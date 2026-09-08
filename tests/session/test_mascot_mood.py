@@ -131,8 +131,9 @@ def test_request_is_first_person_with_the_bot_name_and_only_the_exchange():
     assert [m["role"] for m in messages] == ["system", "user"]
     assert messages[0]["content"].startswith("You are Nina,")
     assert "ONE letter" in messages[0]["content"]
-    for letter in "ABCDE":
+    for letter in "ABCD":
         assert f"{letter} = " in messages[0]["content"]
+    assert "E = " not in messages[0]["content"]
     assert messages[1]["content"] == f"They wrote:\nciao\n\nYou replied:\n{LONG_REPLY}\n\nLetter:"
     # Sotto le sessanta parole: e' il vincolo di costo del piano (D6).
     assert len(messages[0]["content"].split()) < 60
@@ -149,10 +150,16 @@ def test_request_falls_back_to_jenny_when_the_name_is_blank():
 def test_parse_reads_the_letter_in_any_dress():
     assert mm.parse_mood("A") == "happy"
     assert mm.parse_mood(" b") == "sad"
-    assert mm.parse_mood("C.") == "worried"
-    assert mm.parse_mood("(D)") == "surprised"
-    assert mm.parse_mood("E\n") == "neutral"
+    assert mm.parse_mood("C.") == "angry"
+    assert mm.parse_mood("(D)") == "neutral"
     assert mm.parse_mood("**B**") == "sad"
+
+
+def test_the_retired_fifth_letter_is_neutral_and_not_a_mood():
+    """L'alfabeto e' passato da cinque lettere a quattro: la E non vale piu' niente."""
+    assert mm.parse_mood("E") == "neutral"
+    assert "worried" not in mm.MOODS
+    assert "surprised" not in mm.MOODS
 
 
 def test_parse_is_neutral_for_words_blanks_and_strays():

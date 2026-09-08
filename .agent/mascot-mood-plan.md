@@ -1,5 +1,14 @@
 # La mascotte che sente — il piano
 
+> **Superato in parte dal 08/09/2026** da
+> [`mascot-faces-plan.md`](./mascot-faces-plan.md), che porta l'arte a due
+> livelli (corpo + faccia). Non valgono più: **D7** (le etichette: `worried` e
+> `surprised` sono uscite, è entrata `angry`), **D13** (l'arte non arriva più
+> per ultima e non c'è nessuna mappa provvisoria) e tutta la sezione
+> **Standby** (`mascotMood` è tornato `true`, `MOOD_STANDBY` non esiste più).
+> Il resto — il sidecar, il costo, il frame, la scelta del modello — è ancora
+> il documento di riferimento.
+
 La mascotte (`JennyCompanion`) oggi ha tre stati, tutti *fisiologici*: `idle`,
 `thinking`, `talking`. Sa se Jenny sta lavorando, non sa *come* Jenny sta. Questo
 piano le dà un umore — felice, triste, preoccupata, sorpresa — con due vincoli

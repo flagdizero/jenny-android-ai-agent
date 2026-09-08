@@ -7,8 +7,7 @@ import { AppState } from './shared/state.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { THEMES, DEFAULT_THEME, setTheme } from './shared/theme.js';
 import { advancedMode, setAdvancedMode } from './shared/advanced-mode.js';
-import { mascotVisible, setMascotVisible,
-  mascotColor, setMascotColor, mascotSize, setMascotSize,
+import { mascotVisible, setMascotVisible, mascotSize, setMascotSize,
   MASCOT_SIZES } from './shared/mascot.js';
 import { homeView, setHomeView, HOME_VIEW_CHOICES } from './shared/home-view.js';
 import { TelegramPairingWidget } from './shared/telegram-pairing.js';
@@ -1443,7 +1442,7 @@ export class SettingsController {
   // ── Mascotte ───────────────────────────────────────────────────────
 
   /* Blocco della sezione "Personalizzazione", sotto la passerella dei temi:
-     mini-label, toggle di visibilità, taglia e variante colore.
+     mini-label, toggle di visibilità e taglia.
      Le opzioni restano SEMPRE a schermo: nasconderle a mascotte spenta faceva
      sembrare che l'unica scelta fosse tenerla o buttarla via — chi la spegneva
      subito non scopriva mai che era personalizzabile. Da spenta si vedono
@@ -1453,7 +1452,6 @@ export class SettingsController {
      un'impostazione che cambia da sola al primo lancio sarebbe una bugia. */
   _renderMascot() {
     const visible = mascotVisible();
-    const color = mascotColor();
     const size = mascotSize();
     const off = visible ? '' : ' disabled';
     const sizeLabels = {
@@ -1479,13 +1477,6 @@ export class SettingsController {
       <div class="settings-field"${visible ? '' : ' data-settings-off'}>
         <label class="settings-label">${i18n.t('settings.mascotSize')}</label>
         <div class="settings-seg">${sizeButtons}</div>
-      </div>
-      <div class="settings-field settings-toggle-row"${visible ? '' : ' data-settings-off'}>
-        <label class="settings-label">${i18n.t('settings.mascotColor')}</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="mascot-color-toggle" ${color ? 'checked' : ''}${off}>
-          <span class="toggle-slider"></span>
-        </label>
       </div>`;
   }
 
@@ -2310,13 +2301,6 @@ export class SettingsController {
         this.render();
       });
     });
-    // Mascotte: variante colore <-> bianco/nero (la companion ri-risolve le
-    // pose via l'evento 'mascotchange', v. shared/mascot.js)
-    const mascotColorToggle = this.contentEl.querySelector('#mascot-color-toggle');
-    if (mascotColorToggle) {
-      mascotColorToggle.addEventListener('change', () => setMascotColor(mascotColorToggle.checked));
-    }
-
     // Tasto Home: nessun re-render, il valore serve solo a goHome()
     const homeSelect = this.contentEl.querySelector('#home-view-select');
     if (homeSelect) {

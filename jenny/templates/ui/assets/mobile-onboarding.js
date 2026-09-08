@@ -6,7 +6,6 @@ import { i18n } from './shared/i18n.js';
 import { runImportFlow } from './shared/backup-flow.js';
 import { TelegramPairingWidget } from './shared/telegram-pairing.js';
 import { BatteryExemptionCard } from './shared/battery-exemption.js';
-import { poseUrl } from './shared/mascot.js';
 
 /* ── Mini Jenny sul footer ──
    Decorativa, fuori da #onboarding-content (che viene ri-renderizzato a ogni
@@ -582,20 +581,20 @@ export class OnboardingController {
     }
 
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      this.jennyImg.src = poseUrl(JENNY_POSES.idle);
+      this.jennyImg.src = JENNY_POSES.idle;
       return;
     }
 
     // Precarica le pose: al primo swap non deve esserci un frame vuoto.
-    Object.values(JENNY_POSES).forEach((src) => { new Image().src = poseUrl(src); });
+    Object.values(JENNY_POSES).forEach((src) => { new Image().src = src; });
 
     // fall (caduta CSS) -> ground (stordita) -> saluto -> idle.
-    this.jennyImg.src = poseUrl(JENNY_POSES.fall);
+    this.jennyImg.src = JENNY_POSES.fall;
     this.jennyEl.classList.remove('dropping');
     void this.jennyEl.offsetWidth; // riavvia l'animazione se era già corsa
     this.jennyEl.classList.add('dropping');
     this._onJennyLanded = () => {
-      this.jennyImg.src = poseUrl(JENNY_POSES.ground);
+      this.jennyImg.src = JENNY_POSES.ground;
       this._jennyAfter(GROUND_HOLD_MS, () => {
         this._jennyWave(WAVE_CYCLES, () => this._jennyRewaveLoop());
       });
@@ -622,14 +621,14 @@ export class OnboardingController {
     const frames = cycles * 2;
     const tick = (i) => {
       if (i >= frames) {
-        this.jennyImg.src = poseUrl(JENNY_POSES.hello2);
+        this.jennyImg.src = JENNY_POSES.hello2;
         this._jennyAfter(WAVE_REST_MS, () => {
-          this.jennyImg.src = poseUrl(JENNY_POSES.idle);
+          this.jennyImg.src = JENNY_POSES.idle;
           if (done) done();
         });
         return;
       }
-      this.jennyImg.src = poseUrl(i % 2 ? JENNY_POSES.hello2 : JENNY_POSES.hello1);
+      this.jennyImg.src = i % 2 ? JENNY_POSES.hello2 : JENNY_POSES.hello1;
       this._jennyAfter(WAVE_FRAME_MS, () => tick(i + 1));
     };
     tick(0);

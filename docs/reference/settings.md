@@ -28,12 +28,11 @@ Everything not on that list saves on touch.
 | **Theme** | Tap a card to switch instantly across the whole UI (7 named themes, each card is a live preview). See [Themes and mascot](../using/themes-mascot.md). | Chanel |
 | **Mascot** — Show mascot | Toggle the floating companion on/off. | On |
 | **Mascot** — Mascot size | Small / Medium / Large — the side of her square, 120 / 160 / 210 px. Which edge she docks on is not a setting: it's where she last landed after a throw. | Small |
-| **Mascot** — Color mascot | Off switches the mascot to black-and-white artwork. | On |
 | **Home button** | Which view Android's Home button lands on when Jenny is your launcher: Chat, Apps, Workspace, or "Wherever I was". See [Launcher setup](../start/launcher-setup.md). | Chat |
 | **Bot Name** | Free-text field for the assistant's name used in chat and the welcome message. Saves with the 600 ms debounce. Changing it flips `requires_restart` server-side, but the UI never tells you — see above. | "Jenny" |
 | **Language** | Segmented Italian/English switch. Changes the UI's own strings instantly; does **not** change `agents.defaults.language` in `config.json` (that field is only ever written once, during onboarding, and drives backend-generated text like the welcome message). | Detected from the browser/WebView locale at first launch |
 
-The two mascot options below the toggle stay on screen when she's switched off — greyed out and inert, not removed. That's deliberate: hiding them meant that turning her off, which is exactly what someone does right before going looking for a way to tame her, deleted the answer to the question from the page.
+The mascot size control below the toggle stays on screen when she's switched off — greyed out and inert, not removed. That's deliberate: hiding it meant that turning her off, which is exactly what someone does right before going looking for a way to tame her, deleted the answer to the question from the page.
 
 Theme, mascot preferences, the Home button destination, and UI language all live in the browser's `localStorage`, per device — they are **not** part of `config.json` and are **not** included in encrypted backups. Reinstalling the app, or clearing app data, resets all of them to their defaults.
 

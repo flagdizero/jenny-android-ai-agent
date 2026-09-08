@@ -211,7 +211,7 @@ status simply replaces a pending one. `started_at` appears only with `"running"`
 **`mascot_mood`** — how Jenny feels about the reply she just gave, for the on-screen mascot.
 Sent after `turn_end`, only to subscribers of that chat, never retried and never persisted: the
 next turn replaces it, and a reload starts from a neutral face. `mood` is one of `happy`, `sad`,
-`worried`, `surprised` (a neutral verdict sends nothing). `turn_id` is present when the turn had
+`angry` — the three expressions that exist as artwork (a neutral verdict sends nothing). `turn_id` is present when the turn had
 one, so the client can drop a reaction to a reply that is no longer the latest. Off with
 `agents.defaults.mascotMood: false` (see [Configuration](configuration.md)):
 

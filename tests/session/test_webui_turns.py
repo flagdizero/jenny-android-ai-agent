@@ -264,13 +264,19 @@ async def test_provider_failure_leaves_the_mascot_idle(tmp_path):
     assert bus.publish_outbound.await_count == 1
 
 
-async def test_default_config_is_standby_and_costs_no_request(tmp_path):
-    """Con ``Config()`` nudo il sidecar non parte: e' lo stato in cui si spedisce."""
+async def test_default_config_asks_the_question(tmp_path, monkeypatch):
+    """Con ``Config()`` nudo il sidecar parte: e' lo stato in cui si spedisce.
+
+    Fino all'08/09/2026 era il contrario (standby, in attesa dell'arte).
+    """
+    monkeypatch.setattr(
+        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
+    )
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, config=Config())
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_not_awaited()
-    assert bus.publish_outbound.await_count == 1
+    provider.chat_with_retry.assert_awaited_once()
+    assert bus.publish_outbound.await_args_list[-1][0][0].metadata["mascot_mood"] == "happy"
 
 
 async def test_mood_disabled_in_config_costs_no_request(tmp_path):
@@ -338,7 +344,7 @@ async def test_telegram_turn_mood_lands_on_the_webui_view(tmp_path, monkeypatch)
     session.add_message("user", "sposta la riunione")
     session.add_message("assistant", _REPLY)
     provider = MagicMock()
-    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="D"))
+    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="C"))
     event = TurnCompleted(
         context=_telegram_ctx(), latency_ms=1, runtime=LLMRuntime(provider=provider, model="m")
     )
@@ -346,7 +352,7 @@ async def test_telegram_turn_mood_lands_on_the_webui_view(tmp_path, monkeypatch)
     await _run_scheduled(scheduled)
     frame = bus.publish_outbound.await_args_list[-1][0][0]
     assert (frame.channel, frame.chat_id) == ("websocket", "default")
-    assert frame.metadata["mascot_mood"] == "surprised"
+    assert frame.metadata["mascot_mood"] == "angry"
 
 
 # --- proiezione dei turni esterni sulla vista WebUI --------------------------------

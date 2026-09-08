@@ -1,10 +1,13 @@
 /** Preferenze della mascotte (JennyCompanion) — visibilità, aspetto e lato.
  *
  * Stato puramente client-side (localStorage), come tema/lingua/modalità
- * avanzata: non passa mai dal backend. Visibilità, taglia e colore sono
- * scelte dell'utente (Impostazioni → Personalizzazione); il lato invece non
- * è più un'impostazione ma il ricordo di dove l'hai lasciata: lo scrive la
+ * avanzata: non passa mai dal backend. Visibilità e taglia sono scelte
+ * dell'utente (Impostazioni → Personalizzazione); il lato invece non è più
+ * un'impostazione ma il ricordo di dove l'hai lasciata: lo scrive la
  * companion quando lei atterra dopo un lancio (v. mobile-jenny.js#settle).
+ *
+ * Il bianco/nero non c'è più (08/09/2026): l'arte esiste in una sola
+ * variante, a colori, col nome piano — v. .agent/mascot-faces-plan.md, F9.
  */
 
 const VISIBLE_KEY = 'jenny-mascotte-visible';
@@ -14,8 +17,17 @@ const VISIBLE_KEY = 'jenny-mascotte-visible';
    Ripartono tutti da sinistra; la chiave morta si ripulisce sotto. */
 const SIDE_KEY = 'jenny-mascotte-dock-side';
 const LEGACY_SIDE_KEY = 'jenny-mascotte-side';
-const COLOR_KEY = 'jenny-mascotte-color';
 const SIZE_KEY = 'jenny-mascotte-size';
+/* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
+   non una per lettura: non hanno più un getter in cui nascondersi. */
+const DEAD_KEYS = ['jenny-mascotte-color'];
+for (const key of DEAD_KEYS) {
+  try {
+    localStorage.removeItem(key);
+  } catch (_) {
+    /* storage non disponibile */
+  }
+}
 
 /** Lato del canvas quadrato per ogni taglia. Il default è 'sm'; la geometria
  *  in mobile-style.css deriva tutta da --jenny-size, quindi qui basta
@@ -31,7 +43,7 @@ export function mascotVisible() {
 export function setMascotVisible(on) {
   localStorage.setItem(VISIBLE_KEY, on ? '1' : '0');
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: on, side: mascotSide(), color: mascotColor() },
+    detail: { visible: on, side: mascotSide() },
   }));
   return on;
 }
@@ -57,20 +69,6 @@ export function setMascotSide(side) {
   return normalized;
 }
 
-export function mascotColor() {
-  const c = localStorage.getItem(COLOR_KEY);
-  if (c === null) return true; // default: a colori
-  return c === '1';
-}
-
-export function setMascotColor(on) {
-  localStorage.setItem(COLOR_KEY, on ? '1' : '0');
-  window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: mascotVisible(), side: mascotSide(), color: !!on },
-  }));
-  return !!on;
-}
-
 export function mascotSize() {
   const s = localStorage.getItem(SIZE_KEY);
   return s in MASCOT_SIZES ? s : 'sm'; // default: piccola
@@ -81,9 +79,7 @@ export function setMascotSize(size) {
   localStorage.setItem(SIZE_KEY, normalized);
   applyMascotSize();
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: {
-      visible: mascotVisible(), side: mascotSide(), color: mascotColor(), size: normalized,
-    },
+    detail: { visible: mascotVisible(), side: mascotSide(), size: normalized },
   }));
   return normalized;
 }
@@ -94,15 +90,4 @@ export function applyMascotSize() {
   document.documentElement.style.setProperty(
     '--jenny-size', `${MASCOT_SIZES[mascotSize()]}px`
   );
-}
-
-/** Rimappa il path base di una posa (jenny-<name>.webp) alla variante attiva.
- *
- * In colore inserisce il suffisso `-color` prima di `.webp`
- * (jenny-idle.webp -> jenny-idle-color.webp); in bianco/nero lascia il path
- * invariato. Ogni assegnazione `img.src` delle pose passa di qui, così lo
- * switch e' un semplice re-render della posa corrente. */
-export function poseUrl(baseUrl) {
-  if (!mascotColor()) return baseUrl;
-  return baseUrl.replace(/\.webp$/, '-color.webp');
 }

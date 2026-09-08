@@ -5,10 +5,10 @@ from __future__ import annotations
 from jenny.config.schema import Config
 
 
-def test_mascot_mood_defaults_off_without_a_preset():
-    """Standby (08/09/2026): niente richieste finche' l'arte non c'e'."""
+def test_mascot_mood_defaults_on_without_a_preset():
+    """Acceso, e senza preset: la domanda va al modello del turno."""
     defaults = Config().agents.defaults
-    assert defaults.mascot_mood is False
+    assert defaults.mascot_mood is True
     assert defaults.mascot_mood_model_preset is None
 
 

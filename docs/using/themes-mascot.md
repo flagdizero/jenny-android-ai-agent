@@ -39,25 +39,28 @@ A few things about that minichat are worth knowing before you rely on it:
 
 While waiting for a reply she switches between a "thinking" pose and, once text starts streaming back, a "talking" pose with an animated mouth. If you leave her alone reading a long reply she quiets back down into "thinking" after about a second of no new text.
 
-**On standby for now:** she does not yet react to her replies, because the expression artwork is not drawn. The mechanism is built and switched off on both sides — `agents.defaults.mascotMood` is `false` by default, and the WebUI ignores mood frames — so nothing below costs a request or changes her face until it is turned on. When it is: once a reply is done she reacts to it for a few seconds — happy, sad, worried or surprised. That reaction comes from a very small extra request made after the turn is over: the model is asked, in Jenny's own voice, how she feels about what she just wrote, and answers with a single letter. Nothing is added to your conversation or to Jenny's instructions, replies that end in an error or are only a few words long cost nothing, and a "nothing in particular" verdict shows no face at all. Errors make her sad on their own, without asking anyone, and a long think makes her look worried. For now she borrows poses from her existing set for these expressions; the dedicated artwork is separate work. Two `config.json` keys govern it — `agents.defaults.mascotMood` turns it off, `agents.defaults.mascotMoodModelPreset` points the question at a cheaper model — see [Configuration](../reference/configuration.md).
+Once a reply is done she reacts to it for a few seconds: **happy, sad or angry**. That reaction comes from a very small extra request made after the turn is over — the model is asked, in Jenny's own voice, how she feels about what she just wrote, and answers with a single letter. Nothing is added to your conversation or to Jenny's instructions, replies that end in an error or are only a few words long cost nothing, and a "nothing in particular" verdict shows no face at all. Errors make her sad on their own, without asking anyone. She reacts *after* speaking, never while: the question can only be asked once the reply exists. Two `config.json` keys govern it — `agents.defaults.mascotMood` turns it off, `agents.defaults.mascotMoodModelPreset` points the question at a cheaper model — see [Configuration](../reference/configuration.md).
+
+Her face and her body are two separate drawings stacked on each other, which is why an expression can ride on top of any pose rather than being a pose of its own. It only works when she's out in the open: from the docked edge only one eye is visible, so there she wears the single drawn-in face she has always had.
 
 Drag her instead of tapping and she takes flight: she hangs from your finger with a bit of pendulum physics, and on release falls, bounces, gets up, and walks back home to her docked position. It's a pure fidget interaction with no functional effect — dragging her doesn't send anything or change any setting.
 
-Three preferences control her, all in **Settings → Personalization → Mascot**:
+Two preferences control her, both in **Settings → Personalization → Mascot**:
 
 | Setting | Options | Default |
 |---|---|---|
 | Show mascot | on / off | On |
 | Mascot size | Small / Medium / Large | Small |
-| Color mascot | color / black-and-white | Color |
 
 Size is the side of the square she occupies — 120, 160 or 210 px; she starts small. The rest of her geometry follows from it, including where the minichat bubble sits relative to her head, so she stays coherent at every size rather than growing out of her own speech balloon.
 
 Which edge she docks on is not a setting: it's where you last left her. She starts on the left, and after a throw (below) she lands on whichever edge is nearer and stays there.
 
-The two options below the toggle stay on screen when she's switched off, greyed out and inert rather than removed. It reads oddly at first — controls you can see but not use — and it's on purpose: turning her off is exactly the moment you'd go looking for a way to keep her but calm her down, and hiding the options at that moment hid the answer to the question. Greyed-out is a promise about what you get back if you switch her on again.
+The size control below the toggle stays on screen when she's switched off, greyed out and inert rather than removed. It reads oddly at first — a control you can see but not use — and it's on purpose: turning her off is exactly the moment you'd go looking for a way to keep her but calm her down, and hiding the option at that moment hid the answer to the question. Greyed-out is a promise about what you get back if you switch her on again.
 
-Like the theme, these three preferences — and the edge she last landed on — are stored in this device's local storage — not in `config.json`, not in your encrypted backup. A reinstall brings her back showing, small, on the left, in color.
+She comes in one look, in color. There used to be a black-and-white switch here, drawn from a second set of line-art artwork; it was retired when her expressions were drawn, because keeping both meant drawing every expression twice.
+
+Like the theme, these two preferences — and the edge she last landed on — are stored in this device's local storage — not in `config.json`, not in your encrypted backup. A reinstall brings her back showing, small, on the left.
 
 If your phone has "reduce motion" turned on at the OS level, Jenny respects it: the animated mouth-flap while she talks is skipped in favor of a static pose. The drag-to-fly gesture itself is a direct manipulation you control with your finger, so it still works if you choose to use it.
 

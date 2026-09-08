@@ -15,26 +15,41 @@ import { wsManager } from './shared/ws-manager.js';
 import { sessionManager } from './shared/session-manager.js';
 import { i18n } from './shared/i18n.js';
 import {
-  mascotVisible, mascotSide, setMascotSide, poseUrl, applyMascotSize,
+  mascotVisible, mascotSide, setMascotSide, applyMascotSize,
 } from './shared/mascot.js';
 
+/* Arte "cotta" (faccia disegnata dentro, una sola img): serve al bordo, dove
+   la mascotte sporge a metà e una faccia non si leggerebbe. */
 const ART = {
-  idle: '/html-mobile/assets/jenny-idle.webp',
   side: '/html-mobile/assets/jenny-side.webp',
-  think: '/html-mobile/assets/jenny-think.webp',
   sideTalk: '/html-mobile/assets/jenny-side-talk.webp',
 };
-
-/* Parlato animato: coppie [bocca chiusa, bocca aperta] per posa. Nei sorgenti
-   talk_* il numero e' la bocca (1=aperta, 2=chiusa) e la lettera la posa
-   (a=mano alzata, b=braccia giu'): la bocca sbatte a posa fissa e la posa
-   cambia ogni TALK_ANIM_SWITCH_MS. Da docked (bordo) la coppia e' la versione
-   semplificata side/side-talk, posa unica. */
-const TALK_ANIMS = [
-  ['/html-mobile/assets/jenny-talk2a.webp', '/html-mobile/assets/jenny-talk1a.webp'],
-  ['/html-mobile/assets/jenny-talk2b.webp', '/html-mobile/assets/jenny-talk1b.webp'],
-];
 const SIDE_TALK_ANIM = [ART.side, ART.sideTalk];
+
+/* ── Arte a due livelli (v. .agent/mascot-faces-plan.md) ──
+   A mascotte intera il disegno è due img impilate sullo stesso quadrato: il
+   CORPO porta il gesto, la FACCIA l'espressione. Sono ortogonali, quindi
+   "triste mentre pensa" non è un disegno in più ma una composizione, e nel
+   parlato sbatte solo la faccia (6 kB) invece di un corpo intero (22 kB). */
+const BODY = {
+  idle: '/html-mobile/assets/jenny-body-front-idle.webp',
+  hand: '/html-mobile/assets/jenny-body-front-hand.webp',
+  think: '/html-mobile/assets/jenny-body-front-think.webp',
+};
+/* `normal`/`talk` sono le due bocche del parlato; `thinking` è la faccia
+   dell'attesa; le altre tre sono gli umori del backend. Nei sorgenti il nome
+   senza suffisso è la faccia di RIPOSO di quell'espressione — per happy è un
+   sorriso a bocca aperta, ed è giusto così. */
+const FACE = {
+  normal: '/html-mobile/assets/jenny-face-front-normal.webp',
+  talk: '/html-mobile/assets/jenny-face-front-normal-talk.webp',
+  thinking: '/html-mobile/assets/jenny-face-front-thinking.webp',
+  happy: '/html-mobile/assets/jenny-face-front-happy.webp',
+  sad: '/html-mobile/assets/jenny-face-front-sad.webp',
+  angry: '/html-mobile/assets/jenny-face-front-angry.webp',
+};
+/* Il gesto del parlato alterna questi due ogni TALK_ANIM_SWITCH_MS. */
+const TALK_BODIES = [BODY.idle, BODY.hand];
 const MOUTH_FRAME_MS = 260; // apri/chiudi bocca
 const TALK_ANIM_SWITCH_MS = 2600; // permanenza su una posa di parlato
 const TALK_QUIET_TO_THINK_MS = 1000; // silenzio testo -> torna a pensa
@@ -48,30 +63,16 @@ const REPLY_MAX_CHARS = 280;
 /* ── Umore ──
    Dopo il turn_end il backend può mandare un frame `mascot_mood` con la
    reazione di Jenny alla risposta appena data (jenny/session/mascot_mood.py:
-   una lettera chiesta al modello fuori dal turno). Qui è uno strato SOPRA lo
-   stato dell'agente, non un quarto stato: si mostra solo a mascotte intera
-   (`out`), ferma e non in volo, e decade da sé dopo MOOD_HOLD_MS.
+   una lettera chiesta al modello fuori dal turno). Qui è la FACCIA, non un
+   quarto stato: si mostra solo a mascotte intera (dove c'è il livello), perde
+   contro il pensa, e decade da sé dopo MOOD_HOLD_MS.
 
-   MOOD_ART è PROVVISORIA: l'arte dedicata alle espressioni non esiste ancora e
-   qui non la si prevede — ogni etichetta prende in prestito una posa che c'è
-   già, così il meccanismo si prova sul telefono senza disegnare. Le chiavi
-   sono le etichette del backend (`MOODS` meno `neutral`, che non produce
-   frame): un contratto in tests/webui le tiene allineate. */
-const MOOD_ART = {
-  happy: '/html-mobile/assets/jenny-hello1.webp', // provvisoria: braccio alzato
-  sad: '/html-mobile/assets/jenny-ground.webp', // provvisoria: a terra, stordita
-  worried: '/html-mobile/assets/jenny-think.webp', // provvisoria: la posa del pensa
-  surprised: '/html-mobile/assets/jenny-talk1a.webp', // provvisoria: bocca aperta
-};
-/* STANDBY (08/09/2026): con `true` nessuna posa cambia mai per l'umore — né dal
-   frame `mascot_mood`, né dal livello 0 (errore, attesa lunga). Tutto passa da
-   _applyMood, che qui si ferma. Gemello lato backend: `agents.defaults.mascotMood`
-   spento di default. Si riaccende quando le espressioni saranno disegnate. */
-const MOOD_STANDBY = true;
-const MOOD_HOLD_MS = 12000; // quanto dura una faccia prima di tornare idle
-/* Livello 0, gratis: un pensa che dura più di così diventa preoccupata, senza
-   chiedere niente a nessuno. Si disarma al primo frame che cambia stato. */
-const MOOD_WORRY_AFTER_MS = 20000;
+   Sono le etichette del backend (`MOODS` meno `neutral`, che non manda frame) e
+   un sottoinsieme di FACE: le altre chiavi di FACE sono facce di stato, non
+   umori, e un frame che ne nominasse una si scarta. Un contratto in
+   tests/webui tiene allineate le due liste. */
+const MOOD_FACES = ['happy', 'sad', 'angry'];
+const MOOD_HOLD_MS = 12000; // quanto dura una faccia prima di tornare a normale
 
 /* ── Volo Pegman (fisica validata nella demo) ──
    Lo sprite pegman appare solo quando il drag e' commesso (hold oltre
@@ -156,24 +157,23 @@ export class JennyCompanion {
     };
     this._reducedMotion =
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    // Umore (v. MOOD_ART): etichetta viva, scadenza, e l'id dell'ultimo turno
+    // Umore (v. MOOD_FACES): etichetta viva, scadenza, e l'id dell'ultimo turno
     // chiuso — un frame `mascot_mood` di un altro turno è una reazione a una
     // risposta che non è più l'ultima, e si scarta.
     this._mood = null;
     this._moodUntil = 0;
     this._moodTimer = null;
-    this._worryTimer = null;
     this._lastClosedTurnId = null;
 
     this._buildDom();
     this._bindDrag();
     this._bindMinichat();
 
-    // Preload dell'arte degli stati (think + frame del parlato): evita
-    // frame vuoti al primo swap.
-    for (const src of [ART.think, ART.sideTalk, ...TALK_ANIMS.flat(), ...Object.values(MOOD_ART)]) {
+    // Preload di tutto ciò che può comparire: un corpo senza la sua faccia è
+    // una Jenny senza volto, peggio di una bocca in ritardo.
+    for (const src of [ART.sideTalk, ...Object.values(BODY), ...Object.values(FACE)]) {
       const im = new Image();
-      im.src = poseUrl(src);
+      im.src = src;
     }
 
     this._onWsMessage = (e) => this._handleWsMessage(e.detail);
@@ -276,13 +276,26 @@ export class JennyCompanion {
     this.el.className = 'jenny-duo';
     this.el.setAttribute('aria-label', 'Jenny');
     this.el.setAttribute('tabindex', '-1');
+    // I due livelli in un contenitore solo: lo specchio del lato sinistro va
+    // su di lui (v. mobile-style.css), il respiro resta sulle img.
+    const stack = document.createElement('div');
+    stack.className = 'jenny-art-stack';
     const img = document.createElement('img');
     img.className = 'jenny-art';
-    img.src = poseUrl(ART.side);
+    img.src = ART.side;
     img.alt = '';
     img.draggable = false;
-    this.el.appendChild(img);
+    stack.appendChild(img);
     this.img = img;
+    // La faccia nasce spenta: al primo render è al bordo, dove l'arte è cotta.
+    const face = document.createElement('img');
+    face.className = 'jenny-face off';
+    face.src = FACE.normal;
+    face.alt = '';
+    face.draggable = false;
+    stack.appendChild(face);
+    this.face = face;
+    this.el.appendChild(stack);
 
     // Layer del volo: le 5 pose impilate (stesso canvas condiviso, tutte
     // width:100%), visibili solo con .flying e una alla volta (.on, v. showEl).
@@ -291,7 +304,7 @@ export class JennyCompanion {
     this.flyPose = {};
     for (const [key, src] of Object.entries(FLY_POSES)) {
       const im = document.createElement('img');
-      im.src = poseUrl(src);
+      im.src = src;
       im.alt = '';
       im.draggable = false;
       this.fly.appendChild(im);
@@ -324,58 +337,76 @@ export class JennyCompanion {
 
   /* ── Modalità vista ── */
 
-  /* jenny-idle: ferma e visibile (in chat, o overlay in attesa di domanda).
-     jenny-think: sta aspettando la risposta (minichat o chat con lei out).
-     jenny-talk*: bocca animata mentre la risposta arriva (v. TALK_ANIMS).
-     jenny-side / jenny-side-talk: a riposo sul bordo / parlato semplificato.
-   */
-  _setArt(state) {
-    this._setSrc(poseUrl(ART[state]));
+  /* A mascotte intera (`out`) il disegno è a due livelli; al bordo è la posa
+     cotta. Non dipende da altro: è la stessa condizione che il CSS usa per
+     ancorarla, e in volo il layer .jenny-fly copre tutto comunque. */
+  _layered() {
+    return this.el.classList.contains('out');
   }
 
-  _setSrc(src) {
+  _setBody(src) {
     if (this.img.getAttribute('src') !== src) this.img.src = src;
   }
 
-  /* Riallinea l'immagine allo stato corrente (dopo un drag o un tap). L'umore
-     vince sulla posa di riposo, mai sul parlato (v. _moodPose). */
+  /* `null` spegne la faccia (arte cotta). Si nasconde con una classe e non con
+     display: v. il commento in mobile-style.css sulle due animazioni. */
+  _setFace(src) {
+    if (!src) {
+      this.face.classList.add('off');
+      return;
+    }
+    if (this.face.getAttribute('src') !== src) this.face.src = src;
+    this.face.classList.remove('off');
+  }
+
+  /* L'espressione, in precedenza stretta: il pensa vince sull'umore.
+     Aspettare una risposta è uno stato, non un sentimento, e una faccia felice
+     mentre lei sta ancora pensando racconterebbe una cosa falsa. */
+  _faceKey() {
+    if (this._agentState === 'thinking') return 'thinking';
+    return this._moodFace() || 'normal';
+  }
+
+  /* Riallinea le immagini allo stato corrente (dopo un drag, un tap o un
+     cambio di stato dell'agente). */
   _syncArt() {
     if (this._talk.timer) return; // il frame lo gestisce l'animatore del parlato
-    const mood = this._moodPose();
-    if (mood) {
-      this._setSrc(poseUrl(MOOD_ART[mood]));
+    if (!this._layered()) {
+      this._setBody(ART.side);
+      this._setFace(null);
       return;
     }
-    if (this.el.classList.contains('thinking')) {
-      this._setArt('think');
-      return;
-    }
-    this._setArt(this.el.classList.contains('out') ? 'idle' : 'side');
+    this._setBody(this._agentState === 'thinking' ? BODY.think : BODY.idle);
+    this._setFace(FACE[this._faceKey()]);
   }
 
   /* Stato logico dell'agente. In docked (chat senza out) lo stato 'thinking'
      non ha effetto visivo: Jenny resta sul bordo, side statico. */
   _setAgentState(state) {
+    // Un segnale di parlato tiene viva la bocca **anche a stato invariato**: i
+    // delta di un flusso lungo arrivano tutti come 'talking' e la guardia qui
+    // sotto li scarterebbe tutti tranne il primo. Allora dopo
+    // TALK_QUIET_TO_THINK_MS l'animatore tornerebbe al pensa in mezzo alla
+    // frase e, ripartendo, rimetterebbe animIdx a zero: il gesto del parlato
+    // non cambierebbe mai. Misurato sul telefono l'08/09/2026, 23 scatti su 9
+    // secondi di parlato sempre a braccia giù.
+    if (state === 'talking') this._noteTalkActivity();
     if (this._agentState === state) return;
     this._agentState = state;
     const docked = this.mode === 'chat' && !this.el.classList.contains('out');
 
     // Un turno che riparte rende stantia la faccia del turno prima: una
     // risposta neutra non manderebbe niente e la vecchia faccia riapparirebbe a
-    // parlato finito. La preoccupazione del pensa lungo nasce DOPO questo
-    // azzeramento (timer), quindi sopravvive.
+    // parlato finito. Da qui in poi l'espressione la porta lo stato: `thinking`
+    // ha la sua faccia, e non serve un timer per dargliela.
     if (state !== 'idle') this._clearMood();
     if (state === 'talking') {
       this.el.classList.remove('thinking');
-      this._disarmWorry();
-      this._noteTalkActivity();
     } else if (state === 'thinking') {
       if (!docked) this.el.classList.add('thinking');
       this._stopTalk();
-      this._armWorry();
     } else {
       this.el.classList.remove('thinking');
-      this._disarmWorry();
       this._stopTalk();
     }
     this._syncArt();
@@ -392,7 +423,7 @@ export class JennyCompanion {
   }
 
   _acceptMood(msg) {
-    if (!msg || !Object.prototype.hasOwnProperty.call(MOOD_ART, msg.mood)) return false;
+    if (!msg || !MOOD_FACES.includes(msg.mood)) return false;
     if (this._turnActive || this._pendingTurn) return false;
     const turnId = msg.turn_id || msg.turnId || null;
     if (turnId && this._lastClosedTurnId && turnId !== this._lastClosedTurnId) return false;
@@ -407,8 +438,7 @@ export class JennyCompanion {
   }
 
   _applyMood(mood, now = performance.now()) {
-    if (MOOD_STANDBY) return;
-    if (!Object.prototype.hasOwnProperty.call(MOOD_ART, mood)) return;
+    if (!MOOD_FACES.includes(mood)) return;
     this._mood = mood;
     this._moodUntil = now + MOOD_HOLD_MS;
     if (this._moodTimer) clearTimeout(this._moodTimer);
@@ -427,31 +457,12 @@ export class JennyCompanion {
     this._syncArt();
   }
 
-  /* La posa d'umore da mostrare adesso, o null. Solo a mascotte intera
-     (`out`: da `side` una faccia a metà non si legge, e resta in attesa se la
-     si richiama entro il tempo), mai in volo, e durante il pensa solo la
-     preoccupazione — che del pensa lungo è la faccia. */
-  _moodPose(now = performance.now()) {
+  /* L'umore vivo, o null. Che dal bordo non si veda non è una regola scritta
+     qui: là l'arte è cotta e la faccia è spenta, e se la si richiama entro il
+     tempo la trova ancora. */
+  _moodFace(now = performance.now()) {
     if (!this._mood || now >= this._moodUntil) return null;
-    const cl = this.el.classList;
-    if (!cl.contains('out') || cl.contains('flying')) return null;
-    if (cl.contains('thinking') && this._mood !== 'worried') return null;
     return this._mood;
-  }
-
-  _armWorry() {
-    if (this._worryTimer) return;
-    this._worryTimer = setTimeout(() => {
-      this._worryTimer = null;
-      if (this._agentState === 'thinking') this._applyMood('worried');
-    }, MOOD_WORRY_AFTER_MS);
-  }
-
-  _disarmWorry() {
-    if (this._worryTimer) {
-      clearTimeout(this._worryTimer);
-      this._worryTimer = null;
-    }
   }
 
   /* ── Parlato animato ── */
@@ -471,25 +482,28 @@ export class JennyCompanion {
 
   _talkTick() {
     const now = performance.now();
-    const docked = this.mode === 'chat' && !this.el.classList.contains('out');
-    let pair = SIDE_TALK_ANIM;
-    if (!docked) {
-      if (now >= this._talk.switchAt) {
-        this._talk.animIdx = (this._talk.animIdx + 1) % TALK_ANIMS.length;
-        this._talk.switchAt = now + TALK_ANIM_SWITCH_MS;
-      }
-      pair = TALK_ANIMS[this._talk.animIdx];
-    }
     // Silenzio nel flusso: torna allo stato 'pensa' invece di tenere la bocca
     // congelata in posa di parlato.
-    const quiet = now - this._talk.lastTextAt > TALK_QUIET_TO_THINK_MS;
-    if (quiet) {
+    if (now - this._talk.lastTextAt > TALK_QUIET_TO_THINK_MS) {
       this._setAgentState('thinking');
       return;
     }
     this._talk.open = !this._talk.open;
-    const src = poseUrl(pair[this._talk.open ? 1 : 0]);
-    if (this.img.getAttribute('src') !== src) this.img.src = src;
+    if (!this._layered()) {
+      // Dal bordo la posa è unica: la coppia cotta side/side-talk. La faccia si
+      // spegne qui e non solo in _syncArt: se la trascinano al bordo *mentre*
+      // parla, _syncArt esce subito (il frame è dell'animatore) e la faccia
+      // resterebbe accesa sopra un'arte che ce l'ha già dentro.
+      this._setBody(SIDE_TALK_ANIM[this._talk.open ? 1 : 0]);
+      this._setFace(null);
+      return;
+    }
+    if (now >= this._talk.switchAt) {
+      this._talk.animIdx = (this._talk.animIdx + 1) % TALK_BODIES.length;
+      this._talk.switchAt = now + TALK_ANIM_SWITCH_MS;
+    }
+    this._setBody(TALK_BODIES[this._talk.animIdx]);
+    this._setFace(FACE[this._talk.open ? 'talk' : 'normal']);
   }
 
   /* Chiude il parlato e torna all'arte statica (idle/side/think). */
@@ -524,24 +538,19 @@ export class JennyCompanion {
     if (mode === 'chat') {
       // Presenza pura: all'angolo sopra la barra di input, senza minichat.
       this.el.classList.add('in-chat', 'out');
-      this._setArt('idle');
     } else {
       this.el.classList.remove('in-chat', 'out', 'mini');
-      this._setArt('side');
     }
+    this._syncArt();
     this._updateGestureExclusion();
   }
 
-  /* Riallinea visibilità, lato e variante colore quando l'utente cambia le
-     preferenze da Impostazioni → Personalizzazione (evento 'mascotchange'). */
+  /* Riallinea visibilità e lato quando l'utente cambia le preferenze da
+     Impostazioni → Personalizzazione (evento 'mascotchange'). Le img del volo
+     hanno src fisso a creazione e non si ricablano più: da quando l'arte ha
+     una sola variante, il loro path non dipende da nessuna preferenza. */
   _applyMascotPrefs() {
     this._applySide();
-    // Le img del volo hanno src fisso a creazione: ricablale sulla variante
-    // attiva (B/N <-> colore). L'arte statica/parlato si ri-risolve da sola
-    // via poseUrl al prossimo _syncArt / _talkTick.
-    for (const [key, base] of Object.entries(FLY_POSES)) {
-      if (this.flyPose[key]) this.flyPose[key].src = poseUrl(base);
-    }
     this.setMode(this.mode);
     if (!this._talk.timer) this._syncArt();
   }

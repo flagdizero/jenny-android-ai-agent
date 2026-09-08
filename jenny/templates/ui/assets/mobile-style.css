@@ -6745,16 +6745,35 @@ body {
 :root[data-mascotte-hidden] .jenny-scrim,
 :root[data-mascotte-hidden] .jenny-mc { display: none; }
 
-/* Lato sinistro (preferenza utente, v. shared/mascot.js): mirroring completo,
-   stesso offset di destra ma ancorato a left invece che a right. L'arte si
-   specchia così Jenny guarda verso l'interno dello schermo. */
+/* Arte a due livelli (v. .agent/mascot-faces-plan.md): a mascotte intera il
+   corpo (senza faccia) e la faccia sono due img impilate sullo stesso quadrato.
+   Il corpo resta in flusso e dà l'altezza al duo, la faccia gli sta sopra in
+   absolute. Da docked l'arte è cotta e la faccia si spegne (.off).
+   La faccia si nasconde con `visibility` e MAI con `display`: sono due istanze
+   della stessa animazione (jenny-bob/jenny-wobble, sotto) e partono insieme
+   solo se restano entrambe in layout — un display:none le sfaserebbe. */
+.jenny-art-stack { position: relative; }
+.jenny-art-stack img.jenny-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.jenny-art-stack img.jenny-face.off { visibility: hidden; }
+
+/* Lato sinistro (v. shared/mascot.js): mirroring completo, stesso offset di
+   destra ma ancorato a left invece che a right. L'arte si specchia così Jenny
+   guarda verso l'interno dello schermo.
+   Lo specchio sta sul contenitore e non sulle img: le due sono un solo
+   disegno, e `transform` non si compone con sé stesso sullo stesso elemento —
+   quando era sull'img il respiro di .out (che scrive transform) lo annullava e
+   da sinistra, uscita, Jenny finiva per guardare fuori dallo schermo. */
 .jenny-duo.side-left {
   left: calc(var(--jenny-size) * -0.469);
   right: auto;
   transition: left 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
 }
 .jenny-duo.side-left.out { left: calc(var(--jenny-size) * -0.25); }
-.jenny-duo.side-left img.jenny-art { transform: scaleX(-1); }
+.jenny-duo.side-left .jenny-art-stack { transform: scaleX(-1); }
 
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:
    hang/fall/ground/walk1/walk2, una sola visibile via .on) sostituisce
@@ -6772,7 +6791,7 @@ body {
   will-change: transform;
 }
 .jenny-duo.flying .jenny-fly { display: block; }
-.jenny-duo.flying img.jenny-art { visibility: hidden; }
+.jenny-duo.flying .jenny-art-stack { visibility: hidden; }
 .jenny-fly img {
   position: absolute;
   left: 0;

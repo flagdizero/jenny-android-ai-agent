@@ -11,11 +11,16 @@ letto a runtime: è solo il punto di partenza della build degli asset.
   `jenny-ground.PNG`, `jenny-walk1.PNG`, `jenny-walk2.PNG`, `hello1/2.PNG`,
   `idle.PNG`, `think.PNG`, `talk_1a/1b/2a/2b.PNG` — pose della mascotte,
   canvas 3000×3000, tutte cablate in `gen_pose_webp.py`.
-- `*_color.PNG` — la stessa posa nella variante **colore** (line-art riempita).
-  Ogni posa ha il suo gemello `<stem>_color.PNG`; `gen_pose_webp.py` li esporta
-  in `jenny-<name>-color.webp`. A runtime la scelta B/N ↔ colore è una
-  preferenza client-side (`Impostazioni → Personalizzazione → Mascotte a
-  colori`, v. `shared/mascot.js::poseUrl`). L'icona app resta solo B/N.
+  **Una variante per posa**, a colori. Fino all'08/09/2026 ogni posa aveva
+  un gemello `<stem>_color.PNG` e il client rimappava il suffisso `-color` su
+  una preferenza dell'utente; la preferenza è stata ritirata e la line-art coi
+  gemelli B/N è uscita dal repo (recuperabile dalla storia — v.
+  `.agent/mascot-faces-plan.md`, F9). L'icona app resta line-art: `icon.png` è
+  un sorgente a sé e non c'entra con le pose.
+- `body_*.PNG` / `face_*.PNG` — l'arte **a due livelli**: corpi senza faccia e
+  facce da sola, sullo stesso canvas 3000×3000 delle pose. Si compongono a
+  runtime, due `<img>` impilate, e la registrazione è tutta sul canvas: qui
+  nessuno scala, ricentra o compone niente. V. la sezione *Due livelli* sotto.
 - `gen_icons.py` — genera le icone Android da `icon.png`.
 - `gen_pose_webp.py` — esporta le pose della mascotte in webp per la WebUI.
 
@@ -23,6 +28,59 @@ Convenzione dei nomi `talk_*`: il **numero è la bocca** (1=aperta, 2=chiusa),
 la **lettera è la posa** (a=mano alzata, b=braccia giù). Le coppie di
 animazione a runtime sono quindi per posa: `talk_2a↔talk_1a` e
 `talk_2b↔talk_1b`.
+
+## Due livelli: corpo + faccia
+
+Le 15 pose `FILES` hanno la faccia disegnata dentro ("cotte"). Accanto, dal
+settembre 2026, c'è una seconda famiglia di sorgenti in cui **il corpo è senza
+faccia** e la faccia è un livello a sé: a mascotte intera la companion le
+sovrappone, così l'espressione è ortogonale al gesto e "triste mentre pensa"
+non è un disegno in più ma una composizione. Il ragionamento completo sta in
+[`.agent/mascot-faces-plan.md`](../../.agent/mascot-faces-plan.md).
+
+**Orientamento.** `front` è la posa dritta (mascotte intera, `out`), `side` è
+quella diagonale che sporge dal bordo. Le facce di un orientamento valgono solo
+per i corpi dello stesso.
+
+**Il nome dice cosa è, non con cosa si accoppia.** `face_front_happy` è la
+faccia **di riposo** di quell'espressione — per `happy` è un sorriso a bocca
+aperta, ed è giusto così: un chibi felice riposa sorridendo. `face_front_happy_talk`
+è **l'altra bocca**. All'animatore del parlato serve la coppia, e l'ordine non
+si vede.
+
+| Cablati in `LAYERS` (esportati) | | |
+|---|---|---|
+| corpi | `body_front_idle`, `body_front_hand`, `body_front_think` | riposo, gesto del parlato, pensa |
+| facce | `face_front_normal`, `face_front_normal_talk` | la coppia del parlato |
+| | `face_front_thinking` | mentre aspetta la risposta |
+| | `face_front_happy`, `face_front_sad`, `face_front_angry` | le tre reazioni |
+
+In riserva, **importati e non esportati** (14): `face_front_{happy,sad,angry}_talk`
+(le bocche alternative degli umori: servono al parlato espressivo, che non c'è
+ancora), i sette `face_side_*` e i corpi `body_side_idle`, `body_side_hand`,
+`body_front_wave1`, `body_front_wave2`. Non sono webp e non sono nel manifest:
+un asset che nessun ramo del client può mostrare marcisce. Quando serviranno,
+si aggiunge la riga in `LAYERS` e in `_UI_MANIFEST`.
+
+Attenzione ai nomi del saluto: `body_front_wave1` è il corpo di `hello1` e
+`body_front_wave2` quello di `hello2` — nei file dell'artista arrivavano
+incrociati, e all'import si sono raddrizzati.
+
+**Manca la coppia neutra `side`** (`face_side_normal` e il suo `_talk`): non
+serve, perché da docked la faccia non si legge e l'umore lì non si mostra. Se
+un giorno servisse, **si deriva dall'arte cotta** invece di disegnarla:
+`body_side_idle` è `jenny-side` senza faccia, quindi basta tenere di
+`jenny-side.PNG` i pixel che si discostano dal corpo e azzerare l'alfa
+altrove. Verificato: ricomposta torna con uno scarto massimo di 15 su 13 pixel
+di frangia (bocca chiusa) e di 2 su nessun pixel (bocca aperta).
+
+**Il test che tiene la registrazione.** `tests/webui/test_mascot_layer_sources.py`
+pretende che `body_front_idle + face_front_normal_talk` ricomponga `talk_1b` e
+`body_front_think + face_front_thinking` ricomponga `think` **al pixel** (soglia
+8/255, cioè frangia di antialias), che i riquadri d'inchiostro dei corpi
+coincidano con quelli delle pose da cui vengono, e che ogni faccia cada nella
+finestra del suo orientamento. Uno spostamento di un pixel in export lo sfonda
+di un ordine di grandezza — è la guardia che nessuno screenshot dà.
 
 ## Regola generale: chi decide cosa
 
@@ -121,18 +179,19 @@ la mascotte viene trascinata:
 
 ### Output
 
-`FILES` mappa nome-posa → PNG sorgente e scrive **30 webp** in
-`jenny/templates/ui/assets/`: per ogni posa la variante B/N
+`FILES` mappa nome-posa → PNG sorgente e scrive **15 webp** cotti in
+`jenny/templates/ui/assets/`, uno per posa:
 `jenny-{side,side-talk,hang,fall,ground,walk1,walk2,hello1,hello2,idle,think,
-talk1a,talk1b,talk2a,talk2b}.webp` più il gemello colore
-`jenny-<name>-color.webp` (sorgente `<stem>_color.PNG`). Ogni sorgente deve
-essere esattamente 3000×3000 (assert esplicito) o lo script si ferma.
+talk1a,talk1b,talk2a,talk2b}.webp`. `LAYERS` ne aggiunge **9 a due livelli**,
+`jenny-<stem coi trattini>.webp` (per esempio `body_front_idle.PNG` →
+`jenny-body-front-idle.webp`). Ogni sorgente deve essere esattamente 3000×3000
+(assert esplicito) o lo script si ferma.
 
 ## Rigenerare
 
 Per il flusso pratico "sostituisco un sorgente → rigenero → carico sul
 telefono" (con tabella nomi file e checklist) vedi
-[`COLORARE_LE_POSE.md`](./COLORARE_LE_POSE.md).
+[`SOSTITUIRE_UNA_POSA.md`](./SOSTITUIRE_UNA_POSA.md).
 
 ```bash
 # dalla cartella android/image_source/
@@ -163,6 +222,6 @@ posa di riposo coincide col frame "braccia giù, bocca chiusa" del parlato.
 Per cambiarla basta sostituire `idle.PNG`, rilanciare `gen_pose_webp.py` e
 fare `./gradlew app:installDebug` — nessun'altra modifica.
 
-Se si cablano nuovi sorgenti, aggiornare `FILES` qui e i riferimenti runtime
-(`ART`/`TALK_ANIMS`/`FLY_POSES` in `mobile-jenny.js`, `JENNY_POSES` in
-`mobile-onboarding.js`).
+Se si cablano nuovi sorgenti, aggiornare `FILES` (o `LAYERS`) qui e i
+riferimenti runtime (`ART`/`TALK_ANIMS`/`FLY_POSES`/`BODY`/`FACE` in
+`mobile-jenny.js`, `JENNY_POSES` in `mobile-onboarding.js`).

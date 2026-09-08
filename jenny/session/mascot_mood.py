@@ -1,10 +1,11 @@
 """Il sidecar dell'umore della mascotte.
 
 Dopo ogni turno WebUI si chiede al modello, **fuori dal turno**, come si sente
-Jenny per la risposta che ha appena dato: una lettera fra cinque, letta sulla
+Jenny per la risposta che ha appena dato: una lettera fra quattro, letta sulla
 coda dell'ultimo scambio. Il risultato diventa il frame ``mascot_mood`` che il
-client traduce in una posa. Il piano e le ragioni stanno in
-``.agent/mascot-mood-plan.md``; qui si riassumono i vincoli che il codice tiene:
+client traduce in una faccia. Il piano e le ragioni stanno in
+``.agent/mascot-mood-plan.md``, l'arte in ``.agent/mascot-faces-plan.md``; qui
+si riassumono i vincoli che il codice tiene:
 
 - **il prompt dell'agente principale non cambia**: questo modulo non legge
   SOUL.md, non tocca la cronologia, non aggiunge tool. Vede solo l'ultimo
@@ -37,17 +38,21 @@ if TYPE_CHECKING:
     from jenny.providers.base import LLMProvider, LLMResponse
     from jenny.session.manager import Session
 
-# Le etichette che il client conosce (``MOOD_ART`` in mobile-jenny.js); un
+# Le etichette che il client conosce (``MOOD_FACES`` in mobile-jenny.js); un
 # contratto le tiene allineate. ``neutral`` non produce frame.
-MOODS: tuple[str, ...] = ("happy", "sad", "worried", "surprised", "neutral")
+#
+# Sono le espressioni che **esistono disegnate**: l'arte comanda, non il
+# vocabolario. Fino all'08/09/2026 le lettere erano cinque e comprendevano
+# ``worried`` e ``surprised``, che non hanno una faccia e se la prendevano in
+# prestito da una posa; ``angry`` invece ce l'ha. V. mascot-faces-plan.md, F4.
+MOODS: tuple[str, ...] = ("happy", "sad", "angry", "neutral")
 NEUTRAL_MOOD = "neutral"
 
 _LETTER_TO_MOOD: Mapping[str, str] = {
     "A": "happy",
     "B": "sad",
-    "C": "worried",
-    "D": "surprised",
-    "E": NEUTRAL_MOOD,
+    "C": "angry",
+    "D": NEUTRAL_MOOD,
 }
 
 MOOD_USER_MAX_CHARS = 300
@@ -143,9 +148,8 @@ def build_mood_request(inputs: MoodInputs, *, bot_name: str) -> list[dict[str, s
         "else:\n"
         "A = happy or proud\n"
         "B = sad or sorry\n"
-        "C = worried or uneasy\n"
-        "D = surprised\n"
-        "E = nothing in particular"
+        "C = angry or annoyed\n"
+        "D = nothing in particular"
     )
     user = f"They wrote:\n{inputs.user}\n\nYou replied:\n{inputs.assistant}\n\nLetter:"
     return [
@@ -159,7 +163,8 @@ def parse_mood(text: str | None) -> str:
 
     Accetta ``"B"``, ``" b"``, ``"B."``, ``"B)"``; rifiuta una parola che
     comincia con quella lettera (``"Bene"``): con ``max_tokens=3`` il modello
-    puo' iniziare a divagare, e una divagazione non e' un umore.
+    puo' iniziare a divagare, e una divagazione non e' un umore. Una lettera
+    fuori dall'alfabeto — la vecchia ``E``, o una inventata — vale ``neutral``.
     """
     if not isinstance(text, str):
         return NEUTRAL_MOOD

@@ -137,7 +137,7 @@ un force-push.
       5,5 s + 15 s d'ascolto → **0 frame**, bucket `mascot` fermo a 6, nessuna
       riga del sidecar dopo il riavvio alle 14:19, mascotte nella posa di riposo
 
-## Passo 6 — l'interruttore *(dopo il 5; in standby non ha senso finché il 7 non c'è)*
+## Passo 6 — l'interruttore → **spostato** in [`mascot-faces-checklist.md`](./mascot-faces-checklist.md) (passo 8)
 
 - [ ] **6.1** Riga backend "Espressioni" in Personalizzazione → Mascotte, via
       `store.mutate()`, con la nota "finisce in config.json e nel backup"
@@ -145,7 +145,14 @@ un force-push.
 - [ ] **6.3** `docs/reference/settings.md`
 - [ ] **6.4** Test route + verifica verde; commit `-s`
 
-## Passo 7 — l'arte *(indipendente dal 6; fuori da questo PR per decisione del 05/09; è ciò che chiude lo standby)*
+## Passo 7 — l'arte → **spostato** in [`mascot-faces-checklist.md`](./mascot-faces-checklist.md)
+
+L'arte è arrivata l'08/09/2026 in una forma diversa da quella prevista qui: non
+otto pose d'umore ma **corpo + faccia** a due livelli, che rende l'espressione
+ortogonale al gesto. I punti sotto sono quindi superati — restano per storia, la
+lista viva è l'altra.
+
+## ~~Passo 7 — l'arte~~ *(superato)*
 
 - [ ] **7.1** 8 PNG 3000×3000 in `android/image_source/` (`mood_<x>.PNG` + `_color`)
 - [ ] **7.2** `gen_pose_webp.py::FILES` (+4), rigenerato
