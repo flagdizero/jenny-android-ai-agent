@@ -10,14 +10,39 @@ Additional filesystem roots must be capability-specific. `extra_allowed_dirs` is
 
 **Rule**: Any new path-handling logic must go through the workspace path resolver or perform an equivalent containment check with explicit read/write capability semantics.
 
-## The project/diary boundary runs one way only
+## The project/diary boundary is a key plus a destination
 
-A project's words cannot reach the personal diary. The gate is a **single funnel**:
-`MemoryStore.append_history` returns `0` for a `project:` session key, so both writers on that path
-(`Consolidator.archive`'s summary and the `raw_archive` dump when the LLM call fails) stop there
-rather than each carrying their own filter. A second key turn covers the read side —
-`read_recent_history_for_prompt` returns nothing at all for a project key, which also closes entries
-written by an older version or by hand.
+**Rewritten 08/09/2026** — before that date this section read *"a project's words cannot reach the
+personal diary"*, and the gate was `MemoryStore.append_history` returning `0` for a `project:`
+session key. That gate is gone. Read `.agent/project-memory-plan.md` before changing anything
+here; the short version follows.
+
+The gate guarded the right rule on the wrong axis. The declared line is **"who you are travels;
+where else you work does not"** — a rule about the *category of the fact* — and the gate asked
+about the *origin of the session*. Outbound the two coincide, because only identity goes out.
+Inbound they do not: a fact about the person, said inside a project, **is** identity, which is
+exactly the class allowed to travel, and it was stopped anyway. Measured on the device: 39 of 72
+lines in the real projects' journals were facts about the person, and 18 of 23 sampled were in no
+memory file at all.
+
+So a project session now writes to `history.jsonl` **with its own key**, and the boundary is
+carried by two things that must both hold:
+
+- **the key** closes the read side. `read_recent_history_for_prompt` returns nothing at all for a
+  project key, and a project entry matches no other branch either — not the personal one, not an
+  internal job's, not a gardener pass's. No prompt in the installation can show it. This was
+  always true; it is now load-bearing, and there is a test per branch;
+- **the destination** closes the write side. `MemoryStore.build_dream_tools(scope="project")`
+  hands the run `read_file` plus the entry tool restricted to `USER.md`
+  (`MemoryEntryTool(allowed_targets={"user"})`), and nothing else: no `write_file`, no
+  `edit_file`, no `apply_patch`. `memory/MEMORY.md` is the cross-project inventory — *where else
+  you work* — and it is unreachable from a project batch, as is `SOUL.md`. A batch never mixes
+  the two kinds (`build_dream_prompt` takes the leading run of one kind and stops), so the scope
+  is never ambiguous.
+
+`agent/dream_project.md` states the same rule in prose for the model. **That prose is not the
+guarantee** — the reduced toolbox is. Anyone tempted to widen the toolbox and rely on the prompt
+is undoing the boundary, whatever the prompt still says.
 
 **The reverse direction has no structural boundary, and that is deliberate.** `SOUL.md` and
 `USER.md` are always composed from the installation root (`ContextBuilder._IDENTITY_FILES`), so a
@@ -73,7 +98,8 @@ boundary the gate closes on the read side. **The gardener gets no pointer** — 
 refuse, plus an invitation to open it, is worse than the absence.
 
 **Rule**: when adding an internal actor whose writable surface is one project, gate
-`_get_wikis_context`, `read_recent_history_for_prompt` and the `MEMORY.md` block on it — do not
+`_get_wikis_context`, `read_recent_history_for_prompt` and the `MEMORY.md` block on it — and, if
+it can write memory, give it a `build_dream_tools` scope rather than a paragraph — do not
 "fix" the identity path (`_IDENTITY_FILES`) to match, and do not widen the gardener's read root (its
 `build_tools` comment, *"Lettura: dentro il progetto. Non l'intera installazione come Dream"*, is a
 boundary somebody chose: T4.5 records a proposed fix that would have silently undone it).

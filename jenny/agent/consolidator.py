@@ -607,12 +607,20 @@ class Consolidator:
 
             if messages_to_remove and summary is None and is_project_session_key(session_key):
                 # ``archive()`` ha fallito la chiamata LLM e ha raw-dumpato in
-                # ``history.jsonl``; per una sessione-progetto quel dump **non è
-                # stato scritto** — ``append_history`` non scrive per un progetto,
-                # ed è giusto così (v. la sua docstring: l'isolamento di un
-                # progetto è un'assenza, non un filtro replicato). Quindi qui, e
-                # solo qui, la copia va fatta prima di troncare: senza, la
-                # troncatura di sotto butterebbe i messaggi e basta.
+                # ``history.jsonl``. **Dall'08/09/2026 quel dump viene scritto
+                # anche per un progetto** (``append_history`` non rifiuta più una
+                # chiave ``project:``), e la copia qui serve lo stesso: sono due
+                # depositi per due lettori diversi. Il dump in history è la coda
+                # da cui Dream estrae i fatti *sulla persona*, e da un prompt di
+                # progetto non è raggiungibile — il filtro di
+                # ``read_recent_history_for_prompt`` lo esclude. La copia invece
+                # resta **dentro il progetto**, che è l'unico posto dove quella
+                # conversazione può essere ritrovata da chi ci lavora.
+                #
+                # Quindi qui, e solo qui, la copia va fatta prima di troncare:
+                # senza, la troncatura di sotto butterebbe i messaggi dal
+                # progetto — e il fatto che una copia esista in una coda che il
+                # progetto non può leggere non è un rimedio.
                 copy = await asyncio.to_thread(
                     self._copy_removed_into_project, session_key, messages_to_remove
                 )

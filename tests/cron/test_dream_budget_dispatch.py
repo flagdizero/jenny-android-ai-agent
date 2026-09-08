@@ -126,7 +126,7 @@ class _FakeMemory:
         self.events.append("prompt")
         return ("prompt di consolidamento", 42) if self._has_work else None
 
-    def build_dream_tools(self, *, write_size_guard=None):
+    def build_dream_tools(self, *, write_size_guard=None, scope="personal"):
         self.guards.append(write_size_guard)
         return SimpleNamespace(file_states=self._file_states)
 

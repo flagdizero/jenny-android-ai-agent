@@ -150,7 +150,7 @@ class _FakeMemory:
         self.events.append(f"prompt:{gauge.splitlines()[1] if gauge else ''}")
         return ("prompt di consolidamento", 42) if self._has_work else None
 
-    def build_dream_tools(self, *, write_size_guard=None):
+    def build_dream_tools(self, *, write_size_guard=None, scope="personal"):
         self.guards.append(write_size_guard)
         refuses = (
             write_size_guard is not None
@@ -756,7 +756,7 @@ class TestBudgetLogLine:
         # l'unico dei tre senza enforcement, ed è la controprova che la riga
         # distingue i due stati invece di renderli uguali.
         assert messages == [
-            "INFO: Dream memory budget: MEMORY.md 200/50 (400%), USER.md 1/3000 (0%), "
+            "INFO: Dream memory budget: MEMORY.md 200/50 (400%), USER.md 1/4000 (0%), "
             "SOUL.md 1 (no budget) | runs since review: 3, stuck runs: 1"
         ]
 

@@ -593,9 +593,9 @@ class TestReviewPass:
         guards: list[Any] = []
         real_build = memory.build_dream_tools
 
-        def _record(*, write_size_guard=None):
+        def _record(*, write_size_guard=None, scope="personal"):
             guards.append(write_size_guard)
-            return real_build(write_size_guard=write_size_guard)
+            return real_build(write_size_guard=write_size_guard, scope=scope)
 
         monkeypatch.setattr(memory, "build_dream_tools", _record)
 

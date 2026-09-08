@@ -690,7 +690,12 @@ class CronDispatcher:
         if result is None:
             logger.info("Dream: nothing to process")
             return None, None, 0
-        prompt, last_cursor = result
+        prompt, last_cursor = result[0], result[1]
+        # ``getattr`` con un default, come per ``file_states`` poco sotto e per la
+        # stessa ragione: ``build_dream_prompt`` e' sostituito nei test da doppi
+        # che ritornano una coppia nuda. Un batch che non dichiara il proprio tipo
+        # e' un batch personale, che e' il comportamento di sempre.
+        scope = getattr(result, "scope", "personal")
         if prologue.review is None:
             # Un solo checkpoint per ciclo. Se il review è appena girato lo
             # snapshot è già stato preso pochi secondi fa e copre anche il turno
@@ -698,7 +703,9 @@ class CronDispatcher:
             # review sotto la stessa etichetta "pre_dream", cioè un secondo
             # checkpoint che non è pre-niente.
             await take_dream_snapshot(self._snapshot_before_dream)
-        dream_tools = store.build_dream_tools(write_size_guard=prologue.guard)
+        dream_tools = store.build_dream_tools(
+            write_size_guard=prologue.guard, scope=scope,
+        )
         resp = await agent.process_direct(
             prompt,
             session_key=MemoryStore.dream_session_key(),

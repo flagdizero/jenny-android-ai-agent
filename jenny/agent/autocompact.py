@@ -54,6 +54,18 @@ class AutoCompact:
     # E' anche il punto che una generalizzazione allargherebbe.
     _IDLE_CANDIDATE_KEYS: tuple[str, ...] = (UNIFIED_SESSION_KEY,)
 
+    # Quanti messaggi nuovi servono perche' valga la pena di raccogliere il
+    # diario di un progetto (v. :meth:`_harvest_project_diary`). Due, cioe' uno
+    # scambio: una domanda e una risposta possono gia' contenere un fatto sulla
+    # persona, e la soglia serve solo a non spendere una chiamata LLM su una
+    # sessione che non ha detto niente di nuovo.
+    _DIARY_HARVEST_MIN_MESSAGES = 2
+
+    # Dove la sessione si annota fin dove il diario e' stato raccolto. Un indice
+    # nei messaggi, non un timestamp: i messaggi sono la cosa che si conta, e un
+    # orologio andrebbe confrontato con quello di chi scrive.
+    _DIARY_HARVEST_KEY = "_diary_harvested"
+
     def __init__(self, sessions: SessionManager, consolidator: Consolidator,
                  session_ttl_minutes: int = 0,
                  compact_projects: bool = False,
@@ -75,6 +87,10 @@ class AutoCompact:
         # dicendolo, invece di compattare sulla fede.
         self._projects_subdir = projects_subdir
         self._archiving: set[str] = set()
+        # Separato da ``_archiving``: sono due lavori diversi sulla stessa
+        # sessione — uno la accorcia, l'altro la legge e basta — e un insieme
+        # solo farebbe rinviare l'uno per colpa dell'altro.
+        self._harvesting: set[str] = set()
         self._summaries: dict[str, tuple[str, datetime]] = {}
         # Il motivo dell'ultimo rinvio, per progetto: serve solo a non ripetere
         # la stessa riga di log ogni minuto (il giro TTL gira a 60s). La
@@ -318,6 +334,77 @@ class AutoCompact:
                 continue
             self._archiving.add(key)
             schedule_background(self._archive(key))
+        for key in self._diary_candidates():
+            if key in self._harvesting or key in active_session_keys:
+                continue
+            info = self.sessions.read_session_metadata(key)
+            if info is None or not self._is_expired(info.get("updated_at")):
+                continue
+            self._harvesting.add(key)
+            schedule_background(self._harvest_project_diary(key))
+
+    def _diary_candidates(self) -> tuple[str, ...]:
+        """I progetti la cui conversazione va **letta** per il diario personale.
+
+        Sono le sessioni-progetto che questo giro *non* sta gia' compattando. La
+        compattazione, quando e' accesa, riassume gia' e quel riassunto finisce
+        nella coda: raccogliere anche qui vorrebbe dire riassumere due volte la
+        stessa materia. Con la manopola spenta — il default — i due insiemi non
+        si toccano e questo e' l'unico che gira sui progetti.
+        """
+        compacting = set(self._idle_candidates())
+        return tuple(
+            key for key in self._project_session_keys() if key not in compacting
+        )
+
+    async def _harvest_project_diary(self, key: str) -> None:
+        """Riassume quel che un progetto ha detto di nuovo, **senza toccarlo**.
+
+        **La fase che rende la corsia di diario non vuota** (08/09/2026, v.
+        ``.agent/project-memory-plan.md``). Aperta la scrittura in
+        ``history.jsonl``, il trasporto restava quello della compattazione: un
+        riassunto lo produce solo chi compatta. Misurato sul telefono lo stesso
+        giorno, **3 sessioni di progetto su 9** erano mai state compattate — fra
+        le sei escluse c'erano quelle da 54, 64, 78 e 80 messaggi, cioe' proprio
+        le conversazioni piu' ricche. La corsia sarebbe esistita e non avrebbe
+        trasportato quasi niente.
+
+        **Riassume e non compatta, ed e' tutta la differenza.** La sessione non
+        perde un messaggio, ``_last_summary`` non viene toccato, il giardiniere
+        non c'entra: l'unico effetto e' una voce in piu' nella coda, con la
+        chiave del progetto. Percio' qui non serve nessuno dei due cancelli che
+        proteggono la compattazione di un progetto — ne' ``non un progetto``, ne'
+        ``_pages_carry_the_project``. Quelli difendono il *contenuto* del
+        progetto da una troncatura; qui non si tronca niente, e legare la lettura
+        all'orologio del giardiniere sarebbe la corsa fra orologi che quel metodo
+        esiste per evitare.
+
+        L'indice avanza **anche quando la chiamata LLM fallisce**, e non e' una
+        svista: in quel caso ``archive`` scrive il dump grezzo nella coda con la
+        stessa chiave, quindi la materia e' arrivata lo stesso e riassumerla di
+        nuovo produrrebbe una seconda voce sullo stesso contenuto.
+        """
+        try:
+            session = self.sessions.get_or_create(key)
+            messages = list(session.messages)
+            # ``min``: se qualcuno ha compattato in mezzo, l'indice puo' essere
+            # oltre la fine. Ripartire da li' invece che da zero — rileggere
+            # tutto produrrebbe un doppione di quel che e' gia' nella coda.
+            start = min(int(session.metadata.get(self._DIARY_HARVEST_KEY, 0)), len(messages))
+            fresh = messages[start:]
+            if len(fresh) < self._DIARY_HARVEST_MIN_MESSAGES:
+                return
+            await self.consolidator.archive(fresh, session_key=key)
+            session = self.sessions.get_or_create(key)
+            session.metadata[self._DIARY_HARVEST_KEY] = len(messages)
+            self.sessions.save(session)
+            logger.info(
+                "Diary harvest for {}: {} new messages read into the queue", key, len(fresh),
+            )
+        except Exception:
+            logger.exception("Diary harvest failed for {}", key)
+        finally:
+            self._harvesting.discard(key)
 
     async def _archive(self, key: str) -> None:
         # Secondo controllo, e non e' ridondante: ``_archive`` e' una coroutine
