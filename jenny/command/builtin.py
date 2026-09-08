@@ -328,7 +328,11 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                         metadata={"render_as": "text"},
                     ))
                     return
-                prompt, last_cursor = result
+                prompt, last_cursor = result[0], result[1]
+                # V. il gemello in ``runtime/cron_dispatch.py``: il tipo del batch
+                # sceglie la cassetta, e un doppio che ritorna una coppia nuda
+                # resta un batch personale.
+                scope = getattr(result, "scope", "personal")
                 if prologue.review is None:
                     # Un solo checkpoint per ciclo: se il review è appena girato
                     # lo snapshot è già stato preso e copre anche il turno
@@ -336,7 +340,9 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     # archiviato dopo il review non sarebbe pre-niente.
                     await take_dream_snapshot(snapshot_cb)
                 key = dream_session_key()
-                dream_tools = store.build_dream_tools(write_size_guard=prologue.guard)
+                dream_tools = store.build_dream_tools(
+                    write_size_guard=prologue.guard, scope=scope,
+                )
                 # Legato prima del turno: il ``finally`` qui sotto lo legge, e un
                 # ``process_direct`` che solleva lascerebbe altrimenti il nome non
                 # definito — cioè un ``NameError`` dentro il ``finally``, che si

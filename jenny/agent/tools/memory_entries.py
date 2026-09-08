@@ -542,8 +542,29 @@ class MemoryEntryTool(Tool):
         file_states: FileStates | None = None,
         write_size_guard: "WriteSizeGuard | None" = None,
         entry_archiver: Callable[[Path, str], None] | None = None,
+        allowed_targets: set[str] | None = None,
     ) -> None:
         self._workspace = Path(workspace)
+        # Le destinazioni che *questo* montaggio del tool concede. ``None`` vuol
+        # dire tutte, che e' il caso di Dream sulla conversazione personale e il
+        # comportamento di sempre.
+        #
+        # Serve a un caso solo, ed e' meccanico di proposito: un run di Dream su
+        # un batch di **progetto** riceve ``{"user"}``, perche' un fatto che
+        # nasce dentro un progetto puo' diventare identita' e non inventario
+        # (v. ``.agent/project-memory-plan.md``). Un rifiuto qui si prova con un
+        # test; la stessa regola scritta nel prompt no — e questa e' l'unica
+        # differenza che conta fra le due, perche' il prompt lo legge un modello
+        # e questa riga no.
+        #
+        # Filtrato contro ``MEMORY_TARGETS`` alla costruzione: un nome sbagliato
+        # nell'insieme darebbe un tool che rifiuta tutto, cioe' un guasto che si
+        # vede solo a run finito.
+        self._allowed_targets = (
+            set(MEMORY_TARGETS)
+            if allowed_targets is None
+            else {t for t in allowed_targets if t in MEMORY_TARGETS}
+        )
         # Gli stessi due contratti dei tool filesystem di Dream, e non per
         # simmetria: ``dream_should_advance_cursor`` legge questi contatori per
         # decidere se il cursore avanza. Un tool che scrivesse senza contarsi
@@ -600,7 +621,10 @@ class MemoryEntryTool(Tool):
                 },
                 "file": {
                     "type": "string",
-                    "enum": sorted(MEMORY_TARGETS),
+                    # L'elenco concesso, non tutto ``MEMORY_TARGETS``: dichiarare
+                    # una destinazione che verrebbe rifiutata e' un invito a
+                    # spendere un turno per sentirsi dire di no.
+                    "enum": sorted(self._allowed_targets),
                     "description": (
                         "'user' for USER.md (the person: preferences, history, "
                         "relationships), 'memory' for memory/MEMORY.md "
@@ -751,7 +775,24 @@ class MemoryEntryTool(Tool):
         file = str(kwargs.get("file") or "").strip().lower()
         if file not in MEMORY_TARGETS:
             return (
-                f"unknown file {file!r}: pass one of {', '.join(sorted(MEMORY_TARGETS))}"
+                f"unknown file {file!r}: pass one of "
+                f"{', '.join(sorted(self._allowed_targets))}"
+            )
+        if file not in self._allowed_targets:
+            # Distinto da "unknown": il nome esiste, la porta no. Loggato a
+            # WARNING perche' su un run di progetto vuol dire che il prompt non ha
+            # tenuto — e' il segnale che quel testo va rivisto, e senza log
+            # sarebbe invisibile (il modello riceve il rifiuto e tira dritto).
+            logger.warning(
+                "memory tool: write to {!r} refused, this run may only write {}",
+                file, ", ".join(sorted(self._allowed_targets)) or "nothing",
+            )
+            return (
+                f"Cannot write {MEMORY_TARGETS[file]} in this run: it is not one of "
+                f"{', '.join(sorted(self._allowed_targets))}. This is not a "
+                f"restriction to work around — a fact that does not belong in "
+                f"{' or '.join(MEMORY_TARGETS[t] for t in sorted(self._allowed_targets))} "
+                f"has no other home here, and should be left out."
             )
         path = self._path(file)
         text = self._read(path)

@@ -3,9 +3,18 @@
 ``compact_idle_session`` troncava la sessione anche quando ``archive()`` era
 degradata. Sulla conversazione personale il ripiego di ``archive()`` scrive il
 dump grezzo in ``history.jsonl``, quindi i messaggi rimossi restano da qualche
-parte; per una sessione-progetto ``append_history`` non scrive (di proposito,
-v. la sua docstring), quindi quel dump non esisteva e la troncatura li
-cancellava.
+parte; per una sessione-progetto ``append_history`` non scriveva affatto, quindi
+quel dump non esisteva e la troncatura li cancellava.
+
+**Dall'08/09/2026 il dump viene scritto anche per un progetto** (v.
+``.agent/project-memory-plan.md``), e la copia dentro il progetto serve lo
+stesso: sono due depositi per due lettori. Il dump in ``history.jsonl`` e' la
+coda da cui Dream estrae i fatti *sulla persona*, e da un prompt di progetto non
+e' raggiungibile — il filtro di ``read_recent_history_for_prompt`` lo esclude. La
+copia invece resta **dentro il progetto**, l'unico posto dove chi ci lavora puo'
+ritrovare quella conversazione. Percio' i test qui sotto non chiedono piu' che la
+coda sia vuota: chiedono che quel che ci finisce porti la **chiave del progetto**,
+che e' la cosa che lo tiene fuori dai prompt.
 
 Questi test fissano i quattro esiti: progetto degradato con la cartella al suo
 posto, progetto degradato senza cartella, progetto in salute, e la conversazione
@@ -23,6 +32,20 @@ from jenny.session.manager import SessionManager
 
 PROJECT_NAME = "patreon"
 PROJECT_KEY = f"project:{PROJECT_NAME}"
+
+def _diary(store: MemoryStore) -> list[dict]:
+    """Le voci finite nella coda, con la garanzia che ognuna sia attribuita.
+
+    La chiave e' meta' del confine (l'altra meta' e' la cassetta ridotta di
+    ``build_dream_tools(scope="project")``): una voce di progetto scritta senza
+    ``session_key`` sarebbe indistinguibile da una personale, entrerebbe in ogni
+    prompt e Dream la estrarrebbe con le regole sbagliate. Chiederlo qui, dove le
+    scritture nascono, e' piu' utile che chiederlo dove si leggono.
+    """
+    entries = store.read_unprocessed_history(since_cursor=0)
+    assert all(e.get("session_key") == PROJECT_KEY for e in entries), entries
+    return entries
+
 
 
 @pytest.fixture
@@ -99,8 +122,10 @@ class TestProjectDegradedCompaction:
         assert len(recovered) + len(kept) == 20
         assert not kept & {m["content"] for m in recovered}
 
-        # Il recinto del progetto resta chiuso: niente nel diario personale.
-        assert store.read_unprocessed_history(since_cursor=0) == []
+        # Il dump e' anche nella coda, e porta la chiave del progetto: e' la
+        # materia da cui Dream estrarra' i fatti sulla persona, e la chiave e'
+        # quel che gli impedisce di comparire in un prompt.
+        assert len(_diary(store)) == 1
 
     async def test_llm_failure_without_a_project_folder_keeps_the_tail(
         self, consolidator, mock_provider, tmp_path, store
@@ -116,7 +141,11 @@ class TestProjectDegradedCompaction:
         assert [m["content"] for m in reloaded.messages][0] == "user msg 0"
         assert len(reloaded.messages) == 20
         assert reloaded.last_consolidated == 0
-        assert store.read_unprocessed_history(since_cursor=0) == []
+        # Il dump grezzo c'e' — ``archive()`` lo scrive prima che la copia sia
+        # anche solo tentata — ma **non basta a lasciar troncare**: sta in una coda
+        # che il progetto non puo' leggere, e la sessione e' l'unico posto dove
+        # quei messaggi sono ancora raggiungibili da chi ci lavora.
+        assert len(_diary(store)) == 1
         assert list(tmp_path.glob("wikis/**/*.jsonl")) == []
 
     async def test_aborted_compaction_leaves_the_session_expired(
@@ -157,7 +186,11 @@ class TestProjectHealthyCompaction:
         assert reloaded.last_consolidated == 0
         assert reloaded.metadata["_last_summary"]["text"] == "Summary of old conversation."
         assert _copies(project_root) == []
-        assert store.read_unprocessed_history(since_cursor=0) == []
+        # Ramo felice: nella coda ci va il **riassunto**, non il dump, ed e' la
+        # forma buona — Dream estrae meglio da un riassunto che da una
+        # trascrizione.
+        diary = _diary(store)
+        assert [e["content"] for e in diary] == ["Summary of old conversation."]
 
     async def test_nothing_summary_is_unchanged(
         self, consolidator, mock_provider, project_root

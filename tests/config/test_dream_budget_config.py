@@ -29,11 +29,18 @@ def test_memory_and_user_ship_enforced_at_three_thousand() -> None:
     ancora su entrambi, ma lascia margine a chi pota invece di chiudere la porta
     a chi aggiunge. Sono numeri misurati, non arrotondamenti — se cambiano, che
     sia perché è cambiata una misura.
+
+    **``USER.md`` è a 4.000 dall'08/09/2026, ed è cambiata una misura.** La corsia
+    di diario dei progetti (``.agent/project-memory-plan.md``) porta in quel file
+    una sorgente che prima non ci arrivava: misurati sul Titan 2, i fatti
+    personali detti dentro i progetti valgono 1.749 caratteri su un file che ne
+    occupava 2.466 — il 140% del tetto di allora. Il numero nuovo è la somma
+    osservata arrotondata in giù, non un margine di comodo.
     """
     cfg = DreamConfig()
 
     assert cfg.memory_budget_chars == 3000
-    assert cfg.user_budget_chars == 3000
+    assert cfg.user_budget_chars == 4000
     assert cfg.review_every_runs == 12
 
 
@@ -131,7 +138,7 @@ def test_config_written_before_the_budgets_existed_still_loads(tmp_path) -> None
     # Non avendo le chiavi, prende i default nuovi: è l'unica installazione
     # esistente che il cambio di default raggiunge davvero.
     assert dream.memory_budget_chars == 3000
-    assert dream.user_budget_chars == 3000
+    assert dream.user_budget_chars == 4000
     assert dream.soul_budget_chars == 0
     assert dream.review_every_runs == 12
 

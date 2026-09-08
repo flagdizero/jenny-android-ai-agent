@@ -29,6 +29,15 @@ Perché archiviare per tempo un progetto è sbagliato, e non solo diverso: un
 progetto può stare fermo tre settimane e riprendere dove era — è il suo mestiere.
 Comprimerlo perché è stato zitto butta la sola cosa che una sessione di progetto
 ha in più della sua cartella.
+
+**E una quarta metà, dall'08/09/2026: sulla stessa sessione scaduta passa ora un
+secondo lavoro, che non è questo.** ``_harvest_project_diary`` legge i messaggi
+nuovi, li riassume nella coda del diario e **non toglie un messaggio** (v.
+``.agent/project-memory-plan.md``). Il recinto qui descritto non lo riguarda: non
+difende la sessione dall'essere *letta*, difende i suoi messaggi dall'essere
+*buttati*. Perciò i test di pianificazione qui sotto non chiedono più «non è
+stato schedulato niente» — che confonderebbe i due lavori e farebbe fallire il
+recinto per il motivo sbagliato — ma «non è stato schedulato un ``_archive``».
 """
 
 from __future__ import annotations
@@ -49,6 +58,17 @@ from jenny.session.manager import SessionManager
 
 PROJECT = "project:patreon"
 PERSONAL = "unified:default"
+
+
+def _archives(scheduled: list) -> list:
+    """I soli lavori che *accorciano* una sessione, fra quelli pianificati.
+
+    Distinguere per nome della coroutine e non contarle: sulla stessa sessione
+    scaduta passano due lavori con due mestieri opposti, e un conteggio che li
+    confonde non prova piu' il recinto.
+    """
+    return [c for c in scheduled if getattr(c, "__name__", "") == "_archive"]
+
 
 
 @pytest.fixture
@@ -166,7 +186,7 @@ def test_a_stale_project_is_never_scheduled_even_if_listed(
     autocompact._IDLE_CANDIDATE_KEYS = (PERSONAL, PROJECT)
     scheduled: list = []
     autocompact.check_expired(scheduled.append)
-    assert len(scheduled) == 1, "solo la personale, anche con il progetto in elenco"
+    assert len(_archives(scheduled)) == 1, "solo la personale, anche con il progetto in elenco"
     for coro in scheduled:
         coro.close()
 
@@ -650,8 +670,14 @@ def test_with_the_knob_off_a_promoted_project_still_does_not_compact(
     _stale(autocompact, PROJECT)
     _promoted(autocompact)
 
-    scheduled: list[object] = []
+    scheduled: list = []
     autocompact.check_expired(scheduled.append)
 
-    assert scheduled == []
+    assert _archives(scheduled) == []
     assert autocompact._idle_candidates() == (PERSONAL,)
+    # E il secondo lavoro c'e', perche' e' l'altro verso dello stesso invariante:
+    # la conversazione del progetto resta intera **e** quel che vi si e' detto
+    # sulla persona non si perde.
+    assert [getattr(c, "__name__", "") for c in scheduled] == ["_harvest_project_diary"]
+    for coro in scheduled:
+        coro.close()

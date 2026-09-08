@@ -82,7 +82,7 @@ class TestTheTemplateDoesNotAnswerForTheBatch:
         store.append_history("(nothing)")
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         # La premessa del trap: nel prompt intero i tag ci sono comunque.
         assert all(t in prompt for t in ("[durable]", "[permanent]", "[correction]"))
@@ -96,7 +96,7 @@ class TestTheTemplateDoesNotAnswerForTheBatch:
         store.append_history("- [durable] il gateway gira su Android")
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         history = MemoryStore.dream_prompt_history(prompt)
         assert "il gateway gira su Android" in history

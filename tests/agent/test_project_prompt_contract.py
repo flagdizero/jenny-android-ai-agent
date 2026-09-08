@@ -227,6 +227,17 @@ def test_the_block_stays_small() -> None:
     un'operazione resta nella skill.** Se il prossimo che aggiunge un paragrafo
     sta descrivendo *come si fa* qualcosa che capita di rado, quel paragrafo va
     nella skill e questo tetto ha fatto il suo lavoro.
+
+    **Tetto a 6.300 dall'08/09/2026, su un pavimento misurato di 5.739.** Il tetto
+    ha fatto il suo lavoro e la deliberazione è andata dall'altra parte: il
+    paragrafo aggiunto è politica di cattura — la classe che questa regola dice
+    di tenere qui — e chiude un difetto misurato, non un'ipotesi. Fino a quel
+    giorno la regola diceva «se sarà ancora vero, scrivilo» senza dire mai *sul
+    progetto*, e sul telefono si vedeva il risultato: **39 righe su 72** dei
+    journal dei progetti veri erano fatti sulla persona, promossi a pagine di
+    wiki che non c'entravano (v. ``.agent/project-memory-plan.md``). Sono ~210
+    token per turno di progetto, ed è il prezzo di non archiviare la famiglia di
+    qualcuno sotto un progetto di lavoro.
     """
     from jenny.utils.prompt_templates import render_template
 
@@ -262,7 +273,7 @@ def test_the_block_stays_small() -> None:
         "render, quindi questo tetto non sta sorvegliando quel che dice di sorvegliare. "
         "Manca `capture=True`?"
     )
-    assert len(rendered) <= 5400, (
+    assert len(rendered) <= 6300, (
         f"agent/project.md è {len(rendered)} caratteri: sta diventando il manuale della "
         "skill. Qui ci sta quel che si applica a ogni turno; il come si esegue "
         "un'operazione sta in `skills/llm-wiki/SKILL.md`."

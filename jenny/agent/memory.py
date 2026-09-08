@@ -10,7 +10,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple
 
 from loguru import logger
 
@@ -26,6 +26,7 @@ from jenny.session.keys import (
     is_internal_session_key,
     is_personal_session_key,
     is_project_session_key,
+    session_kind,
 )
 from jenny.utils.helpers import (
     ensure_dir,
@@ -36,6 +37,29 @@ from jenny.utils.path import atomic_write
 from jenny.utils.prompt_templates import render_template
 
 # Separatore fra il template di Dream e il batch di storia, dentro il prompt che
+# Quante voci di progetto gia' consumate vengono rimostrate a un run di progetto
+# (v. :meth:`MemoryStore._with_project_replay`). Tre e non uno: la misura
+# dell'08/09/2026 dice che l'unione di quattro letture recupera tutto e che una
+# sola ne prende fra un quarto e tre quarti, quindi due passaggi in piu' sono il
+# punto in cui la curva si appiattisce. Zero disattiva la finestra.
+_DREAM_PROJECT_REPLAY = 3
+
+
+class DreamBatch(NamedTuple):
+    """Un batch pronto per un run di Dream.
+
+    ``scope`` e' ``"personal"`` o ``"project"``, e non e' un'etichetta
+    descrittiva: sceglie il template del prompt **e** la cassetta
+    (:meth:`MemoryStore.build_dream_tools`). Viaggia nel valore di ritorno e non
+    in un attributo dello store perche' due run possono essere in volo insieme,
+    e uno stato condiviso li farebbe leggere la scelta dell'altro.
+    """
+
+    prompt: str
+    cursor: int
+    scope: str
+
+
 # ``MemoryStore.build_dream_prompt`` incolla. È una costante perché lo legge anche
 # ``dream_prompt_history``, che sul prompt fa il taglio inverso.
 DREAM_HISTORY_HEADER = "\n\n## Conversation History\n"
@@ -516,37 +540,37 @@ class MemoryStore:
         content more tightly; this default only exists to catch unintentional
         large writes (e.g. an LLM echoing its input back as a "summary").
 
-        **Una sessione di progetto non scrive qui, e ritorna ``0``.** Questo file
-        e' la coda di lavoro da cui Dream costruisce ``MEMORY.md``: un progetto
-        non alimenta la memoria di lungo periodo, e la sua compattazione continua
-        a funzionare senza toccarla, perche' quel che il turno dopo rilegge e'
-        ``_last_summary`` nei metadati della sessione, non questa coda.
+        **Una sessione di progetto scrive qui, con la propria chiave** (08/09/2026,
+        v. ``.agent/project-memory-plan.md``). Fino a quel giorno questo metodo
+        rifiutava una chiave ``project:`` e ritornava ``0``, e l'isolamento di un
+        progetto era un'*assenza*. Adesso e' **una chiave piu' una destinazione**,
+        ed e' un confine piu' stretto e non piu' largo: la chiave tiene la voce
+        fuori da ogni prompt (:meth:`read_recent_history_for_prompt`), e a valle
+        Dream puo' scriverne solo in ``USER.md`` (:meth:`build_dream_tools`).
 
-        Il gate sta qui e non nei chiamanti di proposito. E' l'imbuto: ci passano
-        sia il riassunto di ``Consolidator.archive`` sia il dump di
-        ``raw_archive`` quando la chiamata LLM fallisce, piu' qualunque chiamante
-        futuro. L'isolamento di un progetto deve essere un'*assenza*, e un filtro
-        replicato in N punti e' una cosa che si puo' sbagliare una volta e mettere
-        il progetto dentro il diario personale. ``0`` non e' un cursore valido —
-        partono da 1 — ed e' ignorato da tutti i chiamanti di produzione.
+        Il cancello e' caduto perche' guardava l'asse sbagliato. La riga
+        dichiarata in ``.agent/security.md`` e' «chi sei viaggia, dove altro
+        lavori no»: e' una regola sulla **categoria del fatto**, e questo era un
+        cancello sull'**origine della sessione**. Nel verso in uscita le due
+        coincidono, perche' esce solo l'identita'; in entrata no — un fatto
+        identitario detto dentro un progetto e' identita', cioe' esattamente la
+        classe autorizzata a viaggiare, e veniva fermato lo stesso. Misurato sul
+        Titan 2: 39 righe su 72 dei journal di progetto erano fatti sulla persona,
+        e 18 su 23 campionati non stavano in nessun file di memoria.
 
-        Nota l'asimmetria, e non "correggerla": per una sessione **interna** la
-        scrittura qui e' voluta, perche' un job cron rilegge le proprie voci per
-        ricordarsi dei run passati.
+        **Quel che non e' cambiato**: ci passano sempre entrambi gli scrittori —
+        il riassunto di ``Consolidator.archive`` e il dump di ``raw_archive``
+        quando la chiamata LLM fallisce — e continua a essere un imbuto solo. E
+        per una sessione **interna** la scrittura resta voluta, perche' un job
+        cron rilegge le proprie voci per ricordarsi dei run passati.
 
-        **E c'e' una seconda asimmetria, piu' grande, che questo cancello non
-        dice** (T7.8): il confine vale in **un verso solo**. Un progetto non entra
-        nel diario personale — questo imbuto, piu' il giro di chiave in
-        :meth:`read_recent_history_for_prompt` — ma il diario esce ovunque, e di
-        proposito: ``SOUL.md``, ``USER.md`` e ``MEMORY.md`` li compone
+        **E resta l'asimmetria grande** (T7.8): il diario esce ovunque, e di
+        proposito. ``SOUL.md``, ``USER.md`` e ``MEMORY.md`` li compone
         ``ContextBuilder`` dalla radice dell'installazione per **ogni** tipo di
         sessione, e ``MemoryRecallTool`` prende l'archivio di quella radice alla
-        costruzione ignorando lo scope del workspace. La riga di confine e' «chi
-        sei viaggia, dove altro lavori no»: quel che si chiude sulla sessione e'
-        l'inventario fra progetti, non l'identita'. Quindi «il diario resta
-        personale» non si legge come simmetrico — personale non vuol dire segreto
-        a un progetto. Il ragionamento intero, e i due soli blocchi che si
-        chiudono, stanno in ``.agent/security.md``.
+        costruzione ignorando lo scope del workspace. Quel che si chiude sulla
+        sessione e' l'inventario fra progetti, non l'identita'. Il ragionamento
+        intero sta in ``.agent/security.md``.
 
         ``prompt_visible=False`` scrive la voce **per Dream e non per i prompt**:
         :meth:`read_recent_history_for_prompt` la salta. Serve a ``/new``, che
@@ -560,13 +584,6 @@ class MemoryStore:
         intanto arrivato. Dream continua a vederla: e' la sola cosa che questo
         flag non tocca.
         """
-        if session_key and is_project_session_key(session_key):
-            logger.debug(
-                "history append skipped for project session {}: a project does not "
-                "feed the personal diary",
-                session_key,
-            )
-            return 0
         limit = max_chars if max_chars is not None else _HISTORY_ENTRY_HARD_CAP
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         raw = entry.rstrip()
@@ -739,6 +756,22 @@ class MemoryStore:
         if not session_key:
             return True
         return is_personal_session_key(session_key)
+
+    @classmethod
+    def _history_entry_scope(cls, session_key: str | None) -> str:
+        """La categoria di una voce di history: ``personal``, ``project``, ``internal``.
+
+        Il vocabolario e' quello unico di :mod:`jenny.session.keys`; qui si
+        aggiunge solo la convenzione su ``None``, che quel modulo non ha perche'
+        lavora su chiavi sempre presenti. **Una voce senza chiave conta come
+        personale**, ed e' la stessa scelta conservativa di
+        :meth:`_is_personal_history_session`: quel campo e' opzionale e assente in
+        tutte le voci scritte prima che l'attribuzione esistesse, e trattarle
+        altrimenti renderebbe invisibile a Dream la storia gia' sul disco.
+        """
+        if not session_key:
+            return "personal"
+        return session_kind(session_key)
 
     def read_recent_history_for_prompt(
         self,
@@ -1071,10 +1104,12 @@ class MemoryStore:
 
     def build_dream_prompt(
         self, *, max_entries: int = 20, gauge: str = "",
-    ) -> tuple[str, int] | None:
+    ) -> "DreamBatch | None":
         """Build the Dream prompt with unprocessed history context.
 
-        Returns ``(prompt, last_cursor)`` or ``None`` if nothing to process.
+        Ritorna un :class:`DreamBatch` — che resta spacchettabile come
+        ``(prompt, cursor)`` solo per i primi due campi — o ``None`` se non c'e'
+        niente da processare.
 
         *gauge* è la riga di riempimento dei file di memoria (es.
         ``MEMORY.md [67% — 1.474/2.200 char]``) da rendere nel prompt come
@@ -1098,28 +1133,108 @@ class MemoryStore:
         # (e riscartare) al run seguente. E' il compromesso conservativo giusto
         # — costa la rilettura di poche righe, mentre saltare in avanti
         # rischierebbe di consumare una voce personale senza averla mai letta.
-        entries = [
-            entry
+        pending = [
+            (entry, scope)
             for entry in self.read_unprocessed_history(since_cursor=last_cursor)
-            if self._is_personal_history_session(entry.get("session_key"))
+            if (scope := self._history_entry_scope(entry.get("session_key"))) != "internal"
         ]
-        if not entries:
+        if not pending:
             return None
 
-        batch = entries[:max_entries]
+        # **Un batch, un tipo solo.** Si prende la sequenza iniziale dello stesso
+        # tipo e ci si ferma al primo cambio: le due categorie hanno prompt
+        # diversi, cassette diverse e destinazioni diverse, quindi mescolarle in
+        # un batch vorrebbe dire scegliere quale delle due regole applicare a
+        # materiale dell'altra.
+        #
+        # Il prezzo e' un batch corto quando i tipi si alternano, e si paga con un
+        # run in piu' — il cursore avanza comunque a ogni giro, quindi non c'e'
+        # nessuno stallo, solo qualche ciclo di Dream in piu' per drenare. E'
+        # il prezzo giusto: l'alternativa che tiene i batch grandi e' un cursore
+        # per tipo, cioe' due filigrane che possono divergere su un file
+        # append-only riscritto anche a mano.
+        scope = pending[0][1]
+        batch_entries = []
+        for entry, entry_scope in pending[:max_entries]:
+            if entry_scope != scope:
+                break
+            batch_entries.append(entry)
+
         history_text = "\n".join(
             f"[{e['timestamp']}] {truncate_text(e['content'], 500)}"
-            for e in batch
+            for e in batch_entries
         )
-        skill_creator_path = str(self.workspace / "skills" / "skill-creator" / "SKILL.md")
-        template = render_template(
-            "agent/dream.md",
-            strip=True,
-            skill_creator_path=skill_creator_path,
-            budget_gauge=gauge,
-        )
+        if scope == "project":
+            template = render_template(
+                "agent/dream_project.md", strip=True, budget_gauge=gauge,
+            )
+            history_text = self._with_project_replay(history_text, last_cursor)
+        else:
+            skill_creator_path = str(
+                self.workspace / "skills" / "skill-creator" / "SKILL.md"
+            )
+            template = render_template(
+                "agent/dream.md",
+                strip=True,
+                skill_creator_path=skill_creator_path,
+                budget_gauge=gauge,
+            )
         prompt = f"{template}{DREAM_HISTORY_HEADER}{history_text}"
-        return (prompt, batch[-1]["cursor"])
+        return DreamBatch(prompt, batch_entries[-1]["cursor"], scope)
+
+    def _with_project_replay(self, history_text: str, last_cursor: int) -> str:
+        """La storia del batch, preceduta dalle ultime voci di progetto gia' consumate.
+
+        **Misurato l'08/09/2026**, e la ragione per cui esiste: su materiale
+        ambiguo — quello in cui ogni fatto e' vestito da progetto — quattro
+        estrazioni identiche hanno restituito **sottoinsiemi diversi** (1, 2, 3 e 2
+        fatti su 4, intersezione vuota, unione completa). Su materiale non ambiguo
+        la stessa estrazione era stabile, 10 su 10 ogni volta. Con un cursore che
+        avanza una volta sola, quella meta' persa e' persa per sempre, e ogni notte
+        e' una meta' diversa.
+
+        Rimostrare le ultime voci gia' consumate da' alla stessa materia un secondo
+        e un terzo passaggio. Non serve nessuna deduplica nuova: un fatto gia'
+        atterrato viene riproposto e ``memory add`` risponde "already present"
+        senza scrivere, che e' esattamente il conto su cui si regge
+        ``batch_was_not_consolidated``.
+
+        **E il cursore avanza lo stesso**, che e' la differenza fra questo e un
+        cursore che arretra. Arretrare di N su un batch di N o meno vuol dire non
+        avanzare mai: livelock, e silenzioso. Qui la finestra e' *contesto in
+        piu'* dentro un batch che resta quello nuovo, quindi non c'e' nessuno
+        stato per-voce da tenere e nessun modo di restare fermi.
+
+        Costa qualche centinaio di token per run di progetto e niente altro.
+        """
+        if _DREAM_PROJECT_REPLAY <= 0:
+            return history_text
+        seen = [
+            entry
+            for entry, cursor in self._iter_valid_entries()
+            if cursor <= last_cursor
+            and self._history_entry_scope(entry.get("session_key")) == "project"
+        ][-_DREAM_PROJECT_REPLAY:]
+        if not seen:
+            return history_text
+        replay = "\n".join(
+            f"[{e['timestamp']}] {truncate_text(e['content'], 500)}" for e in seen
+        )
+        return "\n".join([
+            "### Already processed, shown again",
+            "",
+            "These entries were read by an earlier run. They are here because a single "
+            "reading of project material misses a different half each time, so a second "
+            "look is cheaper than a fact lost for good. Everything already saved will "
+            "come back as 'already present' — propose it anyway rather than deciding "
+            "here what was kept.",
+            "",
+            replay,
+            "",
+            "### New in this batch",
+            "",
+            history_text,
+        ])
 
     @staticmethod
     def dream_prompt_history(prompt: str) -> str:
@@ -1144,9 +1259,39 @@ class MemoryStore:
         return history
 
     def build_dream_tools(
-        self, *, write_size_guard: Callable[[Path, str], str | None] | None = None,
+        self,
+        *,
+        write_size_guard: Callable[[Path, str], str | None] | None = None,
+        scope: str = "personal",
     ):
         """Build the restricted tool registry used by Dream runs.
+
+        *scope* dice **su che tipo di batch** gira questo run, e cambia la
+        cassetta invece del prompt (08/09/2026, v. ``.agent/project-memory-plan.md``):
+
+        - ``"personal"`` — il default e il comportamento di sempre: i quattro tool
+          file sui tre file di memoria piu' ``skills/``, e il tool per voci su
+          entrambe le destinazioni;
+        - ``"project"`` — un batch di voci ``project:``. La cassetta e' ``read_file``
+          piu' il tool per voci **sulla sola ``USER.md``**, e nient'altro.
+
+        **Perche' togliere i tool invece di dirlo nel prompt.** La regola che
+        questo run deve rispettare — da un progetto puo' uscire identita', mai
+        inventario — e' la stessa che ``.agent/security.md`` dichiara, e finora
+        era garantita da un'*assenza* (un progetto non scriveva in ``history``).
+        Aperta quella porta, la garanzia deve stare da qualche parte, e un
+        paragrafo in un template non e' una garanzia: e' una richiesta. Con la
+        cassetta ridotta, ``memory/MEMORY.md`` e ``SOUL.md`` non sono
+        raggiungibili nemmeno da un modello che ci provasse, e la cosa si prova
+        con un test invece che con una lettura del prompt.
+
+        Niente ``edit_file``/``apply_patch``/``write_file`` nel ramo di progetto,
+        e non e' zelo: quei tre scrivono per *file interi* su una allowlist, e
+        ridurre la allowlist a ``USER.md`` lascerebbe comunque tre strade per
+        riscriverla tutta quando la strada giusta e' una voce alla volta. Il
+        prompt di quel ramo non li nomina, il budget si libera con
+        ``memory remove``/``replace``, e ``read_file`` resta perche' leggere non
+        e' scrivere.
 
         Il ``FileStates`` creato per il run viene esposto come attributo
         ``file_states`` del registry restituito: è per-run (nessuna condivisione
@@ -1191,11 +1336,16 @@ class MemoryStore:
         # riscriva USER.md o memory/MEMORY.md fa passare dall'archivio le voci che
         # sta per togliere, senza che nessuno debba ricordarsene.
         entry_archiver = make_entry_archiver(workspace)
-        editable_files = [
-            self.memory_file.resolve(),
-            self.soul_file.resolve(),
-            self.user_file.resolve(),
-        ]
+        is_project_scope = scope == "project"
+        editable_files = (
+            [self.user_file.resolve()]
+            if is_project_scope
+            else [
+                self.memory_file.resolve(),
+                self.soul_file.resolve(),
+                self.user_file.resolve(),
+            ]
+        )
 
         # Il guard va a tutti e quattro, ``ReadFileTool`` compreso, dove oggi
         # non fa nulla: è il costruttore che decide cosa passa, non un elenco
@@ -1298,8 +1448,21 @@ class MemoryStore:
             file_states=file_states,
             write_size_guard=write_size_guard,
             entry_archiver=entry_archiver,
+            allowed_targets={"user"} if is_project_scope else None,
         )
         tools.register(memory_entries)
+        if is_project_scope:
+            # I tre scrittori di file interi via, e per esclusione invece che per
+            # costruzione condizionale: le loro registrazioni qui sopra portano
+            # ciascuna il proprio ragionamento, e infilarle dentro un ``if`` per
+            # una variante avrebbe spostato tre argomenti dentro il ramo di un
+            # quarto. Un elenco di nomi accanto alla ragione si legge; tre blocchi
+            # rientrati no.
+            #
+            # ``read_file`` resta: leggere non e' scrivere, e questo run legge il
+            # workspace intero come tutti gli altri (v. il commento di T9.10).
+            for whole_file_writer in ("edit_file", "apply_patch", "write_file"):
+                tools.unregister(whole_file_writer)
         # Esposto per ``dream_should_advance_cursor``: stesso oggetto usato da
         # tutti i tool sopra (passato esplicitamente ai costruttori), quindi
         # riflette le scritture del run.

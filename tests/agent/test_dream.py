@@ -31,7 +31,7 @@ class TestBuildDreamPrompt:
         store.append_history("hello")
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, cursor = result
+        prompt, cursor = result.prompt, result.cursor
         assert cursor > 0
         assert "## Conversation History" in prompt
         assert "hello" in prompt
@@ -40,7 +40,7 @@ class TestBuildDreamPrompt:
         store.append_history("first")
         r1 = store.build_dream_prompt()
         assert r1 is not None
-        _, c1 = r1
+        c1 = r1.cursor
 
         # Cursor not yet advanced — same entries are still available
         assert store.build_dream_prompt() is not None
@@ -54,14 +54,14 @@ class TestBuildDreamPrompt:
         store.append_history("second")
         r2 = store.build_dream_prompt()
         assert r2 is not None
-        _, c2 = r2
+        c2 = r2.cursor
         assert c2 > c1
 
     def test_prompt_includes_skill_creator_path(self, store):
         store.append_history("test")
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
         assert "skill-creator" in prompt
 
     def test_truncates_long_entries(self, store):
@@ -69,7 +69,7 @@ class TestBuildDreamPrompt:
         store.append_history(long_content)
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
         # The full 2000 chars should not appear — truncated to 500
         assert long_content not in prompt
         assert "x" * 500 in prompt
@@ -80,7 +80,7 @@ class TestBuildDreamPrompt:
 
         result = store.build_dream_prompt(max_entries=20)
         assert result is not None
-        prompt, cursor = result
+        prompt, cursor = result.prompt, result.cursor
 
         assert cursor == 20
         assert "entry-01" in prompt
@@ -90,7 +90,7 @@ class TestBuildDreamPrompt:
         store.set_last_dream_cursor(cursor)
         next_result = store.build_dream_prompt(max_entries=20)
         assert next_result is not None
-        next_prompt, next_cursor = next_result
+        next_prompt, next_cursor = next_result.prompt, next_result.cursor
         assert next_cursor == 25
         assert "entry-21" in next_prompt
         assert "entry-25" in next_prompt
@@ -106,7 +106,7 @@ class TestBuildDreamPrompt:
         result = store.build_dream_prompt()
 
         assert result is not None
-        prompt, cursor = result
+        prompt, cursor = result.prompt, result.cursor
         assert cursor == 2
         assert "usable memory" in prompt
 
@@ -142,7 +142,7 @@ class TestDreamPromptBudgetGauge:
         store.append_history("hello")
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         legacy_template = render_template(
             "agent/dream.md",
@@ -159,7 +159,7 @@ class TestDreamPromptBudgetGauge:
         store.append_history("hello")
         result = store.build_dream_prompt(gauge="MEMORY.md [67% - 1474/2200 chars]")
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         assert "## Budget" in prompt
         assert "MEMORY.md [67% - 1474/2200 chars]" in prompt
@@ -174,7 +174,7 @@ class TestDreamPromptBudgetGauge:
         store.append_history("hello")
         result = store.build_dream_prompt(gauge="MEMORY.md [91%]")
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         assert prompt.index("## Editing") < prompt.index("## Budget")
         assert prompt.index("## Budget") < prompt.index("## Conversation History")
@@ -330,7 +330,7 @@ class TestThePromptTeachesTheEntryTool:
         store.append_history("hello")
         result = store.build_dream_prompt(gauge="USER.md [96%]")
         assert result is not None
-        prompt, _ = result
+        prompt = result.prompt
 
         assert _RETIRED_BLESSING not in prompt
         assert "prunes and then stops has saved nothing" in prompt
@@ -1132,7 +1132,7 @@ class TestEphemeralDirect:
 
         result = store.build_dream_prompt(max_entries=20)
         assert result is not None
-        prompt, cursor = result
+        prompt, cursor = result.prompt, result.cursor
         assert cursor == 20
 
         captured: dict[str, list[dict]] = {}
