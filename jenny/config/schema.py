@@ -95,8 +95,22 @@ class DreamConfig(Base):
         validation_alias=AliasChoices("memoryBudgetChars", "memory_budget_chars"),
         serialization_alias="memoryBudgetChars",
     )
+    # ``USER.md`` sta a **4.000 dal 08/09/2026**, e i 1.000 in piu' rispetto a
+    # ``MEMORY.md`` hanno una causa sola: la corsia di diario dei progetti (v.
+    # ``.agent/project-memory-plan.md``). Misurato sul Titan 2 quel giorno, i
+    # fatti personali detti dentro i progetti e mai arrivati qui valgono **1.749
+    # caratteri** su un file che ne occupava 2.466 su 3.000 — cioe' il 140% del
+    # tetto di allora, 1.215 di sforamento la prima notte. Un tetto che morde
+    # *mentre* si apre la sorgente non pota la ricrescita: consegna venti fatti
+    # nuovi al review pass, che si sa gia' potare male alla seconda passata di
+    # fila. 4.000 e' 2.466 + 1.749 arrotondato in giu': tiene il file sopra la
+    # somma osservata senza smettere di mordere, e resta un numero misurato.
+    #
+    # Si paga in **ogni** prompt di **ogni** sessione, non solo dove la corsia
+    # serve: ~250 token per turno. E' il prezzo dichiarato dei fatti che prima
+    # non c'erano, non un effetto collaterale.
     user_budget_chars: int = Field(
-        default=3000,
+        default=4000,
         ge=0,
         validation_alias=AliasChoices("userBudgetChars", "user_budget_chars"),
         serialization_alias="userBudgetChars",

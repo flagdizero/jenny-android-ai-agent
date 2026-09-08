@@ -162,10 +162,22 @@ fidarsi — quel venv si è già rotto due volte).
 - [x] **7bis.2** test che fallisce sull'asserzione (non sulla sintassi) se la
       riga si toglie; secondo APK e seconda raffica a confermarlo
 
-## Passo 8 — l'interruttore *(dopo il 7)*
+## Passo 8 — l'interruttore *(pianificato l'08/09/2026; decisioni G1–G8 nel piano)*
 
-- [ ] **8.1** riga "Espressioni" in Personalizzazione → Mascotte, via
-      `store.mutate()`
-- [ ] **8.2** i18n `it`/`en`
-- [ ] **8.3** `docs/reference/settings.md`
-- [ ] **8.4** test di route; verifica verde; commit `-s`
+- [ ] **8.1** backend: `_apply_bool` per `mascot_mood`/`mascotMood` in
+      `_apply_agent_defaults`, valore nel payload `agent`, **niente**
+      `restart_required` (si rilegge a ogni turno)
+- [ ] **8.2** test route: accetta `1`/`0`, round-trip nel payload, niente
+      riavvio
+- [ ] **8.3** client: `_toggleRow` + `_hint` nel blocco Mascotte, lettura da
+      `this.data` con `?? true`, rollback sull'errore come il toggle posizione
+- [ ] **8.4** i18n `it`/`en`: `settings.mascotMood`, `settings.mascotMoodHint`
+      col numero misurato (~200 token per turno)
+- [ ] **8.5** la prova che spenta non costa: zero richieste, zero frame, zero
+      righe nel bucket `mascot`
+- [ ] **8.6** docs: `settings.md` (riga nuova **e** la frase sui controlli
+      solo-locali, che oggi mette la mascotte fra quelli che non toccano
+      `config.json`), `themes-mascot.md`, `configuration.md`
+- [ ] **8.7** verifica completa verde; commit `-s`
+- [ ] **8.8** telefono: spenta → un turno → bucket fermo e nessun frame;
+      riaccesa → un turno → il frame torna

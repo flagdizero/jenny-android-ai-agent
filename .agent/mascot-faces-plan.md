@@ -364,10 +364,101 @@ Albero pulito (Chaquopy impacchetta l'albero, non HEAD), `installDebug`, e poi:
 9. un turno da Telegram fa reagire la mascotte nella WebUI;
 10. l'onboarding, con `workspace/` azzerato: Jenny ha la faccia.
 
-### Passo 8 — l'interruttore *(solo dopo il 7)*
-La riga "Espressioni" in Personalizzazione → Mascotte, via `store.mutate()`,
-i18n `it`/`en`, `docs/reference/settings.md`, test di route. Ora ha senso:
-c'è qualcosa da spegnere.
+### Passo 8 — l'interruttore *(pianificato l'08/09/2026, dopo il 7)*
+
+Una riga in **Personalizzazione → Mascotte** per `agents.defaults.mascotMood`,
+con scritto quanto costa. Due requisiti dell'utente, entrambi verificabili:
+**spenta non parte nessuna richiesta**, e **il prezzo sta scritto nella riga**.
+
+#### Il prezzo, misurato
+
+Dal bucket `mascot` sul telefono (`workspace/.jenny/webui/token-usage.json`):
+
+| giorno | richieste | token | per turno | sul totale del giorno |
+|---|---|---|---|---|
+| 07/09 (prompt a 5 lettere) | 3 | 547 | **182** | 0,01% di 4,64 M |
+| 08/09 (prompt a 4 lettere) | 14 | 3.037 | **217** | 0,07% di 4,55 M |
+
+Cioè **circa 200 token per turno**, e una frazione trascurabile della
+giornata: il grosso lo mangiano `cron` (3,6 M) e `user` (0,63 M). Il testo
+della riga deve dire il numero per turno — è la cosa su cui l'utente decide —
+non la percentuale, che è contesto per qui.
+
+#### Le decisioni
+
+**G1 — La riga sta nel blocco Mascotte**, anche se quel blocco è dichiarato
+"tutto sul telefono". È dove la si cerca, e la sezione Personalizzazione già
+mescola: `bot_name`, due righe più sotto, è `config.json`. Ma il costo va
+detto: **questa finisce in `config.json` e nel backup**, a differenza di
+visibilità e taglia che vivono nel `localStorage`. Quindi
+`docs/reference/settings.md`, che oggi elenca la mascotte fra i controlli che
+«never touch `config.json` at all», va corretto invece di lasciato mentire.
+
+**G2 — Il testo dice il prezzo con un numero, non un aggettivo.** «Circa 200
+token per turno; spenta non parte nessuna richiesta». "Risparmia token" da solo
+non fa decidere nessuno, e gonfiarlo sarebbe peggio: 200 token sono davvero
+pochi, e chi legge ha diritto di saperlo prima di andare a cercare
+l'interruttore.
+
+**G3 — Spenta non parte nessuna richiesta, ed è già così: si aggiunge la
+prova.** Il flag si legge nel task in background **prima** di toccare la
+sessione, il provider e la contabilità (`webui_turns.py`,
+`_schedule_mood_from_event`). Il test che c'è prova che il provider non viene
+chiamato; se ne aggiunge uno che pretende anche **nessun frame** e **nessuna
+riga nel bucket dei token**.
+
+L'unico lavoro che resta a spenta è **una lettura di `config.json` per turno**,
+e resta lì di proposito: il flag deve valere dal turno dopo senza riavvio, e
+`load_config` non ha cache — spostare la lettura nel gestore dell'evento
+metterebbe un parse del file sul percorso di *ogni* turno, invece che in un
+task che esce subito. Nessun token, nessuna rete: quello che l'utente chiede.
+
+**G4 — Passa dalla via generica, non da una route nuova.**
+`api.updateSettings({mascot_mood})` → `_apply_agent_defaults`, dove
+`_apply_bool` esiste già; il valore si espone nel payload `agent` accanto a
+`bot_name`. Zero superficie nuova sul server.
+
+**G5 — Nessun riavvio.** A differenza di `bot_name` e `timezone`,
+`mascot_mood` **non** alza `restart_required`: si rilegge a ogni turno. Un test
+lo pinna, altrimenti il primo copia-incolla dalla riga accanto ci mette il
+riavvio e la UI chiede una cosa che non serve.
+
+**G6 — Il toggle si legge da `this.data`, con `?? true`.** È il default dello
+schema: un payload non ancora arrivato non deve mostrare "spento" per una cosa
+accesa. `_renderMascot()` resta senza parametri e legge `this.data`, così non
+si deve infilare `d` in `_renderTheme` solo per questo.
+
+**G7 — Rollback sull'errore**, come fa il toggle della posizione: se la
+scrittura non passa, l'interruttore torna indietro e il toast lo dice. Un
+interruttore che resta dove l'hai messo mentre il file non è cambiato è la
+bugia peggiore che una schermata di impostazioni possa raccontare.
+
+**G8 — Cosa non fa.** Non espone `mascotMoodModelPreset` (resta in
+`config.json`: è una leva da smanettone e una riga in più la pagherebbero
+tutti). E spegnendola **non** cancella la faccia già a schermo: quella scade da
+sé in `MOOD_HOLD_MS`, e un'animazione interrotta a metà per un'impostazione
+sarebbe più brusca del lasciarla finire.
+
+#### I passi
+
+1. **Backend**: `_apply_bool` per `mascot_mood`/`mascotMood` in
+   `_apply_agent_defaults`, il valore nel payload `agent`, `restart_required`
+   **non** toccato. Test in `tests/webui/test_settings_update_api.py` (accetta
+   `1`/`0`, round-trip nel payload, niente riavvio).
+2. **Client**: `_toggleRow` + `_hint` nel blocco Mascotte, wiring con rollback,
+   lettura da `this.data` con `?? true`.
+3. **i18n** `it`/`en`: `settings.mascotMood` e `settings.mascotMoodHint` (col
+   numero). La parità i18n è già un test.
+4. **La prova che spenta non costa**: in `tests/session/test_webui_turns.py`,
+   un test che con `mascotMood: false` pretende **zero** richieste al provider,
+   **zero** frame e **zero** righe nel bucket `mascot`.
+5. **Docs**: `docs/reference/settings.md` (la riga nuova, e la frase sui
+   controlli solo-locali corretta), `docs/using/themes-mascot.md` (dove si
+   spegne e quanto costa), `docs/reference/configuration.md` (rimando alla
+   riga).
+6. **Sul telefono**: spenta → un turno → il bucket `mascot` **non si muove** e
+   nessun frame arriva al client WS; riaccesa → un turno → il frame torna. È
+   la verifica del requisito, non un controllo di contorno.
 
 ---
 

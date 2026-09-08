@@ -25,6 +25,18 @@ What the user tells you is material, the same way a document is. **If it will st
 week, write it down before you answer.** A constraint, a decision, a preference, a name, a date —
 yes. Mood, courtesies, the thread of the discussion — no.
 
+**About the project, though — and that half of the rule was missing.** People say things about
+themselves while talking about something else: a health condition, someone in their family, what
+they own, what they cannot stand. Those are facts, and they are not this project's facts. A
+journal line becomes a page named after the thing it is about, so a fact about the person becomes
+a page about the person filed under a project that has nothing to do with them — where nobody
+will look for it, and where it will be read as project material by every later pass.
+
+So: **do not journal it.** Not here, not "just in case". The test is the same one, turned around
+— if the project were deleted tomorrow and the fact would still matter, it is not a fact of this
+project. Answer the person normally; the line simply does not get written. Somewhere else already
+keeps what the user is like, and it is not your job here.
+
 The gesture is **one `journal_append` call per fact** — not per turn. Nothing else: no page to
 create, no folder to choose, no subagent to spawn. It is cheap on purpose: a capture that costs a
 decision is a capture that does not happen, and what stays only in the chat is lost to the
