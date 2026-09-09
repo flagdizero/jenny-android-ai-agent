@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from jenny.providers.openai_compat_provider import OpenAICompatProvider
 from jenny.providers.openai_responses.converters import (
     convert_messages,
     convert_tools,
@@ -270,6 +271,164 @@ class TestConvertMessages:
         assert items[0]["role"] == "user"
         assert items[1]["type"] == "function_call"
         assert items[2]["type"] == "function_call_output"
+
+
+# ======================================================================
+# converters - tool result image content
+# ======================================================================
+
+
+class TestToolResultImageContent:
+    """``read_file`` su un'immagine ritorna blocchi ``image_url``.
+
+    Stessa famiglia del difetto chiuso sul ramo Anthropic (v.
+    ``tests/providers/test_anthropic_tool_result.py``): lì i blocchi arrivavano
+    non convertiti e l'API li rifiutava, qui ``json.dumps`` riusciva sempre e
+    versava il data URI nel prompt come testo, senza errore e senza traccia.
+
+    ``function_call_output.output`` accetta una lista di input part, quindi la
+    consegna non è un segnaposto: è l'immagine.
+    """
+
+    DATA_URI = "data:image/png;base64,QUJDREVG"
+    IMAGE_BLOCKS = [
+        {
+            "type": "image_url",
+            "image_url": {"url": DATA_URI},
+            "_meta": {"path": "/w/shot.png"},
+        },
+        {"type": "text", "text": "(Image file: shot.png)"},
+    ]
+
+    @staticmethod
+    def _tool_output(content):
+        _, items = convert_messages([{
+            "role": "tool", "tool_call_id": "c1", "name": "read_file",
+            "content": content,
+        }])
+        assert items[0]["type"] == "function_call_output"
+        return items[0]["output"]
+
+    def test_image_block_becomes_a_native_input_image(self):
+        """Il difetto: era un data URI dentro una stringa JSON."""
+        output = self._tool_output(self.IMAGE_BLOCKS)
+        assert isinstance(output, list)
+        assert output[0] == {
+            "type": "input_image", "image_url": self.DATA_URI, "detail": "auto",
+        }
+
+    def test_no_json_scaffolding_reaches_the_model(self):
+        """La prova del difetto: nessun blocco serializzato come testo.
+
+        Con il difetto l'output era ``'[{"type": "image_url", ...}]'``, cioè il
+        modello leggeva l'impalcatura e il base64 al posto dell'immagine.
+        """
+        output = self._tool_output(self.IMAGE_BLOCKS)
+        rendered = json.dumps(output, ensure_ascii=False)
+        assert '"type": "image_url"' not in rendered
+        assert '\"type\": \"image_url\"' not in rendered
+
+    def test_sibling_text_block_survives(self):
+        """Il testo che accompagna l'immagine resta, come input_text."""
+        output = self._tool_output(self.IMAGE_BLOCKS)
+        assert {"type": "input_text", "text": "(Image file: shot.png)"} in output
+
+    def test_meta_never_goes_on_the_wire(self):
+        """``_meta`` è nostro: l'API non lo conosce e lo rifiuterebbe."""
+        output = self._tool_output(self.IMAGE_BLOCKS)
+        assert "_meta" not in json.dumps(output, ensure_ascii=False)
+
+    def test_unusable_image_block_is_dropped_not_stringified(self):
+        """Un ``image_url`` senza URL non ha nulla da dire: si salta."""
+        output = self._tool_output([
+            {"type": "image_url", "image_url": {"url": self.DATA_URI}},
+            {"type": "image_url", "image_url": {}},
+        ])
+        assert output == [
+            {"type": "input_image", "image_url": self.DATA_URI, "detail": "auto"},
+        ]
+
+    def test_unknown_block_is_degraded_to_text_not_lost(self):
+        """In un tool result un pezzo sparito in silenzio è peggio di uno grezzo."""
+        output = self._tool_output([
+            {"type": "image_url", "image_url": {"url": self.DATA_URI}},
+            {"type": "resource", "uri": "file:///w/a.bin"},
+        ])
+        assert output[0]["type"] == "input_image"
+        assert output[1]["type"] == "input_text"
+        assert "file:///w/a.bin" in output[1]["text"]
+
+    def test_image_only_list_without_url_falls_back_to_json(self):
+        """Nessuna part costruibile: si torna al JSON, che qui non porta base64."""
+        content = [{"type": "image_url", "image_url": {}}]
+        assert self._tool_output(content) == json.dumps(content, ensure_ascii=False)
+
+    def test_text_only_list_keeps_json_behaviour(self):
+        """Regressione: senza immagini la serializzazione resta quella di prima."""
+        content = [{"type": "text", "text": "riga 1"}, {"type": "text", "text": "riga 2"}]
+        assert self._tool_output(content) == json.dumps(content, ensure_ascii=False)
+
+    def test_string_content_untouched(self):
+        """Il caso normale — una stringa — non passa da nessuna conversione."""
+        assert self._tool_output("plain result") == "plain result"
+
+    def test_dict_content_keeps_json_behaviour(self):
+        """Un dict non è una lista di blocchi: resta JSON."""
+        content = {"temp": 72}
+        assert self._tool_output(content) == json.dumps(content, ensure_ascii=False)
+
+
+class TestResponsesBodyCarriesToolImages:
+    """Le due strade — ``chat`` e ``chat_stream`` — hanno un solo convertitore.
+
+    ``_build_responses_body`` è il punto in cui entrambe passano
+    (``openai_compat_provider.py``), quindi provarlo una volta copre lo
+    streaming e il non-streaming; il sanitizer dei messaggi sta in mezzo, ed è
+    l'altro posto in cui l'immagine potrebbe perdersi.
+    """
+
+    @staticmethod
+    def _provider():
+        p = OpenAICompatProvider.__new__(OpenAICompatProvider)
+        p.default_model = "gpt-5"
+        p._spec = type("Spec", (), {"name": "openai"})()
+        p._effective_base = "https://api.openai.com/v1"
+        p.api_base = "https://api.openai.com/v1"
+        p._api_type = "responses"
+        p._responses_failures = {}
+        p._responses_tripped_at = {}
+        p._extra_body = {}
+        return p
+
+    def test_tool_image_survives_the_whole_body_build(self):
+        messages = [
+            {"role": "user", "content": "guarda questa"},
+            {
+                "role": "assistant", "content": None,
+                "tool_calls": [
+                    {"id": "c1|fc1", "function": {"name": "read_file", "arguments": "{}"}},
+                ],
+            },
+            {
+                "role": "tool", "tool_call_id": "c1", "name": "read_file",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,QUJDREVG"},
+                        "_meta": {"path": "/w/shot.png"},
+                    },
+                    {"type": "text", "text": "(Image file: shot.png)"},
+                ],
+            },
+        ]
+        body = self._provider()._build_responses_body(
+            messages, None, "gpt-5", 100, 0.0, None, None,
+        )
+        outputs = [i for i in body["input"] if i.get("type") == "function_call_output"]
+        output = outputs[0]["output"]
+        assert output[0]["type"] == "input_image"
+        assert output[0]["image_url"] == "data:image/png;base64,QUJDREVG"
+        assert "_meta" not in json.dumps(body["input"], ensure_ascii=False)
 
 
 # ======================================================================
