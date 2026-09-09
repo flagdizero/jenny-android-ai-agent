@@ -7,13 +7,13 @@ alternative, described further down, for anyone who'd rather not run someone els
 ## Download the APK
 
 Grab it from [**Releases**](https://github.com/flagdizero/jenny-android-ai-agent/releases/latest). It targets Android 8.0 or newer and is
-about 67 MB, most of which is the embedded CPython runtime.
+about 72 MB, most of which is the embedded CPython runtime.
 
 Verify what you downloaded before installing it. The expected hash is published on the
 release page:
 
 ```bash
-shasum -a 256 app-release.apk
+shasum -a 256 jenny-0.10.0.apk
 ```
 
 You'll have to allow installation from outside the Play Store; Android will prompt you for

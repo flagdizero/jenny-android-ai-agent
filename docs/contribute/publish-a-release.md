@@ -88,6 +88,12 @@ Read what it printed, then commit the four changed lines. Running `pytest -q` he
 30 seconds: there are tests asserting that the version files agree with each other, and they
 will tell you immediately if something was left behind.
 
+Two strings the script does **not** touch, because they describe the published asset rather than
+the version: the APK filename and its approximate size in `README.md` and
+[`docs/start/install.md`](../start/install.md). Both are instructions a reader copy-pastes, so a
+stale one sends them to a file that isn't there. Update them once the signed APK exists and you
+know its real size — step 3 prints it.
+
 ### 2. Build and sign
 
 ```bash
@@ -127,6 +133,12 @@ past 400 characters is truncated, so keep them to a line.
 
 Run the `gh release create` command the script printed. It attaches **both** the APK and
 `latest.json` to the tag.
+
+The `--notes` it printed already contain the **verification block** — sha256, exact size, and the
+`shasum` and `apksigner` commands. Keep it in the body when you expand the notes by hand: the
+README tells people to verify the download against the hash *published on the release page*, and
+that sentence is only true while the block is there. The script prints it separately too, so you
+can paste it into a body you wrote in the GitHub UI.
 
 The manifest must be attached to the release under exactly that name, because the client fetches
 it from GitHub's stable redirect:

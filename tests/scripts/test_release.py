@@ -462,6 +462,25 @@ def test_dry_run_prints_the_publish_commands(repo: Path, apk: Path, tmp_path: Pa
     assert "--clobber" in stdout
 
 
+def test_the_publish_notes_carry_the_hash(repo: Path, apk: Path, tmp_path: Path, capsys) -> None:
+    """Il README promette l'hash *nella pagina della release*: qui si paga.
+
+    La 0.3.0 pubblicava sha256, dimensione e comando di verifica nel corpo; dalla
+    0.4.0 la pratica si è persa senza che nulla lo notasse, e l'istruzione del
+    README è rimasta a puntare a qualcosa che non c'era più. Ora il blocco esce
+    dallo script, quindi non dipende dalla memoria di chi pubblica.
+    """
+    expected = hashlib.sha256(apk.read_bytes()).hexdigest()
+
+    _run(repo, "0.7.0", *_manifest_argv(apk, tmp_path / "out", "--dry-run"))
+
+    stdout = capsys.readouterr().out
+    assert expected in stdout.split("Publish (run these yourself")[1]
+    assert f"{apk.stat().st_size} bytes" in stdout
+    assert "shasum -a 256 jenny-0.7.0.apk" in stdout
+    assert "apksigner verify --print-certs" in stdout
+
+
 def test_bump_without_an_apk_explains_the_next_step(repo: Path, capsys) -> None:
     assert _run(repo, "0.7.0") == 0
 

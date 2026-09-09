@@ -354,6 +354,46 @@ def _print_header(title: str) -> None:
     print(f"\n== {title}")
 
 
+def verification_block(*, version: str, sha256: str, size: int) -> str:
+    """Il blocco di verifica da pubblicare nel corpo della release.
+
+    Il README dice "verify it against the hash published on the release page":
+    quella frase è vera solo se il corpo della release porta davvero l'hash.
+    La 0.3.0 lo faceva a mano e dalla 0.4.0 la pratica si è persa, quindi il
+    blocco lo genera lo script — così non dipende da chi si ricorda di
+    incollarlo. ``latest.json`` porta lo stesso digest, ma è un file che si
+    scarica: chi verifica vuole leggerlo nella pagina.
+
+    Dimensione in MiB con l'etichetta "MB", come nella 0.3.0: cambiarla ora
+    farebbe sembrare cresciuto un APK che non è cresciuto.
+    """
+    apk = apk_asset_name(version)
+    mib = size / (1024 * 1024)
+    return (
+        "## Verify what you downloaded\n"
+        "\n"
+        "```\n"
+        f"sha256  {sha256}\n"
+        f"size    {size} bytes ({mib:.1f} MB)\n"
+        "```\n"
+        "\n"
+        "```bash\n"
+        f"shasum -a 256 {apk}\n"
+        "```\n"
+        "\n"
+        "The hash proves you got this file whole; the **signature** is what proves it came from\n"
+        "this project, and Android checks it for you on an in-place update. To check it yourself:\n"
+        "\n"
+        "```bash\n"
+        f"apksigner verify --print-certs {apk}\n"
+        "```\n"
+        "\n"
+        "The certificate is the same one published with\n"
+        "[0.3.0](https://github.com/flagdizero/jenny-android-ai-agent/releases/tag/v0.3.0) — if it\n"
+        "ever differs, the build did not come from this project.\n"
+    )
+
+
 def print_publish_commands(
     *,
     version: str,
@@ -361,12 +401,16 @@ def print_publish_commands(
     apk_path: Path,
     manifest_path: Path,
     summary_en: str,
+    sha256: str,
+    size: int,
 ) -> None:
     """Stampa i comandi ``gh``, che restano da eseguire a mano."""
     tag = f"v{version}"
     quoted_apk = shlex.quote(str(apk_path))
     quoted_manifest = shlex.quote(str(manifest_path))
     quoted_repo = shlex.quote(repo)
+    block = verification_block(version=version, sha256=sha256, size=size)
+    notes = f"{summary_en}\n\n{block}"
 
     _print_header("Publish (run these yourself — this script never publishes)")
     print(
@@ -375,10 +419,14 @@ def print_publish_commands(
         f"    {quoted_manifest} \\\n"
         f"    --repo {quoted_repo} \\\n"
         f"    --title {shlex.quote(f'Jenny {version}')} \\\n"
-        f"    --notes {shlex.quote(summary_en)}"
+        f"    --notes {shlex.quote(notes)}"
     )
     print("\n# Re-upload the manifest after editing it (rollout change, kill switch):")
     print(f"gh release upload {tag} {quoted_manifest} --repo {quoted_repo} --clobber")
+
+    _print_header("Verification block (already inside --notes above)")
+    print("# Paste this into the release body if you write it by hand in the GitHub UI.")
+    print(block)
 
 
 # --------------------------------------------------------------------------
@@ -566,6 +614,8 @@ def run(args: argparse.Namespace) -> int:
         apk_path=staged_apk,
         manifest_path=manifest_path,
         summary_en=args.summary_en,
+        sha256=sha256,
+        size=size,
     )
     return 0
 

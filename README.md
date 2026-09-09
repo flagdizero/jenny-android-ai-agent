@@ -113,12 +113,12 @@ servers; your memory and files never do. Off by default.
 
 ## Quick start
 
-Download the APK from [**Releases**](../../releases/latest) — Android 8.0 or newer, ~67 MB,
+Download the APK from [**Releases**](../../releases/latest) — Android 8.0 or newer, ~72 MB,
 most of which is the embedded CPython runtime. Verify it against the hash published on the
 release page:
 
 ```bash
-shasum -a 256 jenny-0.3.0.apk
+shasum -a 256 jenny-0.10.0.apk
 ```
 
 Android will ask you to allow installing from outside the Play Store. The APK is signed with
