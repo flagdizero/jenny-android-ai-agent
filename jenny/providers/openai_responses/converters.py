@@ -54,8 +54,11 @@ def convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str
 
         if role == "tool":
             call_id, _ = split_tool_call_id(msg.get("tool_call_id"))
-            output_text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
-            input_items.append({"type": "function_call_output", "call_id": call_id, "output": output_text})
+            input_items.append({
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": convert_tool_output(content),
+            })
 
     return system_prompt, input_items
 
@@ -73,15 +76,43 @@ def convert_user_message(content: Any) -> dict[str, Any]:
         for item in content:
             if not isinstance(item, dict):
                 continue
-            if item.get("type") == "text":
-                converted.append({"type": "input_text", "text": item.get("text", "")})
-            elif item.get("type") == "image_url":
-                url = (item.get("image_url") or {}).get("url")
-                if url:
-                    converted.append({"type": "input_image", "image_url": url, "detail": "auto"})
+            part = _input_part(item)
+            if part is not None:
+                converted.append(part)
         if converted:
             return {"role": "user", "content": converted}
     return {"role": "user", "content": [{"type": "input_text", "text": ""}]}
+
+
+def convert_tool_output(content: Any) -> str | list[dict[str, Any]]:
+    """Rende il contenuto di un messaggio ``tool`` come ``output``.
+
+    ``function_call_output.output`` accetta **o** una stringa **o** una lista
+    di input part (``input_text`` / ``input_image`` / ``input_file``): la
+    stessa forma del contenuto di un messaggio utente. Serializzare a JSON una
+    lista di blocchi spenderebbe il file intero come testo e lascerebbe al
+    modello l'impalcatura invece dell'immagine — ``read_file`` su un'immagine
+    ritorna proprio quello (``utils.helpers.build_image_content_blocks``: un
+    blocco ``image_url`` con un data URI, più un blocco ``text``).
+
+    È lo stesso difetto chiuso sul ramo Anthropic in
+    ``anthropic_conversion._tool_result_block``, e qui era più insidioso: lì
+    l'API rifiutava i blocchi non convertiti e la rete di
+    ``base.py`` lasciava un log, mentre ``json.dumps`` riesce sempre.
+
+    La conversione scatta **solo** quando la lista porta un blocco immagine:
+    per tutto il resto resta il JSON di prima, che è il comportamento su cui
+    poggiano i tool che ritornano dati strutturati.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list) and _has_image_block(content):
+        parts = _tool_output_parts(content)
+        if parts:
+            return parts
+        # Ci si arriva solo con blocchi immagine privi di URL: non c'è nulla da
+        # mostrare e, per definizione, nessun base64 da versare nel prompt.
+    return json.dumps(content, ensure_ascii=False)
 
 
 def convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -100,6 +131,56 @@ def convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "parameters": params if isinstance(params, dict) else {},
         })
     return converted
+
+
+def _input_part(block: dict[str, Any]) -> dict[str, Any] | None:
+    """Traduce un blocco di contenuto in una input part della Responses API.
+
+    Ritorna ``None`` quando il blocco non è rappresentabile — tipo ignoto, o
+    un ``image_url`` senza URL. Chi chiama decide se saltarlo (contenuto
+    utente) o degradarlo a testo (output di un tool, dove perdere un pezzo in
+    silenzio nasconde metà del risultato).
+    """
+    kind = block.get("type")
+    if kind == "text":
+        return {"type": "input_text", "text": block.get("text", "")}
+    if kind == "image_url":
+        url = (block.get("image_url") or {}).get("url")
+        if url:
+            return {"type": "input_image", "image_url": url, "detail": "auto"}
+    return None
+
+
+def _has_image_block(content: list[Any]) -> bool:
+    """True se la lista porta almeno un blocco immagine."""
+    return any(
+        isinstance(item, dict) and item.get("type") == "image_url" for item in content
+    )
+
+
+def _tool_output_parts(content: list[Any]) -> list[dict[str, Any]]:
+    """Converte i blocchi di un tool result in input part.
+
+    A differenza del contenuto utente, qui un blocco non rappresentabile non
+    si salta: diventa testo. Un tool result è una risposta a una domanda del
+    modello, e un pezzo sparito in silenzio è peggio di un pezzo grezzo. Le
+    sole eccezioni sono i blocchi immagine inutilizzabili (nessun URL), che
+    non hanno niente da dire.
+    """
+    parts: list[dict[str, Any]] = []
+    for item in content:
+        if isinstance(item, dict):
+            part = _input_part(item)
+            if part is not None:
+                parts.append(part)
+                continue
+            if item.get("type") == "image_url":
+                continue
+            text = json.dumps(item, ensure_ascii=False)
+        else:
+            text = str(item)
+        parts.append({"type": "input_text", "text": text})
+    return parts
 
 
 def _unique_item_id(item_id: str, used: set[str]) -> str:
