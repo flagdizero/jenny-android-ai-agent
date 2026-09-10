@@ -16,6 +16,7 @@ import {
   batteryExemptionSupported,
   batteryExemptionNeeded,
 } from './shared/battery-exemption.js';
+import { buildCronView } from './shared/cron-view.js';
 import {
   runExportFlow,
   runImportFlow,
@@ -152,6 +153,12 @@ export class SettingsController {
     // sezione che non è più a schermo.
     clearTimeout(this._updateTimer);
     this._updateTimer = null;
+    /* L'apertura d'ufficio della sezione Programmazione vale una volta per
+       apertura di schermata: senza questo azzeramento, chi la chiude a mano e
+       torna dopo non la vedrebbe riaprirsi nemmeno con un guasto nuovo — e
+       riaprirla a ogni `render()` (cioè a ogni salvataggio) sarebbe una lotta
+       con l'utente. */
+    this._cronAutoOpened = false;
   }
 
   /* Sotto-stato della sezione: il catalogo modelli aperto occupa la vista e per
@@ -186,6 +193,7 @@ export class SettingsController {
       this._section('tools', 'ti-tool', i18n.t('settings.tools'), this._renderTools(d)),
       this._section('memory', 'ti-sparkles', i18n.t('settings.memory.title'), this._renderMemory(d)),
       this._section('workers', 'ti-map', i18n.t('settings.workers.title'), this._renderWorkers(d)),
+      this._section('scheduling', 'ti-alarm', i18n.t('cron.sectionTitle'), this._renderScheduling()),
       this._renderBatterySection(d),
       this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
       this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
@@ -2130,6 +2138,265 @@ export class SettingsController {
 
   // ── Wire Events ────────────────────────────────────────────────────
 
+  // ── Programmazione ─────────────────────────────────────────────────────
+
+  /* Segnaposto: il blocco si popola da `_loadCron`, come SSH e gli snapshot.
+     Renderlo sincrono vorrebbe dire una fetch dentro `render()`, e `render()`
+     gira anche dopo ogni salvataggio. */
+  _renderScheduling() {
+    return `<div id="cron-block"><div class="settings-empty-state">${i18n.t('settings.loading')}</div></div>`;
+  }
+
+  /* Una sola lettura, all'apertura della schermata e sul pulsante Aggiorna.
+
+     **Nessun polling**, ed è una decisione e non una semplificazione: su questo
+     telefono il lavoro anti-doze si misura in job puntuali a ±2 s attraverso ore
+     di doze profondo, e un pannello che sveglia gateway e WebView ogni cinque
+     secondi finché è aperto è esattamente il contrario. Il timbro «aggiornato
+     alle …» in cima dichiara che è un'istantanea, così l'utente non deve
+     chiedersi se sta guardando il presente. */
+  async _loadCron() {
+    const gen = this._gen;
+    if (!this.contentEl.querySelector('#cron-block')) return;
+    let payload;
+    try {
+      payload = await api.getCron();
+    } catch {
+      if (this._stale(gen)) return;
+      const failEl = this.contentEl.querySelector('#cron-block');
+      if (failEl) {
+        failEl.innerHTML = `<div class="settings-empty-state">${i18n.t('cron.failed')}</div>`;
+      }
+      return;
+    }
+    if (this._stale(gen)) return;
+    // Il nodo si cerca **dopo** l'await: `render()` rifà tutto l'innerHTML, e un
+    // `#cron-block` catturato prima della fetch è già staccato dal documento.
+    const blockEl = this.contentEl.querySelector('#cron-block');
+    if (!blockEl) return;
+    this._cron = buildCronView(payload, {
+      nowMs: payload.now_ms,
+      tr: (key, params) => i18n.t(key, params),
+      locale: i18n.locale,
+    });
+    blockEl.innerHTML = this._renderCronBlock(this._cron);
+    this._wireCronBlock();
+    /* Se c'è qualcosa da dire, la sezione si apre da sé. Stesso argomento della
+       card batteria: un accordion chiuso è esattamente il posto in cui il
+       problema è rimasto invisibile finora. Solo la prima volta per apertura di
+       schermata, perché richiudere una sezione che l'utente ha chiuso a mano
+       sarebbe una lotta. */
+    if (this._cron.banner && !this._cronAutoOpened) {
+      this._cronAutoOpened = true;
+      this._openSections.add('scheduling');
+      const sec = this.contentEl.querySelector('[data-section="scheduling"]');
+      if (sec) sec.classList.remove('collapsed');
+    }
+    this._restoreScrollTop();
+  }
+
+  _renderCronBlock(view) {
+    if (!view.available) {
+      return `<div class="settings-empty-state">${i18n.t('cron.notStarted')}</div>`;
+    }
+    const stamp = new Date(view.asOf).toLocaleTimeString(i18n.locale, {
+      hour: '2-digit', minute: '2-digit',
+    });
+    const rows = view.rows.length
+      ? view.rows.map(r => this._renderCronJob(r)).join('')
+      : `<div class="settings-empty-state">${i18n.t('cron.empty')}</div>`;
+    return `
+      ${this._renderCronBanner(view)}
+      ${rows}
+      <div class="cron-asof">
+        <span>${escapeHtml(i18n.t('cron.asOf', { time: stamp }))}</span>
+        <button class="cron-refresh" id="btn-cron-refresh">
+          <i class="ti ti-refresh"></i> ${i18n.t('cron.refresh')}
+        </button>
+      </div>`;
+  }
+
+  /* Un banner solo, il più utile: la scelta sta in `pickBanner` (modulo puro),
+     qui c'è soltanto il testo. Il caso `inert` cerca prima di tutto l'heartbeat,
+     perché per lui la frase può dire *cosa* manca — un file senza task — mentre
+     per gli altri tre può solo dire che l'interruttore è giù. */
+  _renderCronBanner(view) {
+    const b = view.banner;
+    if (!b) return '';
+    let text = '';
+    let strong = false;
+    if (b.kind === 'stopped') {
+      text = i18n.t('cron.banner.stopped');
+      strong = true;
+    } else if (b.kind === 'recovered') {
+      const empty = b.restoredFrom === 'empty';
+      text = i18n.t(empty ? 'cron.banner.recoveredEmpty' : 'cron.banner.recoveredBackup');
+      strong = empty;
+    } else if (b.kind === 'inert') {
+      const hb = view.rows.find(r => r.id === 'heartbeat' && r.heartbeat?.checkingNothing);
+      if (hb) {
+        text = i18n.t('cron.banner.heartbeatEmpty', { every: hb.schedule });
+      } else if (b.jobs.length === 1) {
+        text = i18n.t('cron.banner.inertOne', { name: b.jobs[0] });
+      } else {
+        text = i18n.t('cron.banner.inertMany', { names: b.jobs.join(', ') });
+      }
+    } else {
+      return '';
+    }
+    return `<div class="settings-notice${strong ? ' settings-notice-strong' : ''}">
+      <i class="ti ti-alert-triangle"></i>
+      <div>${escapeHtml(text)}</div>
+    </div>`;
+  }
+
+  /* Una card per job. In chiaro ci sta quel che si legge di sfuggita — nome,
+     schedulazione, prossima e ultima esecuzione — e il resto (storico, testo del
+     promemoria, controlli dell'heartbeat) sta nel dettaglio: una riga d'elenco
+     che porta tutto smette di essere un elenco. */
+  _renderCronJob(row) {
+    const badges = [];
+    if (row.kind === 'system') badges.push(i18n.t('cron.job.protected'));
+    if (row.monitor) badges.push(i18n.t('cron.job.monitor'));
+    if (row.oneShot) badges.push(i18n.t('cron.job.oneShot'));
+    if (row.health === 'off') badges.push(i18n.t('cron.job.disabled'));
+    if (row.health === 'inert') badges.push(i18n.t('cron.job.inert'));
+    const badgeHtml = badges.length
+      ? `<div class="cron-badges">${badges.map(b => `<span class="cron-badge">${escapeHtml(b)}</span>`).join('')}</div>`
+      : '';
+    const next = row.next
+      ? `<span class="cron-when${row.next.overdue ? ' cron-when-overdue' : ''}">
+           ${escapeHtml(row.next.overdue ? i18n.t('cron.job.nextOverdue') : i18n.t('cron.job.next'))}:
+           ${escapeHtml(row.next.relative)}${this._cronTz(row.next)}
+         </span>`
+      : `<span class="cron-when cron-when-muted">${escapeHtml(i18n.t('cron.job.noNext'))}</span>`;
+    const last = row.last
+      ? `<span class="cron-when">
+           ${escapeHtml(i18n.t('cron.job.last'))}: ${escapeHtml(row.last.relative)}
+           <span class="cron-dot cron-dot-${row.lastTone}"></span>${escapeHtml(this._cronStatusText(row.lastStatus))}
+         </span>`
+      : `<span class="cron-when cron-when-muted">${escapeHtml(i18n.t('cron.job.neverRun'))}</span>`;
+    const cnc = row.couldNotCheck?.consecutive_could_not_check
+      ? `<div class="cron-health">${escapeHtml(this._cronHealthText(row.couldNotCheck))}</div>`
+      : '';
+    return `
+      <div class="cron-card cron-card-${row.health}" data-cron-job="${escapeHtml(row.id)}">
+        <div class="cron-card-head">
+          <span class="cron-name">${escapeHtml(row.name)}</span>
+          <span class="cron-schedule">${escapeHtml(row.schedule)}</span>
+        </div>
+        ${badgeHtml}
+        <div class="cron-lines">${next}${last}</div>
+        ${cnc}
+      </div>`;
+  }
+
+  /* Il fuso si nomina solo quando diverge da quello del dispositivo: `09:00
+     (Asia/Tokyo)` è utile, `(Europe/Rome)` su un telefono a Roma è rumore su
+     ogni riga. La decisione sta in `timeZoneNote`. */
+  _cronTz(when) {
+    return when.timeZoneNote ? ` <span class="cron-tz">(${escapeHtml(when.timeZoneNote)})</span>` : '';
+  }
+
+  _cronStatusText(status) {
+    const text = i18n.t(`cron.status.${status}`);
+    // `i18n.t` ritorna la chiave grezza quando non la conosce: uno store scritto
+    // da una versione più nuova non deve stampare "cron.status.qualcosa".
+    return text.startsWith('cron.status.') ? i18n.t('cron.status.unknown') : text;
+  }
+
+  _cronHealthText(health) {
+    const parts = [i18n.t('cron.health.couldNotCheck', { n: health.consecutive_could_not_check })];
+    if (health.since_ms) {
+      parts.push(i18n.t('cron.health.since', {
+        when: new Date(health.since_ms).toLocaleString(i18n.locale),
+      }));
+    }
+    parts.push(i18n.t(health.escalated ? 'cron.health.warned' : 'cron.health.notWarned'));
+    return parts.join(' · ');
+  }
+
+  _wireCronBlock() {
+    this._wireBtn('btn-cron-refresh', () => this._loadCron());
+    this.contentEl.querySelectorAll('[data-cron-job]').forEach(card => {
+      card.addEventListener('click', () => {
+        const row = this._cron?.rows.find(r => r.id === card.dataset.cronJob);
+        if (row) this._showCronJobDialog(row);
+      });
+    });
+  }
+
+  /* Il dettaglio è **piatto**: storico e controlli dell'heartbeat stanno dentro
+     la stessa modale. `detailDialog` ha una sola istanza (`#oc-detail-dialog`) e
+     si rifiuta di aprirsi se è già aperta, quindi un secondo livello job→run non
+     esisterebbe comunque — meglio progettarlo piatto che scoprirlo dopo. */
+  _showCronJobDialog(row) {
+    const parts = [];
+    if (row.purpose) parts.push(`<p class="oc-detail-lead">${escapeHtml(row.purpose)}</p>`);
+    if (row.message) {
+      parts.push(`<div class="settings-subheading">${i18n.t('cron.job.text')}</div>
+        <p class="cron-detail-text">${escapeHtml(row.message)}</p>`);
+    }
+    if (row.heartbeat) parts.push(this._renderCronHeartbeat(row.heartbeat));
+    parts.push(`<div class="settings-subheading">${i18n.t('cron.job.runs')}</div>`);
+    if (row.runs.length) {
+      parts.push(`<div class="cron-runs">${row.runs.map(run => `
+        <div class="cron-run">
+          <span class="cron-dot cron-dot-${run.tone}"></span>
+          <span class="cron-run-when">${escapeHtml(new Date(run.atMs).toLocaleString(i18n.locale))}</span>
+          <span class="cron-run-status">${escapeHtml(this._cronStatusText(run.status))}</span>
+          ${run.error ? `<span class="cron-run-error">${escapeHtml(run.error)}</span>` : ''}
+        </div>`).join('')}</div>`);
+    } else {
+      parts.push(`<div class="settings-empty-state">${i18n.t('cron.job.noRuns')}</div>`);
+    }
+    detailDialog({ title: row.name, bodyHtml: parts.join('') });
+  }
+
+  /* I controlli di HEARTBEAT.md. Il blocco esiste solo per il job `heartbeat`, e
+     dice due cose che lo store da solo non sa dire: quali controlli **esistono**
+     (il file), e quali di quelli sono rotti (lo stato). Senza la prima metà, un
+     heartbeat che gira a vuoto è indistinguibile da uno sano — registra `ok` a
+     ogni giro. */
+  _renderCronHeartbeat(hb) {
+    const head = `<div class="settings-subheading">${i18n.t('cron.heartbeat.title')}</div>`;
+    if (!hb.fileReadable) {
+      return `${head}<div class="settings-notice settings-notice-strong">
+        <i class="ti ti-alert-triangle"></i>
+        <div>${escapeHtml(i18n.t('cron.heartbeat.fileUnreadable'))}</div></div>`;
+    }
+    if (!hb.filePresent) {
+      return `${head}<div class="settings-empty-state">${i18n.t('cron.heartbeat.fileMissing')}</div>`;
+    }
+    if (hb.checkingNothing) {
+      return `${head}<div class="settings-notice settings-notice-strong">
+        <i class="ti ti-alert-triangle"></i>
+        <div>${escapeHtml(i18n.t('cron.heartbeat.checkingNothing'))}</div></div>`;
+    }
+    const tasks = hb.tasks.map(t => {
+      let note;
+      if (t.state === 'broken') note = i18n.t('cron.heartbeat.taskBroken', { n: t.consecutive });
+      else if (t.state === 'pending') note = i18n.t('cron.heartbeat.taskPending');
+      else note = i18n.t('cron.heartbeat.taskOk');
+      const warned = t.state === 'broken'
+        ? ` · ${i18n.t(t.escalated ? 'cron.health.warned' : 'cron.health.notWarned')}`
+        : '';
+      return `<div class="cron-task cron-task-${t.state}">
+        <span class="cron-task-label">${escapeHtml(t.label || String(t.index))}</span>
+        <span class="cron-task-note">${escapeHtml(note + warned)}</span>
+      </div>`;
+    }).join('');
+    const orphans = hb.orphans.length
+      ? `<div class="settings-subheading">${i18n.t('cron.heartbeat.orphans')}</div>
+         <p class="settings-field-hint">${escapeHtml(i18n.t('cron.heartbeat.orphansHint'))}</p>
+         ${hb.orphans.map(o => `<div class="cron-task cron-task-orphan">
+            <span class="cron-task-label">${escapeHtml(o.label || o.id)}</span>
+            <span class="cron-task-note">${escapeHtml(i18n.t('cron.heartbeat.taskBroken', { n: o.consecutive }))}</span>
+          </div>`).join('')}`
+      : '';
+    return `${head}<div class="cron-tasks">${tasks}</div>${orphans}`;
+  }
+
   _wireSections() {
     // Accordion toggle (lo stato aperto va in _openSections così i
     // re-render non richiudono la sezione in cui l'utente sta lavorando)
@@ -2265,6 +2532,9 @@ export class SettingsController {
 
     // SSH: il blocco si popola da solo (chiamata a parte, v. _renderSsh)
     this._loadSsh();
+
+    // Programmazione: stessa forma, un segnaposto e un caricatore
+    this._loadCron();
 
     // Backup e ripristino
     this._wireBackup();

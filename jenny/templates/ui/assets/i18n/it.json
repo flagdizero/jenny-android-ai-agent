@@ -735,6 +735,84 @@
     "retentionForever": "Per sempre",
     "retentionDays": "{days} giorni"
   },
+  "cron": {
+    "sectionTitle": "Programmazione",
+    "asOf": "Aggiornato alle {time}",
+    "refresh": "Aggiorna",
+    "empty": "Nessuna attività programmata.",
+    "notStarted": "La programmazione non è ancora partita: succede durante la configurazione iniziale.",
+    "failed": "Non riesco a leggere lo stato della programmazione.",
+    "unit": {
+      "second": "{n} secondo",
+      "seconds": "{n} secondi",
+      "minute": "{n} minuto",
+      "minutes": "{n} minuti",
+      "hour": "{n} ora",
+      "hours": "{n} ore",
+      "day": "{n} giorno",
+      "days": "{n} giorni"
+    },
+    "schedule": {
+      "every": "ogni {every}",
+      "expr": "orario: {expr}",
+      "at": "una volta, il {when}",
+      "unknown": "schedulazione non riconosciuta"
+    },
+    "when": {
+      "now": "adesso",
+      "in": "fra {d}",
+      "ago": "{d} fa"
+    },
+    "status": {
+      "ok": "eseguito",
+      "silenced": "ha guardato, niente da dire",
+      "skipped": "non è partito",
+      "could_not_check": "non ha potuto controllare",
+      "error": "errore",
+      "unknown": "esito sconosciuto"
+    },
+    "banner": {
+      "stopped": "Lo scheduler è fermo: le scadenze qui sotto non sono state rimesse, e quelle passate restano nel passato.",
+      "inertOne": "{name} è armato ma non fa niente: la configurazione lo dice spento.",
+      "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti.",
+      "heartbeatEmpty": "L'heartbeat gira {every} ma HEARTBEAT.md non ha task attivi: non sta controllando niente.",
+      "recoveredBackup": "Questo elenco è stato ricostruito dall'ultimo backup valido all'avvio. Controlla che ci siano tutti.",
+      "recoveredEmpty": "All'avvio l'elenco non era leggibile e non c'era un backup utilizzabile: i promemoria che avevi creato non ci sono più."
+    },
+    "job": {
+      "protected": "di sistema",
+      "monitor": "parla solo se ha qualcosa da dire",
+      "oneShot": "una volta sola",
+      "disabled": "spento",
+      "inert": "non fa niente",
+      "next": "Prossima",
+      "nextOverdue": "In ritardo",
+      "last": "Ultima",
+      "neverRun": "mai eseguito",
+      "noNext": "nessuna scadenza",
+      "runs": "Ultime esecuzioni",
+      "noRuns": "Nessuna esecuzione registrata.",
+      "detail": "Dettagli",
+      "text": "Testo del promemoria"
+    },
+    "health": {
+      "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
+      "since": "da {when}",
+      "warned": "te l'ha già detto",
+      "notWarned": "non te l'ha ancora detto"
+    },
+    "heartbeat": {
+      "title": "Controlli in HEARTBEAT.md",
+      "checkingNothing": "Nessun task attivo: l'heartbeat gira e non controlla niente.",
+      "fileMissing": "HEARTBEAT.md non esiste ancora.",
+      "fileUnreadable": "HEARTBEAT.md c'è ma non si legge: controlla i permessi del file.",
+      "taskOk": "regolare",
+      "taskBroken": "non parte da {n} giri",
+      "taskPending": "affidato a un subagent, in attesa del verdetto",
+      "orphans": "Voci senza task",
+      "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
+    }
+  },
   "onboarding": {
     "selectFormat": "Scegli il formato del provider",
     "selectFormatDesc": "La maggior parte dei servizi LLM usa uno di questi formati.",

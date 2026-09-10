@@ -6979,3 +6979,182 @@ body {
 }
 .tg-disabled .ti-circle-off { font-size: 20px; }
 .tg-bot-link { color: var(--accent); font-weight: 600; }
+
+/* ── Programmazione (sezione impostazioni) ─────────────────────────────────
+   Una card per job. Il bordo sinistro porta il verdetto — rotto, inerte,
+   spento, sano — perché è la cosa che si cerca scorrendo, e i pallini portano
+   l'esito dei singoli run. Nessun colore su `silenced`: un monitor che tace ha
+   funzionato, e colorarlo insegnerebbe a ignorare i colori. */
+.cron-card {
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  border: 0.5px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.cron-card:active { background: var(--active); }
+.cron-card-broken { border-left-color: var(--warning); }
+.cron-card-inert { border-left-color: var(--warning); }
+.cron-card-off { border-left-color: var(--border); opacity: 0.62; }
+
+.cron-card-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.cron-name {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--heading);
+}
+
+.cron-schedule {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cron-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.cron-badge {
+  padding: 1px 7px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Le due righe di tempo vanno in colonna e non affiancate: «fra 28 minuti» e
+   «2 ore fa · ha guardato, niente da dire» hanno lunghezze molto diverse, e su
+   380 px affiancarle manderebbe la seconda a capo in mezzo a una parola. */
+.cron-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 7px;
+}
+
+.cron-when {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.cron-when-muted { color: var(--text-faint); }
+.cron-when-overdue { color: var(--warning); font-weight: 600; }
+.cron-tz { color: var(--text-faint); }
+
+.cron-health {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--warning);
+  line-height: 1.4;
+}
+
+.cron-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 5px 0 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  vertical-align: middle;
+}
+
+.cron-dot-ok { background: var(--ok); }
+.cron-dot-warn { background: var(--warning); }
+.cron-dot-bad { background: var(--error); }
+/* `neutral` resta il grigio del default: v. la nota in testa al blocco. */
+
+.cron-asof {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.cron-refresh {
+  padding: 4px 10px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-family: inherit;
+}
+
+.cron-refresh:active { background: var(--active); }
+
+/* ── dettaglio del job ─────────────────────────────────────────────────── */
+.cron-detail-text {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cron-runs { display: flex; flex-direction: column; gap: 3px; }
+
+.cron-run {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cron-run-when {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cron-run-error {
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+
+.cron-tasks { display: flex; flex-direction: column; gap: 5px; }
+
+.cron-task {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cron-task-broken { border-left-color: var(--warning); }
+.cron-task-pending { border-left-color: var(--accent); }
+.cron-task-orphan { border-left-color: var(--border); opacity: 0.7; }
+
+.cron-task-label {
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.cron-task-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}

@@ -175,6 +175,7 @@ class GatewayHTTPHandler:
         disabled_skills: set[str] | None = None,
         snapshot_service: Any | None = None,
         get_subagent_manager: Callable[[], Any | None] | None = None,
+        get_cron_service: Callable[[], Any | None] | None = None,
         log: Any = logger,
         onboarding_event: Any | None = None,
         on_settings_changed: Callable[[], None] | None = None,
@@ -261,6 +262,19 @@ class GatewayHTTPHandler:
         self.backup_routes = BackupRoutes(
             check_api_token=self.check_api_secret,
             get_backup_manager=self._get_backup_manager,
+            log=self._log,
+        )
+
+        from jenny.webui.cron_routes import CronRoutes
+
+        # Getter late-binding come quello dei subagent: ``GatewayContainer.cron``
+        # nasce ``None`` e la WebUI e' servita anche durante l'onboarding.
+        self._get_cron_service = get_cron_service
+        self.cron_routes = CronRoutes(
+            check_api_token=self.check_api_secret,
+            get_cron_service=lambda: (
+                self._get_cron_service() if self._get_cron_service is not None else None
+            ),
             log=self._log,
         )
 
@@ -552,6 +566,11 @@ class GatewayHTTPHandler:
         backup_response = await self.backup_routes.dispatch(request, got)
         if backup_response is not None:
             return backup_response
+
+        # Stato della programmazione (delegato a CronRoutes)
+        cron_response = await self.cron_routes.dispatch(request, got)
+        if cron_response is not None:
+            return cron_response
 
         # Stato/controlli dei subagent (delegato a SubagentRoutes)
         subagent_response = await self.subagent_routes.dispatch(request, got)

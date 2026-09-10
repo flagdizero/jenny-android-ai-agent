@@ -735,6 +735,84 @@
     "retentionForever": "Forever",
     "retentionDays": "{days} days"
   },
+  "cron": {
+    "sectionTitle": "Scheduling",
+    "asOf": "As of {time}",
+    "refresh": "Refresh",
+    "empty": "Nothing scheduled.",
+    "notStarted": "Scheduling has not started yet: this happens during first-time setup.",
+    "failed": "Cannot read the scheduling status.",
+    "unit": {
+      "second": "{n} second",
+      "seconds": "{n} seconds",
+      "minute": "{n} minute",
+      "minutes": "{n} minutes",
+      "hour": "{n} hour",
+      "hours": "{n} hours",
+      "day": "{n} day",
+      "days": "{n} days"
+    },
+    "schedule": {
+      "every": "every {every}",
+      "expr": "schedule: {expr}",
+      "at": "once, on {when}",
+      "unknown": "schedule not recognised"
+    },
+    "when": {
+      "now": "now",
+      "in": "in {d}",
+      "ago": "{d} ago"
+    },
+    "status": {
+      "ok": "ran",
+      "silenced": "looked, nothing to report",
+      "skipped": "did not start",
+      "could_not_check": "could not check",
+      "error": "error",
+      "unknown": "unknown outcome"
+    },
+    "banner": {
+      "stopped": "The scheduler is stopped: the times below have not been recomputed, and past ones stay in the past.",
+      "inertOne": "{name} is armed but does nothing: your settings have it switched off.",
+      "inertMany": "{names} are armed but do nothing: your settings have them switched off.",
+      "heartbeatEmpty": "The heartbeat runs {every} but HEARTBEAT.md has no active tasks: it is checking nothing.",
+      "recoveredBackup": "This list was rebuilt from the last good backup at startup. Check that everything is here.",
+      "recoveredEmpty": "At startup the list was unreadable and there was no usable backup: the reminders you had created are gone."
+    },
+    "job": {
+      "protected": "system",
+      "monitor": "speaks only if it has something to report",
+      "oneShot": "once only",
+      "disabled": "off",
+      "inert": "does nothing",
+      "next": "Next",
+      "nextOverdue": "Overdue",
+      "last": "Last",
+      "neverRun": "never ran",
+      "noNext": "no next run",
+      "runs": "Recent runs",
+      "noRuns": "No runs recorded.",
+      "detail": "Details",
+      "text": "Reminder text"
+    },
+    "health": {
+      "couldNotCheck": "Could not check {n} times in a row",
+      "since": "since {when}",
+      "warned": "you have been told",
+      "notWarned": "you have not been told yet"
+    },
+    "heartbeat": {
+      "title": "Checks in HEARTBEAT.md",
+      "checkingNothing": "No active tasks: the heartbeat runs and checks nothing.",
+      "fileMissing": "HEARTBEAT.md does not exist yet.",
+      "fileUnreadable": "HEARTBEAT.md is there but cannot be read: check the file permissions.",
+      "taskOk": "fine",
+      "taskBroken": "has not run for {n} cycles",
+      "taskPending": "handed to a subagent, waiting for its verdict",
+      "orphans": "Entries with no task",
+      "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
+    }
+  },
   "onboarding": {
     "selectFormat": "Choose your provider format",
     "selectFormatDesc": "Most LLM services speak one of these formats.",

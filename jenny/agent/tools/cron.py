@@ -13,6 +13,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronJobState, CronSchedule
 from jenny.security.workspace_access import (
@@ -395,19 +396,19 @@ class CronTool(Tool, ContextAware):
 
     @staticmethod
     def _system_job_purpose(job: CronJob) -> str:
-        # Un job di sistema che l'utente vede elencato senza sapere cosa fa e
-        # solo un motivo di sospetto: questi girano da soli e spendono token (o
-        # rete), quindi devono sapersi presentare. Chi ne aggiunge un altro lo
-        # aggiunga anche qui.
-        purposes = {
-            "dream": "Dream memory consolidation for long-term memory.",
-            "heartbeat": "Heartbeat: checks HEARTBEAT.md for tasks you left for Jenny.",
-            "update_check": (
-                "Update check: looks for a newer Jenny app release and tells you "
-                "once per version."
-            ),
-        }
-        return purposes.get(job.name, "System-managed internal job.")
+        """La riga con cui un job di sistema si presenta nell'elenco.
+
+        La tabella sta in ``jenny/cron/purposes.py`` e non qui da quando i lettori
+        sono due: questo elenco, che la mostra al modello, e la WebUI, che la
+        mostra all'utente. Due copie divergono, e la prima a divergere e' stata
+        questa — le mancava il giardiniere.
+
+        Per ``id`` e non per ``name``: e' l'id che il container passa a
+        ``register_system_job`` ed e' per id che ``retire_system_job`` toglie. I
+        due coincidono per tutti e quattro i lavoratori, ma il nome e' una
+        stringa che un promemoria dell'utente puo' riusare.
+        """
+        return system_job_purpose(job.id)
 
     def _list_jobs(self) -> str:
         jobs = self._cron.list_jobs()
