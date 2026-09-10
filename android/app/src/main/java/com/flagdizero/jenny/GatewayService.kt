@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -471,7 +472,16 @@ class GatewayService : Service() {
     private fun runGatewayUntilGivenUp(module: PyObject) {
         while (true) {
             try {
-                module.callAttr("run_gateway", filesDir.absolutePath, applicationContext)
+                // `port` e' keyword-only sul lato Python. Passarlo esplicitamente
+                // invece di affidarsi al default: il build type `demo` gira su
+                // un'altra porta per poter stare sul telefono accanto
+                // all'installazione vera (v. app/build.gradle.kts).
+                module.callAttr(
+                    "run_gateway",
+                    filesDir.absolutePath,
+                    applicationContext,
+                    Kwarg("port", BuildConfig.GATEWAY_PORT),
+                )
                 // RITORNO = uscita PULITA, e i due esiti non vanno scambiati:
                 // `jenny/android_entry.py` ritorna solo dopo un `asyncio.run`
                 // finito da sé (riga 184, `return  # clean exit`); i retry

@@ -59,6 +59,14 @@ android {
         versionCode = 15
         versionName = "0.10.0"
 
+        // Porta del gateway locale. Sta qui, e non piu' come costante in
+        // MainActivity, perche' il build type `demo` la cambia: due
+        // installazioni affiancate (applicationId diversi, v. sotto) girano
+        // nello stesso spazio di porte del dispositivo, e la seconda non
+        // riuscirebbe mai a fare il bind. WebView e GatewayService leggono
+        // entrambi da qui, cosi' la porta ha una sola definizione.
+        buildConfigField("int", "GATEWAY_PORT", "18790")
+
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
@@ -84,6 +92,12 @@ android {
         }
     }
 
+    buildFeatures {
+        // Serve per i `buildConfigField` qui sopra: da AGP 8 la generazione di
+        // BuildConfig e' spenta di default.
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -94,6 +108,28 @@ android {
             // null when no credentials were supplied → unsigned APK (see the
             // comment on the credential block above).
             signingConfig = signingConfigs.findByName("release")
+        }
+
+        // Seconda installazione affiancata a quella vera: applicationId
+        // diverso, quindi il sistema la tratta come un'altra app (storage,
+        // permessi, notifiche e workspace tutti suoi) e non la sovrascrive.
+        // Il `namespace` invece NON cambia: le classi restano
+        // `com.flagdizero.jenny.*`, che e' quel che i bridge Python cercano
+        // via `jclass(...)`.
+        create("demo") {
+            initWith(getByName("debug"))
+            // L'applicationId non si fissa qui: i build type hanno solo
+            // `applicationIdSuffix`, che AGP incolla SEMPRE dopo un punto
+            // (`com.flagdizero.jenny._demo`, che aapt rifiuta). Sta nel blocco
+            // `androidComponents` in fondo al file.
+            versionNameSuffix = "-demo"
+            // L'altra meta' dell'affiancamento: con la stessa porta il gateway
+            // della seconda app morirebbe sul bind (l'app vera tiene un
+            // foreground service sempre attivo).
+            buildConfigField("int", "GATEWAY_PORT", "18791")
+            // Le dipendenze AAR non conoscono questo build type: senza fallback
+            // la risoluzione delle varianti fallisce.
+            matchingFallbacks += listOf("debug")
         }
     }
 
@@ -138,6 +174,16 @@ android {
                     .builtBy("copyScriptAssets", "copyPackageSourceAssets")
             )
         }
+    }
+}
+
+// `com.flagdizero.jenny_demo` per la seconda installazione. Qui e non nel build
+// type: `applicationIdSuffix` non puo' produrre un underscore (v. il commento
+// la' sopra), e una product flavor avrebbe rinominato ogni task esistente
+// (`assembleRelease` -> `assembleJennyRelease`) per un solo campo.
+androidComponents {
+    onVariants(selector().withBuildType("demo")) { variant ->
+        variant.applicationId.set("com.flagdizero.jenny_demo")
     }
 }
 

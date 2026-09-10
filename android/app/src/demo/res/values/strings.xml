@@ -1,0 +1,6 @@
+<resources>
+    <!-- Solo l'etichetta: nella griglia delle app le due installazioni sono
+         altrimenti indistinguibili (stessa icona, stesso nome). Tutto il resto
+         delle stringhe arriva dal source set `main`. -->
+    <string name="app_name">Jenny 2</string>
+</resources>

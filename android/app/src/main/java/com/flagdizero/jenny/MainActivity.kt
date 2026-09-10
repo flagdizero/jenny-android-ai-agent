@@ -50,11 +50,15 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "Jenny"
         private const val GATEWAY_HOST = "127.0.0.1"
-        private const val GATEWAY_PORT = 18790
+        // Da BuildConfig (app/build.gradle.kts): il build type `demo` la
+        // cambia per non litigare sul bind con l'installazione vera. `val` e
+        // non `const val`: un campo di BuildConfig non e' un'espressione
+        // costante per Kotlin.
+        private val GATEWAY_PORT = BuildConfig.GATEWAY_PORT
         // Il path — e SOLO quel path — che serve la SPA. Vedi isInternalGatewayUrl():
         // il confronto è per uguaglianza, non per prefisso.
         private const val GATEWAY_PATH = "/html-mobile/"
-        private const val GATEWAY_URL = "http://${GATEWAY_HOST}:${GATEWAY_PORT}${GATEWAY_PATH}"
+        private val GATEWAY_URL = "http://${GATEWAY_HOST}:${GATEWAY_PORT}${GATEWAY_PATH}"
         private const val RETRY_DELAY_MS = 500L
         private const val MAX_RETRIES = 30
         private const val PREFS_NAME = "jenny"
