@@ -118,7 +118,7 @@ most of which is the embedded CPython runtime. Verify it against the hash publis
 release page:
 
 ```bash
-shasum -a 256 jenny-0.10.0.apk
+shasum -a 256 jenny-0.11.0.apk
 ```
 
 Android will ask you to allow installing from outside the Play Store. The APK is signed with

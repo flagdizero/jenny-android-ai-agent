@@ -25,7 +25,7 @@ def _resolve_version() -> str:
         # pyproject.toml né i metadata del pacchetto — quindi questo letterale
         # è la versione che l'app mostra davvero. Va tenuto allineato a
         # pyproject.toml: ci pensa tests/test_package_version.py.
-        return _read_pyproject_version() or "0.10.0"
+        return _read_pyproject_version() or "0.11.0"
 
 
 __version__ = _resolve_version()

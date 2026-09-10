@@ -13,7 +13,7 @@ Verify what you downloaded before installing it. The expected hash is published 
 release page:
 
 ```bash
-shasum -a 256 jenny-0.10.0.apk
+shasum -a 256 jenny-0.11.0.apk
 ```
 
 You'll have to allow installation from outside the Play Store; Android will prompt you for
