@@ -17,6 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from jenny.config.loader import get_config_path, save_config
+from jenny.config.schema import Config
 from jenny.runtime import cron_dispatch
 from jenny.runtime.cron_dispatch import UPDATE_SESSION_KEY, CronDispatcher
 from jenny.runtime.update_check import UpdateInfo
@@ -95,7 +97,35 @@ class _Updater:
 
 
 @pytest.fixture
-def setup(monkeypatch: pytest.MonkeyPatch):
+def config_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Scrive ``config.json`` dentro ``tmp_path`` e ci punta il runtime.
+
+    Il ramo ``update_check`` rilegge la config **da disco** a ogni tick, come
+    Dream, il giardiniere e l'heartbeat: la sezione la si spegne nel file, non
+    nell'oggetto che il dispatcher tiene in mano. L'override del ``config_path``
+    è obbligatorio — senza, questi test leggerebbero il ``config.json`` di chi
+    esegue la suite.
+    """
+    from jenny.config import paths
+    from jenny.runtime.context import get_runtime_context
+
+    previous = paths.get_workspace_path()
+    paths.set_workspace_dir(str(tmp_path))
+    monkeypatch.setattr(get_runtime_context(), "config_path", tmp_path / "config.json")
+
+    def write(*, enabled: bool = True, notify_in_chat: bool = True) -> Config:
+        config = Config()
+        config.updates.enabled = enabled
+        config.updates.notify_in_chat = notify_in_chat
+        save_config(config, get_config_path())
+        return config
+
+    yield write
+    paths.set_workspace_dir(str(previous))
+
+
+@pytest.fixture
+def setup(config_file, monkeypatch: pytest.MonkeyPatch):
     def build(
         info: UpdateInfo | None = _INFO,
         *,
@@ -115,13 +145,15 @@ def setup(monkeypatch: pytest.MonkeyPatch):
         )
         monkeypatch.setattr("jenny.runtime.notifier.post_alert", updater.post_alert)
         agent = _FakeAgent()
+        config_file(enabled=enabled, notify_in_chat=notify_in_chat)
         dispatcher = CronDispatcher(
             get_agent=lambda: agent,
-            config=SimpleNamespace(
-                updates=SimpleNamespace(
-                    enabled=enabled, notify_in_chat=notify_in_chat
-                )
-            ),
+            # Il ``Config`` del dispatcher è quello **d'avvio**, e resta acceso: è
+            # catturato quando il container si costruisce e niente lo aggiorna. I
+            # flag che i test chiedono vanno sul file, che è ciò che il ramo legge
+            # davvero — così ogni test di questo file è anche una prova che quella
+            # lettura è fresca.
+            config=Config(),
             cron=MagicMock(),
             heartbeat_cfg=SimpleNamespace(keep_recent_messages=8),
         )
@@ -240,13 +272,19 @@ class TestWhenNothingShouldBeSaid:
         assert agent.calls == []
         assert updater.notified is None
         assert updater.alerts == []
+        # E il ``Config`` d'avvio è rimasto acceso: lo stiamo scavalcando con la
+        # lettura da disco, non mutando. Senza questa riga il test resterebbe
+        # verde anche col rimedio sbagliato, cioè due sorgenti di verità.
+        assert dispatcher._config.updates.enabled is True
 
-    async def test_the_section_switched_back_on_resumes(self, setup) -> None:
-        """Lo spegnimento è uno stato, non una cancellazione."""
+    async def test_the_section_switched_back_on_resumes(
+        self, setup, config_file
+    ) -> None:
+        """Lo spegnimento è uno stato, non una cancellazione — e si disfa a caldo."""
         dispatcher, agent, updater = setup(enabled=False)
         await dispatcher.dispatch(_UPDATE_JOB)
 
-        dispatcher._config.updates.enabled = True
+        config_file(enabled=True)
         await dispatcher.dispatch(_UPDATE_JOB)
 
         assert updater.checks == 1

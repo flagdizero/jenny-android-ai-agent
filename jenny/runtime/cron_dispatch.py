@@ -312,7 +312,8 @@ def refresh_system_job(
 
 
 class CronDispatcher:
-    """Instrada un ``CronJob`` al gestore giusto (dream / heartbeat / bound)."""
+    """Instrada un ``CronJob`` al gestore giusto (dream / gardener / heartbeat /
+    update_check / bound)."""
 
     def __init__(
         self,
@@ -380,6 +381,21 @@ class CronDispatcher:
             return await self._dispatch(job)
 
     async def _dispatch(self, job: "CronJob") -> str | None:
+        """Instrada il job al suo gestore.
+
+        **Chi aggiunge un lavoratore periodico qui sotto gli deve anche un
+        cancello su ``enabled`` dentro il gestore, letto da disco.**
+        ``GatewayContainer.build`` registra ogni job **solo se acceso**, ma
+        ``register_system_job`` non ha una controparte che deregistri e
+        ``remove_job`` protegge i ``system_event``: il job scritto da un avvio in
+        cui il lavoratore era acceso resta nello store del cron e scatta per
+        sempre, riavvii compresi. È il difetto che Dream ha avuto fino al
+        09/09/2026 — un interruttore girato per **fermare** riscritture di
+        memoria, e che non le fermava.
+
+        Da disco e non da ``self._config``, perché quel ``Config`` è catturato
+        quando il container si costruisce e niente lo aggiorna.
+        """
         agent = self._get_agent()
         if not agent:
             logger.warning("Cron: skipped job '{}' - no provider configured", job.name)
@@ -548,8 +564,29 @@ class CronDispatcher:
         fra loro, un ``/dream`` battuto a mano non lo è con niente. Il rifiuto è un
         log e un ritorno, non un'eccezione: un tick che non parte perché il lavoro è
         già in corso non è un job fallito.
+
+        Il controllo su ``enabled`` è **qui e non solo alla registrazione**, come
+        per il giardiniere e per la stessa ragione: v. la regola in ``_dispatch``.
         """
         from jenny.agent.dream_cycle import claim_dream_cycle, release_dream_cycle
+        from jenny.config.loader import load_config
+
+        # Da disco e non da ``self._config``: quel ``Config`` è catturato quando il
+        # container si costruisce e **niente lo aggiorna** — è la stessa ragione,
+        # con le stesse parole, per cui rileggono ``_run_gardener`` e i knob di
+        # ``_dream_cycle``. Senza la rilettura ``enabled=False`` non è
+        # raggiungibile, ed è precisamente il valore che l'utente gira per
+        # **fermare** una cosa: non può pretendere un riavvio del gateway.
+        #
+        # Prima della presa e non dentro ``_dream_cycle``: la presa è condivisa con
+        # il ``/dream`` battuto a mano, e un tick spento non deve nemmeno
+        # contendersela.
+        #
+        # Il comando resta possibile a interruttore spento, come ``/gardener``:
+        # l'interruttore governa il ciclo automatico, non la richiesta esplicita.
+        if not load_config().agents.defaults.dream.enabled:
+            logger.debug("Dream: disabled")
+            return None
 
         if not claim_dream_cycle():
             logger.warning(
@@ -794,7 +831,22 @@ class CronDispatcher:
         WebUI come indirizzo, e l'unica consegna possibile è il tool ``message``
         chiamato dentro il turno.
         """
-        if not self._config.updates.enabled:
+        from jenny.config.loader import load_config
+
+        # Da disco come gli altri tre lavoratori periodici, e non da
+        # ``self._config``: quel ``Config`` è catturato quando il container si
+        # costruisce e niente lo aggiorna. Oggi ``updates.enabled`` non ha una
+        # superficie di scrittura a runtime, quindi la lettura stantia non si
+        # vedrebbe — ma il giorno che nasce quell'interruttore il difetto sarebbe
+        # identico a quello che Dream ha avuto fino al 09/09/2026, con
+        # l'aggravante di una guardia che *sembra* già esserci.
+        #
+        # La stessa lettura serve tutto il ramo — il cancello, il manifest e la
+        # notifica — altrimenti sarebbero due sorgenti di verità nella stessa
+        # funzione.
+        config = load_config()
+
+        if not config.updates.enabled:
             # Lo spegnimento va fatto valere **qui**, non solo alla
             # registrazione. Il job sopravvive alla configurazione che lo ha
             # creato: ``register_system_job`` non ha una controparte che
@@ -813,11 +865,11 @@ class CronDispatcher:
             notified_version_code,
         )
 
-        info = await check_for_update(self._config)
+        info = await check_for_update(config)
         if info is None:
             logger.debug("Update check: nothing to propose")
             return None
-        if not self._config.updates.notify_in_chat:
+        if not config.updates.notify_in_chat:
             # Niente ``mark_notified``: l'annuncio non è avvenuto, e se l'utente
             # riaccende la notifica deve ancora poterlo ricevere.
             logger.info(
@@ -900,6 +952,19 @@ class CronDispatcher:
 
     async def _run_heartbeat(self, agent: "CronCapableAgent", job: "CronJob") -> str | None:
         # Heartbeat is a system job that checks HEARTBEAT.md for active tasks.
+        #
+        # Il cancello di ``enabled`` per prima cosa, come Dream e il giardiniere e
+        # per la stessa ragione (v. la regola in ``_dispatch``): il job registrato
+        # da un avvio con l'heartbeat acceso sopravvive allo spegnimento. Da disco
+        # e non da ``self._hb_cfg``, che è la sezione catturata alla costruzione
+        # del container; di quella resta ``keep_recent_messages``, che è una
+        # taratura e non un freno.
+        from jenny.config.loader import load_config
+
+        if not load_config().gateway.heartbeat.enabled:
+            logger.debug("Heartbeat: disabled")
+            return None
+
         heartbeat_file = self._config.workspace_path / "HEARTBEAT.md"
         try:
             content = heartbeat_file.read_text(encoding="utf-8")
