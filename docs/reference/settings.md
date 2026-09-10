@@ -134,6 +134,24 @@ Everything about Jenny surviving a screen that's been off for hours. It sits bet
 
 Only the wake-lock mode is editable here; the rest of the `power.*` family (wake-lock rotation, the restart watchdog, alarm-driven cron, the alarm-clock fallback, the outage threshold) is `config.json`-only — see [Configuration](./configuration.md#power). Outside the Android app the whole section is hidden: there is no bridge to ask, and nothing it says would be true.
 
+## Scheduling
+
+Read-only. Everything scheduled — your own reminders and the four system jobs — with what each one did last time and what it will do next. It sits between Background activity and SSH, because a job that slips is nearly always a job the battery manager delayed, and it opens by itself when there is something worth interrupting you for.
+
+Nothing here is editable, and that is deliberate: reminders are created, changed and removed by asking Jenny (the `cron` tool is the single writer on the file), and a "run now" button would queue a real model turn — spending tokens and possibly sending you a message — from a panel you opened to look at something.
+
+| What it shows | Why |
+|---|---|
+| **One card per job**, with its schedule, when it runs next, and how the last run ended | The five outcomes are not colour-coded alike: `silenced` means a monitor looked and had nothing to report, which is success, not a warning. `could not check` is the third state — it ran, but the check did not happen — and stays distinct from `error`. |
+| **Overdue instead of a past date** | Next-run times are stored, not computed on the fly: they are recalculated at startup and after each run. With the scheduler stopped, or right after the phone comes back from a long doze, the stored time is in the past — so the panel says "overdue" instead of "next run: yesterday at 22:30". |
+| **Armed but does nothing** | A system job survives the setting that created it: switch a worker off and its job stays scheduled, its handler returns immediately, and the run is recorded as `ok`. Only this panel can tell you the difference between "healthy" and "does nothing, punctually". |
+| **The Heartbeat checklist** | For the heartbeat job only: the tasks actually present in `HEARTBEAT.md`, each marked fine, not running, or handed to a subagent. An empty checklist gets said out loud — see [Scheduling and proactivity](../using/scheduling.md#heartbeat-a-periodic-checklist). |
+| **A rebuilt list** | If `cron/jobs.json` was recovered at startup, the panel says so above the list, not just in the notice at the top of the screen: a short list looks like a correct list. |
+| **Times in the job's own timezone** | A job created with an explicit timezone is shown in it, named only when it differs from the phone's — so the panel and what Jenny says in chat never disagree. |
+| **"As of HH:MM", with a Refresh button** | The panel does not poll. On a phone where scheduled work is kept punctual through deep doze, a screen that wakes the gateway every few seconds would undo that; so it reads once when you open the section, and the timestamp says it is a snapshot. |
+
+Tapping a card opens its details: the reminder's full text, the last 20 runs with durations and errors, and — for the heartbeat — the checklist.
+
 ## SSH
 
 Its own section between Background activity and Telegram, holding the two decisions that cannot be delegated to the agent: **which machines exist**, and **which host key is the right one**.

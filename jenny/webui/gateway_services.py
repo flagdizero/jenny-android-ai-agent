@@ -59,6 +59,9 @@ def build_gateway_services(
     # dell'AgentLoop). Non un global: l'agente può essere creato dopo il
     # gateway (onboarding), quindi la route lo risolve a ogni chiamata.
     get_subagent_manager: Callable[[], Any | None] | None = None,
+    # Getter late-binding del ``CronService``, come quello sopra: il pannello
+    # della programmazione lo risolve a ogni chiamata.
+    get_cron_service: Callable[[], Any | None] | None = None,
     logger: Any = default_logger,
     onboarding_event: Any | None = None,
     on_settings_changed: Callable[[], None] | None = None,
@@ -90,6 +93,7 @@ def build_gateway_services(
         disabled_skills=disabled_skills,
         snapshot_service=snapshot_service,
         get_subagent_manager=get_subagent_manager,
+        get_cron_service=get_cron_service,
         log=logger,
         onboarding_event=onboarding_event,
         on_settings_changed=on_settings_changed,

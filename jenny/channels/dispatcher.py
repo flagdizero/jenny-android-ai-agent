@@ -54,12 +54,14 @@ class WebSocketDispatcher:
         on_jobs_changed: Callable[[str], None] | None = None,
         ui_query: Any | None = None,
         get_subagent_manager: Callable[[], Any | None] | None = None,
+        get_cron_service: Callable[[], Any | None] | None = None,
     ):
         self.config = config
         self.bus = bus
         self._session_manager = session_manager
         self._snapshot_service = snapshot_service
         self._get_subagent_manager = get_subagent_manager
+        self._get_cron_service = get_cron_service
         self._webui_runtime_model_name = webui_runtime_model_name
         self._onboarding_event = onboarding_event
         self._on_settings_changed = on_settings_changed
@@ -96,6 +98,7 @@ class WebSocketDispatcher:
             runtime_model_name=self._webui_runtime_model_name,
             snapshot_service=self._snapshot_service,
             get_subagent_manager=self._get_subagent_manager,
+            get_cron_service=self._get_cron_service,
             logger=logger,
             onboarding_event=self._onboarding_event,
             on_settings_changed=self._on_settings_changed,

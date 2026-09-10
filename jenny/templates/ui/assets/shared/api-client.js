@@ -129,6 +129,15 @@ class ApiClient {
     return res.json();
   }
 
+  /** Stato della programmazione: cosa e' armato, e cosa fa davvero.
+   *  Sola lettura — le scritture passano dal tool `cron`, che e' l'unico imbuto
+   *  sullo store dei job. */
+  async getCron() {
+    const res = await this._fetch('/api/webui/cron');
+    if (!res.ok) throw new Error(`Cron failed: ${res.status}`);
+    return res.json();
+  }
+
   async getAndroidApps() {
     const res = await this._fetch('/api/webui/android-apps');
     if (!res.ok) throw new Error(`Android apps failed: ${res.status}`);

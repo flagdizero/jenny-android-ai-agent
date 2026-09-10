@@ -112,6 +112,8 @@ Since 0.6.6 that file is handled the same way as `config.json`. Jenny keeps the 
 
 That notice matters more here than it does for settings. A reminder that has stopped existing looks exactly like a reminder that hasn't come due yet, so without being told, you'd find out when it didn't go off. If you see the "started with none" version, your own reminders need recreating — the system jobs above come back on their own.
 
+Settings → **Scheduling** is where you check the outcome: it lists everything scheduled and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → Scheduling](../reference/settings.md#scheduling).
+
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
 
 ## Heartbeat: a periodic checklist
@@ -129,6 +131,8 @@ When Heartbeat does decide to speak, the message is delivered proactively to **b
 The practical rule of thumb: **write tasks under `## Active Tasks`, and delete them once they're done.** Every cycle where that section has content triggers one real LLM call — a forgotten task left in the file keeps costing tokens every 30 minutes indefinitely, even if Heartbeat never finds anything worth reporting.
 
 Example of something reasonable to put there: "Check the weather forecast around 7am and warn me if it looks like rain."
+
+**An empty checklist is free, and now it is also visible.** Skipping the cycle costs nothing, but the job still records a normal `ok` on every beat — so from the outside a heartbeat that is checking nothing is indistinguishable from a healthy one, and the only trace was a debug log line. Settings → **Scheduling** says it in words: the tasks it can actually see in `HEARTBEAT.md`, or a notice that there are none. The same panel names a task that has not been carried out for several cycles, and whether Jenny has already told you about it.
 
 **Heartbeat has one schedule for the whole file.** Every line under `## Active Tasks` is looked at on the same 30-minute beat; there's no per-task cadence, and adding a second heartbeat job isn't the way to get one. If a particular check needs its own rhythm — every 10 minutes, or only on weekday mornings — that's a monitor job ([Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) above), which gives you an independent schedule and the same "only speaks if it's worth it" behavior. Heartbeat stays the right home for the shared, ambient checklist.
 
