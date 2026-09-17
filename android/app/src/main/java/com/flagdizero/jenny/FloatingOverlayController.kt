@@ -1,5 +1,7 @@
 package com.flagdizero.jenny
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -19,9 +21,12 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -87,11 +92,41 @@ object FloatingOverlayController {
      *  sopra il lavoro di qualcun altro. */
     private const val MASCOT_DP = 96
 
-    /** Quanto sporge fuori dal bordo a riposo. Un terzo dello sprite resta
-     *  fuori schermo: si vede che c'è, non ruba spazio, e soprattutto **non
-     *  sparisce del tutto** — una mascotte parcheggiata invisibile non si
-     *  ritrova più. */
-    private const val PARK_OUT_RATIO = 0.33f
+    /**
+     * I due ancoraggi orizzontali, in frazioni del lato dello sprite.
+     *
+     * Copiati da `mobile-style.css` (`.jenny-duo` e `.jenny-duo.out`), dove la
+     * mascotte in chat vive con gli stessi due numeri: a riposo poco meno di
+     * metà quadrato resta fuori schermo, e quando è attiva rientra a un quarto.
+     * Sono frazioni e non pixel per la stessa ragione scritta là: la stessa
+     * camminata deve finire esattamente sul bordo a ogni taglia.
+     */
+    private const val DOCKED_OUT_RATIO = 0.469f
+    private const val OUT_RATIO = 0.25f
+
+    /** Quanto dura lo scivolamento fra i due ancoraggi. `.jenny-duo.side-left`
+     *  usa 0,3 s con questa curva, ed è la stessa transizione. */
+    private const val SIDE_SLIDE_MS = 300L
+
+    /**
+     * L'altezza della banda del composer, in dp.
+     *
+     * Non è una stima: `buildInputRow` mette un tasto d'invio da 46 dp e 12 dp
+     * di padding sopra e sotto, e l'altezza di una `LinearLayout` è quella del
+     * figlio più alto più i padding. Il campo, con i suoi 12+12 attorno a una
+     * riga di testo, resta sotto i 46.
+     */
+    private const val COMPOSER_DP = 46 + 12 + 12
+
+    /** Aria fra la testa e la barra di input. */
+    private const val COMPOSER_GAP_DP = 8
+
+    /** Ripiego per l'altezza della barra di navigazione, se il sistema non la
+     *  dice: una finestra `FLAG_NOT_FOCUSABLE` può non ricevere insets. */
+    private const val NAV_FALLBACK_DP = 24
+
+    /** «Non lo so ancora»: la prima volta la sua casa è la riga del composer. */
+    private const val NO_TOP = Int.MIN_VALUE
 
     /** Oltre questo spostamento il gesto è un trascinamento e non un tap. */
     private const val DRAG_SLOP_DP = 8
@@ -106,8 +141,22 @@ object FloatingOverlayController {
     private const val DEFAULT_REPLY_HOLD_S = 20
 
     private const val PREFS = "jenny_floating"
-    private const val PREF_Y = "park_y"
+
+    /** Su quale bordo si è posata. */
     private const val PREF_RIGHT = "park_right"
+
+    /**
+     * ...e a che altezza.
+     *
+     * Nella prima stesura non si memorizzava: la Y era fissa alla riga sopra
+     * la barra di input, copiando l'invariante che `.jenny-duo` dichiara nel
+     * CSS. Dentro la SPA quella riga *è* il pavimento; sopra le altre app non
+     * c'è niente di disegnato là, e il volo finiva contro un pavimento
+     * invisibile a un terzo di schermo dal fondo. Adesso cade fino in fondo e
+     * si ferma dove atterra — e la riga sopra il composer resta la sua casa,
+     * quella da cui parte e quella a cui la chat la riporta.
+     */
+    private const val PREF_TOP = "park_top"
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -150,12 +199,27 @@ object FloatingOverlayController {
 
     private val sprites = HashMap<String, Bitmap?>()
 
-    /** Ultima altezza a cui l'utente l'ha lasciata, in px. `-1` = mai scelta. */
-    private var parkedY = -1
-
-    /** E su quale dei due bordi. Default destra, come la mascotte in chat. */
+    /** Su quale dei due bordi. Default destra, come la mascotte in chat. */
     private var parkedRight = true
+
+    /** Ordinata del riquadro da parcheggiata, in px schermo. `NO_TOP` finché
+     *  non se ne sa niente: allora è la riga sopra il composer. */
+    private var parkedTop = NO_TOP
     private var waitingForReply = false
+
+    /** Il respiro in corso (bob o wobble), o `null` se sta ferma. */
+    private var breath: ObjectAnimator? = null
+
+    /** Sta scivolando verso un ancoraggio? Finché è vero il respiro aspetta:
+     *  animano la stessa `translationY`, e insieme la fanno tremare. */
+    private var sliding = false
+
+    /** Il volo in corso, o `null` se sta ferma. */
+    private var flight: FloatingFlight? = null
+
+    /** Dove il dito ha toccato per ultimo, in coordinate schermo. */
+    private var downFingerX = 0f
+    private var downFingerY = 0f
 
     private val timeoutRunnable = Runnable { onReplyTimeout() }
     private val holdRunnable = Runnable { collapse() }
@@ -205,6 +269,7 @@ object FloatingOverlayController {
         view.text = text
         view.visibility = View.VISIBLE
         syncFace()
+        startBreathing()
         if (!expanded) expand(withInput = false)
         armHold()
         return true
@@ -343,22 +408,30 @@ object FloatingOverlayController {
         )
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = parkX(ctx)
-        lp.y = parkY(ctx)
+        lp.y = parkTop(ctx)
         return lp
     }
 
     /**
      * Allarga la finestra a schermo intero.
      *
-     * Con *withInput* prende anche il **fuoco**, e le due cose che lo rendono
-     * vero sono state pagate sul telefono il 17/09:
+     * Con *withInput* prende anche il **fuoco**. Tre cose lo rendono vero, e
+     * tutte e tre sono state pagate sul telefono il 17/09:
      *
-     * **`FLAG_LAYOUT_NO_LIMITS` va tolto.** Serve da parcheggiata, dove la
-     * mascotte sporge oltre il bordo, ed è esattamente ciò che una finestra
-     * che deve *ridimensionarsi con la tastiera* non può avere: dice al
-     * sistema che può uscire dallo schermo, quindi `ADJUST_RESIZE` non ha
-     * niente da restringere. Con il flag ancora su, `dumpsys` riportava
-     * `sim={adjust=pan}` malgrado il valore chiesto.
+     * **`FLAG_LAYOUT_NO_LIMITS` non si toglie mai.** Il primo giro lo toglieva
+     * in CHAT, per far mordere `ADJUST_RESIZE`, e con quello si portava via
+     * l'unica cosa che qui conta davvero: senza il flag la finestra viene
+     * insettata dalle barre di sistema, quindi la sua origine **non è più**
+     * l'angolo dello schermo. Tutte le posizioni di questo file sono in px
+     * schermo; una cornice che si sposta di una status bar fra uno stato e
+     * l'altro è esattamente la mascotte che schizza e torna a ogni tocco. Il
+     * flag resta su in tutti gli stati, e origine finestra = origine schermo
+     * per definizione.
+     *
+     * **La tastiera si schiva con gli insets, non col ridimensionamento.** È
+     * `SOFT_INPUT_ADJUST_NOTHING`: la finestra non si muove di un pixel, e il
+     * listener in `buildViews` trasforma l'inset dell'IME nel padding basso
+     * della riga di input. Meno flag, e nessuno che sposti la mascotte.
      *
      * **Il fuoco si chiede dopo il relayout, non nello stesso giro.** Togliere
      * `FLAG_NOT_FOCUSABLE` non dà il fuoco all'istante: il sistema deve
@@ -373,7 +446,7 @@ object FloatingOverlayController {
      * al solo fumetto, e non ruba all'app sotto un fuoco che nessuno le ha
      * chiesto di cedere.
      */
-    private fun expand(withInput: Boolean) {
+    private fun expand(withInput: Boolean, forFlight: Boolean = false) {
         val ctx = appContext ?: return
         val wm = windowManager ?: return
         val view = root ?: return
@@ -381,10 +454,9 @@ object FloatingOverlayController {
         if (expanded && isChatOpen == withInput) return
 
         if (!expanded) {
-            // La mascotte deve restare allo stesso pixel attraversando il
-            // cambio di taglia: la finestra passa a (0,0), quindi la posizione
-            // che aveva come origine della finestra diventa un margine dentro
-            // di essa.
+            // La finestra passa a (0,0), quindi la posizione che aveva come
+            // origine diventa un margine dentro di essa: stesso pixel sullo
+            // schermo, nessun salto.
             placeColumn(ctx, lp.x, lp.y)
             lp.width = WindowManager.LayoutParams.MATCH_PARENT
             lp.height = WindowManager.LayoutParams.MATCH_PARENT
@@ -392,13 +464,13 @@ object FloatingOverlayController {
             lp.y = 0
         }
         lp.flags = if (withInput) {
-            0
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         }
         lp.softInputMode = if (withInput) {
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
         } else {
             WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
@@ -413,6 +485,21 @@ object FloatingOverlayController {
         isChatOpen = withInput
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
         inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
+        if (!forFlight) {
+            // In volo non si scivola all'ancoraggio e non si respira: comanda
+            // la fisica, e due animazioni sulla stessa view si contendono la
+            // stessa traslazione.
+            //
+            // Aprire la chat la riporta **a casa**: rientra dal bordo e, se
+            // era più in basso della riga del composer, risale fin lì. È la
+            // richiesta «deve risiedere sopra la barra input», detta nell'unico
+            // momento in cui conta — quello in cui la barra c'è. Se stava già
+            // più in alto la si lascia dov'è: non c'è niente che la copra.
+            parkedTop = min(parkTop(ctx), composerLineTop(ctx))
+            saveParkPosition(ctx)
+            syncFace()
+            slideTo(ctx, parkX(ctx, out = true), parkedTop)
+        }
         if (withInput) input?.let { it.post { focusTheField(ctx) } }
         armHold()
         Log.i(TAG, "Floating mascot expanded (input=$withInput)")
@@ -470,14 +557,16 @@ object FloatingOverlayController {
         syncFace()
 
         val size = dp(ctx, MASCOT_DP)
+        stopBreathing()
         lp.width = size
         lp.height = size
         lp.x = parkX(ctx)
-        lp.y = parkY(ctx)
+        lp.y = parkTop(ctx)
         lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
         resetColumn()
+        syncFace()
         try {
             wm.updateViewLayout(view, lp)
         } catch (e: Exception) {
@@ -558,7 +647,7 @@ object FloatingOverlayController {
         // nera da bordo a bordo non somiglia a qualcuno che parla, somiglia a
         // un banner. Il tetto serve alle risposte lunghe, che altrimenti
         // uscirebbero dallo schermo.
-        speech.maxWidth = (ctx.resources.displayMetrics.widthPixels * 0.78f).toInt()
+        speech.maxWidth = (screenWidth(ctx) * 0.78f).toInt()
         container.addView(speech, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.BOTTOM or Gravity.START })
@@ -701,92 +790,242 @@ object FloatingOverlayController {
     // ------------------------------------------------------------------ //
 
     /**
-     * Tap e trascinamento sulla mascotte.
+     * Tap e presa sulla mascotte.
      *
-     * Il trascinamento sposta la **finestra** con le coordinate schermo
-     * (`rawX`/`rawY`), e non cambia taglia: è seguire un dito, non fisica. Il
-     * tap apre la chat, ma solo dopo che il dito si è alzato — il cambio di
-     * taglia non avviene mai a gesto in corso.
+     * Il tap apre la chat, ma solo dopo che il dito si è alzato. Oltre la
+     * soglia il gesto diventa una **presa**, e da lì comanda il volo Pegman
+     * (`FloatingFlight`): la finestra passa a schermo intero — che è l'arena
+     * del volo — e lei penzola dalla mano fino al rilascio.
      *
-     * Si muove **in tutte e due le direzioni**, e al rilascio si aggancia al
-     * bordo più vicino. Il primo giro la lasciava scorrere solo in verticale e
-     * inchiodata a destra: è la prima cosa che si prova a fare con una
-     * mascotte che galleggia, e non funzionava.
+     * La promozione della finestra a dito abbassato è sicura per una ragione
+     * misurata: il gesto è tutto in coordinate **schermo** (`rawX`/`rawY`),
+     * quindi ridimensionare la finestra sotto il dito non sposta di un pixel
+     * la matematica.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun bindTouch(ctx: Context, view: View) {
         val slop = dp(ctx, DRAG_SLOP_DP)
         var downRawX = 0f
         var downRawY = 0f
-        var startX = 0
-        var startY = 0
-        var dragged = false
+        var grabbed = false
+        var tracker: VelocityTracker? = null
         view.setOnTouchListener { _, event ->
-            val lp = params ?: return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    if (flight?.isFlying == true) return@setOnTouchListener true
                     downRawX = event.rawX
                     downRawY = event.rawY
-                    startX = lp.x
-                    startY = lp.y
-                    dragged = false
+                    grabbed = false
+                    tracker = VelocityTracker.obtain()
+                    tracker?.addMovement(event)
+                    // L'arena si apre **subito**, col dito ancora fermo.
+                    //
+                    // Non è un'ottimizzazione: la finestra parcheggiata è
+                    // grande quanto lo sprite, e questa ROM **annulla il
+                    // gesto** appena il dito ne esce — che è ciò che succede al
+                    // primo strattone, perché la molla la fa restare indietro.
+                    // Misurato il 17/09: `ACTION_CANCEL` al secondo evento, con
+                    // la mascotte che cadeva da ferma. A schermo intero il dito
+                    // non può uscire da nessuna parte.
+                    openArena(ctx)
                     armHold()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (expanded) return@setOnTouchListener true
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
-                    if (dragged || abs(dx) > slop || abs(dy) > slop) {
-                        dragged = true
-                        lp.x = startX + dx.toInt()
-                        lp.y = clampY(ctx, startY + dy.toInt())
-                        try {
-                            windowManager?.updateViewLayout(root, lp)
-                        } catch (e: Exception) {
-                            Log.i(TAG, "Drag update failed: ${e.javaClass.simpleName}")
-                        }
+                    tracker?.addMovement(event)
+                    if (!grabbed) {
+                        val dx = event.rawX - downRawX
+                        val dy = event.rawY - downRawY
+                        if (abs(dx) <= slop && abs(dy) <= slop) return@setOnTouchListener true
+                        grabbed = true
+                        downFingerX = event.rawX
+                        downFingerY = event.rawY
+                        startFlight(ctx)
                     }
+                    flight?.moveTo(event.rawX, event.rawY)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    when {
-                        dragged -> settleToEdge(ctx, lp)
-                        // Un tap sulla mascotte a chat aperta la richiude: è il
-                        // gesto inverso di quello che l'ha aperta.
-                        isChatOpen -> collapse()
-                        // Finestra grande ma solo per il fumetto (una risposta
-                        // arrivata dopo il collasso): il tap qui vuol dire
-                        // «rispondo», non «via».
-                        else -> expand(withInput = true)
+                    if (grabbed) {
+                        tracker?.computeCurrentVelocity(1000)
+                        flight?.release(tracker?.xVelocity ?: 0f, tracker?.yVelocity ?: 0f)
+                    } else {
+                        when {
+                            // Un tap a chat aperta la richiude: è il gesto
+                            // inverso di quello che l'ha aperta.
+                            isChatOpen -> collapse()
+                            // Finestra grande ma solo per il fumetto: il tap
+                            // qui vuol dire «rispondo», non «via».
+                            else -> expand(withInput = true)
+                        }
                     }
+                    tracker?.recycle()
+                    tracker = null
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    if (grabbed) flight?.release(0f, 0f)
+                    tracker?.recycle()
+                    tracker = null
+                    true
+                }
                 else -> false
             }
         }
     }
 
     /**
-     * Al rilascio si posa sul bordo più vicino, e se lo ricorda.
+     * Porta la finestra a schermo intero senza cambiare nient'altro.
      *
-     * L'aggancio non è vezzo: a metà schermo coprirebbe quello che stai
-     * guardando, ed è l'unica posizione in cui una mascotte che galleggia dà
-     * fastidio invece di far compagnia.
+     * Serve al tocco, non all'aspetto: è l'arena in cui il dito può muoversi e
+     * la mascotte può volare. Resta **non focusable** — nessuna tastiera
+     * rubata a chi sta sotto — e la mascotte resta esattamente dov'era, perché
+     * la posizione che aveva come origine della finestra diventa un margine
+     * dentro di essa.
      */
-    private fun settleToEdge(ctx: Context, lp: WindowManager.LayoutParams) {
-        val size = dp(ctx, MASCOT_DP)
-        val width = ctx.resources.displayMetrics.widthPixels
-        parkedRight = lp.x + size / 2 >= width / 2
-        parkedY = lp.y
-        lp.x = parkX(ctx)
+    private fun openArena(ctx: Context) {
+        if (expanded) return
+        val wm = windowManager ?: return
+        val view = root ?: return
+        val lp = params ?: return
+        placeColumn(ctx, lp.x, lp.y)
+        lp.width = WindowManager.LayoutParams.MATCH_PARENT
+        lp.height = WindowManager.LayoutParams.MATCH_PARENT
+        lp.x = 0
+        lp.y = 0
         try {
-            windowManager?.updateViewLayout(root, lp)
+            wm.updateViewLayout(view, lp)
         } catch (e: Exception) {
-            Log.i(TAG, "Settle failed: ${e.javaClass.simpleName}")
+            Log.i(TAG, "Could not open the arena: ${e.javaClass.simpleName}")
+            return
         }
+        expanded = true
+    }
+
+    /**
+     * La presa: da qui in poi disegna il volo.
+     *
+     * **La finestra resta della taglia dello sprite e si muove**, un fotogramma
+     * alla volta, esattamente come faceva il trascinamento. La prima versione
+     * la promuoveva a schermo intero per avere l'arena, ed è stata smentita dal
+     * telefono nel modo più netto: ridimensionare una finestra sotto il dito
+     * **annulla il gesto**. Misurato il 17/09 — `ACTION_CANCEL` cinque
+     * millisecondi dopo la presa, e la mascotte che cadeva da ferma senza
+     * essersi mossa. Spostarla, invece, il tocco lo tiene: è la differenza fra
+     * `updateViewLayout` che cambia `x`/`y` e uno che cambia `width`/`height`.
+     *
+     * L'oscillazione ci sta dentro lo stesso: il personaggio occupa circa il
+     * 45% del canvas quadrato e il resto è margine trasparente, quindi anche
+     * inclinata di 78° resta dentro il suo riquadro.
+     */
+    private fun startFlight(ctx: Context) {
+        val mascot = column ?: return
+        val size = dp(ctx, MASCOT_DP)
+        val metrics = ctx.resources.displayMetrics
+        val mascotLp = mascot.layoutParams as? FrameLayout.LayoutParams
+        val startLeft = (mascotLp?.leftMargin ?: 0).toFloat()
+        val startTop = (mascotLp?.topMargin ?: 0).toFloat()
+
+        stopBreathing()
+        mascot.animate().cancel()
+        cancelTimeout()
+        main.removeCallbacks(holdRunnable)
+        bubble?.visibility = View.GONE
+        // Si può prenderla anche a chat aperta: allora il campo e il velo se
+        // ne vanno, perché mentre vola non c'è niente a cui scrivere. La
+        // finestra resta grande — è già l'arena — ma smette di prendere il
+        // fuoco, così la tastiera non resta appesa a mezz'aria.
+        if (isChatOpen) {
+            hideKeyboard(ctx)
+            isChatOpen = false
+            scrim?.visibility = View.GONE
+            inputRow?.visibility = View.GONE
+            params?.let { lp ->
+                lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+                try {
+                    windowManager?.updateViewLayout(root, lp)
+                } catch (e: Exception) {
+                    Log.i(TAG, "Could not drop focus for the flight: ${e.javaClass.simpleName}")
+                }
+            }
+        }
+        mascot.translationX = 0f
+        mascot.translationY = 0f
+        mascot.pivotX = size * FloatingFlight.PIVOT_X
+        mascot.pivotY = size * FloatingFlight.PIVOT_Y
+        mascotFace?.visibility = View.GONE
+
+        val width = screenWidth(ctx)
+        val floorY = floorTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
+        val leftDock = -(size * DOCKED_OUT_RATIO) + size * FloatingFlight.PIVOT_X
+        val rightDock = width - size + size * DOCKED_OUT_RATIO +
+            size * FloatingFlight.PIVOT_X
+        flight = FloatingFlight(
+            sizePx = size.toFloat(),
+            viewportW = width.toFloat(),
+            viewportH = screenHeight(ctx).toFloat(),
+            density = metrics.density,
+            floorPivotY = floorY,
+            dockPivotX = leftDock to rightDock,
+            onFrame = { left, top, rot, pose, flip -> drawFlight(left, top, rot, pose, flip) },
+            onSettled = { right, top -> endFlight(ctx, right, top) },
+        ).also {
+            it.grab(
+                startLeft + size * FloatingFlight.PIVOT_X,
+                startTop + size * FloatingFlight.PIVOT_Y,
+            )
+            it.moveTo(downFingerX, downFingerY)
+        }
+        Log.i(TAG, "Pegman flight started")
+    }
+
+    private fun drawFlight(
+        left: Float,
+        top: Float,
+        rotationDeg: Float,
+        pose: FloatingFlight.Pose,
+        flip: Boolean,
+    ) {
+        val mascot = column ?: return
+        (mascot.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            if (lp.leftMargin != 0 || lp.topMargin != 0) {
+                lp.leftMargin = 0
+                lp.topMargin = 0
+                mascot.layoutParams = lp
+            }
+        }
+        mascot.translationX = left
+        mascot.translationY = top
+        mascot.rotation = rotationDeg
+        mascot.scaleX = if (flip) -1f else 1f
+        val name = when (pose) {
+            FloatingFlight.Pose.HANG -> "jenny-hang"
+            FloatingFlight.Pose.FALL -> "jenny-fall"
+            FloatingFlight.Pose.GROUND -> "jenny-ground"
+            FloatingFlight.Pose.WALK1 -> "jenny-walk1"
+            FloatingFlight.Pose.WALK2 -> "jenny-walk2"
+        }
+        mascotBody?.setImageBitmap(sprite(name))
+    }
+
+    /**
+     * Atterrata e riagganciata: torna docked, con l'arte del bordo.
+     *
+     * **Il posto in cui si è fermata diventa il suo.** Non c'è più una riga
+     * fissa a cui tornare: cade fino in fondo, si rialza, cammina fino al
+     * bordo più vicino e lì resta, finché non la si riprende o non si apre la
+     * chat — che è l'unica cosa che la riporta sopra il composer.
+     */
+    private fun endFlight(ctx: Context, right: Boolean, top: Float) {
+        flight = null
+        parkedRight = right
+        parkedTop = top.toInt().coerceIn(dp(ctx, 8), floorTop(ctx))
         saveParkPosition(ctx)
+        clearTransforms(ctx)
+        collapse()
+        Log.i(TAG, "Pegman flight settled (right=$right top=$parkedTop)")
     }
 
     // ------------------------------------------------------------------ //
@@ -801,6 +1040,7 @@ object FloatingOverlayController {
         field.setText("")
         waitingForReply = true
         syncFace()
+        startBreathing()
         bubble?.visibility = View.GONE
         main.removeCallbacks(holdRunnable)
         cancelTimeout()
@@ -860,7 +1100,27 @@ object FloatingOverlayController {
     // Sprite, geometria, preferenze                                       //
     // ------------------------------------------------------------------ //
 
+    /**
+     * L'arte giusta per lo stato, con la stessa regola della mascotte in chat.
+     *
+     * **Al bordo non va la faccia frontale.** Docked resta fuori schermo poco
+     * meno di metà quadrato, e di una faccia si vedrebbe un occhio e mezza
+     * bocca: è esattamente il motivo per cui `jenny-side` — l'arte diagonale,
+     * con la faccia già disegnata dentro — esiste. Quando è *out* torna la
+     * pila a due livelli, corpo × faccia, che è dove le espressioni si leggono.
+     *
+     * Lo specchio è quello di `.jenny-duo.side-left .jenny-art-stack`: l'arte
+     * nasce guardando verso sinistra, cioè giusta sul bordo destro, e si
+     * ribalta sull'altro.
+     */
     private fun syncFace(sad: Boolean = false) {
+        column?.scaleX = if (parkedRight) 1f else -1f
+        if (!expanded) {
+            mascotBody?.setImageBitmap(sprite("jenny-side"))
+            mascotFace?.visibility = View.GONE
+            return
+        }
+        mascotFace?.visibility = View.VISIBLE
         val body = if (waitingForReply) "jenny-body-front-think" else "jenny-body-front-idle"
         val face = when {
             sad -> "jenny-face-front-sad"
@@ -897,10 +1157,16 @@ object FloatingOverlayController {
     private fun placeColumn(ctx: Context, left: Int, top: Int) {
         val mascot = column ?: return
         val size = dp(ctx, MASCOT_DP)
-        val metrics = ctx.resources.displayMetrics
+        // **Le trasformazioni si azzerano qui, sempre.** La posizione a schermo
+        // è la somma di tre cose scritte da tre posti diversi — la `x/y` della
+        // finestra, i margini del riquadro e la traslazione delle animazioni —
+        // e ogni transizione che ne dimenticava una la spostava. Da qui in poi
+        // ne esiste una sola: il margine. Chi anima committa nel margine quando
+        // ha finito (v. `slideTo`).
+        clearTransforms(ctx)
         (mascot.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
             lp.gravity = Gravity.TOP or Gravity.START
-            lp.leftMargin = min(max(left, 0), max(metrics.widthPixels - size, 0))
+            lp.leftMargin = left
             lp.topMargin = max(top, 0)
             mascot.layoutParams = lp
         }
@@ -913,7 +1179,7 @@ object FloatingOverlayController {
             val headroom = (size * 0.22f).toInt()
             lp.gravity = Gravity.BOTTOM or if (parkedRight) Gravity.END else Gravity.START
             lp.bottomMargin = max(
-                metrics.heightPixels - max(top, 0) - headroom, dp(ctx, 8)
+                screenHeight(ctx) - max(top, 0) - headroom, dp(ctx, 8)
             )
             lp.leftMargin = dp(ctx, 14)
             lp.rightMargin = dp(ctx, 14)
@@ -921,7 +1187,111 @@ object FloatingOverlayController {
         }
     }
 
+    /**
+     * Scivola fino a *(left, top)* dentro la finestra grande, e **ci resta**.
+     *
+     * La curva e la durata sono quelle di `.jenny-duo.side-left` nel CSS —
+     * 0,3 s con un rimbalzino finale — così il gesto è lo stesso che si vede
+     * in chat. La differenza importante è la fine: la traslazione viene
+     * *committata* nel margine e azzerata, altrimenti resta addosso al
+     * riquadro e la transizione successiva la vede come uno scarto da
+     * recuperare — cioè uno scatto.
+     *
+     * Il respiro parte solo dopo, perché anima la stessa `translationY`.
+     */
+    private fun slideTo(ctx: Context, left: Int, top: Int) {
+        val mascot = column ?: return
+        val lp = mascot.layoutParams as? FrameLayout.LayoutParams ?: return
+        val dx = (left - lp.leftMargin).toFloat()
+        val dy = (top - lp.topMargin).toFloat()
+        clearTransforms(ctx)
+        if (dx == 0f && dy == 0f) {
+            startBreathing()
+            return
+        }
+        sliding = true
+        mascot.animate()
+            .translationX(dx)
+            .translationY(dy)
+            .setDuration(SIDE_SLIDE_MS)
+            .setInterpolator(OvershootInterpolator(1.1f))
+            .withEndAction {
+                // `cancel()` passa di qui esattamente come un arrivo: senza
+                // questa riga `clearTransforms` — che cancella — rientrerebbe
+                // in `placeColumn`, che richiama `clearTransforms`. Il flag,
+                // azzerato prima del cancel, distingue i due casi.
+                if (!sliding) return@withEndAction
+                sliding = false
+                placeColumn(ctx, left, top)
+                startBreathing()
+            }
+            .start()
+    }
+
+    /** Ferma ogni animazione sul riquadro e lo rimette dritto e non traslato.
+     *  I due pivot tornano al centro: il volo li sposta sulla manica alzata,
+     *  e uno specchio o una rotazione attorno a quel punto sposta anche lei. */
+    private fun clearTransforms(ctx: Context) {
+        val mascot = column ?: return
+        sliding = false
+        mascot.animate().cancel()
+        breath?.cancel()
+        breath = null
+        val half = dp(ctx, MASCOT_DP) / 2f
+        mascot.pivotX = half
+        mascot.pivotY = half
+        mascot.translationX = 0f
+        mascot.translationY = 0f
+        mascot.rotation = 0f
+    }
+
+    /**
+     * Il respiro: `jenny-bob` quando è fuori, `jenny-wobble` mentre pensa.
+     *
+     * Stessi tempi e stesse origini del CSS. L'ampiezza però **non** si copia
+     * in pixel: là sono 4 px su uno sprite da 120, qui il lato è un altro, e un
+     * respiro copiato in pixel sarebbe un respiro più corto. Si porta il
+     * rapporto.
+     */
+    private fun startBreathing() {
+        val ctx = appContext ?: return
+        val mascot = column ?: return
+        if (sliding || flight != null || !expanded) return
+        stopBreathing()
+        if (waitingForReply) {
+            mascot.pivotX = mascot.width / 2f
+            mascot.pivotY = mascot.height * 0.9f
+            breath = ObjectAnimator.ofFloat(mascot, View.ROTATION, -2.5f, 2.5f).apply {
+                duration = 1_100
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
+            return
+        }
+        val amplitude = -dp(ctx, MASCOT_DP) * (4f / 120f)
+        breath = ObjectAnimator.ofFloat(mascot, View.TRANSLATION_Y, 0f, amplitude).apply {
+            duration = 3_400
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    /** Ferma il respiro e rimette la posa a zero. Docked e in mano sta ferma. */
+    private fun stopBreathing() {
+        breath?.cancel()
+        breath = null
+        column?.let {
+            it.translationY = 0f
+            it.rotation = 0f
+        }
+    }
+
     private fun resetColumn() {
+        appContext?.let { clearTransforms(it) }
         (column?.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
             lp.gravity = Gravity.TOP or Gravity.START
             lp.leftMargin = 0
@@ -930,50 +1300,104 @@ object FloatingOverlayController {
         }
     }
 
-    /** Il bordo su cui si è posata, con un terzo dello sprite fuori schermo. */
-    private fun parkX(ctx: Context): Int {
+    /**
+     * L'ascissa del bordo, docked o *out*.
+     *
+     * Gli stessi due ancoraggi della mascotte in chat: `-0.469 × lato` a riposo,
+     * `-0.25 × lato` quando è attiva, specchiati sul bordo sinistro.
+     */
+    private fun parkX(ctx: Context, out: Boolean = false): Int {
         val size = dp(ctx, MASCOT_DP)
-        val out = (size * PARK_OUT_RATIO).toInt()
-        return if (parkedRight) {
-            ctx.resources.displayMetrics.widthPixels - size + out
-        } else {
-            -out
-        }
-    }
-
-    private fun parkY(ctx: Context): Int {
-        if (parkedY >= 0) return clampY(ctx, parkedY)
-        val height = ctx.resources.displayMetrics.heightPixels
-        return clampY(ctx, (height * 0.45f).toInt())
+        val hidden = (size * if (out) OUT_RATIO else DOCKED_OUT_RATIO).toInt()
+        return if (parkedRight) screenWidth(ctx) - size + hidden else -hidden
     }
 
     /**
-     * Tiene la mascotte dentro la parte utile dello schermo.
+     * Le misure dello schermo, **sempre da qui**.
      *
-     * I margini si leggono dalle metriche e **non** dagli insets della finestra:
-     * una finestra `FLAG_NOT_FOCUSABLE` può non riceverne affatto, e una
-     * geometria che dipende da qualcosa che può non arrivare mai è il modo in
-     * cui una mascotte finisce sotto la tacca.
+     * `displayMetrics` di un contesto applicativo può riportare la finestra
+     * dell'ultima Activity invece del display, e una geometria che sbaglia di
+     * qualche decina di pixel si vede come una mascotte che si ferma prima del
+     * bordo. `currentWindowMetrics.bounds` è il display, insets compresi — la
+     * stessa cornice in cui vive una finestra `FLAG_LAYOUT_NO_LIMITS`.
      */
-    private fun clampY(ctx: Context, y: Int): Int {
+    private fun screenWidth(ctx: Context): Int = screenBounds(ctx).first
+
+    private fun screenHeight(ctx: Context): Int = screenBounds(ctx).second
+
+    private fun screenBounds(ctx: Context): Pair<Int, Int> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = ctx.getSystemService(WindowManager::class.java)
+                ?.currentWindowMetrics?.bounds
+            if (bounds != null && bounds.width() > 0 && bounds.height() > 0) {
+                return bounds.width() to bounds.height()
+            }
+        }
+        val metrics = ctx.resources.displayMetrics
+        return metrics.widthPixels to metrics.heightPixels
+    }
+
+    /**
+     * La riga appena sopra la barra di input: **la sua casa**.
+     *
+     * È dove sta appena installata, ed è dove la chat la riporta — la prima
+     * delle tre richieste del secondo giro, «deve risiedere sopra la barra
+     * input». Si calcola anche a composer nascosto: la banda esiste come
+     * misura pure quando non è a schermo, altrimenti la mascotte salterebbe
+     * nell'istante in cui compare.
+     */
+    private fun composerLineTop(ctx: Context): Int {
         val size = dp(ctx, MASCOT_DP)
-        val height = ctx.resources.displayMetrics.heightPixels
-        val top = dp(ctx, 48)
-        val bottom = height - size - dp(ctx, 48)
-        return min(max(y, top), max(bottom, top))
+        val band = dp(ctx, COMPOSER_DP) + dp(ctx, COMPOSER_GAP_DP) + navInset(ctx)
+        return max(screenHeight(ctx) - band - size, dp(ctx, 8))
+    }
+
+    /** Il pavimento: i **piedi** sul fondo dello schermo, non il bordo del
+     *  file. Lo stesso numero che `FloatingFlight` usa per il tonfo. */
+    private fun floorTop(ctx: Context): Int {
+        val size = dp(ctx, MASCOT_DP)
+        return screenHeight(ctx) - (size * FloatingFlight.CONTENT_B).toInt()
+    }
+
+    /** Dove sta da parcheggiata: dove l'hai lasciata, o casa la prima volta. */
+    private fun parkTop(ctx: Context): Int {
+        val top = if (parkedTop == NO_TOP) composerLineTop(ctx) else parkedTop
+        return top.coerceIn(dp(ctx, 8), floorTop(ctx))
+    }
+
+    /**
+     * L'altezza della barra di navigazione.
+     *
+     * Letta dalle metriche della finestra e non dagli insets consegnati: una
+     * finestra `FLAG_NOT_FOCUSABLE` può non riceverne affatto, e una geometria
+     * che dipende da qualcosa che può non arrivare mai è il modo in cui una
+     * mascotte finisce sotto la barra.
+     */
+    private fun navInset(ctx: Context): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets = ctx.getSystemService(WindowManager::class.java)
+                ?.currentWindowMetrics?.windowInsets
+                ?.getInsets(WindowInsets.Type.navigationBars())
+            // Uno zero qui è una risposta, non un silenzio: su questo telefono
+            // la navigazione è a gesti e la barra non c'è. Il primo giro lo
+            // trattava come «non lo so» e regalava 24 dp a una barra che non
+            // esiste. Il ripiego resta per il solo ramo pre-R.
+            if (insets != null) return insets.bottom
+        }
+        return dp(ctx, NAV_FALLBACK_DP)
     }
 
     private fun loadParkPosition(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        parkedY = prefs.getInt(PREF_Y, -1)
         parkedRight = prefs.getBoolean(PREF_RIGHT, true)
+        parkedTop = prefs.getInt(PREF_TOP, NO_TOP)
     }
 
     private fun saveParkPosition(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putInt(PREF_Y, parkedY)
             .putBoolean(PREF_RIGHT, parkedRight)
+            .putInt(PREF_TOP, parkedTop)
             .apply()
     }
 

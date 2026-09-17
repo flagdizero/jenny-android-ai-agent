@@ -174,17 +174,143 @@ class TestConfineConKotlin:
         prezzo è che un rename dell'arte la lascia senza faccia, in silenzio:
         questo test è il posto in cui quel prezzo si paga subito.
         """
+        import re
+
         source = CONTROLLER.read_text(encoding="utf-8")
         assets = REPO / "jenny/templates/ui/assets"
-        names = [
-            line.split('"')[1]
-            for line in source.splitlines()
-            if '"jenny-' in line and "front" in line
-        ]
+        names = set(re.findall(r'"(jenny-[a-z0-9-]+)"', source))
         assert names, "nessuno sprite nominato nel controller: il parsing è da rivedere"
-        for name in names:
+        # Le pose del bordo e del volo, non solo quelle frontali: una mascotte
+        # senza `jenny-hang` non penzola, e non lo dice a nessuno.
+        assert "jenny-side" in names
+        assert {"jenny-hang", "jenny-fall", "jenny-ground", "jenny-walk1", "jenny-walk2"} <= names
+        for name in sorted(names):
             assert (assets / f"{name}.webp").is_file(), f"sprite mancante: {name}.webp"
 
     def test_il_controller_legge_dalla_copia_estratta_della_webui(self):
         source = CONTROLLER.read_text(encoding="utf-8")
         assert '"workspace/ui/assets/$name.webp"' in source
+
+
+class TestLaFisicaNonDiverge:
+    """Le costanti del volo vivono in due posti, e devono restare identiche.
+
+    `FloatingFlight.kt` porta in Kotlin la macchina che `mobile-jenny.js` fa
+    girare per la mascotte in chat. È una duplicazione deliberata — v.
+    `roadmap/02-mascotte-flottante-piano.md`, S1 — e il suo prezzo è esattamente
+    questo: qualcuno ritocca una costante da una parte, e la mascotte comincia a
+    oscillare in due modi diversi a seconda di dove la si guarda.
+
+    Nessun elenco scritto a mano: i nomi si leggono dal sorgente Kotlin, quindi
+    una costante nuova entra da sola nel confronto.
+    """
+
+    FLIGHT_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingFlight.kt"
+    COMPANION_JS = REPO / "jenny/templates/ui/assets/mobile-jenny.js"
+
+    @staticmethod
+    def _js_numbers(source: str) -> dict[str, float]:
+        import re
+
+        out: dict[str, float] = {}
+        for name, raw in re.findall(r"^const ([A-Z][A-Z0-9_]*) = ([-0-9.]+)", source, re.M):
+            out[name] = float(raw)
+        # ``MAX_TILT`` è scritto in radianti come espressione: si confronta il
+        # valore in gradi, che è la forma in cui il Kotlin lo tiene.
+        if re.search(r"^const MAX_TILT = \(78 \* Math\.PI\) / 180", source, re.M):
+            out["MAX_TILT_DEG"] = 78.0
+        return out
+
+    @staticmethod
+    def _kt_numbers(source: str) -> dict[str, float]:
+        import re
+
+        out: dict[str, float] = {}
+        for name, raw in re.findall(r"const val ([A-Z][A-Z0-9_]*) = ([-0-9_.]+)f?L?", source):
+            out[name] = float(raw.replace("_", ""))
+        return out
+
+    def test_ogni_costante_kotlin_ha_la_stessa_in_js(self):
+        kt = self._kt_numbers(self.FLIGHT_KT.read_text(encoding="utf-8"))
+        js = self._js_numbers(self.COMPANION_JS.read_text(encoding="utf-8"))
+
+        # I nomi che in Kotlin portano il suffisso dell'unità: là sono px CSS,
+        # qui px del dispositivo, e il valore di partenza è lo stesso.
+        aliases = {
+            "MAX_SPEED_CSS": "MAX_SPEED",
+            "FALL_G_CSS": "FALL_G",
+            "WALK_SPEED_CSS": "WALK_SPEED",
+            "DIR_MIN_CSS": "DIR_MIN",
+        }
+        compared = 0
+        for name, value in kt.items():
+            js_name = aliases.get(name, name)
+            if js_name not in js:
+                continue
+            compared += 1
+            assert value == pytest.approx(js[js_name]), (
+                f"{name} è {value} in FloatingFlight.kt e {js[js_name]} "
+                f"({js_name}) in mobile-jenny.js: la mascotte flottante e quella "
+                f"in chat si muoverebbero in due modi diversi."
+            )
+        assert compared >= 12, (
+            f"solo {compared} costanti confrontate: il parsing di uno dei due "
+            "sorgenti è da rivedere, e un test che non confronta niente passa sempre"
+        )
+
+    def test_il_riquadro_pieno_segue_larte(self):
+        """Le pareti dell'arena si misurano sul **personaggio**, non sul file.
+
+        Gli sprite sono quadrati da 768 px con molto margine trasparente
+        attorno: mettere le pareti sul bordo del canvas vuol dire fermarla a un
+        dito dal bordo dello schermo, con niente di disegnato a spiegare
+        perché — che è esattamente il difetto («rimbalza su muri invisibili»)
+        per cui `CONTENT_*` esiste. I quattro numeri sono il ritaglio del
+        canale alfa, e questo test li rimisura: se qualcuno ridisegna una posa,
+        i muri tornano invisibili in silenzio, e questo è il posto in cui non
+        succede.
+
+        `jenny-fall` decide i tre lati che si vedono in volo, `jenny-ground` il
+        basso — è la posa con cui tocca terra, quindi l'unica che dice dove sia
+        il pavimento.
+        """
+        # Pillow non è una dipendenza del progetto: senza, si salta — stessa
+        # regola di ``tests/webui/test_mascot_layer_sources.py``.
+        pytest.importorskip("PIL", reason="Pillow non è una dipendenza del progetto")
+        from PIL import Image
+
+        source = self.FLIGHT_KT.read_text(encoding="utf-8")
+        assets = REPO / "jenny/templates/ui/assets"
+
+        def bbox(name: str) -> tuple[float, float, float, float]:
+            with Image.open(assets / f"{name}.webp") as im:
+                box = im.convert("RGBA").getchannel("A").getbbox()
+                w, h = im.size
+            assert box is not None, f"{name}.webp è tutto trasparente"
+            return (box[0] / w, box[1] / h, box[2] / w, box[3] / h)
+
+        fall = bbox("jenny-fall")
+        ground = bbox("jenny-ground")
+        expected = {
+            "CONTENT_L": fall[0],
+            "CONTENT_T": fall[1],
+            "CONTENT_R": fall[2],
+            "CONTENT_B": ground[3],
+        }
+        for name, value in expected.items():
+            declared = self._kt_numbers(source).get(name)
+            assert declared is not None, f"{name} non è più dichiarata in FloatingFlight.kt"
+            assert declared == pytest.approx(value, abs=0.002), (
+                f"{name} vale {declared} ma l'arte dice {value:.4f}: le pareti "
+                f"dell'arena non sono più sui bordi dello schermo."
+            )
+
+    def test_il_pivot_e_lo_stesso(self):
+        """La punta della manica alzata di `jenny-hang`. Sbagliarlo non rompe
+        niente: la fa solo ruotare attorno al punto sbagliato."""
+        kt = self.FLIGHT_KT.read_text(encoding="utf-8")
+        js = self.COMPANION_JS.read_text(encoding="utf-8")
+        assert "const val PIVOT_X = 0.5083f" in kt
+        assert "const val PIVOT_Y = 0.4333f" in kt
+        assert "const PIVOT_X = 0.5083;" in js
+        assert "const PIVOT_Y = 0.4333;" in js
