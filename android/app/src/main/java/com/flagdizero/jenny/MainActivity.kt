@@ -1032,6 +1032,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         /**
+         * La taglia della mascotte scelta in Impostazioni → Personalizzazione.
+         *
+         * *cssPx* è il lato del canvas quadrato (`MASCOT_SIZES` in
+         * `shared/mascot.js`: 120/160/210), *dpr* il `devicePixelRatio` della
+         * WebView. Il prodotto è il lato in px fisici, cioè **esattamente**
+         * quanto la si vede grande in chat, ed è quello che la mascotte
+         * flottante usa per sé: le due non possono divergere perché il numero
+         * viene da un posto solo.
+         *
+         * Il controller la ricorda anche a finestra non montata, quindi questa
+         * chiamata vale pure quando la mascotte flottante è spenta.
+         */
+        @JavascriptInterface
+        fun setMascotSize(cssPx: Int, dpr: Double) {
+            val px = (cssPx * (if (dpr > 0.0) dpr else 1.0)).toInt()
+            FloatingOverlayController.setMascotSize(px)
+        }
+
+        /**
          * La SPA è entrata in chat (``ChatController.activate``). Secondo dei tre
          * modi in cui la chat arriva a schermo, e l'unico che il guscio nativo
          * non può vedere da sé: un cambio vista dentro la WebView non produce
