@@ -158,11 +158,30 @@ object FloatingOverlayController {
     // Superficie chiamata da Python (via FloatingBridge) e dal service      //
     // ------------------------------------------------------------------ //
 
-    /** Accende o spegne la mascotte. Idempotente; solo dal main thread. */
+    /**
+     * Accende o spegne la mascotte. Idempotente; solo dal main thread.
+     *
+     * Ritorna se la mascotte è **davvero** accesa, ed è il valore che
+     * l'interruttore nelle impostazioni mostra all'utente. Da qui la risposta
+     * non è «la finestra è a schermo adesso»: nel momento esatto in cui si
+     * tocca quell'interruttore l'app è per forza in primo piano, quindi la
+     * finestra è per forza nascosta ([`applyVisibility`]) — e rispondere di no
+     * vorrebbe dire dire «non ci riesco» a qualcosa che funziona benissimo.
+     *
+     * La domanda vera è l'altra: **Android la lascerebbe aprire?** Misurato sul
+     * Titan 2 il 17/09/2026, ed è il difetto che questa riga chiude: prima si
+     * ritornava il risultato di `applyVisibility`, che con l'app davanti esce
+     * dal ramo «nascondi» senza nemmeno guardare il permesso. L'interruttore
+     * rispondeva «accesa» e trenta secondi dopo, passando in background, il log
+     * diceva `SYSTEM_ALERT_WINDOW is not granted`. Cioè la cosa che questo
+     * valore esiste per raccontare era esattamente quella che non raccontava.
+     */
     fun setEnabled(context: Context, on: Boolean): Boolean {
-        appContext = context.applicationContext
+        val ctx = context.applicationContext
+        appContext = ctx
         enabled = on
-        return applyVisibility()
+        applyVisibility()
+        return on && canDrawOverlays(ctx)
     }
 
     /**
