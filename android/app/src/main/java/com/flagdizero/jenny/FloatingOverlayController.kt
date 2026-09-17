@@ -137,6 +137,18 @@ object FloatingOverlayController {
     /** Ripiego se Python non ha ancora spinto la config. */
     private const val DEFAULT_REPLY_HOLD_S = 20
 
+    /** Il palco che dorme: si vede, non si tocca, non prende il fuoco. */
+    private const val STAGE_ASLEEP = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
+    /** ...e sveglio: prende i tocchi ma non il fuoco (il solo fumetto). */
+    private const val STAGE_TOUCHABLE = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
+    /** ...e in chat: tocchi e fuoco, per il campo di testo. */
+    private const val STAGE_CHAT = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
     private const val PREFS = "jenny_floating"
 
     /**
@@ -177,8 +189,15 @@ object FloatingOverlayController {
 
     private var appContext: Context? = null
     private var windowManager: WindowManager? = null
+
+    /** Il **palco**: quello che si vede. Schermo intero, immobile. */
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
+
+    /** La **maniglia**: quello che si tocca. Trasparente, e l'unica che cambia
+     *  taglia. */
+    private var grip: View? = null
+    private var gripParams: WindowManager.LayoutParams? = null
 
     private var mascotBody: ImageView? = null
     private var mascotFace: ImageView? = null
@@ -206,6 +225,10 @@ object FloatingOverlayController {
 
     /** Il volo in corso, o `null` se sta ferma. */
     private var flight: FloatingFlight? = null
+
+    /** Dove sta la maniglia da ferma: segue il riquadro (v. `placeColumn`). */
+    private var gripX = 0
+    private var gripY = 0
 
     /** Dove il dito ha toccato per ultimo, in coordinate schermo. */
     private var downFingerX = 0f
@@ -333,12 +356,21 @@ object FloatingOverlayController {
             expanded = false
             isChatOpen = false
             val container = buildViews(ctx)
-            val lp = parkedParams(ctx)
+            val lp = stageParams()
             wm.addView(container, lp)
             windowManager = wm
             root = container
             params = lp
-            Log.i(TAG, "Floating mascot attached (y=${lp.y})")
+            // La maniglia si aggiunge **dopo**, così sta sopra: fra finestre
+            // dello stesso tipo comanda l'ordine di inserimento, e i tocchi
+            // sulla mascotte devono arrivare a lei, non al palco.
+            val handle = buildGrip(ctx)
+            val glp = gripParams(ctx)
+            wm.addView(handle, glp)
+            grip = handle
+            gripParams = glp
+            placeColumn(ctx, parkX(ctx), parkTop(ctx))
+            Log.i(TAG, "Floating mascot attached (x=${glp.x} y=${glp.y})")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach the floating mascot", e)
@@ -354,14 +386,17 @@ object FloatingOverlayController {
         isChatOpen = false
         waitingForReply = false
         val wm = windowManager
-        val view = root
-        if (wm != null && view != null) {
-            try {
-                wm.removeView(view)
-            } catch (e: Exception) {
-                Log.i(TAG, "Floating mascot already detached: ${e.javaClass.simpleName}")
+        if (wm != null) {
+            for (v in listOfNotNull(grip, root)) {
+                try {
+                    wm.removeView(v)
+                } catch (e: Exception) {
+                    Log.i(TAG, "Floating mascot already detached: ${e.javaClass.simpleName}")
+                }
             }
         }
+        grip = null
+        gripParams = null
         root = null
         params = null
         windowManager = null
@@ -386,7 +421,50 @@ object FloatingOverlayController {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-    private fun parkedParams(ctx: Context): WindowManager.LayoutParams {
+    /**
+     * Il palco: **schermo intero, a (0,0), per sempre**.
+     *
+     * È la riga che chiude il difetto misurato il 17/09 fotogramma per
+     * fotogramma. Prima la finestra visibile cambiava taglia a ogni apertura e
+     * chiusura, e le due cose che decidono dove sta la mascotte — la `x/y`
+     * della finestra e il margine del riquadro dentro di essa — non atterrano
+     * nello stesso fotogramma: il margine è layout locale e arriva subito, il
+     * ridimensionamento passa dal WindowManager e arriva dopo. Nel mezzo si
+     * vedeva un fotogramma con il riquadro a `(0,0)` di una finestra ancora
+     * intera, cioè la mascotte **nell'angolo in alto a sinistra**, e da lì
+     * partiva la discesa: misurata a `t=16,807 s`, riquadro all'angolo, e 290
+     * ms di scivolata fino al bordo.
+     *
+     * Con il palco immobile quel fotogramma non esiste: il margine del riquadro
+     * **è** la sua posizione sullo schermo, sempre, in ogni stato.
+     *
+     * Non è toccabile di suo — a schermo intero si mangerebbe ogni tocco del
+     * telefono. Il tocco ce l'ha [gripParams], che è trasparente.
+     */
+    private fun stageParams(): WindowManager.LayoutParams {
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            STAGE_ASLEEP,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.x = 0
+        lp.y = 0
+        return lp
+    }
+
+    /**
+     * La maniglia: un riquadro trasparente grande quanto lo sprite, sopra di
+     * lei, che porta il `setOnTouchListener`.
+     *
+     * È l'unica finestra che cambia taglia — piccola da parcheggiata, intera
+     * durante il volo (l'arena) — e siccome non disegna niente, cambiarla non
+     * si vede. Tutta la classe di difetti «la mascotte salta quando la
+     * finestra cambia» muore qui.
+     */
+    private fun gripParams(ctx: Context): WindowManager.LayoutParams {
         val size = dp(ctx, MASCOT_DP)
         val lp = WindowManager.LayoutParams(
             size,
@@ -394,12 +472,55 @@ object FloatingOverlayController {
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
+            PixelFormat.TRANSPARENT
         )
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = parkX(ctx)
         lp.y = parkTop(ctx)
         return lp
+    }
+
+    /** Il palco riceve tocchi e fuoco solo quando c'è qualcosa da toccare. */
+    private fun applyStage(flags: Int, softInput: Int) {
+        val wm = windowManager ?: return
+        val view = root ?: return
+        val lp = params ?: return
+        if (lp.flags == flags && lp.softInputMode == softInput) return
+        lp.flags = flags
+        lp.softInputMode = softInput
+        try {
+            wm.updateViewLayout(view, lp)
+        } catch (e: Exception) {
+            Log.i(TAG, "Could not change the stage: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * Sposta/ridimensiona la maniglia. *arena* la porta a schermo intero per
+     * il volo; *touchable* la spegne quando è il palco a prendere i tocchi.
+     */
+    private fun setGrip(ctx: Context, arena: Boolean, touchable: Boolean) {
+        val wm = windowManager ?: return
+        val view = grip ?: return
+        val lp = gripParams ?: return
+        val size = dp(ctx, MASCOT_DP)
+        val w = if (arena) WindowManager.LayoutParams.MATCH_PARENT else size
+        val x = if (arena) 0 else gripX
+        val y = if (arena) 0 else gripY
+        var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        if (!touchable) flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        if (lp.width == w && lp.x == x && lp.y == y && lp.flags == flags) return
+        lp.width = w
+        lp.height = w
+        lp.x = x
+        lp.y = y
+        lp.flags = flags
+        try {
+            wm.updateViewLayout(view, lp)
+        } catch (e: Exception) {
+            Log.i(TAG, "Could not move the grip: ${e.javaClass.simpleName}")
+        }
     }
 
     /**
@@ -438,39 +559,21 @@ object FloatingOverlayController {
      */
     private fun expand(withInput: Boolean, forFlight: Boolean = false) {
         val ctx = appContext ?: return
-        val wm = windowManager ?: return
-        val view = root ?: return
-        val lp = params ?: return
         if (expanded && isChatOpen == withInput) return
 
-        if (!expanded) {
-            // La finestra passa a (0,0), quindi la posizione che aveva come
-            // origine diventa un margine dentro di essa: stesso pixel sullo
-            // schermo, nessun salto.
-            placeColumn(ctx, lp.x, lp.y)
-            lp.width = WindowManager.LayoutParams.MATCH_PARENT
-            lp.height = WindowManager.LayoutParams.MATCH_PARENT
-            lp.x = 0
-            lp.y = 0
-        }
-        lp.flags = if (withInput) {
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        } else {
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        }
-        lp.softInputMode = if (withInput) {
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
-        } else {
-            WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
-        }
-        try {
-            wm.updateViewLayout(view, lp)
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not expand the floating mascot", e)
-            return
-        }
+        // Il palco non si muove e non cambia taglia: cambia solo *cosa
+        // accetta*. Da qui in poi prende i tocchi (e con la chat anche il
+        // fuoco), quindi la maniglia si fa da parte.
+        applyStage(
+            if (withInput) STAGE_CHAT else STAGE_TOUCHABLE,
+            if (withInput) {
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+            } else {
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+            },
+        )
+        setGrip(ctx, arena = false, touchable = false)
         expanded = true
         isChatOpen = withInput
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
@@ -526,9 +629,6 @@ object FloatingOverlayController {
      */
     private fun collapse() {
         val ctx = appContext ?: return
-        val wm = windowManager ?: return
-        val view = root ?: return
-        val lp = params ?: return
         main.removeCallbacks(holdRunnable)
         bubble?.visibility = View.GONE
         if (!expanded) return
@@ -539,24 +639,14 @@ object FloatingOverlayController {
         inputRow?.visibility = View.GONE
         cancelTimeout()
         waitingForReply = false
+        stopBreathing()
         syncFace()
 
-        val size = dp(ctx, MASCOT_DP)
-        stopBreathing()
-        lp.width = size
-        lp.height = size
-        lp.x = parkX(ctx)
-        lp.y = parkTop(ctx)
-        lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
-        resetColumn()
-        syncFace()
-        try {
-            wm.updateViewLayout(view, lp)
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not collapse the floating mascot", e)
-        }
+        applyStage(STAGE_ASLEEP, WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED)
+        // Torna al bordo **scivolando**, com'è uscita: stessa curva e stessa
+        // durata dell'uscita, dentro lo stesso palco fermo. La maniglia la
+        // raggiunge a fine corsa (`slideTo` → `placeColumn` → `syncGrip`).
+        slideTo(ctx, parkX(ctx), parkTop(ctx))
         Log.i(TAG, "Floating mascot collapsed")
     }
 
@@ -660,6 +750,10 @@ object FloatingOverlayController {
             mascot.systemGestureExclusionRects =
                 listOf(android.graphics.Rect(0, 0, mascotSize, mascotSize))
         }
+        // Toccabile da due parti, e non è ridondanza: da parcheggiata i tocchi
+        // li prende la maniglia (il palco è `NOT_TOUCHABLE`), a chat aperta li
+        // prende il palco (la maniglia si spegne). Stessa lambda, e tutto il
+        // gesto è in coordinate schermo, quindi non le distingue nemmeno.
         bindTouch(ctx, mascot)
         container.addView(mascot, FrameLayout.LayoutParams(mascotSize, mascotSize).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -701,6 +795,19 @@ object FloatingOverlayController {
 
         syncFace()
         return container
+    }
+
+    /** La maniglia: un riquadro trasparente che esiste solo per essere toccato. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun buildGrip(ctx: Context): View {
+        val handle = View(ctx)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val size = dp(ctx, MASCOT_DP)
+            handle.systemGestureExclusionRects =
+                listOf(android.graphics.Rect(0, 0, size, size))
+        }
+        bindTouch(ctx, handle)
+        return handle
     }
 
     /**
@@ -860,6 +967,7 @@ object FloatingOverlayController {
                     }
                     tracker?.recycle()
                     tracker = null
+                    restGrip(ctx)
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
@@ -875,6 +983,7 @@ object FloatingOverlayController {
                     }
                     tracker?.recycle()
                     tracker = null
+                    restGrip(ctx)
                     true
                 }
                 else -> false
@@ -892,22 +1001,26 @@ object FloatingOverlayController {
      * dentro di essa.
      */
     private fun openArena(ctx: Context) {
-        if (expanded) return
-        val wm = windowManager ?: return
-        val view = root ?: return
-        val lp = params ?: return
-        placeColumn(ctx, lp.x, lp.y)
-        lp.width = WindowManager.LayoutParams.MATCH_PARENT
-        lp.height = WindowManager.LayoutParams.MATCH_PARENT
-        lp.x = 0
-        lp.y = 0
-        try {
-            wm.updateViewLayout(view, lp)
-        } catch (e: Exception) {
-            Log.i(TAG, "Could not open the arena: ${e.javaClass.simpleName}")
-            return
-        }
-        expanded = true
+        // A chat aperta l'arena c'è già: è il palco, intero e toccabile.
+        // Crescere qui vorrebbe dire mettere una finestra nuova sotto un dito
+        // già appoggiato, e il gesto arriva a destinazione come `CANCEL`.
+        if (isChatOpen) return
+        // Cresce la **maniglia**, che è trasparente: il dito non può più
+        // uscirne, e non si vede niente cambiare. Il palco resta com'è.
+        setGrip(ctx, arena = true, touchable = true)
+    }
+
+    /**
+     * Fine del gesto: la maniglia torna quella che deve essere.
+     *
+     * Vale per ogni uscita, `UP` e `CANCEL`, perché una maniglia rimasta
+     * grande è trasparente **e si mangia ogni tocco del telefono** — il guasto
+     * più silenzioso che questa finestra possa produrre. In volo no: là
+     * l'arena serve fino all'atterraggio.
+     */
+    private fun restGrip(ctx: Context) {
+        if (flight != null) return
+        setGrip(ctx, arena = false, touchable = !expanded)
     }
 
     /**
@@ -943,22 +1056,12 @@ object FloatingOverlayController {
         // ne vanno, perché mentre vola non c'è niente a cui scrivere. La
         // finestra resta grande — è già l'arena — ma smette di prendere il
         // fuoco, così la tastiera non resta appesa a mezz'aria.
-        if (isChatOpen) {
-            hideKeyboard(ctx)
-            isChatOpen = false
-            scrim?.visibility = View.GONE
-            inputRow?.visibility = View.GONE
-            params?.let { lp ->
-                lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
-                try {
-                    windowManager?.updateViewLayout(root, lp)
-                } catch (e: Exception) {
-                    Log.i(TAG, "Could not drop focus for the flight: ${e.javaClass.simpleName}")
-                }
-            }
-        }
+        if (isChatOpen) hideKeyboard(ctx)
+        isChatOpen = false
+        expanded = false
+        scrim?.visibility = View.GONE
+        inputRow?.visibility = View.GONE
+        applyStage(STAGE_ASLEEP, WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED)
         mascot.translationX = 0f
         mascot.translationY = 0f
         mascot.pivotX = size * FloatingFlight.PIVOT_X
@@ -1026,8 +1129,11 @@ object FloatingOverlayController {
         flight = null
         parkedRight = right
         saveParkPosition(ctx)
-        clearTransforms(ctx)
-        collapse()
+        syncFace()
+        // La camminata finisce esattamente sull'ancoraggio docked: il riquadro
+        // ci si posa senza muoversi, e la maniglia torna piccola su di lei.
+        placeColumn(ctx, parkX(ctx), parkTop(ctx))
+        setGrip(ctx, arena = false, touchable = true)
         Log.i(TAG, "Pegman flight settled (right=$right)")
     }
 
@@ -1173,6 +1279,11 @@ object FloatingOverlayController {
             lp.topMargin = max(top, 0)
             mascot.layoutParams = lp
         }
+        // Il margine **è** la posizione a schermo (il palco sta a (0,0) e non
+        // si muove), quindi la maniglia va esattamente lì sopra.
+        gripX = left
+        gripY = max(top, 0)
+        if (!expanded && flight == null) setGrip(ctx, arena = false, touchable = true)
         // Il fumetto finisce dove comincia la testa e cresce all'insù, e sta
         // dal lato in cui lei sta: parcheggiata a destra parla verso sinistra,
         // e viceversa. Il ritaglio dello sprite lascia dell'aria sopra la
@@ -1209,6 +1320,10 @@ object FloatingOverlayController {
         val dy = (top - lp.topMargin).toFloat()
         clearTransforms(ctx)
         if (dx == 0f && dy == 0f) {
+            // Già lì: si posa comunque, perché è `placeColumn` a rimettere la
+            // maniglia sopra di lei. Uscire di qui senza farlo la lascerebbe
+            // intoccabile finché non succede qualcos'altro.
+            placeColumn(ctx, left, top)
             startBreathing()
             return
         }
@@ -1293,15 +1408,6 @@ object FloatingOverlayController {
         }
     }
 
-    private fun resetColumn() {
-        appContext?.let { clearTransforms(it) }
-        (column?.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-            lp.gravity = Gravity.TOP or Gravity.START
-            lp.leftMargin = 0
-            lp.topMargin = 0
-            column?.layoutParams = lp
-        }
-    }
 
     /**
      * L'ascissa del bordo, docked o *out*.
