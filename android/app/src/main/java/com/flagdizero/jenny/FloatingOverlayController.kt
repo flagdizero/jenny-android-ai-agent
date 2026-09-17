@@ -207,8 +207,15 @@ object FloatingOverlayController {
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
 
-    /** La **maniglia**: quello che si tocca. Trasparente, e l'unica che cambia
-     *  taglia. */
+    /**
+     * La finestra **di lei**: grande quanto lo sprite, toccabile (quindi mai
+     * tappata in opacità), e **non si ridimensiona mai** — si sposta e basta.
+     */
+    private var mascotWin: FrameLayout? = null
+    private var mascotWinParams: WindowManager.LayoutParams? = null
+
+    /** La **maniglia**: quello che si tocca. Trasparente e vuota, ed è l'unica
+     *  che cambia taglia — a schermo intero è l'arena del volo. */
     private var grip: View? = null
     private var gripParams: WindowManager.LayoutParams? = null
 
@@ -395,6 +402,17 @@ object FloatingOverlayController {
                 it.height = size
             }
         }
+        mascotWinParams?.let { lp ->
+            lp.width = size
+            lp.height = size
+            mascotWin?.let {
+                try {
+                    windowManager?.updateViewLayout(it, lp)
+                } catch (e: Exception) {
+                    Log.i(TAG, "Could not resize her: ${e.javaClass.simpleName}")
+                }
+            }
+        }
         placeColumn(ctx, parkX(ctx, out = expanded), parkTop(ctx))
         setGrip(ctx, arena = false)
         if (expanded) startBreathing()
@@ -440,17 +458,23 @@ object FloatingOverlayController {
             windowManager = wm
             root = container
             params = lp
-            // La maniglia si aggiunge **dopo**, così sta sopra: fra finestre
-            // dello stesso tipo comanda l'ordine di inserimento, e i tocchi
-            // sulla mascotte devono arrivare a lei, non al palco.
+            // Ordine di inserimento = ordine di sovrapposizione: palco in
+            // fondo, lei in mezzo, maniglia sopra. I tocchi li prende sempre
+            // la maniglia, che è l'unica a poter crescere fino a coprire lo
+            // schermo senza che si veda.
+            val box = buildMascotWindow(ctx)
+            val blp = mascotWinParams(ctx)
+            wm.addView(box, blp)
+            mascotWin = box
+            mascotWinParams = blp
             val handle = buildGrip(ctx)
             val glp = gripParams(ctx)
             wm.addView(handle, glp)
             grip = handle
             gripParams = glp
-            // **Dopo** `buildGrip`: è lì che nascono i due livelli dell'arte, e
-            // un `syncFace` prima di loro non disegna niente — cioè una
-            // mascotte accesa e invisibile.
+            // **Dopo** `buildMascotWindow`: è lì che nascono i due livelli
+            // dell'arte, e un `syncFace` prima di loro non disegna niente —
+            // cioè una mascotte accesa e invisibile.
             syncFace()
             placeColumn(ctx, parkX(ctx), parkTop(ctx))
             Log.i(TAG, "Floating mascot attached (x=${glp.x} y=${glp.y})")
@@ -475,7 +499,7 @@ object FloatingOverlayController {
         flight = null
         val wm = windowManager
         if (wm != null) {
-            for (v in listOfNotNull(grip, root)) {
+            for (v in listOfNotNull(grip, mascotWin, root)) {
                 try {
                     wm.removeView(v)
                 } catch (e: Exception) {
@@ -485,6 +509,8 @@ object FloatingOverlayController {
         }
         grip = null
         gripParams = null
+        mascotWin = null
+        mascotWinParams = null
         root = null
         params = null
         windowManager = null
@@ -553,6 +579,23 @@ object FloatingOverlayController {
      * si vede. Tutta la classe di difetti «la mascotte salta quando la
      * finestra cambia» muore qui.
      */
+    /** La finestra di lei. Toccabile di proposito: v. [buildMascotWindow]. */
+    private fun mascotWinParams(ctx: Context): WindowManager.LayoutParams {
+        val size = mascotSize(ctx)
+        val lp = WindowManager.LayoutParams(
+            size,
+            size,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.x = parkX(ctx)
+        lp.y = parkTop(ctx)
+        return lp
+    }
+
     private fun gripParams(ctx: Context): WindowManager.LayoutParams {
         val size = mascotSize(ctx)
         val lp = WindowManager.LayoutParams(
@@ -881,34 +924,72 @@ object FloatingOverlayController {
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun buildGrip(ctx: Context): View {
+        val handle = View(ctx)
+        bindTouch(ctx, handle)
+        return handle
+    }
+
+    /**
+     * La finestra di lei: i due livelli dell'arte, e niente altro.
+     *
+     * **Non si ridimensiona mai.** È la regola che tiene in piedi tutto il
+     * resto: dove sta a schermo è la `x/y` di questa finestra, punto, quindi
+     * non esiste un fotogramma in cui due contabilità divergono. Il volo non
+     * la fa crescere — per quello c'è la maniglia, che è trasparente — e la
+     * scivolata fra gli ancoraggi muove lei, non un figlio dentro di lei.
+     *
+     * È **toccabile** anche se non riceve i tocchi (glieli prende la maniglia,
+     * che le sta sopra): un overlay non fidato con `FLAG_NOT_TOUCHABLE` lo
+     * paga in opacità — Android lo tappa a 0,8 contro il tapjacking — e una
+     * Jenny semitrasparente non è una Jenny.
+     */
+    private fun buildMascotWindow(ctx: Context): FrameLayout {
         val side = mascotSize(ctx)
-        val handle = FrameLayout(ctx)
+        val box = FrameLayout(ctx)
         val body = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         val face = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-        handle.addView(body, FrameLayout.LayoutParams(side, side))
-        handle.addView(face, FrameLayout.LayoutParams(side, side))
+        box.addView(body, FrameLayout.LayoutParams(side, side))
+        box.addView(face, FrameLayout.LayoutParams(side, side))
         mascotBody = body
         mascotFace = face
-        column = handle
-        // L'esclusione dal gesto «indietro» segue il riquadro invece di essere
-        // scritta una volta: la taglia la decide la WebUI e può cambiare
-        // mentre la finestra è già a schermo.
+        column = box
+        // **Fuori dalla zona del gesto «indietro».** Parcheggiata sporge dal
+        // bordo per poco meno di metà quadrato: quel che resta visibile sta
+        // tutto nella fascia in cui Android legge uno swipe come *back*, e
+        // senza questa riga il sistema si prende il gesto al primo movimento.
+        // Sta qui e non sulla maniglia perché questa finestra è sempre grande
+        // quanto lei: la maniglia, in arena, coprirebbe tutto lo schermo.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            handle.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            box.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
                 v.systemGestureExclusionRects =
                     listOf(android.graphics.Rect(0, 0, v.width, v.height))
             }
         }
-        bindTouch(ctx, handle)
-        return handle
+        return box
     }
 
     /** La maniglia si muove: **la finestra**, non il contenuto. Dentro è grande
      *  quanto lei, quindi una traslazione del riquadro verrebbe ritagliata. */
     private fun moveGrip(left: Int, top: Int) {
         val wm = windowManager ?: return
+        // Lei e la maniglia sono la stessa cosa in due strati: si spostano
+        // insieme, o il dito finisce per cercarla dove non è più.
+        mascotWinParams?.let { lp ->
+            if (lp.x != left || lp.y != top) {
+                lp.x = left
+                lp.y = top
+                mascotWin?.let {
+                    try {
+                        wm.updateViewLayout(it, lp)
+                    } catch (e: Exception) {
+                        Log.i(TAG, "Could not move her: ${e.javaClass.simpleName}")
+                    }
+                }
+            }
+        }
         val view = grip ?: return
         val lp = gripParams ?: return
+        if (lp.width != mascotWinParams?.width) return  // in arena non la segue
         if (lp.x == left && lp.y == top) return
         lp.x = left
         lp.y = top
