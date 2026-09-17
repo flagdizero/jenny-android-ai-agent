@@ -258,53 +258,6 @@ class TestLaFisicaNonDiverge:
             "sorgenti è da rivedere, e un test che non confronta niente passa sempre"
         )
 
-    def test_il_riquadro_pieno_segue_larte(self):
-        """Le pareti dell'arena si misurano sul **personaggio**, non sul file.
-
-        Gli sprite sono quadrati da 768 px con molto margine trasparente
-        attorno: mettere le pareti sul bordo del canvas vuol dire fermarla a un
-        dito dal bordo dello schermo, con niente di disegnato a spiegare
-        perché — che è esattamente il difetto («rimbalza su muri invisibili»)
-        per cui `CONTENT_*` esiste. I quattro numeri sono il ritaglio del
-        canale alfa, e questo test li rimisura: se qualcuno ridisegna una posa,
-        i muri tornano invisibili in silenzio, e questo è il posto in cui non
-        succede.
-
-        `jenny-fall` decide i tre lati che si vedono in volo, `jenny-ground` il
-        basso — è la posa con cui tocca terra, quindi l'unica che dice dove sia
-        il pavimento.
-        """
-        # Pillow non è una dipendenza del progetto: senza, si salta — stessa
-        # regola di ``tests/webui/test_mascot_layer_sources.py``.
-        pytest.importorskip("PIL", reason="Pillow non è una dipendenza del progetto")
-        from PIL import Image
-
-        source = self.FLIGHT_KT.read_text(encoding="utf-8")
-        assets = REPO / "jenny/templates/ui/assets"
-
-        def bbox(name: str) -> tuple[float, float, float, float]:
-            with Image.open(assets / f"{name}.webp") as im:
-                box = im.convert("RGBA").getchannel("A").getbbox()
-                w, h = im.size
-            assert box is not None, f"{name}.webp è tutto trasparente"
-            return (box[0] / w, box[1] / h, box[2] / w, box[3] / h)
-
-        fall = bbox("jenny-fall")
-        ground = bbox("jenny-ground")
-        expected = {
-            "CONTENT_L": fall[0],
-            "CONTENT_T": fall[1],
-            "CONTENT_R": fall[2],
-            "CONTENT_B": ground[3],
-        }
-        for name, value in expected.items():
-            declared = self._kt_numbers(source).get(name)
-            assert declared is not None, f"{name} non è più dichiarata in FloatingFlight.kt"
-            assert declared == pytest.approx(value, abs=0.002), (
-                f"{name} vale {declared} ma l'arte dice {value:.4f}: le pareti "
-                f"dell'arena non sono più sui bordi dello schermo."
-            )
-
     def test_il_pivot_e_lo_stesso(self):
         """La punta della manica alzata di `jenny-hang`. Sbagliarlo non rompe
         niente: la fa solo ruotare attorno al punto sbagliato."""

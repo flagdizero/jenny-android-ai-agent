@@ -125,9 +125,6 @@ object FloatingOverlayController {
      *  dice: una finestra `FLAG_NOT_FOCUSABLE` può non ricevere insets. */
     private const val NAV_FALLBACK_DP = 24
 
-    /** «Non lo so ancora»: la prima volta la sua casa è la riga del composer. */
-    private const val NO_TOP = Int.MIN_VALUE
-
     /** Oltre questo spostamento il gesto è un trascinamento e non un tap. */
     private const val DRAG_SLOP_DP = 8
 
@@ -142,21 +139,17 @@ object FloatingOverlayController {
 
     private const val PREFS = "jenny_floating"
 
-    /** Su quale bordo si è posata. */
-    private const val PREF_RIGHT = "park_right"
-
     /**
-     * ...e a che altezza.
+     * L'unica cosa che si ricorda: su quale bordo si è posata.
      *
-     * Nella prima stesura non si memorizzava: la Y era fissa alla riga sopra
-     * la barra di input, copiando l'invariante che `.jenny-duo` dichiara nel
-     * CSS. Dentro la SPA quella riga *è* il pavimento; sopra le altre app non
-     * c'è niente di disegnato là, e il volo finiva contro un pavimento
-     * invisibile a un terzo di schermo dal fondo. Adesso cade fino in fondo e
-     * si ferma dove atterra — e la riga sopra il composer resta la sua casa,
-     * quella da cui parte e quella a cui la chat la riporta.
+     * **L'altezza no.** È la riga sopra la barra di input, in ogni stato —
+     * l'invariante che `.jenny-duo` dichiara nel CSS («Non deve mai cambiare
+     * in Y») — ed è anche il pavimento del volo, come `fs.y0` in JS. Per un
+     * giro (17/09) si è provato a farla cadere fino in fondo e restare dove
+     * atterrava: finiva sempre in un angolo, mezza fuori, sotto le icone del
+     * dock di chiunque. La UI ha una riga sola, e questa è quella.
      */
-    private const val PREF_TOP = "park_top"
+    private const val PREF_RIGHT = "park_right"
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -202,9 +195,6 @@ object FloatingOverlayController {
     /** Su quale dei due bordi. Default destra, come la mascotte in chat. */
     private var parkedRight = true
 
-    /** Ordinata del riquadro da parcheggiata, in px schermo. `NO_TOP` finché
-     *  non se ne sa niente: allora è la riga sopra il composer. */
-    private var parkedTop = NO_TOP
     private var waitingForReply = false
 
     /** Il respiro in corso (bob o wobble), o `null` se sta ferma. */
@@ -490,14 +480,10 @@ object FloatingOverlayController {
             // la fisica, e due animazioni sulla stessa view si contendono la
             // stessa traslazione.
             //
-            // Aprire la chat la **solleva**, non la trasloca: rientra dal
-            // bordo e, se sta più in basso della riga del composer, sale fin
-            // lì per non finirci sotto — è la richiesta «deve risiedere sopra
-            // la barra input», detta nell'unico momento in cui la barra c'è.
-            // Il posto suo resta quello in cui l'hai lasciata: alla chiusura
-            // `collapse` la rimette a `parkTop`, che qui non si tocca.
+            // Rientra dall'ancoraggio docked a quello *out*, solo in
+            // orizzontale: è già alla sua riga, e la barra compare sotto di lei.
             syncFace()
-            slideTo(ctx, parkX(ctx, out = true), min(parkTop(ctx), composerLineTop(ctx)))
+            slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
         }
         if (withInput) input?.let { it.post { focusTheField(ctx) } }
         armHold()
@@ -980,7 +966,7 @@ object FloatingOverlayController {
         mascotFace?.visibility = View.GONE
 
         val width = screenWidth(ctx)
-        val floorY = floorTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
+        val dockY = parkTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
         val leftDock = -(size * DOCKED_OUT_RATIO) + size * FloatingFlight.PIVOT_X
         val rightDock = width - size + size * DOCKED_OUT_RATIO +
             size * FloatingFlight.PIVOT_X
@@ -989,14 +975,15 @@ object FloatingOverlayController {
             viewportW = width.toFloat(),
             viewportH = screenHeight(ctx).toFloat(),
             density = metrics.density,
-            floorPivotY = floorY,
+            dockPivotY = dockY,
             dockPivotX = leftDock to rightDock,
             onFrame = { left, top, rot, pose, flip -> drawFlight(left, top, rot, pose, flip) },
-            onSettled = { right, top -> endFlight(ctx, right, top) },
+            onSettled = { right -> endFlight(ctx, right) },
         ).also {
             it.grab(
                 startLeft + size * FloatingFlight.PIVOT_X,
                 startTop + size * FloatingFlight.PIVOT_Y,
+                downFingerX,
             )
             it.moveTo(downFingerX, downFingerY)
         }
@@ -1032,22 +1019,16 @@ object FloatingOverlayController {
         mascotBody?.setImageBitmap(sprite(name))
     }
 
-    /**
-     * Atterrata e riagganciata: torna docked, con l'arte del bordo.
-     *
-     * **Il posto in cui si è fermata diventa il suo.** Non c'è più una riga
-     * fissa a cui tornare: cade fino in fondo, si rialza, cammina fino al
-     * bordo più vicino e lì resta, finché non la si riprende o non si apre la
-     * chat — che è l'unica cosa che la riporta sopra il composer.
-     */
-    private fun endFlight(ctx: Context, right: Boolean, top: Float) {
+    /** Atterrata e riagganciata alla sua riga: torna docked, con l'arte del
+     *  bordo. La camminata finisce esattamente sull'ancoraggio docked, quindi
+     *  il passaggio alla finestra piccola non la sposta di un pixel. */
+    private fun endFlight(ctx: Context, right: Boolean) {
         flight = null
         parkedRight = right
-        parkedTop = top.toInt().coerceIn(dp(ctx, 8), floorTop(ctx))
         saveParkPosition(ctx)
         clearTransforms(ctx)
         collapse()
-        Log.i(TAG, "Pegman flight settled (right=$right top=$parkedTop)")
+        Log.i(TAG, "Pegman flight settled (right=$right)")
     }
 
     // ------------------------------------------------------------------ //
@@ -1360,31 +1341,20 @@ object FloatingOverlayController {
     }
 
     /**
-     * La riga appena sopra la barra di input: **la sua casa**.
+     * L'ordinata, **derivata e mai memorizzata**: la riga appena sopra la barra
+     * di input — `bottom: dock-height + 58px + scope-row` nel CSS, che qui è
+     * la banda del composer più un filo d'aria.
      *
-     * È dove sta appena installata, ed è dove la chat la riporta — la prima
-     * delle tre richieste del secondo giro, «deve risiedere sopra la barra
-     * input». Si calcola anche a composer nascosto: la banda esiste come
-     * misura pure quando non è a schermo, altrimenti la mascotte salterebbe
-     * nell'istante in cui compare.
+     * È l'invariante di `.jenny-duo` («Non deve mai cambiare in Y»), è dove
+     * *risiede*, è il pavimento del volo e la riga a cui la camminata torna.
+     * Si calcola anche a composer nascosto: la banda esiste come misura pure
+     * quando non è a schermo, altrimenti la mascotte salterebbe nell'istante
+     * in cui compare.
      */
-    private fun composerLineTop(ctx: Context): Int {
+    private fun parkTop(ctx: Context): Int {
         val size = dp(ctx, MASCOT_DP)
         val band = dp(ctx, COMPOSER_DP) + dp(ctx, COMPOSER_GAP_DP) + navInset(ctx)
         return max(screenHeight(ctx) - band - size, dp(ctx, 8))
-    }
-
-    /** Il pavimento: i **piedi** sul fondo dello schermo, non il bordo del
-     *  file. Lo stesso numero che `FloatingFlight` usa per il tonfo. */
-    private fun floorTop(ctx: Context): Int {
-        val size = dp(ctx, MASCOT_DP)
-        return screenHeight(ctx) - (size * FloatingFlight.CONTENT_B).toInt()
-    }
-
-    /** Dove sta da parcheggiata: dove l'hai lasciata, o casa la prima volta. */
-    private fun parkTop(ctx: Context): Int {
-        val top = if (parkedTop == NO_TOP) composerLineTop(ctx) else parkedTop
-        return top.coerceIn(dp(ctx, 8), floorTop(ctx))
     }
 
     /**
@@ -1412,14 +1382,12 @@ object FloatingOverlayController {
     private fun loadParkPosition(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         parkedRight = prefs.getBoolean(PREF_RIGHT, true)
-        parkedTop = prefs.getInt(PREF_TOP, NO_TOP)
     }
 
     private fun saveParkPosition(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(PREF_RIGHT, parkedRight)
-            .putInt(PREF_TOP, parkedTop)
             .apply()
     }
 

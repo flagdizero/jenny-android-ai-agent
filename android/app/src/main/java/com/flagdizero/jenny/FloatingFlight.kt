@@ -38,19 +38,18 @@ class FloatingFlight(
     private val viewportW: Float,
     private val viewportH: Float,
     private val density: Float,
-    /** Ordinata del pivot quando i piedi toccano il fondo dello schermo.
+    /** Ordinata del pivot agganciata: la riga sopra la barra di input.
      *
-     *  **Non e' piu' la riga sopra la barra di input.** Lo era nella prima
-     *  stesura, copiata dalla SPA dove il dock *e'* il pavimento: sul telefono
-     *  quella riga sta a un terzo di schermo dal fondo e senza niente di
-     *  disegnato sotto, quindi si leggeva come un pavimento invisibile a
-     *  mezz'aria. Qui il pavimento e' il fondo vero. */
-    private val floorPivotY: Float,
+     *  **E' anche il pavimento**, come in JS (`fs.y0 = fs.by`): ci atterra, ci
+     *  cammina, ci si riaggancia. Per un giro (17/09) si e' provato a mettere
+     *  il pavimento sul fondo dello schermo — «sembra a mezz'aria» — e il
+     *  risultato era una mascotte che finiva sempre in un angolo, sotto le
+     *  icone di chiunque. La UI ha una riga sola, e questa e' quella. */
+    private val dockPivotY: Float,
     /** Ascissa del pivot agganciata, per lato: `(sinistra, destra)`. */
     private val dockPivotX: Pair<Float, Float>,
     private val onFrame: (left: Float, top: Float, rotationDeg: Float, pose: Pose, flip: Boolean) -> Unit,
-    /** Atterrata: su quale bordo, e a quale ordinata del *riquadro*. */
-    private val onSettled: (right: Boolean, top: Float) -> Unit,
+    private val onSettled: (right: Boolean) -> Unit,
 ) {
 
     enum class Pose { HANG, FALL, GROUND, WALK1, WALK2 }
@@ -74,25 +73,7 @@ class FloatingFlight(
         const val ACCEL_COUPLING = 0.0048f
         const val MAX_TILT_DEG = 78f
         const val WALL_REST = 0.42f
-        const val FLOOR_REST = 0.42f
-
-        /**
-         * Il riquadro **pieno** dello sprite, in frazioni del quadrato.
-         *
-         * Misurato dal canale alfa dei `.webp` il 17/09/2026: il personaggio
-         * sta in poco piu' di meta' canvas e il resto e' margine trasparente.
-         * Senza questi numeri le pareti finiscono dove finisce il *file* e non
-         * dove finisce *lei* — cioe' dei muri invisibili a un dito dal bordo,
-         * che e' esattamente il difetto che chiudono.
-         *
-         * Sinistra, alto e destra vengono da `jenny-fall` (la posa che si vede
-         * mentre vola); il basso da `jenny-ground`, che e' la posa con cui
-         * tocca terra e quindi l'unica che decide dove sia il pavimento.
-         */
-        const val CONTENT_L = 0.2448f
-        const val CONTENT_T = 0.1042f
-        const val CONTENT_R = 0.7721f
-        const val CONTENT_B = 0.9232f
+        const val FLOOR_REST = 0.12f
         const val GETUP_MS = 700L
         const val WALK_FRAME_MS = 500L
         const val RETURN_TIMEOUT_MS = 6_000L
@@ -112,12 +93,6 @@ class FloatingFlight(
     private val fallG = FALL_G_CSS * density
     private val walkSpeed = WALK_SPEED_CSS * density
     private val dirMin = DIR_MIN_CSS * density
-
-    /** Le pareti, in coordinate del pivot: lei le tocca **col personaggio**,
-     *  non col bordo del file. */
-    private val wallL = sizePx * (PIVOT_X - CONTENT_L)
-    private val wallR = viewportW - sizePx * (CONTENT_R - PIVOT_X)
-    private val wallT = sizePx * (PIVOT_Y - CONTENT_T)
 
     private var phase = Phase.HELD
 
@@ -152,7 +127,7 @@ class FloatingFlight(
      *
      * Da qui in poi la posizione la detta il dito: `moveTo` ad ogni movimento.
      */
-    fun grab(pivotX: Float, pivotY: Float) {
+    fun grab(pivotX: Float, pivotY: Float, fingerAtX: Float) {
         phase = Phase.HELD
         fingerX = pivotX
         fingerY = pivotY
@@ -161,7 +136,8 @@ class FloatingFlight(
         vx = 0f
         vy = 0f
         th = 0f
-        om = 0f
+        // «piccolo strappo alla presa», come in JS: `fs.om = (fs.x - e.clientX) * 0.004`
+        om = (pivotX - fingerAtX) * 0.004f
         axS = 0f
         grounded = false
         settled = false
@@ -243,22 +219,22 @@ class FloatingFlight(
             when (phase) {
                 Phase.FALL -> {
                     vx -= 1.7f * vx * dt
-                    if (py <= floorPivotY) {
+                    if (py <= dockPivotY) {
                         vy += fallG * dt              // sopra il dock: cade
                     } else {
-                        vy += (70f * (floorPivotY - py) - 17f * vy) * dt  // sotto: risale
+                        vy += (70f * (dockPivotY - py) - 17f * vy) * dt  // sotto: risale
                     }
                 }
                 Phase.DOWN -> {
                     // A terra dopo il tonfo: ferma, sta per rialzarsi.
                     vy = 0f
-                    py = floorPivotY
+                    py = dockPivotY
                     vx -= 8f * vx * dt
                 }
                 else -> {
                     // Cammina a passo costante verso il bordo.
                     vy = 0f
-                    py = floorPivotY
+                    py = dockPivotY
                     val d = targetPx - px
                     vx = if (abs(vx) > walkSpeed * 1.5f) {
                         vx - 6f * vx * dt                       // attrito residuo
@@ -280,35 +256,30 @@ class FloatingFlight(
         // Pareti morbide: in mano e in caduta (lanciarla = rimbalza), ma NON in
         // cammino — il dock sta oltre il bordo dello schermo e le pareti le
         // impedirebbero di arrivare.
-        // Le pareti valgono **solo in caduta**. In mano il dito non puo'
-        // uscire dallo schermo e la molla la tiene a un palmo da lui, quindi
-        // una parete li' non protegge niente: si sente solo come un punto in
-        // cui lei smette di seguire la mano — un muro invisibile. In cammino
-        // il dock sta oltre il bordo e le pareti le impedirebbero di arrivare.
-        if (phase == Phase.FALL) {
-            if (px < wallL) { px = wallL; vx = abs(vx) * WALL_REST; om += vx * 0.002f }
-            if (px > wallR) { px = wallR; vx = -abs(vx) * WALL_REST; om -= vx * 0.002f }
-            if (py < wallT) { py = wallT; vy = abs(vy) * WALL_REST }
-            // In basso **nessuna parete**: il pavimento e' piu' sotto e lo
-            // gestisce il ramo qui sotto, con il suo rimbalzo e il suo tonfo.
-            // Una parete gli ruberebbe l'urto — invertirebbe `vy` prima che il
-            // pavimento lo veda — e lei non toccherebbe mai terra.
+        // Pareti morbide: in mano e in caduta (lanciarla = rimbalza), ma NON in
+        // cammino — il dock sta oltre il bordo dello schermo e le pareti le
+        // impedirebbero di arrivare. Stesse quattro righe del JS.
+        if (phase != Phase.SLIDE) {
+            val mL = sizePx * PIVOT_X * 0.5f
+            val mR = viewportW - mL
+            val mT = sizePx * PIVOT_Y * 0.6f
+            val mB = viewportH - sizePx * (1f - PIVOT_Y) * 0.5f
+            if (px < mL) { px = mL; vx = abs(vx) * WALL_REST; om += vx * 0.002f }
+            if (px > mR) { px = mR; vx = -abs(vx) * WALL_REST; om -= vx * 0.002f }
+            if (py < mT) { py = mT; vy = abs(vy) * WALL_REST }
+            if (py > mB) { py = mB; vy = -abs(vy) * WALL_REST }
         }
-        // In mano il fondo la ferma comunque: il dito non puo' spingerla sotto.
-        if (phase == Phase.HELD && py > floorPivotY) { py = floorPivotY; vy = 0f }
 
         // Il verso segue il moto, con isteresi.
         if (phase != Phase.DOWN && abs(vx) > dirMin) dir = if (vx > 0f) 1 else -1
 
         // Rimbalzo sulla quota del dock durante la caduta.
         if (phase == Phase.FALL) {
-            if (py >= floorPivotY) grounded = true
-            if (vy > 0f && py >= floorPivotY) {
-                py = floorPivotY
-                // Sotto una certa velocita' e' un tonfo secco; sopra
-                // rimbalza per davvero. Il primo giro aveva `FLOOR_REST` a
-                // 0,12 e un pavimento a mezz'aria: due ragioni perche' non si
-                // vedesse mai un rimbalzo.
+            if (py >= dockPivotY) grounded = true
+            if (vy > 0f && py >= dockPivotY) {
+                py = dockPivotY
+                // tonfo quasi secco: al massimo un rimbalzino molto smorzato,
+                // poi resta un attimo a terra prima di rialzarsi
                 if (abs(vy) < 500f * density) {
                     vy = 0f
                     setPhase(Phase.DOWN)
@@ -317,8 +288,8 @@ class FloatingFlight(
                     vy = -abs(vy) * FLOOR_REST
                     om += vx * 0.0015f
                 }
-            } else if (abs(py - floorPivotY) < 3f * density && abs(vy) < 60f * density) {
-                py = floorPivotY
+            } else if (abs(py - dockPivotY) < 3f * density && abs(vy) < 60f * density) {
+                py = dockPivotY
                 vy = 0f
                 setPhase(Phase.DOWN)
                 downUntil = nowMs + GETUP_MS
@@ -353,11 +324,11 @@ class FloatingFlight(
             "vx=${vx.toInt()} vy=${vy.toInt()}")
     }
 
-    /** Consegna l'atterraggio: bordo e ordinata del riquadro. */
+    /** Consegna l'atterraggio: su quale bordo si e' riagganciata. */
     private fun settleNow() {
         running = false
         Choreographer.getInstance().removeFrameCallback(frames)
-        onSettled(targetPx > viewportW / 2f, py - sizePx * PIVOT_Y)
+        onSettled(targetPx > viewportW / 2f)
     }
 
     private fun chooseSide() {

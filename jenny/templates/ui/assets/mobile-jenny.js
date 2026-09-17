@@ -107,7 +107,7 @@ const MAX_TILT = (78 * Math.PI) / 180;
 const MAX_SPEED = 5000; // px/s
 const WALL_REST = 0.42; // rimbalzo sui bordi dello schermo
 const FALL_G = 1300; // gravità della caduta al rilascio (px/s²) — rientro calmo
-const FLOOR_REST = 0.42; // rimbalzo sul pavimento, come quello sulle pareti
+const FLOOR_REST = 0.12; // rimbalzo sul pavimento molto smorzato
 const WALK_SPEED = 150; // rientro a passo costante (px/s), tipo camminata
 const GETUP_MS = 700; // pausa a terra dopo il tonfo (tempo per "rialzarsi")
 /* Delta di ancoraggio fra docked e out, in frazioni di --jenny-size: sono i
@@ -797,10 +797,8 @@ export class JennyCompanion {
         if (fs.y >= fs.y0) fs.grounded = true; // toccato terra: passa alla posa ground
         if (fs.vy > 0 && fs.y >= fs.y0) {
           fs.y = fs.y0;
-          // tocca terra: sotto una certa velocita' e' un tonfo secco e
-          // resta giu' un attimo prima di rialzarsi, sopra rimbalza per
-          // davvero (FLOOR_REST) — un pavimento che assorbe tutto non si
-          // legge come un pavimento
+          // tonfo quasi secco: al massimo un rimbalzino molto smorzato,
+          // poi resta un attimo a terra prima di rialzarsi
           if (Math.abs(fs.vy) < 500) {
             fs.vy = 0;
             fs.phase = 'down';
