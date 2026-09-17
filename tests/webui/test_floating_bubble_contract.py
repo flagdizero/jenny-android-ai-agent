@@ -38,33 +38,36 @@ class TestIlBeccuccio:
         assert re.search(r"const val TAIL_W_DP\s*=\s*\d+", source)
         assert re.search(r"const val TAIL_H_DP\s*=\s*\d+", source)
 
-    def test_il_beccuccio_esce_dal_lato_giusto(self):
-        """Il fondo della barra sa da che lato mettere il beccuccio.
+    def test_il_beccuccio_punta_dove_sta_lei(self):
+        """Il vertice cade sotto il centro del suo corpo.
 
-        `parkedRight` è false se la mascotte è a sinistra: il beccuccio va a
-        sinistra (`tailOnLeft = true`). Vero se è a destra: beccuccio a destra.
-        Il legame `tailOnLeft = !parkedRight` deve esistere, o Fumetto punta
-        nel vuoto quando l'utente la sposta dall'altro lato.
+        Il primo giro lo metteva sul *fianco* della barra, come nel mockup —
+        dove però lei era disegnata accanto alla barra. Sul telefono
+        ``parkTop`` la mette **sopra** la banda, quindi un beccuccio
+        orizzontale puntava nel vuoto. La x deve venire da dove sta lei
+        davvero, non da un lato scelto a tavolino.
         """
         source = _read()
-        assert "fun barBubble(ctx: Context, tailOnLeft: Boolean)" in source
-        assert "!parkedRight" in source, (
-            "il lato del beccuccio non è più derivato da parkedRight: se la "
-            "mascotte cambia bordo, il beccuccio finisce a puntare al niente"
+        assert "fun barBubble(ctx: Context, tailCenterX: Int)" in source
+        assert "fun mascotCenterX(" in source
+        assert "parkX(ctx, out = true)" in source, (
+            "il centro della mascotte non è più preso dalla sua posizione "
+            "«out»: il beccuccio punterebbe dove lei non è"
         )
-
-    def test_il_composer_lascia_spazio_alla_mascotte(self):
-        """La barra sta *accanto* a lei, non sotto: il row ha padding
-        asimmetrico che rispecchia il suo lato."""
-        source = _read()
-        assert "fun applyBubble(" in source
-        assert "fun mascotBandInset(" in source
-        # Il padding del row cambia in base al lato: il pattern `if (tailOnLeft)`
-        # deve comparire almeno una volta dentro applyBubble.
         m = re.search(r"private fun applyBubble\(ctx: Context\) \{(.*?)\n    \}", source, re.S)
         assert m, "applyBubble non è più leggibile"
-        assert "tailOnLeft" in m.group(1)
-        assert "mascotBandInset" in m.group(1)
+        assert "mascotCenterX" in m.group(1)
+
+    def test_il_composer_e_staccato_dai_bordi(self):
+        """Edge-to-edge era il difetto di partenza: sopra l'app di qualcun
+        altro si leggeva come una fascia di sistema."""
+        source = _read()
+        m = re.search(r"const val COMPOSER_EDGE_DP\s*=\s*(\d+)", source)
+        assert m, "COMPOSER_EDGE_DP non è più leggibile"
+        assert int(m.group(1)) >= 20, (
+            f"la barra è tornata a {m.group(1)} dp dai bordi: a filo di schermo "
+            "non si legge come un oggetto che galleggia"
+        )
 
     def test_il_composer_si_apre_gia_come_nuvoletta(self):
         """`applyBubble` va chiamata **prima** di `visibility = VISIBLE`.
@@ -82,6 +85,29 @@ class TestIlBeccuccio:
         assert "applyBubble(ctx)" in m.group(0), (
             "applyBubble non è chiamata prima di rendere visibile il row: il "
             "beccuccio nascerebbe sul lato di prima"
+        )
+
+
+class TestGliInsetsNonCancellanoLaNuvoletta:
+    """Il difetto che ha fatto sembrare tutto peggio di prima.
+
+    Il listener degli insets IME riscriveva **tutti e quattro** i padding del
+    row con valori fissi, e scatta nell'istante in cui la finestra prende il
+    fuoco — cioè subito dopo ``applyBubble``. Risultato: la geometria della
+    nuvoletta veniva cancellata un frame dopo essere stata calcolata, la barra
+    tornava edge-to-edge e restava solo un triangolo appiccicato a caso.
+    """
+
+    def test_il_listener_ime_tocca_solo_il_fondo(self):
+        source = _read()
+        m = re.search(
+            r"setOnApplyWindowInsetsListener \{(.*?)\n            \}", source, re.S
+        )
+        assert m, "il listener degli insets non è più leggibile"
+        body = m.group(1)
+        assert "it.paddingLeft" in body and "it.paddingRight" in body, (
+            "il listener degli insets riscrive di nuovo i lati invece di "
+            "preservarli: cancella la geometria di applyBubble"
         )
 
 

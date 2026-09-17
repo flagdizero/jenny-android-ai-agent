@@ -151,28 +151,41 @@ object FloatingOverlayController {
     private const val BAR_RADIUS_DP = 23
 
     /**
-     * Il beccuccio della nuvoletta, in dp.
+     * Il beccuccio della nuvoletta, in dp. **Punta in su, non di lato.**
      *
-     * La barra non è più una fascia edge-to-edge sotto lei: è una nuvoletta
-     * che le esce di bocca. Il beccuccio sta sull'estremo della barra dal lato
-     * della mascotte — a sinistra se lei è parcheggiata a sinistra, a destra
-     * se è a destra — e punta verso di lei.
+     * Il primo giro lo metteva sul fianco della barra, perché così stava nel
+     * mockup — dove però la mascotte era disegnata *accanto* alla barra. Sul
+     * telefono lei sta **sopra** la banda ([parkTop] la mette esattamente un
+     * [COMPOSER_GAP_DP] sopra il composer), quindi un beccuccio orizzontale
+     * puntava nel vuoto. Qui esce dal bordo superiore, sotto di lei.
      *
-     * `[TAIL_W_DP]` è quanto si allontana dalla pillola in orizzontale,
-     * `[TAIL_H_DP]` la base del triangolo. Numeri piccoli di proposito: il
-     * beccuccio *indica*, non riempie.
+     * `[TAIL_W_DP]` è la base del triangolo, `[TAIL_H_DP]` quanto si alza
+     * sopra la pillola. Piccoli di proposito: il beccuccio *indica*, non
+     * riempie.
      */
-    private const val TAIL_W_DP = 9
-    private const val TAIL_H_DP = 14
+    private const val TAIL_W_DP = 20
+    private const val TAIL_H_DP = 8
 
-    /** L'aria fra il beccuccio della barra e il bordo visibile della
-     *  mascotte. Non è un valore da toccare — è quel che serve perché
-     *  «indica lei» invece di «la tocca». */
-    private const val TAIL_GAP_DP = 4
+    /**
+     * Il margine della barra dai bordi dello schermo.
+     *
+     * Era 14 e la barra arrivava praticamente a filo: sopra l'app di qualcun
+     * altro si leggeva come una fascia di sistema. A 22 resta un oggetto
+     * appoggiato lì sopra.
+     */
+    private const val COMPOSER_EDGE_DP = 22
 
-    /** Il margine della barra dal bordo dello schermo, dal lato *lontano*
-     *  dalla mascotte (dal suo lato ci va la sua figura). */
-    private const val COMPOSER_EDGE_DP = 14
+    /**
+     * I due padding verticali della banda, che insieme alla barra fanno
+     * [COMPOSER_DP].
+     *
+     * Sono asimmetrici perché il beccuccio mangia [TAIL_H_DP] in cima: sopra
+     * ne restano 4, sotto i 12 di sempre. Il conto: 4 + (8 + 38 + 4 + 4) + 12
+     * = 70 dp, cioè la banda **non cambia altezza** e [parkTop] — il pavimento
+     * del volo — resta dov'era.
+     */
+    private const val COMPOSER_PAD_TOP_DP = 4
+    private const val COMPOSER_PAD_BOTTOM_DP = 12
 
     /** Quanto dura la fioritura del tasto. È la `sendEnable` di
      *  `mobile-style.css`, che fa la stessa cosa nel composer della chat. */
@@ -563,7 +576,8 @@ object FloatingOverlayController {
             // liscia. Ricostruire il beccuccio col colore nuovo del tema
             // (fill *e* bordo) è la sola strada — un GradientDrawable non sa
             // disegnare un triangolo, e riassegnare `background` è
-            // l'invalidazione.
+            // l'invalidazione. Ne approfitta anche per rimettere il beccuccio
+            // sotto di lei, se nel frattempo ha cambiato bordo.
             applyBubble(ctx)
         } else {
             inputBar?.background = barBackground(ctx)
@@ -901,10 +915,9 @@ object FloatingOverlayController {
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
         if (withInput) {
             // La nuvoletta si costruisce **ora**, non al buildInputRow: solo
-            // qui sappiamo su quale bordo la mascotte si è appoggiata. Un
-            // trascinamento aveva potuto muoverla da un lato all'altro dopo il
-            // montaggio, e senza questa chiamata il beccuccio punterebbe nel
-            // vuoto.
+            // qui sappiamo dove la mascotte si è appoggiata, e il beccuccio
+            // deve uscire sotto di lei. Un trascinamento aveva potuto
+            // spostarla da un bordo all'altro dopo il montaggio.
             applyBubble(ctx)
         }
         inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
@@ -1102,12 +1115,20 @@ object FloatingOverlayController {
                 val ime = insets.getInsets(WindowInsets.Type.ime()).bottom
                 val bars = insets.getInsets(WindowInsets.Type.systemBars()).bottom
                 inputRow?.let {
-                    // Gli stessi valori di ``buildInputRow``: questo ramo ne
-                    // riscrive il padding, e due numeri diversi per la stessa
-                    // riga si notano solo quando la tastiera si alza.
-                    val padH = dp(ctx, 14)
-                    val padV = dp(ctx, 12)
-                    it.setPadding(padH, padV, padH, padV + max(ime, bars))
+                    // **Solo il fondo.** Gli altri tre lati li decide
+                    // `applyBubble`, che è l'unico posto che sa da che parte
+                    // sta la mascotte — e questo listener scatta *subito
+                    // dopo*, nell'istante in cui la finestra prende il fuoco.
+                    // Riscrivendo tutto e quattro (com'era) cancellava la
+                    // geometria della nuvoletta un frame dopo che era stata
+                    // calcolata: la barra tornava edge-to-edge e il beccuccio
+                    // restava appiccicato sotto di lei.
+                    it.setPadding(
+                        it.paddingLeft,
+                        it.paddingTop,
+                        it.paddingRight,
+                        dp(ctx, COMPOSER_PAD_BOTTOM_DP) + max(ime, bars),
+                    )
                 }
                 insets
             }
@@ -1213,12 +1234,12 @@ object FloatingOverlayController {
      * era rimasta edge-to-edge: sopra l'app di qualcun altro si leggeva come
      * un pezzo di sistema, non come una cosa di lei.
      *
-     * Ora la barra parte dal fianco della mascotte, con un beccuccio che
-     * punta verso di lei — la geometria orizzontale la calcola [applyBubble]
-     * al momento di aprire il composer, perché **solo lì** si sa da quale
-     * bordo lei ha deciso di stare. Il tasto d'invio resta [SEND_DP] con
-     * [BAR_PAD_DP] d'aria attorno, e la banda resta [COMPOSER_DP] dp — il
-     * pavimento del volo non si muove.
+     * Ora la barra sta staccata dai bordi di [COMPOSER_EDGE_DP], e dal suo
+     * bordo alto esce un beccuccio che punta **in su**, sotto la mascotte —
+     * la x la calcola [applyBubble] al momento di aprire il composer, perché
+     * solo lì si sa dove lei si è appoggiata. Il tasto d'invio resta
+     * [SEND_DP] con [BAR_PAD_DP] d'aria attorno, e la banda resta
+     * [COMPOSER_DP] dp: il pavimento del volo non si muove.
      */
     private fun buildInputRow(ctx: Context): View {
         val row = LinearLayout(ctx).apply {
@@ -1380,7 +1401,7 @@ object FloatingOverlayController {
      * multiplo di dp) e romperebbe il fondo unico: qui è un `Path` solo,
      * riempito e bordato in un colpo, che non può disallinearsi da sé stesso.
      */
-    private fun barBubble(ctx: Context, tailOnLeft: Boolean): Drawable {
+    private fun barBubble(ctx: Context, tailCenterX: Int): Drawable {
         val fillColor = veiled(palette.surface)
         val strokeColor = palette.border
         val radius = dp(ctx, BAR_RADIUS_DP).toFloat()
@@ -1400,32 +1421,31 @@ object FloatingOverlayController {
             override fun draw(canvas: Canvas) {
                 val b = bounds
                 if (b.isEmpty) return
-                // Il rettangolo arrotondato lascia [tailW] px liberi dal
-                // lato del beccuccio — è lì che il triangolo si aggancia.
-                val innerLeft = if (tailOnLeft) b.left + tailW else b.left.toFloat()
-                val innerRight = if (tailOnLeft) b.right.toFloat() else b.right - tailW
-                // Ritira il tracciato di mezzo stroke: il bordo è disegnato
-                // *sopra* la linea, e senza questo mezzo pixel esce dai
-                // bounds e viene tagliato dal padre.
+                // Il bordo si disegna *a cavallo* della linea: mezzo stroke
+                // dentro e mezzo fuori. Senza questo ritiro la metà esterna
+                // esce dai bounds e il padre la taglia.
                 val inset = stroke / 2f
-                val rect = RectF(innerLeft + inset, b.top + inset, innerRight - inset, b.bottom - inset)
+                // La pillola comincia [tailH] sotto il bordo alto: quello
+                // spazio è del beccuccio.
+                val top = b.top + tailH
+                val rect = RectF(b.left + inset, top + inset, b.right - inset, b.bottom - inset)
+                // La *base* del triangolo non deve finire sugli angoli
+                // tondi, o il beccuccio spunta da una curva invece che da un
+                // lato dritto. Il vincolo è quindi su metà base, non su tutta.
+                val minX = b.left + radius + tailW / 2f
+                val maxX = b.right - radius - tailW / 2f
+                val apex = tailCenterX.toFloat().coerceIn(
+                    min(minX, maxX), max(minX, maxX),
+                )
                 val path = Path().apply {
                     addRoundRect(rect, radius, radius, Path.Direction.CW)
-                    val midY = (b.top + b.bottom) / 2f
-                    if (tailOnLeft) {
-                        // Il triangolo attacca al lato interno della pillola
-                        // e si stringe verso il vertice esterno. Uso `op UNION`
-                        // implicito di `addPath` per fondersi con la roundrect.
-                        moveTo(innerLeft, midY - tailH / 2f)
-                        lineTo(b.left + inset, midY)
-                        lineTo(innerLeft, midY + tailH / 2f)
-                        close()
-                    } else {
-                        moveTo(innerRight, midY - tailH / 2f)
-                        lineTo(b.right - inset, midY)
-                        lineTo(innerRight, midY + tailH / 2f)
-                        close()
-                    }
+                    // Base sul bordo alto della pillola, vertice in su verso
+                    // di lei. Il `close()` lo fonde con la roundrect: un solo
+                    // riempimento, un solo contorno, niente cuciture.
+                    moveTo(apex - tailW / 2f, top)
+                    lineTo(apex, b.top + inset)
+                    lineTo(apex + tailW / 2f, top)
+                    close()
                 }
                 canvas.drawPath(path, fillPaint)
                 canvas.drawPath(path, strokePaint)
@@ -1438,13 +1458,22 @@ object FloatingOverlayController {
     }
 
     /**
-     * Quanto del suo lato sporge dentro lo schermo quando è «out» (chat
-     * aperta): `size × (1 − OUT_RATIO)`. È lo spazio che la barra deve
-     * lasciare libero dal suo lato, o le va sotto invece che accanto.
+     * Il centro della sua parte **visibile**, in px dal bordo sinistro, quando
+     * è «out» (chat aperta). È la x a cui punta il beccuccio.
+     *
+     * Il centro del *quadrato* non va bene, ed è l'errore del primo giro:
+     * parcheggiata lei è per un quarto fuori schermo, quindi `parkX + size/2`
+     * cade a una ventina di px dentro la barra — dove c'è ancora l'angolo
+     * tondo, e il clamp che tiene il beccuccio lontano dalle curve lo
+     * spingeva via da sotto di lei. Il centro di quel che si vede sta molto
+     * più dentro, e il beccuccio ci arriva senza essere clampato.
      */
-    private fun mascotBandInset(ctx: Context): Int {
+    private fun mascotCenterX(ctx: Context): Int {
         val size = mascotSize(ctx)
-        return (size * (1f - OUT_RATIO)).toInt()
+        val left = parkX(ctx, out = true)
+        val visibleLeft = max(0, left)
+        val visibleRight = min(screenWidth(ctx), left + size)
+        return (visibleLeft + visibleRight) / 2
     }
 
     /**
@@ -1458,24 +1487,21 @@ object FloatingOverlayController {
     private fun applyBubble(ctx: Context) {
         val row = inputRow as? LinearLayout ?: return
         val bar = inputBar ?: return
-        val tailOnLeft = !parkedRight
         val edge = dp(ctx, COMPOSER_EDGE_DP)
-        val mascotSide = mascotBandInset(ctx) + dp(ctx, TAIL_GAP_DP)
-        val padV = dp(ctx, 12)
         row.setPadding(
-            if (tailOnLeft) mascotSide else edge,
-            padV,
-            if (tailOnLeft) edge else mascotSide,
-            padV,
+            edge,
+            dp(ctx, COMPOSER_PAD_TOP_DP),
+            edge,
+            dp(ctx, COMPOSER_PAD_BOTTOM_DP),
         )
-        bar.background = barBubble(ctx, tailOnLeft)
+        // La x del beccuccio è in coordinate della *barra*, non dello
+        // schermo: la barra comincia a `edge`.
+        bar.background = barBubble(ctx, mascotCenterX(ctx) - edge)
         val basePad = dp(ctx, BAR_PAD_DP)
-        val textPad = dp(ctx, 18)  // stesso respiro di sempre sul lato del testo
-        val tailPad = basePad + dp(ctx, TAIL_W_DP)  // fa spazio al triangolo
         bar.setPadding(
-            if (tailOnLeft) tailPad else textPad,
+            dp(ctx, 18),
+            basePad + dp(ctx, TAIL_H_DP),  // il beccuccio sta qui sopra
             basePad,
-            if (tailOnLeft) textPad else tailPad,
             basePad,
         )
     }
