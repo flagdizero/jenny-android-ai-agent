@@ -7,8 +7,14 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -143,6 +149,30 @@ object FloatingOverlayController {
 
     /** Metà dei 46: a una riga sola la barra è una pillola esatta. */
     private const val BAR_RADIUS_DP = 23
+
+    /**
+     * Il beccuccio della nuvoletta, in dp.
+     *
+     * La barra non è più una fascia edge-to-edge sotto lei: è una nuvoletta
+     * che le esce di bocca. Il beccuccio sta sull'estremo della barra dal lato
+     * della mascotte — a sinistra se lei è parcheggiata a sinistra, a destra
+     * se è a destra — e punta verso di lei.
+     *
+     * `[TAIL_W_DP]` è quanto si allontana dalla pillola in orizzontale,
+     * `[TAIL_H_DP]` la base del triangolo. Numeri piccoli di proposito: il
+     * beccuccio *indica*, non riempie.
+     */
+    private const val TAIL_W_DP = 9
+    private const val TAIL_H_DP = 14
+
+    /** L'aria fra il beccuccio della barra e il bordo visibile della
+     *  mascotte. Non è un valore da toccare — è quel che serve perché
+     *  «indica lei» invece di «la tocca». */
+    private const val TAIL_GAP_DP = 4
+
+    /** Il margine della barra dal bordo dello schermo, dal lato *lontano*
+     *  dalla mascotte (dal suo lato ci va la sua figura). */
+    private const val COMPOSER_EDGE_DP = 14
 
     /** Quanto dura la fioritura del tasto. È la `sendEnable` di
      *  `mobile-style.css`, che fa la stessa cosa nel composer della chat. */
@@ -528,7 +558,16 @@ object FloatingOverlayController {
      */
     private fun applyPalette() {
         val ctx = appContext ?: return
-        inputBar?.background = barBackground(ctx)
+        if (isChatOpen) {
+            // Composer già aperto: il fondo è una nuvoletta, non la pillola
+            // liscia. Ricostruire il beccuccio col colore nuovo del tema
+            // (fill *e* bordo) è la sola strada — un GradientDrawable non sa
+            // disegnare un triangolo, e riassegnare `background` è
+            // l'invalidazione.
+            applyBubble(ctx)
+        } else {
+            inputBar?.background = barBackground(ctx)
+        }
         input?.let {
             it.setTextColor(palette.text)
             it.setHintTextColor(palette.hint)
@@ -860,6 +899,14 @@ object FloatingOverlayController {
         expanded = true
         isChatOpen = withInput
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
+        if (withInput) {
+            // La nuvoletta si costruisce **ora**, non al buildInputRow: solo
+            // qui sappiamo su quale bordo la mascotte si è appoggiata. Un
+            // trascinamento aveva potuto muoverla da un lato all'altro dopo il
+            // montaggio, e senza questa chiamata il beccuccio punterebbe nel
+            // vuoto.
+            applyBubble(ctx)
+        }
         inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
         if (!forFlight) {
             // In volo non si scivola all'ancoraggio e non si respira: comanda
@@ -1156,22 +1203,22 @@ object FloatingOverlayController {
     }
 
     /**
-     * Il composer: **un oggetto solo**, con il tasto d'invio dentro la barra.
+     * Il composer: **una nuvoletta che le esce di bocca**, non una fascia sotto.
      *
      * La prima versione era un `EditText` nudo su una banda scura, e sul
-     * telefono si leggeva come una cosa rotta: nessun bordo, nessun bottone,
-     * niente che dicesse «si scrive qui». La seconda aveva il bordo e il
-     * bottone, ma il bottone stava **fuori**: un disco da 46 dp che si prendeva
-     * 56 dp di larghezza al testo ed era sempre acceso, anche a campo vuoto —
-     * la cosa più luminosa dello schermo, e non faceva niente.
+     * telefono si leggeva come una cosa rotta. La seconda aveva bordo e
+     * bottone, ma il bottone stava **fuori**: un disco da 46 dp che si
+     * prendeva 56 dp di larghezza al testo ed era sempre acceso. La terza
+     * — questa qui, meno l'ultimo passo — l'aveva messo dentro, ma la barra
+     * era rimasta edge-to-edge: sopra l'app di qualcun altro si leggeva come
+     * un pezzo di sistema, non come una cosa di lei.
      *
-     * Qui il tasto sta dentro lo stesso bordo: [SEND_DP] con [BAR_PAD_DP]
-     * d'aria attorno, che fanno i 46 dp del campo. Il conto torna senza muovere
-     * la banda, e quindi senza muovere il pavimento della mascotte
-     * ([COMPOSER_DP]).
-     *
-     * Le forme e i colori sono quelli del composer della chat, perché è la
-     * stessa cosa in un posto diverso.
+     * Ora la barra parte dal fianco della mascotte, con un beccuccio che
+     * punta verso di lei — la geometria orizzontale la calcola [applyBubble]
+     * al momento di aprire il composer, perché **solo lì** si sa da quale
+     * bordo lei ha deciso di stare. Il tasto d'invio resta [SEND_DP] con
+     * [BAR_PAD_DP] d'aria attorno, e la banda resta [COMPOSER_DP] dp — il
+     * pavimento del volo non si muove.
      */
     private fun buildInputRow(ctx: Context): View {
         val row = LinearLayout(ctx).apply {
@@ -1268,11 +1315,14 @@ object FloatingOverlayController {
     /**
      * Il tasto si accende quando c'è qualcosa da mandare.
      *
-     * Da spento non è un disco pieno: è la sola freccia in `--text-faint`,
-     * come `.compose-send[disabled]` nel composer della chat. Alla prima
-     * lettera fiorisce in `--accent` con la stessa molla (`sendEnable`), e
-     * *solo* alla prima: [sendLit] tiene il conto, o la freccia rimbalzerebbe
-     * a ogni carattere.
+     * La pallina c'è sempre: da spenta è del colore dei bordi (`--border-strong`),
+     * appena visibile — dice «questo è il tasto» senza gridarlo. Alla prima
+     * lettera fiorisce in `--accent` con la stessa molla (`sendEnable`) del
+     * composer in chat, e *solo* alla prima: [sendLit] tiene il conto, o la
+     * freccia rimbalzerebbe a ogni carattere.
+     *
+     * La prima versione lasciava la freccia nuda quando la barra era vuota:
+     * senza cerchio, letta come un simbolo abbandonato in mezzo alla riga.
      */
     private fun syncSend(bloom: Boolean = true) {
         val button = sendButton ?: return
@@ -1281,13 +1331,9 @@ object FloatingOverlayController {
         sendLit = lit
         button.isEnabled = lit
         button.setTextColor(if (lit) palette.onAccent else palette.hint)
-        button.background = if (lit) {
-            GradientDrawable().apply {
-                setColor(palette.accent)
-                shape = GradientDrawable.OVAL
-            }
-        } else {
-            null
+        button.background = GradientDrawable().apply {
+            setColor(if (lit) palette.accent else palette.border)
+            shape = GradientDrawable.OVAL
         }
         if (lit && changed && bloom) {
             button.scaleX = 0.85f
@@ -1306,11 +1352,132 @@ object FloatingOverlayController {
      * La stessa pillola di `.compose-pill`, con in più il velo che tutte le
      * superfici di questa finestra portano: galleggiano sopra l'app di
      * qualcun altro, e un filo di trasparenza dice che non sono sue.
+     *
+     * È lo sfondo *iniziale*, montato in `buildInputRow`. Al primo `expand`
+     * viene sostituito da [barBubble], che aggiunge il beccuccio dal lato
+     * della mascotte.
      */
     private fun barBackground(ctx: Context): GradientDrawable = GradientDrawable().apply {
         setColor(veiled(palette.surface))
         cornerRadius = dp(ctx, BAR_RADIUS_DP).toFloat()
         setStroke(dp(ctx, 1), palette.border)
+    }
+
+    /**
+     * Il fondo della barra come **nuvoletta**, con il beccuccio dal lato di lei.
+     *
+     * È la firma di Fumetto: la barra smette di essere una fascia sotto lo
+     * schermo e diventa qualcosa che *le esce di bocca*. Il beccuccio è un
+     * piccolo triangolo che sporge di [TAIL_W_DP] dal fianco della pillola;
+     * il resto del rettangolo arrotondato è disegnato dentro i bounds della
+     * view — quindi il chiamante deve aver messo `[TAIL_W_DP]` di padding
+     * extra da quel lato, o il testo ci finisce sopra.
+     *
+     * Un `Drawable` custom invece di un `GradientDrawable` perché un
+     * `GradientDrawable` è un rettangolo puro — non sa disegnare un triangolo
+     * attaccato. Aggiungere una `View` a parte per il beccuccio complicherebbe
+     * la geometria (dovrebbe stare esattamente attaccata alla pillola in ogni
+     * multiplo di dp) e romperebbe il fondo unico: qui è un `Path` solo,
+     * riempito e bordato in un colpo, che non può disallinearsi da sé stesso.
+     */
+    private fun barBubble(ctx: Context, tailOnLeft: Boolean): Drawable {
+        val fillColor = veiled(palette.surface)
+        val strokeColor = palette.border
+        val radius = dp(ctx, BAR_RADIUS_DP).toFloat()
+        val tailW = dp(ctx, TAIL_W_DP).toFloat()
+        val tailH = dp(ctx, TAIL_H_DP).toFloat()
+        val stroke = dp(ctx, 1).toFloat()
+        return object : Drawable() {
+            private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = fillColor
+                style = Paint.Style.FILL
+            }
+            private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = strokeColor
+                style = Paint.Style.STROKE
+                strokeWidth = stroke
+            }
+            override fun draw(canvas: Canvas) {
+                val b = bounds
+                if (b.isEmpty) return
+                // Il rettangolo arrotondato lascia [tailW] px liberi dal
+                // lato del beccuccio — è lì che il triangolo si aggancia.
+                val innerLeft = if (tailOnLeft) b.left + tailW else b.left.toFloat()
+                val innerRight = if (tailOnLeft) b.right.toFloat() else b.right - tailW
+                // Ritira il tracciato di mezzo stroke: il bordo è disegnato
+                // *sopra* la linea, e senza questo mezzo pixel esce dai
+                // bounds e viene tagliato dal padre.
+                val inset = stroke / 2f
+                val rect = RectF(innerLeft + inset, b.top + inset, innerRight - inset, b.bottom - inset)
+                val path = Path().apply {
+                    addRoundRect(rect, radius, radius, Path.Direction.CW)
+                    val midY = (b.top + b.bottom) / 2f
+                    if (tailOnLeft) {
+                        // Il triangolo attacca al lato interno della pillola
+                        // e si stringe verso il vertice esterno. Uso `op UNION`
+                        // implicito di `addPath` per fondersi con la roundrect.
+                        moveTo(innerLeft, midY - tailH / 2f)
+                        lineTo(b.left + inset, midY)
+                        lineTo(innerLeft, midY + tailH / 2f)
+                        close()
+                    } else {
+                        moveTo(innerRight, midY - tailH / 2f)
+                        lineTo(b.right - inset, midY)
+                        lineTo(innerRight, midY + tailH / 2f)
+                        close()
+                    }
+                }
+                canvas.drawPath(path, fillPaint)
+                canvas.drawPath(path, strokePaint)
+            }
+            override fun setAlpha(a: Int) { /* immutable */ }
+            override fun setColorFilter(c: ColorFilter?) { /* immutable */ }
+            @Deprecated("Deprecated in Java")
+            override fun getOpacity() = PixelFormat.TRANSLUCENT
+        }
+    }
+
+    /**
+     * Quanto del suo lato sporge dentro lo schermo quando è «out» (chat
+     * aperta): `size × (1 − OUT_RATIO)`. È lo spazio che la barra deve
+     * lasciare libero dal suo lato, o le va sotto invece che accanto.
+     */
+    private fun mascotBandInset(ctx: Context): Int {
+        val size = mascotSize(ctx)
+        return (size * (1f - OUT_RATIO)).toInt()
+    }
+
+    /**
+     * Sistema il composer per il tema Fumetto: padding asimmetrico del row
+     * (largo dal lato della mascotte) più il fondo-nuvoletta con il beccuccio.
+     *
+     * Va chiamata **prima** di far comparire il row, così l'utente non vede
+     * per un frame la geometria vecchia. E va richiamata quando la palette
+     * cambia mentre la chat è già aperta — v. [applyPalette].
+     */
+    private fun applyBubble(ctx: Context) {
+        val row = inputRow as? LinearLayout ?: return
+        val bar = inputBar ?: return
+        val tailOnLeft = !parkedRight
+        val edge = dp(ctx, COMPOSER_EDGE_DP)
+        val mascotSide = mascotBandInset(ctx) + dp(ctx, TAIL_GAP_DP)
+        val padV = dp(ctx, 12)
+        row.setPadding(
+            if (tailOnLeft) mascotSide else edge,
+            padV,
+            if (tailOnLeft) edge else mascotSide,
+            padV,
+        )
+        bar.background = barBubble(ctx, tailOnLeft)
+        val basePad = dp(ctx, BAR_PAD_DP)
+        val textPad = dp(ctx, 18)  // stesso respiro di sempre sul lato del testo
+        val tailPad = basePad + dp(ctx, TAIL_W_DP)  // fa spazio al triangolo
+        bar.setPadding(
+            if (tailOnLeft) tailPad else textPad,
+            basePad,
+            if (tailOnLeft) textPad else tailPad,
+            basePad,
+        )
     }
 
     private fun bubbleBackground(): GradientDrawable = GradientDrawable().apply {
