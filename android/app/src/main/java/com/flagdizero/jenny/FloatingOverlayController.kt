@@ -13,7 +13,7 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RectF
+import android.graphics.PorterDuff
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -43,7 +43,6 @@ import android.widget.TextView
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * La mascotte flottante: Jenny sopra le altre app, un tap e le parli.
@@ -124,68 +123,69 @@ object FloatingOverlayController {
      *  usa 0,3 s con questa curva, ed è la stessa transizione. */
     private const val SIDE_SLIDE_MS = 300L
 
-    /**
-     * L'altezza della banda del composer, in dp.
-     *
-     * Non è una stima: `buildInputRow` mette una barra alta 46 dp — il tasto
-     * d'invio da [SEND_DP] con [BAR_PAD_DP] d'aria sopra e sotto — e 12 dp di
-     * padding attorno. Il campo, dentro la barra, non la supera: è alto quanto
-     * il tasto.
-     *
-     * **Il totale non è cambiato quando il tasto è entrato nella barra**, ed è
-     * il motivo per cui quel cambio non ha spostato niente: [parkTop] misura da
-     * qui, quindi questi 70 dp sono anche il pavimento della mascotte.
-     */
-    private const val COMPOSER_DP = 46 + 12 + 12
-
-    /** Aria fra la testa e la barra di input. */
-    private const val COMPOSER_GAP_DP = 8
-
-    /** Il lato del tasto d'invio, dentro la barra. 38 + 4 + 4 = 46. */
-    private const val SEND_DP = 38
-
-    /** L'aria fra il tasto e il bordo della barra. */
-    private const val BAR_PAD_DP = 4
-
-    /** Metà dei 46: a una riga sola la barra è una pillola esatta. */
-    private const val BAR_RADIUS_DP = 23
+    /** Quanto è larga la pillola, in frazione dello schermo. Su 574 dp fa 356. */
+    private const val PILL_WIDTH_RATIO = 0.62f
 
     /**
-     * Il beccuccio della nuvoletta, in dp. **Punta in su, non di lato.**
+     * Il lato della pallina d'invio, dentro la pillola.
      *
-     * Il primo giro lo metteva sul fianco della barra, perché così stava nel
-     * mockup — dove però la mascotte era disegnata *accanto* alla barra. Sul
-     * telefono lei sta **sopra** la banda ([parkTop] la mette esattamente un
-     * [COMPOSER_GAP_DP] sopra il composer), quindi un beccuccio orizzontale
-     * puntava nel vuoto. Qui esce dal bordo superiore, sotto di lei.
-     *
-     * `[TAIL_W_DP]` è la base del triangolo, `[TAIL_H_DP]` quanto si alza
-     * sopra la pillola. Piccoli di proposito: il beccuccio *indica*, non
-     * riempie.
+     * Più piccola del cap della pillola di proposito: a 38 in 46 erano due
+     * cerchi a 4 dp l'uno dall'altro, quasi concentrici, e si leggeva come il
+     * pomello di un interruttore, non come un tasto.
      */
-    private const val TAIL_W_DP = 20
-    private const val TAIL_H_DP = 8
+    private const val SEND_DP = 30
+
+    /** L'aria fra la pallina e il bordo della pillola. */
+    private const val BAR_PAD_DP = 7
 
     /**
-     * Il margine della barra dai bordi dello schermo.
+     * La pillola del composer, in dp: [SEND_DP] più [BAR_PAD_DP] sopra e sotto.
      *
-     * Era 14 e la barra arrivava praticamente a filo: sopra l'app di qualcun
-     * altro si leggeva come una fascia di sistema. A 22 resta un oggetto
-     * appoggiato lì sopra.
+     * Non è più una fascia a tutto schermo ma una pillola **corta e
+     * centrata**, larga [PILL_WIDTH_RATIO] dello schermo — la proporzione
+     * della barra di Claude o di Spotlight sul loro schermo — e lei la usa
+     * come pavimento: sta in piedi sul cap del suo lato (v. [parkX] e
+     * [parkTop]). A una riga: 30 + 7 + 7 = 44.
      */
-    private const val COMPOSER_EDGE_DP = 22
+    private const val PILL_DP = SEND_DP + 2 * BAR_PAD_DP
+
+    /** Metà di [PILL_DP]: a una riga la pillola è esatta, e in multiriga gli
+     *  angoli restano a 22 (rettangolo arrotondato, come `.compose-pill`). */
+    private const val BAR_RADIUS_DP = 22
+
+    /** Il padding del testo dal cap sinistro. */
+    private const val BAR_TEXT_PAD_DP = 16
 
     /**
-     * I due padding verticali della banda, che insieme alla barra fanno
-     * [COMPOSER_DP].
+     * Dove stanno i suoi piedi e il suo asse nello sprite, in frazioni del lato.
      *
-     * Sono asimmetrici perché il beccuccio mangia [TAIL_H_DP] in cima: sopra
-     * ne restano 4, sotto i 12 di sempre. Il conto: 4 + (8 + 38 + 4 + 4) + 12
-     * = 70 dp, cioè la banda **non cambia altezza** e [parkTop] — il pavimento
-     * del volo — resta dov'era.
+     * Misurati sui pixel opachi di `jenny-body-front-idle` (768 px): i piedi
+     * finiscono alla riga 668 e il corpo occupa le colonne 229–572, quindi il
+     * suo asse sta a 0,52 del quadrato — non a metà — con l'arte che guarda a
+     * sinistra, cioè non specchiata; specchiata, l'asse è a 1 − 0,52. Servono
+     * a metterla **in piedi sul cap** della pillola invece che al centro del
+     * suo quadrato trasparente.
      */
+    private const val FEET_RATIO = 0.87f
+    private const val AXIS_RATIO = 0.52f
+
+    /** L'aria fra i suoi piedi e il bordo alto della pillola. */
+    private const val FEET_GAP_DP = 2
+
+    /** I due padding verticali della banda attorno alla pillola. Sopra poco,
+     *  perché sopra c'è lei; sotto i 12 di sempre, più la tastiera quando c'è. */
     private const val COMPOSER_PAD_TOP_DP = 4
     private const val COMPOSER_PAD_BOTTOM_DP = 12
+
+    /**
+     * L'ombra sotto la pillola.
+     *
+     * È quel che la stacca dal wallpaper: fondo e bordo vengono dallo stesso
+     * tema e sono due colori vicini su un terzo, e senza un'ombra la forma
+     * sembra incollata sopra l'app di sotto. Il row lascia spazio attorno
+     * (`clipToPadding = false`) perché l'ombra ha dove cadere.
+     */
+    private const val PILL_ELEVATION_DP = 8
 
     /** Quanto dura la fioritura del tasto. È la `sendEnable` di
      *  `mobile-style.css`, che fa la stessa cosa nel composer della chat. */
@@ -198,6 +198,9 @@ object FloatingOverlayController {
     /** Ripiego per l'altezza della barra di navigazione, se il sistema non la
      *  dice: una finestra `FLAG_NOT_FOCUSABLE` può non ricevere insets. */
     private const val NAV_FALLBACK_DP = 24
+
+    /** Ripiego per l'altezza della status bar, se il sistema non la dice. */
+    private const val STATUS_FALLBACK_DP = 24
 
     /** Oltre questo spostamento il gesto è un trascinamento e non un tap. */
     private const val DRAG_SLOP_DP = 8
@@ -335,8 +338,16 @@ object FloatingOverlayController {
     private var inputRow: View? = null
     /** La barra tonda: il bordo è suo, non del campo. */
     private var inputBar: LinearLayout? = null
+
+    /** L'altezza **misurata** della pillola, in px; `0` finché non ha fatto un
+     *  layout. È quel che fa salire lei quando il testo va a capo: v. [parkTop]. */
+    private var pillHeightPx = 0
+
+    /** Quanto la tastiera (o la barra di sistema) alza il composer, in px. Vale
+     *  solo a chat aperta, che è l'unico momento in cui arrivano gli insets. */
+    private var chatBottomInsetPx = 0
     private var input: EditText? = null
-    private var sendButton: TextView? = null
+    private var sendButton: ImageView? = null
 
     /** Il tasto è acceso? Serve solo a far fiorire la molla una volta sola. */
     private var sendLit = false
@@ -571,17 +582,7 @@ object FloatingOverlayController {
      */
     private fun applyPalette() {
         val ctx = appContext ?: return
-        if (isChatOpen) {
-            // Composer già aperto: il fondo è una nuvoletta, non la pillola
-            // liscia. Ricostruire il beccuccio col colore nuovo del tema
-            // (fill *e* bordo) è la sola strada — un GradientDrawable non sa
-            // disegnare un triangolo, e riassegnare `background` è
-            // l'invalidazione. Ne approfitta anche per rimettere il beccuccio
-            // sotto di lei, se nel frattempo ha cambiato bordo.
-            applyBubble(ctx)
-        } else {
-            inputBar?.background = barBackground(ctx)
-        }
+        applyPill(ctx)
         input?.let {
             it.setTextColor(palette.text)
             it.setHintTextColor(palette.hint)
@@ -914,11 +915,11 @@ object FloatingOverlayController {
         isChatOpen = withInput
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
         if (withInput) {
-            // La nuvoletta si costruisce **ora**, non al buildInputRow: solo
-            // qui sappiamo dove la mascotte si è appoggiata, e il beccuccio
-            // deve uscire sotto di lei. Un trascinamento aveva potuto
-            // spostarla da un bordo all'altro dopo il montaggio.
-            applyBubble(ctx)
+            // La pillola si sistema **ora**, prima di comparire: se lo
+            // schermo è cambiato dal montaggio (rotazione), la larghezza va
+            // ricalcolata, e l'utente non deve vedere per un frame quella
+            // vecchia.
+            applyPill(ctx)
         }
         inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
         if (!forFlight) {
@@ -926,8 +927,9 @@ object FloatingOverlayController {
             // la fisica, e due animazioni sulla stessa view si contendono la
             // stessa traslazione.
             //
-            // Rientra dall'ancoraggio docked a quello *out*, solo in
-            // orizzontale: è già alla sua riga, e la barra compare sotto di lei.
+            // Dal bordo va a mettersi **in piedi sul cap della pillola** dal
+            // suo lato (chat aperta), o rientra a un quarto dal bordo (solo il
+            // fumetto): v. `parkX`.
             syncFace()
             slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
         }
@@ -1114,21 +1116,32 @@ object FloatingOverlayController {
             container.setOnApplyWindowInsetsListener { _, insets ->
                 val ime = insets.getInsets(WindowInsets.Type.ime()).bottom
                 val bars = insets.getInsets(WindowInsets.Type.systemBars()).bottom
+                val bottom = max(ime, bars)
                 inputRow?.let {
-                    // **Solo il fondo.** Gli altri tre lati li decide
-                    // `applyBubble`, che è l'unico posto che sa da che parte
-                    // sta la mascotte — e questo listener scatta *subito
-                    // dopo*, nell'istante in cui la finestra prende il fuoco.
-                    // Riscrivendo tutto e quattro (com'era) cancellava la
-                    // geometria della nuvoletta un frame dopo che era stata
-                    // calcolata: la barra tornava edge-to-edge e il beccuccio
-                    // restava appiccicato sotto di lei.
+                    // **Solo il fondo.** Gli altri tre lati sono geometria
+                    // della pillola, e questo listener scatta nell'istante in
+                    // cui la finestra prende il fuoco — cioè subito dopo
+                    // `applyPill`. Riscrivendo tutti e quattro (com'era) la
+                    // cancellava un frame dopo che era stata calcolata.
                     it.setPadding(
                         it.paddingLeft,
                         it.paddingTop,
                         it.paddingRight,
-                        dp(ctx, COMPOSER_PAD_BOTTOM_DP) + max(ime, bars),
+                        dp(ctx, COMPOSER_PAD_BOTTOM_DP) + bottom,
                     )
+                }
+                if (bottom != chatBottomInsetPx) {
+                    // La pillola è salita sopra la tastiera: lei ci sta in
+                    // piedi sopra, quindi sale con lei — o resterebbe dietro
+                    // la tastiera. `post`, perché `parkTop` legge dove la
+                    // pillola *è*, e il padding nuovo si vede solo dopo il
+                    // layout che questo stesso passaggio sta per fare.
+                    chatBottomInsetPx = bottom
+                    inputRow?.post {
+                        if (isChatOpen && flight == null) {
+                            slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
+                        }
+                    }
                 }
                 insets
             }
@@ -1224,30 +1237,33 @@ object FloatingOverlayController {
     }
 
     /**
-     * Il composer: **una nuvoletta che le esce di bocca**, non una fascia sotto.
+     * Il composer: **una pillola corta, centrata, su cui lei sta in piedi.**
      *
      * La prima versione era un `EditText` nudo su una banda scura, e sul
      * telefono si leggeva come una cosa rotta. La seconda aveva bordo e
-     * bottone, ma il bottone stava **fuori**: un disco da 46 dp che si
-     * prendeva 56 dp di larghezza al testo ed era sempre acceso. La terza
-     * — questa qui, meno l'ultimo passo — l'aveva messo dentro, ma la barra
-     * era rimasta edge-to-edge: sopra l'app di qualcun altro si leggeva come
-     * un pezzo di sistema, non come una cosa di lei.
+     * bottone, ma il bottone stava **fuori**. La terza l'aveva messo dentro,
+     * ma la barra era rimasta edge-to-edge — 12:1, si leggeva come un toast di
+     * sistema — e la quarta ci aveva attaccato un beccuccio da 20 dp su un
+     * bordo da 1300 px, che il clamp spingeva via da sotto di lei: un glitch,
+     * non un fumetto.
      *
-     * Ora la barra sta staccata dai bordi di [COMPOSER_EDGE_DP], e dal suo
-     * bordo alto esce un beccuccio che punta **in su**, sotto la mascotte —
-     * la x la calcola [applyBubble] al momento di aprire il composer, perché
-     * solo lì si sa dove lei si è appoggiata. Il tasto d'invio resta
-     * [SEND_DP] con [BAR_PAD_DP] d'aria attorno, e la banda resta
-     * [COMPOSER_DP] dp: il pavimento del volo non si muove.
+     * Ora è una pillola larga [PILL_WIDTH_RATIO] dello schermo e centrata,
+     * come la barra di Claude o di Spotlight; il legame con lei non è un
+     * triangolo ma la posizione: [parkX] la mette **in piedi sul cap** dal
+     * suo lato e [parkTop] le tiene i piedi a [FEET_GAP_DP] dal bordo alto,
+     * anche quando il testo va a capo e la pillola cresce. Tre piani invece di
+     * tre viola uguali: l'ombra sotto, il bordo che vira all'accento appena
+     * c'è testo, la pallina che si accende dello stesso accento.
      */
     private fun buildInputRow(ctx: Context): View {
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val padH = dp(ctx, 14)
-            val padV = dp(ctx, 12)
-            setPadding(padH, padV, padH, padV)
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            setPadding(0, dp(ctx, COMPOSER_PAD_TOP_DP), 0, dp(ctx, COMPOSER_PAD_BOTTOM_DP))
+            // L'ombra della pillola cade nel padding: senza queste due righe
+            // il row la taglierebbe al bordo della pillola.
+            clipToPadding = false
+            clipChildren = false
             visibility = View.GONE
         }
         // La barra: il bordo tondo è suo, non del campo. È tutta la differenza
@@ -1266,8 +1282,20 @@ object FloatingOverlayController {
             // il motivo per cui un difetto così si scopre tardi.
             isBaselineAligned = false
             val pad = dp(ctx, BAR_PAD_DP)
-            setPadding(dp(ctx, 18), pad, pad, pad)
+            setPadding(dp(ctx, BAR_TEXT_PAD_DP), pad, pad, pad)
             background = barBackground(ctx)
+            elevation = dp(ctx, PILL_ELEVATION_DP).toFloat()
+            // Quando il testo va a capo la pillola cresce verso l'alto, e lei
+            // — che ci sta in piedi sopra — sale con la pillola: `parkTop`
+            // legge l'altezza misurata da qui.
+            addOnLayoutChangeListener { _, _, t, _, b, _, _, _, _ ->
+                val h = b - t
+                if (h <= 0 || h == pillHeightPx) return@addOnLayoutChangeListener
+                pillHeightPx = h
+                if (isChatOpen && flight == null) {
+                    slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
+                }
+            }
         }
         val field = EditText(ctx).apply {
             hint = ctx.getString(R.string.floating_input_hint)
@@ -1310,17 +1338,17 @@ object FloatingOverlayController {
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ))
 
-        val button = TextView(ctx).apply {
-            text = "\u2191"
-            gravity = Gravity.CENTER
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+        val button = ImageView(ctx).apply {
+            setImageDrawable(arrowDrawable(ctx))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = ctx.getString(R.string.floating_send)
             setOnClickListener { send() }
         }
         val side = dp(ctx, SEND_DP)
         bar.addView(button, LinearLayout.LayoutParams(side, side))
 
         row.addView(bar, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            pillWidth(ctx), LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
         input = field
@@ -1336,11 +1364,12 @@ object FloatingOverlayController {
     /**
      * Il tasto si accende quando c'è qualcosa da mandare.
      *
-     * La pallina c'è sempre: da spenta è del colore dei bordi (`--border-strong`),
-     * appena visibile — dice «questo è il tasto» senza gridarlo. Alla prima
-     * lettera fiorisce in `--accent` con la stessa molla (`sendEnable`) del
-     * composer in chat, e *solo* alla prima: [sendLit] tiene il conto, o la
-     * freccia rimbalzerebbe a ogni carattere.
+     * La pallina c'è sempre: da spenta è del colore dei bordi (`--border-strong`)
+     * al 60%, appena visibile — dice «questo è il tasto» senza gridarlo. Alla
+     * prima lettera fiorisce in `--accent` con la stessa molla (`sendEnable`)
+     * del composer in chat, e *solo* alla prima: [sendLit] tiene il conto, o la
+     * freccia rimbalzerebbe a ogni carattere. Con lei si accende anche il
+     * bordo della pillola (v. [strokeColor]).
      *
      * La prima versione lasciava la freccia nuda quando la barra era vuota:
      * senza cerchio, letta come un simbolo abbandonato in mezzo alla riga.
@@ -1351,10 +1380,18 @@ object FloatingOverlayController {
         val changed = lit != sendLit
         sendLit = lit
         button.isEnabled = lit
-        button.setTextColor(if (lit) palette.onAccent else palette.hint)
+        // `SRC_IN`, non il tint: la freccia è un Drawable disegnato a mano, e
+        // il filtro colora i suoi pixel tenendone l'antialias.
+        button.setColorFilter(
+            if (lit) palette.onAccent else faded(palette.text, 0.55f),
+            PorterDuff.Mode.SRC_IN,
+        )
         button.background = GradientDrawable().apply {
-            setColor(if (lit) palette.accent else palette.border)
+            setColor(if (lit) palette.accent else faded(palette.border, 0.6f))
             shape = GradientDrawable.OVAL
+        }
+        appContext?.let { ctx ->
+            (inputBar?.background as? GradientDrawable)?.setStroke(dp(ctx, 1), strokeColor())
         }
         if (lit && changed && bloom) {
             button.scaleX = 0.85f
@@ -1368,142 +1405,110 @@ object FloatingOverlayController {
     }
 
     /**
-     * Il fondo della barra: `--surface` dietro, `--border-strong` attorno.
+     * Il fondo della pillola: `--surface` dietro, il bordo attorno.
      *
      * La stessa pillola di `.compose-pill`, con in più il velo che tutte le
      * superfici di questa finestra portano: galleggiano sopra l'app di
      * qualcun altro, e un filo di trasparenza dice che non sono sue.
-     *
-     * È lo sfondo *iniziale*, montato in `buildInputRow`. Al primo `expand`
-     * viene sostituito da [barBubble], che aggiunge il beccuccio dal lato
-     * della mascotte.
      */
     private fun barBackground(ctx: Context): GradientDrawable = GradientDrawable().apply {
         setColor(veiled(palette.surface))
         cornerRadius = dp(ctx, BAR_RADIUS_DP).toFloat()
-        setStroke(dp(ctx, 1), palette.border)
+        setStroke(dp(ctx, 1), strokeColor())
     }
 
     /**
-     * Il fondo della barra come **nuvoletta**, con il beccuccio dal lato di lei.
+     * Il bordo della pillola: `--border-strong` a vuoto, e appena c'è testo
+     * vira per metà verso `--accent`.
      *
-     * È la firma di Fumetto: la barra smette di essere una fascia sotto lo
-     * schermo e diventa qualcosa che *le esce di bocca*. Il beccuccio è un
-     * piccolo triangolo che sporge di [TAIL_W_DP] dal fianco della pillola;
-     * il resto del rettangolo arrotondato è disegnato dentro i bounds della
-     * view — quindi il chiamante deve aver messo `[TAIL_W_DP]` di padding
-     * extra da quel lato, o il testo ci finisce sopra.
-     *
-     * Un `Drawable` custom invece di un `GradientDrawable` perché un
-     * `GradientDrawable` è un rettangolo puro — non sa disegnare un triangolo
-     * attaccato. Aggiungere una `View` a parte per il beccuccio complicherebbe
-     * la geometria (dovrebbe stare esattamente attaccata alla pillola in ogni
-     * multiplo di dp) e romperebbe il fondo unico: qui è un `Path` solo,
-     * riempito e bordato in un colpo, che non può disallinearsi da sé stesso.
+     * È il `focus-within` di `.compose-pill`, ma legato al testo e non al
+     * fuoco: qui il fuoco c'è sempre, finché la chat è aperta, e un bordo
+     * sempre acceso non direbbe niente.
      */
-    private fun barBubble(ctx: Context, tailCenterX: Int): Drawable {
-        val fillColor = veiled(palette.surface)
-        val strokeColor = palette.border
-        val radius = dp(ctx, BAR_RADIUS_DP).toFloat()
-        val tailW = dp(ctx, TAIL_W_DP).toFloat()
-        val tailH = dp(ctx, TAIL_H_DP).toFloat()
-        val stroke = dp(ctx, 1).toFloat()
+    private fun strokeColor(): Int =
+        if (sendLit) blend(palette.accent, palette.border, 0.55f) else palette.border
+
+    /**
+     * La freccia d'invio, **disegnata**: tratto 2 dp con punte tonde, 12 dp di
+     * corsa, centrata nel disco.
+     *
+     * Era il glifo di testo `↑`: sottile, con la punta da carattere, e seduto
+     * sulla linea di base invece che al centro del disco — un'icona fatta con
+     * un carattere si vede sempre. Il colore lo dà `ImageView.setColorFilter`
+     * (v. [syncSend]); qui la vernice è bianca piena, così il filtro ha una
+     * forma opaca da colorare.
+     */
+    private fun arrowDrawable(ctx: Context): Drawable {
+        val stroke = dp(ctx, 2).toFloat()
+        val span = dp(ctx, 12).toFloat()
         return object : Drawable() {
-            private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = fillColor
-                style = Paint.Style.FILL
-            }
-            private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = strokeColor
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
                 style = Paint.Style.STROKE
                 strokeWidth = stroke
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
             }
             override fun draw(canvas: Canvas) {
                 val b = bounds
                 if (b.isEmpty) return
-                // Il bordo si disegna *a cavallo* della linea: mezzo stroke
-                // dentro e mezzo fuori. Senza questo ritiro la metà esterna
-                // esce dai bounds e il padre la taglia.
-                val inset = stroke / 2f
-                // La pillola comincia [tailH] sotto il bordo alto: quello
-                // spazio è del beccuccio.
-                val top = b.top + tailH
-                val rect = RectF(b.left + inset, top + inset, b.right - inset, b.bottom - inset)
-                // La *base* del triangolo non deve finire sugli angoli
-                // tondi, o il beccuccio spunta da una curva invece che da un
-                // lato dritto. Il vincolo è quindi su metà base, non su tutta.
-                val minX = b.left + radius + tailW / 2f
-                val maxX = b.right - radius - tailW / 2f
-                val apex = tailCenterX.toFloat().coerceIn(
-                    min(minX, maxX), max(minX, maxX),
-                )
+                val cx = b.exactCenterX()
+                val top = b.exactCenterY() - span / 2f
+                val head = span * 0.45f
                 val path = Path().apply {
-                    addRoundRect(rect, radius, radius, Path.Direction.CW)
-                    // Base sul bordo alto della pillola, vertice in su verso
-                    // di lei. Il `close()` lo fonde con la roundrect: un solo
-                    // riempimento, un solo contorno, niente cuciture.
-                    moveTo(apex - tailW / 2f, top)
-                    lineTo(apex, b.top + inset)
-                    lineTo(apex + tailW / 2f, top)
-                    close()
+                    moveTo(cx, top + span)
+                    lineTo(cx, top)
+                    moveTo(cx - head, top + head)
+                    lineTo(cx, top)
+                    lineTo(cx + head, top + head)
                 }
-                canvas.drawPath(path, fillPaint)
-                canvas.drawPath(path, strokePaint)
+                canvas.drawPath(path, paint)
             }
-            override fun setAlpha(a: Int) { /* immutable */ }
-            override fun setColorFilter(c: ColorFilter?) { /* immutable */ }
+            override fun setAlpha(a: Int) { paint.alpha = a }
+            override fun setColorFilter(c: ColorFilter?) { paint.colorFilter = c }
             @Deprecated("Deprecated in Java")
             override fun getOpacity() = PixelFormat.TRANSLUCENT
         }
     }
 
-    /**
-     * Il centro della sua parte **visibile**, in px dal bordo sinistro, quando
-     * è «out» (chat aperta). È la x a cui punta il beccuccio.
-     *
-     * Il centro del *quadrato* non va bene, ed è l'errore del primo giro:
-     * parcheggiata lei è per un quarto fuori schermo, quindi `parkX + size/2`
-     * cade a una ventina di px dentro la barra — dove c'è ancora l'angolo
-     * tondo, e il clamp che tiene il beccuccio lontano dalle curve lo
-     * spingeva via da sotto di lei. Il centro di quel che si vede sta molto
-     * più dentro, e il beccuccio ci arriva senza essere clampato.
-     */
-    private fun mascotCenterX(ctx: Context): Int {
-        val size = mascotSize(ctx)
-        val left = parkX(ctx, out = true)
-        val visibleLeft = max(0, left)
-        val visibleRight = min(screenWidth(ctx), left + size)
-        return (visibleLeft + visibleRight) / 2
-    }
+    /** Quanto è larga la pillola, in px: [PILL_WIDTH_RATIO] dello schermo. */
+    private fun pillWidth(ctx: Context): Int = (screenWidth(ctx) * PILL_WIDTH_RATIO).toInt()
 
     /**
-     * Sistema il composer per il tema Fumetto: padding asimmetrico del row
-     * (largo dal lato della mascotte) più il fondo-nuvoletta con il beccuccio.
+     * Sistema la pillola: larga [pillWidth] e centrata dal row, col fondo del
+     * tema corrente e il bordo nello stato giusto.
      *
      * Va chiamata **prima** di far comparire il row, così l'utente non vede
-     * per un frame la geometria vecchia. E va richiamata quando la palette
-     * cambia mentre la chat è già aperta — v. [applyPalette].
+     * per un frame la geometria vecchia; e di nuovo quando la palette cambia
+     * — v. [applyPalette].
      */
-    private fun applyBubble(ctx: Context) {
-        val row = inputRow as? LinearLayout ?: return
+    private fun applyPill(ctx: Context) {
         val bar = inputBar ?: return
-        val edge = dp(ctx, COMPOSER_EDGE_DP)
-        row.setPadding(
-            edge,
-            dp(ctx, COMPOSER_PAD_TOP_DP),
-            edge,
-            dp(ctx, COMPOSER_PAD_BOTTOM_DP),
-        )
-        // La x del beccuccio è in coordinate della *barra*, non dello
-        // schermo: la barra comincia a `edge`.
-        bar.background = barBubble(ctx, mascotCenterX(ctx) - edge)
-        val basePad = dp(ctx, BAR_PAD_DP)
-        bar.setPadding(
-            dp(ctx, 18),
-            basePad + dp(ctx, TAIL_H_DP),  // il beccuccio sta qui sopra
-            basePad,
-            basePad,
-        )
+        (bar.layoutParams as? LinearLayout.LayoutParams)?.let {
+            val w = pillWidth(ctx)
+            if (it.width != w) {
+                it.width = w
+                bar.layoutParams = it
+            }
+        }
+        bar.background = barBackground(ctx)
+        syncSend(bloom = false)
+    }
+
+    /** `color-mix(in srgb, a k, b)`: canale per canale, alpha compresa. */
+    private fun blend(a: Int, b: Int, k: Float): Int {
+        fun ch(shift: Int): Int {
+            val x = (a shr shift) and 0xFF
+            val y = (b shr shift) and 0xFF
+            return (x * k + y * (1f - k)).toInt().coerceIn(0, 255)
+        }
+        return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    /** Lo stesso colore con l'alpha moltiplicata per `k`. */
+    private fun faded(color: Int, k: Float): Int {
+        val a = (((color ushr 24) and 0xFF) * k).toInt().coerceIn(0, 255)
+        return (color and 0x00FFFFFF) or (a shl 24)
     }
 
     private fun bubbleBackground(): GradientDrawable = GradientDrawable().apply {
@@ -1944,8 +1949,11 @@ object FloatingOverlayController {
      * Il respiro parte solo dopo, perché anima la stessa `translationY`.
      */
     private fun slideTo(ctx: Context, left: Int, top: Int) {
-        val fromX = gripX
-        val fromY = gripY
+        // Da dov'è **adesso**, non dall'ultimo posto in cui si è fermata: se
+        // uno scivolamento è in corso (la pillola è cresciuta a metà corsa) il
+        // nuovo riparte dal fotogramma corrente invece di saltare indietro.
+        val fromX = mascotWinParams?.x ?: gripX
+        val fromY = mascotWinParams?.y ?: gripY
         clearTransforms(ctx)
         if (fromX == left && fromY == top) {
             placeColumn(ctx, left, top)
@@ -2051,10 +2059,31 @@ object FloatingOverlayController {
     private fun mascotSize(ctx: Context): Int =
         if (mascotPx > 0) mascotPx else dp(ctx, MASCOT_FALLBACK_DP)
 
+    /**
+     * L'ascissa del suo riquadro.
+     *
+     * Parcheggiata sta al bordo, per [DOCKED_OUT_RATIO] fuori schermo. «Out»
+     * con la chat aperta sta **in piedi sul cap della pillola** dal suo lato:
+     * l'asse del corpo ([AXIS_RATIO]) cade sul centro del cap — la pallina
+     * d'invio a destra, il suo specchio a sinistra. «Out» senza chat — il
+     * solo fumetto di risposta — rientra a un quarto dal bordo, come prima:
+     * lì la pillola non c'è, e non c'è niente su cui stare.
+     */
     private fun parkX(ctx: Context, out: Boolean = false): Int {
         val size = mascotSize(ctx)
+        val width = screenWidth(ctx)
+        if (out && isChatOpen) {
+            val pillW = pillWidth(ctx)
+            val pillLeft = (width - pillW) / 2
+            val cap = dp(ctx, BAR_PAD_DP) + dp(ctx, SEND_DP) / 2
+            return if (parkedRight) {
+                pillLeft + pillW - cap - (size * AXIS_RATIO).toInt()
+            } else {
+                pillLeft + cap - (size * (1f - AXIS_RATIO)).toInt()
+            }
+        }
         val hidden = (size * if (out) OUT_RATIO else DOCKED_OUT_RATIO).toInt()
-        return if (parkedRight) screenWidth(ctx) - size + hidden else -hidden
+        return if (parkedRight) width - size + hidden else -hidden
     }
 
     /**
@@ -2083,20 +2112,66 @@ object FloatingOverlayController {
     }
 
     /**
-     * L'ordinata, **derivata e mai memorizzata**: la riga appena sopra la barra
-     * di input — `bottom: dock-height + 58px + scope-row` nel CSS, che qui è
-     * la banda del composer più un filo d'aria.
+     * L'ordinata, **derivata e mai memorizzata**: quella con cui i suoi piedi
+     * poggiano [FEET_GAP_DP] sopra il bordo alto della pillola.
      *
      * È l'invariante di `.jenny-duo` («Non deve mai cambiare in Y»), è dove
      * *risiede*, è il pavimento del volo e la riga a cui la camminata torna.
-     * Si calcola anche a composer nascosto: la banda esiste come misura pure
-     * quando non è a schermo, altrimenti la mascotte salterebbe nell'istante
-     * in cui compare.
+     * Si calcola anche a composer nascosto — la pillola esiste come misura
+     * pure quando non è a schermo — con l'altezza a una riga. A chat aperta
+     * segue invece l'altezza **misurata** della pillola ([pillHeightPx]) e la
+     * tastiera ([chatBottomInsetPx]): quando il testo va a capo lei sale con
+     * la pillola, invece di finirci dietro.
      */
     private fun parkTop(ctx: Context): Int {
         val size = mascotSize(ctx)
-        val band = dp(ctx, COMPOSER_DP) + dp(ctx, COMPOSER_GAP_DP) + navInset(ctx)
-        return max(screenHeight(ctx) - band - size, dp(ctx, 8))
+        val pillTop = measuredPillTop() ?: run {
+            // La pillola non è a schermo (o non ha ancora fatto un layout):
+            // si stima dove *comparirà*, a una riga.
+            val pill = if (isChatOpen && pillHeightPx > 0) pillHeightPx else dp(ctx, PILL_DP)
+            val bottom = if (isChatOpen) max(chatBottomInsetPx, navInset(ctx)) else navInset(ctx)
+            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill
+        }
+        val feet = (size * FEET_RATIO).toInt()
+        // **Meno la status bar.** La `y` di una finestra overlay — anche con
+        // `LAYOUT_NO_LIMITS` — è relativa al frame padre, che qui comincia
+        // sotto la status bar (`parent=[0,60]…` nel dumpsys), mentre tutto il
+        // conto sopra è in coordinate schermo. Senza questa riga lei atterra
+        // 60 px più in basso di dove la si è messa: misurato sul Titan 2, con
+        // i piedi 24 dp *dentro* la pillola. Era così anche prima, solo che
+        // con la banda a tutto schermo l'errore si leggeva come «aria a caso».
+        return max(pillTop - dp(ctx, FEET_GAP_DP) - feet - statusInset(ctx), dp(ctx, 8))
+    }
+
+    /**
+     * Dov'è **davvero** il bordo alto della pillola, in coordinate schermo — o
+     * `null` se la pillola non è a schermo.
+     *
+     * Misurato dalla view, non ricostruito dagli insets: il frame del palco
+     * in chat viene ristretto dal sistema di una quindicina di px in fondo
+     * che nessun inset dichiara (`navigationBars` dice 0 su questo telefono,
+     * eppure `frame=[0,60][1436,1425]`), e la stima cadeva 6 dp più in basso
+     * del vero. I piedi di lei devono stare sulla pillola *disegnata*, non su
+     * quella calcolata.
+     */
+    private fun measuredPillTop(): Int? {
+        val bar = inputBar ?: return null
+        if (!isChatOpen || bar.height <= 0 || inputRow?.visibility != View.VISIBLE) return null
+        val loc = IntArray(2)
+        bar.getLocationOnScreen(loc)
+        return loc[1]
+    }
+
+    /** L'altezza della status bar, letta come [navInset]: dalle metriche della
+     *  finestra, non dagli insets consegnati. */
+    private fun statusInset(ctx: Context): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets = ctx.getSystemService(WindowManager::class.java)
+                ?.currentWindowMetrics?.windowInsets
+                ?.getInsets(WindowInsets.Type.statusBars())
+            if (insets != null) return insets.top
+        }
+        return dp(ctx, STATUS_FALLBACK_DP)
     }
 
     /**

@@ -31,6 +31,7 @@
     <string name="floating_input_hint">Ask Jenny…</string>
     <string name="floating_not_running">Jenny isn\'t running right now.</string>
     <string name="floating_no_reply">No reply. Open the chat to see what happened.</string>
+    <string name="floating_send">Send</string>
 
     <!-- App update waiting for the user to confirm it in the system installer
          (UpdateBridge). Its own channel, not the agent's: silencing Jenny's
