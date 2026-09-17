@@ -280,17 +280,22 @@ class FloatingFlight(
         // Pareti morbide: in mano e in caduta (lanciarla = rimbalza), ma NON in
         // cammino — il dock sta oltre il bordo dello schermo e le pareti le
         // impedirebbero di arrivare.
-        if (phase != Phase.SLIDE) {
+        // Le pareti valgono **solo in caduta**. In mano il dito non puo'
+        // uscire dallo schermo e la molla la tiene a un palmo da lui, quindi
+        // una parete li' non protegge niente: si sente solo come un punto in
+        // cui lei smette di seguire la mano — un muro invisibile. In cammino
+        // il dock sta oltre il bordo e le pareti le impedirebbero di arrivare.
+        if (phase == Phase.FALL) {
             if (px < wallL) { px = wallL; vx = abs(vx) * WALL_REST; om += vx * 0.002f }
             if (px > wallR) { px = wallR; vx = -abs(vx) * WALL_REST; om -= vx * 0.002f }
             if (py < wallT) { py = wallT; vy = abs(vy) * WALL_REST }
             // In basso **nessuna parete**: il pavimento e' piu' sotto e lo
-            // gestisce il ramo FALL, con il suo rimbalzo e il suo tonfo. Una
-            // parete qui gli ruberebbe l'urto — invertirebbe `vy` prima che il
-            // pavimento lo veda — e lei non toccherebbe mai terra. In mano,
-            // invece, il fondo la ferma: il dito non puo' spingerla sotto.
-            if (phase == Phase.HELD && py > floorPivotY) { py = floorPivotY; vy = 0f }
+            // gestisce il ramo qui sotto, con il suo rimbalzo e il suo tonfo.
+            // Una parete gli ruberebbe l'urto — invertirebbe `vy` prima che il
+            // pavimento lo veda — e lei non toccherebbe mai terra.
         }
+        // In mano il fondo la ferma comunque: il dito non puo' spingerla sotto.
+        if (phase == Phase.HELD && py > floorPivotY) { py = floorPivotY; vy = 0f }
 
         // Il verso segue il moto, con isteresi.
         if (phase != Phase.DOWN && abs(vx) > dirMin) dir = if (vx > 0f) 1 else -1

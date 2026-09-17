@@ -490,15 +490,14 @@ object FloatingOverlayController {
             // la fisica, e due animazioni sulla stessa view si contendono la
             // stessa traslazione.
             //
-            // Aprire la chat la riporta **a casa**: rientra dal bordo e, se
-            // era più in basso della riga del composer, risale fin lì. È la
-            // richiesta «deve risiedere sopra la barra input», detta nell'unico
-            // momento in cui conta — quello in cui la barra c'è. Se stava già
-            // più in alto la si lascia dov'è: non c'è niente che la copra.
-            parkedTop = min(parkTop(ctx), composerLineTop(ctx))
-            saveParkPosition(ctx)
+            // Aprire la chat la **solleva**, non la trasloca: rientra dal
+            // bordo e, se sta più in basso della riga del composer, sale fin
+            // lì per non finirci sotto — è la richiesta «deve risiedere sopra
+            // la barra input», detta nell'unico momento in cui la barra c'è.
+            // Il posto suo resta quello in cui l'hai lasciata: alla chiusura
+            // `collapse` la rimette a `parkTop`, che qui non si tocca.
             syncFace()
-            slideTo(ctx, parkX(ctx, out = true), parkedTop)
+            slideTo(ctx, parkX(ctx, out = true), min(parkTop(ctx), composerLineTop(ctx)))
         }
         if (withInput) input?.let { it.post { focusTheField(ctx) } }
         armHold()
@@ -661,6 +660,20 @@ object FloatingOverlayController {
         mascot.addView(face, FrameLayout.LayoutParams(mascotSize, mascotSize))
         mascotBody = body
         mascotFace = face
+        // **Fuori dalla zona del gesto «indietro».** Parcheggiata sporge dal
+        // bordo per poco meno di metà quadrato: quel che resta visibile — una
+        // ventina di dp — sta tutto dentro la fascia in cui Android legge uno
+        // swipe come *back*. Senza questa riga il sistema si prende il gesto
+        // al primo movimento, la finestra riceve `ACTION_CANCEL`, lei cade da
+        // ferma e chi sta sotto torna indietro di una schermata. La SPA fa
+        // esattamente questo via `JennyNative.setGestureExclusion`; qui la view
+        // è nostra e il rettangolo è il suo, in coordinate sue, quindi segue
+        // da solo margini, traslazioni e specchio. (Tetto di sistema: 200 dp
+        // per bordo; 96 ci stanno.)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            mascot.systemGestureExclusionRects =
+                listOf(android.graphics.Rect(0, 0, mascotSize, mascotSize))
+        }
         bindTouch(ctx, mascot)
         container.addView(mascot, FrameLayout.LayoutParams(mascotSize, mascotSize).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -864,7 +877,16 @@ object FloatingOverlayController {
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    if (grabbed) flight?.release(0f, 0f)
+                    if (grabbed) {
+                        flight?.release(0f, 0f)
+                    } else if (!isChatOpen) {
+                        // Il sistema si è preso il gesto (un bordo, una
+                        // notifica). L'arena era già aperta dal `DOWN` e a
+                        // schermo intero **inghiotte ogni tocco**: lasciarla lì
+                        // fino allo scadere del timer è un telefono morto per
+                        // venti secondi. Si richiude adesso.
+                        collapse()
+                    }
                     tracker?.recycle()
                     tracker = null
                     true
