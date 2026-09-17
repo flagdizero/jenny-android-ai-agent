@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import COORDINATION_FLAGS, NOTIFICATION_CHANNEL, OutboundMessage
+from jenny.bus.events import (
+    COORDINATION_FLAGS,
+    FLOATING_CHANNEL,
+    NOTIFICATION_CHANNEL,
+    OutboundMessage,
+)
 from jenny.bus.queue import MessageBus
 from jenny.config.schema import Config
 from jenny.runtime.notifier import notify_delivery
@@ -75,6 +80,7 @@ class WebSocketDispatcher:
         self._init_channel()
         self._init_telegram()
         self._init_notification()
+        self._init_floating()
 
     def _init_channel(self) -> None:
         """Initialize the WebSocket channel from the top-level websocket config."""
@@ -163,6 +169,35 @@ class WebSocketDispatcher:
 
         self.channels[NOTIFICATION_CHANNEL] = NotificationChannel()
         logger.info("Notification channel enabled")
+
+    def _init_floating(self) -> None:
+        """Crea il canale della mascotte flottante. Solo su Android.
+
+        Senza guardare ``floating.enabled``, ed è deliberato: quel flag decide
+        se la *finestra* esiste, e la risposta a quella domanda ce l'ha Kotlin,
+        che la rilegge a ogni ``setEnabled`` (v. ``runtime/floating.py``). Il
+        canale invece è solo la strada del ritorno, e tenerlo registrato anche a
+        mascotte spenta costa un oggetto senza stato: a spegnere la consegna
+        basta che ``show_reply`` torni ``False``, che è ciò che fa quando non
+        c'è nessuna finestra a cui parlare.
+
+        Legarlo al flag introdurrebbe invece un guasto vero: la mascotte accesa
+        dalle impostazioni a gateway già su avrebbe la finestra e nessun canale,
+        cioè un campo che accetta testo e una risposta che non torna mai.
+
+        Fuori da Android il canale non esiste: là non c'è nessuna finestra da cui
+        possa arrivare un inbound, quindi non c'è nemmeno un outbound da
+        consegnargli.
+        """
+        from jenny.runtime.context import get_android_context
+
+        if get_android_context() is None:
+            logger.info("Floating channel not available (no Android context)")
+            return
+        from jenny.channels.floating import FloatingChannel
+
+        self.channels[FLOATING_CHANNEL] = FloatingChannel()
+        logger.info("Floating channel enabled")
 
     @property
     def enabled(self) -> bool:

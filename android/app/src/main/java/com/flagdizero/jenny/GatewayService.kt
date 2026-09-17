@@ -59,6 +59,19 @@ class GatewayService : Service() {
          *  avviso apparteneva. */
         const val EXTRA_REPLY_SOURCE_TAG = "com.flagdizero.jenny.extra.REPLY_SOURCE_TAG"
 
+        /** Le due superfici native da cui può entrare del testo dell'utente.
+         *
+         *  Valori di protocollo, non etichette: Python li riconosce per stringa
+         *  (`_CHANNEL_BY_SOURCE` in `jenny/runtime/native_input.py`, elenco
+         *  chiuso) e da lì decide **dove torna la risposta** — un alert per la
+         *  tendina, il fumetto per la mascotte. Una stringa che diverge non
+         *  rompe la compilazione: fa rifiutare ogni messaggio di quella
+         *  superficie, in silenzio. È il legame che
+         *  `tests/runtime/test_native_input.py::TestConfineConKotlin` controlla
+         *  leggendo questo file. */
+        const val NATIVE_SOURCE_NOTIFICATION = "notification"
+        const val NATIVE_SOURCE_FLOATING = "floating"
+
         /** Quanto insistere per consegnare una risposta prima di arrendersi.
          *
          *  Sta **sotto** i 30 s di `PowerBridge.HANDOFF_TIMEOUT_MS` di
@@ -69,6 +82,123 @@ class GatewayService : Service() {
          *  È un budget e non un numero di tentativi perché la variabile vera è
          *  il tempo di avvio a freddo di Chaquopy, non quante volte si bussa. */
         private const val REPLY_DELIVERY_BUDGET_MS = 25_000L
+
+        /** Lo stesso budget, per la mascotte, ed è molto più corto.
+         *
+         *  Non è la stessa situazione: si risponde a un alert di ore prima, con
+         *  il gateway quasi sempre da rimettere in piedi, mentre la mascotte
+         *  esiste **perché** Python ha appena chiamato `setEnabled` — cioè il
+         *  gateway è su. Qui il retry copre una finestra stretta (un riavvio del
+         *  gateway nello stesso processo), e dall'altra parte c'è un utente che
+         *  guarda: cinque secondi di attesa muta sono già tanti, venticinque
+         *  sarebbero una mascotte rotta. */
+        private const val FLOATING_DELIVERY_BUDGET_MS = 5_000L
+
+        /**
+         * Consegna *text* al gateway insistendo finché il budget regge.
+         *
+         * Il cuore condiviso dalle due superfici native. Sta nel companion — e
+         * non sull'istanza — perché la mascotte lo chiama dal proprio
+         * controller, che vive nel processo del service ma non ha un'istanza di
+         * `Service` a portata di mano.
+         *
+         * **Va chiamata da un thread di lavoro, mai dal main Looper**:
+         * attraversa il confine Chaquopy (JNI + GIL) e può restare bloccata
+         * quanto il GIL resta preso da un turno in corso. I due chiamanti
+         * aprono entrambi un `thread {}` e questa funzione dorme dentro.
+         *
+         * Il backoff parte corto (mezzo secondo) perché a gateway già vivo la
+         * consegna riesce al primo colpo, e si allarga fino a due secondi perché
+         * oltre quel punto quello che si aspetta è l'avvio di Chaquopy, che non
+         * si affretta bussando più spesso.
+         */
+        private fun deliverWithRetry(
+            text: String,
+            source: String,
+            sourceTag: String?,
+            budgetMs: Long,
+        ): Boolean {
+            val deadline = SystemClock.elapsedRealtime() + budgetMs
+            var wait = 500L
+            var attempts = 0
+            while (true) {
+                attempts++
+                if (tryDeliverNativeText(text, source, sourceTag)) {
+                    Log.i(TAG, "Native text delivered (source=$source, attempt $attempts)")
+                    return true
+                }
+                if (SystemClock.elapsedRealtime() + wait >= deadline) {
+                    Log.i(TAG, "Native text not delivered within the budget " +
+                        "(source=$source, $attempts attempts)")
+                    return false
+                }
+                Thread.sleep(wait)
+                wait = minOf(wait * 2, 2_000L)
+            }
+        }
+
+        /**
+         * Un tentativo di consegna. `false` se il gateway non è ancora agganciato.
+         *
+         * *sourceTag* è il tag della notifica da cui è partita la risposta e
+         * serve a una cosa sola: tornare indietro. Python lo rimette nei
+         * metadata del turno e il canale ci riporta sopra la risposta, così il
+         * discorso resta nella scheda in cui è cominciato. La mascotte non ne ha
+         * uno — la sua finestra è una sola — e passa `null`.
+         *
+         * Non solleva: qualunque errore è un "non adesso", e chi chiama decide
+         * se riprovare. `Python.isStarted()` falso significa che `startGateway`
+         * sta alzando il runtime in questo momento — è la condizione che il
+         * retry esiste per aspettare, non un guasto.
+         */
+        private fun tryDeliverNativeText(
+            text: String,
+            source: String,
+            sourceTag: String?,
+        ): Boolean = try {
+            if (!Python.isStarted()) {
+                false
+            } else {
+                Python.getInstance()
+                    .getModule("jenny.runtime.native_input")
+                    .callAttr("on_native_text", text, source, sourceTag)
+                    .toBoolean()
+            }
+        } catch (e: Exception) {
+            Log.i(TAG, "Native text delivery attempt failed: ${e.javaClass.simpleName}")
+            false
+        }
+
+        /**
+         * Consegna il testo scritto nel campo della mascotte flottante.
+         *
+         * Gemello di `deliverNativeText` ma **senza le sue due code**, e
+         * nessuna delle due mancanze è una svista:
+         *
+         * * niente `releaseHandoffLock`: quel lock lo prende `WakeReceiver` per
+         *   tenere sveglia la CPU mentre il gateway si alza, e questa strada non
+         *   passa di là. Rilasciarlo qui toglierebbe un lock che appartiene a
+         *   qualcun altro;
+         * * niente notifica di fallimento: chi ha scritto sta guardando la
+         *   mascotte, quindi il fallimento glielo dice lei (`onResult`), che è
+         *   dove sta già guardando. Una notifica sarebbe una seconda superficie
+         *   per dire una cosa che si vede già.
+         */
+        fun deliverFloatingText(text: String, onResult: (Boolean) -> Unit) {
+            thread(name = "jenny-floating-text") {
+                val ok = try {
+                    deliverWithRetry(text, NATIVE_SOURCE_FLOATING, null, FLOATING_DELIVERY_BUDGET_MS)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    Log.i(TAG, "Floating text delivery interrupted")
+                    false
+                } catch (e: Exception) {
+                    Log.e(TAG, "Floating text delivery failed", e)
+                    false
+                }
+                onResult(ok)
+            }
+        }
 
         /** Pausa fra l'uscita di `run_gateway` e il tentativo di rilanciarlo
          *  nello stesso thread. Allineata a `RETRY_DELAY_S` di
@@ -306,32 +436,20 @@ class GatewayService : Service() {
      *    rimandarlo (`NotifierBridge.postReplyFailure`). Nessun accodamento al
      *    buio: una consegna a sorpresa tre ore dopo sarebbe peggio di nessuna.
      *
-     * Il backoff parte corto (mezzo secondo) perché a gateway già vivo la
-     * consegna riesce al primo colpo, e si allarga fino a due secondi perché
-     * oltre quel punto quello che si sta aspettando è l'avvio di Chaquopy, che
-     * non si affretta bussando più spesso.
+     * L'insistenza vera sta in `deliverWithRetry`, condivisa con la mascotte.
+     * Qui restano le due cose che valgono solo per la tendina: il rilascio del
+     * lock di handoff — che è `WakeReceiver` a prendere per tenere sveglia la
+     * CPU mentre il gateway si alza, e che nessun altro percorso possiede — e
+     * la notifica di fallimento, che serve perché chi ha scritto dalla tendina
+     * non sta guardando nulla e va raggiunto dove scriveva.
      */
     private fun deliverNativeText(text: String, sourceTag: String?) {
         thread(name = "jenny-native-text") {
             var delivered = false
             try {
-                val deadline = SystemClock.elapsedRealtime() + REPLY_DELIVERY_BUDGET_MS
-                var wait = 500L
-                var attempts = 0
-                while (true) {
-                    attempts++
-                    delivered = tryDeliverNativeText(text, sourceTag)
-                    if (delivered) {
-                        Log.i(TAG, "Reply delivered to the gateway (attempt $attempts)")
-                        break
-                    }
-                    if (SystemClock.elapsedRealtime() + wait >= deadline) {
-                        Log.i(TAG, "Reply not delivered within the budget ($attempts attempts)")
-                        break
-                    }
-                    Thread.sleep(wait)
-                    wait = minOf(wait * 2, 2_000L)
-                }
+                delivered = deliverWithRetry(
+                    text, NATIVE_SOURCE_NOTIFICATION, sourceTag, REPLY_DELIVERY_BUDGET_MS
+                )
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 Log.i(TAG, "Reply delivery interrupted")
@@ -347,33 +465,6 @@ class GatewayService : Service() {
                 NotifierBridge.postReplyFailure(applicationContext, text, sourceTag)
             }
         }
-    }
-
-    /**
-     * Un tentativo di consegna. `false` se il gateway non è ancora agganciato.
-     *
-     * *sourceTag* è il tag della notifica da cui è partita la risposta e serve
-     * a una cosa sola: tornare indietro. Python lo rimette nei metadata del
-     * turno e il canale ci riporta sopra la risposta, così il discorso resta
-     * nella scheda in cui è cominciato.
-     *
-     * Non solleva: qualunque errore è un "non adesso", e chi chiama decide se
-     * riprovare. `Python.isStarted()` falso significa che `startGateway` sta
-     * alzando il runtime in questo momento — è la condizione che il retry
-     * esiste per aspettare, non un guasto.
-     */
-    private fun tryDeliverNativeText(text: String, sourceTag: String?): Boolean = try {
-        if (!Python.isStarted()) {
-            false
-        } else {
-            Python.getInstance()
-                .getModule("jenny.runtime.native_input")
-                .callAttr("on_native_text", text, "notification", sourceTag)
-                .toBoolean()
-        }
-    } catch (e: Exception) {
-        Log.i(TAG, "Reply delivery attempt failed: ${e.javaClass.simpleName}")
-        false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -402,6 +493,12 @@ class GatewayService : Service() {
         // il watchdog deve vedere "giù". Lasciarlo a `true` su un service
         // distrutto è l'unico modo in cui il flag statico può mentire.
         isRunning = false
+        // La mascotte flottante non sopravvive al gateway che le dà la voce: è
+        // una finestra che accetta domande, e senza nessuno che risponda
+        // resterebbe a schermo a raccogliere testo per un agente che non c'è.
+        // Smontarla qui e non in `stop()` del canale è deliberato — vive nel
+        // processo del service, non nel giro dei canali.
+        FloatingOverlayController.teardown()
         // Il wakelock della modalità "always" (e con lui la rotazione) si molla
         // SOLO se dietro non è rimasto un gateway vivo.
         //

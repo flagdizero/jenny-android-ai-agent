@@ -643,6 +643,9 @@ class MainActivity : AppCompatActivity() {
         // Copre anche lo schermo spento: da qui in poi i messaggi proattivi
         // possono squillare come notifica di sistema.
         isInForeground = false
+        // ...e la mascotte flottante può tornare a schermo: l'app non è più
+        // davanti, quindi non c'è più il rischio di vederne due.
+        FloatingOverlayController.onAppForegroundChanged()
         // Stop WebView JS/animation processing while backgrounded; the
         // gateway keeps running independently in GatewayService.
         webView?.onPause()
@@ -651,6 +654,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isInForeground = true
+        // La mascotte flottante si toglie di mezzo: questa app è la home del
+        // telefono, e sulla schermata iniziale la mascotte c'è già dentro la
+        // SPA. Due Jenny sarebbero una di troppo.
+        FloatingOverlayController.onAppForegroundChanged()
         webView?.onResume()
         // Terzo modo in cui la chat arriva a schermo: il rientro in primo piano
         // con la chat GIÀ attiva. Non passa da nessun cambio vista, quindi

@@ -434,6 +434,12 @@ class ApiClient {
     return res.json();
   }
 
+  async updateFloating(params) {
+    const res = await this._postWithQuery('/api/settings/floating/update', params);
+    if (!res.ok) throw new Error(`Floating update failed: ${res.status}`);
+    return res.json();
+  }
+
   async updatePower(params) {
     const res = await this._postWithQuery('/api/settings/power/update', params);
     if (!res.ok) throw new Error(`Power update failed: ${res.status}`);

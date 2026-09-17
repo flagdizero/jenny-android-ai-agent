@@ -43,6 +43,13 @@ INTERNAL_CHANNEL = "internal"
 # volte è una stringa che prima o poi diverge.
 NOTIFICATION_CHANNEL = "notification"
 
+# Channel name della mascotte flottante: la finestra che sta sopra le altre app,
+# dove un tap apre un campo e la risposta compare in un fumetto. Sta qui per la
+# stessa ragione di ``NOTIFICATION_CHANNEL`` — la importano l'ingresso
+# (``runtime/native_input.py``) e l'uscita (``channels/floating.py``), che sono
+# i due lati opposti dello stesso giro.
+FLOATING_CHANNEL = "floating"
+
 # Flag di metadata che marcano un outbound come coordinamento/streaming: tutto
 # ciò che NON è un messaggio finale user-visible. Sorgente unica condivisa dal
 # dispatcher (che vi aggiunge ``_mirror``) e dal canale Telegram (webui-only),

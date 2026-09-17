@@ -1,8 +1,10 @@
 """Ingresso del testo dell'utente dalle superfici native di Android.
 
-Rovescio di ``jenny/runtime/notifier.py``: quello è l'uscita verso la tendina
-delle notifiche, questo è l'ingresso dalla stessa tendina — la risposta rapida
-(``RemoteInput``) che l'utente scrive senza aprire l'app.
+Due superfici, oggi: la **tendina** delle notifiche — la risposta rapida
+(``RemoteInput``) che si scrive senza aprire l'app, rovescio di
+``jenny/runtime/notifier.py`` — e la **mascotte flottante**, la finestra che sta
+sopra le altre app e apre un campo al tocco. Entrambe scrivono testo dell'utente
+da fuori dalla WebUI, ed entrambe entrano da qui.
 
 **Il testo non prende una strada nuova.** Diventa un ``InboundMessage`` su un
 canale utente come gli altri, e da lì in poi tutto il resto esiste già: la
@@ -38,15 +40,15 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import NOTIFICATION_CHANNEL, InboundMessage
+from jenny.bus.events import FLOATING_CHANNEL, NOTIFICATION_CHANNEL, InboundMessage
 
 if TYPE_CHECKING:
     from jenny.bus.queue import MessageBus
 
-# Chiave dei metadata che dice da quale superficie è arrivato il testo. Oggi c'è
-# una sola sorgente e il canale la identifica già; la chiave esiste perché il
-# canale dice *dove torna la risposta* e questa dice *da dove è entrata la
-# domanda* — due domande diverse che oggi hanno la stessa risposta.
+# Chiave dei metadata che dice da quale superficie è arrivato il testo. Il canale
+# lo identifica già; la chiave esiste perché il canale dice *dove torna la
+# risposta* e questa dice *da dove è entrata la domanda* — due domande diverse
+# che finora hanno sempre la stessa risposta, ma non per forza.
 NATIVE_SOURCE_KEY = "_native_source"
 
 # Chiave dei metadata che porta il **filo** su cui è nata la domanda: il tag
@@ -62,20 +64,37 @@ NATIVE_THREAD_KEY = "_native_thread"
 # protocollo, non un'etichetta.
 SOURCE_NOTIFICATION = "notification"
 
+# La sorgente "mascotte flottante": la finestra overlay sopra le altre app.
+# Stringa condivisa con Kotlin (``FloatingOverlayController`` →
+# ``GatewayService.deliverNativeText``), anche questa di protocollo.
+SOURCE_FLOATING = "floating"
+
 # Sorgente → canale di consegna della risposta. Elenco chiuso: v. il docstring.
+#
+# Le due sorgenti sono due superfici native diverse e vogliono due canali
+# diversi **perché la risposta torna in due posti diversi**: la tendina la posta
+# come alert, il fumetto la disegna nella propria finestra. Mandarle sullo
+# stesso canale farebbe rispondere alla finestra sbagliata — chi ha scritto
+# dall'overlay vedrebbe la risposta squillare in notifica, e viceversa.
 _CHANNEL_BY_SOURCE: dict[str, str] = {
     SOURCE_NOTIFICATION: NOTIFICATION_CHANNEL,
+    SOURCE_FLOATING: FLOATING_CHANNEL,
 }
 
 # ``chat_id`` dei messaggi che entrano da qui. La session key non lo guarda
 # (tutto converge su ``unified:default``), quindi serve solo a leggersi nei log
 # e a distinguere le impronte anti-duplicato del dispatcher.
+#
+# È lo stesso per tutte le superfici native, e va bene così: le impronte del
+# dispatcher si distinguono già per canale, e un ``chat_id`` per superficie
+# aprirebbe una seconda coordinata senza che nessuno la guardi.
 NATIVE_CHAT_ID = "shade"
 
-# Tetto duro sul testo accettato. È una risposta scritta col pollice in una
-# casella di una riga, non un'interfaccia per saghe: oltre il tetto è quasi
-# sempre un incolla accidentale, e rifiutarlo è più onesto che troncarlo e
-# rispondere a metà domanda.
+# Tetto duro sul testo accettato. Vale per tutte le superfici native, e la
+# ragione è la stessa in tutte: è una domanda scritta col pollice in una casella
+# di una riga, non un'interfaccia per saghe. Oltre il tetto è quasi sempre un
+# incolla accidentale, e rifiutarlo è più onesto che troncarlo e rispondere a
+# metà domanda.
 MAX_TEXT_CHARS = 2000
 
 # Loop e bus del gateway corrente. Globali di modulo e non stato di un oggetto,
@@ -189,13 +208,16 @@ def on_native_text(
     testo vuoto o oltre il tetto.
 
     ``True`` significa soltanto "accettato e in viaggio verso il bus": la
-    risposta dell'agente arriverà dopo, sul suo tempo, e per la tendina torna in
-    superficie come nuovo alert (``NotificationChannel``).
+    risposta dell'agente arriverà dopo, sul suo tempo, e torna in superficie dal
+    canale che corrisponde alla sorgente — un alert per la tendina
+    (``NotificationChannel``), il fumetto per la mascotte (``FloatingChannel``).
 
     *thread* è il tag della notifica da cui è partita la domanda. Arriva da
     Kotlin e serve solo a tornare indietro: la risposta si posta su quel tag, e
     il discorso resta dove è cominciato. Assente o vuoto vuol dire "non lo so",
-    e a valle si ricade sul filo di default.
+    e a valle si ricade sul filo di default. La mascotte non lo usa — la sua
+    finestra è una sola e non ha fili da tenere distinti — e lo lascia a
+    ``None``.
 
     A differenza di un tick di sveglia, un ``False`` qui **non** è un esito
     innocuo: il tick perso lo recupera il giro successivo del cron, le parole

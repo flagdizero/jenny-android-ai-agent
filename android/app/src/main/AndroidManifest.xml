@@ -66,6 +66,22 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
+    <!-- Mascotte flottante: la finestra che sta sopra le altre app
+         (FloatingOverlayController). NON è un permesso che si concede da un
+         dialogo — il sistema manda l'utente in una sua schermata
+         (ACTION_MANAGE_OVERLAY_PERMISSION), e finché non lo fa
+         `Settings.canDrawOverlays` resta falso e la finestra non si monta.
+
+         Dichiararlo non apre nulla da solo: senza il consenso esplicito
+         l'`addView` verrebbe rifiutato dal WindowManager. L'interruttore nelle
+         impostazioni di Jenny lo sa, e a permesso negato resta spento invece di
+         dichiarare una mascotte che non può esistere.
+
+         La finestra vive dentro il processo del GatewayService e muore con lui:
+         non c'è nessun percorso in cui resti a schermo senza un agente dietro
+         che possa risponderle. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Makes launchable apps (MAIN/LAUNCHER) visible to PackageManager for the
          "App Android" tab, without requiring QUERY_ALL_PACKAGES. -->
     <queries>

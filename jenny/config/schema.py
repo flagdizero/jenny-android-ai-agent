@@ -728,6 +728,32 @@ class UpdatesConfig(Base):
     notify_in_chat: bool = True
 
 
+class FloatingConfig(Base):
+    """Mascotte flottante: la finestra che sta sopra le altre app.
+
+    ``enabled`` decide se la finestra esiste. Sta in config e non in
+    ``localStorage`` come le altre preferenze della mascotte (visibilità,
+    taglia, lato) per una ragione meccanica: a montarla è il
+    ``GatewayService`` all'avvio, e un service non ha una WebView da cui leggere
+    il ``localStorage``. Di riflesso si guadagna anche la datazione — lo store
+    versiona ``config.json``, quindi *da quando* è accesa si misura invece di
+    ricordarlo.
+
+    Default spento, e non per prudenza generica: accenderla richiede
+    ``SYSTEM_ALERT_WINDOW``, che l'utente concede da una schermata di sistema.
+    Un default acceso sarebbe un interruttore che dichiara una finestra che il
+    permesso non lascia aprire.
+
+    ``reply_hold_s`` è quanto il fumetto resta a schermo dopo una risposta. Non
+    è un tempo di lettura — chi ha appena scritto la domanda sta guardando — ma
+    il tempo dopo il quale una risposta dimenticata a schermo diventa un
+    ingombro sopra l'app di qualcun altro.
+    """
+
+    enabled: bool = False
+    reply_hold_s: int = Field(default=20, ge=5, le=120)
+
+
 class TelegramConfig(Base):
     """Configurazione del canale Telegram (bot personale).
 
@@ -806,6 +832,7 @@ class Config(BaseSettings):
     apps: AppsConfig = Field(default_factory=AppsConfig)
     snapshots: SnapshotConfig = Field(default_factory=SnapshotConfig)
     updates: UpdatesConfig = Field(default_factory=UpdatesConfig)
+    floating: FloatingConfig = Field(default_factory=FloatingConfig)
     model_presets: dict[str, ModelPresetConfig] = Field(
         default_factory=dict,
         validation_alias=AliasChoices("modelPresets", "model_presets"),

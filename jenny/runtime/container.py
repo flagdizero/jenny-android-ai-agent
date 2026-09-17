@@ -641,6 +641,13 @@ class GatewayContainer:
             # continuerebbe a mostrare l'icona nella barra di stato — vedi
             # apply_alarm_clock_config.
             await apply_alarm_clock_config()
+            # Mascotte flottante, e per la stessa ragione delle due righe sopra:
+            # va spinta anche a flag spento, perché la finestra vive nel processo
+            # del service e sopravvive a un riavvio del gateway. Un False
+            # esplicito è l'unica cosa che smonta una mascotte rimasta a schermo
+            # da un giro in cui il flag era acceso.
+            from jenny.runtime.floating import apply_floating_config
+            await apply_floating_config()
             # Buco di attività attraversato prima di questo avvio. Va misurato
             # adesso e non più tardi: la fotografia lasciata da MainActivity è
             # l'unico posto in cui il "prima" sopravvive alla morte del

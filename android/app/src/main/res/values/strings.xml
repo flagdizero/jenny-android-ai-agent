@@ -25,6 +25,13 @@
     <string name="reply_bot_name">Jenny</string>
     <string name="reply_user_name">You</string>
 
+    <!-- Mascotte flottante: il campo che si apre al tocco e i due modi in cui
+         una risposta può non arrivare. Sono le uniche stringhe di quella
+         finestra: tutto il resto che si vede è lo sprite. -->
+    <string name="floating_input_hint">Ask Jenny…</string>
+    <string name="floating_not_running">Jenny isn\'t running right now.</string>
+    <string name="floating_no_reply">No reply. Open the chat to see what happened.</string>
+
     <!-- App update waiting for the user to confirm it in the system installer
          (UpdateBridge). Its own channel, not the agent's: silencing Jenny's
          alerts must not hide an update that is stuck waiting for a tap. -->

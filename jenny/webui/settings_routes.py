@@ -26,6 +26,7 @@ from jenny.webui.settings_api import (
     settings_payload,
     start_update_install,
     update_agent_settings,
+    update_floating_settings,
     update_location_settings,
     update_power_settings,
     update_provider,
@@ -105,6 +106,8 @@ class WebUISettingsRouter:
             return await self._handle_settings_web_search_update(request)
         if path == "/api/settings/location/update":
             return await self._handle_settings_location_update(request)
+        if path == "/api/settings/floating/update":
+            return await self._handle_settings_floating_update(request)
         if path == "/api/settings/power/update":
             return await self._handle_settings_power_update(request)
         if path == "/api/settings/power/diagnostics":
@@ -303,6 +306,22 @@ class WebUISettingsRouter:
         except Exception:
             self.logger.exception("location settings update failed")
             return self._error_response(500, "failed to update location settings")
+        return self._json_response(payload)
+
+    async def _handle_settings_floating_update(self, request: WsRequest) -> Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            payload = await update_floating_settings(self._query(request))
+        except WebUISettingsError as e:
+            return self._error_response(e.status, e.message)
+        except Exception:
+            self.logger.exception("floating settings update failed")
+            return self._error_response(500, "failed to update floating settings")
+        # Nessun _fire_settings_changed: la mascotte non è un pezzo dell'agente
+        # da ricostruire a caldo, ed è già stata applicata al bridge dentro
+        # ``update_floating_settings``. Niente requires_restart, per la stessa
+        # ragione: quella riga esiste apposta perché non ce ne sia bisogno.
         return self._json_response(payload)
 
     async def _handle_settings_power_update(self, request: WsRequest) -> Response:

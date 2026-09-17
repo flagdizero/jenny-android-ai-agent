@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from jenny.config.schema import AgentDefaults, DreamConfig, GardenerConfig
+from jenny.config.schema import AgentDefaults, DreamConfig, FloatingConfig, GardenerConfig
 from jenny.webui.settings_api import WebUISettingsError, _bounds, _parse_int
 
 SETTINGS_API = Path(__file__).resolve().parents[2] / "jenny" / "webui" / "settings_api.py"
@@ -33,6 +33,7 @@ _BOUNDED = [
     (AgentDefaults, "tool_hint_max_length"),
     (DreamConfig, "interval_h"),
     (GardenerConfig, "interval_min"),
+    (FloatingConfig, "reply_hold_s"),
 ]
 
 

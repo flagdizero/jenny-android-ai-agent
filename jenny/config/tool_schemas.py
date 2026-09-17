@@ -72,11 +72,17 @@ class MyToolConfig(Base):
 
 
 class AndroidWebSearchConfig(Base):
-    """Android WebView-backed search configuration."""
+    """Android WebView-backed search configuration.
+
+    I due interi portano i loro limiti qui e non nella rotta che li scrive:
+    ``settings_api._parse_int`` li legge da ``model_fields``, quindi il
+    messaggio di rifiuto — che nomina il range — non può divergere dal
+    validatore. È l'invariante di ``test_settings_bounds_come_from_the_schema``.
+    """
 
     search_engine: str = "bing"
-    max_results: int = 5
-    timeout: int = 30
+    max_results: int = Field(default=5, ge=1, le=10)
+    timeout: int = Field(default=30, ge=1, le=120)
 
 
 class AndroidWebFetchConfig(Base):

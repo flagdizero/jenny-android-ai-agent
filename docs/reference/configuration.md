@@ -388,6 +388,17 @@ The in-app update check. It is the one outbound connection you did not switch on
 
 Turning `enabled` off stops the check; the `install_update` tool remains available for when you ask for it explicitly. See also [Android permissions](android-permissions.md) for the three permissions the install half needs.
 
+## floating
+
+The floating mascot: Jenny above your other apps. Tap her and a text field opens; what you write becomes an ordinary turn in the one conversation — same session, same memory, all of it there when you next open the app — and the answer comes back in a bubble over her head. The bubble shows the last reply only; tapping it opens the full chat.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `floating.enabled` | bool | `false` | Whether the window exists. Off by default because switching it on needs Android's `SYSTEM_ALERT_WINDOW`, granted on a system screen — a default of `true` would promise a window Android wouldn't open. The switch lives in **Settings → Personalisation** and applies immediately, without restarting the app. |
+| `floating.replyHoldS` | int 5–120 | `20` | Seconds the bubble stays up after a reply before the mascot goes back to resting. Not a reading time — whoever just wrote the question is watching — but how long a forgotten reply may sit on top of someone else's app. Typing resets the countdown. |
+
+She hides herself whenever Jenny's own UI is in the foreground: this app is the phone's launcher, and the home screen already has a mascot in it. The window lives inside the gateway service and is destroyed with it, so it can never sit there with no agent behind it. See [Android permissions](android-permissions.md#requested-permissions) for what the overlay permission does and does not allow.
+
 ## wiki
 
 | Key | Type | Default | Effect |

@@ -21,7 +21,8 @@ from jenny.agent.token_usage import token_usage_payload
 from jenny.channels.http_utils import FALSY_VALUES, TRUTHY_VALUES, parse_flag
 from jenny.config import store
 from jenny.config.loader import get_config_path, load_config
-from jenny.config.schema import KEEP_AWAKE_MODES, Config
+from jenny.config.schema import KEEP_AWAKE_MODES, Config, FloatingConfig
+from jenny.config.tool_schemas import AndroidWebSearchConfig
 from jenny.providers.opencode import catalog_headers
 from jenny.providers.tls import CaBundleError, build_ssl_context
 from jenny.security.workspace_access import workspace_sandbox_status
@@ -939,6 +940,14 @@ def settings_payload(
             "keep_awake": config.power.keep_awake,
             "modes": list(KEEP_AWAKE_MODES),
         },
+        # Mascotte flottante. ``available`` dice se la finestra può esistere su
+        # questo dispositivo: fuori da Android no, e la UI nasconde la voce
+        # invece di offrire un interruttore che non farebbe nulla.
+        "floating": {
+            "enabled": config.floating.enabled,
+            "reply_hold_s": config.floating.reply_hold_s,
+            "available": _android_context() is not None,
+        },
         "runtime": {
             "config_path": str(_safe_expanduser(get_config_path())),
             "workspace_path": str(config.workspace_path),
@@ -1303,23 +1312,16 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
 
     max_results = _query_first_alias(query, "max_results", "maxResults")
     if max_results is not None:
-        try:
-            parsed = int(max_results)
-        except ValueError:
-            raise WebUISettingsError("max_results must be an integer") from None
-        if parsed < 1 or parsed > 10:
-            raise WebUISettingsError("max_results must be between 1 and 10")
-        set_search_value("max_results", parsed)
+        set_search_value(
+            "max_results",
+            _parse_int(max_results, "max_results", AndroidWebSearchConfig, "max_results"),
+        )
 
     timeout = _query_first(query, "timeout")
     if timeout is not None:
-        try:
-            parsed_timeout = int(timeout)
-        except ValueError:
-            raise WebUISettingsError("timeout must be an integer") from None
-        if parsed_timeout < 1 or parsed_timeout > 120:
-            raise WebUISettingsError("timeout must be between 1 and 120")
-        set_search_value("timeout", parsed_timeout)
+        set_search_value(
+            "timeout", _parse_int(timeout, "timeout", AndroidWebSearchConfig, "timeout")
+        )
 
     fetch_max_chars = _query_first_alias(query, "fetch_max_chars", "fetchMaxChars")
     if fetch_max_chars is not None:
@@ -1355,6 +1357,60 @@ async def update_location_settings(query: QueryParams) -> dict[str, Any]:
 
     await store.mutate(_apply)
     return settings_payload()
+
+
+def _android_context() -> Any:
+    """Il contesto Android, o ``None`` fuori dal telefono.
+
+    Import locale come gli altri accessi al runtime da questo modulo: tenerlo a
+    livello di modulo legherebbe il payload delle impostazioni al runtime
+    Android anche dove non esiste.
+    """
+    from jenny.runtime.context import get_android_context
+
+    return get_android_context()
+
+
+async def update_floating_settings(query: QueryParams) -> dict[str, Any]:
+    """Accende o spegne la mascotte flottante, e la applica subito.
+
+    Il push al bridge dopo la ``mutate`` non è un di più: la finestra vive nel
+    processo del service e la config la legge solo all'avvio del gateway. Senza
+    questa riga l'interruttore non farebbe niente fino al riavvio dell'app — e
+    un interruttore che mente è peggio di un interruttore che manca.
+
+    Il push sta **fuori** dal callback di ``mutate``: quel lock si tiene per
+    tutta la durata della callback, e una chiamata al bridge Kotlin è I/O che
+    può bloccarsi quanto il GIL resta preso.
+
+    L'esito del push **non** cambia la risposta, e nemmeno questo è una svista:
+    a permesso negato la config resta accesa e il payload lo dice. La UI ha
+    bisogno di sapere che l'utente l'ha voluta accesa *e* che Android non la
+    lascia aprire, altrimenti l'interruttore rimbalzerebbe su off senza
+    spiegare perché.
+    """
+
+    def _apply(config: Config) -> bool:
+        section = config.floating
+        # I bound li dichiara lo schema (``FloatingConfig.reply_hold_s``) e
+        # ``_apply_int`` li legge da lì: riscriverli qui vorrebbe dire che al
+        # primo cambio di schema il messaggio d'errore — che nomina il range —
+        # comincia a mentire.
+        changed = _apply_bool(query, section, "enabled", "enabled")
+        changed |= _apply_int(
+            query, section, "reply_hold_s", FloatingConfig, "reply_hold_s", "replyHoldS"
+        )
+        return changed
+
+    await store.mutate(_apply)
+    from jenny.runtime.floating import apply_floating_config
+
+    applied = await apply_floating_config()
+    payload = settings_payload()
+    # Ciò che Android ha concesso, non ciò che l'utente ha chiesto: è la
+    # differenza che l'interruttore deve poter raccontare.
+    payload["floating"]["active"] = applied
+    return payload
 
 
 async def update_power_settings(query: QueryParams) -> dict[str, Any]:

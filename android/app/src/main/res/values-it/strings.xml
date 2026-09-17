@@ -14,6 +14,10 @@
     <string name="reply_retry_label">Rimanda</string>
     <string name="reply_user_name">Tu</string>
 
+    <string name="floating_input_hint">Chiedi a Jenny…</string>
+    <string name="floating_not_running">Jenny non è attiva in questo momento.</string>
+    <string name="floating_no_reply">Nessuna risposta. Apri la chat per vedere com\'è andata.</string>
+
     <string name="update_channel_name">Aggiornamenti dell\'app</string>
     <string name="update_channel_description">Mostrata quando un aggiornamento già scaricato aspetta la tua conferma per installarsi</string>
     <string name="update_notification_title">Aggiornamento pronto da installare</string>
