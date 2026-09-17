@@ -1051,6 +1051,31 @@ class MainActivity : AppCompatActivity() {
         }
 
         /**
+         * I colori del tema attivo per la finestra flottante.
+         *
+         * Stessa idea della taglia: là dentro non c'è CSS, quindi la
+         * tentazione è di scriverci dei colori — ed era esattamente quello che
+         * c'era, sette costanti che erano la palette `chanel` per tutti e sette
+         * i temi. La SPA spinge i token *calcolati* (`shared/theme.js`), e il
+         * Kotlin non ne ha di propri da tenere allineati.
+         *
+         * I valori arrivano già in `#AARRGGBB`: `Color.parseColor` non legge la
+         * forma `rgba(...)`, che è come tre temi su sette scrivono i bordi, e
+         * la conversione si fa dove il valore è risolto.
+         */
+        @JavascriptInterface
+        fun setFloatingPalette(
+            surface: String,
+            border: String,
+            text: String,
+            hint: String,
+            accent: String,
+            onAccent: String,
+        ) {
+            FloatingOverlayController.setPalette(surface, border, text, hint, accent, onAccent)
+        }
+
+        /**
          * La SPA è entrata in chat (``ChatController.activate``). Secondo dei tre
          * modi in cui la chat arriva a schermo, e l'unico che il guscio nativo
          * non può vedere da sé: un cambio vista dentro la WebView non produce

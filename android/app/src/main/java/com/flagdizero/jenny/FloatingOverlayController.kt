@@ -121,15 +121,36 @@ object FloatingOverlayController {
     /**
      * L'altezza della banda del composer, in dp.
      *
-     * Non è una stima: `buildInputRow` mette un tasto d'invio da 46 dp e 12 dp
-     * di padding sopra e sotto, e l'altezza di una `LinearLayout` è quella del
-     * figlio più alto più i padding. Il campo, con i suoi 12+12 attorno a una
-     * riga di testo, resta sotto i 46.
+     * Non è una stima: `buildInputRow` mette una barra alta 46 dp — il tasto
+     * d'invio da [SEND_DP] con [BAR_PAD_DP] d'aria sopra e sotto — e 12 dp di
+     * padding attorno. Il campo, dentro la barra, non la supera: è alto quanto
+     * il tasto.
+     *
+     * **Il totale non è cambiato quando il tasto è entrato nella barra**, ed è
+     * il motivo per cui quel cambio non ha spostato niente: [parkTop] misura da
+     * qui, quindi questi 70 dp sono anche il pavimento della mascotte.
      */
     private const val COMPOSER_DP = 46 + 12 + 12
 
     /** Aria fra la testa e la barra di input. */
     private const val COMPOSER_GAP_DP = 8
+
+    /** Il lato del tasto d'invio, dentro la barra. 38 + 4 + 4 = 46. */
+    private const val SEND_DP = 38
+
+    /** L'aria fra il tasto e il bordo della barra. */
+    private const val BAR_PAD_DP = 4
+
+    /** Metà dei 46: a una riga sola la barra è una pillola esatta. */
+    private const val BAR_RADIUS_DP = 23
+
+    /** Quanto dura la fioritura del tasto. È la `sendEnable` di
+     *  `mobile-style.css`, che fa la stessa cosa nel composer della chat. */
+    private const val SEND_BLOOM_MS = 400L
+
+    /** Quanto sono opache le superfici di questa finestra. Galleggiano sopra
+     *  l'app di qualcun altro: un filo di velo dice che non sono sue. */
+    private const val SURFACE_ALPHA = 0xF0
 
     /** Ripiego per l'altezza della barra di navigazione, se il sistema non la
      *  dice: una finestra `FLAG_NOT_FOCUSABLE` può non ricevere insets. */
@@ -175,6 +196,49 @@ object FloatingOverlayController {
 
     /** La taglia spinta dalla SPA, in px. */
     private const val PREF_SIZE = "mascot_px"
+
+    /** ...e i colori del tema, nella stessa forma: sei interi separati da
+     *  virgola, nell'ordine di [Palette]. */
+    private const val PREF_PALETTE = "palette"
+
+    /**
+     * I colori della finestra flottante, presi dal tema scelto nell'app.
+     *
+     * Erano sette costanti esadecimali scritte qui dentro, ed erano la palette
+     * `chanel`: chi sceglieva Synthwave si ritrovava la barra avorio sopra la
+     * propria app rosa. Adesso arrivano dalla WebUI, che legge i token
+     * *calcolati* del tema attivo — la stessa lettura che `shared/theme.js` fa
+     * già per le barre di sistema e per le mini-app.
+     *
+     * Sei valori, non sette: [surface] veste sia la barra che il fumetto, ed è
+     * la stessa coppia `--surface`/`--text` su cui si regge ogni superficie
+     * della SPA. Il contrasto viene dal tema, non da una scelta fatta qui.
+     */
+    private data class Palette(
+        val surface: Int,
+        val border: Int,
+        val text: Int,
+        val hint: Int,
+        val accent: Int,
+        val onAccent: Int,
+    )
+
+    /**
+     * Il ripiego: `chanel`, cioè il tema di default della WebUI.
+     *
+     * Non sono i colori «di prima» ritoccati a mano — sono esattamente i token
+     * che la SPA spingerebbe con quel tema (`mobile-style.css`, blocco
+     * `:root`), quindi non esiste un montaggio in cui la finestra si veda
+     * diversa da come si vedrà un istante dopo.
+     */
+    private val CHANEL = Palette(
+        surface = 0xFF1E1E1E.toInt(),   // --surface
+        border = 0x47F4F1EA,            // --border-strong: rgba(244,241,234,.28)
+        text = 0xFFF4F1EA.toInt(),      // --text
+        hint = 0x52F4F1EA,              // --text-faint: rgba(244,241,234,.32)
+        accent = 0xFFF4F1EA.toInt(),    // --accent
+        onAccent = 0xFF141414.toInt(),  // --on-accent
+    )
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -226,7 +290,19 @@ object FloatingOverlayController {
     private var bubble: TextView? = null
     private var scrim: View? = null
     private var inputRow: View? = null
+    /** La barra tonda: il bordo è suo, non del campo. */
+    private var inputBar: LinearLayout? = null
     private var input: EditText? = null
+    private var sendButton: TextView? = null
+
+    /** Il tasto è acceso? Serve solo a far fiorire la molla una volta sola. */
+    private var sendLit = false
+
+    /** I colori in vigore. Si ricordano come la taglia, e per la stessa
+     *  ragione: la finestra vive nel processo del service e può comparire
+     *  prima che la SPA abbia caricato. */
+    @Volatile
+    private var palette = CHANEL
     /** Il riquadro della mascotte (corpo + faccia). Si chiama così da quando
      *  il fumetto ha smesso di stargli sopra in colonna. */
     private var column: FrameLayout? = null
@@ -383,6 +459,85 @@ object FloatingOverlayController {
             }
             Log.i(TAG, "Mascot size set to ${wanted}px")
         }
+    }
+
+    /**
+     * I colori del tema attivo, spinti dalla **WebUI**.
+     *
+     * Sei valori in `#AARRGGBB`. La conversione dalla forma funzionale la fa il
+     * JavaScript, dove il valore è già risolto, e non è pignoleria: tre temi su
+     * sette scrivono i bordi come `rgba(244, 241, 234, 0.28)`, e
+     * `Color.parseColor` quella forma non la legge — solleva e basta.
+     *
+     * Un valore illeggibile non porta giù gli altri cinque: al suo posto resta
+     * quello di [CHANEL], che è anche il ripiego dell'intera palette.
+     *
+     * Si può chiamare da qualunque thread e a finestra non montata: il valore
+     * si ricorda e vale al prossimo montaggio.
+     */
+    fun setPalette(
+        surface: String,
+        border: String,
+        text: String,
+        hint: String,
+        accent: String,
+        onAccent: String,
+    ) {
+        val wanted = Palette(
+            surface = color(surface, CHANEL.surface),
+            border = color(border, CHANEL.border),
+            text = color(text, CHANEL.text),
+            hint = color(hint, CHANEL.hint),
+            accent = color(accent, CHANEL.accent),
+            onAccent = color(onAccent, CHANEL.onAccent),
+        )
+        main.post {
+            if (wanted == palette) return@post
+            palette = wanted
+            appContext?.let { ctx ->
+                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(PREF_PALETTE, wanted.store()).apply()
+            }
+            applyPalette()
+            Log.i(TAG, "Floating palette updated")
+        }
+    }
+
+    private fun color(value: String, fallback: Int): Int = try {
+        Color.parseColor(value.trim())
+    } catch (e: IllegalArgumentException) {
+        Log.w(TAG, "Floating palette: cannot read '$value', keeping the default")
+        fallback
+    }
+
+    private fun Palette.store(): String =
+        listOf(surface, border, text, hint, accent, onAccent).joinToString(",")
+
+    private fun storedPalette(raw: String?): Palette? {
+        val parts = raw?.split(',')?.map { it.trim().toIntOrNull() } ?: return null
+        if (parts.size != 6 || parts.any { it == null }) return null
+        return Palette(parts[0]!!, parts[1]!!, parts[2]!!, parts[3]!!, parts[4]!!, parts[5]!!)
+    }
+
+    /**
+     * Ridipinge quello che è già a schermo.
+     *
+     * Il tema si cambia in Impostazioni → Personalizzazione, cioè con la
+     * mascotte accesa e magari con il fumetto aperto: senza questo, i colori
+     * nuovi arriverebbero solo al montaggio dopo.
+     */
+    private fun applyPalette() {
+        val ctx = appContext ?: return
+        inputBar?.background = barBackground(ctx)
+        input?.let {
+            it.setTextColor(palette.text)
+            it.setHintTextColor(palette.hint)
+        }
+        bubble?.let {
+            it.setTextColor(palette.text)
+            it.background = bubbleBackground()
+        }
+        syncSend(bloom = false)
     }
 
     /**
@@ -835,7 +990,7 @@ object FloatingOverlayController {
         // toccava.
         val side = mascotSize(ctx)
         val speech = TextView(ctx).apply {
-            setTextColor(0xFFF5F0E8.toInt())
+            setTextColor(palette.text)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             maxLines = 10
             visibility = View.GONE
@@ -1001,12 +1156,22 @@ object FloatingOverlayController {
     }
 
     /**
-     * Il composer: un campo tondo e un tasto d'invio, non una striscia di testo.
+     * Il composer: **un oggetto solo**, con il tasto d'invio dentro la barra.
      *
      * La prima versione era un `EditText` nudo su una banda scura, e sul
      * telefono si leggeva come una cosa rotta: nessun bordo, nessun bottone,
-     * niente che dicesse «si scrive qui». Le forme sono quelle del composer
-     * della chat, perché è la stessa cosa in un posto diverso.
+     * niente che dicesse «si scrive qui». La seconda aveva il bordo e il
+     * bottone, ma il bottone stava **fuori**: un disco da 46 dp che si prendeva
+     * 56 dp di larghezza al testo ed era sempre acceso, anche a campo vuoto —
+     * la cosa più luminosa dello schermo, e non faceva niente.
+     *
+     * Qui il tasto sta dentro lo stesso bordo: [SEND_DP] con [BAR_PAD_DP]
+     * d'aria attorno, che fanno i 46 dp del campo. Il conto torna senza muovere
+     * la banda, e quindi senza muovere il pavimento della mascotte
+     * ([COMPOSER_DP]).
+     *
+     * Le forme e i colori sono quelli del composer della chat, perché è la
+     * stessa cosa in un posto diverso.
      */
     private fun buildInputRow(ctx: Context): View {
         val row = LinearLayout(ctx).apply {
@@ -1017,23 +1182,42 @@ object FloatingOverlayController {
             setPadding(padH, padV, padH, padV)
             visibility = View.GONE
         }
+        // La barra: il bordo tondo è suo, non del campo. È tutta la differenza
+        // fra «un campo e un bottone» e «una cosa in cui si scrive e si manda».
+        val bar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            // Fino a quattro righe il campo cresce verso l'alto e il tasto
+            // resta in fondo, dove il pollice l'ha lasciato.
+            gravity = Gravity.BOTTOM
+            // ...**e questa riga è quella che glielo permette.** Una
+            // `LinearLayout` orizzontale allinea i figli per la linea di base
+            // del testo, non per il bordo, e lo fa di default: la freccia
+            // finiva incollata alla *prima* riga del campo, cioè in cima, mezza
+            // tagliata fuori dalla barra. Con tre righe scritte si vede subito;
+            // con una riga sola le due regole danno lo stesso risultato, ed è
+            // il motivo per cui un difetto così si scopre tardi.
+            isBaselineAligned = false
+            val pad = dp(ctx, BAR_PAD_DP)
+            setPadding(dp(ctx, 18), pad, pad, pad)
+            background = barBackground(ctx)
+        }
         val field = EditText(ctx).apply {
             hint = ctx.getString(R.string.floating_input_hint)
-            setTextColor(0xFFF5F0E8.toInt())
-            setHintTextColor(0xFF8A8378.toInt())
+            // Il fondo ce l'ha la barra: due sfondi tondi uno dentro l'altro si
+            // vedono, e male.
+            background = null
+            setTextColor(palette.text)
+            setHintTextColor(palette.hint)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            gravity = Gravity.CENTER_VERTICAL
+            // Alto quanto il tasto: a una riga sola i due si allineano da sé,
+            // senza padding calcolati a mano che sbagliano di un dp.
+            minHeight = dp(ctx, SEND_DP)
+            setPadding(0, 0, dp(ctx, 8), 0)
             maxLines = 4
             setSingleLine(false)
             imeOptions = EditorInfo.IME_ACTION_SEND
             isFocusableInTouchMode = true
-            background = GradientDrawable().apply {
-                setColor(0xF01C1A18.toInt())
-                cornerRadius = dp(ctx, 24).toFloat()
-                setStroke(dp(ctx, 1), 0x33F5F0E8)
-            }
-            val padH = dp(ctx, 18)
-            val padV = dp(ctx, 12)
-            setPadding(padH, padV, padH, padV)
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) {
                     send()
@@ -1048,38 +1232,96 @@ object FloatingOverlayController {
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
-                override fun afterTextChanged(s: Editable?) = armHold()
+                override fun afterTextChanged(s: Editable?) {
+                    armHold()
+                    syncSend()
+                }
             })
         }
-        row.addView(field, LinearLayout.LayoutParams(
+        bar.addView(field, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ))
 
-        val sendButton = TextView(ctx).apply {
+        val button = TextView(ctx).apply {
             text = "\u2191"
             gravity = Gravity.CENTER
-            setTextColor(0xFF141210.toInt())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            background = GradientDrawable().apply {
-                setColor(0xFFF5F0E8.toInt())
-                shape = GradientDrawable.OVAL
-            }
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             setOnClickListener { send() }
         }
-        val side = dp(ctx, 46)
-        row.addView(sendButton, LinearLayout.LayoutParams(side, side).apply {
-            leftMargin = dp(ctx, 10)
-        })
+        val side = dp(ctx, SEND_DP)
+        bar.addView(button, LinearLayout.LayoutParams(side, side))
+
+        row.addView(bar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
 
         input = field
+        sendButton = button
+        inputBar = bar
         inputRow = row
+        // Il testo sopravvive a un collapse (v. `collapse`): il tasto può
+        // nascere già acceso, e deve nascere come lo si è lasciato.
+        syncSend(bloom = false)
         return row
     }
 
+    /**
+     * Il tasto si accende quando c'è qualcosa da mandare.
+     *
+     * Da spento non è un disco pieno: è la sola freccia in `--text-faint`,
+     * come `.compose-send[disabled]` nel composer della chat. Alla prima
+     * lettera fiorisce in `--accent` con la stessa molla (`sendEnable`), e
+     * *solo* alla prima: [sendLit] tiene il conto, o la freccia rimbalzerebbe
+     * a ogni carattere.
+     */
+    private fun syncSend(bloom: Boolean = true) {
+        val button = sendButton ?: return
+        val lit = !(input?.text?.toString()?.trim()).isNullOrEmpty()
+        val changed = lit != sendLit
+        sendLit = lit
+        button.isEnabled = lit
+        button.setTextColor(if (lit) palette.onAccent else palette.hint)
+        button.background = if (lit) {
+            GradientDrawable().apply {
+                setColor(palette.accent)
+                shape = GradientDrawable.OVAL
+            }
+        } else {
+            null
+        }
+        if (lit && changed && bloom) {
+            button.scaleX = 0.85f
+            button.scaleY = 0.85f
+            button.animate()
+                .scaleX(1f).scaleY(1f)
+                .setDuration(SEND_BLOOM_MS)
+                .setInterpolator(OvershootInterpolator(1.6f))
+                .start()
+        }
+    }
+
+    /**
+     * Il fondo della barra: `--surface` dietro, `--border-strong` attorno.
+     *
+     * La stessa pillola di `.compose-pill`, con in più il velo che tutte le
+     * superfici di questa finestra portano: galleggiano sopra l'app di
+     * qualcun altro, e un filo di trasparenza dice che non sono sue.
+     */
+    private fun barBackground(ctx: Context): GradientDrawable = GradientDrawable().apply {
+        setColor(veiled(palette.surface))
+        cornerRadius = dp(ctx, BAR_RADIUS_DP).toFloat()
+        setStroke(dp(ctx, 1), palette.border)
+    }
+
     private fun bubbleBackground(): GradientDrawable = GradientDrawable().apply {
-        setColor(0xF0141210.toInt())
+        setColor(veiled(palette.surface))
         cornerRadius = 28f
     }
+
+    /** Lo stesso `0xF0` che le due bande portavano quando i colori erano
+     *  scritti a mano: il tema decide il colore, non quanto si vede attraverso. */
+    private fun veiled(color: Int): Int =
+        (color and 0x00FFFFFF) or (SURFACE_ALPHA shl 24)
 
     // ------------------------------------------------------------------ //
     // Gesti                                                               //
@@ -1690,6 +1932,7 @@ object FloatingOverlayController {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         parkedRight = prefs.getBoolean(PREF_RIGHT, true)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
+        storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
     }
 
     private fun saveParkPosition(ctx: Context) {
