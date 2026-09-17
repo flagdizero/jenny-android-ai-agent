@@ -140,6 +140,34 @@ async def test_the_response_reports_what_android_actually_granted(
     assert load_config(config_path).floating.enabled is True
 
 
+async def test_the_settings_page_reports_the_live_permission_state(monkeypatch) -> None:
+    """La riga sul permesso deve comparire a **ogni** apertura del pannello.
+
+    Il permesso si concede e si revoca da una schermata di sistema, fuori da
+    Jenny: se ``active`` arrivasse solo nella risposta all'interruttore, la riga
+    che spiega perché la mascotte non si vede sparirebbe al primo ricaricamento
+    — proprio mentre è ancora vera.
+    """
+    from jenny.webui import settings_routes as sr
+
+    payload = {"floating": {"enabled": True, "available": True}}
+    monkeypatch.setattr(sr, "settings_payload", lambda: payload)
+
+    async def refused() -> bool:
+        return False
+
+    monkeypatch.setattr("jenny.runtime.floating.floating_active", refused)
+
+    enriched = dict(payload)
+    await sr._enrich_floating(enriched)
+    assert enriched["floating"]["active"] is False
+
+    # E il contrario: senza contesto Android non si chiede niente al bridge.
+    off_device = {"floating": {"enabled": True, "available": False}}
+    await sr._enrich_floating(off_device)
+    assert "active" not in off_device["floating"]
+
+
 # -- rifiuto -----------------------------------------------------------------
 
 

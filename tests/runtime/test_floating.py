@@ -39,6 +39,10 @@ class _FakeBridge:
         self.calls.append(("showReply", (text,)))
         return self.result
 
+    def isActive(self):  # noqa: N802
+        self.calls.append(("isActive", ()))
+        return self.result
+
 
 @pytest.fixture(autouse=True)
 def _clean_state():
@@ -134,6 +138,16 @@ class TestApplyConfig:
         assert bridge.calls == []
 
 
+class TestIsActive:
+    async def test_chiede_alla_finestra(self, bridge: _FakeBridge):
+        assert await fl.floating_active() is True
+        assert bridge.calls == [("isActive", ())]
+
+    async def test_senza_contesto_android_e_falso(self, monkeypatch):
+        monkeypatch.setattr(fl, "get_android_context", lambda: None)
+        assert await fl.floating_active() is False
+
+
 class TestConfineConKotlin:
     """Il punto in cui un rename rompe solo sul telefono.
 
@@ -147,7 +161,7 @@ class TestConfineConKotlin:
         assert BRIDGE_KT.is_file()
         assert "class FloatingBridge(" in BRIDGE_KT.read_text(encoding="utf-8")
 
-    @pytest.mark.parametrize("method", ["setEnabled", "showReply"])
+    @pytest.mark.parametrize("method", ["setEnabled", "showReply", "isActive"])
     def test_i_metodi_chiamati_esistono_in_kotlin(self, method: str):
         source = BRIDGE_KT.read_text(encoding="utf-8")
         assert f"fun {method}(" in source

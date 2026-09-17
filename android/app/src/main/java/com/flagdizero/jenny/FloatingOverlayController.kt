@@ -204,6 +204,19 @@ object FloatingOverlayController {
         return true
     }
 
+    /**
+     * La mascotte è accesa **e** Android la lascia esistere?
+     *
+     * Domanda distinta da «la finestra è a schermo adesso»: con l'app davanti
+     * è nascosta di proposito, e quello non è un rifiuto. Serve al pannello
+     * impostazioni, che deve poter mostrare la riga sul permesso ogni volta che
+     * è vera — non solo nel secondo successivo al tocco dell'interruttore.
+     */
+    fun isActive(): Boolean {
+        val ctx = appContext ?: return false
+        return enabled && canDrawOverlays(ctx)
+    }
+
     /** Smonta tutto. Chiamata da `GatewayService.onDestroy`. */
     fun teardown() {
         main.post {

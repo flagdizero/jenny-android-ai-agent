@@ -84,6 +84,13 @@ class FloatingBridge(context: Context) {
         FloatingOverlayController.setEnabled(appContext, on)
     }
 
+    /**
+     * La mascotte è accesa e il permesso c'è? Letta dal pannello impostazioni
+     * a ogni caricamento, così la riga «Android non la lascia aprire» compare
+     * tutte le volte che è vera e non solo appena si tocca l'interruttore.
+     */
+    fun isActive(): Boolean = onMain { FloatingOverlayController.isActive() }
+
     /** Disegna la risposta nel fumetto. `false` se non c'è nessuna finestra. */
     fun showReply(text: String): Boolean = onMain {
         FloatingOverlayController.showReply(text)

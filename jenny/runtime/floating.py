@@ -99,6 +99,17 @@ async def show_reply(text: str) -> bool:
     return await _call("showReply", clean)
 
 
+async def floating_active() -> bool:
+    """La mascotte è accesa **e** Android la lascia esistere?
+
+    Distinta da ``config.floating.enabled``, che dice solo cosa ha chiesto
+    l'utente: qui si chiede alla finestra, e la differenza fra le due è
+    esattamente ciò che il pannello impostazioni deve poter raccontare — un
+    interruttore acceso su un permesso negato non è un interruttore acceso.
+    """
+    return await _call("isActive")
+
+
 async def apply_floating_config() -> bool:
     """Spinge ``config.floating.enabled`` al bridge. Da chiamare all'avvio.
 
