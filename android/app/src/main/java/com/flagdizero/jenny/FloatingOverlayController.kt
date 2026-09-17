@@ -107,6 +107,7 @@ object FloatingOverlayController {
 
     private const val PREFS = "jenny_floating"
     private const val PREF_Y = "park_y"
+    private const val PREF_RIGHT = "park_right"
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -143,12 +144,17 @@ object FloatingOverlayController {
     private var scrim: View? = null
     private var inputRow: View? = null
     private var input: EditText? = null
-    private var column: LinearLayout? = null
+    /** Il riquadro della mascotte (corpo + faccia). Si chiama così da quando
+     *  il fumetto ha smesso di stargli sopra in colonna. */
+    private var column: FrameLayout? = null
 
     private val sprites = HashMap<String, Bitmap?>()
 
     /** Ultima altezza a cui l'utente l'ha lasciata, in px. `-1` = mai scelta. */
     private var parkedY = -1
+
+    /** E su quale dei due bordi. Default destra, come la mascotte in chat. */
+    private var parkedRight = true
     private var waitingForReply = false
 
     private val timeoutRunnable = Runnable { onReplyTimeout() }
@@ -344,15 +350,28 @@ object FloatingOverlayController {
     /**
      * Allarga la finestra a schermo intero.
      *
-     * Con *withInput* prende anche il **fuoco**: togliere `FLAG_NOT_FOCUSABLE`
-     * è tutto ciò che serve perché una finestra overlay accetti la tastiera, e
-     * `SOFT_INPUT_ADJUST_RESIZE` — più gli insets IME letti in `buildViews` —
-     * è ciò che tiene il campo sopra di essa invece che sotto. Senza, la
-     * finestra resta intera ma **non focusable**: serve al solo fumetto, e non
-     * ruba all'app sotto un fuoco che nessuno le ha chiesto di cedere.
+     * Con *withInput* prende anche il **fuoco**, e le due cose che lo rendono
+     * vero sono state pagate sul telefono il 17/09:
      *
-     * Il fuoco si restituisce appena si collassa: una finestra overlay
-     * focusable lasciata lì si mangerebbe ogni tasto del telefono.
+     * **`FLAG_LAYOUT_NO_LIMITS` va tolto.** Serve da parcheggiata, dove la
+     * mascotte sporge oltre il bordo, ed è esattamente ciò che una finestra
+     * che deve *ridimensionarsi con la tastiera* non può avere: dice al
+     * sistema che può uscire dallo schermo, quindi `ADJUST_RESIZE` non ha
+     * niente da restringere. Con il flag ancora su, `dumpsys` riportava
+     * `sim={adjust=pan}` malgrado il valore chiesto.
+     *
+     * **Il fuoco si chiede dopo il relayout, non nello stesso giro.** Togliere
+     * `FLAG_NOT_FOCUSABLE` non dà il fuoco all'istante: il sistema deve
+     * rifare il layout e riassegnarlo. Chiedendolo subito si misurava
+     * `mCurrentFocus=null` a finestra già `fillxfill` e focusable, l'`EditText`
+     * senza input connection e `mImeWindowVis=0` — cioè la tastiera non si
+     * apriva mai, che è tutto il punto della funzione. Ora lo chiede
+     * `onWindowFocusChanged` del contenitore, che scatta quando il fuoco
+     * c'è davvero.
+     *
+     * Senza *withInput* la finestra resta intera ma **non focusable**: serve
+     * al solo fumetto, e non ruba all'app sotto un fuoco che nessuno le ha
+     * chiesto di cedere.
      */
     private fun expand(withInput: Boolean) {
         val ctx = appContext ?: return
@@ -373,13 +392,14 @@ object FloatingOverlayController {
             lp.y = 0
         }
         lp.flags = if (withInput) {
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            0
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         }
         lp.softInputMode = if (withInput) {
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
         } else {
             WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
         }
@@ -393,15 +413,35 @@ object FloatingOverlayController {
         isChatOpen = withInput
         scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
         inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
-        if (withInput) {
-            input?.let {
-                it.requestFocus()
-                val imm = ctx.getSystemService(InputMethodManager::class.java)
-                imm?.showSoftInput(it, InputMethodManager.SHOW_IMPLICIT)
-            }
-        }
+        if (withInput) input?.let { it.post { focusTheField(ctx) } }
         armHold()
         Log.i(TAG, "Floating mascot expanded (input=$withInput)")
+    }
+
+    /**
+     * Mette il fuoco sul campo e alza la tastiera.
+     *
+     * Chiamata due volte di proposito — subito dopo il relayout e di nuovo da
+     * `onWindowFocusChanged` — perché quale delle due arriva buona dipende da
+     * quanto ci mette il sistema a riassegnare il fuoco, e non è una cosa su
+     * cui valga la pena scommettere. Idempotente: a fuoco già preso
+     * `requestFocus` è un no-op e `showSoftInput` su una tastiera già alzata
+     * pure.
+     */
+    private fun focusTheField(ctx: Context) {
+        val field = input ?: return
+        if (!isChatOpen) return
+        field.isFocusableInTouchMode = true
+        field.requestFocus()
+        val imm = ctx.getSystemService(InputMethodManager::class.java) ?: return
+        if (!imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)) {
+            // Il primo tentativo può cadere se la finestra non ha ancora il
+            // fuoco: si riprova al giro successivo del Looper invece di
+            // lasciare un campo che lampeggia il cursore e non scrive.
+            field.postDelayed({
+                if (isChatOpen) imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
+            }, 120)
+        }
     }
 
     /**
@@ -465,10 +505,28 @@ object FloatingOverlayController {
                 }
                 return super.dispatchKeyEvent(event)
             }
+
+            /** Il momento in cui il fuoco c'è **davvero**.
+             *
+             *  Togliere `FLAG_NOT_FOCUSABLE` non lo consegna all'istante, e
+             *  chiederlo prima di qui lasciava la tastiera chiusa con il
+             *  cursore che lampeggiava (misurato: `mCurrentFocus=null` a
+             *  finestra già focusable). */
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (hasWindowFocus && isChatOpen) focusTheField(ctx)
+            }
         }
 
+        // Un velo, non un blackout: trasparente in alto — quello che stavi
+        // guardando resta leggibile — e sempre più scuro verso il campo, che è
+        // dove deve andare l'occhio. Il grigio uniforme al 40% del primo giro
+        // sembrava un difetto di rendering, non una scelta.
         val dim = View(ctx).apply {
-            setBackgroundColor(0x66000000)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x00000000, 0x40000000, 0xCC000000.toInt())
+            )
             visibility = View.GONE
             setOnClickListener { collapse() }
         }
@@ -477,26 +535,33 @@ object FloatingOverlayController {
         ))
         scrim = dim
 
-        val col = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
+        // Il fumetto è ancorato **per il basso**, appena sopra la testa: così
+        // cresce verso l'alto quando il testo è lungo e la mascotte non si
+        // sposta di un pixel. Tenerli in una colonna verticale era il difetto
+        // del 17/09 — per far stare il fumetto bisognava riservargli lo spazio
+        // *prima*, e la mascotte saltava su di 120 dp nell'istante in cui la si
+        // toccava.
         val speech = TextView(ctx).apply {
             setTextColor(0xFFF5F0E8.toInt())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            maxLines = 8
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            maxLines = 10
             visibility = View.GONE
             background = bubbleBackground()
-            val padH = dp(ctx, 12)
-            val padV = dp(ctx, 9)
+            val padH = dp(ctx, 14)
+            val padV = dp(ctx, 11)
             setPadding(padH, padV, padH, padV)
             // Il fumetto porta alla conversazione vera: è l'unico posto in cui
             // c'è tutto il resto, dato che qui si vede solo l'ultima risposta.
             setOnClickListener { openChat(ctx) }
         }
-        col.addView(speech, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(ctx, 6) })
+        // Largo quanto il testo, non quanto lo schermo: «ciao» in una striscia
+        // nera da bordo a bordo non somiglia a qualcuno che parla, somiglia a
+        // un banner. Il tetto serve alle risposte lunghe, che altrimenti
+        // uscirebbero dallo schermo.
+        speech.maxWidth = (ctx.resources.displayMetrics.widthPixels * 0.78f).toInt()
+        container.addView(speech, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.BOTTOM or Gravity.START })
         bubble = speech
 
         val mascotSize = dp(ctx, MASCOT_DP)
@@ -508,12 +573,10 @@ object FloatingOverlayController {
         mascotBody = body
         mascotFace = face
         bindTouch(ctx, mascot)
-        col.addView(mascot, LinearLayout.LayoutParams(mascotSize, mascotSize))
-
-        container.addView(col, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
-        ))
-        column = col
+        container.addView(mascot, FrameLayout.LayoutParams(mascotSize, mascotSize).apply {
+            gravity = Gravity.TOP or Gravity.START
+        })
+        column = mascot
 
         container.addView(buildInputRow(ctx), FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
@@ -537,8 +600,12 @@ object FloatingOverlayController {
                 val ime = insets.getInsets(WindowInsets.Type.ime()).bottom
                 val bars = insets.getInsets(WindowInsets.Type.systemBars()).bottom
                 inputRow?.let {
-                    val pad = dp(ctx, 10)
-                    it.setPadding(pad, pad, pad, pad + max(ime, bars))
+                    // Gli stessi valori di ``buildInputRow``: questo ramo ne
+                    // riscrive il padding, e due numeri diversi per la stessa
+                    // riga si notano solo quando la tastiera si alza.
+                    val padH = dp(ctx, 14)
+                    val padV = dp(ctx, 12)
+                    it.setPadding(padH, padV, padH, padV + max(ime, bars))
                 }
                 insets
             }
@@ -548,12 +615,21 @@ object FloatingOverlayController {
         return container
     }
 
+    /**
+     * Il composer: un campo tondo e un tasto d'invio, non una striscia di testo.
+     *
+     * La prima versione era un `EditText` nudo su una banda scura, e sul
+     * telefono si leggeva come una cosa rotta: nessun bordo, nessun bottone,
+     * niente che dicesse «si scrive qui». Le forme sono quelle del composer
+     * della chat, perché è la stessa cosa in un posto diverso.
+     */
     private fun buildInputRow(ctx: Context): View {
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xF0141210.toInt())
-            val pad = dp(ctx, 10)
-            setPadding(pad, pad, pad, pad)
+            gravity = Gravity.CENTER_VERTICAL
+            val padH = dp(ctx, 14)
+            val padV = dp(ctx, 12)
+            setPadding(padH, padV, padH, padV)
             visibility = View.GONE
         }
         val field = EditText(ctx).apply {
@@ -564,7 +640,15 @@ object FloatingOverlayController {
             maxLines = 4
             setSingleLine(false)
             imeOptions = EditorInfo.IME_ACTION_SEND
-            setBackgroundColor(Color.TRANSPARENT)
+            isFocusableInTouchMode = true
+            background = GradientDrawable().apply {
+                setColor(0xF01C1A18.toInt())
+                cornerRadius = dp(ctx, 24).toFloat()
+                setStroke(dp(ctx, 1), 0x33F5F0E8)
+            }
+            val padH = dp(ctx, 18)
+            val padV = dp(ctx, 12)
+            setPadding(padH, padV, padH, padV)
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) {
                     send()
@@ -585,6 +669,23 @@ object FloatingOverlayController {
         row.addView(field, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ))
+
+        val sendButton = TextView(ctx).apply {
+            text = "\u2191"
+            gravity = Gravity.CENTER
+            setTextColor(0xFF141210.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            background = GradientDrawable().apply {
+                setColor(0xFFF5F0E8.toInt())
+                shape = GradientDrawable.OVAL
+            }
+            setOnClickListener { send() }
+        }
+        val side = dp(ctx, 46)
+        row.addView(sendButton, LinearLayout.LayoutParams(side, side).apply {
+            leftMargin = dp(ctx, 10)
+        })
+
         input = field
         inputRow = row
         return row
@@ -603,21 +704,30 @@ object FloatingOverlayController {
      * Tap e trascinamento sulla mascotte.
      *
      * Il trascinamento sposta la **finestra** con le coordinate schermo
-     * (`rawY`), e non cambia taglia: è seguire un dito, non fisica. Il tap
-     * apre la chat, ma solo dopo che il dito si è alzato — il cambio di taglia
-     * non avviene mai a gesto in corso.
+     * (`rawX`/`rawY`), e non cambia taglia: è seguire un dito, non fisica. Il
+     * tap apre la chat, ma solo dopo che il dito si è alzato — il cambio di
+     * taglia non avviene mai a gesto in corso.
+     *
+     * Si muove **in tutte e due le direzioni**, e al rilascio si aggancia al
+     * bordo più vicino. Il primo giro la lasciava scorrere solo in verticale e
+     * inchiodata a destra: è la prima cosa che si prova a fare con una
+     * mascotte che galleggia, e non funzionava.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun bindTouch(ctx: Context, view: View) {
         val slop = dp(ctx, DRAG_SLOP_DP)
+        var downRawX = 0f
         var downRawY = 0f
+        var startX = 0
         var startY = 0
         var dragged = false
         view.setOnTouchListener { _, event ->
             val lp = params ?: return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
                     downRawY = event.rawY
+                    startX = lp.x
                     startY = lp.y
                     dragged = false
                     armHold()
@@ -625,9 +735,11 @@ object FloatingOverlayController {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (expanded) return@setOnTouchListener true
+                    val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (dragged || abs(dy) > slop) {
+                    if (dragged || abs(dx) > slop || abs(dy) > slop) {
                         dragged = true
+                        lp.x = startX + dx.toInt()
                         lp.y = clampY(ctx, startY + dy.toInt())
                         try {
                             windowManager?.updateViewLayout(root, lp)
@@ -639,10 +751,7 @@ object FloatingOverlayController {
                 }
                 MotionEvent.ACTION_UP -> {
                     when {
-                        dragged -> {
-                            parkedY = lp.y
-                            saveParkPosition(ctx)
-                        }
+                        dragged -> settleToEdge(ctx, lp)
                         // Un tap sulla mascotte a chat aperta la richiude: è il
                         // gesto inverso di quello che l'ha aperta.
                         isChatOpen -> collapse()
@@ -657,6 +766,27 @@ object FloatingOverlayController {
                 else -> false
             }
         }
+    }
+
+    /**
+     * Al rilascio si posa sul bordo più vicino, e se lo ricorda.
+     *
+     * L'aggancio non è vezzo: a metà schermo coprirebbe quello che stai
+     * guardando, ed è l'unica posizione in cui una mascotte che galleggia dà
+     * fastidio invece di far compagnia.
+     */
+    private fun settleToEdge(ctx: Context, lp: WindowManager.LayoutParams) {
+        val size = dp(ctx, MASCOT_DP)
+        val width = ctx.resources.displayMetrics.widthPixels
+        parkedRight = lp.x + size / 2 >= width / 2
+        parkedY = lp.y
+        lp.x = parkX(ctx)
+        try {
+            windowManager?.updateViewLayout(root, lp)
+        } catch (e: Exception) {
+            Log.i(TAG, "Settle failed: ${e.javaClass.simpleName}")
+        }
+        saveParkPosition(ctx)
     }
 
     // ------------------------------------------------------------------ //
@@ -756,35 +886,59 @@ object FloatingOverlayController {
         }
     }
 
-    /** Colonna fumetto+mascotte posizionata dove sta la finestra parcheggiata. */
+    /**
+     * Mette la mascotte, dentro la finestra grande, **dove stava** in quella
+     * piccola: stesso pixel sullo schermo, nessun salto all'apertura.
+     *
+     * L'unica correzione è verso l'interno: da parcheggiata sporge oltre il
+     * bordo, e a finestra intera si tira dentro del tutto — lì sta per
+     * parlare, e una mascotte mezza fuori mentre risponde è solo scomoda.
+     */
     private fun placeColumn(ctx: Context, left: Int, top: Int) {
-        val col = column ?: return
-        val lp = col.layoutParams as? FrameLayout.LayoutParams ?: return
+        val mascot = column ?: return
+        val size = dp(ctx, MASCOT_DP)
         val metrics = ctx.resources.displayMetrics
-        // Il fumetto sta sopra la testa, quindi la colonna comincia più in alto
-        // della mascotte: se non ci sta, si scende invece di uscire dallo schermo.
-        val bubbleRoom = dp(ctx, 120)
-        lp.gravity = Gravity.TOP or Gravity.START
-        lp.leftMargin = min(max(left, 0), max(metrics.widthPixels - dp(ctx, MASCOT_DP), 0))
-        lp.topMargin = max(top - bubbleRoom, dp(ctx, 8))
-        col.layoutParams = lp
+        (mascot.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            lp.gravity = Gravity.TOP or Gravity.START
+            lp.leftMargin = min(max(left, 0), max(metrics.widthPixels - size, 0))
+            lp.topMargin = max(top, 0)
+            mascot.layoutParams = lp
+        }
+        // Il fumetto finisce dove comincia la testa e cresce all'insù, e sta
+        // dal lato in cui lei sta: parcheggiata a destra parla verso sinistra,
+        // e viceversa. Il ritaglio dello sprite lascia dell'aria sopra la
+        // testa, quindi si scende un po' dentro il riquadro invece di
+        // ancorarsi al suo bordo — altrimenti il fumetto sembra staccato.
+        (bubble?.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            val headroom = (size * 0.22f).toInt()
+            lp.gravity = Gravity.BOTTOM or if (parkedRight) Gravity.END else Gravity.START
+            lp.bottomMargin = max(
+                metrics.heightPixels - max(top, 0) - headroom, dp(ctx, 8)
+            )
+            lp.leftMargin = dp(ctx, 14)
+            lp.rightMargin = dp(ctx, 14)
+            bubble?.layoutParams = lp
+        }
     }
 
     private fun resetColumn() {
-        val col = column ?: return
-        val lp = col.layoutParams as? FrameLayout.LayoutParams ?: return
-        lp.gravity = Gravity.TOP or Gravity.START
-        lp.leftMargin = 0
-        lp.topMargin = 0
-        col.layoutParams = lp
+        (column?.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            lp.gravity = Gravity.TOP or Gravity.START
+            lp.leftMargin = 0
+            lp.topMargin = 0
+            column?.layoutParams = lp
+        }
     }
 
-    /** Sempre a destra: il trascinamento oggi è solo verticale, quindi un
-     *  lato da ricordare sarebbe una preferenza che nessuno può cambiare. */
+    /** Il bordo su cui si è posata, con un terzo dello sprite fuori schermo. */
     private fun parkX(ctx: Context): Int {
         val size = dp(ctx, MASCOT_DP)
         val out = (size * PARK_OUT_RATIO).toInt()
-        return ctx.resources.displayMetrics.widthPixels - size + out
+        return if (parkedRight) {
+            ctx.resources.displayMetrics.widthPixels - size + out
+        } else {
+            -out
+        }
     }
 
     private fun parkY(ctx: Context): Int {
@@ -810,13 +964,16 @@ object FloatingOverlayController {
     }
 
     private fun loadParkPosition(ctx: Context) {
-        parkedY = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(PREF_Y, -1)
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        parkedY = prefs.getInt(PREF_Y, -1)
+        parkedRight = prefs.getBoolean(PREF_RIGHT, true)
     }
 
     private fun saveParkPosition(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putInt(PREF_Y, parkedY)
+            .putBoolean(PREF_RIGHT, parkedRight)
             .apply()
     }
 
