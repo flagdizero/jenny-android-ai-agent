@@ -1740,6 +1740,11 @@ body {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
+/* Quando la mascotte è agganciata a sinistra (drag dell'utente) l'angolo
+   destro è libero: lo scostamento sopra serve solo quando lei è lì. */
+:root:has(.jenny-duo.side-left) .chat-scroll-fab {
+  right: 14px;
+}
 .chat-scroll-fab.visible {
   opacity: 1;
   transform: translateY(0);
