@@ -223,7 +223,58 @@ dell'impacchettamento; nei webp veri e' il **73% dell'altezza**. Fidarsene fa
 disegnare la mascotte grande il doppio del vero — e' successo, all'inizio di
 questo lavoro.
 
-## Passo 7 — Le due porte
+## Passo 7 — Le due porte ✅
 
-- [ ] Dal menu di casa all'officina e ritorno, con `api.navigate`.
-- [ ] Scambio dei nomi: la casa diventa l'ingresso.
+- [x] Intestazione della casa dalla tavola `Main.dc.html`, ridotta a cio' che
+      esiste: nessun chevron sul titolo, perche' la scelta di con chi parli e'
+      del giro dopo e un chevron che non apre niente e' una bugia.
+- [x] Porta di andata: il bottone in alto a destra. Portera' a «Tu e Jenny»
+      quando quella pagina esistera'; oggi va dritto in officina, e l'icona lo
+      dice.
+- [x] Porta di ritorno: in fondo a Impostazioni → Sistema, non nel dock. Il
+      dock e' la navigazione *dentro* l'officina, e la casa non e' una sua
+      schermata: e' l'altro documento.
+- [x] **Scambio dei nomi**: `index.html` e' la casa (ed e' cio' che il guscio
+      nativo carica), l'officina ha il suo nome.
+- [x] Installato e verificato sul Titan 2 (0.11.0, aggiornamento sul posto).
+
+### Lo scambio ha rotto 21 test, e uno era gia' rotto
+
+Venti erano contratti di markup che leggevano `index.html` perche' l'officina
+*era* `index.html`: ora leggono `officina.html`. Il contratto non e' cambiato,
+il file si'.
+
+Il ventunesimo no. `test_static_serves_index_when_dist_present` scriveva un
+`favicon.svg` in una cartella `dist` **mai collegata al canale** —
+`static_dist_path` e' `workspace/ui`, non una cartella del test — quindi quel
+file non veniva mai servito: la richiesta cadeva sul fallback SPA e
+l'asserzione `"<svg" in text` passava perche' la shell dell'officina conteneva
+`<svg id="graph-svg">`. **Verde per una coincidenza**, e lo scambio ha tolto la
+coincidenza. Ora sonda un asset che esiste e pretende che *non* sia la shell.
+
+### E ha richiesto una riga di Kotlin, che il piano diceva di no
+
+`shouldOverrideUrlLoading` bloccava ogni navigazione di primo livello verso il
+gateway che non fosse esattamente `GATEWAY_PATH`. E' una rete di sicurezza
+giusta — impedisce a un href risolto male sotto `/html-mobile/` di sostituire
+la SPA con `/api/…` e nessuna via di ritorno — ma e' precedente all'esistenza
+di un secondo guscio, e bloccava **entrambe** le porte. L'unica traccia era
+`Blocked main-frame navigation to a non-SPA gateway path` in logcat: il bottone
+semplicemente non faceva niente. Il guard ora conosce i due documenti per nome,
+in un elenco chiuso e non un prefisso.
+
+### Misurato sul telefono, sulla conversazione vera
+
+- La storia si e' ridisegnata con le etichette di provenienza: un messaggio
+  entrato dal fumetto porta *from the bubble*.
+- Mandato un messaggio: bolla disegnata, **«Ruminating…»** sotto la
+  conversazione, bottone diventato ferma, Jenny nella posa del pensa.
+- Risposta arrivata — e Jenny aveva delegato a un subagent. In casa non se n'e'
+  vista traccia: solo il numero. Nell'officina, lo stesso turno mostra la
+  pastiglia `spawn`, «Show thinking» e i tempi (4,1 s e 8,9 s).
+- Il campo cresciuto a due righe ha alzato Jenny: il `ResizeObserver` funziona
+  sul dispositivo vero.
+- Giro completo delle porte: casa → officina → casa, senza 401 e senza blocchi.
+
+Nota: l'interfaccia sul telefono e' in inglese perche' lo e' la lingua scelta
+li' — vale per entrambe, non e' un difetto della casa.
