@@ -372,3 +372,69 @@ classi `.on` sulle pose, che il JS mette comunque. La misura giusta e' *quanti
 pezzi di Jenny sono davvero visibili* — `visibility`, `display`, `opacity`, e il
 `display` del contenitore. A riposo 1, in mano 1, in volo 1, atterrata 1; col
 difetto rimesso apposta, 0.
+
+## Ritocco — la pagina precedente, in tutte e due le case
+
+Prima la casa chiedeva una pagina e buttava il cursore che il server le mandava
+insieme: si arrivava in cima e la conversazione *sembrava cominciare li'*. Niente
+bordo, niente bottone, nessun modo di sapere che sotto c'era altro.
+
+**La macchina a stati e' una sola** (`shared/history-pager.js`), estratta
+dall'officina come la fisica del pegman: cursore, chiavistello, ancoraggio dello
+scorrimento e bottone di ripiego sono lo stesso codice, cambia solo da dove
+prende gli appigli. Resta nei gusci quel che i gusci fanno diverso: dove si
+ascolta lo scroll contro dove si misura, come si chiede una pagina, come si
+disegna.
+
+**Due modi, e servono entrambi.** Lo scorrimento infinito e' il gesto; il bottone
+e' cio' che resta quando il filo non trabocca e quindi non emette **nessun**
+evento `scroll`. In officina e' un caso limite (due `/new` di fila); in casa,
+che butta tracce e strumenti, una pagina puo' disegnare niente — quindi il
+bottone non e' la versione ridotta dello scorrimento, e' il pezzo obbligatorio.
+
+**50 e non 160, e il motivo e' il costo, non il contenuto.** Avevo scritto (e
+detto) che il budget conta le righe degli strumenti: **e' falso**.
+`_count_anchor_messages` conta solo `user`, `stream_end` e `message`; l'attivita'
+degli strumenti arriva come record `activity` e non entra nel conto, e comunque
+le tracce consecutive di un turno si fondono in un messaggio solo. Quindi 50
+sono ~25 scambi. A calare e' il numero di turni scelti, e con loro i record
+grezzi che il gateway rigioca a ogni apertura.
+
+### Tre cose che il censimento ha salvato in anticipo
+
+- `_insertAtTop` ha **quattro** chiamanti: non si sposta, diventa un appiglio.
+- `isLoadingHistory` non e' interno alla paginazione — lo legge il resync della
+  riconnessione, e un test lo pretende per nome. I tre campi restano leggibili
+  col loro nome, come accessori sul pager.
+- **Cinque file di test ritagliano questi metodi per nome** da `mobile-chat.js` e
+  li eseguono in node. Tutti asseriscono `«<nome> non trovato»`, quindi lo
+  spostamento ha fatto 23 rossi rumorosi invece di verdi silenziosi — l'opposto
+  della trappola di `test_floating.py`. Ora guidano il modulo vero, e provano
+  piu' catena di quanta ne provasse il ritaglio.
+
+### La trappola nuova, che ha morso subito
+
+`loadInitialHistory` viene **ritagliato come testo** dentro tre banchi node. Ci
+avevo messo una costante di modulo (`HISTORY_FIRST_PAGE_SIZE`): in node quel
+nome non esiste, il `ReferenceError` e' finito nel `try/catch` del metodo, e
+l'unico sintomo era «nessuna fetch in volo». Un fallimento muto in un test che
+esiste per non averne. Il 160 resta un letterale li', col commento che dice
+perche'.
+
+### Misurato sul Titan 2, sulla conversazione vera
+
+- **La casa ha chiesto una seconda pagina.** Non dedotto dallo scorrimento: la
+  50esima ancora dalla fine del transcript e' il messaggio «si', mi piace — e'
+  il gesto che tutti gia' conoscono», cioe' dove finisce la prima pagina; lo
+  schermo mostrava roba molto piu' vecchia (il backup notturno, la Marranella).
+- **L'ancoraggio non salta**: un trascinamento lento di 400 px ha spostato
+  «E altre cinque righe diverse» da y 543 a y 950 — 407 px, esattamente il
+  trascinamento. *Con una passata veloce non si misura niente*: l'inerzia
+  continua a scorrere dentro la pagina appena arrivata, e sembra un salto.
+- **L'officina regge**: scorsa all'indietro oltre un confine `NEW SESSION
+  STARTED` fino ai `/dream` di prima, che sta oltre la sua prima pagina.
+
+**Quel che sul telefono non ho provato:** il bottone. Compare solo quando c'e'
+altro e il filo non trabocca, cioe' subito dopo `/new` — e `/new` sulla
+conversazione vera dell'utente azzera il suo contesto. Lo coprono i sette test
+del modulo condiviso, che girano sul codice vero.
