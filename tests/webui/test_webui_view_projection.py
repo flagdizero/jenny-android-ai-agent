@@ -16,6 +16,8 @@ from typing import Any
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.config.paths import set_workspace_dir
+from jenny.runtime.context import get_runtime_context
 from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.transcript import build_webui_thread_response
 from jenny.webui.transcript_store import read_transcript_lines
@@ -101,3 +103,63 @@ async def test_user_echo_without_content_is_dropped(tmp_path, monkeypatch) -> No
         )
     )
     assert read_transcript_lines("websocket:default") == []
+
+
+async def test_user_echo_media_is_paths_on_disk_and_signed_on_the_wire(
+    tmp_path, monkeypatch
+) -> None:
+    """Le due forme non vanno confuse, ed è l'unico posto in cui la differenza conta.
+
+    Sul disco i path: ``transcript_replay`` li rifirma a ogni ricarico, quindi
+    la URL non invecchia dentro un file che vive per sempre. Sul filo la URL
+    firmata: un path del filesystem il client non sa caricarlo, ed è così che
+    la prima foto da Telegram è arrivata in chat come bolla senza immagine.
+    """
+    monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
+    previous = get_runtime_context().workspace_dir
+    set_workspace_dir(tmp_path)
+    try:
+        photo = tmp_path / "uploads" / "abc123-photo.jpg"
+        photo.parent.mkdir(parents=True, exist_ok=True)
+        photo.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+        bus = MessageBus()
+        ws = _ws_channel(bus)
+        await ws.send(
+            OutboundMessage(
+                channel="websocket", chat_id="default", content="guarda qui",
+                media=[str(photo)],
+                metadata={"_user_echo": True, "origin_channel": "telegram"},
+            )
+        )
+
+        (row,) = read_transcript_lines("websocket:default")
+        assert row["media_paths"] == [str(photo)]
+        assert "media_urls" not in row
+
+        wire = ws._user_echo_wire(dict(row))
+        assert wire["media_paths"] == [str(photo)]
+        (attachment,) = wire["media_urls"]
+        assert attachment["url"].startswith("/api/media/")
+        assert attachment["kind"] == "image"
+    finally:
+        set_workspace_dir(previous if previous is not None else "")
+
+
+async def test_user_echo_with_media_and_no_text_is_not_dropped(
+    tmp_path, monkeypatch
+) -> None:
+    # Una foto senza didascalia è un messaggio: la bolla è l'immagine.
+    monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
+    bus = MessageBus()
+    ws = _ws_channel(bus)
+    await ws.send(
+        OutboundMessage(
+            channel="websocket", chat_id="default", content="",
+            media=["/tmp/none.jpg"],
+            metadata={"_user_echo": True, "origin_channel": "telegram"},
+        )
+    )
+    (row,) = read_transcript_lines("websocket:default")
+    assert row["event"] == "user"
+    assert row["media_paths"] == ["/tmp/none.jpg"]

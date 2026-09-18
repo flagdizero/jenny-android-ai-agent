@@ -60,6 +60,7 @@ class WebSocketDispatcher:
         ui_query: Any | None = None,
         get_subagent_manager: Callable[[], Any | None] | None = None,
         get_cron_service: Callable[[], Any | None] | None = None,
+        runtime_events: Any | None = None,
     ):
         self.config = config
         self.bus = bus
@@ -72,6 +73,10 @@ class WebSocketDispatcher:
         self._on_settings_changed = on_settings_changed
         self._on_jobs_changed = on_jobs_changed
         self._ui_query = ui_query
+        # Serve solo a Telegram, che senza runtime events non ha modo di sapere
+        # quando un turno comincia o finisce: non riceve i progress e non riceve
+        # un ``turn_end``. Passato per riferimento e non consumato qui.
+        self._runtime_events = runtime_events
         self.channels: dict[str, Any] = {}
         self._dispatch_task: asyncio.Task | None = None
         self._hot_tasks: list[asyncio.Task] = []
@@ -144,6 +149,7 @@ class WebSocketDispatcher:
             self.bus,
             on_paired=record_paired,
             language=self.config.agents.defaults.language,
+            runtime_events=self._runtime_events,
         )
         logger.info("Telegram channel enabled")
 

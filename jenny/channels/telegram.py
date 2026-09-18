@@ -2,7 +2,10 @@
 
 Contratto duck-typed del dispatcher (come ``WebSocketChannel``): attributi di
 gating, ``start()``/``stop()`` e ``send()``. Niente streaming: il canale non
-setta ``_wants_stream`` sull'inbound, quindi riceve solo messaggi finali.
+setta ``_wants_stream`` sull'inbound, quindi riceve solo messaggi finali — e
+siccome non riceve nemmeno i progress né un ``turn_end``, l'unico segno di vita
+durante un turno è l'indicatore "sta scrivendo…", pilotato dai runtime events
+(v. ``_TypingHeartbeat``).
 
 Il canale è pura consegna: non conosce il transcript WebUI. La proiezione dei
 turni Telegram sulla vista WebUI è responsabilità del runtime (user echo via
@@ -16,8 +19,8 @@ import asyncio
 import hmac
 import time
 import uuid
-from collections.abc import Awaitable, Callable
-from contextlib import suppress
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -26,10 +29,18 @@ from loguru import logger
 
 from jenny.bus.events import COORDINATION_FLAGS, InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
+from jenny.bus.runtime_events import TurnRunStatusChanged
 from jenny.channels.telegram_api import TelegramAPI, TelegramAPIError
 from jenny.channels.telegram_format import markdown_to_telegram_html, split_message
+from jenny.channels.telegram_media import (
+    TelegramFile,
+    has_unsupported_attachment,
+    pick_file,
+)
+from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import TelegramConfig
 from jenny.runtime.power import keep_awake
+from jenny.utils.media_decode import FileSizeExceeded, save_bytes
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 # Limite prudente sul testo grezzo: la conversione HTML può allungare il chunk.
@@ -78,13 +89,54 @@ _TG_MEDIA_MAX_BYTES = 10 * 1024 * 1024
 _MAX_PAIR_ATTEMPTS = 5
 _MAX_TRACKED_CHATS = 512
 
-# Chiavi di update Telegram che indicano contenuto non testuale (v1: non gestito).
-# ``location``/``venue`` sono gestite a parte (vedi _maybe_handle_location) e
-# restano qui solo per la fallback "media_soon" quando la posizione è off.
-_MEDIA_KEYS = (
-    "photo", "voice", "document", "sticker", "video", "audio",
-    "video_note", "animation", "location", "contact", "poll",
-)
+# Posizione e venue hanno il loro ramo (``_maybe_handle_location``). Queste
+# chiavi restano qui per il caso in cui quel ramo declini — toggle posizione
+# spento, coordinate malformate — perché anche allora l'utente ha mandato
+# qualcosa e merita una risposta invece del silenzio.
+_LOCATION_KEYS = ("location", "venue")
+
+# Contenuto sintetico quando un allegato arriva senza didascalia, o quando il
+# modello rischia di credere di poterlo percepire.
+#
+# **Le immagini non ne hanno uno, ed è una scelta.** Una foto arriva davvero
+# come blocco vision: annunciarla al modello non aggiunge niente, e il costo si
+# vede dall'altra parte — l'eco del turno sulla vista WebUI usa questo testo,
+# quindi il marcatore comparirebbe in chat come se l'utente se lo fosse scritto
+# da solo, per giunta in inglese. Senza, una foto senza didascalia è esattamente
+# ciò che è quando la si allega dalla WebUI: una bolla con dentro l'immagine.
+#
+# Per audio e video il marcatore resta l'unica cosa che impedisce a Jenny di
+# rispondere come se avesse ascoltato o guardato, e in chat si legge bene.
+_MEDIA_TURN_MARKERS: dict[str, str] = {
+    "audio": (
+        "📎 [The user sent a voice note or audio file. It is saved and referenced by "
+        "path, but nothing transcribed it: you cannot hear its contents.]"
+    ),
+    "video": (
+        "📎 [The user sent a video. It is saved and referenced by path, but you cannot "
+        "watch it.]"
+    ),
+    "document": "📎 [The user sent a file, referenced by path.]",
+}
+
+# Azione mostrata in chat mentre scarichiamo l'allegato: dire "sta scrivendo"
+# durante un download sarebbe la cosa sbagliata detta bene.
+_UPLOAD_ACTIONS: dict[str, str] = {
+    "image": "upload_photo",
+    "audio": "upload_voice",
+    "video": "upload_video",
+    "document": "upload_document",
+}
+
+# Cadenza del battito "sta scrivendo…": l'azione scade lato Telegram dopo ~5s,
+# quindi 4 lascia margine senza sprecare richieste.
+_TYPING_INTERVAL_S = 4.0
+
+# Tetto duro del battito. Esiste per il caso che non si vede in un test: un
+# evento di fine turno perso (crash del loop, handler sganciato a metà) che
+# lascerebbe il bot a "sta scrivendo…" per sempre. Cinque minuti sono oltre
+# qualunque turno onesto e molto sotto "per sempre".
+_TYPING_MAX_S = 300.0
 
 # Contenuto sintetico (LLM-facing, non mostrato all'utente) di un turno
 # innescato da una posizione condivisa: la posizione vera arriva nel runtime
@@ -98,7 +150,8 @@ _BOT_STRINGS: dict[str, dict[str, str]] = {
         "welcome": (
             "Scrivimi come in una chat normale e ti risponde Jenny.\n\n"
             "• /new — inizia una nuova conversazione\n"
-            "• 📎 Foto, vocali e documenti arriveranno presto"
+            "• 📎 Foto, file, vocali e video: arrivano a Jenny. Le foto le vede;\n"
+            "  gli altri li riceve come file, senza ascoltarli o guardarli."
         ),
         "start_prompt": (
             "Per collegarti, inviami il codice a 6 cifre che vedi nella WebUI di Jenny."
@@ -106,14 +159,17 @@ _BOT_STRINGS: dict[str, dict[str, str]] = {
         "wrong_code": (
             "Codice non valido. Controlla il codice a 6 cifre nella WebUI di Jenny e riprova."
         ),
-        "media_soon": "📎 Foto, vocali e documenti arriveranno presto: per ora solo testo.",
+        "media_unsupported": "🤷 Questo tipo di messaggio non so ancora gestirlo.",
+        "media_too_big": "📦 Allegato troppo grande: non riesco a scaricarlo.",
+        "media_failed": "⚠️ Non sono riuscita a scaricare l'allegato. Riprova.",
     },
     "en": {
         "paired": "✅ Paired! You can now talk to Jenny from this chat.",
         "welcome": (
             "Message me like a normal chat and Jenny replies.\n\n"
             "• /new — start a new conversation\n"
-            "• 📎 Photos, voice notes and documents are coming soon"
+            "• 📎 Photos, files, voice notes and videos reach Jenny. She can see\n"
+            "  photos; the rest arrive as files she cannot listen to or watch."
         ),
         "start_prompt": (
             "To pair, send me the 6-digit code shown in Jenny's WebUI."
@@ -121,9 +177,60 @@ _BOT_STRINGS: dict[str, dict[str, str]] = {
         "wrong_code": (
             "Invalid code. Check the 6-digit code in Jenny's WebUI and try again."
         ),
-        "media_soon": "📎 Photos, voice notes and documents are coming soon: text only for now.",
+        "media_unsupported": "🤷 I can't handle this kind of message yet.",
+        "media_too_big": "📦 That attachment is too big for me to download.",
+        "media_failed": "⚠️ I couldn't download that attachment. Try again.",
     },
 }
+
+
+class _TypingHeartbeat:
+    """Tiene acceso "sta scrivendo…" finché qualcuno lo tiene acceso.
+
+    L'azione di Telegram scade da sola dopo ~5 secondi: non è uno stato che si
+    accende e si spegne, è un battito. Da qui le tre proprietà che contano:
+
+    - **idempotente**: ``start`` su un battito già acceso lo sostituisce invece
+      di affiancarne un secondo. C'è una sola chat accoppiata, quindi un solo
+      battito per canale;
+    - **silenzioso**: un errore su ``sendChatAction`` non risale mai. È un
+      indicatore cosmetico; se il turno vero fallisce lo dirà il turno;
+    - **mortale**: si spegne da sé dopo ``_TYPING_MAX_S`` anche senza segnale di
+      fine, perché l'evento che lo spegne può non arrivare mai e un bot che
+      scrive da mezz'ora è peggio di uno che non scrive.
+    """
+
+    def __init__(
+        self,
+        api: Any,
+        *,
+        interval_s: float = _TYPING_INTERVAL_S,
+        max_s: float = _TYPING_MAX_S,
+    ) -> None:
+        self._api = api
+        self._interval_s = interval_s
+        self._max_s = max_s
+        self._task: asyncio.Task | None = None
+
+    async def start(self, chat_id: str, action: str = "typing") -> None:
+        await self.stop()
+        self._task = asyncio.create_task(self._beat(chat_id, action))
+
+    async def stop(self) -> None:
+        task, self._task = self._task, None
+        if task is None or task.done():
+            return
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    async def _beat(self, chat_id: str, action: str) -> None:
+        deadline = time.monotonic() + self._max_s
+        while time.monotonic() < deadline:
+            with suppress(Exception):
+                await self._api.send_chat_action(chat_id, action)
+            await asyncio.sleep(self._interval_s)
+        logger.debug("Telegram: typing heartbeat expired on its own cap")
 
 
 class TelegramChannel:
@@ -146,6 +253,7 @@ class TelegramChannel:
         api: TelegramAPI | None = None,
         on_paired: Callable[[str, str | None], Awaitable[None]] | None = None,
         language: str = "en",
+        runtime_events: Any | None = None,
     ):
         self.config = config
         self.bus = bus
@@ -166,6 +274,17 @@ class TelegramChannel:
         # Tentativi di pairing per chat (in-memory: si azzera al reload del
         # canale, che rigenera comunque il codice nei percorsi che contano).
         self._pair_attempts: dict[str, int] = {}
+        self._typing = _TypingHeartbeat(self.api)
+        # L'unico segnale di fine turno che arriva fin qui. Telegram non riceve
+        # un ``_turn_end`` (``WebuiTurnCoordinator.handle_turn_end`` esce subito
+        # per i canali diversi da websocket) né i progress (``send_progress`` è
+        # falso): resta il runtime event, il cui "idle" è emesso in un
+        # ``finally`` e quindi copre anche errori e turni abortiti.
+        self._unsubscribe: Callable[[], None] | None = None
+        if runtime_events is not None:
+            self._unsubscribe = runtime_events.subscribe(
+                self._on_run_status, TurnRunStatusChanged
+            )
 
     def _t(self, key: str) -> str:
         return _BOT_STRINGS[self._language][key]
@@ -187,6 +306,13 @@ class TelegramChannel:
             await self._poll_task
 
     async def stop(self) -> None:
+        # L'ordine conta: il canale viene *ricostruito* a ogni reload delle
+        # impostazioni Telegram, e un handler lasciato appeso continuerebbe a
+        # scrivere su una ``TelegramAPI`` già chiusa a ogni turno.
+        if self._unsubscribe is not None:
+            self._unsubscribe()
+            self._unsubscribe = None
+        await self._typing.stop()
         if self._poll_task is not None:
             self._poll_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -285,18 +411,46 @@ class TelegramChannel:
             # del bot o dello stato di pairing.
             logger.info("Telegram: ignoring message from unpaired chat {}", chat_id)
             return
-        if not isinstance(text, str) or not text.strip():
-            if await self._maybe_handle_location(chat_id, sender, message):
-                return
-            if any(key in message for key in _MEDIA_KEYS):
-                await self._send_raw(chat_id, self._t("media_soon"))
-            return
-        if self._parse_start(text) is not None:
+        if isinstance(text, str) and text.strip() and self._parse_start(text) is not None:
             # /start dal proprietario: guida rapida di servizio, non un turno
             # LLM (e niente rumore nella vista WebUI). /new e /stop invece
-            # proseguono verso il command router.
+            # proseguono verso il command router. Va riconosciuto prima di
+            # qualunque lavoro sugli allegati: un /start non ne porta.
             await self._send_raw(chat_id, self._t("welcome"))
             return
+
+        # Una didascalia è testo dell'utente quanto un messaggio normale. Prima
+        # non veniva nemmeno letta, quindi una foto con didascalia perdeva
+        # metà del messaggio — la metà scritta a mano.
+        if not isinstance(text, str) or not text.strip():
+            caption = message.get("caption")
+            text = caption if isinstance(caption, str) and caption.strip() else None
+
+        picked = pick_file(message)
+
+        if picked is None and not text:
+            # Niente testo e niente file scaricabile: o è una posizione (che ha
+            # il suo turno sintetico e la sua config), o è un tipo che non
+            # trattiamo, o non è niente.
+            if await self._maybe_handle_location(chat_id, sender, message):
+                return
+            if has_unsupported_attachment(message) or any(
+                key in message for key in _LOCATION_KEYS
+            ):
+                await self._send_raw(chat_id, self._t("media_unsupported"))
+            return
+
+        media: list[str] = []
+        if picked is not None:
+            saved = await self._ingest_media(chat_id, picked)
+            if saved is None:
+                # Il fallimento ha già la sua risposta di servizio. Non si
+                # prosegue con la sola didascalia: un turno che parla di una
+                # foto che non è arrivata è peggio di nessun turno.
+                return
+            media.append(saved)
+
+        content = self._turn_content(text, picked)
 
         # Turn-id per correlare le righe della vista WebUI (user echo, finale,
         # turn_end) allo stesso turno: stesso ruolo del turn-id dei client WS.
@@ -306,10 +460,135 @@ class TelegramChannel:
                 channel=self.name,
                 sender_id=str(sender.get("id", chat_id)),
                 chat_id=chat_id,
-                content=text,
+                content=content,
+                media=media,
                 metadata=metadata,
             )
         )
+        # Il turno è in viaggio ma non è ancora "running": fra il publish e la
+        # costruzione del contesto passa tempo vero, e l'utente non deve
+        # vedere il vuoto. Da qui in poi lo tiene acceso il runtime event.
+        await self._typing.start(chat_id)
+
+    @staticmethod
+    def _turn_content(text: str | None, picked: TelegramFile | None) -> str:
+        """Compone il testo del turno da didascalia e allegato.
+
+        Il marcatore compare quando l'allegato arriva **senza** didascalia, e
+        in più sempre per audio e video: lì è l'unica cosa che impedisce al
+        modello di rispondere come se avesse ascoltato o guardato.
+
+        Le immagini non ne hanno uno (v. ``_MEDIA_TURN_MARKERS``): una foto
+        senza didascalia produce un contenuto vuoto, e il turno è fatto dalla
+        sola immagine — come quando la si allega dalla WebUI.
+        """
+        if picked is None:
+            return text or ""
+        marker = _MEDIA_TURN_MARKERS.get(picked.kind)
+        if marker is None:
+            return text or ""
+        if not text:
+            return marker
+        if picked.kind in ("audio", "video"):
+            return f"{text}\n\n{marker}"
+        return text
+
+    async def _ingest_media(self, chat_id: str, picked: TelegramFile) -> str | None:
+        """Scarica e salva un allegato; ritorna il path o ``None``.
+
+        ``None`` significa "già risposto all'utente": ogni uscita di errore
+        manda la sua risposta di servizio. Un allegato che sparisce in silenzio
+        è indistinguibile da un bot morto, e qui il silenzio sarebbe pure
+        definitivo — l'offset è già avanzato, quindi Telegram non riproporrà
+        l'update al giro dopo.
+        """
+        if picked.size is not None and picked.size > picked.max_bytes:
+            # Il rifiuto economico: ``file_size`` arriva già nell'update, quindi
+            # un file oltre cap non costa nemmeno la chiamata a getFile.
+            logger.info(
+                "Telegram: attachment too big ({} bytes > {}), skipping",
+                picked.size, picked.max_bytes,
+            )
+            await self._send_raw(chat_id, self._t("media_too_big"))
+            return None
+
+        action = _UPLOAD_ACTIONS.get(picked.kind, "typing")
+        try:
+            async with self._working(chat_id, action):
+                info = await self.api.get_file(picked.file_id)
+                declared = info.get("file_size")
+                if isinstance(declared, int) and declared > picked.max_bytes:
+                    await self._send_raw(chat_id, self._t("media_too_big"))
+                    return None
+                file_path = info.get("file_path")
+                if not isinstance(file_path, str) or not file_path.strip():
+                    raise TelegramAPIError(500, "getFile returned no file_path")
+                data = await self.api.download_file(
+                    file_path, max_bytes=picked.max_bytes
+                )
+                return await asyncio.to_thread(self._persist_media, data, picked)
+        except FileSizeExceeded:
+            logger.info("Telegram: attachment exceeded cap mid-download, skipping")
+            await self._send_raw(chat_id, self._t("media_too_big"))
+            return None
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Telegram: attachment download failed ({}): {}", picked.kind, type(e).__name__
+            )
+            await self._send_raw(chat_id, self._t("media_failed"))
+            return None
+
+    @staticmethod
+    def _persist_media(data: bytes, picked: TelegramFile) -> str:
+        """Scrive l'allegato in ``uploads/``. Sincrona: gira in un thread.
+
+        Stessa cartella e stessa convenzione di nome degli allegati della
+        WebUI (``save_bytes``), così il file browser e i tool filesystem
+        dell'agente ne vedono una sola specie.
+        """
+        return save_bytes(
+            data,
+            get_uploads_dir(),
+            mime_type=picked.mime,
+            original_name=picked.filename,
+            max_bytes=picked.max_bytes,
+        )
+
+    @asynccontextmanager
+    async def _working(self, chat_id: str, action: str) -> AsyncIterator[None]:
+        """Mostra l'azione giusta mentre si lavora, e la spegne comunque.
+
+        È l'unico punto in cui il canale accende il battito da sé senza un
+        runtime event: qui il turno non esiste ancora, perché il download
+        precede il publish.
+        """
+        await self._typing.start(chat_id, action)
+        try:
+            yield
+        finally:
+            await self._typing.stop()
+
+    async def _on_run_status(self, event: TurnRunStatusChanged) -> None:
+        """Accende o spegne il battito seguendo lo stato del turno.
+
+        Il filtro sul canale esclude da solo i turni interni (cron, Dream,
+        heartbeat: ``channel="internal"``) e quelli della WebUI. Le consegne
+        proattive non passano di qui affatto — non hanno un turno Telegram —
+        ed è giusto: Jenny che "sta scrivendo" senza che tu abbia scritto
+        niente sarebbe inquietante, non utile.
+        """
+        ctx = event.context
+        if ctx.channel != self.name:
+            return
+        chat_id = str(self._paired_chat_id or ctx.chat_id)
+        if not chat_id:
+            return
+        if event.status == "running":
+            await self._typing.start(chat_id)
+        else:
+            await self._typing.stop()
 
     async def _maybe_handle_location(
         self, chat_id: str, sender: dict[str, Any], message: dict[str, Any]

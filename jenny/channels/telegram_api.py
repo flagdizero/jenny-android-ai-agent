@@ -2,7 +2,8 @@
 
 Nessuna dipendenza nuova: usa lo stesso ``httpx`` dei provider LLM (già nel
 lockfile Android). Copre solo i metodi necessari al canale: ``getMe``,
-``getUpdates`` (long polling) e ``sendMessage``.
+``getUpdates`` (long polling), ``sendMessage``, l'invio di media, il download
+degli allegati in ingresso (``getFile`` + file API) e ``sendChatAction``.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from typing import Any
 
 import httpx
 from loguru import logger
+
+from jenny.utils.media_decode import FileSizeExceeded
 
 TELEGRAM_API_BASE = "https://api.telegram.org"
 
@@ -44,6 +47,11 @@ class TelegramAPI:
         base_url: str = TELEGRAM_API_BASE,
     ):
         self._base = f"{base_url.rstrip('/')}/bot{token}"
+        # Il download degli allegati non è un metodo della Bot API: è un'altra
+        # radice (``/file/bot<token>/<file_path>``) sullo stesso host. Tenuta
+        # qui accanto invece di ricomporla al volo, così il token compare in un
+        # punto solo.
+        self._file_base = f"{base_url.rstrip('/')}/file/bot{token}"
         self._client = client or httpx.AsyncClient(timeout=30.0)
 
     async def close(self) -> None:
@@ -160,6 +168,56 @@ class TelegramAPI:
             if parse_mode:
                 payload["parse_mode"] = parse_mode
         return await self._call(method, payload)
+
+    async def send_chat_action(self, chat_id: str, action: str = "typing") -> Any:
+        """Mostra "sta scrivendo…" nella chat. Scade da sola dopo ~5 secondi.
+
+        Chi la usa deve trattarla come cosmetica: un fallimento qui non ha
+        nessuna conseguenza sul turno, e il chiamante non deve mai attendere
+        oltre il proprio battito (v. ``_TypingHeartbeat`` nel canale).
+        """
+        return await self._call("sendChatAction", {"chat_id": chat_id, "action": action})
+
+    async def get_file(self, file_id: str) -> dict[str, Any]:
+        """``getFile``: ritorna i metadati con ``file_path`` e ``file_size``.
+
+        ``file_size`` è il modo economico di rifiutare un allegato oltre cap:
+        si guarda prima di spendere la banda del download.
+        """
+        result = await self._call("getFile", {"file_id": file_id})
+        return result if isinstance(result, dict) else {}
+
+    async def download_file(self, file_path: str, *, max_bytes: int) -> bytes:
+        """Scarica un allegato dalla file API, in streaming e con tetto.
+
+        Streaming e non ``resp.content``: su un telefono un file oltre cap non
+        deve nemmeno materializzarsi in RAM prima di essere rifiutato. Il
+        controllo è incrementale, quindi un server che mente sulla lunghezza
+        non aggira il tetto.
+
+        ``file_path`` arriva da ``getFile``, cioè da un host remoto: viene
+        rifiutato se prova a risalire la radice. Non è uno scenario realistico
+        con ``api.telegram.org``, ma il costo del controllo è una riga e
+        l'alternativa è fidarsi di un input remoto per comporre un URL.
+        """
+        clean = (file_path or "").strip().lstrip("/")
+        if not clean or ".." in clean.split("/"):
+            raise TelegramAPIError(400, f"invalid file_path: {file_path!r}")
+        url = f"{self._file_base}/{clean}"
+        chunks: list[bytes] = []
+        total = 0
+        async with self._client.stream("GET", url, timeout=60.0) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                raise TelegramAPIError(resp.status_code, resp.text[:200])
+            async for chunk in resp.aiter_bytes():
+                total += len(chunk)
+                if total > max_bytes:
+                    raise FileSizeExceeded(
+                        f"File exceeds {max_bytes // (1024 * 1024)}MB limit"
+                    )
+                chunks.append(chunk)
+        return b"".join(chunks)
 
     async def set_my_commands(self, commands: list[dict[str, str]]) -> Any:
         """Registra il menu comandi del bot (chiamata best-effort lato caller)."""

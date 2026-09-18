@@ -256,11 +256,14 @@ async def test_each_inbound_gets_distinct_turn_id() -> None:
     assert first.metadata["webui_turn_id"] != second.metadata["webui_turn_id"]
 
 
-async def test_media_message_gets_coming_soon_reply() -> None:
+async def test_unsupported_attachment_gets_service_reply() -> None:
+    # Un contatto non è scaricabile e non diventa un turno: resta una risposta
+    # di servizio. Gli allegati che *sappiamo* trattare (foto, file, vocali)
+    # stanno in test_telegram_media_inbound.py, che ha il doppio giusto.
     ch, api, bus = _channel(paired="42")
-    await ch._handle_update(_update("42", photo=[{"file_id": "x"}]))
+    await ch._handle_update(_update("42", contact={"phone_number": "123"}))
     assert len(api.sent) == 1
-    assert "coming soon" in api.sent[0][1]
+    assert "can't handle" in api.sent[0][1]
     assert bus.inbound.empty()
 
 

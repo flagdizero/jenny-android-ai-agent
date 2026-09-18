@@ -1866,9 +1866,17 @@ export class ChatController {
      turno nuovo (stessa disciplina di sendMessage). */
   _handleExternalUser(msg) {
     const text = msg.text || '';
-    if (!text.trim()) return;
+    /* Gli allegati arrivano gia' firmati (`ws_sender::_user_echo_wire`): qui
+       si passano a `addCompletedMessage`, che li rende con la **stessa**
+       `_renderMediaAttachments` del ripristino da history — le due strade
+       devono dipingere la stessa bolla, altrimenti una foto c'e' finche' non
+       ricarichi, o compare solo dopo.
+       E il testo non e' piu' obbligatorio: una foto senza didascalia e' un
+       messaggio a tutti gli effetti, e con il vecchio guard non faceva bolla. */
+    const media = msg.media_urls || [];
+    if (!text.trim() && !media.length) return;
     this._resetStreamState();
-    this.addCompletedMessage(text, 'user', msg.origin);
+    this.addCompletedMessage(text, 'user', msg.origin, media);
     this._bumpUnread();
     this.scrollToBottom();
   }

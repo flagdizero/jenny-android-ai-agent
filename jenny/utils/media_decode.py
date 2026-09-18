@@ -1,7 +1,9 @@
-"""Shared helpers for decoding ``data:...;base64,...`` URLs to disk.
+"""Shared helpers for persisting chat attachments to disk.
 
-Used by the WebSocket channel for parsing uploaded media with consistent
-size guards and filesystem layout.
+Il canale WebSocket arriva con un ``data:...;base64,...`` da decodificare;
+Telegram arriva con i byte già in mano. Le due porte condividono guardie di
+dimensione e — soprattutto — la convenzione dei nomi in ``uploads/``, che vive
+in :func:`save_bytes` e in nessun altro posto.
 """
 
 from __future__ import annotations
@@ -78,6 +80,37 @@ def save_base64_data_url(
         raw = base64.b64decode(b64_payload)
     except Exception:
         return None
+    return save_bytes(
+        raw,
+        media_dir,
+        mime_type=mime_type,
+        original_name=original_name,
+        max_bytes=max_bytes,
+    )
+
+
+def save_bytes(
+    raw: bytes,
+    media_dir: Path,
+    *,
+    mime_type: str = "",
+    original_name: str | None = None,
+    max_bytes: int | None = None,
+) -> str:
+    """Persiste ``raw`` in ``media_dir`` col nome che usano tutti gli allegati.
+
+    È l'unico posto che decide **come si chiama** un file in ``uploads/``:
+    prefisso uuid anti-collisione, nome originale sanitizzato quando c'è,
+    estensione risolta dal MIME (o dal nome, se il MIME è generico). Un canale
+    che salva un allegato passa di qui invece di reinventare la convenzione —
+    altrimenti il file browser della WebUI si trova due forme di nome nella
+    stessa cartella e nessuna delle due è sbagliata abbastanza da accorgersene.
+
+    Solleva :class:`FileSizeExceeded` oltre ``max_bytes`` (default 10 MB). Il
+    controllo è qui e non nel chiamante perché è la stessa promessa per
+    entrambe le porte; chi scarica in streaming ha comunque il *suo* cap prima,
+    per non materializzare in RAM ciò che poi rifiuterebbe.
+    """
     limit = DEFAULT_MAX_BYTES if max_bytes is None else max_bytes
     if len(raw) > limit:
         raise FileSizeExceeded(f"File exceeds {limit // (1024 * 1024)}MB limit")

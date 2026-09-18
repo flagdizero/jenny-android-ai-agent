@@ -2,7 +2,7 @@
 
 Una posizione (o venue) dall'owner viene registrata come override per-canale
 (``runtime.location``) e innesca un turno LLM col marker sintetico; col toggle
-posizione off si ricade sulla fallback "media_soon".
+posizione off si ricade sulla risposta di servizio "media_unsupported".
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ async def test_venue_uses_title_and_address_as_place() -> None:
     assert location._TELEGRAM["42"].place == "Piazza Maggiore, Bologna"
 
 
-async def test_toggle_off_falls_back_to_media_soon(monkeypatch) -> None:
+async def test_toggle_off_falls_back_to_service_reply(monkeypatch) -> None:
     import jenny.config.loader as loader
 
     cfg = Config()
@@ -106,17 +106,19 @@ async def test_toggle_off_falls_back_to_media_soon(monkeypatch) -> None:
     await ch._handle_update(
         _update("42", location={"latitude": 45.0, "longitude": 9.0})
     )
-    # Toggle off: niente registrazione, niente turno, solo media_soon.
+    # Toggle off: niente registrazione, niente turno, solo la risposta di
+    # servizio. È il ramo ``_LOCATION_KEYS`` del canale: senza, una posizione
+    # con il toggle spento sparirebbe in silenzio.
     assert "42" not in location._TELEGRAM
     assert bus.inbound.empty()
     assert len(api.sent) == 1
-    assert "coming soon" in api.sent[0][1].lower()
+    assert "can't handle" in api.sent[0][1].lower()
 
 
 async def test_malformed_location_is_not_a_turn() -> None:
     ch, api, bus = _channel()
-    # location senza coordinate valide → non gestita come posizione, ricade su
-    # media_soon (è comunque tra le _MEDIA_KEYS).
+    # location senza coordinate valide → non gestita come posizione, ricade
+    # sulla risposta di servizio (è comunque tra le _LOCATION_KEYS).
     await ch._handle_update(_update("42", location={"latitude": "nope"}))
     assert bus.inbound.empty()
     assert "42" not in location._TELEGRAM

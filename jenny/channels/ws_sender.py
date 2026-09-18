@@ -436,6 +436,16 @@ class OutboundSenderMixin:
         badge di provenienza. Stessa disciplina di ``send``: persistenza una
         sola volta per invio logico, i retry (skip_persist) rifanno solo la
         consegna alle connessioni mancate.
+
+        **Transcript e filo vogliono due forme diverse, e questa è l'unica
+        funzione in cui la differenza conta.** Sul disco vanno i path
+        (``media_paths``): ``transcript_replay`` li ripassa a
+        ``augment_user_media`` a ogni ricarico, quindi la URL firmata non
+        invecchia mai dentro un file che vive per sempre. Sul filo i path non
+        servono a niente — il client non può leggere il filesystem — e serve
+        invece la URL firmata. Finché nessun canale d'origine ha mandato
+        allegati il difetto non era raggiungibile: la prima foto da Telegram
+        l'ha reso visibile come una bolla senza immagine.
         """
         text = msg.content or ""
         if not text.strip() and not msg.media:
@@ -460,8 +470,38 @@ class OutboundSenderMixin:
         conns = only_conns if only_conns is not None else list(self._subs.get(msg.chat_id, ()))
         if not conns:
             return []
-        raw = json.dumps(payload, ensure_ascii=False)
+        raw = json.dumps(self._user_echo_wire(payload), ensure_ascii=False)
         return await self._fanout(conns, raw, label=" user_echo ")
+
+    def _user_echo_wire(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Copia del record con gli allegati firmati, per i soli client.
+
+        Copia e non mutazione: ``payload`` è già stato consegnato al transcript
+        e aggiungergli le URL firmate significherebbe scriverci dentro un HMAC
+        che scade alla prima rotazione del segreto. Il ramo assistant le
+        persiste per ragioni storiche, ma anche là il replay preferisce i path
+        e tratta ``media_urls`` come ripiego (``transcript_replay`` riga 606).
+        """
+        paths = payload.get("media_paths")
+        if not isinstance(paths, list) or not paths:
+            return payload
+        # Import dentro la funzione per la stessa ragione documentata in
+        # ``_send_message_payload``: a freddo ``jenny.webui.media_api`` richiude
+        # il ciclo su questo modulo (v. tests/session/test_cold_imports.py).
+        from jenny.webui.media_api import media_attachment_kind
+
+        urls: list[dict[str, str]] = []
+        for entry in paths:
+            signed = self._media.sign_or_stage_media_path(Path(entry))
+            if signed is None:
+                continue
+            name = signed.get("name") or Path(entry).name
+            signed.setdefault("kind", media_attachment_kind(name))
+            signed.setdefault("path", str(entry))
+            urls.append(signed)
+        if not urls:
+            return payload
+        return {**payload, "media_urls": urls}
 
     async def send_reasoning_delta(
         self,
