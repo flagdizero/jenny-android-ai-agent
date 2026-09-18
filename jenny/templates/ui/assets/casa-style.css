@@ -382,6 +382,31 @@ body.casa {
   background: var(--border);
 }
 
+/* «Mostra la conversazione precedente». La classe e il momento in cui compare
+   li decide il modulo condiviso con l'officina; qui c'e' solo come si veste.
+
+   Compare quando c'e' una pagina piu' vecchia e il filo non e' abbastanza lungo
+   da poterla scorrere — cioe' quando il gesto non esiste. Discreto come il
+   separatore qui sopra: e' un modo di tornare indietro, non un invito. Essendo
+   il primo figlio si prende il `margin-top:auto` del filo, quindi si appoggia
+   subito sopra il messaggio piu' vecchio invece di galleggiare in cima. */
+.chat-history-more {
+  align-self: center;
+  flex: none;
+  margin: 2px 0;
+  padding: 5px 12px;
+  background: var(--overlay);
+  border: 0.5px solid var(--border);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-history-more:disabled { opacity: .5; }
+
 /* ── Allegati in attesa ── */
 
 .casa-pending {

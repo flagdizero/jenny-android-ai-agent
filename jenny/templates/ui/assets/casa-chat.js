@@ -28,6 +28,7 @@ import { escapeHtml } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
+import { HistoryPager } from './shared/history-pager.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -47,6 +48,14 @@ const ORIGINS = {
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
    rileggendo qualcosa piu' su non va strappato via da una risposta che arriva. */
 const STICK_PX = 24;
+
+/* Quante ancore chiedere per pagina. L'officina ne chiede 160 all'apertura; la
+   casa molte meno, e la ragione e' il costo, non il contenuto: il budget conta
+   gli eventi `user` / `stream_end` / `message`, non le righe degli strumenti,
+   quindi 50 sono ~50 messaggi visibili, cioe' venticinque scambi — quattro o
+   cinque schermate. Quel che cala e' il numero di turni selezionati, e con loro
+   i record grezzi che il gateway rigioca a ogni apertura sulla CPU del telefono. */
+const HISTORY_PAGE_SIZE = 50;
 
 function renderMarkdown(text) {
   /* Fallisce chiuso, non aperto: se il sanificatore non e' stato caricato si
@@ -86,6 +95,45 @@ export class CasaChat {
       this._stick = this._atBottom();
     });
     this._stick = true;
+
+    /* La pagina precedente: stessa macchina dell'officina
+       (`shared/history-pager.js`), appigli diversi. Qui il filo e' il proprio
+       contenitore di scorrimento — in officina lo scroller e' il documento e
+       l'evento arriva a `window`, che sono due oggetti diversi; questa e' la
+       sola asimmetria fra i due gusci. */
+    this.pager = new HistoryPager({
+      scroller: () => this.el,
+      listenOn: this.el,
+      container: () => this.el,
+      pageSize: HISTORY_PAGE_SIZE,
+      begin: () => this._beginHistoryPage(),
+      prepend: (messages) => this.prependTurns(messages),
+      // In cima a tutto: se sopra entra una pagina, `ensureReach` lo rimette
+      // primo lui. Il primo figlio del filo porta il `margin-top:auto` che
+      // appoggia al fondo una conversazione corta, e il bottone se lo prende
+      // volentieri: finisce subito sopra il messaggio piu' vecchio.
+      mount: (node) => this.el.insertBefore(node, this.el.firstChild),
+      label: () => i18n.t('chat.loadPrevious'),
+    });
+  }
+
+  /* In casa la conversazione e' una sola: non c'e' il chip dei progetti, quindi
+     non esiste la pagina che arriva dopo un cambio. La guardia resta comunque
+     quella vera del session manager invece di un `false` scritto a mano — costa
+     zero, e il giorno che le conversazioni diventassero due non sarebbe una
+     bugia da scoprire. */
+  _beginHistoryPage() {
+    const key = sessionManager.currentKey;
+    if (!key) return null;
+    let stale = false;
+    return {
+      fetch: async (limit, cursor) => {
+        const res = await sessionManager.loadThread(key, limit, cursor);
+        stale = !!res.stale;
+        return res.thread;
+      },
+      stale: () => stale,
+    };
   }
 
   /* ── Storia ── */
@@ -93,7 +141,7 @@ export class CasaChat {
   /** Carica la conversazione e la disegna. Ritorna il numero di messaggi. */
   async load() {
     const key = sessionManager.currentKey;
-    const { thread, stale } = await sessionManager.loadThread(key, 160);
+    const { thread, stale } = await sessionManager.loadThread(key, HISTORY_PAGE_SIZE);
     if (stale) return 0;
     const messages = thread?.messages || [];
     for (const turn of this._buildTurns(messages)) {
@@ -101,8 +149,28 @@ export class CasaChat {
       else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
       else this._appendAssistant(turn.content, turn.media);
     }
+    this.pager.adopt(thread?.page);
     this.scrollToBottom();
+    /* Dopo il disegno e dopo l'aggancio al fondo: `ensureReach` misura se il
+       filo trabocca, e prima del disegno la risposta sarebbe sempre "no". */
+    this.pager.bindInfiniteScroll();
+    this.pager.ensureReach();
     return messages.length;
+  }
+
+  /** Una pagina piu' vecchia, in cima. Lo specchio del giro di `load`.
+   *
+   *  I turni si invertono e ognuno entra come primo figlio: inseriti a uno a uno
+   *  in cima, l'ordine finale torna quello giusto. E' lo stesso giro che fa
+   *  l'officina con `_renderThreadMessagesToTop`; a essere diverso e' solo cosa
+   *  sopravvive a `_buildTurns`, cioe' il testo e gli allegati.
+   */
+  prependTurns(messages) {
+    for (const turn of this._buildTurns(messages).reverse()) {
+      if (turn.boundary) this._appendBoundary(true);
+      else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
+      else this._appendAssistant(turn.content, turn.media, true);
+    }
   }
 
   /* I messaggi persistiti diventano turni. E' la versione di casa di
@@ -278,7 +346,7 @@ export class CasaChat {
 
   /* ── Disegno ── */
 
-  _appendUser(text, origin, media) {
+  _appendUser(text, origin, media, toTop = false) {
     const node = document.createElement('div');
     node.className = 'casa-msg casa-msg-user';
     const badge = this._originBadge(origin);
@@ -291,10 +359,10 @@ export class CasaChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
-    this._append(node);
+    this._append(node, toTop);
   }
 
-  _appendAssistant(content, media) {
+  _appendAssistant(content, media, toTop = false) {
     const node = document.createElement('div');
     node.className = 'casa-msg casa-msg-jenny';
     if (content) {
@@ -304,16 +372,16 @@ export class CasaChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
-    this._append(node);
+    this._append(node, toTop);
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire
      "confine di sessione" e' officina. Una riga sottile basta a spiegare perche'
      sopra e sotto non si parlano. */
-  _appendBoundary() {
+  _appendBoundary(toTop = false) {
     const hr = document.createElement('div');
     hr.className = 'casa-boundary';
-    this._append(hr);
+    this._append(hr, toTop);
   }
 
   _originBadge(origin) {
@@ -384,8 +452,9 @@ export class CasaChat {
     return this.blockNode;
   }
 
-  _append(node) {
-    this.el.appendChild(node);
+  _append(node, toTop = false) {
+    if (toTop) this.el.insertBefore(node, this.el.firstChild);
+    else this.el.appendChild(node);
     if (this._empty) {
       this._empty = false;
       this.syncEmpty();
