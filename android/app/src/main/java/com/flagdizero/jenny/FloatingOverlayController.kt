@@ -17,12 +17,14 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.text.util.Linkify
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -42,6 +44,17 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.Markwon
+import io.noties.markwon.MarkwonConfiguration
+import io.noties.markwon.SoftBreakAddsNewLinePlugin
+import io.noties.markwon.core.MarkwonTheme
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
+import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.ext.tables.TableTheme
+import io.noties.markwon.ext.tasklist.TaskListPlugin
+import io.noties.markwon.html.HtmlPlugin
+import io.noties.markwon.linkify.LinkifyPlugin
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -268,6 +281,22 @@ object FloatingOverlayController {
     /** Più leggera di [PILL_ELEVATION_DP]: la pillola resta il piano davanti. */
     private const val BUBBLE_ELEVATION_DP = 4
 
+    /**
+     * Gli schemi che un link di una bolla può aprire.
+     *
+     * Il testo delle bolle lo scrive il modello, e il modello legge pagine web
+     * (`android_web`): una pagina può indurlo a scrivere
+     * `[guarda qui](unapp://qualcosa)`, e un `ACTION_VIEW` senza filtro lo
+     * consegnerebbe a qualunque app dichiari quello schema, con i parametri
+     * scelti dalla pagina. La WebUI quel link non lo mostra nemmeno —
+     * DOMPurify scarta gli schemi che non conosce — e le due viste dello
+     * stesso testo non possono avere due soglie diverse.
+     *
+     * `mailto` c'è perché [LinkifyPlugin] con `EMAIL_ADDRESSES` produce
+     * proprio quello: toglierlo romperebbe gli indirizzi email.
+     */
+    private val LINK_SCHEMES = setOf("http", "https", "mailto")
+
     /** Il lato nominale delle due icone disegnate (freccia d'invio e chip). */
     private const val SEND_ICON_DP = 14
     private const val CHIP_ICON_DP = 13
@@ -467,6 +496,14 @@ object FloatingOverlayController {
 
     /** Il passaggio all'app: primo figlio della lista, sempre presente. */
     private var openChip: TextView? = null
+
+    /**
+     * Il renderer markdown, costruito **dalla palette**, quindi buttato quando
+     * la palette cambia: i colori del codice, delle citazioni e dei link sono
+     * cotti dentro l'istanza, e riusarla dopo un cambio tema lascerebbe quelli
+     * di prima in mezzo a una bolla vestita di nuovo. `null` = da ricostruire.
+     */
+    private var markdown: Markwon? = null
 
     /**
      * La fascia nera in cima alla lista: **sopra** le bolle, non dietro.
@@ -737,6 +774,8 @@ object FloatingOverlayController {
      */
     private fun applyPalette() {
         val ctx = appContext ?: return
+        // Prima di ridisegnare: l'istanza porta i colori vecchi cotti dentro.
+        markdown = null
         applyPill(ctx)
         input?.let {
             it.setTextColor(palette.text)
@@ -884,6 +923,7 @@ object FloatingOverlayController {
         historyVeil = null
         stand = null
         openChip = null
+        markdown = null
         history.clear()
     }
 
@@ -1816,6 +1856,95 @@ object FloatingOverlayController {
         syncListCap(ctx)
     }
 
+    /**
+     * Il renderer markdown delle sue bolle, costruito una volta per palette.
+     *
+     * Le bolle mostravano il **sorgente** — `1. Scegli **una** cosa` — mentre
+     * la WebUI renderizza: la stessa risposta si leggeva in due modi a seconda
+     * di dove la guardavi. Qui c'è lo stesso GFM che `marked` fa in chat, meno
+     * le tre cose che in una bolla non esistono (colori della sintassi,
+     * formule, diagrammi): per quelle c'è il tasto «Continua su app».
+     */
+    private fun markdownRenderer(ctx: Context): Markwon = markdown ?: Markwon.builder(ctx)
+        // **Il `breaks: true` della chat.** Senza, le sue liste scritte a righe
+        // singole si fondono in un paragrafo solo: è la differenza più visibile
+        // fra le due viste, non un dettaglio di resa.
+        .usePlugin(SoftBreakAddsNewLinePlugin.create())
+        // Il pezzo GFM che CommonMark non ha, ed è quello che il modello scrive
+        // davvero.
+        .usePlugin(StrikethroughPlugin.create())
+        .usePlugin(TaskListPlugin.create(palette.accent, palette.border, palette.onAccent))
+        .usePlugin(
+            TablePlugin.create(
+                TableTheme.buildWithDefaults(ctx)
+                    .tableBorderColor(palette.border)
+                    .tableBorderWidth(dp(ctx, 1))
+                    .tableCellPadding(dp(ctx, 4))
+                    .tableHeaderRowBackgroundColor(faded(palette.border, 0.5f))
+                    .tableOddRowBackgroundColor(faded(palette.border, 0.25f))
+                    .build()
+            )
+        )
+        // **Non `Linkify.ALL`**: quello trasforma anche numeri e indirizzi, e
+        // un promemoria con un orario dentro diventerebbe un link al telefono.
+        .usePlugin(LinkifyPlugin.create(Linkify.WEB_URLS or Linkify.EMAIL_ADDRESSES))
+        // L'HTML grezzo che il modello a volte emette. Qui non c'è la superficie
+        // XSS della WebUI — in una `TextView` non gira niente, ed è il motivo
+        // per cui là serve DOMPurify e qui no: i tag che non conosce li ignora.
+        .usePlugin(HtmlPlugin.create())
+        .usePlugin(object : AbstractMarkwonPlugin() {
+            override fun configureTheme(builder: MarkwonTheme.Builder) {
+                builder
+                    .codeTextColor(palette.text)
+                    .codeBackgroundColor(faded(palette.border, 0.5f))
+                    .codeBlockTextColor(palette.text)
+                    .codeBlockBackgroundColor(faded(palette.border, 0.35f))
+                    .codeBlockMargin(dp(ctx, 8))
+                    .blockQuoteColor(palette.accent)
+                    .blockQuoteWidth(dp(ctx, 3))
+                    .bulletWidth(dp(ctx, 4))
+                    .headingBreakColor(palette.border)
+                    .thematicBreakColor(palette.border)
+                    .linkColor(palette.accent)
+            }
+
+            override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
+                builder.linkResolver { _, link -> openLink(ctx, link) }
+            }
+        })
+        .build()
+        .also { markdown = it }
+
+    /**
+     * Apre un link toccato in una bolla.
+     *
+     * Il `LinkResolverDef` di Markwon farebbe `startActivity` con il contesto
+     * che gli si dà, e qui è quello **applicativo**: senza
+     * `FLAG_ACTIVITY_NEW_TASK` l'apertura solleva. E la finestra si chiude
+     * prima, come fa già [openChat]: lasciare l'overlay sopra il browser che si
+     * è appena chiesto di aprire non ha senso.
+     *
+     * Lo schema si controlla **prima di chiudere**: un link rifiutato non deve
+     * nemmeno far sparire la conversazione. V. [LINK_SCHEMES].
+     */
+    private fun openLink(ctx: Context, url: String) {
+        val uri = Uri.parse(url)
+        val scheme = uri.scheme?.lowercase()
+        if (scheme !in LINK_SCHEMES) {
+            Log.i(TAG, "Floating link refused (scheme=$scheme)")
+            return
+        }
+        collapse()
+        try {
+            ctx.startActivity(
+                Intent(Intent.ACTION_VIEW, uri)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) {
+            Log.i(TAG, "Could not open the link: ${e.javaClass.simpleName}")
+        }
+    }
+
     /** Una bolla: il fondo, l'angolo stretto dal lato di chi parla, il testo. */
     private fun bubbleView(ctx: Context, line: Line): TextView {
         val atStart = if (line.mine) parkedRight else !parkedRight
@@ -1829,7 +1958,6 @@ object FloatingOverlayController {
             if (atStart) c else r, if (atStart) c else r,
         )
         return TextView(ctx).apply {
-            text = line.text
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(if (line.mine) palette.onAccent else palette.text)
             maxWidth = (listWidth(ctx) * BUBBLE_MAX_RATIO).toInt()
@@ -1846,6 +1974,18 @@ object FloatingOverlayController {
                 }
             }
             elevation = dp(ctx, BUBBLE_ELEVATION_DP).toFloat()
+            // **Il markdown è solo suo.** Quello che l'utente ha scritto si
+            // mostra com'è scritto: se ha digitato `*ciao*` intendeva gli
+            // asterischi. È anche quel che fa la SPA, che riempie la bolla
+            // utente con `textContent` e la sua con `renderMarkdown`.
+            //
+            // Ultimo, dopo i colori: `setMarkdown` scrive il testo e attacca il
+            // movement method dei link.
+            if (line.mine) {
+                text = line.text
+            } else {
+                markdownRenderer(ctx).setMarkdown(this, line.text)
+            }
         }
     }
 

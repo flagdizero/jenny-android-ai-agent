@@ -270,4 +270,27 @@ dependencies {
     // Ed25519 non sono disponibili. Vedi SshBridge.kt e proguard-rules.pro.
     implementation("com.github.mwiede:jsch:2.28.6")
     implementation("org.bouncycastle:bcprov-jdk18on:1.85")
+
+    // Markdown nelle bolle della finestra flottante (FloatingOverlayController).
+    // Le bolle sono TextView e mostravano il sorgente — `1. Scegli **una** cosa`
+    // — mentre la WebUI renderizza (marked 15, `gfm: true`, `breaks: true`):
+    // la stessa risposta si leggeva in due modi a seconda di dove la guardavi.
+    //
+    // A mano si fa solo l'enfasi inline; il resto — annidamento delle liste,
+    // escape, tabelle — e' un parser, e un parser scritto con le regex sbaglia
+    // in silenzio sulle parole di qualcun altro. Markwon e' CommonMark
+    // (commonmark-java) reso in Spanned, cioe' esattamente cio' che una
+    // TextView sa disegnare.
+    //
+    // Gli `ext-*` sono il pezzo GFM che CommonMark non ha, ed e' quello che il
+    // modello emette davvero. Fuori di proposito: syntax-highlight (Prism4j
+    // vuole un annotation processor), ext-latex (JLatexMath, un paio di MB) e
+    // le immagini (servirebbe un image loader e una fetch di rete da un
+    // overlay). Per quelle tre c'e' il tasto «Continua su app».
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-strikethrough:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
+    implementation("io.noties.markwon:ext-tasklist:4.6.2")
+    implementation("io.noties.markwon:linkify:4.6.2")
+    implementation("io.noties.markwon:html:4.6.2")
 }
