@@ -356,6 +356,11 @@ object FloatingOverlayController {
      * parte opposta alla pillola. Il tetto non è una costante — con la tastiera
      * alzata lo spazio è molto meno — quindi è una `var` che [syncListCap]
      * rimette a ogni cambio di geometria.
+     *
+     * La sfumatura in cima **non** è la sua: v. [historyVeil]. Il
+     * `fadingEdge` di Android qui non serve, e non basterebbe — rende
+     * trasparenti i pixel della bolla, e quello che affiora sotto è l'app di
+     * sotto.
      */
     private class CappedScrollView(ctx: Context) : ScrollView(ctx) {
         var maxHeight = 0
@@ -459,6 +464,18 @@ object FloatingOverlayController {
 
     /** Il passaggio all'app: primo figlio della lista, sempre presente. */
     private var openChip: TextView? = null
+
+    /**
+     * La fascia nera in cima alla lista: **sopra** le bolle, non dietro.
+     *
+     * Il `fadingEdge` di Android rende trasparenti i pixel della bolla più
+     * vecchia, e sopra l'app di qualcun altro quello che affiora è l'app: la
+     * frase si scioglieva in mezzo alle icone del launcher invece di
+     * dissolversi. Dietro non si può rimediare — la sfumatura si applica
+     * *dopo* `onDraw`, quindi cancellerebbe anche il nero — e allora il nero
+     * sta davanti, e la sua opacità segue lo scorrimento.
+     */
+    private var historyVeil: View? = null
 
     /** L'altezza **misurata** della pillola, in px; `0` finché non ha fatto un
      *  layout. È quel che fa salire lei quando il testo va a capo: v. [parkTop]. */
@@ -850,6 +867,7 @@ object FloatingOverlayController {
         column = null
         historyScroll = null
         historyList = null
+        historyVeil = null
         stand = null
         openChip = null
         history.clear()
@@ -1454,20 +1472,36 @@ object FloatingOverlayController {
             // questa riga è il permesso di disegnarci.
             clipToPadding = false
         }
+        val fade = dp(ctx, LIST_FADE_DP)
         val scroll = CappedScrollView(ctx).apply {
             addView(list, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
             ))
             isVerticalScrollBarEnabled = false
-            // La sfumatura è quella di Android, non una maschera disegnata a
-            // mano: sopra l'app di qualcun altro un taglio netto sembra un
-            // difetto di rendering.
-            isVerticalFadingEdgeEnabled = true
-            setFadingEdgeLength(dp(ctx, LIST_FADE_DP))
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         }
-        row.addView(scroll, LinearLayout.LayoutParams(
+        // Il velo: una `View` sorella, disegnata dopo, quindi davanti. Un
+        // taglio netto sopra l'app di qualcun altro sembra un difetto di
+        // rendering; questo dice «c'è dell'altro sopra» e basta.
+        val veil = View(ctx).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.BLACK, Color.TRANSPARENT),
+            )
+            alpha = 0f
+        }
+        val frame = FrameLayout(ctx).apply {
+            addView(scroll, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+            ))
+            addView(veil, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, fade
+            ).apply { gravity = Gravity.TOP })
+        }
+        scroll.setOnScrollChangeListener { _, _, y, _, _ -> syncVeil(y) }
+        row.addView(frame, LinearLayout.LayoutParams(
             listWidth(ctx), LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
@@ -1488,6 +1522,7 @@ object FloatingOverlayController {
         inputRow = row
         historyScroll = scroll
         historyList = list
+        historyVeil = veil
         stand = standView
         openChip = buildChip(ctx)
         renderHistory()
@@ -1663,11 +1698,13 @@ object FloatingOverlayController {
                 bar.layoutParams = it
             }
         }
-        (historyScroll?.layoutParams as? LinearLayout.LayoutParams)?.let {
-            val w = listWidth(ctx)
-            if (it.width != w) {
-                it.width = w
-                historyScroll?.layoutParams = it
+        (historyScroll?.parent as? View)?.let { frame ->
+            (frame.layoutParams as? LinearLayout.LayoutParams)?.let {
+                val w = listWidth(ctx)
+                if (it.width != w) {
+                    it.width = w
+                    frame.layoutParams = it
+                }
             }
         }
         bar.background = barBackground(ctx)
@@ -1694,7 +1731,19 @@ object FloatingOverlayController {
         renderHistory()
         // Dopo il layout, non durante: prima di misurare non si sa dove sia il
         // fondo.
-        historyScroll?.post { historyScroll?.fullScroll(View.FOCUS_DOWN) }
+        historyScroll?.post {
+            historyScroll?.fullScroll(View.FOCUS_DOWN)
+            syncVeil(historyScroll?.scrollY ?: 0)
+        }
+    }
+
+    /** L'opacità del velo: piena quando sopra c'è almeno una fascia intera di
+     *  conversazione, zero quando la lista è in cima e non c'è niente da dire. */
+    private fun syncVeil(scrollY: Int) {
+        val ctx = appContext ?: return
+        val veil = historyVeil ?: return
+        val fade = dp(ctx, LIST_FADE_DP).toFloat()
+        veil.alpha = if (fade <= 0f) 0f else (scrollY / fade).coerceIn(0f, 1f)
     }
 
     /**
@@ -1737,6 +1786,7 @@ object FloatingOverlayController {
                 topMargin = dp(ctx, BUBBLE_GAP_DP)
             })
         }
+        syncVeil(historyScroll?.scrollY ?: 0)
         stand?.let { view ->
             val h = standHeight(ctx)
             if (view.layoutParams.height != h) {

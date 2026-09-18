@@ -174,6 +174,27 @@ class TestLaGeometria:
             "la bolla torna a misurarsi sulla pillola, che è molto più stretta"
         )
 
+    def test_la_sfumatura_in_cima_va_a_nero(self):
+        """E sta **sopra** le bolle, non dietro e non come maschera.
+
+        Il `fadingEdge` di Android rende trasparenti i pixel della bolla, e
+        sopra l'app di qualcun altro quello che affiora è l'app: la frase si
+        scioglieva in mezzo alle icone del launcher. Rimediare dietro non si
+        può — la sfumatura si applica dopo `onDraw` e cancellerebbe anche il
+        nero — quindi il velo è una view sorella, aggiunta dopo la lista.
+        """
+        source = _read()
+        assert "isVerticalFadingEdgeEnabled" not in source, (
+            "è tornato il fadingEdge di Android: sfuma nell'app di sotto, non nel nero"
+        )
+        assert "private var historyVeil" in source
+        body = _fun(source, "private fun buildInputRow(ctx: Context): View")
+        assert body.index("addView(scroll") < body.index("addView(veil"), (
+            "il velo è disegnato prima della lista, quindi ci finisce dietro"
+        )
+        veil = _fun(source, "private fun syncVeil(scrollY: Int)")
+        assert "coerceIn(0f, 1f)" in veil, "l'opacità del velo non segue più lo scorrimento"
+
     def test_la_colonna_e_verticale(self):
         """Lista, lo spazio di lei, pillola — e ancorata in basso, così la
         pillola non si muove di un pixel quando arriva un messaggio."""
