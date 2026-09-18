@@ -414,6 +414,10 @@ class GatewayContainer:
             # e' servita anche prima che ``build`` arrivi in fondo, e ``self.cron``
             # nasce ``None``.
             get_cron_service=lambda: self.cron,
+            # Telegram ci legge lo stato del turno: e' l'unico segnale di
+            # inizio/fine che arriva a un canale che non riceve ne' progress
+            # ne' turn_end.
+            runtime_events=self.runtime_events,
         )
 
         if self.channels.enabled:
