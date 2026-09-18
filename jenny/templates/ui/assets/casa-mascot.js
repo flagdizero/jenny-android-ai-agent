@@ -4,12 +4,14 @@
  *  companion e' anche un *comando*: la si trascina, la si lancia, la si tocca
  *  per aprire una minichat. Qui no.
  *
- *  **In casa Jenny e' presenza, non controllo** (`pointer-events: none`). Le
- *  ragioni sono due. La prima: la minichat esiste perche' in officina la chat
- *  puo' non essere a schermo — in casa la chat *e'* lo schermo, e un secondo
- *  posto dove scriverle sarebbe una porta che da' sulla stanza in cui sei gia'.
- *  La seconda: sta sopra il filo che scorre, e ogni suo gesto sarebbe un gesto
- *  rubato allo scorrimento.
+ *  **Si prende e si lancia, ma non si tocca per parlarle.** La minichat resta
+ *  dell'officina: esiste perche' li' la chat puo' non essere a schermo, mentre
+ *  in casa la chat *e'* lo schermo — un secondo posto dove scriverle sarebbe
+ *  una porta che da' sulla stanza in cui sei gia'. Il trascinamento invece c'e'
+ *  tutto, ed e' **la stessa fisica** (`shared/mascot-drag.js`), non una copia.
+ *
+ *  Il tocco secco quindi non fa niente: e' l'unico gesto che in officina apre
+ *  la minichat, e qui non ha un equivalente da aprire.
  *
  *  Le tabelle degli sprite sono duplicate da `mobile-jenny.js` invece che
  *  importate: quelle sono costanti private di un modulo da 1.353 righe, e
@@ -19,7 +21,8 @@
  *  stessi umori del backend.
  */
 
-import { mascotSize, mascotVisible, applyMascotSize } from './shared/mascot.js';
+import { mascotSide, mascotSize, mascotVisible, applyMascotSize, setMascotSide } from './shared/mascot.js';
+import { bindMascotDrag, buildFlyLayer } from './shared/mascot-drag.js';
 
 const BODY = {
   idle: '/html-mobile/assets/jenny-body-front-idle.webp',
@@ -71,16 +74,92 @@ export class CasaMascot {
     this.face = document.createElement('img');
     this.body.alt = '';
     this.face.alt = '';
-    this.el.append(this.body, this.face);
+    this.body.draggable = false;
+    this.face.draggable = false;
+    /* I due livelli dentro un contenitore loro, come in officina
+       (`.jenny-art-stack`). Non e' cerimonia: lo specchio del lato sinistro va
+       su di lui e **non** sullo sprite, o ribalterebbe anche il livello del
+       volo — e la fisica scrive li' le sue traslazioni in coordinate schermo,
+       quindi lanciandola a destra andrebbe a sinistra. Il respiro del pensa
+       resta sulle img, cosi' i due transform si compongono invece di
+       sovrascriversi. */
+    this.art = document.createElement('div');
+    this.art.className = 'casa-jenny-art';
+    this.art.append(this.body, this.face);
+    this.el.appendChild(this.art);
+
+    /* Il livello del volo e la fisica: gli stessi dell'officina, dal modulo
+       condiviso. In casa non c'e' nessuno stato `out` — lei sta appoggiata sul
+       pavimento e basta — quindi `hasOut` e' falso e lo scarto d'ancoraggio
+       resta a zero: percorre gli stessi rami senza un codice suo. */
+    const { fly, flyPose } = buildFlyLayer(this.el);
+    this.fly = fly;
+    this.flyPose = flyPose;
+
+    this._applySide();
     host.appendChild(this.el);
+
+    this.abortFlight = bindMascotDrag({
+      el: this.el,
+      fly: this.fly,
+      flyPose: this.flyPose,
+      hasOut: false,
+      onSideChange: (side) => {
+        setMascotSide(side);
+        this._applySide();
+      },
+      onFlightEnd: () => {
+        this._paint();
+        this._updateGestureExclusion();
+      },
+    });
+    this._updateGestureExclusion();
 
     window.addEventListener('mascotchange', () => {
       this.visible = mascotVisible();
       applyMascotSize();
+      this._applySide();
       this._paint();
+      this._updateGestureExclusion();
     });
 
     this._paint();
+  }
+
+  /* Il lato su cui e' stata lasciata: lo ricorda `shared/mascot.js`, ed e' lo
+     stesso ricordo dell'officina — attraversare lo schermo di la' la sposta
+     anche di qua, che e' giusto: e' la stessa persona nello stesso telefono. */
+  _applySide() {
+    this.el.classList.toggle('side-left', mascotSide() === 'left');
+  }
+
+  /* L'area di Jenny va dichiarata ad Android, o il trascinamento sul bordo fa
+     partire la gesture di sistema invece del volo. Identico all'officina: e'
+     una proprieta' della finestra, non dell'interfaccia. */
+  _updateGestureExclusion() {
+    const api = window.JennyNative;
+    if (!api || typeof api.setGestureExclusion !== 'function') return;
+    if (!this.visible) {
+      try {
+        api.clearGestureExclusion?.();
+      } catch (_) {
+        /* bridge assente */
+      }
+      return;
+    }
+    const r = this.el.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const m = 8; // margine di sicurezza (px CSS) attorno all'hitbox
+    try {
+      api.setGestureExclusion(
+        Math.round((r.left - m) * dpr),
+        Math.round((r.top - m) * dpr),
+        Math.round((r.right + m) * dpr),
+        Math.round((r.bottom + m) * dpr),
+      );
+    } catch (_) {
+      /* bridge assente */
+    }
   }
 
   /** La taglia scelta, in px. Serve a chi deve lasciarle spazio. */

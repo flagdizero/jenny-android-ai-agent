@@ -296,3 +296,44 @@ Jenny non deve saltellare quando lo fanno.
 appartiene a `.out`, cioe' a quando e' venuta fuori. Una che galleggia non sta
 appoggiata a niente. Il `wobble` del pensa resta — ruota attorno al 90%
 dell'altezza, quasi sui piedi: e' un dondolio sul posto, non un volo.
+
+## Ritocco — il volo pegman anche in casa
+
+Era una decisione, scritta al passo 6, non una dimenticanza: *presenza, non
+controllo*. Ma una delle due ragioni era debole — sostenevo che ogni suo gesto
+avrebbe rubato lo scorrimento, mentre in officina quel conflitto e' gia' risolto
+dalle soglie del gesto. Tolta quella, restava solo la minichat, che non basta.
+
+**La fisica e' stata estratta, non copiata**: `shared/mascot-drag.js`, 427 righe
+spostate identiche riga per riga. `mobile-jenny.js` passa da 1.353 a 908 righe e
+le da' i propri appigli. Il concetto `out` — la mascotte che sta al bordo ed
+"esce" per parlare — esiste solo in officina: un host che dichiara
+`hasOut: false` percorre gli stessi rami con lo scarto d'ancoraggio a zero,
+invece di avere un codice suo.
+
+**Un difetto preso in tempo.** Avevo specchiato il *contenitore* per il lato
+sinistro. L'officina specchia solo l'arte di riposo (`.jenny-art-stack`), ed e'
+la cosa giusta: il livello del volo e' un fratello dell'arte, e la fisica ci
+scrive traslazioni in coordinate schermo — con lo specchio sul contenitore,
+lanciandola a destra sarebbe volata a sinistra. Ora la casa ha il suo
+`.casa-jenny-art`, come l'officina.
+
+**Il lato e' un ricordo condiviso** (`shared/mascot.js`): dove la lasci in
+officina la ritrovi in casa. E' la stessa persona nello stesso telefono.
+
+### Due cose che il banco di prova mi ha quasi fatto sbagliare
+
+**Nel pannello del browser il rAF non gira**: misurato, *zero frame in un
+secondo*, `document.hidden` vero. La prima prova sull'officina mostrava la posa
+ferma su `hang` e il volo chiuso solo dopo 7 s per scadenza — sembrava una
+regressione da estrazione, ed era il banco. Con una pompa manuale
+(`requestAnimationFrame` sostituito da un timer) tutte e cinque le pose
+compaiono e il volo chiude in 3,2 s. **La prima prova non provava niente.**
+
+**C'e' un terzo consumatore di questa fisica**, che non avevo in mente: la
+mascotte flottante in Kotlin. `tests/runtime/test_floating.py` tiene allineate
+le costanti di `FloatingFlight.kt` con quelle JS, e leggeva da
+`mobile-jenny.js`. L'ha preso la sua stessa guardia — *«un test che non
+confronta niente passa sempre»* — che e' scattata a zero confronti. Ripuntato
+al modulo condiviso, e insegnato a leggere anche `export const`: ne confronta
+dodici.

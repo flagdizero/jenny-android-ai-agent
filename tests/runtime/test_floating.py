@@ -195,29 +195,41 @@ class TestConfineConKotlin:
 class TestLaFisicaNonDiverge:
     """Le costanti del volo vivono in due posti, e devono restare identiche.
 
-    `FloatingFlight.kt` porta in Kotlin la macchina che `mobile-jenny.js` fa
-    girare per la mascotte in chat. È una duplicazione deliberata — v.
+    `FloatingFlight.kt` porta in Kotlin la macchina che il JS fa girare per la
+    mascotte in chat. È una duplicazione deliberata — v.
     `roadmap/02-mascotte-flottante-piano.md`, S1 — e il suo prezzo è esattamente
     questo: qualcuno ritocca una costante da una parte, e la mascotte comincia a
     oscillare in due modi diversi a seconda di dove la si guarda.
+
+    **Il lato JS si è spostato** il 18/09/2026: la fisica stava in
+    `mobile-jenny.js`, ora è in `shared/mascot-drag.js` perché la usano in due
+    (la casa e l'officina, v. `.agent/casa-plan.md`). I consumatori di queste
+    costanti sono quindi tre, e questo test è l'unico posto in cui due di loro
+    si guardano in faccia.
 
     Nessun elenco scritto a mano: i nomi si leggono dal sorgente Kotlin, quindi
     una costante nuova entra da sola nel confronto.
     """
 
     FLIGHT_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingFlight.kt"
-    COMPANION_JS = REPO / "jenny/templates/ui/assets/mobile-jenny.js"
+    COMPANION_JS = REPO / "jenny/templates/ui/assets/shared/mascot-drag.js"
 
     @staticmethod
     def _js_numbers(source: str) -> dict[str, float]:
         import re
 
         out: dict[str, float] = {}
-        for name, raw in re.findall(r"^const ([A-Z][A-Z0-9_]*) = ([-0-9.]+)", source, re.M):
+        # `export const` oltre a `const`: nel modulo condiviso alcune costanti
+        # sono esportate (le usano i gusci), e senza questo il confronto le
+        # perderebbe in silenzio — che è il difetto contro cui esiste la
+        # guardia sul numero minimo di confronti.
+        for name, raw in re.findall(
+            r"^(?:export )?const ([A-Z][A-Z0-9_]*) = ([-0-9.]+)", source, re.M
+        ):
             out[name] = float(raw)
         # ``MAX_TILT`` è scritto in radianti come espressione: si confronta il
         # valore in gradi, che è la forma in cui il Kotlin lo tiene.
-        if re.search(r"^const MAX_TILT = \(78 \* Math\.PI\) / 180", source, re.M):
+        if re.search(r"^(?:export )?const MAX_TILT = \(78 \* Math\.PI\) / 180", source, re.M):
             out["MAX_TILT_DEG"] = 78.0
         return out
 
@@ -250,7 +262,7 @@ class TestLaFisicaNonDiverge:
             compared += 1
             assert value == pytest.approx(js[js_name]), (
                 f"{name} è {value} in FloatingFlight.kt e {js[js_name]} "
-                f"({js_name}) in mobile-jenny.js: la mascotte flottante e quella "
+                f"({js_name}) in shared/mascot-drag.js: la mascotte flottante e quella "
                 f"in chat si muoverebbero in due modi diversi."
             )
         assert compared >= 12, (
@@ -265,5 +277,5 @@ class TestLaFisicaNonDiverge:
         js = self.COMPANION_JS.read_text(encoding="utf-8")
         assert "const val PIVOT_X = 0.5083f" in kt
         assert "const val PIVOT_Y = 0.4333f" in kt
-        assert "const PIVOT_X = 0.5083;" in js
-        assert "const PIVOT_Y = 0.4333;" in js
+        assert "export const PIVOT_X = 0.5083;" in js
+        assert "export const PIVOT_Y = 0.4333;" in js

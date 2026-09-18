@@ -452,6 +452,13 @@ body.casa {
 .casa-jenny {
   position: absolute;
   right: calc(var(--jenny-size) * -0.25);
+  /* Si prende e si lancia (v. shared/mascot-drag.js), quindi i tocchi le
+     arrivano. Il conflitto col filo che scorre sotto lo risolvono le soglie
+     del gesto — `TAP_SLOP` e l'attesa della pressione — come in officina.
+     `touch-action: none` perche' il trascinamento e' suo: senza, lo scorrimento
+     del filo se lo porterebbe via al primo movimento verticale. */
+  touch-action: none;
+  cursor: grab;
   /* **I piedi appoggiano sulla riga del composer**, che fa da pavimento.
      Il numero non e' a occhio: l'arte e' un quadrato con margini trasparenti, e
      sotto i piedi ce n'e' il 12,24% del lato (bbox alpha dei webp impacchettati,
@@ -469,6 +476,30 @@ body.casa {
 }
 
 .casa-jenny[hidden] { display: none; }
+.casa-jenny.dragging { cursor: grabbing; }
+
+/* Lasciata sul bordo sinistro ci resta: lo specchio e' del contenitore, come
+   in officina, cosi' anche le pose di volo si specchiano insieme a lei. */
+/* Lasciata sul bordo sinistro ci resta. Lo specchio va sull'**arte**, non sullo
+   sprite: il livello del volo e' un fratello dell'arte, e la fisica ci scrive
+   traslazioni in coordinate schermo — un `scaleX(-1)` sul contenitore le
+   ribalterebbe, e lanciandola a destra volerebbe a sinistra. E' la stessa
+   divisione dell'officina (`.jenny-duo.side-left .jenny-art-stack`). */
+.casa-jenny.side-left {
+  right: auto;
+  left: calc(var(--jenny-size) * -0.25);
+}
+
+.casa-jenny.side-left .casa-jenny-art { transform: scaleX(-1); }
+
+/* Durante il volo l'arte di riposo sparisce e resta il livello delle pose. */
+.casa-jenny.flying .casa-jenny-art { visibility: hidden; }
+.casa-jenny.flying { transition: none; }
+
+.casa-jenny-art {
+  position: relative;
+  width: 100%;
+}
 
 .casa-jenny img {
   display: block;
@@ -479,7 +510,7 @@ body.casa {
 
 /* Le due immagini sono sovrapposte: il corpo sotto, la faccia sopra, stesso
    quadrato. Cambiare espressione e' scambiare la seconda. */
-.casa-jenny img + img {
+.casa-jenny-art img + img {
   position: absolute;
   left: 0;
   top: 0;
@@ -491,7 +522,7 @@ body.casa {
    lo perderebbe subito.
    Il `wobble` del pensa resta, ed e' coerente: ruota attorno al 90%
    dell'altezza, cioe' quasi sui piedi — e' un dondolio sul posto, non un volo. */
-.casa-jenny.thinking img {
+.casa-jenny.thinking .casa-jenny-art img {
   animation: jenny-wobble 1.1s ease-in-out infinite;
   transform-origin: 50% 90%;
 }
