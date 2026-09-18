@@ -88,6 +88,31 @@ class TestNonSiRiapreDaSola:
         body = _fun(_read(), "fun showReply(text: String): Boolean")
         assert "appendLine(mine = false" in body
 
+    def test_l_attesa_finisce_anche_se_non_si_disegna(self):
+        """`waitingForReply` va spento **prima** del `return`.
+
+        Un volo preso mentre aspettava annulla il timeout ma non lo stato
+        (`startFlight` non tocca `waitingForReply`), quindi se la risposta
+        esce senza spegnerlo non resta più niente che possa farlo: faccia che
+        pensa a ogni riapertura, e `armHold` che non arma mai più — il suo
+        primo guardiano è proprio quel flag.
+        """
+        body = _fun(_read(), "fun showReply(text: String): Boolean")
+        wait = body.index("waitingForReply = false")
+        guard = body.index("if (!expanded")
+        assert wait < guard, (
+            "showReply esce prima di spegnere l'attesa: lo stato resta acceso "
+            "e non c'è più nessun timer che possa spegnerlo"
+        )
+
+    def test_a_finestra_chiusa_non_entra_niente(self):
+        """I due percorsi d'errore arrivano da callback che nessuno annulla:
+        senza guardia, una consegna fallita mentre la si lancia via scrive in
+        una conversazione appena azzerata, e la riga ricompare alla prossima
+        apertura — che invece deve essere vuota."""
+        body = _fun(_read(), "private fun appendLine(mine: Boolean, text: String)")
+        assert "if (!expanded) return" in body
+
 
 class TestSiAzzeraSoloChiudendo:
     def test_chiusura_e_volo_azzerano(self):
@@ -150,6 +175,15 @@ class TestLaGeometria:
         body = _fun(_read(), "private fun standHeight(ctx: Context): Int")
         assert "FEET_RATIO - HEAD_RATIO" in body
         assert "CHIP_GAP_DP" in body, "a conversazione vuota il chip non scende più"
+
+    def test_zero_e_un_tetto_valido_non_l_assenza_di_tetto(self):
+        """`maxHeight = 0` vuol dire «non c'è spazio», ed è proprio il caso in
+        cui la lista non deve crescere. Con `0` come sentinella di «non
+        calcolato» faceva l'opposto: niente tetto, e le bolle fuori dal bordo
+        alto."""
+        source = _read()
+        assert "var maxHeight = -1" in source
+        assert "if (maxHeight >= 0)" in source
 
     def test_il_tetto_della_lista_e_lo_spazio_che_resta(self):
         """Non un numero: la lista arriva fin dove c'è posto, e il posto cambia

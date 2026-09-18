@@ -363,10 +363,13 @@ object FloatingOverlayController {
      * sotto.
      */
     private class CappedScrollView(ctx: Context) : ScrollView(ctx) {
-        var maxHeight = 0
+        /** `-1` = non ancora calcolato. **Zero è un tetto valido**: è il caso
+         *  in cui non c'è spazio, e confonderlo con «nessun tetto» faceva
+         *  crescere la lista fuori dal bordo alto proprio lì. */
+        var maxHeight = -1
 
         override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-            val spec = if (maxHeight > 0) {
+            val spec = if (maxHeight >= 0) {
                 MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST)
             } else {
                 heightSpec
@@ -584,11 +587,22 @@ object FloatingOverlayController {
      *
      * Il `false` che torna qui non è un errore per nessuno: il canale lo
      * annota e tira dritto.
+     *
+     * **L'attesa però finisce lo stesso**, e questo va fatto *prima* del
+     * `return`: la risposta è arrivata, che ci sia o no un posto dove
+     * disegnarla. Tenendolo dopo, un volo preso mentre aspettava (che annulla
+     * il timeout ma non lo stato) lasciava [waitingForReply] acceso per
+     * sempre — faccia che pensa a ogni riapertura, e [armHold] che non arma
+     * più niente perché il suo primo guardiano è proprio quello.
      */
     fun showReply(text: String): Boolean {
-        if (!expanded || historyList == null) return false
         cancelTimeout()
         waitingForReply = false
+        if (!expanded || historyList == null) {
+            // Non si disegna, ma la posa sì: non sta più aspettando.
+            syncFace()
+            return false
+        }
         appendLine(mine = false, text = text)
         syncFace()
         startBreathing()
@@ -1724,6 +1738,12 @@ object FloatingOverlayController {
      * vedere è sempre il fondo.
      */
     private fun appendLine(mine: Boolean, text: String) {
+        // **A finestra chiusa non entra niente**, e vale per tutti e tre i
+        // chiamanti. I due percorsi d'errore arrivano da una callback che
+        // nessuno annulla: consegna fallita mentre la si lancia via, e la
+        // riga finiva in una conversazione appena azzerata — per ricomparire
+        // alla prossima apertura, che invece deve essere vuota.
+        if (!expanded) return
         val clean = text.trim()
         if (clean.isEmpty()) return
         history.add(Line(mine, clean))
