@@ -87,11 +87,10 @@ class TestLaPillola:
         l'utente vede per un frame la geometria vecchia."""
         source = _read()
         m = re.search(
-            r"expanded = true\s*\n\s*isChatOpen = withInput.*?inputRow\?\.visibility = if \(withInput\)",
-            source, re.S,
+            r"expanded = true(.*?)inputRow\?\.visibility = View\.VISIBLE", source, re.S
         )
         assert m, "il blocco intorno a expanded=true non è più leggibile"
-        assert "applyPill(ctx)" in m.group(0)
+        assert "applyPill(ctx)" in m.group(1)
 
 
 class TestLeiCiStaSopra:
@@ -100,9 +99,9 @@ class TestLeiCiStaSopra:
     def test_park_x_punta_al_cap_a_chat_aperta(self):
         source = _read()
         body = _fun(source, "private fun parkX(ctx: Context, out: Boolean = false): Int")
-        assert "out && isChatOpen" in body, (
-            "parkX non distingue più la chat aperta: col solo fumetto di "
-            "risposta lei andrebbe in mezzo allo schermo su una pillola che non c'è"
+        assert "out && expanded" in body, (
+            "parkX non distingue più la finestra aperta: da parcheggiata lei "
+            "andrebbe in mezzo allo schermo su una pillola che non c'è"
         )
         assert "pillWidth(ctx)" in body and "AXIS_RATIO" in body
         # Il cap è la pallina: padding più mezza pallina.
@@ -115,7 +114,7 @@ class TestLeiCiStaSopra:
         una riga, o salterebbe quando il composer compare."""
         source = _read()
         body = _fun(source, "private fun parkTop(ctx: Context): Int")
-        assert "isChatOpen && pillHeightPx > 0" in body
+        assert "expanded && pillHeightPx > 0" in body
         assert "chatBottomInsetPx" in body
         assert "FEET_RATIO" in body and "FEET_GAP_DP" in body
 
@@ -181,7 +180,9 @@ class TestLaPallina:
         linea di base invece che al centro del disco."""
         source = _read()
         assert "\\u2191" not in source, "la freccia è tornata un carattere di testo"
-        assert "private fun arrowDrawable(ctx: Context): Drawable" in source
+        # Disegnata da `strokeIcon`, che dal 18/09/2026 fa anche l'icona del
+        # chip: due path, un solo `Drawable` di boilerplate.
+        assert "private fun arrowIcon(ctx: Context): Drawable" in source
         assert "strokeCap = Paint.Cap.ROUND" in source
 
     def test_il_bordo_si_accende_col_testo(self):

@@ -18,6 +18,8 @@
     <string name="floating_not_running">Jenny non è attiva in questo momento.</string>
     <string name="floating_no_reply">Nessuna risposta. Apri la chat per vedere com\'è andata.</string>
     <string name="floating_send">Invia</string>
+    <string name="floating_open_app">Apri l’app</string>
+    <string name="floating_continue_app">Continua su app</string>
 
     <string name="update_channel_name">Aggiornamenti dell\'app</string>
     <string name="update_channel_description">Mostrata quando un aggiornamento già scaricato aspetta la tua conferma per installarsi</string>

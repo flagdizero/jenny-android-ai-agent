@@ -116,10 +116,14 @@ class TestSend:
         assert await FloatingChannel().send(msg) == []
         assert spy.calls == ["guarda qui"]
 
-    async def test_ogni_send_sovrascrive_il_fumetto_precedente(self, spy: _Spy):
-        """«Senza history» è una regola della UI, e qui si vede in negativo: il
-        canale non accumula niente fra una risposta e l'altra, quindi non c'è
-        nessuno stato che possa divergere da ciò che la finestra mostra."""
+    async def test_il_canale_non_accumula_niente(self, spy: _Spy):
+        """La conversazione della finestra la tiene Kotlin, e solo Kotlin.
+
+        Dal 18/09/2026 la finestra mostra gli ultimi quattro scambi invece
+        dell'ultima risposta, il che rende questo test **più** importante di
+        prima e non meno: se il canale cominciasse a tenere una sua copia,
+        avremmo due liste della stessa conversazione, e solo una delle due
+        saprebbe che la finestra nel frattempo si è chiusa."""
         ch = FloatingChannel()
         await ch.send(_msg("prima"))
         await ch.send(_msg("seconda"))

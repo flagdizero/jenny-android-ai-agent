@@ -17,8 +17,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * * `setEnabled` — la volontà, letta da `config.floating.enabled` all'avvio del
  *   gateway (`jenny/runtime/floating.py`);
- * * `showReply` — il testo da disegnare nel fumetto, chiamato dal canale
- *   (`jenny/channels/floating.py`) a ogni risposta.
+ * * `showReply` — il testo da aggiungere alla conversazione nella finestra,
+ *   chiamato dal canale (`jenny/channels/floating.py`) a ogni risposta. Può
+ *   rispondere `false` senza che sia un guasto: a finestra chiusa non si
+ *   disegna niente, e non la si riapre.
  *
  * **Il salto sul main thread è qui e non nel controller.** Python entra da un
  * thread di `asyncio.to_thread`, e toccare delle `View` da lì sarebbe un
