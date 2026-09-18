@@ -95,13 +95,19 @@ _MAX_TRACKED_CHATS = 512
 # qualcosa e merita una risposta invece del silenzio.
 _LOCATION_KEYS = ("location", "venue")
 
-# Contenuto sintetico (LLM-facing) quando un allegato arriva senza didascalia,
-# o quando il modello rischia di credere di poterlo percepire. Le immagini
-# arrivano davvero come blocchi vision, quindi lì il marcatore serve solo a non
-# lasciare il turno senza testo; per audio e video il marcatore è l'unica cosa
-# che impedisce a Jenny di rispondere come se avesse ascoltato o guardato.
+# Contenuto sintetico quando un allegato arriva senza didascalia, o quando il
+# modello rischia di credere di poterlo percepire.
+#
+# **Le immagini non ne hanno uno, ed è una scelta.** Una foto arriva davvero
+# come blocco vision: annunciarla al modello non aggiunge niente, e il costo si
+# vede dall'altra parte — l'eco del turno sulla vista WebUI usa questo testo,
+# quindi il marcatore comparirebbe in chat come se l'utente se lo fosse scritto
+# da solo, per giunta in inglese. Senza, una foto senza didascalia è esattamente
+# ciò che è quando la si allega dalla WebUI: una bolla con dentro l'immagine.
+#
+# Per audio e video il marcatore resta l'unica cosa che impedisce a Jenny di
+# rispondere come se avesse ascoltato o guardato, e in chat si legge bene.
 _MEDIA_TURN_MARKERS: dict[str, str] = {
-    "image": "📎 [The user sent a photo, attached to this message.]",
     "audio": (
         "📎 [The user sent a voice note or audio file. It is saved and referenced by "
         "path, but nothing transcribed it: you cannot hear its contents.]"
@@ -468,12 +474,13 @@ class TelegramChannel:
     def _turn_content(text: str | None, picked: TelegramFile | None) -> str:
         """Compone il testo del turno da didascalia e allegato.
 
-        Il marcatore serve in due casi distinti: quando l'allegato arriva
-        **senza** didascalia (un turno senza testo è un turno muto), e sempre
-        per audio e video — lì è l'unica cosa che impedisce al modello di
-        rispondere come se avesse ascoltato o guardato. Per foto e documenti
-        una didascalia basta: l'immagine arriva davvero come blocco vision e il
-        documento come ``[Attachment: …]``.
+        Il marcatore compare quando l'allegato arriva **senza** didascalia, e
+        in più sempre per audio e video: lì è l'unica cosa che impedisce al
+        modello di rispondere come se avesse ascoltato o guardato.
+
+        Le immagini non ne hanno uno (v. ``_MEDIA_TURN_MARKERS``): una foto
+        senza didascalia produce un contenuto vuoto, e il turno è fatto dalla
+        sola immagine — come quando la si allega dalla WebUI.
         """
         if picked is None:
             return text or ""

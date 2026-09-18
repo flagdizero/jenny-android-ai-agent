@@ -188,7 +188,9 @@ class WebuiTurnCoordinator:
         if metadata.get("_internal_continuation") or metadata.get("_skip_user_persist"):
             return
         text = (event.content or "").strip()
-        if not text or text == "/stop":
+        # Un allegato senza didascalia e' un messaggio: la bolla e' l'immagine.
+        # Col solo controllo sul testo, una foto muta non arrivava in chat.
+        if (not text and not event.media) or text == "/stop":
             return
         channel, chat_id = target
         await self.bus.publish_outbound(

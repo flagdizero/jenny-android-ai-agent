@@ -228,15 +228,19 @@ async def test_saved_attachment_lands_in_uploads_with_the_shared_naming() -> Non
     assert re.fullmatch(r"[0-9a-f]{12}-photo\.jpg", saved.name)
 
 
-async def test_photo_without_caption_is_not_a_mute_turn() -> None:
+async def test_photo_without_caption_is_the_image_alone() -> None:
+    # Nessun marcatore per le immagini: la foto arriva come blocco vision, e
+    # quel testo finirebbe nell'eco WebUI come se l'utente se lo fosse scritto
+    # da solo. È la stessa forma di una foto allegata dalla WebUI senza scrivere
+    # niente — il turno è fatto dall'immagine.
     api = FakeAPI()
     ch, bus = _channel(api)
     await ch._handle_update(_update(photo=_photo()))
     msg = await asyncio.wait_for(bus.consume_inbound(), timeout=1)
     await ch._typing.stop()
 
-    assert "photo" in msg.content.lower()
-    assert msg.media
+    assert msg.content == ""
+    assert len(msg.media) == 1
 
 
 async def test_voice_note_says_it_was_not_heard() -> None:
