@@ -358,3 +358,17 @@ versione vecchia e concludendo sulla nuova. Si controlla in un secondo:
 **Verificato sul Titan 2**, dove il rAF gira davvero: presa, volo, atterraggio,
 rientro a piedi al suo posto coi piedi sulla linea; e con un lancio lento verso
 sinistra passa di lato, specchiata, appoggiata allo stesso pavimento.
+
+### «Appena la tocco sparisce»
+
+Le regole del volo in `mobile-style.css` sono due meta' e **una sola e' senza
+prefisso**: `.jenny-fly { display: none }` vale per tutti, ma quella che lo
+accende e' `.jenny-duo.flying .jenny-fly`, legata alla classe dell'officina. In
+casa lo sprite e' `.casa-jenny`: nascondevo l'arte di riposo e non accendevo
+niente, quindi al tocco Jenny spariva e basta.
+
+**Di nuovo un test che guardava il meccanismo invece del risultato**: contavo le
+classi `.on` sulle pose, che il JS mette comunque. La misura giusta e' *quanti
+pezzi di Jenny sono davvero visibili* — `visibility`, `display`, `opacity`, e il
+`display` del contenitore. A riposo 1, in mano 1, in volo 1, atterrata 1; col
+difetto rimesso apposta, 0.

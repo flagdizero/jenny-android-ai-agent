@@ -493,8 +493,15 @@ body.casa {
 
 .casa-jenny.side-left .casa-jenny-art { transform: scaleX(-1); }
 
-/* Durante il volo l'arte di riposo sparisce e resta il livello delle pose. */
+/* Durante il volo l'arte di riposo sparisce e **si accende** il livello delle
+   pose. Le due meta' vanno insieme: in `mobile-style.css` la regola che accende
+   il livello e' `.jenny-duo.flying .jenny-fly`, legata alla classe dell'officina,
+   quindi qui non vale — e nascondere l'arte senza accendere le pose vuol dire
+   che appena la tocchi Jenny sparisce. (Successo. Il test guardava le classi
+   delle pose, che il JS mette comunque, non se si vedessero.) */
 .casa-jenny.flying .casa-jenny-art { visibility: hidden; }
+.casa-jenny.flying .jenny-fly { display: block; }
+.casa-jenny .jenny-fly img { animation: none; }
 .casa-jenny.flying { transition: none; }
 
 .casa-jenny-art {
