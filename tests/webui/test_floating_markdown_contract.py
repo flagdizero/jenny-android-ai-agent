@@ -120,6 +120,22 @@ class TestILink:
         )
         assert "catch" in body, "un link storto fa cadere l'overlay"
 
+    def test_solo_gli_schemi_del_web(self):
+        """Il testo delle bolle lo scrive il modello, e il modello legge pagine
+        web: senza filtro, una pagina può indurlo a scrivere un link con uno
+        schema d'app e il tocco lo consegna a chi lo dichiara. La WebUI quel
+        link non lo mostra nemmeno (DOMPurify), e le due viste dello stesso
+        testo non possono avere due soglie diverse."""
+        source = _read()
+        assert 'private val LINK_SCHEMES = setOf("http", "https", "mailto")' in source, (
+            "l'elenco degli schemi permessi non c'è più: la bolla apre qualsiasi cosa"
+        )
+        body = _fun(source, "private fun openLink(ctx: Context, url: String)")
+        assert "if (scheme !in LINK_SCHEMES) {" in body
+        # Prima di `collapse()`: un link rifiutato non deve nemmeno far sparire
+        # la conversazione.
+        assert body.index("scheme !in LINK_SCHEMES") < body.index("collapse()")
+
     def test_il_resolver_e_agganciato(self):
         source = _read()
         assert "builder.linkResolver { _, link -> openLink(ctx, link) }" in source

@@ -281,6 +281,22 @@ object FloatingOverlayController {
     /** Più leggera di [PILL_ELEVATION_DP]: la pillola resta il piano davanti. */
     private const val BUBBLE_ELEVATION_DP = 4
 
+    /**
+     * Gli schemi che un link di una bolla può aprire.
+     *
+     * Il testo delle bolle lo scrive il modello, e il modello legge pagine web
+     * (`android_web`): una pagina può indurlo a scrivere
+     * `[guarda qui](unapp://qualcosa)`, e un `ACTION_VIEW` senza filtro lo
+     * consegnerebbe a qualunque app dichiari quello schema, con i parametri
+     * scelti dalla pagina. La WebUI quel link non lo mostra nemmeno —
+     * DOMPurify scarta gli schemi che non conosce — e le due viste dello
+     * stesso testo non possono avere due soglie diverse.
+     *
+     * `mailto` c'è perché [LinkifyPlugin] con `EMAIL_ADDRESSES` produce
+     * proprio quello: toglierlo romperebbe gli indirizzi email.
+     */
+    private val LINK_SCHEMES = setOf("http", "https", "mailto")
+
     /** Il lato nominale delle due icone disegnate (freccia d'invio e chip). */
     private const val SEND_ICON_DP = 14
     private const val CHIP_ICON_DP = 13
@@ -1907,12 +1923,21 @@ object FloatingOverlayController {
      * `FLAG_ACTIVITY_NEW_TASK` l'apertura solleva. E la finestra si chiude
      * prima, come fa già [openChat]: lasciare l'overlay sopra il browser che si
      * è appena chiesto di aprire non ha senso.
+     *
+     * Lo schema si controlla **prima di chiudere**: un link rifiutato non deve
+     * nemmeno far sparire la conversazione. V. [LINK_SCHEMES].
      */
     private fun openLink(ctx: Context, url: String) {
+        val uri = Uri.parse(url)
+        val scheme = uri.scheme?.lowercase()
+        if (scheme !in LINK_SCHEMES) {
+            Log.i(TAG, "Floating link refused (scheme=$scheme)")
+            return
+        }
         collapse()
         try {
             ctx.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                Intent(Intent.ACTION_VIEW, uri)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (e: Exception) {
