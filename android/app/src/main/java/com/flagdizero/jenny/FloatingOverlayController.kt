@@ -45,7 +45,6 @@ import android.widget.TextView
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * La mascotte flottante: Jenny sopra le altre app, un tap e le parli.
@@ -214,17 +213,34 @@ object FloatingOverlayController {
      */
     private const val HISTORY_MAX_TURNS = 4
 
-    /** Il tetto della lista, in dp — quando c'è posto. Circa tre scambi a
-     *  vista; il resto scorre. Il posto vero lo calcola [syncListCap]. */
-    private const val LIST_MAX_DP = 300
-
-    /** Quanto respiro lasciare fra la cima della lista e il bordo alto dello
-     *  schermo, così le bolle non nascono attaccate alla status bar. */
+    /**
+     * Quanto respiro lasciare fra la cima della lista e il bordo alto dello
+     * schermo. **È l'unico limite che ha**: per il resto la conversazione
+     * prende tutto lo spazio che resta sopra di lei.
+     *
+     * C'era un tetto fisso da 300 dp, e teneva la lista a metà schermo con
+     * mezzo telefono vuoto sopra. La conversazione è la cosa che si legge:
+     * sale fin quasi in cima, e sotto resta solo lei e la pillola.
+     */
     private const val LIST_TOP_MARGIN_DP = 24
+
+    /**
+     * Il margine laterale della lista, molto più stretto di quello della
+     * pillola.
+     *
+     * Le bolle stavano larghe quanto la pillola — 62% dello schermo — e a una
+     * conversazione servono i bordi: con questo una bolla corta arriva a
+     * [LIST_EDGE_DP] più il padding della lista dal bordo dello schermo. La
+     * pillola invece resta al 62%, che è la sua proporzione giusta.
+     */
+    private const val LIST_EDGE_DP = 10
+
+    /** Il padding della lista: lo spazio in cui cadono le ombre delle bolle. */
+    private const val LIST_PAD_DP = 6
 
     /** La sfumatura del bordo alto della lista: dice «c'è dell'altro sopra»
      *  senza disegnare niente, ed è quella di Android (`fadingEdge`). */
-    private const val LIST_FADE_DP = 26
+    private const val LIST_FADE_DP = 36
 
     /** L'aria fra i suoi piedi e la lista, sopra la sua testa. */
     private const val STAND_GAP_DP = 8
@@ -243,9 +259,9 @@ object FloatingOverlayController {
     private const val BUBBLE_RADIUS_DP = 16
     private const val BUBBLE_CORNER_DP = 5
 
-    /** Larghezza massima di una bolla, in frazione della pillola: anche la più
+    /** Larghezza massima di una bolla, in frazione della lista: anche la più
      *  lunga lascia vedere da che parte sta chi l'ha scritta. */
-    private const val BUBBLE_MAX_RATIO = 0.82f
+    private const val BUBBLE_MAX_RATIO = 0.78f
 
     private const val BUBBLE_GAP_DP = 8
 
@@ -1432,7 +1448,7 @@ object FloatingOverlayController {
         // alto non avrebbe senso), quindi lo spazio glielo si dà dentro.
         val list = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            val pad = dp(ctx, 6)
+            val pad = dp(ctx, LIST_PAD_DP)
             setPadding(pad, pad, pad, pad)
             // Le ombre delle bolle cadono qui dentro: il padding è lo spazio,
             // questa riga è il permesso di disegnarci.
@@ -1452,7 +1468,7 @@ object FloatingOverlayController {
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         }
         row.addView(scroll, LinearLayout.LayoutParams(
-            pillWidth(ctx), LinearLayout.LayoutParams.WRAP_CONTENT
+            listWidth(ctx), LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
         // Il riquadro vuoto in cui lei sta in piedi. Vuoto davvero: lei è in
@@ -1626,6 +1642,10 @@ object FloatingOverlayController {
     /** Quanto è larga la pillola, in px: [PILL_WIDTH_RATIO] dello schermo. */
     private fun pillWidth(ctx: Context): Int = (screenWidth(ctx) * PILL_WIDTH_RATIO).toInt()
 
+    /** ...e quanto è larga la lista: quasi tutto lo schermo. Le due misure
+     *  sono diverse di proposito — v. [LIST_EDGE_DP]. */
+    private fun listWidth(ctx: Context): Int = screenWidth(ctx) - 2 * dp(ctx, LIST_EDGE_DP)
+
     /**
      * Sistema la pillola: larga [pillWidth] e centrata dal row, col fondo del
      * tema corrente e il bordo nello stato giusto.
@@ -1644,7 +1664,7 @@ object FloatingOverlayController {
             }
         }
         (historyScroll?.layoutParams as? LinearLayout.LayoutParams)?.let {
-            val w = pillWidth(ctx)
+            val w = listWidth(ctx)
             if (it.width != w) {
                 it.width = w
                 historyScroll?.layoutParams = it
@@ -1742,7 +1762,7 @@ object FloatingOverlayController {
             text = line.text
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(if (line.mine) palette.onAccent else palette.text)
-            maxWidth = (pillWidth(ctx) * BUBBLE_MAX_RATIO).toInt()
+            maxWidth = (listWidth(ctx) * BUBBLE_MAX_RATIO).toInt()
             setPadding(dp(ctx, 13), dp(ctx, 9), dp(ctx, 13), dp(ctx, 9))
             background = GradientDrawable().apply {
                 cornerRadii = corners
@@ -1814,18 +1834,21 @@ object FloatingOverlayController {
     /**
      * Rimette il tetto della lista allo spazio che c'è davvero.
      *
-     * [LIST_MAX_DP] è il tetto *voluto*; questo è quello *possibile*, ed è
-     * minore ogni volta che la tastiera è alzata. Senza, con l'IME a schermo
-     * quattro scambi spingerebbero le bolle fuori dal bordo alto — la colonna
-     * cresce verso l'alto, e sopra non c'è nessuno a fermarla.
+     * Non c'è un tetto in dp: la lista arriva fin dove c'è posto, cioè a
+     * [LIST_TOP_MARGIN_DP] dal bordo alto. Quel posto però **cambia** — la
+     * pillola cresce, la tastiera si alza — e senza questo conto le bolle
+     * uscirebbero dal bordo di sopra, dove la colonna cresce e non c'è nessuno
+     * a fermarle.
      */
     private fun syncListCap(ctx: Context) {
         val scroll = historyScroll ?: return
         val pill = max(inputBar?.height ?: 0, dp(ctx, PILL_DP))
         val bottom = max(chatBottomInsetPx, navInset(ctx))
-        val room = screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill -
-            standHeight(ctx) - dp(ctx, COMPOSER_PAD_TOP_DP) - dp(ctx, LIST_TOP_MARGIN_DP)
-        val cap = max(min(dp(ctx, LIST_MAX_DP), room), 0)
+        val cap = max(
+            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill -
+                standHeight(ctx) - dp(ctx, COMPOSER_PAD_TOP_DP) - dp(ctx, LIST_TOP_MARGIN_DP),
+            0,
+        )
         if (cap == scroll.maxHeight) return
         scroll.maxHeight = cap
         scroll.requestLayout()

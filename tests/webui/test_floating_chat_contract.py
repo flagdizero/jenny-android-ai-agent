@@ -151,13 +151,28 @@ class TestLaGeometria:
         assert "FEET_RATIO - HEAD_RATIO" in body
         assert "CHIP_GAP_DP" in body, "a conversazione vuota il chip non scende più"
 
-    def test_il_tetto_della_lista_toglie_la_tastiera(self):
-        """Un tetto fisso spingerebbe le bolle fuori dal bordo alto quando
-        l'IME è a schermo: la colonna cresce all'insù e sopra non c'è nessuno
-        a fermarla."""
-        body = _fun(_read(), "private fun syncListCap(ctx: Context)")
+    def test_il_tetto_della_lista_e_lo_spazio_che_resta(self):
+        """Non un numero: la lista arriva fin dove c'è posto, e il posto cambia
+        quando la pillola cresce o la tastiera si alza. Un tetto fisso
+        spingerebbe le bolle fuori dal bordo alto, dove la colonna cresce e non
+        c'è nessuno a fermarle."""
+        source = _read()
+        body = _fun(source, "private fun syncListCap(ctx: Context)")
         assert "chatBottomInsetPx" in body
-        assert "min(dp(ctx, LIST_MAX_DP)" in body
+        assert "LIST_TOP_MARGIN_DP" in body
+        assert "LIST_MAX_DP" not in source, "è tornato un tetto fisso in dp"
+
+    def test_le_bolle_stanno_piu_larghe_della_pillola(self):
+        """La conversazione vuole i bordi; la pillola resta al suo 62%."""
+        source = _read()
+        assert re.search(
+            r"private fun listWidth\(ctx: Context\): Int = screenWidth\(ctx\) - 2 \* dp\(ctx, LIST_EDGE_DP\)",
+            source,
+        ), "la lista non è più larga dello schermo meno il suo margine"
+        body = _fun(source, "private fun bubbleView(ctx: Context, line: Line): TextView")
+        assert "listWidth(ctx) * BUBBLE_MAX_RATIO" in body, (
+            "la bolla torna a misurarsi sulla pillola, che è molto più stretta"
+        )
 
     def test_la_colonna_e_verticale(self):
         """Lista, lo spazio di lei, pillola — e ancorata in basso, così la
