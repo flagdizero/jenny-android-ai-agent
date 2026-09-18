@@ -391,18 +391,19 @@ object FloatingOverlayController {
     @Volatile
     private var replyHoldMs = DEFAULT_REPLY_HOLD_S * 1000L
 
-    /** La finestra è a schermo intero? Vero anche per il solo fumetto: una
-     *  risposta arrivata a finestra già richiusa deve poter essere disegnata,
-     *  e in 96dp non ci sta. */
+    /**
+     * La finestra è aperta? — e non c'è più un secondo flag accanto.
+     *
+     * Ce n'erano due, questo e `isChatOpen`, perché una risposta poteva aprire
+     * la finestra **senza** il campo: si leggeva e basta, e il fuoco restava
+     * all'app sotto. Da quando la risposta non riapre più niente da sé (v.
+     * [showReply]) quella seconda apertura non ha più chiamanti, e i due flag
+     * cambiavano comunque sempre insieme: tenerli separati voleva dire due
+     * nomi per lo stesso stato e una dozzina di rami che nessun test poteva
+     * raggiungere.
+     */
     @Volatile
     private var expanded = false
-
-    /** ...e dentro quella finestra c'è anche il campo, con il fuoco e la
-     *  tastiera? Le due cose sono separate perché il fumetto da solo **non**
-     *  deve rubare il fuoco all'app sotto: nessuno ha chiesto di scrivere. */
-    @Volatile
-    var isChatOpen = false
-        private set
 
     private var appContext: Context? = null
     private var windowManager: WindowManager? = null
@@ -763,7 +764,6 @@ object FloatingOverlayController {
         return try {
             loadParkPosition(ctx)
             expanded = false
-            isChatOpen = false
             val container = buildViews(ctx)
             val lp = stageParams()
             wm.addView(container, lp)
@@ -802,7 +802,6 @@ object FloatingOverlayController {
         cancelTimeout()
         main.removeCallbacks(holdRunnable)
         expanded = false
-        isChatOpen = false
         waitingForReply = false
         // Un volo lasciato aperto qui tornerebbe a mordere al prossimo
         // montaggio: `startFlight` nasconde la mascotte ferma con un `post`
@@ -970,7 +969,7 @@ object FloatingOverlayController {
     /**
      * Allarga la finestra a schermo intero.
      *
-     * Con *withInput* prende anche il **fuoco**. Tre cose lo rendono vero, e
+     * Prende anche il **fuoco**. Tre cose lo rendono vero, e
      * tutte e tre sono state pagate sul telefono il 17/09:
      *
      * **`FLAG_LAYOUT_NO_LIMITS` non si toglie mai.** Il primo giro lo toglieva
@@ -997,52 +996,34 @@ object FloatingOverlayController {
      * `onWindowFocusChanged` del contenitore, che scatta quando il fuoco
      * c'è davvero.
      *
-     * Senza *withInput* la finestra resta intera ma **non focusable**: serve
-     * al solo fumetto, e non ruba all'app sotto un fuoco che nessuno le ha
-     * chiesto di cedere.
      */
-    private fun expand(withInput: Boolean, forFlight: Boolean = false) {
+    private fun expand() {
         val ctx = appContext ?: return
-        if (expanded && isChatOpen == withInput) return
+        if (expanded) return
 
         // Il palco non si muove e non cambia taglia: cambia solo *cosa
         // accetta*. La maniglia resta toccabile e resta dov'è — è piccola e
         // copre solo lei, quindi il velo e il campo li raggiungi lo stesso, e
         // un tocco su di lei è comunque un tocco su di lei.
         applyStage(
-            if (withInput) STAGE_CHAT else STAGE_TOUCHABLE,
-            if (withInput) {
-                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
-                    WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
-            } else {
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
-            },
+            STAGE_CHAT,
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE,
         )
         expanded = true
-        isChatOpen = withInput
-        scrim?.visibility = if (withInput) View.VISIBLE else View.GONE
-        if (withInput) {
-            // La pillola si sistema **ora**, prima di comparire: se lo
-            // schermo è cambiato dal montaggio (rotazione), la larghezza va
-            // ricalcolata, e l'utente non deve vedere per un frame quella
-            // vecchia.
-            applyPill(ctx)
-        }
-        inputRow?.visibility = if (withInput) View.VISIBLE else View.GONE
-        if (!forFlight) {
-            // In volo non si scivola all'ancoraggio e non si respira: comanda
-            // la fisica, e due animazioni sulla stessa view si contendono la
-            // stessa traslazione.
-            //
-            // Dal bordo va a mettersi **in piedi sul cap della pillola** dal
-            // suo lato (chat aperta), o rientra a un quarto dal bordo (solo il
-            // fumetto): v. `parkX`.
-            syncFace()
-            slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
-        }
-        if (withInput) input?.let { it.post { focusTheField(ctx) } }
+        scrim?.visibility = View.VISIBLE
+        // La pillola si sistema **ora**, prima di comparire: se lo schermo è
+        // cambiato dal montaggio (rotazione), la larghezza va ricalcolata, e
+        // l'utente non deve vedere per un frame quella vecchia.
+        applyPill(ctx)
+        inputRow?.visibility = View.VISIBLE
+        // Dal bordo va a mettersi **in piedi sul cap della pillola** dal suo
+        // lato: v. `parkX`.
+        syncFace()
+        slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
+        input?.let { it.post { focusTheField(ctx) } }
         armHold()
-        Log.i(TAG, "Floating mascot expanded (input=$withInput)")
+        Log.i(TAG, "Floating mascot expanded")
     }
 
     /**
@@ -1057,7 +1038,7 @@ object FloatingOverlayController {
      */
     private fun focusTheField(ctx: Context) {
         val field = input ?: return
-        if (!isChatOpen) return
+        if (!expanded) return
         field.isFocusableInTouchMode = true
         field.requestFocus()
         val imm = ctx.getSystemService(InputMethodManager::class.java) ?: return
@@ -1066,7 +1047,7 @@ object FloatingOverlayController {
             // fuoco: si riprova al giro successivo del Looper invece di
             // lasciare un campo che lampeggia il cursore e non scrive.
             field.postDelayed({
-                if (isChatOpen) imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
+                if (expanded) imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
             }, 120)
         }
     }
@@ -1085,7 +1066,6 @@ object FloatingOverlayController {
         if (!expanded) return
         hideKeyboard(ctx)
         expanded = false
-        isChatOpen = false
         scrim?.visibility = View.GONE
         inputRow?.visibility = View.GONE
         // Chiudere è un gesto, e vale come «ho finito»: la conversazione se ne
@@ -1116,7 +1096,7 @@ object FloatingOverlayController {
              *  qualcosa da chiudere. */
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK &&
-                    event.action == KeyEvent.ACTION_UP && isChatOpen
+                    event.action == KeyEvent.ACTION_UP && expanded
                 ) {
                     collapse()
                     return true
@@ -1132,7 +1112,7 @@ object FloatingOverlayController {
              *  finestra già focusable). */
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (hasWindowFocus && isChatOpen) focusTheField(ctx)
+                if (hasWindowFocus && expanded) focusTheField(ctx)
             }
         }
 
@@ -1230,7 +1210,7 @@ object FloatingOverlayController {
                     // layout che questo stesso passaggio sta per fare.
                     chatBottomInsetPx = bottom
                     inputRow?.post {
-                        if (isChatOpen && flight == null) {
+                        if (expanded && flight == null) {
                             slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
                         }
                     }
@@ -1392,7 +1372,7 @@ object FloatingOverlayController {
                 val h = b - t
                 if (h <= 0 || h == pillHeightPx) return@addOnLayoutChangeListener
                 pillHeightPx = h
-                if (isChatOpen && flight == null) {
+                if (expanded && flight == null) {
                     slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
                 }
             }
@@ -1937,14 +1917,9 @@ object FloatingOverlayController {
                         tracker?.computeCurrentVelocity(1000)
                         flight?.release(tracker?.xVelocity ?: 0f, tracker?.yVelocity ?: 0f)
                     } else {
-                        when {
-                            // Un tap a chat aperta la richiude: è il gesto
-                            // inverso di quello che l'ha aperta.
-                            isChatOpen -> collapse()
-                            // Finestra grande ma solo per il fumetto: il tap
-                            // qui vuol dire «rispondo», non «via».
-                            else -> expand(withInput = true)
-                        }
+                        // Un tap a finestra aperta la richiude: è il gesto
+                        // inverso di quello che l'ha aperta.
+                        if (expanded) collapse() else expand()
                     }
                     tracker?.recycle()
                     tracker = null
@@ -1954,7 +1929,7 @@ object FloatingOverlayController {
                 MotionEvent.ACTION_CANCEL -> {
                     if (grabbed) {
                         flight?.release(0f, 0f)
-                    } else if (!isChatOpen) {
+                    } else if (!expanded) {
                         // Il sistema si è preso il gesto (un bordo, una
                         // notifica). L'arena era già aperta dal `DOWN` e a
                         // schermo intero **inghiotte ogni tocco**: lasciarla lì
@@ -1985,7 +1960,7 @@ object FloatingOverlayController {
         // A chat aperta l'arena c'è già: è il palco, intero e toccabile.
         // Crescere qui vorrebbe dire mettere una finestra nuova sotto un dito
         // già appoggiato, e il gesto arriva a destinazione come `CANCEL`.
-        if (isChatOpen) return
+        if (expanded) return
         // Cresce la **maniglia**, che è trasparente: il dito non può più
         // uscirne, e non si vede niente cambiare. Il palco resta com'è.
         setGrip(ctx, arena = true)
@@ -2038,8 +2013,7 @@ object FloatingOverlayController {
         // ne vanno, perché mentre vola non c'è niente a cui scrivere. La
         // finestra resta grande — è già l'arena — ma smette di prendere il
         // fuoco, così la tastiera non resta appesa a mezz'aria.
-        if (isChatOpen) hideKeyboard(ctx)
-        isChatOpen = false
+        if (expanded) hideKeyboard(ctx)
         expanded = false
         scrim?.visibility = View.GONE
         inputRow?.visibility = View.GONE
@@ -2413,7 +2387,7 @@ object FloatingOverlayController {
     private fun parkX(ctx: Context, out: Boolean = false): Int {
         val size = mascotSize(ctx)
         val width = screenWidth(ctx)
-        if (out && isChatOpen) {
+        if (out && expanded) {
             val pillW = pillWidth(ctx)
             val pillLeft = (width - pillW) / 2
             val cap = dp(ctx, BAR_PAD_DP) + dp(ctx, SEND_DP) / 2
@@ -2469,8 +2443,8 @@ object FloatingOverlayController {
         val pillTop = measuredPillTop() ?: run {
             // La pillola non è a schermo (o non ha ancora fatto un layout):
             // si stima dove *comparirà*, a una riga.
-            val pill = if (isChatOpen && pillHeightPx > 0) pillHeightPx else dp(ctx, PILL_DP)
-            val bottom = if (isChatOpen) max(chatBottomInsetPx, navInset(ctx)) else navInset(ctx)
+            val pill = if (expanded && pillHeightPx > 0) pillHeightPx else dp(ctx, PILL_DP)
+            val bottom = if (expanded) max(chatBottomInsetPx, navInset(ctx)) else navInset(ctx)
             screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill
         }
         val feet = (size * FEET_RATIO).toInt()
@@ -2497,7 +2471,7 @@ object FloatingOverlayController {
      */
     private fun measuredPillTop(): Int? {
         val bar = inputBar ?: return null
-        if (!isChatOpen || bar.height <= 0 || inputRow?.visibility != View.VISIBLE) return null
+        if (!expanded || bar.height <= 0 || inputRow?.visibility != View.VISIBLE) return null
         val loc = IntArray(2)
         bar.getLocationOnScreen(loc)
         return loc[1]
