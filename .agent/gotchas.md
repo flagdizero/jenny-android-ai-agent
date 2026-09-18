@@ -301,3 +301,29 @@ Una quarta chiamata LLM aggiunta altrove deve aprire il suo
 sintomo non è un errore: è prompt caching mancato — cioè niente, finché qualcuno
 non guarda il conto. È lo stesso difetto su cui questa integrazione si è rotta
 negli altri client, sempre sulle chiamate ausiliarie fuori dal turno.
+
+## Un metodo JS ritagliato per nome non porta con sé le costanti del suo file
+
+La WebUI non ha un runner con DOM, quindi una manciata di test estrae il **testo**
+di un metodo da `mobile-chat.js` (o da un altro asset) con una regex e lo esegue
+in node dentro un finto minimo — `test_chat_switch_race_client.py`,
+`test_history_load_failure_client.py`, `test_chat_scroller_client.py` e altri.
+
+Il ritaglio è il solo corpo del metodo: **tutto ciò che il file gli metteva
+intorno non c'è**. Una `const` di modulo referenziata da dentro diventa un
+`ReferenceError` in node — e se il metodo ha un `try/catch` attorno (come
+`loadInitialHistory`, che su fallimento dipinge una riga d'errore), l'eccezione
+viene ingoiata e il test fallisce su un'asserzione lontana, del tipo «nessuna
+fetch in volo». Successo il 18/09/2026: dieci minuti per capire che il difetto
+era una costante nuova, non la modifica vera.
+
+Regola pratica: prima di dare un nome a un numero dentro un metodo, `grep` per
+il nome del metodo in `tests/webui/`. Se qualcuno lo ritaglia, il letterale resta
+(con un commento che dice perché), oppure la costante va iniettata nel banco.
+La stessa cosa vale per gli import: i banchi non li risolvono.
+
+Nota che questi ritagli **falliscono rumorosamente** quando un metodo si sposta
+(`assert m, f"{name} non trovato"`): spostare del codice fa diventare rossi i
+loro test, non verdi a vuoto. È il contrario della trappola descritta in
+[`local-build-and-test-env`] sui confronti a zero elementi — qui il rosso è il
+comportamento giusto, e va risolto ripuntando il banco, non allentando la regex.
