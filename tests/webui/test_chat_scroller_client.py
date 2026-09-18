@@ -18,6 +18,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
+PAGER_JS = ASSETS / "shared" / "history-pager.js"
 
 _NODE = shutil.which("node")
 
@@ -51,6 +52,11 @@ globalThis.window = {
 };
 const fire = (type) => (windowListeners[type] || []).forEach((fn) => fn());
 
+/* Lo scorrimento infinito sta nel modulo condiviso (una macchina sola per la
+   casa e per l'officina): `setupInfiniteScroll` ora e' il filo che lo lega a
+   `window` e al documento, ed e' quel filo che si misura qui. */
+const { HistoryPager } = await import('__PAGER_URL__');
+
 function makeChat({ scrollTop = 0, scrollHeight = 3000, clientHeight = 1000, areaHeight = 900 } = {}) {
   const chat = {
     _scroller: { scrollTop, scrollHeight, clientHeight },
@@ -63,16 +69,28 @@ function makeChat({ scrollTop = 0, scrollHeight = 3000, clientHeight = 1000, are
     _active: true,
     fabUpdates: 0,
     loadedMore: 0,
-    isLoadingHistory: false,
-    hasMoreHistory: true,
     _updateScrollFab() { this.fabUpdates++; },
-    loadMoreHistory() { this.loadedMore++; },
     __NEAR__,
     __BOTTOM__,
     __REMEMBER__,
     __RESTORE__,
     __INFINITE__,
   };
+  chat._pager = new HistoryPager({
+    scroller: () => chat._scroller,
+    listenOn: globalThis.window,
+    container: () => ({ querySelector: () => null }),
+    pageSize: 120,
+    begin: () => null,
+    prepend() {},
+    mount() {},
+    label: () => 'i18n:chat.loadPrevious',
+  });
+  chat._pager.loadMore = async () => { chat.loadedMore++; };
+  Object.defineProperty(chat, 'hasMoreHistory', {
+    get: () => chat._pager.hasMore,
+    set: (v) => { chat._pager.hasMore = !!v; },
+  });
   return chat;
 }
 """
@@ -86,6 +104,7 @@ def _harness() -> str:
         .replace("__REMEMBER__", _member(src, "_rememberScrollAnchor"))
         .replace("__RESTORE__", _member(src, "_restoreScrollAnchor"))
         .replace("__INFINITE__", _member(src, "setupInfiniteScroll"))
+        .replace("__PAGER_URL__", PAGER_JS.as_uri())
     )
 
 

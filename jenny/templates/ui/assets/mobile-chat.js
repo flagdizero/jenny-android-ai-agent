@@ -1,6 +1,7 @@
 /** Mobile Chat Controller — full-featured chat with markdown, thinking, tool calls. */
 
 import { wsManager } from './shared/ws-manager.js';
+import { HistoryPager } from './shared/history-pager.js';
 import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { sessionManager } from './shared/session-manager.js';
@@ -30,6 +31,10 @@ const TOOL_ICONS = {
   end: 'ti-check',
   error: 'ti-x',
 };
+
+/* Quante ancore chiede una pagina all'indietro. La *prima* pagina ne chiede 160
+   e quel numero sta nella sua chiamata: v. il commento in `loadInitialHistory`. */
+const HISTORY_PAGE_SIZE = 120;
 
 /* Icona per kind di attività di un subagent. Tabella e non if/else perché è la
    sola cosa che distingue una riga dall'altra a colpo d'occhio: su un telefono
@@ -187,9 +192,25 @@ export class ChatController {
     this._goalBanner = null;
     this._goalTimer = null;
 
-    this.historyCursor = null;
-    this.isLoadingHistory = false;
-    this.hasMoreHistory = true;
+    /* Cursore, chiavistello e bottone della pagina precedente stanno nel modulo
+       condiviso con la casa (`shared/history-pager.js`): qui restano gli
+       appigli, cioe' le tre cose che i due gusci fanno in modo diverso — dove si
+       ascolta lo scroll, come si chiede una pagina, come la si disegna.
+       `historyCursor` / `hasMoreHistory` / `isLoadingHistory` restano leggibili
+       col loro nome (v. gli accessori sotto): li legge il resync della
+       riconnessione, e i test li nominano. */
+    this._pager = new HistoryPager({
+      // Lo scroller e' il documento, ma l'evento `scroll` arriva a `window`:
+      // qui le due cose non coincidono (v. il getter `_scroller`).
+      scroller: () => this._scroller,
+      listenOn: window,
+      container: () => this.chatArea,
+      pageSize: HISTORY_PAGE_SIZE,
+      begin: () => this._beginHistoryPage(),
+      prepend: (messages) => this._renderThreadMessagesToTop(messages),
+      mount: (node) => this._insertAtTop(node),
+      label: () => i18n.t('chat.loadPrevious'),
+    });
     this._initialHistoryLoaded = false;
     /* Un caricamento iniziale è *in volo*, che non è la stessa cosa di
        `_initialHistoryLoaded` (quello è un latch: resta alzato dopo la fine, e
@@ -622,13 +643,7 @@ export class ChatController {
   }
 
   setupInfiniteScroll() {
-    window.addEventListener('scroll', () => {
-      if (this._scroller.scrollTop === 0 &&
-          !this.isLoadingHistory &&
-          this.hasMoreHistory) {
-        this.loadMoreHistory();
-      }
-    });
+    this._pager.bindInfiniteScroll();
   }
 
   async _initOnSessionReady() {
@@ -699,8 +714,7 @@ export class ChatController {
     this.chatArea.innerHTML = '';
     this.identityEl = null;
     this._ensureIdentity();
-    this.historyCursor = null;
-    this.hasMoreHistory = true;
+    this._pager.reset();
     this._initialHistoryLoaded = false;
   }
 
@@ -783,6 +797,10 @@ export class ChatController {
       await api.bootstrap();
       if (superseded()) return;
       this._initRuntimeModelFromBootstrap();
+      // Il 160 è scritto qui e non in una costante del modulo di proposito: il
+      // corpo di questo metodo viene *ritagliato come testo* ed eseguito in node
+      // da tre test, che non si portano dietro le const del file. Un nome qui
+      // diventa un ReferenceError dentro il try, cioè un fallimento muto.
       const { thread, scope } = await sessionManager.loadThread(key, 160);
       if (superseded()) return;
       // Lo scope mostrato sopra il composer deve venire dal backend, non da un
@@ -798,8 +816,7 @@ export class ChatController {
       // sostituisce).
       this._clearHistoryError();
       this._renderThreadMessages(thread.messages || []);
-      this.historyCursor = thread.page?.before_cursor || null;
-      this.hasMoreHistory = thread.page?.has_more_before !== false;
+      this._pager.adopt(thread.page);
       this._ensureHistoryReach();
       this.scrollToBottom(true);
     } catch (err) {
@@ -823,52 +840,41 @@ export class ChatController {
     }
   }
 
-  /* Il modo di raggiungere la pagina precedente **quando non si può scorrere**.
+  /* Lo stato della paginazione vive nel modulo condiviso, ma il suo nome qui è
+     pubblico: `isLoadingHistory` lo legge `_resyncThreadAfterReconnect` per non
+     far partire una fetch sopra un'altra, e `historyCursor` / `hasMoreHistory`
+     li scrive il caricamento iniziale. Tre accessori invece di tre campi: i
+     punti di lettura restano quelli di prima, la verità sta in un posto solo. */
+  get historyCursor() { return this._pager.cursor; }
 
-     `setupInfiniteScroll` aspetta un evento `scroll` con `scrollTop === 0`, e un
-     contenitore che non trabocca non ne emette nessuno: la pagina più vecchia
-     esiste, il client sa che esiste (`hasMoreHistory`), e non c'è gesto che
-     possa chiederla. Prima non si notava perché la prima pagina è lunga; da
-     quando `/new` fa ripartire la chat dal separatore è lo **stato normale
-     subito dopo un reset** — tre righe a schermo e la conversazione di prima
-     irraggiungibile, cioè la stessa cancellazione apparente che questo disegno
-     esiste per non fare.
+  set historyCursor(value) { this._pager.cursor = value || null; }
 
-     Un bottone e non un allungamento artificiale del contenuto: la riga dice
-     cosa c'è sopra, e sparisce da sola appena la chat cresce abbastanza da
-     rendere di nuovo possibile il gesto. */
-  _ensureHistoryReach() {
-    const existing = this.chatArea.querySelector('.chat-history-more');
-    const canScroll = this._scroller.scrollHeight > this._scroller.clientHeight + 4;
-    if (!this.hasMoreHistory || canScroll) {
-      existing?.remove();
-      return;
-    }
-    /* Riancorato in cima **anche quando c'è già**, ed è il difetto che i test
-       non vedevano: la pagina chiesta dal tocco entra da
-       `_renderThreadMessagesToTop`, cioè sopra di lui, e il bottone resta in
-       mezzo — «mostra la conversazione precedente» con quella conversazione
-       stampata sotto, che indica la direzione sbagliata. Succede quando la
-       pagina caricata è corta (due `/new` di fila: un separatore e basta), e
-       allora la chat non trabocca ancora e il bottone non se ne va.
-       `insertBefore` sposta un nodo già attaccato invece di duplicarlo, quindi
-       il `disabled` del giro in corso resta suo. */
-    this._insertAtTop(existing || this._createHistoryReachButton());
+  get hasMoreHistory() { return this._pager.hasMore; }
+
+  set hasMoreHistory(value) { this._pager.hasMore = !!value; }
+
+  get isLoadingHistory() { return this._pager.loading; }
+
+  /* Apre una pagina: quale conversazione, e la guardia contro il cambio di
+     conversazione. Una pagina vecchia arrivata dopo un cambio va buttata, non
+     incollata in cima al thread di un'altra chat — è la stessa regola del
+     caricamento iniziale, e questo è il pezzo che il modulo condiviso non può
+     sapere da sé. */
+  _beginHistoryPage() {
+    if (!sessionManager.currentKey) return null;
+    const generation = sessionManager.switchGeneration;
+    const key = sessionManager.currentKey;
+    return {
+      fetch: async (limit, cursor) => {
+        const { thread } = await sessionManager.loadThread(key, limit, cursor);
+        return thread;
+      },
+      stale: () => generation !== sessionManager.switchGeneration,
+    };
   }
 
-  _createHistoryReachButton() {
-    const btn = document.createElement('button');
-    btn.className = 'chat-history-more';
-    btn.type = 'button';
-    btn.textContent = i18n.t('chat.loadPrevious');
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await this.loadMoreHistory();
-      // `loadMoreHistory` richiama `_ensureHistoryReach`, che toglie questo
-      // nodo quando non serve più; se serve ancora (pagina corta) va riabilitato.
-      btn.disabled = false;
-    });
-    return btn;
+  _ensureHistoryReach() {
+    this._pager.ensureReach();
   }
 
   /* La riga «storia non caricata», al posto della chat vuota che mentiva.
@@ -888,38 +894,7 @@ export class ChatController {
   }
 
   async loadMoreHistory() {
-    if (this.isLoadingHistory || !this.hasMoreHistory) return;
-    if (!sessionManager.currentKey) return;
-    // Stessa regola del caricamento iniziale: una pagina vecchia arrivata dopo
-    // un cambio di conversazione va buttata, non incollata in cima al thread di
-    // un'altra chat.
-    const generation = sessionManager.switchGeneration;
-    const key = sessionManager.currentKey;
-    // Senza cursore la thread API restituisce la pagina *più recente*, non
-    // quella precedente: paginare indietro con before=null riporterebbe in cima
-    // i messaggi già a schermo invece di quelli vecchi. Se il server dichiara
-    // has_more_before senza darci un cursore, non c'è nulla da paginare.
-    if (!this.historyCursor) {
-      this.hasMoreHistory = false;
-      return;
-    }
-    this.isLoadingHistory = true;
-    const scrollHeightBefore = this._scroller.scrollHeight;
-    try {
-      const { thread } = await sessionManager.loadThread(key, 120, this.historyCursor);
-      if (generation !== sessionManager.switchGeneration) return;
-      const messages = thread.messages || [];
-      this._renderThreadMessagesToTop(messages);
-      this.historyCursor = thread.page?.before_cursor || null;
-      this.hasMoreHistory = thread.page?.has_more_before !== false;
-      this._ensureHistoryReach();
-      const scrollHeightAfter = this._scroller.scrollHeight;
-      this._scroller.scrollTop = scrollHeightAfter - scrollHeightBefore;
-    } catch (err) {
-      console.error('Failed to load more history:', err);
-    } finally {
-      this.isLoadingHistory = false;
-    }
+    await this._pager.loadMore();
   }
 
   // Ricostruisce l'array di turni normalizzati dai messaggi persistiti.

@@ -259,6 +259,7 @@ _UI_MANIFEST = [
     "assets/shared/commands-chip.js",
     "assets/shared/cron-view.js",
     "assets/shared/dialog.js",
+    "assets/shared/history-pager.js",
     "assets/shared/home-view.js",
     "assets/shared/i18n.js",
     "assets/shared/image-handler.js",

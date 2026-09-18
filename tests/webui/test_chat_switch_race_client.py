@@ -39,6 +39,7 @@ import pytest
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 SESSION_JS = ASSETS / "shared" / "session-manager.js"
+PAGER_JS = ASSETS / "shared" / "history-pager.js"
 
 _NODE = shutil.which("node")
 
@@ -66,6 +67,18 @@ def _member(source: str, name: str) -> str:
 
 _HARNESS = """
 import assert from 'node:assert/strict';
+
+/* Cursore e chiavistello della paginazione stanno nel modulo condiviso: qui si
+   importa quello vero, cosi' la guardia contro il cambio di conversazione si
+   misura sull'intera catena (`loadMoreHistory` -> pager -> `_beginHistoryPage`
+   -> `loadThread`) invece che su un ritaglio di testo. */
+globalThis.document = {
+  createElement() {
+    return { className: '', textContent: '', type: '', disabled: false,
+             addEventListener() {}, remove() {} };
+  },
+};
+const { HistoryPager } = await import('__PAGER_URL__');
 
 // ── Doppi: tutto ciò che i metodi veri chiamano fuori da sé ─────────────────
 const UNIFIED_KEY = 'websocket:default';
@@ -103,9 +116,6 @@ function makeChat() {
   const chat = {
     rendered: [],
     identityEl: null,
-    historyCursor: null,
-    hasMoreHistory: true,
-    isLoadingHistory: false,
     _initialHistoryLoaded: false,
     _loadingInitialHistory: false,
     _resetStreamState() {},
@@ -130,6 +140,7 @@ function makeChat() {
     __INVALIDATE__,
     __LOAD_INITIAL__,
     __LOAD_MORE__,
+    __BEGIN_PAGE__,
     __SWITCH_CONVERSATION__,
   };
   // Il DOM ridotto all'osso: svuotarlo si vede, ed è ciò che `invalidateHistory`
@@ -139,7 +150,30 @@ function makeChat() {
   chat.chatArea = {
     get innerHTML() { return chat.rendered.join('\\n'); },
     set innerHTML(v) { if (v === '') chat.rendered = []; },
+    querySelector() { return null; },
   };
+  chat._pager = new HistoryPager({
+    scroller: () => chat._scroller,
+    listenOn: { addEventListener() {} },
+    container: () => chat.chatArea,
+    pageSize: 120,
+    begin: () => chat._beginHistoryPage(),
+    prepend: (msgs) => chat._renderThreadMessagesToTop(msgs),
+    mount() {},
+    label: () => 'i18n:chat.loadPrevious',
+  });
+  /* Gli stessi nomi di prima: li legge il resync e li scrivono i test. */
+  Object.defineProperties(chat, {
+    historyCursor: {
+      get: () => chat._pager.cursor,
+      set: (v) => { chat._pager.cursor = v || null; },
+    },
+    hasMoreHistory: {
+      get: () => chat._pager.hasMore,
+      set: (v) => { chat._pager.hasMore = !!v; },
+    },
+    isLoadingHistory: { get: () => chat._pager.loading },
+  });
   return chat;
 }
 
@@ -174,6 +208,8 @@ def _harness() -> str:
         .replace("__INVALIDATE__", _member(chat, "invalidateHistory"))
         .replace("__LOAD_INITIAL__", _member(chat, "loadInitialHistory"))
         .replace("__LOAD_MORE__", _member(chat, "loadMoreHistory"))
+        .replace("__BEGIN_PAGE__", _member(chat, "_beginHistoryPage"))
+        .replace("__PAGER_URL__", PAGER_JS.as_uri())
         .replace("__SWITCH_CONVERSATION__", _member(chat, "_switchConversation"))
     )
 

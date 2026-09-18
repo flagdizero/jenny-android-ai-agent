@@ -43,6 +43,7 @@ import pytest
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 SESSION_JS = ASSETS / "shared" / "session-manager.js"
+PAGER_JS = ASSETS / "shared" / "history-pager.js"
 I18N_DIR = ASSETS / "i18n"
 
 _NODE = shutil.which("node")
@@ -67,6 +68,17 @@ def _member(source: str, name: str) -> str:
 
 _HARNESS = """
 import assert from 'node:assert/strict';
+
+/* La paginazione vive nel modulo condiviso: il caricamento iniziale registra li'
+   dove e' arrivato (`adopt`) e `invalidateHistory` lo riazzera, quindi il finto
+   monta quello vero invece di tre campi sciolti. */
+globalThis.document = globalThis.document || {
+  createElement() {
+    return { className: '', textContent: '', type: '', disabled: false,
+             addEventListener() {}, remove() {} };
+  },
+};
+const { HistoryPager } = await import('__PAGER_URL__');
 
 // ── Doppi ───────────────────────────────────────────────────────────────────
 const UNIFIED_KEY = 'websocket:default';
@@ -124,9 +136,6 @@ function makeChat() {
   const chat = {
     rendered: [],
     identityEl: null,
-    historyCursor: null,
-    hasMoreHistory: true,
-    isLoadingHistory: false,
     _initialHistoryLoaded: false,
     _loadingInitialHistory: false,
     _resyncingThread: false,
@@ -153,9 +162,34 @@ function makeChat() {
     scrollTop: 0,
     appendChild(el) { nodes.push(el); return el; },
     querySelectorAll(selector) { return withClass(selector.replace('.', '')); },
+    querySelector(selector) { return withClass(selector.replace('.', ''))[0] || null; },
     get innerHTML() { return chat.rendered.join('\\n'); },
     set innerHTML(v) { if (v === '') { chat.rendered = []; nodes = []; } },
   };
+  chat._scroller = { scrollHeight: 2000, clientHeight: 400, scrollTop: 0 };
+  chat._pager = new HistoryPager({
+    scroller: () => chat._scroller,
+    listenOn: { addEventListener() {} },
+    container: () => chat.chatArea,
+    pageSize: 120,
+    begin: () => null,
+    prepend() {},
+    mount() {},
+    label: () => 'i18n:chat.loadPrevious',
+  });
+  /* Gli stessi nomi di prima: `isLoadingHistory` lo legge il resync, e i test
+     leggono il cursore per dire dove il caricamento e' arrivato. */
+  Object.defineProperties(chat, {
+    historyCursor: {
+      get: () => chat._pager.cursor,
+      set: (v) => { chat._pager.cursor = v || null; },
+    },
+    hasMoreHistory: {
+      get: () => chat._pager.hasMore,
+      set: (v) => { chat._pager.hasMore = !!v; },
+    },
+    isLoadingHistory: { get: () => chat._pager.loading },
+  });
   return chat;
 }
 
@@ -194,6 +228,7 @@ def _harness() -> str:
         .replace("__CLEAR_ERROR__", _member(chat, "_clearHistoryError"))
         .replace("__RESYNC__", _member(chat, "_resyncThreadAfterReconnect"))
         .replace("__SWITCH_CONVERSATION__", _member(chat, "_switchConversation"))
+        .replace("__PAGER_URL__", PAGER_JS.as_uri())
     )
 
 
