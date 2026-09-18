@@ -1740,6 +1740,11 @@ body {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
+/* Quando la mascotte è agganciata a sinistra (drag dell'utente) l'angolo
+   destro è libero: lo scostamento sopra serve solo quando lei è lì. */
+:root:has(.jenny-duo.side-left) .chat-scroll-fab {
+  right: 14px;
+}
 .chat-scroll-fab.visible {
   opacity: 1;
   transform: translateY(0);
@@ -5321,6 +5326,12 @@ body {
   line-height: 1.45;
   color: var(--text-faint);
 }
+
+/* Stessa riga, ma quando dice che qualcosa NON sta funzionando: il permesso
+   overlay negato mentre l'interruttore è acceso. Cambia solo il colore —
+   restare una `.settings-hint` è il punto, perché è la stessa riga che spiega
+   la manopola, non un banner che si aggiunge. */
+.settings-hint-warn { color: var(--warn, #c98a2e); }
 
 /* Una riga vuota non lascia un buco: la riga della pianificazione tace quando
    quel lavoratore è spento (`_scheduleText`), e senza questo resterebbe lo

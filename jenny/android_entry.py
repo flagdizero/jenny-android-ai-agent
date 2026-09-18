@@ -97,6 +97,7 @@ def run_gateway(
         from jenny.agent.tools.ssh_jobs import reset_job_store
         from jenny.agent.tools.ssh_transport import reset_ssh_backend
         from jenny.config.store import reset_config_store_state
+        from jenny.runtime.floating import reset_floating_state
         from jenny.runtime.location import reset_location_state
         from jenny.runtime.native_input import reset_native_input
         from jenny.runtime.notifier import reset_notifier_state
@@ -110,6 +111,10 @@ def run_gateway(
         reset_installed_apps_state()
         reset_notifier_state()
         reset_native_input()
+        # Gemello di reset_notifier_state: il FloatingBridge cachato punta al
+        # contesto del giro precedente, e il lock dentro BridgeCache è legato a
+        # un loop morto.
+        reset_floating_state()
         reset_location_state()
         # L'updater tiene una fase *sticky* e un ``UpdateBridge`` in cache: senza
         # questo reset un gateway che riparte nello stesso processo mostrerebbe

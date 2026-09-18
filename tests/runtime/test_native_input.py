@@ -119,8 +119,8 @@ class TestConfineConKotlin:
 
     Kotlin raggiunge questo modulo per **nome**, attraverso Chaquopy: né il
     compilatore Kotlin né pyright vedono quel legame, e rinominare il modulo, la
-    funzione o la stringa della sorgente lascerebbe tutto verde qui e muta la
-    tendina là. Queste tre asserzioni sono l'unico posto in cui quel legame è
+    funzione o una stringa di sorgente lascerebbe tutto verde qui e muta la
+    superficie là. Queste asserzioni sono l'unico posto in cui quel legame è
     controllato.
     """
 
@@ -138,16 +138,36 @@ class TestConfineConKotlin:
         assert 'callAttr("on_native_text"' in self._gateway_service()
         assert callable(ni.on_native_text)
 
-    def test_kotlin_passa_anche_il_filo(self):
-        """Terzo argomento: il tag della notifica. Se qui e là divergono, la
-        risposta finisce su un filo di ripiego e la seconda scheda torna."""
-        assert '"on_native_text", text, "notification", sourceTag' in self._gateway_service()
+    def test_kotlin_passa_sorgente_e_filo(self):
+        """Tre argomenti, in quest'ordine: testo, sorgente, tag del filo. La
+        sorgente è una variabile da quando le superfici native sono due, quindi
+        il legame vero sono le costanti — v. il test qui sotto."""
+        assert (
+            '.callAttr("on_native_text", text, source, sourceTag)'
+            in self._gateway_service()
+        )
 
-    def test_la_sorgente_che_passa_kotlin_e_riconosciuta(self):
-        """Una sorgente fuori elenco viene rifiutata: se le due stringhe
-        divergono, ogni risposta dalla tendina viene scartata."""
-        assert '"on_native_text", text, "notification"' in self._gateway_service()
-        assert ni.SOURCE_NOTIFICATION in ni._CHANNEL_BY_SOURCE
+    @pytest.mark.parametrize(
+        "kotlin_const, python_source",
+        [
+            ("NATIVE_SOURCE_NOTIFICATION", "SOURCE_NOTIFICATION"),
+            ("NATIVE_SOURCE_FLOATING", "SOURCE_FLOATING"),
+        ],
+    )
+    def test_le_sorgenti_di_kotlin_sono_riconosciute(self, kotlin_const, python_source):
+        """Una sorgente fuori elenco viene rifiutata, in silenzio: se le due
+        stringhe divergono, ogni messaggio di quella superficie viene scartato e
+        nulla lo dice a compilazione."""
+        value = getattr(ni, python_source)
+        assert f'const val {kotlin_const} = "{value}"' in self._gateway_service()
+        assert value in ni._CHANNEL_BY_SOURCE
+
+    def test_la_mascotte_consegna_dallo_stesso_confine(self):
+        """La seconda superficie non si è portata un percorso suo: passa dalla
+        stessa funzione, con la sua sorgente."""
+        src = self._gateway_service()
+        assert "fun deliverFloatingText(" in src
+        assert "deliverWithRetry(text, NATIVE_SOURCE_FLOATING" in src
 
 
 class TestConsegna:
@@ -186,6 +206,28 @@ class TestConsegna:
         assert ok is True
         await asyncio.wait_for(bus.arrived.wait(), 2)
         assert bus.inbound[0].content == "scritto dal thread JNI"
+
+    async def test_la_mascotte_entra_sul_suo_canale(self):
+        """Due superfici native, due canali: la risposta a una domanda scritta
+        nel fumetto deve tornare **nel fumetto**, non squillare in tendina."""
+        from jenny.bus.events import FLOATING_CHANNEL
+
+        bus = await _bound()
+        assert ni.on_native_text("che ore sono?", ni.SOURCE_FLOATING) is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+
+        (msg,) = bus.inbound
+        assert msg.channel == FLOATING_CHANNEL
+        assert msg.metadata[ni.NATIVE_SOURCE_KEY] == ni.SOURCE_FLOATING
+        assert msg.session_key == UNIFIED_SESSION_KEY
+
+    async def test_la_mascotte_non_porta_un_filo(self):
+        """La sua finestra è una sola: non ha schede da tenere distinte, e una
+        chiave a vuoto nei metadata la dovrebbe ignorare ogni lettore a valle."""
+        bus = await _bound()
+        assert ni.on_native_text("ciao", ni.SOURCE_FLOATING) is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+        assert ni.NATIVE_THREAD_KEY not in bus.inbound[0].metadata
 
     async def test_il_tag_del_filo_entra_nei_metadata(self):
         """È il tag della notifica da cui è partita la domanda: torna a valle e

@@ -140,6 +140,59 @@ function syncNativeBars(scheme) {
   }
 }
 
+/** Un colore CSS in `#AARRGGBB`, la sola forma che `Color.parseColor` legge.
+ *
+ *  Non è una precauzione teorica: `getComputedStyle` restituisce le custom
+ *  property **alla lettera**, e tre temi su sette scrivono i bordi come
+ *  `rgba(244, 241, 234, 0.28)`. Passata così, quella stringa fa sollevare il
+ *  parser di Android — cioè un bordo che resta del tema di prima, in silenzio.
+ *  Qui il valore è già risolto, quindi la conversione si fa qui. */
+export function argbHex(value) {
+  const css = (value || '').trim();
+  const hex = css.match(/^#([0-9a-f]{3,8})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3 || h.length === 4) h = h.split('').map(c => c + c).join('');
+    if (h.length === 6) return '#ff' + h.toLowerCase();
+    // `#rrggbbaa` è CSS, `#aarrggbb` è Android: l'alfa cambia di posto.
+    if (h.length === 8) return ('#' + h.slice(6) + h.slice(0, 6)).toLowerCase();
+    return '';
+  }
+  const fn = css.match(/^rgba?\(([^)]+)\)$/i);
+  if (!fn) return '';
+  const parts = fn[1].split(/[,/\s]+/).filter(Boolean);
+  if (parts.length < 3) return '';
+  const byte = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  const alpha = parts.length > 3 ? parseFloat(parts[3]) * 255 : 255;
+  if (parts.slice(0, 3).some(p => Number.isNaN(parseFloat(p)))) return '';
+  return '#' + byte(alpha) + parts.slice(0, 3).map(p => byte(parseFloat(p))).join('');
+}
+
+/** I token che vestono la finestra flottante, nell'ordine del ponte. */
+const FLOATING_TOKENS = [
+  '--surface', '--border-strong', '--text', '--text-faint', '--accent', '--on-accent',
+];
+
+/** Veste la mascotte flottante con il tema attivo.
+ *
+ *  Là non c'è CSS — sono `View` in px — quindi i colori erano scritti nel
+ *  Kotlin, ed erano quelli di `chanel` per tutti e sette i temi: con Synthwave
+ *  la barra restava avorio sopra un'app rosa. Come per la taglia
+ *  (`shared/mascot.js`), la fonte di verità resta qui e il guscio la riceve.
+ *  No-op fuori dalla WebView, o su un APK più vecchio del metodo. */
+function syncFloatingPalette() {
+  const native = window.JennyNative;
+  if (!native || typeof native.setFloatingPalette !== 'function') return;
+  const cs = getComputedStyle(document.documentElement);
+  const colors = FLOATING_TOKENS.map(t => argbHex(cs.getPropertyValue(t)));
+  if (colors.some(c => !c)) return;
+  try {
+    native.setFloatingPalette(...colors);
+  } catch (e) {
+    /* ponte assente: la finestra resta con i colori che ha */
+  }
+}
+
 /** Toggle the dark/light syntax stylesheets (highlight.js + CodeMirror). */
 export function applySyntaxTheme(scheme) {
   for (const [id, s] of [
@@ -158,11 +211,13 @@ export function setTheme(id) {
   AppState.theme = theme.id;
   applySyntaxTheme(theme.scheme);
   syncNativeBars(theme.scheme);
+  syncFloatingPalette();
   window.dispatchEvent(new CustomEvent('themechange', { detail: theme }));
   return theme;
 }
 
-// Align the syntax stylesheets and the system bars with the theme the boot
-// script applied.
+// Align the syntax stylesheets, the system bars and the floating mascot with
+// the theme the boot script applied.
 applySyntaxTheme(currentTheme().scheme);
 syncNativeBars(currentTheme().scheme);
+syncFloatingPalette();

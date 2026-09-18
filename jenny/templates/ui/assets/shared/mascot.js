@@ -87,7 +87,15 @@ export function setMascotSize(size) {
 /** Scrive la taglia attiva su <html> come --jenny-size. Da chiamare anche
  *  all'avvio: il default CSS copre solo la taglia di default. */
 export function applyMascotSize() {
-  document.documentElement.style.setProperty(
-    '--jenny-size', `${MASCOT_SIZES[mascotSize()]}px`
-  );
+  const px = MASCOT_SIZES[mascotSize()];
+  document.documentElement.style.setProperty('--jenny-size', `${px}px`);
+  // La mascotte flottante è la stessa persona: prende di qui la sua taglia,
+  // in px fisici, invece di averne una propria da tenere allineata a mano.
+  // Il guscio nativo la ricorda, quindi vale anche se in questo momento è
+  // spenta. Fuori dall'APK il ponte non c'è e non succede niente.
+  try {
+    window.JennyNative?.setMascotSize?.(px, window.devicePixelRatio || 1);
+  } catch (_) {
+    /* ponte assente */
+  }
 }

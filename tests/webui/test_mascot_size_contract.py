@@ -60,3 +60,37 @@ def test_default_size_matches_the_css_token():
     token = re.search(r"--jenny-size:\s*(\d+)px", css)
     assert token, "--jenny-size non è più definita in :root"
     assert int(token.group(1)) == module[default]
+
+
+def test_the_floating_mascot_takes_its_size_from_the_same_place():
+    """Terzo posto in cui la taglia potrebbe divergere: la finestra flottante.
+
+    Là non c'è CSS — è una `View` in px — quindi la tentazione è di scriverci
+    un numero. La regola scelta è l'opposto: la SPA **spinge** la sua taglia
+    attraverso il ponte, già in px fisici, e il Kotlin non ne ha una propria da
+    tenere allineata. Questo test tiene in piedi i tre pezzi di quel giro, che
+    nessun compilatore vede: la chiamata in `applyMascotSize`, il metodo
+    `@JavascriptInterface` che la riceve, e il fatto che il controller non
+    reintroduca una taglia fissa come misura di lavoro.
+    """
+    android = Path(__file__).resolve().parents[2] / "android/app/src/main/java/com/flagdizero/jenny"
+
+    mascot_js = (UI_ASSETS / "shared" / "mascot.js").read_text("utf-8")
+    assert "JennyNative?.setMascotSize?.(px, window.devicePixelRatio" in mascot_js, (
+        "applyMascotSize non spinge più la taglia al guscio nativo: la mascotte "
+        "flottante resterebbe a quella di prima, in silenzio"
+    )
+
+    main_activity = (android / "MainActivity.kt").read_text("utf-8")
+    assert "fun setMascotSize(cssPx: Int, dpr: Double)" in main_activity
+    assert "FloatingOverlayController.setMascotSize(" in main_activity
+
+    controller = (android / "FloatingOverlayController.kt").read_text("utf-8")
+    assert "fun setMascotSize(px: Int)" in controller
+    # Il ripiego può esistere (serve al primo avvio) ma dev'essere la taglia di
+    # default della WebUI, non un numero scelto qui.
+    assert "MASCOT_FALLBACK_DP = 120" in controller, (
+        "il ripiego del controller non è più la `sm` della WebUI"
+    )
+    sizes = _sizes_from(mascot_js, r"MASCOT_SIZES\s*=\s*\{([^}]*)\}")
+    assert sizes["sm"] == 120

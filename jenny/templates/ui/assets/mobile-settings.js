@@ -1485,7 +1485,37 @@ export class SettingsController {
       <div class="settings-field"${visible ? '' : ' data-settings-off'}>
         <label class="settings-label">${i18n.t('settings.mascotSize')}</label>
         <div class="settings-seg">${sizeButtons}</div>
-      </div>`;
+      </div>
+      ${this._renderFloating()}`;
+  }
+
+  /* Mascotte flottante: sopra le altre app, un tap e le si parla.
+     Sta qui sotto la mascotte perché è la stessa Jenny, ma è l'unica voce di
+     questa sezione che NON è una preferenza di client: vive in config.json,
+     perché a montare la finestra è il service all'avvio e un service non ha un
+     localStorage da leggere.
+     Fuori da Android la voce non si disegna affatto (`available` falso): un
+     interruttore che non può accendere niente è peggio di una voce assente.
+     E l'interruttore non mente sul permesso — `active` falso a `enabled` vero
+     vuol dire che Android non lascia aprire la finestra, e la riga sotto lo
+     dice invece di far rimbalzare il toggle su off senza spiegazioni. */
+  _renderFloating() {
+    const floating = this.data?.floating;
+    if (!floating || !floating.available) return '';
+    const on = !!floating.enabled;
+    const blocked = on && floating.active === false;
+    const note = blocked
+      ? `<div class="settings-hint settings-hint-warn">${i18n.t('settings.floatingBlocked')}</div>`
+      : `<div class="settings-hint">${i18n.t('settings.floatingHint')}</div>`;
+    return `
+      <div class="settings-field settings-toggle-row">
+        <label class="settings-label">${i18n.t('settings.floatingEnabled')}</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="floating-enabled-toggle" ${on ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      ${note}`;
   }
 
   // ── Tasto Home ─────────────────────────────────────────────────────
@@ -2571,6 +2601,28 @@ export class SettingsController {
         this.render();
       });
     });
+    // Mascotte flottante: si salva al cambio come il toggle posizione. Il
+    // re-render serve: la risposta porta `active`, cioè se Android ha davvero
+    // lasciato aprire la finestra, e quella riga va ridisegnata.
+    const floatingToggle = this.contentEl.querySelector('#floating-enabled-toggle');
+    if (floatingToggle) {
+      floatingToggle.addEventListener('change', () => {
+        const enabled = floatingToggle.checked;
+        api.updateFloating({ enabled: enabled ? '1' : '0' })
+          .then(payload => {
+            if (payload && payload.floating) this.data.floating = payload.floating;
+            this.render();
+            if (enabled && payload?.floating?.active === false) {
+              showToast(i18n.t('settings.floatingBlocked'));
+            }
+          })
+          .catch(() => {
+            floatingToggle.checked = !enabled;  // rollback sull'errore
+            showToast(i18n.t('settings.saveError'));
+          });
+      });
+    }
+
     // Tasto Home: nessun re-render, il valore serve solo a goHome()
     const homeSelect = this.contentEl.querySelector('#home-view-select');
     if (homeSelect) {

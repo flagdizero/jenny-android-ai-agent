@@ -26,6 +26,7 @@ from jenny.webui.settings_api import (
     settings_payload,
     start_update_install,
     update_agent_settings,
+    update_floating_settings,
     update_location_settings,
     update_power_settings,
     update_provider,
@@ -49,6 +50,23 @@ from jenny.webui.worker_settings import (
 )
 
 QueryParams = dict[str, list[str]]
+
+
+async def _enrich_floating(payload: dict) -> None:
+    """Aggiunge ``floating.active`` al payload delle impostazioni.
+
+    Fuori da Android la sezione dichiara già ``available: false`` e non c'è
+    niente da chiedere: si esce senza toccare il bridge. Un errore qui non deve
+    costare la pagina intera — ``floating_active`` non solleva, ma la guardia
+    resta perché questa funzione sta nel percorso di **lettura** di tutte le
+    impostazioni, non solo di quella riga.
+    """
+    section = payload.get("floating")
+    if not isinstance(section, dict) or not section.get("available"):
+        return
+    from jenny.runtime.floating import floating_active
+
+    section["active"] = await floating_active()
 
 
 class WebUISettingsRouter:
@@ -88,7 +106,7 @@ class WebUISettingsRouter:
 
     async def dispatch(self, request: WsRequest, path: str) -> Response | None:
         if path == "/api/settings":
-            return self._handle_settings(request)
+            return await self._handle_settings(request)
         if path == "/api/settings/update":
             return await self._handle_settings_update(request)
         if path == "/api/settings/provider/update":
@@ -105,6 +123,8 @@ class WebUISettingsRouter:
             return await self._handle_settings_web_search_update(request)
         if path == "/api/settings/location/update":
             return await self._handle_settings_location_update(request)
+        if path == "/api/settings/floating/update":
+            return await self._handle_settings_floating_update(request)
         if path == "/api/settings/power/update":
             return await self._handle_settings_power_update(request)
         if path == "/api/settings/power/diagnostics":
@@ -164,10 +184,19 @@ class WebUISettingsRouter:
             except Exception:
                 self.logger.exception("on_jobs_changed callback failed for {}", worker)
 
-    def _handle_settings(self, request: WsRequest) -> Response:
+    async def _handle_settings(self, request: WsRequest) -> Response:
         if not self._authorized(request):
             return self._unauthorized()
-        return self._json_response(settings_payload())
+        payload = settings_payload()
+        # ``enabled`` dice cosa ha chiesto l'utente, ``active`` se Android
+        # gliela lascia aprire. Va chiesto alla finestra a **ogni** lettura e
+        # non solo dopo un tocco dell'interruttore: il permesso si revoca da
+        # una schermata di sistema, fuori da qui, e la riga che lo spiega deve
+        # comparire tutte le volte che è vera. Asincrono perché la risposta
+        # attraversa Chaquopy; il costo è una chiamata per apertura del
+        # pannello.
+        await _enrich_floating(payload)
+        return self._json_response(payload)
 
     async def _handle_settings_update(self, request: WsRequest) -> Response:
         # Si chiama a ogni salvataggio riuscito, senza guardare *quali* campi
@@ -303,6 +332,22 @@ class WebUISettingsRouter:
         except Exception:
             self.logger.exception("location settings update failed")
             return self._error_response(500, "failed to update location settings")
+        return self._json_response(payload)
+
+    async def _handle_settings_floating_update(self, request: WsRequest) -> Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            payload = await update_floating_settings(self._query(request))
+        except WebUISettingsError as e:
+            return self._error_response(e.status, e.message)
+        except Exception:
+            self.logger.exception("floating settings update failed")
+            return self._error_response(500, "failed to update floating settings")
+        # Nessun _fire_settings_changed: la mascotte non è un pezzo dell'agente
+        # da ricostruire a caldo, ed è già stata applicata al bridge dentro
+        # ``update_floating_settings``. Niente requires_restart, per la stessa
+        # ragione: quella riga esiste apposta perché non ce ne sia bisogno.
         return self._json_response(payload)
 
     async def _handle_settings_power_update(self, request: WsRequest) -> Response:

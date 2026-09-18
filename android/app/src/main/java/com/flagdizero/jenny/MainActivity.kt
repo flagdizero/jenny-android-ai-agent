@@ -643,6 +643,9 @@ class MainActivity : AppCompatActivity() {
         // Copre anche lo schermo spento: da qui in poi i messaggi proattivi
         // possono squillare come notifica di sistema.
         isInForeground = false
+        // ...e la mascotte flottante può tornare a schermo: l'app non è più
+        // davanti, quindi non c'è più il rischio di vederne due.
+        FloatingOverlayController.onAppForegroundChanged()
         // Stop WebView JS/animation processing while backgrounded; the
         // gateway keeps running independently in GatewayService.
         webView?.onPause()
@@ -651,6 +654,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isInForeground = true
+        // La mascotte flottante si toglie di mezzo: questa app è la home del
+        // telefono, e sulla schermata iniziale la mascotte c'è già dentro la
+        // SPA. Due Jenny sarebbero una di troppo.
+        FloatingOverlayController.onAppForegroundChanged()
         webView?.onResume()
         // Terzo modo in cui la chat arriva a schermo: il rientro in primo piano
         // con la chat GIÀ attiva. Non passa da nessun cambio vista, quindi
@@ -1022,6 +1029,50 @@ class MainActivity : AppCompatActivity() {
                 wv.systemGestureExclusionRects =
                     if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
             }
+        }
+
+        /**
+         * La taglia della mascotte scelta in Impostazioni → Personalizzazione.
+         *
+         * *cssPx* è il lato del canvas quadrato (`MASCOT_SIZES` in
+         * `shared/mascot.js`: 120/160/210), *dpr* il `devicePixelRatio` della
+         * WebView. Il prodotto è il lato in px fisici, cioè **esattamente**
+         * quanto la si vede grande in chat, ed è quello che la mascotte
+         * flottante usa per sé: le due non possono divergere perché il numero
+         * viene da un posto solo.
+         *
+         * Il controller la ricorda anche a finestra non montata, quindi questa
+         * chiamata vale pure quando la mascotte flottante è spenta.
+         */
+        @JavascriptInterface
+        fun setMascotSize(cssPx: Int, dpr: Double) {
+            val px = (cssPx * (if (dpr > 0.0) dpr else 1.0)).toInt()
+            FloatingOverlayController.setMascotSize(px)
+        }
+
+        /**
+         * I colori del tema attivo per la finestra flottante.
+         *
+         * Stessa idea della taglia: là dentro non c'è CSS, quindi la
+         * tentazione è di scriverci dei colori — ed era esattamente quello che
+         * c'era, sette costanti che erano la palette `chanel` per tutti e sette
+         * i temi. La SPA spinge i token *calcolati* (`shared/theme.js`), e il
+         * Kotlin non ne ha di propri da tenere allineati.
+         *
+         * I valori arrivano già in `#AARRGGBB`: `Color.parseColor` non legge la
+         * forma `rgba(...)`, che è come tre temi su sette scrivono i bordi, e
+         * la conversione si fa dove il valore è risolto.
+         */
+        @JavascriptInterface
+        fun setFloatingPalette(
+            surface: String,
+            border: String,
+            text: String,
+            hint: String,
+            accent: String,
+            onAccent: String,
+        ) {
+            FloatingOverlayController.setPalette(surface, border, text, hint, accent, onAccent)
         }
 
         /**
