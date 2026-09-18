@@ -278,3 +278,21 @@ in un elenco chiuso e non un prefisso.
 
 Nota: l'interfaccia sul telefono e' in inglese perche' lo e' la lingua scelta
 li' — vale per entrambe, non e' un difetto della casa.
+
+## Ritocco — Jenny appoggia, e sta ferma
+
+I piedi sul bordo superiore del composer, che fa da pavimento. Il numero e'
+misurato, non stimato: l'arte e' un quadrato con margini trasparenti e sotto i
+piedi ce n'e' il **12,24% del lato** (bbox alpha dei webp a 768 px — personaggio
+y 112..674, x 226..576 — identico nelle tre pose del corpo). Quindi
+`bottom = <pavimento> − 0,1224 × lato`. Verificato a **scarto zero**, e regge
+quando il campo cresce a quattro righe (pavimento a 127 px, scarto sempre zero).
+
+Il pavimento e' il composer e non il bordo del filo: e' l'unica linea che sta
+sempre li'. La riga di lavoro e la striscia degli allegati vanno e vengono, e
+Jenny non deve saltellare quando lo fanno.
+
+**Niente piu' `jenny-bob`.** In officina quell'animazione non e' il riposo:
+appartiene a `.out`, cioe' a quando e' venuta fuori. Una che galleggia non sta
+appoggiata a niente. Il `wobble` del pensa resta — ruota attorno al 90%
+dell'altezza, quasi sui piedi: e' un dondolio sul posto, non un volo.
