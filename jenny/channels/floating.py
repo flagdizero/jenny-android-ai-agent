@@ -1,4 +1,4 @@
-"""Canale della mascotte flottante: la risposta nel fumetto sopra la sua testa.
+"""Canale della mascotte flottante: la risposta nella finestra sopra di lei.
 
 Quarto canale utente, gemello di ``channels/notification.py`` — stessa forma,
 stesse ragioni, un solo destinatario diverso: là un alert di sistema, qui la
@@ -20,11 +20,20 @@ scrivere una riga,
   Senza, chi scrive nel fumetto si vedrebbe arrivare anche l'alert della
   tendina con le stesse parole.
 
-**Niente cronologia, ed è una regola della UI.** Il fumetto mostra l'ultimo
-messaggio arrivato e basta: non è una chat con uno scroll, è una risposta sopra
-una testa. La conversazione completa esiste ed è quella dell'app — un tap sul
-fumetto la apre. Qui dentro questo si traduce in una cosa sola: ogni ``send``
-sovrascrive il fumetto precedente, e non c'è niente da accumulare.
+**La cronologia ha un posto solo, e non è questo.** Dal 18/09/2026 la finestra
+tiene una conversazione corta — gli ultimi quattro scambi, finché resta aperta —
+ma il canale non ne sa niente, e non è una semplificazione: accumula Kotlin, che
+è anche l'unico a sapere quando la finestra si chiude, cioè quando quella
+conversazione finisce. Qui ogni ``send`` consegna una riga e la dimentica; due
+contabilità della stessa lista divergerebbero al primo timeout. La conversazione
+*completa* resta comunque quella dell'app, e dalla finestra ci si arriva con il
+tasto in cima alla lista.
+
+**E non fa comparire niente da sé.** ``show_reply`` ritorna ``False`` se la
+finestra è chiusa, e il canale tira dritto: chi l'ha chiusa l'ha chiusa apposta,
+e far saltare su un pannello sopra l'app che sta usando è esattamente ciò che una
+mascotte non deve fare. La risposta non si perde — è nella stessa sessione
+``unified`` di cui questa finestra è una vista.
 
 Come la tendina, il canale **non** entra fra gli ``extra_targets`` del
 ``ChannelDeliverer``: là stanno i destinatari del fan-out proattivo, e
@@ -80,7 +89,7 @@ class FloatingChannel:
         only_conns: list[Any] | None = None,
         skip_persist: bool = False,
     ) -> list[Any]:
-        """Disegna il messaggio finale nel fumetto. Ritorna sempre ``[]``.
+        """Aggiunge il messaggio finale alla conversazione. Ritorna sempre ``[]``.
 
         Nessun fan-out parziale da tracciare (la finestra è una sola) e nessuna
         persistenza: la riga del transcript la scrive il mirror sulla vista
@@ -99,7 +108,7 @@ class FloatingChannel:
         if not content:
             return []
         if msg.media:
-            # Un fumetto è testo. Gli allegati restano nella conversazione — la
+            # Una bolla è testo. Gli allegati restano nella conversazione — la
             # WebUI li mostra — e qui si annota che non sono passati di qua,
             # invece di far finta che il messaggio fosse completo.
             logger.info(
@@ -108,9 +117,13 @@ class FloatingChannel:
             )
         shown = await show_reply(content)
         if not shown:
-            # Esito normale e non un errore: mascotte spenta, permesso mancante,
-            # o app in primo piano (dove la risposta è già a schermo in chat).
-            logger.info("Floating channel: bubble not shown (disabled, hidden or no bridge)")
+            # Esito normale e non un errore: mascotte spenta, permesso
+            # mancante, app in primo piano (dove la risposta è già a schermo in
+            # chat), o **finestra chiusa** — quest'ultimo è il caso volutamente
+            # silenzioso: la finestra non si riapre da sé.
+            logger.info(
+                "Floating channel: reply not drawn (disabled, hidden, closed or no bridge)"
+            )
         return []
 
     # ------------------------------------------------------------------ #

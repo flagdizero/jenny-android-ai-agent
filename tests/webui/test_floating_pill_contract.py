@@ -181,7 +181,9 @@ class TestLaPallina:
         linea di base invece che al centro del disco."""
         source = _read()
         assert "\\u2191" not in source, "la freccia è tornata un carattere di testo"
-        assert "private fun arrowDrawable(ctx: Context): Drawable" in source
+        # Disegnata da `strokeIcon`, che dal 18/09/2026 fa anche l'icona del
+        # chip: due path, un solo `Drawable` di boilerplate.
+        assert "private fun arrowIcon(ctx: Context): Drawable" in source
         assert "strokeCap = Paint.Cap.ROUND" in source
 
     def test_il_bordo_si_accende_col_testo(self):
