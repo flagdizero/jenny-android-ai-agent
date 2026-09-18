@@ -97,9 +97,17 @@ costante `GATEWAY_PATH = "/html-mobile/"`
 ([`MainActivity.kt:56`](../android/app/src/main/java/com/flagdizero/jenny/MainActivity.kt)),
 cioè `index.html`. Per tutta la costruzione la casa vive a `casa.html` e si
 raggiunge a mano; quando convince, si scambiano i nomi dei due file —
-`index.html` diventa la casa, l'officina diventa `officina.html` — e non si tocca
-né il Kotlin né un solo percorso di asset, che sono tutti assoluti. L'inversione
-è l'ultimo passo, non il primo, ed è reversibile in un minuto.
+`index.html` diventa la casa, l'officina diventa `officina.html` — e nessun
+percorso di asset cambia, perché sono tutti assoluti.
+
+*Correzione (18/09/2026, sul telefono):* **il Kotlin invece va toccato, una
+riga.** `shouldOverrideUrlLoading` blocca ogni navigazione di primo livello
+verso il gateway che non sia esattamente `GATEWAY_PATH`, come rete di sicurezza
+contro un href risolto male sotto `/html-mobile/`. Le due porte sono proprio
+navigazioni di quel tipo, quindi venivano bloccate: l'unica traccia era
+`Blocked main-frame navigation to a non-SPA gateway path` in logcat. Il guard
+ora conosce i due documenti-guscio per nome — un elenco chiuso, non un
+prefisso, così `/api/…` resta fuori.
 
 **Il segreto viaggia in un fragment, quindi la strada fra i gusci e' una sola.**
 Il segreto di bootstrap arriva alla pagina in `#bs=` e viene consumato e

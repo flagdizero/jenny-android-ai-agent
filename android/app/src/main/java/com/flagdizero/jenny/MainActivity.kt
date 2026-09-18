@@ -966,10 +966,34 @@ class MainActivity : AppCompatActivity() {
      * sostituirebbe con un 404 JSON, portandosi via `window.mobileApp` e con lui
      * il tasto Indietro. Query e fragment restano liberi (`?mode=chat#bs=…`).
      */
+    /**
+     * Il path è uno dei **documenti-guscio** della WebUI?
+     *
+     * Le interfacce sono due — la casa (`index.html`, cioè quel che
+     * [GATEWAY_PATH] serve) e l'officina (`officina.html`) — e si passa
+     * dall'una all'altra con un caricamento di pagina. Senza questo elenco
+     * quella navigazione veniva bloccata dalla rete di sicurezza qui sotto e
+     * le due porte non si aprivano: misurato sul Titan 2 il 18/09/2026, con
+     * "Blocked main-frame navigation to a non-SPA gateway path" in logcat come
+     * unica traccia.
+     *
+     * È un elenco chiuso e non un prefisso: `/html-mobile/qualunque-cosa`
+     * resta bloccato, quindi `/api/…` e un href relativo risolto male non
+     * passano. Allargarlo a tutto il path sotto il gateway sarebbe rinunciare
+     * alla ragione per cui il blocco esiste.
+     */
+    private fun isShellDocument(path: String): Boolean {
+        val base = GATEWAY_PATH.trimEnd('/')
+        return path == GATEWAY_PATH ||
+            path == base ||
+            path == "$base/index.html" ||
+            path == "$base/officina.html"
+    }
+
     private fun isInternalGatewayUrl(uri: Uri): Boolean {
         if (!isGatewayOrigin(uri)) return false
         val path = uri.path ?: return false
-        return path == GATEWAY_PATH || path == GATEWAY_PATH.trimEnd('/')
+        return isShellDocument(path)
     }
 
     /**
