@@ -471,8 +471,9 @@ body.casa {
   bottom: calc(var(--casa-composer-h, 64px) - var(--jenny-size) * 0.1224);
   width: var(--jenny-size);
   z-index: 5;
-  pointer-events: none;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .casa-jenny[hidden] { display: none; }

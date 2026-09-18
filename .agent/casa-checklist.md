@@ -337,3 +337,24 @@ le costanti di `FloatingFlight.kt` con quelle JS, e leggeva da
 confronta niente passa sempre»* — che e' scattata a zero confronti. Ripuntato
 al modulo condiviso, e insegnato a leggere anche `export const`: ne confronta
 dodici.
+
+### Il difetto che solo un dito vero poteva prendere
+
+Nel CSS avevo scritto il commento *«si prende e si lancia, quindi i tocchi le
+arrivano»* e lasciato la riga `pointer-events: none` due righe sotto. Sul
+telefono il trascinamento scorreva il filo invece di prenderla.
+
+**Il mio test nel browser non poteva accorgersene**: sparavo gli eventi con
+`dispatchEvent` direttamente sull'elemento, che scavalca il hit-testing. Un
+evento sintetico dimostra che i gestori funzionano, **non** che un dito ci
+arriva. Per quello serve il dispositivo, o un test che parta dalle coordinate.
+
+E prima ancora mi ero perso un'installazione: l'esito di `adb install` era
+finito dentro una catena di comandi e non l'avevo letto. L'APK era delle 22:27
+e sul telefono c'era ancora quello delle 22:25, quindi stavo provando la
+versione vecchia e concludendo sulla nuova. Si controlla in un secondo:
+`dumpsys package … | grep lastUpdateTime` contro la data dell'APK.
+
+**Verificato sul Titan 2**, dove il rAF gira davvero: presa, volo, atterraggio,
+rientro a piedi al suo posto coi piedi sulla linea; e con un lancio lento verso
+sinistra passa di lato, specchiata, appoggiata allo stesso pavimento.
