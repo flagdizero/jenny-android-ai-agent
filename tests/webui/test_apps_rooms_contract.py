@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APPS_JS = ASSETS / "mobile-apps.js"
 CSS = ASSETS / "mobile-style.css"
-INDEX = ROOT / "jenny" / "templates" / "ui" / "index.html"
+INDEX = ROOT / "jenny" / "templates" / "ui" / "officina.html"
 
 
 def _src(name: str = "mobile-apps.js") -> str:

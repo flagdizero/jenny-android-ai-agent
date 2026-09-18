@@ -1610,6 +1610,8 @@ export class SettingsController {
       <div class="settings-divider"></div>
       ${this._renderRerunOnboarding()}
       <div class="settings-divider"></div>
+      ${this._renderOpenCasa()}
+      <div class="settings-divider"></div>
       <div class="settings-subheading">${i18n.t('settings.tokenUsage')}</div>
       ${this._renderUsage(d)}`;
   }
@@ -2004,6 +2006,24 @@ export class SettingsController {
       <div class="settings-subheading">${i18n.t('settings.rerunOnboarding')}</div>
       <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.rerunOnboardingHint')}</p>
       <button class="settings-btn-add" id="btn-rerun-onboarding"><i class="ti ti-rocket"></i> ${i18n.t('settings.rerunOnboardingAction')}</button>`;
+  }
+
+  /* La porta per la casa — l'altra interfaccia, quella che fa solo la
+     conversazione (v. `.agent/casa-plan.md`).
+
+     Sta qui, in fondo a Sistema, e non nel dock: il dock è la navigazione
+     *dentro* questa interfaccia, e la casa non è una sua schermata — è l'altro
+     documento. Passarci è un caricamento di pagina, e una voce del dock che
+     ricarica la pagina mentirebbe sul proprio costo.
+
+     `api.navigate` e non un href: il segreto di bootstrap vive solo nella
+     memoria di questa pagina e una navigazione secca lo perderebbe, lasciando
+     la casa a prendere 401 al primo `bootstrap()`. */
+  _renderOpenCasa() {
+    return `
+      <div class="settings-subheading">${i18n.t('casa.backHome')}</div>
+      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('casa.backHomeHint')}</p>
+      <button class="settings-btn-add" id="btn-open-casa"><i class="ti ti-home"></i> ${i18n.t('casa.backHome')}</button>`;
   }
 
   async _rerunOnboarding() {
@@ -2575,6 +2595,7 @@ export class SettingsController {
 
     // Riesegui configurazione: strada permanente verso il wizard.
     this._wireBtn('btn-rerun-onboarding', () => this._rerunOnboarding());
+    this._wireBtn('btn-open-casa', () => api.navigate('/html-mobile/index.html'));
 
     // Aggiornamento dell'app (il bottone c'è solo se il backend ne annuncia uno)
     this._wireBtn('btn-update-install', () => this._startUpdate());

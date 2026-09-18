@@ -1,478 +1,94 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Jenny</title>
-<!-- Pre-render bootstrap (theme + locale). Kept as an external, non-defer
-     script so it runs before the body renders (avoids FOUC) while allowing a
-     script-src 'self' CSP — see M1 in migliorie/webui.md. -->
+
+<!-- Il guscio della casa. Serve una conversazione e nient'altro: qui dentro non
+     entrano CodeMirror, KaTeX, Mermaid, D3 e highlight.js, che l'officina carica
+     perche' le servono davvero. La differenza non e' estetica — e' il tempo che
+     passa fra il tocco sull'icona e la prima riga leggibile.
+
+     Vale la stessa CSP dell'officina (`script-src 'self'`, v. _SHELL_DOCUMENTS
+     in jenny/webui/ws_http.py): nessuno script inline, nemmeno per il tema. -->
+
+<!-- Pre-render: tema, lingua e taglia della mascotte prima del primo paint.
+     Senza defer e in <head>, come nell'officina: e' l'unico modo perche' giri
+     prima che il body si disegni. Lo stesso file, non una copia. -->
 <script src="/html-mobile/assets/bootstrap.js"></script>
 
-<!-- Fonts (Inter + Fira Code + per-theme display fonts) -->
 <link href="/html-mobile/assets/vendor/fonts/google-fonts.css" rel="stylesheet">
 <link href="/html-mobile/assets/vendor/fonts/theme-fonts.css" rel="stylesheet">
-
-<!-- Tabler Icons -->
 <link rel="stylesheet" href="/html-mobile/assets/vendor/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 
-<!-- CodeMirror -->
-<link rel="stylesheet" href="/html-mobile/assets/vendor/codemirror@5.65.16/lib/codemirror.min.css">
-<link rel="stylesheet" id="cm-theme-dark" href="/html-mobile/assets/vendor/codemirror@5.65.16/theme/darcula.min.css" media="all">
-<link rel="stylesheet" id="cm-theme-light" href="/html-mobile/assets/vendor/codemirror@5.65.16/theme/eclipse.min.css" media="not all">
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/lib/codemirror.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/javascript/javascript.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/python/python.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/xml/xml.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/css/css.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/yaml/yaml.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/markdown/markdown.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/go/go.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/addon/mode/simple.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/rust/rust.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/clike/clike.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/shell/shell.min.js" defer></script>
-
-<!-- KaTeX -->
-<link rel="stylesheet" href="/html-mobile/assets/vendor/katex@0.16.10/dist/katex.min.css">
-<script src="/html-mobile/assets/vendor/katex@0.16.10/dist/katex.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/katex@0.16.10/dist/contrib/auto-render.min.js" defer></script>
-
-<!-- Mermaid -->
-<!-- Mermaid (3,2 MB, l'asset piu pesante del bundle) NON e caricato qui: serve
-     solo alla wiki, e solo quando una nota contiene un diagramma. Lo inietta
-     `ensureVendor()` da shared/utils.js. L'asset resta servito e resta nel
-     _UI_MANIFEST: cambia solo il momento in cui viene eseguito. -->
-
-<!-- D3 -->
-<script src="/html-mobile/assets/vendor/d3@7/d3.min.js" defer></script>
-
-<!-- Marked.js (Markdown parser) -->
+<!-- Markdown e sanificazione: le risposte di Jenny sono markdown anche in casa.
+     Sono le due sole librerie che il guscio si porta dietro. -->
 <script src="/html-mobile/assets/vendor/marked@15.0.7/marked.min.js" defer></script>
-
-<!-- DOMPurify (HTML sanitizer for model markdown — C1) -->
 <script src="/html-mobile/assets/vendor/dompurify@3/purify.min.js" defer></script>
 
-<!-- Highlight.js (Syntax highlighting) -->
-<link rel="stylesheet" id="hljs-theme-dark" href="/html-mobile/assets/vendor/highlight.js@11.11.1/styles/github-dark.min.css" media="all">
-<link rel="stylesheet" id="hljs-theme-light" href="/html-mobile/assets/vendor/highlight.js@11.11.1/styles/github.min.css" media="not all">
-<script src="/html-mobile/assets/vendor/highlight.js@11.11.1/build/highlight.min.js" defer></script>
-
-<!-- Mobile Styles -->
+<!-- I token di colore dei sette temi stanno in mobile-style.css, che e' anche il
+     foglio dell'officina. La casa ne usa solo le variabili, e disegna il proprio
+     con casa-style.css. -->
 <link rel="stylesheet" href="/html-mobile/assets/mobile-style.css">
+<link rel="stylesheet" href="/html-mobile/assets/casa-style.css">
 </head>
-<body>
+<body class="casa">
 
-<div class="app" id="app">
+<main class="casa-shell">
 
-  <!-- BODY -->
-  <div class="body">
-
-    <!-- MAIN -->
-    <div class="main">
-
-      <!-- BACKDROP -->
-      <div class="drawer-backdrop" id="backdrop"></div>
-
-      <!-- DRAWER: Audit -->
-      <div class="drawer" id="drawer-audit">
-        <div class="drawer-header">
-          <div class="drawer-handle"></div>
-          <div class="drawer-header-row">
-            <span class="drawer-title" data-i18n="header.audits">Audits</span>
-            <button class="drawer-close" data-close aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-          </div>
-        </div>
-        <div class="drawer-body" id="drawer-audit-body"></div>
-      </div>
-
-      <!-- DRAWER: Wiki Files -->
-      <div class="drawer" id="drawer-files">
-        <div class="drawer-header">
-          <div class="drawer-handle"></div>
-          <div class="drawer-header-row">
-            <span class="drawer-title" data-i18n="header.files">Files</span>
-            <button class="drawer-close" data-close aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-          </div>
-        </div>
-        <div class="drawer-body" id="drawer-files-body"></div>
-      </div>
-
-      <!-- VIEW: Workspace -->
-      <div id="view-workspace" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="workspace-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-workspace"></div>
-        <div class="ws-breadcrumb" id="ws-breadcrumb"></div>
-        <div class="ws-explorer" id="ws-explorer">
-          <div class="ws-grid" id="ws-grid"></div>
-          <div class="ws-empty" id="ws-empty" style="display:none">
-            <div class="ws-empty-icon"><i class="ti ti-folder-off"></i></div>
-            <div class="ws-empty-title" data-i18n="workspace.noFiles">No Files</div>
-            <div class="ws-empty-sub" data-i18n="workspace.folderEmpty">This folder is empty</div>
-          </div>
-        </div>
-        <div class="workspace-viewer" id="workspace-viewer">
-          <div id="code-editor-mobile"></div>
-        </div>
-      </div>
-
-      <!-- VIEW: Chat -->
-      <div id="view-chat" class="view" style="display:flex">
-        <div class="chat-area" id="chat-area"></div>
-        <!-- Tutto quello che sta fermo in fondo mentre la chat scorre: il
-             blocco è `position: sticky` (mobile-style.css), quindi resta in
-             flusso e nessuno deve misurarne l'altezza. Il FAB "vai in fondo"
-             vive qui dentro, assoluto sopra il composer, e lo segue da sé. -->
-        <div class="chat-bottom" id="chat-bottom">
-        <button id="chat-scroll-fab" class="chat-scroll-fab" aria-label="Vai in fondo" data-i18n-aria="chat.scrollToBottom">
-          <i class="ti ti-chevron-down"></i>
-          <span class="chat-scroll-fab-badge" style="display:none"></span>
-        </button>
-        <!-- Subagent panel: fuori da .chat-area così non scorre via mentre
-             cinque job girano. Nascosto quando non c'è nulla da mostrare. -->
-        <div class="subagents" id="subagents" hidden>
-          <button class="subagents-head" id="subagents-head" type="button" aria-expanded="false" aria-controls="subagents-body">
-            <i class="ti ti-users subagents-head-icon"></i>
-            <span class="subagents-head-title" data-i18n="subagents.title">Subagents</span>
-            <span class="subagents-head-count" id="subagents-count"></span>
-            <i class="ti ti-chevron-up subagents-head-chevron"></i>
-          </button>
-          <div class="subagents-body" id="subagents-body" hidden></div>
-        </div>
-        <div class="attach-preview" id="attach-preview" style="display:none"></div>
-        <div id="input-bar">
-          <!-- Scope della conversazione: ancorato sopra il composer perche' e'
-               l'unico punto su cui l'occhio e' posato prima di scrivere. La
-               tendina la costruisce shared/scope-chip.js. -->
-          <div class="compose-scope">
-            <div class="scope-menu" id="scope-menu" role="menu" aria-labelledby="scope-chip"></div>
-            <button class="scope-chip" id="scope-chip" type="button"
-                    aria-haspopup="menu" aria-expanded="false"
-                    aria-label="Cambia scope" data-i18n-aria="scope.change">
-              <span class="scope-chip-mark">✿</span>
-              <span class="scope-chip-path"></span>
-              <i class="ti ti-selector scope-chip-switch"></i>
-            </button>
-            <!-- Seconda meta' della stessa domanda del chip: *cosa fara'* quel
-                 che sto per mandare. Sta nella stessa riga per questo. -->
-            <button class="write-switch" id="write-switch" type="button"
-                    aria-pressed="false"
-                    aria-label="Scrittura o sola lettura" data-i18n-aria="write.change">
-              <i class="write-switch-mark ti ti-pencil"></i>
-              <span class="write-switch-label"></span>
-            </button>
-            <!-- Terza domanda della stessa riga: *cosa posso chiedere*. I
-                 comandi esistevano da sempre e non li vedeva nessuno (issue
-                 #11); la tendina la costruisce shared/commands-chip.js
-                 dall'elenco che serve il backend. -->
-            <div class="commands-menu" id="commands-menu" role="menu" aria-labelledby="commands-chip"></div>
-            <button class="commands-chip" id="commands-chip" type="button"
-                    aria-haspopup="menu" aria-expanded="false"
-                    aria-label="Comandi" data-i18n-aria="commands.aria">
-              <i class="commands-chip-mark ti ti-command"></i>
-              <span class="commands-chip-label"></span>
-            </button>
-          </div>
-          <div id="input-row" class="compose-row">
-            <div class="compose-pill">
-              <textarea id="chat-input" placeholder="Chiedi qualcosa…" rows="1" aria-label="Messaggio" data-i18n-placeholder="chat.placeholder" data-i18n-aria="chat.message"></textarea>
-              <div class="input-actions" id="secondary-actions">
-                <!-- Scorciatoia a un tocco per il comando che la issue #11
-                     chiede per nome. È lo stesso `/new` della tendina, e passa
-                     dalla stessa conferma: sta a un pollice dalla graffetta. -->
-                <button class="input-action" id="btn-new-chat" title="Nuova chat" data-i18n-title="chat.newChat"><i class="ti ti-message-plus"></i></button>
-                <button class="input-action" id="btn-attach" title="Allega" data-i18n-title="chat.attach"><i class="ti ti-paperclip"></i></button>
-              </div>
-            </div>
-            <button id="btn-send" class="compose-send" disabled><i class="ti ti-arrow-up"></i></button>
-          </div>
-        </div>
-        </div>
-      </div>
-
-      <!-- VIEW: Apps -->
-      <div id="view-apps" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="view-title-mount" id="title-apps"></div>
-        <!-- Le tre stanze: il segmento lo riempie AppsController (le etichette
-             sono i18n e la stanza attiva si ricorda fra una visita e l'altra). -->
-        <div class="apps-rooms" id="apps-rooms"></div>
-        <div class="apps-search">
-          <i class="ti ti-search"></i>
-          <input type="text" id="apps-search-input" placeholder="Cerca..." data-i18n-placeholder="apps.search">
-        </div>
-        <div class="apps-content" id="apps-content"></div>
-      </div>
-
-      <!-- VIEW: Settings -->
-      <div id="view-settings" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="settings-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-settings"></div>
-        <div class="settings-content" id="settings-content"></div>
-      </div>
-
-      <!-- VIEW: Wiki -->
-      <div id="view-wiki" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="wiki-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-wiki"></div>
-        <div class="wiki-content" id="wiki-content"></div>
-      </div>
-
-      <!-- VIEW: Graph -->
-      <div id="view-graph" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="graph-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-graph"></div>
-        <div class="graph-wrap" id="graph-wrap">
-          <!-- Ricerca full-text: accende i nodi che corrispondono e spegne gli
-               altri. Sta nel flusso, sopra la tela e sotto i breadcrumb che
-               _renderBreadcrumbs inserisce come primo figlio: sovrapposta
-               coprirebbe i nodi proprio dove si sta guardando. -->
-          <div class="graph-search" id="graph-search" hidden>
-            <i class="ti ti-search graph-search-icon"></i>
-            <input type="search" id="graph-search-input" autocomplete="off"
-                   autocapitalize="off" autocorrect="off" spellcheck="false"
-                   enterkeyhint="search"
-                   placeholder="Cerca nelle pagine…" data-i18n-placeholder="graph.searchPlaceholder"
-                   aria-label="Cerca nelle pagine" data-i18n-aria="graph.searchPlaceholder">
-            <span class="graph-search-count" id="graph-search-count" hidden></span>
-            <button type="button" class="graph-search-clear" id="graph-search-clear" hidden
-                    aria-label="Cancella ricerca" data-i18n-aria="graph.searchClear">
-              <i class="ti ti-x"></i>
-            </button>
-          </div>
-          <svg id="graph-svg"></svg>
-          <div class="graph-legend" id="graph-legend">
-            <div class="legend-row"><div class="legend-dot concepts"></div><span data-i18n="graph.concepts">Concepts</span></div>
-            <div class="legend-row"><div class="legend-dot entities"></div><span data-i18n="graph.entities">Entities</span></div>
-            <div class="legend-row"><div class="legend-dot other"></div><span data-i18n="graph.other">Other</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- VIEW: Onboarding -->
-      <div id="view-onboarding" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="onboarding-content" id="onboarding-content"></div>
-      </div>
-
-    </div><!-- /main -->
-  </div><!-- /body -->
-
-  <!-- MICRO DOCK — always visible -->
-  <nav class="dock" aria-label="Navigazione" data-i18n-aria="nav.ariaLabel">
-    <!-- Ordine voluto: Chat, Wiki, Apps **al centro**, File, Impostazioni.
-         Apps al centro perché è lo slot più
-         raggiungibile dal pollice, e su uno schermo quadrato il centro del
-         dock è il punto più comodo che ci sia. L'ordine del DOM è anche
-         quello del carosello orizzontale, che `_visibleModes()` deriva da
-         qui: spostare una voce sposta anche lo swipe. -->
-    <div class="dock-item active" data-mode="chat" title="Chat" data-i18n-title="nav.chat"><span class="dock-flower">✿</span></div>
-    <div class="dock-item" data-mode="graph" title="Wiki" data-i18n-title="nav.wiki"><i class="ti ti-topology-star"></i></div>
-    <!-- Lo slot Apps **apre il cassetto**, non cambia vista (v. `openLauncher`
-         in mobile-app.js). `data-mode` gli resta perché il carosello deve
-         continuare a raggiungere la scheda, che è dove si gestisce
-         (disinstalla, nascondi, ripara); dal foglio ci si arriva con
-         «Gestisci». -->
-    <div class="dock-item" data-mode="apps" data-opens="launcher" title="Apps" data-i18n-title="nav.apps"><i class="ti ti-layout-grid"></i></div>
-    <div class="dock-item" data-mode="workspace" title="Workspace" data-i18n-title="nav.workspace"><i class="ti ti-folder"></i></div>
-    <div class="dock-item" data-mode="settings" title="Settings" data-i18n-title="nav.settings"><i class="ti ti-settings"></i></div>
-    <div class="dock-item" data-mode="onboarding" title="Setup" id="nav-onboarding" style="display:none" data-i18n-title="nav.onboarding"><i class="ti ti-rocket"></i></div>
-  </nav>
-
-</div><!-- /app -->
-
-<!-- Mobile App Entry Point -->
-<script type="module" src="/html-mobile/assets/mobile-app.js"></script>
-
-<dialog class="oc-dialog" id="oc-confirm-dialog">
-  <div class="oc-dialog-inner">
-    <p class="oc-dialog-message" id="oc-confirm-message"></p>
-    <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-confirm-cancel" data-i18n="dialog.cancel">Cancel</button>
-      <button class="oc-btn oc-btn-confirm" id="oc-confirm-ok" data-i18n="dialog.confirm">Confirm</button>
+  <!-- L'intestazione della tavola `Main.dc.html`, ridotta a cio' che esiste.
+       Il titolo non ha il chevron: la scelta di con chi parli e' del giro dopo,
+       e un chevron che non apre niente e' una bugia. Il bottone a destra e' la
+       porta per l'officina — nel disegno finale portera' a «Tu e Jenny», che
+       quella porta se la tiene in fondo; finche' quella pagina non c'e', porta
+       dritto dove deve portare, e l'icona lo dice. -->
+  <header class="casa-head">
+    <div class="casa-title">
+      <div class="casa-kicker" id="casa-kicker"></div>
+      <h1>Jenny</h1>
     </div>
-  </div>
-</dialog>
+    <button class="casa-door" id="casa-door" type="button" aria-label="Officina">
+      <i class="ti ti-tool"></i>
+    </button>
+  </header>
 
-<dialog class="oc-dialog" id="oc-prompt-dialog">
-  <div class="oc-dialog-inner">
-    <p class="oc-dialog-message" id="oc-prompt-message"></p>
-    <input type="text" class="oc-dialog-input" id="oc-prompt-input" />
-    <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-prompt-cancel" data-i18n="dialog.cancel">Cancel</button>
-      <button class="oc-btn oc-btn-confirm" id="oc-prompt-ok" data-i18n="dialog.confirm">Confirm</button>
-    </div>
-  </div>
-</dialog>
+  <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
+  <div class="casa-thread" id="casa-thread"></div>
 
-<!-- Modale di dettaglio (dialog.js::detailDialog): la card del pannello subagent
-     sta su una riga, il quadro completo — task, tool, esito — sta qui. -->
-<dialog class="oc-sheet oc-detail" id="oc-detail-dialog">
-  <div class="oc-sheet-inner oc-detail-inner">
-    <div class="oc-detail-head">
-      <h2 class="oc-detail-title" id="oc-detail-title"></h2>
-      <button class="oc-detail-close" id="oc-detail-close" type="button" aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="oc-detail-body" id="oc-detail-body"></div>
-    <div class="oc-dialog-buttons oc-detail-actions" id="oc-detail-actions"></div>
+  <!-- Lo stato vuoto sta FUORI dal filo, sovrapposto. Dentro sarebbe il primo
+       figlio, e il primo figlio del filo porta il `margin-top:auto` che tiene
+       una conversazione corta appoggiata al fondo: un nodo nascosto se lo
+       prenderebbe lui, e i messaggi resterebbero incollati in cima. -->
+  <div class="casa-empty" id="casa-empty" hidden>
+    <div class="casa-empty-text" id="casa-empty-text"></div>
   </div>
-</dialog>
 
-<dialog class="oc-sheet" id="ws-context-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="ws-context-title"></div>
-    <div class="oc-sheet-desc" id="ws-context-desc"></div>
-    <div class="oc-sheet-actions" id="ws-context-actions"></div>
-    <button class="oc-sheet-cancel" id="ws-context-cancel" data-i18n="common.cancel">Cancel</button>
-  </div>
-</dialog>
+  <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
+       aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
+  <div class="casa-activity" id="casa-activity" hidden></div>
 
-<dialog class="oc-sheet" id="android-app-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="android-app-title"></div>
-    <div class="oc-sheet-actions" id="android-app-actions"></div>
-    <button class="oc-sheet-cancel" id="android-app-cancel" data-i18n="common.cancel">Annulla</button>
-  </div>
-</dialog>
+  <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
+       riconnessione). A filo funzionante non occupa spazio. -->
+  <div class="casa-wire" id="casa-wire" hidden></div>
 
-<dialog class="oc-sheet" id="skill-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="skill-sheet-title"></div>
-    <div class="oc-sheet-desc" id="skill-sheet-body"></div>
-    <div class="oc-sheet-actions" id="skill-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="skill-sheet-cancel" data-i18n="common.cancel">Annulla</button>
-  </div>
-</dialog>
+  <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
+  <div class="casa-pending" id="casa-pending" hidden></div>
 
-<!-- Azioni di un messaggio di chat, aperte dal `⋯` della sua riga.
-     Figlio diretto di <body> come tutti gli altri, cioè FUORI da `.main`: là
-     dentro il listener di `setupSwipeNav` si prenderebbe il gesto, che è
-     esattamente il conflitto da cui nasce questo foglio. -->
-<dialog class="oc-sheet" id="chat-msg-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" data-i18n="chat.messageActions">Azioni messaggio</div>
-    <div class="oc-sheet-actions" id="chat-msg-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="chat-msg-sheet-cancel" data-i18n="common.cancel">Annulla</button>
+  <div class="casa-composer">
+    <label class="casa-field">
+      <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
+      <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
+        <i class="ti ti-paperclip"></i>
+      </button>
+    </label>
+    <button class="casa-send" id="casa-send" type="button" aria-label="Manda">
+      <i class="ti ti-arrow-up"></i>
+    </button>
   </div>
-</dialog>
 
-<!-- Superficie di selezione isolata: il messaggio renderizzato, fermo, in un
-     contenitore che nessuno riscrive e nessuno scrolla. -->
-<dialog class="oc-sheet" id="jenny-app-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="jenny-app-sheet-title"></div>
-    <div class="oc-sheet-actions" id="jenny-app-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="jenny-app-sheet-cancel" data-i18n="common.cancel">Annulla</button>
-  </div>
-</dialog>
+</main>
 
-<!-- LAUNCHER SHEET — il cassetto delle app.
-     Vive qui, fuori da `.app`, come `.app-frame-overlay`: così copre anche il
-     dock, resta fuori dall'inerzia che DrawerManager mette allo sfondo, e una
-     mini-app aperta *dal* foglio gli si sovrappone senza trucchi di z-index.
-     Contenuto costruito da assets/mobile-launcher.js. -->
-<div class="launcher-scrim" id="launcher-scrim" aria-hidden="true"></div>
-<div class="launcher-sheet" id="launcher-sheet" role="dialog" aria-modal="true"
-     aria-labelledby="launcher-title" aria-hidden="true" tabindex="-1">
-  <!-- Da qui — maniglia e riga del titolo — si trascina il foglio, e **dalla
-       lista mai** (D7): decide l'origine del tocco, e decide sempre allo stesso
-       modo. Sotto c'è una chat, dove i trascinamenti verticali sono già
-       promessi allo scroller da `setupSwipeNav`; contendere i verticali della
-       propria lista è la ragione per cui i bottom sheet dentro contenuto
-       scrollabile sembrano rotti. V. `LauncherController._setupDrag`. -->
-  <div class="launcher-handle-row" id="launcher-handle-row">
-    <div class="launcher-handle"></div>
-  </div>
-  <div class="launcher-head">
-    <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
-    <button class="launcher-close" id="launcher-close" type="button"
-            aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-  </div>
-  <!-- Il campo di ricerca è il corpo del cassetto, non un accessorio: è la
-       direzione *Digita* del rilievo (su 68 voci, cercare batte scorrere a
-       partire dalla quarta). Niente `autofocus` — alzerebbe la tastiera
-       software e si mangerebbe il foglio (D6); il type-ahead è del passo 4, e
-       così `enterkeyhint="go"`, che promette un ⏎ che qui ancora non apre. -->
-  <div class="launcher-search-row">
-    <i class="ti ti-search launcher-search-icon"></i>
-    <input class="launcher-search" id="launcher-search" type="text"
-           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-           enterkeyhint="go" role="combobox" aria-controls="launcher-list"
-           aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox"
-           placeholder="Cerca un'app…" data-i18n-placeholder="launcher.searchPlaceholder"
-           aria-label="Cerca app, skill…" data-i18n-aria="launcher.searchPlaceholder">
-    <button class="launcher-search-clear" id="launcher-search-clear" type="button"
-            aria-label="Pulisci" data-i18n-aria="launcher.clearSearch"><i class="ti ti-x"></i></button>
-  </div>
-  <!-- Passo 4 — la semantica giusta dalla nascita (4.5). La lista è un
-       `listbox` e le righe sono `option`: una lista di risultati con una
-       selezione attiva è quello, non un mucchio di pulsanti. Il campo è il
-       `combobox` che la governa, e la riga selezionata gliela dice
-       `aria-activedescendant` (scritto da JS) — così le frecce muovono la
-       selezione senza spostare il fuoco, che è ciò che tiene il campo
-       scrivibile mentre si scorre. Le righe restano comunque focalizzabili
-       una per una: con TalkBack ci si arriva a scorrimento, non a frecce. -->
-  <!-- Passo 6.2 — l'avviso che distingue "non c'è niente" da "non si è potuto
-       leggere". Serve al caso peggiore, che è quello *parziale*: se il ponte
-       nativo non risponde, le skill e le Jenny App ci sono tutte e mancano solo
-       le app del telefono — nessuno stato vuoto comparirebbe, e il cassetto
-       sembrerebbe un telefono con poche app. `role="status"` e non un dialog:
-       è un'informazione, non una domanda. -->
-  <div class="launcher-status" id="launcher-status" role="status" hidden>
-    <i class="ti ti-alert-triangle launcher-status-icon" aria-hidden="true"></i>
-    <span class="launcher-status-text" data-i18n="launcher.loadFailed">Elenco incompleto: qualcosa non ha risposto.</span>
-    <button class="launcher-status-retry" id="launcher-status-retry" type="button"
-            data-i18n="launcher.retry">Riprova</button>
-  </div>
-  <div class="launcher-list" id="launcher-list" role="listbox"
-       aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
-  <!-- D4 / 6.1 — il foglio *lancia*, la scheda *gestisce*. Disinstallare,
-       nascondere, accendere una skill, riparare un manifest e creare una app
-       nuova restano di là, e questa riga è la porta. Non è una `option` della
-       lista: non si apre con ⏎ e non si trova cercando, perché non è una cosa
-       da lanciare — è un altrove. In fondo al foglio e fuori dalla lista, così
-       non contende lo spazio ai risultati e resta ferma mentre scorrono. -->
-  <button class="launcher-manage" id="launcher-manage" type="button">
-    <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
-    <span data-i18n="launcher.manage">Gestisci app e skill</span>
-    <i class="ti ti-chevron-right launcher-manage-chevron" aria-hidden="true"></i>
-  </button>
-</div>
-
-<!-- Wiki feedback popover -->
-<div class="wiki-popover hidden" id="wiki-feedback-popover">
-  <button class="wiki-popover-btn" id="wiki-feedback-trigger">
-    <i class="ti ti-clipboard-list"></i> <span data-i18n="wiki.addAudit">Add audit</span>
-  </button>
-</div>
-
-<!-- Wiki feedback dialog -->
-<dialog class="mobile-dialog" id="wiki-feedback-dialog">
-  <div class="dialog-inner">
-    <h3 data-i18n="wiki.addFeedback">Add Feedback</h3>
-    <div>
-      <label class="field-label" data-i18n="wiki.preview">Preview</label>
-      <div id="wiki-feedback-preview" style="font-size:12px;color:var(--text2);max-height:100px;overflow-y:auto;background:var(--bg);padding:8px;border-radius:var(--radius);border:0.5px solid var(--border);"></div>
-    </div>
-    <form id="wiki-feedback-form">
-      <div>
-        <label class="field-label" data-i18n="wiki.comment">Comment</label>
-        <textarea id="wiki-feedback-comment" placeholder="Describe the issue…" data-i18n-placeholder="wiki.describeIssue"></textarea>
-      </div>
-      <div>
-        <label class="field-label" data-i18n="wiki.severity">Severity</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="info"> <span data-i18n="wiki.severityInfo">info</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="suggest"> <span data-i18n="wiki.severitySuggest">suggest</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="warn" checked> <span data-i18n="wiki.severityWarn">warn</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="error"> <span data-i18n="wiki.severityError">error</span></label>
-        </div>
-      </div>
-      <div class="dialog-buttons">
-        <button type="button" id="wiki-feedback-cancel" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="primary" data-i18n="wiki.submit">Submit</button>
-      </div>
-    </form>
-  </div>
-</dialog>
-
+<script type="module" src="/html-mobile/assets/casa-app.js"></script>
 </body>
 </html>

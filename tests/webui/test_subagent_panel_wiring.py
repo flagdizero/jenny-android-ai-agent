@@ -17,7 +17,7 @@ from pathlib import Path
 UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
 DIALOG_JS = UI_DIR / "assets" / "shared" / "dialog.js"
-INDEX_HTML = UI_DIR / "index.html"
+OFFICINA_HTML = UI_DIR / "officina.html"
 CSS = UI_DIR / "assets" / "mobile-style.css"
 
 
@@ -107,7 +107,7 @@ def test_the_detail_modal_reuses_the_shared_dialog() -> None:
     assert "'cancel'" in dialog
     assert "oc-detail-close" in dialog
     assert "e.target === dialog" in dialog, "manca la chiusura al tap sul backdrop"
-    html = INDEX_HTML.read_text(encoding="utf-8")
+    html = OFFICINA_HTML.read_text(encoding="utf-8")
     for node_id in ("oc-detail-dialog", "oc-detail-title", "oc-detail-body",
                     "oc-detail-actions", "oc-detail-close"):
         assert f'id="{node_id}"' in html, node_id
@@ -120,7 +120,7 @@ def test_the_detail_modal_is_a_sheet_like_every_other_detail_surface() -> None:
     era la sola superficie di dettaglio della UI a non essere un `.oc-sheet`. Il
     margine per lato lo pagavano le righe di attività, che sono monospazio.
     """
-    html = INDEX_HTML.read_text(encoding="utf-8")
+    html = OFFICINA_HTML.read_text(encoding="utf-8")
     dialog = re.search(r'<dialog[^>]*id="oc-detail-dialog"[^>]*>', html)
     assert dialog, "il <dialog> del dettaglio non è stato trovato"
     classes = dialog.group(0)

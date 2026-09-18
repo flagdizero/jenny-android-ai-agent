@@ -44,8 +44,15 @@ def _make_handler(tmp_path: Path) -> GatewayHTTPHandler:
     return handler
 
 
-def _csp(tmp_path: Path) -> str:
-    resp = _make_handler(tmp_path)._serve_static("/html-mobile/index.html")
+def _csp(tmp_path: Path, document: str = "index.html") -> str:
+    handler = _make_handler(tmp_path)
+    # Il documento deve esistere su disco. Per un path sconosciuto `_serve_static`
+    # ricade sulla shell e servirebbe *index.html*: un test su un altro guscio
+    # passerebbe misurando index.html, cioe' il motivo sbagliato.
+    (handler.static_dist_path / document).write_text(
+        "<!DOCTYPE html><html></html>", encoding="utf-8"
+    )
+    resp = handler._serve_static(f"/html-mobile/{document}")
     assert resp is not None and resp.status_code == 200
     return resp.headers.get("content-security-policy", "")
 
@@ -99,7 +106,23 @@ def test_frame_src_does_not_open_the_whole_web(tmp_path):
         )
 
 
-def test_only_index_html_gets_the_csp(tmp_path):
+def test_officina_html_carries_the_same_csp(tmp_path):
+    """L'officina e' l'altro guscio, e vale la stessa policy.
+
+    Dopo lo scambio dei nomi ``index.html`` e' la casa e l'officina ha il
+    proprio: il documento che rischia di restare senza policy e' cambiato, il
+    difetto no.
+
+    La CSP era legata alla stringa ``index.html``, quindi un secondo documento
+    nasceva senza policy e se la sarebbe presa addosso tutta insieme il giorno
+    dello scambio dei nomi (v. `.agent/casa-plan.md`) — cioe' alla fine, quando
+    una violazione costa di piu' e si spiega di meno. Il confronto ora e' su
+    `_SHELL_DOCUMENTS`, e questo test e' cio' che impedisce di tornare indietro.
+    """
+    assert _csp(tmp_path, "officina.html") == _csp(tmp_path, "index.html")
+
+
+def test_only_shell_documents_get_the_csp(tmp_path):
     """E' una policy di pagina: gli asset non ne hanno bisogno.
 
     Metterla anche sugli asset non e' innocuo — `default-src 'self'` su un JS

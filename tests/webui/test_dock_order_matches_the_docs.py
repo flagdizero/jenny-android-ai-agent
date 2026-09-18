@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-INDEX_HTML = ROOT / "jenny" / "templates" / "ui" / "index.html"
+OFFICINA_HTML = ROOT / "jenny" / "templates" / "ui" / "officina.html"
 TOUR_DOC = ROOT / "docs" / "using" / "webui-tour.md"
 
 # ``onboarding`` è il sesto slot, nascosto dopo il primo avvio: la pagina lo
@@ -41,7 +41,7 @@ def _dom_order() -> list[str]:
     silenzio lo slot scritto al contrario — è successo con ``chat``, e il test
     accusava il documento invece di sé stesso.
     """
-    html = INDEX_HTML.read_text("utf-8")
+    html = OFFICINA_HTML.read_text("utf-8")
     modes: list[str] = []
     for tag in re.findall(r"<div\b[^>]*>", html):
         classes = re.search(r'class="([^"]*)"', tag)
@@ -67,7 +67,7 @@ def test_the_docs_list_the_dock_in_dom_order() -> None:
     dom = _dom_order()
     doc = _doc_order()
 
-    assert dom, "nessuno slot trovato in index.html: il markup della dock è cambiato"
+    assert dom, "nessuno slot trovato in officina.html: il markup della dock è cambiato"
     assert doc, "nessuna riga riconosciuta nella tabella di webui-tour.md"
     assert doc == dom, (
         f"webui-tour.md elenca {doc}, il DOM ha {dom}. "

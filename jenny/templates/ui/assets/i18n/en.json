@@ -909,5 +909,76 @@
     "readonlyHint": "This chat changes nothing on the device. Tap to allow writing again.",
     "askReadonly": "Ask something (read-only)…",
     "askAboutReadonly": "Ask about {name} (read-only)…"
+  },
+  "casa": {
+    "empty": "Nothing here yet.\nGo ahead.",
+    "placeholder": "Write to Jenny",
+    "send": "Send",
+    "wire": {
+      "offline": "Connection lost, retrying"
+    },
+    "threadError": "I can't read the conversation.\nTry again shortly.",
+    "origin": {
+      "telegram": "from Telegram",
+      "notification": "from the shade",
+      "floating": "from the bubble"
+    },
+    "stop": "Stop",
+    "verbs": {
+      "think": [
+        "Pondering…",
+        "Ruminating…",
+        "Mulling it over…",
+        "Cogitating…",
+        "Musing…"
+      ],
+      "read": [
+        "Leafing through…",
+        "Poring over…",
+        "Skimming…",
+        "Reading up…"
+      ],
+      "search": [
+        "Rummaging…",
+        "Sifting…",
+        "Digging around…",
+        "Sniffing about…"
+      ],
+      "write": [
+        "Writing…",
+        "Polishing…",
+        "Copying out…",
+        "Jotting down…"
+      ],
+      "out": [
+        "Peeking outside…",
+        "Stepping out…",
+        "Knocking on a door…",
+        "Going to look…"
+      ],
+      "run": [
+        "Crunching numbers…",
+        "Tinkering…",
+        "Fiddling about…",
+        "Putting it to the test…"
+      ],
+      "delegate": [
+        "Calling for backup…",
+        "Putting someone on it…",
+        "Waking a helper…"
+      ],
+      "busy": [
+        "Getting on with it…",
+        "Working away…",
+        "On it…"
+      ]
+    },
+    "attach": "Attach",
+    "removeAttachment": "Remove attachment",
+    "closeImage": "Close",
+    "kicker": "personal conversation",
+    "workshop": "Workshop",
+    "backHome": "Back to the house",
+    "backHomeHint": "The simple interface: the conversation and nothing else."
   }
 }

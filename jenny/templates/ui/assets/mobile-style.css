@@ -6835,9 +6835,14 @@ body {
 
 .jenny-duo {
   position: absolute;
-  /* L'arte è il canvas QUADRATO 3000² intero (nessun crop): il personaggio
-     occupa ~45% del quadrato, i margini sono trasparenti. 120px di quadrato
-     ≈ 54px di personaggio visibile; gli offset compensano i margini.
+  /* L'arte è il canvas QUADRATO 3000² intero (nessun crop): i margini sono
+     trasparenti e il personaggio ne occupa il **73% dell'altezza** — misurato
+     col bounding box alpha dei webp impacchettati, non sull'arte originale.
+     120px di quadrato ≈ 88px di personaggio visibile; gli offset compensano i
+     margini.
+     (Qui c'era scritto ~45%, che è il rapporto dell'arte a 3000px prima
+     dell'impacchettamento: fidarsene fa disegnare un mockup con la mascotte
+     grande il doppio del vero. Gli offset sotto erano e restano giusti.)
      Tutta la geometria deriva da --jenny-size (impostata su :root da
      shared/mascot.js, default 120px): i rapporti qui sotto valgono a ogni
      taglia, quindi cambiarne una non richiede di ritoccare gli offset. */

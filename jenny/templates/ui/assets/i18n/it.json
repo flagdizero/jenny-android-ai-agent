@@ -909,5 +909,79 @@
     "readonlyHint": "Questa chat non cambia niente sul telefono. Tocca per riattivare la scrittura.",
     "askReadonly": "Chiedi qualcosa (sola lettura)…",
     "askAboutReadonly": "Chiedi qualcosa su {name} (sola lettura)…"
+  },
+  "casa": {
+    "empty": "Non c'è ancora niente qui.\nComincia tu.",
+    "placeholder": "Scrivi a Jenny",
+    "send": "Manda",
+    "wire": {
+      "offline": "Filo interrotto, sto riprovando"
+    },
+    "threadError": "Non riesco a leggere la conversazione.\nRiprova fra poco.",
+    "origin": {
+      "telegram": "da Telegram",
+      "notification": "dalla tendina",
+      "floating": "dal fumetto"
+    },
+    "stop": "Ferma",
+    "verbs": {
+      "think": [
+        "Elucubro…",
+        "Rimugino…",
+        "Ci penso su…",
+        "Arzigogolo…",
+        "Medito…"
+      ],
+      "read": [
+        "Sfoglio…",
+        "Spulcio…",
+        "Scartabello…",
+        "Ripasso…",
+        "Mi rileggo…"
+      ],
+      "search": [
+        "Rovisto…",
+        "Setaccio…",
+        "Frugo…",
+        "Fiuto…",
+        "Scandaglio…"
+      ],
+      "write": [
+        "Scrivo…",
+        "Limo…",
+        "Ricopio…",
+        "Appunto…",
+        "Metto giù…"
+      ],
+      "out": [
+        "Sbircio fuori…",
+        "Esco un attimo…",
+        "Busso a una porta…",
+        "Vado a vedere…"
+      ],
+      "run": [
+        "Faccio due conti…",
+        "Smanetto…",
+        "Armeggio…",
+        "Metto alla prova…"
+      ],
+      "delegate": [
+        "Chiamo rinforzi…",
+        "Metto qualcuno al lavoro…",
+        "Sveglio un aiutante…"
+      ],
+      "busy": [
+        "Mi do da fare…",
+        "Sto lavorando…",
+        "Ci sto…"
+      ]
+    },
+    "attach": "Allega",
+    "removeAttachment": "Togli l'allegato",
+    "closeImage": "Chiudi",
+    "kicker": "conversazione personale",
+    "workshop": "Officina",
+    "backHome": "Torna alla casa",
+    "backHomeHint": "L'interfaccia semplice: solo la conversazione."
   }
 }

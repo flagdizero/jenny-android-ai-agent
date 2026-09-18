@@ -1,0 +1,417 @@
+/** La casa — la conversazione.
+ *
+ *  Un filo solo, dall'alto verso il basso: cosa hai detto tu, cosa ha risposto
+ *  Jenny. Quello che l'officina disegna e qui non esiste — pensieri, chiamate di
+ *  strumento, subagent, token, tempi, latenza — non e' nascosto dietro un
+ *  pannello: non viene proprio letto. I frame arrivano lo stesso, sullo stesso
+ *  websocket, e restano lettera morta.
+ *
+ *  **Le regole del filo non sono state inventate qui.** Sono quelle che
+ *  `mobile-chat.js` ha imparato sbagliando, e che valgono identiche in casa
+ *  perche' descrivono il protocollo, non il disegno:
+ *
+ *  1. `stream_end` puo' arrivare **senza** testo — il server lo omette quando
+ *     l'ultimo delta e' vuoto, cioe' quasi sempre. Il buffer locale e' la stessa
+ *     cosa e fa da riserva.
+ *  2. Un frame `message` porta un testo **gia' completo**: apre un blocco suo e
+ *     lo chiude subito. Riusare il blocco dei delta significa farselo
+ *     sovrascrivere dal delta successivo, e il testo consegnato sparisce.
+ *  3. Un turno puo' alternare testo e strumenti piu' volte: piu' segmenti di
+ *     stream, stesso `turn_id`. Il blocco si chiude a ogni `stream_end`, o i
+ *     segmenti si incollano fra loro.
+ *  4. Un messaggio senza `turn_id` non entra **mai** nel turno precedente:
+ *     `undefined !== undefined` e' falso, e quattro avvisi distinti diventano
+ *     una bolla sola.
+ */
+
+import { escapeHtml } from './shared/utils.js';
+import { i18n } from './shared/i18n.js';
+import { openImageLightbox } from './shared/image-lightbox.js';
+import { sessionManager } from './shared/session-manager.js';
+
+/* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
+   registro completo di tutte le superfici — l'app, Telegram, la tendina delle
+   notifiche, il fumetto della mascotte — e la provenienza va detta, altrimenti
+   un messaggio scritto dal blocco schermo sembra comparso dal nulla.
+
+   Nomi e non identificatori: in officina l'etichetta e' il canale con
+   l'iniziale maiuscola ("Floating"), che e' il nome che ha nel codice. Qui e'
+   il nome che ha per chi lo legge. */
+const ORIGINS = {
+  telegram: { icon: 'ti-brand-telegram', key: 'casa.origin.telegram' },
+  notification: { icon: 'ti-bell', key: 'casa.origin.notification' },
+  floating: { icon: 'ti-message-circle', key: 'casa.origin.floating' },
+};
+
+/* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
+   Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
+   rileggendo qualcosa piu' su non va strappato via da una risposta che arriva. */
+const STICK_PX = 24;
+
+function renderMarkdown(text) {
+  /* Fallisce chiuso, non aperto: se il sanificatore non e' stato caricato si
+     degrada a testo semplice invece di iniettare HTML non sanificato. */
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+    return escapeHtml(text);
+  }
+  try {
+    return DOMPurify.sanitize(marked.parse(text));
+  } catch (e) {
+    console.error('Markdown parse error:', e);
+    return escapeHtml(text);
+  }
+}
+
+function mediaKind(entry) {
+  if (entry.kind) return entry.kind;
+  const name = (entry.name || entry.url || '').toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(name)) return 'image';
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/.test(name)) return 'video';
+  return 'file';
+}
+
+export class CasaChat {
+  constructor(threadEl) {
+    this.el = threadEl;
+    /* La bolla dell'assistente del turno in corso, e il blocco di testo aperto
+       dentro di essa. Due cose diverse: la bolla dura tutto il turno, il blocco
+       dura un segmento di stream. */
+    this.turnNode = null;
+    this.blockNode = null;
+    this.buffer = '';
+    this.turnId = null;
+    this._empty = true;
+
+    this.el.addEventListener('scroll', () => {
+      this._stick = this._atBottom();
+    });
+    this._stick = true;
+  }
+
+  /* ── Storia ── */
+
+  /** Carica la conversazione e la disegna. Ritorna il numero di messaggi. */
+  async load() {
+    const key = sessionManager.currentKey;
+    const { thread, stale } = await sessionManager.loadThread(key, 160);
+    if (stale) return 0;
+    const messages = thread?.messages || [];
+    for (const turn of this._buildTurns(messages)) {
+      if (turn.boundary) this._appendBoundary();
+      else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
+      else this._appendAssistant(turn.content, turn.media);
+    }
+    this.scrollToBottom();
+    return messages.length;
+  }
+
+  /* I messaggi persistiti diventano turni. E' la versione di casa di
+     `_buildTurns`: stessa spina dorsale, ma di un turno dell'assistente
+     sopravvivono solo il testo e gli allegati. Pensieri, strumenti e modifiche
+     ai file vengono letti e buttati qui, una volta sola, invece di essere
+     filtrati in dieci posti piu' in la'. */
+  _buildTurns(messages) {
+    const turns = [];
+    let current = null;
+    const flush = () => { if (current) turns.push(current); current = null; };
+
+    for (const msg of messages) {
+      if (msg.session_boundary) {
+        flush();
+        turns.push({ boundary: true });
+        continue;
+      }
+      const role = msg.role || (msg.kind === 'user' ? 'user' : 'assistant');
+      if (role === 'user') {
+        flush();
+        turns.push({
+          user: true,
+          text: msg.text || msg.content || '',
+          origin: msg.origin,
+          media: Array.isArray(msg.media) ? msg.media : [],
+        });
+        continue;
+      }
+      const turnId = msg.turnId || msg.turn_id;
+      // Regola 4: senza id non si accorpa. Mai.
+      if (!current || !turnId || current.turnId !== turnId) {
+        flush();
+        current = { turnId, content: '', media: [] };
+      }
+      if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
+      /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
+         uno strumento, e in casa non e' niente: si butta, punto. L'officina la
+         tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
+         qui sarebbe il difetto — un turno in cui Jenny ha solo lavorato senza
+         dire niente deve restare muto, non mostrare `read_file: sensori.json`.
+         E la condizione "solo se non c'e' altro testo" non si puo' nemmeno
+         valutare qui: il testo vero arriva *dopo*, in un frame successivo dello
+         stesso turno. */
+      if (msg.kind === 'trace' || msg.role === 'tool') continue;
+      const text = msg.text || msg.content || '';
+      if (text) current.content += (current.content ? '\n\n' : '') + text;
+    }
+    flush();
+    // Un turno senza niente da mostrare non e' una bolla vuota: non e' niente.
+    return turns.filter((t) => t.boundary || t.user || t.content || t.media.length);
+  }
+
+  /* ── Frame dal vivo ── */
+
+  /** Un frame del websocket. Tutto cio' che non e' qui sotto non riguarda la casa. */
+  handleFrame(msg) {
+    if (!this._belongsHere(msg)) return;
+    if (!this._crossesTurn(msg)) return;
+    switch (msg.event) {
+      case 'delta': this._delta(msg.text || ''); break;
+      case 'stream_end': this._streamEnd(msg.text); break;
+      case 'message': this._message(msg); break;
+      case 'user': this._externalUser(msg); break;
+      case 'turn_end': this._turnEnd(); break;
+      default: break;
+    }
+  }
+
+  _belongsHere(msg) {
+    const chatId = msg.chat_id;
+    return !chatId || chatId === sessionManager.currentChatId;
+  }
+
+  /* Regola 3 e 4: il confine di turno. Un `turn_end` di un altro turno non
+     riguarda quello aperto e va ignorato; qualunque altro frame di un turno
+     nuovo chiude quello in corso. */
+  _crossesTurn(msg) {
+    const TURN_SCOPED = ['delta', 'stream_end', 'message', 'turn_end'];
+    if (!TURN_SCOPED.includes(msg.event)) return true;
+    const turnId = msg.turn_id || msg.turnId || null;
+    if (!turnId || turnId === this.turnId) return true;
+    if (this.turnId === null) { this.turnId = turnId; return true; }
+    if (msg.event === 'turn_end') return false;
+    this._resetTurn();
+    this.turnId = turnId;
+    return true;
+  }
+
+  _delta(text) {
+    if (!text) return;
+    this.buffer += text;
+    this._ensureBlock().innerHTML = renderMarkdown(this.buffer);
+    this._follow();
+  }
+
+  /* Regola 1: il testo di `stream_end` e' opzionale, il buffer e' la riserva.
+     Regola 3: il blocco si chiude qui, o il segmento dopo gli si incolla. */
+  _streamEnd(fullText) {
+    const finalText = fullText || this.buffer;
+    if (this.blockNode && finalText) {
+      this.blockNode.innerHTML = renderMarkdown(finalText);
+    }
+    this.blockNode = null;
+    this.buffer = '';
+    this._follow();
+  }
+
+  /* Regola 2: testo gia' completo, blocco proprio, chiuso subito. */
+  _message(msg) {
+    if (msg.session_boundary) {
+      /* Il contesto e' stato azzerato. La storia sul server e' cambiata sotto i
+         piedi: si ricarica invece di indovinare. */
+      this.reload();
+      return;
+    }
+    // Un suggerimento di strumento e' esattamente cio' che la casa non mostra.
+    if (msg.kind === 'tool_hint') return;
+    if (msg.text) {
+      if (this.buffer) this._streamEnd();
+      const block = document.createElement('div');
+      block.className = 'casa-block';
+      block.innerHTML = renderMarkdown(msg.text);
+      this._ensureTurn().appendChild(block);
+      // `blockNode` resta null: il delta dopo apre il proprio.
+    }
+    if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
+    this._follow();
+  }
+
+  /** Un messaggio appena partito da questa finestra.
+   *
+   *  Lo disegna il client, e non e' una scorciatoia: il gateway rimanda l'eco
+   *  solo dei messaggi entrati da *altri* canali. Per il websocket
+   *  `_handle_session_turn_started` esce subito, quindi se non lo disegnassimo
+   *  qui la propria domanda comparirebbe solo dopo un ricaricamento.
+   */
+  appendOwn(text, media = []) {
+    this._resetTurn();
+    this._appendUser(text, null, media);
+    this.scrollToBottom();
+  }
+
+  /* Un messaggio entrato da un'altra superficie mentre la chat e' aperta. */
+  _externalUser(msg) {
+    const text = msg.text || '';
+    const media = msg.media_urls || msg.media || [];
+    if (!text && !media.length) return;
+    this._resetTurn();
+    this._appendUser(text, msg.origin_channel || msg.origin, media);
+    this._follow();
+  }
+
+  _turnEnd() {
+    this._resetTurn();
+  }
+
+  _resetTurn() {
+    this.turnNode = null;
+    this.blockNode = null;
+    this.buffer = '';
+    this.turnId = null;
+  }
+
+  /** Ributta giu' la conversazione da capo. */
+  async reload() {
+    this._resetTurn();
+    this.el.querySelectorAll('.casa-msg, .casa-boundary').forEach((n) => n.remove());
+    this._empty = true;
+    await this.load();
+    this.syncEmpty();
+  }
+
+  /* ── Disegno ── */
+
+  _appendUser(text, origin, media) {
+    const node = document.createElement('div');
+    node.className = 'casa-msg casa-msg-user';
+    const badge = this._originBadge(origin);
+    if (badge) node.appendChild(badge);
+    if (text) {
+      const block = document.createElement('div');
+      block.className = 'casa-block';
+      // Testo dell'utente: mai markdown. E' quello che ha scritto, alla lettera.
+      block.textContent = text;
+      node.appendChild(block);
+    }
+    if (media?.length) this._appendMedia(node, media);
+    this._append(node);
+  }
+
+  _appendAssistant(content, media) {
+    const node = document.createElement('div');
+    node.className = 'casa-msg casa-msg-jenny';
+    if (content) {
+      const block = document.createElement('div');
+      block.className = 'casa-block';
+      block.innerHTML = renderMarkdown(content);
+      node.appendChild(block);
+    }
+    if (media?.length) this._appendMedia(node, media);
+    this._append(node);
+  }
+
+  /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire
+     "confine di sessione" e' officina. Una riga sottile basta a spiegare perche'
+     sopra e sotto non si parlano. */
+  _appendBoundary() {
+    const hr = document.createElement('div');
+    hr.className = 'casa-boundary';
+    this._append(hr);
+  }
+
+  _originBadge(origin) {
+    if (!origin || origin === 'websocket') return null;
+    const known = ORIGINS[origin];
+    const badge = document.createElement('div');
+    badge.className = 'casa-origin';
+    const icon = known ? known.icon : 'ti-arrows-exchange';
+    const label = known ? i18n.t(known.key) : origin;
+    badge.innerHTML = `<i class="ti ${icon}"></i>${escapeHtml(label)}`;
+    return badge;
+  }
+
+  _appendMedia(node, entries) {
+    const wrap = document.createElement('div');
+    wrap.className = 'casa-media';
+    for (const raw of entries) {
+      const entry = typeof raw === 'string' ? { url: raw } : raw;
+      if (!entry.url) continue;
+      const kind = mediaKind(entry);
+      if (kind === 'image') {
+        const img = document.createElement('img');
+        img.src = entry.url;
+        img.loading = 'lazy';
+        img.alt = entry.name || '';
+        /* Ingrandimento: la stessa lightbox dell'officina, col suo pinch-zoom.
+           Lo zoom del viewport e' disabilitato in tutta l'app, quindi senza
+           questa un'immagine si guarda solo alla misura della miniatura. */
+        img.addEventListener('click', () => openImageLightbox(entry.url, {
+          alt: entry.name || '',
+          closeLabel: i18n.t('casa.closeImage'),
+        }));
+        wrap.appendChild(img);
+      } else if (kind === 'video') {
+        const video = document.createElement('video');
+        video.src = entry.url;
+        video.controls = true;
+        video.preload = 'metadata';
+        wrap.appendChild(video);
+      } else {
+        const chip = document.createElement('a');
+        chip.className = 'casa-file';
+        chip.href = entry.url;
+        chip.textContent = entry.name || entry.url;
+        wrap.appendChild(chip);
+      }
+    }
+    if (wrap.childElementCount) node.appendChild(wrap);
+  }
+
+  /** La bolla dell'assistente del turno, creata al primo frame che la riempie. */
+  _ensureTurn() {
+    if (!this.turnNode) {
+      this.turnNode = document.createElement('div');
+      this.turnNode.className = 'casa-msg casa-msg-jenny';
+      this._append(this.turnNode);
+    }
+    return this.turnNode;
+  }
+
+  /** Il blocco di testo del segmento di stream in corso. */
+  _ensureBlock() {
+    if (!this.blockNode) {
+      this.blockNode = document.createElement('div');
+      this.blockNode.className = 'casa-block';
+      this._ensureTurn().appendChild(this.blockNode);
+    }
+    return this.blockNode;
+  }
+
+  _append(node) {
+    this.el.appendChild(node);
+    if (this._empty) {
+      this._empty = false;
+      this.syncEmpty();
+    }
+  }
+
+  /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. */
+  syncEmpty() {
+    const empty = document.getElementById('casa-empty');
+    if (empty) empty.hidden = !this._empty;
+  }
+
+  /* ── Scorrimento ── */
+
+  _atBottom() {
+    const gap = this.el.scrollHeight - this.el.scrollTop - this.el.clientHeight;
+    return gap <= STICK_PX;
+  }
+
+  /** Segue il fondo, ma solo se ci si era. */
+  _follow() {
+    if (this._stick) this.scrollToBottom();
+  }
+
+  scrollToBottom() {
+    this.el.scrollTop = this.el.scrollHeight;
+    this._stick = true;
+  }
+}

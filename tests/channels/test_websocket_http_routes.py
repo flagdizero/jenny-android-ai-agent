@@ -351,10 +351,6 @@ async def test_static_serves_index_when_dist_present(
     bus: MagicMock, tmp_path: Path
 ) -> None:
     port = free_port()
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    (dist / "index.html").write_text("<!doctype html><title>nbweb</title>")
-    (dist / "favicon.svg").write_text("<svg/>")
     sm = _seed_session(tmp_path / "ws_state")
     channel = _ch(bus, session_manager=sm, port=port)
     server_task = asyncio.create_task(channel.start())
@@ -365,9 +361,19 @@ async def test_static_serves_index_when_dist_present(
         root = await _http_get(f"http://127.0.0.1:{port}/")
         assert root.status_code == 200
         assert "Jenny" in root.text
-        asset = await _http_get(f"http://127.0.0.1:{port}/favicon.svg")
+        # Un asset vero deve arrivare **come asset**, non come la shell.
+        #
+        # Qui prima si scriveva un ``favicon.svg`` in una ``dist`` che non era
+        # mai collegata al canale — ``static_dist_path`` è ``workspace/ui``, non
+        # una cartella del test — quindi il file non veniva mai servito: la
+        # richiesta cadeva sul fallback SPA e l'asserzione ``"<svg" in text``
+        # passava perché la shell dell'officina conteneva ``<svg id="graph-svg">``.
+        # Un test verde per una coincidenza. Si sonda un asset che esiste per
+        # davvero, e si pretende che NON sia la shell.
+        asset = await _http_get(f"http://127.0.0.1:{port}/html-mobile/assets/bootstrap.js")
         assert asset.status_code == 200
-        assert "<svg" in asset.text
+        assert "<!DOCTYPE html>" not in asset.text, "è la shell, non l'asset"
+        assert "tc-theme" in asset.text
         # Unknown SPA route falls back to index.html.
         spa = await _http_get(f"http://127.0.0.1:{port}/sessions/abc")
         assert spa.status_code == 200

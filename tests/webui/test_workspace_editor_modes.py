@@ -11,7 +11,7 @@ Cinque delle quattordici voci erano in quello stato: ``json``/``jsonl``
 registra ``application/json`` e ``text/typescript``, ``xml`` registra
 ``text/html`` e ``rust`` ``text/x-rustsrc``. Mancava solo il nome giusto. Il
 modo ``shell`` era invece vendorizzato e spedito nell'APK ma non caricato da
-``index.html``.
+``officina.html``.
 
 Il controllo è in due passi perché ci sono due modi di sbagliare: un nome che
 nessun file registra, e un nome registrato da un file che nessuno carica.
@@ -26,7 +26,7 @@ import pytest
 
 UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 WORKSPACE_JS = UI / "assets" / "mobile-workspace.js"
-INDEX_HTML = UI / "index.html"
+OFFICINA_HTML = UI / "officina.html"
 MODE_DIR = UI / "assets" / "vendor" / "codemirror@5.65.16" / "mode"
 
 # ``text`` non è un modo: è il modo nullo, chiesto di proposito per i file che
@@ -42,8 +42,8 @@ def _ext_lang() -> dict[str, str]:
 
 
 def _loaded_mode_files() -> set[str]:
-    """I file di modo che ``index.html`` carica davvero, per nome di cartella."""
-    html = INDEX_HTML.read_text("utf-8")
+    """I file di modo che ``officina.html`` carica davvero, per nome di cartella."""
+    html = OFFICINA_HTML.read_text("utf-8")
     return set(re.findall(r"codemirror@[\d.]+/mode/([a-z]+)/", html))
 
 
@@ -82,12 +82,12 @@ def test_every_mapped_language_resolves_to_a_loaded_mode(available) -> None:
 
 
 def test_shipped_modes_are_all_loaded() -> None:
-    """Un modo nell'APK e non in ``index.html`` è peso spedito per niente."""
+    """Un modo nell'APK e non in ``officina.html`` è peso spedito per niente."""
     shipped = {p.parent.name for p in MODE_DIR.glob("*/*.min.js")}
     unloaded = sorted(shipped - _loaded_mode_files())
 
     assert not unloaded, (
-        f"modi vendorizzati e spediti ma mai caricati da index.html: {unloaded}. "
+        f"modi vendorizzati e spediti ma mai caricati da officina.html: {unloaded}. "
         "O si agganciano, o si tolgono dal manifest in utils/android_assets.py."
     )
 

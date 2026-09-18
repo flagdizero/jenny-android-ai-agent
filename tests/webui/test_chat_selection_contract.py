@@ -28,7 +28,7 @@ ASSETS = UI / "assets"
 APP_JS = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
 CHAT_JS = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
 SELECTION_JS = (ASSETS / "shared" / "selection.js").read_text(encoding="utf-8")
-INDEX_HTML = (UI / "index.html").read_text(encoding="utf-8")
+OFFICINA_HTML = (UI / "officina.html").read_text(encoding="utf-8")
 ANDROID_ASSETS = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
 
 # Elementi HTML senza tag di chiusura: senza questo elenco lo stack del parser
@@ -65,8 +65,8 @@ class _Ancestry(HTMLParser):
 
 def _ancestor_ids(node_id: str) -> list[str]:
     parser = _Ancestry()
-    parser.feed(INDEX_HTML)
-    assert node_id in parser.ancestors, f"#{node_id} non esiste in index.html"
+    parser.feed(OFFICINA_HTML)
+    assert node_id in parser.ancestors, f"#{node_id} non esiste in officina.html"
     return parser.ancestors[node_id]
 
 
@@ -161,7 +161,7 @@ def test_the_sheet_lives_outside_the_swipe_surface() -> None:
 
 def test_no_inline_handlers_were_added() -> None:
     """La CSP della shell è `script-src 'self'`: un `onclick=` inline non gira."""
-    assert "onclick=" not in INDEX_HTML
+    assert "onclick=" not in OFFICINA_HTML
 
 
 def test_the_new_keys_exist_in_both_locales() -> None:
@@ -176,7 +176,7 @@ def test_the_select_sheet_and_the_anchor_pin_are_gone() -> None:
     """Il foglio era uno scroller interno e riproduceva il difetto al suo
     interno; il pin era un'euristica in JS su un difetto del motore. La radice
     sta in `test_chat_root_scroller_contract.py`."""
-    assert "chat-select-sheet" not in INDEX_HTML
+    assert "chat-select-sheet" not in OFFICINA_HTML
     assert "_showSelectSheet" not in CHAT_JS
     assert "pinSelectionAnchor" not in SELECTION_JS and "pinSelectionAnchor" not in APP_JS
     assert "setBaseAndExtent" not in _code_only(SELECTION_JS), "nessuna scrittura della selezione da JS"

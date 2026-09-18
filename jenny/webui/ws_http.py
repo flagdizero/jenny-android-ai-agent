@@ -97,6 +97,19 @@ def _decode_api_key(raw_key: str) -> str | None:
 
 _ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z0-9_.]{1,255}$")
 
+# I documenti-guscio della WebUI: le pagine che *ospitano* una SPA, non i suoi
+# asset. Sono due perche' le interfacce sono due — la casa (``index.html``, cioe'
+# l'ingresso: e' quel che il guscio nativo carica) e l'officina
+# (``officina.html``) — e tutto cio' che vale a livello di pagina (oggi la CSP)
+# deve valere per entrambe.
+#
+# Il perche' di un insieme invece del confronto con un nome solo: la CSP era
+# legata alla stringa ``index.html``, quindi un secondo guscio sarebbe nato
+# senza policy e se la sarebbe presa addosso tutta insieme il giorno in cui i
+# due file si scambiano il nome — cioe' alla fine, cioe' nel momento in cui una
+# violazione costa di piu' e si spiega di meno.
+_SHELL_DOCUMENTS = frozenset({"index.html", "officina.html"})
+
 def _default_model_name_from_config() -> str | None:
     try:
         from jenny.config.loader import load_config
@@ -812,11 +825,11 @@ class GatewayHTTPHandler:
         ]
         # M1 (migliorie/webui.md): defense-in-depth CSP for the SPA shell,
         # ENFORCING dal 18 lug 2026 dopo smoke test pulito (era Report-Only).
-        # Applied only to index.html (the document that hosts the SPA); the
-        # individual assets don't need a page-level policy. The inline
+        # Applied only to the shell documents (the pages that host a SPA — v.
+        # _SHELL_DOCUMENTS); the individual assets don't need a page-level policy. The inline
         # <script> blocks were already extracted to assets/bootstrap.js so
         # script-src 'self' holds.
-        if candidate.name == "index.html":
+        if candidate.name in _SHELL_DOCUMENTS:
             extra_headers.append((
                 "Content-Security-Policy",
                 "default-src 'self'; script-src 'self'; "

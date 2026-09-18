@@ -213,7 +213,7 @@ def test_rows_are_options_of_a_listbox_not_buttons() -> None:
     # scorrimento di TalkBack passa per gli elementi focalizzabili, e un
     # `roving tabindex` darebbe a Tab una sola fermata su tutta la lista.
     assert "setAttribute('tabindex', '0')" in body
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     assert 'role="listbox"' in html, "la lista non si dichiara"
     assert 'role="combobox"' in html, "il campo non governa la lista"
 
@@ -387,7 +387,7 @@ def test_no_hardcoded_strings_in_the_sheet() -> None:
     for key in ("launcher.recent", "launcher.results", "launcher.noResults"):
         assert f"'{key}'" in source, f"{key} non usata"
     # Il placeholder e le etichette statiche stanno nell'HTML, non nel JS.
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     assert 'data-i18n-placeholder="launcher.searchPlaceholder"' in html
     assert 'data-i18n-aria="launcher.clearSearch"' in html
 
@@ -399,16 +399,16 @@ def test_the_sheet_is_actually_in_the_page() -> None:
 
     Il registro dei livelli, l'ordine fra `miniapp` e `drawer`, `present` e
     `dismiss` sono coperti: ma tutti guardano il *controller*. Il foglio è fatto
-    di nodi che stanno in `index.html` — e `LauncherController` esce subito
+    di nodi che stanno in `officina.html` — e `LauncherController` esce subito
     (`if (!this.sheet) return`) se non li trova, senza un errore. Cancellare il
     blocco HTML lascerebbe verdi tutti gli altri test e un pulsante che non apre
     niente.
     """
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     for node in ('id="launcher-sheet"', 'id="launcher-scrim"', 'id="launcher-list"',
                  'id="launcher-search"', 'id="launcher-title"', 'id="launcher-close"',
                  'id="launcher-handle-row"'):
-        assert node in html, f"{node} manca da index.html: il foglio non esiste più"
+        assert node in html, f"{node} manca da officina.html: il foglio non esiste più"
     # L'unico ingresso: lo slot del dock. Il pulsante nel composer è stato
     # tolto perché esisteva in una vista sola.
     assert 'data-opens="launcher"' in html, "senza questo il foglio non si apre da nessuna parte"
@@ -431,7 +431,7 @@ def test_the_manage_row_leaves_the_launching_to_the_sheet() -> None:
     App* il tocco su «Gestisci» lascerebbe un overlay orfano sopra la vista che
     avrebbe dovuto mostrare.
     """
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     assert 'id="launcher-manage"' in html
     assert 'data-i18n="launcher.manage"' in html
     # Fuori dalla lista: non è una `option` da aprire con ⏎ né da trovare
@@ -479,7 +479,7 @@ def test_a_broken_bridge_is_not_an_empty_phone() -> None:
     assert "listsFailed()" in apps
     launcher = _src("mobile-launcher.js")
     assert "_syncStatus" in launcher
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     assert 'id="launcher-status"' in html
     # Fuori dalla lista: i figli di un `listbox` sono `option`, e un avviso là
     # dentro si annuncerebbe come una voce da aprire.
@@ -532,7 +532,7 @@ def test_the_new_step_six_strings_exist_in_both_locales() -> None:
 def test_the_search_field_does_not_autofocus() -> None:
     """D6: su un telefono con tastiera software l'autofocus alzerebbe la
     tastiera e si mangerebbe il foglio."""
-    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
     field = re.search(r'<input class="launcher-search".*?>', html, re.S)
     assert field, "campo di ricerca non trovato"
     assert "autofocus" not in field.group(0)
@@ -606,7 +606,7 @@ def test_the_dock_apps_slot_opens_the_sheet() -> None:
     navigabili da `.dock-item[data-mode]` — e la scheda Apps resterebbe
     raggiungibile solo dal foglio. `data-opens` è additivo apposta.
     """
-    html = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     slot = re.search(r'<div class="dock-item"[^>]*data-mode="apps"[^>]*>', html)
     assert slot, "lo slot Apps deve esistere nel dock"
     assert 'data-opens="launcher"' in slot.group(0)
@@ -627,7 +627,7 @@ def test_the_dock_order_is_chat_wiki_apps_workspace_settings() -> None:
     """Chat, Wiki, **Apps al centro** (è lì il pollice), File, Impostazioni. L'ordine del DOM è anche
     quello del carosello orizzontale (`_visibleModes`), quindi è un contratto,
     non una preferenza grafica."""
-    html = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     modes = re.findall(r'data-mode="([a-z]+)"', nav)
     modes = [m for m in modes if m != "onboarding"]  # nascosto fuori dal primo avvio
@@ -638,7 +638,7 @@ def test_the_dock_order_is_chat_wiki_apps_workspace_settings() -> None:
 def test_the_wiki_slot_wears_the_graph_icon() -> None:
     """L'icona è quella del grafo, la stessa che l'intestazione usa per la
     stessa destinazione (`mobile-header.js`), non un libro."""
-    html = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     slot = re.search(r'<div class="dock-item"[^>]*data-mode="graph"[^>]*>(.*?)</div>', html, re.S)
     assert slot and "ti-topology-star" in slot.group(1)
     assert "ti-book" not in slot.group(1)
@@ -648,7 +648,7 @@ def test_the_sheet_itself_shows_no_focus_ring() -> None:
     """Il foglio prende il fuoco all'apertura per fare da àncora a TalkBack e ai
     tasti, ma ha `tabindex="-1"`: da tastiera non ci si arriva, quindi l'anello
     non segnala nulla e si vede soltanto. I controlli *dentro* lo tengono."""
-    html = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     sheet = re.search(r'<div class="launcher-sheet"[^>]*>', html).group(0)
     assert 'tabindex="-1"' in sheet, "se diventasse raggiungibile con Tab, l'anello servirebbe"
     css = _src("mobile-style.css")
@@ -673,6 +673,6 @@ def test_the_composer_has_no_launcher_button() -> None:
     """Tolto: l'apertura è una sola, lo slot del dock. Un secondo ingresso che
     esiste in una vista sola era il difetto che ha reso il cassetto
     irraggiungibile da tutte le altre."""
-    html = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     assert "btn-launcher" not in html
     assert "btn-launcher" not in _src("mobile-launcher.js"), "niente riferimenti penzolanti"

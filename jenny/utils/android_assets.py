@@ -212,6 +212,11 @@ _UI_MANIFEST = [
     "assets/apps/jenny-kit.css",
     "assets/apps/jenny-sdk.js",
     "assets/bootstrap.js",
+    "assets/casa-activity.js",
+    "assets/casa-app.js",
+    "assets/casa-chat.js",
+    "assets/casa-mascot.js",
+    "assets/casa-style.css",
     "assets/i18n/en.json",
     "assets/i18n/it.json",
     "assets/jenny-body-front-hand.webp",
@@ -403,7 +408,14 @@ _UI_MANIFEST = [
     "assets/vendor/marked@15.0.7/marked.min.js",
     "assets/vendor/mermaid@10/LICENSE",
     "assets/vendor/mermaid@10/dist/mermaid.min.js",
+    # I due documenti-guscio (v. _SHELL_DOCUMENTS in jenny/webui/ws_http.py).
+    # Chi ne aggiunge uno e si dimentica questa riga non ottiene un 404:
+    # `_serve_static` ricade su index.html e serve l'altra interfaccia.
+    # ``index.html`` e' **la casa**: e' il documento che il guscio nativo carica
+    # (GATEWAY_PATH = "/html-mobile/") e su cui ricade ogni percorso ignoto.
+    # L'officina ha il suo nome e si raggiunge di proposito.
     "index.html",
+    "officina.html",
 ]
 
 _extracted_registry: dict[str, Path] = {}

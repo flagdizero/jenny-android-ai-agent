@@ -91,6 +91,31 @@ class ApiClient {
     location.reload();
   }
 
+  // Va a un ALTRO documento della WebUI portandosi dietro il segreto, che
+  // altrimenti resterebbe qui. È la strada fra i due gusci — la casa e
+  // l'officina — e senza questa il documento di destinazione farebbe un
+  // `bootstrap()` senza credenziale e prenderebbe 401.
+  //
+  // Perché non basta `reload()`: quello ricarica *questa* pagina. Perché non
+  // basta `location.href = path`: il fragment col segreto è stato consumato e
+  // cancellato al primo caricamento (v. _consumeBootstrapSecretFromLocation) e
+  // da lì in poi vive solo nella memoria di questa istanza, che la navigazione
+  // distrugge.
+  //
+  // `assign` e non `replace`: i due gusci sono documenti separati e il tasto
+  // Indietro deve poter tornare da dove si è arrivati.
+  navigate(path) {
+    if (typeof location === 'undefined') return;
+    if (!this._bootstrapSecret) {
+      location.assign(path);
+      return;
+    }
+    const [base, rawHash = ''] = String(path).split('#');
+    const params = new URLSearchParams(rawHash);
+    params.set('bs', this._bootstrapSecret);
+    location.assign(`${base}#${params}`);
+  }
+
   // Riporta un errore client-side nel log del gateway (fire-and-forget).
   // Best-effort: non deve mai lanciare né generare a sua volta errori globali,
   // e un cap per pagina evita flood in caso di errori ripetuti in loop.
