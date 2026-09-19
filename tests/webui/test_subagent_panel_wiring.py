@@ -107,10 +107,14 @@ def test_the_detail_modal_reuses_the_shared_dialog() -> None:
     assert "'cancel'" in dialog
     assert "oc-detail-close" in dialog
     assert "e.target === dialog" in dialog, "manca la chiusura al tap sul backdrop"
-    html = OFFICINA_HTML.read_text(encoding="utf-8")
+    # Il markup non sta più in officina.html: se lo porta il modulo, che lo
+    # monta all'import — i gusci che usano questi dialoghi sono due.
     for node_id in ("oc-detail-dialog", "oc-detail-title", "oc-detail-body",
                     "oc-detail-actions", "oc-detail-close"):
-        assert f'id="{node_id}"' in html, node_id
+        assert f'id="{node_id}"' in dialog, node_id
+    assert 'id="oc-detail-dialog"' not in OFFICINA_HTML.read_text(encoding="utf-8"), (
+        "due copie dello stesso markup: la seconda è quella che resterà indietro"
+    )
 
 
 def test_the_detail_modal_is_a_sheet_like_every_other_detail_surface() -> None:
@@ -120,7 +124,7 @@ def test_the_detail_modal_is_a_sheet_like_every_other_detail_surface() -> None:
     era la sola superficie di dettaglio della UI a non essere un `.oc-sheet`. Il
     margine per lato lo pagavano le righe di attività, che sono monospazio.
     """
-    html = OFFICINA_HTML.read_text(encoding="utf-8")
+    html = DIALOG_JS.read_text(encoding="utf-8")
     dialog = re.search(r'<dialog[^>]*id="oc-detail-dialog"[^>]*>', html)
     assert dialog, "il <dialog> del dettaglio non è stato trovato"
     classes = dialog.group(0)

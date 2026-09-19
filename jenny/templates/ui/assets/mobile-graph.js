@@ -3,7 +3,7 @@ import { escapeHtml, hashString } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { WikiSearchIndex } from './shared/wiki-search.js';
 import { AppState } from './shared/state.js';
-import { isOpenableProjectName } from './shared/scope-chip.js';
+import { isOpenableProjectName } from './shared/conversation-list.js';
 
 export class GraphController {
   constructor() {

@@ -555,19 +555,24 @@ def test_the_name_rule_is_not_copied_a_fourth_time() -> None:
                 assert word not in lowered, (
                     f"{locale}: scope.{key} riscrive la regola dei nomi invece di citarla"
                 )
-    src = _chip()
-    # Il modulo *cita* la regola due volte — il toast del dialogo di creazione e
-    # la nota della tendina — e non la **scrive** mai: nessuna parola della
-    # regola compare nel JS, né in una stringa né altrove.
-    assert src.count("i18n.t('scope.invalidName')") == 2, (
-        "la regola si cita per chiave, e i punti che la citano sono due"
+    # I tre moduli che hanno a che fare con la regola, da quando è stata portata
+    # dove stanno le conversazioni: chi la applica, chi la cita nella tendina,
+    # chi la cita creando. La citano per chiave e non la **scrivono** mai.
+    assets = ASSETS / "shared"
+    trio = {
+        name: (assets / name).read_text(encoding="utf-8")
+        for name in ("conversation-list.js", "scope-chip.js", "project-create.js")
+    }
+    citazioni = sum(src.count("'scope.invalidName'") for src in trio.values())
+    assert citazioni == 2, (
+        f"la regola si cita per chiave, e i punti che la citano sono due (trovati {citazioni})"
     )
-    assert "underscore" not in src.lower(), (
-        "la regola dei nomi è finita in prosa dentro il JS"
-    )
-    assert len(re.findall(r"A-Za-z0-9\]\[A-Za-z0-9", src)) == 1, (
-        "una seconda regex sulla forma dei nomi nel client"
-    )
+    for name, src in trio.items():
+        assert "underscore" not in src.lower(), (
+            f"{name}: la regola dei nomi è finita in prosa dentro il JS"
+        )
+    regex = sum(len(re.findall(r"A-Za-z0-9\]\[A-Za-z0-9", src)) for src in trio.values())
+    assert regex == 1, "una seconda regex sulla forma dei nomi nel client"
 
 
 def test_the_disabled_row_has_a_look_of_its_own() -> None:

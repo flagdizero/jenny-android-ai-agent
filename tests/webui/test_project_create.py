@@ -580,7 +580,13 @@ def test_il_chip_non_legge_piu_una_cartella_projects():
     assert "listWorkspace" not in source
     assert "createWorkspaceFolder" not in source
     assert "api.listProjects()" in source
-    assert "rpc.createProject(" in source
+    # La creazione non la fa più il chip: la fa il giro condiviso, che è anche
+    # quello che usa il pannello della casa.
+    flow = (
+        _REPO / "jenny" / "templates" / "ui" / "assets" / "shared" / "project-create.js"
+    ).read_text(encoding="utf-8")
+    assert "rpc.createProject(" in flow
+    assert "createProjectFlow(" in source
 
 
 # ── aprire la chat di un progetto ────────────────────────────────────────────

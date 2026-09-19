@@ -7,7 +7,7 @@ import { AppState } from './shared/state.js';
 import { renderTree, wireTreeFolder, wireTreeFiles } from './shared/tree-renderer.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
-import { isOpenableProjectName } from './shared/scope-chip.js';
+import { isOpenableProjectName } from './shared/conversation-list.js';
 
 export class WikiController {
   constructor() {

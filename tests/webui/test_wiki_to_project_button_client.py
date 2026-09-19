@@ -47,6 +47,8 @@ HEADER_JS = ASSETS / "mobile-header.js"
 GRAPH_JS = ASSETS / "mobile-graph.js"
 WIKI_JS = ASSETS / "mobile-wiki.js"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+# La regola del nome sta col resto di cosa può essere una conversazione.
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N = ASSETS / "i18n"
 
 _NODE = shutil.which("node")
@@ -142,7 +144,7 @@ const header = new Header();
 
 def _press_harness() -> str:
     return (
-        _PRESS_HARNESS.replace("__IS_OPENABLE__", _const(CHIP_JS, "VALID_NAME") + "\n" + _function(CHIP_JS, "isOpenableProjectName"))
+        _PRESS_HARNESS.replace("__IS_OPENABLE__", _const(LIST_JS, "VALID_NAME") + "\n" + _function(LIST_JS, "isOpenableProjectName"))
         .replace("__HANDLE_ACTION__", _member(HEADER_JS, "handleAction"))
     )
 
@@ -314,7 +316,7 @@ function afterSync(mode, view, arg) {
 
 def _sync_harness() -> str:
     return (
-        _SYNC_HARNESS.replace("__IS_OPENABLE__", _const(CHIP_JS, "VALID_NAME") + "\n" + _function(CHIP_JS, "isOpenableProjectName"))
+        _SYNC_HARNESS.replace("__IS_OPENABLE__", _const(LIST_JS, "VALID_NAME") + "\n" + _function(LIST_JS, "isOpenableProjectName"))
         .replace("__SHOW_ACTION__", _member(HEADER_JS, "showAction"))
         .replace("__HIDE_ACTION__", _member(HEADER_JS, "hideAction"))
         .replace("__GRAPH_SYNC__", _member(GRAPH_JS, "_syncProjectAction"))

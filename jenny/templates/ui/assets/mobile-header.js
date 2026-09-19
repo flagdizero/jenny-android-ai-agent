@@ -7,7 +7,8 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { isOpenableProjectName, scopeChip } from './shared/scope-chip.js';
+import { scopeChip } from './shared/scope-chip.js';
+import { isOpenableProjectName } from './shared/conversation-list.js';
 
 /** Il tasto che dalla wiki porta nella chat del progetto che la possiede.
  *

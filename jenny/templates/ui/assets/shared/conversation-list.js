@@ -35,6 +35,39 @@ export const DEFAULT_PROJECTS_DIR = 'wikis';
  */
 export const PROJECT_PREFIX = 'project:';
 
+/** Un nome di progetto è un nome di cartella: niente separatori né path.
+ *
+ *  **La stessa regola di `jenny/session/keys.py::_PROJECT_NAME_RE`**, che è chi
+ *  la applica davvero — a ogni `chat_id` in arrivo e alla creazione. Qui era più
+ *  larga in tre modi (nessuna regola sul primo carattere, nessun tetto di 64
+ *  caratteri, e `a..b` che passava), quindi `.hidden` e un nome di 300 caratteri
+ *  attraversavano due dialoghi per farsi rifiutare dal server in inglese.
+ *
+ *  Uguale, e non più stretta: questo punto è un *avviso*, non un secondo
+ *  cancello. Un nome che il server accetta deve arrivarci — se questa regex
+ *  rifiutasse qualcosa in più diventerebbe una seconda verità sulla forma dei
+ *  nomi, e la prima cosa che si romperebbe è il recupero di un albero rimasto a
+ *  metà (che il server *completa* invece di rifiutare).
+ */
+const VALID_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** True se *name* è una cartella che il server aprirebbe come conversazione.
+ *
+ *  Le due metà di `is_valid_project_name`: la forma, e il `..` che la forma non
+ *  vede (`a..b` passa la regex). Separate là e separate qui, così le due domande
+ *  restano confrontabili a occhio.
+ *
+ *  Esportata perché la stessa domanda se la pone anche chi non sta creando
+ *  niente: il tasto che dalla wiki porta nella chat del progetto esiste solo se
+ *  quel nome è un nome che il server aprirebbe. È la stessa divisione che fa
+ *  `wiki_routes.py::_collect_projects` fra `projects` e `unopenable`, e un tasto
+ *  offerto su una cartella del secondo gruppo aprirebbe **un'altra**
+ *  conversazione — il guasto per cui quella divisione esiste.
+ */
+export function isOpenableProjectName(name) {
+  return typeof name === 'string' && VALID_NAME.test(name) && !name.includes('..');
+}
+
 /** La chiave di sessione di un quaderno. */
 export function projectKey(name) {
   return `${PROJECT_PREFIX}${name}`;

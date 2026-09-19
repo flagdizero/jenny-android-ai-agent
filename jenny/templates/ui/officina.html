@@ -282,39 +282,11 @@
 <!-- Mobile App Entry Point -->
 <script type="module" src="/html-mobile/assets/mobile-app.js"></script>
 
-<dialog class="oc-dialog" id="oc-confirm-dialog">
-  <div class="oc-dialog-inner">
-    <p class="oc-dialog-message" id="oc-confirm-message"></p>
-    <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-confirm-cancel" data-i18n="dialog.cancel">Cancel</button>
-      <button class="oc-btn oc-btn-confirm" id="oc-confirm-ok" data-i18n="dialog.confirm">Confirm</button>
-    </div>
-  </div>
-</dialog>
-
-<dialog class="oc-dialog" id="oc-prompt-dialog">
-  <div class="oc-dialog-inner">
-    <p class="oc-dialog-message" id="oc-prompt-message"></p>
-    <input type="text" class="oc-dialog-input" id="oc-prompt-input" />
-    <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-prompt-cancel" data-i18n="dialog.cancel">Cancel</button>
-      <button class="oc-btn oc-btn-confirm" id="oc-prompt-ok" data-i18n="dialog.confirm">Confirm</button>
-    </div>
-  </div>
-</dialog>
-
-<!-- Modale di dettaglio (dialog.js::detailDialog): la card del pannello subagent
-     sta su una riga, il quadro completo — task, tool, esito — sta qui. -->
-<dialog class="oc-sheet oc-detail" id="oc-detail-dialog">
-  <div class="oc-sheet-inner oc-detail-inner">
-    <div class="oc-detail-head">
-      <h2 class="oc-detail-title" id="oc-detail-title"></h2>
-      <button class="oc-detail-close" id="oc-detail-close" type="button" aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="oc-detail-body" id="oc-detail-body"></div>
-    <div class="oc-dialog-buttons oc-detail-actions" id="oc-detail-actions"></div>
-  </div>
-</dialog>
+<!-- I tre modali condivisi (conferma, prompt, dettaglio) non stanno più qui: il
+     loro markup lo porta `shared/dialog.js`, che lo monta appena viene
+     importato. Stavano in questo file e basta, e la casa — che quei dialoghi li
+     usa per creare un quaderno — avrebbe dovuto tenerne una seconda copia
+     allineata a mano. -->
 
 <dialog class="oc-sheet" id="ws-context-sheet">
   <div class="oc-sheet-inner">

@@ -40,6 +40,70 @@ function closeThenResolve(dialog, resolve, value) {
   dialog.close();
 }
 
+/** Il markup dei tre modali.
+ *
+ *  **Sta qui e non nel documento** perché i documenti sono due: l'officina e la
+ *  casa. Finché a usarli era un guscio solo, viverci dentro andava bene; dal
+ *  momento in cui anche la casa crea un quaderno — due prompt, una conferma e a
+ *  volte un dettaglio a tre uscite — la seconda copia sarebbe stata una seconda
+ *  cosa da tenere allineata per disegnare la stessa finestra.
+ *
+ *  Gli `id` restano quelli: sono l'interfaccia che le tre funzioni qui sotto
+ *  cercano, e un modulo che monta il proprio markup e poi lo ritrova per `id`
+ *  non è più involuto di uno che se lo tiene in una variabile — è però
+ *  compatibile con chi quegli `id` li conosce già (il pannello subagent, i
+ *  fogli di stile, i banchi).
+ *
+ *  I `data-i18n` servono al giro di traduzioni dell'officina, che cammina sul
+ *  documento: per questo il montaggio è **all'import** e non alla prima
+ *  apertura — un nodo che compare dopo quel giro resterebbe nella lingua
+ *  sbagliata fino al cambio di lingua successivo.
+ */
+const MARKUP = `
+<dialog class="oc-dialog" id="oc-confirm-dialog">
+  <div class="oc-dialog-inner">
+    <p class="oc-dialog-message" id="oc-confirm-message"></p>
+    <div class="oc-dialog-buttons">
+      <button class="oc-btn oc-btn-cancel" id="oc-confirm-cancel" data-i18n="dialog.cancel">Cancel</button>
+      <button class="oc-btn oc-btn-confirm" id="oc-confirm-ok" data-i18n="dialog.confirm">Confirm</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="oc-dialog" id="oc-prompt-dialog">
+  <div class="oc-dialog-inner">
+    <p class="oc-dialog-message" id="oc-prompt-message"></p>
+    <input type="text" class="oc-dialog-input" id="oc-prompt-input" />
+    <div class="oc-dialog-buttons">
+      <button class="oc-btn oc-btn-cancel" id="oc-prompt-cancel" data-i18n="dialog.cancel">Cancel</button>
+      <button class="oc-btn oc-btn-confirm" id="oc-prompt-ok" data-i18n="dialog.confirm">Confirm</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="oc-sheet oc-detail" id="oc-detail-dialog">
+  <div class="oc-sheet-inner oc-detail-inner">
+    <div class="oc-detail-head">
+      <h2 class="oc-detail-title" id="oc-detail-title"></h2>
+      <button class="oc-detail-close" id="oc-detail-close" type="button" aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="oc-detail-body" id="oc-detail-body"></div>
+    <div class="oc-dialog-buttons oc-detail-actions" id="oc-detail-actions"></div>
+  </div>
+</dialog>`;
+
+/* Una volta sola, e solo se non c'è già: un secondo import non deve duplicare
+   nulla, e un documento che se li porta da sé (ce ne fosse uno) vince. */
+function mountDialogs() {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (document.getElementById('oc-confirm-dialog')) return;
+  const host = document.createElement('div');
+  host.innerHTML = MARKUP;
+  while (host.firstElementChild) document.body.appendChild(host.firstElementChild);
+}
+
+mountDialogs();
+
 export function confirmDialog(message, okText, cancelText) {
   okText = okText || i18n.t('dialog.confirm');
   cancelText = cancelText || i18n.t('dialog.cancel');

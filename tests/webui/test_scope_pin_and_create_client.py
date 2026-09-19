@@ -55,6 +55,9 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+# Le due domande e le cinque regole non stanno più nel chip: stanno qui,
+# perché le usa anche il pannello della casa.
+CREATE_JS = ASSETS / "shared" / "project-create.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 
 _NODE = shutil.which("node")
@@ -89,7 +92,7 @@ def _const(source: str, name: str) -> str:
 
 def _const_block(source: str, name: str) -> str:
     """Come :func:`_const`, per una costante su più righe (la mappa dei codici)."""
-    m = re.search(rf"(?ms)^const {re.escape(name)} = \{{.*?^\}};$", source)
+    m = re.search(rf"(?ms)^export const {re.escape(name)} = \{{.*?^\}};$", source)
     assert m, f"const {name} non trovata"
     return m.group(0)
 
@@ -101,7 +104,7 @@ def _function(source: str, name: str) -> str:
     decide quali nomi arrivano al server, e una copia a mano nel test
     smetterebbe di misurare quella vera al primo cambio.
     """
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
+    m = re.search(rf"(?ms)^export (?:async )?function {re.escape(name)}\(.*?^\}}$", source)
     assert m, f"funzione {name} non trovata"
     return m.group(0).removeprefix("export ")
 
@@ -118,6 +121,8 @@ const i18n = {
 };
 __VALID_NAME__
 __CREATE_ERROR_KEYS__
+__PROJECT_WORDS__
+__CREATE_FLOW__
 
 const AppState = {
   pinnedWiki: null,
@@ -142,6 +147,13 @@ function confirmDialog(text, okText) {
 
 const toasts = [];
 function showToast(text, kind) { toasts.push([text, kind]); }
+
+/* Il bivio a tre uscite della chat rimasta sotto un nome cancellato.
+   `undefined` = chiuso senza scegliere, che non crea niente. */
+let detailAnswer;
+const details = [];
+function detailDialog(spec) { details.push(spec); return Promise.resolve(detailAnswer); }
+const escapeHtml = (s) => String(s);
 
 /* La creazione lato server, a comando: `{...}` riuscita (progetto nuovo o
    albero completato, dal client si vedono uguali), `Error` rifiuto. */
@@ -194,6 +206,8 @@ function makeChip() {
   created.length = 0;
   confirms.length = 0;
   confirmAnswer = true;
+  details.length = 0;
+  detailAnswer = undefined;
   createOutcome = null;
   return new ScopeChip();
 }
@@ -212,12 +226,16 @@ function serverError(code, message) {
 
 def _harness() -> str:
     src = _read(CHIP_JS)
+    flow = _read(CREATE_JS)
+    lst = _read(LIST_JS)
     return (
         _HARNESS.replace(
             "__VALID_NAME__",
-            _const(src, "VALID_NAME") + "\n" + _function(src, "isOpenableProjectName"),
+            _const(lst, "VALID_NAME") + "\n" + _function(lst, "isOpenableProjectName"),
         )
-        .replace("__CREATE_ERROR_KEYS__", _const_block(src, "CREATE_ERROR_KEYS"))
+        .replace("__CREATE_ERROR_KEYS__", _const_block(flow, "CREATE_ERROR_KEYS"))
+        .replace("__PROJECT_WORDS__", _const_block(flow, "PROJECT_WORDS"))
+        .replace("__CREATE_FLOW__", _function(flow, "createProjectFlow"))
         .replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__PROJECTS__", _member(src, "_projects"))
         .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
@@ -604,24 +622,27 @@ def test_nothing_is_created_and_nothing_is_entered_without_both_answers() -> Non
     """)
 
 
-def test_every_key_the_map_names_exists_in_both_languages() -> None:
+def test_every_word_the_flow_names_exists_in_both_languages() -> None:
     """Una chiave che manca stampa se stessa: `scope.createRejected` a schermo.
 
-    Vale per la mappa dei codici *e* per il ripiego dei codici sconosciuti, che
-    è la sola chiave raggiungibile senza essere nominata nella mappa.
+    Il giro non conosce nessuna stringa: conosce dei *posti* (`words`), e chi lo
+    chiama ci mette le proprie chiavi. Quindi si controlla il vocabolario intero
+    dell'officina, non solo la mappa dei codici — compreso il ripiego per un
+    codice sconosciuto, che è la sola voce raggiungibile senza essere nominata
+    dalla mappa.
     """
     import json
 
-    src = _read(CHIP_JS)
-    keys = set(re.findall(r"'(scope\.[A-Za-z]+)'", _const_block(src, "CREATE_ERROR_KEYS")))
-    assert len(keys) == 4, f"la mappa dei codici è cambiata: {sorted(keys)}"
-    keys |= {
-        "scope.createInternal",   # ripiego per un codice che il client non conosce
-        "scope.createFailed",     # trasporto: messaggio già localizzato
-        "scope.nameTaken",
-        "scope.nameTakenContinue",
-        "scope.invalidName",
-    }
+    flow = _read(CREATE_JS)
+    slots = set(re.findall(r"(?m)^\s*(\w+): '([^']+)'", _const_block(flow, "PROJECT_WORDS")))
+    keys = {key for _, key in slots}
+    assert len(keys) >= 15, f"il vocabolario si è accorciato: {sorted(keys)}"
+    # Ogni posto che la mappa dei codici nomina deve esistere nel vocabolario.
+    codes = set(re.findall(r"(?m)^\s*\w+: '([^']+)'", _const_block(flow, "CREATE_ERROR_KEYS")))
+    names = {name for name, _ in slots}
+    assert codes <= names, f"la mappa dei codici nomina posti che non esistono: {codes - names}"
+    assert "internal" in names, "manca il ripiego per un codice che il client non conosce"
+
     for locale in ("it", "en"):
         data = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))
         for key in sorted(keys):
@@ -661,7 +682,11 @@ def test_the_pin_still_has_a_single_writer_inside_the_chip() -> None:
 
 
 def test_the_creation_no_longer_reopens_the_menu() -> None:
-    """Guardia debole: la riga che lasciava l'utente fuori dal suo progetto."""
+    """Guardia debole: la riga che lasciava l'utente fuori dal suo progetto.
+
+    Il metodo è diventato sottile — le domande le fa il giro condiviso — e quel
+    che resta suo è dove si va dopo: dentro, e solo se qualcosa è stato creato.
+    """
     body = _member(_read(CHIP_JS), "_createProject")
     code = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
     code = re.sub(r"(?m)^\s*//.*$|\s//.*$", "", code)
@@ -669,8 +694,8 @@ def test_the_creation_no_longer_reopens_the_menu() -> None:
         "la tendina si riapre sopra il toast e il progetto appena creato resta da aprire"
     )
     assert re.search(r"this\.select\(\{ kind: 'project', name: clean \}\)", code)
-    # E il `catch` esce senza toccare niente: il rifiuto non porta dentro.
-    tail = code[code.index("} catch"):]
-    assert tail.index("return;") < tail.index("this.select("), (
-        "un rifiuto deve uscire prima di qualunque select"
+    # Niente creato, niente select: `createProjectFlow` torna `null` in tutte le
+    # uscite che non hanno scritto su disco, e questa è la riga che ci crede.
+    assert code.index("if (!clean) return;") < code.index("this.select("), (
+        "un giro annullato o rifiutato porterebbe dentro un progetto che non c'è"
     )
