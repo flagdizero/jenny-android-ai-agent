@@ -129,6 +129,18 @@ def test_a_block_pruned_in_the_middle_is_rewritten_whole() -> None:
     assert extract_rules(rifatto) == "Chiamami per nome.\nNiente emoji.\nNon scusarti."
 
 
+def test_markers_in_the_wrong_order_are_not_a_block() -> None:
+    """Chiusura prima dell'apertura: non e' un blocco, e prenderlo per tale
+    vorrebbe dire tagliare il file al contrario — dall'apertura indietro fino
+    alla chiusura, cioe' mangiarsi quel che c'era in mezzo. Si ricade
+    sull'intestazione, che e' il riconoscimento che regge alle potature."""
+    storto = "# Soul\n\n" + MARK_END + "\n" + HEADING + "\n\n" + REGOLE + "\n" + MARK_START + "\n"
+    rifatto = project(storto, "Dammi del tu.")
+    assert "# Soul" in rifatto, "il file e' stato tagliato al contrario"
+    assert extract_rules(rifatto) == "Dammi del tu."
+    assert rifatto.count(HEADING) == 1
+
+
 def test_an_orphan_marker_is_absorbed_not_stacked() -> None:
     """Meta' potatura: resta il marcatore d'apertura. Senza questo ramo
     resterebbe li' per sempre, e ogni proiezione ne metterebbe uno nuovo

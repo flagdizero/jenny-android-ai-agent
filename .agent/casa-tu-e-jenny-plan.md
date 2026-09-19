@@ -116,19 +116,25 @@ premessa: è la descrizione di un campo che si svuota da solo.
 marcato dentro `SOUL.md` — l'unico pezzo che l'editor di casa legge e riscrive
 — e tutto il resto resta di Dream, che continua a consolidare come fa adesso.
 
-Il blocco non si difende col prompt. Si difende con un **guardiano
-deterministico** sulla scrittura di `SOUL.md` (`MemoryStore`): se dopo una
-scrittura il blocco non c'è più, viene rimesso. Una funzione, testabile, che
-non dipende da come il modello ha letto un'istruzione quella notte. Una riga nel
-prompt di Dream si può aggiungere dopo, per evitare che ci provi ogni volta —
-ma è l'ottimizzazione, non la garanzia.
+Il blocco non si difende col prompt: si difende riscrivendolo.
 
-*Alternativa considerata e scartata*: un file nuovo fuori dal registro di
-scrittura di Dream (che oggi ammette esattamente `SOUL.md`, `USER.md`,
-`memory/MEMORY.md` e `skills/<nome>/SKILL.md`, e rifiuta il resto). Sarebbe
-sicuro per costruzione, ma costa una voce in più nel bootstrap del contesto —
-cioè in ogni prompt di ogni turno — e separa in due posti una cosa sola: chi è
-lei. Se il guardiano si rivelasse fragile, questa è la via di riserva.
+**Come è finita — due misure hanno spostato il disegno, e la via di riserva è
+diventata la via.** Confrontando le sette versioni di `SOUL.md`: in tutti e sei
+i cambi **nessuna intestazione è stata tolta o aggiunta**, mentre le righe
+dentro sì (+4/−8 nel più grosso). Dream pota *dentro* le sezioni, quindi un
+blocco sopravvive come intestazione ma le sue righe no. E leggendo il codice:
+`MemoryStore` **non è lo scrittore** — Dream scrive quel file con
+`write_file`/`edit_file`/`apply_patch`, e un guardiano lì non avrebbe visto
+passare niente.
+
+Quindi: la verità sta in `.jenny/soul_rules.md`, fuori dal registro di
+scrittura di Dream (che ammette esattamente `SOUL.md`, `USER.md`,
+`memory/MEMORY.md` e `skills/<nome>/SKILL.md`), e dentro `SOUL.md` ne resta un
+blocco **proiettato** — così il prompt lo legge dov'è sempre stato, senza una
+voce in più nel bootstrap. La proiezione si rifà in `finish_dream_cycle`, che
+il chiamante invoca nel `finally`: vale anche per un turno crashato a metà. Il
+blocco si riconosce dai due marcatori e, se mancano, dall'intestazione — il
+ripiego è per la forma di potatura che le misure mostrano.
 
 Trasporto: niente endpoint nuovi. Si legge con `/api/workspace/read?path=SOUL.md`
 e si salva con `rpc.writeWorkspaceFile` — l'RPC sul WebSocket, che esiste
@@ -206,3 +212,10 @@ va detto invece che perso.
 I primi tre non toccano il server. Il quarto sì, ed è l'unico che va misurato
 sul dispositivo prima di dichiararlo fatto: una passata di Dream, e il blocco
 ancora lì.
+
+
+---
+
+## Com'è andata
+
+Tutto atterrato, in quattro commit: [`casa-tu-e-jenny-checklist.md`](casa-tu-e-jenny-checklist.md).

@@ -348,12 +348,18 @@ def test_the_switch_moves_before_the_server_answers_and_takes_its_word_after() -
     Android non l'ha lasciata aprire."""
     _run_js("""
       const lei = stanza({ available: true, enabled: false, active: false });
-      risposta = { floating: { available: true, enabled: true, active: false } };
+      /* Il server risponde il **contrario** dell'ipotesi: il permesso c'e' e
+         la finestra e' su. Con una risposta uguale a quel che la stanza aveva
+         gia' indovinato, buttarla via non si vedrebbe da nessuna parte. */
+      risposta = { floating: { available: true, enabled: true, active: true } };
       const giro = lei.toggleFloating();
       assert.equal(lei.floatingBtn.classList.contains('is-on'), true, 'non si e\\u2019 mosso subito');
+      assert.equal(lei.floatingNote.textContent, i18n.t('settings.floatingBlocked'),
+                   'prima della risposta la stanza sa solo quel che sapeva');
       await giro;
       assert.deepEqual(chiamate, [{ enabled: true }]);
-      assert.equal(lei.floatingNote.textContent, i18n.t('settings.floatingBlocked'),
+      assert.equal(lei.floating.active, true, 'il permesso concesso non e arrivato');
+      assert.equal(lei.floatingNote.textContent, i18n.t('settings.floatingHint'),
                    'la risposta del server non e\\u2019 stata ascoltata');
     """)
 

@@ -254,6 +254,15 @@ def test_picking_a_theme_moves_the_ring_without_redrawing_the_strip() -> None:
       const accese = tu.themesEl.children.filter((c) => c.classList.contains('is-on'));
       assert.equal(accese.length, 1);
       assert.equal(accese[0].dataset.theme, 'y2k', 'l\\u2019anello e\\u2019 rimasto sul tema di prima');
+
+      /* E nemmeno riaprendo la stanza: da «Tu e Jenny» ci si torna a ogni
+         giro, e senza la guardia le sette pastiglie diventano quattordici —
+         un secondo elenco identico in coda al primo. */
+      tu.open();
+      assert.equal(tu.themesEl.children.length, THEMES.length, 'la striscia si accumula');
+      tu.themesEl.children.forEach((card, i) => {
+        assert.equal(card, prima[i], 'ridisegnata alla riapertura');
+      });
     """)
 
 
