@@ -23,6 +23,8 @@
 import { ActivityLine } from './casa-activity.js';
 import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
+import { CasaPages } from './casa-pages.js';
+import { CasaReader } from './casa-reader.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
@@ -38,6 +40,12 @@ import './shared/theme.js';
    tutte vorrebbe dire far lampeggiare una riga d'allarme mentre non e' successo
    niente. Si parla solo se il silenzio dura. */
 const WIRE_GRACE_MS = 2_500;
+
+/* Dove appoggia i piedi Jenny fuori dalla chat, in px dal fondo. Nella chat il
+   suo pavimento e' il composer e si misura (v. `_bindComposer`); nelle pagine
+   il composer non c'e', e la tavola `Quaderno.dc.html` la disegna a venti pixel
+   dal fondo — sopra la maniglia del cassetto, che e' la tavola dopo. */
+const FLOOR_NO_COMPOSER = 20;
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
  *
@@ -75,6 +83,34 @@ class CasaApp {
     this.door = document.getElementById('casa-door');
     this.kicker = document.getElementById('casa-kicker');
     this.pending = document.getElementById('casa-pending');
+    this.shell = document.querySelector('.casa-shell');
+
+    /* I comandi dell'intestazione che cambiano con la stanza. */
+    this.pagesBtn = document.getElementById('casa-pages-open');
+    this.pagesCount = document.getElementById('casa-pages-count');
+    this.backBtn = document.getElementById('casa-back');
+    this.backLabel = document.getElementById('casa-back-label');
+    this.talkBtn = document.getElementById('casa-talk');
+    this.talkLabel = document.getElementById('casa-talk-label');
+
+    /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
+       sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
+       `import` statico la pagherebbe a ogni avvio della casa. */
+    this.pages = new CasaPages({
+      onOpenPage: (path, label) => this.openPage(path, label),
+      onNeedMap: (data) => this._drawMap(data),
+    });
+    this.reader = new CasaReader();
+    this.reader.onTitle = (title) => this._setHeadTitle(title);
+    this.map = null;
+
+    /** Quale stanza e' a schermo: `chat`, `pages` o `reader`. */
+    this.view = 'chat';
+    /* Com'era Jenny quando hai lasciato la chat. Fuori dalla chat sta al bordo
+       — lo dice la tavola, che la disegna a `right:-56px` mentre nelle due
+       della chat sta a `-30px` — ma se l'avevi messa via tu, tornando non deve
+       ricomparire: quella era una tua decisione, non lo stato della stanza. */
+    this._jennyWasOut = true;
 
     /* Il nome della conversazione personale, messo da parte **prima** che il
        titolo cominci a cambiare. Lo prendeva dal titolo, ed era giusto finche'
@@ -149,6 +185,10 @@ class CasaApp {
        sempre. In officina lo stesso evento serve alla stessa cosa
        (`mobile-jenny.js`, `_releaseTrackedTurn`). */
     sessionManager.addEventListener('chat:switch', () => this._releaseTurn());
+    /* E riporta nella conversazione. Le pagine parlano di *un* quaderno: dalla
+       tendina si puo' saltare in un altro, e restare li' vorrebbe dire leggere
+       l'elenco di una stanza in cui non sei piu'. */
+    sessionManager.addEventListener('chat:switch', () => this._setView('chat'));
 
     wsManager.addEventListener('chat:open', () => this._setWire(true));
     wsManager.addEventListener('chat:close', () => this._setWire(false));
@@ -170,6 +210,12 @@ class CasaApp {
     };
     this.door.addEventListener('click', () => this._openInWorkshop(null));
     document.getElementById('casa-who')?.addEventListener('click', () => this.who.toggle());
+    this.pagesBtn?.addEventListener('click', () => this.openPages());
+    /* Le due vie d'uscita della stessa stanza, e fanno la stessa cosa: si esce
+       da dove stai guardando — in alto a sinistra se leggi l'intestazione, in
+       basso a destra col pollice. */
+    this.backBtn?.addEventListener('click', () => this.goBackOneRoom());
+    this.talkBtn?.addEventListener('click', () => this._setView('chat'));
 
     sessionManager.init();
     this._applyConversation();
@@ -263,6 +309,117 @@ class CasaApp {
     await this.switchConversation(projectKey(name));
   }
 
+  /* ── Le stanze ──
+   *
+   *  La casa ne ha tre: la conversazione, le pagine del quaderno, una pagina.
+   *  Si entra dall'intestazione e si torna indietro una alla volta — mai due
+   *  per un gesto, che e' la stessa regola con cui Indietro chiude la tendina
+   *  senza uscire anche dal quaderno.
+   */
+
+  /** Le pagine del quaderno in cui sei. Dalla chat personale non c'e' nulla da
+   *  aprire, e infatti la pastiglia li' non compare. */
+  async openPages() {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (!notebook) return;
+    this._setView('pages');
+    await this.pages.load(notebook);
+  }
+
+  /** Una pagina del quaderno, letta. */
+  async openPage(path, label) {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (!notebook || !path) return;
+    this._setView('reader');
+    this._setHeadTitle(label || '');
+    this._setHeadTitle(await this.reader.load(notebook, path, label));
+  }
+
+  /** Indietro di **una** stanza. Vero se c'era dove tornare. */
+  goBackOneRoom() {
+    if (this.view === 'reader') {
+      this._setView('pages');
+      return true;
+    }
+    if (this.view === 'pages') {
+      this._setView('chat');
+      return true;
+    }
+    return false;
+  }
+
+  /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
+     fa il CSS: cosi' la geometria — cosa occupa lo spazio, cosa sparisce —
+     resta in un posto solo, e qui c'e' solo quel che il CSS non sa fare. */
+  _setView(name) {
+    const view = name === 'pages' || name === 'reader' ? name : 'chat';
+    if (view === this.view) return;
+    if (this.view === 'chat') {
+      /* Com'era quando hai lasciato la chat: al ritorno si rimette com'era, e
+         non «fuori» d'ufficio. Metterla via era una tua decisione. */
+      this._jennyWasOut = this.jenny.el.classList.contains('out');
+    }
+    this.view = view;
+    this.shell?.setAttribute('data-view', view);
+
+    if (view === 'chat') {
+      this.map?.stop();
+      this._measureFloor?.();
+      this.jenny.setOut(this._jennyWasOut);
+      this._applyConversation();
+      this.chat.keepBottom();
+    } else {
+      /* Niente composer, quindi il pavimento va dichiarato: senza, l'osservatore
+         misurerebbe un elemento nascosto e lo troverebbe alto zero. */
+      document.documentElement.style.setProperty(
+        '--casa-composer-h', `${FLOOR_NO_COMPOSER}px`,
+      );
+      /* Fuori dalla chat Jenny sta al bordo: lo dice la tavola, che qui la
+         disegna a `right:-56px` contro i `-30px` delle due della chat. */
+      this.jenny.setOut(false);
+      this.input?.blur();
+    }
+    this._applyHead();
+  }
+
+  /* Il nome in testa: la conversazione nella chat, il quaderno nelle pagine,
+     la pagina nel lettore. E' lo stesso `<h1>`, perche' e' sempre la risposta
+     alla stessa domanda — dove sono. */
+  _setHeadTitle(title) {
+    if (this.nameEl && title) this.nameEl.textContent = title;
+  }
+
+  /* Quali comandi dell'intestazione valgono in questa stanza. */
+  _applyHead() {
+    const inChat = this.view === 'chat';
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (this.kicker) this.kicker.hidden = !inChat;
+    if (this.backBtn) this.backBtn.hidden = inChat;
+    if (this.door) this.door.hidden = !inChat;
+    if (this.talkBtn) this.talkBtn.hidden = inChat;
+    if (this.pagesBtn) this.pagesBtn.hidden = !inChat || !notebook;
+    if (this.dotEl) this.dotEl.hidden = !notebook || !inChat;
+    /* Fuori dalla chat il titolo non apre piu' niente: nelle pagine dice quale
+       quaderno stai guardando, e un chevron che promette una scelta la' sopra
+       porterebbe a cambiare stanza da dentro un'altra. */
+    const whoBtn = document.getElementById('casa-who');
+    if (whoBtn) whoBtn.disabled = !inChat;
+    if (!inChat && this.view === 'pages') this._setHeadTitle(notebook);
+  }
+
+  /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
+     sulla linguetta e non con l'avvio della casa. `import()` dinamico e non
+     statico: e' la differenza fra pagarla chi la apre e pagarla tutti. */
+  async _drawMap(data) {
+    if (!this.map) {
+      const { CasaMap } = await import('./casa-map.js');
+      this.map = new CasaMap({
+        onOpenPage: (path, label) => this.openPage(path, label),
+      });
+    }
+    await this.map.draw(data);
+  }
+
   /* L'intestazione dice dove sei: l'occhiello, il nome, il pallino — lo stesso
      colore che ha la riga nel pannello, ed e' l'unica cosa che lega il tocco
      alla stanza in cui sei finito. */
@@ -274,8 +431,31 @@ class CasaApp {
       this.dotEl.style.background = project ? dotColor(project) : '';
     }
     this._applyTranslations();
+    this._applyHead();
+    this._updatePagesCount(project);
     // Aperto mentre si cambia (non capita col tocco, capita con Indietro).
     if (this.who?.isOpen) this.who.render();
+  }
+
+  /* Il numero sulla pastiglia. Arriva quando arriva — il conteggio sta nello
+     stesso elenco della tendina — e fino ad allora la pastiglia c'e' con la sua
+     icona: un quaderno le pagine ce le ha comunque, e aspettare la cifra per
+     mostrare la porta vorrebbe dire nascondere la porta.
+
+     Il nome si ricontrolla al ritorno: fra la domanda e la risposta si puo'
+     essere passati in un altro quaderno, e scrivere li' il conteggio di quello
+     di prima sarebbe un numero sbagliato su una stanza giusta. */
+  _updatePagesCount(notebook) {
+    if (!this.pagesCount) return;
+    this.pagesCount.textContent = '';
+    if (!notebook) return;
+    this.who.pagesOf(notebook).then((count) => {
+      if (projectNameOf(sessionManager.currentKey) !== notebook) return;
+      if (count === null) return;
+      this.pagesCount.textContent = i18n.t(
+        count === 1 ? 'casa.pages.countOne' : 'casa.pages.countMany', { count },
+      );
+    }).catch((err) => console.warn('casa.pages: conteggio non letto', err));
   }
 
   /* Il turno che stava girando nella conversazione lasciata non si chiudera'
@@ -319,6 +499,7 @@ class CasaApp {
    */
   goHome() {
     this._closeOverlays();
+    this._setView('chat');
     this.switchConversation(null);
     this.input?.blur();
     this.chat.scrollToBottom();
@@ -341,6 +522,11 @@ class CasaApp {
    */
   handleHardwareBack() {
     if (this._closeOverlays()) return;
+    /* Poi le stanze, una per pressione: lettore, pagine, chat. Solo quando la
+       casa e' tornata alla conversazione Indietro vale come «esci dal
+       quaderno» — altrimenti dalle pagine un tocco solo farebbe sparire due
+       cose, la stanza e la stanza che la conteneva. */
+    if (this.goBackOneRoom()) return;
     if (projectNameOf(sessionManager.currentKey)) this.switchConversation(null);
   }
 
@@ -379,6 +565,7 @@ class CasaApp {
    */
   openChat() {
     this._closeOverlays();
+    this._setView('chat');
     this.switchConversation(null);
     this.chat.scrollToBottom();
     return true;
@@ -426,9 +613,19 @@ class CasaApp {
        vera si misura e si scrive in un token, cosi' la geometria resta nel CSS
        e qui c'e' solo il numero. */
     const measure = () => {
+      /* Solo nella chat. Fuori di li' il composer e' `display:none`, quindi il
+         suo `offsetHeight` e' zero: misurarlo scriverebbe un pavimento a filo
+         del bordo, e Jenny finirebbe mezza fuori schermo mentre leggi le
+         pagine. Chi non ha un composer il suo pavimento se lo dichiara
+         (v. `_setView`). */
+      if (this.view !== 'chat') return;
       const h = document.querySelector('.casa-composer')?.offsetHeight || 64;
       document.documentElement.style.setProperty('--casa-composer-h', `${h}px`);
     };
+    /* Serve anche a chi rientra nella chat da un'altra stanza: li' il composer
+       torna visibile e la sua altezza va rimisurata, o Jenny resta appoggiata
+       al pavimento delle pagine. */
+    this._measureFloor = measure;
     measure();
     /* **Tutto quel che sta sotto il filo, non solo il composer.** Il filo è
        `flex: 1`: ogni riga che compare là sotto — gli allegati in attesa, la
@@ -664,6 +861,10 @@ class CasaApp {
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('casa.attach'));
     if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.workshop'));
+    if (this.backLabel) this.backLabel.textContent = i18n.t('casa.pages.back');
+    if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
+    if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));
+    this.pages?.applyTranslations();
     const whoBtn = document.getElementById('casa-who');
     if (whoBtn) whoBtn.setAttribute('aria-label', i18n.t('casa.who.open'));
     // Aperta mentre la lingua cambia: le sue righe sono gia' a schermo.

@@ -852,3 +852,373 @@ body.casa {
 .casa-who-note.is-error {
   color: var(--error);
 }
+
+/* ── Le tre stanze ───────────────────────────────────────────────────────────
+   La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono tre — la
+   conversazione, le pagine di un quaderno, una pagina — e quale sia a schermo
+   lo dice **un attributo solo** su `.casa-shell`. Il JS lo scrive, il resto lo
+   decide qui: cosi' la geometria sta in un posto, e chi legge il guscio non
+   deve inseguire cinque `hidden` per sapere cosa occupa lo spazio.
+
+   L'attributo e' scritto anche nell'HTML, non solo dal JS: senza, il primo
+   frame mostrerebbe tutte e tre le stanze impilate. */
+
+.casa-pages,
+.casa-reader {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.casa-shell[data-view='pages'] .casa-pages,
+.casa-shell[data-view='reader'] .casa-reader { display: flex; }
+
+.casa-shell:not([data-view='chat']) .casa-thread,
+.casa-shell:not([data-view='chat']) .casa-empty,
+.casa-shell:not([data-view='chat']) .casa-activity,
+.casa-shell:not([data-view='chat']) .casa-wire,
+.casa-shell:not([data-view='chat']) .casa-pending,
+.casa-shell:not([data-view='chat']) .casa-composer { display: none; }
+
+/* ── L'intestazione che cambia stanza ── */
+
+.casa-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.casa-actions [hidden] { display: none; }
+
+/* La porta delle pagine e la via del ritorno: due pastiglie, stessa altezza
+   della porta dell'officina. Quella chiara e' un posto dove andare, quella
+   piena e' il ritorno a dove stavi — la tavola le disegna cosi', ed e' giusto:
+   il ritorno non e' una scelta fra pari, e' l'uscita. */
+.casa-pages-open,
+.casa-talk {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.casa-pages-open {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.casa-talk {
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.casa-pages-open:active,
+.casa-talk:active { filter: brightness(0.94); }
+
+/* L'occhiello, quando e' un comando. Sta dove stava la parola, e ne ha il peso:
+   e' una via d'uscita, non un bottone che si contende l'occhio col titolo. */
+.casa-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 2px -4px;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.casa-back:active { color: var(--text); }
+
+/* Fuori dalla chat il titolo dice dove sei e non apre piu' niente. Il chevron
+   se ne va con lui: un segno che promette una tendina, su un bottone spento,
+   e' una porta disegnata sul muro. */
+.casa-who-open:disabled {
+  color: inherit;
+  opacity: 1;
+  cursor: default;
+}
+
+.casa-shell:not([data-view='chat']) .casa-who-open .ti-chevron-down { display: none; }
+
+/* ── Le pagine di un quaderno ── */
+
+.casa-tabs {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  margin: 2px 18px 8px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--overlay);
+}
+
+.casa-tab {
+  flex: 1;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.casa-tab.is-on {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.casa-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin: 0 18px 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.casa-search[hidden] { display: none; }
+
+.casa-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.casa-search-input::placeholder { color: var(--text-faint); }
+
+.casa-page-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 18px 8px;
+}
+
+.casa-page-list[hidden] { display: none; }
+
+/* Una riga e' un comando, come nel pannello: stesso azzeramento del vestito di
+   serie, stesso bersaglio alto abbastanza per un pollice. */
+.casa-page {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.casa-page[hidden] { display: none; }
+.casa-page:active { background: var(--overlay); }
+
+.casa-page-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.casa-page-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.casa-page-group {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* I tre colori dei gruppi. Tre e non quattro: v. `GROUPS` in casa-pages.js —
+   `summaries/` da `/api/graph` non esce.
+
+   **Non sono gli stessi tre della legenda del grafo, e la ragione e' misurata.**
+   Di la' `concepts` e' `--accent` ed `entities` e' `--error`: su sei temi quei
+   due colori distano 26 in kyoto e 58 in pietra (distanza RGB) — cioe' due
+   pallini identici a occhio, in un elenco dove il pallino dovrebbe dividere. La
+   sola coppia che si separa **in tutti e sei** e' `--error` / `--ok`, che non
+   scende mai sotto 101; `--accent` e `--ok` addirittura coincidono (distanza 0)
+   in chanel e fumetto.
+
+   Quindi qui `concepts` prende `--ok`. Non e' una tavolozza rubata a nessuno:
+   nel grafo `--ok` e' assegnato a `summaries`, che non viene mai disegnato. Il
+   grafo dell'officina ha lo stesso scontro e non l'ho toccato — la' la legenda
+   mette la pastiglia accanto alla parola, quindi si decodifica lo stesso, e
+   cambiare i colori di un altro guscio non e' lavoro di questo giro. */
+.casa-group-concepts { background: var(--ok); }
+.casa-group-entities { background: var(--error); }
+.casa-group-other { background: var(--text-faint); }
+
+.casa-pages-note,
+.casa-map-note {
+  flex: none;
+  padding: 10px 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.casa-pages-note[hidden],
+.casa-map-note[hidden] { display: none; }
+
+/* ── La mappa ── */
+
+.casa-map {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 12px 8px;
+}
+
+.casa-map[hidden] { display: none; }
+
+.casa-map-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  touch-action: none;
+}
+
+.casa-map-edges line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+/* Il raggio lo scrive il JS (dice quanti collegamenti ha la pagina); il colore
+   lo scrive il gruppo, con le stesse classi dei pallini dell'elenco. */
+.casa-map-node { cursor: pointer; }
+
+.casa-map-nodes .casa-group-concepts { fill: var(--ok); }
+.casa-map-nodes .casa-group-entities { fill: var(--error); }
+.casa-map-nodes .casa-group-other { fill: var(--text-faint); }
+
+.casa-map-labels text {
+  fill: var(--text-muted);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+  text-anchor: middle;
+  /* Il bersaglio e' il pallino: un'etichetta che intercetta il tocco fa
+     mancare la pagina accanto. */
+  pointer-events: none;
+}
+
+/* ── Una pagina, letta ── */
+
+.casa-reader-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 18px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.casa-reader-note {
+  margin: 12px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.casa-reader-body h1,
+.casa-reader-body h2,
+.casa-reader-body h3 {
+  margin: 18px 0 6px;
+  font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--heading);
+}
+
+.casa-reader-body h1 { font-size: 21px; }
+.casa-reader-body h2 { font-size: 18px; }
+.casa-reader-body h3 { font-size: 16px; }
+.casa-reader-body p { margin: 8px 0; }
+.casa-reader-body ul,
+.casa-reader-body ol { margin: 8px 0; padding-left: 22px; }
+.casa-reader-body li { margin: 3px 0; }
+.casa-reader-body a { color: var(--accent); }
+
+.casa-reader-body code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--overlay);
+  font-size: 0.9em;
+}
+
+.casa-reader-body pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--overlay);
+}
+
+.casa-reader-body pre code { padding: 0; background: none; }
+
+.casa-reader-body blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.casa-reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
+
+.casa-reader-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.casa-reader-body th,
+.casa-reader-body td {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+/* Il ripiego senza DOMPurify: il markdown scappato, che si legge male ma non
+   mente. */
+.casa-reader-raw {
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}

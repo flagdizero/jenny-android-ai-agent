@@ -1017,6 +1017,26 @@
         "leftover": "Sotto questo nome c’è ancora la chat di un quaderno che non c’è più: {count} messaggi. Posso riprenderla — se l’avevi cancellato per sbaglio è tutta lì — oppure partire pulito e buttarla.",
         "leftoverNoCount": "Sotto questo nome c’è ancora la chat di un quaderno che non c’è più. Posso riprenderla — se l’avevi cancellato per sbaglio è tutta lì — oppure partire pulito e buttarla."
       }
+    },
+    "pages": {
+      "open": "Pagine del quaderno",
+      "countOne": "1 pagina",
+      "countMany": "{count} pagine",
+      "back": "torna alla chat",
+      "talk": "Parlane",
+      "tabList": "Pagine",
+      "tabMap": "Mappa",
+      "loading": "Sto guardando…",
+      "none": "Questo quaderno non ha ancora pagine. Scrivono io e te, parlandone.",
+      "noMatch": "Nessuna pagina con queste parole.",
+      "failed": "Non sono riuscita a leggere le pagine di questo quaderno."
+    },
+    "reader": {
+      "failed": "Non sono riuscita ad aprire questa pagina."
+    },
+    "map": {
+      "noLinks": "Le pagine non si rimandano ancora l’una all’altra: la mappa compare quando cominciano a farlo.",
+      "failed": "Non sono riuscita a caricare la mappa."
     }
   }
 }

@@ -95,6 +95,15 @@ let lightbox = null;
 const document = {
   querySelector: (sel) => (sel === '.image-lightbox' ? lightbox : null),
   getElementById: () => makeEl('button'),
+  /* `_setView` dichiara il pavimento di Jenny quando non c'è un composer: la
+     radice serve solo a ricevere quella proprietà, e il banco la legge. */
+  documentElement: {
+    style: {
+      props: {},
+      setProperty(k, v) { this.props[k] = v; },
+      removeProperty(k) { delete this.props[k]; },
+    },
+  },
 };
 
 const api = { clientLog() {} };
@@ -111,6 +120,7 @@ const sessionManager = {
 };
 
 __DOT_COLOR__
+__FLOOR__
 
 /* I due vocabolari, presi dai sorgenti: quello dell'officina e quello di casa,
    che dal primo eredita tutto quel che non dice «progetto». */
@@ -137,6 +147,23 @@ class App {
     this.attach = makeEl('button');
     this.door = makeEl('button');
     this.wire = makeEl('div');
+    /* L'intestazione che cambia stanza, e le stanze stesse. */
+    this.shell = makeEl('main');
+    this.shell.setAttribute = (k, v) => { this.shell.attrs[k] = v; };
+    this.pagesBtn = makeEl('button');
+    this.pagesCount = makeEl('span');
+    this.backBtn = makeEl('button');
+    this.backLabel = makeEl('span');
+    this.talkBtn = makeEl('button');
+    this.talkLabel = makeEl('span');
+    this.view = 'chat';
+    this._jennyWasOut = true;
+    this.map = null;
+    this._measureFloor = () => this.fatti.push('pavimento rimisurato');
+    this.pages = {
+      applyTranslations: () => {},
+      load: (name) => { this.fatti.push('pagine:' + name); return Promise.resolve(); },
+    };
     this.files = { count: 0 };
     this._personalName = 'Jenny';
     this._drafts = new Map();
@@ -151,14 +178,19 @@ class App {
         this.fatti.push('riletto:' + sessionManager.currentKey);
       },
       scrollToBottom: () => this.fatti.push('in fondo'),
+      keepBottom: () => {},
     };
     this.activity = { stop: () => this.fatti.push('riga ferma') };
     this.jenny = {
+      el: { classList: { contains: () => this._jennyOut } },
       noteTurnRunning: (v) => this.fatti.push('turno:' + v),
       idle: () => this.fatti.push('quiete'),
+      setOut: (v) => { this._jennyOut = v; this.fatti.push('fuori:' + v); },
     };
+    this._jennyOut = true;
     this.who = {
       known: [{ name: 'piante', modified: 1 }],
+      pagesOf: (name) => Promise.resolve(this.pageCounts?.[name] ?? null),
       invalidate: () => this.fatti.push('elenco da rileggere'),
       isOpen: false,
       close: () => { this.who.isOpen = false; this.fatti.push('tendina chiusa'); },
@@ -178,6 +210,12 @@ class App {
   __OPEN_CHAT__
   __APPLY_TRANSLATIONS__
   __CREATE_NOTEBOOK__
+  __OPEN_PAGES__
+  __GO_BACK_ONE_ROOM__
+  __SET_VIEW__
+  __APPLY_HEAD__
+  __UPDATE_PAGES_COUNT__
+  __SET_HEAD_TITLE__
 }
 
 function casa() {
@@ -212,7 +250,20 @@ def _harness() -> str:
         .replace("__CREATE_NOTEBOOK__", _member(src, "createNotebook"))
         .replace("__PROJECT_WORDS__", _const_block(_read_create(), "PROJECT_WORDS"))
         .replace("__NOTEBOOK_WORDS__", _const_block(src, "NOTEBOOK_WORDS"))
+        .replace("__OPEN_PAGES__", _member(src, "openPages"))
+        .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
+        .replace("__SET_VIEW__", _member(src, "_setView"))
+        .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
+        .replace("__UPDATE_PAGES_COUNT__", _member(src, "_updatePagesCount"))
+        .replace("__SET_HEAD_TITLE__", _member(src, "_setHeadTitle"))
+        .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
     )
+
+
+def _const_block_scalar(source: str, name: str) -> str:
+    m = re.search(rf"(?m)^const {re.escape(name)} = .+?;$", source)
+    assert m, f"const {name} non trovata"
+    return m.group(0)
 
 
 def _read_create() -> str:
@@ -474,4 +525,158 @@ def test_a_creation_that_did_not_happen_opens_nothing() -> None:
       await app.createNotebook();
       assert.equal(sessionManager.currentKey, 'websocket:default');
       assert.deepEqual(app.fatti, []);
+    """)
+
+
+# ── Le tre stanze ───────────────────────────────────────────────────────────
+
+
+def test_back_peels_one_room_at_a_time() -> None:
+    """Lettore, pagine, chat, e solo allora si esce dal quaderno.
+
+    Quattro pressioni per quattro cose. Se `goBackOneRoom` sparisse, dalle
+    pagine un tocco solo farebbe sparire la stanza **e** il quaderno che la
+    conteneva — due cose per un gesto, che e' esattamente quel che la stessa
+    regola vieta alla tendina.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app.view = 'reader';
+      app.shell.attrs['data-view'] = 'reader';
+
+      app.handleHardwareBack();
+      assert.equal(app.view, 'pages', 'dal lettore non si torna alle pagine');
+      app.handleHardwareBack();
+      assert.equal(app.view, 'chat', 'dalle pagine non si torna alla chat');
+      assert.equal(sessionManager.currentKey, 'project:orto', 'e non si esce dal quaderno');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'websocket:default', 'e adesso si esce');
+    """)
+
+
+def test_a_panel_over_the_pages_still_closes_first() -> None:
+    """Gli strati vengono prima delle stanze: la tendina sta nel top layer, e
+    chiuderla e' quel che l'occhio si aspetta da quel tasto."""
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('pages');
+      app.who.isOpen = true;
+      app.handleHardwareBack();
+      assert.equal(app.who.isOpen, false, 'la tendina non si e\\u2019 chiusa');
+      assert.equal(app.view, 'pages', 'la stanza se n\\u2019e\\u2019 andata insieme a lei');
+    """)
+
+
+def test_leaving_the_chat_puts_jenny_away_and_coming_back_restores_her() -> None:
+    """La tavola la disegna al bordo nelle pagine e fuori nella chat.
+
+    Ma «fuori» al ritorno solo se era fuori quando sei uscito: metterla via e'
+    una decisione dell'utente, e una stanza non la disfa.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+
+      app._setView('pages');
+      assert.equal(app._jennyOut, false, 'nelle pagine non si e\\u2019 messa via');
+      app._setView('chat');
+      assert.equal(app._jennyOut, true, 'tornando non e\\u2019 uscita');
+
+      // Ora messa via a mano, dentro la chat.
+      app._jennyOut = false;
+      app._setView('pages');
+      app._setView('chat');
+      assert.equal(app._jennyOut, false, 'la stanza ha disfatto una scelta dell\\u2019utente');
+    """)
+
+
+def test_a_room_without_a_composer_declares_its_own_floor() -> None:
+    """Il pavimento di Jenny e' il composer, e nelle pagine il composer non
+    c'e': il suo `offsetHeight` la' e' zero, quindi il token va dichiarato o
+    lei appoggia i piedi sul bordo dello schermo. Al ritorno si rimisura."""
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app.fatti.length = 0;
+
+      app._setView('pages');
+      assert.equal(
+        document.documentElement.style.props['--casa-composer-h'],
+        FLOOR_NO_COMPOSER + 'px',
+        'le pagine non dichiarano il loro pavimento',
+      );
+
+      app._setView('chat');
+      assert.ok(
+        app.fatti.includes('pavimento rimisurato'),
+        'tornando nella chat il composer non viene rimisurato',
+      );
+    """)
+
+
+def test_the_pages_pill_only_exists_inside_a_notebook() -> None:
+    """Nella conversazione personale non c'e' nessun quaderno da aprire, e una
+    porta che non porta da nessuna parte e' peggio di nessuna porta."""
+    _run_js("""
+      const app = casa();
+      assert.equal(app.pagesBtn.hidden, true, 'la pastiglia c\\u2019e\\u2019 anche a casa');
+      await app.switchConversation(projectKey('orto'));
+      assert.equal(app.pagesBtn.hidden, false, 'dentro un quaderno la pastiglia manca');
+      await app.switchConversation(null);
+      assert.equal(app.pagesBtn.hidden, true, 'tornando a casa la pastiglia resta');
+    """)
+
+
+def test_the_count_belongs_to_the_notebook_that_asked_for_it() -> None:
+    """Fra la domanda e la risposta si puo' essere passati in un altro
+    quaderno: scrivere li' il conteggio di quello di prima sarebbe un numero
+    sbagliato su una stanza giusta."""
+    _run_js("""
+      const app = casa();
+      app.pageCounts = { orto: 34, erbe: 1 };
+      await app.switchConversation(projectKey('orto'));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.pagesCount.textContent, '34 pagine');
+
+      // Una pagina sola non e' «1 pagine».
+      await app.switchConversation(projectKey('erbe'));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.pagesCount.textContent, '1 pagina');
+
+      // Chiesto per «orto», risposto mentre siamo in «erbe»: non si scrive.
+      app.pagesCount.textContent = '';
+      app._updatePagesCount('orto');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.pagesCount.textContent, '', 'il conteggio di un\\u2019altra stanza');
+    """)
+
+
+def test_a_notebook_whose_count_is_unknown_still_has_its_door() -> None:
+    """`null` e' «non lo so», e non si scrive. Ma la porta resta: un quaderno
+    le pagine ce le ha comunque, e aspettare la cifra per mostrarla vorrebbe
+    dire nascondere la porta a chi ha la rete lenta."""
+    _run_js("""
+      const app = casa();
+      app.pageCounts = {};
+      await app.switchConversation(projectKey('orto'));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.pagesCount.textContent, '');
+      assert.equal(app.pagesBtn.hidden, false);
+    """)
+
+
+def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
+    """Le pagine parlano di *un* quaderno. Un avviso toccato porta nella
+    conversazione personale: restare sull'elenco vorrebbe dire leggere le
+    pagine di una stanza in cui non sei piu'."""
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('pages');
+      app.openChat();
+      assert.equal(app.view, 'chat');
+      assert.equal(app.shell.attrs['data-view'], 'chat');
     """)

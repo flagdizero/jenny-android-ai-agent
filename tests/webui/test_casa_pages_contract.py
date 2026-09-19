@@ -1,0 +1,287 @@
+"""Il contratto delle tre stanze: come la casa ne mostra una alla volta.
+
+Grep e struttura, non comportamento: quel che le stanze *fanno* ha i suoi
+banchi (`test_casa_pages_client.py`, `test_casa_switch_client.py`). Qui stanno
+le cose che si rompono in silenzio — un attributo che sparisce e lascia tre
+stanze impilate, un `import` che diventa statico e fa pagare 280 kB a chi apre
+la chat, un file che non arriva sul telefono perche' non e' nel manifest.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+from jenny.utils.android_assets import _UI_MANIFEST
+
+ROOT = Path(__file__).resolve().parents[2]
+UI = ROOT / "jenny" / "templates" / "ui"
+INDEX = UI / "index.html"
+OFFICINA = UI / "officina.html"
+ASSETS = UI / "assets"
+APP_JS = ASSETS / "casa-app.js"
+MAP_JS = ASSETS / "casa-map.js"
+CSS = ASSETS / "casa-style.css"
+I18N = ASSETS / "i18n"
+
+
+# ── Una stanza alla volta ───────────────────────────────────────────────────
+
+
+def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
+    """L'attributo e' scritto anche nell'HTML, non solo dal JS.
+
+    Senza, il primo frame mostra le tre stanze impilate — la conversazione, le
+    pagine e il lettore uno sotto l'altro — finche' `casa-app.js` non e' stato
+    valutato. Non e' un lampo teorico: e' il motivo per cui le sezioni non
+    hanno piu' `hidden`, che quel ruolo lo copriva a meta'.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    assert re.search(r'<main class="casa-shell" data-view="chat">', html), (
+        "il guscio non nasce piu' dichiarando la stanza attiva"
+    )
+    css = CSS.read_text(encoding="utf-8")
+    for room in ("pages", "reader"):
+        assert f".casa-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
+    assert ".casa-shell:not([data-view='chat']) .casa-composer" in css, (
+        "il composer resta a schermo fuori dalla conversazione"
+    )
+
+
+def test_the_two_new_rooms_are_not_in_the_flow_by_default() -> None:
+    """`display:none` sulle sezioni e non `hidden`: la regola della vista le
+    accende, e due meccanismi per la stessa cosa divergono."""
+    css = CSS.read_text(encoding="utf-8")
+    m = re.search(r"\.casa-pages,\s*\n\.casa-reader \{([^}]*)\}", css)
+    assert m and "display: none" in m.group(1), (
+        "le stanze nuove non partono fuori dal flusso"
+    )
+
+
+# ── I 280 kB che si pagano solo aprendo la mappa ────────────────────────────
+
+
+def test_d3_arrives_with_the_map_and_not_with_the_house() -> None:
+    """Il guscio della casa si porta dietro `marked` e `DOMPurify` e basta, e
+    il commento in cima a `index.html` dice perche'. D3 pesa 279.706 byte: un
+    `import` statico li farebbe pagare a chiunque apra la chat.
+    """
+    app = APP_JS.read_text(encoding="utf-8")
+    assert "await import('./casa-map.js')" in app, (
+        "la mappa non si carica piu' su richiesta"
+    )
+    assert not re.search(r"(?m)^import .*casa-map\.js", app), (
+        "casa-map.js e' tornato un import statico: D3 lo paga tutta la casa"
+    )
+    html = INDEX.read_text(encoding="utf-8")
+    assert "d3" not in html, "il guscio della casa si e' preso D3 nel <head>"
+    assert "d3.min.js" in MAP_JS.read_text(encoding="utf-8")
+
+
+def test_every_new_asset_is_in_the_manifest() -> None:
+    """Un percorso giusto ma fuori manifest non arriva sul telefono: il
+    gateway ricade sulla copia su disco, che su Android e' un mirror e non e'
+    autoritativa. Il difetto si vede solo sul dispositivo."""
+    for name in ("casa-pages.js", "casa-reader.js", "casa-map.js"):
+        rel = f"assets/{name}"
+        assert (ASSETS / name).is_file(), f"{name} non esiste"
+        assert rel in _UI_MANIFEST, f"{rel} non e' nel manifest"
+
+
+# ── L'intestazione che cambia stanza ────────────────────────────────────────
+
+
+def test_the_two_ways_out_of_the_pages_do_the_same_thing() -> None:
+    """La tavola disegna l'occhiello in alto a sinistra e la pastiglia in
+    basso a destra, e fanno la stessa cosa: si esce da dove stai guardando."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="casa-back"' in html and 'id="casa-talk"' in html
+    app = APP_JS.read_text(encoding="utf-8")
+    assert "this.backBtn?.addEventListener" in app
+    assert "this.talkBtn?.addEventListener" in app
+
+
+def test_the_title_stops_being_a_command_outside_the_chat() -> None:
+    """Un chevron che promette una scelta, su un bottone spento, e' una porta
+    disegnata sul muro."""
+    app = APP_JS.read_text(encoding="utf-8")
+    body = re.search(r"\n  _applyHead\(\) \{(.*?)\n  \}", app, re.S)
+    assert body, "_applyHead non trovato"
+    assert "disabled = !inChat" in body.group(1)
+    css = CSS.read_text(encoding="utf-8")
+    assert ".casa-shell:not([data-view='chat']) .casa-who-open .ti-chevron-down" in css
+
+
+# ── Le parole ───────────────────────────────────────────────────────────────
+
+
+def test_the_rooms_speak_both_languages() -> None:
+    words = {}
+    for locale in ("it", "en"):
+        data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
+        section = data["casa"]["pages"]
+        for key in ("open", "countOne", "countMany", "back", "talk",
+                    "tabList", "tabMap", "loading", "none", "noMatch", "failed"):
+            assert section.get(key, "").strip(), f"casa.pages.{key} manca in {locale}.json"
+        assert data["casa"]["map"]["noLinks"].strip()
+        assert data["casa"]["reader"]["failed"].strip()
+        assert "{count}" in section["countMany"], "il conteggio non interpola niente"
+        assert "{count}" not in section["countOne"], (
+            "«1 pagina» non ha bisogno del numero: scriverlo la fa leggere «1 1 pagina»"
+        )
+        words[locale] = section
+    assert words["it"] != words["en"], "una delle due lingue non e' stata tradotta"
+
+
+def test_the_groups_are_the_three_the_server_actually_sends() -> None:
+    """Tre, e la legenda dell'officina aveva ragione.
+
+    `summaries/` sembra un quarto gruppo — ha un colore
+    (`.legend-dot.summaries`) e `mobile-graph.js::sanitizeGroup` lo nomina — ma
+    da `/api/graph` non esce: `WIKI_PAGES_SKIP_DIRS` lo toglie a tutte e
+    quattro le camminate, perche' e' il livello di citazione del pattern di
+    ricerca. Misurato sul grafo vero di una wiki che ce l'ha: sei nodi su
+    sette, e il settimo era quello.
+
+    Questo banco esiste perche' l'errore l'ho fatto: avevo aggiunto la parola e
+    una quarta riga alla legenda, "riparando" un conto che era giusto.
+    """
+    from jenny.utils.wiki_paths import WIKI_PAGES_SKIP_DIRS
+
+    assert "summaries" in WIKI_PAGES_SKIP_DIRS, (
+        "la regola e' cambiata: allora i gruppi diventano quattro e questo "
+        "banco va aggiornato insieme a GROUPS in casa-pages.js"
+    )
+    src = (ASSETS / "casa-pages.js").read_text(encoding="utf-8")
+    m = re.search(r"export const GROUPS = \[(.*?)\];", src)
+    assert m and "summaries" not in m.group(1), (
+        "la casa elenca un gruppo che il server non le manda"
+    )
+    legend = re.findall(r'data-i18n="graph\.(\w+)"', OFFICINA.read_text(encoding="utf-8"))
+    assert "summaries" not in legend, "la legenda dell'officina ha una riga di troppo"
+
+
+def test_the_search_box_borrows_the_words_the_workshop_already_has() -> None:
+    """«Cerca nelle pagine…» esiste gia' ed e', parola per parola, quel che la
+    tavola scrive nel campo."""
+    src = (ASSETS / "casa-pages.js").read_text(encoding="utf-8")
+    assert "'graph.searchPlaceholder'" in src
+    for key in ("graph.entities", "graph.concepts", "graph.other"):
+        assert f"'{key}'" in src, f"{key} non e' piu' quella dell'officina"
+
+
+def test_no_sentence_is_hardcoded_in_the_rooms() -> None:
+    """La regola di AGENTS.md non ha eccezioni, e questo e' codice nuovo: un
+    `textContent` puo' ricevere solo una traduzione o un dato."""
+    for name in ("casa-pages.js", "casa-reader.js", "casa-map.js"):
+        for line in (ASSETS / name).read_text(encoding="utf-8").splitlines():
+            m = re.search(r"\.textContent\s*=\s*(.+);", line)
+            if not m:
+                continue
+            assert not re.match(r"^['\"`]", m.group(1)), (
+                f"{name}: stringa cablata a schermo: {line.strip()}"
+            )
+
+
+# ── I pallini devono dividere, in tutti i temi ──────────────────────────────
+
+
+def _tokens(block: str) -> dict[str, str]:
+    return {k: v.strip() for k, v in re.findall(r"--([a-z-]+):\s*([^;]+);", block)}
+
+
+def _themes() -> dict[str, dict[str, str]]:
+    """I token di colore per tema, **con la base sotto**.
+
+    Un tema ridefinisce solo cio' che cambia: `chanel` non dichiara `--ok` e se
+    lo eredita da `:root`. Leggere il solo blocco del tema direbbe «non
+    definito» per meta' dei token, che e' il modo in cui un banco di colori
+    diventa un banco di niente.
+    """
+    css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
+    base: dict[str, str] = {}
+    for m in re.finditer(r"(?m)^:root\s*\{(.*?)\n\}", css, re.S):
+        base.update(_tokens(m.group(1)))
+    out: dict[str, dict[str, str]] = {}
+    for m in re.finditer(r'\[data-theme="([a-z-]+)"\]\s*\{(.*?)\n\}', css, re.S):
+        out[m.group(1)] = {**base, **_tokens(m.group(2))}
+    return out
+
+
+def _rgb(value: str, over: tuple[int, int, int] = (0, 0, 0)):
+    """Il colore che si vede, non quello che c'e' scritto.
+
+    Un token puo' essere `rgba(...)`: `--text-faint` lo e' in meta' dei temi, e
+    confrontare la sua tripletta ignorando l'alfa direbbe che un grigio al 32%
+    e' bianco. Si compone sullo sfondo del tema, che e' quel che l'occhio fa.
+    """
+    v = value.strip()
+    m = re.fullmatch(r"#([0-9a-fA-F]{6})", v)
+    if m:
+        h = m.group(1)
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    m = re.fullmatch(r"rgba?\(([^)]+)\)", v)
+    if not m:
+        return None
+    parts = [x.strip() for x in m.group(1).replace("/", " ").split(",")]
+    if len(parts) < 3:
+        return None
+    try:
+        r, g, b = (int(float(x)) for x in parts[:3])
+        alpha = float(parts[3]) if len(parts) > 3 else 1.0
+    except ValueError:
+        return None
+    return tuple(round(c * alpha + o * (1 - alpha)) for c, o in zip((r, g, b), over, strict=True))
+
+
+def test_the_three_group_dots_are_telling_apart_in_every_theme() -> None:
+    """Un pallino che non divide non e' informazione, e' decorazione.
+
+    Misurato su tutti i temi: ``--accent`` e ``--error`` distano **26** in
+    kyoto e 58 in pietra — indistinguibili — e ``--accent`` con ``--ok``
+    coincidono (distanza 0) in chanel e in fumetto. La sola coppia che si
+    separa ovunque e' ``--error`` / ``--ok``, mai sotto 101. E' per questo che
+    la casa non usa i tre token della legenda del grafo.
+
+    Questo banco vale per i temi che ci sono **e per quelli che arriveranno**:
+    un tema nuovo con un accento verde non deve poter spegnere questa
+    distinzione in silenzio.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    usati = dict(
+        re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
+    )
+    assert set(usati) == {"concepts", "entities", "other"}, usati
+
+    temi = _themes()
+    assert len(temi) >= 5, f"temi non letti dal foglio: {list(temi)}"
+    for nome, tokens in temi.items():
+        sfondo = _rgb(tokens.get("bg", "#000000")) or (0, 0, 0)
+        colori = {}
+        for gruppo, token in usati.items():
+            valore = tokens.get(token)
+            assert valore, f"{nome}: il tema non definisce --{token}"
+            rgb = _rgb(valore, sfondo)
+            assert rgb, f"{nome}: --{token} non si sa leggere ({valore})"
+            colori[gruppo] = rgb
+        coppie = [("concepts", "entities"), ("concepts", "other"), ("entities", "other")]
+        for a, b in coppie:
+            dist = sum((x - y) ** 2 for x, y in zip(colori[a], colori[b], strict=True)) ** 0.5
+            assert dist >= 60, (
+                f"tema {nome}: i pallini {a} e {b} distano {dist:.0f} — a occhio "
+                f"sono lo stesso colore, e il gruppo smette di dividere"
+            )
+
+
+def test_the_map_paints_its_nodes_with_the_same_three() -> None:
+    """Elenco e mappa sono due rese della stessa risposta: un pallino verde
+    deve voler dire la stessa cosa in tutte e due."""
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    elenco = dict(
+        re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
+    )
+    mappa = dict(
+        re.findall(r"\.casa-map-nodes \.casa-group-(\w+) \{ fill: var\(--([a-z-]+)\); \}", css)
+    )
+    assert elenco == mappa, f"elenco {elenco} contro mappa {mappa}"

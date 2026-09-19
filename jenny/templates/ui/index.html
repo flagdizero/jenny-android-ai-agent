@@ -35,7 +35,7 @@
 </head>
 <body class="casa">
 
-<main class="casa-shell">
+<main class="casa-shell" data-view="chat">
 
   <!-- L'intestazione della tavola `Main.dc.html`, ridotta a cio' che esiste.
        Il titolo porta il chevron e apre «con chi parli»: la tendina che dice
@@ -52,6 +52,14 @@
   <header class="casa-head">
     <div class="casa-title">
       <div class="casa-kicker" id="casa-kicker"></div>
+      <!-- Nelle pagine l'occhiello e' la via d'uscita in alto. Un bottone a
+           parte e non l'occhiello travestito: quello e' una parola, questo e'
+           un comando, e un <div> con un gestore sopra e' un comando che la
+           tastiera non trova. -->
+      <button class="casa-back" id="casa-back" type="button" hidden>
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>
+        <span id="casa-back-label"></span>
+      </button>
       <h1>
         <button class="casa-who-open" id="casa-who" type="button"
                 aria-haspopup="dialog" aria-expanded="false">
@@ -65,9 +73,29 @@
         </button>
       </h1>
     </div>
-    <button class="casa-door" id="casa-door" type="button" aria-label="Officina">
-      <i class="ti ti-tool"></i>
-    </button>
+    <!-- Cosa si puo' fare da qui. Cambia con la stanza: dalla chat di un
+         quaderno si entra nelle sue pagine; dalle pagine si torna a parlarne.
+         Sono due bottoni e non uno che cambia mestiere, perche' il mestiere lo
+         dice l'icona e un bottone che ne cambia due volte non lo dice piu'. -->
+    <div class="casa-actions">
+      <button class="casa-pages-open" id="casa-pages-open" type="button" hidden>
+        <i class="ti ti-book" aria-hidden="true"></i>
+        <span id="casa-pages-count"></span>
+      </button>
+      <!-- La porta dell'officina. Nel disegno finale portera' a «Tu e Jenny»,
+           che quella porta se la tiene in fondo; finche' quella pagina non c'e',
+           porta dritto dove deve portare, e l'icona lo dice. -->
+      <button class="casa-door" id="casa-door" type="button" aria-label="Officina">
+        <i class="ti ti-tool"></i>
+      </button>
+      <!-- Dalle pagine: torna a parlarne. La tavola qui disegna il segno di
+           Jenny; in casa quel segno e' il fiore, ed e' identita' — su un
+           comando ci va l'icona di cio' che il comando fa. -->
+      <button class="casa-talk" id="casa-talk" type="button" hidden>
+        <i class="ti ti-message" aria-hidden="true"></i>
+        <span id="casa-talk-label"></span>
+      </button>
+    </div>
   </header>
 
   <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
@@ -103,6 +131,44 @@
       <i class="ti ti-arrow-up"></i>
     </button>
   </div>
+
+  <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────
+       Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e
+       questa e' quella cosa: due linguette sopra la stessa risposta del
+       server — `/api/graph` porta nodi, archi e indice full-text insieme. -->
+  <section class="casa-pages" id="casa-pages">
+    <div class="casa-tabs" role="tablist">
+      <button class="casa-tab is-on" id="casa-tab-list" type="button"
+              role="tab" aria-selected="true" aria-controls="casa-page-list"></button>
+      <button class="casa-tab" id="casa-tab-map" type="button"
+              role="tab" aria-selected="false" aria-controls="casa-map"></button>
+    </div>
+
+    <label class="casa-search" for="casa-pages-q">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input class="casa-search-input" id="casa-pages-q" type="search"
+             autocomplete="off" autocapitalize="none" spellcheck="false">
+    </label>
+
+    <div class="casa-page-list" id="casa-page-list" role="tabpanel"
+         aria-labelledby="casa-tab-list"></div>
+
+    <div class="casa-map" id="casa-map" role="tabpanel"
+         aria-labelledby="casa-tab-map" hidden>
+      <svg class="casa-map-svg" id="casa-map-svg" aria-hidden="true"></svg>
+      <div class="casa-map-note" id="casa-map-note" hidden></div>
+    </div>
+
+    <div class="casa-pages-note" id="casa-pages-note" hidden></div>
+  </section>
+
+  <!-- ── La terza stanza: una pagina ──────────────────────────────────────
+       L'HTML lo rende gia' il server (`/api/page`); qui si sanifica e si
+       cablano i wikilink, che aprono un'altra pagina dello stesso quaderno.
+       Audit, briciole di pane e LaTeX restano dell'officina. -->
+  <section class="casa-reader" id="casa-reader">
+    <article class="casa-reader-body" id="casa-reader-body"></article>
+  </section>
 
 </main>
 

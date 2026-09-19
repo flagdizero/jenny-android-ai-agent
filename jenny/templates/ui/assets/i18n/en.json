@@ -1014,6 +1014,26 @@
         "leftover": "There is still the chat of a notebook that no longer exists under this name: {count} messages. I can pick it back up — if you deleted it by mistake it is all there — or start clean and throw it away.",
         "leftoverNoCount": "There is still the chat of a notebook that no longer exists under this name. I can pick it back up — if you deleted it by mistake it is all there — or start clean and throw it away."
       }
+    },
+    "pages": {
+      "open": "Notebook pages",
+      "countOne": "1 page",
+      "countMany": "{count} pages",
+      "back": "back to the chat",
+      "talk": "Talk about it",
+      "tabList": "Pages",
+      "tabMap": "Map",
+      "loading": "Looking…",
+      "none": "This notebook has no pages yet. We write them by talking.",
+      "noMatch": "No page with those words.",
+      "failed": "I could not read this notebook’s pages."
+    },
+    "reader": {
+      "failed": "I could not open this page."
+    },
+    "map": {
+      "noLinks": "The pages do not point to each other yet: the map appears once they start to.",
+      "failed": "I could not load the map."
     }
   }
 }
