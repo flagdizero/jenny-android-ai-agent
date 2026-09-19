@@ -83,3 +83,31 @@ la ragione del `min-width: 0`. Provato su tema chiaro e su `kyoto` (scuro).
   nell'altro guscio, che non legge ancora nemmeno il `#turn=`.
 - La data di un quaderno resta l'mtime della cartella. Da oggi però la
   conversazione di un progetto esiste davvero, quindi una data sua è a portata.
+
+## Sul telefono ✅
+
+Titan 2, 0.11.0, aggiornamento in place (APK 11:53, `lastUpdateTime` 11:54), UI
+del telefono in inglese.
+
+- Il titolo apre **TALKING TO / Jenny · personal ✓** e **NOTEBOOKS** con i
+  quaderni veri (`jenny` 20 h fa in cima, poi cinque a 15 giorni).
+- Un tocco su `piante` **apre la sua conversazione**: occhiello `NOTEBOOK`,
+  pallino verde oliva, il nome, e il filo vero del progetto — quello scritto
+  dall'officina, ritrovato intero. Il campo dice «Write to Jenny, in the
+  notebook».
+- Riaperta la tendina da lì dentro: **la spunta è su `piante`**, e la riga
+  personale non ce l'ha più.
+- **Indietro** riporta alla conversazione personale, con la sua storia
+  ridisegnata. Un secondo Indietro non fa niente e l'app resta viva (stesso
+  PID): la radice è la radice.
+- Rientrando nell'app dopo esserne usciti, la conversazione aperta è ancora
+  quella: l'activity riprende, non ricarica. Un caricamento vero riparte dalla
+  personale (D4), e sono due cose diverse.
+
+**Quel che non si è potuto provare qui, e perché.** Il tasto **Home** non
+arriva al JS su questo telefono: Jenny *dichiara* `category.HOME`, ma il
+launcher predefinito oggi è `com.android.launcher3`
+(`cmd package resolve-activity -c android.intent.category.HOME`), quindi HOME
+esce dall'app invece di chiamare `goHome()`. Quel ramo resta coperto dal banco.
+Era scritto in memoria che «l'app è il launcher» come se fosse una costante: non
+lo è, e la nota è stata corretta.
