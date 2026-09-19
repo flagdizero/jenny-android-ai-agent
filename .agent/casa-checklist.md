@@ -495,10 +495,25 @@ Il lavoro lo trasforma in «Troppi video in un messaggio solo» col messaggio ch
 torna indietro — ma la divergenza resta, e la cura vera sarebbe un terzo secchio
 nel client, che avvisa *prima* di mandare. Non l'ho fatto: e' un'altra cosa.
 
-### Stato della verifica
+### Misurato sul Titan 2, con un rifiuto vero
 
-Test verdi (9.741) e provati contro nove difetti messi apposta. **Sul telefono
-non e' stato provato**: il dispositivo e' stato scollegato prima della prova.
-L'APK e' compilato e contiene il modulo, i due import e le parole; restano
-pronti due `.mp4` da 2 kB in `scratchpad/` — allegarli tutti e due e mandare e'
-il rifiuto vero, senza toccare niente della conversazione.
+Due `.mp4` da 2 kB in Download, allegati tutti e due — il telefono li accetta
+(non ha un secchio per i video) e il gateway li rifiuta. E' il giro vero, non un
+frame iniettato.
+
+**In casa:** nessuna bolla, la riga «Too many videos in one message» sobria
+sotto la conversazione, e **«guarda questi due video» tornato nel campo**. Poi
+lo stesso testo mandato senza allegati: bolla disegnata, campo svuotato, Jenny
+nella posa del pensa — l'invio normale non si e' rotto dal riordino.
+
+**In officina:** identico. Riga d'errore, nessuna bolla, «prova in officina»
+tornato nel campo.
+
+E una conferma che non avevo cercato: alla domanda mandata dopo, Jenny ha
+risposto *«non mi e' arrivato niente, il messaggio e' solo testo, zero
+allegati»*. Gli allegati rifiutati erano stati tolti davvero, non solo dallo
+schermo.
+
+L'interfaccia sul telefono e' in inglese perche' lo e' la lingua scelta li'.
+
+Test verdi (9.741) e provati contro nove difetti messi apposta.
