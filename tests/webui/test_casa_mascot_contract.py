@@ -1,6 +1,6 @@
 """Le tabelle degli sprite della casa sono una copia: questo e' cio' che la tiene onesta.
 
-``casa-mascot.js`` duplica ``BODY``, ``FACE`` e ``MOOD_FACES`` da
+``casa-mascot.js`` duplica ``ART``, ``BODY``, ``FACE`` e ``MOOD_FACES`` da
 ``mobile-jenny.js`` invece di importarle. Non e' pigrizia: quelle sono costanti
 private di un modulo da 1.353 righe, e tirarsi dentro la companion intera per
 due dizionari sarebbe il contrario di cio' che la casa e' (v.
@@ -46,7 +46,7 @@ def test_casa_uses_the_same_art_as_the_workshop():
     continuerebbe a disegnare Jenny e la casa mostrerebbe un rettangolo rotto.
     """
     casa, officina = CASA_JS.read_text(), JENNY_JS.read_text()
-    for table in ("BODY", "FACE"):
+    for table in ("ART", "BODY", "FACE"):
         mine, theirs = _table(casa, table), _table(officina, table)
         assert mine, f"{table} vuota in casa-mascot.js"
         for key, path in mine.items():
@@ -62,7 +62,7 @@ def test_every_sprite_is_a_real_file_in_the_manifest():
     vede solo sul dispositivo, ed e' un'immagine mancante.
     """
     casa = CASA_JS.read_text()
-    for table in ("BODY", "FACE"):
+    for table in ("ART", "BODY", "FACE"):
         for key, url in _table(casa, table).items():
             rel = url.removeprefix("/html-mobile/")
             assert (ASSETS.parent / rel).is_file(), f"{table}.{key}: {rel} non esiste"
@@ -80,3 +80,18 @@ def test_moods_match_the_backend():
     faces = _table(CASA_JS.read_text(), "FACE")
     for mood in casa_moods:
         assert mood in faces, f"l'umore {mood} non ha una faccia"
+
+
+def test_the_edge_pose_is_part_of_the_copy():
+    """La posa di profilo e' quella che si vede quando la si mette via.
+
+    Senza, il tocco che la manda al bordo lascia a schermo un corpo frontale
+    tagliato a meta' dal bordo — o, se la tabella la perde del tutto, un
+    quadrato vuoto. E' l'unico disegno che entra in scena *sostituendo* tutto
+    quel che c'era, quindi e' anche l'unico che un file rinominato fa sparire
+    invece che invecchiare.
+    """
+    art = _table(CASA_JS.read_text(), "ART")
+    assert set(art) == {"side", "sideTalk"}, (
+        "la casa disegna il bordo con pose che l'officina non ha, o gliene manca una"
+    )

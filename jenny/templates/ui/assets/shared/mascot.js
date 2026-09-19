@@ -99,3 +99,38 @@ export function applyMascotSize() {
     /* ponte assente */
   }
 }
+
+/* ── Al bordo, o venuta fuori ────────────────────────────────────────────────
+   I due posti in cui Jenny sta ferma, e quanto del suo quadrato resta fuori
+   dallo schermo in ciascuno. Non sono una preferenza — si toccano e cambiano,
+   non si scelgono dalle impostazioni — ma stanno qui perché qui vive tutto il
+   resto della sua geometria, e perché il numero deve esistere una volta sola:
+   lo leggono i due fogli di stile per ancorarla e `mascot-drag.js` per sapere
+   dove farla arrivare a piedi dopo un lancio. Cinque dichiarazioni CSS e una
+   moltiplicazione, un numero solo.
+
+   0.469 e 0.25 sono misurati sull'arte, non scelti: **in larghezza** il
+   personaggio occupa il 45% centrale del canvas quadrato (bbox alpha dei webp
+   impacchettati), quindi "al bordo" e "fuori" vogliono dire due scarti precisi
+   e non due impressioni. In altezza il rapporto e' un altro — 73% — e
+   confonderli e' un errore gia' fatto una volta, v. il commento sopra
+   `.jenny-duo` in mobile-style.css. */
+export const DOCK_RATIO = 0.469;
+export const OUT_RATIO = 0.25;
+/** Quanto si sposta l'ancoraggio passando da uno stato all'altro. */
+export const OUT_SHIFT_RATIO = DOCK_RATIO - OUT_RATIO;
+
+/** Porta i due ancoraggi al CSS, che di suo non sa moltiplicare costanti JS. */
+export function applyDockAnchors() {
+  const style = document.documentElement.style;
+  style.setProperty('--jenny-dock', String(DOCK_RATIO));
+  style.setProperty('--jenny-out', String(OUT_RATIO));
+}
+
+/* All'import e non nel costruttore delle due companion: `mobile-jenny.js`
+   attacca lo sprite al documento *prima* di chiamare `applyMascotSize()`, e un
+   `calc()` con una variabile che non esiste ancora non è "il valore di prima",
+   è una dichiarazione invalida — Jenny comparirebbe per un frame dove la mette
+   il flusso invece che sul bordo. Un modulo, invece, viene valutato prima che
+   qualunque elemento esista. */
+applyDockAnchors();

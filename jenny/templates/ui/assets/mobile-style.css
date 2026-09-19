@@ -6845,8 +6845,12 @@ body {
      grande il doppio del vero. Gli offset sotto erano e restano giusti.)
      Tutta la geometria deriva da --jenny-size (impostata su :root da
      shared/mascot.js, default 120px): i rapporti qui sotto valgono a ogni
-     taglia, quindi cambiarne una non richiede di ritoccare gli offset. */
-  right: calc(var(--jenny-size) * -0.469);
+     taglia, quindi cambiarne una non richiede di ritoccare gli offset.
+     --jenny-dock e --jenny-out sono i due ancoraggi (al bordo / venuta fuori)
+     e arrivano dallo stesso modulo: sono gli stessi numeri che la fisica usa
+     per far arrivare la camminata di rientro sul punto giusto, e la casa usa
+     per ancorare la sua. Scriverli qui a mano li farebbe diventare tre. */
+  right: calc(var(--jenny-size) * var(--jenny-dock) * -1);
   /* Fissa per tutti gli stati: appena sopra la barra di input (dock +
      altezza #input-bar, riga dello scope inclusa). Non deve mai cambiare in Y. */
   bottom: calc(var(--dock-height) + 58px + var(--scope-row));
@@ -6872,7 +6876,7 @@ body {
   pointer-events: none;
   -webkit-user-drag: none;
 }
-.jenny-duo.out { right: calc(var(--jenny-size) * -0.25); }
+.jenny-duo.out { right: calc(var(--jenny-size) * var(--jenny-out) * -1); }
 .jenny-duo.out img {
   animation: jenny-bob 3.4s ease-in-out infinite;
   transform-origin: 50% 100%;
@@ -6915,11 +6919,11 @@ body {
    quando era sull'img il respiro di .out (che scrive transform) lo annullava e
    da sinistra, uscita, Jenny finiva per guardare fuori dallo schermo. */
 .jenny-duo.side-left {
-  left: calc(var(--jenny-size) * -0.469);
+  left: calc(var(--jenny-size) * var(--jenny-dock) * -1);
   right: auto;
   transition: left 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
 }
-.jenny-duo.side-left.out { left: calc(var(--jenny-size) * -0.25); }
+.jenny-duo.side-left.out { left: calc(var(--jenny-size) * var(--jenny-out) * -1); }
 .jenny-duo.side-left .jenny-art-stack { transform: scaleX(-1); }
 
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:

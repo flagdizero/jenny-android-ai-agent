@@ -12,13 +12,14 @@
  *  mano, molla della presa, rimbalzo su pareti e pavimento, tonfo, rialzata e
  *  camminata di rientro — non sa dove vive.
  *
- *  L'unico concetto davvero di un guscio solo e' lo stato `out`: in officina
- *  la mascotte sta al bordo e "esce" per parlare, in casa sta appoggiata sul
- *  pavimento e basta. Un host che dichiara `hasOut: false` percorre gli stessi
- *  rami con lo scarto d'ancoraggio a zero, invece di avere un codice suo.
+ *  Lo stato `out` — al bordo o venuta fuori — e' stato per un giorno il solo
+ *  concetto di un guscio solo, e non lo e' piu': dal 19/09/2026 la si tocca
+ *  per nasconderla anche in casa, con lo stesso gesto e gli stessi ancoraggi
+ *  (v. `DOCK_RATIO`/`OUT_RATIO` in `mascot.js`). L'interruttore `hasOut` e'
+ *  sparito con la sua eccezione: chi usa questo modulo ha lo stato, punto.
  */
 
-import { mascotSide } from './mascot.js';
+import { mascotSide, OUT_SHIFT_RATIO } from './mascot.js';
 
 /* Tutta l'arte (riposo + pose di volo) vive sullo stesso canvas QUADRATO
    3000x3000, esportato cosi' com'e' da gen_pose_webp.py: scala e posizioni
@@ -78,18 +79,14 @@ export function buildFlyLayer(parent) {
  * host:
  *   el                 lo sprite (prende le classi `dragging` e `flying`)
  *   fly, flyPose       il livello del volo e le sue pose
- *   hasOut             esiste lo stato "uscita"? (default: no)
- *   outShiftRatio      scarto d'ancoraggio fra riposo e uscita, in frazioni di lato
- *   isOut()            lo stato attuale
- *   setOut(v)          applicalo (a fine volo)
+ *   isOut()            e' fuori adesso?
+ *   setOut(v)          applica lo stato voluto dal gesto (a fine volo)
  *   onDragCommit()     il trascinamento e' cominciato davvero
  *   onTap()            tocco secco, senza trascinamento
  *   onSideChange(side) e' atterrata sull'altro bordo
  *   onFlightEnd()      il volo e' finito: rimetti l'arte a posto
  */
 export function bindMascotDrag(host) {
-  const hasOut = !!host.hasOut;
-  const outShiftRatio = host.outShiftRatio || 0;
   const isOut = host.isOut || (() => false);
   const setOut = host.setOut || (() => {});
   const onDragCommit = host.onDragCommit || (() => {});
@@ -214,7 +211,7 @@ export function bindMascotDrag(host) {
     // Il cambio di stato out avviene solo a fine volo (fs.after): la x di
     // arrivo la anticipa di uno scarto d'ancoraggio, verso l'interno se si
     // apre e verso il bordo se si chiude.
-    const shift = fs.w * outShiftRatio * (side === 'left' ? -1 : 1);
+    const shift = fs.w * OUT_SHIFT_RATIO * (side === 'left' ? -1 : 1);
     fs.xT = fs.bx + (fs.targetOut ? -shift : shift);
     fs.after = () => setOut(fs.targetOut);
   };
@@ -465,10 +462,8 @@ export function bindMascotDrag(host) {
     // versi si specchiano (v. .jenny-duo.side-left in mobile-style.css).
     const sideSign = mascotSide() === 'left' ? -1 : 1;
     fs.targetOut = out;
-    if (hasOut) {
-      if (!out && dx * sideSign < -DRAG_THRESHOLD) fs.targetOut = true;
-      else if (out && dx * sideSign > DRAG_THRESHOLD) fs.targetOut = false;
-    }
+    if (!out && dx * sideSign < -DRAG_THRESHOLD) fs.targetOut = true;
+    else if (out && dx * sideSign > DRAG_THRESHOLD) fs.targetOut = false;
     fs.xT = fs.bx; // provvisorio: la x di arrivo vera la fissa settle()
     fs.after = null;
     fs.settled = false;

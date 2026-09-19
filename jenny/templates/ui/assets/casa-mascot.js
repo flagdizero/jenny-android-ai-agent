@@ -4,14 +4,23 @@
  *  companion e' anche un *comando*: la si trascina, la si lancia, la si tocca
  *  per aprire una minichat. Qui no.
  *
- *  **Si prende e si lancia, ma non si tocca per parlarle.** La minichat resta
- *  dell'officina: esiste perche' li' la chat puo' non essere a schermo, mentre
- *  in casa la chat *e'* lo schermo — un secondo posto dove scriverle sarebbe
- *  una porta che da' sulla stanza in cui sei gia'. Il trascinamento invece c'e'
- *  tutto, ed e' **la stessa fisica** (`shared/mascot-drag.js`), non una copia.
+ *  **Si prende, si lancia, e si tocca per toglierla di mezzo.** Il tocco la
+ *  manda al bordo e ritoccarla la fa uscire: e' lo stesso gesto dell'officina,
+ *  con gli stessi due ancoraggi (`DOCK_RATIO`/`OUT_RATIO`) e la stessa fisica
+ *  (`shared/mascot-drag.js`) — non una copia. Qui serve anche piu' che la':
+ *  in casa Jenny sta *sopra* il filo della conversazione, e ogni tanto uno
+ *  vuole leggere quello che le sta sotto.
  *
- *  Il tocco secco quindi non fa niente: e' l'unico gesto che in officina apre
- *  la minichat, e qui non ha un equivalente da aprire.
+ *  Quel che resta dell'officina e' la minichat, e resta la' apposta: esiste
+ *  perche' li' la chat puo' non essere a schermo, mentre in casa la chat *e'*
+ *  lo schermo — un secondo posto dove scriverle sarebbe una porta che da'
+ *  sulla stanza in cui sei gia'. Percio' il tocco, in casa, fa solo meta' di
+ *  quel che fa in officina: nasconde e mostra, non apre niente.
+ *
+ *  **Non si ricorda.** Al prossimo avvio e' di nuovo fuori, come in officina.
+ *  Nasconderla e' un gesto per adesso — sto leggendo questo pezzo qui — non
+ *  una preferenza; e una preferenza senza un posto dove disfarla si dimentica
+ *  di essere stata presa, mentre lei, dal bordo, si vede ancora e si ritocca.
  *
  *  Le tabelle degli sprite sono duplicate da `mobile-jenny.js` invece che
  *  importate: quelle sono costanti private di un modulo da 1.353 righe, e
@@ -23,6 +32,16 @@
 
 import { mascotSide, mascotSize, mascotVisible, applyMascotSize, setMascotSide } from './shared/mascot.js';
 import { bindMascotDrag, buildFlyLayer } from './shared/mascot-drag.js';
+
+/* La posa del bordo. E' **una sola immagine** — di profilo, con la faccia gia'
+   dentro — e non due livelli: da li' sporge meno di meta' Jenny, e sovrapporle
+   un volto frontale vorrebbe dire incollarle una faccia sulla nuca. La seconda
+   e' la stessa con la bocca aperta: e' cosi' che si vede che sta parlando
+   quando la si e' messa via. */
+const ART = {
+  side: '/html-mobile/assets/jenny-side.webp',
+  sideTalk: '/html-mobile/assets/jenny-side-talk.webp',
+};
 
 const BODY = {
   idle: '/html-mobile/assets/jenny-body-front-idle.webp',
@@ -67,9 +86,16 @@ export class CasaMascot {
 
     applyMascotSize();
 
-    this.el = document.createElement('div');
-    this.el.className = 'casa-jenny';
-    this.el.setAttribute('aria-hidden', 'true');
+    /* Un bottone, non un div: da quando toccarla fa qualcosa, `aria-hidden`
+       sarebbe una bugia detta a chi non la vede. `tabindex="-1"` come in
+       officina — si puo' toccare, ma non e' una tappa fra il titolo e il campo
+       di scrittura, e sulla tastiera fisica del Titan la barra spazio non deve
+       nasconderla (v. il `blur()` nel modulo della fisica). */
+    this.el = document.createElement('button');
+    this.el.type = 'button';
+    this.el.className = 'casa-jenny out';
+    this.el.setAttribute('aria-label', 'Jenny');
+    this.el.setAttribute('tabindex', '-1');
     this.body = document.createElement('img');
     this.face = document.createElement('img');
     this.body.alt = '';
@@ -89,9 +115,8 @@ export class CasaMascot {
     this.el.appendChild(this.art);
 
     /* Il livello del volo e la fisica: gli stessi dell'officina, dal modulo
-       condiviso. In casa non c'e' nessuno stato `out` — lei sta appoggiata sul
-       pavimento e basta — quindi `hasOut` e' falso e lo scarto d'ancoraggio
-       resta a zero: percorre gli stessi rami senza un codice suo. */
+       condiviso — e dal 19/09/2026 anche gli stessi rami, perche' lo stato
+       `out` non e' piu' di un guscio solo. */
     const { fly, flyPose } = buildFlyLayer(this.el);
     this.fly = fly;
     this.flyPose = flyPose;
@@ -103,7 +128,9 @@ export class CasaMascot {
       el: this.el,
       fly: this.fly,
       flyPose: this.flyPose,
-      hasOut: false,
+      isOut: () => this.el.classList.contains('out'),
+      setOut: (v) => this.setOut(v),
+      onTap: () => this.setOut(!this.el.classList.contains('out')),
       onSideChange: (side) => {
         setMascotSide(side);
         this._applySide();
@@ -113,7 +140,25 @@ export class CasaMascot {
         this._updateGestureExclusion();
       },
     });
+    /* Lo scarto fra i due ancoraggi muove il rettangolo, e l'area esclusa
+       dalle gesture di sistema deve seguirlo: va riportata a transizione
+       *finita*, non appena parte, o si dichiarerebbe ad Android il posto da cui
+       se ne sta andando. A destra transiziona `right`, a sinistra `left`. */
+    this.el.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'right' || e.propertyName === 'left') {
+        this._updateGestureExclusion();
+      }
+    });
     this._updateGestureExclusion();
+
+    /* Le due pose del bordo si caricano adesso e non al primo tocco: sono
+       l'unico disegno che entra in scena *sostituendo* tutto quel che c'era —
+       le altre subentrano dentro una Jenny gia' a schermo, e al massimo
+       arrivano un frame tardi. Qui, senza, il primo tocco la fa sparire. */
+    for (const src of Object.values(ART)) {
+      const im = new Image();
+      im.src = src;
+    }
 
     window.addEventListener('mascotchange', () => {
       this.visible = mascotVisible();
@@ -131,6 +176,19 @@ export class CasaMascot {
      anche di qua, che e' giusto: e' la stessa persona nello stesso telefono. */
   _applySide() {
     this.el.classList.toggle('side-left', mascotSide() === 'left');
+  }
+
+  /** Al bordo (`false`) o venuta fuori (`true`).
+   *
+   *  Non la gira solo il tocco: la si puo' anche spingere contro il bordo o
+   *  tirare verso l'interno, e allora e' la fisica a chiamare qui — a volo
+   *  finito, con lo stato che il gesto aveva chiesto. Per questo non e' un
+   *  metodo privato.
+   */
+  setOut(out) {
+    this.el.classList.toggle('out', out);
+    this._paint();
+    this._updateGestureExclusion();
   }
 
   /* L'area di Jenny va dichiarata ad Android, o il trascinamento sul bordo fa
@@ -258,6 +316,17 @@ export class CasaMascot {
   _paint() {
     this.el.hidden = !this.visible;
     if (!this.visible) return;
+    if (!this.el.classList.contains('out')) {
+      /* Dal bordo il disegno e' cotto: una posa sola, con la faccia dentro. La
+         bocca resta l'unica cosa che si muove — se sta parlando si vede anche
+         da li'. Il dondolio del pensa no: mezza Jenny che oscilla contro il
+         bordo somiglia a un difetto, non a uno stato. */
+      this.body.src = this.state === 'talking' && this._mouthOpen ? ART.sideTalk : ART.side;
+      this.face.classList.add('off');
+      this.el.classList.remove('thinking');
+      return;
+    }
+    this.face.classList.remove('off');
     const mood = this.state === 'thinking' ? null : this._activeMood();
     if (this.state === 'thinking') {
       this.body.src = BODY.think;

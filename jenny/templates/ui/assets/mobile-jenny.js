@@ -525,20 +525,14 @@ export class JennyCompanion {
   /* ── Drag / tap ── */
 
   _bindDrag() {
-    /* La fisica sta in `shared/mascot-drag.js`. Qui ci sono solo le cose che
-       l'officina fa in modo suo: lo stato `out` (la mascotte sta al bordo ed
-       "esce" per parlare — in casa non esiste), la minichat da chiudere quando
-       il trascinamento comincia, e il tocco secco che apre e chiude. */
+    /* La fisica e gli ancoraggi stanno in `shared/mascot-drag.js`. Qui resta
+       solo cio' che l'officina fa in modo suo: la minichat da chiudere quando
+       il trascinamento comincia. Lo stato `out` e il tocco che lo gira sono di
+       tutti e due i gusci (v. casa-mascot.js). */
     this._abortFlight = bindMascotDrag({
       el: this.el,
       fly: this.fly,
       flyPose: this.flyPose,
-      hasOut: true,
-      /* Delta di ancoraggio fra docked e out, in frazioni di --jenny-size: sono
-         i due valori del CSS (-0.469 docked, -0.25 out, v. .jenny-duo[.out]).
-         In frazione e non in px perché la stessa camminata deve finire
-         esattamente sul bordo alle tre taglie, non solo a quella media. */
-      outShiftRatio: 0.469 - 0.25,
       isOut: () => this.el.classList.contains('out'),
       setOut: (v) => this._setOut(v),
       onDragCommit: () => {

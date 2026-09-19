@@ -32,9 +32,17 @@ _NODE = shutil.which("node")
 node = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
 
 
+# Importare il modulo scrive i due ancoraggi su <html> (v.
+# ``test_mascot_dock_contract.py``): senza un `document` finto l'import muore
+# prima di arrivare a quel che questi test guardano.
+_DOM = """
+globalThis.document = { documentElement: { style: { setProperty() {} } } };
+"""
+
+
 def _run(source: str) -> None:
     proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
+        [str(_NODE), "--input-type=module", "-e", _DOM + source],
         capture_output=True,
         text=True,
         timeout=30,
