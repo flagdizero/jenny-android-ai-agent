@@ -318,6 +318,7 @@ correlate a reply to.
 | `method` | `params` | Effect |
 |----------|----------|--------|
 | `workspace.write` | `path`, `content` | Write a workspace text file (1 MB cap). Honours `workspace.enabled` / `workspace.allow_write`. |
+| `soul.rules.write` | `content` | Save the user's standing rules (2 000-character cap) and re-project them into the marked block in `SOUL.md`. Honours the same workspace flags. |
 | `audit.resolve` | `audit_id`, `wiki`, `resolution` | Close a wiki audit item with a resolution note. |
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
 | `project.delete` | `name` | Delete a project chat and its session. |

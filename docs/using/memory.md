@@ -93,6 +93,7 @@ workspace/
 These files play different roles:
 
 - `SOUL.md` remembers how Jenny should behave and sound — guardrails, interaction patterns, tool-use strategy.
+- `.jenny/soul_rules.md` holds the standing rules **you** wrote, from «You and Jenny → Jenny». Dream's write registry allows exactly `SOUL.md`, `USER.md`, `memory/MEMORY.md` and `skills/<name>/SKILL.md`, so no consolidation pass can touch that file; a marked block inside `SOUL.md` carries a copy, which is what the prompt reads, and it is re-projected after every pass. Emptying the box removes both.
 - `USER.md` remembers who you are and what you prefer — identity, habits, language, tone, reply length.
 - `MEMORY.md` remembers what remains true about the work itself — goals, decisions, infrastructure.
 - `history.jsonl` remembers what happened on the way there, as compressed, timestamped summaries.
