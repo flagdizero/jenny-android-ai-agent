@@ -1273,21 +1273,32 @@ body.casa {
   width: 100%;
   min-height: 56px;
   padding: 0 14px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--text);
   border-radius: 14px;
-  /* `--surface` e non `--overlay`: quello e' semi-trasparente, e con lei
-     dietro la scheda la si vedeva **attraverso** — «osserva, regola, ripara»
-     letto sopra la sua faccia. Una scheda che deve coprire dev'essere opaca,
-     e le altre di questa pagina lo sono gia'. */
-  background: var(--surface);
-  color: var(--text);
+  /* Invertita, ed e' l'unica cosa invertita della pagina: di la' si va a fare
+     un altro mestiere. L'inversione e' per costruzione — dove la pagina e'
+     chiara la scheda e' scura — e resta **opaca** in tutti e sette i temi,
+     che e' la ragione per cui non e' `--overlay`: con lei dietro, una scheda
+     semi-trasparente la lascia vedere attraverso.
+     L'icona non usa `--accent`: in Chanel e in Fumetto l'accento *e* il
+     testo, cioe' esattamente il fondo di questa scheda. v. mobile-style.css. */
+  background: var(--text);
+  color: var(--bg);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.casa-workshop:active { background: var(--overlay); }
-.casa-workshop > .ti-tool { flex: none; color: var(--accent); font-size: 20px; }
+/* Un grigio fisso, e non un token: **ogni** inchiostro traslucido del tema e'
+   tarato per il verso giusto — `--overlay` e' bianco nei temi scuri e nero nei
+   temi chiari, che su una scheda invertita e' sempre il verso sbagliato. Un
+   grigio si vede su entrambi, e non buca la scheda. */
+.casa-workshop:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.28); }
+.casa-workshop > .ti-tool { flex: none; color: var(--accent-on-text); font-size: 20px; }
+/* Il chevron e il sottotitolo sono `--text-muted` per tutte le altre righe,
+   cioe' il colore del testo annacquato: qui il testo e' il **fondo**, e si
+   annacqua quel che ci sta sopra. */
+.casa-workshop > .casa-row-go { color: var(--bg); opacity: 0.5; }
 
 .casa-workshop-text {
   flex: 1;
@@ -1301,7 +1312,8 @@ body.casa {
 
 .casa-workshop-hint {
   font-size: 11.5px;
-  color: var(--text-muted);
+  color: var(--bg);
+  opacity: 0.62;
 }
 
 .casa-row-go { flex: none; color: var(--text-muted); font-size: 16px; }

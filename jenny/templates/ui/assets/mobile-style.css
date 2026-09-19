@@ -19,6 +19,14 @@
   --accent-rgb:    244, 241, 234;
   --accent-hover:  #ffffff;
   --on-accent:     #141414;
+  /* L'accento **su un fondo `--text`**, cioè su una superficie invertita.
+     Non è sempre `--accent`: in Chanel e in Fumetto l'accento *è* il testo
+     (#f4f1ea e #1b1820), quindi lì un'icona d'accento su fondo testo non si
+     vede affatto. Il default è `--bg`, che è leggibile per costruzione — è
+     l'altra metà della coppia di contrasto della pagina — e i temi con una
+     tinta vera se lo riprendono più sotto. Un tema nuovo eredita il default
+     e nasce leggibile invece che invisibile. */
+  --accent-on-text: var(--bg);
   --ok:            #f4f1ea;
   --ok-rgb:        244, 241, 234;
   --error:         #ef4444;
@@ -261,6 +269,20 @@
   --bubble-user-border: none;
   --bubble-user-shadow: none;
   --radius-bubble: 12px 12px 3px 12px;
+}
+
+/* I temi il cui accento si vede **sulla superficie invertita**, misurato: il
+   rapporto di contrasto contro `--text` sta sopra 3:1, che è la soglia per un
+   oggetto grafico. Gli altri quattro tengono il default.
+     synthwave 3,06 · kyoto 3,68 · y2k 4,58   ← qui sotto
+     sticker   2,41 · pietra 2,69             ← sotto soglia: l'inchiostro
+     chanel e fumetto: l'accento *è* il testo, cioè il fondo della scheda.
+   Il conto lo rifà un banco (`test_casa_tu_contract.py`), quindi ritoccare la
+   tinta di un tema lo dice invece di lasciarlo scoprire a chi guarda. */
+[data-theme="synthwave"],
+[data-theme="kyoto"],
+[data-theme="y2k"] {
+  --accent-on-text: var(--accent);
 }
 
 /* ── Reset ── */

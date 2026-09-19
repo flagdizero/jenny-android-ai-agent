@@ -23,6 +23,7 @@ ASSETS = UI / "assets"
 APP_JS = ASSETS / "casa-app.js"
 TU_JS = ASSETS / "casa-tu.js"
 CSS = ASSETS / "casa-style.css"
+TEMI = ASSETS / "mobile-style.css"
 I18N = ASSETS / "i18n"
 
 
@@ -327,3 +328,122 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
     assert not in_comune, (
         f"queste classi vogliono dire due cose diverse: {sorted(in_comune)}"
     )
+
+
+# ── L'officina, invertita ───────────────────────────────────────────────────
+
+
+def _contrasto(a: str, b: str) -> float:
+    """Il rapporto di contrasto WCAG fra due colori esadecimali."""
+
+    def luminanza(colore: str) -> float:
+        colore = colore.strip().lstrip("#")
+        canali = [int(colore[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        lineari = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in canali]
+        return 0.2126 * lineari[0] + 0.7152 * lineari[1] + 0.0722 * lineari[2]
+
+    chiaro, scuro = sorted((luminanza(a), luminanza(b)), reverse=True)
+    return (chiaro + 0.05) / (scuro + 0.05)
+
+
+
+def test_the_workshop_card_is_inverted() -> None:
+    """La tavola la disegna **scura su pagina chiara**: e' l'unica cosa
+    invertita della pagina, e lo e' perche' di la' si va a fare un altro
+    mestiere. L'avevo appiattita io, per una ragione reale — era
+    semi-trasparente e Jenny si vedeva attraverso — risolta pero' rendendola
+    identica a tutte le altre schede.
+    """
+    corpo = _rule(CSS.read_text(encoding="utf-8"), ".casa-workshop")
+    sfondo = re.search(r"\n  background: ([^;]+);", corpo)
+    testo = re.search(r"\n  color: ([^;]+);", corpo)
+    assert sfondo and "var(--text)" == sfondo.group(1).strip(), (
+        "la scheda dell'officina non e' piu' invertita: ha lo sfondo delle altre"
+    )
+    assert testo and "var(--bg)" == testo.group(1).strip(), (
+        "fondo invertito e testo no: la scheda e' illeggibile"
+    )
+
+    icona = re.search(r"\.casa-workshop > \.ti-tool \{([^}]*)\}", CSS.read_text(encoding="utf-8"))
+    assert icona and "var(--accent-on-text)" in icona.group(1), (
+        "l'icona e' tornata a `--accent`: su Chanel e su Fumetto l'accento "
+        "**e'** il testo, cioe' esattamente il fondo di questa scheda"
+    )
+
+
+def test_pressing_the_workshop_card_does_not_punch_a_hole_in_it() -> None:
+    """Lo stato premuto non puo' tornare traslucido.
+
+    La scheda copre Jenny, e `--overlay` su una superficie invertita e' due
+    volte sbagliato: e' semi-trasparente, e la sua tinta e' quella del verso
+    opposto — bianca nei temi scuri, dove la scheda invertita e' chiara.
+    """
+    css = CSS.read_text(encoding="utf-8")
+    premuta = _rule(css, ".casa-workshop:active")
+    assert premuta.strip(), "la scheda dell'officina non risponde piu' al tocco"
+    assert "--overlay" not in premuta, (
+        "lo stato premuto e' tornato traslucido: lei si vede attraverso"
+    )
+    assert "background:" not in premuta, (
+        "lo stato premuto riscrive lo sfondo invece di velarlo: un colore "
+        "solo per sette temi torna a essere quello sbagliato in qualcuno"
+    )
+
+
+def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> None:
+    """L'icona su fondo `--text`, misurata su tutti e sette i temi.
+
+    Non basta che sia «diversa dal fondo»: un'icona da 20 px a 2,4:1 e'
+    sbiadita anche se il conto dice che due colori non coincidono. La soglia
+    e' 3:1, quella per un oggetto grafico.
+
+    Misurato sul rig, con `--accent` su tutti e sette:
+
+      chanel 1,00 · fumetto 1,00   l'accento **e'** il testo, cioe' il fondo
+      sticker 2,41 · pietra 2,69   sotto soglia
+      synthwave 3,06 · kyoto 3,68 · y2k 4,58
+
+    Da cui `--accent-on-text`: i tre che passano tengono la loro tinta, gli
+    altri quattro prendono `--bg`, che e' l'altra meta' della coppia di
+    contrasto della pagina e sta sopra 10:1 per costruzione.
+
+    Il banco vale soprattutto per dopo: ritoccare la tinta di un tema, o
+    aggiungerne uno, qui si vede invece di arrivare sullo schermo.
+    """
+    css = TEMI.read_text(encoding="utf-8")
+
+    def dichiara(corpo: str, nome: str) -> str | None:
+        m = re.search(rf"--{nome}:\s*([^;]+);", corpo)
+        return m.group(1).strip() if m else None
+
+    # Le regole in ordine, col loro elenco di selettori: una sola regola di
+    # gruppo vale per cinque temi, e guardarne solo l'ultimo direbbe che agli
+    # altri quattro quel valore non arriva.
+    regole = [
+        ({s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}, corpo)
+        for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    ]
+    temi = sorted({m.group(1) for m in re.finditer(r'\[data-theme="([^"]+)"\]', css)})
+    assert len(temi) >= 7, f"i temi trovati sono {len(temi)}, non i sette che esistono"
+
+    for tema in temi:
+        vale = {":root", f'[data-theme="{tema}"]'}
+        valori: dict[str, str | None] = dict.fromkeys(
+            ("text", "accent", "bg", "accent-on-text"), None
+        )
+        for selettori, corpo in regole:  # in ordine: l'ultimo che parla vince
+            if not (selettori & vale):
+                continue
+            for nome in valori:
+                if (v := dichiara(corpo, nome)) is not None:
+                    valori[nome] = v
+        assert valori["accent-on-text"], f"{tema}: `--accent-on-text` non arriva"
+        # Una sola indirezione, che e' tutto cio' che il foglio usa.
+        risolto = valori["accent-on-text"]
+        for nome in ("accent", "text", "bg"):
+            risolto = risolto.replace(f"var(--{nome})", valori[nome] or "")
+        rapporto = _contrasto(risolto, valori["text"])
+        assert rapporto >= 3.0, (
+            f"tema «{tema}»: l'icona dell'officina e' {risolto} su un fondo "
+            f"{valori['text']} — contrasto {rapporto:.2f}:1, sotto la soglia di 3:1"
+        )
