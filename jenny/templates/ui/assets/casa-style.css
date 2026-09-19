@@ -1250,7 +1250,16 @@ body.casa {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 18px 12px;
+  /* In fondo ci sta lei. E' appoggiata al bordo come un adesivo sul vetro, e
+     nella chat va bene — li' sotto ci scorre la conversazione. Qui sotto c'e'
+     una frase ferma, e a taglia grande le si siede sopra: misurato col rig il
+     19/09/2026, la seconda riga della nota finiva dietro la sua testa.
+
+     Il fondo e' la sua altezza — `--jenny-art-h`, il 73% del quadrato, che e'
+     il numero misurato sull'arte e non la sua larghezza — piu' i venti pixel
+     a cui appoggia i piedi fuori dalla chat. Scritto cosi' vale a ogni
+     taglia, anche a quella che nessuno ha ancora aggiunto. */
+  padding: 2px 18px calc(20px + var(--jenny-size) * var(--jenny-art-h));
 }
 
 /* La scheda dell'officina. E' l'unica cosa scura della pagina, ed e' il punto:
@@ -1498,3 +1507,43 @@ body.casa {
    colore c'e' perche' quella frase e' una cosa da fare, non una descrizione. */
 .casa-block-note[hidden] { display: none; }
 .casa-block-note.is-warn { color: var(--error); }
+
+
+/* ── Le regole che le hai dato tu ───────────────────────────────────────────
+   Una casella di testo, e un bottone che compare solo quando c'e' qualcosa da
+   salvare: un «Salva» sempre acceso su un campo che nessuno ha toccato invita
+   a toccarlo per vedere cosa fa. */
+
+.casa-rules {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.casa-rules:focus { outline: none; border-color: var(--accent); }
+
+.casa-save {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.casa-save[hidden] { display: none; }
+.casa-save:active { filter: brightness(0.94); }

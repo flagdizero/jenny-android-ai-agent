@@ -95,9 +95,9 @@ globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
 import assert from 'node:assert/strict';
 const mod = await import(__URL__);
 assert.deepEqual(
-  [scritte.get('--jenny-dock'), scritte.get('--jenny-out')],
-  [String(mod.DOCK_RATIO), String(mod.OUT_RATIO)],
-  'i due ancoraggi non sono arrivati al documento importando il modulo: ' +
+  [scritte.get('--jenny-dock'), scritte.get('--jenny-out'), scritte.get('--jenny-art-h')],
+  [String(mod.DOCK_RATIO), String(mod.OUT_RATIO), String(mod.ART_HEIGHT_RATIO)],
+  'i rapporti non sono arrivati al documento importando il modulo: ' +
     JSON.stringify([...scritte]),
 );
 """.replace("__URL__", json.dumps(MASCOT_JS.as_uri()))
@@ -167,3 +167,23 @@ def test_both_shells_answer_the_tap() -> None:
         src = f.read_text(encoding="utf-8")
         assert re.search(r"onTap:.*'out'", src), f"{f.name} non gira piu' lo stato al tocco"
         assert "isOut:" in src and "setOut:" in src, f"{f.name} non dichiara piu' lo stato"
+
+
+def test_the_room_that_leaves_her_space_uses_her_height_and_not_her_width() -> None:
+    """Il fondo delle stanze di impostazioni e' alto quanto lei.
+
+    E «quanto lei» e' il 73%, non il 45%: la larghezza e l'altezza dell'arte
+    sono due numeri diversi, ed e' un errore gia' fatto una volta. Scritto come
+    variabile vale anche alla taglia che nessuno ha ancora aggiunto — e se il
+    modulo smettesse di scriverla, il `calc()` diventerebbe invalido e il fondo
+    sparirebbe **in silenzio**: nessun errore, solo la nota finita dietro la
+    sua testa.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.casa-tu-scroll \{[^}]*?padding: [^;]*;", css, re.S)
+    assert m, "il fondo della stanza non c'e' piu'"
+    assert "var(--jenny-art-h)" in m.group(0), (
+        f"il fondo non nomina l'altezza dell'arte: {m.group(0)}"
+    )
+    assert "0.73" not in m.group(0), "il rapporto e' stato riscritto a mano"
+    assert "var(--jenny-size)" in m.group(0), "il fondo non segue piu' la taglia"

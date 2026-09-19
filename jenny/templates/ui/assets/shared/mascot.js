@@ -119,12 +119,21 @@ export const DOCK_RATIO = 0.469;
 export const OUT_RATIO = 0.25;
 /** Quanto si sposta l'ancoraggio passando da uno stato all'altro. */
 export const OUT_SHIFT_RATIO = DOCK_RATIO - OUT_RATIO;
+/** Quanto del quadrato occupa il personaggio **in altezza**.
+ *
+ *  L'altro numero (45%) e' la larghezza, ed e' quello da cui vengono i due
+ *  ancoraggi qui sopra: confonderli e' un errore gia' fatto una volta. Questo
+ *  serve a chi deve lasciarle spazio — una pagina di impostazioni non puo'
+ *  finire sotto di lei — e vale la pena che stia qui, accanto agli altri due,
+ *  invece che scritto a mano dentro un `calc()`. */
+export const ART_HEIGHT_RATIO = 0.73;
 
-/** Porta i due ancoraggi al CSS, che di suo non sa moltiplicare costanti JS. */
+/** Porta i rapporti al CSS, che di suo non sa moltiplicare costanti JS. */
 export function applyDockAnchors() {
   const style = document.documentElement.style;
   style.setProperty('--jenny-dock', String(DOCK_RATIO));
   style.setProperty('--jenny-out', String(OUT_RATIO));
+  style.setProperty('--jenny-art-h', String(ART_HEIGHT_RATIO));
 }
 
 /* All'import e non nel costruttore delle due companion: `mobile-jenny.js`

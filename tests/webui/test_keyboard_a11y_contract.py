@@ -253,7 +253,9 @@ def test_every_long_press_caller_consumes_the_flag() -> None:
             continue
         callers += 1
         assert "import { setupLongPress }" in source, f"{path.name} non importa l'helper condiviso"
-        guards = len(re.findall(r"if \(\w+\.dataset\.longpress\)", source))
+        # `[\w.]+` e non `\w+`: la guardia puo' stare su un campo dell'oggetto
+        # (`this.door.dataset.longpress`) e non solo su una variabile locale.
+        guards = len(re.findall(r"if \([\w.]+\.dataset\.longpress\)", source))
         assert guards == calls, (
             f"{path.name}: {calls} long-press ma {guards} guardie nei click handler"
         )

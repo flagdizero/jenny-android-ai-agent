@@ -1011,7 +1011,13 @@
     "jenny": {
       "title": "Jenny",
       "hidden": "nascosta",
-      "floatingShort": "flottante"
+      "floatingShort": "flottante",
+      "rules": "Le regole che le hai dato tu",
+      "rulesHint": "Questo resta tuo: lo rilegge a ogni turno e non lo riscrive. Il resto del suo carattere lo tiene lei, e si legge in officina.",
+      "rulesPlaceholder": "Per esempio: chiamami per nome, e niente emoji.",
+      "rulesSave": "Salva",
+      "rulesSaved": "Salvato",
+      "rulesFailed": "Non sono riuscita a salvare quel che hai scritto."
     },
     "backHome": "Torna alla casa",
     "backHomeHint": "L'interfaccia semplice: solo la conversazione.",

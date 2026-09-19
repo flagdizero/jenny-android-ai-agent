@@ -723,6 +723,28 @@ def finish_dream_cycle(
             stuck += 1
         else:
             nothing_new += 1
+
+    # Le regole che l'utente ha dato a lei tornano dentro ``SOUL.md``.
+    #
+    # Dream quel file lo riscrive: misurato sugli snapshot del dispositivo di
+    # prova, sei riscritture in 6,6 giorni, e sono potature *dentro* le sezioni
+    # — nessuna intestazione tolta, ma righe sì. Il blocco dell'utente non si
+    # difende chiedendolo nel prompt: si riscrive, e la verità sta in un file
+    # che il registro di scrittura di Dream non ammette
+    # (``.jenny/soul_rules.md``, v. ``agent/soul_rules.py``).
+    #
+    # Qui e non altrove perché questo è il punto che gira dopo **ogni** passata:
+    # sta nel ``finally`` del chiamante, quindi vale anche per un turno che è
+    # crashato a metà — che è il caso in cui il file può essere rimasto a metà.
+    #
+    # La radice si prende da ``soul_file.parent`` e non da ``store.workspace``:
+    # sono la stessa cartella (``MemoryStore.__init__``), ma cosi' il file da
+    # riparare e la cartella in cui si cercano le regole non possono
+    # disaccordarsi — e' un attributo solo invece di due da tenere allineati.
+    from jenny.agent.soul_rules import sync_soul
+
+    sync_soul(store.soul_file.parent, store.soul_file)
+
     runs_since_review += 1
     store.set_review_state(
         runs_since_review=runs_since_review,

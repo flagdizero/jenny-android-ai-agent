@@ -167,6 +167,48 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     return {"path": rel_path, "bytes": size}
 
 
+# Tetto sulle regole che l'utente scrive a Jenny. Non e' un limite di
+# trasporto — quello e' ``MAX_WRITE_BYTES``, mille volte piu' alto — ma una
+# misura di cosa sia una regola: quel testo entra nel prompt di **ogni** turno,
+# accanto a chi e' lei. Oltre qualche paragrafo non e' piu' una regola, e' un
+# secondo SOUL.md scritto a mano.
+MAX_SOUL_RULES_CHARS = 2000
+
+
+async def soul_rules_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Salva le regole che l'utente ha dato a Jenny, e le proietta in ``SOUL.md``.
+
+    Non e' ``workspace.write`` su un path qualunque, e la differenza e' tutta
+    nella seconda meta': la verita' va in ``.jenny/soul_rules.md``, che il
+    registro di scrittura di Dream non ammette, e dentro ``SOUL.md`` ne resta
+    una copia proiettata — che e' dove il prompt la legge. Le due scritture
+    devono restare una sola operazione, o la copia comincia a divergere dalla
+    verita' (v. ``agent/soul_rules.py``).
+    """
+    from jenny.agent.soul_rules import save_rules
+
+    content = params.get("content", "")
+    if not isinstance(content, str):
+        raise CommandError("bad_request", "content must be a string")
+    if len(content) > MAX_SOUL_RULES_CHARS:
+        raise CommandError(
+            "too_large",
+            f"rules too long ({len(content)} > {MAX_SOUL_RULES_CHARS} characters)",
+        )
+
+    _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
+    _require_workspace_flag("allow_write", "forbidden", "workspace writes are disabled")
+
+    try:
+        # Su disco, quindi fuori dal loop: stessa ragione di ``workspace.write``.
+        saved = await asyncio.to_thread(save_rules, ctx.get_workspace_root(), content)
+    except PermissionError as exc:
+        raise CommandError("forbidden", "permission denied") from exc
+    except OSError as exc:
+        raise CommandError("bad_request", str(exc)) from exc
+    return {"chars": len(saved)}
+
+
 async def audit_resolve(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Chiude un item di audit con una nota di risoluzione (testo libero)."""
     from jenny.webui.wiki import discover_wikis, resolve_audit
@@ -302,6 +344,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 
 COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
+    "soul.rules.write": soul_rules_write,
     "audit.resolve": audit_resolve,
     "project.create": project_create,
     "project.delete": project_delete,

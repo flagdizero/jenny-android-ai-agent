@@ -313,3 +313,83 @@ async def test_audit_resolve_blocked_when_wiki_disabled(
             ctx, "audit.resolve", {"audit_id": audit_id, "wiki": "main"}
         )
     assert exc.value.code == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# soul.rules.write
+# ---------------------------------------------------------------------------
+
+
+async def test_saving_rules_writes_the_truth_and_the_copy(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Due scritture, una sola operazione.
+
+    La verità va dove Dream non può scrivere; dentro ``SOUL.md`` ne resta la
+    copia che il prompt legge. Se il comando ne facesse una sola, l'altra
+    comincerebbe a divergere al primo salvataggio.
+    """
+    from jenny.agent.soul_rules import RULES_FILE, extract_rules
+
+    (workspace_root / "SOUL.md").write_text("# Soul\n\nI am Jenny.\n", encoding="utf-8")
+
+    result = await dispatch_command(
+        ctx, "soul.rules.write", {"content": "  Chiamami per nome. 😏  "}
+    )
+
+    assert result["chars"] == len("Chiamami per nome. 😏")
+    assert (workspace_root / RULES_FILE).read_text(encoding="utf-8").strip() == (
+        "Chiamami per nome. 😏"
+    )
+    soul = (workspace_root / "SOUL.md").read_text(encoding="utf-8")
+    assert extract_rules(soul) == "Chiamami per nome. 😏"
+    assert "I am Jenny." in soul
+
+
+async def test_rules_longer_than_the_cap_are_refused(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il tetto non è di trasporto — quello è mille volte più alto — è una
+    misura di cosa sia una regola: quel testo entra nel prompt di ogni turno."""
+    from jenny.webui.commands import MAX_SOUL_RULES_CHARS
+
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "soul.rules.write", {"content": "x" * (MAX_SOUL_RULES_CHARS + 1)}
+        )
+    assert exc.value.code == "too_large"
+    assert MAX_SOUL_RULES_CHARS < MAX_WRITE_BYTES, "il tetto delle regole è un limite di trasporto"
+
+
+async def test_rules_are_refused_when_writes_are_off(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Lo stesso interruttore di ``workspace.write``: questo comando scrive due
+    file del workspace, e non può essere la scorciatoia che lo aggira."""
+    _set_workspace_config(config_path, allow_write=False)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "soul.rules.write", {"content": "x"})
+    assert exc.value.code == "forbidden"
+
+
+async def test_emptying_the_rules_takes_the_block_out(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    from jenny.agent.soul_rules import HEADING, RULES_FILE
+
+    (workspace_root / "SOUL.md").write_text("# Soul\n\nI am Jenny.\n", encoding="utf-8")
+    await dispatch_command(ctx, "soul.rules.write", {"content": "Chiamami per nome."})
+    await dispatch_command(ctx, "soul.rules.write", {"content": ""})
+
+    assert not (workspace_root / RULES_FILE).exists()
+    soul = (workspace_root / "SOUL.md").read_text(encoding="utf-8")
+    assert HEADING not in soul
+    assert "I am Jenny." in soul
+
+
+async def test_rules_that_are_not_text_are_a_bad_request(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "soul.rules.write", {"content": {"a": 1}})
+    assert exc.value.code == "bad_request"

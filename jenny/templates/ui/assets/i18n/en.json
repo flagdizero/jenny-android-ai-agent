@@ -1008,7 +1008,13 @@
     "jenny": {
       "title": "Jenny",
       "hidden": "hidden",
-      "floatingShort": "floating"
+      "floatingShort": "floating",
+      "rules": "The rules you gave her",
+      "rulesHint": "This one stays yours: she reads it every turn and never rewrites it. The rest of her character is hers, and you can read it in the workshop.",
+      "rulesPlaceholder": "For example: call me by name, and no emoji.",
+      "rulesSave": "Save",
+      "rulesSaved": "Saved",
+      "rulesFailed": "I could not save what you wrote."
     },
     "backHome": "Back to the house",
     "backHomeHint": "The simple interface: the conversation and nothing else.",

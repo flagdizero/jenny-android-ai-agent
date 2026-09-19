@@ -199,3 +199,48 @@ def test_the_eyelet_has_a_phrase_for_every_landing() -> None:
         assert len(set(frasi.values())) == len(frasi), (
             "due destinazioni con la stessa frase: l'occhiello ha smesso di dire dove porta"
         )
+
+
+# ── Le regole che le hai dato tu ────────────────────────────────────────────
+
+
+def test_the_rules_are_written_through_the_command_and_not_as_a_file() -> None:
+    """Salvarle vuol dire **due** scritture: la verita' in un file che Dream non
+    puo' riscrivere, e la copia dentro `SOUL.md` che il prompt legge. Se la casa
+    le salvasse con `workspace.write` ne farebbe una sola, e la copia
+    comincerebbe a divergere dalla verita' al primo salvataggio."""
+    jenny = (ASSETS / "casa-jenny.js").read_text(encoding="utf-8")
+    assert "rpc.writeSoulRules(" in jenny, "le regole non passano piu' dal comando"
+    assert "writeWorkspaceFile" not in jenny, (
+        "le regole vengono scritte come un file qualunque: la copia in SOUL.md non si rifa'"
+    )
+    rpc = (ASSETS / "shared" / "rpc-client.js").read_text(encoding="utf-8")
+    assert "soul.rules.write" in rpc, "il comando non esiste piu' lato client"
+
+    from jenny.webui.commands import COMMANDS
+
+    assert "soul.rules.write" in COMMANDS, "il comando non esiste piu' lato server"
+
+
+def test_the_two_halves_look_at_the_same_file() -> None:
+    """La casa legge il file, il server lo scrive: due costanti, un posto solo."""
+    from jenny.agent.soul_rules import RULES_FILE
+
+    jenny = (ASSETS / "casa-jenny.js").read_text(encoding="utf-8")
+    m = re.search(r"export const RULES_PATH = '([^']+)'", jenny)
+    assert m, "la casa non dice piu' da dove legge le regole"
+    assert m.group(1) == RULES_FILE.as_posix(), (
+        f"la casa legge {m.group(1)}, il server scrive {RULES_FILE.as_posix()}"
+    )
+
+
+def test_the_room_says_what_happens_to_what_you_write() -> None:
+    """La frase sotto la casella non e' decorazione: dice che quel testo resta
+    tuo e che il resto del carattere non e' modificabile da li'. Senza, un
+    campo di testo accanto a «Jenny» promette di poter riscrivere lei."""
+    for locale in ("it", "en"):
+        data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
+        jenny = data["casa"]["jenny"]
+        for key in ("rules", "rulesHint", "rulesPlaceholder", "rulesSave",
+                    "rulesSaved", "rulesFailed"):
+            assert jenny.get(key, "").strip(), f"casa.jenny.{key} manca in {locale}.json"

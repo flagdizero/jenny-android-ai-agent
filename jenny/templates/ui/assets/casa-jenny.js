@@ -23,8 +23,16 @@
 
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
+import { rpc } from './shared/rpc-client.js';
+import { showToast } from './shared/utils.js';
 import { MASCOT_SIZES, mascotSize, mascotVisible, setMascotSize, setMascotVisible }
   from './shared/mascot.js';
+
+/* Dove stanno le parole dell'utente. La stessa costante di
+   `jenny/agent/soul_rules.py`, e l'unico posto da cui la casa le legge: la
+   scrittura passa da un comando, perche' salvarle vuol dire anche rifare la
+   copia dentro `SOUL.md`. */
+export const RULES_PATH = '.jenny/soul_rules.md';
 
 /* Le tre taglie, nell'ordine in cui crescono, e le parole che l'officina usa
    gia' per chiamarle. */
@@ -61,6 +69,10 @@ export class CasaJenny {
     this.floatingBtn = document.getElementById('casa-jenny-floating');
     this.floatingLabel = document.getElementById('casa-jenny-floating-label');
     this.floatingNote = document.getElementById('casa-jenny-floating-note');
+    this.rulesEl = document.getElementById('casa-rules');
+    this.rulesLabel = document.getElementById('casa-rules-label');
+    this.rulesNote = document.getElementById('casa-rules-note');
+    this.rulesSave = document.getElementById('casa-rules-save');
 
     this._onChange = onChange;
     /* Quel che il server dice della finestra: `null` finche' non l'ha detto. */
@@ -73,11 +85,17 @@ export class CasaJenny {
       const card = e.target.closest('[data-size]');
       if (card) this.pickSize(card.dataset.size);
     });
+    /* Quel che c'e' su disco, per sapere se c'e' qualcosa da salvare. `null`
+       finche' non si e' letto: diverso da «letto, ed era vuoto». */
+    this._rulesOnDisk = null;
+    this.rulesEl?.addEventListener('input', () => this._markRules());
+    this.rulesSave?.addEventListener('click', () => this.saveRules());
   }
 
   open() {
     this._paintSizes();
     this._mark();
+    this._loadRules();
   }
 
   /** Quel che il server dice della finestra flottante. `null` = non si sa. */
@@ -90,6 +108,10 @@ export class CasaJenny {
     if (this.visibleLabel) this.visibleLabel.textContent = i18n.t('settings.mascotVisible');
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
+    if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('casa.jenny.rules');
+    if (this.rulesNote) this.rulesNote.textContent = i18n.t('casa.jenny.rulesHint');
+    if (this.rulesSave) this.rulesSave.textContent = i18n.t('casa.jenny.rulesSave');
+    if (this.rulesEl) this.rulesEl.placeholder = i18n.t('casa.jenny.rulesPlaceholder');
     if (this._painted) {
       for (const btn of this.sizeEl.children) {
         btn.textContent = i18n.t(SIZE_KEYS[btn.dataset.size]);
@@ -138,6 +160,55 @@ export class CasaJenny {
     }
     this._mark();
     this._onChange?.();
+  }
+
+  /* Quel che ha scritto, una volta per apertura della stanza. Un campo che
+     l'utente sta scrivendo non si sovrascrive mai con quel che c'era: sarebbe
+     lo stesso guasto della bozza della chat, un attimo piu' tardi. */
+  async _loadRules() {
+    if (this._rulesAsked || !this.rulesEl) return;
+    this._rulesAsked = true;
+    let testo = '';
+    try {
+      const file = await api.readWorkspaceFile(RULES_PATH);
+      testo = (file?.content || '').trim();
+    } catch (err) {
+      /* 404 = non ne ha ancora scritte, ed e' lo stato normale del primo
+         giorno. Qualunque altro errore lascia il campo vuoto e non lo dice:
+         quel che c'e' su disco resta `null`, quindi «Salva» non compare e uno
+         spazio battuto per sbaglio non puo' cancellare niente. */
+      if (err?.status !== 404) {
+        console.warn('casa.jenny: regole non lette', err);
+        return;
+      }
+    }
+    this._rulesOnDisk = testo;
+    if (!this.rulesEl.value) this.rulesEl.value = testo;
+    this._markRules();
+  }
+
+  /** «Salva» c'e' solo quando c'e' qualcosa da salvare. */
+  _markRules() {
+    if (!this.rulesSave || !this.rulesEl) return;
+    const cambiato = this._rulesOnDisk !== null
+      && this.rulesEl.value.trim() !== this._rulesOnDisk;
+    this.rulesSave.hidden = !cambiato;
+  }
+
+  /** Salva le regole. Il comando scrive la verita' **e** rifa' la copia. */
+  async saveRules() {
+    if (!this.rulesEl) return;
+    const testo = this.rulesEl.value.trim();
+    try {
+      await rpc.writeSoulRules(testo);
+    } catch (err) {
+      console.warn('casa.jenny: regole non salvate', err);
+      showToast(i18n.t('casa.jenny.rulesFailed'), 'error');
+      return;
+    }
+    this._rulesOnDisk = testo;
+    this._markRules();
+    showToast(i18n.t('casa.jenny.rulesSaved'), 'success');
   }
 
   /* Le tre taglie si disegnano una volta: non cambiano mentre guardi. */

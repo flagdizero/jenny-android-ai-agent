@@ -24,6 +24,16 @@ export const rpc = {
     return wsManager.request('workspace.write', { path, content });
   },
 
+  /** Salva le regole che l'utente ha dato a Jenny.
+   *
+   *  Non e' `workspace.write` su un path: la verita' va in un file che Dream
+   *  non puo' riscrivere, e dentro `SOUL.md` ne resta una copia proiettata.
+   *  Le due scritture sono una sola operazione, e stanno di la'
+   *  (`jenny/agent/soul_rules.py`). */
+  writeSoulRules(content) {
+    return wsManager.request('soul.rules.write', { content });
+  },
+
   /** Crea un progetto: una wiki nuova e vuota, piu' la riga di scope che
    *  l'utente ha scritto. Passa da qui e non da `api` proprio per quella riga:
    *  e' testo libero, e la superficie /api/ non sa trasportarne. */

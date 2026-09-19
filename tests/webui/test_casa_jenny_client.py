@@ -78,6 +78,8 @@ function makeEl(tag) {
     tag,
     className: '',
     textContent: '',
+    value: '',
+    placeholder: '',
     hidden: false,
     dataset: {},
     attrs: {},
@@ -118,17 +120,45 @@ function setMascotSize(size) { taglia = size; return size; }
 let risposta = null;
 let errore = null;
 const chiamate = [];
+/* E quel che c'e' su disco: `null` = il file non c'e' (404), una stringa = c'e'.
+   `letturaRotta` e' l'altra cosa: la risposta non e' arrivata affatto. */
+let suDisco = null;
+let letturaRotta = false;
+const salvataggi = [];
+let salvataggioRotto = false;
+const brindisi = [];
 const api = {
   updateFloating(params) {
     chiamate.push(params);
     if (errore) return Promise.reject(errore);
     return Promise.resolve(risposta);
   },
+  readWorkspaceFile(path) {
+    if (letturaRotta) {
+      const err = new Error('gateway giu');
+      err.status = 500;
+      return Promise.reject(err);
+    }
+    if (suDisco === null) {
+      const err = new Error('not found');
+      err.status = 404;
+      return Promise.reject(err);
+    }
+    return Promise.resolve({ content: suDisco, path });
+  },
 };
+const rpc = {
+  writeSoulRules(content) {
+    salvataggi.push(content);
+    return salvataggioRotto ? Promise.reject(new Error('rifiutato')) : Promise.resolve({});
+  },
+};
+function showToast(msg, tipo) { brindisi.push([msg, tipo]); }
 
 __JENNY_VALUE__
 __SIZE_LIST__
 __SIZE_KEYS__
+__RULES_PATH__
 
 class CasaJenny {
   __CTOR__
@@ -143,16 +173,27 @@ class CasaJenny {
   __MARK__
   __SWITCH__
   __SAY_FLOATING__
+  __LOAD_RULES__
+  __MARK_RULES__
+  __SAVE_RULES__
 }
 
 let cambi = 0;
-function stanza(floating) {
+/* `disco` e' quel che il file delle regole contiene: `undefined` = non c'e'
+   (404). `rotta` e' l'altro caso, quello che conta: la lettura non e' arrivata
+   affatto. Si passano alla costruzione perche' la stanza legge all'apertura. */
+function stanza(floating, disco, rotta) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   visibile = true;
   taglia = 'sm';
   risposta = null;
   errore = null;
   chiamate.length = 0;
+  suDisco = disco === undefined ? null : disco;
+  letturaRotta = !!rotta;
+  salvataggi.length = 0;
+  salvataggioRotto = false;
+  brindisi.length = 0;
   cambi = 0;
   const lei = new CasaJenny({ onChange: () => { cambi += 1; } });
   lei.open();
@@ -184,6 +225,10 @@ def _harness() -> str:
         .replace("__MARK__", _member(src, "_mark"))
         .replace("__SWITCH__", _member(src, "_switch"))
         .replace("__SAY_FLOATING__", _member(src, "_sayFloating"))
+        .replace("__LOAD_RULES__", _member(src, "_loadRules"))
+        .replace("__MARK_RULES__", _member(src, "_markRules"))
+        .replace("__SAVE_RULES__", _member(src, "saveRules"))
+        .replace("__RULES_PATH__", _const(src, "RULES_PATH"))
     )
 
 
@@ -339,4 +384,105 @@ def test_the_words_come_back_when_the_language_changes() -> None:
       for (const btn of lei.sizeEl.children) {
         assert.equal(btn.textContent, i18n.t(SIZE_KEYS[btn.dataset.size]));
       }
+    """)
+
+
+# ── Le regole che le hai dato tu ────────────────────────────────────────────
+
+
+def test_what_is_on_disk_lands_in_the_box() -> None:
+    """E «Salva» non c'e' finche' non c'e' niente da salvare: un bottone acceso
+    su un campo che nessuno ha toccato invita a toccarlo per vedere cosa fa."""
+    _run_js("""
+      const lei = stanza({ available: false }, 'Chiamami per nome.\\n');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(lei.rulesEl.value, 'Chiamami per nome.');
+      assert.equal(lei.rulesSave.hidden, true);
+
+      lei.rulesEl.value = 'Chiamami per nome. Niente emoji.';
+      lei._markRules();
+      assert.equal(lei.rulesSave.hidden, false);
+    """)
+
+
+def test_no_rules_yet_is_not_an_error() -> None:
+    """404 vuol dire «non ne ha ancora scritte», ed e' lo stato normale del
+    primo giorno."""
+    _run_js("""
+      const lei = stanza({ available: false });
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(lei.rulesEl.value, '');
+      assert.equal(lei.rulesSave.hidden, true);
+      assert.deepEqual(brindisi, [], 'ha detto che qualcosa non andava');
+
+      lei.rulesEl.value = 'Dammi del tu.';
+      lei._markRules();
+      assert.equal(lei.rulesSave.hidden, false, 'le prime regole non si possono salvare');
+    """)
+
+
+def test_a_reading_that_failed_cannot_wipe_what_is_there() -> None:
+    """La differenza che conta fra «non ce n'erano» e «non si e' riuscito a
+    leggerle»: nel secondo caso il campo e' vuoto ma **non** e' la verita', e
+    uno spazio battuto per sbaglio manderebbe una casella vuota sopra le regole
+    che ci sono. «Salva» resta via finche' non si sa cosa c'e'."""
+    _run_js("""
+      const lei = stanza({ available: false }, undefined, true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(lei.rulesEl.value, '');
+      lei.rulesEl.value = ' ';
+      lei._markRules();
+      assert.equal(lei.rulesSave.hidden, true, 'si puo\\u2019 salvare sopra quel che non si e\\u2019 letto');
+    """)
+
+
+def test_saving_sends_the_trimmed_text_and_remembers_it() -> None:
+    _run_js("""
+      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      await new Promise((r) => setTimeout(r, 0));
+      lei.rulesEl.value = '  Dammi del tu.  ';
+      lei._markRules();
+      await lei.saveRules();
+      assert.deepEqual(salvataggi, ['Dammi del tu.']);
+      assert.equal(lei.rulesSave.hidden, true, '«Salva» e\\u2019 rimasto dopo aver salvato');
+      assert.equal(brindisi.length, 1);
+      assert.equal(brindisi[0][0], i18n.t('casa.jenny.rulesSaved'));
+    """)
+
+
+def test_a_save_that_failed_keeps_the_button_and_says_so() -> None:
+    """Sparire il bottone dopo un salvataggio fallito vorrebbe dire dire che e'
+    andata bene."""
+    _run_js("""
+      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      await new Promise((r) => setTimeout(r, 0));
+      lei.rulesEl.value = 'Dammi del tu.';
+      lei._markRules();
+      salvataggioRotto = true;
+      await lei.saveRules();
+      assert.equal(lei.rulesSave.hidden, false);
+      assert.equal(brindisi[0][0], i18n.t('casa.jenny.rulesFailed'));
+      assert.equal(brindisi[0][1], 'error');
+    """)
+
+
+def test_reopening_the_room_does_not_overwrite_what_you_are_writing() -> None:
+    """Stessa regola della bozza della chat, un attimo piu' tardi: il testo
+    vivo vince sempre su quello vecchio."""
+    _run_js("""
+      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      await new Promise((r) => setTimeout(r, 0));
+      lei.rulesEl.value = 'Sto ancora scrivendo';
+      lei.open();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(lei.rulesEl.value, 'Sto ancora scrivendo');
+    """)
+
+
+def test_the_path_is_the_one_the_server_writes() -> None:
+    """La casa legge il file; a scriverlo e' un comando, perche' salvarlo vuol
+    dire anche rifare la copia dentro `SOUL.md`. Le due meta' devono guardare
+    lo stesso posto."""
+    _run_js("""
+      assert.equal(RULES_PATH, '.jenny/soul_rules.md');
     """)
