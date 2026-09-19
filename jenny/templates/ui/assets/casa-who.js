@@ -5,12 +5,20 @@
  *  stanno in `shared/conversation-list.js`, che e' lo stesso modulo su cui si
  *  appoggia la tendina dell'officina. Qui c'e' solo il disegno.
  *
- *  **In questo giro un tocco non cambia conversazione.** E' una decisione, non
- *  un pezzo mancante (v. `.agent/casa-who-plan.md`, D1), e il pannello e'
- *  costruito perche' si veda: le righe dei quaderni non sono bottoni, non hanno
- *  chevron e non hanno la spunta. La spunta ce l'ha la riga personale, perche'
- *  li' e' vera. Il giorno che lo scambio arriva, quelle righe diventano
- *  bottoni e il resto di questo file non cambia.
+ *  **Un tocco cambia conversazione**, e la spunta e' su quella in cui sei. Per
+ *  un giro non e' stato cosi' — le righe erano inerti e lo dichiaravano (v.
+ *  `.agent/casa-who-plan.md`, D1) — e quel giro e' finito con
+ *  `.agent/casa-notebook-plan.md`: le righe sono diventate bottoni e il resto
+ *  di questo file e' rimasto com'era, che era la previsione.
+ *
+ *  Le righe delle cartelle **non apribili** restano inerti, e non e' una
+ *  dimenticanza: il gateway rifiuterebbe quella chiave (il nome non passa
+ *  `is_valid_project_name`), quindi un bottone li' sarebbe una promessa che il
+ *  server e' gia' pronto a smentire.
+ *
+ *  Il pannello non conosce le chiavi di sessione: dice *quale nome* e' stato
+ *  toccato, e chi lo ospita ne fa una conversazione. Cosi' la forma della
+ *  chiave resta in un posto solo (`shared/conversation-list.js`).
  *
  *  E' un `<dialog>` aperto con `showModal()`: cosi' sta nel *top layer*, cioe'
  *  sopra la mascotte, senza una guerra di `z-index` con un elemento che in
@@ -36,13 +44,21 @@ export class WhoPanel {
    *         `aria-expanded`.
    *  @param head l'intestazione: da li' si misura dove comincia il pannello.
    *  @param personalName funzione che da' il nome della conversazione
-   *         personale. E' il testo del titolo: cosi' il pannello e
-   *         l'intestazione non possono dire due nomi diversi.
+   *         personale. **Non** si legge dal titolo: da quando il titolo porta
+   *         il nome del quaderno aperto, leggerlo di li' farebbe dire alla riga
+   *         personale «piante».
+   *  @param currentProject funzione che da' il nome del quaderno aperto, o
+   *         `null` se sei nella conversazione personale. E' cio' che decide
+   *         dove sta la spunta.
+   *  @param onPick chiamata col nome del quaderno toccato — `null` per la
+   *         conversazione personale.
    */
-  constructor(trigger, { head, personalName }) {
+  constructor(trigger, { head, personalName, currentProject, onPick }) {
     this._trigger = trigger;
     this._head = head;
     this._personalName = personalName;
+    this._currentProject = currentProject || (() => null);
+    this._onPick = onPick || null;
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = null;
@@ -174,10 +190,11 @@ export class WhoPanel {
     return el;
   }
 
-  /* La conversazione di casa e' una sola, e la spunta e' sua. */
+  /* La casa: si torna sempre, ed e' l'unica riga che non ha un pallino —
+     non e' un quaderno fra i quaderni. */
   _personalRow() {
-    const row = document.createElement('div');
-    row.className = 'casa-who-row is-personal';
+    const row = this._command(this._currentProject() === null, () => this._pick(null));
+    row.classList.add('is-personal');
 
     const name = document.createElement('span');
     name.className = 'casa-who-row-name';
@@ -189,16 +206,18 @@ export class WhoPanel {
     kind.textContent = i18n.t('casa.who.personal');
     row.appendChild(kind);
 
-    const check = document.createElement('i');
-    check.className = 'ti ti-check casa-who-check';
-    check.setAttribute('aria-hidden', 'true');
-    row.appendChild(check);
+    this._maybeCheck(row);
     return row;
   }
 
   _row(item, blocked = false) {
-    const row = document.createElement('div');
-    row.className = 'casa-who-row' + (blocked ? ' is-blocked' : '');
+    /* Una cartella non apribile non e' un comando: il gateway rifiuta quella
+       chiave (v. `_envelope_chat_id`), quindi qui sarebbe un bottone con un no
+       gia' scritto dall'altra parte. */
+    const row = blocked
+      ? document.createElement('div')
+      : this._command(item.name === this._currentProject(), () => this._pick(item.name));
+    if (blocked) row.className = 'casa-who-row is-blocked';
 
     const dot = document.createElement('span');
     dot.className = 'casa-who-dot';
@@ -214,7 +233,39 @@ export class WhoPanel {
     when.className = 'casa-who-row-meta';
     when.textContent = ago(item.modified, (key, vars) => i18n.t(key, vars));
     row.appendChild(when);
+
+    if (!blocked) this._maybeCheck(row);
     return row;
+  }
+
+  /* Lo scheletro di una riga che si puo' toccare. `aria-current` e non solo la
+     spunta: la spunta e' un'icona decorativa, e chi non la vede deve comunque
+     sapere su quale riga si trova. */
+  _command(current, onPick) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'casa-who-row';
+    if (current) {
+      row.classList.add('is-current');
+      row.setAttribute('aria-current', 'true');
+    }
+    row.addEventListener('click', onPick);
+    return row;
+  }
+
+  _maybeCheck(row) {
+    if (!row.classList.contains('is-current')) return;
+    const check = document.createElement('i');
+    check.className = 'ti ti-check casa-who-check';
+    check.setAttribute('aria-hidden', 'true');
+    row.appendChild(check);
+  }
+
+  /* Prima si chiude, poi si cambia: il cambio ricarica il filo, e farlo dietro
+     un pannello aperto vorrebbe dire scoprirlo gia' finito. */
+  _pick(name) {
+    this.close();
+    this._onPick?.(name);
   }
 }
 

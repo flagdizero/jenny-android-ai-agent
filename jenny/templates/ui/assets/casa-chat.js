@@ -131,13 +131,20 @@ export class CasaChat {
       mount: (node) => this.el.insertBefore(node, this.el.firstChild),
       label: () => i18n.t('chat.loadPrevious'),
     });
+    /* **Una volta sola, qui.** Stava in fondo a `load()`, e `bindInfiniteScroll`
+       non ha guardia: un ascoltatore in piu' a ogni ricarica. Finche' una
+       ricarica capitava solo dopo un `session_boundary` non si notava; da
+       quando cambiare quaderno *e'* una ricarica, sarebbe uno in piu' per ogni
+       cambio. L'officina lo lega una volta sola dal suo `setupInfiniteScroll`,
+       per la stessa ragione. */
+    this.pager.bindInfiniteScroll();
   }
 
-  /* In casa la conversazione e' una sola: non c'e' il chip dei progetti, quindi
-     non esiste la pagina che arriva dopo un cambio. La guardia resta comunque
-     quella vera del session manager invece di un `false` scritto a mano — costa
-     zero, e il giorno che le conversazioni diventassero due non sarebbe una
-     bugia da scoprire. */
+  /* La guardia contro la pagina che arriva dopo un cambio di conversazione.
+     Era gia' quella vera del session manager quando in casa la conversazione
+     era una sola — «il giorno che le conversazioni diventassero due non sarebbe
+     una bugia da scoprire». Quel giorno e' arrivato, e qui non c'e' stato
+     niente da cambiare. */
   _beginHistoryPage() {
     const key = sessionManager.currentKey;
     if (!key) return null;
@@ -169,7 +176,6 @@ export class CasaChat {
     this.scrollToBottom();
     /* Dopo il disegno e dopo l'aggancio al fondo: `ensureReach` misura se il
        filo trabocca, e prima del disegno la risposta sarebbe sempre "no". */
-    this.pager.bindInfiniteScroll();
     this.pager.ensureReach();
     return messages.length;
   }
@@ -408,11 +414,28 @@ export class CasaChat {
     this.turnId = null;
   }
 
-  /** Ributta giu' la conversazione da capo. */
+  /** Ributta giu' la conversazione da capo.
+   *
+   *  E' anche il modo in cui si cambia quaderno: la chiave la sa il session
+   *  manager, quindi qui non c'e' un parametro da passare — si svuota e si
+   *  rilegge chi e' attuale adesso.
+   */
   async reload() {
     this._resetTurn();
     this.el.querySelectorAll('.casa-msg, .casa-boundary').forEach((n) => n.remove());
     this._empty = true;
+    /* La bolla in sospeso muore col DOM che la conteneva. Senza azzerarla, un
+       rifiuto in arrivo — che e' l'unico frame che la lascia in vita — la
+       toglierebbe da un nodo staccato e rimetterebbe quel testo nel campo di
+       un'altra conversazione. */
+    this._pendingSend = null;
+    /* Il cursore appartiene alla conversazione che se ne sta andando. `adopt`
+       lo riscrivera' a fetch riuscita — ma se la fetch fallisce lo schermo
+       resta vuoto e il cursore resta quello dell'altra: una scorsa in su
+       incollerebbe in cima la storia del quaderno sbagliato. Per questo
+       `reset()` esiste, e il suo commento dice proprio «si chiama al cambio di
+       conversazione». */
+    this.pager.reset();
     await this.load();
     this.syncEmpty();
   }

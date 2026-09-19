@@ -64,10 +64,38 @@ def test_hardware_back_closes_the_panel_first() -> None:
     E per primo: `showModal()` mette il pannello nel top layer, cioè sopra
     tutto — compresa l'immagine ingrandita.
     """
-    body = _member(APP_JS.read_text(encoding="utf-8"), "handleHardwareBack")
+    body = _member(APP_JS.read_text(encoding="utf-8"), "_closeOverlays")
     chiusura = body.index("this.who.close()")
     lightbox = body.index("image-lightbox")
     assert chiusura < lightbox, "il pannello va chiuso prima dello strato che gli sta sotto"
+
+
+def test_back_leaves_the_notebook_only_after_the_overlays() -> None:
+    """Una pressione, una cosa sola. Chiudere la tendina *e* uscire dal
+    quaderno con lo stesso tasto farebbe sparire due cose per un gesto — e la
+    seconda senza che nessuno l'abbia chiesta."""
+    body = _member(APP_JS.read_text(encoding="utf-8"), "handleHardwareBack")
+    assert "if (this._closeOverlays()) return;" in body, "gli strati non hanno più la precedenza"
+    assert "projectNameOf" in body, "Indietro non riporta più a casa da un quaderno"
+
+
+def test_a_switch_releases_the_turn_that_was_running() -> None:
+    """Il legame che il banco dello scambio non può esercitare: lo fa `init()`,
+    e senza, tutto quel che aspetta un `turn_end` — la faccia di Jenny, la riga
+    di lavoro, il bottone Ferma — resta ad aspettarne uno che è già stato
+    scartato."""
+    body = _member(APP_JS.read_text(encoding="utf-8"), "init")
+    assert "sessionManager.addEventListener('chat:switch'" in body
+    assert "_releaseTurn()" in body
+
+
+def test_a_tapped_alert_lands_in_the_personal_conversation() -> None:
+    """La copia websocket di un avviso proattivo va **sempre** alla chat
+    personale (il fan-out di `runtime/delivery.py` ce la mette d'ufficio):
+    dentro un quaderno quell'avviso non c'è, e aprire "la chat" senza tornare a
+    casa aprirebbe la stanza sbagliata per una notifica appena toccata."""
+    body = _member(APP_JS.read_text(encoding="utf-8"), "openChat")
+    assert "this.switchConversation(null)" in body
 
 
 def test_the_veil_and_escape_are_both_wired() -> None:

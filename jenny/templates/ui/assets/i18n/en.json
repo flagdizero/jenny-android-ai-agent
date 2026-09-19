@@ -925,7 +925,9 @@
   },
   "casa": {
     "empty": "Nothing here yet.\nGo ahead.",
+    "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to Jenny",
+    "placeholderNotebook": "Write to Jenny, in the notebook",
     "send": "Send",
     "wire": {
       "offline": "Connection lost, retrying"
@@ -990,6 +992,7 @@
     "removeAttachment": "Remove attachment",
     "closeImage": "Close",
     "kicker": "personal conversation",
+    "kickerNotebook": "notebook",
     "workshop": "Workshop",
     "backHome": "Back to the house",
     "backHomeHint": "The simple interface: the conversation and nothing else.",

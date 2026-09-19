@@ -23,7 +23,8 @@
 import { ActivityLine } from './casa-activity.js';
 import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
-import { WhoPanel } from './casa-who.js';
+import { WhoPanel, dotColor } from './casa-who.js';
+import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { i18n } from './shared/i18n.js';
@@ -55,12 +56,29 @@ class CasaApp {
     this.kicker = document.getElementById('casa-kicker');
     this.pending = document.getElementById('casa-pending');
 
-    /* «Con chi parli»: il titolo apre la tendina delle conversazioni. Il nome
-       glielo da' il titolo stesso invece di una costante sua — cosi'
-       l'intestazione e il pannello non possono dire due nomi diversi. */
+    /* Il nome della conversazione personale, messo da parte **prima** che il
+       titolo cominci a cambiare. Lo prendeva dal titolo, ed era giusto finche'
+       li' c'era sempre lo stesso nome: da quando il titolo porta il quaderno
+       aperto, la riga personale del pannello direbbe «piante». */
+    this.nameEl = document.querySelector('.casa-who-name');
+    this.dotEl = document.getElementById('casa-who-dot');
+    this._personalName = this.nameEl?.textContent?.trim() || 'Jenny';
+
+    /* Le bozze, una per conversazione. Senza, mezza frase scritta in casa
+       partirebbe dentro il quaderno che apri subito dopo: e' la stessa famiglia
+       di guasto di cui parla `switchGeneration` — quel che dici finisce nel
+       diario di un altro progetto — solo un attimo prima. In memoria e basta:
+       una bozza non e' una cosa da conservare fra due avvii. */
+    this._drafts = new Map();
+
+    /* «Con chi parli»: il titolo apre la tendina delle conversazioni. Il
+       pannello non sa cosa sia una chiave di sessione — dice quale nome hai
+       toccato, e la conversazione la apre questo guscio. */
     this.who = new WhoPanel(document.getElementById('casa-who'), {
       head: document.querySelector('.casa-head'),
-      personalName: () => document.querySelector('.casa-who-name')?.textContent || '',
+      personalName: () => this._personalName,
+      currentProject: () => projectNameOf(sessionManager.currentKey),
+      onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
     });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
@@ -103,6 +121,14 @@ class CasaApp {
     this._applyTranslations();
     i18n.onLocaleChange(() => this._applyTranslations());
 
+    /* Quel che apparteneva alla conversazione lasciata scade qui. Il `turn_end`
+       del turno in volo arrivera' a una chat che non guardiamo piu' e verra'
+       scartato da `_belongsHere`: chi tiene stato *per turno* — la faccia di
+       Jenny, la riga di lavoro, il bottone Ferma — resterebbe ad aspettarlo per
+       sempre. In officina lo stesso evento serve alla stessa cosa
+       (`mobile-jenny.js`, `_releaseTrackedTurn`). */
+    sessionManager.addEventListener('chat:switch', () => this._releaseTurn());
+
     wsManager.addEventListener('chat:open', () => this._setWire(true));
     wsManager.addEventListener('chat:close', () => this._setWire(false));
     wsManager.addEventListener('chat:message', (e) => {
@@ -125,6 +151,7 @@ class CasaApp {
     document.getElementById('casa-who')?.addEventListener('click', () => this.who.toggle());
 
     sessionManager.init();
+    this._applyConversation();
     wsManager.connectChat();
 
     try {
@@ -150,6 +177,74 @@ class CasaApp {
     this._showEmpty(true);
   }
 
+  /* ── Le conversazioni ── */
+
+  /** Apre un'altra conversazione: un quaderno, o la casa (`null`).
+   *
+   *  Non e' una vista che cambia. Sotto una chiave `project:` Jenny lavora
+   *  nella cartella di quel quaderno, si costruisce un altro contesto e
+   *  **non** alimenta la memoria di lungo periodo (v. `session/keys.py`): e'
+   *  un'altra conversazione, e l'intestazione e' la sola cosa a schermo che lo
+   *  dice.
+   *
+   *  Due tocchi ravvicinati si sovrappongono e devono: chi perde e' il primo,
+   *  sempre, e non chi risponde per ultimo. Lo garantisce la generazione che
+   *  `switchTo` fa salire, che `loadThread` rilegge dopo la sua attesa — il
+   *  filo butta da se' la storia di una conversazione gia' lasciata.
+   */
+  async switchConversation(key) {
+    const from = sessionManager.currentKey;
+    const target = key || sessionManager.personalKey;
+    if (target === from) return;
+    /* La bozza resta con la conversazione in cui l'hai scritta. */
+    this._drafts.set(from, this.input?.value || '');
+    if (!sessionManager.switchTo(target)) return;
+    if (this.input) {
+      this.input.value = this._drafts.get(target) || '';
+      this._autosize();
+    }
+    this._applyConversation();
+    try {
+      await this.chat.reload();
+      /* Una lettura riuscita toglie il messaggio d'errore precedente: se
+         restasse, il vuoto di questa conversazione direbbe «non riesco a
+         leggerla» di una storia che abbiamo appena letto. */
+      if (this._threadFailed) {
+        this._threadFailed = false;
+        this._applyTranslations();
+      }
+    } catch (err) {
+      console.error('Conversation switch failed:', err);
+      api.clientLog('error', 'casa.switch', String(err && err.stack || err));
+      this._showThreadError();
+    }
+  }
+
+  /* L'intestazione dice dove sei: l'occhiello, il nome, il pallino — lo stesso
+     colore che ha la riga nel pannello, ed e' l'unica cosa che lega il tocco
+     alla stanza in cui sei finito. */
+  _applyConversation() {
+    const project = projectNameOf(sessionManager.currentKey);
+    if (this.nameEl) this.nameEl.textContent = project || this._personalName;
+    if (this.dotEl) {
+      this.dotEl.hidden = !project;
+      this.dotEl.style.background = project ? dotColor(project) : '';
+    }
+    this._applyTranslations();
+    // Aperto mentre si cambia (non capita col tocco, capita con Indietro).
+    if (this.who?.isOpen) this.who.render();
+  }
+
+  /* Il turno che stava girando nella conversazione lasciata non si chiudera'
+     mai qui dentro: il suo `turn_end` arrivera' e verra' scartato. Si chiude a
+     mano tutto cio' che lo stava aspettando. */
+  _releaseTurn() {
+    this.activity.stop();
+    this.jenny.noteTurnRunning(false);
+    this.jenny.idle();
+    this._setRunning(false);
+  }
+
   /* ── Il contratto col guscio nativo ── */
 
   /** Chiamato da MainActivity.hideLoading a dissolvenza finita. */
@@ -173,13 +268,15 @@ class CasaApp {
   /** Il tasto Home di Android, quando Jenny e' il launcher.
    *
    *  In officina Home smonta cinque livelli di overlay e collassa il
-   *  sotto-stato di ogni sezione. Qui sopra la conversazione non c'e' ancora
-   *  niente da smontare, e Home vuol dire una cosa sola: sei a casa, sei gia'
-   *  arrivato. Si chiude la tastiera, perche' quella si' e' uno strato, e si
-   *  torna in fondo al filo, che e' il presente della conversazione.
+   *  sotto-stato di ogni sezione. Qui Home vuol dire una cosa sola: **sei a
+   *  casa**. Si chiude quel che sta sopra, si torna nella conversazione
+   *  personale — se eri dentro un quaderno, quella e' la casa da cui il tasto
+   *  prende il nome — si chiude la tastiera e si torna in fondo al filo, che e'
+   *  il presente della conversazione.
    */
   goHome() {
-    this.handleHardwareBack();
+    this._closeOverlays();
+    this.switchConversation(null);
     this.input?.blur();
     this.chat.scrollToBottom();
   }
@@ -187,37 +284,59 @@ class CasaApp {
   /** Il tasto Indietro di Android.
    *
    *  In officina e' una catena di cinque livelli di overlay piu' lo stack di
-   *  navigazione. In casa sopra la conversazione c'e' una cosa sola che si puo'
-   *  chiudere, l'immagine ingrandita — e sotto non c'e' nessuna schermata
-   *  precedente, perche' la casa e' una schermata sola.
+   *  navigazione. In casa gli strati sono due — la tendina e l'immagine
+   *  ingrandita — e sotto c'e' una cosa sola da cui si puo' tornare: un
+   *  quaderno. Indietro allora e' la porta di casa, cioe' la conversazione
+   *  personale.
    *
-   *  Alla radice **non si fa niente**, e non e' una dimenticanza: questa app e'
-   *  il launcher del telefono, e Indietro non deve mai chiudere il task.
+   *  Nella conversazione personale, senza niente sopra, **non si fa niente**, e
+   *  non e' una dimenticanza: questa app e' il launcher del telefono, e
+   *  Indietro non deve mai chiudere il task.
+   *
+   *  Una pressione, una cosa sola: chiudere la tendina *e* uscire dal quaderno
+   *  con lo stesso tasto farebbe sparire due cose per un gesto.
    */
   handleHardwareBack() {
-    /* La tendina per prima: `showModal()` la mette nel top layer, quindi e' lo
-       strato piu' in alto che ci sia. Aperta, copre il filo con il suo velo —
-       da li' non si apre nessuna immagine — quindi le due cose non convivono e
-       l'ordine e' una garanzia, non una scelta fra due candidati. */
+    if (this._closeOverlays()) return;
+    if (projectNameOf(sessionManager.currentKey)) this.switchConversation(null);
+  }
+
+  /** Chiude cio' che sta sopra la conversazione. Vero se c'era qualcosa.
+   *
+   *  La tendina per prima: `showModal()` la mette nel top layer, quindi e' lo
+   *  strato piu' in alto che ci sia. Aperta, copre il filo con il suo velo — da
+   *  li' non si apre nessuna immagine — quindi le due cose non convivono e
+   *  l'ordine e' una garanzia, non una scelta fra due candidati.
+   */
+  _closeOverlays() {
     if (this.who.isOpen) {
       this.who.close();
-      return;
+      return true;
     }
     const lightbox = document.querySelector('.image-lightbox');
     if (lightbox) {
       if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
       else lightbox.remove();
+      return true;
     }
+    return false;
   }
 
   /** Il tocco su un avviso proattivo: porta *in chat*.
    *
-   *  In officina significa cambiare vista; qui la chat e' l'unica cosa che
-   *  c'e', quindi vuol dire togliere di mezzo cio' che la copre e riportarsi
-   *  sul presente della conversazione.
+   *  **Nella conversazione personale**, e non in quella che stavi guardando:
+   *  la copia websocket di un avviso proattivo va sempre li' (il fan-out di
+   *  `runtime/delivery.py` ce la mette d'ufficio), quindi dentro un quaderno
+   *  quell'avviso non c'e' — e portarti "in chat" lasciandoti dove sei
+   *  vorrebbe dire aprire la stanza sbagliata per una notifica che hai appena
+   *  toccato.
+   *
+   *  Qui gli strati si chiudono **e** si torna a casa: non e' un tasto
+   *  Indietro, e' un indirizzo.
    */
   openChat() {
-    this.handleHardwareBack();
+    this._closeOverlays();
+    this.switchConversation(null);
     this.chat.scrollToBottom();
     return true;
   }
@@ -429,7 +548,16 @@ class CasaApp {
 
      Il frammento `#turn=` resta nell'URL dopo che il segreto e' stato consumato
      e tolto: l'officina oggi non lo legge ancora, e non fa danno — quando lo
-     leggera', da questa parte non c'e' niente da cambiare. */
+     leggera', da questa parte non c'e' niente da cambiare.
+
+     **Da dentro un quaderno questa porta apre l'officina sulla conversazione
+     personale**, ed e' un buco noto, non una svista: nessuno dei due gusci
+     ricorda la chiave aperta (nessun `localStorage`), quindi l'officina riparte
+     sempre da `websocket:default`. Chiuderlo vuol dire passarle la chiave nel
+     frammento e insegnarle a leggerla — lavoro nell'altro guscio, che non legge
+     ancora nemmeno il `#turn=` che gli mandiamo da mesi. Il chip dell'officina
+     dice comunque a voce alta dove sei finito, che e' il motivo per cui questo
+     buco costa poco. */
   _openInWorkshop(turnId) {
     const target = turnId ? `/html-mobile/officina.html#turn=${encodeURIComponent(turnId)}`
                           : '/html-mobile/officina.html';
@@ -473,16 +601,26 @@ class CasaApp {
   }
 
   _applyTranslations() {
+    /* Tre frasi cambiano con la conversazione, e cambiano insieme: dentro un
+       quaderno il vuoto non dice «comincia tu» ma che quella conversazione non
+       c'e' ancora *e resta li'*, che e' l'unico punto in cui si puo' dire senza
+       spiegarlo che questa e' un'altra stanza. */
+    const inNotebook = !!projectNameOf(sessionManager.currentKey);
     if (this.emptyText) {
-      this.emptyText.textContent = i18n.t(this._threadFailed ? 'casa.threadError' : 'casa.empty');
+      const empty = inNotebook ? 'casa.emptyNotebook' : 'casa.empty';
+      this.emptyText.textContent = i18n.t(this._threadFailed ? 'casa.threadError' : empty);
     }
-    if (this.input) this.input.placeholder = i18n.t('casa.placeholder');
+    if (this.input) {
+      this.input.placeholder = i18n.t(inNotebook ? 'casa.placeholderNotebook' : 'casa.placeholder');
+    }
+    if (this.kicker) {
+      this.kicker.textContent = i18n.t(inNotebook ? 'casa.kickerNotebook' : 'casa.kicker');
+    }
     if (this.send) {
       this.send.setAttribute('aria-label', i18n.t(this._running ? 'casa.stop' : 'casa.send'));
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('casa.attach'));
     if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.workshop'));
-    if (this.kicker) this.kicker.textContent = i18n.t('casa.kicker');
     const whoBtn = document.getElementById('casa-who');
     if (whoBtn) whoBtn.setAttribute('aria-label', i18n.t('casa.who.open'));
     // Aperta mentre la lingua cambia: le sue righe sono gia' a schermo.

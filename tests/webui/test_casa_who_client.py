@@ -7,12 +7,12 @@ non, la cache che sopravvive a una lettura fallita — stanno in
 misura **quel che finisce a schermo**, che e' l'altra meta' e non si deduce
 dalla prima: un elenco giusto disegnato nell'ordine sbagliato resta sbagliato.
 
-E si misura una decisione: **in questo giro un tocco non cambia conversazione**
-(`.agent/casa-who-plan.md`, D1). Quindi le righe dei quaderni non sono bottoni e
-non portano ne' chevron ne' spunta — un tocco che non fa niente e' una promessa
-non mantenuta. La spunta ce l'ha la riga personale, dove e' vera. Il giorno che
-lo scambio arriva quel test va cambiato di proposito, che e' esattamente cio'
-che deve costare.
+E si misura cosa fa un tocco: apre quella conversazione, e la spunta segue
+quella in cui sei. Per un giro non e' stato cosi' — le righe erano inerti e i
+banchi garantivano l'inerzia (`.agent/casa-who-plan.md`, D1) — e quei due
+banchi sono stati **rovesciati**, non cancellati: chi li vede passare oggi deve
+sapere che promettono il contrario di ieri. Le righe delle cartelle non
+apribili sono rimaste inerti, e quella proprieta' ha un banco suo.
 
 I membri si estraggono dal sorgente e si eseguono in node, come gli altri
 banchi della casa; `conversation-list.js` invece si importa **vero**, perche'
@@ -91,8 +91,15 @@ function makeEl(tag) {
     listeners: [],
     children: [],
     setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type) { el.listeners.push(type); },
+    addEventListener(type, fn) { el.listeners.push({ type, fn }); },
     appendChild(child) { el.children.push(child); return child; },
+    classList: {
+      add(...names) {
+        const have = String(el.className).split(' ').filter(Boolean);
+        el.className = [...have, ...names.filter((n) => !have.includes(n))].join(' ');
+      },
+      contains(name) { return String(el.className).split(' ').includes(name); },
+    },
   };
   Object.defineProperty(el, 'innerHTML', {
     get() { return ''; },
@@ -118,15 +125,41 @@ class Panel {
     this._trigger = makeEl('button');
     this._head = null;
     this._personalName = () => 'Jenny';
+    this._currentProject = () => null;
+    /* Cosa e' successo e in che ordine: il pannello deve chiudersi **prima** di
+       cambiare conversazione, o lo scambio si scoprirebbe gia' finito dietro un
+       pannello ancora aperto. */
+    this.storia = [];
+    this._onPick = (name) => this.storia.push('scelto:' + name);
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = makeEl('div');
   }
+  close() { this.storia.push('chiuso'); }
   __RENDER__
   __LABEL__
   __NOTE__
   __PERSONAL_ROW__
   __ROW__
+  __COMMAND__
+  __MAYBE_CHECK__
+  __PICK__
+}
+
+/* Tutti i nodi, in ordine di disegno. */
+function walk(el, out = []) {
+  for (const c of el.children) { out.push(c); walk(c, out); }
+  return out;
+}
+
+function righeDi(panel) {
+  return walk(panel._body).filter((n) => String(n.className).split(' ')[0] === 'casa-who-row');
+}
+
+function tocca(riga) {
+  const click = riga.listeners.find((l) => l.type === 'click');
+  assert.ok(click, 'quella riga non risponde a un tocco');
+  click.fn();
 }
 
 /* Quel che si legge nel pannello, dall'alto in basso: ogni nodo con il suo
@@ -182,6 +215,9 @@ def _harness() -> str:
         .replace("__NOTE__", _member(src, "_note"))
         .replace("__PERSONAL_ROW__", _member(src, "_personalRow"))
         .replace("__ROW__", _member(src, "_row"))
+        .replace("__COMMAND__", _member(src, "_command"))
+        .replace("__MAYBE_CHECK__", _member(src, "_maybeCheck"))
+        .replace("__PICK__", _member(src, "_pick"))
     )
 
 
@@ -208,8 +244,13 @@ def test_the_panel_opens_on_the_conversation_you_are_in() -> None:
     """)
 
 
-def test_the_name_is_the_one_the_header_shows() -> None:
-    """Il nome lo da' il titolo: il pannello e l'intestazione non possono dirne due."""
+def test_the_personal_row_keeps_its_own_name() -> None:
+    """Il nome arriva dal guscio e non si legge dal titolo.
+
+    Lo leggeva di li', ed era giusto finche' nel titolo c'era sempre lo stesso
+    nome. Da quando il titolo porta il quaderno aperto, quella fonte farebbe
+    dire «piante» alla riga della conversazione personale.
+    """
     _run_js("""
       const panel = await open(ELENCO);
       panel._personalName = () => 'Qualcunaltra';
@@ -320,38 +361,92 @@ def test_an_unknown_reason_is_not_told_the_name_rule() -> None:
     """)
 
 
-# ── Cosa il pannello non promette ───────────────────────────────────────────
+# ── Cosa fa un tocco ────────────────────────────────────────────────────────
 
 
-def test_a_notebook_row_is_not_a_button() -> None:
-    """D1: in questo giro un tocco non cambia conversazione, e la riga non deve
-    far credere il contrario. Il giorno che lo scambio arriva questo test si
-    cambia di proposito — ed e' quel che deve costare."""
+def test_a_notebook_row_is_a_command() -> None:
+    """Per un giro non lo e' stato (D1), e il banco di allora garantiva
+    l'inerzia: e' stato rovesciato di proposito, non cancellato."""
     _run_js("""
       const panel = await open(ELENCO);
-      const walk = (el, out = []) => {
-        for (const c of el.children) { out.push(c); walk(c, out); }
-        return out;
-      };
-      const righe = walk(panel._body)
-        .filter((n) => String(n.className).split(' ')[0] === 'casa-who-row');
-      assert.equal(righe.length, 4);
-      for (const riga of righe) {
-        assert.notEqual(riga.tag, 'button', 'una riga e\\' diventata un bottone');
-        assert.deepEqual(riga.listeners, [], 'una riga risponde a un tocco');
+      const aperte = righeDi(panel).filter((r) => !String(r.className).includes('is-blocked'));
+      assert.equal(aperte.length, 4, 'la personale piu\\' i tre quaderni');
+      for (const riga of aperte) {
+        assert.equal(riga.tag, 'button', 'una riga ha smesso di essere un comando');
       }
     """)
 
 
-def test_only_the_row_you_are_on_carries_the_check() -> None:
+def test_the_name_you_touch_is_the_name_that_comes_back() -> None:
+    """Il pannello non sa cosa sia una chiave di sessione: dice il nome, e la
+    conversazione la apre chi lo ospita."""
     _run_js("""
       const panel = await open(ELENCO);
-      const walk = (el, out = []) => {
-        for (const c of el.children) { out.push(c); walk(c, out); }
-        return out;
-      };
+      const etf = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));
+      tocca(etf);
+      assert.deepEqual(panel.storia, ['chiuso', 'scelto:etf'],
+                       'il pannello deve chiudersi prima di cambiare conversazione');
+    """)
+
+
+def test_the_personal_row_takes_you_home() -> None:
+    """Senza, da dentro un quaderno il pannello saprebbe solo portarti altrove."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      panel._currentProject = () => 'etf';
+      panel.render();
+      const casa = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
+      tocca(casa);
+      assert.deepEqual(panel.storia, ['chiuso', 'scelto:null']);
+    """)
+
+
+def test_a_folder_that_does_not_open_is_not_a_command() -> None:
+    """Il gateway rifiuta quella chiave (`_envelope_chat_id`): un bottone qui
+    sarebbe una promessa gia' smentita dall'altra parte."""
+    _run_js("""
+      const panel = await open({
+        dir: 'wikis', projects: [{ name: 'piante', modified: 1 }],
+        unopenable: [{ name: 'Ricerca ETF', modified: 1, reason: 'invalid_name' }],
+      });
+      const bloccate = righeDi(panel).filter((r) => String(r.className).includes('is-blocked'));
+      assert.equal(bloccate.length, 1);
+      assert.notEqual(bloccate[0].tag, 'button');
+      assert.deepEqual(bloccate[0].listeners, [], 'una cartella rotta risponde al tocco');
+    """)
+
+
+def test_only_the_row_you_are_on_carries_the_check() -> None:
+    """Una sola, e su quella giusta: la spunta dice dove sei, non cos'e' la
+    riga personale."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      const spunte = (p) => walk(p._body).filter((n) => String(n.className).includes('ti-check'));
+      const marcata = (p) => righeDi(p).find((r) => String(r.className).includes('is-current'));
+
+      assert.equal(spunte(panel).length, 1);
+      assert.ok(String(marcata(panel).className).includes('is-personal'));
+
+      panel._currentProject = () => 'etf';
+      panel.render();
+      assert.equal(spunte(panel).length, 1, 'due spunte: una delle due mente');
+      const riga = marcata(panel);
+      assert.ok(riga.children.some((c) => c.textContent === 'etf'));
+      assert.equal(riga.attrs['aria-current'], 'true',
+                   'la spunta e\\' decorativa: chi non la vede deve saperlo lo stesso');
+    """)
+
+
+def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
+    """Sei dentro un quaderno che l'elenco non porta piu' (rinominato, o
+    cancellato da un'altra superficie): meglio nessuna spunta che una spunta
+    sulla casa, dove non sei."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      panel._currentProject = () => 'sparito';
+      panel.render();
       const spunte = walk(panel._body).filter((n) => String(n.className).includes('ti-check'));
-      assert.equal(spunte.length, 1, 'la spunta e\\' vera solo sulla conversazione aperta');
+      assert.equal(spunte.length, 0, 'la spunta e\\' finita su una conversazione che non e\\' tua');
     """)
 
 
@@ -373,10 +468,6 @@ def test_a_blocked_row_has_no_colour_at_all() -> None:
         dir: 'wikis', projects: [{ name: 'piante', modified: 1 }],
         unopenable: [{ name: 'Ricerca ETF', modified: 1, reason: 'invalid_name' }],
       });
-      const walk = (el, out = []) => {
-        for (const c of el.children) { out.push(c); walk(c, out); }
-        return out;
-      };
       const pallini = walk(panel._body).filter((n) => String(n.className) === 'casa-who-dot');
       assert.equal(pallini.length, 2);
       assert.ok(pallini[0].style.background, 'il quaderno ha perso il suo colore');

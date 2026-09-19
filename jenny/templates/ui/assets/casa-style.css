@@ -55,6 +55,13 @@ body.casa {
   margin-bottom: 2px;
 }
 
+/* Il titolo cede, la porta no. Un nome di quaderno arriva a 64 caratteri: senza
+   `min-width: 0` una scatola flex non si stringe sotto il proprio contenuto, e
+   quel nome spingerebbe il bottone dell'officina fuori dallo schermo. */
+.casa-title {
+  min-width: 0;
+}
+
 .casa-title h1 {
   margin: 0;
   font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
@@ -595,7 +602,21 @@ body.casa {
   -webkit-tap-highlight-color: transparent;
 }
 
+.casa-who-open {
+  max-width: 100%;
+}
+
+/* Il nome tronca; il chevron e il pallino no. Sono i due pezzi che dicono
+   *cos'e'* questo titolo, e un nome lungo non deve mangiarseli. */
+.casa-who-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .casa-who-open i {
+  flex: none;
   font-size: 18px;
   color: var(--text-muted);
 }
@@ -672,16 +693,31 @@ body.casa {
   overscroll-behavior: contain;
 }
 
-/* Una riga **non e' un bottone**, e non deve sembrarlo: in questo giro un
-   tocco non cambia conversazione, e un tocco che non fa niente e' una
-   promessa non mantenuta. Niente chevron, niente spunta, nessuno stato di
-   pressione. La spunta ce l'ha la riga personale, dove e' vera. */
+/* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
+   vestito da bottone — il pannello e' una lista, non una pulsantiera — e tiene
+   solo cio' che un comando deve avere: tutta la larghezza, il testo a sinistra,
+   e qualcosa che risponde al dito. */
 .casa-who-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 42px;
   padding: 2px 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Il solo segnale di pressione: senza, su un telefono un tocco su una riga
+   sembra non essere stato registrato fino a quando la chat non si e' gia'
+   ricaricata. */
+.casa-who-row:not(.is-blocked):active {
+  background: var(--surface-2);
 }
 
 .casa-who-row + .casa-who-row {
@@ -729,10 +765,20 @@ body.casa {
   background: var(--text-faint);
 }
 
+/* Lo stesso pallino, nel titolo. Un filo piu' piccolo: li' sta accanto a un
+   nome di 26 px e deve accompagnarlo, non annunciarlo. */
+.casa-title-dot {
+  width: 9px;
+  height: 9px;
+}
+
 /* Una cartella che non si apre e' una cosa da sistemare, non una scelta: il
-   pallino perde il colore e la riga si smorza. */
+   pallino perde il colore, la riga si smorza, e resta un `<div>` — il gateway
+   rifiuterebbe quella chiave, quindi un bottone qui sarebbe una promessa gia'
+   smentita dall'altra parte. */
 .casa-who-row.is-blocked {
   color: var(--text-muted);
+  cursor: default;
 }
 
 .casa-who-note {

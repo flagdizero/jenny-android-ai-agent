@@ -925,7 +925,9 @@
   },
   "casa": {
     "empty": "Non c'è ancora niente qui.\nComincia tu.",
+    "emptyNotebook": "Questo quaderno c’è, la conversazione no.\nQuello che scrivi qui resta qui.",
     "placeholder": "Scrivi a Jenny",
+    "placeholderNotebook": "Scrivi a Jenny, nel quaderno",
     "send": "Manda",
     "wire": {
       "offline": "Filo interrotto, sto riprovando"
@@ -993,6 +995,7 @@
     "removeAttachment": "Togli l'allegato",
     "closeImage": "Chiudi",
     "kicker": "conversazione personale",
+    "kickerNotebook": "quaderno",
     "workshop": "Officina",
     "backHome": "Torna alla casa",
     "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
