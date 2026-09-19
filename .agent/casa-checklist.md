@@ -517,3 +517,54 @@ schermo.
 L'interfaccia sul telefono e' in inglese perche' lo e' la lingua scelta li'.
 
 Test verdi (9.741) e provati contro nove difetti messi apposta.
+
+## Ritocco — il telefono sa cosa sia un video, e lo dice prima
+
+`image-handler.js` aveva **due** secchi (immagini <=4, tutto il resto <=4) e un
+commento che diceva «cap per-tipo allineati al server»: non lo erano. Il gateway
+ne ha **tre** e i video li accetta a **uno**. Quindi due video passavano di qui
+e li rifiutava il server a messaggio gia' partito — cioe' esattamente il caso
+che quei tetti esistono per evitare.
+
+Ora i secchi sono tre, specchio di `classify_media_item` ordine compreso. Il
+ripiego sul nome resta **solo per le immagini**, come di la': darlo anche ai
+video rifarebbe nascere la divergenza al contrario.
+
+E **niente sparisce piu' in silenzio**. Il `continue` muto era la seconda meta'
+del difetto: sceglievi cinque foto, ne comparivano quattro, e nessuno diceva
+quale mancasse. Il rifiuto locale usa il codice del gateway, quindi si legge
+identico a uno remoto: **toast in officina** (che ce l'ha, ed e' la forma giusta
+per una risposta al composer) e **la stessa riga nel filo in casa**, che il
+toast non ce l'ha.
+
+Il contratto confronta numeri, insiemi di MIME e vocabolario delle due parti.
+Rimettendo i due secchi diventano rossi sette test: e' la misura che avrebbe
+trovato la divergenza senza doverci inciampare.
+
+### Due difetti trovati mentre lo provavo, e sono quelli veri
+
+**La riga finiva sotto il bordo.** `.casa-pending` e' *fratello* del composer,
+non figlio, quindi il `ResizeObserver` messo sul composer per la geometria di
+Jenny non la vedeva comparire. Il filo e' `flex: 1`: ogni riga che spunta sotto
+gli toglie altezza e il fondo scivola fuori schermo. Valeva anche per l'ultimo
+messaggio quando alleghi una foto, e c'era da sempre.
+
+**E sotto c'era di peggio.** Il primo rimedio non mordeva, perche' la bandierina
+era gia' abbassata: quando il contenitore si accorcia il browser emette uno
+`scroll` che nessun dito ha causato, e `_stick = _atBottom()` lo prendeva per un
+gesto. Da quel momento la chat **smetteva di seguire i messaggi nuovi** — bastava
+allegare una foto. I due casi si distinguono dalla direzione: solo un dito porta
+`scrollTop` indietro.
+
+Il listener e' uscito dal costruttore perche' una chiusura anonima li' dentro
+non si puo' esercitare — e il primo banco che ci ho provato **passava a vuoto**:
+non agganciava niente, `_stick` restava vero, ed era proprio quello che
+asseriva. Terza volta in questo lavoro che un test guarda il meccanismo invece
+del risultato.
+
+### Misurato sul Titan 2
+
+Due `.mp4` selezionati insieme: ne entra **uno**, e comparo «Too many videos in
+one message» — riga sobria nel filo in casa (visibile senza scorrere), pastiglia
+rossa in officina. Prima dello stesso giro, con due video allegati e mandati, il
+rifiuto arrivava dal gateway: nessuna bolla, riga, e il testo tornato nel campo.
