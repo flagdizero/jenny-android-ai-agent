@@ -127,6 +127,45 @@ divergere dalla verità al primo salvataggio.
    schede e non sul contenitore che scorre — quello prenderebbe anche le
    pressioni sopra la sua metà scoperta, che è il modo in cui la si mette via.
 
+## Sul Titan 2
+
+Build release dal worktree al commit, firmata (`CN=flagDiZero`), zero `[jenny]`
+nel log, installata sopra la precedente. Poi, in ordine:
+
+* **l'avatar al posto della chiave**, «You and Jenny» coi sette temi leggibili
+  e «Jenny — small · floating ›»: quella riga legge il config vero, e su questo
+  telefono la finestra flottante è accesa e il permesso c'è;
+* **una regola scritta nella casella e salvata.** «Salva» compare solo dopo il
+  primo carattere. Dopo il tocco, sul telefono:
+  `.jenny/soul_rules.md` con le parole, e dentro `SOUL.md` il blocco marcato —
+  log: `SOUL.md: user rules re-projected (34 chars)`;
+* **la potatura simulata**: tolto il blocco da `SOUL.md` con `sed` via `su`,
+  cioè esattamente quel che una passata può fare;
+* **una passata di Dream vera, forzata** portando `nextRunAtMs` al passato
+  (scattata dopo 4 min e 28 s, dentro i 5 del `max_sleep_ms`):
+
+  ```
+  16:33:46.111  Cron: executing job 'dream'
+  16:33:46.144  Dream memory budget: … SOUL.md 2597/3000 (86%) | runs since review: 8
+  16:33:46.151  Dream: nothing to process
+  16:33:46.171  SOUL.md: user rules re-projected (34 chars)
+  16:33:46.193  Cron: job 'dream' completed
+  ```
+
+  Il blocco è tornato **identico**, e `memory/.dream_review` è delle 16:33 —
+  la passata ha chiuso il suo ciclo davvero, non è stato un tick respinto;
+* **la casella svuotata**: `soul_rules.md` sparisce e il blocco esce da
+  `SOUL.md` (`re-projected (0 chars)`), con le 27 righe di lei intatte.
+
+**Una cosa aperta, vista in quella riga di log.** Su questa installazione
+`SOUL.md` ha un budget di 3 000 caratteri ed è all'86%: restano ~400 caratteri
+di margine, mentre il tetto delle regole è 2 000. Un testo lungo ci passerebbe
+sopra, e a quel punto le scritture *di Dream* verrebbero rifiutate dal budget —
+`stuck` sale e parte un review forzato. La via pulita non è abbassare il tetto:
+è **non contare il blocco dell'utente** dentro quel budget, perché quel budget
+esiste per limitare ciò che Dream scrive, e quelle righe non sono sue. Con i
+default (budget a 0, non applicato) il caso non esiste.
+
 ## Le mutazioni
 
 18, tutte rosse. Tre erano verdi al primo giro, e le tre ragioni sono diverse:
