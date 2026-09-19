@@ -654,7 +654,10 @@ class WebSocketChannel(OutboundSenderMixin):
                 return
             content = envelope.get("content")
             if not isinstance(content, str):
-                await self._send_event(connection, "error", detail="missing content")
+                await self._send_event(
+                    connection, "error",
+                    detail="missing content", reason="missing_content",
+                )
                 return
 
             raw_media = envelope.get("media")
@@ -681,7 +684,10 @@ class WebSocketChannel(OutboundSenderMixin):
 
             # Allow image-only turns (content may be empty when media is attached).
             if not content.strip() and not media_paths:
-                await self._send_event(connection, "error", detail="missing content")
+                await self._send_event(
+                    connection, "error",
+                    detail="missing content", reason="missing_content",
+                )
                 return
 
             # Auto-attach on first use so clients can one-shot without a separate attach.
@@ -733,7 +739,10 @@ class WebSocketChannel(OutboundSenderMixin):
         if t == "rpc":
             await self._handle_rpc(connection, envelope)
             return
-        await self._send_event(connection, "error", detail=f"unknown type: {t!r}")
+        await self._send_event(
+            connection, "error",
+            detail=f"unknown type: {t!r}", reason="unknown_type",
+        )
 
     # -- RPC client→server -------------------------------------------------
 
@@ -802,7 +811,10 @@ class WebSocketChannel(OutboundSenderMixin):
         """
         task_id = normalize_task_id(envelope.get("task_id"))
         if task_id is None:
-            await self._send_event(connection, "error", detail="invalid task_id")
+            await self._send_event(
+                connection, "error",
+                detail="invalid task_id", reason="invalid_task_id",
+            )
             return
         since = normalize_since(envelope.get("since"))
         cursor = await self.send_subagent_activity_window(connection, task_id, since=since)
@@ -828,7 +840,10 @@ class WebSocketChannel(OutboundSenderMixin):
         """``{"type": "subagent_unwatch", "task_id": ...}``. Idempotente."""
         task_id = normalize_task_id(envelope.get("task_id"))
         if task_id is None:
-            await self._send_event(connection, "error", detail="invalid task_id")
+            await self._send_event(
+                connection, "error",
+                detail="invalid task_id", reason="invalid_task_id",
+            )
             return
         self._subagent_watches.unwatch(connection, task_id)
         await self._send_event(
