@@ -104,7 +104,7 @@ Salvare è **un comando** e non `workspace.write` su un path, perché salvare
 vuol dire due scritture: se la casa ne facesse una, la copia comincerebbe a
 divergere dalla verità al primo salvataggio.
 
-## Tre cose che lo schermo ha corretto
+## Cinque cose che lo schermo ha corretto
 
 1. **Sei nomi di tema su sette cominciano per «Jenny».** A 56 px quella parola
    si mangiava quella che distingue: la striscia diceva «Jenny Ky…», «Jenny
@@ -118,6 +118,14 @@ divergere dalla verità al primo salvataggio.
 3. **Il rig serve la copia estratta all'avvio**, non il file che stai
    modificando: un cambio al JS non si vede finché non lo riavvii. È la stessa
    trappola del telefono, un gradino più in basso.
+4. **«Synthwave» non ci stava**, e il rig non lo diceva: a 56 px sul Titan si
+   leggeva «Synthwa…» perché là il font rende più largo. Le pastiglie sono 64,
+   e sette da 64 con dodici di aria stanno nei 554 px che restano a schermo.
+5. **Le schede devono essere opache per coprirla.** Quella dell'officina era
+   `--overlay`, che è semi-trasparente: lei si vedeva *attraverso*, con
+   «osserva, regola, ripara» letto sopra la sua faccia. E il `z-index` va sulle
+   schede e non sul contenitore che scorre — quello prenderebbe anche le
+   pressioni sopra la sua metà scoperta, che è il modo in cui la si mette via.
 
 ## Le mutazioni
 
