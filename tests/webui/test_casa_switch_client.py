@@ -178,12 +178,20 @@ class App {
       open: () => this.fatti.push('tu aperta'),
       showVersion: (v) => this.versioni.push(v),
       sayJenny: (v) => { this.valoreJenny = v; },
+      sayModel: (v) => { this.valoreModello = v; },
     };
     this.jennyRoom = {
       applyTranslations: () => {},
       open: () => this.fatti.push('jenny aperta'),
       setFloating: (v) => this.flottanti.push(v),
       value: () => 'piccola',
+    };
+    this.impostazioniDate = [];
+    this.modelRoom = {
+      applyTranslations: () => {},
+      open: () => this.fatti.push('modello aperta'),
+      setSettings: (v) => this.impostazioniDate.push(v),
+      value: () => 'OpenCode',
     };
     this.view = 'chat';
     this._jennyWasOut = true;

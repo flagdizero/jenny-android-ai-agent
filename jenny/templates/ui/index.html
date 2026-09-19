@@ -207,6 +207,16 @@
       <!-- Lei. La riga dice come sta adesso — «piccola · flottante» — perche'
            una riga che non porta il suo valore e' un collegamento. -->
       <div class="casa-rows">
+        <!-- Chi risponde. La riga porta la **marca**, non l'id del modello:
+             un id sta fra i venti e i trenta caratteri e in questa riga ci
+             starebbe troncato, che e' l'errore gia' pagato una volta sulle
+             pastiglie dei temi. L'id sta dentro, dove c'e' larghezza. -->
+        <button class="casa-row" id="casa-row-model" type="button">
+          <i class="ti ti-message-2" aria-hidden="true"></i>
+          <span class="casa-row-label" id="casa-model-label"></span>
+          <span class="casa-row-value" id="casa-model-value"></span>
+          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+        </button>
         <button class="casa-row" id="casa-row-jenny" type="button">
           <i class="ti ti-flower" aria-hidden="true"></i>
           <span class="casa-row-label" id="casa-jenny-label"></span>
@@ -278,6 +288,54 @@
                   autocapitalize="sentences" spellcheck="false"></textarea>
         <div class="casa-card-note" id="casa-rules-note"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ── La sesta stanza: «Chi risponde» ─────────────────────────────────
+       Le marche configurate, la chiave di quella guardata, e i modelli che
+       quella marca dichiara. La tavola `Modello.dc.html`.
+
+       **Toccare una mattonella non cambia chi risponde**: mostra i suoi
+       modelli. Il cambio e' il tocco su un modello, e salva modello e
+       provider **insieme** — v. `casa-model.js`. -->
+  <section class="casa-model-room" id="casa-model-room">
+    <div class="casa-tu-scroll">
+
+      <div class="casa-card">
+        <div class="casa-card-head">
+          <i class="ti ti-message-2" aria-hidden="true"></i>
+          <span class="casa-card-label" id="casa-providers-label"></span>
+          <span class="casa-card-value" id="casa-providers-value"></span>
+        </div>
+        <div class="casa-brands" id="casa-providers" role="radiogroup"></div>
+
+        <!-- La chiave della marca **guardata**. Il suggerimento offuscato
+             arriva dal server; la chiave vera non torna mai al client, quindi
+             il campo parte vuoto e quel che non riscrivi resta com'e'. -->
+        <div class="casa-key" id="casa-key-row" hidden>
+          <span class="casa-key-label" id="casa-key-label"></span>
+          <span class="casa-key-hint" id="casa-key-hint"></span>
+          <button class="casa-key-btn" id="casa-key-btn" type="button"></button>
+        </div>
+        <div class="casa-key-edit" id="casa-key-edit" hidden>
+          <input class="casa-key-input" id="casa-key-input" type="password"
+                 autocomplete="off" autocapitalize="none" spellcheck="false">
+          <button class="casa-save" id="casa-key-save" type="button"></button>
+        </div>
+      </div>
+
+      <div class="casa-card">
+        <div class="casa-card-head">
+          <i class="ti ti-cpu" aria-hidden="true"></i>
+          <span class="casa-card-label" id="casa-models-label"></span>
+        </div>
+        <div class="casa-models" id="casa-models" role="radiogroup"></div>
+        <div class="casa-card-note" id="casa-models-note" hidden></div>
+      </div>
+
+      <!-- Alcuni cambi valgono dal turno dopo, altri vogliono un riavvio: lo
+           dice il payload, e va detto invece di lasciarlo indovinare. -->
+      <div class="casa-card-note is-warn" id="casa-model-restart" hidden></div>
     </div>
   </section>
 

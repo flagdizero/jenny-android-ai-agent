@@ -22,7 +22,7 @@ insiemi di classi: un nome che vuol dire due cose lo dice prima del telefono.
 
 ---
 
-## 1. Officina: un bottone, e di un altro colore
+## 1. Officina: un bottone, e di un altro colore — **fatto**
 
 **La tavola.** Una scheda **scura su pagina chiara**, con l'icona d'accento e
 il sottotitolo muto. È l'unica cosa invertita della pagina, e lo è perché di là
@@ -38,11 +38,24 @@ chiara la scheda è scura, e viceversa — ma **va guardata su tutti e sette**
 prima di dire che funziona: «Jenny Fumetto» e «Y2K» hanno fondi molto chiari e
 testi molto scuri, e lì l'inversione è la più violenta.
 
-Peso: minuti. È la prima cosa da fare.
+**Com'è andata.** Invertita: fondo `--text`, inchiostro `--bg`, opaca. Il
+pezzo che non era minuti è l'icona. `--accent` su un fondo `--text` è
+**invisibile in Chanel — che è il tema di partenza — e in Fumetto**, perché in
+tutti e due l'accento *è* il testo. Misurato sul rig con `--accent` su tutti e
+sette:
+
+    chanel 1,00 · fumetto 1,00   l'accento è il fondo della scheda
+    sticker 2,41 · pietra 2,69   sotto la soglia di 3:1 per un oggetto grafico
+    synthwave 3,06 · kyoto 3,68 · y2k 4,58
+
+Da cui `--accent-on-text`: i tre che passano tengono la tinta, gli altri
+quattro prendono `--bg`, che sta sopra 10:1 per costruzione. Un tema nuovo
+eredita il default sicuro. Un banco rifà quel conto su ogni blocco di tema,
+cascata compresa.
 
 ---
 
-## 2. Chi risponde
+## 2. Chi risponde — **fatto, versione (a)**
 
 **La tavola** (`Modello.dc.html`) disegna tre cose: una fila di **mattonelle
 di marca** (OpenCode Go, OpenAI, Anthropic, DeepSeek, Groq, OpenRouter,
@@ -90,7 +103,37 @@ Due cose da decidere mentre si fa (a):
 2. **`requires_restart`.** Alcuni cambi valgono dal turno dopo, altri no. La
    stanza deve dirlo con una riga, non lasciarlo indovinare.
 
-Peso: è la più grossa delle cinque.
+**Com'è andata.** La stanza c'è: `casa-model.js`, 18 banchi in node, 13
+mutazioni rosse. Le decisioni prese strada facendo:
+
+* **Toccare una mattonella non cambia chi risponde**, mostra i suoi modelli.
+  Il cambio è il tocco su un modello, e salva `model` e `default_provider`
+  **insieme** — è il punto del redesign dell'officina, e vale anche qui: fra
+  due chiamate separate esisterebbe davvero una config con un modello che il
+  provider attivo non conosce.
+* **Nessuna parola accanto ai modelli**, come previsto: c'è l'id, e il titolo
+  dice di chi è l'elenco.
+* **Il modello in uso sta in cima anche se il provider non lo elenca** — un id
+  battuto a mano in officina, o un elenco che non è arrivato.
+* **Due provider della stessa marca** (`opencode_go` e `opencode_zen` sono
+  entrambi «OpenCode») tengono i loro nomi configurati: due pastiglie identiche
+  di cui una accesa sono peggio di due nomi tecnici.
+
+**Tre difetti li ha trovati il rig, non i banchi** — ed è la ragione per cui il
+rig si guarda:
+
+1. la riga «Chiave» si vedeva **senza nessuna marca da guardare**: `[hidden]`
+   è a specificità zero e `display: flex` lo scavalca. La casa l'aveva già
+   pagata due volte (`.casa-back`, `.casa-version`); adesso c'è un banco che
+   cerca il caso da solo, in tutte e tre le stanze;
+2. la scheda diceva **«Modelli di OpenCode» sopra i modelli di Anthropic**: il
+   titolo leggeva chi *risponde* invece di chi stai *guardando*;
+3. nei temi chiari `--overlay` e `--overlay-strong` sono quasi lo stesso
+   bianco, e **non si distingueva quale elenco stessi leggendo**. Adesso la
+   pastiglia guardata è piena e quella che risponde porta un segno di spunta —
+   l'anello d'accento da solo sparisce dove l'accento è il testo.
+
+Resta **(b)**, aggiungere una marca nuova da casa: costa il piano dei preset.
 
 ---
 
@@ -167,12 +210,12 @@ Peso: piccolo il codice, tua la decisione.
 
 ---
 
-## Ordine proposto
+## Ordine, e a che punto è
 
-1. **Officina invertita** — minuti, e si vede subito.
-2. **Chi risponde (a)** — la più richiesta, e non dipende da niente.
+1. ~~**Officina invertita**~~ — fatta.
+2. ~~**Chi risponde (a)**~~ — fatta.
 3. **Aggiornamenti** — con l'estrazione del flusso condiviso.
 4. **Backup** — col record dell'ultimo export.
-5. **Sostenitori** — quando mi dici da dove vengono i nomi.
+5. **Sostenitori** — quando l'utente dice da dove vengono i nomi.
 
-Le prime quattro non hanno bisogno di niente da te per partire. La quinta sì.
+Le prime quattro non hanno bisogno di niente da lui per partire. La quinta sì.

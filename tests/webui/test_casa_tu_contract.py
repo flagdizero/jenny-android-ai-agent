@@ -84,7 +84,7 @@ def test_the_rooms_arrive_on_the_phone() -> None:
     """Un file fuori dal manifest non da' 404: `_serve_static` ricade
     sull'officina. Il difetto si vede solo sul telefono, ed e' una stanza che
     non si apre."""
-    for asset in ("assets/casa-tu.js", "assets/casa-jenny.js"):
+    for asset in ("assets/casa-tu.js", "assets/casa-jenny.js", "assets/casa-model.js"):
         assert asset in _UI_MANIFEST, (
             f"{asset} non e' nel manifest: sul telefono la stanza non esiste"
         )
@@ -316,9 +316,9 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
 
     html = INDEX.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="casa-(?:tu|jenny-room)".*?</section>', html, re.S
+        r'<section class="casa-(?:tu|jenny-room|model-room)".*?</section>', html, re.S
     )
-    assert len(stanze) == 2, f"le due stanze non si trovano piu' ({len(stanze)})"
+    assert len(stanze) == 3, f"le tre stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
     for stanza in stanze:
         for valore in re.findall(r'class="([^"]+)"', stanza):
@@ -447,3 +447,89 @@ def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> N
             f"tema «{tema}»: l'icona dell'officina e' {risolto} su un fondo "
             f"{valori['text']} — contrasto {rapporto:.2f}:1, sotto la soglia di 3:1"
         )
+
+
+# ── «Chi risponde» ──────────────────────────────────────────────────────────
+
+
+def test_who_answers_is_a_row_that_carries_its_value() -> None:
+    """Una riga che non porta il suo valore e' un collegamento, non
+    un'impostazione. Qui il valore e' la **marca**: un id di modello sta fra i
+    venti e i trenta caratteri e in quella riga finirebbe troncato — l'errore
+    gia' pagato una volta sulle pastiglie dei temi."""
+    html = INDEX.read_text(encoding="utf-8")
+    for el_id in ("casa-row-model", "casa-model-label", "casa-model-value"):
+        assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
+    tu = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('casa-row-model')" in tu and "onModel?.()" in tu, (
+        "la riga non chiama piu' indietro"
+    )
+    assert "onModel: () => this.openModel()," in _app(), (
+        "il guscio non lega piu' la riga alla stanza"
+    )
+
+
+def test_the_room_of_who_answers_starts_with_its_notes_closed() -> None:
+    """Quattro nodi nascono `hidden`, e non e' decorazione: la riga della
+    chiave senza un provider guardato, il campo prima che tu lo apra, la nota
+    dell'elenco e quella del riavvio. Un banco parte da quello stato
+    (`test_casa_model_client.py`), quindi se il markup cambiasse il banco
+    misurerebbe una stanza che non esiste."""
+    html = INDEX.read_text(encoding="utf-8")
+    for el_id in ("casa-key-row", "casa-key-edit", "casa-models-note", "casa-model-restart"):
+        riga = re.search(rf'<[^>]*id="{el_id}"[^>]*>', html)
+        assert riga, f"{el_id} non esiste nel guscio"
+        assert " hidden" in riga.group(0), f"{el_id} non nasce piu' chiuso"
+
+
+def test_the_key_field_never_carries_a_key() -> None:
+    """La chiave vera non torna mai al client — il payload porta solo un
+    suggerimento offuscato. Il campo quindi nasce vuoto e non si fa ricordare
+    da nessuno: un `value` nel markup, o un autocomplete acceso, rimetterebbe
+    dentro qualcosa che poi verrebbe salvato al posto della chiave buona."""
+    html = INDEX.read_text(encoding="utf-8")
+    campo = re.search(r'<input[^>]*id="casa-key-input"[^>]*>', html)
+    assert campo, "il campo della chiave non esiste"
+    assert 'type="password"' in campo.group(0), "la chiave si legge a schermo mentre la incolli"
+    assert 'autocomplete="off"' in campo.group(0), "il campo si fa ricordare dal browser"
+    assert "value=" not in campo.group(0), "il markup mette qualcosa dentro il campo"
+    model = (ASSETS / "casa-model.js").read_text(encoding="utf-8")
+    assert "api_key_hint" in model, "la stanza non legge piu' il suggerimento offuscato"
+    assert not re.search(r"\.api_key\b(?!_hint)", model), (
+        "la stanza legge `api_key` dal payload: li' non c'e', e se ci fosse "
+        "sarebbe la chiave vera tornata al client"
+    )
+
+
+def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
+    """`[hidden]` e' a specificita' zero: una classe con `display` lo scavalca.
+
+    La casa quel difetto l'ha gia' pagato due volte — `.casa-back` e
+    `.casa-version` portano tutte e due il loro `[hidden]` con un commento —
+    e una terza volta con la riga della chiave, che si vedeva senza nessuna
+    marca da guardare. Un caso per volta e' una riga di CSS; il banco invece
+    li cerca tutti, anche quelli di domani.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    stanze = re.findall(
+        r'<section class="casa-(?:tu|jenny-room|model-room)".*?</section>', html, re.S
+    )
+    assert stanze, "le stanze non si trovano piu'"
+
+    guasti = []
+    for stanza in stanze:
+        for tag in re.findall(r"<[a-z]+[^>]*\bhidden\b[^>]*>", stanza):
+            classi = re.search(r'class="([^"]+)"', tag)
+            if not classi:
+                continue
+            for classe in classi.group(1).split():
+                corpo = _rule(css, f".{classe}")
+                if not re.search(r"\n  display: (?!none)", corpo):
+                    continue
+                if f".{classe}[hidden]" not in css:
+                    guasti.append(classe)
+    assert not guasti, (
+        f"queste classi accendono un elemento che nasce chiuso: {sorted(set(guasti))} "
+        "— serve una regola `[hidden]` che le batta"
+    )

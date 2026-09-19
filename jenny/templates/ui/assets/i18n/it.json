@@ -1058,6 +1058,26 @@
     "map": {
       "noLinks": "Le pagine non si rimandano ancora l’una all’altra: la mappa compare quando cominciano a farlo.",
       "failed": "Non sono riuscita a caricare la mappa."
+    },
+    "model": {
+      "title": "Chi risponde",
+      "who": "Chi risponde",
+      "none": "da configurare",
+      "models": "Modelli di {provider}",
+      "saved": "Adesso risponde questo",
+      "failed": "Non sono riuscita a cambiarlo.",
+      "loading": "Chiedo l'elenco…",
+      "needsKey": "Serve una chiave per farsi dare l'elenco.",
+      "needsBase": "Manca l'indirizzo del provider: si mette in officina.",
+      "listFailed": "L'elenco non è arrivato. Quello in uso resta quello che vedi sopra.",
+      "key": "Chiave",
+      "keyNone": "nessuna",
+      "keyAdd": "Aggiungi",
+      "keyChange": "Cambia",
+      "keySave": "Salva",
+      "keySaved": "Chiave salvata",
+      "keyPlaceholder": "incolla qui la chiave",
+      "restart": "Questo cambio vale dal prossimo avvio."
     }
   }
 }

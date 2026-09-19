@@ -26,6 +26,7 @@ import { CasaMascot } from './casa-mascot.js';
 import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
 import { CasaJenny } from './casa-jenny.js';
+import { CasaModel } from './casa-model.js';
 import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -61,6 +62,7 @@ const BACK_TO = {
   reader: 'pages',
   tu: 'chat',
   jenny: 'tu',
+  model: 'tu',
 };
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
@@ -116,10 +118,15 @@ class CasaApp {
     this.tu = new CasaTu({
       onWorkshop: () => this._openInWorkshop(null),
       onJenny: () => this.openJenny(),
+      onModel: () => this.openModel(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
     this.jennyRoom = new CasaJenny({ onChange: () => this.tu.sayJenny(this.jennyRoom.value()) });
+    /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
+       `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
+       riga di «Tu e Jenny» resterebbe sulla marca di prima. */
+    this.modelRoom = new CasaModel({ onSettings: (data) => this._keepSettings(data) });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
        sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
@@ -383,6 +390,8 @@ class CasaApp {
     this.tu.showVersion(data?.version?.current);
     this.jennyRoom.setFloating(data?.floating || null);
     this.tu.sayJenny(this.jennyRoom.value());
+    this.modelRoom.setSettings(data);
+    this.tu.sayModel(this.modelRoom.value());
   }
 
   /** La stanza di lei: com'e' fatta. Ci si arriva solo da «Tu e Jenny», che
@@ -391,6 +400,23 @@ class CasaApp {
   openJenny() {
     this._setView('jenny');
     this.jennyRoom.open();
+  }
+
+  /** «Chi risponde»: le marche configurate e i loro modelli. Ci si arriva da
+   *  «Tu e Jenny», che ha gia' chiesto `/api/settings`. */
+  openModel() {
+    this._setView('model');
+    this.modelRoom.open();
+  }
+
+  /* Il payload fresco che torna da un salvataggio: ha la stessa forma di
+     `/api/settings`, quindi prende il posto di quello in cache e le righe che
+     lo leggono si riscrivono. Senza, la riga «Chi risponde» direbbe la marca
+     di prima fino al riavvio della casa. */
+  _keepSettings(data) {
+    if (!data) return;
+    this._settings = Promise.resolve(data);
+    this.tu.sayModel(this.modelRoom.value());
   }
 
   /* `/api/settings` **una volta**, per due stanze: la versione la scrive «Tu e
@@ -485,6 +511,7 @@ class CasaApp {
     if (!inChat && this.view === 'pages') this._setHeadTitle(notebook);
     if (this.view === 'tu') this._setHeadTitle(i18n.t('casa.tu.title'));
     if (this.view === 'jenny') this._setHeadTitle(i18n.t('casa.jenny.title'));
+    if (this.view === 'model') this._setHeadTitle(i18n.t('casa.model.title'));
     this._applyBackLabel();
   }
 
@@ -954,6 +981,7 @@ class CasaApp {
     this._applyBackLabel();
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
     this.tu?.applyTranslations();
+    this.modelRoom?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.tu?.sayJenny(this.jennyRoom?.value());
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));

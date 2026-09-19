@@ -46,8 +46,9 @@ export function shortThemeName(label) {
 
 export class CasaTu {
   /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre.
-   *  @param onJenny     la riga che porta da lei. */
-  constructor({ onWorkshop, onJenny } = {}) {
+   *  @param onJenny     la riga che porta da lei.
+   *  @param onModel     la riga che porta a chi risponde. */
+  constructor({ onWorkshop, onJenny, onModel } = {}) {
     this.el = document.getElementById('casa-tu');
     this.themesEl = document.getElementById('casa-themes');
     this.themeLabel = document.getElementById('casa-theme-label');
@@ -58,12 +59,16 @@ export class CasaTu {
     this.versionEl = document.getElementById('casa-version');
     this.jennyLabel = document.getElementById('casa-jenny-label');
     this.jennyValue = document.getElementById('casa-jenny-value');
+    this.modelLabel = document.getElementById('casa-model-label');
+    this.modelValue = document.getElementById('casa-model-value');
     this._painted = false;
 
     document.getElementById('casa-workshop')
       ?.addEventListener('click', () => onWorkshop?.());
     document.getElementById('casa-row-jenny')
       ?.addEventListener('click', () => onJenny?.());
+    document.getElementById('casa-row-model')
+      ?.addEventListener('click', () => onModel?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
       if (card) this.pickTheme(card.dataset.theme);
@@ -92,11 +97,17 @@ export class CasaTu {
     if (this.jennyValue) this.jennyValue.textContent = value || '';
   }
 
+  /** Chi risponde, sulla riga che porta a sceglierlo: la marca. */
+  sayModel(value) {
+    if (this.modelValue) this.modelValue.textContent = value || '';
+  }
+
   applyTranslations() {
     if (this.themeLabel) this.themeLabel.textContent = i18n.t('settings.themeLabel');
     if (this.workshopName) this.workshopName.textContent = i18n.t('casa.workshop');
     if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
     if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('casa.jenny.title');
+    if (this.modelLabel) this.modelLabel.textContent = i18n.t('casa.model.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();

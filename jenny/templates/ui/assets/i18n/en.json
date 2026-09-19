@@ -1055,6 +1055,26 @@
     "map": {
       "noLinks": "The pages do not point to each other yet: the map appears once they start to.",
       "failed": "I could not load the map."
+    },
+    "model": {
+      "title": "Who answers",
+      "who": "Who answers",
+      "none": "not set up yet",
+      "models": "{provider} models",
+      "saved": "This one answers now",
+      "failed": "I could not change it.",
+      "loading": "Asking for the list…",
+      "needsKey": "A key is needed before the list can be fetched.",
+      "needsBase": "This provider has no address yet: set it in the workshop.",
+      "listFailed": "The list did not arrive. The one in use is still the one above.",
+      "key": "Key",
+      "keyNone": "none",
+      "keyAdd": "Add",
+      "keyChange": "Replace",
+      "keySave": "Save",
+      "keySaved": "Key saved",
+      "keyPlaceholder": "paste the key here",
+      "restart": "This change takes effect at the next start."
     }
   }
 }

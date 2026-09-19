@@ -854,9 +854,9 @@ body.casa {
 }
 
 /* ── Le stanze ───────────────────────────────────────────────────────────
-   La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono quattro
-   — la conversazione, le pagine di un quaderno, una pagina, «Tu e Jenny» — e
-   quale sia a schermo
+   La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono sei —
+   la conversazione, le pagine di un quaderno, una pagina, «Tu e Jenny», lei,
+   e chi risponde — e quale sia a schermo
    lo dice **un attributo solo** su `.casa-shell`. Il JS lo scrive, il resto lo
    decide qui: cosi' la geometria sta in un posto, e chi legge il guscio non
    deve inseguire cinque `hidden` per sapere cosa occupa lo spazio.
@@ -867,7 +867,8 @@ body.casa {
 .casa-pages,
 .casa-reader,
 .casa-tu,
-.casa-jenny-room {
+.casa-jenny-room,
+.casa-model-room {
   display: none;
   flex: 1;
   min-height: 0;
@@ -877,7 +878,8 @@ body.casa {
 .casa-shell[data-view='pages'] .casa-pages,
 .casa-shell[data-view='reader'] .casa-reader,
 .casa-shell[data-view='tu'] .casa-tu,
-.casa-shell[data-view='jenny'] .casa-jenny-room { display: flex; }
+.casa-shell[data-view='jenny'] .casa-jenny-room,
+.casa-shell[data-view='model'] .casa-model-room { display: flex; }
 
 .casa-shell:not([data-view='chat']) .casa-thread,
 .casa-shell:not([data-view='chat']) .casa-empty,
@@ -1593,3 +1595,172 @@ body.casa {
 
 .casa-save[hidden] { display: none; }
 .casa-save:active { filter: brightness(0.94); }
+
+/* ── «Chi risponde» ──────────────────────────────────────────────────────
+   Le marche configurate in una striscia che scorre di lato, come i temi: qui
+   pero' la pastiglia dice **due** cose diverse — chi risponde adesso (anello
+   d'accento) e di chi stai leggendo i modelli (fondo acceso). Sono due stati
+   separati apposta: si guarda un elenco prima di sceglierlo, e un elenco che
+   cambiasse anche chi risponde lo cambierebbe **prima** di scegliere. */
+
+.casa-brands {
+  display: flex;
+  gap: 8px;
+  margin: 6px -14px 2px;
+  padding: 2px 14px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.casa-brands::-webkit-scrollbar { display: none; }
+
+.casa-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--overlay);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Di chi stai leggendo l'elenco: piena. Era `--overlay-strong`, e nei temi
+   chiari quello e' quasi lo stesso bianco di `--overlay` — a schermo non si
+   distingueva l'elenco che stavi leggendo (visto sul rig, tema Y2K). Il pieno
+   invertito invece si vede per costruzione in tutti e sette, ed e' la stessa
+   coppia della scheda dell'officina. */
+.casa-brand.is-viewing {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* Chi risponde adesso. L'anello d'accento **e** il segno di spunta, perche'
+   l'anello da solo sparisce dove l'accento e' il testo — che e' il fondo
+   della pastiglia piena. Il segno prende `currentColor` e regge entrambi. */
+.casa-brand.is-on { border-color: var(--accent); }
+.casa-brand > .ti-check { flex: none; font-size: 13px; }
+
+.casa-brand-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  /* Il colore di marca e' spesso vicino al fondo del tema — «Ollama» e'
+     bianco, «Jan» e' nero: un cerchietto nudo sparirebbe in un tema su due.
+     `currentColor` e non un token: sulla pastiglia piena il testo e' `--bg`,
+     e un anello di `--border-strong` — che e' il colore del testo annacquato
+     — sarebbe invisibile proprio li'. */
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+/* ── La chiave ── */
+
+.casa-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+/* `display: flex` qui sopra scavalca `[hidden]`, che e' a specificita' zero:
+   senza questa riga la riga della chiave si vede anche quando non c'e'
+   nessuna marca da guardare. La casa quella trappola l'ha gia' pagata due
+   volte — v. `.casa-back[hidden]` e `.casa-version[hidden]`. */
+.casa-key[hidden] { display: none; }
+
+.casa-key-label { flex: none; font-size: 13px; }
+
+.casa-key-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.casa-key-hint.is-faint { color: var(--text-faint); font-family: inherit; }
+
+.casa-key-btn {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.casa-key-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.casa-key-edit[hidden] { display: none; }
+
+.casa-key-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.casa-key-input:focus { outline: none; border-color: var(--accent); }
+
+/* ── I modelli ── */
+
+.casa-models {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -14px;
+}
+
+.casa-model {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.casa-model:active { background: var(--overlay); }
+.casa-model.is-on { color: var(--text); }
+.casa-model.is-on > .ti-check { color: var(--accent); }
+
+.casa-model-id {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.casa-model > .ti { flex: none; font-size: 16px; }
