@@ -1002,7 +1002,18 @@
       "personal": "personal",
       "notebooks": "Notebooks",
       "none": "No notebooks yet.",
-      "loadFailed": "I could not read the list: what you see may be incomplete."
+      "loadFailed": "I could not read the list: what you see may be incomplete.",
+      "newNotebook": "New notebook",
+      "create": {
+        "name": "Notebook name:",
+        "taken": "A notebook “{name}” already exists. If it was left half-built I’ll finish it, otherwise the creation will be refused.",
+        "seedRequired": "I need one line on what the notebook is about: without it the chat starts on nothing.",
+        "created": "Notebook “{name}” created",
+        "wikiOff": "Wikis are switched off in the settings, and a notebook is a wiki: turn them back on and try again.",
+        "rejected": "I could not create “{name}”: either it already exists, or a folder with that name is in the way and is not a notebook.",
+        "leftover": "There is still the chat of a notebook that no longer exists under this name: {count} messages. I can pick it back up — if you deleted it by mistake it is all there — or start clean and throw it away.",
+        "leftoverNoCount": "There is still the chat of a notebook that no longer exists under this name. I can pick it back up — if you deleted it by mistake it is all there — or start clean and throw it away."
+      }
     }
   }
 }

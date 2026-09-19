@@ -131,6 +131,7 @@ class Panel {
        pannello ancora aperto. */
     this.storia = [];
     this._onPick = (name) => this.storia.push('scelto:' + name);
+    this._onCreate = () => this.storia.push('nuovo');
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = makeEl('div');
@@ -144,6 +145,7 @@ class Panel {
   __COMMAND__
   __MAYBE_CHECK__
   __PICK__
+  __NEW_ROW__
 }
 
 /* Tutti i nodi, in ordine di disegno. */
@@ -153,7 +155,15 @@ function walk(el, out = []) {
 }
 
 function righeDi(panel) {
-  return walk(panel._body).filter((n) => String(n.className).split(' ')[0] === 'casa-who-row');
+  return walk(panel._body).filter((n) => {
+    const cls = String(n.className);
+    return cls.split(' ')[0] === 'casa-who-row' && !cls.includes('casa-who-new');
+  });
+}
+
+/* Il comando in fondo, tenuto da parte: non è una conversazione. */
+function nuovoDi(panel) {
+  return walk(panel._body).find((n) => String(n.className).includes('casa-who-new'));
 }
 
 function tocca(riga) {
@@ -174,7 +184,8 @@ function readout(panel) {
         out.push((cls.includes('is-error') ? 'guasto: ' : 'nota: ') + child.textContent);
       } else if (cls.split(' ')[0] === 'casa-who-row') {
         const parts = child.children.map((c) => c.textContent).filter(Boolean);
-        const mark = cls.includes('is-personal') ? 'io' : (cls.includes('is-blocked') ? 'x' : '-');
+        const mark = cls.includes('casa-who-new') ? '+'
+          : (cls.includes('is-personal') ? 'io' : (cls.includes('is-blocked') ? 'x' : '-'));
         out.push(mark + ' ' + parts.join(' · '));
       } else walk(child);
     }
@@ -218,6 +229,7 @@ def _harness() -> str:
         .replace("__COMMAND__", _member(src, "_command"))
         .replace("__MAYBE_CHECK__", _member(src, "_maybeCheck"))
         .replace("__PICK__", _member(src, "_pick"))
+        .replace("__NEW_ROW__", _member(src, "_newRow"))
     )
 
 
@@ -240,7 +252,7 @@ def test_the_panel_opens_on_the_conversation_you_are_in() -> None:
       const panel = await open(ELENCO);
       const righe = readout(panel);
       assert.equal(righe[0], 'etichetta: Con chi parli');
-      assert.equal(righe[1], 'io Jenny · personale');
+      assert.equal(righe[1], 'io ✿ · Jenny · personale');
     """)
 
 
@@ -473,4 +485,58 @@ def test_a_blocked_row_has_no_colour_at_all() -> None:
       assert.ok(pallini[0].style.background, 'il quaderno ha perso il suo colore');
       assert.equal(pallini[1].style.background, undefined,
                    'una cartella che non si apre non deve avere un colore suo');
+    """)
+
+# ── Il fiore, e il comando in fondo ─────────────────────────────────────────
+
+
+def test_the_house_row_carries_jennys_flower() -> None:
+    """Non è un colore assegnato a un nome: è il segno che Jenny ha già nel dock
+    e nella riga d'identità dell'officina. Per questo la riga personale non ha
+    un pallino — non è un quaderno fra i quaderni."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      const casa = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
+      const fiore = casa.children.find((c) => String(c.className).includes('casa-who-flower'));
+      assert.ok(fiore, 'la riga della casa ha perso il fiore');
+      assert.equal(fiore.textContent, '✿');
+      assert.ok(!casa.children.some((c) => String(c.className) === 'casa-who-dot'),
+                'la casa si è presa anche un pallino da quaderno');
+    """)
+
+
+def test_the_new_notebook_row_is_a_command_of_the_panel() -> None:
+    """Chiude il pannello e passa la parola a chi lo ospita: le due domande e le
+    cinque regole stanno nel giro condiviso, non qui."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      const nuovo = nuovoDi(panel);
+      assert.ok(nuovo, 'manca «Nuovo quaderno»');
+      assert.equal(nuovo.tag, 'button');
+      assert.ok(readout(panel).at(-1).startsWith('+ '), 'non è in fondo al pannello');
+      tocca(nuovo);
+      assert.deepEqual(panel.storia, ['chiuso', 'nuovo']);
+    """)
+
+
+def test_the_new_notebook_row_does_not_scroll_away() -> None:
+    """Dentro l'elenco sarebbe l'ultima delle conversazioni: con dodici quaderni
+    si raggiungerebbe solo scorrendo fino in fondo. È un comando del pannello."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      const elenco = walk(panel._body).find((n) => String(n.className) === 'casa-who-list');
+      assert.ok(elenco, 'manca la parte che scorre');
+      const dentro = walk(elenco).some((n) => String(n.className).includes('casa-who-new'));
+      assert.ok(!dentro, '«Nuovo quaderno» è finito dentro la parte che scorre');
+    """)
+
+
+def test_you_can_make_the_first_notebook_from_an_empty_panel() -> None:
+    """Il momento in cui quel comando serve di più è anche quello in cui non c'è
+    nessuna riga sotto cui metterlo."""
+    _run_js("""
+      const panel = await open({ dir: 'wikis', projects: [], unopenable: [] });
+      assert.ok(nuovoDi(panel), 'niente quaderni e nessun modo di farne uno');
+      const rotto = await open('fail');
+      assert.ok(nuovoDi(rotto), 'una lettura fallita si è portata via anche il comando');
     """)

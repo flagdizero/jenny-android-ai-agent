@@ -29,6 +29,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "casa-app.js"
+CREATE_JS = ASSETS / "shared" / "project-create.js"
 WHO_JS = ASSETS / "casa-who.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
@@ -47,6 +48,13 @@ def _member(source: str, name: str) -> str:
     )
     assert m, f"{name} non trovato"
     return m.group(1) + "\n  }"
+
+
+def _const_block(source: str, name: str) -> str:
+    """Una costante di modulo su più righe, presa dal sorgente e non riscritta."""
+    m = re.search(rf"(?ms)^(?:export )?const {re.escape(name)} = \{{.*?^\}};$", source)
+    assert m, f"const {name} non trovata"
+    return m.group(0).removeprefix("export ")
 
 
 def _function(source: str, name: str) -> str:
@@ -104,6 +112,20 @@ const sessionManager = {
 
 __DOT_COLOR__
 
+/* I due vocabolari, presi dai sorgenti: quello dell'officina e quello di casa,
+   che dal primo eredita tutto quel che non dice «progetto». */
+__PROJECT_WORDS__
+__NOTEBOOK_WORDS__
+
+/* Il giro di creazione è esercitato dal suo banco; qui si misura l'aggancio —
+   con quali parole viene chiamato, e cosa succede dopo. */
+let createOutcome = null;
+const creations = [];
+function createProjectFlow(spec) {
+  creations.push(spec);
+  return Promise.resolve(createOutcome);
+}
+
 class App {
   constructor() {
     this.nameEl = makeEl('span');
@@ -136,6 +158,8 @@ class App {
       idle: () => this.fatti.push('quiete'),
     };
     this.who = {
+      known: [{ name: 'piante', modified: 1 }],
+      invalidate: () => this.fatti.push('elenco da rileggere'),
       isOpen: false,
       close: () => { this.who.isOpen = false; this.fatti.push('tendina chiusa'); },
       render: () => {},
@@ -153,10 +177,13 @@ class App {
   __GO_HOME__
   __OPEN_CHAT__
   __APPLY_TRANSLATIONS__
+  __CREATE_NOTEBOOK__
 }
 
 function casa() {
   lightbox = null;
+  createOutcome = null;
+  creations.length = 0;
   sessionManager.currentKey = sessionManager.personalKey;
   const app = new App();
   app._applyConversation();
@@ -182,7 +209,14 @@ def _harness() -> str:
         .replace("__GO_HOME__", _member(src, "goHome"))
         .replace("__OPEN_CHAT__", _member(src, "openChat"))
         .replace("__APPLY_TRANSLATIONS__", _member(src, "_applyTranslations"))
+        .replace("__CREATE_NOTEBOOK__", _member(src, "createNotebook"))
+        .replace("__PROJECT_WORDS__", _const_block(_read_create(), "PROJECT_WORDS"))
+        .replace("__NOTEBOOK_WORDS__", _const_block(src, "NOTEBOOK_WORDS"))
     )
+
+
+def _read_create() -> str:
+    return CREATE_JS.read_text(encoding="utf-8")
 
 
 def _run_js(script: str) -> None:
@@ -389,4 +423,55 @@ def test_a_reading_that_works_takes_the_error_back() -> None:
       await app.switchConversation(null);
       assert.equal(app._threadFailed, false);
       assert.ok(app.emptyText.textContent.includes('Comincia tu'), app.emptyText.textContent);
+    """)
+
+
+# ── Un quaderno nuovo ───────────────────────────────────────────────────────
+
+
+def test_the_house_asks_in_its_own_words() -> None:
+    """Il giro di creazione è uno solo e non sa come si chiami quel che crea:
+    prende le chiavi da chi lo chiama. Qui si controlla che la casa gliene passi
+    di sue **solo** dove l'officina direbbe «progetto» — e che la regola dei
+    nomi resti una, citata da un punto solo."""
+    _run_js("""
+      const proprie = Object.keys(NOTEBOOK_WORDS)
+        .filter((k) => NOTEBOOK_WORDS[k] !== PROJECT_WORDS[k]);
+      assert.ok(proprie.length >= 6, 'la casa ha smesso di parlare come casa');
+      for (const k of proprie) {
+        assert.ok(NOTEBOOK_WORDS[k].startsWith('casa.'), k + ' non è una parola di casa');
+      }
+      assert.equal(NOTEBOOK_WORDS.invalidName, PROJECT_WORDS.invalidName,
+                   'la regola dei nomi è stata copiata una seconda volta');
+      for (const k of Object.keys(PROJECT_WORDS)) {
+        assert.ok(NOTEBOOK_WORDS[k], 'manca un posto del vocabolario: ' + k);
+      }
+    """)
+
+
+def test_a_notebook_created_is_a_notebook_you_are_in() -> None:
+    """Aver dato un nome e scritto la riga di scope senza finire dentro
+    lascerebbe a metà il gesto cominciato."""
+    _run_js("""
+      const app = casa();
+      createOutcome = 'orto';
+      await app.createNotebook();
+      assert.equal(creations[0].words, NOTEBOOK_WORDS);
+      assert.deepEqual(creations[0].known, [{ name: 'piante', modified: 1 }],
+                       'i nomi già noti non vengono dal pannello');
+      assert.ok(app.fatti.includes('elenco da rileggere'), 'la cache è rimasta vecchia');
+      assert.equal(sessionManager.currentKey, 'project:orto');
+    """)
+
+
+def test_a_creation_that_did_not_happen_opens_nothing() -> None:
+    """Annullata, rifiutata o chiusa: il giro torna `null` in tutte le uscite
+    che non hanno scritto su disco, e nessuna di quelle deve portare dentro un
+    quaderno che non c'è."""
+    _run_js("""
+      const app = casa();
+      createOutcome = null;
+      await app.createNotebook();
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.deepEqual(app.fatti, []);
     """)

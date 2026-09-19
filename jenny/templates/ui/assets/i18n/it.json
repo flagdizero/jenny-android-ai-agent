@@ -1005,7 +1005,18 @@
       "personal": "personale",
       "notebooks": "Quaderni",
       "none": "Non hai ancora nessun quaderno.",
-      "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto."
+      "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto.",
+      "newNotebook": "Nuovo quaderno",
+      "create": {
+        "name": "Nome del quaderno:",
+        "taken": "Un quaderno “{name}” c’è già. Se era rimasto a metà lo completo, altrimenti la creazione verrà rifiutata.",
+        "seedRequired": "Serve una riga su cos’è il quaderno: senza, la chat parte a vuoto.",
+        "created": "Quaderno “{name}” creato",
+        "wikiOff": "Le wiki sono spente nelle impostazioni, e un quaderno è una wiki: riaccendile e riprova.",
+        "rejected": "Non ho potuto creare “{name}”: o esiste già, o una cartella con quel nome è di mezzo e non è un quaderno.",
+        "leftover": "Sotto questo nome c’è ancora la chat di un quaderno che non c’è più: {count} messaggi. Posso riprenderla — se l’avevi cancellato per sbaglio è tutta lì — oppure partire pulito e buttarla.",
+        "leftoverNoCount": "Sotto questo nome c’è ancora la chat di un quaderno che non c’è più. Posso riprenderla — se l’avevi cancellato per sbaglio è tutta lì — oppure partire pulito e buttarla."
+      }
     }
   }
 }

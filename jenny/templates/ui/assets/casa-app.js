@@ -25,6 +25,7 @@ import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
+import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { i18n } from './shared/i18n.js';
@@ -37,6 +38,25 @@ import './shared/theme.js';
    tutte vorrebbe dire far lampeggiare una riga d'allarme mentre non e' successo
    niente. Si parla solo se il silenzio dura. */
 const WIRE_GRACE_MS = 2_500;
+
+/* Le stesse domande dell'officina, dette come si dicono in casa.
+ *
+ *  Il giro di creazione e' uno solo (`shared/project-create.js`) e non sa come
+ *  si chiami quel che sta creando: prende le chiavi da qui. Si sovrascrivono
+ *  **solo** le frasi che dicono «progetto» — invalidName no, perche' la regola
+ *  dei nomi e' una e citarla due volte vorrebbe dire tenerne due allineate.
+ */
+const NOTEBOOK_WORDS = {
+  ...PROJECT_WORDS,
+  namePrompt: 'casa.who.create.name',
+  nameTaken: 'casa.who.create.taken',
+  seedRequired: 'casa.who.create.seedRequired',
+  created: 'casa.who.create.created',
+  wikiOff: 'casa.who.create.wikiOff',
+  rejected: 'casa.who.create.rejected',
+  leftoverBody: 'casa.who.create.leftover',
+  leftoverBodyNoCount: 'casa.who.create.leftoverNoCount',
+};
 
 class CasaApp {
   constructor() {
@@ -79,6 +99,7 @@ class CasaApp {
       personalName: () => this._personalName,
       currentProject: () => projectNameOf(sessionManager.currentKey),
       onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
+      onCreate: () => this.createNotebook(),
     });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
@@ -218,6 +239,28 @@ class CasaApp {
       api.clientLog('error', 'casa.switch', String(err && err.stack || err));
       this._showThreadError();
     }
+  }
+
+  /** Un quaderno nuovo, e ci si entra.
+   *
+   *  Le due domande — come si chiama, di cosa si occupa — e tutto quel che puo'
+   *  andare storto stanno in `shared/project-create.js`, che e' lo stesso giro
+   *  che fa l'officina. Qui c'e' quel che e' di casa: le parole, i nomi gia'
+   *  noti per l'avviso, e dove si va dopo.
+   *
+   *  Ci si entra, e non e' un di piu': aver dato un nome e scritto la riga di
+   *  scope senza finire nella conversazione vorrebbe dire lasciare a meta' il
+   *  gesto che l'utente ha cominciato.
+   */
+  async createNotebook() {
+    const name = await createProjectFlow({
+      words: NOTEBOOK_WORDS,
+      t: (key, vars) => i18n.t(key, vars),
+      known: this.who.known,
+    });
+    if (!name) return;
+    this.who.invalidate();              // l'elenco su disco e' cambiato
+    await this.switchConversation(projectKey(name));
   }
 
   /* L'intestazione dice dove sei: l'occhiello, il nome, il pallino — lo stesso

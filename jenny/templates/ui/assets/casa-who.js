@@ -52,13 +52,16 @@ export class WhoPanel {
    *         dove sta la spunta.
    *  @param onPick chiamata col nome del quaderno toccato — `null` per la
    *         conversazione personale.
+   *  @param onCreate chiamata da «Nuovo quaderno». Le due domande e le regole
+   *         stanno in `shared/project-create.js`: qui c'e' solo la riga.
    */
-  constructor(trigger, { head, personalName, currentProject, onPick }) {
+  constructor(trigger, { head, personalName, currentProject, onPick, onCreate }) {
     this._trigger = trigger;
     this._head = head;
     this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
+    this._onCreate = onCreate || null;
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = null;
@@ -66,6 +69,20 @@ export class WhoPanel {
 
   get isOpen() {
     return Boolean(this._dialog && this._dialog.open);
+  }
+
+  /** I quaderni che il pannello conosce, per chi sta per crearne uno.
+   *
+   *  Puo' essere vecchio o non essere mai stato letto, ed e' previsto: chi lo
+   *  usa lo usa per un *avviso*, non per un rifiuto (v. `project-create.js`).
+   */
+  get known() {
+    return this._list.projects || [];
+  }
+
+  /** L'elenco su disco e' cambiato: si rilegge alla prossima apertura. */
+  invalidate() {
+    this._list.invalidate();
   }
 
   toggle() {
@@ -174,6 +191,33 @@ export class WhoPanel {
         list.appendChild(this._note(i18n.t(key, { rule: i18n.t('scope.invalidName') })));
       }
     }
+
+    /* **Fuori dall'elenco che scorre.** Nella tavola sta in fondo alle righe, e
+       dentro l'elenco lo sarebbe davvero: con dodici quaderni si troverebbe
+       sotto un bordo, raggiungibile solo scorrendo fino in fondo. E' un comando
+       del pannello, non l'ultima delle conversazioni. */
+    body.appendChild(this._newRow());
+  }
+
+  _newRow() {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'casa-who-row casa-who-new';
+    row.addEventListener('click', () => {
+      this.close();
+      this._onCreate?.();
+    });
+
+    const plus = document.createElement('i');
+    plus.className = 'ti ti-plus';
+    plus.setAttribute('aria-hidden', 'true');
+    row.appendChild(plus);
+
+    const label = document.createElement('span');
+    label.className = 'casa-who-row-name';
+    label.textContent = i18n.t('casa.who.newNotebook');
+    row.appendChild(label);
+    return row;
   }
 
   _label(text, divided = false) {
@@ -190,11 +234,19 @@ export class WhoPanel {
     return el;
   }
 
-  /* La casa: si torna sempre, ed e' l'unica riga che non ha un pallino —
-     non e' un quaderno fra i quaderni. */
+  /* La casa: si torna sempre, e non ha un pallino perche' non e' un quaderno
+     fra i quaderni. Ha il fiore, che e' il segno di Jenny e non un colore
+     assegnato: lo stesso `✿` del dock e della riga d'identita' in officina,
+     sulla stessa variabile di tema (`--flower`). */
   _personalRow() {
     const row = this._command(this._currentProject() === null, () => this._pick(null));
     row.classList.add('is-personal');
+
+    const flower = document.createElement('span');
+    flower.className = 'casa-who-flower';
+    flower.textContent = '✿';
+    flower.setAttribute('aria-hidden', 'true');
+    row.appendChild(flower);
 
     const name = document.createElement('span');
     name.className = 'casa-who-row-name';

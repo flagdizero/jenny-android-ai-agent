@@ -89,6 +89,23 @@ def test_a_switch_releases_the_turn_that_was_running() -> None:
     assert "_releaseTurn()" in body
 
 
+def test_the_house_has_the_dialogs_it_needs_to_make_a_notebook() -> None:
+    """«Nuovo quaderno» fa due domande, e i tre modali vivevano nel markup
+    dell'officina: in casa `document.getElementById('oc-prompt-dialog')` sarebbe
+    stato `null`, e `promptDialog` torna `false` quando non trova il suo nodo —
+    cioè il giro si sarebbe annullato da sé, in silenzio, per sempre.
+
+    Ora il markup se lo porta il modulo e lo monta all'import. Se quella
+    chiamata sparisce, in casa non si crea più niente e nessun test di
+    comportamento se ne accorge: girano tutti su un DOM finto.
+    """
+    dialog = (UI / "assets" / "shared" / "dialog.js").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^mountDialogs\(\);$", dialog), (
+        "il markup dei modali non viene più montato: in casa i dialoghi non esistono"
+    )
+    assert 'id="oc-prompt-dialog"' in dialog and 'id="oc-confirm-dialog"' in dialog
+
+
 def test_a_tapped_alert_lands_in_the_personal_conversation() -> None:
     """La copia websocket di un avviso proattivo va **sempre** alla chat
     personale (il fan-out di `runtime/delivery.py` ce la mette d'ufficio):
@@ -124,14 +141,23 @@ def test_the_veil_has_a_rule_of_its_own() -> None:
 def test_every_word_on_screen_comes_from_the_translations() -> None:
     """Nessun testo cablato: la regola di AGENTS.md non ha eccezioni, e questo
     è codice nuovo. Un `textContent` può ricevere solo una traduzione o un
-    dato (il nome di un quaderno, la sua data)."""
+    dato (il nome di un quaderno, la sua data).
+
+    L'unica eccezione è un **segno**, non una parola: il fiore di Jenny, che non
+    si traduce e che l'officina disegna identico (`chat-identity-flower`,
+    `dock-flower`). Tradurlo non vorrebbe dire niente; metterlo nei file di
+    lingua vorrebbe dire due posti da cui può divergere.
+    """
     src = WHO_JS.read_text(encoding="utf-8")
     for line in src.splitlines():
         m = re.search(r"\.textContent\s*=\s*(.+);", line)
         if not m:
             continue
         value = m.group(1)
+        if value == "'✿'":
+            continue
         assert not re.match(r"^['\"`]", value), f"stringa cablata a schermo: {line.strip()}"
+    assert src.count("'✿'") == 1, "il fiore è un segno solo, in un punto solo"
 
 
 def test_the_panel_speaks_both_languages() -> None:

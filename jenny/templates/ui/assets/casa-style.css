@@ -757,6 +757,38 @@ body.casa {
   color: var(--accent);
 }
 
+/* Il fiore di Jenny, nello spazio in cui gli altri hanno il pallino. Non e' un
+   colore assegnato a un nome: e' il segno che ha nel dock e nella riga
+   d'identita' dell'officina, sulla stessa variabile di tema. */
+.casa-who-flower {
+  flex: none;
+  width: 10px;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+  color: var(--flower);
+}
+
+/* «Nuovo quaderno»: un comando, non una conversazione. Per questo ha il colore
+   dell'accento e non quello del testo, e una riga sopra che lo stacca
+   dall'elenco. */
+.casa-who-new {
+  gap: 10px;
+  min-height: 44px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.casa-who-new i {
+  flex: none;
+  font-size: 18px;
+}
+
+.casa-who-new .casa-who-row-name {
+  font-size: 14px;
+}
+
 .casa-who-dot {
   flex: none;
   width: 10px;
