@@ -1008,6 +1008,11 @@
       "workshopHint": "osserva, regola, ripara — oppure tieni premuto l'avatar",
       "version": "versione {version}"
     },
+    "jenny": {
+      "title": "Jenny",
+      "hidden": "nascosta",
+      "floatingShort": "flottante"
+    },
     "backHome": "Torna alla casa",
     "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
     "who": {

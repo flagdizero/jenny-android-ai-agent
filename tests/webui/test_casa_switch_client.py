@@ -106,7 +106,19 @@ const document = {
   },
 };
 
-const api = { clientLog() {} };
+/* `/api/settings`: un payload solo, che il guscio chiede una volta e divide
+   fra le due stanze. Qui interessa **quante volte** viene chiesto, e cosa
+   succede quando non arriva. */
+let settingsPayload = { version: { current: '0.11.0' }, floating: { available: true } };
+let settingsCalls = 0;
+const api = {
+  clientLog() {},
+  getSettings() {
+    settingsCalls += 1;
+    if (!settingsPayload) return Promise.reject(new Error('impostazioni non lette'));
+    return Promise.resolve(settingsPayload);
+  },
+};
 
 /* Finto, ma con la regola che conta: chi è già lì non cambia conversazione. */
 const sessionManager = {
@@ -157,11 +169,21 @@ class App {
     this.backLabel = makeEl('span');
     this.talkBtn = makeEl('button');
     this.talkLabel = makeEl('span');
-    /* La quarta stanza e' un modulo suo, col suo banco: qui interessa solo
-       che il guscio la apra quando ci si entra. */
+    /* Le due stanze nuove sono moduli loro, coi loro banchi: qui interessa
+       che il guscio le apra, e cosa ci mette dentro di quel che sa. */
+    this.versioni = [];
+    this.flottanti = [];
     this.tu = {
       applyTranslations: () => {},
       open: () => this.fatti.push('tu aperta'),
+      showVersion: (v) => this.versioni.push(v),
+      sayJenny: (v) => { this.valoreJenny = v; },
+    };
+    this.jennyRoom = {
+      applyTranslations: () => {},
+      open: () => this.fatti.push('jenny aperta'),
+      setFloating: (v) => this.flottanti.push(v),
+      value: () => 'piccola',
     };
     this.view = 'chat';
     this._jennyWasOut = true;
@@ -220,6 +242,8 @@ class App {
   __OPEN_PAGES__
   __GO_BACK_ONE_ROOM__
   __OPEN_TU__
+  __OPEN_JENNY__
+  __ASK_SETTINGS__
   __SET_VIEW__
   __APPLY_HEAD__
   __APPLY_BACK_LABEL__
@@ -231,6 +255,8 @@ function casa() {
   lightbox = null;
   createOutcome = null;
   creations.length = 0;
+  settingsPayload = { version: { current: '0.11.0' }, floating: { available: true } };
+  settingsCalls = 0;
   sessionManager.currentKey = sessionManager.personalKey;
   const app = new App();
   app._applyConversation();
@@ -262,6 +288,8 @@ def _harness() -> str:
         .replace("__OPEN_PAGES__", _member(src, "openPages"))
         .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
         .replace("__OPEN_TU__", _member(src, "openTu"))
+        .replace("__OPEN_JENNY__", _member(src, "openJenny"))
+        .replace("__ASK_SETTINGS__", _member(src, "_askSettings"))
         .replace("__APPLY_BACK_LABEL__", _member(src, "_applyBackLabel"))
         .replace("__SET_VIEW__", _member(src, "_setView"))
         .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
@@ -754,4 +782,57 @@ def test_talking_about_it_belongs_to_a_notebook() -> None:
       assert.equal(app.talkBtn.hidden, true, '«Parlane» in mezzo alle impostazioni');
       assert.equal(app.pagesBtn.hidden, true, 'e nemmeno la pastiglia delle pagine');
       assert.equal(app.nameEl.textContent, i18n.t('casa.tu.title'), 'la testa non dice dove sei');
+    """)
+
+
+def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
+    """`/api/settings` porta provider, contatori e lavoratori periodici, e di
+    quel peso le due stanze leggono un campo per uno: la versione e lo stato
+    della finestra flottante. Chiederlo due volte sarebbe due volte quel
+    peso."""
+    _run_js("""
+      const app = casa();
+      await app.openTu();
+      await app.openJenny();
+      app._setView('chat');
+      await app.openTu();
+      assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
+      assert.deepEqual(app.versioni, ['0.11.0', '0.11.0']);
+      assert.deepEqual(app.flottanti, [{ available: true }, { available: true }]);
+    """)
+
+
+def test_a_settings_call_that_failed_is_tried_again() -> None:
+    """Il fallimento non si ricorda. Una rete andata male una volta lascerebbe
+    la riga della finestra flottante nascosta fino al riavvio della casa — e
+    quella non e' una versione che manca, e' un'impostazione sparita."""
+    _run_js("""
+      const app = casa();
+      settingsPayload = null;
+      await app.openTu();
+      assert.deepEqual(app.flottanti, [null], 'senza risposta la finestra resta sconosciuta');
+
+      settingsPayload = { version: { current: '0.12.0' }, floating: { available: true } };
+      app._setView('chat');
+      await app.openTu();
+      assert.equal(settingsCalls, 2, 'il guscio si e\u2019 ricordato del fallimento');
+      /* Anche il giro andato male passa dalla stanza: le dice «non lo so», e
+         quella non scrive niente. E' il patto di `showVersion`. */
+      assert.deepEqual(app.versioni, [undefined, '0.12.0']);
+    """)
+
+
+def test_her_room_hangs_off_you_and_jenny() -> None:
+    """Indietro sbuccia una stanza per volta anche di qua: da lei si torna a
+    «Tu e Jenny», non alla chat."""
+    _run_js("""
+      const app = casa();
+      app.openJenny();
+      assert.equal(app.view, 'jenny');
+      assert.ok(app.fatti.includes('jenny aperta'));
+      assert.equal(app.nameEl.textContent, i18n.t('casa.jenny.title'), 'la testa non dice dove sei');
+      app.handleHardwareBack();
+      assert.equal(app.view, 'tu');
+      app.handleHardwareBack();
+      assert.equal(app.view, 'chat');
     """)

@@ -1005,6 +1005,11 @@
       "workshopHint": "watch, tune, repair — or hold the avatar",
       "version": "version {version}"
     },
+    "jenny": {
+      "title": "Jenny",
+      "hidden": "hidden",
+      "floatingShort": "floating"
+    },
     "backHome": "Back to the house",
     "backHomeHint": "The simple interface: the conversation and nothing else.",
     "who": {

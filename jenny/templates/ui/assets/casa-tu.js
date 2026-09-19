@@ -15,7 +15,6 @@
  *  Misure e ragioni in `.agent/casa-tu-e-jenny-plan.md`.
  */
 
-import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { THEMES, currentTheme, setTheme } from './shared/theme.js';
 
@@ -46,8 +45,9 @@ export function shortThemeName(label) {
 }
 
 export class CasaTu {
-  /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre. */
-  constructor({ onWorkshop } = {}) {
+  /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre.
+   *  @param onJenny     la riga che porta da lei. */
+  constructor({ onWorkshop, onJenny } = {}) {
     this.el = document.getElementById('casa-tu');
     this.themesEl = document.getElementById('casa-themes');
     this.themeLabel = document.getElementById('casa-theme-label');
@@ -56,27 +56,47 @@ export class CasaTu {
     this.workshopName = document.getElementById('casa-workshop-name');
     this.workshopHint = document.getElementById('casa-workshop-hint');
     this.versionEl = document.getElementById('casa-version');
-    this._versionAsked = false;
+    this.jennyLabel = document.getElementById('casa-jenny-label');
+    this.jennyValue = document.getElementById('casa-jenny-value');
     this._painted = false;
 
     document.getElementById('casa-workshop')
       ?.addEventListener('click', () => onWorkshop?.());
+    document.getElementById('casa-row-jenny')
+      ?.addEventListener('click', () => onJenny?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
       if (card) this.pickTheme(card.dataset.theme);
     });
   }
 
-  /** La stanza si apre. */
+  /** La stanza si apre. Quel che sa il server arriva dopo, e da fuori. */
   open() {
     this._paintThemes();
-    this._loadVersion();
+  }
+
+  /** Il numero di versione, quando si sa.
+   *
+   *  Una versione che non si sa non si scrive: la riga resta vuota, e vuota
+   *  non occupa. Non e' un guasto di cui valga la pena parlare a chi sta
+   *  scegliendo un tema.
+   */
+  showVersion(current) {
+    if (!current || !this.versionEl) return;
+    this.versionEl.textContent = i18n.t('casa.tu.version', { version: current });
+    this.versionEl.hidden = false;
+  }
+
+  /** Come sta lei, sulla riga che porta da lei: «piccola · flottante». */
+  sayJenny(value) {
+    if (this.jennyValue) this.jennyValue.textContent = value || '';
   }
 
   applyTranslations() {
     if (this.themeLabel) this.themeLabel.textContent = i18n.t('settings.themeLabel');
     if (this.workshopName) this.workshopName.textContent = i18n.t('casa.workshop');
     if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
+    if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('casa.jenny.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();
@@ -147,22 +167,4 @@ export class CasaTu {
     if (this.themeDesc) this.themeDesc.textContent = i18n.t(`themes.${theme.id}.desc`);
   }
 
-  /* Il numero di versione, una volta per avvio. `/api/settings` e' un payload
-     grosso e qui se ne usa un campo: vale la pena chiederlo all'apertura della
-     stanza, non al caricamento della casa, e non due volte. */
-  async _loadVersion() {
-    if (this._versionAsked) return;
-    this._versionAsked = true;
-    try {
-      const data = await api.getSettings();
-      const current = data?.version?.current;
-      if (!current || !this.versionEl) return;
-      this.versionEl.textContent = i18n.t('casa.tu.version', { version: current });
-      this.versionEl.hidden = false;
-    } catch (err) {
-      /* Una versione che non si sa non si scrive: la riga resta vuota. Non e'
-         un guasto di cui valga la pena parlare a chi sta scegliendo un tema. */
-      console.warn('casa.tu: versione non letta', err);
-    }
-  }
 }

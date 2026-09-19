@@ -51,12 +51,23 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
 
 def test_the_rooms_after_the_chat_are_not_in_the_flow_by_default() -> None:
     """`display:none` sulle sezioni e non `hidden`: la regola della vista le
-    accende, e due meccanismi per la stessa cosa divergono."""
+    accende, e due meccanismi per la stessa cosa divergono.
+
+    Il banco non nomina le stanze: le prende da chi le accende, cosi' la
+    quinta non puo' essere accesa e dimenticata qui.
+    """
     css = CSS.read_text(encoding="utf-8")
-    m = re.search(r"\.casa-pages,\s*\n\.casa-reader,\s*\n\.casa-tu \{([^}]*)\}", css)
-    assert m and "display: none" in m.group(1), (
-        "le stanze nuove non partono fuori dal flusso"
-    )
+    accese = set(re.findall(r"\.casa-shell\[data-view='\w+'\] (\.casa-[\w-]+)", css))
+    assert accese, "nessuna stanza nel foglio: la grep non morde piu'"
+    spente = set()
+    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        if "display: none" not in corpo:
+            continue
+        # L'ultima riga di ogni pezzo: davanti al primo selettore di un blocco
+        # c'e' il commento che lo spiega, e quello non e' un selettore.
+        spente |= {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+    mancanti = accese - spente
+    assert not mancanti, f"stanze che partono dentro il flusso: {mancanti}"
 
 
 # ── I 280 kB che si pagano solo aprendo la mappa ────────────────────────────

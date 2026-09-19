@@ -124,17 +124,6 @@ function setTheme(id) {
 __SWATCH__
 __SHORT_NAME__
 
-/* Il payload delle impostazioni, di cui la stanza usa un campo solo. */
-let settingsPayload = { version: { current: '0.11.0' } };
-let settingsCalls = 0;
-const api = {
-  getSettings() {
-    settingsCalls += 1;
-    if (!settingsPayload) return Promise.reject(new Error('impostazioni non lette'));
-    return Promise.resolve(settingsPayload);
-  },
-};
-
 class CasaTu {
   __CTOR__
   __OPEN__
@@ -144,15 +133,14 @@ class CasaTu {
   __THEME_CARD__
   __MARK_THEME__
   __SAY_THEME__
-  __LOAD_VERSION__
+  __SHOW_VERSION__
+  __SAY_JENNY__
 }
 
 function stanza() {
   for (const k of Object.keys(nodi)) delete nodi[k];
   acceso = 'chanel';
   applicati.length = 0;
-  settingsPayload = { version: { current: '0.11.0' } };
-  settingsCalls = 0;
   const tu = new CasaTu({});
   tu.versionEl.hidden = true;
   return tu;
@@ -178,7 +166,8 @@ def _harness() -> str:
         .replace("__THEME_CARD__", _member(src, "_themeCard"))
         .replace("__MARK_THEME__", _member(src, "_markTheme"))
         .replace("__SAY_THEME__", _member(src, "_sayTheme"))
-        .replace("__LOAD_VERSION__", _member(src, "_loadVersion"))
+        .replace("__SHOW_VERSION__", _member(src, "showVersion"))
+        .replace("__SAY_JENNY__", _member(src, "sayJenny"))
     )
 
 
@@ -296,53 +285,17 @@ def test_the_words_come_back_when_the_language_changes() -> None:
       tu.workshopName.textContent = '';
       tu.workshopHint.textContent = '';
       tu.themeDesc.textContent = '';
+      tu.jennyLabel.textContent = '';
       tu.applyTranslations();
       assert.equal(tu.themeLabel.textContent, i18n.t('settings.themeLabel'));
       assert.equal(tu.workshopName.textContent, i18n.t('casa.workshop'));
       assert.equal(tu.workshopHint.textContent, i18n.t('casa.tu.workshopHint'));
+      assert.equal(tu.jennyLabel.textContent, i18n.t('casa.jenny.title'));
       assert.equal(tu.themeDesc.textContent, i18n.t('themes.chanel.desc'));
     """)
 
 
 # ── La versione ─────────────────────────────────────────────────────────────
-
-
-def test_the_version_is_asked_once_and_never_invented() -> None:
-    """`/api/settings` e' un payload grosso e di suo qui serve un campo: si
-    chiede all'apertura della stanza, non al caricamento della casa, e una
-    volta sola. E «versione {version}» con la graffa dentro sarebbe peggio di
-    una riga che non c'e'."""
-    _run_js("""
-      const tu = stanza();
-      tu.open();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(tu.versionEl.hidden, false);
-      assert.ok(tu.versionEl.textContent.includes('0.11.0'), tu.versionEl.textContent);
-      assert.ok(!tu.versionEl.textContent.includes('{'), 'il segnaposto e\\u2019 rimasto dentro');
-
-      tu.open();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(settingsCalls, 1, 'la versione viene richiesta a ogni apertura');
-    """)
-
-
-def test_a_version_that_is_not_known_leaves_no_line() -> None:
-    """Impostazioni irraggiungibili, o un payload senza versione: la riga resta
-    vuota e non occupa."""
-    _run_js("""
-      const tu = stanza();
-      settingsPayload = null;
-      tu.open();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(tu.versionEl.hidden, true, 'una versione che non si sa e\\u2019 finita a schermo');
-
-      const altra = stanza();
-      settingsPayload = { version: {} };
-      altra.open();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(altra.versionEl.hidden, true);
-      assert.equal(altra.versionEl.textContent, '');
-    """)
 
 
 def test_the_pill_keeps_the_word_that_tells_the_themes_apart() -> None:
@@ -361,4 +314,36 @@ def test_the_pill_keeps_the_word_that_tells_the_themes_apart() -> None:
         assert.ok(nome.length <= 9, 'non ci sta nella pastiglia: ' + nome);
         assert.ok(!nome.startsWith('Jenny'), 'e\u2019 rimasto il nome di lei: ' + nome);
       }
+    """)
+
+
+def test_a_version_is_written_only_when_it_is_known() -> None:
+    """Il payload lo chiede il guscio — `/api/settings` porta provider,
+    contatori e lavoratori periodici, e due stanze ne leggono un campo per uno.
+    Qui si misura il patto di questa: un numero che non c'e' non si scrive, e
+    «versione {version}» con la graffa dentro sarebbe peggio di una riga che
+    non c'e'."""
+    _run_js("""
+      const tu = stanza();
+      tu.showVersion(undefined);
+      assert.equal(tu.versionEl.hidden, true, 'una versione che non si sa e\u2019 finita a schermo');
+      assert.equal(tu.versionEl.textContent, '');
+
+      tu.showVersion('0.11.0');
+      assert.equal(tu.versionEl.hidden, false);
+      assert.ok(tu.versionEl.textContent.includes('0.11.0'), tu.versionEl.textContent);
+      assert.ok(!tu.versionEl.textContent.includes('{'), 'il segnaposto e\u2019 rimasto dentro');
+    """)
+
+
+def test_the_row_that_leads_to_her_says_how_she_is_now() -> None:
+    """Una riga che non porta il suo valore e' un collegamento, non
+    un'impostazione. Il valore lo compone la stanza di lei; qui si misura che
+    arrivi a schermo, e che svuotarlo non lasci a mezz'aria quello di prima."""
+    _run_js("""
+      const tu = stanza();
+      tu.sayJenny('piccola \u00b7 flottante');
+      assert.equal(tu.jennyValue.textContent, 'piccola \u00b7 flottante');
+      tu.sayJenny(undefined);
+      assert.equal(tu.jennyValue.textContent, '', 'il valore di prima e\u2019 rimasto');
     """)

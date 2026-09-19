@@ -71,7 +71,7 @@ def test_the_workshop_card_is_the_other_way_in() -> None:
     assert "getElementById('casa-workshop')" in tu and "onWorkshop?.()" in tu, (
         "la scheda dell'officina non chiama piu' indietro"
     )
-    assert "new CasaTu({ onWorkshop: () => this._openInWorkshop(null) })" in _app(), (
+    assert "onWorkshop: () => this._openInWorkshop(null)," in _app(), (
         "il guscio non passa piu' la porta dell'officina alla stanza"
     )
     html = INDEX.read_text(encoding="utf-8")
@@ -79,12 +79,27 @@ def test_the_workshop_card_is_the_other_way_in() -> None:
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
 
 
-def test_the_room_arrives_on_the_phone() -> None:
+def test_the_rooms_arrive_on_the_phone() -> None:
     """Un file fuori dal manifest non da' 404: `_serve_static` ricade
     sull'officina. Il difetto si vede solo sul telefono, ed e' una stanza che
     non si apre."""
-    assert "assets/casa-tu.js" in _UI_MANIFEST, (
-        "casa-tu.js non e' nel manifest: sul telefono la stanza non esiste"
+    for asset in ("assets/casa-tu.js", "assets/casa-jenny.js"):
+        assert asset in _UI_MANIFEST, (
+            f"{asset} non e' nel manifest: sul telefono la stanza non esiste"
+        )
+
+
+def test_the_room_of_her_is_not_the_sprite_of_her() -> None:
+    """`.casa-jenny` e' lo sprite che cammina sul bordo, e vive nel guscio da
+    prima di questa stanza. Se la stanza avesse preso quel nome, la regola
+    della vista avrebbe acceso e spento **lei** invece della pagina — e
+    `data-view` avrebbe smesso di parlare solo di stanze."""
+    html = INDEX.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    assert '<section class="casa-jenny-room" id="casa-jenny-room">' in html
+    assert ".casa-shell[data-view='jenny'] .casa-jenny-room" in css
+    assert not re.search(r"\[data-view='jenny'\] \.casa-jenny\b(?!-room)", css), (
+        "la regola della stanza morde lo sprite di lei"
     )
 
 
