@@ -56,6 +56,9 @@ class CasaApp {
        intero, quindi i limiti devono stare da una parte sola. */
     this.files = new ImageHandler();
     this.files.onChange = () => this._renderPending();
+    /* Un allegato che non entra lo diceva nessuno: spariva e basta. Ora lo
+       dice il telefono, con le stesse parole che userebbe il gateway. */
+    this.files.onReject = (reason) => this.chat.noteRefusal(reason);
 
     this._wireTimer = null;
     this._threadFailed = false;

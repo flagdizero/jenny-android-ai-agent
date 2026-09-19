@@ -226,6 +226,14 @@ export class ChatController {
 
     this.imageHandler = new ImageHandler();
     this.imageHandler.onChange = (images) => this._renderAttachPreview(images);
+    /* Un allegato che sfora i tetti: un toast e non una riga nel filo, perche'
+       non e' un fatto della conversazione — e' una risposta a quel che stai
+       facendo adesso nel composer, e se ne va da sola come il gesto. Le
+       parole sono le stesse di un rifiuto del gateway: e' la stessa cosa
+       detta un istante prima. */
+    this.imageHandler.onReject = (reason) => {
+      showToast(describeWireError({ reason }, (key) => i18n.t(key)).text, 'error');
+    };
 
     this._voiceTimerInterval = null;
 

@@ -347,6 +347,16 @@ export class CasaChat {
     this._appendNote(text);
   }
 
+  /** Un rifiuto deciso **qui**, dal telefono: un allegato che sfora i tetti.
+   *
+   *  Passa dalla stessa porta di un rifiuto del gateway perche' e' la stessa
+   *  cosa detta un istante prima: le parole sono quelle, e il messaggio non e'
+   *  partito, quindi non c'e' nessuna bolla da riprendere.
+   */
+  noteRefusal(reason) {
+    this._error({ reason });
+  }
+
   /* La bolla del messaggio rifiutato se ne va, e il suo testo torna a chi ce
      l'ha dato. Gli allegati no: l'allegato *è* la cosa rifiutata, e il server
      butta il lotto intero senza dire quale file fosse. */
