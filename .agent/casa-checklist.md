@@ -438,3 +438,67 @@ perche'.
 altro e il filo non trabocca, cioe' subito dopo `/new` — e `/new` sulla
 conversazione vera dell'utente azzera il suo contesto. Lo coprono i sette test
 del modulo condiviso, che girano sul codice vero.
+
+## Ritocco — un rifiuto del gateway, detto a parole
+
+Prima: l'officina scriveva `Errore: image_rejected` — il nome che quel rifiuto
+ha nel codice sorgente, mostrato a chi stava mandando una foto — e la casa non
+diceva niente del tutto. Il motivo vero (`decode`, `size`, `too_many_videos`)
+stava nel frame e veniva buttato, perche' `detail || reason` non guarda mai il
+secondo.
+
+**La radice era che `detail` faceva due mestieri**: a volte un codice, a volte
+una frase inglese intera, a volte un `repr` da debug. L'invariante ora e':
+`reason` e' per la macchina e c'e' **sempre**, `detail` e' per il log. Quattro
+righe nel gateway e un contratto sull'albero sintattico che impedisce al
+prossimo errore di nascere senza una parola.
+
+**Le parole stanno in `shared/wire-error.js`**, tradotte, una tabella sola per
+i due gusci. `i18n.t` ritorna **la chiave** quando non la trova, quindi una voce
+dimenticata metterebbe a schermo `common.wireError.decode`: tre test lo
+impediscono, e uno confronta l'elenco del client con quello del server.
+
+**Due famiglie, non una.** «Il tuo messaggio non e' entrato» appartiene al
+messaggio: la bolla se ne va, il testo torna nel campo, una riga dice perche'.
+«Qualcosa non ha funzionato» resta una riga e basta. La famiglia non si decide
+dal solo `reason`: ogni rifiuto di allegato porta `detail: "image_rejected"`
+qualunque sia il motivo, quindi un motivo inventato domani torna indietro lo
+stesso invece di farti perdere quel che avevi scritto.
+
+**Quale bolla** si sa per stato e non per orologio: la bolla resta *in sospeso*
+finche' un frame che non e' un rifiuto non dimostra che il gateway l'ha presa.
+Sul filo non c'e' un identificativo, e aggiungerlo toccherebbe protocollo, due
+client e i loro test per un caso che oggi non lo chiede.
+
+### L'officina aveva la stessa malattia in due posti, e la casa ne aveva curato uno
+
+`sendMessage` disegnava la bolla, svuotava il campo, **buttava gli allegati** e
+*poi* provava a spedire: un socket chiuso ti lasciava una bolla che sembrava
+partita, un errore di fianco, e il testo perduto. La casa faceva gia' il
+contrario dal passo 3. Quindi meta' del lavoro e' andata nella direzione
+opposta al solito: **la regola della casa e' passata in officina.**
+
+Gli allegati non tornano, ed e' voluto: l'allegato *e'* la cosa rifiutata, e il
+server butta il lotto intero senza dire quale file fosse.
+
+### La scoperta che rende il tutto non teorico
+
+Credevo che il rifiuto fosse quasi irraggiungibile dall'app, perche' i tetti
+client e server coincidono. **Non coincidono.** Il client ha due secchi
+(immagini <=4, tutto il resto <=4) e **non sa cosa sia un video**: `grep -c
+video` in `image-handler.js` da' zero. Il server ne ha tre e cappa i video a
+**1** (`_MAX_VIDEOS_PER_MESSAGE`).
+
+Quindi **due video allegati passano il telefono e li rifiuta il gateway**, con
+`too_many_videos`. E' ordinario, e prima di oggi in casa era silenzio assoluto.
+Il lavoro lo trasforma in «Troppi video in un messaggio solo» col messaggio che
+torna indietro — ma la divergenza resta, e la cura vera sarebbe un terzo secchio
+nel client, che avvisa *prima* di mandare. Non l'ho fatto: e' un'altra cosa.
+
+### Stato della verifica
+
+Test verdi (9.741) e provati contro nove difetti messi apposta. **Sul telefono
+non e' stato provato**: il dispositivo e' stato scollegato prima della prova.
+L'APK e' compilato e contiene il modulo, i due import e le parole; restano
+pronti due `.mp4` da 2 kB in `scratchpad/` — allegarli tutti e due e mandare e'
+il rifiuto vero, senza toccare niente della conversazione.
