@@ -111,3 +111,48 @@ launcher predefinito oggi è `com.android.launcher3`
 esce dall'app invece di chiamare `goHome()`. Quel ramo resta coperto dal banco.
 Era scritto in memoria che «l'app è il launcher» come se fosse una costante: non
 lo è, e la nota è stata corretta.
+
+## Due voci ripescate (19/09/2026, dopo la tavola)
+
+Il pannello era disegnato con due cose che avevo tolto: il **fiore** sulla riga
+di Jenny e **«Nuovo quaderno»** in fondo. La seconda era una decisione
+dichiarata (crea cartelle, sembrava tre schermate); la prima no, mancava e
+basta.
+
+- Il fiore è `✿`, lo stesso segno del dock e della riga d'identità
+  dell'automatismo dell'officina, sulla stessa variabile `--flower`. Sta dove i
+  quaderni hanno il pallino, ed è il motivo per cui la riga di casa il pallino
+  non ce l'ha: non è un quaderno fra i quaderni.
+- «Nuovo quaderno» fa le due domande col **giro condiviso**
+  (`shared/project-create.js`) e le **parole di casa** (`casa.who.create.*`).
+  Sta fuori dall'elenco che scorre: dentro sarebbe l'ultima delle
+  conversazioni, raggiungibile solo scorrendo fino in fondo. C'è anche quando
+  l'elenco è vuoto o non si è potuto leggere, che è quando serve di più.
+
+**Tre cose sono dovute diventare comuni perché la casa potesse farlo**, e la
+seconda era una trappola silenziosa:
+
+1. la regola del nome (`isOpenableProjectName`) è passata in
+   `conversation-list.js`: la casa non può importare il chip dell'officina
+   senza tirarsi dentro tutto il guscio che ha il compito di non avere;
+2. **i tre modali vivevano nel markup di `officina.html`.** In casa
+   `getElementById('oc-prompt-dialog')` era `null`, e `promptDialog` in quel
+   caso risponde «annullato»: il giro si sarebbe interrotto da solo, in
+   silenzio, per sempre. Ora il markup se lo porta `dialog.js` e lo monta
+   all'import — una copia sola, e un banco che controlla che quella chiamata ci
+   sia, perché nessun test di comportamento se ne accorgerebbe (girano tutti su
+   un DOM finto);
+3. il giro di creazione sta in `shared/project-create.js` e non conosce
+   nessuna stringa: prende `words` e `t` da chi lo chiama, come `ago()`.
+
+**Sul telefono** (APK 12:21, `lastUpdateTime` 12:22): il fiore c'è, «New
+notebook» è in fondo, e il tocco apre davvero il dialogo con «Notebook name:» —
+cioè proprio quel che senza il markup non sarebbe successo. **Non ho creato un
+quaderno vero**: annullato al primo dialogo, e `wikis/` è rimasta identica.
+La creazione fino in fondo è provata al banco e sul rig, dove crea e rifiuta a
+comando.
+
+E una seconda volta, nella campagna di mutazione: **una mutazione verde era la
+mutazione sbagliata**, non un banco cieco (spargere due volte lo stesso oggetto
+non toglie le sovrascritture che vengono dopo). Rifatta togliendo davvero le
+parole di casa: rossa.
