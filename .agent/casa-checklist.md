@@ -311,6 +311,9 @@ le da' i propri appigli. Il concetto `out` — la mascotte che sta al bordo ed
 `hasOut: false` percorre gli stessi rami con lo scarto d'ancoraggio a zero,
 invece di avere un codice suo.
 
+> Superato il 19/09/2026: `out` ce l'hanno tutti e due e `hasOut` non esiste
+> piu' — v. *Ritocco — toccarla per metterla via*, in fondo.
+
 **Un difetto preso in tempo.** Avevo specchiato il *contenitore* per il lato
 sinistro. L'officina specchia solo l'arte di riposo (`.jenny-art-stack`), ed e'
 la cosa giusta: il livello del volo e' un fratello dell'arte, e la fisica ci
@@ -568,3 +571,88 @@ Due `.mp4` selezionati insieme: ne entra **uno**, e comparo «Too many videos in
 one message» — riga sobria nel filo in casa (visibile senza scorrere), pastiglia
 rossa in officina. Prima dello stesso giro, con due video allegati e mandati, il
 rifiuto arrivava dal gateway: nessuna bolla, riga, e il testo tornato nel campo.
+
+## Ritocco — toccarla per metterla via (19/09/2026)
+
+«Su officina se la clicchi si nasconde ed esce, sulla casa no vero?» No.
+Misurato invece che dedotto, sui due gusci veri: in officina un tocco porta lo
+sprite da `right: -30px` a `-56,28px` e scambia l'arte frontale con la posa di
+profilo; in casa il tocco arrivava e non faceva niente, perche' `casa-mascot.js`
+non passava nessun `onTap` e il modulo condiviso ne ha uno che tace.
+
+Era una decisione scritta — *«il tocco secco quindi non fa niente: e' l'unico
+gesto che in officina apre la minichat, e qui non ha un equivalente da
+aprire»* — ed era **mezza giusta**. Vera sulla minichat, che resta dell'officina
+per la ragione di sempre. Falsa su tutto il resto: in officina quel tocco fa
+*due* cose, e la seconda — toglierla di mezzo — in casa serve **di piu'**, non di
+meno, perche' qui Jenny sta appoggiata sopra il filo che stai leggendo.
+
+**Cosa e' diventato comune, e perche' proprio quello.** Non lo stato in se': e'
+una classe che si gira, e un giro di classe non vale un modulo. Quello che non
+poteva restare in due copie sono i **due ancoraggi** — quanto del suo quadrato
+resta fuori dallo schermo al bordo (0,469) e venuta fuori (0,25). Erano gia'
+scritti tre volte (due nel foglio dell'officina, una nel JS che decide dove far
+finire la camminata di rientro dopo un lancio) e la casa stava per aggiungerne
+altre due. Ora stanno in `shared/mascot.js` e arrivano ai due fogli come
+`--jenny-dock` e `--jenny-out`: **una copia sola, e le altre non sono piu'
+possibili** — non solo rilevabili.
+
+Scritte **all'import** e non da un costruttore, ed e' la trappola del giro:
+`mobile-jenny.js` attacca lo sprite al documento *prima* di chiamare
+`applyMascotSize()`, e un `calc()` con una variabile che non esiste ancora non
+e' «il valore di prima», e' una dichiarazione invalida — Jenny comparirebbe per
+un frame dove la mette il flusso. Un modulo viene valutato prima che qualunque
+elemento esista.
+
+**E `hasOut` e' sparito.** Esisteva per dire «in casa questo stato non c'e'»:
+adesso c'e' in tutti e due, quindi l'interruttore aveva un valore solo. Un ramo
+morto che il prossimo lettore prende per una possibilita' vera costa piu' di
+quanto renda, e `shared/mascot-drag.js` ci guadagna tre righe e un concetto in
+meno. Il suo cappello, che quell'eccezione la spiegava, adesso racconta che non
+c'e'.
+
+**Il pavimento ha retto per un pelo, e lo so perche' l'ho misurato.** In casa i
+piedi appoggiano sulla riga del composer, e il numero (12,24% del lato sotto i
+piedi) veniva dal bbox alpha delle tre pose frontali. La posa del bordo e' una
+quarta arte: **12,50%**. Differenza 0,26 punti — 0,3 px a taglia 120, 0,5 a 210.
+Sotto il pixel, quindi mettendola via non saltella. Con due punti di scarto
+avrebbe galleggiato, e nessun test l'avrebbe detto.
+
+Tre regole prese dall'officina invece che reinventate: al bordo il disegno e'
+**uno solo** (la posa di profilo ha la faccia dentro, e tenere acceso il volto
+frontale sopra meno di meta' Jenny le incolla una faccia sulla nuca); **la bocca
+si muove lo stesso**, perche' messa via non vuol dire zittita; **il dondolio del
+pensa no**, che contro il bordo somiglia a un guasto della pagina.
+
+Da `<div aria-hidden>` a `<button aria-label="Jenny" tabindex="-1">`: da quando
+toccarla fa qualcosa, `aria-hidden` e' una bugia detta a chi non la vede. Fuori
+dal percorso della tastiera come in officina — e' un ornamento che si puo'
+toccare, non una tappa fra il titolo e il campo.
+
+### Com'e' stato provato
+
+Sul banco locale, con la stessa CSS e lo stesso JS che finiscono nell'APK:
+
+* **tocco** — click per coordinate (non `dispatchEvent`: il hit-testing e' la
+  meta' che nel pannello si perde) → `out` via, `jenny-side.webp`, faccia
+  spenta, `x` da −30 a −56. Ritocco: tutto indietro;
+* **mentre pensa** → posa di profilo e la classe `thinking` tolta;
+* **mentre parla** → `jenny-side.webp` e `jenny-side-talk.webp` che si
+  alternano, campionate per 12 secondi;
+* **trascinamento**, con la pompa manuale del rAF (nel pannello non gira):
+  verso il bordo la mette via, verso l'interno la tira fuori, e **lanciata
+  dall'altra parte atterra al bordo nuovo a `x = 526`** — che a 590 di viewport
+  e' l'ancoraggio esatto, non un'approssimazione;
+* **l'officina non si e' mossa**: gli stessi due numeri di prima, −56,28 px e
+  −30 px, letti dal computed style a transizione disattivata.
+
+21 mutazioni, 21 rosse. Due erano verdi al primo giro e **nessuna delle due per
+colpa del banco**: una cadeva sulla classe iniziale, che il banco si riscriveva
+invece di leggerla dal sorgente (ora la legge); l'altra sostituiva la costante
+con il numero *dentro la fisica*, mentre il test si accontentava di vederla
+nell'`import`. Terza volta che la domanda giusta davanti a un verde e' «dove e'
+caduta la mutazione?».
+
+**Non e' ancora stato sul telefono.** Il banco prova il JS e la CSS veri; restano
+da vedere li' la resa a 1440×1440 e l'area esclusa dalle gesture di sistema, che
+il ponte nativo non ha fuori dall'APK.
