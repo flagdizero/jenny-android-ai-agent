@@ -80,3 +80,26 @@ Per annullare una mutazione ho usato `git checkout <file>` su un file con lavoro
 **non commesso**, e mi sono portato via l'aggancio del pannello in `casa-app.js`.
 Le mutazioni si annullano con la copia di backup, mai con git, finché il passo
 non è commesso.
+
+## Sul telefono ✅
+
+Titan 2, 0.11.0, aggiornamento sul posto (APK delle 11:16, `lastUpdateTime`
+11:17). L'interfaccia lì è in inglese, che è la lingua scelta: *TALKING TO* e
+*NOTEBOOKS*.
+
+- Il titolo apre, e l'elenco è quello vero: `jenny` 19 h fa in cima, poi
+  `piante`, `nomadismo`, `produttivita`, `travel-wiki`, `stato-danimo` a 15
+  giorni. Ordine per data, pallini distinti, la riga personale con la spunta.
+- **Cinque quaderni su sei dicono «15 days ago»**, ed è `modified` che fa quello
+  che `_collect_projects` dichiara di fare: è l'mtime della cartella, non
+  l'ultima volta che ci hai parlato. Non è un difetto di questo pannello — è il
+  motivo per cui quella docstring esiste — ma è la misura che dice quanto vale
+  quella colonna finché la conversazione di un progetto non porta la propria
+  data.
+- Le tre vie d'uscita: velo, Indietro, e il tocco sul titolo. Tutte e tre
+  chiudono, e Indietro dopo non fa altro (l'app è il launcher).
+- **Un tocco su un quaderno non fa niente**, che è la decisione: nessun
+  cambiamento a schermo, nessuna conversazione cambiata.
+- **La tendina dell'officina è identica a prima dell'estrazione**: stessa
+  sezione personale, stessi progetti nello stesso ordine, stesse date, cestini e
+  «New project...» al loro posto.
