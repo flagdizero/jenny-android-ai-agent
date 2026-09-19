@@ -475,7 +475,20 @@
     "failedToLoadMode": "Failed to load {mode}",
     "linkNotOpenable": "This link can't be opened from here",
     "gatewayOffline": "Gateway unreachable: try again once the connection is back.",
-    "requestTimeout": "No answer from the gateway. Try again."
+    "requestTimeout": "No answer from the gateway. Try again.",
+    "wireError": {
+      "decode": "I couldn't open this file",
+      "invalid_project_name": "That project cannot be opened: its folder name is not a valid project name (letters, numbers, dot, dash and underscore only — no spaces or accents). Rename the folder, you can ask me to do it from the personal chat, then pick it again.",
+      "invalid_task_id": "That job no longer exists",
+      "malformed": "The attachment didn't arrive intact",
+      "missing_content": "The message was empty, so I didn't send it",
+      "size": "The file is too large",
+      "too_many_files": "Too many attachments in one message",
+      "too_many_images": "Too many images in one message",
+      "too_many_videos": "Too many videos in one message",
+      "unknown": "Something went wrong",
+      "unknown_type": "I didn't understand the request"
+    }
   },
   "dialog": {
     "confirm": "Confirm",

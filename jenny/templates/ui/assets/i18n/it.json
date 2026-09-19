@@ -475,7 +475,20 @@
     "failedToLoadMode": "Caricamento di {mode} fallito",
     "linkNotOpenable": "Questo link non si può aprire da qui",
     "gatewayOffline": "Gateway non raggiungibile: riprova quando la connessione torna.",
-    "requestTimeout": "Nessuna risposta dal gateway. Riprova."
+    "requestTimeout": "Nessuna risposta dal gateway. Riprova.",
+    "wireError": {
+      "decode": "Non sono riuscita ad aprire questo file",
+      "invalid_project_name": "Questo progetto non si può aprire: il nome della cartella non è valido (solo lettere, numeri, punto, trattino e trattino basso — niente spazi né accenti). Rinomina la cartella, anche chiedendomelo dalla chat personale, poi riselezionala.",
+      "invalid_task_id": "Quel lavoro non esiste più",
+      "malformed": "L'allegato non è arrivato intero",
+      "missing_content": "Il messaggio era vuoto, non l'ho mandato",
+      "size": "Il file è troppo grande",
+      "too_many_files": "Troppi allegati in un messaggio solo",
+      "too_many_images": "Troppe immagini in un messaggio solo",
+      "too_many_videos": "Troppi video in un messaggio solo",
+      "unknown": "Qualcosa non ha funzionato",
+      "unknown_type": "Non ho capito la richiesta"
+    }
   },
   "dialog": {
     "confirm": "Conferma",
