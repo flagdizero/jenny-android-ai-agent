@@ -247,8 +247,25 @@ class CasaApp {
       document.documentElement.style.setProperty('--casa-composer-h', `${h}px`);
     };
     measure();
+    /* **Tutto quel che sta sotto il filo, non solo il composer.** Il filo è
+       `flex: 1`: ogni riga che compare là sotto — gli allegati in attesa, la
+       riga di lavoro, lo stato del collegamento — gliela toglie, e il suo fondo
+       scivola sotto il bordo. Visto sul telefono allegando due video: la riga
+       che spiegava il rifiuto finiva fuori schermo *proprio* nel momento in cui
+       serviva leggerla. Vale anche per l'ultimo messaggio quando alleghi una
+       foto, e c'era da sempre.
+
+       `keepBottom` riaggancia solo se ci si era: chi sta rileggendo più su non
+       viene strappato via. */
     if (window.ResizeObserver) {
-      new ResizeObserver(measure).observe(document.querySelector('.casa-composer'));
+      const observer = new ResizeObserver(() => {
+        measure();
+        this.chat.keepBottom();
+      });
+      for (const sel of ['.casa-composer', '.casa-pending', '.casa-activity', '.casa-wire']) {
+        const el = document.querySelector(sel);
+        if (el) observer.observe(el);
+      }
     }
   }
 

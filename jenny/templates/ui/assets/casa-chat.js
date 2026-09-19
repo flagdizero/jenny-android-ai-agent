@@ -544,6 +544,12 @@ export class CasaChat {
     if (this._stick) this.scrollToBottom();
   }
 
+  /** Riaggancia il fondo **se ci si era**: chi sta rileggendo più su non si
+   *  tocca. Serve a chi cambia l'altezza di quel che sta sotto il filo. */
+  keepBottom() {
+    this._follow();
+  }
+
   scrollToBottom() {
     this.el.scrollTop = this.el.scrollHeight;
     this._stick = true;

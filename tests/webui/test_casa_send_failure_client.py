@@ -216,3 +216,31 @@ def test_the_box_keeps_what_you_are_writing_now() -> None:
     body = hook.group(1)
     assert "this.input.value.trim()" in body, "sovrascrive il campo senza guardare cosa c'è dentro"
     assert "this.input.value = text" in body
+
+
+def test_the_thread_keeps_its_bottom_when_the_rows_below_it_grow() -> None:
+    """Il filo è `flex: 1`: ogni riga che compare sotto gliela toglie.
+
+    Misurato sul telefono allegando due video: la nota che spiegava il rifiuto
+    finiva **sotto il bordo**, cioè fuori schermo proprio nel momento in cui
+    serviva leggerla. La striscia degli allegati è *fratello* del composer, non
+    figlio, quindi il `ResizeObserver` che c'era — messo solo sul composer per
+    la geometria di Jenny — non la vedeva.
+
+    Vale anche per l'ultimo messaggio quando alleghi una foto, e c'era da
+    sempre: la nota l'ha solo reso visibile.
+    """
+    src = CASA_APP_JS.read_text(encoding="utf-8")
+    block = re.search(r"if \(window\.ResizeObserver\) \{(.*?)\n    \}", src, re.S)
+    assert block, "nessun osservatore delle altezze"
+    body = block.group(1)
+    for sel in (".casa-composer", ".casa-pending", ".casa-activity", ".casa-wire"):
+        assert sel in body, f"{sel} non è osservato: il filo perderà il fondo"
+    assert "keepBottom()" in body, "l'osservatore misura e basta, non riaggancia il fondo"
+
+    chat = CASA_CHAT_JS.read_text(encoding="utf-8")
+    keep = _member(chat, "keepBottom")
+    assert "_follow()" in keep, (
+        "riagganciare deve rispettare chi sta rileggendo più su: `_follow` "
+        "scorre solo se ci si era"
+    )
