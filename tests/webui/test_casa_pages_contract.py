@@ -347,3 +347,21 @@ def test_the_note_sits_above_the_list_and_not_under_it() -> None:
     nota = html.index('id="casa-pages-note"')
     elenco = html.index('id="casa-page-list"')
     assert nota < elenco, "la nota e' tornata sotto l'elenco"
+
+
+def test_the_names_are_placed_once_the_physics_stops() -> None:
+    """A ogni tick vorrebbe dire far lampeggiare i nomi mentre la nuvola si
+    assesta, e una misura di testo per etichetta per frame. Lo zoom non lo rifa
+    perche' non serve: ingrandire e' una trasformazione del gruppo, e due
+    riquadri che non si toccavano non cominciano a toccarsi."""
+    src = (ASSETS / "casa-map.js").read_text(encoding="utf-8")
+    fine = re.search(r"this\._sim\.on\('end', \(\) => \{(.*?)\n    \}\);", src, re.S)
+    assert fine, "la simulazione non ha piu' un gestore di fine"
+    assert "_placeLabels" in fine.group(1), (
+        "i nomi non si collocano piu' a fisica ferma"
+    )
+    tick = re.search(r"\.on\('tick', \(\) => \{(.*?)\n      \}\)", src, re.S)
+    assert tick and "_placeLabels" not in tick.group(1), (
+        "i nomi si ricollocano a ogni tick: lampeggiano, e costano una misura "
+        "di testo per etichetta per frame"
+    )

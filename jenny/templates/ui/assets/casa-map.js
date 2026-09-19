@@ -44,6 +44,16 @@ const FIT_MAX_SCALE = 1.6;
  *  che li elenca tutti e li cerca. */
 const MAX_LABELS = 10;
 const LABEL_CHARS = 22;
+/* L'altezza di una riga di etichetta, in unita' del disegno. Si dichiara
+   invece di misurarla: `getBBox()` su un testo appena inserito costringe il
+   browser a un layout per ogni nome, e per un numero che il CSS fissa a 9 px
+   (piu' discendenti e un filo d'aria). La larghezza invece si misura davvero —
+   dipende dalle lettere, e indovinarla vorrebbe dire sbagliarla su ogni
+   titolo. */
+const LABEL_HEIGHT = 11;
+/* Aria fra due riquadri. Due nomi che si toccano si leggono male quanto due
+   che si accavallano. */
+const LABEL_GAP = 3;
 /* Sotto questa soglia si scrivono tutti: dieci su undici sarebbe una scelta
    che non si capisce, e undici nomi ci stanno. */
 const LABEL_ALL_UNDER = 13;
@@ -96,6 +106,93 @@ export function labelledNodes(nodes) {
     (a, b) => (b.degree || 0) - (a.degree || 0) || String(a.label).localeCompare(String(b.label)),
   );
   return new Set(ordinati.slice(0, MAX_LABELS).map((n) => n.id));
+}
+
+/* Due riquadri si toccano? `LABEL_GAP` allarga quello che si sta provando, e
+   basta: allargarli entrambi conterebbe l'aria due volte. */
+function overlap(a, b) {
+  return (
+    a.x < b.x + b.w + LABEL_GAP &&
+    b.x < a.x + a.w + LABEL_GAP &&
+    a.y < b.y + b.h + LABEL_GAP &&
+    b.y < a.y + a.h + LABEL_GAP
+  );
+}
+
+/** I due posti in cui un nome puo' stare, in ordine di preferenza: sotto il
+ *  pallino, e — se sotto e' occupato — sopra.
+ *
+ *  Sopra lo scarto e' **piu' largo di quanto sembri necessario**, e non e' per
+ *  simmetria: `y` di un testo e' la linea di base, quindi andando in alto il
+ *  riquadro scende sotto il punto d'ancoraggio di un paio di pixel. Con lo
+ *  stesso numero di sotto, il fondo del nome finiva dentro l'aria del pallino
+ *  del vicino, e il posto di riserva non era piu' un posto.
+ */
+export function labelOffsets(radius) {
+  return [radius + 10, -(radius + 8)];
+}
+
+/** Il riquadro che un nome occupa, dato lo scarto verticale.
+ *
+ *  `y` di un testo SVG e' la **linea di base**, non il bordo alto: il riquadro
+ *  comincia sopra di essa, e il testo ci scende sotto per i discendenti. Oggi
+ *  i riquadri si confrontano solo fra loro, quindi una traslazione comune non
+ *  cambierebbe nessuna decisione — ma un riquadro che dice il falso su dove
+ *  sta il testo e' una trappola pronta per il primo che gli confronti accanto
+ *  qualcos'altro. Esportata apposta: e' una promessa sulla geometria, e le
+ *  promesse si misurano.
+ */
+export function labelBox(item, offset) {
+  return {
+    x: item.x - item.w / 2,
+    y: item.y + offset - LABEL_HEIGHT * 0.8,
+    w: item.w,
+    h: LABEL_HEIGHT,
+  };
+}
+
+/** Dove va ogni nome, e quali non ci stanno.
+ *
+ *  **Chi arriva prima sceglie**, e arriva prima la pagina piu' collegata: e' la
+ *  stessa gerarchia con cui si decide chi un nome ce l'ha
+ *  (v. `labelledNodes`), e senza un ordine fisso la mappa cambierebbe
+ *  etichette fra due aperture disegnando gli stessi nodi. A parita' decide il
+ *  nome.
+ *
+ *  Un nome che non trova posto **sparisce**, e non si accavalla: due parole
+ *  sovrapposte non sono due informazioni, sono zero. La pagina resta il suo
+ *  pallino, si tocca lo stesso, e il suo nome sta nell'elenco accanto.
+ *
+ *  **Si scansano fra loro e basta: i pallini non sono ostacoli.** Ci ho provato,
+ *  e il conto dice di no. Un nome sta dieci pixel sotto il bordo del suo
+ *  cerchio, cioe' dentro l'aria che separa due riquadri — quindi litigava
+ *  perfino col proprio pallino, e tutte le etichette sparivano. Escluso il
+ *  proprio, restava che un nome largo fino a 90 px su nodi distanti 40 tocca
+ *  sempre il cerchio del vicino: misurato, tre pagine in fila ne conservavano
+ *  **una su tre**. Un nome che sfiora un pallino si legge; un nome che non c'e'
+ *  no, e la mappa esiste per leggere i nomi.
+ *
+ *  @param items  `[{id, x, y, w, r, priority}]` in coordinate del disegno.
+ *  @returns `Map<id, offset>`, solo per i nomi che ci stanno.
+ */
+export function placeLabels(items) {
+  const presi = [];
+  const scelti = new Map();
+  const ordinati = [...(items || [])].sort(
+    (a, b) =>
+      (b.priority || 0) - (a.priority || 0) ||
+      String(a.id).localeCompare(String(b.id)),
+  );
+  for (const item of ordinati) {
+    for (const offset of labelOffsets(item.r || 0)) {
+      const box = labelBox(item, offset);
+      if (presi.some((p) => overlap(p, box))) continue;
+      presi.push(box);
+      scelti.set(item.id, offset);
+      break;
+    }
+  }
+  return scelti;
 }
 
 export class CasaMap {
@@ -179,12 +276,14 @@ export class CasaMap {
 
     /* Il nome sotto il pallino, e solo per i nodi che ne portano uno. Niente
        `pointer-events`: il bersaglio e' il pallino, e un'etichetta che
-       intercetta il tocco fa mancare la pagina accanto. */
+       intercetta il tocco fa mancare la pagina accanto. Lo scarto verticale
+       vero lo sceglie `placeLabels` a fisica ferma; questo e' il posto di
+       preferenza, buono finche' i nodi si muovono. */
     const conNome = labelledNodes(nodes);
     const name = root.append('g').attr('class', 'casa-map-labels')
       .selectAll('text').data(nodes.filter((d) => conNome.has(d.id))).join('text')
       .text((d) => shortLabel(d.label))
-      .attr('dy', (d) => radiusOf(d.degree) + 10);
+      .attr('dy', (d) => labelOffsets(radiusOf(d.degree))[0]);
 
     this._sim = d3.forceSimulation(nodes)
       /* Misurati su un quaderno vero da 31 pagine: con 58 e -120 i nodi si
@@ -221,6 +320,7 @@ export class CasaMap {
        stanza vuota. Si inquadra a riposo e non a ogni tick: inseguire una
        simulazione che si assesta vuol dire farle ballare sotto lo sguardo. */
     this._sim.on('end', () => {
+      this._placeLabels(name);
       const xs = nodes.map((n) => n.x);
       const ys = nodes.map((n) => n.y);
       const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
@@ -235,5 +335,34 @@ export class CasaMap {
         .scale(k);
       svg.call(zoom.transform, t);
     });
+  }
+
+  /* Misura i nomi, li colloca, e toglie quelli che non ci stanno.
+   *
+   *  Si fa **una volta sola**, a fisica ferma: rifarlo a ogni tick vorrebbe
+   *  dire far lampeggiare i nomi mentre la nuvola si assesta, e costerebbe una
+   *  misura di testo per etichetta per frame. Lo zoom non lo rifa' perche' non
+   *  cambia niente: ingrandire e' una trasformazione del gruppo, e due
+   *  riquadri che non si toccavano non cominciano a toccarsi.
+   */
+  _placeLabels(selection) {
+    const misure = [];
+    selection.each(function (d) {
+      misure.push({
+        id: d.id,
+        x: d.x,
+        y: d.y,
+        /* La larghezza vera del testo reso. `getComputedTextLength` e non
+           `getBBox`: vuole la stessa misura ma senza il riquadro, e su una
+           WebView e' la strada piu' corta. */
+        w: this.getComputedTextLength ? this.getComputedTextLength() : 0,
+        r: radiusOf(d.degree),
+        priority: d.degree || 0,
+      });
+    });
+    const scelti = placeLabels(misure);
+    selection
+      .attr('dy', (d) => scelti.get(d.id) ?? 0)
+      .attr('display', (d) => (scelti.has(d.id) ? null : 'none'));
   }
 }
