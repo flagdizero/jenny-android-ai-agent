@@ -1349,21 +1349,20 @@ body.casa {
    atterrate su ogni riga della conversazione: i messaggi sono diventati
    schede e Jenny e' finita **dietro la chat**. Visto sul telefono, 19/09/2026.
 
-   Le schede delle due stanze di impostazioni passano **davanti** a lei.
-   Sono opache, e senza questo a taglia grande le si siede sopra: la nota
-   sotto la casella finiva dietro la sua testa (visto col rig, 19/09/2026).
-   Cosi' invece fa capolino da dietro, che e' poi come la disegna la tavola.
+   **Le schede erano passate davanti a lei, ed era sbagliato** (corretto il
+   19/09/2026 su segnalazione dall'uso: «vedo jenny dietro i menu»). La
+   ragione c'era — a taglia grande le si sedeva sopra, e una nota finiva
+   dietro la sua testa — ma il rimedio ha creato una **incoerenza**: lei sta
+   davanti in chat, davanti fra le pagine di un quaderno, e solo qui finiva
+   sotto, tagliata a meta' da una scheda. Lo stesso sprite non puo' stare
+   sopra in una stanza e sotto in un'altra.
 
-   `position: relative` sulle schede e non sul contenitore che scorre, e la
-   differenza e' il tocco: un contenitore davanti prenderebbe anche le
-   pressioni sopra di lei — comprese quelle sulla sua parte scoperta, che e'
-   il modo in cui la si mette via. Davanti c'e' solo cio' che e' opaco. */
-.casa-card,
-.casa-rows,
-.casa-workshop {
-  position: relative;
-  z-index: 6;
-}
+   Quel che risolve il difetto originale resta, ed e' l'altra meta' del fix:
+   il fondo delle stanze e' alto quanto lei (`--jenny-art-h` in
+   `.casa-tu-scroll`), quindi l'ultima riga si porta **sopra** di lei
+   scorrendo, invece di restarle sotto. E' esattamente come si comporta la
+   chat, dove lei copre l'ultimo messaggio finche' non lo scorri — e dove
+   nessuno l'ha mai letta come un difetto, perche' e' coerente. */
 
 .casa-card {
   flex: none;

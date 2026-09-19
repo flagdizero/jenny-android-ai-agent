@@ -275,19 +275,45 @@ def _rule(css: str, selector: str) -> str:
     return "\n".join(corpi)
 
 
-def test_the_cards_pass_in_front_of_her() -> None:
-    """A taglia grande lei si siede sulla pagina: le schede delle due stanze
-    le passano davanti. Il numero deve stare **sopra** il suo, e non e' una
-    costante scritta a caso — se un giorno il suo salisse, queste righe
-    smetterebbero di coprirla e nessuno lo direbbe."""
+def test_she_is_on_top_of_everything_in_the_house() -> None:
+    """Lo sprite di Jenny e' **l'unico** `z-index` del foglio della casa.
+
+    Non e' un dettaglio di stile: e' l'invariante che tiene. Finche' nessun
+    altro ne dichiara uno, lei sta sopra qualunque cosa la pagina metta —
+    comprese le stanze che non esistono ancora. Il difetto nasce nel momento
+    in cui qualcuno ne aggiunge un secondo, ed e' quel che e' successo: per un
+    giro le schede delle impostazioni le sono passate davanti, lasciandola
+    tagliata a meta' mentre in chat e fra le pagine resta in cima. «Vedo jenny
+    dietro i menu», dall'uso, il 19/09/2026 — e prima ancora, con lo stesso
+    numero preso da un nome sbagliato, «Jenny dietro la chat».
+
+    Il difetto che quel numero voleva risolvere resta risolto dall'altra
+    meta': il fondo delle stanze e' alto quanto lei, quindi l'ultima riga si
+    porta sopra di lei **scorrendo**, come fa la chat con l'ultimo messaggio.
+    """
     css = CSS.read_text(encoding="utf-8")
-    m = re.search(r"\.casa-jenny \{[^}]*z-index: (\d+)", css, re.S)
-    assert m, "lo sprite non ha piu' un z-index"
-    suo = int(m.group(1))
-    corpo = _rule(css, ".casa-workshop")
-    z = re.search(r"z-index: (\d+)", corpo)
-    assert z and int(z.group(1)) > suo, (
-        f"le schede stanno a {z.group(1) if z else 'nessuno'} e lei a {suo}: le finisce sopra"
+    livelli = []
+    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        m = re.search(r"z-index:\s*(-?\d+)", corpo)
+        if not m:
+            continue
+        nomi = [s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()]
+        livelli.append((int(m.group(1)), nomi))
+
+    suoi = [z for z, nomi in livelli if ".casa-jenny" in nomi]
+    assert len(suoi) == 1, f"lo sprite non ha piu' esattamente un livello suo: {suoi}"
+    altri = [(z, nomi) for z, nomi in livelli if ".casa-jenny" not in nomi]
+    assert not altri, (
+        f"qualcun altro dichiara un livello: {altri}. Se serve davvero, deve "
+        f"stare **sotto** il suo ({suoi[0]}) — e va scritto perche'"
+    )
+
+    # E il fondo che le lascia il posto: e' quello che rende superfluo
+    # coprirla, quindi toglierlo riaprirebbe il difetto per cui era nata.
+    scroll = _rule(css, ".casa-tu-scroll")
+    assert "--jenny-art-h" in scroll, (
+        "il fondo delle stanze non e' piu' alto quanto lei: l'ultima riga non "
+        "si puo' piu' portare sopra di lei scorrendo"
     )
 
 
