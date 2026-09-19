@@ -424,6 +424,43 @@ class TestElencoProgetti:
         payload = await _get_projects(handler)
         assert payload["projects"] == []
 
+    async def test_ogni_progetto_porta_il_numero_delle_sue_pagine(
+        self, handler, ctx, workspace
+    ):
+        """La pastiglia «N pagine» dell'intestazione legge di qui.
+
+        Sta su questa route e non su una sua perche' e' l'unica che l'elenco
+        chiama gia'; l'alternativa — ``/api/graph`` — e' la stessa cifra dentro
+        una risposta che porta anche l'indice full-text.
+
+        Il conteggio e' **ricorsivo** — le wiki vere mettono le pagine in
+        ``concepts/`` ed ``entities/``, e un conteggio piatto direbbe zero
+        proprio per i nove quaderni su quattordici che li usano — e conta con
+        la regola di chi quelle pagine le elenca: ``summaries/`` resta fuori.
+        Con una ``rglob`` nuda la porta diceva «7» e la stanza dietro mostrava
+        sei righe.
+        """
+        await _create(ctx, name="alpha", seed="a")
+        pages = workspace / "wikis" / "alpha" / "wiki"
+        (pages / "concepts").mkdir(parents=True, exist_ok=True)
+        (pages / "concepts" / "uno.md").write_text("# uno", encoding="utf-8")
+        (pages / "concepts" / "due.md").write_text("# due", encoding="utf-8")
+        # Il livello di citazione: non e' una pagina, e non entra nel grafo.
+        (pages / "summaries").mkdir(parents=True, exist_ok=True)
+        (pages / "summaries" / "fonte.md").write_text("# fonte", encoding="utf-8")
+        # Fuori dalla pages-dir: la fonte grezza non e' una pagina.
+        (workspace / "wikis" / "alpha" / "raw").mkdir(parents=True, exist_ok=True)
+        (workspace / "wikis" / "alpha" / "raw" / "scarto.md").write_text("x", encoding="utf-8")
+
+        payload = await _get_projects(handler)
+
+        voce = next(p for p in payload["projects"] if p["name"] == "alpha")
+        tutti = sum(1 for _ in pages.rglob("*.md"))
+        assert voce["pages"] == tutti - 1, (
+            f"il riassunto e' stato contato: {voce['pages']} su {tutti} file"
+        )
+        assert voce["pages"] >= 3, payload
+
     async def test_serve_il_token(self, handler):
         request = WsRequest(path="/api/projects", headers=Headers())
         response = await handler.wiki_routes.dispatch(request, "/api/projects")

@@ -146,6 +146,7 @@ class Panel {
   __MAYBE_CHECK__
   __PICK__
   __NEW_ROW__
+  __PAGES_OF__
 }
 
 /* Tutti i nodi, in ordine di disegno. */
@@ -230,6 +231,7 @@ def _harness() -> str:
         .replace("__MAYBE_CHECK__", _member(src, "_maybeCheck"))
         .replace("__PICK__", _member(src, "_pick"))
         .replace("__NEW_ROW__", _member(src, "_newRow"))
+        .replace("__PAGES_OF__", _member(src, "pagesOf"))
     )
 
 
@@ -539,4 +541,61 @@ def test_you_can_make_the_first_notebook_from_an_empty_panel() -> None:
       assert.ok(nuovoDi(panel), 'niente quaderni e nessun modo di farne uno');
       const rotto = await open('fail');
       assert.ok(nuovoDi(rotto), 'una lettura fallita si è portata via anche il comando');
+    """)
+
+
+# ── Quante pagine ha un quaderno ────────────────────────────────────────────
+
+
+def test_the_list_carries_the_page_count_it_is_given() -> None:
+    """La pastiglia «N pagine» dell'intestazione legge di qui.
+
+    Il conteggio lo manda `/api/projects` insieme al nome e alla data;
+    `ConversationList` mappa la voce campo per campo, e un campo non nominato
+    si perde in silenzio — la porta resterebbe senza numero per sempre, senza
+    un errore da nessuna parte.
+    """
+    _run_js("""
+      const list = new ConversationList(async () => ({
+        dir: 'wikis',
+        projects: [{ name: 'orto', modified: 20, pages: 34 }],
+        unopenable: [],
+      }));
+      assert.equal(await list.load(), true);
+      assert.equal(list.projects[0].pages, 34, 'il conteggio non arriva alla voce');
+    """)
+
+
+def test_a_gateway_that_does_not_send_the_count_says_it_does_not_know() -> None:
+    """`null` e non zero: «non lo so» e «e' vuoto» sono due cose diverse, e
+    solo la seconda si scrive a schermo."""
+    _run_js("""
+      const list = new ConversationList(async () => ({
+        dir: 'wikis', projects: [{ name: 'orto', modified: 20 }], unopenable: [],
+      }));
+      await list.load();
+      assert.equal(list.projects[0].pages, null);
+    """)
+
+
+def test_the_panel_answers_how_many_pages_and_reads_the_list_if_it_has_to() -> None:
+    """La pastiglia compare entrando in un quaderno, che di solito e' prima
+    che la tendina sia stata aperta anche una volta: se la cache e' vuota, la
+    domanda la riempie invece di rispondere «non lo so» per sempre."""
+    _run_js("""
+      const panel = new Panel();
+      let letture = 0;
+      panel._list = new ConversationList(async () => {
+        letture += 1;
+        return { dir: 'wikis', projects: [{ name: 'orto', modified: 1, pages: 7 }],
+                 unopenable: [] };
+      });
+      assert.equal(await panel.pagesOf('orto'), 7);
+      assert.equal(letture, 1, 'la cache vuota non e’ stata riempita');
+      // La seconda volta la cache c'e': non si rilegge.
+      assert.equal(await panel.pagesOf('orto'), 7);
+      assert.equal(letture, 1, 'riletto l’elenco per una risposta che sapeva gia’');
+      // Un quaderno che l'elenco non conosce: «non lo so», non zero.
+      assert.equal(await panel.pagesOf('sconosciuto'), null);
+      assert.equal(await panel.pagesOf(''), null);
     """)

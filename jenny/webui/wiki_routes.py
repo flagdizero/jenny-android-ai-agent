@@ -86,11 +86,26 @@ def safe_wiki_page_path(input_path: str) -> str | None:
 def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Le wiki divise in due: quelle apribili come chat, e quelle no.
 
-    ``[{name, modified}]`` per ognuna, nell'ordine in cui le da' la discovery.
-    ``modified`` e' l'mtime della radice della wiki, che oggi e' il solo segnale
-    di attivita' disponibile: la conversazione di un progetto non esiste ancora
-    (item 3). Quando esistera', l'ultima attivita' dovra' venire da lei, non dal
-    filesystem — un `lint` non e' attivita' dell'utente.
+    ``[{name, modified, pages}]`` per ognuna, nell'ordine in cui le da' la
+    discovery. ``modified`` e' l'mtime della radice della wiki, che oggi e' il
+    solo segnale di attivita' disponibile: la conversazione di un progetto non
+    esiste ancora (item 3). Quando esistera', l'ultima attivita' dovra' venire
+    da lei, non dal filesystem — un `lint` non e' attivita' dell'utente.
+
+    ``pages`` e' il numero di pagine della wiki, ed e' qui e non su una route
+    sua perche' questa e' la sola chiamata che l'elenco fa gia'. Costa una
+    ``rglob`` per quaderno: misurato sul Titan 2, contare ricorsivamente i
+    ``.md`` di quattordici quaderni (464 file) sta in **20 ms** di flash. La
+    stessa cifra la calcola gia' ``build_home_graph``, ma la mette nel
+    ``degree`` di un nodo del grafo — cioe' dentro una risposta da ~110 kB
+    (grafo + indice full-text) che non si puo' chiedere per scrivere "34".
+
+    **Conta con la regola di chi le elenca**, ``is_wiki_page_rel``, e non tutti
+    i ``.md``: ``summaries/`` non e' fatto di pagine di contenuto e resta fuori
+    da grafo, albero e ricerca. Con una ``rglob`` nuda la pastiglia
+    dell'intestazione diceva «7 pagine» e la stanza dietro ne elencava sei —
+    visto al primo giro sul banco, su un quaderno con un riassunto dentro. Un
+    numero su una porta deve contare quel che c'e' dall'altra parte.
 
     **La divisione e' il punto.** Il nome di una cartella e' anche il nome di una
     sessione (``project:<nome>``), e i due lati non facevano la stessa domanda:
@@ -111,7 +126,7 @@ def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[
     continuerebbe a offrire quel che non si apre.
     """
     from jenny.session.keys import is_valid_project_name
-    from jenny.utils.wiki_paths import discover_wiki_roots
+    from jenny.utils.wiki_paths import discover_wiki_roots, is_wiki_page_rel
 
     projects: list[dict[str, Any]] = []
     unopenable: list[dict[str, Any]] = []
@@ -120,7 +135,17 @@ def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[
             modified = int(root.stat().st_mtime)
         except OSError:
             modified = 0
-        entry = {"name": name, "modified": modified}
+        try:
+            pages_dir = root / "wiki"
+            pages = sum(
+                1 for f in pages_dir.rglob("*.md")
+                if is_wiki_page_rel(f.relative_to(pages_dir))
+            )
+        except OSError:
+            # Una cartella sparita fra la discovery e il conteggio: zero e'
+            # la risposta onesta, e non deve far cadere l'intero elenco.
+            pages = 0
+        entry = {"name": name, "modified": modified, "pages": pages}
         if is_valid_project_name(name):
             projects.append(entry)
         else:

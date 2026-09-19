@@ -170,8 +170,14 @@ export class ConversationList {
     try {
       const data = await this._fetch();
       this.dir = data?.dir || DEFAULT_PROJECTS_DIR;
+      /* `pages` viaggia con la voce: la pastiglia dell'intestazione lo legge di
+         qui invece di chiedere `/api/graph` — che e' la stessa cifra dentro una
+         risposta da ~110 kB, indice full-text compreso, per scrivere un numero.
+         Puo' mancare (un gateway piu' vecchio): chi disegna lo distingue da
+         zero, che e' un quaderno vuoto davvero. */
       this.projects = byRecent(data?.projects, (it) => ({
         name: it.name, modified: it.modified,
+        pages: typeof it.pages === 'number' ? it.pages : null,
       }));
       // Stesso ordine delle righe apribili, e `reason` viaggia con la voce: la
       // riga la disegna chi sa cosa dire, e cosa dire dipende dal motivo.
