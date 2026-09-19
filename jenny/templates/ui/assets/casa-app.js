@@ -27,6 +27,7 @@ import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
 import { CasaJenny } from './casa-jenny.js';
 import { CasaModel } from './casa-model.js';
+import { CasaUpdates } from './casa-updates.js';
 import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -63,6 +64,7 @@ const BACK_TO = {
   tu: 'chat',
   jenny: 'tu',
   model: 'tu',
+  updates: 'tu',
 };
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
@@ -119,6 +121,7 @@ class CasaApp {
       onWorkshop: () => this._openInWorkshop(null),
       onJenny: () => this.openJenny(),
       onModel: () => this.openModel(),
+      onUpdates: () => this.openUpdates(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
@@ -127,6 +130,12 @@ class CasaApp {
        `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
        riga di «Tu e Jenny» resterebbe sulla marca di prima. */
     this.modelRoom = new CasaModel({ onSettings: (data) => this._keepSettings(data) });
+    /* Gli aggiornamenti: la seconda vista di `shared/update-flow.js`, di cui
+       l'officina e' la prima. Un controllo riuscito porta una versione fresca,
+       e quella deve riscrivere la riga **e** la cache del guscio. */
+    this.updatesRoom = new CasaUpdates({
+      onVersion: (version) => this._keepVersion(version),
+    });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
        sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
@@ -387,11 +396,12 @@ class CasaApp {
     this.tu.open();
     this.tu.sayJenny(this.jennyRoom.value());
     const data = await this._askSettings();
-    this.tu.showVersion(data?.version?.current);
     this.jennyRoom.setFloating(data?.floating || null);
     this.tu.sayJenny(this.jennyRoom.value());
     this.modelRoom.setSettings(data);
     this.tu.sayModel(this.modelRoom.value());
+    this.updatesRoom.setVersion(data?.version || null);
+    this.tu.sayUpdates(this.updatesRoom.value());
   }
 
   /** La stanza di lei: com'e' fatta. Ci si arriva solo da «Tu e Jenny», che
@@ -407,6 +417,23 @@ class CasaApp {
   openModel() {
     this._setView('model');
     this.modelRoom.open();
+  }
+
+  /** «Aggiornamenti». */
+  openUpdates() {
+    this._setView('updates');
+    this.updatesRoom.open();
+  }
+
+  /* Una versione fresca arrivata da un controllo manuale: va nella riga e
+     nella cache, o alla prossima apertura di «Tu e Jenny» si rileggerebbe
+     quella vecchia da un payload messo da parte prima del controllo. */
+  _keepVersion(version) {
+    if (!version) return;
+    this._settings?.then?.((data) => {
+      if (data) data.version = version;
+    });
+    this.tu.sayUpdates(this.updatesRoom.value());
   }
 
   /* Il payload fresco che torna da un salvataggio: ha la stessa forma di
@@ -460,6 +487,10 @@ class CasaApp {
     }
     this.view = view;
     this.shell?.setAttribute('data-view', view);
+    /* Il polling dell'installazione non tiene sveglia una stanza che non c'e'
+       piu'. Rientrando si riaggancia da se' (`open()`), perche' l'installazione
+       intanto e' andata avanti per conto suo. */
+    if (view !== 'updates') this.updatesRoom?.close();
 
     if (view === 'chat') {
       this.map?.stop();
@@ -512,6 +543,7 @@ class CasaApp {
     if (this.view === 'tu') this._setHeadTitle(i18n.t('casa.tu.title'));
     if (this.view === 'jenny') this._setHeadTitle(i18n.t('casa.jenny.title'));
     if (this.view === 'model') this._setHeadTitle(i18n.t('casa.model.title'));
+    if (this.view === 'updates') this._setHeadTitle(i18n.t('casa.updates.title'));
     this._applyBackLabel();
   }
 
@@ -982,6 +1014,7 @@ class CasaApp {
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
     this.tu?.applyTranslations();
     this.modelRoom?.applyTranslations();
+    this.updatesRoom?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.tu?.sayJenny(this.jennyRoom?.value());
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));

@@ -47,8 +47,9 @@ export function shortThemeName(label) {
 export class CasaTu {
   /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre.
    *  @param onJenny     la riga che porta da lei.
-   *  @param onModel     la riga che porta a chi risponde. */
-  constructor({ onWorkshop, onJenny, onModel } = {}) {
+   *  @param onModel     la riga che porta a chi risponde.
+   *  @param onUpdates   la riga che porta agli aggiornamenti. */
+  constructor({ onWorkshop, onJenny, onModel, onUpdates } = {}) {
     this.el = document.getElementById('casa-tu');
     this.themesEl = document.getElementById('casa-themes');
     this.themeLabel = document.getElementById('casa-theme-label');
@@ -56,11 +57,12 @@ export class CasaTu {
     this.themeDesc = document.getElementById('casa-theme-desc');
     this.workshopName = document.getElementById('casa-workshop-name');
     this.workshopHint = document.getElementById('casa-workshop-hint');
-    this.versionEl = document.getElementById('casa-version');
     this.jennyLabel = document.getElementById('casa-jenny-label');
     this.jennyValue = document.getElementById('casa-jenny-value');
     this.modelLabel = document.getElementById('casa-model-label');
     this.modelValue = document.getElementById('casa-model-value');
+    this.updatesLabel = document.getElementById('casa-updates-label');
+    this.updatesValue = document.getElementById('casa-updates-value');
     this._painted = false;
 
     document.getElementById('casa-workshop')
@@ -69,6 +71,8 @@ export class CasaTu {
       ?.addEventListener('click', () => onJenny?.());
     document.getElementById('casa-row-model')
       ?.addEventListener('click', () => onModel?.());
+    document.getElementById('casa-row-updates')
+      ?.addEventListener('click', () => onUpdates?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
       if (card) this.pickTheme(card.dataset.theme);
@@ -80,16 +84,16 @@ export class CasaTu {
     this._paintThemes();
   }
 
-  /** Il numero di versione, quando si sa.
+  /** La versione, sulla riga che porta agli aggiornamenti.
    *
-   *  Una versione che non si sa non si scrive: la riga resta vuota, e vuota
-   *  non occupa. Non e' un guasto di cui valga la pena parlare a chi sta
+   *  Stava su una riga muta in fondo alla pagina, e un numero e basta non e'
+   *  un'impostazione: e' un'etichetta. Adesso e' il valore di una riga che si
+   *  apre, come il tema e come lei. Una versione che non si sa resta una
+   *  stringa vuota: non e' un guasto di cui valga la pena parlare a chi sta
    *  scegliendo un tema.
    */
-  showVersion(current) {
-    if (!current || !this.versionEl) return;
-    this.versionEl.textContent = i18n.t('casa.tu.version', { version: current });
-    this.versionEl.hidden = false;
+  sayUpdates(value) {
+    if (this.updatesValue) this.updatesValue.textContent = value || '';
   }
 
   /** Come sta lei, sulla riga che porta da lei: «piccola · flottante». */
@@ -108,6 +112,7 @@ export class CasaTu {
     if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
     if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('casa.jenny.title');
     if (this.modelLabel) this.modelLabel.textContent = i18n.t('casa.model.title');
+    if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('casa.updates.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();

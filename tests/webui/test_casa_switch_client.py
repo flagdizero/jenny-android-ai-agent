@@ -176,7 +176,7 @@ class App {
     this.tu = {
       applyTranslations: () => {},
       open: () => this.fatti.push('tu aperta'),
-      showVersion: (v) => this.versioni.push(v),
+      sayUpdates: (v) => this.versioni.push(v),
       sayJenny: (v) => { this.valoreJenny = v; },
       sayModel: (v) => { this.valoreModello = v; },
     };
@@ -187,6 +187,14 @@ class App {
       value: () => 'piccola',
     };
     this.impostazioniDate = [];
+    this.versioniDate = [];
+    this.updatesRoom = {
+      applyTranslations: () => {},
+      open: () => this.fatti.push('aggiornamenti aperta'),
+      close: () => this.fatti.push('aggiornamenti chiusa'),
+      setVersion: (v) => this.versioniDate.push(v),
+      value: () => '0.11.0',
+    };
     this.modelRoom = {
       applyTranslations: () => {},
       open: () => this.fatti.push('modello aperta'),
@@ -251,6 +259,7 @@ class App {
   __GO_BACK_ONE_ROOM__
   __OPEN_TU__
   __OPEN_JENNY__
+  __OPEN_UPDATES__
   __ASK_SETTINGS__
   __SET_VIEW__
   __APPLY_HEAD__
@@ -297,6 +306,7 @@ def _harness() -> str:
         .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
         .replace("__OPEN_TU__", _member(src, "openTu"))
         .replace("__OPEN_JENNY__", _member(src, "openJenny"))
+        .replace("__OPEN_UPDATES__", _member(src, "openUpdates"))
         .replace("__ASK_SETTINGS__", _member(src, "_askSettings"))
         .replace("__APPLY_BACK_LABEL__", _member(src, "_applyBackLabel"))
         .replace("__SET_VIEW__", _member(src, "_setView"))
@@ -805,7 +815,7 @@ def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
       app._setView('chat');
       await app.openTu();
       assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
-      assert.deepEqual(app.versioni, ['0.11.0', '0.11.0']);
+      assert.deepEqual(app.versioniDate, [{ current: '0.11.0' }, { current: '0.11.0' }]);
       assert.deepEqual(app.flottanti, [{ available: true }, { available: true }]);
     """)
 
@@ -825,8 +835,8 @@ def test_a_settings_call_that_failed_is_tried_again() -> None:
       await app.openTu();
       assert.equal(settingsCalls, 2, 'il guscio si e\u2019 ricordato del fallimento');
       /* Anche il giro andato male passa dalla stanza: le dice «non lo so», e
-         quella non scrive niente. E' il patto di `showVersion`. */
-      assert.deepEqual(app.versioni, [undefined, '0.12.0']);
+         quella non scrive niente. */
+      assert.deepEqual(app.versioniDate, [null, { current: '0.12.0' }]);
     """)
 
 
@@ -843,4 +853,28 @@ def test_her_room_hangs_off_you_and_jenny() -> None:
       assert.equal(app.view, 'tu');
       app.handleHardwareBack();
       assert.equal(app.view, 'chat');
+    """)
+
+
+def test_leaving_the_updates_room_stops_its_polling() -> None:
+    """Un'installazione avviata va avanti per conto suo, ma il suo polling non
+    deve tenere sveglia una stanza che non e' piu' a schermo — e rientrando si
+    riaggancia da se'. Il guscio lo dice a **ogni** cambio di stanza, non solo
+    tornando indietro: dalla chat, da un quaderno, da dove capita."""
+    _run_js("""
+      const app = casa();
+      app.openUpdates();
+      assert.equal(app.view, 'updates');
+      assert.ok(app.fatti.includes('aggiornamenti aperta'));
+      assert.ok(!app.fatti.includes('aggiornamenti chiusa'), 'chiusa appena aperta');
+
+      app.goBackOneRoom();
+      assert.equal(app.view, 'tu', 'da li si torna a «Tu e Jenny»');
+      assert.ok(app.fatti.includes('aggiornamenti chiusa'), 'il polling resta vivo');
+
+      /* E anche uscendo da un'altra parte: il guscio non sa da dove vieni. */
+      app.fatti.length = 0;
+      app.openUpdates();
+      app._setView('chat');
+      assert.ok(app.fatti.includes('aggiornamenti chiusa'));
     """)

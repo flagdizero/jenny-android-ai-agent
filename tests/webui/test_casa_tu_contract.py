@@ -76,7 +76,7 @@ def test_the_workshop_card_is_the_other_way_in() -> None:
         "il guscio non passa piu' la porta dell'officina alla stanza"
     )
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-workshop", "casa-workshop-name", "casa-workshop-hint", "casa-version"):
+    for el_id in ("casa-workshop", "casa-workshop-name", "casa-workshop-hint"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
 
 
@@ -84,7 +84,13 @@ def test_the_rooms_arrive_on_the_phone() -> None:
     """Un file fuori dal manifest non da' 404: `_serve_static` ricade
     sull'officina. Il difetto si vede solo sul telefono, ed e' una stanza che
     non si apre."""
-    for asset in ("assets/casa-tu.js", "assets/casa-jenny.js", "assets/casa-model.js"):
+    for asset in (
+        "assets/casa-tu.js",
+        "assets/casa-jenny.js",
+        "assets/casa-model.js",
+        "assets/casa-updates.js",
+        "assets/shared/update-flow.js",
+    ):
         assert asset in _UI_MANIFEST, (
             f"{asset} non e' nel manifest: sul telefono la stanza non esiste"
         )
@@ -180,9 +186,13 @@ def test_the_fourth_room_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         casa = data["casa"]
-        for key in ("title", "open", "workshopHint", "version"):
+        for key in ("title", "open", "workshopHint"):
             assert casa["tu"].get(key, "").strip(), f"casa.tu.{key} manca in {locale}.json"
-        assert "{version}" in casa["tu"]["version"], "la riga della versione non interpola niente"
+        # La versione ha cambiato posto: era una riga muta in fondo alla
+        # pagina, adesso e' il valore della riga che apre gli aggiornamenti.
+        for key in ("title", "current", "waiting", "upToDate"):
+            assert casa["updates"].get(key, "").strip(), f"casa.updates.{key} manca in {locale}.json"
+        assert "{version}" in casa["updates"]["current"], "la riga non interpola la versione"
         parole[locale] = casa["tu"]
     assert parole["it"] != parole["en"], "una delle due lingue non e' stata tradotta"
 
@@ -316,9 +326,9 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
 
     html = INDEX.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="casa-(?:tu|jenny-room|model-room)".*?</section>', html, re.S
+        r'<section class="casa-(?:tu|jenny-room|model-room|updates-room)".*?</section>', html, re.S
     )
-    assert len(stanze) == 3, f"le tre stanze non si trovano piu' ({len(stanze)})"
+    assert len(stanze) == 4, f"le quattro stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
     for stanza in stanze:
         for valore in re.findall(r'class="([^"]+)"', stanza):
@@ -513,7 +523,7 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="casa-(?:tu|jenny-room|model-room)".*?</section>', html, re.S
+        r'<section class="casa-(?:tu|jenny-room|model-room|updates-room)".*?</section>', html, re.S
     )
     assert stanze, "le stanze non si trovano piu'"
 
@@ -533,3 +543,48 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
         f"queste classi accendono un elemento che nasce chiuso: {sorted(set(guasti))} "
         "— serve una regola `[hidden]` che le batta"
     )
+
+
+# ── «Aggiornamenti» ─────────────────────────────────────────────────────────
+
+
+def test_the_updates_row_carries_the_version() -> None:
+    """La versione stava su una riga muta in fondo alla pagina. Un numero e
+    basta non e' un'impostazione: e' un'etichetta. Adesso apre la stanza che
+    quel numero puo' cambiarlo."""
+    html = INDEX.read_text(encoding="utf-8")
+    for el_id in ("casa-row-updates", "casa-updates-label", "casa-updates-value"):
+        assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
+    assert 'id="casa-version"' not in html, (
+        "la riga muta della versione e' ancora li': due posti che dicono la "
+        "stessa cosa, e uno dei due si dimentica"
+    )
+    tu = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('casa-row-updates')" in tu and "onUpdates?.()" in tu
+    assert "onUpdates: () => this.openUpdates()," in _app()
+
+
+def test_the_house_and_the_workshop_share_one_update_machine() -> None:
+    """Il punto dell'estrazione. Due copie di una macchina a stati non
+    sbagliano subito: sbagliano dopo, quando una impara qualcosa che l'altra
+    non sa — e i due casi che ingannano (la connessione che cade *perche'*
+    l'app si sta riavviando, il rifiuto che non deve sporcare la fase) sono
+    esattamente il genere di cosa che si impara una volta sola."""
+    flusso = (ASSETS / "shared" / "update-flow.js").read_text(encoding="utf-8")
+    casa = (ASSETS / "casa-updates.js").read_text(encoding="utf-8")
+    officina = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+
+    for vista, sorgente in (("la casa", casa), ("l'officina", officina)):
+        assert "update-flow.js" in sorgente, f"{vista} non usa piu' il flusso condiviso"
+
+    # Le rotte si chiamano da un posto solo: chi le chiama, le implementa.
+    for vista, sorgente in (("la casa", casa), ("l'officina", officina)):
+        rotte = re.findall(r"/api/updates/\w+", sorgente)
+        assert not rotte, f"{vista} parla da sola con {sorted(set(rotte))}"
+    assert re.findall(r"/api/updates/\w+", flusso), "il flusso non chiama piu' nessuna rotta"
+
+    # E le fasi hanno una tabella sola.
+    assert "phaseKey" in casa and "phaseKey" in officina
+    assert flusso.count("phaseDownloading") == 1
+    for sorgente in (casa, officina):
+        assert "phaseDownloading" not in sorgente, "una seconda tabella delle fasi"

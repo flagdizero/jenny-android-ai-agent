@@ -693,10 +693,20 @@ class TestTheStringsTheUIAsksFor:
     _UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 
     def _keys_used_by_the_settings_page(self) -> set[str]:
+        """Ogni file della WebUI, non piu' solo la pagina delle impostazioni.
+
+        La macchina a stati e' uscita di li' (``shared/update-flow.js``) e la
+        casa ne e' diventata la seconda vista: cercare in un file solo
+        direbbe che meta' delle chiavi sono orfane, e la promessa che questo
+        banco custodisce — nessuna chiave senza traduzione, nessuna
+        traduzione senza chi la usa — vale sull'interfaccia intera.
+        """
         import re
 
-        source = (self._UI / "mobile-settings.js").read_text(encoding="utf-8")
-        return set(re.findall(r"'(settings\.update\.[A-Za-z]+)'", source))
+        chiavi: set[str] = set()
+        for js in self._UI.rglob("*.js"):
+            chiavi |= set(re.findall(r"'(settings\.update\.[A-Za-z]+)'", js.read_text(encoding="utf-8")))
+        return chiavi
 
     def _keys_defined_in(self, locale: str) -> set[str]:
         data = json.loads((self._UI / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))
@@ -743,13 +753,16 @@ class TestThePromptOutcomeIsTerminal:
     conferma è la strada normale, non l'eccezione: la UI sarebbe rotta proprio
     nel caso atteso.
 
-    Il controllo è sul sorgente perché qui non gira un motore JS. Vale comunque
-    la pena: è l'unico presidio contro un ritorno silenzioso del difetto.
+    Il controllo è sul sorgente. Dal 19/09/2026 la macchina sta in
+    ``shared/update-flow.js``, estratta perché la casa ne è diventata la
+    seconda vista — e c'è anche un banco che la fa girare davvero
+    (``test_update_flow_client.py``). Questo resta perché legge le due righe
+    che *devono* stare nel ramo terminale, e le legge dove sono scritte.
     """
 
     _SOURCE = (
         Path(__file__).resolve().parents[2]
-        / "jenny" / "templates" / "ui" / "assets" / "mobile-settings.js"
+        / "jenny" / "templates" / "ui" / "assets" / "shared" / "update-flow.js"
     ).read_text(encoding="utf-8")
 
     def _body_of(self, name: str) -> str:
@@ -757,17 +770,17 @@ class TestThePromptOutcomeIsTerminal:
         return self._SOURCE[start:self._SOURCE.index("\n  }\n", start)]
 
     def test_reaching_the_prompt_settles_the_ui(self) -> None:
-        body = self._body_of("_settleUpdateAtPrompt")
+        body = self._body_of("_settleAtPrompt")
 
-        assert "_stopUpdatePoll()" in body
+        assert "this.stop()" in body
         assert "busy: false" in body
         # Riprovare deve restare possibile: la conferma può essere arrivata come
         # notifica e l'utente può averla scartata.
         assert "settings.update.promptNote" in body
 
     def test_both_the_reply_and_the_polling_route_into_it(self) -> None:
-        assert "_settleUpdateAtPrompt" in self._body_of("async _startUpdate")
-        assert "_settleUpdateAtPrompt" in self._body_of("async _pollUpdateStatus")
+        assert "_settleAtPrompt" in self._body_of("async start")
+        assert "_settleAtPrompt" in self._body_of("async _poll")
 
 
 class TestTheStatusRoute:

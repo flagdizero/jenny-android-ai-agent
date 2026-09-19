@@ -223,6 +223,15 @@
           <span class="casa-row-value" id="casa-jenny-value"></span>
           <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
         </button>
+        <!-- Gli aggiornamenti. La riga porta la versione, quindi la riga muta
+             che la scriveva in fondo alla pagina non serve piu': un numero e
+             basta non e' un'impostazione, e' un'etichetta. -->
+        <button class="casa-row" id="casa-row-updates" type="button">
+          <i class="ti ti-refresh" aria-hidden="true"></i>
+          <span class="casa-row-label" id="casa-updates-label"></span>
+          <span class="casa-row-value" id="casa-updates-value"></span>
+          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+        </button>
       </div>
 
       <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
@@ -234,11 +243,6 @@
         </span>
         <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
       </button>
-
-      <!-- La versione, e nient'altro: il giro di aggiornamento e' dell'officina.
-           Un numero che non c'e' non si finge con uno zero — la riga resta
-           vuota, e vuota non occupa. -->
-      <div class="casa-version" id="casa-version" hidden></div>
     </div>
   </section>
 
@@ -336,6 +340,46 @@
       <!-- Alcuni cambi valgono dal turno dopo, altri vogliono un riavvio: lo
            dice il payload, e va detto invece di lasciarlo indovinare. -->
       <div class="casa-card-note is-warn" id="casa-model-restart" hidden></div>
+    </div>
+  </section>
+
+  <!-- ── La settima stanza: «Aggiornamenti» ──────────────────────────────
+       La seconda vista di `shared/update-flow.js`. Il pallino dice il
+       **meccanismo** e non la versione: verde vuol dire «il controllo
+       funziona», non «sei aggiornata» — un manifest irraggiungibile da un mese
+       mostrerebbe altrimenti la stessa schermata di chi lo e' davvero. -->
+  <section class="casa-updates-room" id="casa-updates-room">
+    <div class="casa-tu-scroll">
+
+      <div class="casa-card">
+        <div class="casa-card-head">
+          <span class="casa-update-dot is-ok" id="casa-update-dot" aria-hidden="true"></span>
+          <span class="casa-card-label" id="casa-update-headline"></span>
+        </div>
+        <div class="casa-card-note" id="casa-update-summary" hidden></div>
+        <a class="casa-update-notes" id="casa-update-notes" target="_blank"
+           rel="noopener" hidden></a>
+
+        <!-- Quel che sta succedendo adesso. La nota sopravvive ai cambi di
+             fase: dice cosa aspettarsi, la fase dice solo a che punto e'. -->
+        <div class="casa-update-progress" id="casa-update-progress" hidden>
+          <div class="casa-card-note" id="casa-update-note" hidden></div>
+          <div class="casa-update-phase" id="casa-update-phase" hidden></div>
+          <div class="casa-update-detail" id="casa-update-detail" hidden></div>
+          <div class="casa-update-track" id="casa-update-track" hidden>
+            <span class="casa-update-bar" id="casa-update-bar"></span>
+          </div>
+        </div>
+
+        <button class="casa-save" id="casa-update-install" type="button" hidden></button>
+      </div>
+
+      <!-- Il meccanismo che dovrebbe trovarli, e che c'e' sempre — anche,
+           soprattutto, quando non c'e' niente da installare. -->
+      <div class="casa-card">
+        <div class="casa-update-lines" id="casa-update-lines"></div>
+        <button class="casa-key-btn" id="casa-update-check" type="button"></button>
+      </div>
     </div>
   </section>
 

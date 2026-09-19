@@ -137,7 +137,7 @@ Resta **(b)**, aggiungere una marca nuova da casa: costa il piano dei preset.
 
 ---
 
-## 3. Aggiornamenti
+## 3. Aggiornamenti — **fatto**
 
 **La tavola.** Una riga col pallino verde, «v0.11.0 · aggiornata», e un chevron.
 
@@ -153,7 +153,38 @@ ne diventano due viste. È il pezzo di lavoro più onesto dei cinque, perché
 l'alternativa è una seconda copia di una macchina a stati che sbaglia in
 silenzio.
 
-Peso: medio-grande, quasi tutto nell'estrazione.
+**Com'è andata.** Estratto: `shared/update-flow.js`, −315 righe da
+`mobile-settings.js` e +42. L'officina e la casa ne sono due viste; il modulo
+non contiene HTML e torna **dati** (una chiave i18n e i suoi parametri), perché
+le due viste disegnano in modo diverso — schede larghe di là, righe di qua.
+
+**Il guadagno vero non è la riga in casa: è che adesso quella macchina è
+misurabile.** Viveva dentro il controller senza un banco che la esercitasse —
+c'erano le rotte lato Python e due controlli sul sorgente, e basta. Adesso ha
+18 banchi in node coi timer finti, 15 mutazioni rosse, e i due casi che
+ingannano sono i primi due:
+
+* la connessione che cade **perché** l'app si sta riavviando (non è un
+  errore), contro quella che cade prima che il polling abbia visto muoversi
+  qualcosa (che lo è);
+* il rifiuto «niente da installare», che vive nel `detail` della risposta e
+  che un giro di polling cancellerebbe: il polling si ferma **prima** che lo
+  stato venga scritto, ed è un ordine fra due righe.
+
+Un difetto latente trovato dai banchi: dopo che un timer era scattato,
+`_timer` restava un id morto e `idleTimer` mentiva — `resume()` si sarebbe
+rifiutato di riagganciare un polling fermo.
+
+In casa la versione ha cambiato posto: era una riga muta in fondo alla pagina,
+adesso è il valore della riga che apre la stanza. **Il pallino dice il
+meccanismo, non la versione** — verde vuol dire «il controllo funziona», non
+«sei aggiornata», e `warn` vince su `new`: se i controlli non arrivano più al
+server, quel che sai di una versione nuova è vecchio quanto l'ultimo esito
+positivo.
+
+Il rig ha trovato il terzo difetto del giro: prima che `/api/settings`
+rispondesse, la scheda diceva **«Sei alla , ed è l'ultima»** — una frase con un
+buco, e per di più una rassicurazione inventata. Non sapere adesso si dice.
 
 ---
 
@@ -214,7 +245,7 @@ Peso: piccolo il codice, tua la decisione.
 
 1. ~~**Officina invertita**~~ — fatta.
 2. ~~**Chi risponde (a)**~~ — fatta.
-3. **Aggiornamenti** — con l'estrazione del flusso condiviso.
+3. ~~**Aggiornamenti**~~ — fatta, con l'estrazione del flusso condiviso.
 4. **Backup** — col record dell'ultimo export.
 5. **Sostenitori** — quando l'utente dice da dove vengono i nomi.
 

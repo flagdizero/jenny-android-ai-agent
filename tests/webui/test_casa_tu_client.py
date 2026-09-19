@@ -141,9 +141,7 @@ function stanza() {
   for (const k of Object.keys(nodi)) delete nodi[k];
   acceso = 'chanel';
   applicati.length = 0;
-  const tu = new CasaTu({});
-  tu.versionEl.hidden = true;
-  return tu;
+  return new CasaTu({});
 }
 """
 
@@ -166,7 +164,7 @@ def _harness() -> str:
         .replace("__THEME_CARD__", _member(src, "_themeCard"))
         .replace("__MARK_THEME__", _member(src, "_markTheme"))
         .replace("__SAY_THEME__", _member(src, "_sayTheme"))
-        .replace("__SHOW_VERSION__", _member(src, "showVersion"))
+        .replace("__SHOW_VERSION__", _member(src, "sayUpdates"))
         .replace("__SAY_JENNY__", _member(src, "sayJenny"))
     )
 
@@ -326,22 +324,24 @@ def test_the_pill_keeps_the_word_that_tells_the_themes_apart() -> None:
     """)
 
 
-def test_a_version_is_written_only_when_it_is_known() -> None:
-    """Il payload lo chiede il guscio — `/api/settings` porta provider,
-    contatori e lavoratori periodici, e due stanze ne leggono un campo per uno.
-    Qui si misura il patto di questa: un numero che non c'e' non si scrive, e
-    «versione {version}» con la graffa dentro sarebbe peggio di una riga che
-    non c'e'."""
+def test_the_version_rides_on_the_row_that_opens_the_updates() -> None:
+    """Stava su una riga muta in fondo alla pagina, e un numero e basta non e'
+    un'impostazione: e' un'etichetta. Adesso e' il valore della riga che porta
+    agli aggiornamenti, come «grande» lo e' della riga che porta da lei.
+
+    Il patto resta quello: un numero che non si sa non si scrive — una stringa
+    vuota, non «versione {version}» con la graffa dentro.
+    """
     _run_js("""
       const tu = stanza();
-      tu.showVersion(undefined);
-      assert.equal(tu.versionEl.hidden, true, 'una versione che non si sa e\u2019 finita a schermo');
-      assert.equal(tu.versionEl.textContent, '');
+      tu.sayUpdates('');
+      assert.equal(nodi['casa-updates-value'].textContent, '',
+        'una versione che non si sa e\u2019 finita a schermo');
 
-      tu.showVersion('0.11.0');
-      assert.equal(tu.versionEl.hidden, false);
-      assert.ok(tu.versionEl.textContent.includes('0.11.0'), tu.versionEl.textContent);
-      assert.ok(!tu.versionEl.textContent.includes('{'), 'il segnaposto e\u2019 rimasto dentro');
+      tu.sayUpdates('0.11.0 \u00b7 aggiornata');
+      assert.equal(nodi['casa-updates-value'].textContent, '0.11.0 \u00b7 aggiornata');
+      assert.ok(!nodi['casa-updates-value'].textContent.includes('{'),
+        'il segnaposto e\u2019 rimasto dentro');
     """)
 
 

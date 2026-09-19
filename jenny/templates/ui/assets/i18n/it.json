@@ -1005,8 +1005,7 @@
     "tu": {
       "title": "Tu e Jenny",
       "open": "Tu e Jenny",
-      "workshopHint": "osserva, regola, ripara — oppure tieni premuto l'avatar",
-      "version": "versione {version}"
+      "workshopHint": "osserva, regola, ripara — oppure tieni premuto l'avatar"
     },
     "jenny": {
       "title": "Jenny",
@@ -1078,6 +1077,13 @@
       "keySaved": "Chiave salvata",
       "keyPlaceholder": "incolla qui la chiave",
       "restart": "Questo cambio vale dal prossimo avvio."
+    },
+    "updates": {
+      "title": "Aggiornamenti",
+      "current": "{version} · aggiornata",
+      "waiting": "{version} → {latest}",
+      "upToDate": "Sei alla {version}, ed è l'ultima.",
+      "unknown": "Non so ancora a che versione sei."
     }
   }
 }

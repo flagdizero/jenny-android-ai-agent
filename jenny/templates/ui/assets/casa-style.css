@@ -868,7 +868,8 @@ body.casa {
 .casa-reader,
 .casa-tu,
 .casa-jenny-room,
-.casa-model-room {
+.casa-model-room,
+.casa-updates-room {
   display: none;
   flex: 1;
   min-height: 0;
@@ -879,7 +880,8 @@ body.casa {
 .casa-shell[data-view='reader'] .casa-reader,
 .casa-shell[data-view='tu'] .casa-tu,
 .casa-shell[data-view='jenny'] .casa-jenny-room,
-.casa-shell[data-view='model'] .casa-model-room { display: flex; }
+.casa-shell[data-view='model'] .casa-model-room,
+.casa-shell[data-view='updates'] .casa-updates-room { display: flex; }
 
 .casa-shell:not([data-view='chat']) .casa-thread,
 .casa-shell:not([data-view='chat']) .casa-empty,
@@ -1595,6 +1597,9 @@ body.casa {
 
 .casa-save[hidden] { display: none; }
 .casa-save:active { filter: brightness(0.94); }
+/* Premuto e basta non si vede: un bottone disabilitato **durante**
+   l'installazione deve dirlo, o si continua a premerlo. */
+.casa-save:disabled { opacity: 0.5; }
 
 /* ── «Chi risponde» ──────────────────────────────────────────────────────
    Le marche configurate in una striscia che scorre di lato, come i temi: qui
@@ -1764,3 +1769,76 @@ body.casa {
 }
 
 .casa-model > .ti { flex: none; font-size: 16px; }
+
+/* ── «Aggiornamenti» ─────────────────────────────────────────────────────
+   Il pallino dice il **meccanismo**: verde vuol dire «il controllo funziona»,
+   non «sei aggiornata». Giallo quando i controlli partono e non arrivano piu'
+   — la cosa che altrimenti non si vede mai, perche' a schermo somiglia in
+   tutto e per tutto a «non c'e' niente da installare». */
+
+.casa-update-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.casa-update-dot.is-new { background: var(--accent); }
+.casa-update-dot.is-warn { background: var(--warning); }
+
+.casa-update-notes {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.casa-update-notes[hidden] { display: none; }
+
+.casa-update-progress { margin-top: 8px; }
+.casa-update-progress[hidden] { display: none; }
+
+.casa-update-phase {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+
+.casa-update-detail {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.casa-update-track {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--overlay-strong);
+  overflow: hidden;
+}
+
+.casa-update-track[hidden] { display: none; }
+
+.casa-update-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.casa-update-line {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.casa-update-line.is-warn { color: var(--warning); }
+
+/* Il bottone del controllo riempie la scheda: e' l'unica cosa da toccare li'
+   dentro, e una pastiglia stretta in mezzo a due righe di testo sembrerebbe
+   una nota. */
+#casa-update-check { width: 100%; min-height: 36px; }

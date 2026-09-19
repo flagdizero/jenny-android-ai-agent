@@ -17,6 +17,7 @@ import {
   batteryExemptionNeeded,
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
+import { UpdateFlow, checkLines, phaseKey } from './shared/update-flow.js';
 import {
   runExportFlow,
   runImportFlow,
@@ -27,18 +28,6 @@ import {
 // del client: stesso ordine di `KEEP_AWAKE_MODES` in config/schema.py, dal più
 // parsimonioso al più affamato.
 const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
-
-/* Distanza fra "ultimo tentativo" e "ultimo tentativo riuscito" oltre la quale
-   il controllo aggiornamenti va dichiarato rotto in pagina.
-
-   Sette giorni perché il job gira ogni ventiquattr'ore (`updates.checkInterval_h`,
-   default 24): una settimana di scarto vuol dire almeno sette tentativi andati
-   a vuoto di fila, che nessun disguido passeggero spiega — un'antenna che va e
-   viene, un riavvio, una notte senza rete rientrano tutti abbondantemente sotto
-   soglia e restano silenziosi, come devono. Più corta griderebbe al lupo; più
-   lunga lascerebbe un manifest pubblicato col nome sbagliato invisibile per
-   metà mese. */
-const UPDATE_STALE_MS = 7 * 86400000;
 
 export class SettingsController {
   constructor() {
@@ -66,17 +55,25 @@ export class SettingsController {
        `_restoreScrollTop()`. */
     this._restoringScroll = false;
     this._restorePending = false;
-    /* Installazione dell'aggiornamento: `null` finché non la si avvia, poi
-       {busy, noteKey, phase, progress, detail}. Vive nel controller e non nel
-       DOM perché ogni salvataggio riscrive tutta la pagina, e un'installazione
-       in corso non è una cosa che possa sparire da sotto gli occhi. */
-    this._update = null;
-    this._updateTimer = null;
-    this._updatePolls = 0;
-    /* Vero mentre un controllo manuale è in volo. Vive nel controller e non
-       nel DOM per lo stesso motivo di `_update`: un salvataggio qualsiasi
-       riscrive tutta la pagina, e il bottone deve restare disabilitato. */
-    this._checking = false;
+    /* L'aggiornamento dell'app: fasi, polling e i due casi che ingannano
+       stanno in `shared/update-flow.js`, che la casa usa con la stessa
+       macchina e una vista sua. Qui resta il disegno, e i tre ganci che
+       traducono «lo stato si è mosso» nel modo in cui questa pagina si
+       ridipinge. Lo stato vive lì e non nel DOM perché ogni salvataggio
+       riscrive la pagina intera, e un'installazione in corso non è una cosa
+       che possa sparire da sotto gli occhi. */
+    this.updates = new UpdateFlow({
+      generation: () => this._gen,
+      onToast: (testo, tipo) => showToast(testo, tipo),
+      onVersion: (version) => {
+        if (this.data && version) this.data.version = version;
+      },
+      /* `render()` quando c'è una versione nuova da annunciare, il solo
+         riquadro quando è un giro di polling: un render completo a ogni giro
+         ricostruirebbe tutta la pagina ogni secolo e mezzo. Li distingue chi
+         chiama, non il flusso. */
+      onChange: () => this._paintUpdate(),
+    });
     /* La posizione va letta *mentre* la vista è visibile: `switchMode` mette il
        display:none sulla view prima di chiamare `deactivate()`, e un
        contenitore senza box legge scrollTop 0 — salvare lì avrebbe riportato in
@@ -151,8 +148,7 @@ export class SettingsController {
     // Il polling dell'installazione: il guard di generazione già ferma la
     // continuazione, ma il timer va spento comunque per non tenere sveglia una
     // sezione che non è più a schermo.
-    clearTimeout(this._updateTimer);
-    this._updateTimer = null;
+    this.updates.stop();
     /* L'apertura d'ufficio della sezione Programmazione vale una volta per
        apertura di schermata: senza questo azzeramento, chi la chiude a mano e
        torna dopo non la vedrebbe riaprirsi nemmeno con un guasto nuovo — e
@@ -1650,7 +1646,7 @@ export class SettingsController {
     const notes = v.notes_url
       ? `<div style="margin-top:6px"><a href="${escapeHtml(v.notes_url)}" target="_blank" rel="noopener">${escapeHtml(i18n.t('settings.update.notes'))}</a></div>`
       : '';
-    const busy = !!this._update?.busy;
+    const busy = this.updates.busy;
     return `
       <div class="settings-notice${critical ? ' settings-notice-strong' : ''}">
         <i class="ti ti-${critical ? 'shield-exclamation' : 'download'}"></i>
@@ -1677,7 +1673,7 @@ export class SettingsController {
      telefono headless nessuno va a leggere i log per accorgersene. */
 
   _renderUpdateCheck(v) {
-    const busy = !!this._checking;
+    const busy = this.updates.checking;
     const label = i18n.t(busy ? 'settings.update.checking' : 'settings.update.checkNow');
     return `
       <div class="update-check" id="update-check">
@@ -1689,54 +1685,14 @@ export class SettingsController {
   }
 
   /* Quando il controllo è riuscito l'ultima volta, e se il caso l'avviso che
-     non riesce più. Il confronto è fra i due timestamp dell'updater, non con
-     l'ora corrente: `last_check` è scritto a ogni tentativo, `last_success`
-     solo quando il manifest è stato letto davvero, e un telefono spento per una
-     settimana li ha vecchi entrambi — nessun meccanismo rotto da segnalare. */
+     non riesce più. Quali righe dire lo decide `checkLines` in
+     `shared/update-flow.js` — è la stessa domanda che si fa la casa, e la
+     risposta non può essere due — qui si traduce e si veste. */
   _updateCheckLinesHtml(v) {
-    const success = Number(v.last_success) || 0;
-    const check = Number(v.last_check) || 0;
-    if (!success) {
-      /* Prima del primo tentativo in assoluto non c'è nessun guasto: c'è
-         un'installazione appena fatta, e darle l'aria dell'allarme sarebbe la
-         prima cosa falsa che Jenny dice. */
-      if (!check) {
-        return `<div class="update-check-line">${escapeHtml(i18n.t('settings.update.neverChecked'))}</div>`;
-      }
-      /* Tentativi sì, esiti positivi no. Vale anche per uno stato scritto prima
-         che `last_success` esistesse, ed è per questo che la stringa manda a
-         premere "Controlla ora" invece di sentenziare: un tap distingue i due
-         casi meglio di qualunque euristica. */
-      return `<div class="update-check-line warn">${escapeHtml(i18n.t('settings.update.staleNever'))}</div>`;
-    }
-    const when = this._formatUpdateWhen(success);
-    const rows = [
-      `<div class="update-check-line">${escapeHtml(i18n.t('settings.update.lastSuccess', { when }))}</div>`,
-    ];
-    if (check - success > UPDATE_STALE_MS) {
-      rows.push(`<div class="update-check-line warn">${escapeHtml(i18n.t('settings.update.stale', { when }))}</div>`);
-    }
-    return rows.join('');
-  }
-
-  /* "oggi alle 14:22", "3 giorni fa", "27 giu 2025". Relativo finché resta
-     leggibile, datato dopo: a novanta giorni "90 giorni fa" non dice più
-     niente, una data sì. "Ieri" ha un ramo suo perché "1 giorni fa" si legge
-     male in entrambe le lingue. Le date passano da `toLocaleDateString`, che le
-     localizza da sé: non sono stringhe scritte a mano. */
-  _formatUpdateWhen(ms) {
-    const at = new Date(Number(ms) || 0);
-    const dayMs = 86400000;
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-    const time = at.toLocaleTimeString(i18n.locale, { hour: '2-digit', minute: '2-digit' });
-    if (at.getTime() >= midnight.getTime()) return i18n.t('settings.update.whenToday', { time });
-    if (at.getTime() >= midnight.getTime() - dayMs) return i18n.t('settings.update.whenYesterday', { time });
-    // Arrotondato per eccesso: il ramo "ieri" qui sopra garantisce già >= 2, e
-    // troncando, un controllo di tre giorni fa alle 23:00 diventerebbe "2".
-    const days = Math.ceil((midnight.getTime() - at.getTime()) / dayMs);
-    if (days <= 30) return i18n.t('settings.update.whenDays', { days });
-    return at.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    return checkLines(v).map((riga) => {
+      const classe = riga.warn ? 'update-check-line warn' : 'update-check-line';
+      return `<div class="${classe}">${escapeHtml(i18n.t(riga.key, riga.params))}</div>`;
+    }).join('');
   }
 
   /* Ridipinge solo questo blocco: come `_paintUpdate`, un render() completo
@@ -1749,250 +1705,21 @@ export class SettingsController {
     this._wireBtn('btn-update-check', () => this._runUpdateCheck());
   }
 
-  /* Controllo forzato. Esiste perché senza di esso non c'è alcun modo di
-     chiedere "sei ancora viva?": si aspetta il cron, ventiquattr'ore, e se
-     fallisce non lo dice nessuno. È l'affordance che rende diagnosticabili le
-     righe qui sopra, e `check_for_update` ignora `updates.enabled` proprio per
-     poter essere chiamata così. Il doppio tap è fermato due volte: qui dal
-     flag, e lato server da un lock, perché la rotta fa rete. */
+  /* Il controllo manuale. La macchina sta nel flusso condiviso; qui restano
+     le due cose che sono di questa pagina: il bottone che si disabilita da
+     solo, e il `render()` completo quando arriva una versione nuova — il
+     riquadro dell'aggiornamento compare *sopra*, e ridipingere solo la riga
+     del controllo lo lascerebbe fuori. */
   async _runUpdateCheck() {
-    if (this._checking) return;
-    const gen = this._gen;
-    this._checking = true;
     this._paintUpdateCheck();
-
-    let payload = null;
-    try {
-      /* GET e non POST: v. `_startUpdate` per il motivo (il server HTTP di
-         `websockets` rifiuta ogni altro metodo prima del router). */
-      const res = await api._fetch('/api/updates/check');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      payload = await res.json();
-    } catch (_) {
-      payload = null;
-    }
-    /* Il flag si azzera anche se nel frattempo si è usciti dalla sezione: è
-       roba del controller, non del DOM, e lasciarlo acceso bloccherebbe il
-       bottone al rientro senza che nulla lo rimetta a posto. */
-    this._checking = false;
-    if (this._stale(gen)) return;
-
-    if (!payload) {
-      this._paintUpdateCheck();
-      showToast(i18n.t('settings.update.checkFailed'), 'error');
-      return;
-    }
-    if (payload.status === 'busy') {
-      this._paintUpdateCheck();
-      showToast(i18n.t('settings.update.checkBusy'));
-      return;
-    }
-    /* Il payload versione fresco entra in `this.data` e la pagina si ridisegna:
-       senza, una versione appena trovata comparirebbe solo alla prossima
-       apertura delle impostazioni — cioè proprio dopo il gesto con cui
-       l'utente l'ha chiesta. */
-    if (this.data && payload.version) this.data.version = payload.version;
-    this.render();
-    if (payload.status !== 'ok') {
-      showToast(i18n.t('settings.update.checkFailed'), 'error');
-      return;
-    }
-    const v = payload.version || {};
-    showToast(v.update_available
-      ? i18n.t('settings.update.available', { version: v.latest || '' })
-      : i18n.t('settings.update.checkUpToDate'));
+    const payload = await this.updates.check();
+    this._paintUpdateCheck();
+    if (payload?.status === 'ok') this.render();
   }
 
-  /* Chiave della riga di fase. `idle` non ne ha una: prima di premere il
-     bottone non c'è niente da raccontare, e dopo un errore la fase torna a
-     essere l'ultima cosa detta, non "inattivo". */
+  /* Chiave della riga di fase: la stessa tabella per le due viste. */
   _updatePhaseKey(phase) {
-    return {
-      downloading: 'settings.update.phaseDownloading',
-      installing: 'settings.update.phaseInstalling',
-      prompt: 'settings.update.phasePrompt',
-      error: 'settings.update.phaseError',
-      done: 'settings.update.phaseDone',
-    }[phase] || '';
-  }
-
-  _updateProgressHtml() {
-    const u = this._update;
-    if (!u) return '';
-    const rows = [];
-    // La nota sopravvive ai cambi di fase: dice che cosa ci si deve aspettare
-    // (riavvio in arrivo, conferma di sistema da dare), la fase dice solo a che
-    // punto è.
-    if (u.noteKey) rows.push(`<div class="update-note">${escapeHtml(i18n.t(u.noteKey))}</div>`);
-    const phaseKey = this._updatePhaseKey(u.phase);
-    if (phaseKey) rows.push(`<div class="update-phase">${escapeHtml(i18n.t(phaseKey))}</div>`);
-    if (u.detail) rows.push(`<div class="update-detail">${escapeHtml(u.detail)}</div>`);
-    if ((u.phase === 'downloading' || u.phase === 'installing') && u.progress > 0) {
-      rows.push(`
-        <div class="update-progress-track">
-          <span class="update-progress-bar" style="width:${Math.min(Math.max(u.progress, 0), 100)}%"></span>
-        </div>`);
-    }
-    return rows.length ? `<div class="update-status">${rows.join('')}</div>` : '';
-  }
-
-  /* Ridipinge solo il riquadro di stato: un render() completo qui
-     ricostruirebbe tutta la pagina a ogni giro di polling. */
-  _paintUpdate() {
-    const host = this.contentEl?.querySelector('#update-progress');
-    if (host) host.innerHTML = this._updateProgressHtml();
-    const btn = this.contentEl?.querySelector('#btn-update-install');
-    if (btn) btn.disabled = !!this._update?.busy;
-  }
-
-  async _startUpdate() {
-    const gen = this._gen;
-    this._update = { busy: true, noteKey: 'settings.update.starting', phase: 'idle', progress: 0, detail: '' };
-    this._updatePolls = 0;
-    this._paintUpdate();
-
-    /* Il polling parte *prima* di aspettare la risposta, non dopo: la richiesta
-       di installazione risponde solo a download+commit conclusi, e nel percorso
-       "silent" non risponde affatto — il sistema uccide il processo mentre la
-       risposta è ancora in volo. Lo stato vero arriva da qui. */
-    this._scheduleUpdatePoll(gen);
-
-    let result;
-    try {
-      /* GET e non POST, come ogni altra scrittura di questa WebUI: il server
-         HTTP è quello di `websockets`, e `Request.parse` rifiuta qualunque
-         metodo diverso da GET *prima* che la richiesta arrivi al router — un
-         POST qui non fallirebbe con un 405, fallirebbe con la connessione
-         chiusa. `api._fetch` e non un metodo di api-client: aggiungerlo lì è
-         fuori dal perimetro di questa modifica. */
-      const res = await api._fetch('/api/updates/install');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      result = await res.json();
-    } catch (err) {
-      if (this._stale(gen) || !this._update) return;
-      /* Connessione caduta a installazione già avviata: è il riavvio, non un
-         guasto — chiamarlo errore sarebbe una bugia proprio nel caso normale.
-         Solo se il polling non ha ancora visto muoversi niente si tratta di un
-         vero fallimento di partenza. */
-      if (this._update.phase !== 'idle') {
-        this._update.noteKey = 'settings.update.restarting';
-        this._paintUpdate();
-        return;
-      }
-      this._failUpdate(err.message);
-      return;
-    }
-    if (this._stale(gen) || !this._update) return;
-
-    if (!result.ok || result.state === 'error') {
-      // Un rifiuto (niente da installare, versione già applicata) non sporca la
-      // fase lato server: il motivo sta tutto nel `detail` della risposta, e il
-      // polling lo cancellerebbe rileggendo una fase ancora "idle".
-      this._failUpdate(result.detail || '');
-      return;
-    }
-
-    if (result.state === 'prompt') {
-      this._settleUpdateAtPrompt(result.detail || '');
-      return;
-    }
-
-    /* "silent" non vuol dire "finito": la sessione è committata, il sistema
-       ucciderà questo processo e Jenny ripartirà da sola. La WebSocket cadrà —
-       ws-manager riconnette da sé con backoff — e dirlo prima è l'unico modo
-       perché quella caduta non sembri un guasto. */
-    this._update.noteKey = 'settings.update.restarting';
-    this._paintUpdate();
-  }
-
-  /* `prompt` è terminale: la palla è passata ad Android e non torna indietro da
-     sola. La fase resta su questo valore finché l'utente non risponde, quindi
-     continuare a interrogarla non porta niente di nuovo — porta solo dieci
-     minuti di polling con il bottone disabilitato, e un'uscita-e-rientro dalle
-     impostazioni ne fa ripartire altri dieci.
-
-     Non è un caso di nicchia da cui difendersi per scrupolo: su Android 14+,
-     con l'update ownership, il ramo con conferma è *la* strada normale
-     (v. `UpdateBridge.kt`). Qui si ferma il polling, si sblocca il bottone e si
-     dice che cosa manca — la conferma può essere una schermata aperta davanti
-     agli occhi o, se l'app era in background, una notifica ancora in attesa. Se
-     l'utente la perde, "Installa ora" è di nuovo premibile. */
-  _settleUpdateAtPrompt(detail) {
-    this._stopUpdatePoll();
-    this._update = {
-      ...(this._update || {}),
-      busy: false,
-      noteKey: 'settings.update.promptNote',
-      phase: 'prompt',
-      progress: 0,
-      detail: detail || this._update?.detail || '',
-    };
-    this._paintUpdate();
-  }
-
-  /* Esito negativo definitivo: ferma il polling *prima* di scrivere lo stato,
-     altrimenti il giro successivo sovrascrive il motivo con la fase del
-     server, che dopo un rifiuto è ancora "inattivo". */
-  _failUpdate(detail) {
-    this._stopUpdatePoll();
-    this._update = { busy: false, noteKey: null, phase: 'error', progress: 0, detail };
-    this._paintUpdate();
-    showToast(i18n.t('settings.update.startFailed'), 'error');
-  }
-
-  _stopUpdatePoll() {
-    clearTimeout(this._updateTimer);
-    this._updateTimer = null;
-  }
-
-  _scheduleUpdatePoll(gen) {
-    clearTimeout(this._updateTimer);
-    this._updateTimer = setTimeout(() => this._pollUpdateStatus(gen), 1500);
-  }
-
-  async _pollUpdateStatus(gen) {
-    if (this._stale(gen)) return;
-    let status;
-    try {
-      const res = await api._fetch('/api/updates/status');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      status = await res.json();
-    } catch (_) {
-      /* Un polling che fallisce non è un'installazione fallita: durante
-         l'installazione il gateway *sparisce* (è il caso normale, non
-         l'eccezione). Si riprova senza cambiare quello che l'utente legge. */
-      if (!this._stale(gen) && this._updatePolls++ < 400) this._scheduleUpdatePoll(gen);
-      return;
-    }
-    if (this._stale(gen) || !this._update) return;
-
-    this._update = {
-      ...this._update,
-      phase: status.phase || 'idle',
-      progress: Number(status.progress) || 0,
-      detail: status.detail || '',
-    };
-    /* Terminale quanto `error` e `done`, ma per l'altro motivo: non è finita,
-       è ferma e aspetta una persona. Vedi `_settleUpdateAtPrompt`. */
-    if (status.phase === 'prompt') {
-      this._settleUpdateAtPrompt(status.detail || '');
-      return;
-    }
-    if (status.phase === 'error' || status.phase === 'done') {
-      this._stopUpdatePoll();
-      this._update.busy = false;
-      /* "done" lato server vuol dire "sessione committata", non "installato":
-         subito dopo Android sostituisce l'app e il processo muore. La nota sul
-         riavvio è quindi più vera adesso che mai — e la si rimette anche se la
-         risposta della richiesta non è mai arrivata. */
-      if (status.phase === 'done') this._update.noteKey = 'settings.update.restarting';
-      this._paintUpdate();
-      return;
-    }
-    this._paintUpdate();
-    // Tetto di sicurezza (~10 minuti): senza, una fase che non si muove più
-    // lascerebbe un timer vivo per tutta la vita della pagina.
-    if (this._updatePolls++ < 400) this._scheduleUpdatePoll(gen);
+    return phaseKey(phase);
   }
 
   /* Strada permanente verso il wizard di configurazione. Finora l'onboarding
@@ -2598,14 +2325,14 @@ export class SettingsController {
     this._wireBtn('btn-open-casa', () => api.navigate('/html-mobile/index.html'));
 
     // Aggiornamento dell'app (il bottone c'è solo se il backend ne annuncia uno)
-    this._wireBtn('btn-update-install', () => this._startUpdate());
+    this._wireBtn('btn-update-install', () => this.updates.start());
     // Il controllo manuale invece c'è sempre: è la diagnostica del meccanismo.
     this._wireBtn('btn-update-check', () => this._runUpdateCheck());
     /* Rientro nella sezione con un'installazione già avviata: va avanti per
        conto suo, ma `deactivate()` aveva spento il polling. Senza riagganciarlo
        il bottone resterebbe disabilitato e lo stato congelato all'ultima cosa
        vista. Il timer nullo è la prova che il polling non è già in corso. */
-    if (this._update?.busy && !this._updateTimer) this._scheduleUpdatePoll(this._gen);
+    this.updates.resume();
 
     // Mascotte: toggle visibilità (re-render per accendere/spegnere le
     // opzioni sotto) + scelta della taglia

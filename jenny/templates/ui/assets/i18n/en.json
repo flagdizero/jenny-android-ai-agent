@@ -1002,8 +1002,7 @@
     "tu": {
       "title": "You and Jenny",
       "open": "You and Jenny",
-      "workshopHint": "watch, tune, repair — or hold the avatar",
-      "version": "version {version}"
+      "workshopHint": "watch, tune, repair — or hold the avatar"
     },
     "jenny": {
       "title": "Jenny",
@@ -1075,6 +1074,13 @@
       "keySaved": "Key saved",
       "keyPlaceholder": "paste the key here",
       "restart": "This change takes effect at the next start."
+    },
+    "updates": {
+      "title": "Updates",
+      "current": "{version} · up to date",
+      "waiting": "{version} → {latest}",
+      "upToDate": "You're on {version}, and that's the latest.",
+      "unknown": "I don't know which version you're on yet."
     }
   }
 }
