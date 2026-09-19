@@ -23,15 +23,7 @@ import { rpc } from './rpc-client.js';
 import { escapeHtml, showToast } from './utils.js';
 import { confirmDialog, detailDialog, promptDialog } from './dialog.js';
 import { deleteProjectFlow } from './project-delete.js';
-
-/** Cartella che ospita i progetti, finche' il backend non dice la sua.
- *
- *  Un progetto **e' una wiki**: non esiste una `projects/` separata, e questo
- *  modulo ne leggeva una che non c'era. Il nome vero arriva da `/api/projects`
- *  (`config.wiki.wikis_dir` e' configurabile); questo e' il valore mostrato nel
- *  frattempo, cioe' il default della config.
- */
-const DEFAULT_DIR = 'wikis';
+import { ConversationList, ago } from './conversation-list.js';
 
 /** Un nome di progetto è un nome di cartella: niente separatori né path.
  *
@@ -139,13 +131,13 @@ export class ScopeChip {
     this.enabled = Boolean(this.el && this.menu);
     // Scope corrente: ``null`` come nome significa sessione personale.
     this.scope = { kind: 'personal', name: null };
-    this._projects = null;   // cache dell'ultimo elenco letto da disco
-    // Le cartelle che ci sono ma non si aprono, dallo stesso payload. `null` =
-    // non si sa ancora, come per `_projects`: un elenco non letto non è «non ce
-    // ne sono».
-    this._unopenable = null;
-    this._loadFailed = false; // l'ultima lettura è fallita: v. `_loadProjects`
-    this._dir = DEFAULT_DIR; // nome vero della cartella, dal backend
+    /* Quali conversazioni esistono, in che ordine, e da quanto: **non è roba
+       del chip**. Le stesse cinque regole servono al pannello «con chi parli»
+       della casa, e una seconda copia sarebbe una seconda verità su cosa c'è
+       nel workspace. Qui resta il disegno; i dati stanno in `conversation-list`
+       e i quattro campi di prima sono diventati altrettanti accessori, così il
+       resto di questo file è rimasto com'era. */
+    this._list = new ConversationList(() => api.listProjects());
     this._open = false;
     // Latch di `init`, come `sessionManager._initialized` e
     // `ChatController._wsListenersBound`. I due listener su `document` non sono
@@ -186,6 +178,27 @@ export class ScopeChip {
   }
 
   // ── Stato ──────────────────────────────────────────────────────────────
+
+  /* I quattro campi che erano qui, ora letti da `conversation-list`. Restano
+     con i nomi di prima perché sono letti in una dozzina di punti di questo
+     file, e cambiarli avrebbe reso il passaggio a un modulo condiviso
+     indistinguibile da una riscrittura della tendina. In sola lettura: la cache
+     la scrive `load()`, e si butta con `invalidate()`. */
+  get _projects() {
+    return this._list.projects;
+  }
+
+  get _unopenable() {
+    return this._list.unopenable;
+  }
+
+  get _loadFailed() {
+    return this._list.loadFailed;
+  }
+
+  get _dir() {
+    return this._list.dir;
+  }
 
   /** Scope attivo secondo il backend. ``null``/radice ⇒ sessione personale. */
   syncFromSession(workspaceScope) {
@@ -332,48 +345,18 @@ export class ScopeChip {
     this.el.setAttribute('aria-expanded', 'false');
   }
 
-  /** Progetti = le wiki del workspace, lette dal backend. */
+  /** Progetti = le wiki del workspace, lette dal backend.
+   *
+   *  L'ordine, la divisione fra apribili e non, e la regola per cui una lettura
+   *  fallita **non** cancella l'elenco buono stanno in `conversation-list.js`:
+   *  sono le stesse per la tendina e per il pannello della casa, e da quando
+   *  sono due i posti che le usano non possono piu' stare in uno solo.
+   *
+   *  Il ridisegno resta qui, e resta legato alla riuscita: il nome della
+   *  cartella puo' essere cambiato, e su un fallimento non e' cambiato niente.
+   */
   async _loadProjects() {
-    try {
-      const data = await api.listProjects();
-      this._dir = data?.dir || DEFAULT_DIR;
-      // Dal piu' recente: l'ordine alfabetico del backend mette in cima la
-      // wiki con la lettera piu' bassa, che non e' mai quella che si cerca.
-      // Il criterio e' lo stesso `modified` che ogni riga stampa accanto al
-      // nome, quindi l'elenco non puo' contraddire quel che mostra; a parita'
-      // (mtime uguale, o mancante e quindi 0) decide il nome, per non avere
-      // un ordine che cambia a ogni apertura.
-      this._projects = (data?.projects || [])
-        .map(it => ({ name: it.name, modified: it.modified }))
-        .sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name));
-      // Stesso ordine delle righe apribili, e `reason` viaggia con la voce: la
-      // riga la disegna chi sa cosa dire, e cosa dire dipende dal motivo.
-      this._unopenable = (data?.unopenable || [])
-        .map(it => ({ name: it.name, modified: it.modified, reason: it.reason }))
-        .sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name));
-      this._loadFailed = false;
-      this.render();                    // il nome della cartella puo' essere cambiato
-    } catch {
-      /* Una lettura fallita **non e'** «nessun progetto». Qui c'era
-         `this._projects = []`, e quello scriveva a schermo una frase che il
-         client non sa: 401, 500, gateway ancora in piedi a meta' o telefono
-         offline diventavano tutti "Nessun progetto ancora" — e buttavano via
-         l'elenco buono letto un minuto prima. La risposta ovvia a quello
-         schermo e' rifare il progetto, che e' il modo in cui nasce un doppione:
-         due wiki con lo stesso scopo e la storia divisa fra le due, che nessuna
-         delle due poi contiene.
-
-         Quindi la cache non si tocca — quel che c'era resta, ed e' l'unica cosa
-         vera che abbiamo — e la tendina lo dichiara con una nota sua
-         (`scope.loadFailed`), distinta dall'elenco vuoto. Il `_dir` neanche: un
-         default sovrascritto sopra un valore letto dal backend farebbe
-         sbagliare `syncFromSession` sul prossimo scope.
-
-         `_unopenable` neanche, e per la stessa ragione: buttarlo via
-         rifarebbe sparire dallo schermo una cartella che c'e', che e'
-         esattamente lo stato che questa riga esiste per evitare. */
-      this._loadFailed = true;
-    }
+    if (await this._list.load()) this.render();
   }
 
   _renderMenu() {
@@ -636,7 +619,7 @@ export class ScopeChip {
       if (!this.leaveIfSelected(name)) {
         // Non era lo scope aperto: nessun cambio di conversazione, ma l'elenco
         // in cache nomina ancora un progetto che non c'è più.
-        this._projects = null;
+        this._list.invalidate();
         await this._loadProjects();
       }
       showToast(i18n.t('workspace.deletedProject', { name }), 'success');
@@ -647,7 +630,7 @@ export class ScopeChip {
 
   leaveIfSelected(name) {
     if (this.scope.kind !== 'project' || this.scope.name !== name) return false;
-    this._projects = null;              // l'elenco su disco e' cambiato
+    this._list.invalidate();            // l'elenco su disco e' cambiato
     this.select({ kind: 'personal', name: null });
     return true;
   }
@@ -756,7 +739,7 @@ export class ScopeChip {
       );
       return;
     }
-    this._projects = null;              // forza la rilettura da disco
+    this._list.invalidate();            // forza la rilettura da disco
     showToast(i18n.t('scope.created', { name: clean }), 'success');
     /* E ci si entra. Qui c'era `this.open()`: la tendina si riapriva sopra il
        toast e lasciava l'utente nella conversazione personale, con un secondo
@@ -769,17 +752,14 @@ export class ScopeChip {
     this.select({ kind: 'project', name: clean });
   }
 
-  /** "2 ore fa" da un mtime unix in secondi. */
+  /** "2 ore fa" da un mtime unix in secondi.
+   *
+   *  Il calcolo e le cinque frasi stanno in `conversation-list.js`, perche' le
+   *  stesse date le stampa anche il pannello della casa. Il traduttore glielo
+   *  passa chi chiama: quel modulo non importa niente, apposta.
+   */
   _ago(modified) {
-    if (!modified) return '';
-    const minutes = Math.floor((Date.now() / 1000 - modified) / 60);
-    if (minutes < 2) return i18n.t('scope.ago.now');
-    if (minutes < 60) return i18n.t('scope.ago.minutes', { n: String(minutes) });
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return i18n.t('scope.ago.hours', { n: String(hours) });
-    const days = Math.floor(hours / 24);
-    if (days === 1) return i18n.t('scope.ago.yesterday');
-    return i18n.t('scope.ago.days', { n: String(days) });
+    return ago(modified, (key, vars) => i18n.t(key, vars));
   }
 }
 

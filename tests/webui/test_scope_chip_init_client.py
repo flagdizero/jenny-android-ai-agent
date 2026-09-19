@@ -29,6 +29,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 
 _NODE = shutil.which("node")
 
@@ -66,9 +67,15 @@ import assert from 'node:assert/strict';
 
 // Costanti e helper del modulo, dal sorgente: riscriverli qui vorrebbe dire
 // misurare una copia.
-__DEFAULT_DIR__
 __NAME_IN_PLACEHOLDER__
 __SHORT__
+
+/* Il costruttore vero monta un `ConversationList`, che e' dove sono finiti i
+   campi dell'elenco: si importa quello, non se ne fa una sagoma. La rete non
+   viene mai toccata da questi test — `init` aggancia e basta — ma la fetch va
+   passata lo stesso, perche' e' il costruttore vero a chiederla. */
+const { ConversationList } = await import('__LIST_URL__');
+const api = { listProjects: () => Promise.resolve({}) };
 
 const i18n = {
   t: (key, vars) => 'i18n:' + key + (vars ? ':' + Object.values(vars).join(',') : ''),
@@ -135,6 +142,7 @@ const document = {
 
 class ScopeChip {
   __CTOR__
+  __DIR__
   __INIT__
   __PERSONAL_LABEL__
   __PATH_SEGMENTS__
@@ -168,8 +176,9 @@ function mount(complete = true) {
 def _harness() -> str:
     src = _source()
     return (
-        _HARNESS.replace("__DEFAULT_DIR__", _const(src, "DEFAULT_DIR"))
+        _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__NAME_IN_PLACEHOLDER__", _const(src, "NAME_IN_PLACEHOLDER"))
+        .replace("__DIR__", _member(src, "_dir"))
         .replace("__SHORT__", _function(src, "_short"))
         .replace("__CTOR__", _member(src, "constructor"))
         .replace("__INIT__", _member(src, "init"))

@@ -26,6 +26,7 @@ from pathlib import Path
 UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 CSS = UI_DIR / "assets" / "mobile-style.css"
 CHIP_JS = UI_DIR / "assets" / "shared" / "scope-chip.js"
+LIST_JS = UI_DIR / "assets" / "shared" / "conversation-list.js"
 
 
 def _css() -> str:
@@ -162,10 +163,22 @@ def test_the_open_menu_shows_where_you_are() -> None:
 
 
 def test_projects_are_ordered_by_the_same_field_the_rows_print() -> None:
-    body = _method("_loadProjects")
-    assert ".sort((a, b) => (b.modified || 0) - (a.modified || 0)" in body, (
+    """L'ordine non sta piu' nel chip: sta nel modulo che i due gusci dividono.
+
+    `_loadProjects` ora delega a `conversation-list.js`, che fa quell'ordine una
+    volta per la tendina dell'officina e per il pannello della casa. Il
+    contratto e' rimasto lo stesso — *dal piu' recente, con lo spareggio sul
+    nome* — e ha solo cambiato indirizzo.
+    """
+    src = LIST_JS.read_text(encoding="utf-8")
+    body = re.search(r"function byRecent\([^)]*\)\s*\{(.*?)\n\}", src, re.S)
+    assert body, "byRecent non trovato in conversation-list.js"
+    assert ".sort((a, b) => (b.modified || 0) - (a.modified || 0)" in body.group(1), (
         "l'elenco deve scendere dal piu' recente, con lo stesso `modified` che ogni riga stampa"
     )
-    assert "a.name.localeCompare(b.name)" in body, (
+    assert "a.name.localeCompare(b.name)" in body.group(1), (
         "senza spareggio due mtime uguali danno un ordine diverso a ogni apertura"
+    )
+    assert "this._list.load()" in _method("_loadProjects"), (
+        "il chip deve passare da li', o l'ordine verificato sopra non e' quello che usa"
     )

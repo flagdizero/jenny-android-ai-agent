@@ -32,6 +32,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 CSS = ASSETS / "mobile-style.css"
 I18N_DIR = ASSETS / "i18n"
 
@@ -57,8 +58,8 @@ def _member(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const DEFAULT_DIR = 'wikis';
 const i18n = { t: (key) => 'i18n:' + key };
+const { ConversationList, ago } = await import('__LIST_URL__');
 
 /* Un elemento è quel poco che `_renderMenu` e i suoi aiutanti toccano. */
 function makeEl(tag) {
@@ -116,9 +117,11 @@ const api = {
 class Chip {
   constructor() {
     this.scope = { kind: 'personal', name: null };
-    this._projects = null;
-    this._loadFailed = false;
-    this._dir = DEFAULT_DIR;
+    /* I quattro campi di prima stanno in `conversation-list.js`, che questo
+       banco importa **vero**: la regola che si misura qui — una lettura
+       fallita non cancella la cache — adesso vive li', e riscriverne una
+       copia in questo file vorrebbe dire misurare la copia. */
+    this._list = new ConversationList(() => api.listProjects());
     this.menu = makeEl('div');
     this.rendered = 0;
   }
@@ -136,6 +139,10 @@ class Chip {
     row.appendChild(item);
     return row;
   }
+  __PROJECTS__
+  __UNOPENABLE__
+  __LOAD_FAILED__
+  __DIR__
   __LOAD_PROJECTS__
   __RENDER_MENU__
   __LABEL__
@@ -150,7 +157,12 @@ class Chip {
 def _harness() -> str:
     src = _chip()
     return (
-        _HARNESS.replace("__LOAD_PROJECTS__", _member(src, "_loadProjects"))
+        _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
+        .replace("__PROJECTS__", _member(src, "_projects"))
+        .replace("__UNOPENABLE__", _member(src, "_unopenable"))
+        .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
+        .replace("__DIR__", _member(src, "_dir"))
+        .replace("__LOAD_PROJECTS__", _member(src, "_loadProjects"))
         .replace("__RENDER_MENU__", _member(src, "_renderMenu"))
         .replace("__LABEL__", _member(src, "_label"))
         .replace("__SEP__", _member(src, "_sep"))
@@ -320,14 +332,22 @@ def test_the_error_note_has_a_rule_of_its_own() -> None:
 
 
 def test_the_catch_no_longer_empties_the_cache() -> None:
-    """Grep, non comportamento: la riga che causava il doppione non torni."""
-    src = _member(_chip(), "_loadProjects")
+    """Grep, non comportamento: la riga che causava il doppione non torni.
+
+    Il `catch` si e' spostato in `conversation-list.js` insieme al resto della
+    lettura; la riga da cui nasceva il doppione e' la stessa, e il grep la cerca
+    dove sta adesso.
+    """
+    m = re.search(r"\n  async load\(\)\s*\{(.*?)\n  \}",
+                  LIST_JS.read_text(encoding="utf-8"), re.S)
+    assert m, "load() non trovato in conversation-list.js"
+    src = m.group(1)
     catch = src[src.index("} catch"):]
     # Senza i commenti: il commento accanto *cita* la riga rimossa per dire
     # perché è stata rimossa, e un grep ingenuo la ritroverebbe lì.
     catch = re.sub(r"/\*.*?\*/", "", catch, flags=re.S)
     catch = re.sub(r"^\s*//.*$", "", catch, flags=re.M)
-    assert "this._projects = []" not in catch, (
+    assert "this.projects = []" not in catch, (
         "un guasto torna a dichiarare che l'utente non ha progetti"
     )
-    assert "this._loadFailed = true" in catch
+    assert "this.loadFailed = true" in catch

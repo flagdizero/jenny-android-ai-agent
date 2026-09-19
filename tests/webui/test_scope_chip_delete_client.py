@@ -27,6 +27,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 CSS = ASSETS / "mobile-style.css"
@@ -56,6 +57,8 @@ def _locale(name: str) -> dict:
 
 _HARNESS = """
 import assert from 'node:assert/strict';
+
+const { ConversationList } = await import('__LIST_URL__');
 
 const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = {
@@ -98,7 +101,9 @@ function showToast(text) { toasts.push(text); }
 class Chip {
   constructor() {
     this.scope = { kind: 'personal', name: null };
-    this._projects = null;
+    /* La cache dell'elenco sta in `conversation-list.js`: qui si importa
+       quello, cosi' «l'elenco e' stato buttato» lo dice il codice vero. */
+    this._list = new ConversationList(() => Promise.resolve({}));
     this.closed = 0;
     this.left = [];
     this.reloaded = 0;
@@ -110,6 +115,7 @@ class Chip {
     return mine;
   }
   async _loadProjects() { this.reloaded++; }
+  __PROJECTS__
   __PROJECT_ROW__
 }
 
@@ -126,6 +132,8 @@ function row(chip, name) {
 def _harness() -> str:
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": _locale("it")}))
+        .replace("__LIST_URL__", LIST_JS.as_uri())
+        .replace("__PROJECTS__", _member(_chip(), "_projects"))
         .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__PROJECT_ROW__", _member(_chip(), "_projectRow"))
     )

@@ -42,6 +42,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 CSS = ASSETS / "mobile-style.css"
 I18N_DIR = ASSETS / "i18n"
@@ -80,7 +81,7 @@ def _locale(name: str) -> dict:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const DEFAULT_DIR = 'wikis';
+const { ConversationList, ago } = await import('__LIST_URL__');
 __HINT_KEYS__
 
 /* La `t()` vera di `i18n.js` sulle traduzioni vere: la nota va letta come la
@@ -158,10 +159,10 @@ const api = {
 class Chip {
   constructor() {
     this.scope = { kind: 'personal', name: null };
-    this._projects = null;
-    this._unopenable = null;
-    this._loadFailed = false;
-    this._dir = DEFAULT_DIR;
+    /* Le due liste stanno in `conversation-list.js`, importato vero: la
+       divisione fra apribili e non — e il fatto che un guasto non la cancelli
+       — e' la sua regola, e va misurata dove vive. */
+    this._list = new ConversationList(() => api.listProjects());
     this.menu = makeEl('div');
     this.picked = [];
   }
@@ -179,6 +180,10 @@ class Chip {
     row.appendChild(item);
     return row;
   }
+  __PROJECTS__
+  __UNOPENABLE__
+  __LOAD_FAILED__
+  __DIR__
   __LOAD_PROJECTS__
   __RENDER_MENU__
   __LABEL__
@@ -194,6 +199,11 @@ def _harness() -> str:
     src = _chip()
     return (
         _HARNESS.replace("__HINT_KEYS__", _const(src, "UNOPENABLE_HINT_KEYS"))
+        .replace("__LIST_URL__", LIST_JS.as_uri())
+        .replace("__PROJECTS__", _member(src, "_projects"))
+        .replace("__UNOPENABLE__", _member(src, "_unopenable"))
+        .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
+        .replace("__DIR__", _member(src, "_dir"))
         .replace("__TRANSLATIONS__", json.dumps({"it": _locale("it")}))
         .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__LOAD_PROJECTS__", _member(src, "_loadProjects"))

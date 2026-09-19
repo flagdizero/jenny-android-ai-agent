@@ -55,6 +55,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
+LIST_JS = ASSETS / "shared" / "conversation-list.js"
 
 _NODE = shutil.which("node")
 
@@ -108,6 +109,8 @@ def _function(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
+const { ConversationList } = await import('__LIST_URL__');
+
 const i18n = {
   t: (key, vars) => 'i18n:' + key + (vars ? ':' + Object.values(vars).join(',') : ''),
 };
@@ -155,9 +158,11 @@ class ScopeChip {
   constructor() {
     this.enabled = true;
     this.scope = { kind: 'personal', name: null };
-    this._projects = [{ name: 'vecchio', modified: 1 }];
-    this._loadFailed = false;
-    this._dir = 'wikis';
+    /* L'elenco vive in `conversation-list.js`, importato vero: qui si semina
+       la cache come se una lettura fosse andata a buon fine, perche' il
+       controllo sul nome gia' preso legge quella. */
+    this._list = new ConversationList(() => Promise.resolve({}));
+    this._list.projects = [{ name: 'vecchio', modified: 1 }];
     this._open = false;
     this.renders = 0;
     this.opened = 0;
@@ -168,6 +173,9 @@ class ScopeChip {
   // viste e la conversazione sotto.
   render() { this.renders++; }
   open() { this.opened++; }
+  __PROJECTS__
+  __LOAD_FAILED__
+  __DIR__
   __PUBLISH_PIN__
   __SYNC_FROM_SESSION__
   __KEY_FOR__
@@ -208,6 +216,10 @@ def _harness() -> str:
             _const(src, "VALID_NAME") + "\n" + _function(src, "isOpenableProjectName"),
         )
         .replace("__CREATE_ERROR_KEYS__", _const_block(src, "CREATE_ERROR_KEYS"))
+        .replace("__LIST_URL__", LIST_JS.as_uri())
+        .replace("__PROJECTS__", _member(src, "_projects"))
+        .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
+        .replace("__DIR__", _member(src, "_dir"))
         .replace("__PUBLISH_PIN__", _member(src, "_publishPin"))
         .replace("__SYNC_FROM_SESSION__", _member(src, "syncFromSession"))
         .replace("__KEY_FOR__", _member(src, "keyFor"))
@@ -552,7 +564,7 @@ def test_an_unread_list_raises_no_warning_at_all() -> None:
     """Con la cache vuota (`null`) non si sa niente: non si avvisa di niente."""
     _run_js("""
       const chip = makeChip();
-      chip._projects = null;
+      chip._list.invalidate();          // nessuna lettura riuscita: `null`, non `[]`
       answers = ['vecchio', 'una riga'];
       createOutcome = { name: 'vecchio', created: [], seeded: true };
       await chip._createProject();
