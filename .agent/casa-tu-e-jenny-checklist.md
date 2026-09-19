@@ -181,7 +181,42 @@ default (budget a 0, non applicato) il caso non esiste.
   provati da niente, e prenderli per un blocco vuol dire tagliare il file al
   contrario.
 
-## Fuori da questo giro, e sono decisioni
+## Il secondo giro: le quattro righe che avevo tolto
+
+Piano: [`casa-tu-e-jenny-resto-plan.md`](casa-tu-e-jenny-resto-plan.md). La
+tabella qui sotto era la lista dei tagli, ed è stata ribaltata dall'utente.
+Quattro delle cinque voci sono atterrate; la quinta aspetta tre decisioni sue.
+
+**«Tu e Jenny» adesso ha quattro righe e una scheda:** chi risponde, Jenny,
+aggiornamenti, backup — e l'officina, invertita in fondo. La riga muta della
+versione non c'è più: quel numero è il valore della riga che apre gli
+aggiornamenti, perché un numero e basta è un'etichetta, non un'impostazione.
+
+Tre cose di questo giro vale la pena rileggerle:
+
+1. **L'accento non è sempre l'accento.** Su una scheda invertita `--accent` è
+   invisibile in Chanel — il tema di partenza — e in Fumetto, dove l'accento
+   *è* il testo. Misurato su tutti e sette e deciso con una soglia (3:1, quella
+   di un oggetto grafico): tre temi tengono la tinta, quattro prendono `--bg`.
+   Il conto lo rifà un banco a ogni ritocco di un tema.
+2. **Una macchina a stati si estrae, non si ricopia.** Il giro degli
+   aggiornamenti è uscito dall'officina in `shared/update-flow.js`, e il
+   guadagno vero non è la stanza in casa: è che quella macchina, che viveva nel
+   controller senza un banco che la esercitasse, adesso ne ha 18 — coi due casi
+   che ingannano in testa.
+3. **Una data che nessuno scriveva.** «Ultimo backup» non aveva fonte, e non
+   poteva averla dal lato che prepara il file: fra il container cifrato e il
+   file su disco c'è un picker di sistema annullabile, e l'esito lo conosce
+   solo il client.
+
+**Il rig ha trovato quattro difetti che i banchi non vedevano**, ed è il
+motivo per cui vale la pena guardarlo a ogni stanza: la riga della chiave
+visibile senza nessuna marca (`[hidden]` a specificità zero, la terza volta per
+questa casa — adesso c'è un banco che cerca il caso da solo); «Modelli di
+OpenCode» sopra i modelli di Anthropic; due pastiglie indistinguibili nei temi
+chiari; e «Sei alla , ed è l'ultima» prima che il payload rispondesse.
+
+## Fuori dal primo giro, ed erano decisioni ribaltate
 
 | Riga della tavola | Perché no |
 |---|---|
@@ -191,3 +226,9 @@ default (budget a 0, non applicato) il caso non esiste.
 | Aggiornamenti | giro suo; qui c'è solo il numero di versione |
 | «grazie a [n] sostenitori» | non c'è nessun posto da cui prendere quel numero |
 | Maniglia del cassetto | come nei giri precedenti |
+
+**Questa tabella è stata ribaltata dall'utente il 19/09/2026, e aveva ragione.**
+Quattro di quelle sei righe adesso esistono; la quinta — «grazie a [n]
+sostenitori» — aspetta tre decisioni sue (da dove vengono i nomi, cosa si
+pubblica di una persona, dove porta «Sostieni Jenny»), e finché quei nomi non
+esistono la riga non si mette: «grazie a 0 sostenitori» è peggio di niente.
