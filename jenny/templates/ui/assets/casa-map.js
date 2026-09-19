@@ -286,6 +286,14 @@ export class CasaMap {
       .attr('dy', (d) => labelOffsets(radiusOf(d.degree))[0]);
 
     this._sim = d3.forceSimulation(nodes)
+      /* Quanto ci mette a fermarsi. Il default di D3 sono ~300 tick, cioe'
+         cinque secondi a 60 fps — e su un quaderno da 31 pagine il Titan ne fa
+         una trentina al secondo, quindi **dieci**. Dieci secondi in cui i nomi
+         stanno dove capita, perche' si collocano solo a fisica ferma: misurato
+         con due scatti, a 5 s accavallati e a 16 s a posto. Con 0,045 i tick
+         sono ~150 e la nuvola e' assestata lo stesso: a quel punto le forze
+         stanno gia' spostando i nodi di frazioni di pixel. */
+      .alphaDecay(0.045)
       /* Misurati su un quaderno vero da 31 pagine: con 58 e -120 i nodi si
          impilavano al centro in una matassa, e nemmeno lo zoom la apriva. */
       .force('link', d3.forceLink(links).id((d) => d.id).distance(72).strength(0.35))

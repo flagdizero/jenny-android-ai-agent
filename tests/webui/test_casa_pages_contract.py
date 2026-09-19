@@ -365,3 +365,20 @@ def test_the_names_are_placed_once_the_physics_stops() -> None:
         "i nomi si ricollocano a ogni tick: lampeggiano, e costano una misura "
         "di testo per etichetta per frame"
     )
+
+
+def test_the_physics_stops_in_a_few_seconds_and_not_in_ten() -> None:
+    """I nomi si collocano a fisica ferma, quindi quanto ci mette a fermarsi e'
+    quanto restano dove capita.
+
+    Il default di D3 sono ~300 tick: cinque secondi a 60 fps, e dieci sul Titan
+    con 31 nodi. Misurato con due scatti — a 5 s le etichette erano accavallate,
+    a 16 s a posto.
+    """
+    src = (ASSETS / "casa-map.js").read_text(encoding="utf-8")
+    m = re.search(r"\.alphaDecay\(([\d.]+)\)", src)
+    assert m, "la simulazione e' tornata al tempo di assestamento di serie"
+    assert float(m.group(1)) >= 0.04, (
+        f"alphaDecay {m.group(1)}: la nuvola ci mette troppo a fermarsi, e fino "
+        "ad allora i nomi stanno dove capita"
+    )

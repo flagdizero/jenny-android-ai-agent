@@ -148,6 +148,44 @@ davanti a un verde è «dove è caduta la mutazione?».
   Finché non c'è, l'intestazione tiene la porta dell'officina.
 - **Audit, briciole di pane e LaTeX** nel lettore: sono arnesi da operatore, e
   l'officina resta dov'è.
-- **Due etichette su dieci** si sfiorano ancora al centro della mappa quando il
-  quaderno è denso. Si legge; sistemarlo vuol dire un anti-collisione sulle
-  etichette, che è un lavoro suo.
+- L'anti-collisione delle etichette era il quarto atterraggio: v. sotto.
+
+## Ritocco — ogni nome al suo posto
+
+Le due etichette che si sfioravano al centro della mappa. I nomi si misurano a
+fisica ferma e si collocano in ordine di quanto è collegata la loro pagina:
+sotto il pallino, se no sopra, se no **non si scrivono**. Due parole
+sovrapposte non sono due informazioni, sono zero; il pallino resta, si tocca
+lo stesso, e il nome sta nell'elenco accanto.
+
+**I pallini non sono ostacoli, ed è misurato e non assunto.** Ci ho provato per
+primo. Un nome sta dieci pixel sotto il bordo del suo cerchio — cioè dentro
+l'aria che separa due riquadri — quindi litigava perfino col *proprio* pallino
+e sparivano tutte le etichette: preso dal banco, prima che lo vedesse il
+telefono, dove sarebbe stato «la mappa non ha più i nomi». Escluso il proprio,
+restava che un nome largo fino a 90 px su nodi distanti 40 tocca sempre il
+cerchio del vicino: tre pagine in fila ne conservavano **una su tre**. Un nome
+che sfiora un pallino si legge; un nome che non c'è no.
+
+Il posto di riserva è più largo di quanto sembri: `y` di un testo SVG è la
+linea di base, quindi andando in alto il riquadro scende di un paio di pixel
+sotto l'ancora, e con lo stesso numero di sotto il fondo del nome finiva dentro
+l'aria del pallino vicino — il ripiego non era più un ripiego.
+
+### E poi il telefono ha detto che non era cambiato niente
+
+Primo scatto dopo il collocamento: identico a prima. Non era rotto — **era
+presto**. I nomi si mettono a posto solo quando la fisica si ferma, e il
+default di D3 sono ~300 tick: cinque secondi a 60 fps, e il Titan con 31 nodi e
+80 archi ne fa una trentina al secondo, quindi **dieci**. Misurato con due
+scatti: a 5 s accavallati, a 16 s a posto. Con `alphaDecay(0.045)` i tick sono
+~150 e a **6 secondi** sullo stesso quaderno le dieci etichette sono tutte
+leggibili e nessuna si tocca — la nuvola è assestata lo stesso, perché a quel
+punto le forze spostano i nodi di frazioni di pixel.
+
+**11 mutazioni, 11 rosse.** Cinque erano verdi al primo giro, e le prime tre
+per lo stesso motivo: il banco provava solo nomi lontanissimi o esattamente
+sovrapposti, mai a un pixel di distanza — e l'aria fra due riquadri è due
+condizioni diverse, di cui una sola morde a seconda di chi sta a destra. Le
+altre due erano il *disegno*, che nessun banco toccava: adesso una selezione di
+D3 finta esercita anche quello.
