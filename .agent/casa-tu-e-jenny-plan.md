@@ -147,6 +147,13 @@ va detto invece che perso.
 
 ## Cosa entra in questo giro, cosa no
 
+> **Questa tabella è stata ribaltata dall'utente il 19/09/2026, e aveva
+> ragione.** Cinque delle sei righe qui sotto sono tagli miei, con ragioni mie
+> — una perfino paternalistica: «una chiave API si incolla in officina». In
+> casa si sceglie chi risponde come si sceglie il tema. Il resto della pagina
+> ha un piano suo: [`casa-tu-e-jenny-resto-plan.md`](casa-tu-e-jenny-resto-plan.md).
+
+
 | Riga della tavola | In questo giro | Perché |
 |---|---|---|
 | Tema | **sì** | i sette temi sono già in `mobile-style.css`, che la casa carica apposta, e `bootstrap.js` li applica prima del primo paint: è una striscia di pastiglie, non un lavoro di CSS. La tavola ne disegna quattro perché quattro ci stanno |
