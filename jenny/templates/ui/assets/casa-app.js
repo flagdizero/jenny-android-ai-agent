@@ -25,6 +25,7 @@ import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
 import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
+import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
@@ -107,11 +108,10 @@ class CasaApp {
     this.talkLabel = document.getElementById('casa-talk-label');
 
     /* «Tu e Jenny»: le impostazioni di chi la usa. La porta dell'officina vive
-       qui dentro, in fondo, e resta sotto il tocco lungo sull'avatar. */
-    this.workshopBtn = document.getElementById('casa-workshop');
-    this.workshopName = document.getElementById('casa-workshop-name');
-    this.workshopHint = document.getElementById('casa-workshop-hint');
-    this.versionEl = document.getElementById('casa-version');
+       qui dentro, in fondo, e resta sotto il tocco lungo sull'avatar — che e'
+       l'unica cosa di quella stanza che questo guscio si tiene, perche' e' lui
+       a sapere come si apre l'officina. */
+    this.tu = new CasaTu({ onWorkshop: () => this._openInWorkshop(null) });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
        sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
@@ -169,9 +169,6 @@ class CasaApp {
 
     this._wireTimer = null;
     this._threadFailed = false;
-    /* La versione si chiede una volta per avvio, alla prima apertura della
-       stanza: non cambia sotto i piedi di chi guarda un tema. */
-    this._versionAsked = false;
     this._running = false;
     /* Il guscio nativo copre la pagina con un caricamento finche' non chiama
        onNativeReady: fino ad allora qualunque animazione d'ingresso scorre
@@ -240,7 +237,6 @@ class CasaApp {
       this.openTu();
     });
     setupLongPress(this.door, () => this._openInWorkshop(null));
-    this.workshopBtn?.addEventListener('click', () => this._openInWorkshop(null));
     document.getElementById('casa-who')?.addEventListener('click', () => this.who.toggle());
     this.pagesBtn?.addEventListener('click', () => this.openPages());
     /* Le due vie d'uscita della stessa stanza, e fanno la stessa cosa: si esce
@@ -367,29 +363,10 @@ class CasaApp {
     this._setHeadTitle(await this.reader.load(notebook, path, label));
   }
 
-  /** «Tu e Jenny». La versione arriva dopo, e se non arriva la riga non c'e'. */
+  /** «Tu e Jenny». */
   openTu() {
     this._setView('tu');
-    this._loadVersion();
-  }
-
-  /* Il numero di versione, una volta per avvio. `/api/settings` e' un payload
-     grosso e qui se ne usa un campo: vale la pena chiamarlo all'apertura della
-     stanza, non al caricamento della casa, e non due volte. */
-  async _loadVersion() {
-    if (this._versionAsked) return;
-    this._versionAsked = true;
-    try {
-      const data = await api.getSettings();
-      const current = data?.version?.current;
-      if (!current || !this.versionEl) return;
-      this.versionEl.textContent = i18n.t('casa.tu.version', { version: current });
-      this.versionEl.hidden = false;
-    } catch (err) {
-      /* Una versione che non si sa non si scrive: la riga resta vuota. Non e'
-         un guasto di cui valga la pena parlare a chi sta guardando un tema. */
-      console.warn('casa.tu: versione non letta', err);
-    }
+    this.tu.open();
   }
 
   /** Indietro di **una** stanza. Vero se c'era dove tornare. */
@@ -931,8 +908,7 @@ class CasaApp {
     if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.tu.open'));
     this._applyBackLabel();
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
-    if (this.workshopName) this.workshopName.textContent = i18n.t('casa.workshop');
-    if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
+    this.tu?.applyTranslations();
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));
     this.pages?.applyTranslations();
     const whoBtn = document.getElementById('casa-who');

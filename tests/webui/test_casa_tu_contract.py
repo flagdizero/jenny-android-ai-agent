@@ -14,11 +14,14 @@ import json
 import re
 from pathlib import Path
 
+from jenny.utils.android_assets import _UI_MANIFEST
+
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
 ASSETS = UI / "assets"
 APP_JS = ASSETS / "casa-app.js"
+TU_JS = ASSETS / "casa-tu.js"
 CSS = ASSETS / "casa-style.css"
 I18N = ASSETS / "i18n"
 
@@ -59,11 +62,41 @@ def test_the_avatar_opens_you_and_jenny_and_the_workshop_is_a_long_press() -> No
 
 
 def test_the_workshop_card_is_the_other_way_in() -> None:
-    """La stessa porta, dove la tavola la mette: in fondo alla pagina."""
-    app = _app()
-    assert "this.workshopBtn?.addEventListener('click', () => this._openInWorkshop(null));" in app
+    """La stessa porta, dove la tavola la mette: in fondo alla pagina.
+
+    La stanza non sa come si apre l'officina — quello lo sa il guscio, che ha
+    la chiave di sessione da passarle. La scheda chiama indietro.
+    """
+    tu = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('casa-workshop')" in tu and "onWorkshop?.()" in tu, (
+        "la scheda dell'officina non chiama piu' indietro"
+    )
+    assert "new CasaTu({ onWorkshop: () => this._openInWorkshop(null) })" in _app(), (
+        "il guscio non passa piu' la porta dell'officina alla stanza"
+    )
     html = INDEX.read_text(encoding="utf-8")
     for el_id in ("casa-workshop", "casa-workshop-name", "casa-workshop-hint", "casa-version"):
+        assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
+
+
+def test_the_room_arrives_on_the_phone() -> None:
+    """Un file fuori dal manifest non da' 404: `_serve_static` ricade
+    sull'officina. Il difetto si vede solo sul telefono, ed e' una stanza che
+    non si apre."""
+    assert "assets/casa-tu.js" in _UI_MANIFEST, (
+        "casa-tu.js non e' nel manifest: sul telefono la stanza non esiste"
+    )
+
+
+def test_the_theme_is_chosen_where_it_is_seen() -> None:
+    """Il tema non apre una stanza: si tocca e c'e'. Le pastiglie stanno nella
+    pagina, e il tocco le trova per attributo — non per posizione, che cambia
+    col numero dei temi."""
+    tu = TU_JS.read_text(encoding="utf-8")
+    assert "closest('[data-theme]')" in tu, "la striscia non riconosce piu' la pastiglia toccata"
+    assert "setTheme(id)" in tu, "il tema non viene piu' applicato"
+    html = INDEX.read_text(encoding="utf-8")
+    for el_id in ("casa-themes", "casa-theme-label", "casa-theme-value", "casa-theme-desc"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
 
 

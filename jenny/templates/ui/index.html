@@ -191,6 +191,19 @@
   <section class="casa-tu" id="casa-tu">
     <div class="casa-tu-scroll">
 
+      <!-- Il tema non apre una stanza: si tocca e c'e'. E' l'unica impostazione
+           della casa il cui effetto e' tutto a schermo, e mandarla a scegliere
+           altrove vorrebbe dire sceglierla senza vederla. -->
+      <div class="casa-block">
+        <div class="casa-block-head">
+          <i class="ti ti-palette" aria-hidden="true"></i>
+          <span class="casa-block-label" id="casa-theme-label"></span>
+          <span class="casa-block-value" id="casa-theme-value"></span>
+        </div>
+        <div class="casa-themes" id="casa-themes" role="radiogroup"></div>
+        <div class="casa-block-note" id="casa-theme-desc"></div>
+      </div>
+
       <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
       <button class="casa-workshop" id="casa-workshop" type="button">
         <i class="ti ti-tool" aria-hidden="true"></i>

@@ -106,19 +106,7 @@ const document = {
   },
 };
 
-/* `getSettings` e' il payload delle impostazioni, di cui la casa usa un campo
-   solo: la versione. Qui e' sostituibile per poter misurare anche il caso in
-   cui quel campo non c'e'. */
-let settingsPayload = { version: { current: '0.11.0' } };
-let settingsCalls = 0;
-const api = {
-  clientLog() {},
-  getSettings() {
-    settingsCalls += 1;
-    if (!settingsPayload) return Promise.reject(new Error('impostazioni non lette'));
-    return Promise.resolve(settingsPayload);
-  },
-};
+const api = { clientLog() {} };
 
 /* Finto, ma con la regola che conta: chi è già lì non cambia conversazione. */
 const sessionManager = {
@@ -169,13 +157,12 @@ class App {
     this.backLabel = makeEl('span');
     this.talkBtn = makeEl('button');
     this.talkLabel = makeEl('span');
-    /* «Tu e Jenny»: la scheda dell'officina e la riga della versione, che
-       nasce nascosta e resta nascosta se la versione non si sa. */
-    this.workshopName = makeEl('span');
-    this.workshopHint = makeEl('span');
-    this.versionEl = makeEl('div');
-    this.versionEl.hidden = true;
-    this._versionAsked = false;
+    /* La quarta stanza e' un modulo suo, col suo banco: qui interessa solo
+       che il guscio la apra quando ci si entra. */
+    this.tu = {
+      applyTranslations: () => {},
+      open: () => this.fatti.push('tu aperta'),
+    };
     this.view = 'chat';
     this._jennyWasOut = true;
     this.map = null;
@@ -233,7 +220,6 @@ class App {
   __OPEN_PAGES__
   __GO_BACK_ONE_ROOM__
   __OPEN_TU__
-  __LOAD_VERSION__
   __SET_VIEW__
   __APPLY_HEAD__
   __APPLY_BACK_LABEL__
@@ -245,8 +231,6 @@ function casa() {
   lightbox = null;
   createOutcome = null;
   creations.length = 0;
-  settingsPayload = { version: { current: '0.11.0' } };
-  settingsCalls = 0;
   sessionManager.currentKey = sessionManager.personalKey;
   const app = new App();
   app._applyConversation();
@@ -278,7 +262,6 @@ def _harness() -> str:
         .replace("__OPEN_PAGES__", _member(src, "openPages"))
         .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
         .replace("__OPEN_TU__", _member(src, "openTu"))
-        .replace("__LOAD_VERSION__", _member(src, "_loadVersion"))
         .replace("__APPLY_BACK_LABEL__", _member(src, "_applyBackLabel"))
         .replace("__SET_VIEW__", _member(src, "_setView"))
         .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
@@ -728,6 +711,7 @@ def test_you_and_jenny_goes_back_to_the_chat() -> None:
       app.openTu();
       assert.equal(app.view, 'tu');
       assert.equal(app.shell.attrs['data-view'], 'tu', 'il CSS non sa in che stanza sei');
+      assert.ok(app.fatti.includes('tu aperta'), 'la stanza non e\u2019 stata caricata');
       app.handleHardwareBack();
       assert.equal(app.view, 'chat');
       assert.equal(sessionManager.currentKey, 'project:orto', 'e il quaderno e\u2019 rimasto');
@@ -770,47 +754,4 @@ def test_talking_about_it_belongs_to_a_notebook() -> None:
       assert.equal(app.talkBtn.hidden, true, '«Parlane» in mezzo alle impostazioni');
       assert.equal(app.pagesBtn.hidden, true, 'e nemmeno la pastiglia delle pagine');
       assert.equal(app.nameEl.textContent, i18n.t('casa.tu.title'), 'la testa non dice dove sei');
-    """)
-
-
-def test_the_version_is_asked_once_and_never_invented() -> None:
-    """La riga nasce nascosta e resta nascosta finche' non c'e' un numero.
-
-    `/api/settings` e' un payload grosso e di suo qui serve un campo: si chiede
-    all'apertura della stanza, non al caricamento della casa, e una volta sola.
-    Un numero che non si sa non si scrive — «versione {version}» con la graffa
-    dentro sarebbe peggio di una riga che non c'e'.
-    """
-    _run_js("""
-      const app = casa();
-      app.openTu();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.versionEl.hidden, false);
-      assert.ok(app.versionEl.textContent.includes('0.11.0'), app.versionEl.textContent);
-      assert.ok(!app.versionEl.textContent.includes('{'), 'il segnaposto e\u2019 rimasto dentro');
-
-      app._setView('chat');
-      app.openTu();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(settingsCalls, 1, 'la versione viene richiesta a ogni apertura');
-    """)
-
-
-def test_a_version_that_is_not_known_leaves_no_line() -> None:
-    """Impostazioni irraggiungibili, o un payload senza versione: la riga resta
-    vuota e non occupa. Non e' un guasto di cui valga la pena parlare a chi sta
-    guardando un tema."""
-    _run_js("""
-      const app = casa();
-      settingsPayload = null;
-      app.openTu();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.versionEl.hidden, true, 'una versione che non si sa e\u2019 finita a schermo');
-
-      const altro = casa();
-      settingsPayload = { version: {} };
-      altro.openTu();
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(altro.versionEl.hidden, true);
-      assert.equal(altro.versionEl.textContent, '');
     """)

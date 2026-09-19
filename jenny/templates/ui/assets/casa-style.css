@@ -1303,3 +1303,92 @@ body.casa {
    e' a specificita' zero, e la casa quella trappola l'ha gia' pagata una volta
    — v. `.casa-back[hidden]`, cinquanta righe piu' su. */
 .casa-version[hidden] { display: none; }
+
+/* ── Il tema ─────────────────────────────────────────────────────────────────
+   Una striscia che scorre di lato, non una griglia: i temi sono sette e la
+   tavola ne disegna quattro perche' quattro ci stanno. Scorrere e' il modo in
+   cui uno schermo basso dice «ce n'e' altro» senza rubare altezza alla
+   pagina. */
+
+.casa-block {
+  flex: none;
+  padding: 8px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.casa-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+
+.casa-block-head > .ti { flex: none; color: var(--accent); font-size: 18px; }
+.casa-block-label { flex: 1; min-width: 0; font-size: 14px; }
+
+.casa-block-value {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.casa-block-note {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.casa-themes {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 4px 2px 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.casa-themes::-webkit-scrollbar { display: none; }
+
+.casa-theme {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 56px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* Il quadrato porta i tre colori del tema, non il suo accento soltanto: fra
+   `chanel` e `pietra` l'accento e' quasi lo stesso, ed e' lo sfondo a dire di
+   che tema si tratta. */
+.casa-theme-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.casa-theme-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* L'anello della tavola: due ombre, la prima del colore del fondo, cosi' lo
+   stacco si vede anche quando il tema e' scuro quanto la pagina. */
+.casa-theme.is-on .casa-theme-swatch {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.casa-theme.is-on .casa-theme-name { color: var(--text); font-weight: 600; }
