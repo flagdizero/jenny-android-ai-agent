@@ -109,7 +109,9 @@ def _function(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const { ConversationList } = await import('__LIST_URL__');
+/* `projectKey` serve a `keyFor`, che la chiama: la forma della chiave sta in
+   `conversation-list.js` insieme all'elenco di cui e' l'indirizzo. */
+const { ConversationList, projectKey } = await import('__LIST_URL__');
 
 const i18n = {
   t: (key, vars) => 'i18n:' + key + (vars ? ':' + Object.values(vars).join(',') : ''),

@@ -25,6 +25,33 @@
  */
 export const DEFAULT_PROJECTS_DIR = 'wikis';
 
+/** Il prefisso di una chiave di sessione-progetto.
+ *
+ *  Sta qui perche' e' la stessa cosa di cui questo modulo tiene l'elenco: il
+ *  nome che `/api/projects` restituisce e il nome dentro la chiave sono lo
+ *  stesso nome, e il gateway lo rilegge con quella regola
+ *  (`session/keys.py::PROJECT_SESSION_PREFIX`). I due gusci la costruivano
+ *  ognuno per conto suo.
+ */
+export const PROJECT_PREFIX = 'project:';
+
+/** La chiave di sessione di un quaderno. */
+export function projectKey(name) {
+  return `${PROJECT_PREFIX}${name}`;
+}
+
+/** Il nome del quaderno dentro una chiave, o `null` se e' la personale.
+ *
+ *  E' la domanda *«sono dentro un quaderno?»* scritta una volta sola: chi la
+ *  fa con uno `startsWith` sparso per il codice prima o poi la fa in un posto
+ *  e non nell'altro.
+ */
+export function projectNameOf(key) {
+  return typeof key === 'string' && key.startsWith(PROJECT_PREFIX)
+    ? key.slice(PROJECT_PREFIX.length)
+    : null;
+}
+
 /** Dal piu' recente, e a parita' per nome.
  *
  *  L'ordine alfabetico del backend mette in cima la wiki con la lettera piu'

@@ -23,7 +23,7 @@ import { rpc } from './rpc-client.js';
 import { escapeHtml, showToast } from './utils.js';
 import { confirmDialog, detailDialog, promptDialog } from './dialog.js';
 import { deleteProjectFlow } from './project-delete.js';
-import { ConversationList, UNOPENABLE_HINT_KEYS, ago } from './conversation-list.js';
+import { ConversationList, UNOPENABLE_HINT_KEYS, ago, projectKey } from './conversation-list.js';
 
 /** Un nome di progetto è un nome di cartella: niente separatori né path.
  *
@@ -532,7 +532,7 @@ export class ScopeChip {
   /** La chiave di sessione di uno scope. */
   static keyFor(scope) {
     return scope.kind === 'project' && scope.name
-      ? `project:${scope.name}`
+      ? projectKey(scope.name)
       : null;   // null = la conversazione personale, che la conosce il chiamante
   }
 
