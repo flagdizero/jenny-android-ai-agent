@@ -559,3 +559,18 @@ body.casa {
   animation: jenny-wobble 1.1s ease-in-out infinite;
   transform-origin: 50% 90%;
 }
+
+/* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
+   un guasto si dice come si direbbe a voce, non con un pannello rosso. Sta nel
+   filo e non nella striscia dello stato perché la striscia racconta com'è il
+   collegamento adesso e se ne va da sola, mentre questo è un fatto della
+   conversazione — quel messaggio non è entrato — e resta dov'era la bolla. */
+.casa-note {
+  align-self: center;
+  max-width: 88%;
+  margin: 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
+}

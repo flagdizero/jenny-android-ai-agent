@@ -29,6 +29,7 @@ import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
+import { describeWireError } from './shared/wire-error.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -90,6 +91,12 @@ export class CasaChat {
     this.buffer = '';
     this.turnId = null;
     this._empty = true;
+    /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
+       `null` = non c'è niente da riprendere. */
+    this._pendingSend = null;
+    /* Il campo del messaggio è del guscio, non del filo: quando un messaggio
+       torna indietro, il testo glielo ridà lui. */
+    this.onSendRejected = null;
 
     this.el.addEventListener('scroll', () => {
       this._stick = this._atBottom();
@@ -229,8 +236,13 @@ export class CasaChat {
   /** Un frame del websocket. Tutto cio' che non e' qui sotto non riguarda la casa. */
   handleFrame(msg) {
     if (!this._belongsHere(msg)) return;
+    /* La prova che l'ultimo invio è entrato: il gateway sta rispondendo di
+       qualcosa che non è un rifiuto. Da qui in poi quella bolla non è più in
+       sospeso, e un errore che arrivasse dopo è un errore di altro. */
+    if (msg.event !== 'error') this._pendingSend = null;
     if (!this._crossesTurn(msg)) return;
     switch (msg.event) {
+      case 'error': this._error(msg); break;
       case 'delta': this._delta(msg.text || ''); break;
       case 'stream_end': this._streamEnd(msg.text); break;
       case 'message': this._message(msg); break;
@@ -310,7 +322,49 @@ export class CasaChat {
    */
   appendOwn(text, media = []) {
     this._resetTurn();
-    this._appendUser(text, null, media);
+    const node = this._appendUser(text, null, media);
+    this.scrollToBottom();
+    /* Partito non vuol dire entrato: il gateway può ancora rifiutarlo (un
+       allegato che non riesce ad aprire). Finché non arriva niente che dimostri
+       il contrario questa bolla è "in sospeso", ed è così che un rifiuto sa
+       *quale* togliere senza bisogno di un identificativo sul filo. */
+    this._pendingSend = { node, text };
+  }
+
+  /* Un rifiuto del gateway. Le parole e la famiglia le decide il modulo
+     condiviso con l'officina; qui si decide dove va a finire.
+
+     La riga sta **nel filo** e non nella striscia dello stato: la striscia dice
+     com'è il collegamento adesso e se ne va da sola, questo invece è un fatto
+     della conversazione — quel messaggio non è entrato — e deve restare lì dove
+     c'era la bolla, anche se scorri via e torni. */
+  _error(msg) {
+    const { text, blocksSend } = describeWireError(msg, (key) => i18n.t(key));
+    if (blocksSend) {
+      const returned = this._takeBackPendingSend();
+      if (returned !== null && this.onSendRejected) this.onSendRejected(returned);
+    }
+    this._appendNote(text);
+  }
+
+  /* La bolla del messaggio rifiutato se ne va, e il suo testo torna a chi ce
+     l'ha dato. Gli allegati no: l'allegato *è* la cosa rifiutata, e il server
+     butta il lotto intero senza dire quale file fosse. */
+  _takeBackPendingSend() {
+    const pending = this._pendingSend;
+    this._pendingSend = null;
+    if (!pending?.node?.isConnected) return null;
+    pending.node.remove();
+    return pending.text || '';
+  }
+
+  /* Una riga sobria nel filo: nessuna icona, nessun pannello. In casa una cosa
+     che non è andata si dice come si direbbe a voce. */
+  _appendNote(text) {
+    const node = document.createElement('div');
+    node.className = 'casa-note';
+    node.textContent = text;
+    this._append(node);
     this.scrollToBottom();
   }
 
@@ -359,7 +413,7 @@ export class CasaChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
-    this._append(node, toTop);
+    return this._append(node, toTop);
   }
 
   _appendAssistant(content, media, toTop = false) {
@@ -459,6 +513,7 @@ export class CasaChat {
       this._empty = false;
       this.syncEmpty();
     }
+    return node;
   }
 
   /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. */

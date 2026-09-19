@@ -97,6 +97,15 @@ class CasaApp {
     });
 
     this._bindComposer();
+    /* Un messaggio rifiutato dal gateway torna nel campo, così puoi correggere
+       invece di riscrivere — a meno che tu non abbia già ricominciato a
+       scrivere: quello vince sempre, non si sovrascrive del testo vivo con del
+       testo vecchio. */
+    this.chat.onSendRejected = (text) => {
+      if (!text || this.input.value.trim()) return;
+      this.input.value = text;
+      this._autosize();
+    };
     this.door.addEventListener('click', () => this._openInWorkshop(null));
 
     sessionManager.init();
