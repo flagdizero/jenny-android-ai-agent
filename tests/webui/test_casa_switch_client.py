@@ -106,7 +106,19 @@ const document = {
   },
 };
 
-const api = { clientLog() {} };
+/* `getSettings` e' il payload delle impostazioni, di cui la casa usa un campo
+   solo: la versione. Qui e' sostituibile per poter misurare anche il caso in
+   cui quel campo non c'e'. */
+let settingsPayload = { version: { current: '0.11.0' } };
+let settingsCalls = 0;
+const api = {
+  clientLog() {},
+  getSettings() {
+    settingsCalls += 1;
+    if (!settingsPayload) return Promise.reject(new Error('impostazioni non lette'));
+    return Promise.resolve(settingsPayload);
+  },
+};
 
 /* Finto, ma con la regola che conta: chi è già lì non cambia conversazione. */
 const sessionManager = {
@@ -121,6 +133,7 @@ const sessionManager = {
 
 __DOT_COLOR__
 __FLOOR__
+__BACK_TO__
 
 /* I due vocabolari, presi dai sorgenti: quello dell'officina e quello di casa,
    che dal primo eredita tutto quel che non dice «progetto». */
@@ -156,6 +169,13 @@ class App {
     this.backLabel = makeEl('span');
     this.talkBtn = makeEl('button');
     this.talkLabel = makeEl('span');
+    /* «Tu e Jenny»: la scheda dell'officina e la riga della versione, che
+       nasce nascosta e resta nascosta se la versione non si sa. */
+    this.workshopName = makeEl('span');
+    this.workshopHint = makeEl('span');
+    this.versionEl = makeEl('div');
+    this.versionEl.hidden = true;
+    this._versionAsked = false;
     this.view = 'chat';
     this._jennyWasOut = true;
     this.map = null;
@@ -212,8 +232,11 @@ class App {
   __CREATE_NOTEBOOK__
   __OPEN_PAGES__
   __GO_BACK_ONE_ROOM__
+  __OPEN_TU__
+  __LOAD_VERSION__
   __SET_VIEW__
   __APPLY_HEAD__
+  __APPLY_BACK_LABEL__
   __UPDATE_PAGES_COUNT__
   __SET_HEAD_TITLE__
 }
@@ -222,6 +245,8 @@ function casa() {
   lightbox = null;
   createOutcome = null;
   creations.length = 0;
+  settingsPayload = { version: { current: '0.11.0' } };
+  settingsCalls = 0;
   sessionManager.currentKey = sessionManager.personalKey;
   const app = new App();
   app._applyConversation();
@@ -252,11 +277,15 @@ def _harness() -> str:
         .replace("__NOTEBOOK_WORDS__", _const_block(src, "NOTEBOOK_WORDS"))
         .replace("__OPEN_PAGES__", _member(src, "openPages"))
         .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
+        .replace("__OPEN_TU__", _member(src, "openTu"))
+        .replace("__LOAD_VERSION__", _member(src, "_loadVersion"))
+        .replace("__APPLY_BACK_LABEL__", _member(src, "_applyBackLabel"))
         .replace("__SET_VIEW__", _member(src, "_setView"))
         .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
         .replace("__UPDATE_PAGES_COUNT__", _member(src, "_updatePagesCount"))
         .replace("__SET_HEAD_TITLE__", _member(src, "_setHeadTitle"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
+        .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
 
 
@@ -528,7 +557,7 @@ def test_a_creation_that_did_not_happen_opens_nothing() -> None:
     """)
 
 
-# ── Le tre stanze ───────────────────────────────────────────────────────────
+# ── Le stanze ───────────────────────────────────────────────────────────────
 
 
 def test_back_peels_one_room_at_a_time() -> None:
@@ -679,4 +708,109 @@ def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
       app.openChat();
       assert.equal(app.view, 'chat');
       assert.equal(app.shell.attrs['data-view'], 'chat');
+    """)
+
+
+# ── La quarta stanza: «Tu e Jenny» ──────────────────────────────────────────
+
+
+def test_you_and_jenny_goes_back_to_the_chat() -> None:
+    """La quarta stanza non sta nel ramo dei quaderni: da li' Indietro riporta
+    alla conversazione, non alle pagine di qualcosa.
+
+    E ci riporta **senza uscire dal quaderno**: «Tu e Jenny» si apre anche da
+    dentro uno, e tornare indietro da una pagina di impostazioni non e' un modo
+    di cambiare conversazione.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app.openTu();
+      assert.equal(app.view, 'tu');
+      assert.equal(app.shell.attrs['data-view'], 'tu', 'il CSS non sa in che stanza sei');
+      app.handleHardwareBack();
+      assert.equal(app.view, 'chat');
+      assert.equal(sessionManager.currentKey, 'project:orto', 'e il quaderno e\u2019 rimasto');
+    """)
+
+
+def test_the_eyelet_names_where_you_land() -> None:
+    """L'occhiello dice dove si atterra, e le stanze non atterrano tutte nello
+    stesso posto.
+
+    Era una frase sola — «torna alla chat» — scritta in `_applyTranslations` e
+    buona per tutte: vera dalle pagine, falsa dal lettore, che torna alle
+    pagine. Con quattro stanze la parola giusta la decide la stessa tabella che
+    decide il salto.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      const dice = (stanza) => { app._setView(stanza); return app.backLabel.textContent; };
+      assert.equal(dice('pages'), i18n.t('casa.back.chat'));
+      assert.equal(dice('reader'), i18n.t('casa.back.pages'), 'dal lettore si torna alle pagine');
+      assert.equal(dice('tu'), i18n.t('casa.back.chat'));
+      assert.notEqual(i18n.t('casa.back.pages'), i18n.t('casa.back.chat'),
+                      'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
+    """)
+
+
+def test_talking_about_it_belongs_to_a_notebook() -> None:
+    """«Parlane» riporta a parlare *di questo quaderno*: dentro «Tu e Jenny»
+    non c'e' niente di cui parlare, e il bottone non ci va.
+
+    Era `hidden = inChat`, che con tre stanze diceva la stessa cosa.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('pages');
+      assert.equal(app.talkBtn.hidden, false, 'dalle pagine si torna a parlarne');
+      app._setView('tu');
+      assert.equal(app.talkBtn.hidden, true, '«Parlane» in mezzo alle impostazioni');
+      assert.equal(app.pagesBtn.hidden, true, 'e nemmeno la pastiglia delle pagine');
+      assert.equal(app.nameEl.textContent, i18n.t('casa.tu.title'), 'la testa non dice dove sei');
+    """)
+
+
+def test_the_version_is_asked_once_and_never_invented() -> None:
+    """La riga nasce nascosta e resta nascosta finche' non c'e' un numero.
+
+    `/api/settings` e' un payload grosso e di suo qui serve un campo: si chiede
+    all'apertura della stanza, non al caricamento della casa, e una volta sola.
+    Un numero che non si sa non si scrive — «versione {version}» con la graffa
+    dentro sarebbe peggio di una riga che non c'e'.
+    """
+    _run_js("""
+      const app = casa();
+      app.openTu();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.versionEl.hidden, false);
+      assert.ok(app.versionEl.textContent.includes('0.11.0'), app.versionEl.textContent);
+      assert.ok(!app.versionEl.textContent.includes('{'), 'il segnaposto e\u2019 rimasto dentro');
+
+      app._setView('chat');
+      app.openTu();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(settingsCalls, 1, 'la versione viene richiesta a ogni apertura');
+    """)
+
+
+def test_a_version_that_is_not_known_leaves_no_line() -> None:
+    """Impostazioni irraggiungibili, o un payload senza versione: la riga resta
+    vuota e non occupa. Non e' un guasto di cui valga la pena parlare a chi sta
+    guardando un tema."""
+    _run_js("""
+      const app = casa();
+      settingsPayload = null;
+      app.openTu();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.versionEl.hidden, true, 'una versione che non si sa e\u2019 finita a schermo');
+
+      const altro = casa();
+      settingsPayload = { version: {} };
+      altro.openTu();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(altro.versionEl.hidden, true);
+      assert.equal(altro.versionEl.textContent, '');
     """)

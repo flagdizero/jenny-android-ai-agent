@@ -853,9 +853,10 @@ body.casa {
   color: var(--error);
 }
 
-/* ── Le tre stanze ───────────────────────────────────────────────────────────
-   La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono tre — la
-   conversazione, le pagine di un quaderno, una pagina — e quale sia a schermo
+/* ── Le stanze ───────────────────────────────────────────────────────────
+   La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono quattro
+   — la conversazione, le pagine di un quaderno, una pagina, «Tu e Jenny» — e
+   quale sia a schermo
    lo dice **un attributo solo** su `.casa-shell`. Il JS lo scrive, il resto lo
    decide qui: cosi' la geometria sta in un posto, e chi legge il guscio non
    deve inseguire cinque `hidden` per sapere cosa occupa lo spazio.
@@ -864,7 +865,8 @@ body.casa {
    frame mostrerebbe tutte e tre le stanze impilate. */
 
 .casa-pages,
-.casa-reader {
+.casa-reader,
+.casa-tu {
   display: none;
   flex: 1;
   min-height: 0;
@@ -872,7 +874,8 @@ body.casa {
 }
 
 .casa-shell[data-view='pages'] .casa-pages,
-.casa-shell[data-view='reader'] .casa-reader { display: flex; }
+.casa-shell[data-view='reader'] .casa-reader,
+.casa-shell[data-view='tu'] .casa-tu { display: flex; }
 
 .casa-shell:not([data-view='chat']) .casa-thread,
 .casa-shell:not([data-view='chat']) .casa-empty,
@@ -1231,3 +1234,72 @@ body.casa {
   font-size: 12.5px;
   color: var(--text-muted);
 }
+
+
+/* ── «Tu e Jenny» ────────────────────────────────────────────────────────────
+   La tavola `TuEJenny.dc.html`: schede su fondo chiaro, righe basse, e il
+   valore corrente a destra di ogni etichetta. */
+
+.casa-tu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 18px 12px;
+}
+
+/* La scheda dell'officina. E' l'unica cosa scura della pagina, ed e' il punto:
+   di la' si va per osservare e riparare, e la tavola la stacca dal resto
+   invece di farne l'ottava riga di un elenco. */
+.casa-workshop {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--overlay);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.casa-workshop:active { background: var(--surface); }
+.casa-workshop > .ti-tool { flex: none; color: var(--accent); font-size: 20px; }
+
+.casa-workshop-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.casa-workshop-name { font-size: 14px; font-weight: 600; }
+
+.casa-workshop-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.casa-row-go { flex: none; color: var(--text-muted); font-size: 16px; }
+
+.casa-version {
+  flex: none;
+  padding: 2px 4px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* La riga nasce nascosta, e qui sopra non c'e' nessun `display` che lo
+   scavalchi: questa regola e' per il giorno in cui ce ne fosse uno. `[hidden]`
+   e' a specificita' zero, e la casa quella trappola l'ha gia' pagata una volta
+   — v. `.casa-back[hidden]`, cinquanta righe piu' su. */
+.casa-version[hidden] { display: none; }

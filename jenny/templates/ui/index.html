@@ -82,11 +82,14 @@
         <i class="ti ti-book" aria-hidden="true"></i>
         <span id="casa-pages-count"></span>
       </button>
-      <!-- La porta dell'officina. Nel disegno finale portera' a «Tu e Jenny»,
-           che quella porta se la tiene in fondo; finche' quella pagina non c'e',
-           porta dritto dove deve portare, e l'icona lo dice. -->
-      <button class="casa-door" id="casa-door" type="button" aria-label="Officina">
-        <i class="ti ti-tool"></i>
+      <!-- L'avatar: apre «Tu e Jenny». **Tocco lungo per l'officina**, che e'
+           la scorciatoia che la tavola scrive sulla scheda in fondo a quella
+           pagina — «oppure tieni premuto l'avatar». Fino al 19/09/2026 questo
+           bottone era una chiave inglese e portava dritto in officina; adesso
+           l'officina sta dove la tavola la mette, e resta a un tocco lungo da
+           qui per chi ci va dieci volte al giorno. -->
+      <button class="casa-door" id="casa-door" type="button" aria-label="Tu e Jenny">
+        <i class="ti ti-user"></i>
       </button>
       <!-- Dalle pagine: torna a parlarne. La tavola qui disegna il segno di
            Jenny; in casa quel segno e' il fiore, ed e' identita' — su un
@@ -172,6 +175,37 @@
        Audit, briciole di pane e LaTeX restano dell'officina. -->
   <section class="casa-reader" id="casa-reader">
     <article class="casa-reader-body" id="casa-reader-body"></article>
+  </section>
+
+  <!-- ── La quarta stanza: «Tu e Jenny» ───────────────────────────────────
+       Le impostazioni di chi la usa, non di chi la costruisce: la tavola
+       `TuEJenny.dc.html`. Righe da 42 px, e ognuna dice a destra **come sta
+       adesso** — una riga che non porta il suo valore e' un collegamento, non
+       un'impostazione.
+
+       **La lingua non c'e', ed e' una decisione.** Quella riga cambierebbe le
+       scritte dei bottoni, non la lingua di Jenny: quella viene da `SOUL.md`,
+       da `USER.md` e dal modello. La segue il sistema, che e' cio' che
+       `i18n.detectLocale()` fa gia' quando nessuno ha scelto. Misure e ragioni
+       in `.agent/casa-tu-e-jenny-plan.md`. -->
+  <section class="casa-tu" id="casa-tu">
+    <div class="casa-tu-scroll">
+
+      <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
+      <button class="casa-workshop" id="casa-workshop" type="button">
+        <i class="ti ti-tool" aria-hidden="true"></i>
+        <span class="casa-workshop-text">
+          <span class="casa-workshop-name" id="casa-workshop-name"></span>
+          <span class="casa-workshop-hint" id="casa-workshop-hint"></span>
+        </span>
+        <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+      </button>
+
+      <!-- La versione, e nient'altro: il giro di aggiornamento e' dell'officina.
+           Un numero che non c'e' non si finge con uno zero — la riga resta
+           vuota, e vuota non occupa. -->
+      <div class="casa-version" id="casa-version" hidden></div>
+    </div>
   </section>
 
 </main>

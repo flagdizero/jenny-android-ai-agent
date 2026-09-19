@@ -42,18 +42,18 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
         "il guscio non nasce piu' dichiarando la stanza attiva"
     )
     css = CSS.read_text(encoding="utf-8")
-    for room in ("pages", "reader"):
+    for room in ("pages", "reader", "tu"):
         assert f".casa-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
     assert ".casa-shell:not([data-view='chat']) .casa-composer" in css, (
         "il composer resta a schermo fuori dalla conversazione"
     )
 
 
-def test_the_two_new_rooms_are_not_in_the_flow_by_default() -> None:
+def test_the_rooms_after_the_chat_are_not_in_the_flow_by_default() -> None:
     """`display:none` sulle sezioni e non `hidden`: la regola della vista le
     accende, e due meccanismi per la stessa cosa divergono."""
     css = CSS.read_text(encoding="utf-8")
-    m = re.search(r"\.casa-pages,\s*\n\.casa-reader \{([^}]*)\}", css)
+    m = re.search(r"\.casa-pages,\s*\n\.casa-reader,\s*\n\.casa-tu \{([^}]*)\}", css)
     assert m and "display: none" in m.group(1), (
         "le stanze nuove non partono fuori dal flusso"
     )
@@ -121,7 +121,7 @@ def test_the_rooms_speak_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["casa"]["pages"]
-        for key in ("open", "countOne", "countMany", "back", "talk",
+        for key in ("open", "countOne", "countMany", "talk",
                     "tabList", "tabMap", "loading", "none", "noMatch", "failed"):
             assert section.get(key, "").strip(), f"casa.pages.{key} manca in {locale}.json"
         assert data["casa"]["map"]["noLinks"].strip()

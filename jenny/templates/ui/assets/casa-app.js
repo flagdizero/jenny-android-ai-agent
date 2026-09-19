@@ -30,6 +30,7 @@ import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
+import { setupLongPress } from './shared/longpress.js';
 import { i18n } from './shared/i18n.js';
 import { sessionManager } from './shared/session-manager.js';
 import { wsManager } from './shared/ws-manager.js';
@@ -46,6 +47,18 @@ const WIRE_GRACE_MS = 2_500;
    il composer non c'e', e la tavola `Quaderno.dc.html` la disegna a venti pixel
    dal fondo — sopra la maniglia del cassetto, che e' la tavola dopo. */
 const FLOOR_NO_COMPOSER = 20;
+
+/* Le stanze oltre la chat, e dove si atterra premendo Indietro una volta.
+   La catena e' lineare e sta **in un posto solo**: `_setView` la usa per
+   sapere quali nomi esistono, `goBackOneRoom` per percorrerla e l'occhiello
+   per scriverci sopra dove porta. Erano tre `if` in fila finche' le stanze
+   erano tre; con cinque, l'occhiello diceva «torna alla chat» anche dal
+   lettore, che torna alle pagine. Aggiungere una stanza e' una riga qui. */
+const BACK_TO = {
+  pages: 'chat',
+  reader: 'pages',
+  tu: 'chat',
+};
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
  *
@@ -93,6 +106,13 @@ class CasaApp {
     this.talkBtn = document.getElementById('casa-talk');
     this.talkLabel = document.getElementById('casa-talk-label');
 
+    /* «Tu e Jenny»: le impostazioni di chi la usa. La porta dell'officina vive
+       qui dentro, in fondo, e resta sotto il tocco lungo sull'avatar. */
+    this.workshopBtn = document.getElementById('casa-workshop');
+    this.workshopName = document.getElementById('casa-workshop-name');
+    this.workshopHint = document.getElementById('casa-workshop-hint');
+    this.versionEl = document.getElementById('casa-version');
+
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
        sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
        `import` statico la pagherebbe a ogni avvio della casa. */
@@ -104,7 +124,7 @@ class CasaApp {
     this.reader.onTitle = (title) => this._setHeadTitle(title);
     this.map = null;
 
-    /** Quale stanza e' a schermo: `chat`, `pages` o `reader`. */
+    /** Quale stanza e' a schermo: `chat` o una delle chiavi di `BACK_TO`. */
     this.view = 'chat';
     /* Com'era Jenny quando hai lasciato la chat. Fuori dalla chat sta al bordo
        — lo dice la tavola, che la disegna a `right:-56px` mentre nelle due
@@ -149,6 +169,9 @@ class CasaApp {
 
     this._wireTimer = null;
     this._threadFailed = false;
+    /* La versione si chiede una volta per avvio, alla prima apertura della
+       stanza: non cambia sotto i piedi di chi guarda un tema. */
+    this._versionAsked = false;
     this._running = false;
     /* Il guscio nativo copre la pagina con un caricamento finche' non chiama
        onNativeReady: fino ad allora qualunque animazione d'ingresso scorre
@@ -208,7 +231,16 @@ class CasaApp {
       this.input.value = text;
       this._autosize();
     };
-    this.door.addEventListener('click', () => this._openInWorkshop(null));
+    /* L'avatar apre «Tu e Jenny»; **tenuto premuto** va dritto in officina,
+       che e' la scorciatoia scritta sulla scheda in fondo a quella pagina. Il
+       flag lo posa `setupLongPress` e lo consuma il click che segue la
+       pressione: senza, un tocco lungo aprirebbe l'officina *e* la pagina. */
+    this.door.addEventListener('click', () => {
+      if (this.door.dataset.longpress) { delete this.door.dataset.longpress; return; }
+      this.openTu();
+    });
+    setupLongPress(this.door, () => this._openInWorkshop(null));
+    this.workshopBtn?.addEventListener('click', () => this._openInWorkshop(null));
     document.getElementById('casa-who')?.addEventListener('click', () => this.who.toggle());
     this.pagesBtn?.addEventListener('click', () => this.openPages());
     /* Le due vie d'uscita della stessa stanza, e fanno la stessa cosa: si esce
@@ -335,24 +367,44 @@ class CasaApp {
     this._setHeadTitle(await this.reader.load(notebook, path, label));
   }
 
+  /** «Tu e Jenny». La versione arriva dopo, e se non arriva la riga non c'e'. */
+  openTu() {
+    this._setView('tu');
+    this._loadVersion();
+  }
+
+  /* Il numero di versione, una volta per avvio. `/api/settings` e' un payload
+     grosso e qui se ne usa un campo: vale la pena chiamarlo all'apertura della
+     stanza, non al caricamento della casa, e non due volte. */
+  async _loadVersion() {
+    if (this._versionAsked) return;
+    this._versionAsked = true;
+    try {
+      const data = await api.getSettings();
+      const current = data?.version?.current;
+      if (!current || !this.versionEl) return;
+      this.versionEl.textContent = i18n.t('casa.tu.version', { version: current });
+      this.versionEl.hidden = false;
+    } catch (err) {
+      /* Una versione che non si sa non si scrive: la riga resta vuota. Non e'
+         un guasto di cui valga la pena parlare a chi sta guardando un tema. */
+      console.warn('casa.tu: versione non letta', err);
+    }
+  }
+
   /** Indietro di **una** stanza. Vero se c'era dove tornare. */
   goBackOneRoom() {
-    if (this.view === 'reader') {
-      this._setView('pages');
-      return true;
-    }
-    if (this.view === 'pages') {
-      this._setView('chat');
-      return true;
-    }
-    return false;
+    const target = BACK_TO[this.view];
+    if (!target) return false;
+    this._setView(target);
+    return true;
   }
 
   /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
      fa il CSS: cosi' la geometria — cosa occupa lo spazio, cosa sparisce —
      resta in un posto solo, e qui c'e' solo quel che il CSS non sa fare. */
   _setView(name) {
-    const view = name === 'pages' || name === 'reader' ? name : 'chat';
+    const view = Object.hasOwn(BACK_TO, name) ? name : 'chat';
     if (view === this.view) return;
     if (this.view === 'chat') {
       /* Com'era quando hai lasciato la chat: al ritorno si rimette com'era, e
@@ -392,11 +444,16 @@ class CasaApp {
   /* Quali comandi dell'intestazione valgono in questa stanza. */
   _applyHead() {
     const inChat = this.view === 'chat';
+    /* «Parlane» riporta a parlare **di questo quaderno**: vale dalle sue
+       pagine e dal lettore, e in nessun altro posto. Era `!inChat`, che con
+       tre stanze diceva la stessa cosa e con cinque no — il bottone sarebbe
+       comparso dentro «Tu e Jenny», dove non c'e' niente di cui parlare. */
+    const inNotebook = this.view === 'pages' || this.view === 'reader';
     const notebook = projectNameOf(sessionManager.currentKey);
     if (this.kicker) this.kicker.hidden = !inChat;
     if (this.backBtn) this.backBtn.hidden = inChat;
     if (this.door) this.door.hidden = !inChat;
-    if (this.talkBtn) this.talkBtn.hidden = inChat;
+    if (this.talkBtn) this.talkBtn.hidden = !inNotebook;
     if (this.pagesBtn) this.pagesBtn.hidden = !inChat || !notebook;
     if (this.dotEl) this.dotEl.hidden = !notebook || !inChat;
     /* Fuori dalla chat il titolo non apre piu' niente: nelle pagine dice quale
@@ -405,6 +462,17 @@ class CasaApp {
     const whoBtn = document.getElementById('casa-who');
     if (whoBtn) whoBtn.disabled = !inChat;
     if (!inChat && this.view === 'pages') this._setHeadTitle(notebook);
+    if (this.view === 'tu') this._setHeadTitle(i18n.t('casa.tu.title'));
+    this._applyBackLabel();
+  }
+
+  /* L'occhiello dice **dove si atterra**, non «indietro». Con tre stanze la
+     differenza non si vedeva; con quattro, «torna alla chat» sopra il lettore
+     era falso — di li' si torna alle pagine. La frase la sceglie la stessa
+     tabella che decide il salto, quindi le due non possono divergere. */
+  _applyBackLabel() {
+    if (!this.backLabel) return;
+    this.backLabel.textContent = i18n.t(`casa.back.${BACK_TO[this.view] || 'chat'}`);
   }
 
   /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
@@ -860,9 +928,11 @@ class CasaApp {
       this.send.setAttribute('aria-label', i18n.t(this._running ? 'casa.stop' : 'casa.send'));
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('casa.attach'));
-    if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.workshop'));
-    if (this.backLabel) this.backLabel.textContent = i18n.t('casa.pages.back');
+    if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.tu.open'));
+    this._applyBackLabel();
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
+    if (this.workshopName) this.workshopName.textContent = i18n.t('casa.workshop');
+    if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));
     this.pages?.applyTranslations();
     const whoBtn = document.getElementById('casa-who');

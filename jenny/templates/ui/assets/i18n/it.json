@@ -997,6 +997,17 @@
     "kicker": "conversazione personale",
     "kickerNotebook": "quaderno",
     "workshop": "Officina",
+    "back": {
+      "chat": "torna alla chat",
+      "pages": "torna alle pagine",
+      "tu": "Tu e Jenny"
+    },
+    "tu": {
+      "title": "Tu e Jenny",
+      "open": "Tu e Jenny",
+      "workshopHint": "osserva, regola, ripara — oppure tieni premuto l'avatar",
+      "version": "versione {version}"
+    },
     "backHome": "Torna alla casa",
     "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
     "who": {
@@ -1022,7 +1033,6 @@
       "open": "Pagine del quaderno",
       "countOne": "1 pagina",
       "countMany": "{count} pagine",
-      "back": "torna alla chat",
       "talk": "Parlane",
       "tabList": "Pagine",
       "tabMap": "Mappa",

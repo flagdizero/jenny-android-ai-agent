@@ -994,6 +994,17 @@
     "kicker": "personal conversation",
     "kickerNotebook": "notebook",
     "workshop": "Workshop",
+    "back": {
+      "chat": "back to the chat",
+      "pages": "back to the pages",
+      "tu": "You and Jenny"
+    },
+    "tu": {
+      "title": "You and Jenny",
+      "open": "You and Jenny",
+      "workshopHint": "watch, tune, repair — or hold the avatar",
+      "version": "version {version}"
+    },
     "backHome": "Back to the house",
     "backHomeHint": "The simple interface: the conversation and nothing else.",
     "who": {
@@ -1019,7 +1030,6 @@
       "open": "Notebook pages",
       "countOne": "1 page",
       "countMany": "{count} pages",
-      "back": "back to the chat",
       "talk": "Talk about it",
       "tabList": "Pages",
       "tabMap": "Map",
