@@ -252,3 +252,112 @@ def test_the_first_page_is_drawn_before_the_button_is_measured() -> None:
         load.index("this.pager.ensureReach()"),
     ]
     assert order == sorted(order), order
+
+
+# ── L'aggancio al fondo ──────────────────────────────────────────────────────
+
+_STICK_HARNESS = """
+import assert from 'node:assert/strict';
+
+function makeThread({ scrollHeight = 2000, clientHeight = 1000 } = {}) {
+  const listeners = [];
+  const el = {
+    scrollHeight, clientHeight, scrollTop: scrollHeight - clientHeight,
+    addEventListener(type, fn) { if (type === 'scroll') listeners.push(fn); },
+  };
+  el.fire = () => listeners.forEach((fn) => fn());
+  return el;
+}
+
+const STICK_PX = __STICK_PX__;  // il numero vero, letto dal sorgente
+
+function makeChat(el) {
+  const chat = { el, _stick: true, _lastTop: el.scrollTop, __ON_SCROLL__, __AT_BOTTOM__,
+                 __FOLLOW__, __KEEP__, __SCROLL__ };
+  // L'aggancio vero: senza, `fire()` non chiama niente e il banco passa a vuoto.
+  el.addEventListener('scroll', () => chat._onScroll());
+  return chat;
+}
+"""
+
+
+def _stick_px(src: str) -> str:
+    """La soglia vera. Copiarne una a mano qui la farebbe divergere in silenzio."""
+    m = re.search(r"const STICK_PX = (\d+);", src)
+    assert m, "STICK_PX non trovato"
+    return m.group(1)
+
+
+def _stick_harness() -> str:
+    src = CASA_CHAT_JS.read_text(encoding="utf-8")
+    return (
+        _STICK_HARNESS.replace("__STICK_PX__", _stick_px(src))
+        .replace("__ON_SCROLL__", _member(src, "_onScroll"))
+        .replace("__AT_BOTTOM__", _member(src, "_atBottom"))
+        .replace("__FOLLOW__", _member(src, "_follow"))
+        .replace("__KEEP__", _member(src, "keepBottom"))
+        .replace("__SCROLL__", _member(src, "scrollToBottom"))
+    )
+
+
+def _run_stick(script: str) -> None:
+    proc = subprocess.run(
+        [str(_NODE), "--input-type=module", "-e", _stick_harness() + "\n" + script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_a_row_appearing_below_does_not_unstick_the_thread() -> None:
+    """Il difetto misurato sul telefono, e la sua metà peggiore.
+
+    Quando la striscia degli allegati compare, il filo si accorcia: `scrollTop`
+    resta dov'è, la distanza dal fondo cresce, e il browser emette uno `scroll`
+    che nessun dito ha causato. Prendendolo per un gesto, la chat si staccava
+    dal fondo da sola — e da lì in poi non seguiva più i messaggi nuovi. Bastava
+    allegare una foto.
+    """
+    _run_stick("""
+      const el = makeThread();
+      const chat = makeChat(el);
+      // La striscia compare: il contenitore si accorcia di 64 px.
+      el.clientHeight -= 64;
+      el.fire();
+      assert.equal(chat._stick, true, 'una riga comparsa sotto ha staccato l\\'aggancio');
+    """)
+
+
+def test_a_finger_going_up_does_unstick_it() -> None:
+    """La guardia dell'altro verso: chi rilegge più su non va inseguito."""
+    _run_stick("""
+      const el = makeThread();
+      const chat = makeChat(el);
+      el.scrollTop -= 400;
+      el.fire();
+      assert.equal(chat._stick, false);
+    """)
+
+
+def test_coming_back_to_the_bottom_sticks_again() -> None:
+    _run_stick("""
+      const el = makeThread();
+      const chat = makeChat(el);
+      el.scrollTop -= 400; el.fire();
+      assert.equal(chat._stick, false);
+      el.scrollTop = el.scrollHeight - el.clientHeight; el.fire();
+      assert.equal(chat._stick, true);
+    """)
+
+
+def test_keep_bottom_re_anchors_after_the_shrink() -> None:
+    """Le due metà insieme: la bandierina regge, e l'osservatore riaggancia."""
+    _run_stick("""
+      const el = makeThread();
+      const chat = makeChat(el);
+      el.clientHeight -= 64;
+      el.fire();
+      chat.keepBottom();
+      assert.equal(el.scrollTop, el.scrollHeight, 'il fondo non è stato ripreso');
+    """)

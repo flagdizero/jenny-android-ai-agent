@@ -98,10 +98,19 @@ export class CasaChat {
        torna indietro, il testo glielo ridà lui. */
     this.onSendRejected = null;
 
-    this.el.addEventListener('scroll', () => {
-      this._stick = this._atBottom();
-    });
+    /* **Uno `scroll` non e' sempre un gesto.** Quando una riga compare sotto il
+       filo — gli allegati in attesa, la riga di lavoro — il contenitore si
+       accorcia: `scrollTop` resta dov'e', la distanza dal fondo cresce, e il
+       browser emette uno `scroll` che nessun dito ha causato. Riducendo tutto a
+       `_stick = _atBottom()` quell'evento staccava l'aggancio da solo, e da li'
+       in poi la chat smetteva di seguire i messaggi nuovi: bastava allegare una
+       foto.
+
+       I due casi si distinguono dalla direzione: **solo un dito porta
+       `scrollTop` indietro.** Un accorciamento lo lascia fermo. */
+    this._lastTop = 0;
     this._stick = true;
+    this.el.addEventListener('scroll', () => this._onScroll());
 
     /* La pagina precedente: stessa macchina dell'officina
        (`shared/history-pager.js`), appigli diversi. Qui il filo e' il proprio
@@ -534,6 +543,18 @@ export class CasaChat {
 
   /* ── Scorrimento ── */
 
+  /* Un evento di scorrimento, e cosa farne. Metodo e non chiusura nel
+     costruttore per una ragione precisa: un listener anonimo li' dentro non si
+     puo' esercitare, e il primo banco che ci ho provato **passava a vuoto** —
+     non agganciava niente, `_stick` restava vero, ed era proprio quello che
+     asseriva. */
+  _onScroll() {
+    const top = this.el.scrollTop;
+    if (this._atBottom()) this._stick = true;
+    else if (top < this._lastTop) this._stick = false;
+    this._lastTop = top;
+  }
+
   _atBottom() {
     const gap = this.el.scrollHeight - this.el.scrollTop - this.el.clientHeight;
     return gap <= STICK_PX;
@@ -552,6 +573,8 @@ export class CasaChat {
 
   scrollToBottom() {
     this.el.scrollTop = this.el.scrollHeight;
+    // Anche il ricordo, o il primo gesto dopo sembrerebbe un ritorno indietro.
+    this._lastTop = this.el.scrollTop;
     this._stick = true;
   }
 }
