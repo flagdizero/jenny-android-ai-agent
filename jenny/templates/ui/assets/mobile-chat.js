@@ -2,6 +2,7 @@
 
 import { wsManager } from './shared/ws-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
+import { describeWireError } from './shared/wire-error.js';
 import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { sessionManager } from './shared/session-manager.js';
@@ -199,6 +200,9 @@ export class ChatController {
        `historyCursor` / `hasMoreHistory` / `isLoadingHistory` restano leggibili
        col loro nome (v. gli accessori sotto): li legge il resync della
        riconnessione, e i test li nominano. */
+    /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
+       `null` = non c'è niente da riprendere. */
+    this._pendingSend = null;
     this._pager = new HistoryPager({
       // Lo scroller e' il documento, ma l'evento `scroll` arriva a `window`:
       // qui le due cose non coincidono (v. il getter `_scroller`).
@@ -715,6 +719,7 @@ export class ChatController {
     this.identityEl = null;
     this._ensureIdentity();
     this._pager.reset();
+    this._pendingSend = null;
     this._initialHistoryLoaded = false;
   }
 
@@ -1457,6 +1462,10 @@ export class ChatController {
 
   handleMessage(msg) {
     if (!this._belongsToOpenChat(msg)) return;
+    /* La prova che l'ultimo invio è entrato: il gateway sta rispondendo di
+       qualcosa che non è un rifiuto. Da qui in poi quella bolla non è più in
+       sospeso, e un errore che arrivasse dopo è un errore di altro. */
+    if (msg.event !== 'error') this._pendingSend = null;
     if (!this._applyTurnBoundary(msg)) return;
     switch (msg.event) {
       case 'delta':
@@ -1500,7 +1509,7 @@ export class ChatController {
         this._handleSubagentUnwatched(msg);
         break;
       case 'error':
-        this._handleError(msg.detail || msg.reason || 'Unknown error');
+        this._handleError(msg);
         break;
       case 'runtime_model_updated':
         // Campi del payload backend (ws_sender.send_runtime_model_updated):
@@ -3302,15 +3311,46 @@ export class ChatController {
     }
   }
 
-  _handleError(detail) {
-    const el = document.createElement('div');
-    el.className = 'chat-error';
-    el.textContent = i18n.t('chat.error') + ': ' + detail;
-    this.chatArea.appendChild(el);
-    this._autoScroll = true;
-    this.scrollToBottom(true);
+  /* Un rifiuto del gateway. Le parole e la famiglia le decide il modulo
+     condiviso con la casa (`shared/wire-error.js`); qui si decide **dove va a
+     finire**, che è la parte che i due gusci fanno uguale.
 
+     Prima questa riga diceva `Errore: image_rejected`: il nome che quel rifiuto
+     ha nel codice sorgente, mostrato a chi stava mandando una foto. E il motivo
+     vero — `decode`, `size`, `too_many_files` — stava nel frame e veniva
+     scartato, perché `detail || reason` non guarda mai il secondo. */
+  _handleError(frame) {
+    const { text, blocksSend } = describeWireError(frame, (key) => i18n.t(key));
+    // Riprendere il messaggio azzera già lo stream — è un turno che non è mai
+    // cominciato — quindi qui si azzera solo quando non si è ripreso niente.
+    if (!blocksSend || !this._takeBackPendingSend()) this._resetStreamState();
+    this._showChatError(text);
+  }
+
+  /* Il messaggio rifiutato torna indietro: la bolla se ne va e il testo torna
+     nel campo, così puoi correggere invece di riscrivere.
+
+     **Gli allegati no**, ed è voluto: l'allegato *è* la cosa che è stata
+     rifiutata, e rimetterlo lì inviterebbe a rimandare lo stesso file che
+     fallirà di nuovo. Il server rifiuta il lotto intero senza dire quale file
+     fosse, quindi non c'è nemmeno modo di restituire solo i buoni.
+
+     Torna `false` quando non c'è niente da riprendere (il rifiuto è arrivato
+     tardi, o dopo un ricaricamento): in quel caso resta la sola riga. */
+  _takeBackPendingSend() {
+    const pending = this._pendingSend;
+    this._pendingSend = null;
+    if (!pending?.node?.isConnected) return false;
+    pending.node.remove();
+    // Se nel frattempo hai già scritto altro, quello vince: non si sovrascrive
+    // mai il campo con del testo vecchio.
+    if (!this.input.value.trim() && pending.text) {
+      this.input.value = pending.text;
+      this._updateSendState();
+      this._updateActions();
+    }
     this._resetStreamState();
+    return true;
   }
 
   _renderAttachPreview(items) {
@@ -3424,6 +3464,23 @@ export class ChatController {
 
     sessionManager.ensureAttached();
 
+    // Ogni invio apre una bolla AI nuova: se il turn_end del turno precedente
+    // è andato perso (turno cancellato, riconnessione), la risposta non deve
+    // accodarsi alla bolla vecchia.
+    this._resetStreamState();
+
+    /* **Prima si spedisce, poi si disegna.** Prima era il contrario: la bolla
+       compariva, il campo si svuotava, gli allegati si buttavano, e *poi* si
+       provava a mandare — così un socket chiuso ti lasciava una bolla che
+       sembrava partita, un errore di fianco, e il testo perduto. Una bolla che
+       compare e un messaggio che non arriva sono la stessa cosa vista da due
+       parti, e la prima fa credere alla seconda. */
+    if (!wsManager.sendToChat(sessionManager.currentKey, text, media)) {
+      this._showChatError(i18n.t('chat.wsError'));
+      this.input.focus();
+      return;
+    }
+
     const msg = document.createElement('div');
     msg.className = 'chat-msg chat-msg-user';
     const content = document.createElement('div');
@@ -3447,17 +3504,20 @@ export class ChatController {
     this._updateActions();
     this.input.focus();
 
-    // Ogni invio apre una bolla AI nuova: se il turn_end del turno precedente
-    // è andato perso (turno cancellato, riconnessione), la risposta non deve
-    // accodarsi alla bolla vecchia.
-    this._resetStreamState();
+    /* Partito non vuol dire entrato: il gateway può ancora rifiutarlo (un
+       allegato che non riesce ad aprire). Finché non arriva niente che dimostri
+       il contrario, questa bolla è "in sospeso" — ed è così che un rifiuto sa
+       *quale* bolla togliere, senza bisogno di un identificativo sul filo. */
+    this._pendingSend = { node: msg, text };
+  }
 
-    if (!wsManager.sendToChat(sessionManager.currentKey, text, media)) {
-      const el = document.createElement('div');
-      el.className = 'chat-error';
-      el.textContent = i18n.t('chat.wsError');
-      this.chatArea.appendChild(el);
-    }
+  _showChatError(text) {
+    const el = document.createElement('div');
+    el.className = 'chat-error';
+    el.textContent = text;
+    this.chatArea.appendChild(el);
+    this._autoScroll = true;
+    this.scrollToBottom(true);
   }
 
   /* Lo scroller della chat è il **documento**, non `.chat-area`
