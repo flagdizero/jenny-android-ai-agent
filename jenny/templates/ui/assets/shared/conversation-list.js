@@ -39,6 +39,28 @@ function byRecent(items, pick) {
     .sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name));
 }
 
+/** Perché una cartella non si apre, detto nella lingua dell'utente.
+ *
+ *  `reason` è la sola parte di una voce di `unopenable` pensata per essere letta
+ *  da un programma (`wiki_routes.py::_collect_projects` lo dice sul posto: il
+ *  motivo lo scelga chi disegna la riga, non si indovini dal nome). Oggi ce n'è
+ *  uno solo; un motivo che questa mappa non conosce prende una frase che **non
+ *  nomina nessuna regola**, perché raccontare la regola dei nomi di una cartella
+ *  rifiutata per un altro motivo è peggio che non spiegare niente.
+ *
+ *  La regola dei nomi non si riscrive qui: la frase è quella che il dialogo di
+ *  creazione mostra già (`scope.invalidName`), interpolata dentro la nota. Di
+ *  copie a mano di quella regola ce ne sono già tre (`session/keys.py`, lo
+ *  scaffolder della skill, e `VALID_NAME` in `scope-chip.js`) — una quarta, e
+ *  in prosa, si desincronizzerebbe senza che nessun test se ne accorga.
+ *
+ *  Sta qui e non nel chip perché la stessa domanda se la pone chiunque disegni
+ *  quelle righe: `reason` arriva dal server, e la sua traduzione è una sola.
+ */
+export const UNOPENABLE_HINT_KEYS = {
+  invalid_name: 'scope.unopenableInvalidName',
+};
+
 export class ConversationList {
   /** @param fetchProjects funzione senza argomenti che risolve col payload di
    *  `/api/projects`. Il modulo non sa da dove viene, e non deve saperlo. */

@@ -995,6 +995,14 @@
     "kicker": "conversazione personale",
     "workshop": "Officina",
     "backHome": "Torna alla casa",
-    "backHomeHint": "L'interfaccia semplice: solo la conversazione."
+    "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
+    "who": {
+      "open": "Con chi parli",
+      "title": "Con chi parli",
+      "personal": "personale",
+      "notebooks": "Quaderni",
+      "none": "Non hai ancora nessun quaderno.",
+      "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto."
+    }
   }
 }

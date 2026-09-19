@@ -992,6 +992,14 @@
     "kicker": "personal conversation",
     "workshop": "Workshop",
     "backHome": "Back to the house",
-    "backHomeHint": "The simple interface: the conversation and nothing else."
+    "backHomeHint": "The simple interface: the conversation and nothing else.",
+    "who": {
+      "open": "Who you are talking to",
+      "title": "Talking to",
+      "personal": "personal",
+      "notebooks": "Notebooks",
+      "none": "No notebooks yet.",
+      "loadFailed": "I could not read the list: what you see may be incomplete."
+    }
   }
 }

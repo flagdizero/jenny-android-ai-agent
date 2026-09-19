@@ -38,15 +38,27 @@
 <main class="casa-shell">
 
   <!-- L'intestazione della tavola `Main.dc.html`, ridotta a cio' che esiste.
-       Il titolo non ha il chevron: la scelta di con chi parli e' del giro dopo,
-       e un chevron che non apre niente e' una bugia. Il bottone a destra e' la
-       porta per l'officina — nel disegno finale portera' a «Tu e Jenny», che
-       quella porta se la tiene in fondo; finche' quella pagina non c'e', porta
-       dritto dove deve portare, e l'icona lo dice. -->
+       Il titolo porta il chevron e apre «con chi parli»: la tendina che dice
+       con quale conversazione stai parlando e quali quaderni ci sono. Il
+       bottone a destra e' la porta per l'officina — nel disegno finale
+       portera' a «Tu e Jenny», che quella porta se la tiene in fondo; finche'
+       quella pagina non c'e', porta dritto dove deve portare, e l'icona lo
+       dice.
+
+       Il bottone sta *dentro* l'h1 e non attorno: un <button> accetta solo
+       contenuto di frase, quindi un h1 dentro un bottone non e' markup valido
+       — al contrario, ed e' l'unico modo di avere sia il titolo che il
+       comando. -->
   <header class="casa-head">
     <div class="casa-title">
       <div class="casa-kicker" id="casa-kicker"></div>
-      <h1>Jenny</h1>
+      <h1>
+        <button class="casa-who-open" id="casa-who" type="button"
+                aria-haspopup="dialog" aria-expanded="false">
+          <span class="casa-who-name">Jenny</span>
+          <i class="ti ti-chevron-down" aria-hidden="true"></i>
+        </button>
+      </h1>
     </div>
     <button class="casa-door" id="casa-door" type="button" aria-label="Officina">
       <i class="ti ti-tool"></i>

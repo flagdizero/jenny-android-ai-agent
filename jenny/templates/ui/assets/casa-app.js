@@ -6,20 +6,24 @@
  *  possono rompere a vicenda. Condividono le fondamenta — `assets/shared/*` —
  *  e nient'altro.
  *
- *  Piano: `.agent/casa-plan.md`. Questo file e' il passo 1, e fa tre cose:
- *  accende il filo, onora il contratto col guscio nativo, e disegna il posto
- *  dove la conversazione andra'.
+ *  Piano: `.agent/casa-plan.md`.
  *
- *  **Il contratto col guscio nativo e' di tre metodi.** Android chiama
- *  `window.mobileApp.onNativeReady()`, `.goHome()` e `.onPackageChanged()` —
- *  sono gli unici tre attraversamenti in quella direzione in tutto il sorgente
- *  Kotlin. Il nome globale resta `mobileApp` apposta: cosi' il guscio nativo
- *  non sa, e non deve sapere, quale delle due interfacce ha caricato.
+ *  **Il contratto col guscio nativo e' di cinque metodi.** Android chiama
+ *  `window.mobileApp.onNativeReady()`, `.goHome()`, `.onPackageChanged()`,
+ *  `.handleHardwareBack()` e `.openChat()`. Erano tre in questo commento, e il
+ *  conto era sbagliato: le due che mancavano non si trovano cercando
+ *  `window.mobileApp.<nome>` perche' il Kotlin le invoca su una variabile
+ *  locale (`var app = window.mobileApp; … app.handleHardwareBack()`). Il ponte
+ *  verso il JS si conta sulle **chiamate**, non sul nome dell'oggetto.
+ *
+ *  Il nome globale resta `mobileApp` apposta: cosi' il guscio nativo non sa, e
+ *  non deve sapere, quale delle due interfacce ha caricato.
  */
 
 import { ActivityLine } from './casa-activity.js';
 import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
+import { WhoPanel } from './casa-who.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { i18n } from './shared/i18n.js';
@@ -50,6 +54,14 @@ class CasaApp {
     this.door = document.getElementById('casa-door');
     this.kicker = document.getElementById('casa-kicker');
     this.pending = document.getElementById('casa-pending');
+
+    /* «Con chi parli»: il titolo apre la tendina delle conversazioni. Il nome
+       glielo da' il titolo stesso invece di una costante sua — cosi'
+       l'intestazione e il pannello non possono dire due nomi diversi. */
+    this.who = new WhoPanel(document.getElementById('casa-who'), {
+      head: document.querySelector('.casa-head'),
+      personalName: () => document.querySelector('.casa-who-name')?.textContent || '',
+    });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
        del server (4 immagini, 8 MB l'una): superarli fa rifiutare il messaggio
@@ -110,6 +122,7 @@ class CasaApp {
       this._autosize();
     };
     this.door.addEventListener('click', () => this._openInWorkshop(null));
+    document.getElementById('casa-who')?.addEventListener('click', () => this.who.toggle());
 
     sessionManager.init();
     wsManager.connectChat();
@@ -182,6 +195,14 @@ class CasaApp {
    *  il launcher del telefono, e Indietro non deve mai chiudere il task.
    */
   handleHardwareBack() {
+    /* La tendina per prima: `showModal()` la mette nel top layer, quindi e' lo
+       strato piu' in alto che ci sia. Aperta, copre il filo con il suo velo —
+       da li' non si apre nessuna immagine — quindi le due cose non convivono e
+       l'ordine e' una garanzia, non una scelta fra due candidati. */
+    if (this.who.isOpen) {
+      this.who.close();
+      return;
+    }
     const lightbox = document.querySelector('.image-lightbox');
     if (lightbox) {
       if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
@@ -462,6 +483,10 @@ class CasaApp {
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('casa.attach'));
     if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.workshop'));
     if (this.kicker) this.kicker.textContent = i18n.t('casa.kicker');
+    const whoBtn = document.getElementById('casa-who');
+    if (whoBtn) whoBtn.setAttribute('aria-label', i18n.t('casa.who.open'));
+    // Aperta mentre la lingua cambia: le sue righe sono gia' a schermo.
+    if (this.who?.isOpen) this.who.render();
     if (this.files?.count) this._renderPending();
     if (this.wire && !this.wire.hidden) this.wire.textContent = i18n.t('casa.wire.offline');
   }

@@ -574,3 +574,174 @@ body.casa {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* ── «Con chi parli» ── */
+
+/* Il comando sta dentro l'h1: qui si spoglia del vestito da bottone e riprende
+   quello del titolo. Il chevron e' piu' piccolo e piu' smorto del nome —
+   e' un invito, non una seconda parola. */
+.casa-who-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  /* Il bersaglio e' il titolo intero, e il titolo e' alto 29 px: tocca bene
+     anche senza allargarlo, e allargarlo lo staccherebbe dal kicker. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.casa-who-open i {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+/* L'anello del fuoco sta qui, che e' il comando. Sul pannello no: un `<dialog>`
+   modale prende il fuoco all'apertura, e Chrome gli disegna attorno un anello
+   bianco che sembra un bordo acceso — ma quello non e' un comando, e' la
+   stanza. */
+.casa-who-open:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.casa-who:focus { outline: none; }
+
+/* La tendina. `showModal()` la mette nel top layer: sopra la mascotte, che in
+   casa e' disegnata sopra tutto il resto, senza doverle contendere uno
+   `z-index`. Il `top` lo scrive il JS misurando l'intestazione — l'altezza del
+   titolo dipende dal font del tema. */
+.casa-who {
+  position: fixed;
+  left: 18px;
+  /* Il pannello non e' mai piu' largo dello schermo meno i due margini: su uno
+     schermo stretto la tavola sarebbe sfondata. */
+  width: min(330px, calc(100vw - 36px));
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Il velo. La tavola ne dà uno al 28%, ma è misurato sulla sua tavolozza
+   chiara: sui temi scuri della casa sparisce, e un velo che non si vede lascia
+   il pannello a galleggiare su uno schermo che sembra ancora vivo. Questo è il
+   valore che l'app usa già per i suoi dialoghi e per la tendina laterale. */
+.casa-who::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.casa-who-body {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 14px 6px;
+}
+
+.casa-who-label {
+  padding: 4px 4px 2px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.casa-who-label.is-divided {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* Solo l'elenco scorre. Il tetto e' quel che resta di schermo sotto il
+   pannello: il `top` e' gia' scritto sul `<dialog>`, quindi qui basta lasciare
+   un margine sotto perche' l'ultimo quaderno non tocchi il bordo. */
+.casa-who-list {
+  max-height: 46dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Una riga **non e' un bottone**, e non deve sembrarlo: in questo giro un
+   tocco non cambia conversazione, e un tocco che non fa niente e' una
+   promessa non mantenuta. Niente chevron, niente spunta, nessuno stato di
+   pressione. La spunta ce l'ha la riga personale, dove e' vera. */
+.casa-who-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 2px 4px;
+}
+
+.casa-who-row + .casa-who-row {
+  border-top: 1px solid var(--border);
+}
+
+.casa-who-row.is-personal {
+  min-height: 44px;
+}
+
+.casa-who-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  /* Un nome di quaderno arriva a 64 caratteri: tronca, non va a capo e non
+     spinge fuori la data. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.casa-who-row.is-personal .casa-who-row-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--heading);
+}
+
+.casa-who-row-meta {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.casa-who-check {
+  flex: none;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.casa-who-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--text-faint);
+}
+
+/* Una cartella che non si apre e' una cosa da sistemare, non una scelta: il
+   pallino perde il colore e la riga si smorza. */
+.casa-who-row.is-blocked {
+  color: var(--text-muted);
+}
+
+.casa-who-note {
+  margin: 4px 4px 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.casa-who-note.is-error {
+  color: var(--error);
+}

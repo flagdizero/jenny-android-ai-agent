@@ -217,6 +217,7 @@ _UI_MANIFEST = [
     "assets/casa-chat.js",
     "assets/casa-mascot.js",
     "assets/casa-style.css",
+    "assets/casa-who.js",
     "assets/i18n/en.json",
     "assets/i18n/it.json",
     "assets/jenny-body-front-hand.webp",

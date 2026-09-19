@@ -23,7 +23,7 @@ import { rpc } from './rpc-client.js';
 import { escapeHtml, showToast } from './utils.js';
 import { confirmDialog, detailDialog, promptDialog } from './dialog.js';
 import { deleteProjectFlow } from './project-delete.js';
-import { ConversationList, ago } from './conversation-list.js';
+import { ConversationList, UNOPENABLE_HINT_KEYS, ago } from './conversation-list.js';
 
 /** Un nome di progetto è un nome di cartella: niente separatori né path.
  *
@@ -77,25 +77,6 @@ const CREATE_ERROR_KEYS = {
   too_large: 'scope.createSeedTooLong',
   unavailable: 'scope.createWikiOff',
   internal: 'scope.createInternal',
-};
-
-/** Perché una cartella non si apre, detto nella lingua dell'utente.
- *
- *  `reason` è la sola parte di una voce di `unopenable` pensata per essere letta
- *  da un programma (`wiki_routes.py::_collect_projects` lo dice sul posto: il
- *  motivo lo scelga chi disegna la riga, non si indovini dal nome). Oggi ce n'è
- *  uno solo; un motivo che questa mappa non conosce prende una frase che **non
- *  nomina nessuna regola**, perché raccontare la regola dei nomi di una cartella
- *  rifiutata per un altro motivo è peggio che non spiegare niente.
- *
- *  La regola dei nomi non si riscrive qui: la frase è quella che il dialogo di
- *  creazione mostra già (`scope.invalidName`), interpolata dentro la nota. Di
- *  copie a mano di quella regola ce ne sono già tre (`session/keys.py`, lo
- *  scaffolder della skill, e `VALID_NAME` qui sopra) — una quarta, e in prosa,
- *  si desincronizzerebbe senza che nessun test se ne accorga.
- */
-const UNOPENABLE_HINT_KEYS = {
-  invalid_name: 'scope.unopenableInvalidName',
 };
 
 /** Quanto del nome entra nel placeholder prima dei puntini.

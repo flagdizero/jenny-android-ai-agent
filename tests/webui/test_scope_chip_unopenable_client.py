@@ -69,9 +69,9 @@ def _member(source: str, name: str) -> str:
 
 def _const(source: str, name: str) -> str:
     """Un `const NOME = {...};` di modulo, dal sorgente."""
-    m = re.search(rf"\nconst {re.escape(name)} = \{{.*?\n\}};", source, re.S)
+    m = re.search(rf"\n(?:export )?const {re.escape(name)} = \{{.*?\n\}};", source, re.S)
     assert m, f"const {name} non trovato"
-    return m.group(0)
+    return m.group(0).replace("export const", "const")
 
 
 def _locale(name: str) -> dict:
@@ -198,7 +198,12 @@ class Chip {
 def _harness() -> str:
     src = _chip()
     return (
-        _HARNESS.replace("__HINT_KEYS__", _const(src, "UNOPENABLE_HINT_KEYS"))
+        # La mappa motivo→chiave e' passata in `conversation-list.js` col resto
+        # di quel che i due gusci dividono: `reason` arriva dal server e la sua
+        # traduzione e' una sola.
+        _HARNESS.replace("__HINT_KEYS__",
+                         _const(LIST_JS.read_text(encoding="utf-8"),
+                                "UNOPENABLE_HINT_KEYS"))
         .replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__PROJECTS__", _member(src, "_projects"))
         .replace("__UNOPENABLE__", _member(src, "_unopenable"))
