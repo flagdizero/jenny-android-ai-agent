@@ -1325,7 +1325,13 @@ body.casa {
    cui uno schermo basso dice «ce n'e' altro» senza rubare altezza alla
    pagina. */
 
-/* Le schede delle due stanze di impostazioni passano **davanti** a lei.
+/* `casa-card` e non `casa-block`: quel nome e' **gia' preso**, ed e' la bolla
+   di un messaggio (`casa-chat.js`, `.casa-msg .casa-block`). Chiamando cosi'
+   le schede, le loro regole — sfondo, bordo, e lo `z-index` qui sotto — sono
+   atterrate su ogni riga della conversazione: i messaggi sono diventati
+   schede e Jenny e' finita **dietro la chat**. Visto sul telefono, 19/09/2026.
+
+   Le schede delle due stanze di impostazioni passano **davanti** a lei.
    Sono opache, e senza questo a taglia grande le si siede sopra: la nota
    sotto la casella finiva dietro la sua testa (visto col rig, 19/09/2026).
    Cosi' invece fa capolino da dietro, che e' poi come la disegna la tavola.
@@ -1334,14 +1340,14 @@ body.casa {
    differenza e' il tocco: un contenitore davanti prenderebbe anche le
    pressioni sopra di lei — comprese quelle sulla sua parte scoperta, che e'
    il modo in cui la si mette via. Davanti c'e' solo cio' che e' opaco. */
-.casa-block,
+.casa-card,
 .casa-rows,
 .casa-workshop {
   position: relative;
   z-index: 6;
 }
 
-.casa-block {
+.casa-card {
   flex: none;
   padding: 8px 14px 10px;
   border: 1px solid var(--border);
@@ -1349,23 +1355,23 @@ body.casa {
   background: var(--surface);
 }
 
-.casa-block-head {
+.casa-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 30px;
 }
 
-.casa-block-head > .ti { flex: none; color: var(--accent); font-size: 18px; }
-.casa-block-label { flex: 1; min-width: 0; font-size: 14px; }
+.casa-card-head > .ti { flex: none; color: var(--accent); font-size: 18px; }
+.casa-card-label { flex: 1; min-width: 0; font-size: 14px; }
 
-.casa-block-value {
+.casa-card-value {
   flex: none;
   color: var(--text-muted);
   font-size: 13px;
 }
 
-.casa-block-note {
+.casa-card-note {
   margin-top: 6px;
   color: var(--text-muted);
   font-size: 11.5px;
@@ -1530,11 +1536,11 @@ body.casa {
 
 /* La nota sotto una scheda. `is-warn` e' quando Android ha detto di no: il
    colore c'e' perche' quella frase e' una cosa da fare, non una descrizione. */
-.casa-block-note[hidden] { display: none; }
+.casa-card-note[hidden] { display: none; }
 /* Dentro una scheda di righe la nota non ha bisogno del margine di suo: il
    fianco glielo da' gia' la scheda. */
-.casa-rows .casa-block-note { padding: 0 0 8px; }
-.casa-block-note.is-warn { color: var(--error); }
+.casa-rows .casa-card-note { padding: 0 0 8px; }
+.casa-card-note.is-warn { color: var(--error); }
 
 
 /* ── Le regole che le hai dato tu ───────────────────────────────────────────

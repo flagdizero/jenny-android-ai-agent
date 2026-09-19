@@ -285,10 +285,45 @@ def test_a_card_that_has_to_cover_her_is_not_see_through() -> None:
     la lasciava vedere **attraverso** — «osserva, regola, ripara» letto sopra la
     sua faccia. Una scheda che deve coprire dev'essere opaca."""
     css = CSS.read_text(encoding="utf-8")
-    for selettore in (".casa-workshop", ".casa-rows", ".casa-block"):
+    for selettore in (".casa-workshop", ".casa-rows", ".casa-card"):
         corpo = _rule(css, selettore)
         sfondo = re.search(r"\n  background: ([^;]+);", corpo)
         assert sfondo, f"{selettore} non dichiara piu' uno sfondo"
         assert "--overlay" not in sfondo.group(1), (
             f"{selettore} e' semi-trasparente: lei si vede attraverso"
         )
+
+
+def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> None:
+    """Un nome di classe vuol dire **una** cosa.
+
+    `casa-block` era gia' la bolla di un messaggio, e chiamando cosi' le schede
+    di questa pagina le loro regole sono atterrate su ogni riga della
+    conversazione: i messaggi sono diventati schede con bordo e sfondo, e lo
+    `z-index` che serviva a coprire Jenny l'ha mandata **dietro la chat**.
+    Nessun banco lo vedeva — i due file non si nominano fra loro — e sul
+    telefono era la prima cosa che si notava.
+
+    Il banco incrocia i due insiemi: le classi che la chat si costruisce da
+    sola, e quelle che le due stanze nuove scrivono nel guscio.
+    """
+    chat = (ASSETS / "casa-chat.js").read_text(encoding="utf-8")
+    della_chat = set()
+    for valore in re.findall(r"className = '([^']+)'", chat):
+        della_chat |= set(valore.split())
+    assert della_chat, "la grep sulle classi della chat non morde piu'"
+
+    html = INDEX.read_text(encoding="utf-8")
+    stanze = re.findall(
+        r'<section class="casa-(?:tu|jenny-room)".*?</section>', html, re.S
+    )
+    assert len(stanze) == 2, f"le due stanze non si trovano piu' ({len(stanze)})"
+    delle_stanze = set()
+    for stanza in stanze:
+        for valore in re.findall(r'class="([^"]+)"', stanza):
+            delle_stanze |= set(valore.split())
+
+    in_comune = della_chat & delle_stanze
+    assert not in_comune, (
+        f"queste classi vogliono dire due cose diverse: {sorted(in_comune)}"
+    )
