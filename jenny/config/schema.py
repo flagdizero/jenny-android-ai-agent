@@ -698,6 +698,14 @@ class SnapshotConfig(Base):
     retention_max_age_days: int = Field(default=0, ge=0)
     # Il tetto rispecchia MAX_KDF_ITERATIONS del formato container (crypto.py).
     pbkdf2_iterations: int = Field(default=600_000, ge=100_000, le=10_000_000)
+    # Quando un backup cifrato è stato **salvato davvero**, in secondi epoch;
+    # 0 = mai. Non lo sa il gateway: lui prepara il file cifrato in staging, e
+    # se quel file finisca su disco lo decide il picker SAF, che risponde solo
+    # al client (``window.jennyBackup.onExportDone``). Per questo lo scrive una
+    # rotta che il client chiama a cose fatte, e per questo il campo si chiama
+    # «esportato» e non «preparato»: sono due momenti diversi, e quello che
+    # conta per chi legge «ultimo backup» è il secondo.
+    last_export_at: float = Field(default=0.0, ge=0)
     # Unica fonte di verità: la costante del motore di snapshot (engine.py).
     exclude_globs: list[str] = Field(
         default_factory=lambda: list(DEFAULT_EXCLUDE_GLOBS)

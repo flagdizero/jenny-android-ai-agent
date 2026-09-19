@@ -188,7 +188,7 @@ buco, e per di più una rassicurazione inventata. Non sapere adesso si dice.
 
 ---
 
-## 4. Backup
+## 4. Backup — **fatto**
 
 **La tavola.** Riga «Backup — ieri, 23:10».
 
@@ -206,7 +206,32 @@ parola dice) oppure l'ultimo **snapshot locale** (che esiste già, è automatico
 ed è quello che ti salva davvero se cancelli una cosa per sbaglio)? Propongo il
 primo come valore della riga e il secondo dentro la stanza, in una frase.
 
-Peso: medio.
+**Com'è andata.** La domanda aperta — «la riga mostra l'ultimo backup
+esportato o l'ultimo snapshot locale?» — è stata decisa come proposto: la riga
+porta **l'export**, perché è quello che la parola promette; la storia locale si
+racconta dentro, in una frase che dice anche cosa **non** è («vive su questo
+telefono — di un telefono perso non salva niente»).
+
+La data ora esiste: `snapshots.lastExportAt` nel config, scritto da una rotta
+nuova (`/api/backup/exported`) che passa dal funnel di `store.mutate`. **Non
+poteva scriverla il lato che prepara il file**: il gateway cifra il container e
+lo lascia in staging, poi si apre il picker SAF di sistema — e se quel file
+finisca su disco lo sa solo il client, che riceve la risposta del picker. Fra
+le due cose c'è uno schermo annullabile, quindi segnarlo prima sarebbe falso
+proprio nel caso in cui l'utente ha detto di no. Due mutazioni lo provano, e
+una delle due la becca il banco del funnel che esisteva già.
+
+Effetto collaterale utile: `whenText` («oggi alle 14:22», «3 giorni fa») è
+uscita da `update-flow.js` in `shared/when.js`. Due posti che non hanno niente
+in comune si facevano la stessa domanda, e una riga di backup che importa la
+macchina degli aggiornamenti per avere una data è una dipendenza che non vuol
+dire niente.
+
+Il rig ha trovato l'ultima cosa: senza il ponte nativo la scheda del ripristino
+restava **orfana** — una nota che promette un gesto senza il bottone che lo fa.
+Adesso sparisce tutta, e la spiegazione di cosa sia un backup resta (era stata
+sostituita dal motivo, che lasciava una pagina che non diceva più di cosa
+parlava).
 
 ---
 
@@ -246,7 +271,7 @@ Peso: piccolo il codice, tua la decisione.
 1. ~~**Officina invertita**~~ — fatta.
 2. ~~**Chi risponde (a)**~~ — fatta.
 3. ~~**Aggiornamenti**~~ — fatta, con l'estrazione del flusso condiviso.
-4. **Backup** — col record dell'ultimo export.
+4. ~~**Backup**~~ — fatta, col record dell'ultimo export.
 5. **Sostenitori** — quando l'utente dice da dove vengono i nomi.
 
 Le prime quattro non hanno bisogno di niente da lui per partire. La quinta sì.

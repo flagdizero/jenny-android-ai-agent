@@ -38,6 +38,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
+WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -162,7 +163,7 @@ def _harness() -> str:
         .replace("__POLL_MS__", _const(src, "POLL_MS"))
         .replace("__POLL_MAX__", _const(src, "POLL_MAX"))
         .replace("__PHASE_KEY__", _function(src, "phaseKey"))
-        .replace("__WHEN_TEXT__", _function(src, "whenText"))
+        .replace("__WHEN_TEXT__", _function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
         .replace("__CHECK_LINES__", _function(src, "checkLines"))
         .replace("__CTOR__", _member(src, "constructor"))
         .replace("__BUSY__", _member(src, "busy"))

@@ -1081,6 +1081,18 @@
       "waiting": "{version} → {latest}",
       "upToDate": "You're on {version}, and that's the latest.",
       "unknown": "I don't know which version you're on yet."
+    },
+    "backup": {
+      "title": "Backup",
+      "never": "never",
+      "neverLong": "You haven't exported a backup yet.",
+      "last": "Last backup: {when}.",
+      "export": "Export a backup",
+      "import": "Restore from a file",
+      "exportHint": "One encrypted file, with a passphrase you choose: everything is in it — conversations, notebooks, settings. Keep it somewhere that isn't this phone.",
+      "importHint": "Replaces everything there is now with what's in the file, and restarts Jenny.",
+      "snapshots": "Jenny also keeps a local history of the workspace, automatically: it's there to put back something deleted by mistake, and you can browse it in the workshop. It lives on this phone though — of a lost phone it saves nothing.",
+      "snapshotsOff": "The local workspace history is off: the only net is the backup you export yourself. You can turn it back on in the workshop."
     }
   }
 }

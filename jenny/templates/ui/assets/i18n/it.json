@@ -1084,6 +1084,18 @@
       "waiting": "{version} → {latest}",
       "upToDate": "Sei alla {version}, ed è l'ultima.",
       "unknown": "Non so ancora a che versione sei."
+    },
+    "backup": {
+      "title": "Backup",
+      "never": "mai fatto",
+      "neverLong": "Non hai ancora esportato nessun backup.",
+      "last": "Ultimo backup: {when}.",
+      "export": "Esporta un backup",
+      "import": "Ripristina da un file",
+      "exportHint": "Un file cifrato con una passphrase che scegli tu: dentro c'è tutto — le conversazioni, i quaderni, le impostazioni. Mettilo da qualche parte che non sia questo telefono.",
+      "importHint": "Sostituisce tutto quello che c'è adesso con quello che c'è nel file, e riavvia Jenny.",
+      "snapshots": "Jenny tiene anche una storia locale del workspace, automatica: serve a rimettere a posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive però su questo telefono — di un telefono perso non salva niente.",
+      "snapshotsOff": "La storia locale del workspace è spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina."
     }
   }
 }

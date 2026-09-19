@@ -156,6 +156,13 @@ export function runExportFlow() {
       _pending.export = (ok) => {
         showToast(ok ? i18n.t('backup.exportSuccess') : i18n.t('backup.exportCancelled'),
                   ok ? undefined : 'error');
+        /* Il momento in cui si sa che il file c'è davvero, e l'unico: fra
+           `exportBackup` e questa risposta c'è una schermata di sistema che
+           si può annullare. Segnarlo prima vorrebbe dire scrivere «ultimo
+           backup: adesso» su un backup che non è stato salvato.
+           Se la scrittura del record fallisce non si dice niente: il backup
+           è fatto, ed è quello che conta — a mancare sarebbe la data. */
+        if (ok) api.noteBackupExported().catch(() => {});
         resolve(ok);
       };
       window.JennyNative.exportBackup(staged.staged_path, staged.suggested_filename);

@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +30,7 @@ from jenny.channels.http_utils import (
 )
 
 if TYPE_CHECKING:
+    from jenny.config.schema import Config
     from jenny.snapshot.backup import BackupManager
 
 BACKUP_DATA_HEADER = "X-Jenny-Backup-Data"
@@ -63,6 +65,8 @@ class BackupRoutes:
             return await self._export(request, manager)
         if path == "/api/backup/import":
             return await self._import(request, manager)
+        if path == "/api/backup/exported":
+            return await self._note_exported()
         if path == "/api/backup/snapshots/create":
             return await self._snapshot_create(request, manager)
         if path == "/api/backup/snapshots/restore":
@@ -132,6 +136,36 @@ class BackupRoutes:
             self._log.exception("Backup export failed")
             return http_error(500, "backup export failed")
         return http_json_response(result)
+
+    async def _note_exported(self) -> Response:
+        """Il client dice che il file cifrato è stato salvato davvero.
+
+        Il gateway non può saperlo da sé: lui prepara il container in staging,
+        e a decidere se quel file finisce su disco è il picker SAF, che
+        risponde solo alla WebView. Senza questa riga «ultimo backup» non ha
+        nessuna fonte — non esiste da nessuna parte, in nessun file.
+
+        Rotta separata e non un ritorno di ``/export`` per la stessa ragione:
+        fra le due cose c'è una schermata di sistema che l'utente può
+        annullare, e segnare il backup come fatto mentre il file non è stato
+        scritto sarebbe la bugia peggiore di questa pagina.
+        """
+        from jenny.config import store
+
+        adesso = time.time()
+
+        def _apply(config: Config) -> bool:
+            if config.snapshots.last_export_at == adesso:
+                return False
+            config.snapshots.last_export_at = adesso
+            return True
+
+        try:
+            await store.mutate(_apply)
+        except Exception:
+            self._log.exception("Recording the backup export failed")
+            return http_error(500, "could not record the export")
+        return http_json_response({"ok": True, "last_export_at": adesso})
 
     async def _import(self, request: WsRequest, manager: "BackupManager") -> Response:
         from jenny.snapshot.backup import BackupError

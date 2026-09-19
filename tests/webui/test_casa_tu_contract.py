@@ -588,3 +588,51 @@ def test_the_house_and_the_workshop_share_one_update_machine() -> None:
     assert flusso.count("phaseDownloading") == 1
     for sorgente in (casa, officina):
         assert "phaseDownloading" not in sorgente, "una seconda tabella delle fasi"
+
+
+# ── «Backup» ────────────────────────────────────────────────────────────────
+
+
+def test_the_backup_row_carries_the_date_that_did_not_exist() -> None:
+    """«Ultimo backup: ieri alle 23:10» non aveva nessuna fonte: non c'era un
+    `last_backup` in nessun file. Adesso c'e', e arriva dal payload."""
+    html = INDEX.read_text(encoding="utf-8")
+    for el_id in ("casa-row-backup", "casa-backup-label", "casa-backup-value"):
+        assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
+    assert "onBackup: () => this.openBackup()," in _app()
+    assert "this.backupRoom.setBackup(data?.backup || null);" in _app(), (
+        "la stanza non riceve piu' il record dal payload"
+    )
+
+
+def test_the_export_is_recorded_only_after_the_system_screen() -> None:
+    """Fra il container cifrato e il file su disco c'e' un picker di sistema
+    che si puo' annullare. Il record si scrive nel callback di quel picker —
+    l'unico posto in cui si sa che il file c'e' davvero — e non dopo la
+    chiamata che prepara il container."""
+    flusso = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
+    dentro = re.search(r"_pending\.export = \(ok\) => \{(.*?)\n      \};", flusso, re.S)
+    assert dentro, "il callback del picker non si trova piu'"
+    assert "api.noteBackupExported()" in dentro.group(1), (
+        "il record non si scrive dove si sa l'esito"
+    )
+    assert "if (ok)" in dentro.group(1), "si segna un backup anche quando e' stato annullato"
+    # E da nessun'altra parte: una seconda chiamata segnerebbe il backup
+    # quando il container e' solo pronto.
+    assert flusso.count("noteBackupExported") == 1, "il record si scrive da due posti"
+
+
+def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
+    """Si somigliano abbastanza da essere scambiate: la storia locale e'
+    automatica e rimette a posto una cosa cancellata per sbaglio, ma vive sullo
+    stesso telefono. La stanza le distingue con due frasi diverse."""
+    for locale in ("it", "en"):
+        data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
+        backup = data["casa"]["backup"]
+        for key in ("title", "never", "neverLong", "last", "export", "import",
+                    "exportHint", "importHint", "snapshots", "snapshotsOff"):
+            assert backup.get(key, "").strip(), f"casa.backup.{key} manca in {locale}.json"
+        assert "{when}" in backup["last"], "la riga non interpola la data"
+        assert backup["snapshots"] != backup["snapshotsOff"], (
+            "la storia locale accesa e spenta si leggono uguali"
+        )

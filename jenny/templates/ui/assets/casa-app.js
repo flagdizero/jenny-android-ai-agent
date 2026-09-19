@@ -28,6 +28,7 @@ import { CasaReader } from './casa-reader.js';
 import { CasaJenny } from './casa-jenny.js';
 import { CasaModel } from './casa-model.js';
 import { CasaUpdates } from './casa-updates.js';
+import { CasaBackup } from './casa-backup.js';
 import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -65,6 +66,7 @@ const BACK_TO = {
   jenny: 'tu',
   model: 'tu',
   updates: 'tu',
+  backup: 'tu',
 };
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
@@ -122,6 +124,7 @@ class CasaApp {
       onJenny: () => this.openJenny(),
       onModel: () => this.openModel(),
       onUpdates: () => this.openUpdates(),
+      onBackup: () => this.openBackup(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
@@ -135,6 +138,11 @@ class CasaApp {
        e quella deve riscrivere la riga **e** la cache del guscio. */
     this.updatesRoom = new CasaUpdates({
       onVersion: (version) => this._keepVersion(version),
+    });
+    /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
+       e' la data, che prima non esisteva da nessuna parte. */
+    this.backupRoom = new CasaBackup({
+      onExported: () => this.tu.sayBackup(this.backupRoom.value()),
     });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
@@ -402,6 +410,8 @@ class CasaApp {
     this.tu.sayModel(this.modelRoom.value());
     this.updatesRoom.setVersion(data?.version || null);
     this.tu.sayUpdates(this.updatesRoom.value());
+    this.backupRoom.setBackup(data?.backup || null);
+    this.tu.sayBackup(this.backupRoom.value());
   }
 
   /** La stanza di lei: com'e' fatta. Ci si arriva solo da «Tu e Jenny», che
@@ -423,6 +433,12 @@ class CasaApp {
   openUpdates() {
     this._setView('updates');
     this.updatesRoom.open();
+  }
+
+  /** «Backup». */
+  openBackup() {
+    this._setView('backup');
+    this.backupRoom.open();
   }
 
   /* Una versione fresca arrivata da un controllo manuale: va nella riga e
@@ -544,6 +560,7 @@ class CasaApp {
     if (this.view === 'jenny') this._setHeadTitle(i18n.t('casa.jenny.title'));
     if (this.view === 'model') this._setHeadTitle(i18n.t('casa.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('casa.updates.title'));
+    if (this.view === 'backup') this._setHeadTitle(i18n.t('casa.backup.title'));
     this._applyBackLabel();
   }
 
@@ -1015,6 +1032,7 @@ class CasaApp {
     this.tu?.applyTranslations();
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
+    this.backupRoom?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.tu?.sayJenny(this.jennyRoom?.value());
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));

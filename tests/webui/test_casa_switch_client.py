@@ -177,6 +177,7 @@ class App {
       applyTranslations: () => {},
       open: () => this.fatti.push('tu aperta'),
       sayUpdates: (v) => this.versioni.push(v),
+      sayBackup: (v) => { this.valoreBackup = v; },
       sayJenny: (v) => { this.valoreJenny = v; },
       sayModel: (v) => { this.valoreModello = v; },
     };
@@ -188,6 +189,13 @@ class App {
     };
     this.impostazioniDate = [];
     this.versioniDate = [];
+    this.backupDati = [];
+    this.backupRoom = {
+      applyTranslations: () => {},
+      open: () => this.fatti.push('backup aperta'),
+      setBackup: (v) => this.backupDati.push(v),
+      value: () => 'mai fatto',
+    };
     this.updatesRoom = {
       applyTranslations: () => {},
       open: () => this.fatti.push('aggiornamenti aperta'),

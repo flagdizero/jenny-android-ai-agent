@@ -412,3 +412,54 @@ async def test_snapshots_list_limit_clamped(env) -> None:
     # Un limit non numerico viene ignorato (nessun 500): lista completa.
     assert len(await _list("/api/backup/snapshots?limit=abc")) == 3
     assert len(await _list("/api/backup/snapshots?limit=9999")) == 3
+
+
+# ── «Quando l'hai esportato l'ultima volta» ─────────────────────────────────
+
+
+async def test_the_export_record_is_written_by_the_client_and_not_by_the_export(
+    env,
+) -> None:
+    """«Ultimo backup: ieri alle 23:10» non aveva nessuna fonte.
+
+    E non poteva averla dal lato che prepara il file: il gateway cifra il
+    container e lo lascia in staging, poi si apre il picker SAF di sistema — e
+    se quel file finisca su disco lo sa solo il client, che riceve la risposta
+    del picker. Fra le due cose c'è uno schermo annullabile, quindi segnare il
+    backup come fatto quando il container è pronto sarebbe falso proprio nel
+    caso in cui l'utente ha detto di no.
+    """
+    from jenny.config.loader import load_config
+
+    # La fixture ha gia' puntato il workspace su tmp_path: `config.json` sta
+    # li' dentro, ed e' quello che il funnel di `store.mutate` scrive.
+    config_path = env.workspace / "config.json"
+
+    assert load_config(config_path).snapshots.last_export_at == 0, "parte da «mai»"
+
+    # Preparare il container non scrive niente: l'utente non ha ancora visto
+    # il picker.
+    export = await env.handler.backup_routes.dispatch(
+        _make_request("/api/backup/export", {"passphrase": _PASSPHRASE}),
+        "/api/backup/export",
+    )
+    assert export.status_code == 200
+    assert load_config(config_path).snapshots.last_export_at == 0, (
+        "il record è stato scritto prima che il file fosse salvato"
+    )
+
+    # È il client a dire che il file c'è.
+    noted = await env.handler.backup_routes.dispatch(
+        _make_request("/api/backup/exported"), "/api/backup/exported"
+    )
+    assert noted.status_code == 200
+    quando = load_config(config_path).snapshots.last_export_at
+    assert quando > 0
+    assert _json(noted)["last_export_at"] == pytest.approx(quando)
+
+
+async def test_the_export_record_needs_a_token(env) -> None:
+    response = await env.handler.backup_routes.dispatch(
+        _make_request("/api/backup/exported", token=None), "/api/backup/exported"
+    )
+    assert response.status_code == 401

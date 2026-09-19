@@ -48,8 +48,9 @@ export class CasaTu {
   /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre.
    *  @param onJenny     la riga che porta da lei.
    *  @param onModel     la riga che porta a chi risponde.
-   *  @param onUpdates   la riga che porta agli aggiornamenti. */
-  constructor({ onWorkshop, onJenny, onModel, onUpdates } = {}) {
+   *  @param onUpdates   la riga che porta agli aggiornamenti.
+   *  @param onBackup    la riga che porta al backup. */
+  constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup } = {}) {
     this.el = document.getElementById('casa-tu');
     this.themesEl = document.getElementById('casa-themes');
     this.themeLabel = document.getElementById('casa-theme-label');
@@ -63,6 +64,8 @@ export class CasaTu {
     this.modelValue = document.getElementById('casa-model-value');
     this.updatesLabel = document.getElementById('casa-updates-label');
     this.updatesValue = document.getElementById('casa-updates-value');
+    this.backupLabel = document.getElementById('casa-backup-label');
+    this.backupValue = document.getElementById('casa-backup-value');
     this._painted = false;
 
     document.getElementById('casa-workshop')
@@ -73,6 +76,8 @@ export class CasaTu {
       ?.addEventListener('click', () => onModel?.());
     document.getElementById('casa-row-updates')
       ?.addEventListener('click', () => onUpdates?.());
+    document.getElementById('casa-row-backup')
+      ?.addEventListener('click', () => onBackup?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
       if (card) this.pickTheme(card.dataset.theme);
@@ -96,6 +101,11 @@ export class CasaTu {
     if (this.updatesValue) this.updatesValue.textContent = value || '';
   }
 
+  /** Quando l'hai esportato l'ultima volta, sulla riga che porta al backup. */
+  sayBackup(value) {
+    if (this.backupValue) this.backupValue.textContent = value || '';
+  }
+
   /** Come sta lei, sulla riga che porta da lei: «piccola · flottante». */
   sayJenny(value) {
     if (this.jennyValue) this.jennyValue.textContent = value || '';
@@ -113,6 +123,7 @@ export class CasaTu {
     if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('casa.jenny.title');
     if (this.modelLabel) this.modelLabel.textContent = i18n.t('casa.model.title');
     if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('casa.updates.title');
+    if (this.backupLabel) this.backupLabel.textContent = i18n.t('casa.backup.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();

@@ -869,7 +869,8 @@ body.casa {
 .casa-tu,
 .casa-jenny-room,
 .casa-model-room,
-.casa-updates-room {
+.casa-updates-room,
+.casa-backup-room {
   display: none;
   flex: 1;
   min-height: 0;
@@ -881,7 +882,8 @@ body.casa {
 .casa-shell[data-view='tu'] .casa-tu,
 .casa-shell[data-view='jenny'] .casa-jenny-room,
 .casa-shell[data-view='model'] .casa-model-room,
-.casa-shell[data-view='updates'] .casa-updates-room { display: flex; }
+.casa-shell[data-view='updates'] .casa-updates-room,
+.casa-shell[data-view='backup'] .casa-backup-room { display: flex; }
 
 .casa-shell:not([data-view='chat']) .casa-thread,
 .casa-shell:not([data-view='chat']) .casa-empty,
@@ -1842,3 +1844,13 @@ body.casa {
    dentro, e una pastiglia stretta in mezzo a due righe di testo sembrerebbe
    una nota. */
 #casa-update-check { width: 100%; min-height: 36px; }
+
+/* ── «Backup» ────────────────────────────────────────────────────────────
+   Due bottoni larghi e tre frasi: esportare e importare sono le uniche due
+   cose che si fanno qui, e una pastiglia stretta in mezzo al testo
+   sembrerebbe una nota. «Mai fatto» si segnala — e' l'unica volta in cui
+   quella riga va letta davvero. */
+
+#casa-backup-export, #casa-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
+.casa-card-label.is-warn { color: var(--warning); }
+#casa-backup-snapshots { padding: 0 4px; }

@@ -612,6 +612,15 @@ class ApiClient {
     return this._backupPost('/api/backup/export', { passphrase });
   }
 
+  /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui
+     prepara il container cifrato in staging, e se quel file finisca su disco
+     lo decide il picker SAF, che risponde solo di qua. */
+  async noteBackupExported() {
+    const res = await this._fetch('/api/backup/exported');
+    if (!res.ok) throw new Error(`Backup record failed: ${res.status}`);
+    return res.json();
+  }
+
   async importBackup({ stagedPath, passphrase } = {}) {
     const payload = { passphrase };
     if (stagedPath) payload.staged_path = stagedPath;

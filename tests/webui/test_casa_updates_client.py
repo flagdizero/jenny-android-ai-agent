@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 ROOM_JS = ASSETS / "casa-updates.js"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
+WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -154,7 +155,7 @@ def _harness() -> str:
         .replace("__POLL_MS__", _const(flow, "POLL_MS"))
         .replace("__POLL_MAX__", _const(flow, "POLL_MAX"))
         .replace("__PHASE_KEY__", _function(flow, "phaseKey"))
-        .replace("__WHEN_TEXT__", _function(flow, "whenText"))
+        .replace("__WHEN_TEXT__", _function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
         .replace("__CHECK_LINES__", _function(flow, "checkLines"))
         .replace("__FLOW_CTOR__", _member(flow, "constructor"))
         .replace("__FLOW_BUSY__", _member(flow, "busy"))

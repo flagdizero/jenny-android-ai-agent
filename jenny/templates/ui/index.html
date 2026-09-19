@@ -232,6 +232,15 @@
           <span class="casa-row-value" id="casa-updates-value"></span>
           <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
         </button>
+        <!-- Il backup. La riga porta **quando l'hai esportato**, non quando il
+             telefono ha fatto l'ultimo snapshot: sono due cose diverse, e
+             quella che la parola promette e' la prima. -->
+        <button class="casa-row" id="casa-row-backup" type="button">
+          <i class="ti ti-archive" aria-hidden="true"></i>
+          <span class="casa-row-label" id="casa-backup-label"></span>
+          <span class="casa-row-value" id="casa-backup-value"></span>
+          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+        </button>
       </div>
 
       <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
@@ -380,6 +389,33 @@
         <div class="casa-update-lines" id="casa-update-lines"></div>
         <button class="casa-key-btn" id="casa-update-check" type="button"></button>
       </div>
+    </div>
+  </section>
+
+  <!-- ── L'ottava stanza: «Backup» ───────────────────────────────────────
+       La terza vista di `shared/backup-flow.js` (le altre due: officina e
+       onboarding). L'unica cosa nuova e' la data: «ultimo backup» non aveva
+       nessuna fonte, in nessun file — v. `casa-backup.js`. -->
+  <section class="casa-backup-room" id="casa-backup-room">
+    <div class="casa-tu-scroll">
+
+      <div class="casa-card">
+        <div class="casa-card-head">
+          <i class="ti ti-archive" aria-hidden="true"></i>
+          <span class="casa-card-label" id="casa-backup-when"></span>
+        </div>
+        <div class="casa-card-note" id="casa-backup-export-note"></div>
+        <button class="casa-save" id="casa-backup-export" type="button"></button>
+      </div>
+
+      <div class="casa-card" id="casa-backup-import-card">
+        <div class="casa-card-note" id="casa-backup-import-note"></div>
+        <button class="casa-key-btn" id="casa-backup-import" type="button"></button>
+      </div>
+
+      <!-- La storia locale: somiglia abbastanza da essere scambiata per un
+           backup, e non lo e' — vive sullo stesso telefono. -->
+      <div class="casa-card-note" id="casa-backup-snapshots"></div>
     </div>
   </section>
 

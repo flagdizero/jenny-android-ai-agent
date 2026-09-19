@@ -969,6 +969,14 @@ def settings_payload(
             "ssrf_whitelist_count": len(config.security.ssrf_whitelist),
             "exec_enabled": exec_config.enable,
         },
+        # Quando l'ultimo backup cifrato è stato salvato davvero (0 = mai), e
+        # se la storia locale degli snapshot è accesa. Sono due cose diverse e
+        # la casa lo dice: la storia locale vive sullo stesso telefono, un
+        # backup esportato no.
+        "backup": {
+            "last_export_at": config.snapshots.last_export_at,
+            "snapshots_enabled": config.snapshots.enabled,
+        },
         "requires_restart": requires_restart,
         "version": _version_payload(),
         "config_recovery": _config_recovery_payload(),
