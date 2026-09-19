@@ -653,6 +653,30 @@ con il numero *dentro la fisica*, mentre il test si accontentava di vederla
 nell'`import`. Terza volta che la domanda giusta davanti a un verde e' «dove e'
 caduta la mutazione?».
 
-**Non e' ancora stato sul telefono.** Il banco prova il JS e la CSS veri; restano
-da vedere li' la resa a 1440×1440 e l'area esclusa dalle gesture di sistema, che
-il ponte nativo non ha fuori dall'APK.
+### Sul Titan 2
+
+APK delle 12:58:10, installato alle 12:59:02, firmato `CN=flagDiZero`.
+
+Il tocco la mette via e la rimette fuori, e quel che c'era sotto si legge: nello
+scatto di prima Jenny copriva l'inizio di due righe dell'ultima risposta, in
+quello dopo no. **Non sparisce** — resta il quarto di quadrato che l'officina
+lascia al bordo, ed e' quel che deve essere: e' parcheggiata, non spenta, e da
+li' la si ritrova per ritoccarla.
+
+**L'area esclusa dalle gesture di sistema segue l'ancoraggio**, che era la meta'
+che fuori dall'APK non si puo' provare — il ponte nativo non c'e'. Letta da
+`dumpsys window`: `(0,994,179,1334)` al bordo, `(0,994,245,1334)` fuori. I 66 px
+di differenza sono esattamente lo scarto d'ancoraggio, `(0,469 - 0,25) × 120 CSS
+× 2,5`; e ciascun bordo destro torna al pixel con `(r.right + 8) × dpr`. Senza il
+gancio su `transitionend` si sarebbe dichiarato ad Android il posto da cui se ne
+stava andando.
+
+**Il trascinamento con `input motionevent`**, non con `input swipe`: il volo
+intero e' girato sul telefono — presa, caduta, tonfo, camminata di rientro — e
+lei e' finita al bordo, con il rettangolo tornato a 179. E' la parte che sul
+banco esiste solo con la pompa manuale del rAF.
+
+Non provato sul telefono, di proposito: **la bocca che si muove dal bordo**.
+Vorrebbe dire far girare un turno vero nella conversazione dell'utente per
+guardare due immagini alternarsi; quella e' stata campionata sul banco per 12
+secondi.
