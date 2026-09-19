@@ -944,6 +944,15 @@ body.casa {
   cursor: pointer;
 }
 
+/* Serve, e non e' ridondante: `[hidden]` e' una regola del browser a
+   specificita' bassissima, e il `display` messo qui sopra su una classe la
+   scavalca. Senza questa riga «torna alla chat» resta a schermo **dentro la
+   chat**, sotto l'occhiello — visto sul telefono al primo avvio. E' la stessa
+   trappola di `.casa-empty[hidden]`, che questo foglio documenta da settembre:
+   i due bottoni dell'altra fila se ne salvano solo perche' li copre
+   `.casa-actions [hidden]`, che di specificita' ne ha una in piu'. */
+.casa-back[hidden] { display: none; }
+
 .casa-back:active { color: var(--text); }
 
 /* Fuori dalla chat il titolo dice dove sei e non apre piu' niente. Il chevron

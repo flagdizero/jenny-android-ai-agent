@@ -285,3 +285,52 @@ def test_the_map_paints_its_nodes_with_the_same_three() -> None:
         re.findall(r"\.casa-map-nodes \.casa-group-(\w+) \{ fill: var\(--([a-z-]+)\); \}", css)
     )
     assert elenco == mappa, f"elenco {elenco} contro mappa {mappa}"
+
+
+def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> None:
+    """`[hidden]` e' una regola del browser a specificita' bassissima.
+
+    Un `display:` messo su una classe la scavalca, e l'elemento resta a schermo
+    con `hidden` vero: nessun errore, nessun avviso, solo una riga che non se
+    ne va. E' successo con «torna alla chat», che compariva **dentro la chat**,
+    e questo foglio documenta la stessa trappola per `.casa-empty` da
+    settembre.
+
+    Il banco la cerca da solo: ogni classe che il guscio nasconde con
+    l'attributo deve avere la sua regola — o stare dentro `.casa-actions`, che
+    ne ha una per i figli, con una specificita' in piu'.
+    """
+    app = APP_JS.read_text(encoding="utf-8")
+    html = INDEX.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+
+    assert ".casa-actions [hidden]" in css, "la fila dei comandi ha perso la sua regola"
+    fila = re.search(r'<div class="casa-actions">(.*?)</div>', html, re.S)
+    assert fila, "la fila dei comandi non esiste piu'"
+
+    campi = dict(re.findall(r"this\.(\w+) = document\.getElementById\('([\w-]+)'\)", app))
+    nascosti = {campi[c] for c in re.findall(r"this\.(\w+)\.hidden = ", app) if c in campi}
+    assert nascosti, "nessun elemento nascosto per attributo: la grep non morde piu'"
+
+    mancanti = []
+    for el_id in sorted(nascosti):
+        if f'id="{el_id}"' in fila.group(1):
+            continue  # coperto dalla regola della fila
+        m = re.search(rf'<[^>]*id="{re.escape(el_id)}"[^>]*>', html)
+        if not m:
+            continue
+        classi = re.search(r'class="([^"]+)"', m.group(0))
+        if not classi:
+            continue
+        classi = classi.group(1).split()
+        ha_display = any(
+            re.search(rf"\.{re.escape(c)}[^{{]*\{{[^}}]*display:", css) for c in classi
+        )
+        ha_regola = any(re.search(rf"\.{re.escape(c)}\[hidden\]", css) for c in classi)
+        if ha_display and not ha_regola:
+            mancanti.append((el_id, classi))
+
+    assert not mancanti, (
+        "questi si nascondono con `hidden` ma hanno un `display` che lo "
+        f"scavalca, e resteranno a schermo: {mancanti}"
+    )
