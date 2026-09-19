@@ -244,3 +244,51 @@ def test_the_room_says_what_happens_to_what_you_write() -> None:
         for key in ("rules", "rulesHint", "rulesPlaceholder", "rulesSave",
                     "rulesSaved", "rulesFailed"):
             assert jenny.get(key, "").strip(), f"casa.jenny.{key} manca in {locale}.json"
+
+
+# ── Lei sta dietro, e le schede la coprono davvero ──────────────────────────
+
+
+def _rule(css: str, selector: str) -> str:
+    """Tutto cio' che il foglio dichiara per *selector*, gruppi compresi.
+
+    Unisce i corpi invece di prendere il primo: quelle due proprieta' arrivano
+    da due regole diverse — il gruppo che mette davanti le schede e la regola
+    che veste quella singola — e guardarne una sola dice «non c'e'».
+    """
+    corpi = []
+    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        nomi = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+        if selector in nomi:
+            corpi.append(corpo)
+    return "\n".join(corpi)
+
+
+def test_the_cards_pass_in_front_of_her() -> None:
+    """A taglia grande lei si siede sulla pagina: le schede delle due stanze
+    le passano davanti. Il numero deve stare **sopra** il suo, e non e' una
+    costante scritta a caso — se un giorno il suo salisse, queste righe
+    smetterebbero di coprirla e nessuno lo direbbe."""
+    css = CSS.read_text(encoding="utf-8")
+    m = re.search(r"\.casa-jenny \{[^}]*z-index: (\d+)", css, re.S)
+    assert m, "lo sprite non ha piu' un z-index"
+    suo = int(m.group(1))
+    corpo = _rule(css, ".casa-workshop")
+    z = re.search(r"z-index: (\d+)", corpo)
+    assert z and int(z.group(1)) > suo, (
+        f"le schede stanno a {z.group(1) if z else 'nessuno'} e lei a {suo}: le finisce sopra"
+    )
+
+
+def test_a_card_that_has_to_cover_her_is_not_see_through() -> None:
+    """`--overlay` e' semi-trasparente: con lei dietro, la scheda dell'officina
+    la lasciava vedere **attraverso** — «osserva, regola, ripara» letto sopra la
+    sua faccia. Una scheda che deve coprire dev'essere opaca."""
+    css = CSS.read_text(encoding="utf-8")
+    for selettore in (".casa-workshop", ".casa-rows", ".casa-block"):
+        corpo = _rule(css, selettore)
+        sfondo = re.search(r"\n  background: ([^;]+);", corpo)
+        assert sfondo, f"{selettore} non dichiara piu' uno sfondo"
+        assert "--overlay" not in sfondo.group(1), (
+            f"{selettore} e' semi-trasparente: lei si vede attraverso"
+        )

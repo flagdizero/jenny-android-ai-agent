@@ -1275,14 +1275,18 @@ body.casa {
   padding: 0 14px;
   border: 1px solid var(--border-strong);
   border-radius: 14px;
-  background: var(--overlay);
+  /* `--surface` e non `--overlay`: quello e' semi-trasparente, e con lei
+     dietro la scheda la si vedeva **attraverso** — «osserva, regola, ripara»
+     letto sopra la sua faccia. Una scheda che deve coprire dev'essere opaca,
+     e le altre di questa pagina lo sono gia'. */
+  background: var(--surface);
   color: var(--text);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.casa-workshop:active { background: var(--surface); }
+.casa-workshop:active { background: var(--overlay); }
 .casa-workshop > .ti-tool { flex: none; color: var(--accent); font-size: 20px; }
 
 .casa-workshop-text {
@@ -1320,6 +1324,22 @@ body.casa {
    tavola ne disegna quattro perche' quattro ci stanno. Scorrere e' il modo in
    cui uno schermo basso dice «ce n'e' altro» senza rubare altezza alla
    pagina. */
+
+/* Le schede delle due stanze di impostazioni passano **davanti** a lei.
+   Sono opache, e senza questo a taglia grande le si siede sopra: la nota
+   sotto la casella finiva dietro la sua testa (visto col rig, 19/09/2026).
+   Cosi' invece fa capolino da dietro, che e' poi come la disegna la tavola.
+
+   `position: relative` sulle schede e non sul contenitore che scorre, e la
+   differenza e' il tocco: un contenitore davanti prenderebbe anche le
+   pressioni sopra di lei — comprese quelle sulla sua parte scoperta, che e'
+   il modo in cui la si mette via. Davanti c'e' solo cio' che e' opaco. */
+.casa-block,
+.casa-rows,
+.casa-workshop {
+  position: relative;
+  z-index: 6;
+}
 
 .casa-block {
   flex: none;
@@ -1370,7 +1390,12 @@ body.casa {
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  width: 56px;
+  /* 64 e non 56: «Synthwave» e' il nome piu' lungo che resta dopo aver tolto
+     «Jenny», e a 56 px sul telefono si leggeva «Synthwa…» — misurato sul Titan
+     2, non sul rig, dove il font rendeva piu' stretto. Sette pastiglie da 64
+     con dodici di aria stanno in 520 px, dentro i 554 che restano a schermo:
+     la striscia resta tutta visibile senza scorrere. */
+  width: 64px;
   padding: 0;
   border: none;
   background: none;
@@ -1506,6 +1531,9 @@ body.casa {
 /* La nota sotto una scheda. `is-warn` e' quando Android ha detto di no: il
    colore c'e' perche' quella frase e' una cosa da fare, non una descrizione. */
 .casa-block-note[hidden] { display: none; }
+/* Dentro una scheda di righe la nota non ha bisogno del margine di suo: il
+   fianco glielo da' gia' la scheda. */
+.casa-rows .casa-block-note { padding: 0 0 8px; }
 .casa-block-note.is-warn { color: var(--error); }
 
 
