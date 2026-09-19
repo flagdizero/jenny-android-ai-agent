@@ -29,6 +29,25 @@ const D3_SRC = '/html-mobile/assets/vendor/d3@7/d3.min.js';
 const FIT_PADDING = 40;
 const FIT_MAX_SCALE = 1.6;
 
+/* Quante pagine portano il nome scritto, e quanto lungo.
+ *
+ *  Misurato sul Titan con un quaderno vero da 31 pagine: scrivendoli tutti, e
+ *  interi, le etichette si sovrappongono fino a diventare una macchia — e i
+ *  titoli di una wiki sono lunghi («Coltivazione-Monstera-Roma — Sostegno,
+ *  fertilizzazione, crescita»). Su uno schermo da 566 px non e' una
+ *  regolazione fine: e' che oltre una decina di nomi non ce ne sta un
+ *  undicesimo.
+ *
+ *  Quali: **i nodi piu' collegati**, che e' l'unica domanda a cui una mappa
+ *  risponde meglio di un elenco — dove si annoda il quaderno. Gli altri
+ *  restano pallini, e per sapere come si chiamano c'e' la linguetta accanto,
+ *  che li elenca tutti e li cerca. */
+const MAX_LABELS = 10;
+const LABEL_CHARS = 22;
+/* Sotto questa soglia si scrivono tutti: dieci su undici sarebbe una scelta
+   che non si capisce, e undici nomi ci stanno. */
+const LABEL_ALL_UNDER = 13;
+
 /* Il raggio dice quanti collegamenti ha una pagina. E' l'unico numero che la
    casa mostra, e lo mostra senza scriverlo: un pallino piu' grosso e' un posto
    dove il quaderno si annoda. */
@@ -56,6 +75,27 @@ export function toSimulation(data) {
     .filter((e) => known.has(e.source) && known.has(e.target))
     .map((e) => ({ source: e.source, target: e.target }));
   return { nodes, links };
+}
+
+/** Il nome accorciato: un titolo di wiki e' spesso una frase. */
+export function shortLabel(text) {
+  const t = String(text || '');
+  return t.length <= LABEL_CHARS ? t : `${t.slice(0, LABEL_CHARS - 1).trimEnd()}…`;
+}
+
+/** Gli id delle pagine che portano il nome scritto: le piu' collegate.
+ *
+ *  A parita' di collegamenti decide il nome, perche' l'insieme deve essere lo
+ *  stesso a ogni apertura: una mappa che cambia le etichette fra due sguardi
+ *  sembra rotta anche quando disegna gli stessi nodi.
+ */
+export function labelledNodes(nodes) {
+  const all = nodes || [];
+  if (all.length < LABEL_ALL_UNDER) return new Set(all.map((n) => n.id));
+  const ordinati = [...all].sort(
+    (a, b) => (b.degree || 0) - (a.degree || 0) || String(a.label).localeCompare(String(b.label)),
+  );
+  return new Set(ordinati.slice(0, MAX_LABELS).map((n) => n.id));
 }
 
 export class CasaMap {
@@ -137,17 +177,20 @@ export class CasaMap {
       .attr('class', (d) => `casa-map-node casa-group-${d.group}`)
       .on('click', (_e, d) => this._onOpenPage?.(d.path, d.label));
 
-    /* Il nome sotto il pallino. Niente `pointer-events`: il bersaglio e' il
-       pallino, e un'etichetta che intercetta il tocco fa mancare la pagina
-       accanto. */
+    /* Il nome sotto il pallino, e solo per i nodi che ne portano uno. Niente
+       `pointer-events`: il bersaglio e' il pallino, e un'etichetta che
+       intercetta il tocco fa mancare la pagina accanto. */
+    const conNome = labelledNodes(nodes);
     const name = root.append('g').attr('class', 'casa-map-labels')
-      .selectAll('text').data(nodes).join('text')
-      .text((d) => d.label)
+      .selectAll('text').data(nodes.filter((d) => conNome.has(d.id))).join('text')
+      .text((d) => shortLabel(d.label))
       .attr('dy', (d) => radiusOf(d.degree) + 10);
 
     this._sim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d) => d.id).distance(58).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-120).distanceMax(320))
+      /* Misurati su un quaderno vero da 31 pagine: con 58 e -120 i nodi si
+         impilavano al centro in una matassa, e nemmeno lo zoom la apriva. */
+      .force('link', d3.forceLink(links).id((d) => d.id).distance(72).strength(0.35))
+      .force('charge', d3.forceManyBody().strength(-230).distanceMax(400))
       .force('center', d3.forceCenter(w / 2, h / 2).strength(0.05))
       /* Le pagine senza collegamenti sono tante — in un quaderno appena
          cominciato sono quasi tutte — e la repulsione le spinge via senza che
@@ -157,7 +200,7 @@ export class CasaMap {
          nella stessa pagina senza appiattire il disegno. */
       .force('x', d3.forceX(w / 2).strength(0.06))
       .force('y', d3.forceY(h / 2).strength(0.06))
-      .force('collision', d3.forceCollide().radius((d) => radiusOf(d.degree) + 12))
+      .force('collision', d3.forceCollide().radius((d) => radiusOf(d.degree) + 14))
       .on('tick', () => {
         line
           .attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y)

@@ -334,3 +334,16 @@ def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> Non
         "questi si nascondono con `hidden` ma hanno un `display` che lo "
         f"scavalca, e resteranno a schermo: {mancanti}"
     )
+
+
+def test_the_note_sits_above_the_list_and_not_under_it() -> None:
+    """L'elenco e' `flex: 1`: da vuoto si prende tutta l'altezza.
+
+    Con la nota dopo, «nessuna pagina con queste parole» finiva appiccicata al
+    bordo inferiore — visto sul telefono — dove sembra un piede di pagina e non
+    la risposta alla ricerca appena fatta.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    nota = html.index('id="casa-pages-note"')
+    elenco = html.index('id="casa-page-list"')
+    assert nota < elenco, "la nota e' tornata sotto l'elenco"

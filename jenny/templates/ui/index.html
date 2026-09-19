@@ -150,6 +150,12 @@
              autocomplete="off" autocapitalize="none" spellcheck="false">
     </label>
 
+    <!-- La nota sta **prima** dell'elenco: l'elenco e' `flex: 1`, quindi da
+         vuoto si prende tutta l'altezza e spingerebbe «nessuna pagina con
+         queste parole» sul bordo inferiore, dove sembra un piede di pagina
+         invece che la risposta alla ricerca appena fatta. -->
+    <div class="casa-pages-note" id="casa-pages-note" hidden></div>
+
     <div class="casa-page-list" id="casa-page-list" role="tabpanel"
          aria-labelledby="casa-tab-list"></div>
 
@@ -158,8 +164,6 @@
       <svg class="casa-map-svg" id="casa-map-svg" aria-hidden="true"></svg>
       <div class="casa-map-note" id="casa-map-note" hidden></div>
     </div>
-
-    <div class="casa-pages-note" id="casa-pages-note" hidden></div>
   </section>
 
   <!-- ── La terza stanza: una pagina ──────────────────────────────────────
