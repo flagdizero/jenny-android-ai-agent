@@ -204,11 +204,61 @@ documentato in testa a `casa-app.js` come la superficie che Kotlin chiama —
 
 ---
 
-## La passata dal bordo basso: perché costa meno di quanto sembri
+## La passata verso l'alto: l'ostacolo non è Android, è la casa
+
+> **Correzione del 20/09/2026.** In chat avevo detto che la passata dal bordo
+> basso «non si può prendere, né in Kotlin né in JavaScript». **È sbagliato**, e
+> la domanda che l'ha smontata è quella giusta: *i launcher normali ce l'hanno
+> tutti, come fanno?*
+>
+> Fanno che Android si prende solo una **striscia sottile** all'ultimo bordo, e
+> tutto il resto dello schermo resta dell'app. Una passata che comincia sopra
+> quella striscia arriva all'app come un tocco qualunque. Quel che si chiama
+> «swipe up dal basso» non parte mai davvero dall'ultimo pixel.
+>
+> E funziona da loro per una ragione che **noi non abbiamo**: la home di un
+> launcher è una griglia di icone che *non scorre in verticale*, quindi una
+> passata verticale lì non vuol dire nient'altro. La nostra home è una
+> conversazione che scorre: lì la stessa passata significa già «scorri».
+>
+> **L'ostacolo quindi non è una regola di Android: è il nostro layout.** E si
+> aggira scegliendo *dove* comincia il gesto, non rinunciandoci.
+
+### Le due superfici ferme della casa
+
+1. **La barra del composer** (~130 px, in fondo): non scorre, sta sopra la
+   striscia di sistema, e una passata in su da lì *è* «swipe up dal basso» per
+   chi la fa. L'opzione solida.
+2. **La conversazione quando è già in fondo**: la casa apre sempre in fondo al
+   filo, e lì una passata in su non ha più niente da scorrere — oggi non fa
+   nulla. Più elegante, più da launcher, più facile che scatti per sbaglio.
+
+Si possono tenere **entrambe**: più punti di partenza, stesso gesto, che è poi
+quel che fanno i launcher veri.
+
+### Quel che il Titan 2 non dice
+
+Misurato il 20/09/2026 su `dumpsys window displays`: il dispositivo dichiara
+`statusBars`, `mandatorySystemGestures` e `tappableElement` **solo in alto**
+(60 px), più l'`ime` in basso quando la tastiera è su. **Nessuna sorgente di
+inset in basso**, benché `navigation_mode = 2`.
+
+Conseguenza pratica: `getBottomGestureInset()` qui torna **0**, e il meccanismo
+che l'officina usa per «stare fuori dalla zona pericolosa» non ha niente su cui
+lavorare. La shell di Unihertz riconosce la passata senza dichiarare la fascia,
+quindi l'altezza va **assunta e tarata con un dito vero** — chiude in negativo
+la §7.2 del handover, aperta dal 31/08/2026.
+
+E i gesti iniettati con `adb shell input swipe` **non riproducono il problema**:
+provati da y=1430, 1400, 1355, 1300 e 1200, il fuoco è sempre rimasto su Jenny,
+mentre col dito la passata apre i Recenti. Su questo l'unico strumento è la
+persona.
+
+### Il contesto originale
 
 Il Titan 2 è 1440×1440 con `navigation_mode = 2` (gesture attiva, misurato in
-`apps-drawer-handover.md`). La passata verso l'alto dal bordo basso **è** il
-gesto di home del sistema: le due cose si contendono gli stessi pixel.
+`apps-drawer-handover.md`). La passata verso l'alto dall'**ultima striscia** è
+il gesto di sistema: lì, e solo lì, le due cose si contendono gli stessi pixel.
 
 **Ma qui c'è un'attenuante che altrove non ci sarebbe, ed è decisiva.** Jenny
 **è** il launcher. Quando la passata scappa al sistema, il sistema consegna
