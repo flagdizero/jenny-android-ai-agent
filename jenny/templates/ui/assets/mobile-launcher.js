@@ -226,11 +226,7 @@ export class LauncherController {
       this._applyStaticTranslations();
       this._render();
     });
-    /* E una volta subito: `i18n.load` è asincrona, quindi al boot le chiavi
-       potrebbero non esserci ancora — ma il segnaposto italiano del markup sì,
-       e quello va coperto comunque. Se le traduzioni arrivano dopo,
-       `onLocaleChange` ripassa di qui. */
-    this._applyStaticTranslations();
+
 
     this._setupDrag();
     this._setupGeometry();
@@ -487,6 +483,13 @@ export class LauncherController {
     if (!this.sheet || this._open) return;
     this._open = true;
     this._lastFocus = document.activeElement;
+    /* Le stringhe del markup si riscrivono **qui**, non nel costruttore, e per
+       la stessa ragione per cui il primo disegno è qui: al boot `i18n.load` non
+       è ancora tornata, e `i18n.t()` restituisce la chiave. Provato a metterle
+       nel costruttore il 20/09/2026, e sul telefono il campo diceva
+       «launcher.searchPlaceholder» — cioè peggio del segnaposto italiano da cui
+       si scappava, e su una schermata che l'utente guarda davvero. */
+    this._applyStaticTranslations();
     /* Ogni apertura riparte dal campo vuoto. Ritrovare la query di ieri
        vorrebbe dire aprire il cassetto su tre voci su settanta senza aver
        chiesto niente — e il costo di ricominciare è una parola, mentre il costo

@@ -846,3 +846,41 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
         f"queste chiavi nessuno le scrive, quindi a schermo resta il segnaposto "
         f"del markup: {orfane}"
     )
+
+def test_the_static_strings_are_written_when_the_sheet_opens_not_at_boot() -> None:
+    """**Il difetto che ho fatto io correggendo il difetto di prima.**
+
+    `i18n.load()` è asincrona. Nel costruttore del cassetto — che gira al boot,
+    con gli altri pezzi permanenti del guscio — le traduzioni non sono ancora
+    arrivate e `i18n.t('x')` restituisce `'x'`. Ci avevo messo
+    `_applyStaticTranslations()` il 20/09/2026, e sul telefono il campo di
+    ricerca diceva **«launcher.searchPlaceholder»**: peggio del segnaposto
+    italiano da cui si scappava, e su una schermata che si guarda davvero.
+
+    Il file lo diceva già, due righe sopra, a proposito del primo disegno:
+    «al boot le traduzioni non sono ancora arrivate e disegnare adesso vorrebbe
+    dire scrivere le chiavi grezze». La regola vale per tutto ciò che legge
+    `i18n.t()`, non solo per la lista.
+
+    Quindi: si scrive all'apertura, quando le traduzioni ci sono di sicuro, e a
+    ogni cambio di lingua. Mai nel costruttore.
+    """
+    js = _src("mobile-launcher.js")
+
+    # La chiamata *diretta* nel costruttore e' quella sbagliata. Dentro il
+    # callback di `onLocaleChange` ci sta di diritto — gira dopo — e si
+    # distinguono dall'indentazione: quattro spazi il corpo del costruttore,
+    # sei dentro la lambda. I commenti si tolgono prima: il costruttore nomina
+    # il metodo per spiegarsi, e la spiegazione non e' una chiamata.
+    costruttore = _senza_commenti_js(_method(js, "constructor"))
+    assert "\n    this._applyStaticTranslations();" not in costruttore, (
+        "nel costruttore i18n non ha ancora caricato: scriverebbe le chiavi grezze"
+    )
+
+    assert "_applyStaticTranslations();" in _method(js, "open"), (
+        "senza la chiamata in open() il markup resta nella lingua in cui è scritto"
+    )
+
+    # E al cambio di lingua, altrimenti cambiarla lascia indietro questi nodi.
+    dopo = js[js.index("i18n.onLocaleChange("):]
+    assert "_applyStaticTranslations()" in dopo[:400]
