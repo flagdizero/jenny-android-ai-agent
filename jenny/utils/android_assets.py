@@ -519,6 +519,40 @@ def _write_bytes_force(target: Path, data: bytes) -> None:
     target.write_bytes(data)
 
 
+def _already_identical(target: Path, data: bytes) -> bool:
+    """*target* contiene gia' esattamente *data*?
+
+    Serve a non riscrivere un file che non e' cambiato, ed e' un risparmio piu'
+    grosso di quanto sembri. I prompt di sistema, la UI e le skill si estraggono
+    **senza** ``skip_existing`` di proposito — e' l'unico modo in cui la
+    correzione di un prompt arriva su un telefono gia' installato (v.
+    ``sync_workspace_templates``) — ma "riscrivere sempre" e "riscrivere quando
+    e' cambiato" mantengono la stessa promessa: il byte diverso atterra in tutti
+    e due i casi. La differenza e' solo in quante scritture su flash costa un
+    avvio in cui non e' cambiato niente, cioe' **tutti** gli avvii tranne quello
+    dopo un aggiornamento.
+
+    Misurato sul Titan 2 il 20/09/2026: 272 file riscritti per passata, e su
+    Android le passate sono due (``android_entry`` e ``runtime/container``, due
+    entry point che non sapevano l'uno dell'altro) — 544 scritture a ogni
+    accensione per lasciare il disco come l'avevano trovato.
+
+    La taglia si guarda per prima perche' risponde da sola nel caso che conta —
+    un file cambiato di solito cambia anche di lunghezza — e costa una ``stat``
+    invece di una lettura intera.
+
+    Qualunque guaio in lettura (file assente, permessi, un symlink rotto)
+    risponde "no": non sapere vuol dire scrivere, che e' il comportamento di
+    prima e non puo' peggiorare niente.
+    """
+    try:
+        if target.stat().st_size != len(data):
+            return False
+        return target.read_bytes() == data
+    except OSError:
+        return False
+
+
 def extract_package_dir(
     package: str,
     dest: Path,
@@ -566,6 +600,13 @@ def extract_package_dir(
             continue
         data = read_asset(package, rel_path)
         if data is not None:
+            # Gia' identico: niente da scrivere. Il conteggio diventa cosi'
+            # "quanti file sono **cambiati**" invece di "quanti ne ho riscritti
+            # comunque" — che e' anche la domanda a cui quel log serviva
+            # rispondere (v. l'intestazione di tests/utils/test_template_refresh.py:
+            # «tre prompt modificati e uno aggiunto, il log diceva Extracted 1»).
+            if _already_identical(target, data):
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             _write_bytes_force(target, data)
             count += 1

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import stat
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -567,3 +568,112 @@ def test_the_retired_digest_registry_has_exactly_one_definition() -> None:
                 f"il digest ritirato di {name} è scritto in {holders}: "
                 "la definizione deve restare una sola"
             )
+
+
+# -- la quarta politica: quel che non è cambiato non si riscrive -------------
+#
+# Le tre politiche qui sopra dicono *cosa* estrarre. Questa dice *quando* farlo
+# costare qualcosa, e non le contraddice: un byte diverso atterra comunque.
+#
+# Misurato sul Titan 2 il 20/09/2026: ogni passata riscriveva 272 file, e su
+# Android le passate sono due — `android_entry` e `runtime/container` sono due
+# entry point che non sapevano l'uno dell'altro, e la ripetizione era invisibile
+# nel log perché i due chiamanti nominavano la stessa cartella in due modi
+# (`/data/user/0/<pkg>` e `/data/data/<pkg>`). 544 scritture su flash a ogni
+# accensione per lasciare il disco identico.
+
+
+def test_a_second_identical_pass_writes_nothing(tmp_path: Path) -> None:
+    """La passata che non ha niente da fare non deve toccare il disco.
+
+    Si guarda l'``mtime`` e non il conteggio: il conteggio è quel che la
+    funzione *dice*, l'``mtime`` è quel che ha *fatto*.
+    """
+    dest = tmp_path / "ws"
+    primo = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert primo > 0, "la prima passata deve estrarre davvero"
+
+    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    prima = campione.stat().st_mtime_ns
+    # Un mtime a grana grossa renderebbe il confronto cieco: si sposta indietro
+    # di un secondo, così un'eventuale riscrittura si vede comunque.
+    os.utime(campione, ns=(prima - 1_000_000_000, prima - 1_000_000_000))
+    segnato = campione.stat().st_mtime_ns
+
+    secondo = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert secondo == 0, f"la seconda passata ha riscritto {secondo} file identici"
+    assert campione.stat().st_mtime_ns == segnato, "il file è stato riscritto uguale"
+
+
+def test_a_changed_file_still_lands(tmp_path: Path) -> None:
+    """**La casella che vale l'ottimizzazione.**
+
+    È la promessa che il salto non deve rompere, ed è la ragione per cui questi
+    file si estraggono senza ``skip_existing``: la correzione di un prompt deve
+    arrivare su un telefono già installato. Se il confronto fosse sbagliato —
+    per esempio se guardasse solo la taglia — un byte cambiato a lunghezza
+    invariata resterebbe fermo per sempre, e nessuno se ne accorgerebbe.
+    """
+    dest = tmp_path / "ws"
+    extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    buono = campione.read_bytes()
+
+    # Stessa lunghezza, un byte diverso: il caso che una `stat` non vede.
+    guasto = bytearray(buono)
+    guasto[0] = (guasto[0] + 1) % 256
+    campione.write_bytes(bytes(guasto))
+
+    scritti = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert scritti == 1, f"il file corrotto doveva essere riscritto, scritti={scritti}"
+    assert campione.read_bytes() == buono, "il contenuto del pacchetto deve aver vinto"
+
+
+def test_a_truncated_file_is_rewritten(tmp_path: Path) -> None:
+    """Il caso che la taglia prende da sola, e che deve restare preso."""
+    dest = tmp_path / "ws"
+    extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    buono = campione.read_bytes()
+    campione.write_bytes(buono[: len(buono) // 2])
+
+    assert extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES) == 1
+    assert campione.read_bytes() == buono
+
+
+def test_an_unreadable_file_is_rewritten_not_skipped(tmp_path: Path) -> None:
+    """Non sapere vuol dire scrivere.
+
+    Un confronto che non si può fare non deve diventare un "va bene così": è il
+    modo in cui un file danneggiato resterebbe danneggiato. ``_write_bytes_force``
+    esiste già per sopravvivere al file reso read-only, e questo lo esercita.
+    """
+    dest = tmp_path / "ws"
+    extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    buono = campione.read_bytes()
+    campione.write_bytes(b"rotto")
+    campione.chmod(0o000)
+    try:
+        scritti = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    finally:
+        with suppress(OSError):
+            campione.chmod(0o644)
+    assert scritti == 1, "un file illeggibile va riscritto, non saltato"
+    assert campione.read_bytes() == buono
+
+
+def test_both_startup_paths_name_the_workspace_the_same_way() -> None:
+    """I due entry point devono chiedere la stessa cartella con lo stesso nome.
+
+    Non è pedanteria: su Android la cartella dati risponde a due nomi, e finché
+    ``android_entry`` passava la sua variabile locale invece del valore
+    canonico, nel log del boot le due passate sembravano **due destinazioni**
+    invece che una ripetizione. È ciò che ha tenuto nascosto il doppio lavoro.
+    """
+    entry = (
+        Path(__file__).resolve().parents[2] / "jenny" / "android_entry.py"
+    ).read_text(encoding="utf-8")
+    assert "sync_workspace_templates(get_workspace_path())" in entry, (
+        "android_entry deve passare il percorso canonico, non la sua variabile locale"
+    )

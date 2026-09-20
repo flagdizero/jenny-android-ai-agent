@@ -172,9 +172,21 @@ def run_gateway(
     # Set global workspace dir for path resolution
     set_workspace_dir(workspace_dir)
 
-    # Sync templates, skills, UI assets from package to writable storage
+    # Sync templates, skills, UI assets from package to writable storage.
+    #
+    # Il percorso si riprende da ``get_workspace_path()`` e non dalla variabile
+    # locale qui sopra, che è la stessa cartella scritta in un altro modo: su
+    # Android la cartella dati risponde a due nomi, Java passa
+    # ``/data/user/0/<pkg>`` e ``set_workspace_dir`` lo risolve — apposta — in
+    # ``/data/data/<pkg>`` (v. il commento lì, 26/08). Usando la locale, questa
+    # sync e quella di ``runtime/container`` scrivono nello stesso posto
+    # **dicendo due nomi diversi**, e nel log del boot le due passate sembrano
+    # due destinazioni invece che una ripetizione. È così che la ripetizione è
+    # rimasta invisibile fino al 20/09/2026.
+    from jenny.config.paths import get_workspace_path
+
     try:
-        sync_workspace_templates(workspace_path)
+        sync_workspace_templates(get_workspace_path())
     except Exception:
         logger.opt(exception=True).warning(
             "Failed to extract package assets to {} — gateway may lack WebUI or prompts",
