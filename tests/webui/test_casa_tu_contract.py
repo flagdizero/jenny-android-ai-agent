@@ -590,33 +590,36 @@ def test_the_updates_row_carries_the_version() -> None:
     assert "onUpdates: () => this.openUpdates()," in _app()
 
 
-def test_the_house_and_the_workshop_share_one_update_machine() -> None:
-    """Il punto dell'estrazione. Due copie di una macchina a stati non
-    sbagliano subito: sbagliano dopo, quando una impara qualcosa che l'altra
-    non sa — e i due casi che ingannano (la connessione che cade *perche'*
-    l'app si sta riavviando, il rifiuto che non deve sporcare la fase) sono
-    esattamente il genere di cosa che si impara una volta sola."""
+def test_the_update_round_has_exactly_one_view_now() -> None:
+    """L'estrazione serviva a non avere due copie della stessa macchina. Il
+    giro delle tavole ha poi fatto il passo dopo: **una vista sola**.
+
+    Il controllo, il riquadro, l'installazione e la diagnostica del meccanismo
+    sono in casa, da «Aggiornamenti». In officina resta il numero di versione,
+    che e' un dato e non un giro. Quindi il flusso condiviso ha un solo
+    consumatore — ed e' giusto cosi': era condiviso per non essere ricopiato,
+    non per essere usato due volte.
+    """
     flusso = (ASSETS / "shared" / "update-flow.js").read_text(encoding="utf-8")
     casa = (ASSETS / "casa-updates.js").read_text(encoding="utf-8")
     officina = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
-    for vista, sorgente in (("la casa", casa), ("l'officina", officina)):
-        assert "update-flow.js" in sorgente, f"{vista} non usa piu' il flusso condiviso"
+    assert "update-flow.js" in casa, "la casa non usa piu' il flusso condiviso"
+    assert "update-flow.js" not in officina, (
+        "l'officina ha ripreso il giro degli aggiornamenti: e' in casa"
+    )
+    for pezzo in ("btn-update-install", "btn-update-check", "_renderUpdateCard"):
+        assert pezzo not in officina, f"«{pezzo}» e' tornato in officina"
 
-    # Le rotte si chiamano da un posto solo: chi le chiama, le implementa.
+    # Le rotte si chiamano da un posto solo.
     for vista, sorgente in (("la casa", casa), ("l'officina", officina)):
         rotte = re.findall(r"/api/updates/\w+", sorgente)
         assert not rotte, f"{vista} parla da sola con {sorted(set(rotte))}"
     assert re.findall(r"/api/updates/\w+", flusso), "il flusso non chiama piu' nessuna rotta"
 
-    # E le fasi hanno una tabella sola.
-    assert "phaseKey" in casa and "phaseKey" in officina
+    # E la tabella delle fasi resta una.
     assert flusso.count("phaseDownloading") == 1
-    for sorgente in (casa, officina):
-        assert "phaseDownloading" not in sorgente, "una seconda tabella delle fasi"
-
-
-# ── «Backup» ────────────────────────────────────────────────────────────────
+    assert "phaseDownloading" not in casa and "phaseDownloading" not in officina
 
 
 def test_the_backup_row_carries_the_date_that_did_not_exist() -> None:

@@ -202,8 +202,41 @@ con il puntatore a chi tiene la promessa adesso.
 
 Sei mutazioni rosse.
 
-**Passo 4 — Console.** La testata per turno e la barra in fondo. La
-fisarmonica adesso è vuota: `view-settings` sparisce.
+**Passo 4 — Console. ⚠️ fatto a metà, e la metà che manca è una misura.**
+
+Quel che è atterrato: **il giro degli aggiornamenti se n'è andato
+dall'officina.** Controllo, riquadro, installazione, diagnostica del
+meccanismo, e le due stringhe della pastiglia: sono in casa, da
+«Aggiornamenti». Qui resta il numero di versione, che è un dato e non un giro —
+e il flusso condiviso ha adesso **un consumatore solo**, che è giusto: era
+condiviso per non essere ricopiato, non per essere usato due volte. Con lui se
+n'è andato **«Riesegui la configurazione»**, per la ragione già misurata:
+`save_onboarding` sostituisce l'elenco dei provider invece di aggiungere.
+
+**Quel che non si può fare come scritto: la testata per turno e la barra.**
+Quei numeri non arrivano al client. Misurato:
+
+* `turn_end` porta `latency_ms` e basta — nessun conto di token;
+* `token_usage_payload` torna totali (tutto, 30 g, 365 g), picco, serie,
+  giorni attivi, richieste: **nessun per-turno e nessun «oggi»**;
+* il contesto stimato (`context_tokens_estimate`) esiste solo dentro
+  `build_status_content`, cioè dentro `/status`, e nessuna rotta lo espone.
+
+Quindi la barra vuole un campo nuovo sul filo (`turn_end` con i token del
+turno) o una rotta che esponga il contesto. È un cambio di protocollo, piccolo
+ma vero, e **non è un raggruppamento**: va deciso a parte. Era una mia
+assunzione sbagliata quando ho scritto questo piano — «leggono
+`/api/token-usage` e il runtime» — e il codice dice altro.
+
+**E un difetto vero, trovato qui e già sul telefono.** L'estrazione del passo
+di ieri (`e0b61ea`) si era portata via `_updateProgressHtml` e `_paintUpdate`
+lasciando in piedi le due righe che li chiamavano: file valido, `node --check`
+verde, suite verde, e un `TypeError` sul telefono al primo tocco su «Controlla
+ora» in officina. Adesso quel codice non c'è più — e c'è un banco nuovo,
+`test_no_ghost_methods_contract.py`, che cerca i `this._x()` senza definizione
+in tutti i file della WebUI. **Contro la versione che è installata sul telefono
+fallisce**, nominando i due metodi: è la prova che non è una formalità scritta
+dopo il fatto.
 
 Ogni passo è installabile da solo.
 

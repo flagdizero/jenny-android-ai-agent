@@ -17,7 +17,6 @@ import {
   batteryExemptionNeeded,
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
-import { UpdateFlow, checkLines, phaseKey } from './shared/update-flow.js';
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
@@ -116,25 +115,6 @@ export class SettingsController {
        controller da solo — i banchi, e la schermata finche' il dock non e'
        passato a quattro voci. */
     this._cassetto = null;
-    /* L'aggiornamento dell'app: fasi, polling e i due casi che ingannano
-       stanno in `shared/update-flow.js`, che la casa usa con la stessa
-       macchina e una vista sua. Qui resta il disegno, e i tre ganci che
-       traducono «lo stato si è mosso» nel modo in cui questa pagina si
-       ridipinge. Lo stato vive lì e non nel DOM perché ogni salvataggio
-       riscrive la pagina intera, e un'installazione in corso non è una cosa
-       che possa sparire da sotto gli occhi. */
-    this.updates = new UpdateFlow({
-      generation: () => this._gen,
-      onToast: (testo, tipo) => showToast(testo, tipo),
-      onVersion: (version) => {
-        if (this.data && version) this.data.version = version;
-      },
-      /* `render()` quando c'è una versione nuova da annunciare, il solo
-         riquadro quando è un giro di polling: un render completo a ogni giro
-         ricostruirebbe tutta la pagina ogni secolo e mezzo. Li distingue chi
-         chiama, non il flusso. */
-      onChange: () => this._paintUpdate(),
-    });
     /* La posizione va letta *mentre* la vista è visibile: `switchMode` mette il
        display:none sulla view prima di chiamare `deactivate()`, e un
        contenitore senza box legge scrollTop 0 — salvare lì avrebbe riportato in
@@ -217,10 +197,6 @@ export class SettingsController {
       document.removeEventListener('visibilitychange', this._onPowerVisible);
       this._onPowerVisible = null;
     }
-    // Il polling dell'installazione: il guard di generazione già ferma la
-    // continuazione, ma il timer va spento comunque per non tenere sveglia una
-    // sezione che non è più a schermo.
-    this.updates.stop();
     /* L'apertura d'ufficio della sezione Programmazione vale una volta per
        apertura di schermata: senza questo azzeramento, chi la chiude a mano e
        torna dopo non la vedrebbe riaprirsi nemmeno con un guasto nuovo — e
@@ -1675,17 +1651,28 @@ export class SettingsController {
 
   // ── Sistema ────────────────────────────────────────────────────────
 
-  /* Diagnostica e opzioni da power user: versione, modalità avanzata,
-     statistiche di utilizzo token. */
+  /* Diagnostica e opzioni da power user.
+   *
+   * **Il giro degli aggiornamenti non c'e' piu'**: controllo, riquadro,
+   * installazione e diagnostica del meccanismo sono in casa, da
+   * «Aggiornamenti», dove sono arrivati col giro di «Tu e Jenny». Qui resta il
+   * numero di versione, che e' un dato e non un giro.
+   *
+   * **E nemmeno «riesegui la configurazione»**: `save_onboarding` fa
+   * `config.providers.providers = [una]` — **sostituisce** l'elenco invece di
+   * aggiungere. In una schermata da operatore quel bottone puo' solo toglierti
+   * marche che hai configurato, e tutto cio' che il wizard imposta si fa
+   * meglio di qua (la marca col suo `+`, il modello dalla casa). Resta vivo
+   * dove serve: al primo avvio, quando non c'e' ancora niente da cancellare.
+   */
   _renderSystem(d) {
     const v = d.version || {};
     return `
       <div class="settings-field-row">
         <span class="settings-field-label">${i18n.t('settings.version')}</span>
-        <span class="settings-field-value">${escapeHtml(v.current || '—')}${this._renderUpdateBadge(v)}</span>
+        <span class="settings-field-value">${escapeHtml(v.current || '—')}</span>
       </div>
-      ${this._renderUpdateCard(v)}
-      ${this._renderUpdateCheck(v)}
+      <p class="settings-hint" style="margin:6px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.updatesLiveInCasa')}</p>
       <div class="settings-divider"></div>
       <div class="settings-field settings-toggle-row">
         <label class="settings-label">${i18n.t('settings.advancedMode')}</label>
@@ -1696,160 +1683,17 @@ export class SettingsController {
       </div>
       <p class="settings-hint" style="margin-top:6px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.advancedModeHint')}</p>
       <div class="settings-divider"></div>
-      ${this._renderRerunOnboarding()}
-      <div class="settings-divider"></div>
       ${this._renderOpenCasa()}
       <div class="settings-divider"></div>
       <div class="settings-subheading">${i18n.t('settings.tokenUsage')}</div>
       ${this._renderUsage(d)}`;
   }
 
-  /* ── Aggiornamento dell'app ──────────────────────────────────────────
-
-     Il backend calcola già tutto (`version.update_available` viene dallo stato
-     dell'updater, non da un giro di rete fatto qui): questa parte si limita a
-     dirlo e a offrire il bottone. Senza, una release nuova esisteva solo nei
-     log del job periodico. */
-
-  /* Pastiglia accanto al numero di versione. Un aggiornamento critico non è
-     "una versione nuova con più cose": è una fix che conviene installare
-     subito, e deve leggersi diversamente già da qui. */
-  _renderUpdateBadge(v) {
-    if (!v.update_available) return '';
-    const critical = !!v.critical;
-    const label = i18n.t(critical ? 'settings.update.badgeCritical' : 'settings.update.badge');
-    const icon = critical ? 'shield-exclamation' : 'arrow-up';
-    return ` <span class="update-badge${critical ? ' critical' : ''}"><i class="ti ti-${icon}"></i>${escapeHtml(label)}</span>`;
-  }
-
-  _renderUpdateCard(v) {
-    if (!v.update_available) return '';
-    const critical = !!v.critical;
-    const headline = i18n.t(
-      critical ? 'settings.update.availableCritical' : 'settings.update.available',
-      { version: v.latest || '' },
-    );
-    const summary = v.summary
-      ? `<div style="margin-top:4px;color:var(--text-muted)">${escapeHtml(v.summary)}</div>`
-      : '';
-    // Link normale: la WebView devia le navigazioni fuori dal gateway locale su
-    // una Custom Tab (v. _renderOemGuidance), aprirlo dentro la SPA la
-    // sostituirebbe senza ritorno.
-    const notes = v.notes_url
-      ? `<div style="margin-top:6px"><a href="${escapeHtml(v.notes_url)}" target="_blank" rel="noopener">${escapeHtml(i18n.t('settings.update.notes'))}</a></div>`
-      : '';
-    const busy = this.updates.busy;
-    return `
-      <div class="settings-notice${critical ? ' settings-notice-strong' : ''}">
-        <i class="ti ti-${critical ? 'shield-exclamation' : 'download'}"></i>
-        <div style="flex:1;min-width:0">
-          <div>${escapeHtml(headline)}</div>
-          ${summary}
-          ${notes}
-        </div>
-      </div>
-      <div id="update-progress">${this._updateProgressHtml()}</div>
-      <div class="onboarding-nav">
-        <button class="onboarding-btn ${critical ? 'onboarding-btn-primary' : 'onboarding-btn-secondary'}" id="btn-update-install" ${busy ? 'disabled' : ''}>
-          ${escapeHtml(i18n.t('settings.update.install'))}
-        </button>
-      </div>`;
-  }
-
-  /* ── Il controllo degli aggiornamenti, visto dall'utente ─────────────
-
-     Il riquadro sopra racconta un aggiornamento *trovato*. Questo racconta il
-     meccanismo che dovrebbe trovarlo, e c'è sempre — anche, soprattutto, quando
-     non c'è niente da installare: senza, un manifest irraggiungibile da mesi
-     mostra esattamente la stessa schermata di "sei aggiornato", e su un
-     telefono headless nessuno va a leggere i log per accorgersene. */
-
-  _renderUpdateCheck(v) {
-    const busy = this.updates.checking;
-    const label = i18n.t(busy ? 'settings.update.checking' : 'settings.update.checkNow');
-    return `
-      <div class="update-check" id="update-check">
-        ${this._updateCheckLinesHtml(v)}
-        <button class="settings-btn-add" id="btn-update-check" ${busy ? 'disabled' : ''}>
-          <i class="ti ti-refresh"></i> ${escapeHtml(label)}
-        </button>
-      </div>`;
-  }
-
-  /* Quando il controllo è riuscito l'ultima volta, e se il caso l'avviso che
-     non riesce più. Quali righe dire lo decide `checkLines` in
-     `shared/update-flow.js` — è la stessa domanda che si fa la casa, e la
-     risposta non può essere due — qui si traduce e si veste. */
-  _updateCheckLinesHtml(v) {
-    return checkLines(v).map((riga) => {
-      const classe = riga.warn ? 'update-check-line warn' : 'update-check-line';
-      return `<div class="${classe}">${escapeHtml(i18n.t(riga.key, riga.params))}</div>`;
-    }).join('');
-  }
-
-  /* Ridipinge solo questo blocco: come `_paintUpdate`, un render() completo
-     ricostruirebbe tutta la pagina per accendere l'etichetta di un bottone. Il
-     rewire è obbligatorio, `outerHTML` butta via il nodo con il suo listener. */
-  _paintUpdateCheck() {
-    const host = this.contentEl?.querySelector('#update-check');
-    if (!host) return;
-    host.outerHTML = this._renderUpdateCheck(this.data?.version || {});
-    this._wireBtn('btn-update-check', () => this._runUpdateCheck());
-  }
-
-  /* Il controllo manuale. La macchina sta nel flusso condiviso; qui restano
-     le due cose che sono di questa pagina: il bottone che si disabilita da
-     solo, e il `render()` completo quando arriva una versione nuova — il
-     riquadro dell'aggiornamento compare *sopra*, e ridipingere solo la riga
-     del controllo lo lascerebbe fuori. */
-  async _runUpdateCheck() {
-    this._paintUpdateCheck();
-    const payload = await this.updates.check();
-    this._paintUpdateCheck();
-    if (payload?.status === 'ok') this.render();
-  }
-
-  /* Chiave della riga di fase: la stessa tabella per le due viste. */
-  _updatePhaseKey(phase) {
-    return phaseKey(phase);
-  }
-
-  /* Strada permanente verso il wizard di configurazione. Finora l'onboarding
-     era raggiungibile solo al primo avvio, e solo perché il gateway rispondeva
-     `first_run: true`: chi voleva rifare la configurazione da capo — o chi al
-     boot ha incontrato un errore che ha lasciato indeterminato lo stato del
-     primo avvio — non aveva alcun modo di riaprirlo. La voce sta qui e non
-     accanto ai provider perché non è "cambia il modello": rifà tutto il giro. */
-  _renderRerunOnboarding() {
-    return `
-      <div class="settings-subheading">${i18n.t('settings.rerunOnboarding')}</div>
-      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.rerunOnboardingHint')}</p>
-      <button class="settings-btn-add" id="btn-rerun-onboarding"><i class="ti ti-rocket"></i> ${i18n.t('settings.rerunOnboardingAction')}</button>`;
-  }
-
-  /* La porta per la casa — l'altra interfaccia, quella che fa solo la
-     conversazione (v. `.agent/casa-plan.md`).
-
-     Sta qui, in fondo a Sistema, e non nel dock: il dock è la navigazione
-     *dentro* questa interfaccia, e la casa non è una sua schermata — è l'altro
-     documento. Passarci è un caricamento di pagina, e una voce del dock che
-     ricarica la pagina mentirebbe sul proprio costo.
-
-     `api.navigate` e non un href: il segreto di bootstrap vive solo nella
-     memoria di questa pagina e una navigazione secca lo perderebbe, lasciando
-     la casa a prendere 401 al primo `bootstrap()`. */
   _renderOpenCasa() {
     return `
       <div class="settings-subheading">${i18n.t('casa.backHome')}</div>
       <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('casa.backHomeHint')}</p>
       <button class="settings-btn-add" id="btn-open-casa"><i class="ti ti-home"></i> ${i18n.t('casa.backHome')}</button>`;
-  }
-
-  async _rerunOnboarding() {
-    if (!await confirmDialog(i18n.t('settings.rerunOnboardingConfirm'))) return;
-    const app = window.mobileApp;
-    if (!app) return;
-    app.openOnboarding();
   }
 
   _wireBackup() {
@@ -2416,19 +2260,8 @@ export class SettingsController {
     const advToggle = this.contentEl.querySelector('#advanced-mode-toggle');
     if (advToggle) advToggle.addEventListener('change', () => setAdvancedMode(advToggle.checked));
 
-    // Riesegui configurazione: strada permanente verso il wizard.
-    this._wireBtn('btn-rerun-onboarding', () => this._rerunOnboarding());
     this._wireBtn('btn-open-casa', () => api.navigate('/html-mobile/index.html'));
 
-    // Aggiornamento dell'app (il bottone c'è solo se il backend ne annuncia uno)
-    this._wireBtn('btn-update-install', () => this.updates.start());
-    // Il controllo manuale invece c'è sempre: è la diagnostica del meccanismo.
-    this._wireBtn('btn-update-check', () => this._runUpdateCheck());
-    /* Rientro nella sezione con un'installazione già avviata: va avanti per
-       conto suo, ma `deactivate()` aveva spento il polling. Senza riagganciarlo
-       il bottone resterebbe disabilitato e lo stato congelato all'ultima cosa
-       vista. Il timer nullo è la prova che il polling non è già in corso. */
-    this.updates.resume();
 
     // Mascotte: toggle visibilità (re-render per accendere/spegnere le
     // opzioni sotto) + scelta della taglia

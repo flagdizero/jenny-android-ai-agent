@@ -172,10 +172,6 @@
     "webSearch": "Web Search",
     "advancedMode": "Developer mode",
     "advancedModeHint": "Also shows what Jenny uses to work: system skills and internal files (memory, configuration) appear in the lists. Only useful for looking under the hood.",
-    "rerunOnboarding": "Re-run setup",
-    "rerunOnboardingHint": "Reopens the initial wizard: format, provider, API key and model. Your current settings stay in place until you save new ones.",
-    "rerunOnboardingAction": "Open the setup wizard",
-    "rerunOnboardingConfirm": "Reopen the setup wizard?",
     "personalization": "Personalization",
     "tools": "Tools",
     "memory": {
@@ -358,8 +354,6 @@
     "fetchMaxCharsPlaceholder": "1000 – 200000",
     "loading": "Loading...",
     "update": {
-      "badge": "New",
-      "badgeCritical": "Security",
       "available": "Version {version} is available.",
       "availableCritical": "Security update available: version {version}. Worth installing right away.",
       "notes": "What changed",
@@ -477,7 +471,8 @@
     "firstModelRequired": "To use it now, the first model is needed.",
     "useNow": "Use it now",
     "providerSavedAndActive": "Saved, and it answers now",
-    "providerSavedNotActive": "Brand saved, but not activated: {error}"
+    "providerSavedNotActive": "Brand saved, but not activated: {error}",
+    "updatesLiveInCasa": "Checking for and installing updates happens in the house, under «Updates»."
   },
   "common": {
     "loading": "Loading...",

@@ -172,10 +172,6 @@
     "webSearch": "Ricerca web",
     "advancedMode": "Modalità sviluppatore",
     "advancedModeHint": "Mostra anche quello che Jenny usa per lavorare: le skill di sistema e i file interni (memoria, configurazione) compaiono nelle liste. Serve solo per guardare sotto il cofano.",
-    "rerunOnboarding": "Riesegui configurazione",
-    "rerunOnboardingHint": "Riapre la procedura guidata iniziale: formato, provider, chiave API e modello. Le impostazioni attuali restano finché non ne salvi di nuove.",
-    "rerunOnboardingAction": "Apri la configurazione guidata",
-    "rerunOnboardingConfirm": "Riaprire la configurazione guidata?",
     "personalization": "Personalizzazione",
     "tools": "Strumenti",
     "memory": {
@@ -358,8 +354,6 @@
     "fetchMaxCharsPlaceholder": "1000 – 200000",
     "loading": "Caricamento...",
     "update": {
-      "badge": "Nuova",
-      "badgeCritical": "Sicurezza",
       "available": "È disponibile la versione {version}.",
       "availableCritical": "Aggiornamento di sicurezza disponibile: versione {version}. Conviene installarlo subito.",
       "notes": "Che cosa cambia",
@@ -477,7 +471,8 @@
     "firstModelRequired": "Per usarla adesso serve il primo modello.",
     "useNow": "Usala adesso",
     "providerSavedAndActive": "Salvata, e adesso risponde lei",
-    "providerSavedNotActive": "Marca salvata, ma non attivata: {error}"
+    "providerSavedNotActive": "Marca salvata, ma non attivata: {error}",
+    "updatesLiveInCasa": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti»."
   },
   "common": {
     "loading": "Caricamento...",

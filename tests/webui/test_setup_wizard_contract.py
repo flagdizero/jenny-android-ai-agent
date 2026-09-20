@@ -171,26 +171,31 @@ def test_every_completion_of_the_onboarding_releases_the_lock() -> None:
 # ── N25 · una strada permanente verso il wizard ──────────────────────────────
 
 
-def test_the_wizard_is_reachable_from_the_settings() -> None:
-    """Finora l'unica strada era il ``first_run`` del gateway al boot: una porta
-    che si apre da sé una volta sola e poi non c'è più."""
-    settings = SETTINGS_JS.read_text(encoding="utf-8")
-    assert "btn-rerun-onboarding" in settings
-    assert "this._wireBtn('btn-rerun-onboarding'" in settings, "il pulsante non è cablato"
-    rerun = _method(settings, "_rerunOnboarding")
-    assert "confirmDialog(i18n.t('settings.rerunOnboardingConfirm'))" in rerun, (
-        "rifare la configurazione non è un tap da subire per sbaglio"
-    )
-    assert "app.openOnboarding()" in rerun, (
-        "la sezione si apre dall'ingresso della shell, che mostra anche la voce del dock"
-    )
+def test_the_wizard_is_not_a_button_in_the_workshop() -> None:
+    """«Riesegui la configurazione» non c'e' piu', ed e' una decisione.
 
+    `save_onboarding` fa `config.providers.providers = [una]`: **sostituisce**
+    l'elenco invece di aggiungere. In una schermata da operatore quel bottone
+    puo' solo toglierti marche che hai configurato — e tutto cio' che il
+    wizard imposta si fa meglio altrove: la marca col suo «Aggiungi», il
+    modello dalla casa, il nome dalle impostazioni.
+
+    Il giro resta vivo dove serve e dove non puo' cancellare niente: al primo
+    avvio, quando il gateway risponde `first_run` e non c'e' ancora nessun
+    provider. L'ingresso della shell resta, perche' e' quello che il primo
+    avvio usa.
+    """
+    settings = SETTINGS_JS.read_text(encoding="utf-8")
+    assert "btn-rerun-onboarding" not in settings, (
+        "il bottone e' tornato: in officina puo' solo togliere marche"
+    )
+    assert "_rerunOnboarding" not in settings
+
+    # Ma la porta della shell c'e' ancora: e' quella del primo avvio.
     entry = _method(_app(), "openOnboarding")
     assert "navOnb.style.display = '';" in entry, (
         "senza la voce del dock la sezione resta a schermo senza un'ancora attiva"
     )
-    assert "this.switchMode('onboarding')" in entry
-    assert "markRerun()" in entry
 
 
 def test_the_reopened_wizard_can_be_left_with_the_back() -> None:
@@ -237,14 +242,20 @@ def test_an_unreadable_settings_call_is_not_read_as_configured() -> None:
     )
 
 
-def test_the_new_strings_exist_in_both_locales() -> None:
-    keys = [
-        "rerunOnboarding",
-        "rerunOnboardingHint",
-        "rerunOnboardingAction",
-        "rerunOnboardingConfirm",
-    ]
+def test_the_strings_of_the_button_went_with_the_button() -> None:
+    """Le quattro stringhe del «riesegui» non esistono piu', ed e' il punto.
+
+    Una stringa tradotta che nessuno usa non rompe niente oggi: sopravvive
+    alle riscritture e alla revisione dei testi, e la prima volta che qualcuno
+    la riusa si porta dietro un copy scritto per un'altra schermata. Toglierle
+    insieme al bottone e' la meta' del lavoro che si dimentica sempre.
+    """
+    orfane = ["rerunOnboarding", "rerunOnboardingHint",
+              "rerunOnboardingAction", "rerunOnboardingConfirm"]
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        for key in keys:
-            assert key in data["settings"], f"settings.{key} manca in {locale}.json"
+        rimaste = [k for k in orfane if k in data["settings"]]
+        assert not rimaste, (
+            f"{locale}.json tiene ancora le stringhe di un bottone che non "
+            f"c'e' piu': {rimaste}"
+        )
