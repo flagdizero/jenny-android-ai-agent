@@ -536,13 +536,20 @@ def test_the_svg_background_click_tolerates_a_missing_clear_focus() -> None:
     assert "svg.on('click', () => { this._clearFocus(); });" not in graph
 
 
-def test_the_open_model_catalog_is_a_screen() -> None:
-    """Il catalogo modelli aperto occupa la vista: ci si arriva da un pulsante e
-    lo si scorre. Senza handleBack, una pressione ne saltava due di schermate."""
+def test_settings_has_no_sub_screen_left_to_peel() -> None:
+    """Il catalogo modelli era un livello dentro le impostazioni: ci si
+    arrivava da un pulsante, lo si scorreva, e senza `handleBack` una
+    pressione ne saltava due di schermate.
+
+    Dal 20/09/2026 quel catalogo e' in casa, dove e' una **stanza** e non un
+    sotto-livello: la sua uscita la governa `BACK_TO` (v.
+    `test_casa_tu_contract.py`, «nessuna stanza senza uscita»). Qui dentro non
+    resta niente da sbucciare, e `handleBack` deve dirlo — un `true` di troppo
+    si mangerebbe una pressione senza chiudere niente.
+    """
     settings = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
     back = _method(settings, "handleBack")
-    assert "#model-catalog" in back
-    assert "this._toggleModelCatalog()" in back, (
-        "richiudere il catalogo passa dal suo toggle, non da un display scritto a mano"
+    assert "return false;" in back, "a niente da sbucciare, il back prosegue la catena"
+    assert "return true" not in back, (
+        "handleBack si tiene una pressione per un livello che non esiste piu'"
     )
-    assert "return false;" in back, "a catalogo chiuso il back deve proseguire la catena"

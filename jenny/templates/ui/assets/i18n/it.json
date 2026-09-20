@@ -468,7 +468,16 @@
       "disabledTitle": "Canale disattivato",
       "disabledPaired": "Il bot non risponde. Token e collegamento a {who} sono conservati: riaccendendo riprende da dove era, senza rifare il pairing.",
       "disabledUnpaired": "Il bot non risponde. Il token è conservato: riaccendendo non serve ripassare da BotFather."
-    }
+    },
+    "brands": "Le marche",
+    "modelLivesInCasa": "Quale modello risponde si sceglie in casa, da «Chi risponde»: un tocco su un modello salva modello e marca insieme. Qui si decide quali marche esistono.",
+    "firstModel": "Primo modello",
+    "firstModelPlaceholder": "es. deepseek-v4.1-flash",
+    "firstModelHint": "Una marca senza un modello che funziona non è una marca che c'è. Dopo lo cambi dalla casa.",
+    "firstModelRequired": "Per usarla adesso serve il primo modello.",
+    "useNow": "Usala adesso",
+    "providerSavedAndActive": "Salvata, e adesso risponde lei",
+    "providerSavedNotActive": "Marca salvata, ma non attivata: {error}"
   },
   "common": {
     "loading": "Caricamento...",

@@ -175,9 +175,32 @@ non li rifaccia, e che la casa ce li abbia davvero. Un banco che guardi solo il
 primo verso difende un buco invece di un confine — il giorno che sparissero
 dalla casa resterebbe verde.
 
-**Passo 3 — Cervello.** L'unica sezione che va **divisa**: da `models` il
-catalogo va via (è in casa), restano l'anagrafica e i parametri. Più il blocco
-batteria. Qui va anche il campo «primo modello» nel dialogo di aggiunta.
+**Passo 3 — Cervello. ✅ fatto il 20/09/2026.** L'unica sezione **divisa**.
+
+Il catalogo se n'è andato in casa: «Cambia modello», l'elenco per provider, il
+filtro, e i sei metodi che li servivano. Al loro posto una riga: *quale modello
+risponde si sceglie in casa; qui si decide quali marche esistono*. Resta
+l'anagrafica — formato, endpoint, CA bundle — e i tre parametri.
+
+E «Aggiungi una marca» adesso **finisce**: primo modello e «usala adesso»,
+acceso di suo. Senza, aggiungerne una vorrebbe dire uscire, andare in casa e
+sceglierne uno — una cosa sola in due posti, cioè il difetto che questo giro
+esiste per togliere. Le due scritture restano due, e in quest'ordine: se la
+prima fallisce la marca non c'è, e attivarla prima farebbe puntare
+`default_provider` a un provider che non esiste; se fallisce la seconda, la
+marca resta salvata e quel che si perde è l'attivazione, non cinque campi
+compilati.
+
+**Tre banchi guardavano il catalogo di qua**, e non si cancellano: si spostano
+a guardare il confine. Quello del tasto Indietro difendeva un sotto-livello che
+non esiste più — `handleBack` adesso deve tornare `false`, e un `true` di
+troppo si mangerebbe una pressione senza chiudere niente. Quello del ripristino
+dello scroll perde `_fillCatalogGroup` dall'elenco dei caricatori asincroni, ma
+il meccanismo resta perché SSH e gli snapshot atterrano allo stesso modo. Il
+terzo è diventato «il catalogo è migrato, e l'officina non deve riprenderselo»,
+con il puntatore a chi tiene la promessa adesso.
+
+Sei mutazioni rosse.
 
 **Passo 4 — Console.** La testata per turno e la barra in fondo. La
 fisarmonica adesso è vuota: `view-settings` sparisce.

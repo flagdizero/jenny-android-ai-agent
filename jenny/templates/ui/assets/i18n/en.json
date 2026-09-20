@@ -468,7 +468,16 @@
       "disabledTitle": "Channel disabled",
       "disabledPaired": "The bot does not reply. The token and the link to {who} are kept: switch it back on and it resumes where it was, with no new pairing.",
       "disabledUnpaired": "The bot does not reply. The token is kept: switching it back on does not need another trip to BotFather."
-    }
+    },
+    "brands": "Brands",
+    "modelLivesInCasa": "Which model answers is chosen in the house, under «Who answers»: one tap on a model saves the model and the brand together. Here you decide which brands exist.",
+    "firstModel": "First model",
+    "firstModelPlaceholder": "e.g. deepseek-v4.1-flash",
+    "firstModelHint": "A brand with no working model is not a brand that exists. You change it later from the house.",
+    "firstModelRequired": "To use it now, the first model is needed.",
+    "useNow": "Use it now",
+    "providerSavedAndActive": "Saved, and it answers now",
+    "providerSavedNotActive": "Brand saved, but not activated: {error}"
   },
   "common": {
     "loading": "Loading...",

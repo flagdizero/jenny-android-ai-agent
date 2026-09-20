@@ -245,3 +245,57 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
     assert "runSnapshotRestore" not in casa, (
         "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
     )
+
+
+def test_choosing_the_model_lives_in_the_casa() -> None:
+    """Il catalogo — «Cambia modello», l'elenco per provider, il filtro — e' in
+    casa, da «Chi risponde», dove un tocco salva `model` e `default_provider`
+    insieme. In officina resta l'anagrafica: formato, endpoint, CA bundle.
+
+    In una riga: in casa scegli fra quel che c'e', in officina decidi cosa
+    c'e'. Sono due verbi diversi sullo stesso oggetto — ma un catalogo di qua
+    sarebbe la copia, non il secondo verbo.
+    """
+    officina = _src("mobile-settings.js")
+    for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
+        assert pezzo not in officina, f"«{pezzo}» e' tornato in officina"
+
+    casa = _casa("casa-model.js")
+    assert "getProviderModels" in casa, "la casa non chiede piu' l'elenco dei modelli"
+    assert "default_provider: provider" in casa, (
+        "la casa non salva piu' modello e marca insieme: e' il punto del redesign"
+    )
+    # E l'anagrafica resta **solo** di qua: la casa sostituisce una chiave, non
+    # compila un endpoint.
+    for campo in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
+        assert campo in officina, f"l'anagrafica ha perso {campo}"
+        assert campo not in casa, f"la casa ha preso {campo}: quello ha bisogno di un paragrafo"
+
+
+def test_adding_a_brand_finishes_the_job() -> None:
+    """Senza il primo modello, aggiungere una marca vorrebbe dire uscire di
+    qui, andare in casa e sceglierne uno: **una cosa sola in due posti**, che
+    e' il difetto che questo giro esiste per togliere.
+
+    E «usala adesso» e' un interruttore, non un automatismo: attivarla
+    d'ufficio cambierebbe chi risponde senza dirlo, con la sorpresa alla
+    risposta successiva.
+    """
+    src = _src("mobile-settings.js")
+    for campo in ("dlg-first-model", "dlg-use-now"):
+        assert campo in src, f"il dialogo di aggiunta ha perso {campo}"
+    assert 'id="dlg-use-now" checked' in src, (
+        "«usala adesso» parte spento: nove volte su dieci la aggiungi per usarla"
+    )
+    assert "primoModello: isEdit ? '' : " in src and "usalaAdesso: !isEdit" in src, (
+        "il primo modello si raccoglie anche in modifica: cambiare l'endpoint di "
+        "una marca in uso non deve poter cambiare chi risponde"
+    )
+    salva = re.search(r"(?s)async _saveProvider\(.*?\n  \}", src).group(0)
+    i = salva.index("api.updateProvider(")
+    j = salva.index("api.updateSettings(")
+    assert i < j, (
+        "la marca si attiva prima di esistere: se la prima scrittura fallisce, "
+        "`default_provider` punta a un provider che non c'e'"
+    )
+    assert "usalaAdesso && primoModello" in salva, "si attiva anche senza un modello"

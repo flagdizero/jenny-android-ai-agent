@@ -102,14 +102,10 @@ export class SettingsController {
     // continuazione lo cattura prima del primo await ed esce se è cambiato —
     // altrimenti scrive nel DOM (o apre modali) di una sezione già lasciata.
     this._gen = 0;
-    /* Posizione di lettura e stato del catalogo modelli. Come `_openSections`
-       vivono nel controller: il contenitore che scorre è lo stesso che
-       `render()` riscrive per intero, quindi qualunque salvataggio — e
-       scegliere un modello *è* un salvataggio — riportava in cima una pagina
-       lunga, col catalogo richiuso e il filtro perso. */
+    /* Posizione di lettura. Vive nel controller come `_openSections`: il
+       contenitore che scorre è lo stesso che `render()` riscrive per intero,
+       quindi qualunque salvataggio riportava in cima una pagina lunga. */
     this._scrollTop = 0;
-    this._catalogOpen = false;
-    this._catalogFilter = '';
     /* Vero mentre *noi* stiamo scrivendo `scrollTop`, e vero finché il
        contenuto asincrono di un `render()` non è ancora atterrato. Vedi
        `_restoreScrollTop()`. */
@@ -233,15 +229,13 @@ export class SettingsController {
     this._cronAutoOpened = false;
   }
 
-  /* Sotto-stato della sezione: il catalogo modelli aperto occupa la vista e per
-     l'utente *è* una schermata (ci si arriva da un pulsante, si scorre, si
-     sceglie). Senza questo il tasto Indietro saltava quel livello e usciva
-     direttamente dalle impostazioni: due schermate in una pressione sola. */
+  /* Nessun sotto-livello da sbucciare. Il catalogo modelli ne era uno — ci si
+     arrivava da un pulsante, si scorreva, si sceglieva — e Indietro doveva
+     chiuderlo invece di uscire dalle impostazioni. Adesso quel catalogo e' in
+     casa, e qui dentro non c'e' piu' niente che il tasto Indietro debba
+     sbucciare prima di lasciare la schermata. */
   handleBack() {
-    const el = this.contentEl?.querySelector('#model-catalog');
-    if (!el || el.style.display === 'none') return false;
-    this._toggleModelCatalog();
-    return true;
+    return false;
   }
 
   handleAction(action) {
@@ -258,7 +252,7 @@ export class SettingsController {
     // LLM, capacità dell'agente, la sua memoria, i lavoratori periodici che la
     // curano, canali, dati, diagnostica.
     /* Le undici sezioni, per id. Disegnarle tutte e poi nasconderne otto
-       vorrebbe dire costruire ogni volta anche il catalogo dei modelli e la
+       vorrebbe dire costruire ogni volta anche l'anagrafica delle marche e la
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
       personalization: () => this._section('personalization', 'ti-palette', i18n.t('settings.personalization'), this._renderPersonalization(d)),
@@ -285,10 +279,9 @@ export class SettingsController {
 
     this._wireSections();
     this._wirePorte();
-    // L'innerHTML qui sopra ha appena riportato il catalogo chiuso e vuoto e lo
-    // scroll in cima: entrambi vanno rimessi come li aveva lasciati l'utente.
-    this._restoreCatalogState();
-    /* In questo istante catalogo, SSH, snapshot, widget Telegram e card
+    // L'innerHTML qui sopra ha appena riportato lo scroll in cima: va rimesso
+    // dove l'aveva lasciato l'utente.
+    /* In questo istante SSH, snapshot, widget Telegram e card
        batteria sono ancora segnaposto: la pagina è molto più corta di quando la
        posizione fu misurata. Si rimette ora *e* la si riapplica quando i pezzi
        atterrano — v. `_restoreScrollTop()`. */
@@ -321,20 +314,6 @@ export class SettingsController {
       if (this._restorePending) this.contentEl.scrollTop = this._scrollTop;
       requestAnimationFrame(() => { this._restoringScroll = false; });
     });
-  }
-
-  /* Riapre il catalogo modelli e rimette il testo del filtro dopo un
-     `render()`. Non è una comodità: il catalogo si richiude a ogni salvataggio,
-     e provare due modelli di fila significava riaprirlo e rifiltrarlo ogni
-     volta. */
-  _restoreCatalogState() {
-    if (!this._catalogOpen) return;
-    const el = this.contentEl.querySelector('#model-catalog');
-    if (!el) return;
-    el.style.display = '';
-    const search = this.contentEl.querySelector('#model-search');
-    if (search) search.value = this._catalogFilter;
-    this._loadModelCatalog();
   }
 
   /* Avviso di config recuperata all'avvio. Silenzioso nel caso normale: se
@@ -717,11 +696,18 @@ export class SettingsController {
     }[fmt] || fmt || i18n.t('provider.unknown');
   }
 
-  /* Gerarchia a decisione unica: la card "In uso" mostra modello e provider
-     correnti; il catalogo unificato (raggruppato per provider) salva
-     modello + default_provider insieme, in una chiamata sola. Le chiavi API
-     sono pura gestione credenziali (nessuno stato "attivo" da leggere lì);
-     i parametri di generazione stanno in una disclosure chiusa. */
+  /* L'anagrafica delle marche e i parametri. **Non** la scelta del modello.
+   *
+   * Il catalogo — «Cambia modello», l'elenco per provider, il filtro — e' in
+   * casa, da «Chi risponde»: li' un tocco su un modello salva `model` e
+   * `default_provider` insieme, che e' il punto dell'intero redesign. Qui
+   * resta cio' che ha bisogno di un paragrafo per spiegarsi: formato,
+   * endpoint, CA bundle, e i tre parametri di generazione.
+   *
+   * In una riga: **in casa scegli fra quel che c'e', qui decidi cosa c'e'.**
+   * Sono due verbi diversi sullo stesso oggetto, e nessuno dei due e' la
+   * copia dell'altro.
+   */
   _renderModelSettings(d) {
     const a = d.agent || {};
     const providers = d.providers || [];
@@ -735,14 +721,10 @@ export class SettingsController {
       <div class="model-inuse">
         <span class="model-inuse-name">${escapeHtml(a.model || '—')}</span>
         <span class="model-inuse-via">${via}</span>
-        <button class="settings-btn-save model-change-btn" id="btn-change-model">${i18n.t('settings.changeModel')}</button>
       </div>
-      <div class="model-catalog" id="model-catalog" style="display:none">
-        <input type="text" class="settings-input" id="model-search" placeholder="${i18n.t('settings.filterModels')}" autocomplete="off" />
-        <div id="model-catalog-groups"></div>
-      </div>
+      <p class="settings-hint" style="margin:8px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.modelLivesInCasa')}</p>
       <div class="settings-divider"></div>
-      <div class="settings-subheading">${i18n.t('settings.apiKeys')}</div>
+      <div class="settings-subheading">${i18n.t('settings.brands')}</div>
       <div id="provider-list">
         ${this._renderProviderListHtml(providers)}
       </div>
@@ -2349,13 +2331,6 @@ export class SettingsController {
     document.addEventListener('visibilitychange', this._onPowerVisible);
     this._loadPowerDiagnostics();
 
-    // Catalogo modelli unificato
-    this._wireBtn('btn-change-model', () => this._toggleModelCatalog());
-    const modelSearch = this.contentEl.querySelector('#model-search');
-    if (modelSearch) {
-      modelSearch.addEventListener('input', () => this._applyCatalogFilter());
-    }
-
     // Provider edit/delete buttons
     this.contentEl.querySelectorAll('.provider-edit').forEach(btn => {
       btn.addEventListener('click', () => this._editProvider(btn.dataset.provider));
@@ -2539,12 +2514,32 @@ export class SettingsController {
 
   /* keepStoredKey: il provider ha già una chiave salvata, quindi un campo
      vuoto significa "lasciala com'è" e non va segnalato come errore. */
+  /* Salva una marca. In aggiunta, la finisce.
+   *
+   * **Una marca senza un modello che funziona non e' una marca che c'e'.**
+   * Senza il primo modello, aggiungerne una vorrebbe dire uscire di qui,
+   * andare in casa e sceglierne uno: una cosa sola in due posti, che e' il
+   * difetto che questo giro esiste per togliere. Il giro iniziale la pensa
+   * gia' cosi' — `save_onboarding` pretende provider **e** modello insieme,
+   * perche' e' quella coppia a fare una configurazione valida.
+   *
+   * «Usala adesso» e' un interruttore e non un automatismo: acceso di suo,
+   * perche' nove volte su dieci la aggiungi per usarla; spegnibile, perche'
+   * la decima aggiungi una marca di scorta — e attivarla d'ufficio
+   * cambierebbe chi risponde senza dirlo, con la sorpresa alla risposta
+   * successiva.
+   */
   async _saveProvider(
     name, format, apiKey, apiBase,
-    { keepStoredKey = false, caBundle = '', clearCaBundle = false } = {},
+    { keepStoredKey = false, caBundle = '', clearCaBundle = false,
+      primoModello = '', usalaAdesso = false } = {},
   ) {
     if (!name || (!apiKey && !keepStoredKey)) {
       showToast(i18n.t('settings.nameAndKeyRequired'), 'error');
+      return;
+    }
+    if (usalaAdesso && !primoModello) {
+      showToast(i18n.t('settings.firstModelRequired'), 'error');
       return;
     }
 
@@ -2572,8 +2567,24 @@ export class SettingsController {
       buttons.forEach(b => { b.disabled = false; });
     }
 
+    /* La seconda scrittura, e solo se l'hai chiesto. Separata dalla prima
+       perche' sono due rotte diverse — la marca sta nel config dei provider,
+       chi risponde negli `agents.defaults` — e perche' se questa fallisce la
+       marca resta comunque salvata: quel che si perde e' l'attivazione, non
+       il lavoro di compilare cinque campi. */
+    if (usalaAdesso && primoModello) {
+      try {
+        await api.updateSettings({ model: primoModello, default_provider: name });
+      } catch (e) {
+        this._closeProviderDialog();
+        showToast(i18n.t('settings.providerSavedNotActive', { error: e.message }), 'error');
+        this.loadSettings();
+        return;
+      }
+    }
+
     this._closeProviderDialog();
-    showToast(i18n.t('settings.providerSaved'));
+    showToast(usalaAdesso ? i18n.t('settings.providerSavedAndActive') : i18n.t('settings.providerSaved'));
     this.loadSettings();
   }
 
@@ -2619,89 +2630,9 @@ export class SettingsController {
       .catch(e => showToast(e.message, 'error'));
   }
 
-  // ── Catalogo modelli ───────────────────────────────────────────────
 
-  _toggleModelCatalog() {
-    const el = this.contentEl.querySelector('#model-catalog');
-    if (!el) return;
-    const wasOpen = el.style.display !== 'none';
-    el.style.display = wasOpen ? 'none' : '';
-    this._catalogOpen = !wasOpen;
-    if (!wasOpen) this._loadModelCatalog();
-  }
 
-  /* Un gruppo per provider; i cataloghi arrivano in parallelo e ogni gruppo
-     si riempie appena il suo fetch risponde. In coda a ogni gruppo c'è
-     l'input per un ID manuale (il provider è implicito nel gruppo). */
-  _loadModelCatalog() {
-    const groupsEl = this.contentEl.querySelector('#model-catalog-groups');
-    if (!groupsEl) return;
-    const providers = this.data?.providers || [];
-    if (!providers.length) {
-      groupsEl.innerHTML = `<div class="settings-empty-state">${i18n.t('settings.noProviders')}</div>`;
-      return;
-    }
-    groupsEl.innerHTML = providers.map(p => `
-      <div class="model-group" data-group="${escapeHtml(p.name)}">
-        <div class="model-group-label">${escapeHtml(p.name)} <span>· ${escapeHtml(this._formatLabel(p.format))}</span></div>
-        <div class="model-group-items"><p class="model-group-msg">${i18n.t('settings.loading')}</p></div>
-      </div>`).join('');
-    for (const p of providers) {
-      api.getProviderModels(p.name)
-        .then(res => this._fillCatalogGroup(p, (res.models || []).map(m => m.id || m), res.message))
-        .catch(() => this._fillCatalogGroup(p, [], i18n.t('settings.couldNotFetch')));
-    }
-  }
 
-  _fillCatalogGroup(p, models, message) {
-    const group = this.contentEl.querySelector(
-      `.model-group[data-group="${CSS.escape(p.name)}"] .model-group-items`);
-    if (!group) return; // catalogo richiuso o re-render nel frattempo
-    const current = this.data?.agent?.model;
-    const isActive = this.data?.default_provider === p.name;
-    const rows = models.map(m =>
-      `<div class="onboarding-model-item${isActive && m === current ? ' selected' : ''}"
-        data-model="${escapeHtml(m)}" data-provider="${escapeHtml(p.name)}">${escapeHtml(m)}</div>`
-    ).join('');
-    const msg = !models.length && message
-      ? `<p class="model-group-msg">${escapeHtml(message)}</p>` : '';
-    group.innerHTML = `${rows}${msg}
-      <input type="text" class="settings-input model-custom-input"
-        placeholder="${i18n.t('settings.customModelId')}" autocomplete="off" />`;
-    group.querySelectorAll('[data-model]').forEach(el => {
-      el.addEventListener('click', () => this._selectModel(el.dataset.provider, el.dataset.model));
-    });
-    const custom = group.querySelector('.model-custom-input');
-    custom.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && custom.value.trim()) this._selectModel(p.name, custom.value.trim());
-    });
-    this._applyCatalogFilter();
-    // Il gruppo ha appena sostituito un «Caricamento…» con decine di righe: la
-    // pagina è più alta di quando `render()` ha rimesso la posizione, e quella
-    // andava clampata. Si riapplica ora che c'è spazio per contenerla.
-    this._restoreScrollTop();
-  }
-
-  /* Il punto dell'intero redesign: modello e provider si salvano insieme. */
-  _selectModel(providerName, model) {
-    api.updateSettings({ model, default_provider: providerName })
-      .then(() => {
-        showToast(i18n.t('settings.saved'));
-        this.loadSettings();
-      })
-      .catch(e => showToast(e.message, 'error'));
-  }
-
-  _applyCatalogFilter() {
-    // Il testo si memorizza grezzo: è quello che va rimesso nell'input dopo un
-    // re-render, e rimetterlo minuscolo sarebbe una riscrittura di ciò che
-    // l'utente ha battuto.
-    this._catalogFilter = this.contentEl.querySelector('#model-search')?.value || '';
-    const q = this._catalogFilter.toLowerCase();
-    this.contentEl.querySelectorAll('#model-catalog-groups [data-model]').forEach(el => {
-      el.style.display = el.dataset.model.toLowerCase().includes(q) ? '' : 'none';
-    });
-  }
 
   _showAddProviderDialog(existingProvider) {
     const isEdit = !!existingProvider;
@@ -2751,6 +2682,20 @@ export class SettingsController {
             autocomplete="off" value="${isEdit ? escapeHtml(existingProvider.ca_bundle || '') : ''}" />
           <span class="settings-field-hint">${i18n.t('settings.caBundleHint')}</span>
         </div>
+        ${isEdit ? '' : `
+        <div class="settings-field">
+          <label class="settings-label">${i18n.t('settings.firstModel')}</label>
+          <input type="text" class="settings-input" id="dlg-first-model"
+            placeholder="${i18n.t('settings.firstModelPlaceholder')}" autocomplete="off" value="" />
+          <span class="settings-field-hint">${i18n.t('settings.firstModelHint')}</span>
+        </div>
+        <div class="settings-field settings-toggle-row">
+          <label class="settings-label" for="dlg-use-now">${i18n.t('settings.useNow')}</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="dlg-use-now" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>`}
         <div class="oc-dialog-buttons" style="margin-top:16px">
           <button class="oc-btn oc-btn-cancel" id="dlg-provider-cancel">${i18n.t('common.cancel')}</button>
           <button class="oc-btn oc-btn-confirm" id="dlg-provider-save">${i18n.t('settings.save')}</button>
@@ -2789,6 +2734,10 @@ export class SettingsController {
         keepStoredKey: isEdit,
         caBundle,
         clearCaBundle: !caBundle && !!(isEdit && existingProvider.ca_bundle),
+        /* Solo in aggiunta, mai in modifica: cambiare l'endpoint di una marca
+           gia' in uso non deve poter cambiare anche chi risponde. */
+        primoModello: isEdit ? '' : (dialog.querySelector('#dlg-first-model')?.value.trim() || ''),
+        usalaAdesso: !isEdit && !!dialog.querySelector('#dlg-use-now')?.checked,
       });
     });
     // Il congedo (Indietro, Esc, catena della shell) passa da un `cancel`

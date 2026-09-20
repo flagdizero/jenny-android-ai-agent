@@ -259,15 +259,17 @@ def test_the_settings_scroll_restore_does_not_destroy_what_it_restores() -> None
     """La prima stesura del ripristino si auto-distruggeva, e l'asserzione «sta
     in coda a render()» era vera lo stesso — per questo il difetto è passato.
 
-    Il meccanismo: ``render()`` rimette la posizione mentre catalogo modelli,
-    blocco SSH e lista snapshot sono ancora dei «Caricamento…». La pagina è
+    Il meccanismo: ``render()`` rimette la posizione mentre blocco SSH e lista
+    snapshot sono ancora dei «Caricamento…». La pagina è
     molto più corta di quando la posizione fu misurata, quindi Blink clampa
     l'assegnazione a ``scrollHeight - clientHeight``; l'assegnazione emette un
     evento ``scroll``, e il listener del costruttore riscriveva ``_scrollTop``
     col valore clampato. La posizione buona non era approssimata: era persa, e
     quando i gruppi del catalogo si riempivano un attimo dopo non la
-    riapplicava nessuno. Lo scenario è esattamente quello che motiva N19:
-    scegliere un modello a catalogo aperto e pagina scorsa in basso.
+    riapplicava nessuno. Lo scenario che lo motivava — scegliere un modello a
+    catalogo aperto e pagina scorsa in basso — adesso vive in casa; il
+    meccanismo resta perché SSH e la storia degli snapshot atterrano allo
+    stesso modo.
 
     Due proprietà, quindi: il listener non registra le scritture nostre, e i
     caricatori asincroni riapplicano quando il contenuto è atterrato.
@@ -294,25 +296,36 @@ def test_the_settings_scroll_restore_does_not_destroy_what_it_restores() -> None
     )
 
     # Il contenuto asincrono atterra dopo: chi lo inietta riapplica.
-    for name in ("_fillCatalogGroup", "_loadSsh", "_loadSnapshotList"):
+    # `_fillCatalogGroup` non c'e' piu': il catalogo modelli e' in casa dal
+    # 20/09/2026, e con lui se n'e' andato il caso che dava il nome a N19.
+    for name in ("_loadSsh", "_loadSnapshotList"):
         assert "this._restoreScrollTop();" in _method(settings, name), (
             f"{name}() allunga la pagina dopo il ripristino: deve riapplicarlo"
         )
 
 
-def test_the_model_catalog_survives_the_save_that_re_renders_it() -> None:
-    """Scegliere un modello *è* un salvataggio, e il salvataggio ridisegna:
-    catalogo richiuso e filtro perso proprio mentre si stava confrontando due
-    modelli."""
+def test_the_model_catalog_moved_to_the_casa_with_its_promise() -> None:
+    """Il catalogo modelli non e' piu' in officina: e' in casa, da «Chi
+    risponde», dal 20/09/2026 (`.agent/officina-tavole-plan.md`, passo 3).
+
+    Questo banco difendeva lo stato «aperto + filtro» attraverso il
+    ridisegno, perche' scegliere un modello *e'* un salvataggio e il
+    salvataggio ridisegna. In casa quel problema non si pone nella stessa
+    forma — i cataloghi gia' chiesti vivono nel controller e non nel DOM — ma
+    la promessa va tenuta da qualche parte, ed e' qui che si dice dov'e'
+    andata: `test_casa_model_client.py`, «il catalogo si chiede una volta per
+    provider» e «un catalogo in ritardo non dipinge sopra quello che stai
+    leggendo».
+
+    Quel che si misura adesso e' il confine: l'officina non deve riprenderselo.
+    """
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    toggle = _method(settings, "_toggleModelCatalog")
-    assert "this._catalogOpen = !wasOpen;" in toggle, "lo stato aperto/chiuso non vive solo nel DOM"
-
-    filt = _method(settings, "_applyCatalogFilter")
-    assert "this._catalogFilter" in filt
-
-    restore = _method(settings, "_restoreCatalogState")
-    assert "if (!this._catalogOpen) return;" in restore
-    assert "search.value = this._catalogFilter;" in restore
-    assert "this._loadModelCatalog();" in restore, "riaperto vuoto non è riaperto"
-    assert "this._restoreCatalogState();" in _method(settings, "render")
+    for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
+        assert pezzo not in settings, (
+            f"«{pezzo}» e' tornato in officina: la scelta del modello e' in casa"
+        )
+    casa = (SETTINGS_JS.parent / "casa-model.js").read_text(encoding="utf-8")
+    assert "getProviderModels" in casa and "default_provider" in casa, (
+        "la casa non ha piu' il catalogo: toglierlo dall'officina lo toglierebbe "
+        "dall'app"
+    )
