@@ -57,7 +57,7 @@ def test_the_avatar_opens_you_and_jenny_and_the_workshop_is_a_long_press() -> No
         "il flag della pressione lunga non viene consumato: un tocco lungo "
         "aprirebbe l'officina **e** la pagina sotto"
     )
-    assert "<i class=\"ti ti-user\">" in INDEX.read_text(encoding="utf-8"), (
+    assert "<i class=\"ti ti-settings\">" in INDEX.read_text(encoding="utf-8"), (
         "l'icona non dice piu' dove porta il bottone"
     )
 

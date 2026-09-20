@@ -135,14 +135,59 @@ def test_css_url_refs_are_in_manifest():
     assert not problems, f"CSS url() references not covered by _UI_MANIFEST: {problems}"
 
 
-def test_mobile_style_has_no_backdrop_filter():
+def test_backdrop_filter_only_on_the_drawer_scrim():
+    """Il divieto resta, con **una** eccezione dichiarata.
+
+    Il divieto totale e\' del 01/08/2026 (`8833b94`, "Jenny 0.3.0"), e la
+    ragione scritta allora era «Android WebView performance». Accanto, su
+    `.swipe-scrim`, un commento della stessa data ne da\' un\'altra: il WebView
+    rendeva **nere** le zone trasparenti, cioe\' le icone.
+
+    Il 20/09/2026 l\'eccezione: lo scrim del cassetto. Le due ragioni di allora
+    non lo riguardano allo stesso modo —
+
+    * `.swipe-scrim` anima l\'opacita\' a **ogni frame** durante il gesto di
+      cambio vista; questo sfuma una volta e poi sta fermo. E\' il caso facile,
+      non quello che aveva motivato il divieto.
+    * sul Titan 2 gira oggi **WebView 143.0.7499.192** (misurato): il difetto
+      delle zone trasparenti rese nere e\' di versioni molto piu\' vecchie.
+
+    Quindi il banco non sparisce e non si allarga: **elenca**. Un
+    `backdrop-filter` nuovo su un altro selettore torna rosso e obbliga chi lo
+    aggiunge a dire perche\', che e\' esattamente cio\' che il divieto proteggeva.
+
+    **Resta da confermare sul telefono**: le icone delle app nella lista e la
+    mascotte — il nodo trasparente piu\' grosso della casa — a cassetto aperto.
+    Se tornassero nere, si toglie la riga e si rimette il divieto tondo.
+    """
     css = (UI_DIR / "assets/mobile-style.css").read_text()
-    # Match the actual CSS property declaration, not the word appearing in a
-    # comment (e.g. one documenting the deliberate *absence* of the property).
-    assert not re.search(r"backdrop-filter\s*:", css), (
-        "backdrop-filter property reintroduced in mobile-style.css — it is banned "
-        "for Android WebView performance (use opaque surfaces)"
+    # I selettori a cui e\' concesso. Si dichiarano uno per uno.
+    concessi = {".launcher-scrim"}
+
+    colpevoli = []
+    for blocco in css.split("}"):
+        if not re.search(r"backdrop-filter\s*:", blocco):
+            continue
+        testa = blocco.split("{")[0].strip()
+        nomi = {s.strip().splitlines()[-1].strip() for s in testa.split(",") if s.strip()}
+        if not (nomi & concessi):
+            colpevoli.append(testa.splitlines()[-1].strip() if testa else "?")
+
+    assert not colpevoli, (
+        f"backdrop-filter su selettori non concessi: {colpevoli}. "
+        f"E\' vietato per le prestazioni del WebView Android (usa superfici "
+        f"opache); le eccezioni si dichiarano in `concessi` con il motivo."
     )
+
+
+def test_the_drawer_scrim_actually_blurs():
+    """E l\'eccezione deve esserci davvero: toglierla e\' una decisione, non una
+    svista. Senza questa riga, il banco qui sopra passerebbe anche a
+    sfocatura sparita."""
+    css = (UI_DIR / "assets/mobile-style.css").read_text()
+    blocco = next(b for b in css.split("}") if ".launcher-scrim" in b.split("{")[0])
+    assert re.search(r"[^-]backdrop-filter:\s*blur\(", blocco), "lo scrim non sfoca piu\'"
+    assert "-webkit-backdrop-filter" in blocco, "manca il prefisso: il WebView usa quello"
 
 
 def test_accent_backgrounds_use_on_accent():

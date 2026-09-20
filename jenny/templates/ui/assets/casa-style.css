@@ -189,11 +189,21 @@ body.casa {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: flex-end;
+  /* Al centro, come `.compose-pill` in officina: con il campo che cresce, la
+     graffetta appoggiata al fondo finisce incollata all'ultima riga e sembra
+     caduta li'. */
+  align-items: center;
   gap: 4px;
   padding: 0 4px 0 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
+  /* **Raggio fisso, non `--radius-pill`.** A una riga (40px) 20px e' esattamente
+     meta' dell'altezza, quindi la forma e' la stessa capsula di prima; a tre
+     righe il raggio non cresce e gli angoli restano 20px — un rettangolo
+     arrotondato. Con 999px il raggio si taglia a meta' dell'altezza corrente,
+     e gli estremi diventano due semicerchi da 50px: e' il difetto che si vede
+     sul telefono appena il messaggio va a capo. Stessa scelta, stesso motivo e
+     stesso conto di `.compose-pill` (meta' del `min-height`). */
+  border-radius: 20px;
   background: var(--surface);
 }
 

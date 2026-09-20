@@ -3535,7 +3535,21 @@ body {
 
 .launcher-scrim {
   position: fixed; inset: 0; z-index: 99;
-  background: rgba(0, 0, 0, 0.55);
+  /* Il nero scende da 0,55 a 0,35: con la sfocatura sopra, il velo di prima
+     copriva tutto e la sfocatura non si sarebbe vista. */
+  background: rgba(0, 0, 0, 0.35);
+  /* **La sfocatura, malgrado il commento di `.swipe-scrim` qui sotto**, che
+     dice «no filter/backdrop-filter, so WebView never renders transparent
+     regions (icons) black». Quella nota vale per un altro elemento e per un
+     altro WebView: `.swipe-scrim` anima l'opacita' a **ogni frame** durante il
+     gesto, mentre questo sfuma una volta e poi sta fermo; e sul Titan 2 oggi
+     gira WebView 143.0.7499.192 (misurato il 20/09/2026), dove il difetto
+     delle zone trasparenti rese nere non c'e' piu'.
+     Le due cose da guardare sul telefono se un giorno tornasse: le icone delle
+     app nella lista e la mascotte, che e' il nodo trasparente piu' grosso
+     della casa. */
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   opacity: 0; pointer-events: none;
   transition: opacity .25s cubic-bezier(.25,.1,.25,1);
 }
