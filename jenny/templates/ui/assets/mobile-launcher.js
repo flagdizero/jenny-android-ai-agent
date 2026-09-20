@@ -29,6 +29,7 @@
 
 import { i18n } from './shared/i18n.js';
 import { UsageRanking, rankEntries } from './shared/launcher-rank.js';
+import { usageStore } from './shared/launcher-usage-store.js';
 import { isTypeAheadKey } from './shared/type-ahead.js';
 
 /* Etichetta del tipo, a destra della riga. Chiavi proprie del cassetto e non
@@ -137,9 +138,13 @@ export class LauncherController {
     // Pixel di rotella non ancora spesi — v. `_onWheel`.
     this._wheelAcc = 0;
     // Frequenza e recenza per chiave (D9). Costruito qui e non alla prima
-    // apertura: leggere una riga di localStorage costa meno di decidere se
+    // apertura: leggere una riga di storage costa meno di decidere se
     // leggerla, e il ranking serve già al primo disegno.
-    this._usage = new UsageRanking(window.localStorage);
+    /* Lo storage non è più `window.localStorage` diretto: dentro l'APK il
+       valore vive nelle SharedPreferences, che sopravvivono al kill del
+       processo — v. `shared/launcher-usage-store.js`, che sceglie il posto e
+       porta di là il valore vecchio una volta sola. */
+    this._usage = new UsageRanking(usageStore());
     /* L'altezza del viewport **senza tastiera**, da cui si calcola quella del
        foglio. Serve ricordarla perché su questo guscio la finestra si
        ridimensiona davvero quando la tastiera software sale (misurato: 432 →

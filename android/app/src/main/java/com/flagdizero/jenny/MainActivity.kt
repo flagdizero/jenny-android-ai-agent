@@ -62,6 +62,10 @@ class MainActivity : AppCompatActivity() {
         // Ultima Build.FINGERPRINT vista: cambia solo con un aggiornamento di
         // sistema, che su Samsung e Xiaomi rimette l'app fra quelle ottimizzate.
         private const val PREF_LAST_FINGERPRINT = "last_build_fingerprint"
+        // Quante volte, e quando, hai aperto ogni voce del cassetto. Formato
+        // compatto `{"<chiave>": [conteggio, ultimoMs]}` — lo decide
+        // `shared/launcher-rank.js`, qui è una stringa opaca.
+        private const val PREF_LAUNCHER_USAGE = "launcher_usage"
         // First launch pays Chaquopy bootstrap + package extraction inside
         // GatewayService, which can take well beyond the WebView retry window.
         private const val BOOT_POLL_INTERVAL_MS = 250L
@@ -1052,6 +1056,62 @@ class MainActivity : AppCompatActivity() {
                 val b = bottom.coerceAtMost(wv.height)
                 wv.systemGestureExclusionRects =
                     if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
+            }
+        }
+
+        /**
+         * Il conteggio d'uso del cassetto: letto e scritto **qui**, non nel
+         * `localStorage` della WebView.
+         *
+         * Il dato è `{"<chiave>": [conteggio, ultimoMs]}` e lo produce
+         * `shared/launcher-rank.js`; per il Kotlin è una stringa opaca, e va
+         * tenuta tale — la forma la decide chi la sa leggere.
+         *
+         * **Perché si è spostato.** Stava in `localStorage`, e il commento di
+         * [buildGatewayUrl] dice già perché era il posto sbagliato: la
+         * persistenza di Chromium è asincrona e non sopravvive a un kill del
+         * processo, mentre le SharedPreferences sì. Jenny è il launcher del
+         * telefono e il sistema la uccide di routine, quindi l'ordine «più
+         * usate» si sbriciolava da sé — un difetto silenzioso, perché un
+         * cassetto in ordine sbagliato non sembra rotto, sembra solo inutile.
+         *
+         * Vuoto vuol dire «mai scritto»: chi legge ricostruisce da zero, che è
+         * lo stesso degrado di prima (ordine alfabetico) e non un guasto.
+         */
+        @JavascriptInterface
+        fun getLauncherUsage(): String =
+            try {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(PREF_LAUNCHER_USAGE, "") ?: ""
+            } catch (e: Exception) {
+                Log.w(TAG, "launcher usage unreadable (${e.javaClass.simpleName})")
+                ""
+            }
+
+        /**
+         * Salva il conteggio d'uso.
+         *
+         * `commit()` e non `apply()`, ed è tutto il punto dello spostamento:
+         * questa riga si scrive nell'istante in cui stai **aprendo un'altra
+         * app**, cioè esattamente quando Jenny passa in background e diventa
+         * uccidibile. Un flush asincrono è la sola cosa su cui qui non si può
+         * contare, e affidarcisi rifarebbe in Kotlin il difetto da cui si
+         * scappava.
+         *
+         * Il costo è un'I/O sincrona, e la si può pagare: i metodi
+         * `@JavascriptInterface` girano su un thread di servizio della WebView,
+         * non sul thread della UI.
+         */
+        @JavascriptInterface
+        fun setLauncherUsage(json: String) {
+            try {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit().putString(PREF_LAUNCHER_USAGE, json).commit()
+            } catch (e: Exception) {
+                // Un ordine che non si ricorda di questo avvio è meno grave di
+                // un lancio fallito: la voce è già stata aperta quando
+                // arriviamo qui. Stessa scelta di `UsageRanking._write`.
+                Log.w(TAG, "launcher usage not saved (${e.javaClass.simpleName})")
             }
         }
 

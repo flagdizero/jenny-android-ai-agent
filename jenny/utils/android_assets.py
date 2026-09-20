@@ -276,6 +276,7 @@ _UI_MANIFEST = [
     "assets/shared/image-lightbox.js",
     "assets/shared/keyboard.js",
     "assets/shared/launcher-rank.js",
+    "assets/shared/launcher-usage-store.js",
     "assets/shared/longpress.js",
     "assets/shared/mascot-drag.js",
     "assets/shared/mascot.js",
