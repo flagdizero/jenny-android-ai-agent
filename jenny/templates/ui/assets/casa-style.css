@@ -230,6 +230,27 @@ body.casa {
 
 .casa-input::placeholder { color: var(--text-faint); }
 
+/* Il cassetto delle app: gemello sinistro del tasto manda, e volutamente
+   spento. In questa riga la cosa accesa resta una sola — quella che manda il
+   messaggio. Due tondi pieni farebbero due primi attori, e nessuno dei due si
+   leggerebbe piu' come «il» gesto. Stessa taglia, cosi' la riga resta
+   simmetrica. Gemello anche di `.compose-drawer` in officina: stesso posto,
+   stessa icona, stesso foglio dietro. */
+.casa-drawer {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--overlay);
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+}
+.casa-drawer:active { background: var(--overlay-strong); }
+
 .casa-send {
   flex: none;
   width: 40px;

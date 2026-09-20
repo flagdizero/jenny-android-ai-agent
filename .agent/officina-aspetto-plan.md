@@ -1,121 +1,124 @@
-# L'officina: dall'impalcatura all'aspetto della tavola
+# L'officina come la tavola: il passaggio definitivo
 
 **Stato al 20/09/2026.** I cinque passi di [`officina-tavole-plan.md`](./officina-tavole-plan.md)
-hanno spostato **cosa sta dove**: quattro cassetti, niente doppioni con la casa,
-il giro degli aggiornamenti tornato a casa. Quel piano non ha mai toccato
-**come si vede**, e la differenza con la tavola è tutta lì — misurata sul
-telefono il 20/09.
+hanno spostato **cosa sta dove**: quattro cassetti, niente doppioni con la casa.
+Non hanno toccato **come si vede**, e la differenza con la tavola è tutta lì.
 
-Questo documento è il secondo tempo: l'aspetto.
+## La cosa da capire prima di tutto: non è una riverniciata, è un **ritaglio diverso**
 
-## La scoperta che cambia il conto
+Il primo istinto — «apri le fisarmoniche e cambia i colori» — è sbagliato, e si
+vede confrontando le soprascritte della tavola con le sezioni del codice.
 
-La tavola non usa una tavolozza inventata. È **il tema `kyoto`, token per
-token**:
+| cassetto | i gruppi della tavola | le sezioni di `CASSETTI` |
+| --- | --- | --- |
+| **Cervello** | chi pensa · le marche · parametri · poter pensare a schermo spento | `models` · `battery` · `personalization` · `system` |
+| **Mani** | permessi di scrittura · ricerca web · posizione · ssh · canali e abilità · quando agisce da sola | `tools` · `ssh` · `telegram` · `scheduling` |
+| **Memoria** | quanto ricorda · dream · giardiniere · i file veri · storia | `memory` · `workers` · `backup` |
 
-| nella tavola | in `mobile-style.css` |
-| --- | --- |
-| `#201d1a` fondo | `--bg` |
-| `#2b2723` schede | `--surface` |
-| `#191714` campi | `--surface-2` |
-| `#3f3a33` bordi | `--border` |
-| `#b2543f` accento | `--accent` |
-| `#e5ddd0` testo | `--text` |
-| `#efe7d8` titoli | `--heading` |
-| `#8fa382` pallino stato | `--ok` |
-| Shippori Mincho | `--font-display` |
+Non combaciano, e non per poco:
 
-Il carattere è **già impacchettato** (`assets/vendor/fonts/theme-fonts.css`).
-Il telefono è su `chanel` (quasi-nero, accento = testo), e questo da solo
-spiega una fetta grossa del «totalmente diversa».
+- **`models` diventa tre gruppi** (chi pensa, le marche, parametri).
+- **`tools` diventa tre gruppi** (permessi, ricerca web, posizione).
+- **`memory` diventa tre gruppi** (quanto ricorda, dream, i file veri).
+- **`personalization` e `system` non esistono nella tavola.**
+- **«permessi di scrittura» non esiste nel codice.**
 
-**Conseguenza sul progetto:** l'aspetto della tavola **non va scritto a mano nel
-CSS**. Sette temi esistono e l'utente li cambia; inchiodare `#b2543f` ne
-romperebbe sei. Tutto quel che segue si scrive in token, e la tavola si ottiene
-scegliendo `kyoto`.
+Quindici gruppi contro undici sezioni. La tavola **non ridisegna le sezioni: le
+ritaglia in un altro modo**, più piccole e tutte aperte. Quindi il lavoro
+definitivo non è vestire quel che c'è: è cambiare l'unità di cui è fatta la
+pagina.
 
-## Il salto, in quattro pezzi
+**La buona notizia: è meno macchina, non di più.** La fisarmonica sparisce del
+tutto — niente `_openSections`, niente testa cliccabile, niente chevron. Resta
+un solo mattone, ripetuto quindici volte: *soprascritta + scheda aperta*.
 
-Misurato confrontando `project/Console.dc.html` e `project/Cervello.dc.html`
-della tavola con quel che disegna la build `b14c2e0`.
+## L'altra scoperta: la tavolozza esiste già
 
-### 1. Il tema — nessun codice
+La tavola non usa colori inventati. È **il tema `kyoto`, token per token**:
+`#201d1a` = `--bg`, `#2b2723` = `--surface`, `#3f3a33` = `--border`,
+`#b2543f` = `--accent`, `#e5ddd0` = `--text`, `#8fa382` = `--ok`, e il serif dei
+titoli è `--font-display` (Shippori Mincho, **già impacchettato** in
+`assets/vendor/fonts/theme-fonts.css`). Il telefono è su `chanel`, il quasi-nero.
 
-Passare a `kyoto` porta colori, bordi e il serif dei titoli. Zero righe.
-È il primo passo perché è quello che cambia di più a parità di rischio.
+**Regola di conseguenza:** tutto si scrive in token. Inchiodare `#b2543f`
+romperebbe gli altri sei temi. La tavola si ottiene *scegliendo* `kyoto`.
 
-### 2. L'intestazione — il gancio c'è, il contenuto no
+## Tre cose che non sono lavoro di vista, e vanno decise
 
-La tavola ha, in cima a ogni cassetto: soprascritta `officina`, il nome in
-serif, **una riga che dice a cosa serve il cassetto**, una pastiglia di stato e
-il bottone `Jenny` che torna a casa.
+### 1. Due sezioni senza casa nella tavola
 
-Oggi: **niente**. Ma `officina.html:209` ha già `<div class="view-title-mount"
-id="title-settings">`, e `.view-title-text` (`mobile-style.css:574`) usa già
-`--font-display`. Manca chi ci scrive dentro.
+`personalization` (tema, nome e icona di Jenny) e `system` (versione, modalità
+sviluppatore, torna alla casa, utilizzo token) non compaiono in nessuna tavola.
 
-Da fare: far disegnare l'intestazione a `SettingsController` in funzione del
-cassetto aperto — quattro sottotitoli nuovi in i18n, la pastiglia di stato, il
-bottone per la casa.
+Tre di quei pezzi la tavola li ha già risolti da sé, nella **cornice**: la
+versione è una pastiglia nell'intestazione della Console, l'utilizzo token è la
+striscia in fondo alla Console, e «torna alla casa» è il bottone `Jenny` in
+testa a ogni cassetto.
 
-### 3. La barra sotto — icone nude
+Restano senza posto: **tema, nome e icona di Jenny, modalità sviluppatore**.
 
-Tavola: icona **+ etichetta** + pallino sotto la voce attiva, barra rialzata
-con bordo in cima.
-Oggi: `<div class="dock-item">` con dentro solo l'icona.
+> **Proposta.** Tema, nome e icona vanno **in casa**: sono «come mi appare
+> Jenny», e la casa ha già «Tu e Jenny» che parla di questo. La modalità
+> sviluppatore resta in Cervello, come ultima riga discreta. Così la tavola non
+> va toccata e niente si perde.
 
-Le etichette esistono già come `title`/`data-i18n-title`: vanno rese visibili.
-Piccolo, ma è metà di quel che si guarda.
+### 2. «Permessi di scrittura» è una funzione che non c'è
 
-### 4. I cassetti — fisarmoniche chiuse contro schede aperte
+Il gruppo della tavola contiene quattro comandi:
 
-**È questo che fa dire «totalmente diversa».**
+- tre interruttori per ambito — **personale** · **quaderni** · **console**
+- la riga su `/ro` (sola lettura per un turno)
+- **«Resta dentro il workspace»**
 
-Tavola: gruppi con una soprascritta maiuscola (`chi pensa`, `le marche`,
-`parametri`, `poter pensare a schermo spento`) e le schede **tutte aperte**, una
-sotto l'altra, da scorrere.
-Oggi: quattro righe chiuse su uno schermo vuoto, e il contenuto si vede solo
-toccando.
+Solo l'ultimo esiste (`security.restrict_to_workspace`). Gli altri tre più `/ro`
+sono da costruire: non è pittura, è comportamento.
 
-È il pezzo più grosso: tocca la macchina delle sezioni a fisarmonica, non solo
-il foglio di stile. Dentro ci sono anche i dettagli della tavola che oggi non
-esistono — il pallino colorato per marca, la chiave mascherata `sk-k…hxBW`, la
-barra del contesto in uso, il comando a tre scelte per la CPU, le righe di
-rimando in fondo («Dream e il giardiniere stanno in Memoria»).
+> **Proposta.** Il gruppo si fa ora **con il comando che esiste**, e i tre
+> interruttori per ambito arrivano quando arriva la funzione. Un interruttore che
+> non fa niente è peggio di un interruttore che manca — è la stessa regola con cui
+> i bottoni del backup spariscono fuori da Android.
 
-### 5. La Console — è un'altra vista, e per metà non è disegnabile
+### 3. I numeri della Console sono un cambio di protocollo
 
-La Console della tavola **non è la chat**: è la stessa sessione **esplosa**, un
-turno per scheda, con l'intestazione `21:52:04 · minimax-m3 · 12 671 in · 369
-out · 8,4 s` e le righe etichettate `tu` / `pensa` / `legge` / `esce` /
-`scrive` / `jenny`, ognuna col suo tempo a destra. Sotto, la striscia
-`in · out · cache` + `ctx 17k/65k`, e un composer col bottone `/`.
+La Console della tavola non è la chat: è la stessa sessione **esplosa**, un
+turno per scheda, con le righe `tu` / `pensa` / `legge` / `esce` / `scrive` /
+`jenny` e il tempo di ognuna.
 
-**Metà si può fare oggi**: le righe esplose e i loro tempi si ricavano dagli
-eventi degli strumenti che il transcript già registra.
+Le righe e i tempi **si possono fare oggi**, dagli eventi degli strumenti che il
+transcript già registra.
 
-**Metà no.** I numeri per turno (`12 671 in · 369 out`) e la stima del contesto
-(`ctx 17k/65k`) **non esistono nel protocollo**: `turn_end` non porta nessun
-campo di token (verificato il 20/09), e non c'è una rotta che esponga la stima
-del contesto. Sono un **cambio di protocollo**, non un riordino — e restano una
-decisione dell'utente, non mia.
+I numeri no: `12 671 in · 369 out` per turno e `ctx 17k/65k` **non esistono nel
+protocollo** — `turn_end` non porta nessun campo di token (riverificato il
+20/09), e nessuna rotta espone la stima del contesto.
 
-## L'ordine consigliato
+> **Proposta.** La Console esplosa si fa senza la striscia dei numeri. La
+> striscia arriva solo se decidi il cambio di protocollo, che resta una tua
+> chiamata.
 
-1. **Tema `kyoto`** — zero codice, cambia di più.
-2. **Barra sotto con le etichette** — piccolo, visibile subito.
-3. **Intestazione dei cassetti** — il gancio esiste già.
-4. **Schede aperte al posto delle fisarmoniche** — il pezzo grosso.
-5. **Console esplosa, senza i numeri** — quel che si può fare senza toccare il
-   protocollo.
-6. **I numeri della Console** — solo se l'utente decide il cambio di protocollo.
+## L'ordine
 
-Ogni passo si chiude col suo banco, e ogni banco va provato rosso mutando il
-codice che difende — come nei cinque passi precedenti.
+Scelto perché nessun passo butta via il precedente, e perché il salto più grosso
+si vede subito.
 
-## Quel che questo piano **non** cambia
+1. **Tema `kyoto`.** Zero codice. Porta colori, bordi e il serif.
+2. **La cornice.** Intestazione di cassetto (soprascritta `officina`, nome in
+   serif, la riga che dice a cosa serve, pastiglia di stato, bottone `Jenny`) e
+   barra sotto con **etichette** e il pallino sulla voce attiva. Indipendente dal
+   ritaglio, quindi si può fare prima; il gancio esiste già
+   (`officina.html:209`, `.view-title-text` usa già `--font-display`).
+3. **Il ritaglio.** Il mattone *soprascritta + scheda aperta*, la fisarmonica
+   rimossa, i quindici gruppi. Un cassetto alla volta: Cervello → Mani → Memoria,
+   ognuno col suo banco.
+4. **Console esplosa**, senza i numeri.
+5. **Le decisioni**, se e quando: i tre interruttori per ambito con `/ro`; i
+   numeri della Console.
 
-- Dove stanno le cose: i quattro cassetti e il loro contenuto restano quelli
-  decisi in `officina-tavole-plan.md`. Qui si cambia solo l'aspetto.
-- La casa. `index.html` e i suoi `casa-*.js` non si toccano.
-- Gli altri sei temi: tutto in token, o il piano è sbagliato.
+Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende —
+come nei cinque passi precedenti.
+
+## Quel che non si tocca
+
+- **Dove stanno le cose**: i quattro cassetti restano quelli decisi in
+  `officina-tavole-plan.md`. Qui cambia il taglio interno, non l'indirizzo.
+- **La casa**, salvo il trasloco proposto di tema/nome/icona.
+- **Gli altri sei temi**: tutto in token, o il piano è sbagliato.

@@ -1096,6 +1096,28 @@ body {
 }
 
 /* Send button */
+/* Il cassetto delle app, gemello sinistro del tasto manda.
+   **Non** in accento, e non e' timidezza: in questa riga la cosa accesa deve
+   restare una sola — quella che manda il messaggio. Un secondo tondo pieno
+   accanto farebbe due primi attori e nessuno dei due si leggerebbe piu' come
+   «il» gesto. Stessa taglia pero', perche' sono la stessa classe di bottone e
+   la riga resta simmetrica. */
+.compose-drawer {
+  width: 50px; height: 50px;   /* come .compose-send: la riga resta allineata */
+  border-radius: 50%;
+  background: var(--overlay);
+  border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text);
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), background 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.compose-drawer i { font-size: 18px; }
+.compose-drawer:active { transform: scale(0.92); background: var(--overlay-strong); }
+
 .compose-send {
   width: 50px; height: 50px; /* alto quanto .compose-pill: restano allineati */
   border-radius: 50%;
@@ -3833,6 +3855,14 @@ body {
    è una voce del `listbox` — non si apre con ⏎ e non si trova cercando, perché
    non è una cosa da lanciare. Il filo sopra dice che il cambio di registro è
    voluto: sopra si lancia, qui si va altrove. */
+/* `[hidden]` ha specificita' zero: qualunque regola con un `display` lo batte,
+   e qui sopra ce n'e' una. In casa la riga si nasconde perche' non ha dove
+   portare (`LauncherController._manageAvailable`), e senza questa riga si
+   sarebbe vista lo stesso — un bottone che promette una schermata che non
+   esiste. E' la quarta volta che questo codice paga lo stesso conto: v.
+   `.casa-key[hidden]` in casa-style.css. */
+.launcher-manage[hidden] { display: none; }
+
 .launcher-manage {
   display: flex; align-items: center; gap: 8px;
   flex-shrink: 0;

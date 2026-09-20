@@ -124,6 +124,16 @@
   <div class="casa-pending" id="casa-pending" hidden></div>
 
   <div class="casa-composer">
+    <!-- Il cassetto delle app. Stesso posto e stesso gesto dell'officina — a
+         sinistra del composer — perché è lo stesso foglio: `mobile-launcher.js`
+         lo disegna per tutti e due i gusci, e una seconda copia qui sarebbe la
+         solita macchina duplicata che impara le cose una volta sola.
+         Fuori dall'APK il ponte delle app Android non c'è, ma le Jenny App sì:
+         il cassetto resta, più corto. -->
+    <button class="casa-drawer" id="casa-drawer" type="button"
+            aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
+      <i class="ti ti-layout-grid"></i>
+    </button>
     <label class="casa-field">
       <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
       <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
@@ -422,5 +432,85 @@
 </main>
 
 <script type="module" src="/html-mobile/assets/casa-app.js"></script>
+
+<!-- IL CASSETTO DELLE APP — lo stesso foglio dell'officina.
+     Il markup e' copiato perche' i due gusci sono due documenti, ma il codice
+     che lo riempie e' uno solo (`assets/mobile-launcher.js`) e lo stile pure
+     (`mobile-style.css`, che la casa carica gia'). Fuori da `.casa-shell` di
+     proposito: cosi' copre tutto, e l'inerzia che il foglio mette allo sfondo
+     non se lo mette addosso da solo. -->
+<!-- LAUNCHER SHEET — il cassetto delle app.
+     Vive qui, fuori da `.app`, come `.app-frame-overlay`: così copre anche il
+     dock, resta fuori dall'inerzia che DrawerManager mette allo sfondo, e una
+     mini-app aperta *dal* foglio gli si sovrappone senza trucchi di z-index.
+     Contenuto costruito da assets/mobile-launcher.js. -->
+<div class="launcher-scrim" id="launcher-scrim" aria-hidden="true"></div>
+<div class="launcher-sheet" id="launcher-sheet" role="dialog" aria-modal="true"
+     aria-labelledby="launcher-title" aria-hidden="true" tabindex="-1">
+  <!-- Da qui — maniglia e riga del titolo — si trascina il foglio, e **dalla
+       lista mai** (D7): decide l'origine del tocco, e decide sempre allo stesso
+       modo. Sotto c'è una chat, dove i trascinamenti verticali sono già
+       promessi allo scroller da `setupSwipeNav`; contendere i verticali della
+       propria lista è la ragione per cui i bottom sheet dentro contenuto
+       scrollabile sembrano rotti. V. `LauncherController._setupDrag`. -->
+  <div class="launcher-handle-row" id="launcher-handle-row">
+    <div class="launcher-handle"></div>
+  </div>
+  <div class="launcher-head">
+    <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
+    <button class="launcher-close" id="launcher-close" type="button"
+            aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+  </div>
+  <!-- Il campo di ricerca è il corpo del cassetto, non un accessorio: è la
+       direzione *Digita* del rilievo (su 68 voci, cercare batte scorrere a
+       partire dalla quarta). Niente `autofocus` — alzerebbe la tastiera
+       software e si mangerebbe il foglio (D6); il type-ahead è del passo 4, e
+       così `enterkeyhint="go"`, che promette un ⏎ che qui ancora non apre. -->
+  <div class="launcher-search-row">
+    <i class="ti ti-search launcher-search-icon"></i>
+    <input class="launcher-search" id="launcher-search" type="text"
+           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+           enterkeyhint="go" role="combobox" aria-controls="launcher-list"
+           aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox"
+           placeholder="Cerca un'app…" data-i18n-placeholder="launcher.searchPlaceholder"
+           aria-label="Cerca app, skill…" data-i18n-aria="launcher.searchPlaceholder">
+    <button class="launcher-search-clear" id="launcher-search-clear" type="button"
+            aria-label="Pulisci" data-i18n-aria="launcher.clearSearch"><i class="ti ti-x"></i></button>
+  </div>
+  <!-- Passo 4 — la semantica giusta dalla nascita (4.5). La lista è un
+       `listbox` e le righe sono `option`: una lista di risultati con una
+       selezione attiva è quello, non un mucchio di pulsanti. Il campo è il
+       `combobox` che la governa, e la riga selezionata gliela dice
+       `aria-activedescendant` (scritto da JS) — così le frecce muovono la
+       selezione senza spostare il fuoco, che è ciò che tiene il campo
+       scrivibile mentre si scorre. Le righe restano comunque focalizzabili
+       una per una: con TalkBack ci si arriva a scorrimento, non a frecce. -->
+  <!-- Passo 6.2 — l'avviso che distingue "non c'è niente" da "non si è potuto
+       leggere". Serve al caso peggiore, che è quello *parziale*: se il ponte
+       nativo non risponde, le skill e le Jenny App ci sono tutte e mancano solo
+       le app del telefono — nessuno stato vuoto comparirebbe, e il cassetto
+       sembrerebbe un telefono con poche app. `role="status"` e non un dialog:
+       è un'informazione, non una domanda. -->
+  <div class="launcher-status" id="launcher-status" role="status" hidden>
+    <i class="ti ti-alert-triangle launcher-status-icon" aria-hidden="true"></i>
+    <span class="launcher-status-text" data-i18n="launcher.loadFailed">Elenco incompleto: qualcosa non ha risposto.</span>
+    <button class="launcher-status-retry" id="launcher-status-retry" type="button"
+            data-i18n="launcher.retry">Riprova</button>
+  </div>
+  <div class="launcher-list" id="launcher-list" role="listbox"
+       aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
+  <!-- D4 / 6.1 — il foglio *lancia*, la scheda *gestisce*. Disinstallare,
+       nascondere, accendere una skill, riparare un manifest e creare una app
+       nuova restano di là, e questa riga è la porta. Non è una `option` della
+       lista: non si apre con ⏎ e non si trova cercando, perché non è una cosa
+       da lanciare — è un altrove. In fondo al foglio e fuori dalla lista, così
+       non contende lo spazio ai risultati e resta ferma mentre scorrono. -->
+  <button class="launcher-manage" id="launcher-manage" type="button">
+    <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
+    <span data-i18n="launcher.manage">Gestisci app e skill</span>
+    <i class="ti ti-chevron-right launcher-manage-chevron" aria-hidden="true"></i>
+  </button>
+</div>
+
 </body>
 </html>

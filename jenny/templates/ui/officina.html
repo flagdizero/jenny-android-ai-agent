@@ -174,6 +174,15 @@
             </button>
           </div>
           <div id="input-row" class="compose-row">
+            <!-- Il cassetto delle app, a un tocco. Stava sul dock (la voce
+                 «Apps», `data-opens="launcher"`) e il passo 0 del rimaneggiamento
+                 l'ha portata via insieme alle altre: da allora il foglio si
+                 raggiungeva solo da Mani → «Cassetto delle app», cioè tre tocchi
+                 per la cosa che un launcher fa più spesso. Qui è simmetrico al
+                 tasto manda, e sta nello stesso posto in casa. -->
+            <button id="btn-launcher" class="compose-drawer" type="button"
+                    title="Cassetto delle app" data-i18n-title="nav.launcher"
+                    aria-label="Cassetto delle app" data-i18n-aria="nav.launcher"><i class="ti ti-layout-grid"></i></button>
             <div class="compose-pill">
               <textarea id="chat-input" placeholder="Chiedi qualcosa…" rows="1" aria-label="Messaggio" data-i18n-placeholder="chat.placeholder" data-i18n-aria="chat.message"></textarea>
               <div class="input-actions" id="secondary-actions">

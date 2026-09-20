@@ -671,10 +671,148 @@ def test_no_skills_in_the_drawer() -> None:
     assert "'skill'" not in _method(_src("mobile-launcher.js"), "_buildRow")
 
 
-def test_the_composer_has_no_launcher_button() -> None:
-    """Tolto: l'apertura è una sola, lo slot del dock. Un secondo ingresso che
-    esiste in una vista sola era il difetto che ha reso il cassetto
-    irraggiungibile da tutte le altre."""
-    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
-    assert "btn-launcher" not in html
-    assert "btn-launcher" not in _src("mobile-launcher.js"), "niente riferimenti penzolanti"
+# Copiato da `test_casa_tu_contract.py`: unisce i corpi di tutte le regole che
+# nominano il selettore, gruppi compresi — guardarne una sola dice «non c'e'».
+def _rule(css: str, selector: str) -> str:
+    """Tutto cio' che il foglio dichiara per *selector*, gruppi compresi.
+
+    Unisce i corpi invece di prendere il primo: quelle due proprieta' arrivano
+    da due regole diverse — il gruppo che mette davanti le schede e la regola
+    che veste quella singola — e guardarne una sola dice «non c'e'».
+    """
+    corpi = []
+    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        nomi = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+        if selector in nomi:
+            corpi.append(corpo)
+    return "\n".join(corpi)
+
+
+def _senza_commenti_html(src: str) -> str:
+    """Il testo senza i `<!-- -->`.
+
+    Serve perche' i commenti di questi file *nominano* apposta il codice che
+    non c'e' piu' (e' cosi' che si spiega una rimozione), e un banco che
+    grepasse il file intero leggerebbe la spiegazione come se fosse la cosa
+    spiegata.
+    """
+    return re.sub(r"<!--.*?-->", "", src, flags=re.S)
+
+
+def _senza_commenti_js(src: str) -> str:
+    """Idem per `/* */` e `//`. Grezzo — una stringa che contiene `//` ci va di
+    mezzo — e va bene: si usa solo per cercare identificatori che *non* devono
+    esistere, dove un falso negativo e' impossibile e un falso positivo si vede
+    subito."""
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return re.sub(r"//[^\n]*", "", src)
+
+
+def test_the_drawer_is_reachable_from_every_view() -> None:
+    """**L'invariante, non l'implementazione.** Il cassetto deve avere almeno un
+    ingresso che esiste in *ogni* vista.
+
+    Storia, perché la regola è stata scritta tre volte e due erano sbagliate:
+
+    1. C'era un pulsante nel composer. Il composer però vive solo nella vista
+       chat, quindi da Workspace, Apps o Impostazioni il cassetto non si apriva.
+    2. Fu tolto e sostituito dallo slot «Apps» del dock (`data-opens="launcher"`),
+       che c'è ovunque. Il banco di allora si chiamava
+       `test_the_composer_has_no_launcher_button` e difendeva proprio quello.
+    3. Il passo 0 del rimaneggiamento ha portato il dock a quattro cassetti e
+       **si è portato via anche quello slot**, lasciando il ramo che lo gestiva
+       come codice morto. Da lì il cassetto si raggiungeva solo da Mani →
+       «Cassetto delle app»: tre tocchi per la cosa che un launcher fa più
+       spesso, e nessun banco se n'era accorto — perché difendevano la forma
+       («niente pulsante») e non lo scopo («si apre da ovunque»).
+
+    Oggi gli ingressi sono due e fanno cose diverse: la porta dentro Mani è
+    quella che c'è **sempre**, ed è lei che tiene l'invariante; il pulsante nel
+    composer è la scorciatoia dov'è più frequente. Il difetto del punto 1 non
+    torna proprio perché il primo esiste.
+    """
+    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    impostazioni = _src("mobile-settings.js")
+
+    # L'ingresso che vale da ogni cassetto: la porta dentro Mani.
+    assert "porte: ['launcher', 'apps']" in impostazioni, (
+        "tolta la porta, il cassetto torna raggiungibile solo dalla chat"
+    )
+    assert "PORTE_LANCIO = { launcher:" in impostazioni
+
+    # La scorciatoia dalla chat, nei due gusci.
+    assert 'id="btn-launcher"' in officina
+    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    assert 'id="casa-drawer"' in casa
+
+    # E i due pulsanti devono essere agganciati, non decorativi.
+    assert "getElementById('btn-launcher')" in _src("mobile-app.js")
+    assert "getElementById('casa-drawer')" in _src("casa-app.js")
+
+    # Il modulo del cassetto non conosce gli id dei due gusci: li aggancia chi
+    # li possiede. Senza questo il foglio saprebbe di stare in due case.
+    assert "btn-launcher" not in _src("mobile-launcher.js")
+    assert "casa-drawer" not in _src("mobile-launcher.js")
+
+
+def test_the_dead_dock_branch_is_gone() -> None:
+    """Il ramo che apriva il cassetto dallo slot del dock non esiste più.
+
+    `data-opens` non è in nessuno dei due documenti dal passo 0: il ramo che lo
+    leggeva è rimasto lì a non fare niente per quattro commit. Un `if` su un
+    attributo che nessun elemento porta è il modo in cui una funzionalità
+    sparisce senza che nulla diventi rosso.
+    """
+    for doc in ("officina.html", "index.html"):
+        html = (ROOT / "jenny/templates/ui" / doc).read_text(encoding="utf-8")
+        assert "data-opens" not in _senza_commenti_html(html), doc
+    assert "dataset.opens" not in _senza_commenti_js(_src("mobile-app.js"))
+
+def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
+    """`[hidden]` e' a specificita' zero: una classe con `display` lo scavalca.
+
+    Il banco gemello in `test_casa_tu_contract.py` guarda gli elementi che
+    nascono `hidden` **nel markup**. Questo guarda l'altra meta', che e' la
+    piu' insidiosa: quelli che il JS nasconde **a runtime**. Li' il difetto non
+    si vede leggendo l'HTML — l'attributo non c'e' finche' il codice non lo
+    mette — e a schermo il risultato e' un elemento che si crede nascosto e non
+    lo e'.
+
+    Preso sul banco il 20/09/2026: portando il cassetto in casa, «Gestisci app
+    e skill» si nasconde perche' li' non ha dove portare
+    (`_manageAvailable()`), `el.hidden` valeva `true`, e la riga si vedeva
+    lo stesso — un bottone che prometteva una schermata inesistente. Quarta
+    volta per questa stessa classe di difetto in questo progetto.
+    """
+    js = _src("mobile-launcher.js")
+    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    css = _src("mobile-style.css")
+
+    # I campi che il cassetto nasconde a runtime, risaliti al loro nodo.
+    campi = set(re.findall(r"this\.(\w+)\.hidden\s*=", js))
+    assert campi, "nessun `.hidden =` trovato: il banco guarda il posto sbagliato"
+
+    guasti = []
+    for campo in sorted(campi):
+        m = re.search(rf"this\.{campo}\s*=\s*document\.getElementById\('([^']+)'\)", js)
+        assert m, f"non risalgo al nodo di this.{campo}"
+        nodo_id = m.group(1)
+        for doc, nome in ((officina, "officina.html"), (casa, "index.html")):
+            tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(nodo_id)}"[^>]*>', doc)
+            if not tag:
+                continue
+            classi = re.search(r'class="([^"]+)"', tag.group(0))
+            if not classi:
+                continue
+            for classe in classi.group(1).split():
+                corpo = _rule(css, f".{classe}")
+                if not re.search(r"display:\s*(?!none)", corpo):
+                    continue
+                if f".{classe}[hidden]" not in css:
+                    guasti.append(f"{classe} ({nome})")
+
+    assert not guasti, (
+        f"il JS li nasconde ma il CSS li riaccende: {sorted(set(guasti))} "
+        "— serve una regola `[hidden]` che batta il loro `display`"
+    )

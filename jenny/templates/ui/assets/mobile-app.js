@@ -150,16 +150,19 @@ class MobileApp {
 
     // Sidebar navigation
     document.querySelectorAll('.dock-item[data-mode]').forEach(item => {
-      item.addEventListener('click', () => {
-        /* Lo slot Apps apre il cassetto invece di cambiare vista: è il gesto
-           più frequente, e cercare un lanciatore nel dock è la prima cosa che
-           si fa. `data-mode` gli resta comunque, così il carosello orizzontale
-           continua a raggiungere la scheda — che non diventa irraggiungibile,
-           solo meno immediata: dal foglio ci si arriva con «Gestisci». */
-        if (item.dataset.opens === 'launcher') this.openLauncher();
-        else this.switchMode(item.dataset.mode);
-      });
+      item.addEventListener('click', () => this.switchMode(item.dataset.mode));
     });
+
+    /* Il cassetto delle app, dal composer.
+
+       Qui c'era un ramo `data-opens === 'launcher'` sullo slot Apps del dock, e
+       dal passo 0 era **codice morto**: quel dock non esiste più, e con lui se
+       n'è andato l'unico gesto da un tocco per aprire il foglio — restava Mani
+       → «Cassetto delle app», tre tocchi per la cosa che un launcher fa più di
+       ogni altra. Il pulsante è tornato dove la mano ce l'ha già, accanto alla
+       graffetta, e la casa ne ha uno identico. */
+    document.getElementById('btn-launcher')
+      ?.addEventListener('click', () => this.openLauncher());
 
     // Drawer open/close sync
     this.drawer.addEventListener('open', () => this.header.syncDrawerTabs());

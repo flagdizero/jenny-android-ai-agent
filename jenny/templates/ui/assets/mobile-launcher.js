@@ -86,6 +86,8 @@ export class LauncherController {
     this.statusEl = document.getElementById('launcher-status');
     this.retryBtn = document.getElementById('launcher-status-retry');
     this.manageBtn = document.getElementById('launcher-manage');
+    // V. `_manageAvailable()`: in casa non c'e' una scheda Apps dove andare.
+    if (this.manageBtn) this.manageBtn.hidden = !this._manageAvailable();
 
     /* Verità unica sullo stato del foglio, e la ragione per cui esiste invece
        di interrogare il DOM: `present()` deve diventare falso *nell'istante*
@@ -567,7 +569,17 @@ export class LauncherController {
    *  prima costa una riga ed è idempotente: quando la catena normale funziona,
    *  la chiusura dentro `switchMode` diventa un giro a vuoto.
    */
+  /* In casa la scheda Apps non esiste — il guscio non ha `switchMode` — e la
+     riga «Gestisci» non ha dove portare. Sparisce invece di restare e non fare
+     niente: una porta che non si apre è peggio di una porta che manca, ed è
+     la stessa regola con cui il backup nasconde i suoi bottoni fuori dall'APK.
+     La gestione resta di là, in officina, che è dove le cose si aggiustano. */
+  _manageAvailable() {
+    return typeof this.app?.switchMode === 'function';
+  }
+
   _openManager() {
+    if (!this._manageAvailable()) return;
     this.close();
     this.app.switchMode('apps');
   }
@@ -603,7 +615,12 @@ export class LauncherController {
   }
 
   _setBackgroundInert(on) {
-    const shell = document.getElementById('app');
+    /* I due gusci chiamano la propria radice in due modi — `#app` in officina,
+       `.casa-shell` in casa — e questo e' l'unico punto del cassetto che ne
+       tocca una. Si cercano tutte e due invece di passarla dal costruttore:
+       un argomento in piu' su ogni chiamante per un nodo che si trova da se'. */
+    const shell = document.getElementById('app')
+      || document.querySelector('.casa-shell');
     if (shell) shell.inert = on;
     /* `inert` toglie fuoco e tocchi, **non** l'impilamento: la mascotte vive
        dentro `#app` (v. `JennyCompanion._buildDom`) ma a z-index 120, sopra

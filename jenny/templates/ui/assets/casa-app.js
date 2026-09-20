@@ -31,6 +31,14 @@ import { CasaUpdates } from './casa-updates.js';
 import { CasaBackup } from './casa-backup.js';
 import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
+/* Il cassetto delle app e la sua sorgente, **presi dall'officina, non
+   ricopiati**. `AppsController` e' una scheda dell'officina, ma la sua meta'
+   dati e' gia' fatta per girare senza schermo — `render()` emette il cambio e
+   poi esce se il suo DOM non c'e', con un commento che nomina proprio questo
+   caso. Qui la si usa cosi': niente `view-apps` in casa, e nessun DOM da
+   toccare. */
+import { LauncherController } from './mobile-launcher.js';
+import { AppsController } from './mobile-apps.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { api } from './shared/api-client.js';
@@ -210,6 +218,14 @@ class CasaApp {
        dietro una tendina e se ne vede solo la coda. */
     this._shellReady = false;
     this._shellReadyCbs = [];
+
+    /* Il cassetto: costruito subito perche' il suo markup e' statico, come in
+       officina. I **dati** invece no — `AppsController` fa quattro fetch e
+       quella delle app Android ricodifica ogni icona in base64: si aggancia
+       alla prima apertura (v. `appsController()`), che e' la stessa scelta che
+       il cassetto fa gia' di suo in `_attachSource()`. */
+    this.launcher = new LauncherController(this);
+    this._apps = null;
 
     window.mobileApp = this;
     this.init();
@@ -654,6 +670,23 @@ class CasaApp {
     if (!window.JennyNative) requestAnimationFrame(() => this.onNativeReady());
   }
 
+  /** La sorgente dei dati del cassetto, costruita alla prima richiesta.
+   *
+   *  Il cassetto la chiede da se' (`_attachSource`) e non piu' di una volta.
+   *  `AppsController` qui non trova nessuno dei suoi nodi e resta muto: il suo
+   *  `render()` emette il cambio e poi esce, che e' esattamente il giro di cui
+   *  il cassetto ha bisogno.
+   */
+  appsController() {
+    return (this._apps ||= new AppsController());
+  }
+
+  /** Apre il cassetto delle app. Stesso nome del metodo dell'officina, perche'
+   *  chi chiama e' lo stesso codice. */
+  openLauncher() {
+    this.launcher?.open();
+  }
+
   /** Il tasto Home di Android, quando Jenny e' il launcher.
    *
    *  In officina Home smonta cinque livelli di overlay e collassa il
@@ -704,6 +737,17 @@ class CasaApp {
    *  l'ordine e' una garanzia, non una scelta fra due candidati.
    */
   _closeOverlays() {
+    /* Il cassetto per primo: e' il piu' alto di tutti, e in officina sta nello
+       stesso posto della catena (fra la mini-app e la tendina). Il suo
+       `close()` e' idempotente, quindi `isOpen()` e' l'unica domanda da fare —
+       e si chiama cosi', non `present()`: quello e' il nome della *proprieta'*
+       che l'officina mette nei suoi livelli di overlay, e scriverlo qui sarebbe
+       passato in silenzio (optional chaining su un metodo che non c'e' torna
+       `undefined`, cioe' «Indietro non chiude il cassetto» senza un errore). */
+    if (this.launcher?.isOpen()) {
+      this.launcher.close();
+      return true;
+    }
     if (this.who.isOpen) {
       this.who.close();
       return true;
@@ -750,6 +794,11 @@ class CasaApp {
 
   _bindComposer() {
     this.attach.addEventListener('click', () => this.files.trigger());
+
+    /* Il cassetto delle app, a sinistra del composer: lo stesso posto e lo
+       stesso foglio dell'officina. */
+    document.getElementById('casa-drawer')
+      ?.addEventListener('click', () => this.openLauncher());
 
     this.pending.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-remove]');
