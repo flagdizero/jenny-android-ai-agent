@@ -223,11 +223,48 @@ export class LauncherController {
       // Le righe portano dentro testo tradotto (il tipo, l'errore di un
       // manifest rotto): la cache va buttata, non riordinata.
       this._rows.clear();
+      this._applyStaticTranslations();
       this._render();
     });
+    /* E una volta subito: `i18n.load` è asincrona, quindi al boot le chiavi
+       potrebbero non esserci ancora — ma il segnaposto italiano del markup sì,
+       e quello va coperto comunque. Se le traduzioni arrivano dopo,
+       `onLocaleChange` ripassa di qui. */
+    this._applyStaticTranslations();
 
     this._setupDrag();
     this._setupGeometry();
+  }
+
+  /** Le stringhe che stanno **nel markup** e non le scrive nessun disegno.
+   *
+   *  In officina non serviva: quel guscio ha una passata sua che gira su tutto
+   *  il documento (`MobileApp._applyStaticTranslations`, che legge
+   *  `data-i18n-placeholder` e compagnia). La casa quella passata non ce l'ha —
+   *  non ne aveva mai avuto bisogno, perché il suo markup non portava
+   *  nemmeno un `data-i18n` — e portandoci dentro questo foglio ci sono
+   *  arrivate dieci stringhe italiane fisse. Visto sul telefono, con la lingua
+   *  su inglese: titolo «MOST USED» e sotto «Cerca un'app…».
+   *
+   *  Sta qui e non in casa perché i nodi sono di questo componente: una
+   *  seconda passata generica nel guscio funzionerebbe, ma lascerebbe il
+   *  prossimo pezzo condiviso a scoprire lo stesso buco da capo. In officina
+   *  gira anche lei e riscrive gli stessi valori: costa nulla ed è idempotente.
+   */
+  _applyStaticTranslations() {
+    if (this.search) {
+      this.search.placeholder = i18n.t('launcher.searchPlaceholder');
+      this.search.setAttribute('aria-label', i18n.t('launcher.searchPlaceholder'));
+    }
+    this.clearBtn?.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
+    this.list?.setAttribute('aria-label', i18n.t('launcher.resultsList'));
+    const testo = this.statusEl?.querySelector('.launcher-status-text');
+    if (testo) testo.textContent = i18n.t('launcher.loadFailed');
+    if (this.retryBtn) this.retryBtn.textContent = i18n.t('launcher.retry');
+    const gestisci = this.manageBtn?.querySelector('span');
+    if (gestisci) gestisci.textContent = i18n.t('launcher.manage');
+    document.getElementById('launcher-close')
+      ?.setAttribute('aria-label', i18n.t('common.close'));
   }
 
   /* ── Geometria: la zona di gesture e la tastiera (5.2, 5.3, 5.5) ────────── */

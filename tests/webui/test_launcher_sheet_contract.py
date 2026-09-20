@@ -816,3 +816,33 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
         f"il JS li nasconde ma il CSS li riaccende: {sorted(set(guasti))} "
         "— serve una regola `[hidden]` che batta il loro `display`"
     )
+
+def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
+    """**La casa non ha una passata generica sui `data-i18n-*`.**
+
+    L'officina sì (`MobileApp._applyStaticTranslations`, che spazza tutto il
+    documento), e per questo il markup del foglio ha sempre potuto portarsi
+    dietro dei segnaposto italiani: qualcuno li riscriveva. In casa quella
+    passata non esiste — non ne aveva mai avuto bisogno, perché il suo markup
+    non conteneva nemmeno un `data-i18n` — e portandoci dentro il foglio ci
+    sono arrivate dieci stringhe fisse.
+
+    Visto sul telefono il 20/09/2026, lingua su inglese: il titolo diceva
+    «MOST USED» (quello lo scrive il JS) e sotto il campo diceva «Cerca
+    un'app…». Metà schermata in una lingua e metà nell'altra.
+
+    Il banco chiede che **ogni chiave `data-i18n*` del markup della casa sia
+    scritta da qualcuno**: dal cassetto, che ora ha la sua passata, o dal
+    guscio. Una chiave che nessuno scrive è un segnaposto che resta a schermo.
+    """
+    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    scrittori = _src("mobile-launcher.js") + _src("casa-app.js")
+
+    chiavi = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', casa))
+    assert chiavi, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"
+
+    orfane = [k for k in sorted(chiavi) if f"'{k}'" not in scrittori]
+    assert not orfane, (
+        f"queste chiavi nessuno le scrive, quindi a schermo resta il segnaposto "
+        f"del markup: {orfane}"
+    )

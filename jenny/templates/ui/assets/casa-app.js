@@ -797,8 +797,15 @@ class CasaApp {
 
     /* Il cassetto delle app, a sinistra del composer: lo stesso posto e lo
        stesso foglio dell'officina. */
-    document.getElementById('casa-drawer')
-      ?.addEventListener('click', () => this.openLauncher());
+    const cassetto = document.getElementById('casa-drawer');
+    cassetto?.addEventListener('click', () => this.openLauncher());
+    /* L'etichetta per chi legge lo schermo. La casa non ha una passata
+       generica sui `data-i18n-*` — non ne ha mai avuto bisogno — quindi
+       l'attributo da solo non basta e il valore va scritto. */
+    const dilloBene = () =>
+      cassetto?.setAttribute('aria-label', i18n.t('nav.launcher'));
+    dilloBene();
+    i18n.onLocaleChange(dilloBene);
 
     this.pending.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-remove]');
