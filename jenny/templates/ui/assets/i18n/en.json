@@ -835,7 +835,8 @@
       "taskPending": "handed to a subagent, waiting for its verdict",
       "orphans": "Entries with no task",
       "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
-    }
+    },
+    "byHerself": "When she acts on her own"
   },
   "onboarding": {
     "selectFormat": "Choose your provider format",

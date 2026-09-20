@@ -419,3 +419,142 @@ def test_an_unavailable_payload_still_produces_a_renderable_view() -> None:
     assert view["available"] is False
     assert view["banner"] == {"kind": "unavailable"}
     assert view["rows"] == []
+
+
+# ── Il filtro: un elenco per cassetto ───────────────────────────────────────
+
+
+def _payload(*, jobs: str = "", extra: str = "") -> str:
+    return f"{{ available: true, now_ms: NOW, default_timezone: 'Europe/Rome', jobs: [{jobs}], counts: {{ system: 4, user: 2 }}{extra} }}"
+
+
+def _job(id_: str, kind: str, *, effective: str = "active", next_ms: str = "NOW + 60_000") -> str:
+    """Un lavoro come lo manda il gateway. `effective` e' il campo che
+    `pickBanner` guarda per dire «fermo»: `enabled` da solo non basta."""
+    return (f"{{ id: '{id_}', name: '{id_}', kind: '{kind}', effective: '{effective}', "
+            f"schedule: {{ kind: 'every', every_ms: 1_800_000 }}, next_run_at_ms: {next_ms}, "
+            f"last_run_at_ms: NOW - 600_000, runs: [] }}")
+
+
+def test_a_drawer_shows_only_its_own_jobs() -> None:
+    """«Programmazione» non era una famiglia: i quattro lavori di sistema
+    finiscono in tre posti diversi. Il payload porta gia' `kind` per riga, e
+    il filtro e' quel che rende la divisione un parametro invece di un giro di
+    codice nuovo."""
+    out = _run_js(f"""
+      const tutto = buildCronView({_payload(jobs=', '.join([
+          _job('dream', 'system'), _job('gardener', 'system'),
+          _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))}, {{ tr }});
+      const mani = buildCronView({_payload(jobs=', '.join([
+          _job('dream', 'system'), _job('gardener', 'system'),
+          _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))},
+        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+      console.log(JSON.stringify({{
+        tutto: tutto.rows.map((r) => r.id),
+        mani: mani.rows.map((r) => r.id),
+      }}));
+    """)
+    visto = json.loads(out)
+    assert sorted(visto["tutto"]) == ["acqua-basilico", "dream", "gardener", "heartbeat"]
+    assert sorted(visto["mani"]) == ["acqua-basilico", "heartbeat"], (
+        "il cassetto Mani mostra lavori che appartengono a un altro cassetto"
+    )
+
+
+def test_the_banner_talks_about_the_jobs_you_can_see() -> None:
+    """Il banner nomina i lavori spenti. Calcolato sul payload intero e mostrato
+    accanto a un elenco filtrato, direbbe di lavori che li' non ci sono — e chi
+    legge cerca una riga che non esiste."""
+    spenti = ', '.join([
+        _job('dream', 'system', effective='inert', next_ms='null'),
+        _job('gardener', 'system', effective='inert', next_ms='null'),
+        _job('heartbeat', 'system'),
+        _job('acqua-basilico', 'user'),
+    ])
+    out = _run_js(f"""
+      const tutto = buildCronView({_payload(jobs=spenti)}, {{ tr }});
+      const mani = buildCronView({_payload(jobs=spenti)},
+        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+      console.log(JSON.stringify({{
+        tutto: tutto.banner, mani: mani.banner,
+      }}));
+    """)
+    visto = json.loads(out)
+    assert visto["tutto"] and visto["tutto"]["kind"] == "inert", visto["tutto"]
+    assert "dream" in visto["tutto"]["jobs"], visto["tutto"]
+    assert not visto["mani"] or "dream" not in (visto["mani"].get("jobs") or []), (
+        f"il banner di Mani nomina un lavoro che Mani non mostra: {visto['mani']}"
+    )
+
+
+def test_the_count_describes_what_is_on_screen() -> None:
+    """I conteggi vengono dal payload e descrivono **tutti** i lavori: un «4
+    lavori» sopra due righe si legge come un guasto."""
+    jobs = ', '.join([
+        _job('dream', 'system'), _job('gardener', 'system'),
+        _job('heartbeat', 'system'), _job('acqua-basilico', 'user'),
+    ])
+    out = _run_js(f"""
+      const tutto = buildCronView({_payload(jobs=jobs)}, {{ tr }});
+      const mani = buildCronView({_payload(jobs=jobs)},
+        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+      console.log(JSON.stringify({{ tutto: tutto.counts, mani: mani.counts }}));
+    """)
+    visto = json.loads(out)
+    assert visto["tutto"] == {"system": 4, "user": 2}, "senza filtro i conti restano quelli del server"
+    assert visto["mani"] == {"system": 1, "user": 1}, visto["mani"]
+
+
+def test_without_a_filter_nothing_changes() -> None:
+    """Il filtro e' un parametro, non un cambio di comportamento: chi non lo
+    passa deve vedere esattamente quel che vedeva prima."""
+    jobs = ', '.join([_job('dream', 'system'), _job('acqua-basilico', 'user')])
+    out = _run_js(f"""
+      const a = buildCronView({_payload(jobs=jobs)}, {{ tr }});
+      const b = buildCronView({_payload(jobs=jobs)}, {{ tr, tieni: undefined }});
+      console.log(JSON.stringify({{ a: a.rows.map((r) => r.id), b: b.rows.map((r) => r.id),
+                                    conti: a.counts }}));
+    """)
+    visto = json.loads(out)
+    assert visto["a"] == visto["b"]
+    assert visto["conti"] == {"system": 4, "user": 2}
+
+
+def _predicato_di_mani() -> str:
+    """`LAVORI_DI_MANI` preso dal sorgente, non riscritto qui.
+
+    Ricopiarlo vorrebbe dire misurare la copia: il difetto che conta e' che
+    *quel* predicato cambi, non che ne esista uno giusto da qualche parte.
+    """
+    import re
+
+    src = (
+        Path(__file__).resolve().parents[2]
+        / "jenny" / "templates" / "ui" / "assets" / "mobile-settings.js"
+    ).read_text(encoding="utf-8")
+    m = re.search(r"^export const LAVORI_DI_MANI = (.+);$", src, re.M)
+    assert m, "LAVORI_DI_MANI non si trova piu' in mobile-settings.js"
+    return m.group(1)
+
+
+def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
+    """I quattro lavori di sistema vanno in tre posti diversi.
+
+    In Mani resta cio' che Jenny fa **per te** quando non glielo stai
+    chiedendo: i tuoi promemoria, e l'heartbeat — che legge le cose che le hai
+    lasciato in `HEARTBEAT.md`. `dream` e `gardener` riempiono la memoria e
+    stanno accanto a quel che riempiono; `update_check` e' dell'app, e il suo
+    giro e' in casa.
+    """
+    out = _run_js(f"""
+      const tieni = {_predicato_di_mani()};
+      const lavori = [
+        {{ id: 'dream', kind: 'system' }},
+        {{ id: 'gardener', kind: 'system' }},
+        {{ id: 'update_check', kind: 'system' }},
+        {{ id: 'heartbeat', kind: 'system' }},
+        {{ id: 'acqua-basilico', kind: 'user' }},
+      ];
+      console.log(JSON.stringify(lavori.filter(tieni).map((j) => j.id)));
+    """)
+    assert sorted(json.loads(out)) == ["acqua-basilico", "heartbeat"], json.loads(out)

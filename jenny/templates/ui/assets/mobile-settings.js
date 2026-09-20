@@ -58,6 +58,19 @@ const PORTE_ICONE = { launcher: 'layout-grid', apps: 'adjustments', workspace: '
    traduzione mancante si presenta (visto sul rig). */
 const PORTE_ETICHETTE = { graph: 'nav.wiki' };
 
+/* Quali lavori periodici appartengono a Mani.
+ *
+ * «Programmazione» non era una famiglia: i quattro lavori di sistema finiscono
+ * in tre posti diversi. `dream` e `gardener` riempiono la memoria e stanno
+ * accanto a quel che riempiono (Memoria, passo 2); `update_check` e'
+ * dell'app, e il suo giro e' in casa. Qui resta cio' che Jenny fa **per te**
+ * quando non glielo stai chiedendo: i tuoi promemoria, e l'heartbeat, che
+ * legge le cose che le hai lasciato in `HEARTBEAT.md`.
+ *
+ * Il payload porta gia' `kind: system|user` per riga, quindi e' un filtro e
+ * non un giro di codice nuovo. */
+export const LAVORI_DI_MANI = (job) => job.kind !== 'system' || job.id === 'heartbeat';
+
 /* `launcher` non e' un modo: e' il cassetto delle app, che sale dal fondo. Si
    apriva dalla voce «Apps» del dock — la sola, e adesso quella voce non c'e'
    piu'. Senza questa riga il cassetto resterebbe vivo e senza maniglia. */
@@ -255,7 +268,7 @@ export class SettingsController {
       tools: () => this._section('tools', 'ti-tool', i18n.t('settings.tools'), this._renderTools(d)),
       memory: () => this._section('memory', 'ti-sparkles', i18n.t('settings.memory.title'), this._renderMemory(d)),
       workers: () => this._section('workers', 'ti-map', i18n.t('settings.workers.title'), this._renderWorkers(d)),
-      scheduling: () => this._section('scheduling', 'ti-alarm', i18n.t('cron.sectionTitle'), this._renderScheduling()),
+      scheduling: () => this._section('scheduling', 'ti-alarm', i18n.t('cron.byHerself'), this._renderScheduling()),
       battery: () => this._renderBatterySection(d),
       ssh: () => this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
@@ -2048,6 +2061,7 @@ export class SettingsController {
       nowMs: payload.now_ms,
       tr: (key, params) => i18n.t(key, params),
       locale: i18n.locale,
+      tieni: LAVORI_DI_MANI,
     });
     blockEl.innerHTML = this._renderCronBlock(this._cron);
     this._wireCronBlock();

@@ -835,7 +835,8 @@
       "taskPending": "affidato a un subagent, in attesa del verdetto",
       "orphans": "Voci senza task",
       "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
-    }
+    },
+    "byHerself": "Quando agisce da sola"
   },
   "onboarding": {
     "selectFormat": "Scegli il formato del provider",

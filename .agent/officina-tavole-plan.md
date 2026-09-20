@@ -132,8 +132,28 @@ che chiede a ogni porta di avere un nome in tutte e due le lingue.
 Otto banchi nuovi (`test_officina_cassetti_contract.py`), otto mutazioni
 rosse.
 
-**Passo 1 — Mani.** Tre sezioni intere che si spostano: `tools`, `ssh`,
-`telegram`. È il passo che prova la tabella, e non può rompere niente.
+**Passo 1 — Mani. ✅ fatto il 20/09/2026.** `tools`, `ssh` e `telegram` erano
+già nel cassetto dal passo 0 — la tabella li aveva assegnati tutti e undici —
+quindi il lavoro vero era l'altro pezzo della riga: **l'elenco dei lavori
+periodici**.
+
+`buildCronView` prende un `tieni`, e Mani mostra `LAVORI_DI_MANI`: i tuoi
+promemoria più `heartbeat`. `dream` e `gardener` se ne vanno con la memoria che
+riempiono; `update_check` è dell'app, e il suo giro è in casa.
+
+Due cose che il filtro ha portato con sé, e che sarebbero state difetti
+silenziosi:
+
+* **il banner si calcola sul filtrato, non sul payload.** Nomina i lavori
+  fermi: sopra un elenco filtrato direbbe «dream è fermo» dove dream non c'è, e
+  chi legge cerca una riga che non esiste.
+* **i conteggi si ricontano.** Venivano dal server e descrivevano tutti i
+  lavori: un «4 lavori» sopra due righe si legge come un guasto.
+
+La sezione si chiama «Quando agisce da sola» invece di «Programmazione»: dice
+cosa ci trovi, non com'è fatta sotto. Cinque banchi nuovi, otto mutazioni
+rosse — comprese le due sul predicato, che al primo giro erano verdi perché
+nessuno lo misurava.
 
 **Passo 2 — Memoria.** `memory` e `workers` interi, più la vista workspace,
 più gli snapshot. Il pezzo delicato è uno solo: da `backup` restano gli

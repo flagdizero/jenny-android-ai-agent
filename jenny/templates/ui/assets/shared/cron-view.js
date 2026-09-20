@@ -237,14 +237,26 @@ export function heartbeatView(block) {
 }
 
 /** Il modello di vista completo. Una chiamata, tutto quel che la sezione rende. */
-export function buildCronView(payload, { nowMs, tr, locale } = {}) {
+export function buildCronView(payload, { nowMs, tr, locale, tieni } = {}) {
   const stamp = Number.isFinite(nowMs) ? nowMs : payload?.now_ms;
-  const banner = pickBanner(payload);
-  if (!payload || payload.available === false) {
+  /* Il filtro si applica **prima** del banner, non dopo le righe.
+   *
+   * Il banner nomina i lavori spenti («dream e gardener sono fermi»): calcolato
+   * sul payload intero e mostrato accanto a un elenco filtrato, direbbe di
+   * lavori che li' non ci sono — e chi legge cerca una riga che non esiste.
+   * Filtrando prima, l'elenco e la sua spiegazione parlano della stessa cosa.
+   * I banner che non dipendono dai lavori (servizio giu', store recuperato)
+   * restano comunque: quelli rompono anche i lavori che stai guardando.
+   */
+  const visto = tieni && payload?.jobs
+    ? { ...payload, jobs: payload.jobs.filter(tieni) }
+    : payload;
+  const banner = pickBanner(visto);
+  if (!visto || visto.available === false) {
     return { available: false, banner, rows: [], counts: null, asOf: stamp };
   }
-  const rows = [...(payload.jobs ?? [])].sort(compareJobs).map((job) => {
-    const tz = job.display_timezone || payload.default_timezone;
+  const rows = [...(visto.jobs ?? [])].sort(compareJobs).map((job) => {
+    const tz = job.display_timezone || visto.default_timezone;
     return {
       id: job.id,
       name: job.name,
@@ -273,5 +285,13 @@ export function buildCronView(payload, { nowMs, tr, locale } = {}) {
       heartbeat: heartbeatView(job.heartbeat),
     };
   });
-  return { available: true, banner, rows, counts: payload.counts ?? null, asOf: stamp };
+  /* I conteggi vengono dal payload e descrivono **tutti** i lavori: con un
+     filtro attivo non descrivono piu' quel che si vede, quindi si ricontano
+     sulle righe rimaste. Un «4 lavori» sopra due righe e' un difetto che si
+     legge come un guasto. */
+  const counts = tieni
+    ? { system: visto.jobs.filter((j) => j.kind === 'system').length,
+        user: visto.jobs.filter((j) => j.kind !== 'system').length }
+    : payload.counts ?? null;
+  return { available: true, banner, rows, counts, asOf: stamp };
 }
