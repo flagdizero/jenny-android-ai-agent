@@ -155,9 +155,25 @@ cosa ci trovi, non com'è fatta sotto. Cinque banchi nuovi, otto mutazioni
 rosse — comprese le due sul predicato, che al primo giro erano verdi perché
 nessuno lo misurava.
 
-**Passo 2 — Memoria.** `memory` e `workers` interi, più la vista workspace,
-più gli snapshot. Il pezzo delicato è uno solo: da `backup` restano gli
-snapshot e se ne vanno esporta/importa, che sono della casa.
+**Passo 2 — Memoria. ✅ fatto il 20/09/2026.** `memory` e `workers` erano già
+nel cassetto dal passo 0; la vista workspace ci arriva dalla sua porta. Il
+lavoro era il pezzo delicato: **dividere `backup`**.
+
+Esportare e ripristinare da file se ne sono andati — sono in casa, e ci sono
+arrivati col giro di «Tu e Jenny». Qui resta la storia locale, che è quel che
+la casa manda a sfogliare qui: la sua frase lo dice già, «si sfoglia in
+officina. Vive però su questo telefono — di un telefono perso non salva
+niente».
+
+La sezione si chiama «Storia locale» e non più «Backup e ripristino»: il nome
+vecchio prometteva due gesti che lì non ci sono più. Anche l'import del modulo
+è sparito — lasciarlo vorrebbe dire tenere quei due gesti a portata di un
+bottone dimenticato.
+
+Il banco nuovo guarda il confine **da tutte e due le parti**: che l'officina
+non li rifaccia, e che la casa ce li abbia davvero. Un banco che guardi solo il
+primo verso difende un buco invece di un confine — il giorno che sparissero
+dalla casa resterebbe verde.
 
 **Passo 3 — Cervello.** L'unica sezione che va **divisa**: da `models` il
 catalogo va via (è in casa), restano l'anagrafica e i parametri. Più il blocco

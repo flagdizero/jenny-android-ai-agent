@@ -18,11 +18,9 @@ import {
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
 import { UpdateFlow, checkLines, phaseKey } from './shared/update-flow.js';
-import {
-  runExportFlow,
-  runImportFlow,
-  runSnapshotRestore,
-} from './shared/backup-flow.js';
+/* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
+   e un import qui li rimetterebbe a portata di un bottone dimenticato. */
+import { runSnapshotRestore } from './shared/backup-flow.js';
 
 // Ripiego per `power.modes` quando il payload arriva da un gateway più vecchio
 // del client: stesso ordine di `KEEP_AWAKE_MODES` in config/schema.py, dal più
@@ -272,7 +270,7 @@ export class SettingsController {
       battery: () => this._renderBatterySection(d),
       ssh: () => this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
-      backup: () => this._section('backup', 'ti-database-export', i18n.t('backup.sectionTitle'), this._renderBackup()),
+      backup: () => this._section('backup', 'ti-history', i18n.t('backup.snapshotHistory'), this._renderBackup()),
       system: () => this._section('system', 'ti-info-circle', i18n.t('settings.system'), this._renderSystem(d)),
     };
     const cassetto = CASSETTI[this._cassetto];
@@ -1663,15 +1661,21 @@ export class SettingsController {
 
   // ── Backup e ripristino ──────────────────────────────────────────────
 
+  /* La storia locale, e **non** il backup cifrato.
+   *
+   * Esportare e ripristinare vivono in casa, da «Backup», dove sono arrivati
+   * col giro di «Tu e Jenny» — e la frase che la casa gia' scrive di suo dice
+   * anche perche' questa meta' sta qui: la storia locale «serve a rimettere a
+   * posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive pero'
+   * su questo telefono — di un telefono perso non salva niente».
+   *
+   * Due schermate che sanno esportare vorrebbero dire due posti da tenere
+   * allineati per un gesto che si fa una volta al mese; e sarebbero anche due
+   * posti in cui puo' comparire una passphrase.
+   */
   _renderBackup() {
     return `
-      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.exportDesc')}</p>
-      <button class="settings-btn-save settings-btn-block" id="btn-backup-export"><i class="ti ti-file-export"></i> ${i18n.t('backup.exportButton')}</button>
-      <div class="settings-divider"></div>
-      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.importDesc')}</p>
-      <button class="settings-btn-add" id="btn-backup-import"><i class="ti ti-file-import"></i> ${i18n.t('backup.importButton')}</button>
-      <div class="settings-divider"></div>
-      <div class="settings-subheading">${i18n.t('backup.snapshotHistory')}</div>
+      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.snapshotDesc')}</p>
       <div class="settings-field">
         <label class="settings-label">${i18n.t('backup.retentionLabel')}</label>
         <select class="settings-select" id="snapshot-retention">
@@ -1867,10 +1871,8 @@ export class SettingsController {
   }
 
   _wireBackup() {
-    this._wireBtn('btn-backup-export', () => runExportFlow());
-    this._wireBtn('btn-backup-import', async () => {
-      if (await confirmDialog(i18n.t('backup.importConfirm'))) runImportFlow();
-    });
+    /* Esportare e ripristinare da file non si agganciano piu': quei due
+       bottoni sono in casa. Qui resta la storia locale. */
     this._wireBtn('btn-snapshot-create', async () => {
       try {
         const res = await api.createSnapshot();

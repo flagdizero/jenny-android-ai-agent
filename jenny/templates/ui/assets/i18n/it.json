@@ -757,7 +757,8 @@
     "retentionMonth": "1 mese",
     "retentionYear": "1 anno",
     "retentionForever": "Per sempre",
-    "retentionDays": "{days} giorni"
+    "retentionDays": "{days} giorni",
+    "snapshotDesc": "Jenny fotografa il workspace da sola — quando smetti di scrivere, prima di ogni passata di Dream, allo spegnimento. Serve a rimettere a posto una cosa cancellata per sbaglio. Vive su questo telefono: il backup che porti via si fa in «Tu e Jenny»."
   },
   "cron": {
     "sectionTitle": "Programmazione",

@@ -202,3 +202,46 @@ def test_every_door_wears_an_icon() -> None:
     porte = {p for c in _cassetti().values() for p in c["porte"]}
     senza = sorted(porte - set(icone))
     assert not senza, f"porte senza icona, tutte uguali fra loro: {senza}"
+
+
+# ── Quel che ha la casa, l'officina non lo rifa' ────────────────────────────
+
+CASA = ASSETS  # gli stessi file: le due interfacce condividono `shared/`
+
+
+def _casa(nome: str) -> str:
+    return (ASSETS / nome).read_text(encoding="utf-8")
+
+
+def test_the_encrypted_backup_lives_in_one_place() -> None:
+    """Esportare e ripristinare da file sono in casa, da «Backup».
+
+    Due schermate che sanno esportare sono due posti da tenere allineati per un
+    gesto che si fa una volta al mese — e due posti in cui puo' comparire una
+    passphrase. In officina resta la **storia locale**, che e' quel che la casa
+    manda a sfogliare qui: «si sfoglia in officina. Vive pero' su questo
+    telefono — di un telefono perso non salva niente».
+    """
+    officina = _src("mobile-settings.js")
+    for gesto in ("runExportFlow", "runImportFlow"):
+        assert gesto not in officina, (
+            f"l'officina rifa' «{gesto}», che la casa ha gia': due posti che "
+            f"scrivono lo stesso file"
+        )
+    for bottone in ("btn-backup-export", "btn-backup-import"):
+        assert bottone not in officina, f"{bottone} e' tornato in officina"
+
+    # E la casa ce li ha davvero: se un giorno sparissero di la', questo banco
+    # starebbe difendendo un buco invece di un confine.
+    casa = _casa("casa-backup.js")
+    assert "runExportFlow" in casa and "runImportFlow" in casa, (
+        "la casa non ha piu' il backup cifrato: toglierlo dall'officina lo "
+        "toglierebbe dall'app"
+    )
+
+    # Quel che resta di qua: la storia locale, con le sue tre manopole.
+    for pezzo in ("btn-snapshot-create", "snapshot-retention", "runSnapshotRestore"):
+        assert pezzo in officina, f"la storia locale ha perso {pezzo}"
+    assert "runSnapshotRestore" not in casa, (
+        "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
+    )
