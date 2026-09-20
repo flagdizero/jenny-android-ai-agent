@@ -263,6 +263,7 @@ _UI_MANIFEST = [
     "assets/mobile-workspace.js",
     "assets/shared/advanced-mode.js",
     "assets/shared/api-client.js",
+    "assets/shared/apps-source.js",
     "assets/shared/backup-flow.js",
     "assets/shared/battery-exemption.js",
     "assets/shared/commands-chip.js",
