@@ -1,167 +1,170 @@
-# L'officina come la disegnano le tavole — il giro minimo
+# L'officina in quattro cassetti — il piano intero
 
-Sei tavole nella riga dell'operatore del canvas: **Console, Stato,
-Programmazione, Cervello, Mani, Cassetti**. Questo piano dice come arrivarci
-spostando il meno possibile.
+Sostituisce la prima stesura di questo file, che pianificava **sei** tavole
+(Console, Stato, Programmazione, Cervello, Mani, Cassetti). Le tavole adesso
+sono quattro, e le tre che sono cadute sono cadute per una ragione ciascuna,
+scritta qui sotto perché non tornino.
 
-## La tesi, e la misura che la regge
+Tavole: canvas «Jenny UI: Utente e Operatore», riga dell'operatore.
 
-**Le tavole non chiedono un'officina nuova: chiedono la stessa officina divisa
-in cinque cassetti diversi.** Misurato voce per voce, di tutto quel che le sei
-tavole disegnano esiste già **tutto tranne tre cose** — e una delle tre
-propongo di tenerla fuori.
+## Le quattro, e la domanda a cui ognuna risponde
 
-Cosa c'è oggi:
+| Cassetto | La domanda |
+|---|---|
+| **Console** | cosa sta facendo, adesso e per esteso |
+| **Cervello** | con che testa pensa — e quali marche esistono |
+| **Mani** | cosa può fare, e quando parte da sola |
+| **Memoria** | cosa ricorda, chi gliela riempie, dov'è su disco |
+
+Una console e tre facoltà: **pensa · fa · ricorda**. Non è un elenco di
+sottosistemi — è il motivo per cui si capisce dov'è una cosa senza averlo
+imparato.
+
+## Le tre che sono cadute
+
+**Stato.** Le sue sei caselle erano **sei link**: modello e contesto →
+Cervello, oggi e attività → Console, prossimi lavori e sfondo →
+Programmazione. Una scheda in cui ogni cella porta altrove non è un posto: è
+un menu, e il menu esiste già ed è il dock. Quel che serviva davvero (`/status`)
+resta un comando in Console.
+
+**Programmazione.** Non è una famiglia. I quattro lavori di sistema finiscono
+in tre posti diversi — `dream` e `gardener` in Memoria (riempiono i file),
+`heartbeat` in Mani (legge `HEARTBEAT.md`, cioè le cose che le lasci),
+`update_check` è dell'app — più i promemoria dell'utente, che sono Mani senza
+dubbio. Hanno in comune solo di avere un orologio: raggrupparli per quello è
+raggruppare per implementazione. **Il payload del cron porta già
+`kind: system|user` per riga**, quindi dividerli è un filtro, non un refactor.
+
+**Cassetti.** Era il ripostiglio degli avanzi: file, trascrizione, audit,
+backup, «rifai la configurazione». Quelle cose non hanno niente in comune se
+non di non stare altrove. Diventa **Memoria**, che è quel che erano: i file
+*sono* la sua memoria su disco.
+
+## La regola che decide tutto il resto
+
+> **Se ce l'ha la casa, l'officina non lo rifà.**
+
+E il criterio per sapere di chi è una cosa lo aveva già scritto il canvas:
+*se un'impostazione ha bisogno di un paragrafo per spiegarsi, sta in officina.*
+
+Cosa resta della casa, per intero e senza copie qui:
 
 | | |
 |---|---|
-| guscio | `officina.html`, 450 righe, 7 viste (`view-<mode>`) |
-| dock | 5 voci: chat, wiki, apps, workspace, settings (+ onboarding nascosta) |
-| impostazioni | `mobile-settings.js`, 2 699 righe, **11 sezioni a fisarmonica** |
-| le altre viste | chat 3 832 · apps 1 730 · workspace 1 108 · graph 943 · wiki 746 |
+| **Aggiornamenti** | il giro intero. In officina resta l'etichetta `v0.11.0` in Console |
+| **Backup cifrato** | esporta e ripristina. In officina resta la **storia locale** degli snapshot — ed è quel che la casa già dice: «si sfoglia in officina» |
+| **Chi risponde** | scegliere il modello (e la marca viene con lui) fra quelle configurate |
+| **Tema, mascotte, le sue regole** | tutto della casa |
 
-E la cosa che rende il giro economico: **`switchMode` è già generica** — si
-regge su `controllerFactories` e su un `<div id="view-NOME">`, non su un elenco
-di casi — e le undici sezioni sono undici funzioni `_render*` che tornano una
-stringa e stanno fra le 10 e le 31 righe l'una. Non c'è niente da riscrivere:
-c'è da rifilare.
+E la divisione che ha richiesto più giri, sui provider:
 
-## La corrispondenza, tavola per tavola
+* **casa** — *scegli fra quel che c'è*: tocchi un modello, e `model` +
+  `default_provider` si salvano insieme.
+* **officina, Cervello** — *decidi cosa c'è*: aggiungi o togli una marca, col
+  suo formato, endpoint, CA bundle. «Aggiungi una marca» raccoglie anche **il
+  primo modello** e ha «usala adesso» (acceso di suo, spegnibile): una marca
+  senza un modello che funziona non è una marca che c'è, e senza questo
+  aggiungerne una vorrebbe dire andare in officina e poi in casa per finire.
+* **la chiave sta in tutti e due**: in casa come «sostituisci», in officina
+  come campo dell'anagrafica. È l'unica manutenzione che diventa urgente —
+  quando scade, Jenny smette di rispondere, e attraversare due schermate in
+  quel momento è la cosa sbagliata.
 
-| Tavola | Da dove viene, oggi | Cosa manca davvero |
-|---|---|---|
-| **Console** | `view-chat` intera, con pensieri, tool e tempi già a schermo; l'intestazione la fa già `mobile-header.js` per vista | **la barra in fondo** (token del turno, cache, `ctx 16k/65k`): i dati ci sono in `/api/token-usage`, nella chat non sono mai stati disegnati |
-| **Stato** | versione da `system`, contatori da `usage`, batteria dalla sua scheda, prossimi lavori da `cron-view`, SSH da `ssh` | **la pagina**. Oggi non esiste un posto che risponda «come sta adesso»: le cinque risposte stanno in cinque sezioni diverse |
-| **Programmazione** | `settings→scheduling` (`shared/cron-view.js`), intera | niente — cambia solo da dove si apre: sotto-pagina di Stato |
-| **Cervello** | `settings→models` + `memory` + `workers` | niente |
-| **Mani** | `settings→tools` + `ssh` + `view-apps` + skill | **i permessi per scope e `/ro`** — v. sotto |
-| **Cassetti** | `view-workspace` + `settings→backup` + `system` + trascrizione/audit | niente |
+## Cosa contiene ogni cassetto, e da dove viene
 
-Quattro tavole su sei sono **zero codice nuovo**: sono le stesse funzioni di
-render chiamate da un contenitore diverso.
+Niente di tutto questo è codice nuovo, tranne dove è detto.
 
-## Le tre cose che non sono un raggruppamento
+**Console** — la chat dell'officina (`view-chat`), con pensieri, tool e tempi
+già a schermo. *Da aggiungere:* la testata per turno (token in/out, durata) e
+la barra in fondo (turno + contesto), che leggono `/api/token-usage` e il
+runtime. Più l'etichetta della versione nell'intestazione. **Niente
+impostazioni qui dentro**: è una conversazione.
 
-**1. Stato è una pagina nuova** — ma è composizione, non backend: ogni numero
-che disegna esiste già in `/api/settings` (modello, provider, `usage`,
-`power`, `version`, `runtime`) e in `/api/cron` (prossimi lavori, `uptime`,
-`active_task_count`). Una funzione di render e una fetch che il controller fa
-già. È il pezzo più grosso del giro e resta piccolo.
+**Cervello** — `settings→models` **meno il catalogo** (che è della casa), cioè
+l'anagrafica dei provider e i parametri; più il blocco batteria
+(`_renderBatterySection`). Il dialogo che raccoglie i campi di un provider
+esiste già (`_showAddProviderDialog`).
 
-**2. La barra di Console** — token del turno e contesto. Dato esistente,
-disegno nuovo. Piccola.
+**Mani** — `settings→tools` + `ssh` + `telegram`, interi; la porta per app e
+skill; e l'elenco cron filtrato su `kind: user` più `heartbeat`.
 
-**3. I permessi di scrittura per scope, e `/ro`** — e questa **propongo di
-lasciarla fuori dal giro minimo**, dicendolo invece di nasconderla.
+**Memoria** — `settings→memory` + `workers`, interi (Dream, i tetti, il
+giardiniere, l'archiviazione); la vista `view-workspace`; gli snapshot da
+`settings→backup` (senza esporta/importa); i referti.
 
-Oggi esiste un interruttore scrittura/sola-lettura nel composer
-(`shared/write-switch.js`): è **per conversazione**, vive nel client e il flag
-viaggia **dentro il messaggio**, apposta — «un messaggio partito credendolo in
-sola lettura non si ritira», e il server non tiene quello stato perché
-altrimenti potrebbe raccontarne uno diverso da quello con cui il messaggio è
-partito.
+## Il percorso
 
-La tavola Mani disegna un'altra cosa: tre permessi **per scope** (personale,
-quaderni, console) che vivono nelle impostazioni, e un `/ro` davanti al
-messaggio per un turno solo — con la nota «il chip è sparito dalla chat».
-Sono uno stato sul server, un comando nuovo, e la rimozione di un comando del
-composer: cambia **cosa fa un messaggio**, non dove sta un'impostazione. È un
-giro suo, e merita di essere pesato da solo.
+La regola del giro: **l'app non è mai rotta a metà, e non c'è mai uno schermo
+finto.** Da cui la forma — *la fisarmonica si svuota*.
 
-Nel giro minimo, Mani mostra i permessi **come sono oggi** — cioè l'ambito di
-scrittura reale (`security.restrict_to_workspace`) e l'interruttore dove sta —
-e la tavola resta da finire.
+**Passo 0 — il guscio.** Il dock passa a quattro voci. `view-settings`
+**resta** e all'inizio è il contenitore: dentro ci sono ancora tutte e undici
+le sezioni. L'unica cosa da costruire è la chiave del giro: in `render()`
+l'elenco delle sezioni diventa una **tabella `cassetto → sezioni`**, e il
+controller disegna solo quelle del cassetto attivo.
 
-## Cosa le tavole non nominano, e va deciso
+Niente controller nuovi, niente file nuovi, `_wireSections` (222 righe) **non
+si spezza**: aggancia per `id`, e gli id delle sezioni non disegnate non ci
+sono. `_wireBtn` è già a prova di assente; su 18 `querySelector` nove sono
+protetti da un `if` e due da `?.` — **ne restano ~7 da verificare**.
 
-- **Personalizzazione** (tema, mascotte, lingua): in nessuna delle sei. È
-  giusto — da oggi vive in casa, «Tu e Jenny». Quindi: **si toglie
-  dall'officina**, o resta come doppione? Propongo di toglierla: due posti che
-  scrivono la stessa preferenza sono due posti che si disallineano.
-- **Telegram**: in nessuna tavola. Da qualche parte deve stare. Propongo
-  **Mani**: è un canale, cioè un modo in cui Jenny arriva fuori — la stessa
-  famiglia di SSH e delle app.
-- **SSH** compare due volte: in Stato come riga di stato («SSH acceso · 1
-  host») e in Mani come impostazione. Non è un doppione se si legge così: **la
-  manopola sta in Mani, Stato la legge**. Vale come regola generale fra le due
-  tavole.
-- **Onboarding**: vista nascosta, non è sul dock, resta dov'è.
+**Passo 1 — Mani.** Tre sezioni intere che si spostano: `tools`, `ssh`,
+`telegram`. È il passo che prova la tabella, e non può rompere niente.
 
-## Il percorso, e perché in quest'ordine
+**Passo 2 — Memoria.** `memory` e `workers` interi, più la vista workspace,
+più gli snapshot. Il pezzo delicato è uno solo: da `backup` restano gli
+snapshot e se ne vanno esporta/importa, che sono della casa.
 
-La regola del giro: **l'app non deve mai essere rotta a metà, e non deve mai
-esserci uno schermo finto.** Da cui la forma della migrazione — *la
-fisarmonica si svuota*:
+**Passo 3 — Cervello.** L'unica sezione che va **divisa**: da `models` il
+catalogo va via (è in casa), restano l'anagrafica e i parametri. Più il blocco
+batteria. Qui va anche il campo «primo modello» nel dialogo di aggiunta.
 
-**Passo 0 — il guscio.** Il dock passa a cinque voci: Console, Stato, Cervello,
-Mani, Cassetti. `view-settings` **resta**, e all'inizio è Stato: dentro ci sono
-ancora tutte e undici le sezioni. Nessuna è sparita, nessuna è vuota.
+**Passo 4 — Console.** La testata per turno e la barra in fondo. La
+fisarmonica adesso è vuota: `view-settings` sparisce.
 
-Una sola cosa da costruire, ed è la chiave di tutto il giro: in `render()`
-l'elenco delle undici sezioni diventa una **tabella `tab → sezioni`**, e il
-controller disegna solo quelle del cassetto attivo. Niente controller nuovi,
-niente file nuovi, `_wireSections` (222 righe) **non si spezza**: aggancia per
-`id`, e gli id delle sezioni non disegnate semplicemente non ci sono.
+Ogni passo è installabile da solo.
 
-*Da controllare prima:* `_wireBtn` è già a prova di assente (`if (btn)`), e in
-`_wireSections` su 18 `querySelector` nove sono già protetti da un `if` e due
-da `?.`. **Restano ~7 accessi da verificare** — mezz'ora, mica un refactor.
+## Fuori dal giro, dichiarato
 
-**Passo 1 — Cassetti.** `backup` e `system` escono dalla fisarmonica e si
-uniscono a `view-workspace`. Due voci nella tabella. È il passo più facile e
-serve a provare che la tabella funziona.
+* **I permessi per ambito e `/ro`.** Oggi c'è un interruttore per
+  conversazione, client-side, col flag **dentro il messaggio** — apposta: un
+  messaggio partito credendolo in sola lettura non si ritira, e il server non
+  tiene quello stato per non poterne raccontare uno diverso. La tavola disegna
+  tre permessi per ambito e un `/ro` per un turno: è uno stato sul server, un
+  comando nuovo e un comando in meno nel composer. Cambia **cosa fa un
+  messaggio**, non dove sta un'impostazione. Giro suo.
+* **«Resta dentro il workspace».** Oggi è uno *stato* nel payload
+  (`advanced.workspace_sandbox`), non una manopola. Disegnarlo come
+  interruttore è una feature, non un raggruppamento.
+* **Il nome e l'icona di Jenny.** Il nome si cambia nelle impostazioni
+  vecchie, l'icona solo nel giro iniziale. Sono persona, quindi casa — ma è
+  una riga nuova in «Tu e Jenny».
+* **«Riesegui la configurazione» non torna.** `save_onboarding` fa
+  `config.providers.providers = [uno]`: **sostituisce** l'elenco invece di
+  aggiungere. In una schermata pro quel bottone può solo toglierti roba.
 
-**Passo 2 — Cervello.** `models` + `memory` + `workers`. Tre voci nella
-tabella, zero modifiche alle funzioni.
+## Le prove
 
-**Passo 3 — Mani.** `tools` + `ssh` + `telegram`, più la porta per le app e le
-skill. Qui si decide dove finisce Telegram (v. sopra).
-
-**Passo 4 — Stato, e Programmazione sotto.** Adesso la fisarmonica è vuota, e
-quel che resta nella vista è **solo** ciò che Stato deve dire. Si riscrive come
-pagina, e `scheduling` diventa la sua sotto-pagina — stessa catena di «indietro»
-della casa, una riga in una tabella.
-
-**Passo 5 — la barra di Console.** Token del turno e contesto sotto la chat.
-
-Ogni passo è installabile da solo, e ogni passo lascia l'officina intera.
-
-## Cosa non si tocca, ed è la parte che tiene basso il costo
-
-- **Nessun controller si riscrive.** `mobile-settings.js` resta un file, con lo
-  stesso nome: **28 file di banco** leggono i sorgenti dell'officina, e un
-  rename li tocca tutti per niente.
-- **Nessuna rotta nuova, nessun campo nuovo nei payload.** Tutti i numeri delle
-  sei tavole sono già serviti. L'unica eccezione sarebbe il punto 3, che è
-  fuori.
-- **La casa non si tocca.** Sono due gusci che non si vedono fra loro.
-- **Le funzioni `_render*` non si spostano di file.** Cambia chi le chiama.
-
-## Le prove, per passo
-
-- **Passo 0:** un banco che incrocia la tabella `tab → sezioni` con l'elenco
-  delle sezioni esistenti — nessuna sezione senza cassetto, nessun cassetto che
-  nomina una sezione che non c'è. È la stessa forma dell'invariante `BACK_TO`
-  della casa, ed è l'unico modo di non scoprire una sezione sparita sul
-  telefono.
-- **Passi 1-3:** per ogni cassetto, un banco che apre la vista e conta le
-  sezioni a schermo; e la suite esistente delle impostazioni, che deve restare
-  verde senza modifiche — se cade, qualcosa si è spostato davvero invece di
-  essere stato solo rifilato.
-- **Passo 4:** Stato legge da `/api/settings` e `/api/cron`, quindi il banco è
-  sui dati: ogni riga della tavola nasce da un campo esistente, e un campo che
-  manca deve far fallire il banco, non comparire come `undefined` a schermo.
-- **Passo 5:** i conti della barra contro `/api/token-usage`.
+* **Passo 0:** un banco che incrocia la tabella `cassetto → sezioni` con le
+  sezioni che esistono — nessuna sezione senza cassetto, nessun cassetto che
+  ne nomina una che non c'è. Stessa forma dell'invariante `BACK_TO` della casa.
+* **Passi 1-3:** per ogni cassetto, un banco che conta le sezioni a schermo; e
+  la suite delle impostazioni deve restare verde **senza modifiche** — se cade,
+  qualcosa si è spostato davvero invece di essere stato solo rifilato.
+* **Passo 3, in più:** un banco che il catalogo dei modelli **non** compaia in
+  officina. È l'unico punto in cui il doppione può rientrare di soppiatto.
+* **Passo 4:** i conti della barra contro `/api/token-usage`.
 
 ## Il peso
 
-| Passo | Peso |
+| Passo | |
 |---|---|
-| 0 — guscio + tabella | mezza giornata, e ci sta dentro l'audit dei 7 accessi |
-| 1 — Cassetti | un'ora |
-| 2 — Cervello | un'ora |
-| 3 — Mani | un'ora, più la decisione su Telegram |
-| 4 — Stato + Programmazione | il pezzo vero: mezza giornata |
-| 5 — barra di Console | un'ora |
+| 0 — guscio e tabella | mezza giornata, audit dei 7 accessi compreso |
+| 1 — Mani | un'ora |
+| 2 — Memoria | due ore |
+| 3 — Cervello | due ore |
+| 4 — Console | due ore |
 
-Fuori: i permessi per scope e `/ro`, che sono un giro loro.
+Poco più di una giornata. Era una giornata e mezza con sei tavole: Stato era
+mezza giornata, e adesso non esiste.
