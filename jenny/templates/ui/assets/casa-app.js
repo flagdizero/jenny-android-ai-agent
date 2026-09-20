@@ -37,6 +37,7 @@ import { WhoPanel, dotColor } from './casa-who.js';
    poi esce se il suo DOM non c'e', con un commento che nomina proprio questo
    caso. Qui la si usa cosi': niente `view-apps` in casa, e nessun DOM da
    toccare. */
+import { JennyGap } from './shared/jenny-gap.js';
 import { LauncherController } from './mobile-launcher.js';
 import { AppsController } from './mobile-apps.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -101,6 +102,12 @@ class CasaApp {
     this.thread = document.getElementById('casa-thread');
     this.chat = new CasaChat(this.thread);
     this.jenny = new CasaMascot(document.querySelector('.casa-shell'));
+    /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
+       consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
+       la banda da scansare si misura su di lei, non su dei numeri copiati —
+       cosi' vale anche quando cambia taglia, quando la metti via sul bordo e
+       quando la trascini dall'altra parte. */
+    this.chat.gap = new JennyGap(this.thread, this.jenny.el);
     this.activity = new ActivityLine(document.getElementById('casa-activity'), {
       onOpenInWorkshop: (turnId) => this._openInWorkshop(turnId),
     });

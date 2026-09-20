@@ -555,6 +555,10 @@ export class CasaChat {
       this._empty = false;
       this.syncEmpty();
     }
+    /* Chi le finisce nell'angolo si scansa. Qui e non nel `_follow()`: quello
+       scorre, e il margine va deciso **dopo** che il nodo e' nel filo e prima
+       che l'occhio ci arrivi. */
+    this.gap?.aggiorna();
     return node;
   }
 
@@ -576,6 +580,11 @@ export class CasaChat {
     if (this._atBottom()) this._stick = true;
     else if (top < this._lastTop) this._stick = false;
     this._lastTop = top;
+    /* Il filo scorre e lei no, quindi quale messaggio le stia dietro cambia.
+       Si ricalcola a scorrimento **fermo** e non qui dentro: il margine manda
+       il testo a capo, e rifarlo a ogni fotogramma sposterebbe sotto le dita
+       quel che si sta leggendo. */
+    this.gap?.scorrendo();
   }
 
   _atBottom() {

@@ -274,6 +274,7 @@ _UI_MANIFEST = [
     "assets/shared/i18n.js",
     "assets/shared/image-handler.js",
     "assets/shared/image-lightbox.js",
+    "assets/shared/jenny-gap.js",
     "assets/shared/keyboard.js",
     "assets/shared/launcher-rank.js",
     "assets/shared/launcher-usage-store.js",

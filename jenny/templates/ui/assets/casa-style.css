@@ -306,9 +306,23 @@ body.casa {
   max-width: 78%;
 }
 
+/* **Niente tetto.** Qui c'era `max-width: 88%`, e non era decorazione: serviva
+   a non finire dietro la mascotte. Solo che lei sta in un angolo — 87,6 px in
+   fondo a destra, misurati — e il tetto lo pagavano *tutti* i messaggi, anche
+   quelli in cima dove non c'e' nessuno: 82,6 px CSS su ogni riga, il 14% dello
+   schermo (Titan 2, 20/09/2026).
+   Adesso il margine ce l'ha solo chi le finisce davvero addosso, e a dirlo e'
+   `shared/jenny-gap.js`, che misura i due rettangoli invece di indovinare. */
 .casa-msg-jenny {
   align-self: flex-start;
-  max-width: 88%;
+}
+
+/* Il messaggio e' nell'angolo di Jenny. Il valore non e' scritto qui: lo
+   calcola il modulo dalla taglia vera della mascotte e dal suo ancoraggio, e lo
+   mette sul filo come `--jenny-gap`. Il ripiego serve al primo disegno e a chi
+   apre la pagina fuori dall'APK. */
+.casa-msg-jenny.is-under-jenny {
+  padding-right: var(--jenny-gap, 39px);
 }
 
 .casa-block {
