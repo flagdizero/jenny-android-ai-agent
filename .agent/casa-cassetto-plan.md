@@ -1,5 +1,15 @@
 # Il cassetto delle app in casa
 
+> **Di cosa parla questo file.** Del **cassetto in casa**: il pannello con le
+> app del telefono, le Jenny App e le skill, che oggi in casa non esiste (c'è
+> solo in officina). La domanda del documento non è *se* farlo — è **con cosa
+> costruirlo sotto**: Kotlin nativo, o il cassetto JavaScript che l'officina ha
+> già. Per chi lo usa le due strade danno **la stessa cosa**.
+>
+> Il file si chiamava `casa-cassetto-nativo-plan.md` finché la risposta non è
+> arrivata. Rinominato il 20/09/2026, perché un piano che si chiama «nativo» e
+> conclude di non farlo nativo è una trappola per chi lo riapre fra un mese.
+
 **Stato: il passo 0 è stato fatto, e ha risposto di no al Kotlin.**
 
 > **Esito del 20/09/2026 — misurato sul Titan 2.** Il gateway è su in **~2,0 s**
