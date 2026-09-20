@@ -29,6 +29,55 @@ import {
 // parsimonioso al più affamato.
 const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
 
+/* I quattro cassetti dell'officina, e cosa contiene ognuno.
+ *
+ * **Una tabella e non undici `if`.** Prima le sezioni erano un elenco dentro
+ * `render()`; adesso sono un elenco per cassetto, e il controller ne disegna
+ * uno per volta. Il giro delle tavole (`.agent/officina-tavole-plan.md`) sta
+ * tutto qui dentro: spostare una sezione da un cassetto all'altro e' spostare
+ * una stringa, e non c'e' nessun posto in cui possa restare scritta due volte.
+ *
+ * `porte` sono le viste che prima stavano sul dock e adesso no: si aprono da
+ * una riga in cima al cassetto. Senza, cambiare il dock le lascerebbe
+ * irraggiungibili — un difetto che non si vede finche' non servono.
+ *
+ * **Due parcheggi, dichiarati.** `personalization` e `system` stanno in
+ * Cervello e non ci resteranno: del primo la casa ha gia' tema e mascotte, e
+ * quel che avanza e' il nome di Jenny (v. il piano, «fuori, dichiarato»); del
+ * secondo la versione diventa un'etichetta in Console e i contatori la barra
+ * dei token, al passo 4. Parcheggiarli qui e' cio' che tiene l'app intera
+ * mentre i cassetti si riempiono, invece di farli sparire prima che esista
+ * dove rimetterli.
+ */
+const PORTE_ICONE = { launcher: 'layout-grid', apps: 'adjustments', workspace: 'folder', graph: 'topology-star' };
+
+/* Come si chiama una porta. Di norma `nav.<modo>`, ma il modo non e' sempre il
+   nome della cosa: la vista del grafo si chiama `graph` e l'utente la conosce
+   come Wiki — il dock infatti la etichettava `nav.wiki`. Senza questa riga a
+   schermo compare la chiave grezza, «nav.graph», che e' il modo in cui una
+   traduzione mancante si presenta (visto sul rig). */
+const PORTE_ETICHETTE = { graph: 'nav.wiki' };
+
+/* `launcher` non e' un modo: e' il cassetto delle app, che sale dal fondo. Si
+   apriva dalla voce «Apps» del dock — la sola, e adesso quella voce non c'e'
+   piu'. Senza questa riga il cassetto resterebbe vivo e senza maniglia. */
+const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
+
+export const CASSETTI = {
+  cervello: {
+    sezioni: ['models', 'battery', 'personalization', 'system'],
+    porte: [],
+  },
+  mani: {
+    sezioni: ['tools', 'ssh', 'telegram', 'scheduling'],
+    porte: ['launcher', 'apps'],
+  },
+  memoria: {
+    sezioni: ['memory', 'workers', 'backup'],
+    porte: ['workspace', 'graph'],
+  },
+};
+
 export class SettingsController {
   constructor() {
     this.contentEl = document.getElementById('settings-content');
@@ -55,6 +104,11 @@ export class SettingsController {
        `_restoreScrollTop()`. */
     this._restoringScroll = false;
     this._restorePending = false;
+    /* Quale cassetto e' a schermo. Lo scrive il guscio prima di `activate()`;
+       `null` vuol dire «tutti», che e' cio' che serve a chi istanzia questo
+       controller da solo — i banchi, e la schermata finche' il dock non e'
+       passato a quattro voci. */
+    this._cassetto = null;
     /* L'aggiornamento dell'app: fasi, polling e i due casi che ingannano
        stanno in `shared/update-flow.js`, che la casa usa con la stessa
        macchina e una vista sua. Qui resta il disegno, e i tre ganci che
@@ -123,6 +177,17 @@ export class SettingsController {
     }
   }
 
+  /** Quale dei cassetti disegnare. Lo dice il guscio, che sa quale voce del
+   *  dock e' stata toccata. Ridisegna subito se i dati ci sono gia': i tre
+   *  cassetti condividono un controller solo, quindi passare dall'uno
+   *  all'altro non deve ricaricare `/api/settings`. */
+  setCassetto(nome) {
+    if (this._cassetto === nome) return;
+    this._cassetto = nome;
+    this._openSections.clear();
+    if (this.data) this.render();
+  }
+
   activate() { this.loadSettings(); }
   deactivate() {
     // Da qui in poi nessuna continuazione in volo tocca più niente: né il DOM
@@ -181,23 +246,34 @@ export class SettingsController {
     // Sezioni tematiche, una per asse mentale: preferenze d'interfaccia, motore
     // LLM, capacità dell'agente, la sua memoria, i lavoratori periodici che la
     // curano, canali, dati, diagnostica.
+    /* Le undici sezioni, per id. Disegnarle tutte e poi nasconderne otto
+       vorrebbe dire costruire ogni volta anche il catalogo dei modelli e la
+       storia degli snapshot: qui si costruisce **solo** quel che si vede. */
+    const sezioni = {
+      personalization: () => this._section('personalization', 'ti-palette', i18n.t('settings.personalization'), this._renderPersonalization(d)),
+      models: () => this._section('models', 'ti-cpu', i18n.t('settings.model'), this._renderModelSettings(d)),
+      tools: () => this._section('tools', 'ti-tool', i18n.t('settings.tools'), this._renderTools(d)),
+      memory: () => this._section('memory', 'ti-sparkles', i18n.t('settings.memory.title'), this._renderMemory(d)),
+      workers: () => this._section('workers', 'ti-map', i18n.t('settings.workers.title'), this._renderWorkers(d)),
+      scheduling: () => this._section('scheduling', 'ti-alarm', i18n.t('cron.sectionTitle'), this._renderScheduling()),
+      battery: () => this._renderBatterySection(d),
+      ssh: () => this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
+      telegram: () => this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      backup: () => this._section('backup', 'ti-database-export', i18n.t('backup.sectionTitle'), this._renderBackup()),
+      system: () => this._section('system', 'ti-info-circle', i18n.t('settings.system'), this._renderSystem(d)),
+    };
+    const cassetto = CASSETTI[this._cassetto];
+    const quali = cassetto ? cassetto.sezioni : Object.keys(sezioni);
+
     this.contentEl.innerHTML = [
       this._renderConfigRecovery(d),
       this._renderCronRecovery(d),
-      this._section('personalization', 'ti-palette', i18n.t('settings.personalization'), this._renderPersonalization(d)),
-      this._section('models', 'ti-cpu', i18n.t('settings.model'), this._renderModelSettings(d)),
-      this._section('tools', 'ti-tool', i18n.t('settings.tools'), this._renderTools(d)),
-      this._section('memory', 'ti-sparkles', i18n.t('settings.memory.title'), this._renderMemory(d)),
-      this._section('workers', 'ti-map', i18n.t('settings.workers.title'), this._renderWorkers(d)),
-      this._section('scheduling', 'ti-alarm', i18n.t('cron.sectionTitle'), this._renderScheduling()),
-      this._renderBatterySection(d),
-      this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
-      this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
-      this._section('backup', 'ti-database-export', i18n.t('backup.sectionTitle'), this._renderBackup()),
-      this._section('system', 'ti-info-circle', i18n.t('settings.system'), this._renderSystem(d)),
+      this._renderPorte(cassetto),
+      ...quali.map((id) => sezioni[id]()),
     ].join('');
 
     this._wireSections();
+    this._wirePorte();
     // L'innerHTML qui sopra ha appena riportato il catalogo chiuso e vuoto e lo
     // scroll in cima: entrambi vanno rimessi come li aveva lasciati l'utente.
     this._restoreCatalogState();
@@ -291,6 +367,23 @@ export class SettingsController {
         ${where}
       </div>
     </div>`;
+  }
+
+  /* Le viste che prima erano sul dock. Senza queste righe il passaggio a
+     quattro voci le lascerebbe vive e irraggiungibili — che e' il modo piu'
+     silenzioso di perdere una schermata. Spariranno una alla volta, quando il
+     cassetto che le ospita avra' la sua riga vera (workspace dentro Memoria,
+     app dentro Mani). */
+  _renderPorte(cassetto) {
+    const porte = cassetto?.porte || [];
+    if (!porte.length) return '';
+    const voci = porte.map((mode) => `
+      <button class="settings-porta" data-porta="${escapeHtml(mode)}" type="button">
+        <i class="ti ti-${PORTE_ICONE[mode] || 'arrow-right'}"></i>
+        <span>${escapeHtml(i18n.t(PORTE_ETICHETTE[mode] || `nav.${mode}`))}</span>
+        <i class="ti ti-chevron-right"></i>
+      </button>`).join('');
+    return `<div class="settings-porte">${voci}</div>`;
   }
 
   _section(id, icon, title, body) {
@@ -2172,6 +2265,18 @@ export class SettingsController {
           </div>`).join('')}`
       : '';
     return `${head}<div class="cron-tasks">${tasks}</div>${orphans}`;
+  }
+
+  _wirePorte() {
+    this.contentEl.querySelectorAll('[data-porta]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const app = window.mobileApp;
+        if (!app) return;
+        const lancio = PORTE_LANCIO[el.dataset.porta];
+        if (lancio) lancio(app);
+        else app.switchMode(el.dataset.porta);
+      });
+    });
   }
 
   _wireSections() {

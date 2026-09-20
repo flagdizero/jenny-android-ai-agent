@@ -1,10 +1,12 @@
 """L'ordine della dock nei docs deve essere quello del DOM.
 
-``docs/using/webui-tour.md`` elenca i cinque slot «in this order», e quell'ordine
+``docs/using/webui-tour.md`` elenca gli slot «in this order», e quell'ordine
 non è cosmetico: è anche l'ordine del carosello dello swipe (``_visibleModes``),
-quindi la pagina che lo sbaglia insegna la gesture sbagliata. Aveva
-Chat·Apps·Wiki dove il DOM ha chat·wiki·apps — Apps sta al centro di proposito,
-perché è lo slot più raggiungibile dal pollice.
+quindi la pagina che lo sbaglia insegna la gesture sbagliata.
+
+Dal 20/09/2026 sono quattro — una console e tre facoltà — e il ``data-mode``
+non è più il nome del sottosistema: ``cervello``, ``mani`` e ``memoria`` sono
+tre cassetti della stessa vista.
 
 Si confronta la sequenza, non i nomi presi uno per uno: uno slot spostato è
 esattamente il difetto, e un test su «ci sono tutti» non lo vedrebbe.
@@ -25,11 +27,10 @@ _HIDDEN_MODES = {"onboarding"}
 
 # Come la tabella nomina ciascun mode. La chiave è il ``data-mode`` del DOM.
 _DOC_LABELS = {
-    "chat": "Chat",
-    "graph": "Wiki",
-    "apps": "Apps",
-    "workspace": "Workspace",
-    "settings": "Settings",
+    "chat": "Console",
+    "cervello": "Brain",
+    "mani": "Hands",
+    "memoria": "Memory",
 }
 
 

@@ -6,7 +6,12 @@
     "settings": "Settings",
     "wiki": "Wiki",
     "onboarding": "Setup",
-    "ariaLabel": "Navigation"
+    "ariaLabel": "Navigation",
+    "console": "Console",
+    "cervello": "Brain",
+    "mani": "Hands",
+    "memoria": "Memory",
+    "launcher": "App drawer"
   },
   "chat": {
     "placeholder": "Ask something…",

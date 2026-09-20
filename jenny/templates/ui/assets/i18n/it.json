@@ -6,7 +6,12 @@
     "settings": "Impostazioni",
     "wiki": "Wiki",
     "onboarding": "Setup",
-    "ariaLabel": "Navigazione"
+    "ariaLabel": "Navigazione",
+    "console": "Console",
+    "cervello": "Cervello",
+    "mani": "Mani",
+    "memoria": "Memoria",
+    "launcher": "Cassetto delle app"
   },
   "chat": {
     "placeholder": "Chiedi qualcosa…",

@@ -409,9 +409,13 @@ def test_the_sheet_is_actually_in_the_page() -> None:
                  'id="launcher-search"', 'id="launcher-title"', 'id="launcher-close"',
                  'id="launcher-handle-row"'):
         assert node in html, f"{node} manca da officina.html: il foglio non esiste più"
-    # L'unico ingresso: lo slot del dock. Il pulsante nel composer è stato
-    # tolto perché esisteva in una vista sola.
-    assert 'data-opens="launcher"' in html, "senza questo il foglio non si apre da nessuna parte"
+    # L'unico ingresso. Era lo slot Apps del dock; dal 20/09/2026 il dock ha
+    # quattro voci e quello slot non c'è più, quindi la maniglia è la porta in
+    # cima al cassetto Mani (v. CASSETTI in mobile-settings.js).
+    impostazioni = _src("mobile-settings.js")
+    assert "PORTE_LANCIO = { launcher:" in impostazioni, (
+        "senza questo il foglio non si apre da nessuna parte"
+    )
     # Vive *fuori* da `.app`: è ciò che gli permette di coprire il dock, di
     # restare fuori dall'inerzia che si applica allo sfondo, e di lasciarsi
     # sovrapporre da una mini-app aperta da lui senza trucchi di z-index.
@@ -599,49 +603,47 @@ def test_the_mascot_goes_under_the_scrim_with_the_sheet_open() -> None:
     assert scrim and "z-index: 99" in scrim.group(1)
 
 
-def test_the_dock_apps_slot_opens_the_sheet() -> None:
-    """Lo slot Apps apre il cassetto, ma **non** perde `data-mode`.
+def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
+    """Lo slot Apps del dock apriva il cassetto. Dal 20/09/2026 il dock ha
+    quattro voci e quello slot non esiste: senza una maniglia nuova il foglio
+    resterebbe **vivo e irraggiungibile** — il modo piu' silenzioso di perdere
+    una schermata, perche' tutti gli altri banchi restano verdi.
 
-    Toglierlo lo caverebbe da `_visibleModes()` — che deriva le schede
-    navigabili da `.dock-item[data-mode]` — e la scheda Apps resterebbe
-    raggiungibile solo dal foglio. `data-opens` è additivo apposta.
+    La maniglia e' una porta in cima al cassetto Mani, ed e' una porta
+    speciale: non cambia vista, apre il foglio.
+    """
+    src = _src("mobile-settings.js")
+    assert "PORTE_LANCIO = { launcher: (app) => app.openLauncher() }" in src
+    m = re.search(r"mani: \{\s*sezioni: \[[^\]]*\],\s*porte: \[([^\]]*)\]", src)
+    assert m and "'launcher'" in m.group(1), "il cassetto Mani non porta piu' al foglio"
+
+    app = _src("mobile-app.js")
+    # E l'aggancio del dock resta **uno solo**: un secondo `forEach` con un
+    # `click` rimetterebbe in piedi il vecchio comportamento accanto al nuovo.
+    handlers = re.findall(
+        r"\.dock-item\[data-mode\]'\)\.forEach\(item => \{\s*item\.addEventListener\('click'", app)
+    assert len(handlers) == 1, f"un solo aggancio al click del dock, trovati {len(handlers)}"
+    assert "this.openLauncher()" in app
+
+
+def test_the_dock_is_a_console_and_three_faculties() -> None:
+    """Console, Cervello, Mani, Memoria. Erano cinque per sottosistema; adesso
+    sono quattro per domanda. L'ordine del DOM e' anche quello del carosello
+    (``_visibleModes``), quindi e' un contratto e non una preferenza grafica.
+
+    ``cervello``, ``mani`` e ``memoria`` non hanno una vista propria: sono tre
+    cassetti di ``view-settings``, e il guscio lo sa da una tabella sola.
     """
     html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
-    slot = re.search(r'<div class="dock-item"[^>]*data-mode="apps"[^>]*>', html)
-    assert slot, "lo slot Apps deve esistere nel dock"
-    assert 'data-opens="launcher"' in slot.group(0)
-    assert 'data-mode="apps"' in slot.group(0), "il carosello deve ancora raggiungere la scheda"
-    src = _src("mobile-app.js")
-    # L'aggancio del dock non sta in un metodo proprio: è nel costruttore.
-    # E dev'essercene **uno solo** — un secondo `forEach` con un `click` che
-    # chiama `switchMode` rimetterebbe in piedi il vecchio comportamento
-    # accanto al nuovo, e il foglio si aprirebbe *e* la vista cambierebbe.
-    handlers = re.findall(
-        r"\.dock-item\[data-mode\]'\)\.forEach\(item => \{\s*item\.addEventListener\('click'", src)
-    assert len(handlers) == 1, f"un solo aggancio al click del dock, trovati {len(handlers)}"
-    assert "item.dataset.opens === 'launcher'" in src
-    assert "this.openLauncher()" in src
-
-
-def test_the_dock_order_is_chat_wiki_apps_workspace_settings() -> None:
-    """Chat, Wiki, **Apps al centro** (è lì il pollice), File, Impostazioni. L'ordine del DOM è anche
-    quello del carosello orizzontale (`_visibleModes`), quindi è un contratto,
-    non una preferenza grafica."""
-    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
-    modes = re.findall(r'data-mode="([a-z]+)"', nav)
-    modes = [m for m in modes if m != "onboarding"]  # nascosto fuori dal primo avvio
-    assert modes == ["chat", "graph", "apps", "workspace", "settings"], modes
-    assert modes[2] == "apps", "Apps deve stare al centro dei cinque"
+    modes = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
+    assert modes == ["chat", "cervello", "mani", "memoria"], modes
 
-
-def test_the_wiki_slot_wears_the_graph_icon() -> None:
-    """L'icona è quella del grafo, la stessa che l'intestazione usa per la
-    stessa destinazione (`mobile-header.js`), non un libro."""
-    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
-    slot = re.search(r'<div class="dock-item"[^>]*data-mode="graph"[^>]*>(.*?)</div>', html, re.S)
-    assert slot and "ti-topology-star" in slot.group(1)
-    assert "ti-book" not in slot.group(1)
+    app = _src("mobile-app.js")
+    assert "const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };" in app
+    # Un controller solo per i tre cassetti: tre istanze vorrebbero dire tre
+    # `/api/settings` e due copie che invecchiano mentre guardi la terza.
+    assert "this._impostazioni ||= new SettingsController()" in app
 
 
 def test_the_sheet_itself_shows_no_focus_ring() -> None:

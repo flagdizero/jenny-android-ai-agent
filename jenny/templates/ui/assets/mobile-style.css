@@ -7331,3 +7331,31 @@ body {
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ── Le porte di un cassetto ─────────────────────────────────────────────
+   Le viste che stavano sul dock e adesso no: app, file, wiki. Una riga in
+   cima al cassetto che le ospitera', finche' non avra' la sua riga vera.
+   Senza, il dock a quattro voci le lascerebbe vive e irraggiungibili. */
+.settings-porte { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+
+.settings-porta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-porta > span { flex: 1; min-width: 0; }
+.settings-porta > .ti:first-child { color: var(--accent); font-size: 18px; }
+.settings-porta > .ti:last-child { color: var(--text-muted); font-size: 16px; }
+.settings-porta:active { background: var(--overlay); }

@@ -8,15 +8,16 @@ A row of five icons pinned to the bottom of the screen switches between the app'
 
 | Icon | Tab | What it is |
 |---|---|---|
-| ✿ | **Chat** | The conversation with Jenny. See [Chat basics](chat.md). |
-| graph | **Wiki** | The knowledge base Jenny can compile about your notes and conversations. See [Wiki](wiki.md). |
-| grid | **Apps** | Tapping it **opens the launcher drawer** rather than switching view — it is the most thumb-reachable slot, and launching is what you do most. The tab itself, where you manage Jenny Apps, Skills and your phone's apps, is reached by swiping or by **Manage apps** at the bottom of the drawer. See [Mini-apps](mini-apps.md), [Skills](skills.md), [Phone app launcher](app-launcher.md). |
-| folder | **Workspace** | A file browser/editor over Jenny's private working folder on the device. |
-| gear | **Settings** | Everything configurable from the app. See [Settings](../reference/settings.md). |
+| ✿ | **Console** | The conversation with Jenny, with everything under it on show: thoughts, tool calls, timings. See [Chat basics](chat.md). |
+| brain | **Brain** | Which model answers and which brands exist, the generation parameters, and what the phone lets her do while the screen is off. |
+| hand | **Hands** | What she can reach — web, location, SSH, Telegram, skills, mini-apps — and the jobs that start by themselves. |
+| database | **Memory** | What she remembers: the three memory files and their caps, Dream and the gardener that fill them, the workspace files, the local snapshot history. |
 
 A sixth tab, **Setup**, exists in the same dock but stays hidden (`display:none`) once onboarding is complete — it only appears during first run, when it also disables the other five tabs so you can't wander off mid-wizard. See [First run](../start/first-run.md).
 
-Tapping a dock icon switches views immediately; the active tab is highlighted. While you're browsing an individual Wiki page (rather than the Wiki tab's own landing/graph view), the dock still highlights the Wiki icon.
+Tapping a dock icon switches views immediately; the active tab is highlighted. Brain, Hands and Memory are three drawers of one screen — they share a controller, so moving between them does not reload anything.
+
+The app launcher drawer, the Apps tab, the file browser and the Wiki, which used to have their own dock slots, now open from a row at the top of the drawer that will host them.
 
 ## Moving around: swipe and the back button
 
@@ -29,7 +30,7 @@ A few guards keep this from fighting with normal scrolling:
 - If the content under your finger can scroll horizontally in the direction you're dragging (for example, a wide code block or a horizontally scrollable list), that content gets the gesture instead of the tab swipe.
 - A mostly-vertical drag is treated as ordinary scrolling, not a tab change.
 - Swipe navigation is disabled entirely during onboarding, and while a drawer/side panel is open (it owns its own vertical swipe).
-- Swipe only moves between the five dock tabs in the table above, in dock order. It does **not** work while you're inside an individual Wiki page (only the Wiki tab's own landing/graph view is swipeable) — reading a specific article is a state the dock doesn't know about.
+- Swipe only moves between the four dock tabs in the table above, in dock order. It does **not** work while you're inside an individual Wiki page (only the Wiki tab's own landing/graph view is swipeable) — reading a specific article is a state the dock doesn't know about.
 
 ### The Android hardware back button
 

@@ -51,6 +51,11 @@ function ensureVisible(el) {
   }, 300);
 }
 
+/* Quale `<div id="view-...">` mostra un modo, quando non e' quello omonimo.
+   Cervello, Mani e Memoria sono tre voci del dock e una vista sola: il
+   controller e' lo stesso e cambia solo il cassetto che disegna. */
+const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };
+
 class MobileApp {
   constructor() {
     this.header = new ViewTitleController();
@@ -64,11 +69,20 @@ class MobileApp {
     this.launcher = new LauncherController(this);
 
     // Lazy controller factories
+    /* Cervello, Mani e Memoria sono **un controller solo**: sono tre cassetti
+       della stessa schermata, e istanziarne tre vorrebbe dire tre
+       `/api/settings` e tre copie dello stesso stato — con due che invecchiano
+       mentre guardi la terza. La fabbrica li serve tutti dalla stessa
+       istanza, creata alla prima apertura. */
+    const impostazioni = () => (this._impostazioni ||= new SettingsController());
     this.controllerFactories = {
       chat:      () => new ChatController(),
       workspace: () => new WorkspaceController(),
       apps:      () => new AppsController(),
-      settings:  () => new SettingsController(),
+      settings:  impostazioni,
+      cervello:  impostazioni,
+      mani:      impostazioni,
+      memoria:   impostazioni,
       graph:     () => new GraphController(),
       wiki:      () => new WikiController(),
       onboarding: () => new OnboardingController(),
@@ -805,7 +819,7 @@ class MobileApp {
     });
 
     // Show target view
-    const view = document.getElementById(`view-${mode}`);
+    const view = document.getElementById(`view-${VISTA_DI[mode] || mode}`);
     if (view) {
       view.style.display = 'flex';
     }
@@ -813,8 +827,7 @@ class MobileApp {
     // Update sidebar active state. La sezione Wiki ha come dock-mode "graph"
     // (landing di default); resta attiva anche nella vista pagina ("wiki").
     document.querySelectorAll('.dock-item').forEach(item => {
-      const isWikiSection = (mode === 'graph' || mode === 'wiki') && item.dataset.mode === 'graph';
-      item.classList.toggle('active', item.dataset.mode === mode || isWikiSection);
+      item.classList.toggle('active', item.dataset.mode === mode);
     });
 
     // Update header
@@ -826,6 +839,10 @@ class MobileApp {
     }
     this.currentMode = mode;
     const next = this.controllers[mode];
+    /* Quale cassetto, per i tre modi che condividono la schermata. Va detto
+       **prima** di `activate()`: quello ricarica e ridisegna, e saperlo dopo
+       vorrebbe dire un frame col cassetto di prima. */
+    next.setCassetto?.(VISTA_DI[mode] === 'settings' ? mode : null);
     if (next.ready) {
       next.ready.then(() => next.activate());
     } else {

@@ -98,7 +98,7 @@ giardiniere, l'archiviazione); la vista `view-workspace`; gli snapshot da
 La regola del giro: **l'app non è mai rotta a metà, e non c'è mai uno schermo
 finto.** Da cui la forma — *la fisarmonica si svuota*.
 
-**Passo 0 — il guscio.** Il dock passa a quattro voci. `view-settings`
+**Passo 0 — il guscio. ✅ fatto il 20/09/2026.** Il dock passa a quattro voci. `view-settings`
 **resta** e all'inizio è il contenitore: dentro ci sono ancora tutte e undici
 le sezioni. L'unica cosa da costruire è la chiave del giro: in `render()`
 l'elenco delle sezioni diventa una **tabella `cassetto → sezioni`**, e il
@@ -106,8 +106,31 @@ controller disegna solo quelle del cassetto attivo.
 
 Niente controller nuovi, niente file nuovi, `_wireSections` (222 righe) **non
 si spezza**: aggancia per `id`, e gli id delle sezioni non disegnate non ci
-sono. `_wireBtn` è già a prova di assente; su 18 `querySelector` nove sono
-protetti da un `if` e due da `?.` — **ne restano ~7 da verificare**.
+sono.
+
+*Com'è andata.* Il rischio dei ~7 `querySelector` non protetti non si è
+materializzato: `render()` costruisce **solo** le sezioni del cassetto, quindi
+`_wireSections` gira su un DOM dove gli id assenti sono assenti — e `_wireBtn`
+era già a prova di assente. Due cose in più che il piano non aveva previsto:
+
+* **le porte.** Togliendo tre voci dal dock, app, file e wiki restavano vive e
+  irraggiungibili. Ogni cassetto ha un elenco `porte`, e la prima è speciale:
+  il **cassetto delle app** non è un modo, è un foglio che saliva dalla voce
+  «Apps» — senza una maniglia nuova sarebbe sparito in silenzio, con tutti i
+  banchi verdi.
+* **due parcheggi dichiarati.** `personalization` e `system` stanno in Cervello
+  e non ci resteranno: il primo perde tema e mascotte (li ha la casa) e lascia
+  il nome di Jenny; del secondo la versione diventa un'etichetta in Console al
+  passo 4. Parcheggiarli è ciò che tiene l'app intera mentre i cassetti si
+  riempiono.
+
+*Il rig ha trovato una cosa che i banchi non vedevano:* la porta del grafo
+mostrava **`nav.graph`**, la chiave grezza — il modo si chiama `graph` e
+l'utente la conosce come Wiki. Adesso c'è una tabella per i nomi, e un banco
+che chiede a ogni porta di avere un nome in tutte e due le lingue.
+
+Otto banchi nuovi (`test_officina_cassetti_contract.py`), otto mutazioni
+rosse.
 
 **Passo 1 — Mani.** Tre sezioni intere che si spostano: `tools`, `ssh`,
 `telegram`. È il passo che prova la tabella, e non può rompere niente.
