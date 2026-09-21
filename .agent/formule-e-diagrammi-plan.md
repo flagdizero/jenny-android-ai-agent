@@ -211,3 +211,58 @@ un messaggio che parla di prezzi.
   toccato — e si guarda col telefono attaccato.
 - **La chat di casa non ha `highlight.js`**: `index.html` non lo carica, quindi
   lì i blocchi di codice sono grigi. Misurato passando di qui, non deciso.
+
+---
+
+# Fatto, e misurato sul telefono — 21/09/2026 sera
+
+## Quanto contenuto c'era davvero
+
+Contato nel workspace vero, col telefono attaccato:
+
+| | quanti |
+|---|---|
+| pagine con un diagramma mermaid | **22** |
+| pagine con una formula `$$` | **3** (tutte in `etf-finance`) |
+
+I 22 diagrammi chiudono la domanda: non era una funzione da valutare, era
+contenuto gia' scritto che si vedeva come sorgente.
+
+## L'ironia che conferma la scelta del dollaro
+
+Le uniche formule stanno nel quaderno di **finanza** — cioe' l'unico posto dove
+`$` vuol dire anche dollari. Guardato dentro `risk-management.md`:
+
+```
+$$S = \frac{R_p - R_f}{\sigma_p}$$
+Where $R_p$ = portfolio return, $R_f$ = risk-free rate, $\sigma_p$ = volatility.
+```
+
+Formule a blocco, formule in riga col dollaro singolo, e **nessun prezzo scritto
+col dollaro**: nelle pagine quel simbolo e' matematica per regola della casa,
+esattamente come la skill promette. La regola per superficie regge sui dati
+veri, non solo sull'ipotesi.
+
+## Cosa si e' visto a schermo
+
+- **Diagramma** (`etf-finance` → Asset Classes): flowchart disegnato, tema
+  scuro, ci sta in larghezza senza scorrere. Non serve toccare lo stile.
+- **Formula a blocco** (Risk Management): frazione vera, tipografia KaTeX.
+- **Formule in riga** nella stessa pagina: `R_p`, `R_f`, `σ_p` dentro la frase.
+- **Le percentuali accanto** («50%», «100%») intatte: nessun falso positivo.
+
+## E la mappa non e' rotta
+
+La domanda che ha aperto tutto il giro. Sul quaderno `jenny`: la mappa **si
+disegna** (due nodi, un filo) e **si trascina** — swipe misurato con due
+scatti, il contenuto si sposta col dito. Restano le due spiegazioni gia' date:
+il trascinamento dei *nodi* non e' mai esistito in casa (era del grafo
+dell'officina), e su un quaderno senza collegamenti la mappa non disegna niente
+— e senza niente non c'e' niente da spostare.
+
+## Cosa resta non visto
+
+Formule e diagrammi **in chat**: le tre superfici condividono lo stesso modulo,
+e i banchi coprono il cablaggio, ma a schermo non si sono viste — servirebbe un
+messaggio che le contenga, cioe' scrivere nella conversazione vera.
+
