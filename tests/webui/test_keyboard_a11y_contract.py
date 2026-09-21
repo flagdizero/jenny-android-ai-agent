@@ -156,37 +156,6 @@ def test_switching_drawers_is_not_a_return_to_the_view() -> None:
 # ── N26 · griglia App da tastiera ─────────────────────────────────────────────
 
 
-def test_every_touchable_thing_in_the_apps_view_is_a_real_button() -> None:
-    """Sul Titan 2 Tab è navigazione primaria, e la scheda Apps ha quattro cose
-    che si toccano: la linguetta di una stanza, il corpo di una riga, la riga
-    "Nuova…", la cella di una app Android.
-
-    Prima erano tutte ``<div>``, e ``wireEvents`` ci riappiccicava
-    ``tabindex``/``role``/``keydown`` a **ogni** ridisegno — cioè a ogni tasto
-    digitato nella ricerca. Un solo builder dimenticato e quella cosa smetteva
-    di esistere per Tab e per TalkBack, senza rumore. Un ``<button>`` porta
-    Invio, Spazio, il fuoco e il ruolo dalla nascita: qui si verifica che i
-    quattro builder lo creino davvero, e che non sia tornato nessun rattoppo.
-    """
-    source = _read("mobile-apps.js")
-    for method, css_class in (
-        ("_renderRoomTabs", "apps-room-tab"),
-        ("_rowMain", "apps-row-main"),
-        ("_buildAddRow", "apps-add-row"),
-        ("_buildAndroidCell", "app-cell"),
-    ):
-        body = _method(source, method)
-        assert "createElement('button')" in body, f"{method} non crea un <button>"
-        assert "type = 'button'" in body, (
-            f"{method}: senza type, dentro un form il pulsante lo invierebbe"
-        )
-        assert css_class in body
-
-    assert "wireEvents" not in source, (
-        "il rattoppo tabindex/role a ogni ridisegno non deve tornare: la "
-        "semantica sta nei builder"
-    )
-
 
 def test_the_keyboard_focus_in_the_apps_view_is_visible() -> None:
     css = CSS.read_text(encoding="utf-8")

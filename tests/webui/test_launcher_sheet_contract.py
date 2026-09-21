@@ -45,7 +45,7 @@ def _method(source: str, name: str) -> str:
 # ── difetto 02 — la descrizione arriva alla riga ────────────────────────────
 
 def test_the_gateway_description_reaches_the_entry() -> None:
-    body = _method(_src("mobile-apps.js"), "launcherEntries")
+    body = _method(_src("shared/apps-source.js"), "launcherEntries")
     assert "app.description" in body, "la description delle Jenny App si perde"
     assert "app.description || ''" in body, "le Jenny App portano la loro description"
     assert "description: app.packageName" in body, (
@@ -69,7 +69,7 @@ def test_the_row_prints_the_secondary_line() -> None:
 def test_the_secondary_line_is_searchable() -> None:
     """3.1: si cerca su nome **e** descrizione. Se `searchText` non arrivasse
     alla voce, la ricerca tornerebbe a essere solo sui nomi senza fallire."""
-    body = _method(_src("mobile-apps.js"), "launcherEntries")
+    body = _method(_src("shared/apps-source.js"), "launcherEntries")
     assert body.count("searchText:") == 2, (
         "entrambe le categorie del cassetto devono essere cercabili "
         "(le skill non ci sono più: v. test_no_skills_in_the_drawer)"
@@ -150,20 +150,21 @@ def test_activation_is_delegated_to_one_listener_on_the_list() -> None:
     assert "this.list?.addEventListener('click'" in source
 
 
-def test_the_launch_policy_lives_with_the_data_owner() -> None:
-    """"Aprire" significa tre cose diverse nei tre spazi di nomi, e sono già
-    decise nella scheda: una seconda copia divergerebbe al primo caso
-    particolare (una skill locked, una Jenny App rotta)."""
-    apps = _src("mobile-apps.js")
+def test_the_launch_policy_lives_in_one_place() -> None:
+    """«Aprire» vuol dire due cose diverse nei due spazi di nomi, e la scelta
+    sta in **un** posto.
+
+    Erano tre finche' c'erano le skill: quelle pero' non si lanciano — toccarne
+    una apriva una scheda — e nel cassetto non sono mai entrate. Con la scheda
+    «App» cancellata (21/09/2026) restano le due che si aprono davvero.
+
+    Il foglio non decide e non parla con la rete: chiede alle azioni.
+    """
+    apps = _src("shared/apps-actions.js")
     body = _method(apps, "activateEntry")
     assert "this.launchAndroidApp(entry.id)" in body
     assert "this.openApp(entry.id)" in body
-    # La politica delle skill è una sola e vive in `_openSkill`, che è anche ciò
-    # che tocca la riga della stanza Skill: la scelta fra la scheda in sola
-    # lettura e l'editor del file non ha due copie da tenere allineate.
-    assert "this._openSkill(entry.id)" in body
-    policy = _method(apps, "_openSkill")
-    assert "showSkillSheet" in policy and "_openSkillFile" in policy
+    assert "_openSkill" not in body, "le skill non si lanciano: nessun terzo ramo"
     launcher = _method(_src("mobile-launcher.js"), "_activate")
     assert "activateEntry(entry)" in launcher
     assert "api." not in launcher, "il foglio non parla con la rete (D5)"
@@ -286,10 +287,12 @@ def test_shift_enter_opens_the_card_and_does_not_count_as_a_launch() -> None:
     body = _method(_src("mobile-launcher.js"), "_activateSelected")
     assert "detailEntry(entry)" in body
     assert "_usage.record" not in body
-    detail = _method(_src("mobile-apps.js"), "detailEntry")
+    detail = _method(_src("shared/apps-actions.js"), "detailEntry")
     assert "showAndroidAppSheet" in detail
     assert "showJennyAppSheet" in detail
-    assert "showSkillSheet" in detail
+    # Niente `showSkillSheet`: le skill non entrano nel cassetto (non si
+    # lanciano) e la scheda che le gestiva e' stata cancellata il 21/09/2026.
+    assert "showSkillSheet" not in detail
 
 
 def test_escape_and_back_clear_the_field_before_closing() -> None:
@@ -427,24 +430,21 @@ def test_the_sheet_is_actually_in_the_page() -> None:
     assert "name: 'launcher'" in _method(app, "_overlayLayers")
 
 
-def test_the_manage_row_leaves_the_launching_to_the_sheet() -> None:
-    """D4/6.1: il foglio lancia, la scheda gestisce.
+def test_the_manage_row_is_gone_with_the_screen_it_led_to() -> None:
+    """La riga «Gestisci app e skill» portava alla scheda «App».
 
-    La chiusura esplicita non è ridondante: `switchMode` esce subito quando il
-    modo richiesto è già quello corrente, e col foglio aperto *sopra la scheda
-    App* il tocco su «Gestisci» lascerebbe un overlay orfano sopra la vista che
-    avrebbe dovuto mostrare.
+    Quella scheda e' stata cancellata il 21/09/2026: il cassetto e' l'unico
+    posto, e quel che la riga prometteva — disinstallare, info app — si fa col
+    **tocco lungo** su una riga. Una porta che non si apre e' peggio di una
+    porta che manca, ed e' il motivo per cui se n'e' andata invece di restare
+    disabilitata.
     """
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
-    assert 'id="launcher-manage"' in html
-    assert 'data-i18n="launcher.manage"' in html
-    # Fuori dalla lista: non è una `option` da aprire con ⏎ né da trovare
-    # cercando — è un altrove, non una cosa da lanciare.
-    assert html.index('id="launcher-manage"') > html.index('id="launcher-list"')
-    body = _method(_src("mobile-launcher.js"), "_openManager")
-    assert "this.close()" in body
-    assert "switchMode('apps')" in body
-    assert body.index("this.close()") < body.index("switchMode('apps')")
+    for doc in ("officina.html", "index.html"):
+        html = (ROOT / "jenny" / "templates" / "ui" / doc).read_text(encoding="utf-8")
+        assert "launcher-manage" not in html, doc
+    launcher = _src("mobile-launcher.js")
+    assert "manageBtn" not in _senza_commenti_js(launcher)
+    assert "_openManager" not in _senza_commenti_js(launcher)
 
 
 def test_the_three_empty_states_are_three_different_sentences() -> None:
@@ -473,7 +473,7 @@ def test_a_broken_bridge_is_not_an_empty_phone() -> None:
         "senza il campo, la risposta di un ponte rotto è identica a quella di "
         "un telefono senza app"
     )
-    apps = _src("mobile-apps.js")
+    apps = _src("shared/apps-source.js")
     android = _method(apps, "loadAndroidApps")
     assert "data.error" in android, "il campo arriva e viene buttato"
     assert "announceRemovals && apps && !failed" in android, (
@@ -494,13 +494,13 @@ def test_a_failed_launch_says_something() -> None:
     """6.3: prima qui c'era un `catch` vuoto commentato "best effort", e un
     avvio fallito non produceva nessun segno — indistinguibile da un tocco non
     registrato. L'informazione c'era già: l'endpoint risponde 404."""
-    body = _method(_src("mobile-apps.js"), "launchAndroidApp")
+    body = _method(_src("shared/apps-actions.js"), "launchAndroidApp")
     assert "showToast" in body
     assert "apps.launchFailed" in body
     assert "return false" in body and "return true" in body, (
         "senza l'esito il cassetto non può decidere se chiudersi"
     )
-    activate = _method(_src("mobile-apps.js"), "activateEntry")
+    activate = _method(_src("shared/apps-actions.js"), "activateEntry")
     assert "return this.launchAndroidApp(entry.id)" in activate, (
         "l'esito va restituito, non lasciato cadere"
     )
@@ -663,7 +663,7 @@ def test_no_skills_in_the_drawer() -> None:
     là, il difetto 01 del rilievo — un solo elenco per nature diverse. Restano
     nella scheda Apps; dove vadano davvero è ancora da decidere.
     """
-    body = _method(_src("mobile-apps.js"), "launcherEntries")
+    body = _method(_src("shared/apps-source.js"), "launcherEntries")
     assert "for (const skill of this.skills)" not in body
     assert "kind: 'skill'" not in body
     assert "skill:${skill.name}" not in body
@@ -735,7 +735,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     impostazioni = _src("mobile-settings.js")
 
     # L'ingresso che vale da ogni cassetto: la porta dentro Mani.
-    assert "porte: ['launcher', 'apps']" in impostazioni, (
+    assert "porte: ['launcher']" in impostazioni, (
         "tolta la porta, il cassetto torna raggiungibile solo dalla chat"
     )
     assert "PORTE_LANCIO = { launcher:" in impostazioni
@@ -836,7 +836,13 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
     guscio. Una chiave che nessuno scrive è un segnaposto che resta a schermo.
     """
     casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
-    scrittori = _src("mobile-launcher.js") + _src("casa-app.js")
+    # I moduli che possiedono dei nodi nel markup della casa. `apps-actions.js`
+    # e' entrato nell'elenco il 21/09/2026 con i due fogli per-app, che sono
+    # arrivati dall'officina portandosi dietro le sue parole.
+    scrittori = (
+        _src("mobile-launcher.js") + _src("casa-app.js")
+        + _src("shared/apps-actions.js")
+    )
 
     chiavi = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', casa))
     assert chiavi, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"

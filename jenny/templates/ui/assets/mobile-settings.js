@@ -46,7 +46,7 @@ const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
  * mentre i cassetti si riempiono, invece di farli sparire prima che esista
  * dove rimetterli.
  */
-const PORTE_ICONE = { launcher: 'layout-grid', apps: 'adjustments', workspace: 'folder', graph: 'topology-star' };
+const PORTE_ICONE = { launcher: 'layout-grid', workspace: 'folder', graph: 'topology-star' };
 
 /* Come si chiama una porta. Di norma `nav.<modo>`, ma il modo non e' sempre il
    nome della cosa: la vista del grafo si chiama `graph` e l'utente la conosce
@@ -80,7 +80,7 @@ export const CASSETTI = {
   },
   mani: {
     sezioni: ['tools', 'ssh', 'telegram', 'scheduling'],
-    porte: ['launcher', 'apps'],
+    porte: ['launcher'],
   },
   memoria: {
     sezioni: ['memory', 'workers', 'backup'],

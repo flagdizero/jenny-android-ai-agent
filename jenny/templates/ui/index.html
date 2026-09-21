@@ -499,18 +499,29 @@
   </div>
   <div class="launcher-list" id="launcher-list" role="listbox"
        aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
-  <!-- D4 / 6.1 — il foglio *lancia*, la scheda *gestisce*. Disinstallare,
-       nascondere, accendere una skill, riparare un manifest e creare una app
-       nuova restano di là, e questa riga è la porta. Non è una `option` della
-       lista: non si apre con ⏎ e non si trova cercando, perché non è una cosa
-       da lanciare — è un altrove. In fondo al foglio e fuori dalla lista, così
-       non contende lo spazio ai risultati e resta ferma mentre scorrono. -->
-  <button class="launcher-manage" id="launcher-manage" type="button">
-    <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
-    <span data-i18n="launcher.manage">Gestisci app e skill</span>
-    <i class="ti ti-chevron-right launcher-manage-chevron" aria-hidden="true"></i>
-  </button>
 </div>
+
+
+<!-- Le schede di una voce del cassetto: tocco lungo su una riga.
+     Stesso markup dell'officina, perche' e' lo stesso codice a riempirle
+     (`shared/apps-actions.js`). Quella delle skill non c'e' piu' da nessuna
+     parte: le skill non si lanciano, quindi nel cassetto non sono mai entrate,
+     e la scheda che le gestiva e' stata cancellata il 21/09/2026. -->
+<dialog class="oc-sheet" id="android-app-sheet">
+  <div class="oc-sheet-inner">
+    <div class="oc-sheet-title" id="android-app-title"></div>
+    <div class="oc-sheet-actions" id="android-app-actions"></div>
+    <button class="oc-sheet-cancel" id="android-app-cancel" data-i18n="common.cancel">Annulla</button>
+  </div>
+</dialog>
+
+<dialog class="oc-sheet" id="jenny-app-sheet">
+  <div class="oc-sheet-inner">
+    <div class="oc-sheet-title" id="jenny-app-sheet-title"></div>
+    <div class="oc-sheet-actions" id="jenny-app-sheet-actions"></div>
+    <button class="oc-sheet-cancel" id="jenny-app-sheet-cancel" data-i18n="common.cancel">Annulla</button>
+  </div>
+</dialog>
 
 </body>
 </html>

@@ -31,15 +31,14 @@ import { CasaUpdates } from './casa-updates.js';
 import { CasaBackup } from './casa-backup.js';
 import { CasaTu } from './casa-tu.js';
 import { WhoPanel, dotColor } from './casa-who.js';
-/* Il cassetto delle app e la sua sorgente, **presi dall'officina, non
-   ricopiati**. `AppsController` e' una scheda dell'officina, ma la sua meta'
-   dati e' gia' fatta per girare senza schermo — `render()` emette il cambio e
-   poi esce se il suo DOM non c'e', con un commento che nomina proprio questo
-   caso. Qui la si usa cosi': niente `view-apps` in casa, e nessun DOM da
-   toccare. */
+/* Il cassetto delle app, **preso dall'officina e non ricopiato**: e' lo stesso
+   modulo per i due gusci. I dati e le azioni stanno in `shared/`, fuori da
+   qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
+   che li ospitava e' stata cancellata. */
 import { JennyGap } from './shared/jenny-gap.js';
 import { LauncherController } from './mobile-launcher.js';
-import { AppsController } from './mobile-apps.js';
+import { AppsSource } from './shared/apps-source.js';
+import { AppsActions } from './shared/apps-actions.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { api } from './shared/api-client.js';
@@ -227,10 +226,10 @@ class CasaApp {
     this._shellReadyCbs = [];
 
     /* Il cassetto: costruito subito perche' il suo markup e' statico, come in
-       officina. I **dati** invece no — `AppsController` fa quattro fetch e
-       quella delle app Android ricodifica ogni icona in base64: si aggancia
-       alla prima apertura (v. `appsController()`), che e' la stessa scelta che
-       il cassetto fa gia' di suo in `_attachSource()`. */
+       officina. I **dati** invece no — sono due fetch, e quella delle app
+       Android ricodifica ogni icona in base64: si agganciano alla prima
+       apertura (v. `appsSource()`), che e' la stessa scelta che il cassetto fa
+       gia' di suo in `_attachSource()`. */
     this.launcher = new LauncherController(this);
     this._apps = null;
 
@@ -680,12 +679,30 @@ class CasaApp {
   /** La sorgente dei dati del cassetto, costruita alla prima richiesta.
    *
    *  Il cassetto la chiede da se' (`_attachSource`) e non piu' di una volta.
-   *  `AppsController` qui non trova nessuno dei suoi nodi e resta muto: il suo
-   *  `render()` emette il cambio e poi esce, che e' esattamente il giro di cui
-   *  il cassetto ha bisogno.
+   *  Pigra e non nel costruttore: sono due fetch, e quella delle app Android
+   *  ricodifica ogni icona in base64 — farle al boot per un cassetto che
+   *  potrebbe non aprirsi mai e' un costo che si paga sempre e serve a volte.
    */
-  appsController() {
-    return (this._apps ||= new AppsController());
+  appsSource() {
+    return (this._apps ||= new AppsSource());
+  }
+
+  /** Le azioni sulle voci. Il guscio le da' l'unica cosa che sa fare lui:
+   *  mettere una richiesta nel composer e mandarla. */
+  appsActions() {
+    return (this._azioniApp ||= new AppsActions(this.appsSource(), {
+      sendChatPrompt: (testo) => this._mandaInChat(testo),
+    }));
+  }
+
+  /** Porta una richiesta gia' scritta dentro la conversazione e la manda.
+   *  Serve a «modifica questa app», che non apre un editor: chiede a Jenny. */
+  _mandaInChat(testo) {
+    this.goHome();
+    if (!this.input) return;
+    this.input.value = testo;
+    this.input.dispatchEvent(new Event('input', { bubbles: true }));
+    this.input.focus();
   }
 
   /** Apre il cassetto delle app. Stesso nome del metodo dell'officina, perche'

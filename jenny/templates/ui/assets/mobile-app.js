@@ -12,7 +12,8 @@ import { DrawerManager } from './mobile-drawer.js';
 import { LauncherController } from './mobile-launcher.js';
 import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
-import { AppsController } from './mobile-apps.js';
+import { AppsSource } from './shared/apps-source.js';
+import { AppsActions } from './shared/apps-actions.js';
 import { GraphController } from './mobile-graph.js';
 import { WikiController } from './mobile-wiki.js';
 import { SettingsController } from './mobile-settings.js';
@@ -78,7 +79,6 @@ class MobileApp {
     this.controllerFactories = {
       chat:      () => new ChatController(),
       workspace: () => new WorkspaceController(),
-      apps:      () => new AppsController(),
       settings:  impostazioni,
       cervello:  impostazioni,
       mani:      impostazioni,
@@ -693,27 +693,36 @@ class MobileApp {
     this.controllers.apps?.onPackageChanged(kind, packageName);
   }
 
-  /** Il proprietario dei dati delle app (D5), costruito anche a scheda mai
-   *  aperta.
+  /** La sorgente dei dati del cassetto. Pigra: sono due fetch, e quella delle
+   *  app Android ricodifica ogni icona in base64 — farle al boot per un
+   *  cassetto che potrebbe non aprirsi mai e' un costo che si paga sempre e
+   *  serve a volte.
    *
-   *  `switchMode` costruisce i controller pigramente, quindi finché l'utente non
-   *  entrava nella sezione App `AppsController` non esisteva — e il cassetto si
-   *  sarebbe aperto vuoto. Qui la costruzione è la stessa (`controllerFactories`
-   *  resta l'unica ricetta) ma slegata dal fatto che `view-apps` sia a schermo:
-   *  il controller scrive nel DOM della scheda, che sta in pagina fin dal boot,
-   *  nascosto. Registrarlo in `this.controllers` è la parte che conta: da lì lo
-   *  ritrova `switchMode` — che non ne costruirà un secondo — e ci arriva
-   *  `onPackageChanged`. */
-  appsController() {
-    if (!this.controllers.apps) {
-      try {
-        this.controllers.apps = this.controllerFactories.apps();
-      } catch (err) {
-        console.error('Failed to init apps controller:', err);
-        return null;
-      }
-    }
-    return this.controllers.apps;
+   *  Qui c'era `appsController()`, che costruiva la scheda «App» anche quando
+   *  non era a schermo, proprio perche' il cassetto ci leggeva dentro. Quella
+   *  scheda non esiste piu' (21/09/2026): restano i dati, e stanno per conto
+   *  loro.
+   */
+  appsSource() {
+    return (this._appsSource ||= new AppsSource());
+  }
+
+  /** Le azioni sulle voci, col modo dell'officina di mandare una richiesta in
+   *  chat: cambia vista e scrive nel composer. */
+  appsActions() {
+    return (this._appsActions ||= new AppsActions(this.appsSource(), {
+      sendChatPrompt: (testo) => this._mandaInChat(testo),
+    }));
+  }
+
+  _mandaInChat(testo) {
+    this.switchMode('chat');
+    const chat = this.controllers?.chat;
+    if (!chat?.input) return;
+    chat.input.value = testo;
+    chat._autoResize?.();
+    chat._updateSendState?.();
+    chat.input.focus();
   }
 
   /* Ingresso unico nella sezione grafo con una vista precisa.

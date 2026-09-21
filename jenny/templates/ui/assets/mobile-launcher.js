@@ -18,19 +18,21 @@
  *  eredita gratis il tasto Indietro, Home e la guardia del type-ahead della
  *  chat.
  *
- *  **Non possiede i dati** (D5). Skill, Jenny App e app Android stanno in
- *  `AppsController`, che ha già il ricaricamento con annuncio delle rimozioni,
- *  l'elenco delle nascoste, `onPackageChanged` e l'ascolto dei frame
- *  `apps_list_changed` / `app_data_changed`. Qui si legge da lì e ci si iscrive
- *  ai suoi cambi: una seconda macchina di ricarica sarebbe una seconda verità
- *  da tenere allineata, e si scoprirebbe disallineata proprio nei casi che il
- *  cassetto deve servire bene (una app disinstallata mentre il foglio è aperto).
+ *  **Non possiede i dati.** Jenny App e app Android stanno in
+ *  `shared/apps-source.js`, che ha il ricaricamento con annuncio delle
+ *  rimozioni, `onPackageChanged` e l'ascolto dei frame `apps_list_changed` /
+ *  `app_data_changed`; quel che ci si **fa** sta in `shared/apps-actions.js`.
+ *  Qui si legge di la' e ci si iscrive ai cambi: una seconda macchina di
+ *  ricarica sarebbe una seconda verita' da tenere allineata, e si scoprirebbe
+ *  disallineata proprio nei casi che il cassetto deve servire bene — una app
+ *  disinstallata mentre il foglio e' aperto.
  */
 
 import { i18n } from './shared/i18n.js';
 import { UsageRanking, rankEntries } from './shared/launcher-rank.js';
 import { usageStore } from './shared/launcher-usage-store.js';
 import { isTypeAheadKey } from './shared/type-ahead.js';
+import { setupLongPress } from './shared/longpress.js';
 
 /* Etichetta del tipo, a destra della riga. Chiavi proprie del cassetto e non
    quelle della scheda: lì i titoli sono intestazioni di sezione (plurali,
@@ -85,9 +87,9 @@ export class LauncherController {
     this.clearBtn = document.getElementById('launcher-search-clear');
     this.statusEl = document.getElementById('launcher-status');
     this.retryBtn = document.getElementById('launcher-status-retry');
-    this.manageBtn = document.getElementById('launcher-manage');
-    // V. `_manageAvailable()`: in casa non c'e' una scheda Apps dove andare.
-    if (this.manageBtn) this.manageBtn.hidden = !this._manageAvailable();
+    /* Qui c'era `manageBtn`, la riga «Gestisci app e skill». Portava alla
+       scheda «App», che dal 21/09/2026 non esiste piu': il cassetto e' l'unico
+       posto, e disinstallare si fa col tocco lungo su una riga. */
 
     /* Verità unica sullo stato del foglio, e la ragione per cui esiste invece
        di interrogare il DOM: `present()` deve diventare falso *nell'istante*
@@ -104,6 +106,8 @@ export class LauncherController {
     // lasciato: l'iscrizione ai suoi cambi deve sopravvivere alla chiusura del
     // foglio, altrimenti riaprirlo mostrerebbe l'elenco di quando si è chiuso.
     this._apps = null;
+    /** Le azioni (aprire, la scheda). V. `_attachSource`. */
+    this._azioni = null;
     // Le voci come le consegna `launcherEntries()`, non ordinate per la query:
     // riordinarle e filtrarle è lavoro di `_renderList()`, che gira a ogni
     // tasto, mentre questa si rinfresca solo quando i dati cambiano davvero.
@@ -165,7 +169,6 @@ export class LauncherController {
     this.closeBtn?.addEventListener('click', () => this.close());
     this.scrim?.addEventListener('click', () => this.close());
 
-    this.manageBtn?.addEventListener('click', () => this._openManager());
     this.retryBtn?.addEventListener('click', () => this._retryFailedLists());
 
     this.search?.addEventListener('input', () => this._onQueryChanged());
@@ -185,7 +188,12 @@ export class LauncherController {
        finisce comunque in `_activate`: un percorso solo, dichiarato. */
     this.list?.addEventListener('click', (e) => {
       const row = e.target.closest?.('.launcher-row');
-      if (row?.dataset.key) this._activate(row.dataset.key);
+      if (!row?.dataset.key) return;
+      /* Un tocco lungo lascia dietro di se' un click sintetico: senza questa
+         riga aprirebbe la scheda **e** lancerebbe l'app. Stessa guardia di
+         ogni altro chiamante di `setupLongPress` in questo codice. */
+      if (row.dataset.longpress) { delete row.dataset.longpress; return; }
+      this._activate(row.dataset.key);
     });
 
     /* Il fuoco che entra in una riga *è* una selezione: chi arriva con Tab o
@@ -257,8 +265,6 @@ export class LauncherController {
     const testo = this.statusEl?.querySelector('.launcher-status-text');
     if (testo) testo.textContent = i18n.t('launcher.loadFailed');
     if (this.retryBtn) this.retryBtn.textContent = i18n.t('launcher.retry');
-    const gestisci = this.manageBtn?.querySelector('span');
-    if (gestisci) gestisci.textContent = i18n.t('launcher.manage');
     document.getElementById('launcher-close')
       ?.setAttribute('aria-label', i18n.t('common.close'));
   }
@@ -609,20 +615,6 @@ export class LauncherController {
    *  prima costa una riga ed è idempotente: quando la catena normale funziona,
    *  la chiusura dentro `switchMode` diventa un giro a vuoto.
    */
-  /* In casa la scheda Apps non esiste — il guscio non ha `switchMode` — e la
-     riga «Gestisci» non ha dove portare. Sparisce invece di restare e non fare
-     niente: una porta che non si apre è peggio di una porta che manca, ed è
-     la stessa regola con cui il backup nasconde i suoi bottoni fuori dall'APK.
-     La gestione resta di là, in officina, che è dove le cose si aggiustano. */
-  _manageAvailable() {
-    return typeof this.app?.switchMode === 'function';
-  }
-
-  _openManager() {
-    if (!this._manageAvailable()) return;
-    this.close();
-    this.app.switchMode('apps');
-  }
 
   /** «Riprova» dell'avviso di 6.2.
    *
@@ -674,9 +666,9 @@ export class LauncherController {
 
   /** Aggancia la sorgente dei dati (D5) alla prima apertura, e ci resta.
    *
-   *  Non nel costruttore: `AppsController` fa quattro fetch, e quella delle app
-   *  Android ricodifica ogni icona in base64. Farle al boot per un foglio che
-   *  potrebbe non aprirsi mai è un costo che si paga sempre e serve a volte.
+   *  Non nel costruttore: sono due fetch, e quella delle app Android
+   *  ricodifica ogni icona in base64. Farle al boot per un foglio che potrebbe
+   *  non aprirsi mai e' un costo che si paga sempre e serve a volte.
    *  Da qui in poi però l'iscrizione non si scioglie più — v. `this._apps`.
    */
   _attachSource() {
@@ -686,9 +678,13 @@ export class LauncherController {
       this._apps.ensureLoaded();
       return;
     }
-    const apps = this.app.appsController?.();
+    const apps = this.app.appsSource?.();
     if (!apps) return;
     this._apps = apps;
+    /* Le **azioni** sono un oggetto a parte: la sorgente sa cosa c'e', non cosa
+       farci. I due gusci la costruiscono ognuno col proprio modo di mandare un
+       messaggio in chat, che e' l'unica cosa in cui differiscono. */
+    this._azioni = this.app.appsActions?.() || null;
     apps.addChangeListener(() => this._onDataChanged());
     apps.ensureLoaded();
   }
@@ -998,7 +994,7 @@ export class LauncherController {
     /* La scheda **non** conta come uso: è il posto dove si va per disinstallare
        o per capire cosa sia una voce, e contarla farebbe salire in classifica
        proprio le app di cui si dubita. Il ranking misura gli avvii. */
-    this._apps?.detailEntry(entry);
+    this._azioni?.detailEntry(entry);
   }
 
   /** Il titolo del foglio dice in che ordine si sta guardando: a campo vuoto è
@@ -1037,7 +1033,7 @@ export class LauncherController {
        registrare un avvio poi fallito è una posizione in classifica; il costo
        opposto è un cassetto che non impara mai le app che si usano di più. */
     this._usage.record(entry.key);
-    const started = this._apps?.activateEntry(entry);
+    const started = this._azioni?.activateEntry(entry);
     /* Una app Android se ne va con tutto il task: il foglio deve chiudersi, o
        al ritorno lo si ritroverebbe aperto sopra la conversazione senza averlo
        chiesto. Le altre due no — una Jenny App si apre *sopra* il foglio e
@@ -1061,6 +1057,13 @@ export class LauncherController {
     const row = document.createElement('div');
     row.className = 'launcher-row';
     row.dataset.key = entry.key;
+    /* **Tocco lungo: la scheda della voce** — apri, info, disinstalla.
+       Fino al 21/09/2026 ci si arrivava **solo da tastiera** (⇧⏎). Su un
+       telefono con la tastiera fisica e' una strada vera, ma non *la* strada:
+       col dito non c'era niente, e disinstallare restava una cosa da fare
+       altrove. Il click resta delegato sulla lista (v. il costruttore); questo
+       sta sulla riga perche' `setupLongPress` vuole l'elemento. */
+    setupLongPress(row, () => this._azioni?.detailEntry(entry));
     /* Semantica giusta dalla nascita, non aggiunta dopo — la stessa regola che
        la scheda Apps ha poi adottato per le sue tre stanze (`mobile-apps.js`),
        dove le righe nascono `<button>` invece di essere `<div>` a cui si

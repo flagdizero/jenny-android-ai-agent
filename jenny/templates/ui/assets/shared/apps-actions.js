@@ -1,0 +1,562 @@
+/** Quel che si **fa** con una voce del cassetto: aprirla, e la sua scheda.
+ *
+ *  Stava dentro `AppsController`, la scheda «App» dell'officina, cancellata il
+ *  21/09/2026. I dati sono usciti di li' per primi (`shared/apps-source.js`);
+ *  queste sono le azioni, ed erano l'altra meta' che valeva la pena salvare —
+ *  il resto era la griglia, che il cassetto rimpiazza.
+ *
+ *  **Il codice e' quello di prima, spostato e non riscritto.** Le uniche
+ *  differenze sono dichiarate e sono tre: i dati si chiedono alla sorgente
+ *  invece di tenerli qui; non c'e' piu' nessuna schermata da ridisegnare, e
+ *  chi guarda lo scopre dall'avviso della sorgente; e le due cose che sono
+ *  state tolte per intero — le **skill**, che nel cassetto non erano mai
+ *  entrate perche' non si lanciano, e **«nascondi»**, che se n'e' andato con
+ *  la schermata che lo ospitava.
+ *
+ *  `shell` e' l'unico appiglio al guscio, e ne serve uno solo: mandare un
+ *  messaggio in chat. «Modifica una Jenny App» non apre nessun editor — scrive
+ *  una richiesta a Jenny — e la chat e' l'unica cosa che i due gusci fanno in
+ *  due modi diversi.
+ */
+
+import { api } from './api-client.js';
+import { escapeHtml, showToast } from './utils.js';
+import { confirmDialog } from './dialog.js';
+import { i18n } from './i18n.js';
+import { wsManager } from './ws-manager.js';
+import { currentTheme, themeTokens } from './theme.js';
+
+export class AppsActions {
+  /** @param source {import('./apps-source.js').AppsSource}
+   *  @param shell  `{ sendChatPrompt(testo) }` */
+  constructor(source, shell) {
+    this.source = source;
+    this.shell = shell;
+    /** La mini-app aperta sopra tutto, o `null`. */
+    this._openApp = null;
+    this._appHtmlWaiters = new Map();
+    this._appHtmlSeq = 0;
+    window.addEventListener('message', (e) => this._onAppMessage(e));
+    /* Il tema cambia **mentre** una mini-app e' aperta: dentro l'iframe non
+       c'e' il nostro CSS, quindi la palette gli va spinta. Stava nel
+       costruttore della scheda «App» e per un momento, cancellandola, e' andata
+       persa con lei — la mini-app sarebbe restata coi colori di prima finche'
+       non la riaprivi. */
+    new MutationObserver(() => {
+      const t = currentTheme();
+      this._openApp?.iframe.contentWindow?.postMessage(
+        { type: 'jenny:theme', theme: t.scheme, accent: t.accent, onAccent: t.onAccent,
+          tokens: themeTokens() }, '*');
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
+  /** «Annulla» sui due fogli.
+   *
+   *  Vive qui per la stessa ragione della passata del cassetto: la casa non ha
+   *  nessun giro generico sui `data-i18n-*` — non ne aveva mai avuto bisogno —
+   *  e il markup di questi fogli e' arrivato di la' dall'officina portandosi
+   *  dietro le sue parole. Si scrive **all'apertura** e mai al caricamento:
+   *  `i18n.load()` e' asincrona, e chiamarla presto stampa la chiave grezza
+   *  (gia' successo il 20/09/2026 sul campo di ricerca).
+   */
+  _traduciFoglio(idAnnulla) {
+    const b = document.getElementById(idAnnulla);
+    if (b) b.textContent = i18n.t('common.cancel');
+  }
+
+  /** Apre la *scheda* di una voce del cassetto: il foglio informativo, non la
+   *  cosa. È ⇧⏎ dal cassetto, ed è la pressione lunga dalla cella della
+   *  griglia — cioè la stessa strada già battuta, per la stessa ragione di
+   *  `activateEntry`: due copie della scelta divergerebbero al primo caso
+   *  particolare.
+   *
+   *  Le tre schede sono `<dialog>` aperte con `showModal()`, quindi vivono nel
+   *  livello `dialog`, che sta **sopra** `launcher`: si sovrappongono al foglio
+   *  e Indietro chiude prima loro, esattamente come la scheda di una skill
+   *  locked aperta col tocco (3.7).
+   */
+  detailEntry(entry) {
+    if (!entry) return;
+    if (entry.kind === 'android') this.showAndroidAppSheet(entry.id);
+    else if (entry.kind === 'jenny') this.showJennyAppSheet(entry.id);
+  }
+
+  /** Avvia una voce del cassetto.
+   *
+   *  Sta qui e non nel foglio perché "aprire" significa tre cose diverse nei tre
+   *  spazi di nomi, e sono già decise: sono le stesse azioni del tap sulla cella
+   *  spazi di nomi, e la scelta era gia' presa dalla scheda che non c'e' piu'.
+   *  Due copie di questa scelta divergerebbero
+   *  al primo caso particolare — una skill locked, una Jenny App rotta — ed è
+   *  esattamente dove la divergenza si nota di meno e costa di più. */
+  activateEntry(entry) {
+    if (!entry) return;
+    if (entry.kind === 'android') {
+      /* **Ritornata**, non lasciata cadere: è l'unica delle tre attivazioni che
+         può fallire in modo osservabile, e il cassetto ci decide sopra se
+         chiudersi (6.3). Le altre due aprono qualcosa *sopra* il foglio e non
+         hanno un esito da aspettare. */
+      return this.launchAndroidApp(entry.id);
+    }
+    if (entry.kind === 'jenny') {
+      // Rotta compresa: `openApp` chiede conferma e propone la riparazione in
+      // chat, che dalla riga del cassetto è la strada giusta come dalla cella.
+      this.openApp(entry.id);
+    }
+  }
+
+  /** Avvia una app Android. Ritorna **se ci è riuscita** (6.3).
+   *
+   *  Prima qui c'era un `catch` vuoto commentato "best effort", e un avvio
+   *  fallito non diceva niente: nessun toast, nessun messaggio — il difetto che
+   *  `docs/using/app-launcher.md` elencava. L'informazione c'era già e la si
+   *  buttava: l'endpoint risponde 404 quando il pacchetto non c'è più o Android
+   *  rifiuta di avviarlo, e `api.launchAndroidApp` lo alza.
+   *
+   *  Il caso vero non è esotico: una app disinstallata (o disabilitata) fra il
+   *  caricamento della lista e il tocco lascia una riga stantia, e toccarla non
+   *  faceva assolutamente niente — indistinguibile da un tocco non registrato.
+   *
+   *  L'etichetta si cerca nella lista in memoria: se il pacchetto è già sparito
+   *  di lì, il nome del pacchetto è comunque meglio di una frase senza soggetto.
+   */
+  async launchAndroidApp(packageName) {
+    try {
+      await api.launchAndroidApp(packageName);
+      return true;
+    } catch {
+      const name = this.source.androidApps.find(a => a.packageName === packageName)?.label
+        || packageName;
+      showToast(i18n.t('apps.launchFailed', { name }), 'error');
+      return false;
+    }
+  }
+
+  // ── Jenny Apps ──
+
+  async openApp(slug) {
+    const app = this.source.jennyApps.find(a => a.slug === slug);
+    if (!app) return;
+    if (app.broken) {
+      const ok = await confirmDialog(
+        i18n.t('apps.brokenConfirm', { name: app.name || slug, error: app.error || i18n.t('apps.invalidManifest') })
+      );
+      if (ok) {
+        this.shell.sendChatPrompt(i18n.t('apps.brokenPrompt', { slug, error: app.error || i18n.t('apps.invalidManifest') }));
+      }
+      return;
+    }
+
+    if (!api.getSecret()) {
+      try { await api.bootstrap(); } catch { return; }
+    }
+
+    if (app.view_kind === 'external') {
+      await this._openExternalView(slug, app);
+      return;
+    }
+
+    const t = currentTheme();
+    const lang = document.documentElement.lang || 'it';
+    const src = `/apps/${encodeURIComponent(slug)}/index.html`
+      + `?token=${encodeURIComponent(api.getSecret())}`
+      + `&theme=${encodeURIComponent(t.scheme)}&lang=${encodeURIComponent(lang)}`
+      + `&accent=${encodeURIComponent(t.accent)}&onAccent=${encodeURIComponent(t.onAccent)}`
+      + `&tokens=${encodeURIComponent(themeTokens())}`;
+
+    this.closeApp();
+    const overlay = document.createElement('div');
+    overlay.className = 'app-frame-overlay';
+    overlay.innerHTML = `
+      <div class="app-frame-header">
+        <span class="app-frame-title">${escapeHtml(app.name || slug)}</span>
+        <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
+      </div>
+    `;
+    const iframe = document.createElement('iframe');
+    // Opaque origin on purpose: the app must not reach the SPA DOM/localStorage.
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.src = src;
+    overlay.appendChild(iframe);
+    overlay.querySelector('.app-frame-close').addEventListener('click', () => this.closeApp());
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    this._openApp = { slug, overlay, iframe, depth: 1 };
+  }
+
+  /* Smontare l'overlay basta perché l'SDK non scrive la history: la profondità
+     dell'app è pura contabilità (v. jenny-sdk.js). Quando invece l'SDK spingeva
+     le schermate nella history con `pushState`, ognuna lasciava una entry nella
+     joint session history del WebView che nemmeno `iframe.remove()` toglieva —
+     e dopo la ✕ restavano pressioni di Indietro morte. */
+  /* Vista esterna: lo schermo dell'app è la UI del suo server, servita dal
+     proxy su loopback (jenny/apps/proxy.py). Esiste perché la policy di rete
+     dell'APK rifiuta un iframe verso un `http://` non-loopback, quindi
+     "incornicia il mio server" non era esprimibile in nessun modo. */
+  async _openExternalView(slug, app) {
+    let url;
+    try {
+      const res = await fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`, {
+        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
+      url = body.url;
+    } catch (e) {
+      showToast(i18n.t('apps.viewProxyFailed', { error: String(e.message || e) }), 'error');
+      return;
+    }
+
+    this.closeApp();
+    const overlay = document.createElement('div');
+    overlay.className = 'app-frame-overlay';
+    overlay.innerHTML = `
+      <div class="app-frame-header">
+        <span class="app-frame-title">${escapeHtml(app.name || slug)}</span>
+        <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
+      </div>
+    `;
+    const iframe = document.createElement('iframe');
+    /* Sandbox più largo che per una app normale, e la differenza è l'ORIGINE,
+       non la fiducia.
+
+       Una app normale è servita DALL'ORIGINE DEL GATEWAY: lasciarle la sua
+       origine naturale (`allow-same-origin`) le darebbe il DOM e il
+       localStorage della SPA e l'API del gateway col token. Per quello lì il
+       sandbox è `allow-scripts` e basta.
+
+       Una vista esterna sta su `http://127.0.0.1:<porta effimera>`: porta
+       diversa → **origine diversa** dal gateway. `allow-same-origin` le
+       restituisce la sua origine, che è quella del proxy e di nessun altro, e
+       la same-origin policy del browser la tiene comunque fuori dalla SPA.
+
+       Senza `allow-same-origin` invece l'origine è opaca e la pagina remota è
+       di fatto morta: cookie bloccati, `localStorage` che solleva, e i suoi
+       stessi `fetch` con `Origin: null`. È anche il motivo per cui questa vista
+       NON può essere un iframe annidato dentro l'app-frame sandboxata: i flag
+       di sandbox si ereditano nei frame figli. */
+    iframe.setAttribute(
+      'sandbox',
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
+    );
+    iframe.src = url;
+    overlay.appendChild(iframe);
+    overlay.querySelector('.app-frame-close').addEventListener('click', () => this.closeApp());
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    this._openApp = { slug, overlay, iframe, depth: 1, external: true };
+  }
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    this._openApp = { slug, overlay, iframe, depth: 1, external: true };
+  }
+
+  closeApp() {
+    const open = this._openApp;
+    if (!open) return;
+    this._openApp = null;
+    open.overlay.classList.remove('visible');
+    setTimeout(() => open.overlay.remove(), 200);
+    /* Il listener del proxy vive quanto la vista: chiuderlo qui è la via
+       normale. Se questo fetch non arriva (processo ucciso, rete interna giù)
+       ci pensa l'idle timeout lato Python — non resta aperto per sempre. */
+    if (open.external) {
+      fetch(`/api/webui/apps/${encodeURIComponent(open.slug)}/view/close`, {
+        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
+      }).catch(() => {});
+    }
+  }
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    this._openApp = { slug, overlay, iframe, depth: 1 };
+  }
+
+  handleBack() {
+    const open = this._openApp;
+    if (!open) return false;
+    /* `depth` è ciò che l'app dichiara via `jenny:nav-state`: schermate interne
+       più <dialog> aperti. I dialog contano perché l'iframe ha origine opaca e
+       il livello `dialog` della catena, che interroga solo il documento del
+       parent, non li vede: senza questo ramo Indietro chiudeva tutta l'app
+       portandosi via il form a metà. */
+    if (open.depth > 1) {
+      open.iframe.contentWindow?.postMessage({ type: 'jenny:go-back' }, '*');
+      return true;
+    }
+    // Back out of the mini-app: reveal the Apps tab underneath. Do not push a
+    // forward history entry (we are going *back*); switchMode is only needed on
+    // the off chance the app was opened from another mode.
+    this.closeApp();
+    /* Col cassetto aperto, l'app è stata lanciata da lì: la destinazione del
+       ritorno è il foglio, non la scheda. Senza questa uscita anticipata lo
+       `switchMode` qui sotto chiuderebbe il foglio (v. MobileApp.switchMode),
+       e una pressione di Indietro smonterebbe due livelli invece di uno —
+       proprio ciò che l'ordine `miniapp` → `launcher` promette di non fare. */
+    if (window.mobileApp.launcher?.isOpen()) return true;
+    if (window.mobileApp.currentMode !== 'apps') window.mobileApp.switchMode('apps', false);
+    return true;
+  }
+
+  /* Mostra nella UI il fallimento di un sub-frame dell'app aperta.
+     Chiamato dalla shell Android (MainActivity.reportSubframeError), che è il
+     solo punto del sistema che lo sappia. */
+  _onSubframeError(event) {
+    const open = this._openApp;
+    if (!open) return;
+    const d = event?.detail;
+    if (!d || typeof d !== 'object') return;
+
+    /* `ERR_CLEARTEXT_NOT_PERMITTED` merita il suo messaggio: la causa non è
+       nell'app né nella rete, è la network security config dell'APK, che
+       permette il cleartext solo verso il gateway. Detto come errore generico
+       manda a cercare il guasto dove non è — che è esattamente quello che è
+       successo. */
+    const cleartext = String(d.description || '').includes('ERR_CLEARTEXT_NOT_PERMITTED');
+    const host = String(d.host || d.url || '');
+    const message = cleartext
+      ? i18n.t('apps.frameCleartextBlocked', { host })
+      : i18n.t('apps.frameLoadFailed', {
+          host, reason: String(d.description || d.errorCode || ''),
+        });
+
+    let banner = open.overlay.querySelector('.app-frame-error');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.className = 'app-frame-error';
+      open.overlay.querySelector('.app-frame-header')?.insertAdjacentElement('afterend', banner);
+    }
+    banner.innerHTML = `<i class="ti ti-alert-triangle"></i><span>${escapeHtml(message)}</span>`;
+  }
+
+  notifyAppDataChanged(slug) {
+    const open = this._openApp;
+    if (!open || (slug && open.slug !== slug)) return;
+    open.iframe.contentWindow?.postMessage({ type: 'jenny:data-changed', slug: open.slug }, '*');
+  }
+
+  _onAppMessage(event) {
+    const open = this._openApp;
+    if (!open || event.source !== open.iframe.contentWindow) return;
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'jenny:nav-state') {
+      // Il valore arriva da codice dell'app: si accetta solo un intero in un
+      // intervallo sensato, altrimenti un NaN (o un numero enorme) renderebbe
+      // Indietro inutile fino alla ✕.
+      const depth = Math.floor(Number(msg.depth));
+      open.depth = Number.isFinite(depth) ? Math.min(99, Math.max(1, depth)) : 1;
+      return;
+    }
+    if (msg.type === 'jenny:discuss') {
+      const app = this.source.jennyApps.find(a => a.slug === open.slug);
+      const name = app?.name || open.slug;
+      const text = String(msg.text || '').slice(0, 4000);
+      this.closeApp();
+      this.shell.sendChatPrompt(i18n.t('apps.chatAboutApp', { name, text }));
+      return;
+    }
+    if (msg.type === 'jenny:ui-result') {
+      // Risposta al round-trip di requestAppHtml: risolve il waiter del nonce.
+      const waiter = this._appHtmlWaiters.get(msg.nonce);
+      if (waiter) {
+        this._appHtmlWaiters.delete(msg.nonce);
+        clearTimeout(waiter.timer);
+        waiter.resolve(String(msg.html || ''));
+      }
+    }
+  }
+
+  /* Chiede all'iframe dell'app aperta il proprio HTML (l'SDK legge il suo DOM
+     e lo rimanda: il parent non può leggerlo, l'iframe ha origin opaca). Ritorna
+     null se non c'è un'app aperta o se l'app non risponde entro il timeout. */
+  requestAppHtml(timeoutMs = 2000) {
+    const open = this._openApp;
+    if (!open || !open.iframe.contentWindow) return Promise.resolve(null);
+    const nonce = 'app-html-' + (++this._appHtmlSeq);
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        this._appHtmlWaiters.delete(nonce);
+        resolve(null);
+      }, timeoutMs);
+      this._appHtmlWaiters.set(nonce, { resolve, timer });
+      open.iframe.contentWindow.postMessage({ type: 'jenny:ui-query', nonce }, '*');
+    });
+  }
+
+  // ── App Android context sheet ──
+
+  showAndroidAppSheet(packageName) {
+    const app = this.source.androidApps.find(a => a.packageName === packageName);
+    if (!app) return;
+
+    const sheet = document.getElementById('android-app-sheet');
+    if (!sheet) return;
+
+    const icon = app.icon
+      ? `<img src="${escapeHtml(app.icon)}" alt="">`
+      : '<i class="ti ti-apps"></i>';
+    document.getElementById('android-app-title').innerHTML =
+      `<div class="app-sheet-head">
+        <div class="app-sheet-icon">${icon}</div>
+        <div class="app-sheet-name">${escapeHtml(app.label)}</div>
+      </div>`;
+
+    const actions = [
+      { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'launch' },
+      { icon: 'ti-info-circle', label: i18n.t('apps.appInfo'), action: 'info' },
+    ];
+    if (!app.system) {
+      actions.push({ icon: 'ti-trash', label: i18n.t('apps.uninstall'), action: 'uninstall', danger: true });
+    }
+    const actionsEl = document.getElementById('android-app-actions');
+    actionsEl.innerHTML = actions.map(a =>
+      `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
+        <i class="ti ${a.icon}"></i>${a.label}
+      </button>`
+    ).join('');
+
+    const close = () => sheet.close();
+
+    actionsEl.querySelectorAll('.oc-sheet-action').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        sheet.close();
+        await this._handleAndroidSheetAction(btn.dataset.action, app);
+      });
+    });
+
+    const cancelBtn = document.getElementById('android-app-cancel');
+    cancelBtn.onclick = close;
+    // Ignore the synthetic tap that follows a touch long-press for a moment,
+    // so it doesn't immediately close the freshly-opened sheet via the backdrop.
+    const openedAt = Date.now();
+    sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
+
+    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    sheet.showModal();
+  }
+
+    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    sheet.showModal();
+  }
+
+  async _handleAndroidSheetAction(action, app) {
+    const pkg = app.packageName;
+    if (action === 'launch') {
+      this.launchAndroidApp(pkg);
+    } else if (action === 'info') {
+      try { await api.openAndroidAppInfo(pkg); } catch {}
+      // Da "Info app" si può disinstallare: al rientro la lista va riallineata.
+      this.source.reloadOnReturn();
+    } else if (action === 'uninstall') {
+      // Nessuna conferma nostra: quella di Android arriva comunque e non è
+      // aggirabile, quindi la nostra era solo un tap in più prima della
+      // domanda vera. Stesso comportamento dei launcher di sistema.
+      try { await api.uninstallAndroidApp(pkg); } catch {}
+      this.source.reloadOnReturn();
+    }
+  }
+
+  // ── Jenny app context sheet ──
+
+  showJennyAppSheet(slug) {
+    const app = this.source.jennyApps.find(a => a.slug === slug);
+    if (!app) return;
+
+    const sheet = document.getElementById('jenny-app-sheet');
+    if (!sheet) return;
+
+    const icon = app.broken ? 'ti-alert-triangle' : (app.icon || 'ti-apps');
+    document.getElementById('jenny-app-sheet-title').innerHTML =
+      `<div class="app-sheet-head">
+        <div class="app-sheet-icon"><i class="ti ${escapeHtml(icon)}"></i></div>
+        <div class="app-sheet-name">${escapeHtml(app.name || app.slug)}</div>
+      </div>`;
+
+    const actions = [
+      { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
+      { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
+      { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
+    ];
+
+    const actionsEl = document.getElementById('jenny-app-sheet-actions');
+    actionsEl.innerHTML = actions.map(a =>
+      `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
+        <i class="ti ${a.icon}"></i>${a.label}
+      </button>`
+    ).join('');
+
+    const close = () => sheet.close();
+
+    actionsEl.querySelectorAll('.oc-sheet-action').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        sheet.close();
+        await this._handleJennySheetAction(btn.dataset.action, app);
+      });
+    });
+
+    document.getElementById('jenny-app-sheet-cancel').onclick = close;
+    // Ignore the synthetic tap that follows a touch long-press for a moment,
+    // so it doesn't immediately close the freshly-opened sheet via the backdrop.
+    const openedAt = Date.now();
+    sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
+
+    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    sheet.showModal();
+  }
+
+    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    sheet.showModal();
+  }
+
+  async _handleJennySheetAction(action, app) {
+    const slug = app.slug;
+    if (action === 'open') {
+      this.openApp(slug);
+    } else if (action === 'edit') {
+      this._startAppModification(app);
+    } else if (action === 'delete') {
+      const ok = await confirmDialog(
+        i18n.t('apps.deleteAppConfirm', { name: app.name || slug })
+      );
+      if (!ok) return;
+      try {
+        await api.deleteJennyApp(slug);
+        await this.source.loadJennyApps();
+        showToast(i18n.t('apps.appDeleted'), 'success');
+      } catch {
+        showToast(i18n.t('apps.deleteFailed'), 'error');
+      }
+    }
+  }
+
+  async _handleJennySheetAction(action, app) {
+    const slug = app.slug;
+    if (action === 'open') {
+      this.openApp(slug);
+    } else if (action === 'edit') {
+      this._startAppModification(app);
+    } else if (action === 'delete') {
+      const ok = await confirmDialog(
+        i18n.t('apps.deleteAppConfirm', { name: app.name || slug })
+      );
+      if (!ok) return;
+      try {
+        await api.deleteJennyApp(slug);
+        await this.source.loadJennyApps();
+        showToast(i18n.t('apps.appDeleted'), 'success');
+      } catch {
+        showToast(i18n.t('apps.deleteFailed'), 'error');
+      }
+    }
+  }
+
+  _startAppModification(app) {
+    this.shell.sendChatPrompt(i18n.t('apps.editAppPrompt', { name: app.name || app.slug, slug: app.slug }));
+  }
+}

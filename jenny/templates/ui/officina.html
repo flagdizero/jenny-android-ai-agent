@@ -200,17 +200,6 @@
       </div>
 
       <!-- VIEW: Apps -->
-      <div id="view-apps" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="view-title-mount" id="title-apps"></div>
-        <!-- Le tre stanze: il segmento lo riempie AppsController (le etichette
-             sono i18n e la stanza attiva si ricorda fra una visita e l'altra). -->
-        <div class="apps-rooms" id="apps-rooms"></div>
-        <div class="apps-search">
-          <i class="ti ti-search"></i>
-          <input type="text" id="apps-search-input" placeholder="Cerca..." data-i18n-placeholder="apps.search">
-        </div>
-        <div class="apps-content" id="apps-content"></div>
-      </div>
 
       <!-- VIEW: Settings -->
       <div id="view-settings" class="view" style="display:none;flex-direction:column;height:100%">
@@ -313,14 +302,6 @@
   </div>
 </dialog>
 
-<dialog class="oc-sheet" id="skill-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="skill-sheet-title"></div>
-    <div class="oc-sheet-desc" id="skill-sheet-body"></div>
-    <div class="oc-sheet-actions" id="skill-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="skill-sheet-cancel" data-i18n="common.cancel">Annulla</button>
-  </div>
-</dialog>
 
 <!-- Azioni di un messaggio di chat, aperte dal `⋯` della sua riga.
      Figlio diretto di <body> come tutti gli altri, cioè FUORI da `.main`: là
@@ -404,17 +385,6 @@
   </div>
   <div class="launcher-list" id="launcher-list" role="listbox"
        aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
-  <!-- D4 / 6.1 — il foglio *lancia*, la scheda *gestisce*. Disinstallare,
-       nascondere, accendere una skill, riparare un manifest e creare una app
-       nuova restano di là, e questa riga è la porta. Non è una `option` della
-       lista: non si apre con ⏎ e non si trova cercando, perché non è una cosa
-       da lanciare — è un altrove. In fondo al foglio e fuori dalla lista, così
-       non contende lo spazio ai risultati e resta ferma mentre scorrono. -->
-  <button class="launcher-manage" id="launcher-manage" type="button">
-    <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
-    <span data-i18n="launcher.manage">Gestisci app e skill</span>
-    <i class="ti ti-chevron-right launcher-manage-chevron" aria-hidden="true"></i>
-  </button>
 </div>
 
 <!-- Wiki feedback popover -->

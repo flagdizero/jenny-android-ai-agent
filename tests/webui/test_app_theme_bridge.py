@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SDK_JS = ASSETS / "apps" / "jenny-sdk.js"
 KIT_CSS = ASSETS / "apps" / "jenny-kit.css"
-APPS_JS = ASSETS / "mobile-apps.js"
+APPS_JS = ASSETS / "shared" / "apps-actions.js"
 THEME_JS = ASSETS / "shared" / "theme.js"
 SPA_CSS = ASSETS / "mobile-style.css"
 
@@ -112,7 +112,7 @@ def test_sdk_e_spa_sono_daccordo_su_quali_token_attraversano():
 def test_la_palette_viaggia_su_entrambi_i_canali():
     """Il postMessage da solo non basta: l'iframe dipinge prima che arrivi."""
     apps = _read(APPS_JS)
-    assert "themeTokens()" in apps, "mobile-apps.js non legge mai la palette del tema"
+    assert "themeTokens()" in apps, "apps-actions.js non legge mai la palette del tema"
     src = re.search(r"const src = (.*?);\n", apps, re.S)
     assert src and "tokens=" in src.group(1), "la palette manca dalla query string dell'iframe"
     post = re.search(r"type: 'jenny:theme'.*?\}", apps, re.S)

@@ -187,18 +187,7 @@ class ApiClient {
     return res.json();
   }
 
-  async getHiddenApps() {
-    const res = await this._fetch('/api/webui/hidden-apps');
-    if (!res.ok) throw new Error(`Hidden apps failed: ${res.status}`);
-    return res.json();
-  }
 
-  async setHiddenApps(packages) {
-    const state = encodeURIComponent(JSON.stringify({ packages }));
-    const res = await this._fetch(`/api/webui/hidden-apps/update?state=${state}`);
-    if (!res.ok) throw new Error(`Hidden apps update failed: ${res.status}`);
-    return res.json();
-  }
 
   async getJennyApps() {
     const res = await this._fetch('/api/webui/apps');

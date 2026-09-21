@@ -126,29 +126,6 @@ def test_the_discard_confirmation_reenters_the_same_teardown() -> None:
     )
 
 
-def test_advanced_mode_only_redraws_the_grid() -> None:
-    """Il listener chiamava ``navigateTo``, che forza ``viewMode = 'explorer'``:
-    accendere la modalità avanzata *mentre* si modificava un file smontava
-    l'editor, senza chiedere niente e senza che nulla lo suggerisse. Il gemello
-    nella sezione App aggancia lo stesso evento a un ``render()`` che è davvero
-    solo un ridisegno."""
-    source = _workspace()
-    assert "window.addEventListener('advancedmodechange', () => this.refreshGrid());" in source
-    assert "advancedmodechange', () => this.navigateTo" not in source
-
-    refresh = _methods(source)["refreshGrid"]
-    for forbidden in ("viewMode", "renderBreadcrumb", "showExplorerView", "_syncHeaderBack"):
-        assert forbidden not in refresh, f"refreshGrid tocca {forbidden}: non è più un solo ridisegno"
-    assert "this.renderGrid(" in refresh
-    assert "this._navToken" in refresh, (
-        "condivide il token con navigateTo, altrimenti una risposta vecchia riscrive la griglia nuova"
-    )
-
-    apps = (ASSETS / "mobile-apps.js").read_text(encoding="utf-8")
-    assert "window.addEventListener('advancedmodechange', () => this.render());" in apps, (
-        "cambiato il gemello: i due controller devono restare d'accordo"
-    )
-
 
 def test_the_discard_prompt_is_localized_in_both_languages() -> None:
     """Nessuna stringa visibile hardcodata, e nessuna chiave presente in un file

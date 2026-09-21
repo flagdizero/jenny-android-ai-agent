@@ -234,7 +234,7 @@ def test_the_two_dangerous_collaborators_of_the_chain_still_exist() -> None:
         "l'optional call sul metodo trasformerebbe la rottura in un salto silenzioso di due livelli"
     )
 
-    apps = (ASSETS / "mobile-apps.js").read_text(encoding="utf-8")
+    apps = (ASSETS / "shared" / "apps-actions.js").read_text(encoding="utf-8")
     apps_back = _method(apps, "handleBack")
     assert "if (!open) return false;" in apps_back, (
         "senza mini-app aperta il livello deve lasciar proseguire la catena"
@@ -461,29 +461,6 @@ def test_leaving_the_workspace_forgets_where_the_editor_came_from() -> None:
         "il flag sopravviveva al cambio sezione e regalava un Indietro che salta due livelli"
     )
 
-
-def test_opening_a_skill_in_the_editor_is_not_re_entrant() -> None:
-    """Due ``await`` fra il cambio sezione e l'apertura vera.
-
-    ``_openSkillFile`` cambia sezione, aspetta la ``ready`` del Workspace e poi
-    la lettura del file; solo alla fine posa ``_returnMode``. La scheda skill si
-    chiude *prima* di invocare l'azione, quindi durante quella finestra la
-    griglia è di nuovo sotto il dito: due aperture concorrenti si
-    sovrascrivevano ``currentDir`` e ``_returnMode`` a vicenda, e l'editor
-    poteva restare su un file con il breadcrumb dell'altro.
-
-    Il guard sta qui e non in ``handleBack``: nessuna pressione viene consumata
-    da questo percorso, e spostare la toppa sul tasto Indietro
-    significherebbe rimettere una definizione dei livelli fuori dalla catena.
-    """
-    apps = (ASSETS / "mobile-apps.js").read_text(encoding="utf-8")
-    body = _method(apps, "_openSkillFile")
-    assert "if (this._openingSkill) return;" in body, "manca il guard di apertura in corso"
-    assert "this._openingSkill = name;" in body
-    assert "} finally {" in body and "this._openingSkill = null;" in body, (
-        "senza finally un errore lascia il guard acceso e la skill non si riapre più"
-    )
-    assert "handleBack" not in body
 
 
 def test_the_session_info_popover_is_a_layer_of_its_own() -> None:

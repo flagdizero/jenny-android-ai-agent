@@ -10,7 +10,6 @@ Also houses shared HTTP utility functions used by both this module and
 from __future__ import annotations
 
 import datetime
-import json
 import mimetypes
 import re
 import time
@@ -72,10 +71,6 @@ from jenny.webui.android_apps_api import (
     webui_android_apps_payload,
 )
 from jenny.webui.file_preview import WebUIFilePreviewError, file_preview_payload
-from jenny.webui.hidden_android_apps import (
-    read_hidden_android_apps,
-    write_hidden_android_apps,
-)
 from jenny.webui.media_gateway import WebUIMediaGateway
 from jenny.webui.transcript import build_webui_thread_response
 from jenny.webui.workspaces import WebUIWorkspaceController
@@ -566,10 +561,6 @@ class GatewayHTTPHandler:
             return await self._handle_webui_android_app_info(request, m.group(1))
         if got == "/api/webui/commands":
             return self._handle_webui_commands(request)
-        if got == "/api/webui/hidden-apps":
-            return self._handle_webui_hidden_apps(request)
-        if got == "/api/webui/hidden-apps/update":
-            return self._handle_webui_hidden_apps_update(request)
         if got == "/api/client-log":
             return self._handle_client_log(request)
         apps_response = await self.apps_routes.dispatch(request, got)
@@ -710,35 +701,6 @@ class GatewayHTTPHandler:
         return _http_json_response(
             {"commands": [spec.as_dict() for spec in visible_specs(session_key)]}
         )
-
-    def _handle_webui_hidden_apps(self, request: WsRequest) -> Response:
-        if not self.check_api_secret(request):
-            return _http_error(401, "Unauthorized")
-        return _http_json_response(read_hidden_android_apps())
-
-    def _handle_webui_hidden_apps_update(self, request: WsRequest) -> Response:
-        if not self.check_api_secret(request):
-            return _http_error(401, "Unauthorized")
-        query = _parse_query(request.path)
-        raw_state = _query_first(query, "state")
-        if raw_state is None:
-            return _http_error(400, "missing state")
-        try:
-            decoded = json.loads(raw_state)
-        except json.JSONDecodeError:
-            return _http_error(400, "state must be JSON")
-        if not isinstance(decoded, dict):
-            return _http_error(400, "state must be an object")
-        try:
-            state = write_hidden_android_apps(decoded)
-        except ValueError as e:
-            return _http_error(400, str(e))
-        except OSError:
-            self._log.exception("failed to write hidden android apps state")
-            return _http_error(500, "failed to write hidden apps state")
-        return _http_json_response(state)
-
-    # -- Wiki routes --------------------------------------------------------
 
     def _get_workspace_root(self) -> Path:
         """Get workspace root directory."""

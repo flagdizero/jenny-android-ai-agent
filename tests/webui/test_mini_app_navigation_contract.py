@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SDK_JS = ASSETS / "apps" / "jenny-sdk.js"
-APPS_JS = ASSETS / "mobile-apps.js"
+APPS_JS = ASSETS / "shared" / "apps-actions.js"
 SKILL_DIR = ROOT / "jenny" / "skills" / "app-creator"
 
 
