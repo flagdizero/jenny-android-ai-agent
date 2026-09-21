@@ -19,6 +19,7 @@ banchi qui sotto chiedono che resti tale.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -506,24 +507,40 @@ def test_i_numeri_del_menu_hanno_i_separatori() -> None:
     )
 
 
-def test_la_pastiglia_dice_una_cosa_che_il_guscio_sa_davvero() -> None:
-    """La tavola scrive «idle», che è uno stato di **turno**: lo conosce la
-    chat, non il guscio, e duplicarlo qui vorrebbe dire tenerne due copie che
-    divergono. La connessione invece il guscio ce l'ha, ed è la più utile delle
-    due da un cassetto di impostazioni — se è caduta, quel che tocchi non
-    arriva da nessuna parte.
+def test_l_intestazione_non_porta_nessuna_pastiglia_di_stato() -> None:
+    """L'intestazione di un cassetto diceva anche se la connessione col gateway
+    era viva. Non lo dice piu': l'utente l'ha tolta il 21/09/2026.
+
+    Il banco guarda **tutte e quattro** le tracce, perche' reintrodurne una
+    sola basta a far tornare la pastiglia a meta': il nodo nel markup, la
+    chiave `stato` che lo accendeva, il lettore della connessione e il suo
+    vestito. Il lettore in particolare non e' un dettaglio: era l'unico motivo
+    per cui questo file conosceva `ws-manager`.
     """
     header = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
-    assert "wsManager.chatConnected" in header
-    assert "'chat:open'" in header and "'chat:close'" in header, (
-        "la pastiglia non segue le transizioni: un cassetto aperto da dieci "
-        "minuti con la WS caduta direbbe il falso"
+    assert "view-title-stato" not in header, "il nodo della pastiglia e' tornato"
+    assert "stato: true" not in header, "la chiave che accendeva la pastiglia e' tornata"
+    assert "wsManager" not in header, (
+        "l'intestazione e' tornata ad ascoltare la connessione: la pastiglia "
+        "era il suo unico motivo per conoscerla"
     )
-    assert "view-title-stato" in CSS
-    m = re.search(r"\.view-title-stato\.is-giu \.view-title-punto \{([^}]*)\}", CSS)
-    assert m and "inset" in m.group(1), (
-        "pieno e vuoto sono l'unica differenza che sopravvive a ogni tema"
+    assert "view-title-stato" not in CSS and "view-title-punto" not in CSS, (
+        "il vestito della pastiglia e' rimasto nel CSS"
     )
+
+
+def test_le_parole_della_pastiglia_non_restano_orfane() -> None:
+    """Due stringhe tradotte in due lingue che nessuno legge piu'. Restare non
+    e' innocuo: la prossima persona che cerca «connessa» le trova e crede che
+    la pastiglia esista ancora da qualche parte."""
+    sorgenti = "".join(
+        (ASSETS / nome).read_text(encoding="utf-8")
+        for nome in ("mobile-header.js", "mobile-settings.js", "mobile-app.js")
+    )
+    assert "officina.stato" not in sorgenti
+    for lingua in ("it", "en"):
+        d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+        assert "stato" not in d["officina"], f"{lingua}: le parole della pastiglia sono ancora li'"
 
 
 def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
