@@ -890,3 +890,45 @@ def test_the_static_strings_are_written_when_the_sheet_opens_not_at_boot() -> No
     # E al cambio di lingua, altrimenti cambiarla lascia indietro questi nodi.
     dopo = js[js.index("i18n.onLocaleChange("):]
     assert "_applyStaticTranslations()" in dopo[:400]
+
+
+def test_the_drawer_only_calls_methods_its_collaborators_have() -> None:
+    """**Il difetto che ha rotto il cassetto il 21/09/2026.**
+
+    Spostando i dati fuori dalla scheda «App» ho ribattezzato
+    `isLoadingLists()` in `isLoading()` e ho lasciato indietro l'unico
+    chiamante. Il cassetto si apriva — `isOpen()` tornava vero, il foglio
+    prendeva la sua classe — e poi moriva a meta' disegno con
+    `apps.isLoadingLists is not a function`: a schermo un foglio che sale e
+    resta vuoto.
+
+    Nessun banco lo vedeva. `test_no_ghost_methods_contract` guarda le chiamate
+    `this._x()` **dentro un oggetto su se stesso**; questa e' l'altra meta': una
+    chiamata su un **collaboratore**, dove il nome sta in un file e il metodo in
+    un altro. E' la classe di difetto che nasce da ogni rinomina fatta a meta'.
+
+    Il controllo e' grezzo apposta e puo' sbagliare in un verso solo — verso il
+    falso allarme — e si zittisce aggiungendo il metodo, non allentando la
+    regola.
+    """
+    import re as _re
+
+    def metodi(percorso: str) -> set[str]:
+        src = _src(percorso)
+        return set(_re.findall(r"^  (?:async )?([A-Za-z][A-Za-z0-9]*)\s*\(", src, _re.M))
+
+    offerti = metodi("shared/apps-source.js") | metodi("shared/apps-actions.js")
+    assert "launcherEntries" in offerti, "il banco sta leggendo i file sbagliati"
+
+    launcher = _src("mobile-launcher.js")
+    # I tre modi in cui il foglio nomina i suoi due collaboratori.
+    chiamate = set(_re.findall(
+        r"(?:this\._apps|this\._azioni|\bapps)\??\.([A-Za-z][A-Za-z0-9]*)\(", launcher))
+    assert chiamate, "nessuna chiamata trovata: il banco guarda il posto sbagliato"
+
+    fantasmi = sorted(chiamate - offerti)
+    assert not fantasmi, (
+        f"il cassetto chiama metodi che ne' AppsSource ne' AppsActions hanno: "
+        f"{fantasmi}. Il file resta valido, la suite verde, e il foglio si apre "
+        f"vuoto al primo disegno."
+    )

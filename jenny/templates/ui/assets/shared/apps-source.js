@@ -86,12 +86,12 @@ export class AppsSource {
 
   /** Vero finche' una delle due risposte non e' tornata. Distingue «non c'e'
    *  niente» da «non e' ancora arrivato niente». */
-  isLoading() {
+  isLoadingLists() {
     return !(this._jennyLoaded && this._androidLoaded);
   }
 
   /** Almeno una lista non si e' potuta leggere. Terza risposta accanto a
-   *  `isLoading()` e a «l'elenco e' vuoto», e le tre non si sovrappongono: un
+   *  `isLoadingLists()` e a «l'elenco e' vuoto», e le tre non si sovrappongono: un
    *  guasto **non** lascia la UI in caricamento — la risposta e' arrivata, dice
    *  solo che e' andata male — e non e' nemmeno un elenco vuoto, perche'
    *  l'altra lista puo' esserci tutta. */
