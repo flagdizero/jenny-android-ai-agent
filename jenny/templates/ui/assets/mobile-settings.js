@@ -854,7 +854,7 @@ export class SettingsController {
   _numberField(label, key, spec) {
     const min = spec?.min ?? '';
     const max = spec?.max ?? '';
-    return `<div class="settings-field">
+    return `<div class="settings-riga">
       <label class="settings-label">${label}</label>
       <input type="number" class="settings-input" data-worker-key="${key}"
         value="${escapeHtml(String(spec?.value ?? ''))}"
@@ -1891,8 +1891,12 @@ export class SettingsController {
 
   // ── Form Helpers ───────────────────────────────────────────────────
 
+  /* Le tre righe dell'officina — un numero, un menu', un numero col suo range —
+     hanno tutte la stessa forma: nome a sinistra, comando a destra. Era
+     impilata: etichetta sopra, campo a tutta larghezza sotto. Vedi
+     `.settings-riga` nel foglio di stile per il motivo della classe nuova. */
   _field(label, type, key, value, placeholder = '') {
-    return `<div class="settings-field">
+    return `<div class="settings-riga">
       <label class="settings-label">${label}</label>
       <input type="${type}" class="settings-input" data-key="${key}" value="${escapeHtml(String(value))}"
         placeholder="${escapeHtml(placeholder)}">
@@ -1903,7 +1907,7 @@ export class SettingsController {
     const opts = options.map(o =>
       `<option value="${escapeHtml(o)}" ${o === value ? 'selected' : ''}>${o || '—'}</option>`
     ).join('');
-    return `<div class="settings-field">
+    return `<div class="settings-riga">
       <label class="settings-label">${label}</label>
       <select class="settings-select" data-key="${key}">${opts}</select>
     </div>`;

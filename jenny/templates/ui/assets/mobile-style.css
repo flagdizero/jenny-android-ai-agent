@@ -5393,6 +5393,34 @@ body {
   gap: 3px;
 }
 
+/* ── La riga a due colonne: nome a sinistra, comando a destra ─────────────
+   La forma della tavola, e la forma che `.settings-toggle-row` ha sempre avuto:
+   un interruttore non e' mai stato sotto la sua etichetta. Adesso ce l'hanno
+   anche i numeri e i menu'.
+
+   **Classe nuova invece di cambiare `.settings-field`**, che non e' timidezza:
+   quella classe la usano anche `shared/backup-flow.js` e
+   `shared/telegram-pairing.js`, e backup-flow disegna i due campi della
+   passphrase **dentro una finestra, anche in casa**. Una password schiacciata
+   in 92 px sarebbe il prezzo di un allineamento che non la riguarda. */
+.settings-riga {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.settings-riga > .settings-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+/* Larghezze fisse, e il numero allineato a destra: incolonnati, tre numeri si
+   confrontano con l'occhio invece che leggendoli uno per uno. */
+.settings-riga > .settings-input { width: 92px; flex-shrink: 0; text-align: right; }
+.settings-riga > .settings-select { width: 150px; flex-shrink: 0; }
+
 .settings-label {
   font-size: 11px;
   color: var(--text-muted);
@@ -6808,7 +6836,10 @@ body {
   flex-direction: column;
   gap: 2px;
 }
-.model-inuse-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+/* Un nome di modello e' un identificatore, non una parola: in monospazio si
+   confronta con quello scritto altrove invece di somigliargli. Stessa ragione
+   per l'endpoint e la chiave mascherata di una marca. */
+.model-inuse-name { font-family: var(--font-mono); font-size: 15px; font-weight: 600; }
 .model-inuse-via { font-size: 11px; color: var(--text-faint); }
 .model-inuse .model-change-btn { margin-top: 9px; align-self: flex-start; }
 
@@ -6857,7 +6888,7 @@ body {
     justify-content: space-between;
     align-items: center;
 }
-.provider-name { font-weight: 500; font-size: 13px; }
+.provider-name { font-family: var(--font-mono); font-weight: 500; font-size: 13px; }
 .provider-badge {
     font-size: 10px;
     padding: 1px 6px;
@@ -6870,6 +6901,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-faint);
 }
