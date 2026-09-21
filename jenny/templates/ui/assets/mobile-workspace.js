@@ -6,7 +6,6 @@ import { escapeHtml, getFileExtension, showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { i18n } from './shared/i18n.js';
 import { currentTheme } from './shared/theme.js';
-import { advancedMode } from './shared/advanced-mode.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { setupLongPress } from './shared/longpress.js';
 import { scopeChip } from './shared/scope-chip.js';
@@ -206,12 +205,6 @@ export class WorkspaceController {
     this._dirty = false;
 
     this.ready = this.init();
-    // Solo il contenuto della griglia dipende dalla modalità avanzata: qui ci
-    // va un ridisegno, non una navigazione. navigateTo forza
-    // viewMode = 'explorer' e smonterebbe un editor aperto scavalcando il
-    // guard sul buffer sporco. (Il gemello in mobile-apps.js aggancia lo
-    // stesso evento a render(), che è davvero solo un ridisegno.)
-    window.addEventListener('advancedmodechange', () => this.refreshGrid());
   }
 
   showLoading() {
@@ -471,7 +464,12 @@ export class WorkspaceController {
   // ── Grid rendering ──
 
   renderGrid(items) {
-    items = advancedMode() ? items : items.filter(i => !i.internal);
+    /* I file di servizio non si elencano mai. C'era un interruttore —
+       «modalità sviluppatore» — che li faceva comparire: tolto il 21/09/2026,
+       e con lui l'unica condizione davanti a questo filtro. Il flag lo mette
+       il server file per file (`webui/workspace_files.py`): sparisce
+       l'interruttore, non la distinzione. */
+    items = items.filter(i => !i.internal);
     this._thumbUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
     this.gridEl.innerHTML = '';
 

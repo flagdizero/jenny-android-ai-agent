@@ -166,8 +166,6 @@
     "save": "Salva",
     "saved": "Salvato!",
     "webSearch": "Ricerca web",
-    "advancedMode": "Modalità sviluppatore",
-    "advancedModeHint": "Mostra anche quello che Jenny usa per lavorare: le skill di sistema e i file interni (memoria, configurazione) compaiono nelle liste. Serve solo per guardare sotto il cofano.",
     "memory": {
       "unavailable": "Non riesco a leggere le impostazioni della memoria. Riapri la schermata; se resta così, controlla config.json.",
       "dreamEnabled": "Consolidamento periodico",

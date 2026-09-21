@@ -260,7 +260,6 @@ _UI_MANIFEST = [
     "assets/mobile-ui-query.js",
     "assets/mobile-wiki.js",
     "assets/mobile-workspace.js",
-    "assets/shared/advanced-mode.js",
     "assets/shared/api-client.js",
     "assets/shared/apps-actions.js",
     "assets/shared/apps-source.js",

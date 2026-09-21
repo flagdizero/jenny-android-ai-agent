@@ -166,8 +166,6 @@
     "save": "Save",
     "saved": "Saved!",
     "webSearch": "Web Search",
-    "advancedMode": "Developer mode",
-    "advancedModeHint": "Also shows what Jenny uses to work: system skills and internal files (memory, configuration) appear in the lists. Only useful for looking under the hood.",
     "memory": {
       "unavailable": "The memory settings could not be read. Reopen this screen; if it stays like this, check config.json.",
       "dreamEnabled": "Periodic consolidation",

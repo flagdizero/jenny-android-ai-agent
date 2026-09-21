@@ -4,7 +4,6 @@ import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
-import { advancedMode, setAdvancedMode } from './shared/advanced-mode.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import {
   BatteryExemptionCard,
@@ -1854,16 +1853,6 @@ export class SettingsController {
       </div>
       <p class="settings-hint" style="margin:6px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.updatesLiveInCasa')}</p>
       <div class="settings-divider"></div>
-      <div class="settings-field settings-toggle-row">
-        <label class="settings-label">${i18n.t('settings.advancedMode')}</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="advanced-mode-toggle" ${advancedMode() ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <p class="settings-hint" style="margin-top:6px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.advancedModeHint')}</p>
-      <div class="settings-divider"></div>
-      <div class="settings-divider"></div>
       <div class="settings-subheading">${i18n.t('settings.tokenUsage')}</div>
       ${this._renderUsage(d)}`;
   }
@@ -2483,10 +2472,6 @@ export class SettingsController {
         this._APRI_PANNELLO[id]?.call(this);
       });
     });
-
-    // Modalità avanzata
-    const advToggle = this.contentEl.querySelector('#advanced-mode-toggle');
-    if (advToggle) advToggle.addEventListener('change', () => setAdvancedMode(advToggle.checked));
   }
 
   _wireBtn(id, fn) {

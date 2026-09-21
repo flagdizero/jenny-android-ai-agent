@@ -7,7 +7,11 @@ via da un percorso che non sa di doverlo chiedere — e tre cinture diverse:
   ``ws-back`` dell'header, i crumb del breadcrumb (visibili anche mentre si
   modifica un file) e il listener ``advancedmodechange`` del costruttore, che
   chiamava ``navigateTo`` — la quale forza ``viewMode = 'explorer'``
-  incondizionatamente. Nessuno dei quattro guardava se il buffer era sporco: il
+  incondizionatamente. **Il quarto non esiste piu'**: la modalita' sviluppatore
+  se n'e' andata il 21/09/2026 e con lei quel listener, quindi le strade
+  rimaste sono tre. La regola non cambia — chi smonta l'editor guarda il
+  buffer — cambia solo da quanti posti la si puo' violare.
+  Nessuna delle strade guardava se il buffer era sporco: il
   segnale esisteva solo come classe CSS ``dirty`` sul pulsante Salva, e ``grep
   dirty`` sul file non trovava altro. Il testo modificato restava in un viewer
   nascosto irraggiungibile, e riaprire il file rifaceva la fetch
@@ -181,3 +185,28 @@ def test_an_in_flight_provider_save_cannot_be_dismissed() -> None:
     # Fuori dalla finestra di salvataggio, scartare i campi su un cancel è la
     # semantica normale di una modale annullabile: non si tocca.
     assert "dialog.addEventListener('close', () => dialog.remove());" in dialog
+
+
+def test_the_workspace_never_lists_service_files() -> None:
+    """Il filtro sui file di servizio non ha piu' una condizione davanti.
+
+    C'era un interruttore — «modalita' sviluppatore» — che li faceva comparire,
+    e viveva nel `localStorage` del client. Tolto il 21/09/2026: tutto funziona
+    col filtro acceso, che era gia' lo stato in cui l'app si presentava.
+
+    Il flag lo mette il **server**, file per file
+    (``webui/workspace_files.py``): quel che sparisce e' la scelta, non la
+    distinzione — quindi il banco guarda che il filtro ci sia e che non abbia
+    niente davanti, non che il concetto sia stato buttato.
+    """
+    sorgente = WORKSPACE_JS.read_text(encoding="utf-8")
+    body = _methods(sorgente)["renderGrid"]
+    assert "items.filter(i => !i.internal)" in body, "i file di servizio si elencano di nuovo"
+    assert "advancedMode" not in body, "il filtro ha di nuovo una condizione davanti"
+
+    assert "advancedmodechange" not in sorgente, (
+        "il listener che smontava l'editor senza guardare il buffer e' tornato"
+    )
+    assert not (ASSETS / "shared" / "advanced-mode.js").exists(), (
+        "il modulo della modalita' sviluppatore e' tornato"
+    )
