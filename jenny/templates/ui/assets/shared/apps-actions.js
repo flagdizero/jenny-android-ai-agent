@@ -37,6 +37,19 @@ export class AppsActions {
     this._appHtmlWaiters = new Map();
     this._appHtmlSeq = 0;
     window.addEventListener('message', (e) => this._onAppMessage(e));
+    /* Un iframe che non carica non dice niente al JS che lo contiene
+       (cross-origin: `onerror` non scatta, `contentDocument` e' inaccessibile).
+       L'unico che lo vede e' il WebViewClient del guscio, che ce lo rigira qui
+       — v. `MainActivity.reportSubframeError`. Senza, una app che non carica e'
+       un riquadro bianco e nient'altro, per qualunque causa.
+
+       **Ed e' esattamente com'e' stato per un mese.** Questo ascolto stava nel
+       costruttore della scheda «App» e se n'e' andato con lei: il guscio ha
+       continuato a mandare l'evento, e di qua non c'era piu' nessuno. Il
+       messaggio sul cleartext — la causa piu' frequente, e la meno indovinabile
+       — e' tornato visibile solo in logcat. Stesso incidente del tema qui
+       sotto, che invece qualcuno aveva notato. */
+    window.addEventListener('jenny-subframe-error', (e) => this._onSubframeError(e));
     /* Il tema cambia **mentre** una mini-app e' aperta: dentro l'iframe non
        c'e' il nostro CSS, quindi la palette gli va spinta. Stava nel
        costruttore della scheda «App» e per un momento, cancellandola, e' andata

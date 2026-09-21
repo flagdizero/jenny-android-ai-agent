@@ -714,18 +714,6 @@ class MobileApp {
     });
   }
 
-  /** Riapre il wizard di configurazione a configurazione già fatta
-   *  (Impostazioni → "Riesegui configurazione"), che è anche l'unica strada
-   *  quando il boot non è riuscito a stabilire se il primo avvio fosse alle
-   *  spalle. La voce del dock esiste ma è nascosta fuori dal primo avvio: va
-   *  mostrata, altrimenti la sezione resta a schermo senza un'ancora attiva. */
-  openOnboarding() {
-    const navOnb = document.getElementById('nav-onboarding');
-    if (navOnb) navOnb.style.display = '';
-    this.switchMode('onboarding');
-    // Dopo lo switch: il controller è lazy e viene costruito lì dentro.
-    this.controllers.onboarding?.markRerun();
-  }
 
   /** Apre il cassetto delle app (pulsante nella riga del composer, D1).
    *

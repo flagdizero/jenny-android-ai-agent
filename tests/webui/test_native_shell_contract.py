@@ -345,3 +345,43 @@ def test_a_cold_start_from_the_alert_still_lands_in_chat() -> None:
     kotlin = _main_activity()
     assert "openChatOnLoad = true" in _code_only(_fun_body(kotlin, "onCreate"))
     assert "openChatOnLoad" in _code_only(_fun_body(kotlin, "buildGatewayUrl"))
+
+
+# ── Quel che il guscio grida, qualcuno deve sentirlo ─────────────────────
+
+
+def test_every_event_the_shell_dispatches_has_a_listener() -> None:
+    """Il guscio parla alla WebUI anche per eventi, non solo per chiamate: la
+    WebView vede cose che il JS dentro la pagina non puo' vedere, e gliele
+    rigira.
+
+    **Un evento senza ascoltatore non fallisce.** Non c'e' un errore, non c'e'
+    una riga nel log: cade nel vuoto, e quel che doveva succedere semplicemente
+    non succede. E' andata cosi' per `jenny-subframe-error`, che il guscio manda
+    quando l'iframe di una mini-app non carica: l'ascolto stava nel costruttore
+    della scheda «App», e quando quella schermata e' stata cancellata se n'e'
+    andato con lei. Da allora una mini-app che non parte e' un riquadro bianco —
+    compreso il caso piu' frequente, il cleartext bloccato dalla policy
+    dell'APK, che senza quella scritta si vede solo in logcat.
+
+    Il banco guarda dalla parte che non si puo' dimenticare: l'elenco lo detta
+    il guscio, non noi. Un evento nuovo di la' arriva qui rosso finche' non ha
+    un orecchio.
+    """
+    kotlin = "\n".join(
+        p.read_text(encoding="utf-8") for p in JAVA.rglob("*.kt")
+    )
+    eventi = set(re.findall(r"new (?:Custom)?Event\('([\w-]+)'", kotlin))
+    assert eventi, "nessun evento nel guscio: la ricerca non guarda piu' dove deve"
+
+    ascolti = "\n".join(
+        p.read_text(encoding="utf-8", errors="replace")
+        for p in UI_ASSETS.rglob("*.js")
+        if "vendor" not in p.relative_to(UI_ASSETS).parts
+    )
+    sordi = sorted(e for e in eventi if f"addEventListener('{e}'" not in ascolti)
+    assert not sordi, (
+        f"il guscio manda questi eventi e in pagina non li ascolta nessuno: {sordi}. "
+        f"Cadono nel vuoto in silenzio — nessun errore, e la cosa che dovevano "
+        f"far succedere semplicemente non succede."
+    )

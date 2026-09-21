@@ -171,19 +171,26 @@ def test_every_completion_of_the_onboarding_releases_the_lock() -> None:
 # ── N25 · una strada permanente verso il wizard ──────────────────────────────
 
 
-def test_the_wizard_is_not_a_button_in_the_workshop() -> None:
+def test_the_wizard_is_only_the_first_run() -> None:
     """«Riesegui la configurazione» non c'e' piu', ed e' una decisione.
 
     `save_onboarding` fa `config.providers.providers = [una]`: **sostituisce**
     l'elenco invece di aggiungere. In una schermata da operatore quel bottone
-    puo' solo toglierti marche che hai configurato — e tutto cio' che il
-    wizard imposta si fa meglio altrove: la marca col suo «Aggiungi», il
-    modello dalla casa, il nome dalle impostazioni.
+    puo' solo toglierti marche che hai configurato — e tutto cio' che il wizard
+    imposta si fa meglio altrove: la marca col suo «Aggiungi», il modello dalla
+    casa, il nome dalle impostazioni.
 
-    Il giro resta vivo dove serve e dove non puo' cancellare niente: al primo
-    avvio, quando il gateway risponde `first_run` e non c'e' ancora nessun
-    provider. L'ingresso della shell resta, perche' e' quello che il primo
-    avvio usa.
+    **Aggiornato il 21/09/2026.** Quel giorno il bottone era sparito ma la
+    strada per rientrarci no: restavano la porta (`openOnboarding`), il segnale
+    «lo stai rifacendo» (`markRerun` → `_rerun`) e i due rami che ne
+    dipendevano. Una porta senza maniglia da nessuno dei due lati: nessuno
+    poteva aprirla, e chi leggeva il codice trovava una strada che non c'era.
+    Peggio, un commento nel boot — proprio nel ramo che gestisce una Jenny
+    rimasta senza provider — la prometteva a parole.
+
+    Adesso l'unico modo di essere nel wizard e' il primo avvio, e il banco
+    misura quello: non che manchi un bottone, ma che non esista **nessuna**
+    strada oltre a quella.
     """
     settings = SETTINGS_JS.read_text(encoding="utf-8")
     assert "btn-rerun-onboarding" not in settings, (
@@ -191,28 +198,44 @@ def test_the_wizard_is_not_a_button_in_the_workshop() -> None:
     )
     assert "_rerunOnboarding" not in settings
 
-    # Ma la porta della shell c'e' ancora: e' quella del primo avvio.
-    entry = _method(_app(), "openOnboarding")
-    assert "navOnb.style.display = '';" in entry, (
-        "senza la voce del dock la sezione resta a schermo senza un'ancora attiva"
+    app = _app()
+    assert "openOnboarding" not in app, "la porta e' tornata senza una maniglia"
+    assert "markRerun" not in _onboarding(), (
+        "il wizard sa di nuovo di «essere rifatto», ma nessuno puo' rifarlo"
+    )
+
+    # L'unico ingresso: il primo avvio dirotta la vista iniziale.
+    init = _method(app, "init")
+    assert "initialMode = 'onboarding'" in init, (
+        "il primo avvio non porta piu' al wizard: una Jenny nuova resta senza provider"
     )
 
 
-def test_the_reopened_wizard_can_be_left_with_the_back() -> None:
-    """Al primo avvio dall'onboarding non si esce, ed è giusto: non c'è niente
-    sotto. Riaperto da Impostazioni invece c'è, ed è da lì che si è arrivati —
-    inchiodare l'utente nel wizard sarebbe un vicolo cieco creato da noi."""
+def test_from_the_first_run_there_is_no_way_out(  ) -> None:
+    """Dal wizard del primo avvio non si esce col back, e ora e' senza
+    eccezioni: sotto non c'e' niente, e una Jenny senza provider portata in chat
+    non puo' fare niente.
+
+    L'eccezione c'era, ed era il wizard riaperto da Impostazioni: li' allo step
+    0 il back doveva riportare da dove si era arrivati. Se n'e' andata con la
+    riapertura stessa (21/09/2026) — un ramo che non poteva piu' scattare, e che
+    prometteva un'uscita a chi leggeva.
+    """
     source = _onboarding()
     back = _method(source, "handleBack")
-    assert "this.step === 0 && this._rerun" in back
-    assert "return false;" in back, "senza il false la catena non prosegue e non si esce"
-    assert "return true;" in back, "al primo avvio (senza _rerun) la pressione si consuma sempre"
-    assert "markRerun()" in source
+    assert "_rerun" not in back, "il ramo dell'uscita e' tornato senza la strada che lo accendeva"
+    assert "return false;" not in back, (
+        "una pressione non consumata esce dal wizard: al primo avvio non c'e' dove andare"
+    )
+    assert "return true;" in back, "la pressione va consumata sempre"
 
-    # E uscendone la voce del dock, mostrata solo per arrivarci, se ne va con lei.
+    # E la voce del dock la governa un posto solo: chi sa quando il blocco
+    # comincia e quando finisce.
     deactivate = _method(source, "deactivate")
-    assert "if (this._rerun) {" in deactivate
-    assert "navOnb.style.display = 'none';" in deactivate
+    assert "nav-onboarding" not in deactivate, (
+        "il wizard rimette mano alla voce del dock: quel conto lo tiene _setFirstRunLock"
+    )
+    assert "_setFirstRunLock" in _app(), "nessuno accende piu' la voce del dock al primo avvio"
 
 
 def test_an_unreadable_settings_call_is_not_read_as_configured() -> None:

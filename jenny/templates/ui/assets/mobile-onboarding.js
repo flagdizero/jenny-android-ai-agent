@@ -49,9 +49,6 @@ export class OnboardingController {
     // scriverebbe nel form nuovo (o riaprirebbe il campo custom su uno step che
     // non ce l'ha). Monotono, si invalida uscendo dallo step 2.
     this._modelsToken = 0;
-    // Wizard riaperto da Impostazioni → "Riesegui configurazione": lì il back
-    // allo step 0 deve poter *uscire*, mentre al primo avvio non si esce.
-    this._rerun = false;
     this.jennyEl = null;
     this.jennyImg = null;
     this._jennyTimers = [];
@@ -65,18 +62,19 @@ export class OnboardingController {
     window.mobileApp.whenShellReady(() => this._startJenny());
   }
 
-  /* Riapertura da Impostazioni: il wizard è raggiungibile anche a
-     configurazione fatta, e da lì il back allo step 0 deve riportare da dove si
-     è arrivati invece di inchiodare l'utente nel wizard. */
-  markRerun() {
-    this._rerun = true;
-  }
-
   /* Tasto Indietro hardware: risale di uno step, esattamente come il pulsante
      "Indietro" del wizard. Consuma *sempre* la pressione — dall'onboarding non
      si esce col back (step 0 non ha un prima, e dallo step 3 la config è già
      salvata: tornare indietro riaprirebbe un form che non ha più effetto).
-     L'unica eccezione è il wizard riaperto da Impostazioni (v. markRerun). */
+
+     C'era un'eccezione — il wizard riaperto da Impostazioni, che allo step 0
+     doveva poter *uscire* — e se n'è andata il 21/09/2026 col resto di quella
+     strada: «Riesegui configurazione» era uscito il 20/09 per una ragione
+     misurata (`save_onboarding` **sostituisce** l'elenco dei provider invece di
+     aggiungere, quindi rifare il giro cancellava le marche già messe), ma la
+     porta per rientrarci era rimasta lì senza maniglia da nessuno dei due lati.
+     Adesso l'unico modo di essere qui è il primo avvio, e dal primo avvio non
+     si esce. */
   handleBack() {
     // Salvataggio in volo: la config sta già partendo verso il gateway e lo
     // step successivo è deciso. Rimettere a schermo il form precedente
@@ -87,7 +85,6 @@ export class OnboardingController {
     if (this.saving) return true;
     if (this.step === 1) this._goToStep0();
     else if (this.step === 2) this._goBackToStep1();
-    else if (this.step === 0 && this._rerun) return false;
     return true;
   }
 
@@ -95,13 +92,9 @@ export class OnboardingController {
     // Una fetch modelli in volo non deve più scrivere niente: al rientro il
     // wizard riparte dallo step in cui era, e il form è stato ri-renderizzato.
     this._modelsToken++;
-    // Il wizard riaperto da Impostazioni ha mostrato la propria voce nel dock:
-    // uscendone senza completarlo, quella voce resterebbe lì fino al prossimo
-    // reload, e fuori dal primo avvio il dock non la mostra.
-    if (this._rerun) {
-      const navOnb = document.getElementById('nav-onboarding');
-      if (navOnb) navOnb.style.display = 'none';
-    }
+    // La voce nel dock qui non si tocca: fuori dal primo avvio non c'è, e
+    // durante il primo avvio la accende e la spegne `_setFirstRunLock`, che è
+    // l'unico a sapere quando quel blocco comincia e finisce.
     this._stopJenny();
     if (this._tgWidget) {
       this._tgWidget.destroy();
