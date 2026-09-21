@@ -33,8 +33,13 @@ BACKUP = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
 
 
 def _corpo(nome: str) -> str:
-    """Il corpo di un metodo di `SettingsController`, per nome."""
-    m = re.search(rf"\n  {nome}\((.*?)\n  \}}", SETTINGS, re.S)
+    """Il corpo di un metodo di `SettingsController`, per nome.
+
+    `async` è opzionale: senza, i tre metodi che aspettano la rete —
+    proprio quelli che questi banchi devono leggere — risultavano "non
+    trovati", che è un falso verde travestito da rosso.
+    """
+    m = re.search(rf"\n  (?:async )?{nome}\((.*?)\n  \}}", SETTINGS, re.S)
     assert m, f"{nome} non trovato"
     return m.group(1)
 
@@ -133,3 +138,91 @@ def test_il_monospazio_viene_dal_token_e_non_da_un_nome_di_carattere() -> None:
             assert "--font-mono" in riga or "@font-face" in riga or "--font-" in riga, (
                 f"carattere monospazio scritto a mano invece che dal token: {riga.strip()}"
             )
+
+
+# ── Riassumere invece di elencare ────────────────────────────────────────────
+#
+# La differenza più grossa fra i cassetti e le tavole non era di stile: era di
+# **quanto c'è a schermo**. Memoria misurava 6 467 px sul telefono (foto intera,
+# 21/09/2026) e quasi due terzi erano l'elenco delle istantanee, una riga per
+# ognuna. Nessuna di quelle righe risponde alla domanda per cui si apre il
+# gruppo — «ce l'ho una storia, e quanto va indietro?» — a cui invece bastano
+# due numeri.
+#
+# Il criterio della tavola, che questi banchi tengono fermo: **in cassetto quel
+# che si legge, l'amministrazione dietro un tocco.**
+
+OFFICINA_HTML = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+
+
+def test_la_storia_in_cassetto_e_una_riga() -> None:
+    """`_renderBackup` non disegna più l'elenco, il menù, né «crea adesso»."""
+    corpo = _corpo("_renderBackup")
+    assert "_riepilogo(" in corpo, "la storia non è più riassunta in una riga"
+    for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
+        assert roba not in corpo, f"«{roba}» è tornato disteso nel cassetto"
+
+
+def test_il_dettaglio_vive_nel_pannello() -> None:
+    """Niente è stato **tolto**: è solo andato dietro il tocco."""
+    corpo = _corpo("_apriStoria")
+    for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
+        assert roba in corpo, f"«{roba}» non è nel pannello: allora è sparito davvero"
+    assert 'id="drawer-storia"' in OFFICINA_HTML, "il pannello non esiste nel documento"
+    assert 'id="drawer-storia-body"' in OFFICINA_HTML
+
+
+def test_il_corpo_del_pannello_si_disegna_all_apertura() -> None:
+    """Un pannello chiuso **non ha i suoi nodi**.
+
+    Se il corpo si disegnasse al caricamento della schermata, `_loadSnapshotList`
+    scriverebbe nel vuoto e la riga resterebbe su «Caricamento…» — in silenzio,
+    che è il modo in cui questo difetto è già arrivato sul telefono una volta.
+    """
+    assert "this._apriStoria" in SETTINGS, "niente collega la riga al suo pannello"
+    apri = _corpo("_apriStoria")
+    assert "_wireStoria" in apri and "_loadSnapshotList" in apri, (
+        "il pannello si disegna ma non si aggancia né si riempie"
+    )
+    # E il caricatore cerca il nodo nel documento, non dentro la vista: il
+    # pannello vive fuori da `contentEl`.
+    carico = _corpo("_loadSnapshotList")
+    assert "document.getElementById('snapshot-list')" in carico
+    assert "contentEl.querySelector('#snapshot-list')" not in carico
+
+
+def test_il_riepilogo_racconta_la_piu_vecchia_non_la_piu_recente() -> None:
+    """Quanto **indietro** si può tornare: è la cosa per cui una storia esiste.
+
+    La più recente è quasi sempre «poco fa» e non distingue una storia di venti
+    istantanee da una di due.
+    """
+    corpo = _corpo("_caricaRiepilogoStoria")
+    assert "Math.min(" in corpo, "il riepilogo guarda la più recente"
+    assert "Math.max(" not in corpo
+
+
+def test_il_riepilogo_non_resta_a_caricamento_per_sempre() -> None:
+    """Un errore è un'informazione; un «Caricamento…» eterno è un guasto
+    travestito da attesa."""
+    corpo = _corpo("_caricaRiepilogoStoria")
+    assert "catch" in corpo
+    assert "snapshotHistoryUnavailable" in corpo
+
+
+@pytest.mark.parametrize("lingua", ("it", "en"))
+def test_le_due_frasi_del_riepilogo_esistono(lingua: str) -> None:
+    import json
+
+    d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))["backup"]
+    assert "{count}" in d["snapshotSummary"] and "{when}" in d["snapshotSummary"], (
+        f"{lingua}: il riepilogo non porta i due numeri che lo rendono utile"
+    )
+    assert d["snapshotSummaryEmpty"].strip()
+
+
+def test_le_righe_di_riepilogo_si_agganciano_con_una_regola_sola() -> None:
+    """Ne arriveranno altre due (Telegram, SSH): un `if` per ognuna le farebbe
+    divergere una per volta."""
+    assert "[data-riepilogo]" in SETTINGS, "il cablaggio non è generico"
+    assert "_APRI_PANNELLO" in SETTINGS, "manca la tabella pannello -> chi lo riempie"

@@ -358,9 +358,14 @@ def test_settings_dom_nodes_are_looked_up_after_the_await() -> None:
     assert ssh.index("await api.getSsh()") < ssh.index(
         "const blockEl = this.contentEl.querySelector('#ssh-block');"
     )
+    # L'elenco delle istantanee non vive più dentro `contentEl`: sta nel pannello
+    # `drawer-storia`, che è fuori dalla vista (in cassetto resta la riga di
+    # riepilogo). Cambia **dove** si cerca, non la regola: il nodo si prende
+    # dopo l'await, mai prima — e qui in più il pannello può essersi chiuso nel
+    # frattempo, quindi l'assenza del nodo è normale e va gestita, non evitata.
     snapshots = _method(settings, "_loadSnapshotList")
     assert snapshots.index("await api.getSnapshotHistory()") < snapshots.index(
-        "const listEl = this.contentEl.querySelector('#snapshot-list');"
+        "const listEl = document.getElementById('snapshot-list');"
     )
 
 

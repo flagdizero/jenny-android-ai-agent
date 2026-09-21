@@ -5393,6 +5393,44 @@ body {
   gap: 3px;
 }
 
+/* ── La riga di riepilogo ─────────────────────────────────────────────────
+   Nome a sinistra, la risposta breve a destra, una freccina. Il tocco apre il
+   pannello col dettaglio.
+
+   E' `<button>` e non una riga cliccabile: da tastiera ci si arriva, e chi
+   legge lo schermo sente che e' un comando invece di due frasi accostate. */
+.settings-riepilogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-riepilogo-nome { flex-shrink: 0; font-size: 13px; color: var(--text); }
+/* La risposta si prende lo spazio che resta e si tronca: e' un riassunto, e un
+   riassunto che va a capo due volte non e' piu' un riassunto. */
+.settings-riepilogo-valore {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-riepilogo i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.settings-riepilogo:active { opacity: .6; }
+
 /* ── La riga a due colonne: nome a sinistra, comando a destra ─────────────
    La forma della tavola, e la forma che `.settings-toggle-row` ha sempre avuto:
    un interruttore non e' mai stato sotto la sua etichetta. Adesso ce l'hanno

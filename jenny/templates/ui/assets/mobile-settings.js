@@ -17,6 +17,7 @@ import {
   batteryExemptionNeeded,
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
+import { whenText } from './shared/when.js';
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
@@ -1700,10 +1701,57 @@ export class SettingsController {
    * allineati per un gesto che si fa una volta al mese; e sarebbero anche due
    * posti in cui puo' comparire una passphrase.
    */
+  /** La storia locale, in cassetto, e' **una riga**.
+   *
+   *  L'elenco disteso costava due terzi dei 6.467 px di Memoria (misurato sul
+   *  telefono il 21/09/2026, foto intera): una riga per istantanea, e ce ne
+   *  sono venti. Nessuna di quelle righe risponde alla domanda per cui si apre
+   *  il gruppo — «ce l'ho una storia, e quanto va indietro?» — a cui invece
+   *  rispondono due numeri.
+   *
+   *  Il resto (l'elenco, per quanto si conserva, «crea adesso») non sparisce:
+   *  si apre nel pannello `drawer-storia`. E' il criterio della tavola, ed e'
+   *  lo stesso ovunque: **in cassetto quel che si legge, l'amministrazione
+   *  dietro un tocco.**
+   */
+  /* Chi disegna il corpo di ogni pannello, per id. Tabella e non `if`: le
+     righe di riepilogo sono destinate a diventare tre (storia, Telegram, SSH)
+     e un elenco di condizioni le farebbe divergere una per volta. */
+  get _APRI_PANNELLO() {
+    return { storia: this._apriStoria };
+  }
+
   _renderBackup() {
     return `
       <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.snapshotDesc')}</p>
-      <div class="settings-field">
+      ${this._riepilogo('storia', i18n.t('backup.snapshotHistory'), i18n.t('settings.loading'))}`;
+  }
+
+  /** Una riga di riepilogo: cosa c'e', in due numeri, e una freccina.
+   *
+   *  `valore` e' la risposta breve; il tocco apre `drawer-<id>`. Il bottone e'
+   *  un `<button>` vero e non una riga cliccabile: da tastiera ci si arriva, e
+   *  chi legge lo schermo sente che e' un comando.
+   */
+  _riepilogo(id, etichetta, valore) {
+    return `<button class="settings-riepilogo" data-riepilogo="${id}" type="button">
+      <span class="settings-riepilogo-nome">${etichetta}</span>
+      <span class="settings-riepilogo-valore" id="riepilogo-${id}">${valore}</span>
+      <i class="ti ti-chevron-right" aria-hidden="true"></i>
+    </button>`;
+  }
+
+  /** Il corpo del pannello della storia: quel che stava disteso nel cassetto.
+   *
+   *  Si disegna **all'apertura** e non al caricamento: un pannello chiuso non
+   *  ha i suoi nodi nel DOM, e `_loadSnapshotList` scriverebbe nel vuoto senza
+   *  dire niente.
+   */
+  _apriStoria() {
+    const corpo = document.getElementById('drawer-storia-body');
+    if (!corpo) return;
+    corpo.innerHTML = `
+      <div class="settings-riga">
         <label class="settings-label">${i18n.t('backup.retentionLabel')}</label>
         <select class="settings-select" id="snapshot-retention">
           <option value="7">${i18n.t('backup.retentionWeek')}</option>
@@ -1716,6 +1764,8 @@ export class SettingsController {
       <div id="snapshot-list" style="margin-top:8px">
         <div class="settings-empty-state">${i18n.t('settings.loading')}</div>
       </div>`;
+    this._wireStoria();
+    this._loadSnapshotList();
   }
 
   // ── Sistema ────────────────────────────────────────────────────────
@@ -1758,35 +1808,80 @@ export class SettingsController {
   }
 
 
+  /** In cassetto c'e' solo la riga: qui si va a prendere di che riempirla.
+   *
+   *  I comandi del pannello (crea, conservazione) li aggancia `_wireStoria`
+   *  quando il pannello si apre: adesso non esistono nel DOM.
+   */
   _wireBackup() {
-    /* Esportare e ripristinare da file non si agganciano piu': quei due
-       bottoni sono in casa. Qui resta la storia locale. */
-    this._wireBtn('btn-snapshot-create', async () => {
-      try {
-        const res = await api.createSnapshot();
-        showToast(res.snapshot
-          ? i18n.t('backup.snapshotCreated')
-          : i18n.t('backup.snapshotNoChanges'));
-        this._loadSnapshotList();
-      } catch (e) { showToast(e.message, 'error'); }
-    });
-    const retentionEl = this.contentEl.querySelector('#snapshot-retention');
+    this._caricaRiepilogoStoria();
+  }
+
+  /** I comandi dentro il pannello. Girano all'apertura, non al caricamento. */
+  _wireStoria() {
+    const creaBtn = document.getElementById('btn-snapshot-create');
+    if (creaBtn) {
+      creaBtn.addEventListener('click', async () => {
+        try {
+          const res = await api.createSnapshot();
+          showToast(res.snapshot
+            ? i18n.t('backup.snapshotCreated')
+            : i18n.t('backup.snapshotNoChanges'));
+          this._loadSnapshotList();
+          this._caricaRiepilogoStoria();
+        } catch (e) { showToast(e.message, 'error'); }
+      });
+    }
+    const retentionEl = document.getElementById('snapshot-retention');
     if (retentionEl) {
       retentionEl.addEventListener('change', async () => {
         try {
           await api.updateSnapshotRetention(parseInt(retentionEl.value, 10));
           showToast(i18n.t('settings.saved'));
           this._loadSnapshotList();
+          this._caricaRiepilogoStoria();
         } catch (e) { showToast(e.message, 'error'); }
       });
     }
-    this._loadSnapshotList();
+  }
+
+  /** Quante istantanee ci sono e quanto va indietro la piu' vecchia.
+   *
+   *  Due numeri al posto di venti righe. Un fallimento non lascia la riga a
+   *  «Caricamento...» per sempre: dice che non si e' potuto leggere, che e'
+   *  un'informazione, mentre un caricamento eterno e' un guasto travestito.
+   */
+  async _caricaRiepilogoStoria() {
+    const gen = this._gen;
+    const scrivi = (testo) => {
+      const el = this.contentEl?.querySelector('#riepilogo-storia');
+      if (el) el.textContent = testo;
+    };
+    try {
+      const history = await api.getSnapshotHistory();
+      if (this._stale(gen)) return;
+      const snapshots = history.snapshots || [];
+      if (!snapshots.length) {
+        scrivi(i18n.t('backup.snapshotSummaryEmpty'));
+        return;
+      }
+      /* La piu' vecchia, non la piu' recente: dice **quanto indietro si puo'
+         tornare**, che e' la cosa per cui una storia esiste. */
+      const piuVecchia = Math.min(...snapshots.map(s => s.created_at_ms));
+      scrivi(i18n.t('backup.snapshotSummary', {
+        count: snapshots.length,
+        when: whenText(piuVecchia),
+      }));
+    } catch {
+      if (this._stale(gen)) return;
+      scrivi(i18n.t('backup.snapshotHistoryUnavailable'));
+    }
   }
 
   /** Allinea la select al valore corrente; un valore fuori preset (config
    *  editata a mano) diventa un'opzione dedicata invece di mostrarne una falsa. */
   _syncRetentionSelect(days) {
-    const el = this.contentEl.querySelector('#snapshot-retention');
+    const el = document.getElementById('snapshot-retention');
     if (el == null || days == null) return;
     const value = String(days);
     if (![...el.options].some(o => o.value === value)) {
@@ -1801,7 +1896,7 @@ export class SettingsController {
   /* Stesso motivo di `_loadSsh`: il nodo si cerca dopo l'await. */
   async _loadSnapshotList() {
     const gen = this._gen;
-    if (!this.contentEl.querySelector('#snapshot-list')) return;
+    if (!document.getElementById('snapshot-list')) return;
     let snapshots = [];
     try {
       const history = await api.getSnapshotHistory();
@@ -1810,11 +1905,11 @@ export class SettingsController {
       this._syncRetentionSelect(history.retention_max_age_days);
     } catch {
       if (this._stale(gen)) return;
-      const failEl = this.contentEl.querySelector('#snapshot-list');
+      const failEl = document.getElementById('snapshot-list');
       if (failEl) failEl.innerHTML = `<div class="settings-empty-state">${i18n.t('backup.snapshotHistoryUnavailable')}</div>`;
       return;
     }
-    const listEl = this.contentEl.querySelector('#snapshot-list');
+    const listEl = document.getElementById('snapshot-list');
     if (!listEl) return;
     if (!snapshots.length) {
       listEl.innerHTML = `<div class="settings-empty-state">${i18n.t('backup.snapshotHistoryEmpty')}</div>`;
@@ -2299,6 +2394,16 @@ export class SettingsController {
 
     // Backup e ripristino
     this._wireBackup();
+    /* Ogni riga di riepilogo apre `drawer-<id>`, e chiede al suo gruppo di
+       disegnarne il corpo. Una regola sola per tutte le righe: la prossima non
+       ha bisogno di cablaggio nuovo. */
+    this.contentEl.querySelectorAll('[data-riepilogo]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.riepilogo;
+        window.mobileApp?.drawer?.open(id);
+        this._APRI_PANNELLO[id]?.call(this);
+      });
+    });
 
     // Modalità avanzata
     const advToggle = this.contentEl.querySelector('#advanced-mode-toggle');

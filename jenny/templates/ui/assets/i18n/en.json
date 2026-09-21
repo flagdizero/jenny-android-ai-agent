@@ -751,7 +751,9 @@
     "retentionYear": "1 year",
     "retentionForever": "Forever",
     "retentionDays": "{days} days",
-    "snapshotDesc": "Jenny snapshots the workspace by herself — when you stop typing, before each Dream pass, at shutdown. It's there to put back something deleted by mistake. It lives on this phone: the backup you carry away is made in «You and Jenny»."
+    "snapshotDesc": "Jenny snapshots the workspace by herself — when you stop typing, before each Dream pass, at shutdown. It's there to put back something deleted by mistake. It lives on this phone: the backup you carry away is made in «You and Jenny».",
+    "snapshotSummary": "{count} snapshots · oldest {when}",
+    "snapshotSummaryEmpty": "no snapshots yet"
   },
   "cron": {
     "sectionTitle": "Scheduling",
