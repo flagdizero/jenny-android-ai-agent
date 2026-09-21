@@ -201,3 +201,55 @@ def test_il_pill_porta_una_parola_e_non_solo_una_icona() -> None:
     """Una casetta puo' voler dire home, casa o indietro. «Jenny» no."""
     assert "ibtn-pill" in HEADER, "l'azione verso la casa non e' un pill"
     assert ".ibtn-pill {" in CSS, "ibtn-pill senza stile: sarebbe un quadrato da 36px"
+
+
+# ── Le schede aperte ─────────────────────────────────────────────────────────
+
+
+def test_niente_piu_fisarmoniche() -> None:
+    """Nessuna sezione che si apre e si chiude, in nessuna forma.
+
+    Era il difetto piu' grosso: un cassetto si apriva su quattro teste chiuse e
+    per sapere cosa c'era dentro bisognava toccarle una per una. La tavola non
+    ha nessuna fisarmonica, e la pagina si legge scorrendo.
+
+    Si controlla il vocabolario intero — la classe, la testa, il chevron, lo
+    stato — perche' reintrodurne *uno* basta a far tornare il difetto.
+    """
+    for parola in ("settings-section", "settings-chevron", "_openSections"):
+        assert parola not in SETTINGS, f"la fisarmonica e' tornata in mobile-settings.js: {parola}"
+        assert parola not in CSS, f"la fisarmonica e' tornata nel foglio di stile: {parola}"
+
+
+def test_il_gruppo_e_una_scheda_aperta() -> None:
+    """Il mattone che l'ha sostituita: soprascritta fuori, scheda dentro."""
+    m = re.search(r"_gruppo\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    assert m, "_gruppo non trovato"
+    corpo = m.group(1)
+    assert "settings-gruppo-label" in corpo, "il gruppo non ha soprascritta"
+    assert "settings-card" in corpo, "il gruppo non ha una scheda"
+    assert "chevron" not in corpo and "collapsed" not in corpo, "il gruppo si richiude"
+    # La **regola** della classe, non una sua comparsa qualunque: `.settings-card`
+    # compare anche in due selettori discendenti (`.settings-card .tstrip`), e un
+    # controllo che accettasse quelli restava verde con la scheda senza stile —
+    # misurato mutando `.settings-card {` in `.settings-carta {`.
+    for classe in ("settings-gruppo", "settings-gruppo-label", "settings-card"):
+        assert re.search(rf"^\.{classe} \{{", CSS, re.M), f"{classe} non ha una regola sua"
+
+
+def test_le_pezze_della_fisarmonica_se_ne_vanno_con_lei() -> None:
+    """Due sezioni si aprivano d'ufficio, ognuna con la stessa nota in commento:
+    «un accordion chiuso e' esattamente il posto in cui il problema e' rimasto
+    invisibile». Erano pezze su un difetto, non funzioni: senza fisarmoniche
+    non c'e' piu' niente da forzare, e lasciarle sarebbe codice che non fa
+    niente ma sembra fare qualcosa.
+    """
+    assert "_cronAutoOpened" not in SETTINGS, "la pezza del cron e' rimasta"
+    assert "batteryExemptionNeeded()" not in SETTINGS or "_openSections" not in SETTINGS
+
+
+def test_ogni_gruppo_ha_ancora_un_id_nel_dom() -> None:
+    """`data-gruppo` non serve piu' a ricordare chi e' aperto, ma serve a chi
+    cerca un gruppo nel DOM — il banco, e i caricatori asincroni che scrivono
+    nel proprio segnaposto."""
+    assert 'data-gruppo="${id}"' in SETTINGS

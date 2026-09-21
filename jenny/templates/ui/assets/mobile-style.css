@@ -386,8 +386,8 @@ body {
 .tstrip::-webkit-scrollbar { display: none; }
 /* Dentro il body di una sezione (padding 10px 12px): il bleed compensa il
    padding del contenitore così la passerella arriva a filo dei bordi. */
-.settings-section-body .theme-strip-eyebrow { padding-left: 0; }
-.settings-section-body .tstrip {
+.settings-card .theme-strip-eyebrow { padding-left: 0; }
+.settings-card .tstrip {
   margin: 0 -12px;
   padding-left: 12px;
   padding-right: 12px;
@@ -5319,68 +5319,41 @@ body {
   transform: none;
 }
 
-.settings-section {
+/* ── Gruppi di impostazioni ──────────────────────────────────────────────
+   Una soprascritta fuori, una scheda aperta sotto. Erano fisarmoniche: testa
+   cliccabile, chevron, corpo chiuso. La tavola non ne ha nessuna, e il motivo
+   non e' estetico — un cassetto di teste chiuse si apre su quattro righe che
+   non dicono niente, e ogni risposta costa un tocco e un'attesa. */
+
+.settings-gruppo {
+  flex-shrink: 0;
+  animation: cardEntrance 0.3s cubic-bezier(.25,.1,.25,1) both;
+}
+
+/* La soprascritta sta **fuori** dalla scheda e non dentro una testa: cosi'
+   non somiglia a un bottone, e non invita a toccarla per aprire qualcosa che
+   e' gia' aperto. */
+.settings-gruppo-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 4px 6px;
+}
+
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   border: 0.5px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
-  flex-shrink: 0;
   background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
   box-shadow:
     0 2px 16px rgba(0,0,0,0.15),
     inset 0 1px 2px rgba(0,0,0,0.10),
     inset 0 0.5px 0 rgba(255,255,255,0.04);
-  animation: cardEntrance 0.3s cubic-bezier(.25,.1,.25,1) both;
-}
-
-.settings-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  cursor: pointer;
-  background: rgba(255,255,255,0.02);
-  font-size: 13px;
-  font-weight: 500;
-  user-select: none;
-  transition: background 0.2s cubic-bezier(.25,.1,.25,1);
-}
-
-.settings-section-header:hover {
-  background: var(--surface-2);
-}
-
-.settings-section-header i:first-child {
-  color: var(--accent);
-  font-size: 16px;
-}
-
-.settings-chevron {
-  margin-left: auto;
-  font-size: 14px;
-  color: var(--text-faint);
-  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
-}
-
-.settings-section.collapsed .settings-chevron {
-  transform: rotate(-90deg);
-}
-
-.settings-section-body {
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: max-height 0.3s cubic-bezier(.25,.1,.25,1), padding 0.3s cubic-bezier(.25,.1,.25,1), opacity 0.25s cubic-bezier(.25,.1,.25,1);
-  max-height: 2000px;
-  opacity: 1;
-  overflow: hidden;
-}
-
-.settings-section.collapsed .settings-section-body {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
 }
 
 .settings-divider {

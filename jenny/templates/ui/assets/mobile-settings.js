@@ -107,14 +107,11 @@ export class SettingsController {
     this.loadingEl = document.getElementById('settings-loading');
     this.data = null;
     this._debounceTimers = {};
-    // Sezioni aperte, per id: sopravvive ai re-render (che ricostruiscono
-    // tutto l'HTML), non alla navigazione — niente localStorage di proposito.
-    this._openSections = new Set();
     // Contatore di generazione: incrementato in deactivate(). Ogni
     // continuazione lo cattura prima del primo await ed esce se è cambiato —
     // altrimenti scrive nel DOM (o apre modali) di una sezione già lasciata.
     this._gen = 0;
-    /* Posizione di lettura. Vive nel controller come `_openSections`: il
+    /* Posizione di lettura. Vive nel controller e non in localStorage: il
        contenitore che scorre è lo stesso che `render()` riscrive per intero,
        quindi qualunque salvataggio riportava in cima una pagina lunga. */
     this._scrollTop = 0;
@@ -184,7 +181,6 @@ export class SettingsController {
   setCassetto(nome) {
     if (this._cassetto === nome) return;
     this._cassetto = nome;
-    this._openSections.clear();
     if (this.data) this.render();
   }
 
@@ -210,12 +206,6 @@ export class SettingsController {
       document.removeEventListener('visibilitychange', this._onPowerVisible);
       this._onPowerVisible = null;
     }
-    /* L'apertura d'ufficio della sezione Programmazione vale una volta per
-       apertura di schermata: senza questo azzeramento, chi la chiude a mano e
-       torna dopo non la vedrebbe riaprirsi nemmeno con un guasto nuovo — e
-       riaprirla a ogni `render()` (cioè a ogni salvataggio) sarebbe una lotta
-       con l'utente. */
-    this._cronAutoOpened = false;
   }
 
   /* Nessun sotto-livello da sbucciare. Il catalogo modelli ne era uno — ci si
@@ -244,17 +234,17 @@ export class SettingsController {
        vorrebbe dire costruire ogni volta anche l'anagrafica delle marche e la
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
-      personalization: () => this._section('personalization', 'ti-palette', i18n.t('settings.personalization'), this._renderPersonalization(d)),
-      models: () => this._section('models', 'ti-cpu', i18n.t('settings.model'), this._renderModelSettings(d)),
-      tools: () => this._section('tools', 'ti-tool', i18n.t('settings.tools'), this._renderTools(d)),
-      memory: () => this._section('memory', 'ti-sparkles', i18n.t('settings.memory.title'), this._renderMemory(d)),
-      workers: () => this._section('workers', 'ti-map', i18n.t('settings.workers.title'), this._renderWorkers(d)),
-      scheduling: () => this._section('scheduling', 'ti-alarm', i18n.t('cron.byHerself'), this._renderScheduling()),
+      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d)),
+      models: () => this._gruppo('models', i18n.t('settings.model'), this._renderModelSettings(d)),
+      tools: () => this._gruppo('tools', i18n.t('settings.tools'), this._renderTools(d)),
+      memory: () => this._gruppo('memory', i18n.t('settings.memory.title'), this._renderMemory(d)),
+      workers: () => this._gruppo('workers', i18n.t('settings.workers.title'), this._renderWorkers(d)),
+      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       battery: () => this._renderBatterySection(d),
-      ssh: () => this._section('ssh', 'ti-terminal-2', i18n.t('settings.ssh.title'), this._renderSsh()),
-      telegram: () => this._section('telegram', 'ti-brand-telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
-      backup: () => this._section('backup', 'ti-history', i18n.t('backup.snapshotHistory'), this._renderBackup()),
-      system: () => this._section('system', 'ti-info-circle', i18n.t('settings.system'), this._renderSystem(d)),
+      ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
+      telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup()),
+      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
     };
     const cassetto = CASSETTI[this._cassetto];
     const quali = cassetto ? cassetto.sezioni : Object.keys(sezioni);
@@ -365,15 +355,27 @@ export class SettingsController {
     return `<div class="settings-porte">${voci}</div>`;
   }
 
-  _section(id, icon, title, body) {
-    const collapsed = this._openSections.has(id) ? '' : ' collapsed';
-    return `<div class="settings-section${collapsed}" data-section="${id}">
-      <div class="settings-section-header">
-        <i class="ti ${icon}"></i>
-        <span>${title}</span>
-        <i class="ti ti-chevron-down settings-chevron"></i>
-      </div>
-      <div class="settings-section-body">${body}</div>
+  /** Un gruppo: una soprascritta fuori, e sotto una scheda **aperta**.
+   *
+   *  Era una fisarmonica — testa cliccabile, chevron, corpo chiuso di
+   *  default — e la tavola non ne ha nessuna. Il motivo non e' estetico: un
+   *  cassetto di fisarmoniche chiuse si apre su quattro righe che non dicono
+   *  niente, e per sapere cosa c'e' dentro bisogna toccarle una per una. La
+   *  pagina della tavola si legge scorrendo.
+   *
+   *  **E porta via due pezze.** L'esenzione batteria mancante e il banner del
+   *  cron aprivano d'ufficio la loro sezione, ognuno con la stessa nota: «un
+   *  accordion chiuso e' esattamente il posto in cui il problema e' rimasto
+   *  invisibile». Senza accordion non c'e' piu' niente da forzare.
+   *
+   *  L'`id` resta come `data-gruppo`: non serve piu' a ricordare chi e'
+   *  aperto, serve a chi cerca un gruppo nel DOM (il banco, e il cron che
+   *  scrive nel proprio segnaposto).
+   */
+  _gruppo(id, etichetta, corpo) {
+    return `<div class="settings-gruppo" data-gruppo="${id}">
+      <div class="settings-gruppo-label">${etichetta}</div>
+      <section class="settings-card">${corpo}</section>
     </div>`;
   }
 
@@ -407,16 +409,10 @@ export class SettingsController {
      ma keepAwake vive nel config del gateway ed è modificabile da qualunque
      browser: la sezione resta, con il solo controllo che ha ancora senso. */
   _renderBatterySection(d) {
-    // Aperta d'ufficio quando l'esenzione manca: un accordion chiuso è
-    // esattamente il posto in cui il problema è rimasto invisibile finora.
-    if (batteryExemptionSupported() && batteryExemptionNeeded()) {
-      this._openSections.add('battery');
-    }
     const card = batteryExemptionSupported()
       ? `<div id="settings-battery-card"></div><div class="settings-divider"></div>`
       : '';
-    return this._section(
-      'battery', 'ti-battery-charging', i18n.t('settings.battery.title'),
+    return this._gruppo('battery', i18n.t('settings.battery.title'),
       `${card}${this._renderKeepAwake(d)}<div id="settings-power-diagnostics"></div>`,
     );
   }
@@ -1899,17 +1895,6 @@ export class SettingsController {
     });
     blockEl.innerHTML = this._renderCronBlock(this._cron);
     this._wireCronBlock();
-    /* Se c'è qualcosa da dire, la sezione si apre da sé. Stesso argomento della
-       card batteria: un accordion chiuso è esattamente il posto in cui il
-       problema è rimasto invisibile finora. Solo la prima volta per apertura di
-       schermata, perché richiudere una sezione che l'utente ha chiuso a mano
-       sarebbe una lotta. */
-    if (this._cron.banner && !this._cronAutoOpened) {
-      this._cronAutoOpened = true;
-      this._openSections.add('scheduling');
-      const sec = this.contentEl.querySelector('[data-section="scheduling"]');
-      if (sec) sec.classList.remove('collapsed');
-    }
     this._restoreScrollTop();
   }
 
@@ -2128,17 +2113,6 @@ export class SettingsController {
   }
 
   _wireSections() {
-    // Accordion toggle (lo stato aperto va in _openSections così i
-    // re-render non richiudono la sezione in cui l'utente sta lavorando)
-    this.contentEl.querySelectorAll('.settings-section-header').forEach(h => {
-      h.addEventListener('click', () => {
-        const sec = h.closest('.settings-section');
-        const collapsed = sec.classList.toggle('collapsed');
-        if (collapsed) this._openSections.delete(sec.dataset.section);
-        else this._openSections.add(sec.dataset.section);
-      });
-    });
-
     // Active config fields → auto-save on change
     for (const key of ['bot_name', 'max_tokens', 'temperature', 'reasoning_effort']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
