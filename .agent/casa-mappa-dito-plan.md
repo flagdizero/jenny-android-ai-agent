@@ -56,24 +56,31 @@ funzione.** Il trascinamento fa `alphaTarget(0.3).restart()`, quindi la fisica
 riparte, quindi `end` scatta **di nuovo** — e la camera si ripiazza nell'istante
 in cui alzi il dito. Ogni nodo trascinato costerebbe un salto della vista.
 
-## Passo 0 — misurare sul telefono, prima di scrivere una riga
+## Passo 0 — misurato sul telefono ✅ *21/09/2026, ore 20:21*
 
-Due catture, e separano tre storie diverse:
+La build installata (`versionName 0.11.0`, aggiornata alle 20:02) **portava già
+la correzione del Passo 1**: verificato leggendo il JS che il telefono serve
+davvero, non il repo — `_inquadrataDaTe` compare 4 volte in
+`files/workspace/ui/assets/casa-map.js`. Quindi la misura non e' «com'era
+prima», e' «com'e' adesso».
 
-1. Apri la casa → quaderno → linguetta della mappa. **Foto subito.**
-   - Se si legge una delle tre frasi: la mappa non è disegnata, e non c'è niente
-     da trascinare. Il seguito di questo piano non serve — serve capire perché
-     (quasi certamente `noLinks`: pagine che non si linkano fra loro).
-   - Se si vedono pallini e fili: la mappa c'è, e si prosegue.
-2. Con i pallini a schermo, **aspetta sei secondi**, poi sposta. Poi riapri la
-   linguetta e sposta **entro il primo secondo**.
-   - Funziona dopo e non prima → è la camera che litiga, ed è il Passo 1.
-   - Non funziona né prima né dopo → è altro, e va cercato con la console del
-     pannello browser (`adb forward`, v. la nota «Guidare la WebUI del telefono
-     dal Mac»): un errore dentro `_render` lascerebbe il disegno a metà.
+**La mappa si disegna.** Nessuna delle tre uscite anticipate: quaderno
+«etf-finance», 21 pagine, fili in abbondanza, nomi sui nodi piu' collegati.
+Quindi l'ipotesi `noLinks` cade, e il sospetto principale era quello giusto.
 
-Senza il Passo 0 tutto il resto è una scommessa: da qui non si distingue una
-mappa che non risponde da una mappa che non c'è.
+Le tre meta' dell'invariante, ognuna con la sua misura:
+
+| prova | atteso | misurato |
+|---|---|---|
+| sposto **entro il primo secondo**, poi aspetto 9 s (la fisica si ferma dentro) | la vista resta dove l'ho messa | resta. Differenza media 7,31/255, e il riquadro che cambia e' solo quello dei pallini che si assestano: la camera non si muove |
+| torno su «Pagine» e poi sulla «Mappa» | la vista e' quella che avevo lasciato | **identica pixel per pixel** (differenza 0,0) |
+| esco dal quaderno e lo riapro (disegno nuovo) | si inquadra da se' | centro verticale della nuvola a **0,474** — meta' esatta del pannello — e occupa da 0,071 a 0,982 |
+
+**Un limite da dire:** il difetto **non** l'ho visto coi miei occhi. La build
+sul telefono era gia' corretta, quindi «prima la vista tornava indietro» resta
+dedotto dal codice — dove la riga girava senza condizioni — e non osservato.
+Quel che e' osservato e' che adesso non torna indietro, e che l'inquadratura
+automatica funziona ancora dove deve.
 
 ## Passo 1 — la camera smette di litigare col dito ✅ *fatto, senza telefono*
 
@@ -101,7 +108,8 @@ quaderno nuovo merita la sua inquadratura, ma tornare sulla linguetta non
 ridisegna (`if (this._drawn === data) return`) e non deve buttare via dove
 l'utente aveva guardato.
 
-**Resta da provare sul telefono, e va riportato prima del Passo 2:** se la
+**Provato sul telefono il 21/09/2026 (v. Passo 0): tiene.** Resta il senso della
+frase che segue: se la
 risposta era «il pan tornava indietro», il trascinamento è una cosa che si
 aggiunge per scelta e non per rimediare. Il Passo 0 resta valido così com'è
 scritto — con una differenza: adesso la prova «sposta entro il primo secondo»
