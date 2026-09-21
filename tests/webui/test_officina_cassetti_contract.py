@@ -42,10 +42,18 @@ def _cassetti() -> dict[str, dict[str, list[str]]]:
     corpo = m.group(1)
     fuori = {}
     for nome, dentro in re.findall(r"(\w+): \{(.*?)\n  \}", corpo, re.S):
-        def elenco(chiave: str) -> list[str]:
-            voci = re.search(rf"{chiave}: \[([^\]]*)\]", dentro)
+        def elenco(chiave: str, aperta: str = "[", chiusa: str = "]") -> list[str]:
+            voci = re.search(rf"{chiave}: \{aperta}([^\{chiusa}]*)\{chiusa}", dentro)
             return re.findall(r"'([^']+)'", voci.group(1)) if voci else []
-        fuori[nome] = {"sezioni": elenco("sezioni"), "porte": elenco("porte")}
+        # `porte` e' passata da elenco a **mappa gruppo -> porte**: le
+        # destinazioni stanno in fondo al gruppo che le riguarda, non in cima al
+        # cassetto. Qui si raccolgono comunque tutte, perche' i banchi che la
+        # usano chiedono «questa vista si apre da qualche parte?», e la risposta
+        # non dipende da quale gruppo la ospiti.
+        fuori[nome] = {
+            "sezioni": elenco("sezioni"),
+            "porte": elenco("porte", "{", "}"),
+        }
     assert fuori, "la tabella e' vuota"
     return fuori
 
@@ -146,7 +154,7 @@ def test_a_drawer_only_builds_what_it_shows() -> None:
     m = re.search(r"(?s)this\.contentEl\.innerHTML = \[(.*?)\]\.join\(''\);", src)
     assert m, "il corpo di render() non si trova piu'"
     corpo = m.group(1)
-    assert "quali.map((id) => sezioni[id]())" in corpo, (
+    assert "quali.map((id) => sezioni[id]()" in corpo, (
         "render() non disegna piu' per cassetto: se le costruisce tutte, le "
         "costruisce tutte anche quando ne mostra una"
     )

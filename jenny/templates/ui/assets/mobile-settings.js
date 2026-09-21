@@ -1,4 +1,4 @@
-/** Mobile Settings Controller — accordion-based settings panel. */
+/** Mobile Settings Controller — i gruppi aperti dei tre cassetti dell'officina. */
 
 import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
@@ -99,15 +99,15 @@ const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
 export const CASSETTI = {
   cervello: {
     sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'personalization', 'system'],
-    porte: [],
+    porte: {},
   },
   mani: {
     sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
-    porte: ['launcher'],
+    porte: { telegram: ['launcher'] },
   },
   memoria: {
     sezioni: ['quantoRicorda', 'dream', 'workers', 'backup'],
-    porte: ['workspace', 'graph'],
+    porte: { workers: ['graph', 'workspace'] },
   },
 };
 
@@ -258,23 +258,23 @@ export class SettingsController {
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
       // Cervello
-      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d)),
-      marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d)),
-      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d)),
+      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d), this._portePerGruppo(cassetto, 'chiPensa')),
+      marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d), this._portePerGruppo(cassetto, 'marche')),
+      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d), this._portePerGruppo(cassetto, 'parametri')),
       battery: () => this._renderBatterySection(d),
-      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d)),
-      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
+      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d), this._portePerGruppo(cassetto, 'personalization')),
+      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d), this._portePerGruppo(cassetto, 'system')),
       // Mani
-      ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d)),
-      posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d)),
-      ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
-      telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
-      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
+      ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d), this._portePerGruppo(cassetto, 'ricercaWeb')),
+      posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d), this._portePerGruppo(cassetto, 'posizione')),
+      ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh(), this._portePerGruppo(cassetto, 'ssh')),
+      telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram(), this._portePerGruppo(cassetto, 'telegram')),
+      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling(), this._portePerGruppo(cassetto, 'scheduling')),
       // Memoria
-      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
-      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d)),
-      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d)),
-      backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup()),
+      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d), this._portePerGruppo(cassetto, 'quantoRicorda')),
+      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d), this._portePerGruppo(cassetto, 'dream')),
+      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d), this._portePerGruppo(cassetto, 'workers')),
+      backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup(), this._portePerGruppo(cassetto, 'backup')),
     };
     const cassetto = CASSETTI[this._cassetto];
     const quali = cassetto ? cassetto.sezioni : Object.keys(sezioni);
@@ -282,7 +282,6 @@ export class SettingsController {
     this.contentEl.innerHTML = [
       this._renderConfigRecovery(d),
       this._renderCronRecovery(d),
-      this._renderPorte(cassetto),
       ...quali.map((id) => sezioni[id]()),
     ].join('');
 
@@ -373,8 +372,20 @@ export class SettingsController {
      silenzioso di perdere una schermata. Spariranno una alla volta, quando il
      cassetto che le ospita avra' la sua riga vera (workspace dentro Memoria,
      app dentro Mani). */
-  _renderPorte(cassetto) {
-    const porte = cassetto?.porte || [];
+  /** Le porte di un gruppo, in fondo al gruppo.
+   *
+   *  Stavano in cima al cassetto, tutte insieme e staccate dal loro argomento:
+   *  si apriva Memoria e la prima cosa erano due righe, «Workspace» e «Wiki»,
+   *  prima ancora di sapere di cosa parlasse la pagina. Nelle tavole di Mani e
+   *  Memoria **non c'e' niente prima del primo gruppo**: quelle destinazioni
+   *  stanno dentro il gruppo che le riguarda, come ultima riga.
+   *
+   *  Percio' `porte` non e' piu' un elenco per cassetto ma una mappa
+   *  gruppo -> porte: il cassetto delle app in fondo ai canali, la wiki e i
+   *  file in fondo al giardiniere, che e' chi li riempie.
+   */
+  _portePerGruppo(cassetto, gruppo) {
+    const porte = cassetto?.porte?.[gruppo] || [];
     if (!porte.length) return '';
     const voci = porte.map((mode) => `
       <button class="settings-porta" data-porta="${escapeHtml(mode)}" type="button">
@@ -402,10 +413,10 @@ export class SettingsController {
    *  aperto, serve a chi cerca un gruppo nel DOM (il banco, e il cron che
    *  scrive nel proprio segnaposto).
    */
-  _gruppo(id, etichetta, corpo) {
+  _gruppo(id, etichetta, corpo, porte = '') {
     return `<div class="settings-gruppo" data-gruppo="${id}">
       <div class="settings-gruppo-label">${etichetta}</div>
-      <section class="settings-card">${corpo}</section>
+      <section class="settings-card">${corpo}${porte}</section>
     </div>`;
   }
 
@@ -463,13 +474,24 @@ export class SettingsController {
     const power = (d && d.power) || {};
     const current = power.keep_awake || 'turns';
     const modes = power.modes || KEEP_AWAKE_CHOICES;
-    const options = modes.map(id =>
-      `<option value="${escapeHtml(id)}"${id === current ? ' selected' : ''}>${escapeHtml(i18n.t(`settings.battery.keepAwake.${id}`))}</option>`
-    ).join('');
+    /* A segmenti e non a tendina. Il criterio e' gia' scritto nel codice (v.
+       `_renderLanguage`): a segmenti quando le voci stanno in riga, a tendina
+       quando non ci stanno. Tre voci ci stanno — ma solo accorciate: «Solo
+       mentre lavora (consigliato)» in un terzo di 590 px non entra. Il testo
+       lungo, «(consigliato)» compreso, resta nel `title` di ogni bottone,
+       quindi la raccomandazione non si perde: cambia dove si legge. */
+    const options = modes.map(id => {
+      const corto = i18n.t(`settings.battery.keepAwakeShort.${id}`);
+      const lungo = i18n.t(`settings.battery.keepAwake.${id}`);
+      return `<button type="button" class="settings-seg-btn${id === current ? ' active' : ''}"
+        data-keep-awake="${escapeHtml(id)}" title="${escapeHtml(lungo)}"
+        role="radio" aria-checked="${id === current ? 'true' : 'false'}">${escapeHtml(corto)}</button>`;
+    }).join('');
     return `
       <div class="settings-subheading">${i18n.t('settings.battery.keepAwakeTitle')}</div>
       <div class="settings-field">
-        <select class="settings-select" id="keep-awake-select">${options}</select>
+        <div class="settings-seg" id="keep-awake-seg" role="radiogroup"
+          aria-label="${escapeHtml(i18n.t('settings.battery.keepAwakeTitle'))}">${options}</div>
         <p class="settings-choice-cost" id="keep-awake-cost">${escapeHtml(this._keepAwakeCost(current))}</p>
         <p class="settings-hint" style="margin:6px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.battery.keepAwakeHint')}</p>
         <p class="settings-hint" style="margin:6px 0 0;font-size:12px;color:var(--text-faint)"><i class="ti ti-refresh"></i> ${i18n.t('settings.battery.keepAwakeRestart')}</p>
@@ -777,9 +799,10 @@ export class SettingsController {
   _renderMarche(d) {
     return `
       <div id="provider-list">
-        ${this._renderProviderListHtml(d.providers || [])}
+        ${this._renderProviderListHtml(d.providers || [], d.default_provider)}
       </div>
-      <button class="settings-btn-add" id="btn-add-provider"><i class="ti ti-plus"></i> ${i18n.t('settings.addProvider')}</button>`;
+      <button class="settings-btn-add settings-btn-pieno" id="btn-add-provider"><i class="ti ti-plus"></i> ${i18n.t('settings.addProvider')}</button>
+      <p class="settings-hint" style="margin:8px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.addProviderHint')}</p>`;
   }
 
   /** Le manopole del motore.
@@ -797,28 +820,83 @@ export class SettingsController {
         ['', 'low', 'medium', 'high'])}`;
   }
 
-  _renderProviderListHtml(providers) {
+  /** Una marca, in una riga da 52 px.
+   *
+   *  Era una scheda: nome, targhetta del formato, indirizzo, chiave e due
+   *  bottoni-icona, per un'altezza tripla. La tavola ne fa una riga —
+   *  pallino, nome, indirizzo, chiave mascherata, freccina — e ci aggiunge
+   *  **la pastiglia «risponde»** su quella che risponde adesso, che la scheda
+   *  non aveva: da qui si amministrano le marche, e sapere quale sta
+   *  rispondendo e' il contesto di ogni decisione che si prende.
+   *
+   *  Modifica ed elimina passano nel pannello: sono cose che si fanno **a**
+   *  una marca.
+   */
+  _renderProviderListHtml(providers, attiva) {
     if (!providers.length) return `<div class="settings-empty-state">${i18n.t('settings.noProviders')}</div>`;
     return providers.map(p => {
-      return `<div class="provider-card" data-provider="${escapeHtml(p.name)}">
-        <div class="provider-card-header">
-          <span class="provider-name">${escapeHtml(p.name)}</span>
-          <span class="provider-badge format-badge">${escapeHtml(this._formatLabel(p.format))}</span>
-        </div>
-        <div class="provider-card-body">
-          <span class="provider-url">${escapeHtml(p.api_base || i18n.t('settings.defaultUrl'))}</span>
-          <span class="provider-key">${escapeHtml(p.api_key_hint || i18n.t('settings.noKey'))}</span>
-        </div>
-        <div class="provider-card-actions">
-          <button class="btn-icon provider-edit" data-provider="${escapeHtml(p.name)}" title="${i18n.t('settings.edit')}">
-            <i class="ti ti-edit"></i>
-          </button>
-          <button class="btn-icon btn-danger provider-delete" data-provider="${escapeHtml(p.name)}" title="${i18n.t('settings.delete')}">
-            <i class="ti ti-trash"></i>
-          </button>
-        </div>
-      </div>`;
+      const nome = escapeHtml(p.name);
+      const risponde = p.name === attiva
+        ? `<span class="marca-risponde">${i18n.t('settings.answersNow')}</span>`
+        : '';
+      return `<button class="marca-riga" type="button" data-marca-open="${nome}">
+        <span class="marca-pallino" style="background:${this._coloreMarca(p.name)}" aria-hidden="true"></span>
+        <span class="marca-testo">
+          <span class="marca-nome">${nome}${risponde}</span>
+          <span class="marca-dove">${escapeHtml(this._formatLabel(p.format))} · ${escapeHtml(p.api_base || i18n.t('settings.defaultUrl'))}</span>
+        </span>
+        <span class="marca-chiave">${escapeHtml(p.api_key_hint || i18n.t('settings.noKey'))}</span>
+        <i class="ti ti-chevron-right" aria-hidden="true"></i>
+      </button>`;
     }).join('');
+  }
+
+  /** Il colore del pallino di una marca.
+   *
+   *  **Derivato dal nome, non da una tabella.** Una tabella nome→colore
+   *  andrebbe tenuta aggiornata a mano e lascerebbe grigie tutte le marche che
+   *  non conosce — cioe' proprio quelle che l'utente si e' aggiunto da se', che
+   *  sono il motivo per cui questa schermata esiste. La tinta si ricava dal
+   *  nome, saturazione e chiarezza fisse: distinguibile su fondo chiaro e su
+   *  fondo scuro, e stabile fra un'apertura e l'altra.
+   *
+   *  Non passa dai token del tema di proposito: identifica una marca, non un
+   *  ruolo nell'interfaccia, e deve restare la stessa su tutti e sette i temi.
+   */
+  _coloreMarca(nome) {
+    let h = 0;
+    for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) % 360;
+    return `hsl(${h}, 62%, 55%)`;
+  }
+
+  /** Il pannello di una marca: modifica ed elimina. */
+  _apriMarca(nome) {
+    const corpo = document.getElementById('drawer-marca-body');
+    const titolo = document.getElementById('drawer-marca-title');
+    const p = (this.data?.providers || []).find(x => x.name === nome);
+    if (!corpo || !p) return;
+    if (titolo) titolo.textContent = p.name;
+    corpo.innerHTML = `
+      <div class="settings-riga">
+        <span class="settings-label">${i18n.t('settings.defaultUrl')}</span>
+        <span class="settings-riepilogo-valore">${escapeHtml(p.api_base || i18n.t('settings.defaultUrl'))}</span>
+      </div>
+      <div class="settings-riga">
+        <span class="settings-label">${i18n.t('settings.noKey')}</span>
+        <span class="settings-riepilogo-valore">${escapeHtml(p.api_key_hint || i18n.t('settings.noKey'))}</span>
+      </div>
+      <div class="provider-card-actions" style="margin-top:12px">
+        <button class="settings-btn-add provider-edit" data-provider="${escapeHtml(p.name)}">
+          <i class="ti ti-edit"></i> ${i18n.t('settings.edit')}
+        </button>
+        <button class="settings-btn-add btn-danger provider-delete" data-provider="${escapeHtml(p.name)}">
+          <i class="ti ti-trash"></i> ${i18n.t('settings.delete')}
+        </button>
+      </div>`;
+    document.querySelectorAll('#drawer-marca-body .provider-edit').forEach(b =>
+      b.addEventListener('click', () => this._editProvider(b.dataset.provider)));
+    document.querySelectorAll('#drawer-marca-body .provider-delete').forEach(b =>
+      b.addEventListener('click', () => this._deleteProvider(b.dataset.provider)));
   }
 
   // ── Strumenti ──────────────────────────────────────────────────────
@@ -920,9 +998,72 @@ export class SettingsController {
     if (!m) return `<div class="settings-empty">${i18n.t('settings.memory.unavailable')}</div>`;
     return `
       ${this._hint(i18n.t('settings.memory.budgetsHint'))}
-      ${this._renderBudget(m, 'MEMORY.md', 'memory_budget_chars')}
-      ${this._renderBudget(m, 'USER.md', 'user_budget_chars')}
-      ${this._renderBudget(m, 'SOUL.md', 'soul_budget_chars')}`;
+      ${this._misuraTetto(m, 'MEMORY.md', 'memory_budget_chars')}
+      ${this._misuraTetto(m, 'USER.md', 'user_budget_chars')}
+      ${this._misuraTetto(m, 'SOUL.md', 'soul_budget_chars')}
+      <button class="settings-btn-add" data-riepilogo="tetti" type="button">
+        <i class="ti ti-adjustments"></i> ${i18n.t('settings.memory.changeBudgets')}
+      </button>`;
+  }
+
+  /** Un file: quanto misura, la barra, e **quanto ne resta**.
+   *
+   *  In sola lettura. Il campo per cambiare il tetto stava qui accanto alla
+   *  misura, e la tavola lo toglie: «quanto ricorda» e' una domanda con una
+   *  risposta da leggere, e cambiarla e' un'altra cosa — dietro «Cambia i
+   *  tetti».
+   *
+   *  La riga che resta e' quella che il cassetto non aveva: **i caratteri che
+   *  mancano al tetto**. «2.090 su 3.000» va letto e sottratto; «restano 910»
+   *  e' la risposta. Sopra il tetto la frase cambia del tutto, perche' cambia
+   *  la conseguenza: Dream smette di scrivere.
+   */
+  _misuraTetto(m, label, key) {
+    const tetto = m[key]?.value || 0;
+    const file = (m.files || []).find(f => f.label === label);
+    const chars = file && file.readable !== false && file.exists ? file.chars : null;
+    const pct = tetto > 0 && chars != null ? Math.min(100, Math.round((chars / tetto) * 100)) : 0;
+    const oltre = tetto > 0 && chars != null && chars > tetto;
+    const resto = oltre
+      ? i18n.t('settings.memory.headroomOver', { over: chars - tetto })
+      : (tetto > 0 && chars != null ? i18n.t('settings.memory.headroom', { left: tetto - chars }) : '');
+    return `<div class="settings-budget">
+      <div class="settings-riga">
+        <span class="settings-label">${escapeHtml(label)}</span>
+        <span class="settings-riepilogo-valore">${escapeHtml(this._budgetMeasure(m, label, key))}</span>
+      </div>
+      <div class="settings-meter${oltre ? ' is-over' : ''}" data-meter="${label}">
+        <span style="width:${pct}%"></span>
+      </div>
+      <div class="settings-budget-measure" data-measure="${label}">${escapeHtml(resto)}</div>
+    </div>`;
+  }
+
+  /** Il pannello dei tetti: i tre campi, con il loro range dal server. */
+  _apriTetti() {
+    const m = this.data?.memory;
+    const corpo = document.getElementById('drawer-tetti-body');
+    if (!m || !corpo) return;
+    corpo.innerHTML = `
+      ${this._hint(i18n.t('settings.memory.budgetsHint'))}
+      ${this._numberField('MEMORY.md', 'memory_budget_chars', m.memory_budget_chars)}
+      ${this._numberField('USER.md', 'user_budget_chars', m.user_budget_chars)}
+      ${this._numberField('SOUL.md', 'soul_budget_chars', m.soul_budget_chars)}`;
+    this._wireTetti();
+  }
+
+  /** I tre campi dentro il pannello. Stesso `change` del resto — su una
+   *  tastiera mobile `input` salverebbe a ogni cifra. */
+  _wireTetti() {
+    document.querySelectorAll('#drawer-tetti-body [data-worker-key]').forEach(el => {
+      el.addEventListener('change', async () => {
+        try {
+          await this._saveWorkerParams('memory', { [el.dataset.workerKey]: el.value });
+          showToast(i18n.t('settings.saved'));
+          this.loadSettings();
+        } catch (e) { showToast(e.message, 'error'); }
+      });
+    });
   }
 
   /** Dream: chi riempie quei tre file, e ogni quanto. */
@@ -936,27 +1077,6 @@ export class SettingsController {
       ${this._numberField(i18n.t('settings.memory.reviewCadence'), 'review_every_runs', m.review_every_runs)}
       ${this._hint(i18n.t('settings.memory.reviewHint', { floor: m.review_floor }))}
       ${this._renderReviewState(m.review_state)}`;
-  }
-
-  /* Una riga di tetto: il nome del file, quanto misura adesso, la barra, e il
-     campo. La misura sta accanto al campo e non in un pannello a parte perché è
-     il numero su cui si decide il tetto — separarli era quel che rendeva
-     `/dream budget` due comandi invece di uno. */
-  _renderBudget(m, label, key) {
-    const spec = m[key] || {};
-    const file = (m.files || []).find(f => f.label === label);
-    const budget = spec.value || 0;
-    const chars = file ? file.chars : null;
-    const measure = this._budgetMeasure(m, label, key);
-    const pct = budget > 0 && chars != null ? Math.min(100, Math.round((chars / budget) * 100)) : 0;
-    const over = budget > 0 && chars != null && chars > budget;
-    return `<div class="settings-budget">
-      ${this._numberField(label, key, spec)}
-      <div class="settings-meter${over ? ' is-over' : ''}" data-meter="${label}">
-        <span style="width:${pct}%"></span>
-      </div>
-      <div class="settings-budget-measure" data-measure="${label}">${measure}</div>
-    </div>`;
   }
 
   /* La frase sotto la barra. In un metodo suo perché la scrive anche
@@ -1793,7 +1913,11 @@ export class SettingsController {
      righe di riepilogo sono destinate a diventare tre (storia, Telegram, SSH)
      e un elenco di condizioni le farebbe divergere una per volta. */
   get _APRI_PANNELLO() {
-    return { storia: this._apriStoria, telegram: this._apriTelegram };
+    return {
+      storia: this._apriStoria,
+      telegram: this._apriTelegram,
+      tetti: this._apriTetti,
+    };
   }
 
   _renderBackup() {
@@ -2385,12 +2509,13 @@ export class SettingsController {
     document.addEventListener('visibilitychange', this._onPowerVisible);
     this._loadPowerDiagnostics();
 
-    // Provider edit/delete buttons
-    this.contentEl.querySelectorAll('.provider-edit').forEach(btn => {
-      btn.addEventListener('click', () => this._editProvider(btn.dataset.provider));
-    });
-    this.contentEl.querySelectorAll('.provider-delete').forEach(btn => {
-      btn.addEventListener('click', () => this._deleteProvider(btn.dataset.provider));
+    /* Ogni marca e' una riga: il tocco apre il suo pannello, dove vivono
+       modifica ed elimina. Nel cassetto quei due bottoni non esistono piu'. */
+    this.contentEl.querySelectorAll('[data-marca-open]').forEach(riga => {
+      riga.addEventListener('click', () => {
+        window.mobileApp?.drawer?.open('marca');
+        this._apriMarca(riga.dataset.marcaOpen);
+      });
     });
 
     // Ricerca web → auto-save con debounce (payload completo, come il
@@ -2423,23 +2548,29 @@ export class SettingsController {
 
     // Wakelock anti-doze: si salva al cambio, e il toast ripete che vale dal
     // prossimo riavvio — chi lo cambia dalla select non rilegge la riga sotto.
-    const keepAwakeSelect = this.contentEl.querySelector('#keep-awake-select');
-    if (keepAwakeSelect) {
+    const keepAwakeSeg = this.contentEl.querySelector('#keep-awake-seg');
+    if (keepAwakeSeg) {
+      const bottoni = [...keepAwakeSeg.querySelectorAll('[data-keep-awake]')];
       // `previous` segue l'ultimo valore accettato dal server, non quello del
       // primo render: due cambi di fila con il secondo fallito riporterebbero
-      // altrimenti la select su un modo che non è più quello salvato.
-      let previous = keepAwakeSelect.value;
-      // Il costo della scelta sta fuori dalla select (una <option> non va a
-      // capo) e segue la selezione subito, prima ancora del salvataggio: è
-      // quello che l'utente sta valutando, non la conferma di quello che ha
-      // già scelto. `textContent`: la frase viene da i18n, non da HTML.
+      // altrimenti il comando su un modo che non è più quello salvato.
+      let previous = bottoni.find(b => b.classList.contains('active'))?.dataset.keepAwake;
+      // Il costo della scelta sta sotto il comando e segue la selezione
+      // subito, prima ancora del salvataggio: è quello che l'utente sta
+      // valutando, non la conferma di quello che ha già scelto.
       const costEl = this.contentEl.querySelector('#keep-awake-cost');
-      const showCost = (mode) => {
+      const mostra = (mode) => {
         if (costEl) costEl.textContent = this._keepAwakeCost(mode);
+        bottoni.forEach(b => {
+          const suo = b.dataset.keepAwake === mode;
+          b.classList.toggle('active', suo);
+          b.setAttribute('aria-checked', suo ? 'true' : 'false');
+        });
       };
-      keepAwakeSelect.addEventListener('change', () => {
-        const mode = keepAwakeSelect.value;
-        showCost(mode);
+      bottoni.forEach(btn => btn.addEventListener('click', () => {
+        const mode = btn.dataset.keepAwake;
+        if (mode === previous) return;
+        mostra(mode);
         api.updatePower({ keep_awake: mode })
           .then(() => {
             previous = mode;
@@ -2447,11 +2578,10 @@ export class SettingsController {
             showToast(i18n.t('settings.battery.keepAwakeSaved'));
           })
           .catch(() => {
-            keepAwakeSelect.value = previous;  // rollback sull'errore
-            showCost(previous);
+            mostra(previous);  // rollback sull'errore
             showToast(i18n.t('settings.saveError'));
           });
-      });
+      }));
     }
 
     // Add provider

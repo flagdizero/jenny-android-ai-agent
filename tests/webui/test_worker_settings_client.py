@@ -138,7 +138,10 @@ _MEMBERS = (
     "_workerValue",
     "_repaintWorkerDerived",
     "_budgetMeasure",
-    "_renderBudget",
+    # `_renderBudget` era la riga con dentro il campo modificabile. In
+    # cassetto i tetti ora si **leggono** (`_misuraTetto`) e i campi stanno
+    # nel pannello «Cambia i tetti»: cambia chi disegna, non cosa si salva.
+    "_misuraTetto",
     "_numberField",
 )
 

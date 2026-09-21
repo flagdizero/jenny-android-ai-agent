@@ -614,7 +614,10 @@ def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
     """
     src = _src("mobile-settings.js")
     assert "PORTE_LANCIO = { launcher: (app) => app.openLauncher() }" in src
-    m = re.search(r"mani: \{\s*sezioni: \[[^\]]*\],\s*porte: \[([^\]]*)\]", src)
+    # `porte` e' passata da elenco per cassetto a mappa gruppo -> porte: le
+    # destinazioni stanno ora in fondo al gruppo che le riguarda, non in cima
+    # al cassetto. La maniglia resta dentro Mani, cambia solo dove.
+    m = re.search(r"mani: \{\s*sezioni: \[[^\]]*\],\s*porte: \{([^}]*)\}", src)
     assert m and "'launcher'" in m.group(1), "il cassetto Mani non porta piu' al foglio"
 
     app = _src("mobile-app.js")
@@ -741,7 +744,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     impostazioni = _src("mobile-settings.js")
 
     # L'ingresso che vale da ogni cassetto: la porta dentro Mani.
-    assert "porte: ['launcher']" in impostazioni, (
+    assert re.search(r"porte: \{[^}]*'launcher'", impostazioni), (
         "tolta la porta, il cassetto torna raggiungibile solo dalla chat"
     )
     assert "PORTE_LANCIO = { launcher:" in impostazioni

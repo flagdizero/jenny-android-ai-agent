@@ -184,7 +184,10 @@
       "ofBudget": "{chars} caratteri su {budget}",
       "measuredOnly": "{chars} caratteri, nessun tetto applicato",
       "notYetWritten": "non ancora scritto",
-      "unmeasured": "non misurabile adesso"
+      "unmeasured": "non misurabile adesso",
+      "changeBudgets": "Cambia i tetti",
+      "headroom": "Restano {left} caratteri prima del tetto.",
+      "headroomOver": "Oltre il tetto di {over} caratteri: le scritture di Dream vengono rifiutate."
     },
     "workers": {
       "unavailable": "Non riesco a leggere le impostazioni dei lavoratori periodici. Riapri la schermata; se resta così, controlla config.json.",
@@ -426,7 +429,12 @@
       "oemButton": "Apri le impostazioni del produttore",
       "oemLink": "Istruzioni per {brand}",
       "oemUnknownBrand": "il tuo telefono",
-      "oemOpenFailed": "Nessuna schermata di gestione batteria raggiungibile su questo telefono."
+      "oemOpenFailed": "Nessuna schermata di gestione batteria raggiungibile su questo telefono.",
+      "keepAwakeShort": {
+        "off": "Mai",
+        "turns": "Mentre lavora",
+        "always": "Sempre"
+      }
     },
     "telegram": {
       "enable": "Canale attivo",
@@ -469,7 +477,9 @@
     "useNow": "Usala adesso",
     "providerSavedAndActive": "Salvata, e adesso risponde lei",
     "providerSavedNotActive": "Marca salvata, ma non attivata: {error}",
-    "updatesLiveInCasa": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti»."
+    "updatesLiveInCasa": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti».",
+    "addProviderHint": "Nome, formato, indirizzo, chiave e il primo modello. Una marca senza un modello che funziona non è una marca che c'è.",
+    "answersNow": "risponde"
   },
   "common": {
     "loading": "Caricamento...",

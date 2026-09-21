@@ -184,7 +184,12 @@ def test_the_control_lives_in_the_background_activity_section() -> None:
     assert "settings.battery.keepAwake" in source
     assert "settings.battery.keepAwakeRestart" in source
     # Niente etichette inline: la copy sta nei file i18n.
-    assert "keep-awake-select" in source
+    # Da tendina a segmenti (v. `_renderKeepAwake`): l'id cambia, il fatto che
+    # il comando esista e stia qui no.
+    assert "keep-awake-seg" in source
+    assert "settings.battery.keepAwakeShort." in source, (
+        "i segmenti usano le parole corte: quelle lunghe non stanno in un terzo di riga"
+    )
 
 
 # -- strato route ------------------------------------------------------------

@@ -137,6 +137,35 @@
         <div class="drawer-body" id="drawer-ssh-host-body"></div>
       </div>
 
+      <!-- DRAWER: una marca ─ modifica ed elimina.
+           In cassetto la marca e' una riga da 52 px: pallino, nome, indirizzo,
+           chiave mascherata, e la pastiglia «risponde» su quella che risponde
+           adesso. Quel che si fa **a** una marca sta di qua. -->
+      <div class="drawer" id="drawer-marca">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" id="drawer-marca-title">—</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body" id="drawer-marca-body"></div>
+      </div>
+
+      <!-- DRAWER: i tetti dei tre file.
+           In cassetto «quanto ricorda» si **legge**: tre nomi, quanto misurano
+           e quanto ne resta. Cambiare un tetto e' un'altra cosa e sta qui. -->
+      <div class="drawer" id="drawer-tetti">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" data-i18n="settings.memory.changeBudgets">Cambia i tetti</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body" id="drawer-tetti-body"></div>
+      </div>
+
       <!-- DRAWER: Wiki Files -->
       <div class="drawer" id="drawer-files">
         <div class="drawer-header">

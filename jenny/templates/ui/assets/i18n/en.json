@@ -184,7 +184,10 @@
       "ofBudget": "{chars} characters of {budget}",
       "measuredOnly": "{chars} characters, no budget enforced",
       "notYetWritten": "not written yet",
-      "unmeasured": "cannot be measured right now"
+      "unmeasured": "cannot be measured right now",
+      "changeBudgets": "Change the budgets",
+      "headroom": "{left} characters left before the budget.",
+      "headroomOver": "{over} characters over budget: Dream writes are refused."
     },
     "workers": {
       "unavailable": "The periodic worker settings could not be read. Reopen this screen; if it stays like this, check config.json.",
@@ -426,7 +429,12 @@
       "oemButton": "Open the manufacturer's settings",
       "oemLink": "Instructions for {brand}",
       "oemUnknownBrand": "your phone",
-      "oemOpenFailed": "No battery management screen could be reached on this phone."
+      "oemOpenFailed": "No battery management screen could be reached on this phone.",
+      "keepAwakeShort": {
+        "off": "Never",
+        "turns": "While working",
+        "always": "Always"
+      }
     },
     "telegram": {
       "enable": "Channel active",
@@ -469,7 +477,9 @@
     "useNow": "Use it now",
     "providerSavedAndActive": "Saved, and it answers now",
     "providerSavedNotActive": "Brand saved, but not activated: {error}",
-    "updatesLiveInCasa": "Checking for and installing updates happens in the house, under «Updates»."
+    "updatesLiveInCasa": "Checking for and installing updates happens in the house, under «Updates».",
+    "addProviderHint": "Name, format, endpoint, key and the first model. A brand without a working model is not a brand you have.",
+    "answersNow": "answers"
   },
   "common": {
     "loading": "Loading...",

@@ -223,7 +223,9 @@ def test_niente_piu_fisarmoniche() -> None:
 
 def test_il_gruppo_e_una_scheda_aperta() -> None:
     """Il mattone che l'ha sostituita: soprascritta fuori, scheda dentro."""
-    m = re.search(r"_gruppo\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    # `porte` è arrivato dopo: le destinazioni stanno **dentro** la scheda, come
+    # sua ultima riga. Concatenarle fuori le lasciava fluttuare fra due gruppi.
+    m = re.search(r"_gruppo\(id, etichetta, corpo(?:, porte = '')?\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo non trovato"
     corpo = m.group(1)
     assert "settings-gruppo-label" in corpo, "il gruppo non ha soprascritta"

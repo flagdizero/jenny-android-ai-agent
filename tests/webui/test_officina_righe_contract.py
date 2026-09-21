@@ -349,3 +349,107 @@ def test_le_parole_corte_dei_due_stati_esistono(lingua: str) -> None:
     for k in ("markKey", "markPassword", "markFingerprint"):
         assert ssh.get(k, "").strip(), f"{lingua}: manca {k}"
         assert len(ssh[k]) <= 12, f"{lingua}: «{ssh[k]}» è troppo lungo per una riga da 52px"
+
+
+# ── Secondo giro: struttura ──────────────────────────────────────────────────
+
+
+def test_le_porte_stanno_dentro_il_loro_gruppo() -> None:
+    """Stavano in cima al cassetto, tutte insieme e staccate dal loro argomento:
+    si apriva Memoria e la prima cosa erano «Workspace» e «Wiki», prima ancora
+    di sapere di cosa parlasse la pagina. Nelle tavole di Mani e Memoria non c'è
+    niente prima del primo gruppo.
+    """
+    assert "_renderPorte(" not in SETTINGS, "il blocco in cima è tornato"
+    assert "_portePerGruppo(" in SETTINGS
+    # E finiscono **dentro** la scheda: concatenarle fuori le lascerebbe
+    # fluttuare fra due gruppi, che è dove sono atterrate al primo tentativo.
+    m = re.search(r"_gruppo\(id, etichetta, corpo, porte = ''\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    assert m, "_gruppo non prende più le porte"
+    assert "${corpo}${porte}" in m.group(1), (
+        "le porte non sono dentro la scheda del gruppo"
+    )
+
+
+def test_la_tabella_delle_porte_dice_a_quale_gruppo_appartengono() -> None:
+    """Da elenco per cassetto a mappa gruppo -> porte: senza, «dentro il gruppo»
+    non è esprimibile."""
+    m = re.search(r"export const CASSETTI = \{(.*?)\n\};", SETTINGS, re.S)
+    assert m
+    # **Nessuna** voce può essere un elenco piatto. Controllarne una sola
+    # lasciava passare la mutazione che ne riportava indietro un'altra:
+    # misurato il 21/09/2026, il banco era verde con `mani` già rotta.
+    piatte = re.findall(r"(\w+): \{\s*sezioni: \[[^\]]*\],\s*porte: \[", m.group(1))
+    assert not piatte, f"`porte` è tornata un elenco piatto in: {piatte}"
+    assert m.group(1).count("porte: {") == 3, "un cassetto non dichiara più le sue porte"
+
+
+def test_i_tetti_si_leggono_e_si_cambiano_altrove() -> None:
+    """«Quanto ricorda» è una domanda con una risposta da leggere."""
+    corpo = _corpo("_renderQuantoRicorda")
+    assert "_misuraTetto(" in corpo
+    assert "_numberField(" not in corpo, "i campi modificabili sono tornati in cassetto"
+    assert 'data-riepilogo="tetti"' in corpo, "manca il modo di cambiarli"
+    pannello = _corpo("_apriTetti")
+    assert pannello.count("_numberField(") == 3, "i tre campi non sono nel pannello"
+
+
+def test_la_misura_dice_quanto_resta_non_solo_quanto_misura() -> None:
+    """«2.090 su 3.000» va letto e sottratto; «restano 910» è la risposta.
+
+    E sopra il tetto la frase cambia del tutto, perché cambia la conseguenza:
+    Dream smette di scrivere.
+    """
+    corpo = _corpo("_misuraTetto")
+    assert "settings.memory.headroom" in corpo
+    assert "headroomOver" in corpo, "sopra il tetto non si dice cosa succede"
+    import json
+
+    for lingua in ("it", "en"):
+        mem = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+        mem = mem["settings"]["memory"]
+        assert "{left}" in mem["headroom"] and "{over}" in mem["headroomOver"]
+
+
+def test_una_marca_e_una_riga_con_chi_risponde() -> None:
+    """La pastiglia «risponde» la scheda non ce l'aveva: da qui si amministrano
+    le marche, e sapere quale sta rispondendo è il contesto di ogni decisione."""
+    corpo = _corpo("_renderProviderListHtml")
+    assert 'class="marca-riga"' in corpo and "provider-card" not in corpo
+    assert "marca-risponde" in corpo and "settings.answersNow" in corpo
+    assert "provider-edit" not in corpo and "provider-delete" not in corpo, (
+        "modifica ed elimina sono rimaste nella riga"
+    )
+    assert "provider-edit" in _corpo("_apriMarca")
+    m = re.search(r"^\.marca-riga \{(.*?)\}", CSS, re.S | re.M)
+    assert m and re.search(r"min-height:\s*52px", m.group(1))
+
+
+def test_il_colore_della_marca_non_viene_da_una_tabella() -> None:
+    """Una tabella nome->colore lascerebbe grigie proprio le marche che
+    l'utente si è aggiunto da sé, che sono il motivo per cui questa schermata
+    esiste."""
+    corpo = _corpo("_coloreMarca")
+    assert "charCodeAt" in corpo and "hsl(" in corpo
+
+
+def test_tenere_sveglia_la_cpu_e_un_comando_a_segmenti() -> None:
+    """Tre voci stanno in riga; il criterio era già scritto nel codice."""
+    corpo = _corpo("_renderKeepAwake")
+    assert "settings-seg" in corpo and "<select" not in corpo
+    assert "keepAwakeShort" in corpo, "le parole lunghe non stanno in un terzo di riga"
+    assert 'role="radiogroup"' in corpo and 'role="radio"' in corpo
+    # Il testo lungo — «(consigliato)» compreso — non si perde: va nel title.
+    assert "title=" in corpo and "settings.battery.keepAwake.$" in corpo.replace("{id}", "$")
+
+
+def test_il_bottone_principale_e_pieno_e_uno_solo() -> None:
+    """Sei bottoni pieni sulla stessa pagina non ne fanno risaltare nessuno."""
+    assert SETTINGS.count("settings-btn-pieno") == 1, (
+        "il modificatore è finito su più di un'azione"
+    )
+    assert "settings.addProviderHint" in SETTINGS, "manca la riga che spiega cosa comporta"
+    m = re.search(r"^\.settings-btn-pieno \{(.*?)\}", CSS, re.S | re.M)
+    assert m and "var(--on-accent)" in m.group(1), (
+        "testo non su --on-accent: con un accento chiaro non si legge"
+    )
