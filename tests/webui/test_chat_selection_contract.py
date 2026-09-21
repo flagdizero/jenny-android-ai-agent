@@ -149,14 +149,25 @@ def test_the_actions_row_reaches_history_too() -> None:
 
 
 def test_the_actions_row_is_idempotent_and_last() -> None:
-    body = _method(CHAT_JS, "_appendMsgActions")
+    body = _method(CHAT_JS, "_ensureMsgActions")
     assert "':scope > .chat-msg-actions'" in body
-    assert "msg.appendChild(existing)" in body
+    assert "msg.appendChild(row)" in body, "la riga non viene rimessa in coda"
 
 
-def test_the_sheet_lives_outside_the_swipe_surface() -> None:
-    """Dentro `#app` (e quindi `.main`) il listener dello swipe si prende il gesto."""
-    assert "app" not in _ancestor_ids("chat-msg-sheet")
+def test_the_message_sheet_is_gone_with_its_button() -> None:
+    """Il `⋯` e il foglio «Copia testo / Copia come Markdown» se ne vanno
+    insieme: era l'unica cosa che quel pulsante apriva, e l'unico modo di
+    aprirla.
+
+    Resta un Copia solo, e copia il **sorgente** — che era la voce «Copia come
+    Markdown», cioè quella per cui il foglio era stato scritto.
+    """
+    for sparito in ("chat-msg-more", "_showMessageSheet", "_messagePlain",
+                    "chat-msg-sheet", "ti-dots"):
+        assert sparito not in CHAT_JS, f"{sparito} è ancora in mobile-chat.js"
+    assert "chat-msg-sheet" not in OFFICINA_HTML
+    body = _method(CHAT_JS, "_copyMessage")
+    assert "markdown" not in body, "_copyMessage ha ancora la scelta che il foglio le dava"
 
 
 def test_no_inline_handlers_were_added() -> None:
@@ -164,11 +175,16 @@ def test_no_inline_handlers_were_added() -> None:
     assert "onclick=" not in OFFICINA_HTML
 
 
-def test_the_new_keys_exist_in_both_locales() -> None:
-    keys = ("messageActions", "copyPlain", "copyMarkdown")
+def test_the_sheet_strings_left_with_the_sheet() -> None:
+    """Tre chiavi che nessuno legge più sono tre traduzioni da mantenere per
+    niente — e il posto in cui una stringa morta torna a schermo."""
+    morte = ("messageActions", "copyPlain", "copyMarkdown")
     for lang in ("it", "en"):
         chat = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))["chat"]
-        for key in keys:
+        for key in morte:
+            assert key not in chat, f"{lang}.chat.{key} è rimasta orfana"
+        # E quella che resta c'è ancora, in tutte e due.
+        for key in ("copy", "copied", "copyFailed"):
             assert chat.get(key), f"{lang}.chat.{key}"
 
 

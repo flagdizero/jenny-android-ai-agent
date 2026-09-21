@@ -98,40 +98,115 @@ Il token c'è già (`--font-mono`): è una questione di dove applicarlo.
 
 ---
 
-## Mani e Memoria
+---
 
-**Non ancora fotografati.** Il telefono si è scollegato a metà della raccolta
-(`adb` non lo vede più). Lo script è pronto: appena torna, due comandi.
+## Mani e Memoria — e la differenza più grossa di tutte
 
-Dalla lettura delle tavole, le differenze attese sono **le stesse di A–E** — la
-forma delle righe, i valori in monospazio, il bottone pieno — più:
+Fotografati entrambi (`hands-intero.png` 1436×4096, `memory-intero.png`
+1436×6467). A–E valgono identiche anche qui. Ma il confronto ne fa emergere
+**tre di struttura**, più grosse di tutte quelle già elencate.
 
-- **Mani**: il gruppo «permessi di scrittura» (funzione assente, già deciso di
-  rimandarlo) e la riga `/ro`.
-- **Memoria**: «i file veri» (elenco delle cartelle, lettura che la schermata non
-  fa) e, in «quanto ricorda», la frase che calcola **quanti caratteri restano**
-  e li confronta con la casella delle regole della casa.
+### H. La tavola riassume dove il cassetto elenca
+
+È la differenza che spiega perché Memoria è **alta 6 467 px**: quasi due terzi
+sono l'elenco delle istantanee, una riga per ognuna.
+
+| | la tavola | il cassetto |
+| --- | --- | --- |
+| storia locale | **una riga**: «N istantanee · la più vecchia 6 g fa» | menù «conserva per», bottone «crea adesso», **e l'elenco intero** |
+| quando agisce da sola | righe compatte: nome · di chi è · quando | schede alte con «Next:» / «Last:» / pallino, più un bottone «aggiorna» e la riga «As of …» |
+| canali | **una riga**: «Telegram collegato · @…» | scheda intera con interruttore, riquadro di accoppiamento e bottone «disaccoppia» |
+| ssh | toggle, una riga di aiuto, **una riga per host** | toggle, aiuto lungo, scheda con targhetta, bottone «verifica impronta», matita e cestino |
+
+Il criterio della tavola è coerente: **in cassetto ci sta quel che si legge, e
+l'amministrazione è dietro un tocco.** Non è una scelta grafica — è quel che fa
+la differenza fra una pagina che si scorre in tre gesti e una che ne chiede
+venti.
+
+### I. Le porte spariscono, e diventano righe dentro il gruppo giusto
+
+Nelle tavole di Mani e Memoria **non c'è niente prima del primo gruppo**: nessuna
+riga «Cassetto delle app», nessuna «Workspace», nessuna «Wiki».
+
+Quelle destinazioni ci sono lo stesso, ma **dentro il gruppo a cui
+appartengono**, come riga di riepilogo con una freccina:
+
+- «Jenny Apps · 4, una nascosta» sta dentro *canali e abilità*;
+- «Skill · 3 tue, 4 integrate» pure;
+- i file del workspace sono il gruppo *i file veri*, che è l'elenco delle
+  cartelle, non un rimando.
+
+Il cassetto invece le mette come righe-porta in cima, staccate dal loro
+argomento.
+
+### J. Prima si legge, poi si modifica
+
+In «quanto ricorda» la tavola mostra i tre file con le loro barre e **un solo
+bottone, «Cambia i tetti»**. I campi numerici non sono a schermo.
+
+Il cassetto mostra **tre campi numerici modificabili** subito, con la misura
+sotto ognuno.
+
+Stesso principio di H, applicato dentro un gruppo: la domanda «quanto ricorda» ha
+una risposta da leggere; cambiarla è un'altra cosa e sta dietro un tocco.
+
+### E le due voci che restano fuori
+
+- **Mani / «permessi di scrittura»** — tre interruttori per ambito più la riga
+  `/ro`. Funzione assente, già deciso di rimandarla.
+- **Memoria / «i file veri»** — l'elenco delle cartelle del workspace. Richiede
+  una lettura che questa schermata non fa.
+
+### Cose del cassetto che la tavola non ha
+
+Oltre a quelle di Cervello: la targhetta e il bottone dell'impronta SSH, il
+riquadro di accoppiamento Telegram, il bottone «aggiorna» e la riga «As of …»
+sotto i lavori, il menù «conserva per» e «crea istantanea adesso».
+
+Non vanno **tolte**: vanno dietro il tocco che apre la riga di riepilogo.
+
+---
 
 ## L'ordine consigliato
 
-Prima i tre cambiamenti **condivisi**, perché ognuno allinea tutti e tre i
-cassetti in un colpo e riduce quel che resta:
+**Misura di partenza (21/09/2026, dalle foto intere):** Cervello ≈ 5 000 px,
+Mani 4 096 px, Memoria 6 467 px. La tavola disegna pagine da 1 120–1 180 px.
+Il divario non è di stile: è di **quanto c'è a schermo**.
 
-1. **A — righe a due colonne** (`_field`, `_select`). La differenza più ripetuta.
-2. **E — i valori in monospazio.** Poche righe, cambia molto la somiglianza.
-3. **B — comando a segmenti per «tenere sveglia la CPU».** Componente esistente.
+### Primo giro — quel che vale per tutti e tre
 
-Poi i pezzi di Cervello:
+1. **A — righe a due colonne** (`_field`, `_select`): etichetta a sinistra,
+   controllo a destra. La differenza più ripetuta dei tre cassetti, e si tocca
+   in un punto solo.
+2. **E — i valori di macchina in monospazio.** Il token esiste già
+   (`--font-mono`): è questione di dove applicarlo.
+3. **H — riassumere invece di elencare.** Il più redditizio: la storia locale
+   diventa una riga, i lavori diventano righe compatte, Telegram una riga. Da
+   solo dimezza Memoria.
 
-4. **C — le marche diventano righe compatte** (pallino, pastiglia, chevron).
-5. **D — bottone pieno + riga di spiegazione.**
-6. **F.2 — «Finestra di contesto»**: esporre un controllo che il config ha già.
-7. **F.4 — la riga di rimando a Memoria.**
-8. **G — togliere il superfluo** (icona aggiorna) e trasformare «CURRENT STATE»
-   in interruttori.
+### Secondo giro — struttura
 
-Infine, solo dopo aver fotografato gli altri due, i pezzi di Mani e Memoria.
+4. **I — le porte entrano nel loro gruppo** e smettono di stare in cima.
+5. **J — «quanto ricorda» si legge**, e i tetti vanno dietro «Cambia i tetti».
+6. **C — le marche diventano righe compatte** (pallino, pastiglia «risponde»,
+   chevron) invece di schede alte.
+7. **B — comando a segmenti** per «tenere sveglia la CPU»: il componente esiste.
+8. **D — bottone principale pieno** + la riga che spiega cosa comporta.
 
-**Fuori da questo piano** (cambio di protocollo, decisione dell'utente):
-la barra del contesto in Cervello e la striscia dei numeri in Console — sono la
-stessa cosa mancante, e vanno decise insieme.
+### Terzo giro — dettagli
+
+9. **F.2 — «Finestra di contesto»**: esporre un controllo che il config ha già
+   e nessuna schermata mostra.
+10. **F.3 — la pastiglia di stato** nell'intestazione.
+11. **F.4 — le righe di rimando in fondo** («…sta in Memoria»).
+12. **G — il superfluo**: via l'icona «aggiorna», e «CURRENT STATE» diventa
+    interruttori invece di referto.
+
+### Fuori da questo piano
+
+- **La barra «contesto in uso»** (Cervello) e **la striscia dei numeri**
+  (Console): la stessa cosa mancante nel protocollo, da decidere insieme.
+- **«Permessi di scrittura»** e **«i file veri»**: due funzioni che non esistono.
+- **`personalization` e `system`**: i due parcheggi, in attesa di una casa.
+
+Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.

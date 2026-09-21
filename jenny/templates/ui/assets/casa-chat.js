@@ -542,6 +542,11 @@ export class CasaChat {
    */
   _codaDi(node, latencyMs) {
     if (!node || node.querySelector('.casa-coda')) return;
+    /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col
+       suo bordo: e' separato da se', e un Copia sotto le proprie parole non
+       serve a nessuno. Oggi nessun chiamante ci passa una bolla utente — la
+       guardia e' perche' la prossima non debba ricordarselo. */
+    if (!String(node.className).includes('casa-msg-jenny')) return;
     // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
     if (!this._testoDi(node)) return;
     const riga = document.createElement('div');

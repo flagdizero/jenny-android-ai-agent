@@ -680,3 +680,43 @@ Non provato sul telefono, di proposito: **la bocca che si muove dal bordo**.
 Vorrebbe dire far girare un turno vero nella conversazione dell'utente per
 guardare due immagini alternarsi; quella e' stata campionata sul banco per 12
 secondi.
+
+## Ritocco — la coda di una risposta, che è anche il suo confine (21/09/2026)
+
+«Nella chat casa non c'è separazione tra i vari messaggi di jenny, sembra un
+messaggione unico.» Vero, e non è spaziatura. In casa Jenny non ha una bolla
+attorno al testo — è la decisione del Passo 2, «è testo sulla pagina, come una
+lettera» — quindi quattro risposte di fila sono quattro gruppi di paragrafi a
+10 px l'uno dall'altro, e l'occhio le legge come una.
+
+Il confine è **la coda**: il pulsante Copia e i secondi del turno, su una riga
+sola. Due cose che servono, invece di una linea che non serve a niente. La
+stessa riga dell'officina, dove Copia e secondi erano **due** nodi impilati e
+adesso sono uno.
+
+Quel che è servito, ed è quasi tutto nel «quando», non nel «cosa»:
+
+- **La coda si posa in `_resetTurn`, non in `_turnEnd`.** Un turno finisce in
+  più modi: il `turn_end` del gateway, ma anche un frame di un turno nuovo che
+  scavalca quello aperto (`_crossesTurn`) e un invio partito da qui
+  (`appendOwn`). Attaccata al solo `turn_end`, **la prima di due risposte
+  consecutive restava senza** — cioè proprio il caso da separare.
+- **I secondi arrivano da `turn_end.latency_ms`** e vanno azzerati dopo l'uso,
+  o la risposta dopo mostra il tempo di quella prima. Dalla cronologia li porta
+  `_buildTurns`, che fin qui li buttava con tutto il resto dell'officina.
+- **Si copia il sorgente, non il reso.** `_registra` nei tre punti in cui il
+  testo di un segmento è definitivo — `_streamEnd`, `_message`,
+  `_appendAssistant` — e `innerText` come rete, così un Copia non copia mai il
+  vuoto. `WeakMap` sulla bolla: una ricarica del filo li butta tutti.
+- **La coda cresce dopo la misura.** Nel percorso vivo la bolla è già nel filo
+  quando la riga si aggiunge, quindi `gap.aggiorna()` e `_follow()` vanno
+  richiamati: il margine per scansare la mascotte era stato calcolato su una
+  bolla più corta.
+
+In officina, insieme: **il `⋯` se n'è andato** con il foglio «Copia testo /
+Copia come Markdown» che era l'unica cosa che apriva. Resta un Copia solo, e
+copia il sorgente — cioè la voce per cui quel foglio era stato scritto. Le
+bolle utente restano senza riga: il `⋯` era la loro unica azione.
+
+Banchi: `test_casa_message_tail_client.py` (16, nuovo) e
+`test_chat_copy_client.py` riscritto; venti mutazioni, tutte rosse.

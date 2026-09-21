@@ -179,18 +179,38 @@ def test_a_turn_with_several_segments_copies_whole() -> None:
 
 
 def test_the_actions_row_is_added_once_and_stays_last() -> None:
-    """Due chiamate (blocco `message` e poi `turn_end`) lasciano una riga sola."""
+    """Due chiamate (blocco `message` e poi `turn_end`) lasciano una riga sola,
+    con un Copia solo dentro.
+
+    E **in coda**: fra le due chiamate la bolla può allungarsi — `_handleMessage`
+    posa la riga e poi rende gli allegati, `_flushPersistedTurn` li rende prima.
+    Qui in mezzo arriva un'immagine, che è il caso vero.
+    """
     _run_js("""
       const c = chat();
       const msg = bubble('ai', 'risposta');
       c._appendMsgActions(msg);
+      const media = el('div');
+      media.className = 'chat-media';
+      msg.appendChild(media);
       c._appendLatency(msg, 4000);
       c._appendMsgActions(msg);
 
       const rows = msg.children.filter((x) => x.className.split(' ').includes('chat-msg-actions'));
       assert.equal(rows.length, 1, 'la riga è stata duplicata');
       assert.equal(msg.children[msg.children.length - 1], rows[0], 'la riga non è in coda');
+      assert.deepEqual(actions(msg), ['chat-msg-copy', '4.0s'], 'il Copia è doppio');
     """)
+
+
+def test_the_row_is_one_line() -> None:
+    """Una riga sola, chiesta esplicitamente: i secondi erano un nodo impilato
+    sopra i pulsanti, e in coda a ogni risposta occupavano due righe."""
+    css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.chat-msg-actions\s*\{([^}]*)\}", css)
+    assert m, ".chat-msg-actions non ha stile"
+    assert "display: flex" in m.group(1)
+    assert "align-items: center" in m.group(1)
 
 
 def test_the_seconds_share_the_row_with_copy() -> None:
