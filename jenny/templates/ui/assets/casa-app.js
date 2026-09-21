@@ -164,7 +164,7 @@ class CasaApp {
        `import` statico la pagherebbe a ogni avvio della casa. */
     this.pages = new CasaPages({
       onOpenPage: (path, label) => this.openPage(path, label),
-      onNeedMap: (data) => this._drawMap(data),
+      onNeedMap: (data, _rows, quaderno) => this._drawMap(data, quaderno),
     });
     this.reader = new CasaReader();
     this.reader.onTitle = (title) => this._setHeadTitle(title);
@@ -599,14 +599,14 @@ class CasaApp {
   /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
      sulla linguetta e non con l'avvio della casa. `import()` dinamico e non
      statico: e' la differenza fra pagarla chi la apre e pagarla tutti. */
-  async _drawMap(data) {
+  async _drawMap(data, quaderno) {
     if (!this.map) {
       const { CasaMap } = await import('./casa-map.js');
       this.map = new CasaMap({
         onOpenPage: (path, label) => this.openPage(path, label),
       });
     }
-    await this.map.draw(data);
+    await this.map.draw(data, quaderno);
   }
 
   /* L'intestazione dice dove sei: l'occhiello, il nome, il pallino — lo stesso

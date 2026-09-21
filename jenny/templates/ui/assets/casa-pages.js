@@ -170,6 +170,9 @@ export class CasaPages {
     if (token !== this._token) return;
 
     this.data = data;
+    /* Il nome serve alla mappa come chiave degli spilli, e va tenuto qui: e'
+       l'unico posto che lo sa gia'. */
+    this.notebook = notebook;
     this.rows = orderPages(data.nodes);
     this._index = WikiSearchIndex.from(data.search);
     this._render();
@@ -189,7 +192,7 @@ export class CasaPages {
        filtrare che si legga. */
     const search = this.queryEl?.closest('.casa-search');
     if (search) search.hidden = !onList;
-    if (!onList && this.data) this._onNeedMap?.(this.data, this.rows);
+    if (!onList && this.data) this._onNeedMap?.(this.data, this.rows, this.notebook);
   }
 
   _say(key) {

@@ -20,6 +20,8 @@
 
 import { ensureVendor } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
+import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 
 const D3_SRC = '/html-mobile/assets/vendor/d3@7/d3.min.js';
 
@@ -51,20 +53,57 @@ const FIT_MAX_SCALE = 1.6;
  */
 const SOGLIA_TOCCO = 10;
 
+/* Dove restano gli spilli fra un'apertura e l'altra.
+ *
+ *  **Non `localStorage`**, ed e' una misura del repo e non un gusto: il
+ *  commento di `MainActivity.kt` che `shared/launcher-usage-store.js` cita dice
+ *  che «il localStorage della WebView non sopravvive al kill (persistenza
+ *  asincrona di Chromium)». Jenny e' il launcher del telefono e il sistema la
+ *  uccide di routine: una disposizione tenuta li' si sbriciolerebbe da sola,
+ *  poco alla volta, e una mappa che ogni tanto dimentica non sembra rotta —
+ *  sembra che il salvataggio non funzioni, che e' peggio.
+ *
+ *  Il ponte nativo sarebbe durevole ma ha **un cassetto solo**, ed e' del
+ *  cassetto delle app: prendergli la chiave non e' roba nostra.
+ *
+ *  Quindi nel workspace, che e' dove stanno i quaderni: sopravvive al kill,
+ *  alla reinstallazione, e se lo porta dietro un backup. Un file solo per tutti
+ *  i quaderni invece di uno dentro `wikis/<nome>/`, perche' quella cartella la
+ *  decide la config (`wiki.wikis_dir`) e il client non la conosce — cercarla
+ *  vorrebbe dire indovinarla. Sotto `.jenny/` perche' e' stato dell'interfaccia
+ *  e non roba dell'utente: il gestore file lo nasconde da se' (i pattern
+ *  `internal`), quindi non compare fra i suoi file.
+ */
+const FILE_SPILLI = '.jenny/map-layout.json';
+
 /* Quante pagine portano il nome scritto, e quanto lungo.
  *
- *  Misurato sul Titan con un quaderno vero da 31 pagine: scrivendoli tutti, e
- *  interi, le etichette si sovrappongono fino a diventare una macchia — e i
- *  titoli di una wiki sono lunghi («Coltivazione-Monstera-Roma — Sostegno,
- *  fertilizzazione, crescita»). Su uno schermo da 566 px non e' una
- *  regolazione fine: e' che oltre una decina di nomi non ce ne sta un
- *  undicesimo.
+ *  **Il tetto e' una rete di sicurezza, non una regola di disegno** — e per due
+ *  giorni e' stato il contrario. Nato a 10 il 19/09/2026 su una misura vera:
+ *  un quaderno da 31 pagine, i titoli di una wiki sono frasi
+ *  («Coltivazione-Monstera-Roma — Sostegno, fertilizzazione, crescita»), e su
+ *  566 px scrivendoli tutti le etichette diventavano una macchia.
  *
- *  Quali: **i nodi piu' collegati**, che e' l'unica domanda a cui una mappa
- *  risponde meglio di un elenco — dove si annoda il quaderno. Gli altri
- *  restano pallini, e per sapere come si chiamano c'e' la linguetta accanto,
- *  che li elenca tutti e li cerca. */
-const MAX_LABELS = 10;
+ *  Quella misura resta giusta, il rimedio no. Il difetto l'ha visto l'utente il
+ *  21/09: su una mappa da 21 pagine restavano undici pallini muti **con lo
+ *  spazio attorno visibile**, perche' il tetto li escludeva prima che qualcuno
+ *  misurasse. Un numero che non guarda il disegno non puo' avere ragione ai due
+ *  estremi — su una nuvola larga e sparsa dieci sono pochi, su una strettissima
+ *  sono troppi.
+ *
+ *  A decidere e' gia' `placeLabels`, che **ordina per collegamenti** (l'unica
+ *  domanda a cui una mappa risponde meglio di un elenco: dove si annoda il
+ *  quaderno) e butta chi non ci sta. Il tetto era in buona parte un doppione; la
+ *  parte che non lo era — «ci sta» vuol dire «i riquadri non si toccano», non
+ *  «si legge» — la paga meglio un numero alto. A quaranta, su un quaderno
+ *  normale decide lo spazio; su uno enorme il tetto ferma il muro di testo prima
+ *  che si formi. Costa trenta misure di testo in piu', una volta sola, a fisica
+ *  ferma.
+ *
+ *  Gli altri restano pallini, e per sapere come si chiamano c'e' la linguetta
+ *  accanto, che li elenca tutti e li cerca.
+ */
+const MAX_LABELS = 40;
 const LABEL_CHARS = 22;
 /* L'altezza di una riga di etichetta, in unita' del disegno. Si dichiara
    invece di misurarla: `getBBox()` su un testo appena inserito costringe il
@@ -76,9 +115,6 @@ const LABEL_HEIGHT = 11;
 /* Aria fra due riquadri. Due nomi che si toccano si leggono male quanto due
    che si accavallano. */
 const LABEL_GAP = 3;
-/* Sotto questa soglia si scrivono tutti: dieci su undici sarebbe una scelta
-   che non si capisce, e undici nomi ci stanno. */
-const LABEL_ALL_UNDER = 13;
 
 /* Il raggio dice quanti collegamenti ha una pagina. E' l'unico numero che la
    casa mostra, e lo mostra senza scriverlo: un pallino piu' grosso e' un posto
@@ -123,7 +159,11 @@ export function shortLabel(text) {
  */
 export function labelledNodes(nodes) {
   const all = nodes || [];
-  if (all.length < LABEL_ALL_UNDER) return new Set(all.map((n) => n.id));
+  /* Nessuna scorciatoia per i quaderni piccoli. Ce n'era una — «sotto le
+     tredici pagine si scrivono tutte» — e con un tetto a 10 cambiava la
+     risposta; a 40 non ne cambia nessuna, perche' undici nodi passano interi
+     dallo `slice` comunque. Un ramo che non puo' cambiare l'esito e' solo un
+     posto in piu' dove sbagliare. */
   const ordinati = [...all].sort(
     (a, b) => (b.degree || 0) - (a.degree || 0) || String(a.label).localeCompare(String(b.label)),
   );
@@ -240,11 +280,20 @@ export class CasaMap {
        automatica dopo l'uno o l'altro e' un cambiamento che l'utente non ha
        chiesto e non capisce. */
     this._presaInMano = false;
+    /* Quale quaderno e' disegnato: e' la chiave degli spilli. */
+    this._quaderno = null;
+    /* Gli spilli letti da disco, per id. Null finche' non si e' letto. */
+    this._spilli = null;
   }
 
-  /** Disegna la mappa di *data*. La stessa risposta dell'elenco. */
-  async draw(data) {
+  /** Disegna la mappa di *data*. La stessa risposta dell'elenco.
+   *
+   *  `quaderno` e' il nome, e serve solo come chiave degli spilli: la mappa in
+   *  se' non ha bisogno di sapere di chi e'.
+   */
+  async draw(data, quaderno) {
     const gen = ++this._gen;
+    this._quaderno = quaderno || null;
     /* Gia' disegnata per questa risposta: non si rifa' la simulazione a ogni
        ritorno sulla linguetta, o i nodi ripartono da capo ogni volta. */
     if (this._drawn === data) return;
@@ -261,7 +310,18 @@ export class CasaMap {
       if (gen === this._gen) this._say('casa.map.failed');
       return;
     }
+    /* Gli spilli **prima** del disegno: applicarli dopo vorrebbe dire far
+       partire la fisica da posizioni casuali e poi strattonare i nodi al loro
+       posto sotto gli occhi. Una lettura per disegno, non per apertura: la
+       linguetta che ritorna esce prima, sopra. */
+    const spilli = await this._leggiSpilli();
     if (gen !== this._gen) return;
+    for (const n of nodes) {
+      const p = spilli?.[n.id];
+      if (!p) continue;
+      n.x = n.fx = p[0];
+      n.y = n.fy = p[1];
+    }
     this._drawn = data;
     this._render(nodes, links);
   }
@@ -355,7 +415,7 @@ export class CasaMap {
         name.attr('x', (d) => d.x).attr('y', (d) => d.y);
       });
 
-    dot.call(this._trascina());
+    dot.call(this._trascina(nodes));
 
     /* Si trascina e si avvicina: su 590x566 un quaderno da sessanta pagine non
        ci sta, e rimpicciolire i pallini non lo renderebbe leggibile. */
@@ -382,6 +442,67 @@ export class CasaMap {
   _onZoom(e, root) {
     if (e.sourceEvent) this._presaInMano = true;
     root.attr('transform', e.transform);
+  }
+
+  /** Gli spilli di questo quaderno, o null se non ce ne sono.
+   *
+   *  Il file puo' non esistere — e' il caso normale, la prima volta — e un 404
+   *  non e' un guasto: si torna null e la mappa parte a mani libere. Qualunque
+   *  altro inciampo (file illeggibile, JSON rotto da un'altra versione) finisce
+   *  nello stesso posto **di proposito**: una disposizione perduta e' un
+   *  peccato, una mappa che non si disegna e' un guasto, e fra i due non c'e'
+   *  partita.
+   */
+  async _leggiSpilli() {
+    if (!this._quaderno) return null;
+    if (this._spilli) return this._spilli[this._quaderno] || null;
+    try {
+      const r = await api.readWorkspaceFile(FILE_SPILLI);
+      this._spilli = JSON.parse(r?.content || '{}') || {};
+    } catch (err) {
+      this._spilli = {};
+    }
+    return this._spilli[this._quaderno] || null;
+  }
+
+  /** Scrive gli spilli di questo quaderno. Chiamata a fine trascinamento.
+   *
+   *  **Si salva quel che e' a schermo adesso**, non quel che c'era piu' quel
+   *  che si e' aggiunto: una pagina cancellata dal quaderno sparisce dal file
+   *  al primo trascinamento successivo, senza che nessuno debba ricordarsene.
+   *  Una pagina *rinominata* invece cambia id, quindi il suo spillo resta
+   *  orfano e viene buttato allo stesso giro — la disposizione di quella pagina
+   *  si perde, ed e' il prezzo di una chiave che e' il percorso.
+   *
+   *  Gli altri quaderni nel file restano intatti: sono chiavi diverse, e
+   *  riscrivere solo la propria e' anche quel che rende innocuo un secondo
+   *  disegno aperto altrove.
+   */
+  async _salvaSpilli(nodes) {
+    if (!this._quaderno) return;
+    const miei = {};
+    for (const n of nodes) {
+      if (n.fx === null || n.fx === undefined) continue;
+      miei[n.id] = [Math.round(n.fx), Math.round(n.fy)];
+    }
+    const tutti = { ...(this._spilli || {}), [this._quaderno]: miei };
+    this._spilli = tutti;
+    const testo = JSON.stringify(tutti);
+    try {
+      await rpc.writeWorkspaceFile(FILE_SPILLI, testo);
+    } catch (err) {
+      /* La cartella puo' non esserci su un workspace appena nato: `.jenny/` la
+         creano le funzioni che ci scrivono, e questa potrebbe essere la prima.
+         Un solo secondo tentativo, poi si lascia perdere in silenzio — la mappa
+         a schermo e' gia' come l'utente l'ha messa, e un errore sbandierato per
+         una disposizione non salvata sarebbe rumore sopra un gesto riuscito. */
+      try {
+        await api.createWorkspaceFolder('.jenny');
+        await rpc.writeWorkspaceFile(FILE_SPILLI, testo);
+      } catch (err2) {
+        console.warn('casa.map: spilli non salvati', err2);
+      }
+    }
   }
 
   /** Prendere un pallino e spostarlo. **Resta dove lo metti.**
@@ -414,7 +535,7 @@ export class CasaMap {
    *  che niente si riassesti. Si spegne all'`end`, e la quiete che segue
    *  ricolloca i nomi (v. `_placeLabels`, chiamato da `sim.on('end')`).
    */
-  _trascina() {
+  _trascina(nodes) {
     return d3.drag()
       .clickDistance(SOGLIA_TOCCO)
       .on('start', (e, d) => {
@@ -433,6 +554,10 @@ export class CasaMap {
       .on('end', (e) => {
         if (!e.active) this._sim.alphaTarget(0);
         // E `fx`/`fy` restano: e' tutto lo spillo.
+        /* Si salva alzando il dito, che e' l'unico momento in cui uno spillo
+           nasce o si sposta. Non si aspetta: la scrittura va su localhost e il
+           gesto e' gia' finito. */
+        this._salvaSpilli(nodes);
       });
   }
 

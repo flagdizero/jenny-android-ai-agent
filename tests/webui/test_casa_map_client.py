@@ -85,8 +85,7 @@ def _run(script: str) -> None:
     harness = "import assert from 'node:assert/strict';\n" + "\n".join(
         [
             _const(src, n)
-            for n in ("MAX_LABELS", "LABEL_CHARS", "LABEL_ALL_UNDER",
-                      "LABEL_HEIGHT", "LABEL_GAP")
+            for n in ("MAX_LABELS", "LABEL_CHARS", "LABEL_HEIGHT", "LABEL_GAP")
         ]
         + [_private(src, "overlap")]
         + [
@@ -106,8 +105,13 @@ def _run(script: str) -> None:
 
 
 def test_a_small_notebook_shows_every_name() -> None:
-    """Dieci su undici sarebbe una scelta che non si capisce, e undici nomi ci
-    stanno."""
+    """Undici pagine, undici nomi: il tetto non tocca un quaderno piccolo.
+
+    C'era una scorciatoia apposta (`LABEL_ALL_UNDER`), perche' col tetto a 10
+    «dieci su undici» sarebbe stata una scelta incomprensibile. Dal 21/09/2026 il
+    tetto e' 40 e la scorciatoia non cambia piu' nessuna risposta: se n'e'
+    andata, e questa prova resta a tenere il risultato — che e' la cosa che
+    conta, non il meccanismo che lo produce."""
     _run("""
       const nodi = Array.from({ length: 11 }, (_, i) => ({ id: 'n' + i, label: 'p' + i, degree: 0 }));
       assert.equal(labelledNodes(nodi).size, 11);
@@ -115,15 +119,42 @@ def test_a_small_notebook_shows_every_name() -> None:
 
 
 def test_a_big_notebook_names_only_where_it_knots() -> None:
+    """Il tetto morde solo su un quaderno enorme, ed e' li' che deve mordere:
+    oltre un certo numero anche i nomi che «ci stanno» sono un muro di testo, e
+    lo spazio da solo non saprebbe dire di no."""
     _run("""
-      const nodi = Array.from({ length: 31 }, (_, i) => ({
+      const nodi = Array.from({ length: 60 }, (_, i) => ({
         id: 'n' + i, label: 'p' + String(i).padStart(2, '0'), degree: i,
       }));
       const con = labelledNodes(nodi);
       assert.equal(con.size, MAX_LABELS);
-      assert.ok(con.has('n30'), 'il nodo piu\\u2019 collegato non ha un nome');
+      assert.ok(con.has('n59'), 'il nodo piu\\u2019 collegato non ha un nome');
       assert.ok(!con.has('n0'), 'anche una foglia porta il nome');
     """)
+
+
+def test_the_cap_is_a_safety_net_and_not_a_design_rule() -> None:
+    """Il numero si legge da fuori, o il banco sopra non saprebbe distinguere un
+    tetto da un conteggio qualsiasi — e' lo stesso difetto trovato sulla scheda
+    dei file il 21/09/2026.
+
+    Il tetto e' nato a 10 su una misura vera (31 pagine, titoli che sono frasi,
+    566 px) e per due giorni e' stato la regola di disegno. Lo era a torto: su
+    una mappa da 21 pagine lasciava undici pallini muti con lo spazio attorno
+    visibile, perche' escludeva prima che qualcuno misurasse. A decidere e'
+    `placeLabels`, che ordina gia' per collegamenti; il tetto serve solo a
+    fermare il muro di testo su un quaderno enorme.
+
+    Quindi: alto abbastanza da non decidere su un quaderno normale, basso
+    abbastanza da restare una rete."""
+    src = MAP_JS.read_text(encoding="utf-8")
+    m = re.search(r"^const MAX_LABELS = (\d+);$", src, re.M)
+    assert m, "il tetto non si trova"
+    n = int(m.group(1))
+    assert 25 <= n <= 60, (
+        f"tetto a {n}: sotto la venticinquina torna a decidere lui al posto dello "
+        f"spazio, sopra la sessantina non ferma piu' niente"
+    )
 
 
 def test_the_same_notebook_gets_the_same_names_every_time() -> None:
@@ -423,6 +454,22 @@ const d3 = {
   },
 };
 
+/* Il disco, ridotto a una variabile. `letto` e' cio' che il file contiene,
+   `scritture` cio' che ci finisce; `rotto` fa fallire la lettura, `mkdir` conta
+   le cartelle create. */
+let letto = null, rotto = false;
+const scritture = [], cartelle = [];
+const api = {
+  readWorkspaceFile() {
+    if (rotto) return Promise.reject(new Error('404'));
+    return Promise.resolve({ content: letto });
+  },
+  createWorkspaceFolder(p) { cartelle.push(p); return Promise.resolve(); },
+};
+const rpc = {
+  writeWorkspaceFile(path, content) { scritture.push([path, content]); return Promise.resolve(); },
+};
+
 /* La fisica ridotta a un diario: interessa **quando** si riaccende e quando si
    spegne, non dove finiscono i nodi. */
 function fisicaFinta() {
@@ -443,9 +490,11 @@ function svgFinto() {
 const zoomFinto = { transform: 'TRANSFORM' };
 
 class Mappa {
-  constructor() {
+  constructor(quaderno = 'quaderno') {
     this._presaInMano = false;
     this._sim = fisicaFinta();
+    this._quaderno = quaderno;
+    this._spilli = null;
   }
 __METODI__
 }
@@ -465,11 +514,14 @@ def _run_gesti(script: str) -> None:
         + "\n"
         + _const(src, "SOGLIA_TOCCO")
         + "\n"
+        + _const(src, "FILE_SPILLI")
+        + "\n"
         + _CAMERA.replace(
             "__METODI__",
             "\n".join(
                 "  " + _member(src, n)
-                for n in ("_onZoom", "_trascina", "_inquadra")
+                for n in ("_onZoom", "_trascina", "_inquadra",
+                          "_leggiSpilli", "_salvaSpilli")
             ),
         )
     )
@@ -619,8 +671,8 @@ def test_a_dragged_dot_stays_where_you_put_it() -> None:
     """
     _run_gesti("""
 const m = new Mappa();
-const t = m._trascina();
-const d = { x: 100, y: 100 };
+const d = { id: 'p1', x: 100, y: 100 };
+const t = m._trascina([d]);
 
 t.gestori.start({ active: 0 }, d);
 assert.deepEqual([d.fx, d.fy], [100, 100], 'il pallino non si inchioda per il gesto');
@@ -646,7 +698,7 @@ def test_dragging_takes_the_map_in_hand() -> None:
     """
     _run_gesti("""
 const m = new Mappa();
-m._trascina().gestori.start({ active: 0 }, { x: 10, y: 10 });
+m._trascina([]).gestori.start({ active: 0 }, { x: 10, y: 10 });
 assert.equal(m._presaInMano, true, 'il trascinamento non prende la mappa in mano');
 
 const svg = svgFinto();
@@ -669,7 +721,7 @@ def test_a_small_gesture_is_still_a_tap_on_the_page() -> None:
     quello, non che sia giusto.
     """
     _run_gesti("""
-const soglia = new Mappa()._trascina().soglia;
+const soglia = new Mappa()._trascina([]).soglia;
 assert.equal(soglia, SOGLIA_TOCCO, 'il gesto non distingue un tocco da un trascinamento');
 assert.ok(soglia > 0 && soglia <= 16,
   'una soglia fuori scala: sotto lo zero ogni tocco e\\' un trascinamento, ' +
@@ -684,8 +736,8 @@ def test_the_physics_wakes_for_the_drag_and_goes_back_to_sleep() -> None:
     cui i nomi si ricollocano."""
     _run_gesti("""
 const m = new Mappa();
-const t = m._trascina();
-const d = { x: 1, y: 1 };
+const d = { id: 'p1', x: 1, y: 1 };
+const t = m._trascina([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 assert.deepEqual(m._sim.diario,
@@ -701,9 +753,146 @@ def test_a_second_finger_does_not_restart_the_physics_twice() -> None:
     tirando."""
     _run_gesti("""
 const m = new Mappa();
-const t = m._trascina();
+const t = m._trascina([]);
 t.gestori.start({ active: 1 }, { x: 1, y: 1 });
 t.gestori.end({ active: 1 }, { x: 1, y: 1 });
 assert.deepEqual(m._sim.diario, [],
   'il secondo dito rimette mano alla fisica del primo');
 """)
+
+
+# ── Gli spilli restano fra un'apertura e l'altra ────────────────────────────
+
+
+def test_letting_go_writes_the_arrangement() -> None:
+    """Chiesto dall'utente: «i nodi devono rimanere salvati». Si scrive alzando
+    il dito, che è l'unico momento in cui uno spillo nasce o si sposta."""
+    _run_gesti("""
+const m = new Mappa('piante');
+const d = { id: 'Monstera.md', x: 10, y: 10 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.drag({ x: 240.4, y: 91.6 }, d);
+t.gestori.end({ active: 0 }, d);
+await new Promise((r) => setTimeout(r, 0));
+
+assert.equal(scritture.length, 1, 'alzando il dito non si salva niente');
+const [path, testo] = scritture[0];
+assert.equal(path, FILE_SPILLI);
+assert.deepEqual(JSON.parse(testo), { piante: { 'Monstera.md': [240, 92] } },
+  'la posizione salvata non e\\' quella dove il dito ha lasciato il pallino');
+""")
+
+
+def test_only_the_pinned_dots_are_written() -> None:
+    """Un pallino mai toccato non ha una posizione da ricordare: è la fisica a
+    deciderla, e scriverla vorrebbe dire inchiodare tutta la mappa al primo
+    trascinamento."""
+    _run_gesti("""
+const m = new Mappa('piante');
+const spillato = { id: 'a', x: 5, y: 5 };
+const libero = { id: 'b', x: 99, y: 99 };
+const t = m._trascina([spillato, libero]);
+t.gestori.start({ active: 0 }, spillato);
+t.gestori.end({ active: 0 }, spillato);
+await new Promise((r) => setTimeout(r, 0));
+assert.deepEqual(Object.keys(JSON.parse(scritture[0][1]).piante), ['a'],
+  'e\\' finito nel file anche un pallino che nessuno ha spostato');
+""")
+
+
+def test_another_notebook_keeps_its_own_arrangement() -> None:
+    """Un file solo per tutti i quaderni, una chiave per ciascuno: salvare la
+    propria non deve cancellare quella di un altro."""
+    _run_gesti("""
+letto = JSON.stringify({ viaggi: { 'Kyoto.md': [1, 2] } });
+const m = new Mappa('piante');
+await m._leggiSpilli();
+const d = { id: 'a', x: 5, y: 5 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.end({ active: 0 }, d);
+await new Promise((r) => setTimeout(r, 0));
+const scritto = JSON.parse(scritture[0][1]);
+assert.deepEqual(scritto.viaggi, { 'Kyoto.md': [1, 2] },
+  'salvando un quaderno si e\\' persa la disposizione di un altro');
+assert.ok(scritto.piante, 'e la propria non c\\'e\\'');
+""")
+
+
+def test_a_page_that_left_the_notebook_leaves_the_file_too() -> None:
+    """Si salva quel che è a schermo adesso, non quel che c'era più quel che si
+    è aggiunto. Così una pagina cancellata sparisce al primo trascinamento
+    successivo, senza che nessuno debba ricordarsene."""
+    _run_gesti("""
+letto = JSON.stringify({ piante: { 'Monstera.md': [1, 2], 'Sparita.md': [3, 4] } });
+const m = new Mappa('piante');
+await m._leggiSpilli();
+// Nel disegno di oggi c'e' solo Monstera, ed e' spillata.
+const viva = { id: 'Monstera.md', x: 7, y: 8, fx: 7, fy: 8 };
+const t = m._trascina([viva]);
+t.gestori.start({ active: 0 }, viva);
+t.gestori.end({ active: 0 }, viva);
+await new Promise((r) => setTimeout(r, 0));
+assert.deepEqual(Object.keys(JSON.parse(scritture[0][1]).piante), ['Monstera.md'],
+  'lo spillo di una pagina che non esiste piu\\u2019 resta nel file per sempre');
+""")
+
+
+def test_no_arrangement_yet_is_not_a_failure() -> None:
+    """Il file non esiste la prima volta, ed è il caso normale: 404. Qualunque
+    altro inciampo — file illeggibile, JSON di un'altra versione — finisce nello
+    stesso posto **di proposito**: una disposizione perduta è un peccato, una
+    mappa che non si disegna è un guasto, e fra i due non c'è partita."""
+    _run_gesti("""
+rotto = true;
+assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+  'un file che non c\\'e\\' ancora viene preso per un guasto');
+
+rotto = false; letto = '{ questo non e' + String.fromCharCode(39) + ' json';
+assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+  'un file rotto fa saltare il disegno invece di essere ignorato');
+
+letto = JSON.stringify({ altro: { a: [1, 2] } });
+assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+  'un quaderno senza spilli non torna null');
+""")
+
+
+def test_a_workspace_without_the_folder_gets_it_made_once() -> None:
+    """`.jenny/` può non esserci su un workspace appena nato, e questa può
+    essere la prima a scriverci. Un solo secondo tentativo: la mappa a schermo è
+    già come l'utente l'ha messa, e insistere non la cambierebbe."""
+    _run_gesti("""
+let falliti = 0;
+rpc.writeWorkspaceFile = (path, content) => {
+  falliti++;
+  if (falliti === 1) return Promise.reject(new Error('ENOENT'));
+  scritture.push([path, content]);
+  return Promise.resolve();
+};
+const m = new Mappa('piante');
+const d = { id: 'a', x: 1, y: 1 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.end({ active: 0 }, d);
+await new Promise((r) => setTimeout(r, 0));
+assert.deepEqual(cartelle, ['.jenny'], 'la cartella non viene creata al primo inciampo');
+assert.equal(scritture.length, 1, 'il secondo tentativo non ha scritto');
+""")
+
+
+def test_the_pins_are_applied_before_the_physics_starts() -> None:
+    """Applicarli dopo vorrebbe dire far partire la simulazione da posizioni
+    casuali e poi strattonare i nodi al loro posto sotto gli occhi. Si legge dal
+    sorgente perché `draw` è la funzione che carica D3."""
+    src = MAP_JS.read_text(encoding="utf-8")
+    draw = _member(src, "draw")
+    assert "_leggiSpilli()" in draw, "gli spilli non si leggono affatto"
+    assert draw.index("_leggiSpilli()") < draw.index("this._render("), (
+        "si disegna prima di sapere dove vanno i pallini spillati"
+    )
+    assert "n.x = n.fx" in draw and "n.y = n.fy" in draw, (
+        "lo spillo fissa il nodo ma non lo mette li': la fisica partirebbe da "
+        "una posizione casuale e lo strattonerebbe a posto sotto gli occhi"
+    )
