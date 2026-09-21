@@ -243,9 +243,15 @@ class MobileApp {
       // l'ignoto come configurazione completa cancellava il marcatore locale e
       // portava in chat una Jenny senza provider, senza più alcuna strada verso
       // il wizard. Qui si sospende il giudizio: nessuno stato viene riscritto,
-      // e il wizard resta raggiungibile da Impostazioni → "Riesegui
-      // configurazione" (v. `openOnboarding`). La contabilità vera è
-      // `firstRunKnown`, che resta false: qui basta lasciarne traccia nel log.
+      // La contabilità vera è `firstRunKnown`, che resta false: qui basta
+      // lasciarne traccia nel log.
+      //
+      // Questo commento prometteva anche che «il wizard resta raggiungibile da
+      // Impostazioni → Riesegui configurazione». **Non è più vero** dal
+      // 20/09/2026: quel bottone è uscito con il giro degli aggiornamenti, per
+      // una ragione misurata (`save_onboarding` sostituisce l'elenco dei
+      // provider invece di aggiungere). Chi si ritrova senza provider ci rimedia
+      // dalla casa, dove la marca ha il suo «Aggiungi».
       api.clientLog('warning', 'boot-first-run',
         `settings unavailable at boot: ${err?.message || err}`);
     }

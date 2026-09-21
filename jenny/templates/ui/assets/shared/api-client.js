@@ -148,11 +148,6 @@ class ApiClient {
     return res.json();
   }
 
-  async getSkills() {
-    const res = await this._fetch('/api/webui/skills');
-    if (!res.ok) throw new Error(`Skills failed: ${res.status}`);
-    return res.json();
-  }
 
   /** Stato della programmazione: cosa e' armato, e cosa fa davvero.
    *  Sola lettura — le scritture passano dal tool `cron`, che e' l'unico imbuto
@@ -201,11 +196,6 @@ class ApiClient {
     return res.json();
   }
 
-  async getConfig() {
-    const res = await this._fetch('/api/config');
-    if (!res.ok) return {};
-    return res.json();
-  }
 
   /** Progetti dello scope chip: un progetto e' una wiki, quindi e' l'elenco
    *  delle wiki. Ritorna `{ dir, projects: [{ name, modified }] }`. */
@@ -226,12 +216,6 @@ class ApiClient {
     return res.json();
   }
 
-  async getTree(wiki) {
-    const url = wiki ? `/api/tree?wiki=${encodeURIComponent(wiki)}` : '/api/tree';
-    const res = await this._fetch(url);
-    if (!res.ok) throw new Error(`Tree failed: ${res.status}`);
-    return res.json();
-  }
 
   async getGraph(wiki) {
     const url = wiki ? `/api/graph?wiki=${encodeURIComponent(wiki)}` : '/api/graph';
@@ -249,23 +233,7 @@ class ApiClient {
     return res.json();
   }
 
-  async getAudits({ wiki, targetPath, mode = 'open' } = {}) {
-    const params = new URLSearchParams({ target: targetPath || '', mode });
-    if (wiki) params.set('wiki', wiki);
-    const res = await this._fetch(`/api/audit?${params}`);
-    if (!res.ok) throw new Error(`Audits failed: ${res.status}`);
-    return res.json();
-  }
 
-  async createAudit({ wiki, target, rawMarkdown, selStart, selEnd, comment, severity, author }) {
-    const params = new URLSearchParams({ wiki, target, selStart, selEnd, comment, severity, author });
-    const res = await this._fetch(`/api/audit/create?${params}`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Audit create failed: ${res.status}`);
-    }
-    return res.json();
-  }
 
   // Workspace APIs
   async listWorkspace(path) {

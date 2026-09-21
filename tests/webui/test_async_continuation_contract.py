@@ -82,32 +82,39 @@ def test_every_controller_with_async_loads_bumps_a_generation_on_leave() -> None
 # ── N10 · il titolo appartiene a una modalità ──────────────────────────
 
 
-def test_the_view_title_refuses_writers_from_another_mode() -> None:
-    """``titleEl`` viene ripuntato solo da ``setMode``, che ``switchMode`` chiama
-    **prima** di ``deactivate``/``activate``: un caricamento lento della sezione
-    che si sta lasciando riscriveva il titolo di quella di destinazione.
-
+def test_no_one_writes_the_view_title_after_an_await() -> None:
+    """Qui stava ``setTitle``, e la sua guardia: ``titleEl`` viene ripuntato solo
+    da ``setMode``, che ``switchMode`` chiama **prima** di
+    ``deactivate``/``activate``, quindi un caricamento lento della sezione che si
+    stava lasciando riscriveva il titolo di quella di destinazione.
     Intermittente, e per questo insidioso: chat e onboarding non hanno mount, lì
     ``titleEl`` è null e non si vede niente.
+
+    Il metodo se n'è andato il 21/09/2026 coi suoi unici chiamanti — wiki e
+    grafo, usciti dall'officina. Il titolo oggi lo scrive **solo** ``setMode``,
+    che è sincrono: non c'è nessuna finestra in cui la vista possa cambiare
+    sotto. Il banco misura che resti così, perché quella è la premessa che rende
+    inutile la guardia.
     """
     header = _src(HEADER_JS)
-    body = _method(header, "setTitle")
-    assert "setTitle(title, ownerMode = null)" in header
-    assert "if (ownerMode && ownerMode !== this.currentMode) return;" in body
+    assert "setTitle(" not in header, (
+        "setTitle è tornato: se qualcuno riscrive il titolo dopo un await, "
+        "gli serve la guardia sul proprietario della modalità"
+    )
+    mode = _method(header, "setMode")
+    assert "await" not in mode, "setMode è diventato asincrono: la vista può cambiargli sotto"
 
 
-def test_every_async_title_writer_declares_which_mode_it_belongs_to() -> None:
-    for js in ASSETS.rglob("*.js"):
-        # `vendor/` si esclude per path, non per basename: un domani
-        # `assets/**/mermaid.min.js` non deve auto-esentarsi.
-        if js.name == HEADER_JS.name or "vendor" in js.relative_to(ASSETS).parts:
-            continue
-        for lineno, line in enumerate(_src(js).splitlines(), 1):
-            if ".setTitle(" not in line:
-                continue
-            assert re.search(r"\.setTitle\(.+,\s*'[a-z]+'\)", line), (
-                f"{js.name}:{lineno} scrive il titolo senza dichiarare la modalità proprietaria"
-            )
+def test_every_async_action_writer_declares_which_mode_it_belongs_to() -> None:
+    """Le *azioni* dell'header invece dopo un ``await`` si accendono ancora — il
+    gestore file accende così la freccia Indietro. ``ownerMode`` è opzionale per
+    i chiamanti sincroni, quindi la regola si misura sulla guardia."""
+    header_src = _src(HEADER_JS)
+    for nome in ("showAction", "hideAction"):
+        corpo = _method(header_src, nome)
+        assert "if (ownerMode && ownerMode !== this.currentMode) return;" in corpo, (
+            f"{nome} ha perso la guardia sul proprietario della modalità"
+        )
 
 
 # ── N4 · il poller di pairing Telegram ─────────────────────────────────

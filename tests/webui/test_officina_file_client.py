@@ -144,7 +144,6 @@ class WorkspaceController {
     this._dirty = false;
     this.editor = null;
     this.viewerEl = { innerHTML: '', classList: { add() {}, remove() {} } };
-    this.explorerEl = null;
     this.breadcrumbEl = null;
     this.gridEl = null;
     this.emptyEl = null;

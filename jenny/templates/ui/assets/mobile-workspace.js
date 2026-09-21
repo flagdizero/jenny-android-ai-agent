@@ -189,7 +189,6 @@ export class WorkspaceController {
        intero a ogni apertura e a ogni salvataggio. Quindi questi tre non si
        cercano una volta sola nel documento: li riaggancia `mount()`, ed e'
        null finche' la scheda non c'e'. */
-    this.explorerEl = null;
     this.breadcrumbEl = null;
     this.gridEl = null;
     this.emptyEl = null;
@@ -226,7 +225,6 @@ export class WorkspaceController {
    */
   mount(host) {
     if (!host) return;
-    this.explorerEl = host;
     this.breadcrumbEl = host.querySelector('[data-ws-crumb]');
     this.gridEl = host.querySelector('[data-ws-grid]');
     this.emptyEl = host.querySelector('[data-ws-empty]');

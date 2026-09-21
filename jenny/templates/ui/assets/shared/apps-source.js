@@ -218,10 +218,6 @@ export class AppsSource {
   }
 
   /** Il gateway dice che i dati di una Jenny App sono cambiati. */
-  notifyAppDataChanged() {
-    this._jennyLoaded = false;
-    this.loadJennyApps();
-  }
 
   /* ── Le righe del cassetto ──────────────────────────────────────────────── */
 
@@ -278,7 +274,4 @@ export class AppsSource {
   }
 
   /** La riga di una voce, per chi ha solo la chiave. */
-  entryByKey(key) {
-    return this.launcherEntries().find((e) => e.key === key) || null;
-  }
 }

@@ -52,10 +52,4 @@ export const rpc = {
     return wsManager.request('project.delete', { name });
   },
 
-  /** Chiude un item di audit con una nota di risoluzione. */
-  resolveAudit(auditId, wiki, resolution) {
-    return wsManager.request('audit.resolve', {
-      audit_id: auditId, wiki, resolution,
-    });
-  },
 };

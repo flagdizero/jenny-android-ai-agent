@@ -174,26 +174,15 @@ export class ViewTitleController {
     this.renderActions(config.actions);
   }
 
-  /** Scrive il titolo della vista, ma solo se chi lo scrive è ancora il
-   *  proprietario della modalità corrente.
-   *
-   *  `titleEl` viene ripuntato soltanto da `setMode`, che `switchMode` chiama
-   *  *prima* di `deactivate`/`activate`: un caricamento lento della sezione che
-   *  si sta lasciando riprendeva dopo il cambio e scriveva il proprio titolo nel
-   *  mount della sezione di **destinazione**. Il difetto è intermittente — chat
-   *  e onboarding non hanno mount, quindi lì `titleEl` è null e non si vede
-   *  niente — e per questo era rimasto invisibile.
-   *
-   *  `ownerMode` è opzionale solo per non rompere chiamanti futuri distratti:
-   *  chi scrive un titolo asincrono deve passarlo.
-   */
-  setTitle(title, ownerMode = null) {
-    if (ownerMode && ownerMode !== this.currentMode) return;
-    if (this.titleEl) this.titleEl.textContent = title;
-  }
 
   /** Accende un'azione, ma solo se chi la accende possiede ancora la modalità
-   *  corrente — la stessa guardia di :meth:`setTitle`, e per lo stesso motivo.
+   *  corrente.
+   *
+   *  La stessa guardia stava anche su `setTitle`, che scriveva il titolo della
+   *  vista dopo un `await`. Quel metodo se n'è andato il 21/09/2026 con i suoi
+   *  unici chiamanti — wiki e grafo, usciti dall'officina — e il titolo oggi lo
+   *  scrive solo `setMode`, che è sincrono e non può sbagliare vista. La
+   *  ragione della guardia però è la stessa, ed è questa:
    *
    *  `actionsEl` punta al mount della modalità **a schermo**: un caricamento
    *  lento della sezione che si sta lasciando riprende dopo il cambio e cerca il

@@ -63,16 +63,6 @@ export class I18n {
     this._listeners.push(cb);
   }
 
-  get availableLocales() {
-    return ['it', 'en'];
-  }
-
-  getLocaleName(locale) {
-    const names = {
-      'it': 'Italiano', 'en': 'English'
-    };
-    return names[locale] || locale;
-  }
 }
 
 export const i18n = new I18n();
