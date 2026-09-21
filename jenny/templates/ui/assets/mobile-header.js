@@ -42,6 +42,24 @@ function projectChatAction() {
   };
 }
 
+/** Il pill «Jenny»: l'unica porta dell'officina verso la casa.
+ *
+ *  Una funzione e non una costante, e la ragione e' la stessa del 21/09/2026:
+ *  **le stringhe qui dentro vanno lette quando si disegna, non quando il file
+ *  si carica.** Il pill e' l'unica azione dell'officina che porta una parola
+ *  visibile invece di una sola icona, quindi e' anche l'unica in cui una
+ *  traduzione letta troppo presto si vede a schermo — e infatti si e' vista:
+ *  «officina.casaPill» scritto per esteso dentro il bottone.
+ */
+function pillCasa() {
+  return {
+    icon: 'ti-home',
+    title: i18n.t('casa.backHome'),
+    action: 'go-casa',
+    pill: i18n.t('officina.casaPill'),
+  };
+}
+
 /** L'intestazione di un cassetto dell'officina.
  *
  *  `eyebrow` e `sub` sono le due righe che la tavola mette attorno al nome; il
@@ -56,8 +74,26 @@ function cassetto(nome) {
     sub: i18n.t(`officina.sub.${nome}`),
     actions: [
       { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' },
-      { icon: 'ti-home', title: i18n.t('casa.backHome'), action: 'go-casa', pill: i18n.t('officina.casaPill') },
+      pillCasa(),
     ],
+  };
+}
+
+/** L'intestazione della Console — la chat dell'officina.
+ *
+ *  E' quella della casa, con le due differenze volute: niente soprascritta (la
+ *  vista sta gia' dentro l'officina, e dirglielo di nuovo non aggiunge niente)
+ *  e il nome e' «Console», la stessa stringa che la barra in fondo mostra gia'
+ *  — una parola sola per due posti, cosi' non possono divergere.
+ *
+ *  Come `cassetto`, e' una funzione perche' si ricostruisce intera a ogni
+ *  cambio di lingua: riassegnare il solo titolo lasciava il pill con la
+ *  stringa letta al caricamento del file, cioe' la chiave grezza.
+ */
+function consolle() {
+  return {
+    title: i18n.t('nav.console'),
+    actions: [pillCasa()],
   };
 }
 
@@ -67,22 +103,10 @@ export class ViewTitleController {
     this.titleEl = null;
     this.actionsEl = null;
     this.modeConfigs = {
-      /* La chat, con l'intestazione della casa.
-       *
-       *  Fino al 21/09/2026 questa vista era l'unica dell'officina a partire
-       *  dal bordo dello schermo: nessun titolo, e nessuna via verso casa che
-       *  non passasse da un altro cassetto. La casa qui sopra ha la stessa
-       *  intestazione con scritto «conversazione personale / Jenny»; qui la
-       *  soprascritta non c'e' — la vista sta gia' dentro l'officina, e
-       *  dirglielo di nuovo non aggiunge niente — e il nome e' quello che la
-       *  barra in fondo le da' gia', cosi' la parola e' **una sola**
-       *  (`nav.console`) e le due non possono divergere. */
-      chat: {
-        title: i18n.t('nav.console'),
-        actions: [
-          { icon: 'ti-home', title: i18n.t('casa.backHome'), action: 'go-casa', pill: i18n.t('officina.casaPill') },
-        ],
-      },
+      /* La chat. Fino al 21/09/2026 era l'unica vista dell'officina a partire
+         dal bordo dello schermo: nessun titolo, e nessuna via verso casa che
+         non passasse da un altro cassetto. V. `consolle()`. */
+      chat: consolle(),
       apps: {
         title: i18n.t('nav.apps'),
         actions: [
@@ -138,7 +162,9 @@ export class ViewTitleController {
   }
 
   _refreshTitles() {
-    this.modeConfigs.chat.title = i18n.t('nav.console');
+    /* Intera, non il solo titolo: il pill porta una parola visibile, e
+       riassegnare `title` lasciava quella com'era al caricamento del file. */
+    this.modeConfigs.chat = consolle();
     this.modeConfigs.apps.title = i18n.t('nav.apps');
     this.modeConfigs.workspace.title = i18n.t('nav.workspace');
     this.modeConfigs.wiki.title = i18n.t('nav.wiki');

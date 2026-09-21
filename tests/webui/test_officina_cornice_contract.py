@@ -353,9 +353,16 @@ def test_la_console_ha_il_suo_mount() -> None:
 def test_la_console_ha_una_voce_in_modeconfigs() -> None:
     m = re.search(r"this\.modeConfigs\s*=\s*\{(.*?)\n    \};", HEADER, re.S)
     assert m, "modeConfigs non trovato"
-    assert re.search(r"\bchat\s*:\s*\{", m.group(1)), (
+    assert re.search(r"\bchat\s*:", m.group(1)), (
         "la chat non ha una voce in modeConfigs: il mount resterebbe vuoto"
     )
+
+
+def _corpo_consolle() -> str:
+    """Il corpo della fabbrica che disegna l'intestazione della Console."""
+    m = re.search(r"function consolle\(\)\s*\{(.*?)\n\}", HEADER, re.S)
+    assert m, "consolle() non trovata: la Console non ha piu' un'intestazione sua"
+    return m.group(1)
 
 
 def test_il_titolo_della_console_e_la_parola_del_dock() -> None:
@@ -364,9 +371,7 @@ def test_il_titolo_della_console_e_la_parola_del_dock() -> None:
     L'etichetta in fondo e il titolo in cima dicono la stessa cosa della stessa
     vista: due chiavi diverse sono due traduzioni che divergono al primo giro.
     """
-    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
-    assert m, "la voce chat di modeConfigs non si legge"
-    assert "i18n.t('nav.console')" in m.group(1), (
+    assert "i18n.t('nav.console')" in _corpo_consolle(), (
         "il titolo della console non viene da `nav.console`, che e' la stessa "
         "stringa dell'etichetta nel dock"
     )
@@ -381,10 +386,9 @@ def test_la_console_non_ha_soprascritta() -> None:
     gia' dentro l'officina, e `setMode` nasconde la riga quando manca — quindi
     la si omette invece di riempirla.
     """
-    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
-    assert m
-    assert "eyebrow" not in m.group(1), "la console ha una soprascritta: non deve averla"
-    assert "sub:" not in m.group(1), "la console ha un sottotitolo: non deve averlo"
+    corpo = _corpo_consolle()
+    assert "eyebrow" not in corpo, "la console ha una soprascritta: non deve averla"
+    assert "sub:" not in corpo, "la console ha un sottotitolo: non deve averlo"
 
 
 def test_dalla_console_si_torna_in_casa() -> None:
@@ -393,9 +397,20 @@ def test_dalla_console_si_torna_in_casa() -> None:
     E' la porta che a questa vista mancava del tutto: l'unica per la casa sta
     nell'intestazione, e la chat non ne aveva una.
     """
-    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
-    assert m
-    assert "'go-casa'" in m.group(1), "dalla console non si torna in casa"
+    assert "pillCasa()" in _corpo_consolle(), "dalla console non si torna in casa"
+
+
+def test_il_pill_e_definito_una_volta_sola() -> None:
+    """Quattro intestazioni, una definizione.
+
+    Il pill era ricopiato a mano in `cassetto()` e nella Console: due copie
+    della stessa riga con due stringhe dentro, che e' il modo in cui una delle
+    due resta indietro.
+    """
+    assert "function pillCasa()" in HEADER, "il pill non ha piu' una definizione sua"
+    assert HEADER.count("i18n.t('officina.casaPill')") == 1, (
+        "la stringa del pill compare piu' di una volta: e' tornata a essere copiata"
+    )
 
 
 def test_il_titolo_della_console_resta_su_mentre_la_chat_scorre() -> None:
@@ -415,12 +430,45 @@ def test_il_titolo_della_console_resta_su_mentre_la_chat_scorre() -> None:
     assert "background" in regola, "senza sfondo la chat scorre attraverso il titolo"
 
 
-def test_il_cambio_lingua_rifa_anche_la_console() -> None:
-    m = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
-    assert m, "_refreshTitles non trovato"
-    assert "modeConfigs.chat.title" in m.group(1), (
-        "al cambio lingua il titolo della console resta nella lingua di prima"
-    )
+def test_una_intestazione_col_pill_si_rifa_intera() -> None:
+    """**Il difetto vero, visto a schermo il 21/09/2026.**
+
+    La prima versione di questa intestazione riassegnava il solo `title` al
+    cambio lingua. Il resto della voce restava quello costruito **al
+    caricamento del file**, quando le traduzioni non ci sono ancora — e nel
+    bottone c'era scritto, per esteso, `officina.casaPill`.
+
+    Perche' solo li'. Ogni intestazione dell'officina ha azioni con una
+    stringa dentro, ma quella stringa e' quasi sempre un `title=`, cioe' un
+    suggerimento che su un telefono non legge nessuno. Il pill e' l'unica
+    azione che porta una **parola visibile**: e' l'unico posto dove una
+    traduzione letta troppo presto finisce sotto gli occhi.
+
+    Quindi la regola, e vale per chiunque ne aggiunga un'altra: una voce con
+    un pill si ricostruisce intera.
+    """
+    m = re.search(r"this\.modeConfigs\s*=\s*\{(.*?)\n    \};", HEADER, re.S)
+    assert m, "modeConfigs non trovato"
+    dichiarazione = m.group(1)
+    refresh = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
+    assert refresh, "_refreshTitles non trovato"
+    corpo = refresh.group(1)
+
+    for modo, voce in re.findall(r"\n      (\w+):\s*(.+?),\n", dichiarazione):
+        fabbrica = re.match(r"(\w+)\(", voce)
+        if not fabbrica:
+            continue
+        sorgente = re.search(rf"function {fabbrica.group(1)}\(.*?\)\s*\{{(.*?)\n\}}", HEADER, re.S)
+        if not sorgente or "pill" not in sorgente.group(1):
+            continue
+        # I tre cassetti passano dal ciclo su `VISTA_DI`, che li rifa' tutti e
+        # tre interi; chiunque altro deve nominarsi.
+        rifatta = modo in CASSETTI or re.search(rf"modeConfigs\.{modo}\s*=[^=]", corpo)
+        assert rifatta, (
+            f"{modo} porta un pill ma al cambio lingua non si rifa' intera: "
+            "la parola nel bottone resta quella letta al caricamento del file, "
+            "cioe' la chiave grezza"
+        )
 
 
 def test_la_casa_non_e_stata_toccata() -> None:
