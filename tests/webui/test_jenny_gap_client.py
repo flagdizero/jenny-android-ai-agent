@@ -156,3 +156,101 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
         "il tetto e' tornato: il margine condizionale non serve piu' a niente"
     )
     assert ".casa-msg-jenny.is-under-jenny" in css, "manca la regola del margine"
+
+
+# ── Chi si scansa: tutti e due i lati della conversazione ──────────────────
+
+
+def _con_dom(script: str) -> str:
+    """`aggiorna()` con un DOM finto, che e' l'unico modo di provare *quali*
+    nodi la classe la prendono. La geometria qui sopra si prova pura; questo
+    invece e' l'aggancio, ed e' dove stava il difetto."""
+    return _run_js(
+        """
+function nodo(classi, rect) {
+  const set = new Set(classi.split(' '));
+  return {
+    classi: set,
+    classList: {
+      add: (c) => set.add(c),
+      remove: (c) => set.delete(c),
+      contains: (c) => set.has(c),
+    },
+    getBoundingClientRect: () => rect,
+  };
+}
+globalThis.getComputedStyle = () => ({ paddingRight: '18px' });
+const mascotte = {
+  hidden: false,
+  getBoundingClientRect: () => (
+    { left: 484.4, right: 604.4, top: 100, bottom: 220, width: 120 }),
+};
+function filoCon(nodi) {
+  return {
+    style: { setProperty: (k, v) => { filoCon.scritto = [k, v]; } },
+    getBoundingClientRect: () => ({ right: 574.4 }),
+    querySelectorAll: (sel) => nodi.filter((n) => sel
+      .split(',').map((s) => s.trim())
+      .some((s) => n.classi.has(s.slice(1)))),
+  };
+}
+"""
+        + script
+    )
+
+
+def test_a_bubble_of_ours_in_her_corner_dodges_too() -> None:
+    """Il difetto vero: si scansavano solo le risposte.
+
+    Le bolle di chi scrive sono `align-self: flex-end` — incollate al bordo
+    destro, che e' la colonna di Jenny — e la piu' recente e' anche la piu' in
+    basso. Cioe' l'unica cosa che lei copriva sempre era **quello che hai
+    appena scritto tu**. Con il selettore vecchio (`.casa-msg-jenny`) questo
+    banco e' rosso.
+    """
+    out = _con_dom("""
+const risposta = nodo('casa-msg casa-msg-jenny', { right: 540, bottom: 200 });
+const mia      = nodo('casa-msg casa-msg-user',  { right: 556.4, bottom: 300 });
+const vecchia  = nodo('casa-msg casa-msg-user',  { right: 556.4, bottom: 90 });
+const filo = filoCon([vecchia, risposta, mia]);
+new JennyGap(filo, mascotte).aggiorna();
+assert.ok(mia.classi.has(CLASSE), 'la bolla nel suo angolo non si e scansata');
+assert.ok(risposta.classi.has(CLASSE), 'la risposta nel suo angolo non si e scansata');
+assert.ok(!vecchia.classi.has(CLASSE), 'una bolla sopra di lei non deve scansarsi');
+assert.deepEqual(filoCon.scritto, ['--jenny-gap', '39px']);
+console.log('ok');
+""")
+    assert "ok" in out
+
+
+def test_a_bubble_that_stops_dodging_gets_cleaned_up() -> None:
+    """Scorri, e chi era nel suo angolo non ci sta piu'.
+
+    Senza il giro di `remove` la bolla si porterebbe dietro il margine per
+    sempre: uno scalino a destra su un messaggio in mezzo al filo, dove non
+    c'e' nessuno da scansare.
+    """
+    out = _con_dom("""
+const mia = nodo('casa-msg casa-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
+new JennyGap(filoCon([mia]), mascotte).aggiorna();
+assert.ok(!mia.classi.has(CLASSE), 'il margine e rimasto attaccato');
+console.log('ok');
+""")
+    assert "ok" in out
+
+
+def test_our_bubble_moves_aside_it_does_not_hollow_out() -> None:
+    """Le due forme si scansano in modo diverso, e non e' un dettaglio.
+
+    La risposta di Jenny non ha sfondo: stringerle il testo con `padding` non
+    si vede. La bolla ce l'ha — con `padding` si allungherebbe fin sotto di
+    lei con dentro il vuoto, cioe' il testo si sposta e la pelle della bolla
+    resta coperta lo stesso. Deve muoversi tutta intera: `margin`.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    assert ".casa-msg-user.is-under-jenny" in css, "le bolle non si scansano affatto"
+    blocco = css.split(".casa-msg-user.is-under-jenny {")[1].split("}")[0]
+    assert "margin-right: var(--jenny-gap" in blocco, blocco
+    assert "padding-right" not in blocco, (
+        "con padding la bolla si svuota a destra invece di spostarsi"
+    )

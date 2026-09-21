@@ -325,6 +325,16 @@ body.casa {
   padding-right: var(--jenny-gap, 39px);
 }
 
+/* La stessa distanza, ma la bolla si **sposta** invece di stringersi.
+   Padding qui vorrebbe dire allungare la bolla fin sotto di lei e lasciarci
+   dentro solo il vuoto: il testo si scanserebbe, la pelle della bolla no. E
+   siccome la bolla e' ancorata a destra (`flex-end`), toglierle margine da
+   quel lato la porta via tutta intera. Il numero e' lo stesso e viene dallo
+   stesso conto: chi scrive sta nella colonna di destra, che e' la sua. */
+.casa-msg-user.is-under-jenny {
+  margin-right: var(--jenny-gap, 39px);
+}
+
 .casa-block {
   font-size: 14.5px;
   line-height: 1.45;

@@ -720,3 +720,21 @@ bolle utente restano senza riga: il `⋯` era la loro unica azione.
 
 Banchi: `test_casa_message_tail_client.py` (16, nuovo) e
 `test_chat_copy_client.py` riscritto; venti mutazioni, tutte rosse.
+
+## Ritocco — anche le nostre bolle si scansano (21/09/2026)
+
+`shared/jenny-gap.js` cercava `.casa-msg-jenny`, perché il tetto che stava
+sostituendo (`max-width: 88%`) era sulle risposte. Ma le bolle di chi scrive
+sono `align-self: flex-end` — nella colonna destra, che è la sua — e la più
+recente è anche la più in basso: **l'unica cosa che copriva sempre era quello
+che avevi appena scritto tu**. Il selettore ora è `.casa-msg`.
+
+Il *come* scansare resta diverso, e sta nel CSS. La risposta non ha sfondo:
+`padding-right` le stringe il testo e non si vede. La bolla ce l'ha, e con il
+padding si allungherebbe fin sotto di lei col vuoto dentro — si sposta tutta
+intera, `margin-right`. Stesso numero, stesso conto, fatto una volta sola.
+
+Banchi: 3 nuovi in `test_jenny_gap_client.py`, di cui due eseguono `aggiorna()`
+su un DOM finto (il difetto stava nell'aggancio, non nella geometria pura).
+Quattro mutazioni, tutte rosse. Misurato sul Titan 2: la bolla si sposta di
+145 px device e si ferma 52 px prima di lei, dove prima le finiva sotto.

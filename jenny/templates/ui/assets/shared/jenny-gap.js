@@ -18,6 +18,12 @@
  *  517,4 px CSS e intrude negli **87,6 px in fondo** al filo; il margine che
  *  serve e' **39 px**, non 82.
  *
+ *  **Vale per tutti e due i lati della conversazione** (21/09/2026). All'inizio
+ *  si scansavano solo le risposte, perche' il tetto che si stava togliendo era
+ *  loro. Ma le bolle di chi scrive stanno a **destra**, e la piu' recente sta
+ *  in fondo: l'angolo di Jenny e' esattamente il loro. Il margine si calcola
+ *  una volta sola e va su chiunque la tocchi.
+ *
  *  **Quel che questo modulo non fa, ed e' dichiarato.** Il filo scorre e lei
  *  no: quale messaggio le finisca dietro cambia a ogni scorrimento, e il solo
  *  CSS non lo sa esprimere. Qui si ricalcola all'arrivo di un messaggio e
@@ -110,7 +116,14 @@ export class JennyGap {
     this.thread.style.setProperty('--jenny-gap', `${margine}px`);
 
     const vivi = new Set();
-    for (const msg of this.thread.querySelectorAll('.casa-msg-jenny')) {
+    /* **Tutti** i messaggi, non solo le risposte. Qui c'era `.casa-msg-jenny`,
+       e le bolle di chi scrive restavano fuori: peccato che quelle siano
+       `align-self: flex-end`, cioe' incollate al bordo destro — proprio la
+       colonna dove sta lei. L'ultima cosa scritta e' anche quella piu' in
+       basso, quindi era la piu' coperta di tutte. Il *come* scansare cambia
+       fra le due (la risposta stringe il testo, la bolla si sposta), e quello
+       lo dice il CSS; qui la regola e' una sola, ed e' geometrica. */
+    for (const msg of this.thread.querySelectorAll('.casa-msg')) {
       /* Il rettangolo va letto **senza** il margine che gli abbiamo messo noi,
          altrimenti un messaggio scansato si misura piu' stretto, esce dalla
          banda, e al giro dopo rientra: un'altalena a ogni ricalcolo. */
