@@ -84,12 +84,15 @@ export class ViewTitleController {
           { icon: 'ti-eye-off', title: i18n.t('header.showHiddenApps'), action: 'toggle-hidden' }
         ]
       },
+      /* Questa vista e' **un file aperto**, da quando l'esploratore e' una
+         scheda di Memoria. «Aggiorna» qui non aggiornava gia' niente (il ramo
+         usciva subito in modalita' editor) e «nuovo» crea file nella cartella
+         che si sta guardando, che ora si guarda altrove: il bottone e' andato
+         accanto alle briciole, dentro la scheda. Resta la freccia indietro. */
       workspace: {
         title: i18n.t('nav.workspace'),
         actions: [
-          { icon: 'ti-arrow-left', title: i18n.t('header.back'), action: 'ws-back', hidden: true },
-          { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' },
-          { icon: 'ti-plus', title: i18n.t('header.new'), action: 'ws-new' }
+          { icon: 'ti-arrow-left', title: i18n.t('header.back'), action: 'ws-back' },
         ]
       },
       settings: {

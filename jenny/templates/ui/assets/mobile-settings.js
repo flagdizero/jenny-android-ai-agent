@@ -27,7 +27,6 @@ const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
    giro ha tolto dalla storia locale — duecento righe che rispondono a una
    domanda che nessuno ha fatto. Quel che avanza si conta in una riga, e il
    gestore file e' li' sotto. */
-export const TETTO_FILE = 8;
 
 /* I quattro cassetti dell'officina, e cosa contiene ognuno.
  *
@@ -37,16 +36,15 @@ export const TETTO_FILE = 8;
  * tutto qui dentro: spostare una sezione da un cassetto all'altro e' spostare
  * una stringa, e non c'e' nessun posto in cui possa restare scritta due volte.
  *
- * **Le porte non sono piu' una tabella.** Erano tre viste uscite dal dock che
- * il cassetto doveva pur far raggiungere — il cassetto delle app, i file, la
+ * **Le porte non ci sono piu'.** Erano tre viste uscite dal dock che il
+ * cassetto doveva pur far raggiungere — il cassetto delle app, i file, la
  * wiki — e una mappa `gruppo -> porte` che le disegnava in fondo al gruppo
- * giusto. Il 21/09/2026 ne e' rimasta una sola: il cassetto delle app ha la
+ * giusto. Il 21/09/2026 sono finite tutte e tre: il cassetto delle app ha la
  * sua maniglia accanto alla graffetta del composer, la wiki e' uscita
- * dall'officina (elenco, mappa e lettore vivono in casa), e i file sono
- * diventati un gruppo che se la disegna da se', in fondo alle cartelle che
- * mostra. Un meccanismo generico per una riga sola era piu' codice della cosa
- * che reggeva; resta `_wirePorte`, che aggancia qualunque `data-porta` trovi
- * nel DOM.
+ * dall'officina (elenco, mappa e lettore vivono in casa), e i file non hanno
+ * piu' una porta perche' **sono** la scheda — il gestore ci sta dentro, non
+ * dietro. Un cassetto che manda altrove e' un cassetto che non contiene, ed
+ * era la sola cosa che il meccanismo delle porte sapesse fare.
  *
  * **Dei due parcheggi ne resta uno.** `personalization` e' uscito il
  * 21/09/2026: temi, mascotte e finestra flottante vivevano gia' in casa, il
@@ -95,8 +93,12 @@ export const CASSETTI = {
   mani: {
     sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
   },
+  /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
+     quando quella scheda contiene l'esploratore vero la sua altezza dipende da
+     quanti file ci sono, e una cartella piena sotterrerebbe qualunque cosa le
+     stia sotto. In fondo non c'e' niente da sotterrare. */
   memoria: {
-    sezioni: ['quantoRicorda', 'dream', 'workers', 'file', 'backup'],
+    sezioni: ['quantoRicorda', 'dream', 'workers', 'backup', 'file'],
   },
 };
 
@@ -220,13 +222,13 @@ export class SettingsController {
     }
   }
 
-  /* Nessun sotto-livello da sbucciare. Il catalogo modelli ne era uno — ci si
-     arrivava da un pulsante, si scorreva, si sceglieva — e Indietro doveva
-     chiuderlo invece di uscire dalle impostazioni. Adesso quel catalogo e' in
-     casa, e qui dentro non c'e' piu' niente che il tasto Indietro debba
-     sbucciare prima di lasciare la schermata. */
   handleBack() {
-    return false;
+    /* Una cosa sola, e sta in Memoria: il gestore file dentro la scheda «I
+       file veri». Dentro una sottocartella Indietro risale di un livello,
+       perche' uscire dal cassetto buttando via tre livelli di cammino in una
+       pressione e' il difetto che la catena di `handleHardwareBack` esiste
+       per evitare. Alla radice non consuma niente e si esce, come prima. */
+    return window.mobileApp?.controllers?.workspace?.handleCardBack?.() ?? false;
   }
 
   handleAction(action) {
@@ -275,7 +277,6 @@ export class SettingsController {
     ].join('');
 
     this._wireSections();
-    this._wirePorte();
     // L'innerHTML qui sopra ha appena riportato lo scroll in cima: va rimesso
     // dove l'aveva lasciato l'utente.
     /* In questo istante SSH, snapshot, widget Telegram e card
@@ -1717,88 +1718,63 @@ export class SettingsController {
 
   // ── I file veri ────────────────────────────────────────────────────
 
-  /** Cosa c'e' davvero nel workspace, alla radice.
+  /** Il gestore file, dentro la scheda.
    *
    *  **La tavola la chiamava «i file veri», e fino al 21/09/2026 non
    *  esisteva.** Al suo posto c'era una riga in fondo al giardiniere che
-   *  portava al gestore file: un collegamento, non un contenuto. Una scheda
-   *  che si legge scorrendo — il criterio di tutto il cassetto — qui vuol dire
-   *  vedere le cartelle senza andarci.
+   *  portava al gestore file: un collegamento, non un contenuto.
    *
-   *  **Una richiesta sola.** Le righe si disegnano da `/api/workspace/list`
-   *  sulla radice. Dire anche «quante cose dentro» per ogni cartella
-   *  costerebbe una richiesta a cartella a ogni apertura di Memoria: e' una
-   *  misura che il server potrebbe dare in una risposta sola, e finche' non la
-   *  da' questa scheda non se la inventa a colpi di round trip.
+   *  Il primo tentativo fu un riassunto — le prime otto voci della radice, poi
+   *  una porta verso il gestore vero. Durato un giorno: un elenco troncato che
+   *  non si tocca non risponde a nessuna domanda, e il bottone sotto rendeva
+   *  due gesti quel che ne vale uno. **Adesso la scheda contiene il gestore.**
+   *  Le cartelle si aprono qui dentro, senza mai lasciare Memoria; Indietro
+   *  risale di una cartella (`handleCardBack`) prima di uscire dal cassetto.
    *
-   *  **E i file di servizio non ci sono**, come nel gestore file: il flag
-   *  `internal` lo mette il server file per file.
+   *  L'unica uscita e' **aprire** un file, che e' una schermata sua come in
+   *  qualunque gestore file, e da cui Indietro riporta esattamente in questa
+   *  cartella (`_enterEditorView`).
+   *
+   *  Qui c'e' solo il contenitore: i nodi li riempie `WorkspaceController`,
+   *  che e' anche l'unico posto dove sta il come — icone, miniature, tieni
+   *  premuto, «nuovo». Riscriverne una seconda copia per la scheda avrebbe
+   *  voluto dire due elenchi degli stessi file che col tempo si raccontano
+   *  diversi, ed e' esattamente il difetto che la scheda riassunto aveva.
+   *
+   *  **E i file di servizio non ci sono**: il flag `internal` lo mette il
+   *  server file per file, e a filtrarli e' `renderGrid`.
    */
   _renderFile() {
     return `
       <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('officina.file.desc')}</p>
-      <div id="settings-file-lista"><div class="settings-empty-state">${i18n.t('settings.loading')}</div></div>
-      <button class="settings-porta" data-porta="workspace" type="button">
-        <i class="ti ti-folder"></i>
-        <span>${escapeHtml(i18n.t('nav.workspace'))}</span>
-        <i class="ti ti-chevron-right"></i>
-      </button>`;
-  }
-
-  async _caricaFile() {
-    const box = this.contentEl?.querySelector('#settings-file-lista');
-    if (!box) return;
-    let items;
-    try {
-      const payload = await api.listWorkspace('');
-      items = payload?.items || [];
-    } catch (e) {
-      box.innerHTML = `<div class="settings-empty-state">${escapeHtml(i18n.t('officina.file.errore'))}</div>`;
-      return;
-    }
-    const visibili = items.filter((i) => !i.internal);
-    if (!visibili.length) {
-      box.innerHTML = `<div class="settings-empty-state">${escapeHtml(i18n.t('officina.file.vuoto'))}</div>`;
-      return;
-    }
-    /* Cartelle prima, e dentro ogni famiglia in ordine alfabetico: e' l'ordine
-       del gestore file, e due schermate sugli stessi dati che li ordinano
-       diversamente sembrano parlare di due cartelle diverse. */
-    const perNome = (a, b) => a.name.localeCompare(b.name);
-    const cartelle = visibili.filter((i) => i.type === 'directory').sort(perNome);
-    const file = visibili.filter((i) => i.type !== 'directory').sort(perNome);
-    const tutte = [...cartelle, ...file];
-    const mostrate = tutte.slice(0, TETTO_FILE);
-    const righe = mostrate.map((i) => {
-      const cartella = i.type === 'directory';
-      const sotto = cartella ? i18n.t('officina.file.cartella') : this._pesoFile(i.size);
-      return `<div class="file-riga">
-        <i class="ti ti-${cartella ? 'folder' : 'file'} file-riga-icona" aria-hidden="true"></i>
-        <span class="file-riga-nome">${escapeHtml(i.name)}</span>
-        <span class="file-riga-peso">${escapeHtml(sotto)}</span>
+      <div class="ws-esploratore" id="settings-file-esploratore">
+        <div class="ws-barra">
+          <div class="ws-breadcrumb" data-ws-crumb></div>
+          <button class="ws-nuovo" data-ws-new type="button"
+                  title="${escapeHtml(i18n.t('workspace.new'))}"
+                  aria-label="${escapeHtml(i18n.t('workspace.new'))}">
+            <i class="ti ti-plus"></i>
+          </button>
+        </div>
+        <div class="ws-grid" data-ws-grid></div>
+        <div class="ws-empty" data-ws-empty style="display:none">
+          <div class="ws-empty-icon"><i class="ti ti-folder-off"></i></div>
+          <div class="ws-empty-title">${escapeHtml(i18n.t('workspace.noFiles'))}</div>
+          <div class="ws-empty-sub">${escapeHtml(i18n.t('workspace.folderEmpty'))}</div>
+        </div>
       </div>`;
-    }).join('');
-    const avanzo = tutte.length - mostrate.length;
-    const coda = avanzo > 0
-      ? `<div class="file-riga file-riga-avanzo">${escapeHtml(i18n.t('officina.file.altri', { n: avanzo }))}</div>`
-      : '';
-    box.innerHTML = righe + coda;
   }
 
-  /** Quanto pesa un file, in una parola.
+  /** Consegna il contenitore appena disegnato al gestore file.
    *
-   *  `null` non e' zero, ed e' il valore che il server manda per le cartelle:
-   *  `Number(null)` fa 0, quindi senza questa prima riga una voce senza peso
-   *  si presenterebbe come «0 B» — un file vuoto e un peso che non sappiamo
-   *  sono due cose diverse, e la seconda non si scrive.
+   *  Il controller puo' non esistere ancora: fino a ieri nasceva alla prima
+   *  apertura della sua vista, e quella vista adesso e' solo il file aperto —
+   *  cioe' arriva **dopo**. `ensureController` lo costruisce senza portarcisi.
    */
-  _pesoFile(byte) {
-    if (byte === null || byte === undefined) return '';
-    const n = Number(byte);
-    if (!Number.isFinite(n) || n < 0) return '';
-    if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
-    if (n >= 1e3) return `${(n / 1e3).toFixed(1)} kB`;
-    return `${n} B`;
+  _montaFile() {
+    const host = this.contentEl?.querySelector('#settings-file-esploratore');
+    if (!host) return;
+    window.mobileApp?.ensureController('workspace')?.mount(host);
   }
 
   // ── Backup e ripristino ──────────────────────────────────────────────
@@ -2383,24 +2359,6 @@ export class SettingsController {
     return `${head}<div class="cron-tasks">${tasks}</div>${orphans}`;
   }
 
-  /** Aggancia le righe che portano a un'altra vista.
-   *
-   *  Oggi ce n'e' una — il gestore file, in fondo alla scheda «I file veri» —
-   *  e sta nel markup di chi la disegna, non in una tabella. Il cablaggio
-   *  resta generico perche' costa una riga e perche' la riga che porta
-   *  altrove e' esattamente il pezzo che, sparendo, lascia una schermata viva
-   *  e irraggiungibile (v. `test_officina_cassetti_contract.py`).
-   */
-  _wirePorte() {
-    this.contentEl.querySelectorAll('[data-porta]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const app = window.mobileApp;
-        if (!app) return;
-        app.switchMode(el.dataset.porta);
-      });
-    });
-  }
-
   _wireSections() {
     // Active config fields → auto-save on change
     for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
@@ -2411,10 +2369,10 @@ export class SettingsController {
 
     this._wireWorkerSettings();
 
-    // I file veri: in cassetto la scheda nasce col segnaposto, e la radice del
-    // workspace arriva dopo. Fuori da Memoria il contenitore non esiste e il
-    // metodo esce subito.
-    this._caricaFile();
+    // I file veri: la scheda nasce vuota e il gestore file ci si aggancia
+    // sopra. Fuori da Memoria il contenitore non esiste e il metodo esce
+    // subito.
+    this._montaFile();
 
     // Telegram: in cassetto solo la riga. Il widget lo monta `_apriTelegram`
     // quando il pannello si apre — prima, il suo contenitore non esiste.

@@ -141,19 +141,15 @@
         <div class="drawer-body" id="drawer-tetti-body"></div>
       </div>
 
-      <!-- VIEW: Workspace -->
+      <!-- VIEW: il file aperto.
+           L'esploratore non e' qui: sta nella scheda «I file veri» di Memoria
+           (`mobile-settings.js::_renderFile`), e ci si gira dentro senza mai
+           lasciare il cassetto. Questa schermata e' il gesto che ne esce —
+           aprire un file — e il breadcrumb qui sotto porta il nome del file e
+           il bottone «Salva». -->
       <div id="view-workspace" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="workspace-loading"><div class="spinner"></div></div>
         <div class="view-title-mount" id="title-workspace"></div>
         <div class="ws-breadcrumb" id="ws-breadcrumb"></div>
-        <div class="ws-explorer" id="ws-explorer">
-          <div class="ws-grid" id="ws-grid"></div>
-          <div class="ws-empty" id="ws-empty" style="display:none">
-            <div class="ws-empty-icon"><i class="ti ti-folder-off"></i></div>
-            <div class="ws-empty-title" data-i18n="workspace.noFiles">No Files</div>
-            <div class="ws-empty-sub" data-i18n="workspace.folderEmpty">This folder is empty</div>
-          </div>
-        </div>
         <div class="workspace-viewer" id="workspace-viewer">
           <div id="code-editor-mobile"></div>
         </div>

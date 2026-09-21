@@ -276,3 +276,92 @@ mutazione** prima di dirlo fatto.
 Alla fine: build release dal worktree pulito, `adb install -r`, e foto intere
 dei tre cassetti con `cuci.py` da confrontare con quelle di oggi. La misura
 che conta è Cervello: deve scendere di circa 3.000 px.
+
+---
+
+# Coda: la scheda dei file smette di essere un riassunto
+
+*21/09/2026, stesso giorno, dopo i cinque tagli e la rimozione di `pinnedWiki`.*
+
+## La misura che l'ha aperta
+
+La scheda nata al passo 5b mostrava **otto righe della radice**, poi «e altre N
+voci», poi un bottone verso il gestore file. L'utente, aprendola: «ha una lista
+inutilissima e poi un tasto che rimanda alla lista completa».
+
+Ha ragione, e il rimedio non era togliere il tetto: un elenco piatto della sola
+radice, che non si tocca, non risponde a nessuna domanda — lungo o corto.
+**Quel che serviva era il contenuto, non un campione più grande.**
+
+Tre cose lette prima di decidere:
+
+- il gestore file esiste già, completo (icone, miniature, tieni-premuto per
+  rinomina/cancella/condividi, «nuovo»), ed è **1.106 righe**;
+- **quel bottone era la sua unica porta**: nessun altro punto dell'app apriva
+  più `view-workspace` — `_returnMode`, scritto per l'origine «Apps → modifica
+  skill», era già sempre `null`;
+- l'esploratore è una **griglia** (`minmax(88px, 1fr)`, ~6 per riga sul Titan
+  2), non un elenco: 40 voci sono 7 righe, cioè una schermata. La scheda non
+  diventa un mostro.
+
+Quindi: il gestore **entra nella scheda**, invece di stare dietro di essa.
+
+## La forma scelta
+
+Una sola cosa era davvero da decidere, ed è andata all'utente: cosa succede
+toccando un file. Risposta: **schermata intera, e Indietro riporta lì**.
+Girare tra le cartelle non lascia mai Memoria; aprire un documento è una
+schermata sua, come in qualunque gestore file.
+
+- `view-workspace` **è** il file aperto, e basta. Il breadcrumb che gli resta
+  porta il nome del file e il tasto «Salva».
+- L'esploratore (briciole + griglia + stato vuoto) è il corpo della scheda «I
+  file veri», ultima in Memoria — la sua altezza dipende da quanti file ci
+  sono, e sotto non deve esserci niente da sotterrare.
+- `WorkspaceController.mount(host)` **riaggancia** i tre nodi a ogni ridisegno
+  della scheda. `render()` riscrive `contentEl` per intero a ogni apertura del
+  cassetto e dopo ogni salvataggio: un riferimento tenuto dal costruttore
+  scriverebbe in un DOM buttato via. La **cartella** invece vive nel
+  controller, quindi salvare un'impostazione di Memoria non rimbalza alla
+  radice chi stava a tre livelli.
+- Indietro: `SettingsController.handleBack()` gira la pressione a
+  `handleCardBack()`, che risale di una cartella e solo alla radice lascia
+  proseguire la catena.
+- «Nuovo» è passato dall'intestazione della vista al bottone accanto alle
+  briciole. «Aggiorna» non è tornato: `cassetto()` non ce l'ha per scelta
+  scritta, e la scheda si ricarica a ogni apertura.
+
+## Quel che è caduto per conseguenza
+
+- **`_returnMode`**, il campo che diceva da quale sezione si era aperto il
+  file. Con una sola origine aveva un valore solo, e si portava dietro
+  l'azzeramento in `deactivate()` che *era* la superficie del difetto già
+  corretto una volta. Sostituito da una destinazione scritta dove si usa e da
+  un parametro `stay` per Home, che è la stessa richiesta detta a voce alta.
+  Stessa lezione di `pinnedWiki`, poche ore prima.
+- **`_wirePorte` e `data-porta`**: zero porte rimaste. Un cassetto contiene;
+  mandare altrove era l'unica cosa che le porte sapessero fare.
+- `refreshGrid`, `showLoading`/`hideLoading`, `viewEl`, `init()`/`ready`:
+  senza lettori dopo il trasloco.
+- Le chiavi i18n del riassunto (`cartella`, `altri`, `vuoto`, `errore`), in
+  entrambe le lingue.
+
+## Come si verifica
+
+Banco `test_officina_file_client.py` **riscritto**: non misurava più niente,
+perché il riassunto che misurava non esiste. Dodici prove sul gestore vero, in
+node su un DOM finto — filtro `internal`, ordine, **nessun campione**,
+riaggancio che non torna alla radice, girare senza lasciare Memoria, Indietro
+che risale e poi lascia andare, chiudere un file che torna nella sua cartella,
+Home che non naviga due volte, cartella illeggibile ≠ cartella vuota, «nuovo»
+che crea dove si sta guardando, risposta vecchia che non sovrascrive la nuova.
+
+Sette mutazioni, tutte rosse — e una prima passata **verde**, che ha trovato il
+banco debole: il tetto rimesso sulle sole cartelle non si vedeva, perché la
+prova contava soltanto file. Corretta contando entrambe le famiglie.
+
+**Resta da fare: la prova sul telefono.** Il dispositivo non era collegato alla
+fine di questa passata. Da provare a mano: Indietro da dentro una cartella, da
+un file aperto, da un file modificato e non salvato; Home dagli stessi tre
+punti; riapertura dell'app con un file aperto (deve ripartire da Memoria, non
+da una schermata bianca).

@@ -1,23 +1,27 @@
-"""«I file veri»: la scheda di Memoria che legge davvero il workspace.
+"""«I file veri»: la scheda di Memoria *e'* il gestore file.
 
-Era una voce della tavola che nel prodotto non esisteva. Al suo posto c'era una
-riga in fondo al giardiniere che portava al gestore file — un collegamento, non
-un contenuto — e il commento in cima a ``mobile-settings.js`` lo diceva:
-«mostrarlo anche qui vuole una lettura che questa schermata non fa». Dal
-21/09/2026 quella lettura c'e'.
+Era una voce della tavola che nel prodotto non esisteva. Il 21/09/2026 e'
+nata come riassunto — le prime otto voci della radice, poi un bottone verso il
+gestore vero — ed e' durata un giorno: un elenco troncato che non si tocca non
+risponde a nessuna domanda, e il bottone sotto rendeva due gesti quel che ne
+vale uno. Adesso la scheda **contiene** l'esploratore: le cartelle si aprono
+li' dentro, e l'unica uscita e' aprire un file.
 
-Tre cose non si misurano leggendo il sorgente, e girano qui in node su un DOM
-finto:
+Quel che gira qui in node, su un DOM finto, e' quello che leggere il sorgente
+non dimostra:
 
-* **I file di servizio non si elencano.** Il flag ``internal`` lo mette il
-  server file per file; il filtro qui non ha piu' nessuna condizione davanti da
-  quando la modalita' sviluppatore e' sparita.
-* **Il tetto di righe tiene.** Alla radice di un workspace vissuto ci sono
-  decine di voci, e una scheda che le elenca tutte rifa' il difetto che questo
-  giro ha appena tolto dalla storia locale.
-* **Una risposta che non arriva lo dice.** Un contenitore che resta sul
-  segnaposto «Caricamento…» per sempre e' il modo in cui un guasto di rete si
-  traveste da lentezza.
+* **I file di servizio non si elencano, e l'ordine e' uno solo.** Il flag
+  ``internal`` lo mette il server file per file.
+* **Non c'e' nessun campione.** Un tetto di righe rimesso qui rifarebbe il
+  difetto che questa passata toglie.
+* **Riaprire il cassetto non riporta alla radice.** La scheda si ridisegna a
+  ogni apertura *e dopo ogni salvataggio* in Memoria: se la cartella vivesse
+  nel DOM, salvare un'impostazione butterebbe via tre livelli di cammino.
+* **Indietro risale, poi lascia andare.** Uscire dal cassetto e' quel che fa
+  alla radice, non da dentro una cartella.
+* **Chiudere un file riporta nella sua cartella**, non alla radice.
+* **Una cartella illeggibile lo dice.** Uguale a una vuota e' il modo in cui un
+  guasto di rete si traveste da cartella vuota.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
+WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -51,11 +56,20 @@ def _member(source: str, name: str) -> str:
     return m.group(1) + "\n  }"
 
 
-def _const(source: str, name: str) -> str:
-    m = re.search(rf"(?m)^export const {re.escape(name)} = .+?;$", source)
-    assert m, f"const {name} non trovata"
-    return m.group(0).removeprefix("export ")
-
+# I metodi del gestore file che il banco fa girare davvero. Gli altri sono
+# stub: costruire una tessera della griglia o un breadcrumb e' DOM, e il DOM
+# finto misurerebbe se' stesso.
+_VERI = (
+    "mount",
+    "navigateTo",
+    "renderGrid",
+    "handleCardBack",
+    "collapseToRoot",
+    "_closeEditor",
+    "_resetToExplorerAt",
+    "showExplorerView",
+    "_handleNewAction",
+)
 
 _HARNESS = """
 import assert from 'node:assert/strict';
@@ -67,7 +81,9 @@ const escapeHtml = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
-__TETTO__
+/* `renderGrid` revoca le object URL delle miniature: qui non ce ne sono. */
+const URL = { revokeObjectURL() {} };
+const parentPath = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
 
 /* Quel che il server risponde a `/api/workspace/list`, deciso dal banco. */
 let risposta = null;
@@ -80,49 +96,102 @@ const api = {
   },
 };
 
-/* Un contenitore solo: la scheda scrive in `#settings-file-lista` e basta. */
-function contenitore(presente) {
-  const box = { innerHTML: '' };
-  return { querySelector: (sel) => (presente && sel === '#settings-file-lista' ? box : null), box };
+/* Un nodo finto: quel tanto che serve a `navigateTo` e `renderGrid`. */
+function nodo(sotto = {}) {
+  return {
+    innerHTML: '', style: {}, figli: [], ascolti: {},
+    textContent: '',
+    appendChild(c) { this.figli.push(c); },
+    querySelector(sel) { return sotto[sel] ?? null; },
+    addEventListener(ev, cb) { (this.ascolti[ev] ||= []).push(cb); },
+    clic() { (this.ascolti.click || []).forEach((cb) => cb()); },
+  };
 }
 
-class SettingsController {
-  constructor(contentEl) { this.contentEl = contentEl; }
-  __RENDER_FILE__
-  __CARICA_FILE__
-  __PESO_FILE__
+/* La scheda appena disegnata da `SettingsController.render()`. */
+function scheda() {
+  const crumb = nodo();
+  const griglia = nodo();
+  const sub = nodo();
+  const vuoto = nodo({ '.ws-empty-sub': sub });
+  const nuovo = nodo();
+  const host = nodo({
+    '[data-ws-crumb]': crumb, '[data-ws-grid]': griglia,
+    '[data-ws-empty]': vuoto, '[data-ws-new]': nuovo,
+  });
+  return { host, crumb, griglia, vuoto, sub, nuovo };
+}
+
+/* Il guscio: `switchMode` e `navigateBack` sono i due modi di lasciare
+   Memoria, e questo banco conta quante volte accadono. */
+const guscio = { mosse: [] };
+const window_ = {
+  mobileApp: {
+    switchMode: (m) => guscio.mosse.push(['switchMode', m]),
+    navigateBack: (m) => guscio.mosse.push(['navigateBack', m]),
+    header: null,
+  },
+};
+globalThis.window = window_;
+
+class WorkspaceController {
+  constructor() {
+    this.currentDir = '';
+    this.currentPath = '';
+    this.viewMode = 'explorer';
+    this._navToken = 0;
+    this._thumbUrls = [];
+    this._dirty = false;
+    this.editor = null;
+    this.viewerEl = { innerHTML: '', classList: { add() {}, remove() {} } };
+    this.explorerEl = null;
+    this.breadcrumbEl = null;
+    this.gridEl = null;
+    this.emptyEl = null;
+    /* Quel che la griglia ha costruito, nell'ordine in cui l'ha costruito. */
+    this.tessere = [];
+    this.menuNuovo = 0;
+    this.creati = [];
+  }
+  _createDirItem(i) { this.tessere.push('cartella:' + i.name); return {}; }
+  _createFileItem(i) { this.tessere.push('file:' + i.name); return {}; }
+  renderBreadcrumb() {}
+  showEditorView() {}
+  _syncHeaderBack() {}
+  _showNewMenu() { this.menuNuovo++; }
+  _createEntry(azione, base) { this.creati.push([azione, base]); }
+  _confirmDiscard() { this.scartoChiesto = true; }
+__METODI__
 }
 
 function voce(name, type, size, internal) {
   return { name, type, size: size ?? null, internal: !!internal };
 }
 
-async function scheda(items, { rotto = false, senzaBox = false } = {}) {
+/* Un giro completo: la scheda si disegna, il gestore ci si aggancia, e la
+   radice arriva. */
+async function apri(items, { rotto = false } = {}) {
   risposta = items === null ? null : { items, path: '' };
   errore = rotto ? new Error('gateway giu') : null;
   chiamate.length = 0;
-  const el = contenitore(!senzaBox);
-  const c = new SettingsController(el);
-  await c._caricaFile();
-  return { html: el.box.innerHTML, c };
-}
-
-function nomi(html) {
-  return [...html.matchAll(/class="file-riga-nome">([^<]*)</g)].map((m) => m[1]);
+  guscio.mosse.length = 0;
+  const s = scheda();
+  const c = new WorkspaceController();
+  c.mount(s.host);
+  await new Promise((r) => setTimeout(r, 0));
+  return { c, ...s };
 }
 """
 
 
 def _harness() -> str:
-    src = SETTINGS_JS.read_text(encoding="utf-8")
+    ws = WORKSPACE_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    metodi = "\n".join("  " + _member(ws, nome) for nome in _VERI)
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__TETTO__", _const(src, "TETTO_FILE"))
-        .replace("__RENDER_FILE__", _member(src, "_renderFile"))
-        .replace("__CARICA_FILE__", _member(src, "_caricaFile"))
-        .replace("__PESO_FILE__", _member(src, "_pesoFile"))
+        .replace("__METODI__", metodi)
     )
 
 
@@ -136,122 +205,233 @@ def _run_js(script: str) -> None:
     assert proc.returncode == 0, proc.stderr or proc.stdout
 
 
+def test_outside_memoria_nothing_is_read() -> None:
+    """La scheda vive in un cassetto solo. Aprendo Cervello o Mani il suo
+    contenitore non esiste, e una richiesta al workspace partita comunque
+    sarebbe traffico per un disegno che nessuno vedra'."""
+    settings = SETTINGS_JS.read_text(encoding="utf-8")
+    monta = _member(settings, "_montaFile")
+    proc = subprocess.run(
+        [
+            str(_NODE),
+            "--input-type=module",
+            "-e",
+            """
+import assert from 'node:assert/strict';
+let montaggi = 0;
+globalThis.window = { mobileApp: {
+  ensureController: () => ({ mount: () => { montaggi++; } }),
+} };
+class C {
+  constructor(el) { this.contentEl = el; }
+  """
+            + monta
+            + """
+}
+// Cassetto senza la scheda dei file: il contenitore non c'e'.
+new C({ querySelector: () => null })._montaFile();
+assert.equal(montaggi, 0, 'il gestore file si monta fuori da Memoria');
+// E in Memoria si monta, o il banco sopra passerebbe per un refuso.
+new C({ querySelector: () => ({}) })._montaFile();
+assert.equal(montaggi, 1, 'in Memoria il gestore non si monta affatto');
+""",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
 def test_service_files_are_never_listed() -> None:
-    """Il flag lo mette il server; la scheda lo rispetta senza chiedere
-    permesso a nessuno — l'interruttore che lo scavalcava non esiste piu'."""
+    """Il flag lo mette il server; la griglia lo rispetta senza chiedere
+    permesso a nessuno. C'era un interruttore — «modalita' sviluppatore» — che
+    li faceva comparire: tolto il 21/09/2026, e con lui l'unica condizione
+    davanti a questo filtro."""
     _run_js("""
-      const { html } = await scheda([
-        voce('progetti', 'directory'),
-        voce('sessions', 'directory', null, true),
-        voce('note.md', 'file', 120),
-        voce('config.json', 'file', 900, true),
-      ]);
-      assert.deepEqual(nomi(html), ['progetti', 'note.md']);
-    """)
+const { c } = await apri([
+  voce('USER.md', 'file', 120),
+  voce('config.json', 'file', 80, true),
+  voce('sessions', 'directory', null, true),
+  voce('progetti', 'directory'),
+]);
+assert.deepEqual(c.tessere, ['cartella:progetti', 'file:USER.md']);
+""")
 
 
 def test_folders_come_first_then_files_each_alphabetical() -> None:
-    """E' l'ordine del gestore file: due schermate sugli stessi dati che li
-    ordinano diversamente sembrano parlare di due cartelle diverse."""
+    """Un ordine solo per gli stessi dati. Due schermate che li ordinano
+    diversamente sembrano parlare di due cartelle diverse."""
     _run_js("""
-      const { html } = await scheda([
-        voce('zeta.md', 'file', 10),
-        voce('orto', 'directory'),
-        voce('alfa.md', 'file', 10),
-        voce('appunti', 'directory'),
-      ]);
-      assert.deepEqual(nomi(html), ['appunti', 'orto', 'alfa.md', 'zeta.md']);
-    """)
+const { c } = await apri([
+  voce('zeta.md', 'file', 1), voce('foto', 'directory'),
+  voce('alfa.md', 'file', 1), voce('archivio', 'directory'),
+]);
+assert.deepEqual(c.tessere, [
+  'cartella:archivio', 'cartella:foto', 'file:alfa.md', 'file:zeta.md',
+]);
+""")
 
 
-def test_the_cap_is_small_enough_to_be_a_cap() -> None:
-    """Il banco qui sotto legge `TETTO_FILE` dal sorgente, quindi da solo non
-    sa distinguere un tetto da un numero enorme: alzarlo a 99 lo lascerebbe
-    verde e rimetterebbe in piedi l'elenco lungo che questo giro ha appena
-    tolto alla storia locale. Il valore percio' si guarda anche da fuori.
-
-    Dodici e' largo: sono gia' mezzo schermo di un telefono da 1440 px, e la
-    scheda deve poter stare **dentro** un cassetto che si scorre insieme ad
-    altri quattro gruppi.
-    """
-    tetto = int(re.search(r"export const TETTO_FILE = (\d+);", SETTINGS_JS.read_text(encoding="utf-8")).group(1))
-    assert 3 <= tetto <= 12, f"TETTO_FILE = {tetto}: non e' piu' un tetto, e' un elenco"
-
-
-def test_the_row_cap_holds_and_the_rest_is_counted() -> None:
-    """Il tetto e' la ragione per cui questa scheda non ridiventa l'elenco che
-    il giro ha appena tolto alla storia locale."""
+def test_the_card_shows_every_file_and_not_a_sample() -> None:
+    """**Il difetto che questa passata toglie.** La scheda nasceva con un tetto
+    di otto righe e un bottone verso l'elenco vero: un campione che non risponde
+    a nessuna domanda, e sotto il gesto che serviva davvero. Un tetto rimesso
+    qui lo rifarebbe identico, e sarebbe invisibile finche' qualcuno non apre
+    una cartella con dentro piu' roba del tetto."""
     _run_js("""
-      const molte = [];
-      for (let i = 0; i < TETTO_FILE + 5; i++) {
-        molte.push(voce(`c${String(i).padStart(2, '0')}`, 'directory'));
-      }
-      const { html } = await scheda(molte);
-      assert.equal(nomi(html).length, TETTO_FILE, 'il tetto non tiene');
-      assert.ok(html.includes('file-riga-avanzo'), 'quel che avanza non si conta');
-      assert.ok(html.includes('5'), 'il conto di quel che avanza e\\u2019 sbagliato: ' + html);
-    """)
+/* Cartelle **e** file, e tante di entrambi: un tetto rimesso su una sola
+   delle due famiglie passerebbe inosservato contando solo l'altra. */
+const molte = [
+  ...Array.from({ length: 20 }, (_, i) =>
+    voce('c' + String(i).padStart(3, '0'), 'directory')),
+  ...Array.from({ length: 20 }, (_, i) =>
+    voce(String(i).padStart(3, '0') + '.md', 'file', 10)),
+];
+const { c } = await apri(molte);
+assert.equal(c.tessere.filter((t) => t.startsWith('cartella:')).length, 20,
+  'le cartelle sono un campione invece di tutte');
+assert.equal(c.tessere.filter((t) => t.startsWith('file:')).length, 20,
+  'i file sono un campione invece di tutti');
+""")
 
 
-def test_nothing_left_over_means_no_counting_row() -> None:
-    """Una riga «e altre 0 voci» sotto un elenco completo e' peggio di niente."""
+def test_reopening_the_card_stays_in_the_folder_you_were_in() -> None:
+    """La scheda si ridisegna a ogni apertura di Memoria **e dopo ogni
+    salvataggio** in quel cassetto: `render()` riscrive `contentEl` per intero.
+
+    Se la cartella corrente vivesse nel DOM, cambiare un'impostazione qualsiasi
+    di Memoria rimbalzerebbe alla radice chi stava a tre livelli di profondita'.
+    Vive nel controller, e il riaggancio la rilegge da li'."""
     _run_js("""
-      const { html } = await scheda([voce('orto', 'directory'), voce('note.md', 'file', 12)]);
-      assert.ok(!html.includes('file-riga-avanzo'), 'conta un avanzo che non c\\u2019e\\u2019');
-    """)
+const { c } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti/casa');
+assert.equal(c.currentDir, 'progetti/casa');
+
+// Memoria si ridisegna: nodi nuovi, stesso controller.
+const s2 = scheda();
+chiamate.length = 0;
+c.mount(s2.host);
+await new Promise((r) => setTimeout(r, 0));
+assert.deepEqual(chiamate, ['progetti/casa'],
+  'il riaggancio riparte dalla radice invece che da dove si era');
+assert.equal(c.gridEl, s2.griglia, 'la griglia vecchia e\\' rimasta agganciata');
+""")
 
 
-def test_an_empty_workspace_says_so() -> None:
-    """Vuoto e «non l'ho letta» sono due risposte diverse, e la scheda le
-    distingue: un contenitore vuoto le confonderebbe."""
+def test_walking_into_a_folder_never_leaves_memoria() -> None:
+    """E' la ragione per cui il gestore e' entrato nella scheda: girare tra le
+    cartelle non deve cambiare schermata. Solo **aprire** un file lo fa."""
     _run_js("""
-      const vuoto = await scheda([]);
-      assert.ok(vuoto.html.includes(i18n.t('officina.file.vuoto')), vuoto.html);
-      const solointerni = await scheda([voce('sessions', 'directory', null, true)]);
-      assert.ok(solointerni.html.includes(i18n.t('officina.file.vuoto')), solointerni.html);
-    """)
+const { c } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti');
+await c.navigateTo('progetti/casa');
+assert.deepEqual(guscio.mosse, [],
+  'girare tra le cartelle ha lasciato il cassetto');
+""")
 
 
-def test_a_read_that_failed_says_so_instead_of_loading_forever() -> None:
-    """Il segnaposto e' «Caricamento…»: lasciarcelo per sempre e' il modo in
-    cui un guasto di rete si traveste da lentezza."""
+def test_back_walks_up_one_folder_and_then_lets_go() -> None:
+    """Risalire viene prima di uscire. Alla radice invece non c'e' piu' niente
+    da sbucciare e la pressione deve proseguire la catena: un `true` di troppo
+    la mangerebbe senza cambiare niente a schermo."""
     _run_js("""
-      const { html } = await scheda(null, { rotto: true });
-      assert.ok(html.includes(i18n.t('officina.file.errore')), html);
-      assert.ok(!html.includes(i18n.t('settings.loading')), 'e\\u2019 rimasto sul segnaposto');
-    """)
+const { c } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti/casa/note');
+
+assert.equal(c.handleCardBack(), true);
+assert.equal(c.currentDir, 'progetti/casa');
+assert.equal(c.handleCardBack(), true);
+assert.equal(c.currentDir, 'progetti');
+assert.equal(c.handleCardBack(), true);
+assert.equal(c.currentDir, '');
+assert.equal(c.handleCardBack(), false,
+  'alla radice il cassetto si mangia la pressione');
+
+// Con un file aperto la pressione non e' del cassetto: e' dell'altra
+// schermata, e la raccoglie `handleBack`.
+c.viewMode = 'editor';
+c.currentDir = 'progetti';
+assert.equal(c.handleCardBack(), false);
+""")
 
 
-def test_outside_memoria_the_read_does_not_happen() -> None:
-    """`_caricaFile` gira col cablaggio di ogni cassetto. Negli altri due il
-    contenitore non c'e', e una richiesta per una scheda che non e' a schermo
-    e' peso pagato per niente."""
+def test_closing_a_file_returns_to_the_folder_it_was_opened_from() -> None:
+    """Il cammino fatto per arrivare a un file non si butta via aprendolo. Qui
+    c'era un `ret ? '' : this.currentDir`, giusto finche' l'origine era
+    un'altra sezione e l'esploratore non era la schermata da cui si veniva."""
     _run_js("""
-      await scheda([voce('orto', 'directory')], { senzaBox: true });
-      assert.deepEqual(chiamate, [], 'ha letto il workspace da un cassetto che non lo mostra');
-    """)
+const { c } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti/casa');
+c.viewMode = 'editor';
+c.currentPath = 'progetti/casa/note.md';
+guscio.mosse.length = 0;
+
+assert.equal(c._closeEditor({ hardwareBack: true }), false,
+  'col back hardware la history riporta indietro da se\\'');
+assert.equal(c.currentDir, 'progetti/casa');
+assert.deepEqual(guscio.mosse, [], 'il back hardware ha anche navigato');
+
+// La freccia dell'header invece naviga: nessuno lo fa al posto suo.
+c.viewMode = 'editor';
+assert.equal(c._closeEditor(), true);
+assert.deepEqual(guscio.mosse, [['navigateBack', 'memoria']]);
+""")
 
 
-def test_the_card_carries_the_way_into_the_file_manager() -> None:
-    """La scheda dice cosa c'e'; ad aprirlo si va dal gestore file. Senza questa
-    riga il gestore resta vivo e senza nessuna maniglia — e' la porta che
-    `test_officina_cassetti_contract.py` conta."""
+def test_home_dismounts_the_file_without_a_second_destination() -> None:
+    """Home porta in chat per conto suo. Se lo smontaggio navigasse anche lui,
+    una pressione produrrebbe due destinazioni di fila."""
     _run_js("""
-      const c = new SettingsController(contenitore(true));
-      const html = c._renderFile();
-      assert.ok(html.includes('data-porta="workspace"'), html);
-      assert.ok(html.includes('settings-file-lista'), 'manca il contenitore delle righe');
-    """)
+const { c } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti/casa');
+c.viewMode = 'editor';
+guscio.mosse.length = 0;
+c.collapseToRoot();
+assert.deepEqual(guscio.mosse, [], 'Home ha navigato due volte');
+assert.equal(c.currentDir, '', 'Home non e\\' tornata alla radice');
+""")
 
 
-def test_a_size_that_the_server_did_not_send_is_not_invented() -> None:
-    """Le cartelle arrivano con ``size: null``; «NaN B» accanto a un nome e' il
-    modo piu' rapido di far sembrare rotta una schermata che non lo e'."""
+def test_an_unreadable_folder_says_so_instead_of_looking_empty() -> None:
+    """Un guasto di rete che si traveste da cartella vuota e' il modo in cui si
+    dice all'utente che i suoi file non ci sono piu'."""
     _run_js("""
-      const c = new SettingsController(contenitore(true));
-      assert.equal(c._pesoFile(null), '');
-      assert.equal(c._pesoFile(undefined), '');
-      assert.equal(c._pesoFile(0), '0 B');
-      assert.equal(c._pesoFile(2400), '2.4 kB');
-      assert.equal(c._pesoFile(3_500_000), '3.5 MB');
-    """)
+const vuota = await apri([]);
+assert.equal(vuota.vuoto.style.display, '');
+assert.equal(vuota.sub.textContent, '', 'una cartella vuota si e\\' inventata un guasto');
+
+const rotta = await apri([], { rotto: true });
+assert.equal(rotta.vuoto.style.display, '');
+assert.match(rotta.sub.textContent, /gateway giu/,
+  'la cartella illeggibile si presenta come vuota');
+""")
+
+
+def test_the_new_button_creates_where_you_are_looking() -> None:
+    """«Nuovo» e' passato dall'intestazione della vista alla scheda, e crea
+    nella cartella che si sta guardando — non in quella da cui si e' partiti."""
+    _run_js("""
+const { c, nuovo } = await apri([voce('progetti', 'directory')]);
+nuovo.clic();
+assert.equal(c.menuNuovo, 1, 'il bottone «nuovo» non e\\' agganciato');
+
+await c.navigateTo('progetti/casa');
+await c._handleNewAction('newFile');
+assert.deepEqual(c.creati, [['newFile', 'progetti/casa']]);
+""")
+
+
+def test_a_stale_answer_never_overwrites_a_newer_one() -> None:
+    """Due tocchi in fretta su due cartelle: vince l'ultimo partito, non
+    l'ultimo arrivato. Senza il gettone, una risposta lenta della cartella
+    lasciata riempirebbe la griglia di quella aperta."""
+    _run_js("""
+const { c } = await apri([voce('a', 'directory'), voce('b', 'directory')]);
+const vecchia = c.navigateTo('a');
+risposta = { items: [voce('dentro-b.md', 'file', 1)], path: 'b' };
+const nuova = c.navigateTo('b');
+await Promise.all([vecchia, nuova]);
+assert.deepEqual(c.tessere.slice(-1), ['file:dentro-b.md'],
+  'la risposta della cartella lasciata ha riempito quella aperta');
+""")

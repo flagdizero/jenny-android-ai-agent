@@ -70,13 +70,17 @@ def test_home_never_discards_unsaved_work() -> None:
     )
 
 
-def test_the_return_mode_is_cleared_before_collapsing() -> None:
-    """``_closeEditor`` con ``_returnMode`` valorizzato *naviga* nella history
-    per tornare alla sezione d'origine. Da Home non si torna indietro: si va a
-    casa. Senza azzerarlo, il tasto Home produrrebbe una navigazione."""
+def test_home_dismounts_the_editor_without_navigating() -> None:
+    """``_closeEditor`` di suo *naviga*: torna in Memoria, da dove il file è
+    stato aperto. Da Home non si torna indietro, si va a casa — e la
+    navigazione la fa ``goHome``. Senza il freno, una pressione di Home
+    produrrebbe due destinazioni di fila.
+
+    **Aggiornato**: il freno era azzerare ``_returnMode``, cioè spegnere uno
+    stato per ottenere un comportamento. Adesso è un parametro con quel nome
+    (``stay``), che è la stessa richiesta detta a voce alta."""
     body = _method(_src("mobile-workspace.js"), "collapseToRoot")
-    assert "this._returnMode = null;" in body
-    assert body.index("this._returnMode = null;") < body.index("this._closeEditor(")
+    assert "stay: true" in body, "Home smonta e naviga due volte"
 
 
 def test_open_chat_is_one_behaviour_in_one_place() -> None:

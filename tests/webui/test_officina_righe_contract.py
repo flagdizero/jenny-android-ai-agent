@@ -355,27 +355,35 @@ def test_le_parole_corte_dei_due_stati_esistono(lingua: str) -> None:
 # ── Secondo giro: struttura ──────────────────────────────────────────────────
 
 
-def test_la_porta_sta_dentro_la_scheda_del_suo_gruppo() -> None:
-    """Stavano in cima al cassetto, tutte insieme e staccate dal loro argomento:
-    si apriva Memoria e la prima cosa erano «Workspace» e «Wiki», prima ancora
-    di sapere di cosa parlasse la pagina. Nelle tavole di Mani e Memoria non c'e'
-    niente prima del primo gruppo.
+def test_una_scheda_contiene_invece_di_mandare_altrove() -> None:
+    """Le porte stavano in cima al cassetto, tutte insieme e staccate dal loro
+    argomento: si apriva Memoria e la prima cosa erano «Workspace» e «Wiki»,
+    prima ancora di sapere di cosa parlasse la pagina. Nelle tavole di Mani e
+    Memoria non c'e' niente prima del primo gruppo.
 
-    **E adesso non sono nemmeno piu' un meccanismo.** Delle tre viste uscite dal
-    dock ne resta una da raggiungere: il gestore file. Il cassetto delle app ha
-    la sua maniglia accanto alla graffetta del composer, la wiki e' uscita
-    dall'officina. Una mappa `gruppo -> porte`, una tabella di icone, una di
-    etichette e una fabbrica di righe erano piu' codice della cosa che
-    reggevano: la riga sta nel markup di chi la disegna, cioe' dentro la scheda
-    del suo gruppo per costruzione, ed e' quello che questo banco misura.
+    Poi ne resto' una sola — il gestore file, in fondo alla scheda «I file
+    veri» — e una mappa `gruppo -> porte` con tabelle di icone ed etichette era
+    piu' codice della cosa che reggeva.
+
+    **E il 21/09/2026 e' finita anche quella**, perche' la scheda che la
+    ospitava era il difetto: otto righe di riassunto che non si toccano, e
+    sotto un bottone verso l'elenco vero. Due gesti per una cosa sola, e il
+    primo non rispondeva a niente. Adesso la scheda **contiene** il gestore, e
+    quel che questo banco misura e' che nessuno rimetta un rimando al posto di
+    un contenuto.
     """
     for morto in ("_renderPorte(", "_portePerGruppo(", "PORTE_ICONE", "PORTE_ETICHETTE"):
         assert morto not in SETTINGS, f"{morto} e' tornato: il meccanismo generico si e' rifatto"
     assert "porte: {" not in SETTINGS, "la mappa delle porte e' tornata dentro CASSETTI"
+    assert "data-porta" not in SETTINGS, "la scheda e' tornata a mandare altrove invece di contenere"
 
-    # La riga vive nel corpo del gruppo che la ospita, non appesa dopo la scheda.
+    # E la scheda dei file monta il gestore vero, non una seconda copia
+    # dell'elenco: due elenchi degli stessi file col tempo si raccontano
+    # diversi, ed e' come il riassunto aveva cominciato.
     corpo = _corpo("_renderFile")
-    assert 'data-porta="workspace"' in corpo, "la porta non sta piu' dentro la scheda dei file"
+    assert "data-ws-grid" in corpo, "la scheda non ha piu' dove montare il gestore file"
+    assert "listWorkspace" not in corpo, "la scheda si e' rifatta un elenco suo"
+
     m = re.search(r"_gruppo\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo ha cambiato forma"
     assert "${corpo}</section>" in m.group(1), (

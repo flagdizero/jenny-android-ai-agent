@@ -426,15 +426,27 @@ def test_sections_with_their_own_depth_expose_a_back_handler() -> None:
     (v. ``test_unsaved_work_contract.py``).
     """
     workspace = (ASSETS / "mobile-workspace.js").read_text(encoding="utf-8")
+    # Il file aperto è la vista `workspace`, e il suo back la smonta.
     ws_back = _method(workspace, "handleBack")
-    assert "parentPath(this.currentDir)" in ws_back, "il back deve risalire di una cartella"
-    assert "this.viewMode === 'editor'" in ws_back
     assert "this._closeEditor({ hardwareBack: true })" in ws_back, (
         "il back non smonta l'editor per conto suo: passa dal teardown unico"
     )
     close_editor = _method(workspace, "_closeEditor")
     assert "if (hardwareBack) return false;" in close_editor, (
-        "l'editor aperto da un'altra sezione lascia proseguire il back: quella entry è già nello stack"
+        "sotto c'è già la entry di Memoria: il back prosegue e ci arriva da sé"
+    )
+
+    # La cartella, invece, è un livello **dentro Memoria** dal 21/09/2026:
+    # l'esploratore ha lasciato la sua vista ed è una scheda del cassetto. La
+    # regola non è cambiata — risalire viene prima di uscire — ma la pressione
+    # arriva al controller del cassetto, che la gira qui.
+    card_back = _method(workspace, "handleCardBack")
+    assert "parentPath(this.currentDir)" in card_back, "il back deve risalire di una cartella"
+    assert "return true;" in card_back, "risalire è un cambiamento visibile: consuma la pressione"
+    settings_back = _method((ASSETS / "mobile-settings.js").read_text(encoding="utf-8"), "handleBack")
+    assert "handleCardBack" in settings_back, (
+        "il cassetto non gira la pressione al gestore file: da tre cartelle di "
+        "profondità una sola pressione porterebbe fuori dall'intera schermata"
     )
 
     onboarding = (ASSETS / "mobile-onboarding.js").read_text(encoding="utf-8")
@@ -443,24 +455,32 @@ def test_sections_with_their_own_depth_expose_a_back_handler() -> None:
     assert "return true;" in onb_back, "dall'onboarding non si esce col back"
 
 
-def test_leaving_the_workspace_forgets_where_the_editor_came_from() -> None:
-    """``_returnMode`` è una promessa sullo *stack*, non una preferenza.
+def test_the_editor_has_one_origin_and_does_not_remember_it_as_state() -> None:
+    """``_returnMode`` era una promessa sullo *stack*, non una preferenza.
 
-    Vale "sotto la entry dell'editor c'è quella della sezione da cui l'ho
-    aperto". Uscendo dal Workspace con l'editor aperto quella promessa scade —
-    l'utente è andato altrove e la history è cambiata — ma il flag restava
-    valorizzato. Al rientro, una sola pressione di Indietro faceva due cose:
-    ``_closeEditor`` chiudeva l'editor *e*, trovando ``ret`` valorizzato,
-    lasciava proseguire la catena (``hardwareBack`` → ``return false``), che
-    portava fuori dalla sezione. Due cambiamenti visibili per una pressione, che
-    è esattamente ciò che il piano vieta.
+    Valeva "sotto la entry dell'editor c'è quella della sezione da cui l'ho
+    aperto". Uscendo dal Workspace con l'editor aperto quella promessa scadeva
+    — l'utente era andato altrove — ma il flag restava valorizzato, e al
+    rientro una sola pressione di Indietro chiudeva l'editor *e* portava fuori
+    dalla sezione. Due cambiamenti visibili per una pressione. La toppa era
+    azzerarlo in ``deactivate()``.
+
+    Dal 21/09/2026 la domanda non si pone: l'esploratore è la scheda «I file
+    veri» di Memoria, e **nient'altro apre un file**. Un campo con un valore
+    solo non descrive niente, e si porta dietro l'azzeramento che è la vera
+    superficie del difetto. Qui si misura che non torni: non il nome, ma la
+    forma — una destinazione letta da uno stato invece che scritta dove serve.
     """
     workspace = (ASSETS / "mobile-workspace.js").read_text(encoding="utf-8")
-    deactivate = _method(workspace, "deactivate")
-    assert "this._returnMode = null;" in deactivate, (
-        "il flag sopravviveva al cambio sezione e regalava un Indietro che salta due livelli"
+    codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", workspace, flags=re.S))
+    assert "_returnMode" not in codice, "la destinazione è tornata a essere uno stato"
+    # E l'origine unica va *scritta*, o `_closeEditor` non sa dove riportare.
+    assert "navigateBack('memoria')" in codice, "l'uscita dal file non nomina la sua origine"
+    apri = _method(workspace, "_enterEditorView")
+    assert "switchMode('workspace')" in apri, (
+        "aprire un file deve impilare la propria schermata: senza, il file si "
+        "disegna sotto la scheda e Indietro non ha niente da togliere"
     )
-
 
 
 def test_the_session_info_popover_is_a_layer_of_its_own() -> None:
@@ -484,20 +504,29 @@ def test_leaving_the_chat_takes_the_popover_with_it() -> None:
     assert "this._hideSessionInfo();" in _method(chat, "deactivate")
 
 
-def test_settings_has_no_sub_screen_left_to_peel() -> None:
+def test_the_drawers_only_sub_screen_is_the_folder_you_are_in() -> None:
     """Il catalogo modelli era un livello dentro le impostazioni: ci si
     arrivava da un pulsante, lo si scorreva, e senza `handleBack` una
-    pressione ne saltava due di schermate.
+    pressione ne saltava due di schermate. Dal 20/09/2026 quel catalogo e' in
+    casa, dove e' una **stanza** e non un sotto-livello.
 
-    Dal 20/09/2026 quel catalogo e' in casa, dove e' una **stanza** e non un
-    sotto-livello: la sua uscita la governa `BACK_TO` (v.
-    `test_casa_tu_contract.py`, «nessuna stanza senza uscita»). Qui dentro non
-    resta niente da sbucciare, e `handleBack` deve dirlo — un `true` di troppo
-    si mangerebbe una pressione senza chiudere niente.
+    Per un giorno qui non e' rimasto niente da sbucciare. Poi il gestore file
+    e' entrato nella scheda «I file veri» (21/09/2026) e ha portato con se'
+    l'unico sotto-livello che i cassetti abbiano: la cartella in cui si sta.
+
+    Quel che il banco misura non e' che ci sia un `true`, ma che il `true`
+    arrivi **solo** da li'. Un `handleBack` che consuma per conto suo si
+    mangerebbe la pressione senza chiudere niente, ed e' il difetto che il
+    catalogo modelli aveva reso concreto.
     """
     settings = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
     back = _method(settings, "handleBack")
-    assert "return false;" in back, "a niente da sbucciare, il back prosegue la catena"
+    codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", back, flags=re.S)).strip()
+    assert codice.count("return") == 1, "il cassetto decide da se' invece di girare la domanda"
+    assert "?? false" in codice, (
+        "senza gestore file agganciato la pressione deve proseguire la catena"
+    )
+    assert "handleCardBack" in codice, "l'unico sotto-livello e' la cartella del gestore file"
     assert "return true" not in back, (
         "handleBack si tiene una pressione per un livello che non esiste piu'"
     )

@@ -82,20 +82,29 @@ def test_a_foreign_history_entry_keeps_the_back_walking() -> None:
 
 
 def test_leaving_the_editor_returns_to_the_origin_without_stacking() -> None:
-    """L'editor aperto da un'altra sezione (App → modifica skill) ha la entry di
-    quella sezione già nello stack, sotto la propria.
+    """Il file aperto ha la entry di Memoria già nello stack, sotto la propria:
+    è da lì che lo si è aperto, e dal 21/09/2026 non c'è altra strada.
 
     Il back hardware lo sa e ritorna ``false`` apposta, lasciando che sia la
     history a riportare indietro. La freccia ← dell'header faceva l'opposto:
-    ``switchMode(ret)``, con push di default, impilava una entry *in avanti*
+    uno ``switchMode`` con push di default impilava una entry *in avanti*
     mentre l'utente stava tornando indietro.
+
+    **Aggiornato**: la destinazione era il campo ``_returnMode``, che descriveva
+    un'origine variabile. Adesso è scritta dove si usa, perché di origini ce
+    n'è una sola — ma la regola su *come* ci si torna non è cambiata di una
+    virgola, ed è quella che questo banco misura.
     """
     workspace = WORKSPACE_JS.read_text(encoding="utf-8")
     # I commenti citano il prima: qui interessa solo il codice.
     close_editor = re.sub(r"//.*", "", _method(workspace, "_closeEditor"))
-    assert "window.mobileApp?.navigateBack(ret);" in close_editor
-    assert "switchMode(ret)" not in close_editor, (
+    assert "window.mobileApp?.navigateBack('memoria');" in close_editor
+    assert "switchMode(" not in close_editor, (
         "switchMode con push di default impila una entry in avanti mentre si va indietro"
+    )
+    assert "if (hardwareBack) return false;" in close_editor, (
+        "col back hardware la history riporta indietro da sé: navigare qui "
+        "sarebbe un secondo cambiamento per una pressione sola"
     )
 
     back = _method(_app(), "navigateBack")

@@ -1083,11 +1083,7 @@
       "dreamInMemoria": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
     },
     "file": {
-      "desc": "What sits in her working folder, at the root. Service files are not listed.",
-      "cartella": "folder",
-      "altri": "and {n} more",
-      "vuoto": "The working folder is empty.",
-      "errore": "I couldn't read the working folder."
+      "desc": "Her working folder, all of it: folders open right here. Service files are never listed."
     }
   }
 }

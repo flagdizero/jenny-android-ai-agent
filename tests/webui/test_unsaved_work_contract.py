@@ -123,7 +123,11 @@ def test_the_discard_confirmation_reenters_the_same_teardown() -> None:
     strada, cioè il difetto che questa ondata chiude."""
     body = _methods(_workspace())["_confirmDiscard"]
     assert "this._dirty = false;" in body
-    assert "this._closeEditor({ dir });" in body
+    assert "this._closeEditor({ dir, stay });" in body
+    # E `stay` va ripassato, non riscoperto: la conferma differisce lo
+    # smontaggio, e Home che aspetta una risposta resta Home — senza, la
+    # risposta affermativa rimanderebbe in Memoria mentre si andava a casa.
+    assert "stay = false } = {}" in body, "la conferma perde per strada la richiesta di Home"
     assert "this._resetToExplorerAt(" not in body
     assert "if (this.viewMode !== 'editor') return;" in body, (
         "fra la domanda e la risposta l'editor può essere già uscito da un altro percorso"

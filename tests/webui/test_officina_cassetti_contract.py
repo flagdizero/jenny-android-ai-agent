@@ -146,16 +146,24 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
 
     impostazioni = _src("mobile-settings.js")
     porte = set(re.findall(r'data-porta="([a-z]+)"', impostazioni))
+    # Una vista si raggiunge anche da un gesto scritto nel codice, non solo da
+    # una riga su cui si preme. Il file aperto e' cosi' dal 21/09/2026:
+    # l'esploratore e' una scheda di Memoria, e ad aprirlo e' il tocco su un
+    # file. Senza questa terza fonte il banco chiederebbe di rimettere una porta
+    # per una schermata che si raggiunge gia'.
+    gesti = set()
+    for nome in ("mobile-settings.js", "mobile-workspace.js", "mobile-chat.js"):
+        gesti |= set(re.findall(r"switchMode\('([a-z]+)'", _src(nome)))
     cassetti = set(_cassetti())
     # `settings` e' il contenitore dei tre cassetti; `onboarding` si apre da
     # dentro, al primo avvio. `wiki` era esente perche' «si apre dal grafo»:
     # un anello di due viste che si aprivano a vicenda, e quando la porta e'
     # sparita l'esenzione sarebbe diventata falsa. Sono uscite entrambe.
     esenti = {"settings", "onboarding"} | cassetti
-    orfani = sorted(modi - sul_dock - porte - esenti)
+    orfani = sorted(modi - sul_dock - porte - gesti - esenti)
     assert not orfani, (
         f"queste viste non hanno piu' nessun modo di aprirsi: {orfani}. "
-        f"Vanno messe fra le `porte` di un cassetto finche' non hanno la loro riga."
+        f"Serve una riga in un cassetto, o un gesto che ci porti."
     )
 
 
@@ -190,41 +198,25 @@ def test_the_three_drawers_share_one_screen_and_one_fetch() -> None:
     assert i < j, "il cassetto viene scelto dopo che la schermata si e' gia' disegnata"
 
 
-def test_the_one_door_left_says_its_name_and_wears_its_own_icon() -> None:
-    """Due banchi, uniti quando la mappa delle porte e' sparita.
+def test_no_drawer_row_leads_out_of_its_drawer_any_more() -> None:
+    """Qui stavano due regole sulle righe-porta: una chiave i18n vera (una
+    mancante non fallisce — `i18n.t` torna la chiave, e a schermo compare
+    «nav.graph», visto sul rig il 20/09/2026) e un'icona propria invece della
+    freccia generica.
 
-    Il primo: una chiave i18n che non esiste non fallisce — `i18n.t` torna la
-    chiave, e a schermo compare «nav.graph». Visto sul rig il 20/09/2026.
-    Il secondo: il ripiego dell'icona era una freccia generica, e due porte con
-    la stessa freccia si distinguono solo leggendo, che e' quel che un'icona
-    serve a evitare.
+    Dal 21/09/2026 di righe-porta non ce n'e' piu' nessuna, quindi le due
+    regole non hanno soggetto. Al loro posto quel che le rendeva necessarie: un
+    cassetto **contiene**, e mandare altrove era l'unica cosa che le porte
+    sapessero fare. L'ultima era il gestore file, ed e' finita perche' il
+    gestore e' entrato nella scheda.
 
-    Oggi la porta e' una sola e sta nel markup della scheda «I file veri», non
-    in una tabella: percio' le due regole si misurano li'. L'icona non e' piu'
-    un ripiego ma una scelta scritta a mano, e la chiave dev'essere una vera.
+    La reciproca — che la vista del file resti raggiungibile — la misura
+    `test_the_views_that_left_the_dock_are_still_reachable`, che da qui in poi
+    conta anche i gesti scritti nel codice.
     """
-    import json
-
     src = _src("mobile-settings.js")
-    righe = re.findall(
-        r'<button class="settings-porta" data-porta="(\w+)"[^>]*>(.*?)</button>', src, re.S
-    )
-    assert righe, "nessuna riga-porta nel sorgente: il gestore file e' irraggiungibile"
-    for porta, corpo in righe:
-        chiave = re.search(r"i18n\.t\('nav\.(\w+)'\)", corpo)
-        assert chiave, f"la porta «{porta}» non prende il nome da una chiave `nav.*`"
-        for locale in ("it", "en"):
-            voci = json.loads(
-                (ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8")
-            )["nav"]
-            assert voci.get(chiave.group(1), "").strip(), (
-                f"la porta «{porta}» non ha un nome in {locale}.json: a schermo "
-                f"comparirebbe «nav.{chiave.group(1)}»"
-            )
-        icone = re.findall(r'class="ti ti-([\w-]+)"', corpo)
-        assert icone and icone[0] != "arrow-right", (
-            f"la porta «{porta}» porta la freccia generica invece di un'icona sua"
-        )
+    assert "data-porta" not in src, "una riga che porta fuori dal cassetto e' tornata"
+    assert "_wirePorte" not in src, "il cablaggio delle porte e' tornato senza porte"
 
 
 # ── Quel che ha la casa, l'officina non lo rifa' ────────────────────────────

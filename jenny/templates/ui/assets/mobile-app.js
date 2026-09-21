@@ -213,6 +213,11 @@ class MobileApp {
     const urlMode = urlParams.get('mode');
     const savedMode = localStorage.getItem('mobile-last-mode');
     let initialMode = urlMode || savedMode || 'chat';
+    /* `workspace` **e' un file aperto**, non una sezione: l'esploratore vive
+       in Memoria, e questa vista senza il suo file e' una schermata bianca.
+       Da `mobile-last-mode` arriva esattamente cosi' — chiudendo l'app con un
+       file aperto — quindi si riparte da dove i file stanno. */
+    if (initialMode === 'workspace') initialMode = 'memoria';
 
     // Radice dello stack, marcata *prima* dei due await qui sotto. I listener
     // del dock sono già registrati da un pezzo: un tap durante il boot impilava
@@ -733,6 +738,26 @@ class MobileApp {
     this.launcher.open();
   }
 
+  /** Il controller di `mode`, costruendolo se e' la prima volta.
+   *
+   *  Nasceva dentro `switchMode`, cioe' solo andando nella sua vista. Non
+   *  basta piu': il gestore file si monta dentro una scheda di Memoria, quindi
+   *  serve **prima** che qualcuno vada nella sua vista — che oggi e' il file
+   *  aperto, e arriva dopo. Ritorna null se la costruzione fallisce, che e' la
+   *  ragione per cui `switchMode` non prosegue. */
+  ensureController(mode) {
+    if (this.controllers[mode]) return this.controllers[mode];
+    if (!this.controllerFactories[mode]) return null;
+    try {
+      this.controllers[mode] = this.controllerFactories[mode]();
+    } catch (err) {
+      console.error(`Failed to init ${mode} controller:`, err);
+      showToast(i18n.t('common.failedToLoadMode', { mode }), 'error');
+      return null;
+    }
+    return this.controllers[mode];
+  }
+
   switchMode(mode, pushState = true) {
     // Block ANY navigation if onboarding is not complete
     if (mode !== 'onboarding' && !localStorage.getItem('onboarding-complete') && this._firstRun) {
@@ -747,16 +772,7 @@ class MobileApp {
       return;
     }
 
-    // Lazy init controller
-    if (!this.controllers[mode]) {
-      try {
-        this.controllers[mode] = this.controllerFactories[mode]();
-      } catch (err) {
-        console.error(`Failed to init ${mode} controller:`, err);
-        showToast(i18n.t('common.failedToLoadMode', { mode }), 'error');
-        return;
-      }
-    }
+    if (!this.ensureController(mode)) return;
 
     // Hide all views
     document.querySelectorAll('.view').forEach(v => {
@@ -778,9 +794,11 @@ class MobileApp {
     this.header.setMode(mode);
 
     // Notify controllers
-    if (this.controllers[this.currentMode]) {
-      this.controllers[this.currentMode].deactivate();
-    }
+    // `?.`: non ogni sezione ha qualcosa da smontare uscendo. Il gestore file
+    // aveva un `deactivate` che azzerava la sezione d'origine dell'editor, e se
+    // n'e' andato con lei — un metodo vuoto tenuto in vita da una chiamata
+    // obbligatoria e' una risposta finta a «questa sezione ha pulizie?».
+    this.controllers[this.currentMode]?.deactivate?.();
     this.currentMode = mode;
     const next = this.controllers[mode];
     /* Quale cassetto, per i tre modi che condividono la schermata. Va detto

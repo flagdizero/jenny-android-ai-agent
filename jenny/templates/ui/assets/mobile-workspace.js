@@ -178,20 +178,25 @@ function parentPath(path) {
 
 export class WorkspaceController {
   constructor() {
-    this.viewEl = document.getElementById('view-workspace');
-    this.explorerEl = document.getElementById('ws-explorer');
-    this.breadcrumbEl = document.getElementById('ws-breadcrumb');
-    this.gridEl = document.getElementById('ws-grid');
-    this.emptyEl = document.getElementById('ws-empty');
     this.viewerEl = document.getElementById('workspace-viewer');
-    this.loadingEl = document.getElementById('workspace-loading');
+    /* Il breadcrumb dell'**editor**: quello dell'esploratore vive nella scheda
+       di Memoria, che si ridisegna, quindi non si puo' tenere per riferimento
+       qui. Questo invece sta fermo nella vista del file aperto, ed e' anche
+       dove compare il bottone «Salva». */
+    this.editorCrumbEl = document.getElementById('ws-breadcrumb');
+    /* L'esploratore — briciole, griglia, stato vuoto — vive dentro la scheda
+       «I file veri» di Memoria, che `SettingsController.render()` riscrive per
+       intero a ogni apertura e a ogni salvataggio. Quindi questi tre non si
+       cercano una volta sola nel documento: li riaggancia `mount()`, ed e'
+       null finche' la scheda non c'e'. */
+    this.explorerEl = null;
+    this.breadcrumbEl = null;
+    this.gridEl = null;
+    this.emptyEl = null;
     this.editor = null;
     this.currentDir = '';
     this.currentPath = '';
     this.viewMode = 'explorer';
-    // When a file is opened from another view (e.g. Apps → edit skill), the
-    // editor "back" returns to that view instead of the workspace explorer.
-    this._returnMode = null;
     // Monotonic navigation token: guards against stale-response races when the
     // user navigates rapidly (only the latest navigateTo() writes the grid).
     this._navToken = 0;
@@ -203,31 +208,44 @@ export class WorkspaceController {
     // percorso di uscita lo leggeva, e il testo modificato finiva in un viewer
     // nascosto irraggiungibile, sovrascritto alla riapertura del file.
     this._dirty = false;
-
-    this.ready = this.init();
   }
 
-  showLoading() {
-    if (this.loadingEl) this.loadingEl.classList.add('active');
+  /** Aggancia l'esploratore al contenitore che la scheda di Memoria ha appena
+   *  disegnato, e ricarica la cartella corrente.
+   *
+   *  **Riaggancia invece di ricordare.** La scheda si ridisegna per intero a
+   *  ogni apertura del cassetto e dopo ogni salvataggio: i nodi di prima sono
+   *  stati buttati, e un riferimento tenuto dal costruttore scriverebbe in un
+   *  DOM che non e' piu' a schermo — la griglia si popolerebbe e non si
+   *  vedrebbe niente.
+   *
+   *  La cartella invece **si ricorda**: `currentDir` sta nel controller, non
+   *  nel DOM, quindi un salvataggio in un'altra scheda di Memoria non
+   *  rimbalza l'utente alla radice. A tornare alla radice e' solo Home
+   *  (`collapseToRoot`), che e' una richiesta esplicita.
+   */
+  mount(host) {
+    if (!host) return;
+    this.explorerEl = host;
+    this.breadcrumbEl = host.querySelector('[data-ws-crumb]');
+    this.gridEl = host.querySelector('[data-ws-grid]');
+    this.emptyEl = host.querySelector('[data-ws-empty]');
+    host.querySelector('[data-ws-new]')
+      ?.addEventListener('click', () => this._showNewMenu());
+    this.navigateTo(this.currentDir);
   }
 
-  hideLoading() {
-    if (this.loadingEl) this.loadingEl.classList.remove('active');
-  }
-
-  async init() {
-    this.showLoading();
-    await this.navigateTo('');
-    this.hideLoading();
-  }
-
+  /** Questa vista adesso **e' il file aperto**, e basta: l'esploratore sta
+   *  nella scheda di Memoria. Arrivarci senza un file aperto vuol dire una
+   *  schermata bianca, e ci si arriva davvero — una entry `mode: workspace`
+   *  rimasta nella history di un WebView mai chiuso. Non e' una destinazione
+   *  lecita: si torna da dove si viene. */
   activate() {
-    if (this.viewMode === 'editor') {
-      this.showEditorView();
-    } else {
-      this.showExplorerView();
-      this.navigateTo(this.currentDir);
+    if (this.viewMode !== 'editor') {
+      window.mobileApp?.navigateBack('memoria');
+      return;
     }
+    this.showEditorView();
     this._syncHeaderBack();
   }
 
@@ -243,37 +261,36 @@ export class WorkspaceController {
   collapseToRoot() {
     if (this.viewMode === 'editor') {
       if (this._dirty) return;
-      // La sezione d'origine non c'entra più: si va a casa, non si torna
-      // indietro. Azzerarlo prima evita che _closeEditor navighi nella history.
-      this._returnMode = null;
-      this._closeEditor({ dir: '' });
+      // `stay`: si va a casa, non si torna indietro. Senza, il teardown
+      // rimanderebbe in Memoria e Home ci passerebbe sopra un istante dopo.
+      this._closeEditor({ dir: '', stay: true });
       return;
     }
-    if (this.currentDir) this.navigateTo('');
-  }
-
-  deactivate() {
-    /* `_returnMode` descrive *da dove* si è entrati nell'editor, e vale solo
-       finché quel percorso è ancora nello stack. Uscendo dalla sezione con
-       l'editor aperto il flag restava valorizzato: al rientro la prima
-       pressione di Indietro chiudeva l'editor *e* portava fuori dalla sezione
-       — due cambiamenti visibili per una pressione, con la sezione d'origine
-       nel frattempo cambiata sotto. La sua entry non è più dove il flag
-       promette che sia: si azzera qui. */
-    this._returnMode = null;
+    if (!this.currentDir) return;
+    this.currentDir = '';
+    // Se la scheda non e' a schermo non c'e' niente da ridisegnare: la
+    // cartella e' gia' tornata alla radice, e `mount()` legge di li'.
+    if (this.gridEl) this.navigateTo('');
   }
 
   /* Tasto Indietro hardware, invocato dalla shell prima di toccare la history.
      Ritorna true se la pressione è stata consumata qui dentro. */
   handleBack() {
-    if (this.viewMode === 'editor') {
-      return this._closeEditor({ hardwareBack: true });
-    }
-    if (this.currentDir) {
-      this.navigateTo(parentPath(this.currentDir));
-      return true;
-    }
-    return false;
+    // Il ramo «risali di una cartella» stava qui finche' l'esploratore era
+    // questa vista. Adesso e' una scheda di Memoria, e quella pressione la
+    // raccoglie `handleCardBack()` per conto del cassetto.
+    return this._closeEditor({ hardwareBack: true });
+  }
+
+  /** Indietro premuto **dentro Memoria**, girato qui dal cassetto.
+   *
+   *  Risalire di una cartella viene prima di uscire dal cassetto: senza questo
+   *  una sola pressione porterebbe via dall'intera schermata da tre livelli di
+   *  profondita', e tutto il cammino fatto sparirebbe in un colpo. */
+  handleCardBack() {
+    if (this.viewMode === 'editor' || !this.currentDir) return false;
+    this.navigateTo(parentPath(this.currentDir));
+    return true;
   }
 
   /** Unico punto di smontaggio dell'editor: ci passano il back hardware, la
@@ -283,37 +300,43 @@ export class WorkspaceController {
    *  affatto.
    *
    *  `dir` è la cartella su cui atterrare (i crumb ne scelgono una precisa);
-   *  null lascia decidere l'origine dell'editor.
+   *  null lascia quella da cui si è aperto il file.
+   *
+   *  `stay` vuol dire «smonta e basta, alla navigazione ci penso io»: lo passa
+   *  solo Home, che porta in chat per conto suo.
    *
    *  Ritorna true se la pressione è stata consumata qui dentro:
    *   - buffer sporco → la conferma è a schermo, l'editor resta aperto e la
    *     pressione è comunque consumata (il cambiamento visibile è il dialog);
-   *   - editor aperto dall'explorer → chiuso, pressione consumata;
-   *   - editor aperto da un'altra sezione (Apps → modifica skill) con
-   *     `hardwareBack` → false: la entry di quella sezione è già nello stack e
-   *     il back ci torna da sé, mentre uno switchMode impilerebbe una entry
-   *     *in avanti* mentre si sta andando indietro. Senza `hardwareBack`
-   *     (freccia dell'header) nessuno naviga al posto nostro: si torna là a
-   *     mano. */
-  _closeEditor({ hardwareBack = false, dir = null } = {}) {
+   *   - `hardwareBack` → false: sotto c'è già la entry di Memoria, da cui il
+   *     file è stato aperto, e la catena ci arriva da sé; uno switchMode
+   *     impilerebbe una entry *in avanti* mentre si sta andando indietro.
+   *     Senza `hardwareBack` (freccia dell'header) nessuno naviga al posto
+   *     nostro: si torna là a mano.
+   *
+   *  Qui c'era un campo che diceva *da quale sezione* si era aperto il file, e
+   *  che andava azzerato lasciando la vista perché la entry promessa poteva non
+   *  essere più lì sotto. Dal 21/09/2026 l'origine è una sola — l'esploratore è
+   *  la scheda di Memoria, e nient'altro apre un file — quindi quel campo aveva
+   *  un valore solo: uno stato che finge di variare costa i suoi azzeramenti e
+   *  non paga niente. */
+  _closeEditor({ hardwareBack = false, dir = null, stay = false } = {}) {
     if (this.viewMode !== 'editor') return false;
 
     if (this._dirty) {
-      this._confirmDiscard({ dir });
+      this._confirmDiscard({ dir, stay });
       return true;
     }
 
-    const ret = this._returnMode;
-    this._returnMode = null;
-    this._resetToExplorerAt(dir !== null ? dir : (ret ? '' : this.currentDir));
-    if (!ret) return true;
+    /* Nella cartella da cui si è aperto il file, sempre. Qui c'era un
+       `ret ? '' : this.currentDir`: con un'origine esterna si ripartiva dalla
+       radice, perché l'esploratore non era la schermata da cui si veniva.
+       Adesso lo è, e buttare via il cammino fatto per aprire un file sarebbe
+       la cosa che l'esploratore nella scheda esiste per evitare. */
+    this._resetToExplorerAt(dir !== null ? dir : this.currentDir);
+    if (stay) return true;
     if (hardwareBack) return false;
-    // Si *torna* alla sezione d'origine, non ci si va: la sua entry è già nello
-    // stack, sotto quella dell'editor. `switchMode(ret)` (push di default) ne
-    // impilava una in avanti mentre si va indietro — l'opposto del back
-    // hardware, che qui ritorna false apposta per non impilare — e lasciava
-    // dietro una pressione di Indietro che non cambia niente a schermo.
-    window.mobileApp?.navigateBack(ret);
+    window.mobileApp?.navigateBack('memoria');
     return true;
   }
 
@@ -323,7 +346,7 @@ export class WorkspaceController {
    *  La chiusura differita non è mai `hardwareBack`: la pressione che l'ha
    *  aperta è stata consumata dal dialog e nessuno naviga più al posto nostro,
    *  quindi tornare alla sezione d'origine tocca a noi. */
-  async _confirmDiscard({ dir = null } = {}) {
+  async _confirmDiscard({ dir = null, stay = false } = {}) {
     /* La tastiera software va fatta scendere *prima* della modale. Un <dialog>
        chiuso ripristina il fuoco all'elemento che ce l'aveva prima — qui
        l'input di CodeMirror — e con quello risale l'IME: la pressione di
@@ -339,7 +362,7 @@ export class WorkspaceController {
     if (!confirmed) return;
     if (this.viewMode !== 'editor') return;  // uscito da un altro percorso nel frattempo
     this._dirty = false;
-    this._closeEditor({ dir });
+    this._closeEditor({ dir, stay });
   }
 
   // ── Navigation ──
@@ -350,6 +373,10 @@ export class WorkspaceController {
     this.viewMode = 'explorer';
     this.showExplorerView();
     this._syncHeaderBack();
+    // Chiuso l'editor si passa di qui anche quando la scheda non e' ancora
+    // stata ridisegnata: la cartella e' registrata, il disegno lo fara'
+    // `mount()`. Andare avanti a DOM staccato riempirebbe nodi gia' buttati.
+    if (!this.gridEl) return;
 
     this.renderBreadcrumb(dirPath);
 
@@ -366,59 +393,40 @@ export class WorkspaceController {
     }
   }
 
-  /** Ridisegno del contenuto della cartella corrente e basta: nessun cambio di
-   *  viewMode, nessun breadcrumb riscritto. Serve a chi vuole solo rileggere
-   *  la cartella (cambio di modalità avanzata) senza smontare ciò che c'è
-   *  sopra. Condivide `_navToken` con navigateTo: vince sempre l'ultima
-   *  richiesta partita, come per le navigazioni. */
-  async refreshGrid() {
-    const token = ++this._navToken;
-    try {
-      const data = await api.listWorkspace(this.currentDir);
-      if (token !== this._navToken) return;
-      this.renderGrid(data.items || []);
-    } catch (err) {
-      if (token !== this._navToken) return;
-      /* Non c'è stata navigazione, quindi la griglia resta com'è — ma il
-         fallimento va detto lo stesso: `navigateTo`, il percorso che questo
-         rimpiazza, lo mostrava, e un aggiornamento che non aggiorna niente in
-         silenzio è indistinguibile da uno riuscito. */
-      showToast(i18n.t('workspace.failedToLoad') + err.message, 'error');
-    }
-  }
-
   showExplorerView() {
-    this.explorerEl.style.display = '';
     this.viewerEl.classList.remove('active');
-    this._syncHeaderBack();
   }
 
   showEditorView() {
-    this.explorerEl.style.display = 'none';
     this.viewerEl.classList.add('active');
-    this._syncHeaderBack();
   }
 
   _syncHeaderBack() {
     const header = window.mobileApp?.header;
     if (!header) return;
-    if (this.viewMode === 'editor' || this.currentDir) {
-      header.showAction('ws-back');
-    } else {
-      header.hideAction('ws-back');
-    }
+    if (this.viewMode === 'editor') header.showAction('ws-back');
+    else header.hideAction('ws-back');
   }
 
   // ── Breadcrumb ──
 
+  /** Le briciole del percorso, su **due barre diverse**.
+   *
+   *  Senza un nome di file sono la testa dell'esploratore, dentro la scheda di
+   *  Memoria; con un nome di file sono l'intestazione del file aperto, che sta
+   *  in un'altra schermata e porta anche il bottone «Salva». E' il parametro a
+   *  dire quale delle due si sta disegnando: dedurlo da `viewMode` sarebbe
+   *  vero oggi e falso al primo chiamante che lo imposta dopo. */
   renderBreadcrumb(dirPath, fileName) {
-    this.breadcrumbEl.innerHTML = '';
+    const barra = fileName ? this.editorCrumbEl : this.breadcrumbEl;
+    if (!barra) return;
+    barra.innerHTML = '';
 
     const rootCrumb = document.createElement('span');
     rootCrumb.className = 'ws-crumb';
     rootCrumb.textContent = i18n.t('workspace.root');
     rootCrumb.addEventListener('click', () => this.backToExplorerAt(''));
-    this.breadcrumbEl.appendChild(rootCrumb);
+    barra.appendChild(rootCrumb);
 
     const parts = dirPath ? dirPath.split('/').filter(Boolean) : [];
     let accumulated = '';
@@ -427,7 +435,7 @@ export class WorkspaceController {
       const sep = document.createElement('span');
       sep.className = 'ws-sep';
       sep.textContent = '\u203a';
-      this.breadcrumbEl.appendChild(sep);
+      barra.appendChild(sep);
 
       accumulated = accumulated ? accumulated + '/' + parts[i] : parts[i];
       const crumb = document.createElement('span');
@@ -437,28 +445,28 @@ export class WorkspaceController {
       const targetPath = accumulated;
       crumb.addEventListener('click', () => this.backToExplorerAt(targetPath));
 
-      this.breadcrumbEl.appendChild(crumb);
+      barra.appendChild(crumb);
     }
 
     if (fileName) {
       const sep = document.createElement('span');
       sep.className = 'ws-sep';
       sep.textContent = '\u203a';
-      this.breadcrumbEl.appendChild(sep);
+      barra.appendChild(sep);
 
       const fileCrumb = document.createElement('span');
       fileCrumb.className = 'ws-crumb';
       fileCrumb.textContent = fileName;
-      this.breadcrumbEl.appendChild(fileCrumb);
+      barra.appendChild(fileCrumb);
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'ws-save-btn';
       saveBtn.textContent = i18n.t('workspace.save');
       saveBtn.addEventListener('click', () => this.saveFile());
-      this.breadcrumbEl.appendChild(saveBtn);
+      barra.appendChild(saveBtn);
     }
 
-    this.breadcrumbEl.scrollLeft = this.breadcrumbEl.scrollWidth;
+    barra.scrollLeft = barra.scrollWidth;
   }
 
   // ── Grid rendering ──
@@ -823,16 +831,20 @@ export class WorkspaceController {
     this.renderCodeViewer(name, data.content, ext);
   }
 
+  /** Apre il file: e' l'unico gesto che porta fuori da Memoria.
+   *
+   *  Girare tra le cartelle resta nella scheda; **leggere un file** e' una
+   *  schermata sua, come in qualunque gestore file — ed e' l'unica cosa
+   *  rimasta in `view-workspace`. */
   _enterEditorView(fullPath, name) {
-    // Opening a file through normal explorer navigation clears any prior
-    // cross-view origin; callers that want "back" to leave the workspace
-    // set _returnMode after awaiting this.
-    this._returnMode = null;
     this._dirty = false;
     this.currentPath = fullPath;
     this.viewMode = 'editor';
     this.renderBreadcrumb(this.currentDir, name);
     this.showEditorView();
+    // Push, non replace: la entry di Memoria resta sotto, ed e' quella su cui
+    // atterra il tasto Indietro.
+    window.mobileApp?.switchMode('workspace');
   }
 
   /** Apre il file col viewer di sistema Android via bridge nativo.
@@ -1020,25 +1032,14 @@ export class WorkspaceController {
 
   // ── Header action handler ──
 
+  /* Un'azione sola: questa vista e' il file aperto. «Aggiorna» e «nuovo»
+     erano dell'esploratore e se ne sono andati con lui — «nuovo» nel bottone
+     accanto alle briciole della scheda, che chiama `_showNewMenu` da se'. */
   handleAction(action) {
-    switch (action) {
-      case 'refresh':
-        if (this.viewMode === 'editor') return;
-        this.navigateTo(this.currentDir);
-        break;
-      case 'ws-back':
-        if (this.viewMode === 'editor') {
-          // Stesso teardown del back hardware: il guard sul buffer sporco è
-          // uno solo, e da qui nessuno naviga al posto nostro.
-          this._closeEditor();
-        } else if (this.currentDir) {
-          this.navigateTo(parentPath(this.currentDir));
-        }
-        break;
-      case 'ws-new':
-        this._showNewMenu();
-        break;
-    }
+    if (action !== 'ws-back') return;
+    // Stesso teardown del back hardware: il guard sul buffer sporco è uno
+    // solo, e da qui nessuno naviga al posto nostro.
+    this._closeEditor();
   }
 
   _showNewMenu() {
