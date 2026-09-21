@@ -266,3 +266,15 @@ Formule e diagrammi **in chat**: le tre superfici condividono lo stesso modulo,
 e i banchi coprono il cablaggio, ma a schermo non si sono viste — servirebbe un
 messaggio che le contenga, cioe' scrivere nella conversazione vera.
 
+## Nota sul registro: due sessioni, un albero solo
+
+Il cablaggio della chat di casa, quello del lettore e i due blocchi di stile del
+diagramma **stanno dentro `d60e2d4`**, che e' un commit di un'altra sessione
+sulla camera della mappa. Non e' un errore di nessuno dei due: si lavora sullo
+stesso working tree, e un `git add -A` raccoglie anche quel che l'altro ha a
+meta'. Niente e' andato perso — l'albero e' giusto, la suite verde e le prove
+sul telefono sono state fatte su quel codice.
+
+Non si riscrive la storia con un'altra sessione dentro l'albero: la convenzione
+qui e' nominare le righe prese in prestito nel commit dopo, ed e' questa nota.
+
