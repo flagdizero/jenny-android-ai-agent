@@ -315,7 +315,10 @@
       "replace": "Sostituisci",
       "replaceConfirm": "Sostituire l'impronta accettata per {alias}? Se non hai reinstallato tu il server, questa è la firma di un attacco.",
       "deleteConfirm": "Eliminare l'host {alias}? Vengono cancellate anche la sua chiave e l'impronta accettata.",
-      "deleted": "Host eliminato"
+      "deleted": "Host eliminato",
+      "markKey": "chiave",
+      "markPassword": "password",
+      "markFingerprint": "impronta"
     },
     "noProviderConfigured": "Nessun provider configurato",
     "editProvider": "Modifica Provider",

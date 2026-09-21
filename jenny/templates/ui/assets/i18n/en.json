@@ -315,7 +315,10 @@
       "replace": "Replace",
       "replaceConfirm": "Replace the accepted fingerprint for {alias}? If you did not reinstall the server yourself, this is what an attack looks like.",
       "deleteConfirm": "Delete host {alias}? Its key and accepted fingerprint are deleted too.",
-      "deleted": "Host deleted"
+      "deleted": "Host deleted",
+      "markKey": "key",
+      "markPassword": "password",
+      "markFingerprint": "fingerprint"
     },
     "noProviderConfigured": "No provider configured",
     "editProvider": "Edit Provider",

@@ -5393,6 +5393,58 @@ body {
   gap: 3px;
 }
 
+/* ── La riga di un host SSH ───────────────────────────────────────────────
+   Alias e indirizzo a sinistra, i due stati a destra, la freccina. Era una
+   scheda alta con la chiave pubblica per intero e quattro bottoni.
+
+   **I due stati restano in chiaro**, ed e' il punto: sono i due passi che
+   l'utente deve fare, e nasconderli dietro il tocco lascerebbe host mezzi
+   configurati che falliscono solo al primo comando. Qui costano due parole
+   invece di due targhette. */
+.ssh-riga {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 0;
+  border: 0;
+  border-top: 0.5px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ssh-riga:first-of-type { border-top: 0; }
+.ssh-riga:active { opacity: .6; }
+.ssh-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ssh-riga-nome { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+.ssh-riga-dove {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssh-riga-stati { flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+/* Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
+   l'accento **e'** il colore del testo due pallini colorati si somigliano. */
+.ssh-segno {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--text-faint);
+}
+.ssh-segno i { font-size: 12px; }
+.ssh-segno.is-ok { color: var(--ok, var(--text-muted)); }
+.ssh-segno.is-manca { color: var(--warning, var(--text-faint)); }
+.ssh-riga > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+
 /* ── La riga di riepilogo ─────────────────────────────────────────────────
    Nome a sinistra, la risposta breve a destra, una freccina. Il tocco apre il
    pannello col dettaglio.

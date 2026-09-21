@@ -289,9 +289,14 @@ export function buildCronView(payload, { nowMs, tr, locale, tieni } = {}) {
      filtro attivo non descrivono piu' quel che si vede, quindi si ricontano
      sulle righe rimaste. Un «4 lavori» sopra due righe e' un difetto che si
      legge come un guasto. */
+  /* `visto.jobs` puo' non esserci: la riga che costruisce `visto` si protegge
+     con `payload?.jobs`, e quando quello manca `visto` **e'** `payload`, cioe'
+     un oggetto senza `jobs`. Con un filtro attivo — e Mani ne passa sempre uno
+     — queste due righe esplodevano. Stesso guardiano di sopra, non uno nuovo. */
+  const daContare = visto.jobs ?? [];
   const counts = tieni
-    ? { system: visto.jobs.filter((j) => j.kind === 'system').length,
-        user: visto.jobs.filter((j) => j.kind !== 'system').length }
+    ? { system: daContare.filter((j) => j.kind === 'system').length,
+        user: daContare.filter((j) => j.kind !== 'system').length }
     : payload.counts ?? null;
   return { available: true, banner, rows, counts, asOf: stamp };
 }

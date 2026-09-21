@@ -558,3 +558,34 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
       console.log(JSON.stringify(lavori.filter(tieni).map((j) => j.id)));
     """)
     assert sorted(json.loads(out)) == ["acqua-basilico", "heartbeat"], json.loads(out)
+
+
+# ── un payload senza `jobs`, con un filtro attivo ───────────────────────────
+
+
+def test_counting_survives_a_payload_without_jobs() -> None:
+    """Un guardiano su due non e' un guardiano.
+
+    ``visto`` nasce da ``tieni && payload?.jobs ? {...} : payload``: quando
+    ``jobs`` manca, ``visto`` **e'** ``payload``, cioe' un oggetto senza
+    ``jobs``. Le due righe che ricontano i lavori ci facevano ``.filter``
+    sopra — e con un filtro attivo, che Mani passa **sempre**
+    (``LAVORI_DI_MANI``), era un ``TypeError`` che portava via l'intero gruppo
+    «quando agisce da sola».
+
+    Trovato per caso il 21/09/2026 mentre si provava un altro passo, con una
+    risposta finta priva di ``jobs``. La riga sopra si proteggeva gia'; questa
+    no, e la distanza fra le due era di tre righe.
+    """
+    out = _run_js("""
+      const vista = buildCronView(
+        { service_running: true },
+        { nowMs: NOW, tr, locale: 'it', tieni: (j) => j.kind !== 'system' },
+      );
+      console.log(JSON.stringify({ disponibile: vista.available, conteggi: vista.counts }));
+    """)
+    data = json.loads(out)
+
+    assert data["conteggi"] == {"system": 0, "user": 0}, (
+        "senza lavori i conteggi sono zero, non un'eccezione"
+    )

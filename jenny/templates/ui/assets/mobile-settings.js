@@ -1208,37 +1208,72 @@ export class SettingsController {
      accettata — stanno in chiaro sulla card: sono i due passi che l'utente deve
      fare, e nasconderli dietro un tap lascerebbe host mezzi configurati che
      falliscono solo al primo comando. */
+  /** Un host, in una riga.
+   *
+   *  Era una scheda alta: alias, indirizzo, stato della credenziale, la chiave
+   *  pubblica per intero, e quattro bottoni. La tavola ne fa una riga da 52 px.
+   *
+   *  **Ma la riga della tavola perde i due stati, e quelli restano.** Il
+   *  commento che stava qui lo diceva gia', ed e' una misura e non un'opinione:
+   *  credenziale pronta e impronta accettata sono i due passi che l'utente deve
+   *  fare, e nasconderli dietro un tocco lascia host mezzi configurati che
+   *  falliscono solo al primo comando. Qui diventano due segni brevi — un
+   *  pallino e una parola — invece di due targhette larghe: stessa
+   *  informazione, un decimo dello spazio, e il testo lungo resta nel `title`.
+   *
+   *  Tutto il resto — genera, copia, verifica, modifica, elimina — e' quel che
+   *  si fa **a** un host, e si apre col tocco.
+   */
   _renderSshHost(h) {
     const alias = escapeHtml(h.alias);
     const byPassword = h.auth === 'password';
-    const pinned = h.pinned
-      ? `<span class="provider-badge format-badge">${i18n.t('settings.ssh.statusPinned')}</span>`
-      : `<span class="provider-badge format-badge">${i18n.t('settings.ssh.statusUnpinned')}</span>`;
-    /* Lo stato della credenziale segue il modo scelto: su un host a password
-       "Nessuna chiave" sarebbe un allarme per qualcosa che non serve, e
-       nasconderebbe l'unica cosa che conta lì, cioè se la password c'è. */
-    const credentialState = byPassword
-      ? (h.has_password
-        ? i18n.t('settings.ssh.statusPasswordSet')
-        : i18n.t('settings.ssh.statusPasswordMissing'))
-      : (h.has_key
-        ? i18n.t('settings.ssh.statusKeyReady')
-        : i18n.t('settings.ssh.statusKeyMissing'));
+    const credOk = byPassword ? !!h.has_password : !!h.has_key;
+    const credLungo = byPassword
+      ? i18n.t(h.has_password ? 'settings.ssh.statusPasswordSet' : 'settings.ssh.statusPasswordMissing')
+      : i18n.t(h.has_key ? 'settings.ssh.statusKeyReady' : 'settings.ssh.statusKeyMissing');
+    const credCorto = i18n.t(byPassword ? 'settings.ssh.markPassword' : 'settings.ssh.markKey');
+    const impLungo = i18n.t(h.pinned ? 'settings.ssh.statusPinned' : 'settings.ssh.statusUnpinned');
+    return `<button class="ssh-riga" type="button" data-ssh-open="${alias}">
+      <span class="ssh-riga-testo">
+        <span class="ssh-riga-nome">${alias}</span>
+        <span class="ssh-riga-dove">${escapeHtml(`${h.username}@${h.host}:${h.port}`)}</span>
+      </span>
+      <span class="ssh-riga-stati">
+        ${this._segnoSsh(credCorto, credOk, credLungo)}
+        ${this._segnoSsh(i18n.t('settings.ssh.markFingerprint'), !!h.pinned, impLungo)}
+      </span>
+      <i class="ti ti-chevron-right" aria-hidden="true"></i>
+    </button>`;
+  }
+
+  /** Un pallino e una parola. Il colore da solo non basta — su un tema in cui
+   *  l'accento e' il testo due pallini si somiglierebbero — quindi la
+   *  differenza vera e' pieno contro vuoto, e il colore la rinforza. */
+  _segnoSsh(parola, ok, titolo) {
+    return `<span class="ssh-segno${ok ? ' is-ok' : ' is-manca'}" title="${escapeHtml(titolo)}">
+      <i class="ti ${ok ? 'ti-circle-check-filled' : 'ti-circle'}" aria-hidden="true"></i>${escapeHtml(parola)}
+    </span>`;
+  }
+
+  /** Il pannello di un host: tutto quel che gli si fa. */
+  _apriHostSsh(alias) {
+    const h = (this._ssh?.hosts || []).find(x => x.alias === alias);
+    const corpo = document.getElementById('drawer-ssh-host-body');
+    const titolo = document.getElementById('drawer-ssh-host-title');
+    if (!h || !corpo) return;
+    if (titolo) titolo.textContent = h.alias;
+    const byPassword = h.auth === 'password';
     const desc = h.description
-      ? `<div style="font-size:12px;color:var(--text-faint)">${escapeHtml(h.description)}</div>`
+      ? `<p class="settings-hint" style="margin:0 0 8px">${escapeHtml(h.description)}</p>`
       : '';
-    return `<div class="provider-card" data-ssh-alias="${alias}">
-      <div class="provider-card-header">
-        <span class="provider-name">${alias}</span>
-        ${pinned}
-      </div>
-      <div class="provider-card-body">
-        <span class="provider-url">${escapeHtml(`${h.username}@${h.host}:${h.port}`)}</span>
-        <span class="provider-key">${escapeHtml(credentialState)}</span>
-      </div>
+    corpo.innerHTML = `
       ${desc}
+      <div class="settings-riga">
+        <span class="settings-label">${i18n.t('settings.ssh.markFingerprint')}</span>
+        <span class="settings-riepilogo-valore">${escapeHtml(`${h.username}@${h.host}:${h.port}`)}</span>
+      </div>
       ${this._renderSshPublicKey(h)}
-      <div class="provider-card-actions">
+      <div class="provider-card-actions" style="margin-top:10px">
         ${byPassword ? '' : `<button class="settings-btn-add ssh-generate" data-ssh-alias="${alias}" data-has-key="${h.has_key ? '1' : ''}">
           ${h.has_key ? i18n.t('settings.ssh.regenerateKey') : i18n.t('settings.ssh.generateKey')}
         </button>`}
@@ -1249,8 +1284,21 @@ export class SettingsController {
         <button class="btn-icon btn-danger ssh-delete" data-ssh-alias="${alias}" title="${i18n.t('settings.delete')}">
           <i class="ti ti-trash"></i>
         </button>
-      </div>
-    </div>`;
+      </div>`;
+    this._wireHostSsh();
+  }
+
+  /** I comandi dentro il pannello. All'apertura, non al caricamento. */
+  _wireHostSsh() {
+    const each = (sel, fn) =>
+      document.querySelectorAll(`#drawer-ssh-host-body ${sel}`).forEach(btn =>
+        btn.addEventListener('click', () => fn(btn.dataset.sshAlias, btn)));
+    each('.ssh-generate', (alias, btn) => this._sshGenerateKey(alias, !!btn.dataset.hasKey));
+    each('.ssh-verify', alias => this._sshVerify(alias));
+    each('.ssh-edit', alias => this._showSshHostDialog(
+      (this._ssh?.hosts || []).find(h => h.alias === alias)));
+    each('.ssh-delete', alias => this._sshDelete(alias));
+    each('.ssh-copy', alias => this._sshCopyPublicKey(alias));
   }
 
   /* La pubblica resta a schermo finché l'host esiste: il passo "incollala in
@@ -1291,15 +1339,14 @@ export class SettingsController {
       });
     }
     this._wireBtn('btn-ssh-add', () => this._showSshHostDialog());
-    const each = (selector, fn) =>
-      this.contentEl.querySelectorAll(selector).forEach(btn =>
-        btn.addEventListener('click', () => fn(btn.dataset.sshAlias, btn)));
-    each('.ssh-generate', (alias, btn) => this._sshGenerateKey(alias, !!btn.dataset.hasKey));
-    each('.ssh-verify', alias => this._sshVerify(alias));
-    each('.ssh-edit', alias => this._showSshHostDialog(
-      (this._ssh?.hosts || []).find(h => h.alias === alias)));
-    each('.ssh-delete', alias => this._sshDelete(alias));
-    each('.ssh-copy', alias => this._sshCopyPublicKey(alias));
+    /* In cassetto ogni host e' una riga: il tocco apre il suo pannello. I
+       comandi (genera, verifica, modifica, elimina, copia) li aggancia
+       `_wireHostSsh` la' dentro — qui non esistono ancora nel DOM. */
+    this.contentEl.querySelectorAll('[data-ssh-open]').forEach(riga =>
+      riga.addEventListener('click', () => {
+        window.mobileApp?.drawer?.open('ssh-host');
+        this._apriHostSsh(riga.dataset.sshOpen);
+      }));
   }
 
   /* Le route SSH rispondono con un corpo di errore in testo semplice, e quel

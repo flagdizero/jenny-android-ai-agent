@@ -271,3 +271,81 @@ def test_il_riassunto_telegram_copre_tutti_gli_stati() -> None:
                   "summaryUnknown"):
             assert tg.get(k, "").strip(), f"{lingua}: manca {k}"
         assert "{who}" in tg["summaryPaired"]
+
+
+# ── SSH: la forma della tavola, senza perdere i due stati ────────────────────
+#
+# Qui la tavola e il codice erano in conflitto, ed è stato deciso di seguire
+# **tutte e due**: la riga compatta della tavola, ma con dentro i due stati che
+# il commento di `_renderSshHost` difendeva da prima —
+#
+#   «credenziale pronta e impronta accettata sono i due passi che l'utente deve
+#   fare, e nasconderli dietro un tap lascerebbe host mezzi configurati che
+#   falliscono solo al primo comando»
+#
+# — perché quella non era un'opinione grafica: era una misura.
+
+
+def test_un_host_e_una_riga() -> None:
+    corpo = _corpo("_renderSshHost")
+    assert 'class="ssh-riga"' in corpo, "l'host è tornato una scheda"
+    assert "provider-card" not in corpo
+    m = re.search(r"^\.ssh-riga \{(.*?)\}", CSS, re.S | re.M)
+    assert m and re.search(r"min-height:\s*52px", m.group(1)), (
+        "la riga non ha l'altezza della tavola"
+    )
+
+
+def test_i_due_stati_restano_in_chiaro_nella_riga() -> None:
+    """Il punto della decisione: **non** dietro il tocco.
+
+    Se qualcuno li sposta nel pannello per accorciare la riga, un host a cui
+    manca la chiave sembra a posto finché non fallisce il primo comando.
+    """
+    corpo = _corpo("_renderSshHost")
+    assert corpo.count("this._segnoSsh(") == 2, "i due stati non sono più due"
+    assert "has_key" in corpo and "pinned" in corpo, (
+        "la riga non guarda più credenziale e impronta"
+    )
+    pannello = _corpo("_apriHostSsh")
+    assert "_segnoSsh" not in pannello, "i due stati sono migrati dietro il tocco"
+
+
+def test_lo_stato_si_distingue_anche_senza_colore() -> None:
+    """Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
+    l'accento **è** il colore del testo, due pallini colorati si somigliano."""
+    corpo = _corpo("_segnoSsh")
+    assert "ti-circle-check-filled" in corpo and "ti-circle" in corpo, (
+        "la differenza è affidata al solo colore"
+    )
+    assert "title=" in corpo, "il testo lungo non è più raggiungibile da nessuna parte"
+
+
+def test_i_comandi_dell_host_stanno_nel_pannello() -> None:
+    """Genera, verifica, modifica, elimina, copia: sono cose che si fanno **a**
+    un host, non informazioni su di lui."""
+    pannello = _corpo("_apriHostSsh")
+    for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
+        assert cmd in pannello, f"«{cmd}» non è nel pannello"
+    riga = _corpo("_renderSshHost")
+    for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
+        assert cmd not in riga, f"«{cmd}» è rimasto nella riga"
+    assert 'id="drawer-ssh-host"' in OFFICINA_HTML
+
+
+def test_il_cablaggio_dei_comandi_guarda_dentro_il_pannello() -> None:
+    """Cercarli in `contentEl` non troverebbe niente: il pannello è fuori."""
+    corpo = _corpo("_wireHostSsh")
+    assert "#drawer-ssh-host-body" in corpo
+    assert "contentEl" not in corpo
+
+
+@pytest.mark.parametrize("lingua", ("it", "en"))
+def test_le_parole_corte_dei_due_stati_esistono(lingua: str) -> None:
+    import json
+
+    ssh = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+    ssh = ssh["settings"]["ssh"]
+    for k in ("markKey", "markPassword", "markFingerprint"):
+        assert ssh.get(k, "").strip(), f"{lingua}: manca {k}"
+        assert len(ssh[k]) <= 12, f"{lingua}: «{ssh[k]}» è troppo lungo per una riga da 52px"

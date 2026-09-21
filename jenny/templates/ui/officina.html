@@ -119,6 +119,24 @@
         <div class="drawer-body"><div id="drawer-telegram-body"></div></div>
       </div>
 
+      <!-- DRAWER: un host SSH ─ tutto quel che si fa **a** un host.
+           Genera/rigenera la chiave, la pubblica da copiare, verifica
+           l'impronta, modifica, elimina. In cassetto resta la riga compatta,
+           che pero' **tiene in chiaro i due stati** — credenziale e impronta —
+           perche' sono i due passi che l'utente deve fare, e nasconderli
+           lascerebbe host mezzi configurati che falliscono al primo comando
+           (v. il commento su `_renderSshHost`). -->
+      <div class="drawer" id="drawer-ssh-host">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" id="drawer-ssh-host-title">SSH</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body" id="drawer-ssh-host-body"></div>
+      </div>
+
       <!-- DRAWER: Wiki Files -->
       <div class="drawer" id="drawer-files">
         <div class="drawer-header">
