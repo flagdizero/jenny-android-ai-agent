@@ -412,11 +412,10 @@ def test_the_sheet_is_actually_in_the_page() -> None:
                  'id="launcher-search"', 'id="launcher-title"', 'id="launcher-close"',
                  'id="launcher-handle-row"'):
         assert node in html, f"{node} manca da officina.html: il foglio non esiste più"
-    # L'unico ingresso. Era lo slot Apps del dock; dal 20/09/2026 il dock ha
-    # quattro voci e quello slot non c'è più, quindi la maniglia è la porta in
-    # cima al cassetto Mani (v. CASSETTI in mobile-settings.js).
-    impostazioni = _src("mobile-settings.js")
-    assert "PORTE_LANCIO = { launcher:" in impostazioni, (
+    # L'unico ingresso. Era lo slot Apps del dock, poi una porta dentro Mani;
+    # dal 21/09/2026 è il pulsante accanto alla graffetta del composer, e la
+    # Console è a un tocco da ogni cassetto (v. il banco dell'invariante).
+    assert 'id="btn-launcher"' in html, (
         "senza questo il foglio non si apre da nessuna parte"
     )
     # Vive *fuori* da `.app`: è ciò che gli permette di coprire il dock, di
@@ -609,16 +608,13 @@ def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
     resterebbe **vivo e irraggiungibile** — il modo piu' silenzioso di perdere
     una schermata, perche' tutti gli altri banchi restano verdi.
 
-    La maniglia e' una porta in cima al cassetto Mani, ed e' una porta
-    speciale: non cambia vista, apre il foglio.
+    La maniglia fu una porta in fondo al gruppo Telegram di Mani, dove non
+    c'entrava niente. Dal 21/09/2026 e' il pulsante accanto alla graffetta del
+    composer: la Console e' sul dock, quindi quel pulsante e' a un tocco da
+    ogni cassetto.
     """
-    src = _src("mobile-settings.js")
-    assert "PORTE_LANCIO = { launcher: (app) => app.openLauncher() }" in src
-    # `porte` e' passata da elenco per cassetto a mappa gruppo -> porte: le
-    # destinazioni stanno ora in fondo al gruppo che le riguarda, non in cima
-    # al cassetto. La maniglia resta dentro Mani, cambia solo dove.
-    m = re.search(r"mani: \{\s*sezioni: \[[^\]]*\],\s*porte: \{([^}]*)\}", src)
-    assert m and "'launcher'" in m.group(1), "il cassetto Mani non porta piu' al foglio"
+    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    assert 'id="btn-launcher"' in officina, "il foglio non ha piu' nessuna maniglia"
 
     app = _src("mobile-app.js")
     # E l'aggancio del dock resta **uno solo**: un secondo `forEach` con un
@@ -735,21 +731,39 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
        spesso, e nessun banco se n'era accorto — perché difendevano la forma
        («niente pulsante») e non lo scopo («si apre da ovunque»).
 
-    Oggi gli ingressi sono due e fanno cose diverse: la porta dentro Mani è
-    quella che c'è **sempre**, ed è lei che tiene l'invariante; il pulsante nel
-    composer è la scorciatoia dov'è più frequente. Il difetto del punto 1 non
-    torna proprio perché il primo esiste.
+    4. **21/09/2026, e questa è una decisione, non una scoperta.** La porta
+       viveva in fondo al gruppo *Telegram* di Mani, dove non c'entrava niente:
+       ci era finita perché Telegram era l'ultimo gruppo del cassetto. L'utente
+       l'ha tolta, e con essa l'invariante nella sua forma forte.
+
+    La forma nuova, e perché regge: l'ingresso è **uno**, il pulsante accanto
+    alla graffetta del composer, che vive nella sola vista chat — ma la chat è
+    la Console, ed è la prima voce del dock, quindi da qualunque cassetto è a
+    **un tocco**. Il cassetto delle app è a due, esattamente come quando la
+    porta esisteva (Mani → scorri → tocca). Il difetto del punto 1 era che
+    dalle altre viste non ci si arrivava *affatto*: con un dock che porta
+    sempre alla Console, non è lo stesso difetto.
+
+    Quindi il banco non chiede più un ingresso per ogni vista: chiede che
+    l'unico ingresso esista, sia agganciato, e che la Console sia sul dock —
+    che è la riga da cui dipende tutto il ragionamento qui sopra.
     """
     officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
     impostazioni = _src("mobile-settings.js")
 
-    # L'ingresso che vale da ogni cassetto: la porta dentro Mani.
-    assert re.search(r"porte: \{[^}]*'launcher'", impostazioni), (
-        "tolta la porta, il cassetto torna raggiungibile solo dalla chat"
+    # La porta se n'è andata, e non deve tornare in un altro gruppo a caso.
+    assert "'launcher'" not in _senza_commenti_js(impostazioni), (
+        "il cassetto delle app è tornato a essere una riga dentro un cassetto"
     )
-    assert "PORTE_LANCIO = { launcher:" in impostazioni
 
-    # La scorciatoia dalla chat, nei due gusci.
+    # La Console è sul dock: è ciò che rende «un tocco» vero.
+    nav = officina[officina.index('<nav class="dock"'):officina.index("</nav>")]
+    assert 'data-mode="chat"' in nav, (
+        "senza la Console sul dock il pulsante del composer non è raggiungibile "
+        "da un cassetto, e il cassetto delle app torna irraggiungibile"
+    )
+
+    # L'ingresso, nei due gusci.
     assert 'id="btn-launcher"' in officina
     casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
     assert 'id="casa-drawer"' in casa

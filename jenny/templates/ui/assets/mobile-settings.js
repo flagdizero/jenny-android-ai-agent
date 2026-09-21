@@ -30,18 +30,19 @@ const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
  * una stringa, e non c'e' nessun posto in cui possa restare scritta due volte.
  *
  * `porte` sono le viste che prima stavano sul dock e adesso no: si aprono da
- * una riga in cima al cassetto. Senza, cambiare il dock le lascerebbe
- * irraggiungibili — un difetto che non si vede finche' non servono.
+ * una riga in fondo al gruppo che le riguarda. Senza, cambiare il dock le
+ * lascerebbe irraggiungibili — un difetto che non si vede finche' non servono.
+ * Il cassetto delle app **non** e' fra queste: stava sotto Telegram, dove non
+ * c'entrava niente, e la sua maniglia vera e' il pulsante accanto alla
+ * graffetta del composer della Console (v. `mobile-app.js`, `#btn-launcher`).
  *
- * **Due parcheggi, dichiarati.** `personalization` e `system` stanno in
- * Cervello e non ci resteranno: del primo la casa ha gia' tema e mascotte, e
- * quel che avanza e' il nome di Jenny (v. il piano, «fuori, dichiarato»); del
- * secondo la versione diventa un'etichetta in Console e i contatori la barra
- * dei token, al passo 4. Parcheggiarli qui e' cio' che tiene l'app intera
- * mentre i cassetti si riempiono, invece di farli sparire prima che esista
- * dove rimetterli.
+ * **Dei due parcheggi ne resta uno.** `personalization` e' uscito il
+ * 21/09/2026: temi, mascotte e finestra flottante vivevano gia' in casa, il
+ * nome di Jenny e' andato nella stanza «Jenny» con loro. Resta `system` — la
+ * versione e il consumo di token — che nessuna tavola disegna e che non ha
+ * ancora un altro posto dove stare.
  */
-const PORTE_ICONE = { launcher: 'layout-grid', workspace: 'folder', graph: 'topology-star' };
+const PORTE_ICONE = { workspace: 'folder', graph: 'topology-star' };
 
 /* Come si chiama una porta. Di norma `nav.<modo>`, ma il modo non e' sempre il
    nome della cosa: la vista del grafo si chiama `graph` e l'utente la conosce
@@ -63,11 +64,6 @@ const PORTE_ETICHETTE = { graph: 'nav.wiki' };
  * non un giro di codice nuovo. */
 export const LAVORI_DI_MANI = (job) => job.kind !== 'system' || job.id === 'heartbeat';
 
-/* `launcher` non e' un modo: e' il cassetto delle app, che sale dal fondo. Si
-   apriva dalla voce «Apps» del dock — la sola, e adesso quella voce non c'e'
-   piu'. Senza questa riga il cassetto resterebbe vivo e senza maniglia. */
-const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
-
 /* I gruppi di ogni cassetto, nell'ordine in cui si scorrono.
  *
  * Erano undici **sezioni**, una per pezzo di codice. La tavola ne ha quindici,
@@ -86,9 +82,9 @@ const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
  *     `workspace` qui sopra ci porta gia'; mostrarlo anche qui vuole una
  *     lettura che questa schermata non fa.
  *
- * `personalization` e `system` (Cervello) invece **restano**, pur non stando in
- * nessuna tavola: sono tema, nome e icona di Jenny piu' la modalita'
- * sviluppatore. Toglierli senza dargli una casa li farebbe sparire e basta.
+ * `system` (Cervello) invece **resta**, pur non stando in nessuna tavola: e' la
+ * versione e il consumo di token. Toglierlo senza dargli una casa lo farebbe
+ * sparire e basta.
  */
 export const CASSETTI = {
   cervello: {
@@ -97,7 +93,7 @@ export const CASSETTI = {
   },
   mani: {
     sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
-    porte: { telegram: ['launcher'] },
+    porte: {},
   },
   memoria: {
     sezioni: ['quantoRicorda', 'dream', 'workers', 'backup'],
@@ -2330,16 +2326,14 @@ export class SettingsController {
       el.addEventListener('click', () => {
         const app = window.mobileApp;
         if (!app) return;
-        const lancio = PORTE_LANCIO[el.dataset.porta];
-        if (lancio) lancio(app);
-        else app.switchMode(el.dataset.porta);
+        app.switchMode(el.dataset.porta);
       });
     });
   }
 
   _wireSections() {
     // Active config fields → auto-save on change
-    for (const key of ['bot_name', 'max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
+    for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
       if (!el) continue;
       el.addEventListener('change', () => this._debouncedSave(key, el.value));
