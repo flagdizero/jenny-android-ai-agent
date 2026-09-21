@@ -59,8 +59,8 @@ export class AppsActions {
    *  `i18n.load()` e' asincrona, e chiamarla presto stampa la chiave grezza
    *  (gia' successo il 20/09/2026 sul campo di ricerca).
    */
-  _traduciFoglio(idAnnulla) {
-    const b = document.getElementById(idAnnulla);
+  _traduciFoglio(foglio) {
+    const b = foglio?.querySelector('[id$="cancel"]');
     if (b) b.textContent = i18n.t('common.cancel');
   }
 
@@ -80,7 +80,6 @@ export class AppsActions {
     if (entry.kind === 'android') this.showAndroidAppSheet(entry.id);
     else if (entry.kind === 'jenny') this.showJennyAppSheet(entry.id);
   }
-
   /** Avvia una voce del cassetto.
    *
    *  Sta qui e non nel foglio perché "aprire" significa tre cose diverse nei tre
@@ -104,7 +103,6 @@ export class AppsActions {
       this.openApp(entry.id);
     }
   }
-
   /** Avvia una app Android. Ritorna **se ci è riuscita** (6.3).
    *
    *  Prima qui c'era un `catch` vuoto commentato "best effort", e un avvio
@@ -131,9 +129,6 @@ export class AppsActions {
       return false;
     }
   }
-
-  // ── Jenny Apps ──
-
   async openApp(slug) {
     const app = this.source.jennyApps.find(a => a.slug === slug);
     if (!app) return;
@@ -184,16 +179,6 @@ export class AppsActions {
     requestAnimationFrame(() => overlay.classList.add('visible'));
     this._openApp = { slug, overlay, iframe, depth: 1 };
   }
-
-  /* Smontare l'overlay basta perché l'SDK non scrive la history: la profondità
-     dell'app è pura contabilità (v. jenny-sdk.js). Quando invece l'SDK spingeva
-     le schermate nella history con `pushState`, ognuna lasciava una entry nella
-     joint session history del WebView che nemmeno `iframe.remove()` toglieva —
-     e dopo la ✕ restavano pressioni di Indietro morte. */
-  /* Vista esterna: lo schermo dell'app è la UI del suo server, servita dal
-     proxy su loopback (jenny/apps/proxy.py). Esiste perché la policy di rete
-     dell'APK rifiuta un iframe verso un `http://` non-loopback, quindi
-     "incornicia il mio server" non era esprimibile in nessun modo. */
   async _openExternalView(slug, app) {
     let url;
     try {
@@ -248,12 +233,6 @@ export class AppsActions {
     requestAnimationFrame(() => overlay.classList.add('visible'));
     this._openApp = { slug, overlay, iframe, depth: 1, external: true };
   }
-
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('visible'));
-    this._openApp = { slug, overlay, iframe, depth: 1, external: true };
-  }
-
   closeApp() {
     const open = this._openApp;
     if (!open) return;
@@ -269,12 +248,6 @@ export class AppsActions {
       }).catch(() => {});
     }
   }
-
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('visible'));
-    this._openApp = { slug, overlay, iframe, depth: 1 };
-  }
-
   handleBack() {
     const open = this._openApp;
     if (!open) return false;
@@ -300,10 +273,6 @@ export class AppsActions {
     if (window.mobileApp.currentMode !== 'apps') window.mobileApp.switchMode('apps', false);
     return true;
   }
-
-  /* Mostra nella UI il fallimento di un sub-frame dell'app aperta.
-     Chiamato dalla shell Android (MainActivity.reportSubframeError), che è il
-     solo punto del sistema che lo sappia. */
   _onSubframeError(event) {
     const open = this._openApp;
     if (!open) return;
@@ -331,13 +300,6 @@ export class AppsActions {
     }
     banner.innerHTML = `<i class="ti ti-alert-triangle"></i><span>${escapeHtml(message)}</span>`;
   }
-
-  notifyAppDataChanged(slug) {
-    const open = this._openApp;
-    if (!open || (slug && open.slug !== slug)) return;
-    open.iframe.contentWindow?.postMessage({ type: 'jenny:data-changed', slug: open.slug }, '*');
-  }
-
   _onAppMessage(event) {
     const open = this._openApp;
     if (!open || event.source !== open.iframe.contentWindow) return;
@@ -369,10 +331,6 @@ export class AppsActions {
       }
     }
   }
-
-  /* Chiede all'iframe dell'app aperta il proprio HTML (l'SDK legge il suo DOM
-     e lo rimanda: il parent non può leggerlo, l'iframe ha origin opaca). Ritorna
-     null se non c'è un'app aperta o se l'app non risponde entro il timeout. */
   requestAppHtml(timeoutMs = 2000) {
     const open = this._openApp;
     if (!open || !open.iframe.contentWindow) return Promise.resolve(null);
@@ -386,9 +344,6 @@ export class AppsActions {
       open.iframe.contentWindow.postMessage({ type: 'jenny:ui-query', nonce }, '*');
     });
   }
-
-  // ── App Android context sheet ──
-
   showAndroidAppSheet(packageName) {
     const app = this.source.androidApps.find(a => a.packageName === packageName);
     if (!app) return;
@@ -436,14 +391,9 @@ export class AppsActions {
     const openedAt = Date.now();
     sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
 
-    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    this._traduciFoglio(sheet);
     sheet.showModal();
   }
-
-    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
-    sheet.showModal();
-  }
-
   async _handleAndroidSheetAction(action, app) {
     const pkg = app.packageName;
     if (action === 'launch') {
@@ -460,9 +410,6 @@ export class AppsActions {
       this.source.reloadOnReturn();
     }
   }
-
-  // ── Jenny app context sheet ──
-
   showJennyAppSheet(slug) {
     const app = this.source.jennyApps.find(a => a.slug === slug);
     if (!app) return;
@@ -506,14 +453,9 @@ export class AppsActions {
     const openedAt = Date.now();
     sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
 
-    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
+    this._traduciFoglio(sheet);
     sheet.showModal();
   }
-
-    this._traduciFoglio(sheet.querySelector('[id$="cancel"]')?.id);
-    sheet.showModal();
-  }
-
   async _handleJennySheetAction(action, app) {
     const slug = app.slug;
     if (action === 'open') {
@@ -534,28 +476,6 @@ export class AppsActions {
       }
     }
   }
-
-  async _handleJennySheetAction(action, app) {
-    const slug = app.slug;
-    if (action === 'open') {
-      this.openApp(slug);
-    } else if (action === 'edit') {
-      this._startAppModification(app);
-    } else if (action === 'delete') {
-      const ok = await confirmDialog(
-        i18n.t('apps.deleteAppConfirm', { name: app.name || slug })
-      );
-      if (!ok) return;
-      try {
-        await api.deleteJennyApp(slug);
-        await this.source.loadJennyApps();
-        showToast(i18n.t('apps.appDeleted'), 'success');
-      } catch {
-        showToast(i18n.t('apps.deleteFailed'), 'error');
-      }
-    }
-  }
-
   _startAppModification(app) {
     this.shell.sendChatPrompt(i18n.t('apps.editAppPrompt', { name: app.name || app.slug, slug: app.slug }));
   }
