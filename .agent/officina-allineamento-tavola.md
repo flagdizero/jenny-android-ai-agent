@@ -210,3 +210,145 @@ Il divario non è di stile: è di **quanto c'è a schermo**.
 - **`personalization` e `system`**: i due parcheggi, in attesa di una casa.
 
 Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
+
+---
+
+# Il piano preciso
+
+L'elenco qui sopra è la **diagnosi**. Questa è la ricetta: cosa si tocca, come si
+sa che è finita, cosa può rompersi.
+
+## Il buco che va chiuso prima: dove atterra il tocco
+
+Tre dei dodici punti — **H** (riassumere invece di elencare), **I** (le porte
+dentro il gruppo), **J** (prima si legge, poi si modifica) — dicono la stessa
+cosa: *in cassetto ci sta il riepilogo, il dettaglio sta dietro un tocco*.
+
+**Ma la tavola non disegna mai dove quel tocco atterra.** L'officina ha quattro
+tavole — Console, Cervello, Mani, Memoria — e nessuna per l'elenco delle
+istantanee, per l'accoppiamento Telegram, per la scheda di un host SSH.
+
+**Decisione presa qui, e dichiarata:** il dettaglio si apre in un **pannello che
+sale dal fondo**, non in una vista nuova. Tre motivi:
+
+1. Il meccanismo **esiste già e gira**: `assets/mobile-drawer.js`
+   (`DrawerManager` — fondale, trascinamento, ritorno del fuoco), con quindici
+   pannelli registrati in `officina.html`, fra cui `drawer-audit` e
+   `drawer-files`.
+2. Un pannello **non consuma una voce del dock**, e il dock è chiuso a quattro.
+3. La freccina della tavola (`›` a fine riga) legge come «si apre qualcosa
+   sopra», non come «cambia pagina».
+
+Se questa non è l'intenzione, **cambia solo questo paragrafo** e i tre punti si
+riscrivono; tutto il resto del piano regge lo stesso.
+
+## Primo giro — vale per tutti e tre i cassetti
+
+### 1. Righe a due colonne
+
+- **Dove:** `_field` (`mobile-settings.js:1894`), `_select` (`:1902`),
+  `_numberField` (`:854`); `.settings-field` / `.settings-label` /
+  `.settings-input` nel foglio di stile.
+- **Cosa:** etichetta a sinistra che si restringe, controllo a destra di
+  larghezza fissa (92 px un numero, 150 px un menù), riga alta almeno 44 px.
+  `_toggleRow` (`:841`) è **già** a due colonne: diventa la forma di riferimento.
+- **Si sa che è finita quando:** nessun `.settings-label` è più largo della sua
+  riga meno il controllo, e su 590 px di larghezza nessuna etichetta va a capo.
+- **Rischio:** `_field`/`_select` li usano anche onboarding e casa. Il banco deve
+  guardare **anche** quelle due, o si allinea l'officina e si storce il resto.
+
+### 2. I valori di macchina in monospazio
+
+- **Dove:** `.model-inuse-name`, `.provider-url`, `.provider-key`,
+  `.settings-input[type=number]`, le misure sotto le barre dei tetti.
+- **Cosa:** `font-family: var(--font-mono)`. Il token esiste in tutti e sette i
+  temi.
+- **Si sa che è finita quando:** nome del modello, endpoint, chiave, numeri e
+  orari sono in monospazio; le frasi umane no.
+- **Rischio:** nessuno. È solo tipografia.
+
+### 3. Riassumere invece di elencare — il punto più redditizio
+
+Tre posti, stessa forma: **una riga di riepilogo con la freccina**, e il dettaglio
+nel pannello.
+
+| dove | la riga che resta | cosa va nel pannello |
+| --- | --- | --- |
+| `_renderBackup` (`:1703`) | «N istantanee · la più vecchia *quando*» | l'elenco, «conserva per», «crea adesso» |
+| `_renderTelegram` (`:698`) | «Telegram: collegato · *@nome*» oppure «non collegato» | interruttore, accoppiamento, «disaccoppia» |
+| `_renderSsh` (`:1112`) | «N macchine registrate» + una riga per host | impronta, «verifica», modifica, elimina |
+
+- **Si sa che è finita quando:** Memoria scende sotto i 3 000 px (oggi 6 467) e
+  Mani sotto i 2 500 (oggi 4 096), misurati con lo stesso `cuci.py`.
+- **Rischio:** i caricatori asincroni scrivono nel proprio segnaposto
+  (`_loadSnapshotList`, `_loadSsh`, `_loadCron`). Se il segnaposto si sposta nel
+  pannello, **devono cercarlo lì** — e un pannello chiuso non ha il nodo: la
+  scrittura va fatta all'apertura, non al caricamento.
+
+## Secondo giro — struttura
+
+### 4. Le porte entrano nel loro gruppo
+
+- **Dove:** `_renderPorte` (`:375`), `CASSETTI[*].porte`.
+- **Cosa:** `porte` sparisce come blocco in cima; ogni destinazione diventa una
+  riga dentro il gruppo che la riguarda — le app dentro i canali, il workspace
+  dentro Memoria.
+- **Attenzione:** `workspace` e `graph` sono **viste intere**, non pannelli:
+  restano cambi di vista, si sposta solo la riga che ci porta.
+
+### 5. «Quanto ricorda» si legge
+
+- **Dove:** `_renderQuantoRicorda` (`:889`), `_renderBudget` (`:916`).
+- **Cosa:** restano i tre file con barra e misura; i tre campi numerici vanno nel
+  pannello dietro «Cambia i tetti».
+- **Da aggiungere:** la frase che la tavola ha e il cassetto no — **quanti
+  caratteri restano**, e il confronto con la casella delle regole della casa.
+  I numeri ci sono già tutti nel payload.
+
+### 6. Le marche diventano righe
+
+- **Dove:** `_renderProviderListHtml` (`:771`).
+- **Cosa:** da scheda alta a riga da 52 px: pallino della marca · nome in
+  monospazio · pastiglia «risponde» sull'attiva · endpoint e chiave mascherata ·
+  freccina. Modifica ed elimina vanno nel pannello che la freccina apre.
+- **Nota:** il pallino vuole un colore per marca — una tabella nome→colore, con
+  un colore neutro per le marche che non conosce.
+
+### 7. Comando a segmenti per «tenere sveglia la CPU»
+
+- **Dove:** `_renderKeepAwake` (`:461`).
+- **Cosa:** da `<select>` a `.settings-seg` / `.settings-seg-btn`, che
+  **esistono** (li usano taglia della mascotte e lingua).
+- **Il criterio è già nel codice** (`:1651`): a segmenti quando le voci stanno in
+  riga, a tendina quando no. Tre voci ci stanno.
+
+### 8. Bottone principale pieno
+
+- **Dove:** `.settings-btn-add`.
+- **Cosa:** pastiglia piena d'accento a tutta larghezza, più la riga che spiega
+  cosa comporta aggiungere una marca.
+- **Attenzione al contrasto:** su Chanel e Fumetto `--accent` **è** il colore del
+  testo; il testo del bottone va su `--on-accent`, che esiste apposta.
+
+## Terzo giro — dettagli
+
+9. **«Finestra di contesto»** (`context_window_tokens`): esiste nello schema e nel
+   payload, non lo espone nessuno. Una riga in «Parametri».
+10. **Pastiglia di stato** nell'intestazione (`mobile-header.js`, `cassetto()`).
+11. **Righe di rimando in fondo** ai gruppi («…sta in Memoria»).
+12. **Il superfluo:** via l'icona «aggiorna»; «CURRENT STATE» da referto a
+    interruttori.
+
+## Come si misura la fine
+
+Non «sembra uguale», ma tre numeri e un banco:
+
+1. **Altezza** dei tre cassetti con `cuci.py`, contro i 1 120–1 180 px delle
+   tavole. Oggi: 5 000 / 4 096 / 6 467.
+2. **Inventario dei controlli** per gruppo — quanti interruttori, numeri, menù,
+   segmenti — confrontato con quello estratto dai `.dc.html`. Sono già stati
+   estratti una volta per questo documento: l'estrazione diventa il banco.
+3. **Nessuna regressione** su casa e onboarding, che condividono `_field` e
+   `_select`.
+
+Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
