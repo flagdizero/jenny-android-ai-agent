@@ -115,66 +115,47 @@ aggiunge per scelta e non per rimediare. Il Passo 0 resta valido così com'è
 scritto — con una differenza: adesso la prova «sposta entro il primo secondo»
 deve **funzionare**, ed è la conferma che questo passo era la causa.
 
-## Passo 2 — il trascinamento dei nodi
+## Passo 2 — il trascinamento dei nodi ✅ *fatto: spillo*
 
-Il codice viene da dove era, senza reinventarlo (`mobile-graph.js:402-420`,
-recuperabile con `git show 0116b1f^:jenny/templates/ui/assets/mobile-graph.js`):
+**Scelto dall'utente il 21/09/2026: «si deve restare, sono d'accordo».**
 
-```js
-const trascina = d3.drag()
-  .on('start', (e, d) => {
-    if (!e.active) this._sim.alphaTarget(0.3).restart();
-    d.fx = d.x; d.fy = d.y;
-  })
-  .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-  .on('end', (e, d) => {
-    if (!e.active) this._sim.alphaTarget(0);
-    /* qui la decisione, v. sotto */
-  });
-dot.call(trascina);
-```
+Il codice viene da dove era (`mobile-graph.js:402-420`), con una riga in meno:
+l'`end` **non** rilascia `fx`/`fy`. È tutto lo spillo. Le forze continuano a
+tirare gli altri, e il pallino spillato sta fermo.
 
-### La decisione da prendere: molla o spillo
+Dura quanto il disegno: i nodi nascono da `toSimulation` a ogni `_render`,
+quindi una mappa ridisegnata riparte senza spilli. Ricordarli resta una terza
+decisione, non presa (dove, con che chiave, e cosa succede quando una pagina
+cambia nome).
 
-L'ultima riga cambia che **cosa sia** il trascinamento, e non è un dettaglio di
-implementazione.
+**E il trascinamento prende la mappa in mano.** Questa non era nel piano ed è
+venuta fuori scrivendolo: un trascinamento riaccende la fisica, quindi la quiete
+arriva di nuovo, quindi l'inquadratura automatica **sposterebbe sotto gli occhi
+il pallino appena messo a posto**. La guardia del Passo 1 copriva solo lo
+spostamento, e il flag si chiamava `_inquadrataDaTe` — un nome che un
+trascinamento rendeva falso. Rinominato `_presaInMano`: spostare sceglie da dove
+guardare, trascinare dove sta una pagina, e in entrambi i casi chi decide cosa
+c'è a schermo è l'utente.
 
-- **Molla** (`d.fx = d.fy = null`): il nodo torna dove la fisica lo vuole. È
-  quello che faceva il grafo dell'officina. Serve a **guardare sotto** — sposti
-  un pallino, vedi cosa c'era dietro, lo lasci andare. Su un quaderno annodato
-  la matassa si richiude appena mollata.
-- **Spillo** (`fx`/`fy` restano): il nodo sta dove l'hai messo. La mappa
-  diventa una cosa che **si sistema**. Costa due domande in più: che fine fa la
-  disposizione ricaricando (si perde, a meno di scriverla da qualche parte), e i
-  nomi vanno ricollocati attorno alla nuova posizione di riposo.
+## Passo 3 — il tocco contro il trascinamento ✅ *fatto*
 
-**Consiglio: lo spillo.** In casa il pallino ha già un gesto — il tocco apre la
-pagina — quindi trascinare è l'unico altro motivo per mettergli il dito sopra, e
-«guarda sotto e poi lascia che si richiuda» non è un motivo. Con lo spillo, una
-mappa di venti pagine si può aprire a mano una volta e leggerla; con la molla si
-può solo sbirciare.
+Se ne occupa `clickDistance` di D3, che è il meccanismo giusto e non una soglia
+scritta a mano: sotto, il gesto resta un tocco e la pagina si apre; sopra, il
+click viene soppresso e il pallino si è solo spostato.
 
-E la disposizione **non si persiste in questo giro**: sarebbe una terza
-decisione (dove, con che chiave, e cosa succede quando una pagina cambia nome),
-e va chiesta a parte.
+**Il numero.** Il piano diceva «il repo ne ha già una misurata». Mezzo vero: ne
+ha **tre**, una per gesto — la mascotte 6 px (sta sopra un filo che scorre, e un
+trascinamento involontario porta via la lettura), `pinch-zoom` 10 px («movimento
+massimo perché un gesto conti come tap»), `selection` 12 px. Preso 10, che è
+quella che risponde alla stessa domanda, e **dichiarato sul posto invece di
+importato**: due gesti diversi che oggi condividono un numero sono due numeri,
+non uno.
 
-## Passo 3 — il tocco contro il trascinamento, sullo stesso pallino
-
-Il pallino ha già `.on('click', … _onOpenPage)`. Con un `d3.drag()` sopra, su
-uno schermo che si tocca col pollice i due gesti si pestano: d3 sopprime il
-click solo oltre la propria soglia, e un tocco con tre pixel di tremolio
-diventa un trascinamento minuscolo che **si mangia l'apertura della pagina** —
-che è il gesto principale di quella schermata.
-
-Non si inventa una soglia: il repo ne ha già una misurata, per la mascotte, che
-vive sullo stesso conflitto (si prende e si lancia, e sotto scorre il filo) —
-`shared/mascot-drag.js`, `DRAG_THRESHOLD` e l'attesa della pressione. La mappa
-prende **lo stesso patto**: sotto la soglia è un tocco e apre la pagina, sopra
-è un trascinamento e non apre niente.
-
-Va scritto sul posto perché è la cosa che si rompe per prima: un cambio di
-soglia «per far trascinare meglio» è anche un cambio di quanto è facile
-mancare una pagina.
+L'errore non è simmetrico, e il commento sul posto lo dice: un tocco che non
+apre è un colpo a vuoto che si ripete, ma un trascinamento che apre *anche* la
+pagina ti porta nel lettore proprio mentre stavi sistemando la mappa. Quindi
+meglio stretta che larga. È anche l'unica cosa di tutta questa passata che solo
+un pollice su un vetro può giudicare.
 
 ## Passo 4 — i nomi dopo un trascinamento
 

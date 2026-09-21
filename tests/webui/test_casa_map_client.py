@@ -409,7 +409,31 @@ const d3 = {
     translate(x, y) { return { ...this, tx: x, ty: y }; },
     scale(k) { return { ...this, k }; },
   },
+  /* `d3.drag()` ridotto a un registratore: tiene la soglia del click e i
+     gestori, cosi' il banco puo' recitare un gesto chiamandoli. */
+  drag() {
+    const gestori = {};
+    const api = {
+      soglia: null,
+      gestori,
+      clickDistance(n) { api.soglia = n; return api; },
+      on(ev, fn) { gestori[ev] = fn; return api; },
+    };
+    return api;
+  },
 };
+
+/* La fisica ridotta a un diario: interessa **quando** si riaccende e quando si
+   spegne, non dove finiscono i nodi. */
+function fisicaFinta() {
+  const diario = [];
+  const sim = {
+    diario,
+    alphaTarget(v) { diario.push(['alphaTarget', v]); return sim; },
+    restart() { diario.push(['restart']); return sim; },
+  };
+  return sim;
+}
 
 function svgFinto() {
   const applicate = [];
@@ -420,8 +444,8 @@ const zoomFinto = { transform: 'TRANSFORM' };
 
 class Mappa {
   constructor() {
-    this._inquadrataDaTe = false;
-    this.disegnato = [];
+    this._presaInMano = false;
+    this._sim = fisicaFinta();
   }
 __METODI__
 }
@@ -431,7 +455,7 @@ const NODI = [{ x: 260, y: 300 }, { x: 300, y: 320 }, { x: 280, y: 280 }];
 """
 
 
-def _run_camera(script: str) -> None:
+def _run_gesti(script: str) -> None:
     src = MAP_JS.read_text(encoding="utf-8")
     harness = (
         "import assert from 'node:assert/strict';\n"
@@ -439,9 +463,14 @@ def _run_camera(script: str) -> None:
         + "\n"
         + _const(src, "FIT_MAX_SCALE")
         + "\n"
+        + _const(src, "SOGLIA_TOCCO")
+        + "\n"
         + _CAMERA.replace(
             "__METODI__",
-            "  " + _member(src, "_onZoom") + "\n  " + _member(src, "_inquadra"),
+            "\n".join(
+                "  " + _member(src, n)
+                for n in ("_onZoom", "_trascina", "_inquadra")
+            ),
         )
     )
     proc = subprocess.run(
@@ -457,7 +486,7 @@ def test_at_rest_the_cloud_gets_framed() -> None:
     """A fisica ferma la nuvola sta dove l'hanno lasciata le forze, che non e'
     il centro: sei nodi in basso a destra e mezza stanza vuota. Senza questa
     inquadratura la mappa si apre guardando il vuoto."""
-    _run_camera("""
+    _run_gesti("""
 const m = new Mappa();
 const svg = svgFinto();
 m._inquadra(svg, zoomFinto, NODI, 590, 400);
@@ -478,13 +507,13 @@ def test_the_frame_never_writes_over_your_finger() -> None:
     `end` scatta di nuovo — senza la guardia, ogni pallino trascinato costerebbe
     un salto della vista nel momento in cui si alza il dito.
     """
-    _run_camera("""
+    _run_gesti("""
 const m = new Mappa();
 const radice = { attr() {} };
 
 // Il dito: D3 porta `sourceEvent` solo per un gesto vero.
 m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
-assert.equal(m._inquadrataDaTe, true, 'un gesto vero non viene riconosciuto');
+assert.equal(m._presaInMano, true, 'un gesto vero non viene riconosciuto');
 
 const svg = svgFinto();
 m._inquadra(svg, zoomFinto, NODI, 590, 400);
@@ -499,11 +528,11 @@ def test_framing_ourselves_does_not_count_as_your_finger() -> None:
     e poi si dichiarerebbe "toccata dall'utente" per sempre — e un quaderno
     ridisegnato si aprirebbe di nuovo guardando il vuoto. `sourceEvent` e' null
     proprio per questo."""
-    _run_camera("""
+    _run_gesti("""
 const m = new Mappa();
 const radice = { attr() {} };
 m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
-assert.equal(m._inquadrataDaTe, false,
+assert.equal(m._presaInMano, false,
   'inquadrarsi da soli viene contato come un gesto dell\\'utente');
 
 const svg = svgFinto();
@@ -515,7 +544,7 @@ assert.equal(svg.applicate.length, 1, 'la nuvola non viene piu' + ' inquadrata')
 def test_the_transform_reaches_the_drawing_either_way() -> None:
     """Gesto o no, la trasformazione va applicata al gruppo: la guardia decide
     *chi inquadra*, non se il disegno si muove."""
-    _run_camera("""
+    _run_gesti("""
 const m = new Mappa();
 const viste = [];
 const radice = { attr: (nome, v) => viste.push([nome, v]) };
@@ -537,10 +566,10 @@ def test_a_redrawn_map_gets_its_frame_back_but_a_revisit_does_not() -> None:
     src = MAP_JS.read_text(encoding="utf-8")
     render = _member(src, "_render")
     draw = _member(src, "draw")
-    assert "this._inquadrataDaTe = false;" in render, (
+    assert "this._presaInMano = false;" in render, (
         "un quaderno ridisegnato si apre guardando dove guardava il precedente"
     )
-    assert "_inquadrataDaTe" not in draw, (
+    assert "_presaInMano" not in draw, (
         "tornare sulla linguetta butta via l'inquadratura dell'utente"
     )
 
@@ -567,10 +596,114 @@ def test_the_names_are_replaced_at_every_rest() -> None:
     assert "this._placeLabels(" in corpo, (
         "a fisica ferma i nomi non si ricollocano: restano dove stavano prima"
     )
-    assert "_inquadrataDaTe" not in corpo, (
+    assert "_presaInMano" not in corpo, (
         "la ricollocazione dei nomi e' finita sotto la guardia dell'inquadratura: "
         "chi ha spostato la mappa col dito non li vedrebbe piu' aggiustare"
     )
     assert corpo.index("this._placeLabels(") < corpo.index("this._inquadra("), (
         "si inquadra prima di sapere dove stanno i nomi"
     )
+
+
+# ── Un pallino preso resta dove lo metti ────────────────────────────────────
+
+
+def test_a_dragged_dot_stays_where_you_put_it() -> None:
+    """**La decisione dell'utente, il 21/09/2026.** Il grafo dell'officina
+    rilasciava `fx`/`fy` all'`end`: il pallino tornava dove lo vuole la fisica, e
+    su una nuvola annodata la matassa si richiudeva appena mollata. Qui resta.
+
+    Lo spillo *e'* l'`end` che non rilascia. Se qualcuno lo rimettesse, il
+    trascinamento tornerebbe a servire solo a sbirciare — e il pallino ha gia'
+    un gesto che lo apre, quindi non sarebbe un motivo per metterci il dito.
+    """
+    _run_gesti("""
+const m = new Mappa();
+const t = m._trascina();
+const d = { x: 100, y: 100 };
+
+t.gestori.start({ active: 0 }, d);
+assert.deepEqual([d.fx, d.fy], [100, 100], 'il pallino non si inchioda per il gesto');
+
+t.gestori.drag({ x: 260, y: 40 }, d);
+assert.deepEqual([d.fx, d.fy], [260, 40], 'il pallino non segue il dito');
+
+t.gestori.end({ active: 0 }, d);
+assert.deepEqual([d.fx, d.fy], [260, 40],
+  'mollando, il pallino e\\' tornato in mano alla fisica');
+""")
+
+
+def test_dragging_takes_the_map_in_hand() -> None:
+    """Un trascinamento riaccende la fisica, quindi la quiete arriva di nuovo, e
+    con lei l'inquadratura automatica: **sposterebbe sotto gli occhi il pallino
+    appena messo a posto.**
+
+    E' il motivo per cui la guardia dell'inquadratura non parla di
+    «spostamento» ma di mani sulla mappa: spostare sceglie da dove guardare,
+    trascinare dove sta una pagina, e in entrambi i casi chi ha deciso cosa c'e'
+    a schermo e' l'utente.
+    """
+    _run_gesti("""
+const m = new Mappa();
+m._trascina().gestori.start({ active: 0 }, { x: 10, y: 10 });
+assert.equal(m._presaInMano, true, 'il trascinamento non prende la mappa in mano');
+
+const svg = svgFinto();
+m._inquadra(svg, zoomFinto, NODI, 590, 400);
+assert.deepEqual(svg.applicate, [],
+  'la quiete dopo il trascinamento ha reinquadrato la nuvola');
+""")
+
+
+def test_a_small_gesture_is_still_a_tap_on_the_page() -> None:
+    """Il pallino porta due gesti e col pollice si pestano. Non e' simmetrico:
+    un tocco che non apre e' un colpo a vuoto che si ripete, ma un
+    trascinamento che apre **anche** la pagina ti porta nel lettore proprio
+    mentre stavi sistemando la mappa.
+
+    Se ne occupa `clickDistance` di D3: sotto la soglia il gesto resta un tocco,
+    sopra il click viene soppresso. Senza, ogni trascinamento aprirebbe una
+    pagina. Il numero e' l'unica cosa qui che solo un pollice puo' giudicare, e
+    ha il suo commento in `SOGLIA_TOCCO`; il banco misura che ci sia e che sia
+    quello, non che sia giusto.
+    """
+    _run_gesti("""
+const soglia = new Mappa()._trascina().soglia;
+assert.equal(soglia, SOGLIA_TOCCO, 'il gesto non distingue un tocco da un trascinamento');
+assert.ok(soglia > 0 && soglia <= 16,
+  'una soglia fuori scala: sotto lo zero ogni tocco e\\' un trascinamento, ' +
+  'sopra la sedicina un trascinamento apre anche la pagina');
+""")
+
+
+def test_the_physics_wakes_for_the_drag_and_goes_back_to_sleep() -> None:
+    """Senza riaccenderla, gli altri nodi resterebbero fermi mentre uno si
+    muove: i fili si allungherebbero da soli e niente si riassesterebbe. E va
+    rispenta, o la nuvola non arriva mai alla quiete — che e' l'unico momento in
+    cui i nomi si ricollocano."""
+    _run_gesti("""
+const m = new Mappa();
+const t = m._trascina();
+const d = { x: 1, y: 1 };
+t.gestori.start({ active: 0 }, d);
+t.gestori.end({ active: 0 }, d);
+assert.deepEqual(m._sim.diario,
+  [['alphaTarget', 0.3], ['restart'], ['alphaTarget', 0]],
+  'la fisica non si riaccende per il gesto, o non si rispegne dopo');
+""")
+
+
+def test_a_second_finger_does_not_restart_the_physics_twice() -> None:
+    """`event.active` conta i gesti in corso: e' zero solo per il primo. Un
+    secondo dito che scende mentre il primo trascina non deve riaccendere una
+    fisica gia' accesa, ne' — alzandosi — spegnerla mentre l'altro sta ancora
+    tirando."""
+    _run_gesti("""
+const m = new Mappa();
+const t = m._trascina();
+t.gestori.start({ active: 1 }, { x: 1, y: 1 });
+t.gestori.end({ active: 1 }, { x: 1, y: 1 });
+assert.deepEqual(m._sim.diario, [],
+  'il secondo dito rimette mano alla fisica del primo');
+""")

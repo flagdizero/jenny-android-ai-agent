@@ -29,6 +29,28 @@ const D3_SRC = '/html-mobile/assets/vendor/d3@7/d3.min.js';
 const FIT_PADDING = 40;
 const FIT_MAX_SCALE = 1.6;
 
+/* Quanto puo' muoversi un dito e contare ancora come **tocco** sul pallino.
+ *
+ *  Il pallino ha due gesti sopra: il tocco apre la pagina, il trascinamento la
+ *  sposta. Col pollice si pestano, e non e' simmetrico — un tocco che non apre
+ *  e' un colpo a vuoto che si ripete, ma un trascinamento che apre anche la
+ *  pagina ti porta dentro il lettore e ti fa perdere la disposizione. Quindi
+ *  meglio stretta che larga.
+ *
+ *  Il numero non e' scelto a occhio, ed e' anche l'unica cosa qui che solo un
+ *  pollice su un vetro puo' giudicare: il repo ha tre soglie, una per gesto, e
+ *  questa e' quella che risponde alla stessa domanda — `shared/pinch-zoom.js`,
+ *  «movimento massimo perche' un gesto conti come tap». La mascotte ne ha una
+ *  piu' stretta (6) perche' sta sopra un filo che scorre, e un suo
+ *  trascinamento involontario porta via la lettura; qui porta via solo un
+ *  pallino, che si rimette.
+ *
+ *  Dichiarata qui e non importata da la': due gesti diversi che oggi
+ *  condividono un numero sono due numeri, non uno — legarli vuol dire
+ *  romperne uno aggiustando l'altro.
+ */
+const SOGLIA_TOCCO = 10;
+
 /* Quante pagine portano il nome scritto, e quanto lungo.
  *
  *  Misurato sul Titan con un quaderno vero da 31 pagine: scrivendoli tutti, e
@@ -208,10 +230,16 @@ export class CasaMap {
        ed e' la stessa ragione per cui `mobile-graph.js` ne ha due. */
     this._gen = 0;
     this._drawn = null;
-    /* Vero appena l'utente ha spostato o avvicinato la mappa **col dito**.
-       Da quel momento l'inquadratura e' sua, e nessuno la riscrive: v.
-       `_inquadra`. */
-    this._inquadrataDaTe = false;
+    /* Vero appena l'utente ha messo le mani sulla mappa: spostata, avvicinata
+       o un pallino trascinato. Da quel momento quel che si vede e' una sua
+       decisione, e nessuno la riscrive — v. `_inquadra`.
+
+       Copre tutti e tre perche' tutti e tre rispondono alla stessa domanda:
+       **chi ha deciso cosa c'e' a schermo.** Lo spostamento sceglie da dove
+       guardare, il trascinamento dove sta una pagina; un'inquadratura
+       automatica dopo l'uno o l'altro e' un cambiamento che l'utente non ha
+       chiesto e non capisce. */
+    this._presaInMano = false;
   }
 
   /** Disegna la mappa di *data*. La stessa risposta dell'elenco. */
@@ -260,11 +288,13 @@ export class CasaMap {
     /* Una simulazione precedente va fermata prima di sostituirne l'SVG: i
        suoi tick scrivono su nodi che stanno per sparire. */
     this.stop();
-    /* Un disegno nuovo merita la sua inquadratura. **Qui e non in `draw`**: per
+    /* Un disegno nuovo e' una mappa da capo, quindi si riparte a mani libere:
+       i nodi sono oggetti nuovi e gli spilli del disegno precedente non ci sono
+       piu' (v. `_trascina`). **Qui e non in `draw`**: per
        una risposta gia' disegnata `draw` esce subito (`this._drawn === data`),
        quindi azzerarlo li' vorrebbe dire buttare via dove l'utente stava
        guardando ogni volta che torna sulla linguetta. */
-    this._inquadrataDaTe = false;
+    this._presaInMano = false;
     const box = this.el.getBoundingClientRect();
     const w = Math.max(240, Math.round(box.width) || 320);
     const h = Math.max(240, Math.round(box.height) || 320);
@@ -325,6 +355,8 @@ export class CasaMap {
         name.attr('x', (d) => d.x).attr('y', (d) => d.y);
       });
 
+    dot.call(this._trascina());
+
     /* Si trascina e si avvicina: su 590x566 un quaderno da sessanta pagine non
        ci sta, e rimpicciolire i pallini non lo renderebbe leggibile. */
     const zoom = d3.zoom()
@@ -348,8 +380,60 @@ export class CasaMap {
    *  inquadrati da soli», e serve a `_inquadra` per non passare sopra al dito.
    */
   _onZoom(e, root) {
-    if (e.sourceEvent) this._inquadrataDaTe = true;
+    if (e.sourceEvent) this._presaInMano = true;
     root.attr('transform', e.transform);
+  }
+
+  /** Prendere un pallino e spostarlo. **Resta dove lo metti.**
+   *
+   *  Chiesto dall'utente il 21/09/2026, e la scelta e' sua: o il pallino torna
+   *  dove lo vuole la fisica appena lo molli, o ci resta. Il grafo
+   *  dell'officina faceva la prima — serviva a guardare sotto, e su una nuvola
+   *  annodata la matassa si richiudeva appena mollata. Qui fa la seconda: il
+   *  pallino ha gia' un gesto che lo apre, quindi trascinarlo e' l'unico altro
+   *  motivo per metterci il dito sopra, e «sbircia e lascia richiudere» non e'
+   *  un motivo. Con lo spillo una nuvola stretta si apre a mano una volta e poi
+   *  si legge.
+   *
+   *  Lo spillo e' l'`end` che **non** rilascia `fx`/`fy`: le forze continuano a
+   *  tirare gli altri, e questo sta fermo. Dura quanto il disegno — i nodi
+   *  nascono da `toSimulation` a ogni `_render`, quindi una mappa ridisegnata
+   *  riparte senza spilli. Ricordarli sarebbe una terza decisione (dove, con
+   *  che chiave, e cosa succede quando una pagina cambia nome) e va chiesta a
+   *  parte.
+   *
+   *  **`clickDistance` e' la parte che si rompe per prima**, ed e' anche il
+   *  motivo per cui il numero ha un commento suo (v. `SOGLIA_TOCCO`): sotto la
+   *  soglia il gesto resta un tocco e la pagina si apre, sopra D3 sopprime il
+   *  click e il pallino si e' solo spostato. Senza, ogni trascinamento aprirebbe
+   *  anche la pagina — cioe' ti butterebbe nel lettore proprio mentre stavi
+   *  sistemando la mappa.
+   *
+   *  `alphaTarget(0.3).restart()` riaccende la fisica mentre trascini, o gli
+   *  altri nodi resterebbero fermi e i fili si allungherebbero da soli senza
+   *  che niente si riassesti. Si spegne all'`end`, e la quiete che segue
+   *  ricolloca i nomi (v. `_placeLabels`, chiamato da `sim.on('end')`).
+   */
+  _trascina() {
+    return d3.drag()
+      .clickDistance(SOGLIA_TOCCO)
+      .on('start', (e, d) => {
+        /* Da qui la mappa e' sua: senza questo, la quiete dopo il
+           trascinamento reinquadrerebbe la nuvola e sposterebbe sotto gli occhi
+           il pallino appena messo a posto. */
+        this._presaInMano = true;
+        if (!e.active) this._sim.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on('drag', (e, d) => {
+        d.fx = e.x;
+        d.fy = e.y;
+      })
+      .on('end', (e) => {
+        if (!e.active) this._sim.alphaTarget(0);
+        // E `fx`/`fy` restano: e' tutto lo spillo.
+      });
   }
 
   /** Inquadra la nuvola: **una volta, e mai contro il dito.**
@@ -374,7 +458,7 @@ export class CasaMap {
    *  momento in cui si alza il dito.
    */
   _inquadra(svg, zoom, nodes, w, h) {
-    if (this._inquadrataDaTe) return;
+    if (this._presaInMano) return;
     const xs = nodes.map((n) => n.x);
     const ys = nodes.map((n) => n.y);
     const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
