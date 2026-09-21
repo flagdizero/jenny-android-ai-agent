@@ -1597,6 +1597,7 @@ export class ChatController {
     if (!msg || !text) return;
     const { thinking, header, body } = this._buildThinkingBlock(collapsed);
     body.innerHTML = renderMarkdown(text);
+    renderRichContent(body);
 
     header.addEventListener('click', () => {
       thinking.classList.toggle('collapsed');
@@ -1752,6 +1753,12 @@ export class ChatController {
       this._renderReasoningBody();
       this._reasoningDirty = false;
     }
+    /* Adesso il segmento e' chiuso, quindi formule e diagrammi si possono
+       disegnare: `_renderReasoningBody` gira a ogni frame mentre il testo
+       arriva, e li' una formula e' a meta'. Il ragionamento e' una piega che si
+       apre per guardarci dentro — ed e' il posto dove una formula serve di
+       piu', non di meno. */
+    if (this._currentThinking) renderRichContent(this._currentThinking);
     this._setThinkingLive(this._currentThinking, false);
     /* Il buffer NON si azzera. `reasoning_end` chiude un *segmento*, non il
        ragionamento del turno: il modello ne apre uno nuovo ogni volta che

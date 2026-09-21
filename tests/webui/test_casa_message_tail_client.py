@@ -89,6 +89,12 @@ function makeNode() {
 globalThis.document = { createElement: makeNode, getElementById: () => null };
 
 const renderMarkdown = (t) => t;
+/* Formule e diagrammi: qui si misura la forma delle bolle, non il loro
+   contenuto ricco. Il finto e' dichiarato invece che implicito perche' un
+   finto dimenticato e' come un difetto e' passato inosservato il 21/09/2026
+   (v. `test_vendor_contract.py`); che il chiamante esista lo misura
+   `test_rich_surfaces_contract.py`. */
+const renderRich = () => {};
 const i18n = { t: (key) => key };
 
 function makeChat() {
