@@ -546,3 +546,32 @@ def test_il_cassetto_dice_dove_sta_quel_che_non_ci_sta() -> None:
     for lingua in ("it", "en"):
         d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
         assert d["officina"]["rimando"]["dreamInMemoria"].strip()
+
+
+def test_un_lavoro_periodico_e_una_riga() -> None:
+    """La quarta voce della tabella «riassumere invece di elencare», che al
+    primo giro era rimasta indietro.
+
+    Cinque lavori come schede alte — nome e schedule in testa, «Next:» e
+    «Last:» su due righe intere — facevano **oltre un terzo** dei 3 729 px di
+    Mani misurati sul telefono il 21/09/2026.
+    """
+    corpo = _corpo("_renderCronJob")
+    assert 'class="cron-riga' in corpo, "il lavoro è ancora una scheda"
+    assert "cron-card-head" not in corpo and "cron-lines" not in corpo
+    m = re.search(r"^\.cron-riga \{(.*?)\}", CSS, re.S | re.M)
+    assert m and re.search(r"min-height:\s*52px", m.group(1))
+
+
+def test_la_riga_del_lavoro_tiene_quel_che_cambia_il_significato() -> None:
+    """Le targhette non sono decorazione: un lavoro **spento** con su scritto
+    «fra 4 minuti» sarebbe una bugia. E il pallino dell'esito distingue «ha
+    guardato e non c'era niente» da «è andata male»."""
+    corpo = _corpo("_renderCronJob")
+    for pezzo in ("cron.job.disabled", "cron.job.inert", "cron-dot", "couldNotCheck"):
+        assert pezzo in corpo, f"«{pezzo}» è sparito dalla riga"
+    # Le due parole spariscono: la colonna di destra *è* il prossimo giro.
+    assert "cron.job.next'" not in corpo and "cron.job.last'" not in corpo, (
+        "«Next:» e «Last:» sono tornate: sono due etichette per due colonne che "
+        "si spiegano da sole"
+    )

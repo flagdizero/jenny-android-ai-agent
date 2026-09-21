@@ -2342,6 +2342,21 @@ export class SettingsController {
      schedulazione, prossima e ultima esecuzione — e il resto (storico, testo del
      promemoria, controlli dell'heartbeat) sta nel dettaglio: una riga d'elenco
      che porta tutto smette di essere un elenco. */
+  /** Un lavoro, in una riga.
+   *
+   *  Era una scheda alta: nome e schedule in testa, una fila di targhette, e
+   *  «Next: …» / «Last: … · esito» su due righe intere. Con cinque lavori
+   *  faceva oltre un terzo dell'altezza di Mani (misurato sul telefono il
+   *  21/09/2026, foto intera).
+   *
+   *  La tavola ne fa una riga: **nome** a sinistra con la sua natura, l'esito
+   *  dell'ultimo giro sotto, e **quando tocca di nuovo** a destra. Le due
+   *  parole «Next» e «Last» spariscono: la colonna di destra *e'* il prossimo
+   *  giro, e la riga sotto *e'* l'ultimo. Restano il pallino dell'esito e le
+   *  targhette che cambiano il significato della riga (spento, inerte), che non
+   *  sono decorazione: un lavoro spento con su scritto «fra 4 minuti» sarebbe
+   *  una bugia.
+   */
   _renderCronJob(row) {
     const badges = [];
     if (row.kind === 'system') badges.push(i18n.t('cron.job.protected'));
@@ -2349,34 +2364,29 @@ export class SettingsController {
     if (row.oneShot) badges.push(i18n.t('cron.job.oneShot'));
     if (row.health === 'off') badges.push(i18n.t('cron.job.disabled'));
     if (row.health === 'inert') badges.push(i18n.t('cron.job.inert'));
-    const badgeHtml = badges.length
-      ? `<div class="cron-badges">${badges.map(b => `<span class="cron-badge">${escapeHtml(b)}</span>`).join('')}</div>`
-      : '';
-    const next = row.next
-      ? `<span class="cron-when${row.next.overdue ? ' cron-when-overdue' : ''}">
-           ${escapeHtml(row.next.overdue ? i18n.t('cron.job.nextOverdue') : i18n.t('cron.job.next'))}:
-           ${escapeHtml(row.next.relative)}${this._cronTz(row.next)}
-         </span>`
-      : `<span class="cron-when cron-when-muted">${escapeHtml(i18n.t('cron.job.noNext'))}</span>`;
-    const last = row.last
-      ? `<span class="cron-when">
-           ${escapeHtml(i18n.t('cron.job.last'))}: ${escapeHtml(row.last.relative)}
-           <span class="cron-dot cron-dot-${row.lastTone}"></span>${escapeHtml(this._cronStatusText(row.lastStatus))}
-         </span>`
-      : `<span class="cron-when cron-when-muted">${escapeHtml(i18n.t('cron.job.neverRun'))}</span>`;
+    const badgeHtml = badges
+      .map(b => `<span class="cron-badge">${escapeHtml(b)}</span>`).join('');
+    const quando = row.next
+      ? `<span class="cron-riga-quando${row.next.overdue ? ' is-tardi' : ''}">${escapeHtml(row.next.relative)}${this._cronTz(row.next)}</span>`
+      : `<span class="cron-riga-quando is-muto">${escapeHtml(i18n.t('cron.job.noNext'))}</span>`;
+    const ultimo = row.last
+      ? `<span class="cron-dot cron-dot-${row.lastTone}"></span>${escapeHtml(row.last.relative)} · ${escapeHtml(this._cronStatusText(row.lastStatus))}`
+      : escapeHtml(i18n.t('cron.job.neverRun'));
+    /* Il conteggio dei «non ho potuto controllare» resta su una riga sua: e' lo
+       stato che dice che un monitor sta girando a vuoto, e incastrarlo nella
+       riga dell'esito lo farebbe leggere come parte di quello. */
     const cnc = row.couldNotCheck?.consecutive_could_not_check
       ? `<div class="cron-health">${escapeHtml(this._cronHealthText(row.couldNotCheck))}</div>`
       : '';
     return `
-      <div class="cron-card cron-card-${row.health}" data-cron-job="${escapeHtml(row.id)}">
-        <div class="cron-card-head">
-          <span class="cron-name">${escapeHtml(row.name)}</span>
-          <span class="cron-schedule">${escapeHtml(row.schedule)}</span>
-        </div>
-        ${badgeHtml}
-        <div class="cron-lines">${next}${last}</div>
-        ${cnc}
-      </div>`;
+      <button class="cron-riga cron-card-${row.health}" type="button" data-cron-job="${escapeHtml(row.id)}">
+        <span class="cron-riga-testo">
+          <span class="cron-riga-nome">${escapeHtml(row.name)}${badgeHtml}</span>
+          <span class="cron-riga-sotto">${ultimo}</span>
+          ${cnc}
+        </span>
+        ${quando}
+      </button>`;
   }
 
   /* Il fuso si nomina solo quando diverge da quello del dispositivo: `09:00

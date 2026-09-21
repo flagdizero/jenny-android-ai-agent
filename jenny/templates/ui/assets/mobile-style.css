@@ -5424,6 +5424,58 @@ body {
   gap: 3px;
 }
 
+/* ── La riga di un lavoro periodico ───────────────────────────────────────
+   Nome e natura a sinistra, l'esito dell'ultimo giro sotto, **quando tocca di
+   nuovo** a destra. Era una scheda alta con «Next:» e «Last:» su due righe
+   intere: con cinque lavori faceva oltre un terzo di Mani. */
+.cron-riga {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 0;
+  border: 0;
+  border-top: 0.5px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cron-riga:first-of-type { border-top: 0; }
+.cron-riga:active { opacity: .6; }
+.cron-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cron-riga-nome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.cron-riga-sotto {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+/* A destra e in monospazio: incolonnati, cinque «fra quanto» si confrontano a
+   colpo d'occhio invece di leggerli uno per uno. */
+.cron-riga-quando {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-align: right;
+  color: var(--text-muted);
+}
+.cron-riga-quando.is-tardi { color: var(--warning, var(--text-muted)); }
+.cron-riga-quando.is-muto { color: var(--text-faint); }
+
 /* ── La riga di una marca ─────────────────────────────────────────────────
    Pallino, nome, indirizzo, chiave mascherata, freccina — piu' la pastiglia
    «risponde» su quella che risponde adesso. Era una scheda alta il triplo. */
