@@ -1678,6 +1678,10 @@ body.casa {
 
 .casa-rules:focus { outline: none; border-color: var(--accent); }
 
+/* Il nome: la stessa casella delle regole, su una riga sola. `resize` non
+   esiste su un input, e l'altezza la decide il testo. */
+.casa-nome { line-height: 1.6; }
+
 .casa-save {
   flex: none;
   height: 28px;

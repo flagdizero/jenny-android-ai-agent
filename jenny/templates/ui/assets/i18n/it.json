@@ -165,11 +165,9 @@
   "settings": {
     "save": "Salva",
     "saved": "Salvato!",
-    "language": "Lingua",
     "webSearch": "Ricerca web",
     "advancedMode": "Modalità sviluppatore",
     "advancedModeHint": "Mostra anche quello che Jenny usa per lavorare: le skill di sistema e i file interni (memoria, configurazione) compaiono nelle liste. Serve solo per guardare sotto il cofano.",
-    "personalization": "Personalizzazione",
     "memory": {
       "unavailable": "Non riesco a leggere le impostazioni della memoria. Riapri la schermata; se resta così, controlla config.json.",
       "dreamEnabled": "Consolidamento periodico",
@@ -211,7 +209,6 @@
     "cronRecoveredBackup": "I promemoria programmati sono stati recuperati dall'ultimo backup valido: all'avvio l'elenco dei job non era leggibile. Controlla che ci siano tutti.",
     "cronRecoveredEmpty": "L'elenco dei promemoria programmati non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita senza nessuno: quelli che avevi creato non suoneranno più e vanno ricreati. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
-    "mascotSection": "Mascotte",
     "mascotVisible": "Mostra la mascotte",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
@@ -220,9 +217,6 @@
     "floatingEnabled": "Mascotte flottante",
     "floatingHint": "Jenny resta sopra le altre app: toccala e le parli, la risposta compare in un fumetto. È la stessa conversazione dell'app.",
     "floatingBlocked": "Android non le lascia aprire la finestra: concedi «Sovrapponi ad altre app» dalle impostazioni di sistema.",
-    "homeSection": "Tasto Home",
-    "homeHint": "Dove atterra il tasto Home di Android quando Jenny è il tuo launcher.",
-    "homeLast": "Dove ero rimasto",
     "tokenUsage": "Utilizzo token",
     "version": "Versione",
     "via": "via",
@@ -234,7 +228,6 @@
     "temperature": "Temperatura",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Sforzo di ragionamento",
-    "botName": "Nome bot",
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
@@ -690,34 +683,26 @@
     "codeTag": "[codice]"
   },
   "themes": {
-    "placeholder": "Scrivi a Jenny…",
     "chanel": {
-      "desc": "Bianco e nero couture, un filo d'oro solo dove conta.",
-      "reply": "Il lusso non alza mai la voce."
+      "desc": "Bianco e nero couture, un filo d'oro solo dove conta."
     },
     "synthwave": {
-      "desc": "Neon rosa su notte viola, ogni luce lascia la scia.",
-      "reply": "Massimo carattere — per chi non ha paura."
+      "desc": "Neon rosa su notte viola, ogni luce lascia la scia."
     },
     "kyoto": {
-      "desc": "Terra, ruggine e angoli smussati a mano, come ceramica riparata.",
-      "reply": "La quiete non chiede attenzione."
+      "desc": "Terra, ruggine e angoli smussati a mano, come ceramica riparata."
     },
     "sticker": {
-      "desc": "Ogni messaggio è un adesivo ritagliato: bordo bianco, ombra dura, rotazione imperfetta.",
-      "reply": "La chat come il retro di un laptop."
+      "desc": "Ogni messaggio è un adesivo ritagliato: bordo bianco, ombra dura, rotazione imperfetta."
     },
     "fumetto": {
-      "desc": "China su carta, retini e nuvolette: ogni risposta è una vignetta.",
-      "reply": "La tua chat è una tavola da leggere."
+      "desc": "China su carta, retini e nuvolette: ogni risposta è una vignetta."
     },
     "y2k": {
-      "desc": "Gradienti lucidi, gloss bubblegum, bordi bianchi.",
-      "reply": "Il duemila come ce lo eravamo promesso."
+      "desc": "Gradienti lucidi, gloss bubblegum, bordi bianchi."
     },
     "pietra": {
-      "desc": "Travertino, bronzo e serif romani, luce di mezzogiorno.",
-      "reply": "Solida come un'idea scolpita bene."
+      "desc": "Travertino, bronzo e serif romani, luce di mezzogiorno."
     }
   },
   "provider": {
@@ -1032,6 +1017,9 @@
       "title": "Jenny",
       "hidden": "nascosta",
       "floatingShort": "flottante",
+      "nome": "Come si chiama",
+      "nomeHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",
+      "nomeFailed": "Non sono riuscita a salvare il nome.",
       "rules": "Le regole che le hai dato tu",
       "rulesHint": "Questo resta tuo: lo rilegge a ogni turno e non lo riscrive. Il resto del suo carattere lo tiene lei, e si legge in officina.",
       "rulesPlaceholder": "Per esempio: chiamami per nome, e niente emoji.",

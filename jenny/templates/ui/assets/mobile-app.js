@@ -22,7 +22,6 @@ import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
 import { keyboard } from './shared/keyboard.js';
 import { hasSelection, exposeSelectionState, forwardTapsThroughChrome } from './shared/selection.js';
-import { homeView } from './shared/home-view.js';
 import './shared/theme.js';
 
 export { showToast };
@@ -601,14 +600,16 @@ class MobileApp {
 
   // Android Home button / home gesture. This app is the device launcher, so
   // Home means "collapse to the home screen": dismiss every overlay layer,
-  // collapse each section's sub-state, and go to the home view — collapsing to
-  // the root of the navigation stack rather than pushing onto it. Not a no-op
-  // when already home: the sub-state still has to come down. Called from
+  // collapse each section's sub-state, and go to the chat — collapsing to the
+  // root of the navigation stack rather than pushing onto it. Not a no-op when
+  // already home: the sub-state still has to come down. Called from
   // MainActivity.onNewIntent.
   //
-  // Which view counts as "home" is a preference (default chat ✿, as it always
-  // was). 'last' means the user asked to be left wherever they were, so the
-  // overlays close and the view stays put.
+  // La schermata iniziale e' **sempre** la chat. Era una preferenza con
+  // quattro voci (`shared/home-view.js`, con un 'last' che voleva dire "non
+  // muoverti"): tolta il 21/09/2026 insieme al gruppo che la conteneva, perche'
+  // una casa che a ogni Home puo' aprirsi su una schermata diversa non e' una
+  // casa. Chi vuole i file o le app li raggiunge da dentro, in un tocco.
   /* Smonta *tutti* i livelli, non un sottoinsieme scritto a mano: è così che
      si perdevano lightbox e minichat, e i dialog venivano chiusi con close()
      diretto. Il ciclo interno serve ai livelli impilabili (più <dialog>); il
@@ -623,8 +624,6 @@ class MobileApp {
 
   goHome() {
     this._dismissAllOverlays();
-    const target = homeView();
-    if (target === 'last') return;
     // Gli overlay non sono tutto: le sezioni hanno un sotto-stato che
     // sopravvive al cambio vista (l'editor del workspace resta montato e
     // `activate()` lo ripropone al rientro, la griglia riapre l'ultima
@@ -637,13 +636,13 @@ class MobileApp {
     // diventava annullabile con Indietro — nessun launcher si comporta così —
     // e lo stack non calava mai: dieci Home = dieci entry, tutte da smaltire
     // una pressione alla volta prima di arrivare al fondo.
-    this.switchMode(target, false);
+    this.switchMode('chat', false);
     // Il blocco del primo avvio può aver dirottato lo switch sull'onboarding:
-    // in quel caso la radice non descrive la vista home, e marcarla comunque
-    // scriverebbe nella entry corrente una schermata che non è a schermo.
-    if (this.currentMode !== target) return;
+    // in quel caso la radice non descrive la schermata iniziale, e marcarla
+    // comunque scriverebbe nella entry corrente una vista che non è a schermo.
+    if (this.currentMode !== 'chat') return;
     this._navPos = 0;
-    this.replaceNav(this._navStateFor(target, null, null));
+    this.replaceNav(this._navStateFor('chat', null, null));
   }
 
   /* Tap sulla notifica di un messaggio proattivo (MainActivity). Non è "vai a

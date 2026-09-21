@@ -3,13 +3,8 @@
 import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
-import { AppState } from './shared/state.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
-import { THEMES, DEFAULT_THEME, setTheme } from './shared/theme.js';
 import { advancedMode, setAdvancedMode } from './shared/advanced-mode.js';
-import { mascotVisible, setMascotVisible, mascotSize, setMascotSize,
-  MASCOT_SIZES } from './shared/mascot.js';
-import { homeView, setHomeView, HOME_VIEW_CHOICES } from './shared/home-view.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import {
   BatteryExemptionCard,
@@ -98,7 +93,7 @@ const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
  */
 export const CASSETTI = {
   cervello: {
-    sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'personalization', 'system'],
+    sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'system'],
     porte: {},
   },
   mani: {
@@ -262,7 +257,6 @@ export class SettingsController {
       marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d), this._portePerGruppo(cassetto, 'marche')),
       parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d), this._portePerGruppo(cassetto, 'parametri')),
       battery: () => this._renderBatterySection(d),
-      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d), this._portePerGruppo(cassetto, 'personalization')),
       system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d), this._portePerGruppo(cassetto, 'system')),
       // Mani
       ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d), this._portePerGruppo(cassetto, 'ricercaWeb')),
@@ -418,23 +412,6 @@ export class SettingsController {
       <div class="settings-gruppo-label">${etichetta}</div>
       <section class="settings-card">${corpo}${porte}</section>
     </div>`;
-  }
-
-  // ── Personalizzazione ──────────────────────────────────────────────
-
-  /* Tutte le preferenze "come appare e come parla l'interfaccia": temi,
-     mascotte, nome del bot e lingua vivono qui, sullo stesso asse. */
-  _renderPersonalization(d) {
-    const a = d.agent || {};
-    return `
-      ${this._renderTheme()}
-      ${this._renderHomeView()}
-      <div class="theme-strip-eyebrow">${i18n.t('settings.botName')}</div>
-      <div class="settings-field">
-        <input type="text" class="settings-input" data-key="bot_name" value="${escapeHtml(a.bot_name || '')}" />
-      </div>
-      <div class="theme-strip-eyebrow">${i18n.t('settings.language')}</div>
-      ${this._renderLanguage()}`;
   }
 
   // ── Attività in background (doze) ──────────────────────────────────
@@ -1767,142 +1744,6 @@ export class SettingsController {
     dialog.addEventListener('close', () => dialog.remove());
   }
 
-  // ── Theme ──────────────────────────────────────────────────────────
-
-  _renderTheme() {
-    const current = AppState.theme || localStorage.getItem('tc-theme') || DEFAULT_THEME;
-    // Each card is dressed in its own theme (self-contained `.tk-<id>` styles)
-    // and *is* the preview — a mini-conversation + input, not just a swatch.
-    const cards = THEMES.map(t => {
-      const sel = t.id === current;
-      return `<button class="tcard tk-${t.id}${sel ? ' sel' : ''}" data-theme-choice="${t.id}" title="${escapeHtml(t.label)}">
-        ${sel ? '<span class="tsel">✓</span>' : ''}
-        <div class="thead"><span class="tnm">${escapeHtml(t.label)}</span><span class="tfl">✿</span></div>
-        <div class="tconv">
-          <div class="tblo">${escapeHtml(i18n.t('themes.' + t.id + '.desc'))}</div>
-          <div class="trep">${escapeHtml(i18n.t('themes.' + t.id + '.reply'))}</div>
-          <div class="tmeta">0.8s</div>
-        </div>
-        <div class="tfoot"><span class="tin">${i18n.t('themes.placeholder')}</span><span class="tsend">↑</span></div>
-      </button>`;
-    }).join('');
-    return `<div class="theme-strip-eyebrow">${i18n.t('settings.themeLabel')}</div>
-      <div class="tstrip">${cards}</div>
-      ${this._renderMascot()}`;
-  }
-
-  // ── Mascotte ───────────────────────────────────────────────────────
-
-  /* Blocco della sezione "Personalizzazione", sotto la passerella dei temi:
-     mini-label, toggle di visibilità e taglia.
-     Le opzioni restano SEMPRE a schermo: nasconderle a mascotte spenta faceva
-     sembrare che l'unica scelta fosse tenerla o buttarla via — chi la spegneva
-     subito non scopriva mai che era personalizzabile. Da spenta si vedono
-     inerti (attributo `disabled`), come promessa di cosa si ottiene
-     riaccendendola.
-     Il lato NON si sceglie qui: lo decide il lancio (v. mobile-jenny.js), e
-     un'impostazione che cambia da sola al primo lancio sarebbe una bugia. */
-  _renderMascot() {
-    const visible = mascotVisible();
-    const size = mascotSize();
-    const off = visible ? '' : ' disabled';
-    const sizeLabels = {
-      sm: i18n.t('settings.mascotSizeSmall'),
-      md: i18n.t('settings.mascotSizeMedium'),
-      lg: i18n.t('settings.mascotSizeLarge'),
-    };
-    const sizeButtons = Object.keys(MASCOT_SIZES).map(id =>
-      `<button class="settings-seg-btn${id === size ? ' active' : ''}" data-mascot-size="${id}"${off}>
-        ${escapeHtml(sizeLabels[id])}
-        ${id === size ? '<i class="ti ti-check"></i>' : ''}
-      </button>`
-    ).join('');
-    return `
-      <div class="theme-strip-eyebrow">${i18n.t('settings.mascotSection')}</div>
-      <div class="settings-field settings-toggle-row">
-        <label class="settings-label">${i18n.t('settings.mascotVisible')}</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="mascot-visible-toggle" ${visible ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="settings-field"${visible ? '' : ' data-settings-off'}>
-        <label class="settings-label">${i18n.t('settings.mascotSize')}</label>
-        <div class="settings-seg">${sizeButtons}</div>
-      </div>
-      ${this._renderFloating()}`;
-  }
-
-  /* Mascotte flottante: sopra le altre app, un tap e le si parla.
-     Sta qui sotto la mascotte perché è la stessa Jenny, ma è l'unica voce di
-     questa sezione che NON è una preferenza di client: vive in config.json,
-     perché a montare la finestra è il service all'avvio e un service non ha un
-     localStorage da leggere.
-     Fuori da Android la voce non si disegna affatto (`available` falso): un
-     interruttore che non può accendere niente è peggio di una voce assente.
-     E l'interruttore non mente sul permesso — `active` falso a `enabled` vero
-     vuol dire che Android non lascia aprire la finestra, e la riga sotto lo
-     dice invece di far rimbalzare il toggle su off senza spiegazioni. */
-  _renderFloating() {
-    const floating = this.data?.floating;
-    if (!floating || !floating.available) return '';
-    const on = !!floating.enabled;
-    const blocked = on && floating.active === false;
-    const note = blocked
-      ? `<div class="settings-hint settings-hint-warn">${i18n.t('settings.floatingBlocked')}</div>`
-      : `<div class="settings-hint">${i18n.t('settings.floatingHint')}</div>`;
-    return `
-      <div class="settings-field settings-toggle-row">
-        <label class="settings-label">${i18n.t('settings.floatingEnabled')}</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="floating-enabled-toggle" ${on ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      ${note}`;
-  }
-
-  // ── Tasto Home ─────────────────────────────────────────────────────
-
-  /* Da launcher, Home significa "torna alla schermata iniziale": qui si sceglie
-     quale sia. Select e non segmented: quattro voci non stanno in riga su un
-     telefono. Le etichette delle viste sono quelle del dock (nav.*), così
-     restano allineate a quello che si vede nella barra. */
-  _renderHomeView() {
-    const current = homeView();
-    const labels = {
-      chat: i18n.t('nav.chat'),
-      apps: i18n.t('nav.apps'),
-      workspace: i18n.t('nav.workspace'),
-      last: i18n.t('settings.homeLast'),
-    };
-    const options = HOME_VIEW_CHOICES.map(id =>
-      `<option value="${id}"${id === current ? ' selected' : ''}>${escapeHtml(labels[id])}</option>`
-    ).join('');
-    return `
-      <div class="theme-strip-eyebrow">${i18n.t('settings.homeSection')}</div>
-      <div class="settings-field">
-        <select class="settings-select" id="home-view-select">${options}</select>
-        <p class="settings-hint" style="margin:6px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.homeHint')}</p>
-      </div>`;
-  }
-
-  // ── Language ───────────────────────────────────────────────────────
-
-  _renderLanguage() {
-    const current = i18n.locale;
-    let html = '<div class="settings-language-list">';
-    for (const locale of i18n.availableLocales) {
-      const isActive = locale === current;
-      html += `<button class="settings-seg-btn${isActive ? ' active' : ''}" data-locale="${locale}">
-        ${i18n.getLocaleName(locale)}
-        ${isActive ? '<i class="ti ti-check"></i>' : ''}
-      </button>`;
-    }
-    html += '</div>';
-    return html;
-  }
-
   // ── Backup e ripristino ──────────────────────────────────────────────
 
   /* La storia locale, e **non** il backup cifrato.
@@ -2646,72 +2487,6 @@ export class SettingsController {
     // Modalità avanzata
     const advToggle = this.contentEl.querySelector('#advanced-mode-toggle');
     if (advToggle) advToggle.addEventListener('change', () => setAdvancedMode(advToggle.checked));
-
-
-
-    // Mascotte: toggle visibilità (re-render per accendere/spegnere le
-    // opzioni sotto) + scelta della taglia
-    const mascotToggle = this.contentEl.querySelector('#mascot-visible-toggle');
-    if (mascotToggle) {
-      mascotToggle.addEventListener('change', () => {
-        setMascotVisible(mascotToggle.checked);
-        this.render();
-      });
-    }
-    this.contentEl.querySelectorAll('[data-mascot-size]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        setMascotSize(btn.dataset.mascotSize);
-        this.render();
-      });
-    });
-    // Mascotte flottante: si salva al cambio come il toggle posizione. Il
-    // re-render serve: la risposta porta `active`, cioè se Android ha davvero
-    // lasciato aprire la finestra, e quella riga va ridisegnata.
-    const floatingToggle = this.contentEl.querySelector('#floating-enabled-toggle');
-    if (floatingToggle) {
-      floatingToggle.addEventListener('change', () => {
-        const enabled = floatingToggle.checked;
-        api.updateFloating({ enabled: enabled ? '1' : '0' })
-          .then(payload => {
-            if (payload && payload.floating) this.data.floating = payload.floating;
-            this.render();
-            if (enabled && payload?.floating?.active === false) {
-              showToast(i18n.t('settings.floatingBlocked'));
-            }
-          })
-          .catch(() => {
-            floatingToggle.checked = !enabled;  // rollback sull'errore
-            showToast(i18n.t('settings.saveError'));
-          });
-      });
-    }
-
-    // Tasto Home: nessun re-render, il valore serve solo a goHome()
-    const homeSelect = this.contentEl.querySelector('#home-view-select');
-    if (homeSelect) {
-      homeSelect.addEventListener('change', () => setHomeView(homeSelect.value));
-    }
-
-    // Theme selector — tap a card to switch theme
-    this.contentEl.querySelectorAll('.tcard[data-theme-choice]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const theme = setTheme(btn.dataset.themeChoice);
-        this.render();
-        showToast(theme.label);
-      });
-    });
-
-    // Language selector — solo i bottoni seg con data-locale (quelli della
-    // taglia mascotte condividono la classe ma hanno data-mascot-size).
-    this.contentEl.querySelectorAll('.settings-seg-btn[data-locale]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const locale = btn.dataset.locale;
-        i18n.setLocale(locale).then(() => {
-          this.render();
-          showToast(i18n.t('settings.saved'));
-        });
-      });
-    });
   }
 
   _wireBtn(id, fn) {

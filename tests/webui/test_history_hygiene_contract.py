@@ -119,15 +119,45 @@ def test_home_collapses_to_the_root_instead_of_stacking_over_it() -> None:
     mai: dieci Home, dieci entry da smaltire una pressione alla volta.
     """
     body = _method(_app(), "goHome")
-    assert "this.switchMode(target, false);" in body, "la vista home non si impila"
+    assert "this.switchMode('chat', false);" in body, "la vista home non si impila"
     assert "this._navPos = 0;" in body, "Home riporta al fondo dello stack nostro"
     assert "this.replaceNav(" in body, "la entry corrente deve descrivere la home"
-    assert body.index("this.switchMode(target, false);") < body.index("this._navPos = 0;"), (
+    assert body.index("this.switchMode('chat', false);") < body.index("this._navPos = 0;"), (
         "prima si cambia vista, poi si marca la radice: replaceNav descrive dove si è atterrati"
     )
-    assert "target === 'last'" in body, (
-        "'last' vuol dire 'lasciami dove sono': niente cambio vista e niente riscrittura"
+    # Quale vista sia «home» era una preferenza a quattro voci, con un 'last'
+    # che voleva dire "non muoverti". Tolta il 21/09/2026 col gruppo che la
+    # conteneva: la schermata iniziale è **sempre** la chat. La regola di
+    # sopra non cambia — Home collassa e non impila — cambia solo che la
+    # destinazione non è più leggibile da fuori.
+    assert "homeView()" not in body, "la schermata iniziale è la chat, non una preferenza"
+    assert "'last'" not in body, "il ramo che lasciava l'utente dov'era è tornato"
+
+
+def test_the_home_view_preference_is_gone_from_the_product() -> None:
+    """Non basta che `goHome` non la legga: finche' il modulo esiste, il valore
+    resta scritto nel `localStorage` di chi l'aveva cambiato e la prossima
+    persona che lo trova crede che la preferenza esista ancora da qualche
+    parte. Il file se n'e' andato, e con lui la sua riga di manifesto — un file
+    elencato e non presente e' un 404 silenzioso sul telefono, che in locale
+    non si vede.
+    """
+    from jenny.utils.android_assets import _UI_MANIFEST
+
+    modulo = ASSETS / "shared" / "home-view.js"
+    assert not modulo.exists(), "il modulo della vista home e' tornato"
+    assert "assets/shared/home-view.js" not in _UI_MANIFEST, (
+        "il manifesto elenca ancora un file che non esiste"
     )
+    # Solo gli `import`, non la parola: il commento di `goHome` nomina il
+    # modulo apposta, per dire dove la preferenza viveva prima di sparire.
+    for js in sorted(ASSETS.rglob("*.js")):
+        if "vendor" in js.parts:
+            continue
+        for riga in js.read_text(encoding="utf-8").splitlines():
+            assert not (riga.lstrip().startswith("import") and "home-view" in riga), (
+                f"{js.name} importa ancora la preferenza della vista home"
+            )
 
 
 def test_the_workspace_editor_is_never_dropped_behind_home() -> None:

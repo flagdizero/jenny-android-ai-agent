@@ -320,17 +320,35 @@ def test_le_soprascritte_nuove_sono_tradotte(lingua: str) -> None:
 
 
 def test_il_taglio_fine_e_arrivato() -> None:
-    """La misura del ritaglio: undici sezioni sono diventate almeno quindici
+    """La misura del ritaglio: undici sezioni sono diventate quattordici
     gruppi, e le tre grandi si sono spezzate.
 
     `_renderModelSettings`, `_renderTools` e `_renderMemory` tenevano insieme
     cose che la tavola separa; se uno di quei nomi ricompare, qualcuno ha
     rimesso insieme quel che il ritaglio aveva diviso.
+
+    **Erano quindici fino al 21/09/2026.** Il gruppo che manca e'
+    `personalization`, e non e' un pezzo di ritaglio andato perso: non stava in
+    nessuna tavola, era uno dei due parcheggi dichiarati, e delle sue quattro
+    voci tre vivevano gia' in casa (temi, mascotte, finestra flottante). Il
+    nome di Jenny e' andato nella stanza «Jenny» con loro, e la lingua se n'e'
+    andata con l'ultimo interruttore che la cambiava. Quindi il conto sceso di
+    uno **e'** il taglio, non un suo cedimento — e il controllo qui sotto dice
+    proprio quello: personalizzazione in officina non deve tornare.
     """
     for vecchio in ("_renderModelSettings", "_renderTools(", "_renderMemory("):
         assert vecchio not in SETTINGS, f"{vecchio} e' tornato: il ritaglio si e' richiuso"
-    totale = sum(len(g) for g in _gruppi_dichiarati().values())
-    assert totale >= 15, f"solo {totale} gruppi: il taglio fine non c'e'"
+    dichiarati = _gruppi_dichiarati()
+    totale = sum(len(g) for g in dichiarati.values())
+    assert totale >= 14, f"solo {totale} gruppi: il taglio fine non c'e'"
+    tutti = {g for gruppi in dichiarati.values() for g in gruppi}
+    assert "personalization" not in tutti, (
+        "la personalizzazione e' tornata in officina: temi, mascotte e nome "
+        "stanno in casa, e tenerli in due posti vuol dire tenerli allineati"
+    )
+    for morto in ("_renderPersonalization", "_renderTheme(", "_renderMascot(",
+                  "_renderHomeView(", "_renderLanguage("):
+        assert morto not in SETTINGS, f"{morto} e' tornato in officina"
 
 
 # ── L'intestazione della Console ─────────────────────────────────────────────

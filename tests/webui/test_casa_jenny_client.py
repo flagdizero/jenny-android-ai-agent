@@ -127,7 +127,15 @@ let letturaRotta = false;
 const salvataggi = [];
 let salvataggioRotto = false;
 const brindisi = [];
+const nomiSalvati = [];
+let nomeRotto = false;
 const api = {
+  updateSettings(params) {
+    nomiSalvati.push(params);
+    return nomeRotto
+      ? Promise.reject(new Error('rifiutato'))
+      : Promise.resolve({});
+  },
   updateFloating(params) {
     chiamate.push(params);
     if (errore) return Promise.reject(errore);
@@ -163,6 +171,9 @@ __RULES_PATH__
 class CasaJenny {
   __CTOR__
   __OPEN__
+  __SET_NAME__
+  __MARK_NOME__
+  __SAVE_NOME__
   __SET_FLOATING__
   __APPLY_TRANSLATIONS__
   __VALUE__
@@ -193,6 +204,8 @@ function stanza(floating, disco, rotta) {
   letturaRotta = !!rotta;
   salvataggi.length = 0;
   salvataggioRotto = false;
+  nomiSalvati.length = 0;
+  nomeRotto = false;
   brindisi.length = 0;
   cambi = 0;
   const lei = new CasaJenny({ onChange: () => { cambi += 1; } });
@@ -215,6 +228,9 @@ def _harness() -> str:
         .replace("__SIZE_KEYS__", _const(src, "SIZE_KEYS"))
         .replace("__CTOR__", _member(src, "constructor"))
         .replace("__OPEN__", _member(src, "open"))
+        .replace("__SET_NAME__", _member(src, "setName"))
+        .replace("__MARK_NOME__", _member(src, "_markNome"))
+        .replace("__SAVE_NOME__", _member(src, "saveNome"))
         .replace("__SET_FLOATING__", _member(src, "setFloating"))
         .replace("__APPLY_TRANSLATIONS__", _member(src, "applyTranslations"))
         .replace("__VALUE__", _member(src, "value"))
@@ -491,4 +507,74 @@ def test_the_path_is_the_one_the_server_writes() -> None:
     lo stesso posto."""
     _run_js("""
       assert.equal(RULES_PATH, '.jenny/soul_rules.md');
+    """)
+
+
+# ── Come si chiama ──────────────────────────────────────────────────────────
+#
+# Il nome era l'unica voce della «Personalizzazione» dell'officina che in casa
+# non esistesse gia'. Il 21/09/2026 quel gruppo e' sparito e il nome e' venuto
+# qui: senza, si sarebbe potuto scegliere soltanto al primo avvio.
+
+
+def test_the_save_button_only_shows_when_there_is_something_to_save() -> None:
+    """Un «Salva» sempre acceso su un campo che nessuno ha toccato invita a
+    toccarlo per vedere cosa fa — e un nome vuoto non e' qualcosa da salvare:
+    il server ripiegherebbe su «Jenny» senza dirlo."""
+    _run_js("""
+      const lei = stanza();
+      assert.equal(nodi['casa-nome-save'].hidden, true, 'nascosto finche\u2019 non si sa il nome');
+
+      lei.setName('Ada');
+      assert.equal(nodi['casa-nome'].value, 'Ada', 'il campo non porta il nome del server');
+      assert.equal(nodi['casa-nome-save'].hidden, true, 'niente da salvare: e\u2019 lo stesso nome');
+
+      nodi['casa-nome'].value = 'Ada Lovelace';
+      nodi['casa-nome'].listeners.input[0]();
+      assert.equal(nodi['casa-nome-save'].hidden, false, 'il nome e\u2019 cambiato e non si puo\u2019 salvare');
+
+      nodi['casa-nome'].value = '   ';
+      nodi['casa-nome'].listeners.input[0]();
+      assert.equal(nodi['casa-nome-save'].hidden, true, 'un nome vuoto non si salva');
+    """)
+
+
+def test_a_name_being_typed_is_never_overwritten() -> None:
+    """Stesso patto delle regole: la risposta del server arriva quando arriva,
+    e non deve mai riscrivere quel che la persona sta scrivendo."""
+    _run_js("""
+      const lei = stanza();
+      nodi['casa-nome'].value = 'Vera';
+      lei.setName('Jenny');
+      assert.equal(nodi['casa-nome'].value, 'Vera', 'la risposta ha scritto sopra');
+    """)
+
+
+def test_saving_the_name_goes_through_the_settings_call() -> None:
+    """La stessa chiamata con cui la casa salva il modello: `updateSettings`.
+    Il server la gestisce gia\u2019, e un secondo percorso di scrittura per un
+    campo solo sarebbe un secondo posto da tenere allineato."""
+    _run_js("""
+      const lei = stanza();
+      lei.setName('Jenny');
+      nodi['casa-nome'].value = 'Ada';
+      await lei.saveNome();
+      assert.deepEqual(nomiSalvati, [{ bot_name: 'Ada' }]);
+      assert.equal(nodi['casa-nome-save'].hidden, true, 'salvato, e il bottone resta li\u2019');
+    """)
+
+
+def test_a_refused_save_says_so_and_keeps_the_button() -> None:
+    """Se il salvataggio non e\u2019 andato, dirlo e lasciare il bottone: un
+    bottone che sparisce dopo un errore racconta che il nome e\u2019 cambiato."""
+    _run_js("""
+      const lei = stanza();
+      lei.setName('Jenny');
+      nodi['casa-nome'].value = 'Ada';
+      nodi['casa-nome'].listeners.input[0]();
+      nomeRotto = true;
+      await lei.saveNome();
+      assert.equal(nodi['casa-nome-save'].hidden, false, 'il bottone e\u2019 sparito su un errore');
+      assert.equal(brindisi.length, 1, 'l\u2019errore non l\u2019ha detto');
+      assert.equal(brindisi[0][1], 'error');
     """)

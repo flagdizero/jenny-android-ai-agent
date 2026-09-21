@@ -69,6 +69,10 @@ export class CasaJenny {
     this.floatingBtn = document.getElementById('casa-jenny-floating');
     this.floatingLabel = document.getElementById('casa-jenny-floating-label');
     this.floatingNote = document.getElementById('casa-jenny-floating-note');
+    this.nomeEl = document.getElementById('casa-nome');
+    this.nomeLabel = document.getElementById('casa-nome-label');
+    this.nomeNote = document.getElementById('casa-nome-note');
+    this.nomeSave = document.getElementById('casa-nome-save');
     this.rulesEl = document.getElementById('casa-rules');
     this.rulesLabel = document.getElementById('casa-rules-label');
     this.rulesNote = document.getElementById('casa-rules-note');
@@ -85,6 +89,11 @@ export class CasaJenny {
       const card = e.target.closest('[data-size]');
       if (card) this.pickSize(card.dataset.size);
     });
+    /* Come si chiama secondo il server. `null` finche' non l'ha detto. */
+    this._nomeSalvato = null;
+    this.nomeEl?.addEventListener('input', () => this._markNome());
+    this.nomeSave?.addEventListener('click', () => this.saveNome());
+
     /* Quel che c'e' su disco, per sapere se c'e' qualcosa da salvare. `null`
        finche' non si e' letto: diverso da «letto, ed era vuoto». */
     this._rulesOnDisk = null;
@@ -95,7 +104,50 @@ export class CasaJenny {
   open() {
     this._paintSizes();
     this._mark();
+    /* Il «Salva» del nome parte nascosto anche nel markup, ma affidare a un
+       attributo HTML l'unica garanzia che non compaia prima di sapere come si
+       chiama vuol dire perderla al primo ritocco della pagina. */
+    this._markNome();
     this._loadRules();
+  }
+
+  /** Come si chiama, secondo il server.
+   *
+   *  Arriva col payload di «Tu e Jenny», come lo stato della finestra: una
+   *  sola lettura per entrambi. Un campo che l'utente sta scrivendo non si
+   *  sovrascrive — stesso patto delle regole qui sotto.
+   */
+  setName(nome) {
+    this._nomeSalvato = typeof nome === 'string' ? nome : '';
+    if (this.nomeEl && !this.nomeEl.value) this.nomeEl.value = this._nomeSalvato;
+    this._markNome();
+  }
+
+  /** «Salva» c'e' solo quando c'e' qualcosa da salvare, e un nome vuoto non
+   *  e' qualcosa: il server ripiegherebbe su «Jenny» senza dirlo. */
+  _markNome() {
+    if (!this.nomeSave || !this.nomeEl) return;
+    const scritto = this.nomeEl.value.trim();
+    this.nomeSave.hidden = this._nomeSalvato === null
+      || !scritto
+      || scritto === this._nomeSalvato;
+  }
+
+  /** Salva il nome. Stessa chiamata con cui la casa salva il modello. */
+  async saveNome() {
+    if (!this.nomeEl) return;
+    const nome = this.nomeEl.value.trim();
+    if (!nome) return;
+    try {
+      await api.updateSettings({ bot_name: nome });
+    } catch (err) {
+      console.warn('casa.jenny: nome non salvato', err);
+      showToast(i18n.t('casa.jenny.nomeFailed'), 'error');
+      return;
+    }
+    this._nomeSalvato = nome;
+    this._markNome();
+    showToast(i18n.t('casa.jenny.rulesSaved'), 'success');
   }
 
   /** Quel che il server dice della finestra flottante. `null` = non si sa. */
@@ -108,6 +160,9 @@ export class CasaJenny {
     if (this.visibleLabel) this.visibleLabel.textContent = i18n.t('settings.mascotVisible');
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
+    if (this.nomeLabel) this.nomeLabel.textContent = i18n.t('casa.jenny.nome');
+    if (this.nomeNote) this.nomeNote.textContent = i18n.t('casa.jenny.nomeHint');
+    if (this.nomeSave) this.nomeSave.textContent = i18n.t('casa.jenny.rulesSave');
     if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('casa.jenny.rules');
     if (this.rulesNote) this.rulesNote.textContent = i18n.t('casa.jenny.rulesHint');
     if (this.rulesSave) this.rulesSave.textContent = i18n.t('casa.jenny.rulesSave');

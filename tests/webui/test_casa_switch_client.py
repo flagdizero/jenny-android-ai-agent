@@ -181,10 +181,14 @@ class App {
       sayJenny: (v) => { this.valoreJenny = v; },
       sayModel: (v) => { this.valoreModello = v; },
     };
+    /* Il nome di Jenny viaggia con lo stesso payload della finestra
+       flottante: una lettura sola per due campi della stessa stanza. */
+    this.nomi = [];
     this.jennyRoom = {
       applyTranslations: () => {},
       open: () => this.fatti.push('jenny aperta'),
       setFloating: (v) => this.flottanti.push(v),
+      setName: (v) => this.nomi.push(v),
       value: () => 'piccola',
     };
     this.impostazioniDate = [];

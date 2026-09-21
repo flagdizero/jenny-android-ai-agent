@@ -427,6 +427,7 @@ class CasaApp {
     this.tu.sayJenny(this.jennyRoom.value());
     const data = await this._askSettings();
     this.jennyRoom.setFloating(data?.floating || null);
+    this.jennyRoom.setName(data?.agent?.bot_name || '');
     this.tu.sayJenny(this.jennyRoom.value());
     this.modelRoom.setSettings(data);
     this.tu.sayModel(this.modelRoom.value());

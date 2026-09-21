@@ -165,11 +165,9 @@
   "settings": {
     "save": "Save",
     "saved": "Saved!",
-    "language": "Language",
     "webSearch": "Web Search",
     "advancedMode": "Developer mode",
     "advancedModeHint": "Also shows what Jenny uses to work: system skills and internal files (memory, configuration) appear in the lists. Only useful for looking under the hood.",
-    "personalization": "Personalization",
     "memory": {
       "unavailable": "The memory settings could not be read. Reopen this screen; if it stays like this, check config.json.",
       "dreamEnabled": "Periodic consolidation",
@@ -211,7 +209,6 @@
     "cronRecoveredBackup": "Your scheduled reminders were restored from the last good backup: the job list could not be read at startup. Check that they are all there.",
     "cronRecoveredEmpty": "The scheduled reminder list could not be read and there was no usable backup, so Jenny started with none: the ones you had created will not fire again and need recreating. The unreadable file was kept aside:",
     "themeLabel": "Theme",
-    "mascotSection": "Mascot",
     "mascotVisible": "Show mascot",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
@@ -220,9 +217,6 @@
     "floatingEnabled": "Floating mascot",
     "floatingHint": "Jenny stays above other apps: tap her and you can talk, with the answer in a bubble. It's the same conversation as in the app.",
     "floatingBlocked": "Android won't let her open the window: allow “Display over other apps” in the system settings.",
-    "homeSection": "Home button",
-    "homeHint": "Where the Android Home button lands when Jenny is your launcher.",
-    "homeLast": "Wherever I was",
     "tokenUsage": "Token Usage",
     "version": "Version",
     "via": "via",
@@ -234,7 +228,6 @@
     "temperature": "Temperature",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Reasoning Effort",
-    "botName": "Bot Name",
     "addProvider": "Add provider",
     "noProviders": "No providers configured.",
     "edit": "Edit",
@@ -690,34 +683,26 @@
     "codeTag": "[code]"
   },
   "themes": {
-    "placeholder": "Write to Jenny…",
     "chanel": {
-      "desc": "Black and white couture, a thread of gold only where it counts.",
-      "reply": "Luxury never raises its voice."
+      "desc": "Black and white couture, a thread of gold only where it counts."
     },
     "synthwave": {
-      "desc": "Neon pink on violet night, every light leaves a trail.",
-      "reply": "Maximum character — for the fearless."
+      "desc": "Neon pink on violet night, every light leaves a trail."
     },
     "kyoto": {
-      "desc": "Earth, rust and hand-rounded edges, like mended ceramics.",
-      "reply": "Quietness never asks for attention."
+      "desc": "Earth, rust and hand-rounded edges, like mended ceramics."
     },
     "sticker": {
-      "desc": "Every message is a cut-out sticker: white border, hard shadow, imperfect rotation.",
-      "reply": "Chat like the back of a laptop."
+      "desc": "Every message is a cut-out sticker: white border, hard shadow, imperfect rotation."
     },
     "fumetto": {
-      "desc": "Ink on paper, hatching and speech bubbles: every reply is a comic panel.",
-      "reply": "Your chat is a page to read."
+      "desc": "Ink on paper, hatching and speech bubbles: every reply is a comic panel."
     },
     "y2k": {
-      "desc": "Glossy gradients, bubblegum gloss, white borders.",
-      "reply": "The year 2000 as we promised ourselves."
+      "desc": "Glossy gradients, bubblegum gloss, white borders."
     },
     "pietra": {
-      "desc": "Travertine, bronze and Roman serifs, midday light.",
-      "reply": "Solid as a well-carved idea."
+      "desc": "Travertine, bronze and Roman serifs, midday light."
     }
   },
   "provider": {
@@ -1029,6 +1014,9 @@
       "title": "Jenny",
       "hidden": "hidden",
       "floatingShort": "floating",
+      "nome": "Her name",
+      "nomeHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
+      "nomeFailed": "I couldn't save the name.",
       "rules": "The rules you gave her",
       "rulesHint": "This one stays yours: she reads it every turn and never rewrites it. The rest of her character is hers, and you can read it in the workshop.",
       "rulesPlaceholder": "For example: call me by name, and no emoji.",
