@@ -208,6 +208,10 @@ export class CasaMap {
        ed e' la stessa ragione per cui `mobile-graph.js` ne ha due. */
     this._gen = 0;
     this._drawn = null;
+    /* Vero appena l'utente ha spostato o avvicinato la mappa **col dito**.
+       Da quel momento l'inquadratura e' sua, e nessuno la riscrive: v.
+       `_inquadra`. */
+    this._inquadrataDaTe = false;
   }
 
   /** Disegna la mappa di *data*. La stessa risposta dell'elenco. */
@@ -256,6 +260,11 @@ export class CasaMap {
     /* Una simulazione precedente va fermata prima di sostituirne l'SVG: i
        suoi tick scrivono su nodi che stanno per sparire. */
     this.stop();
+    /* Un disegno nuovo merita la sua inquadratura. **Qui e non in `draw`**: per
+       una risposta gia' disegnata `draw` esce subito (`this._drawn === data`),
+       quindi azzerarlo li' vorrebbe dire buttare via dove l'utente stava
+       guardando ogni volta che torna sulla linguetta. */
+    this._inquadrataDaTe = false;
     const box = this.el.getBoundingClientRect();
     const w = Math.max(240, Math.round(box.width) || 320);
     const h = Math.max(240, Math.round(box.height) || 320);
@@ -320,29 +329,65 @@ export class CasaMap {
        ci sta, e rimpicciolire i pallini non lo renderebbe leggibile. */
     const zoom = d3.zoom()
       .scaleExtent([0.4, 4])
-      .on('zoom', (e) => root.attr('transform', e.transform));
+      .on('zoom', (e) => this._onZoom(e, root));
     svg.call(zoom);
 
-    /* A fisica ferma, la nuvola sta dove l'hanno lasciata le forze — che non e'
-       il centro. Visto al banco: sei nodi raccolti in basso a destra e mezza
-       stanza vuota. Si inquadra a riposo e non a ogni tick: inseguire una
-       simulazione che si assesta vuol dire farle ballare sotto lo sguardo. */
     this._sim.on('end', () => {
+      /* I nomi si ricollocano **sempre**: dipendono da dove stanno i nodi, non
+         da dove guarda l'utente. */
       this._placeLabels(name);
-      const xs = nodes.map((n) => n.x);
-      const ys = nodes.map((n) => n.y);
-      const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
-      const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
-      const k = Math.min(
-        FIT_MAX_SCALE,
-        (w - FIT_PADDING * 2) / Math.max(1, x1 - x0),
-        (h - FIT_PADDING * 2) / Math.max(1, y1 - y0),
-      );
-      const t = d3.zoomIdentity
-        .translate(w / 2 - k * (x0 + x1) / 2, h / 2 - k * (y0 + y1) / 2)
-        .scale(k);
-      svg.call(zoom.transform, t);
+      this._inquadra(svg, zoom, nodes, w, h);
     });
+  }
+
+  /** Cosa fa un evento di zoom, gesto o no.
+   *
+   *  D3 manda lo stesso evento per un dito e per un `zoom.transform` scritto da
+   *  noi, e li distingue con `sourceEvent`: c'e' solo nel primo caso. E' la
+   *  differenza fra «l'utente ha guardato da qualche parte» e «ci siamo
+   *  inquadrati da soli», e serve a `_inquadra` per non passare sopra al dito.
+   */
+  _onZoom(e, root) {
+    if (e.sourceEvent) this._inquadrataDaTe = true;
+    root.attr('transform', e.transform);
+  }
+
+  /** Inquadra la nuvola: **una volta, e mai contro il dito.**
+   *
+   *  A fisica ferma la nuvola sta dove l'hanno lasciata le forze — che non e' il
+   *  centro. Visto al banco: sei nodi raccolti in basso a destra e mezza stanza
+   *  vuota. Si inquadra a riposo e non a ogni tick: inseguire una simulazione
+   *  che si assesta vuol dire farla ballare sotto lo sguardo.
+   *
+   *  **E qui c'era un difetto, chiesto dall'utente il 21/09/2026: «né drag né
+   *  pan, niente».** Questa riga girava senza condizioni. La simulazione si
+   *  ferma cinque secondi circa dopo l'apertura della linguetta (~150 tick a
+   *  `alphaDecay(0.045)`, e il Titan ne fa una trentina al secondo): chi apriva
+   *  la mappa e spostava subito la vedeva **tornare indietro da sola**. Non era
+   *  lo spostamento che non funzionava — era lo spostamento riscritto un istante
+   *  dopo.
+   *
+   *  La guardia vale anche in avanti, ed e' la ragione per cui arriva prima del
+   *  trascinamento dei nodi (v. `.agent/casa-mappa-dito-plan.md`): trascinare
+   *  fa ripartire la fisica, quindi `end` scatta di nuovo, quindi senza questa
+   *  riga **ogni pallino trascinato costerebbe un salto della vista** nel
+   *  momento in cui si alza il dito.
+   */
+  _inquadra(svg, zoom, nodes, w, h) {
+    if (this._inquadrataDaTe) return;
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+    const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
+    const k = Math.min(
+      FIT_MAX_SCALE,
+      (w - FIT_PADDING * 2) / Math.max(1, x1 - x0),
+      (h - FIT_PADDING * 2) / Math.max(1, y1 - y0),
+    );
+    const t = d3.zoomIdentity
+      .translate(w / 2 - k * (x0 + x1) / 2, h / 2 - k * (y0 + y1) / 2)
+      .scale(k);
+    svg.call(zoom.transform, t);
   }
 
   /* Misura i nomi, li colloca, e toglie quelli che non ci stanno.

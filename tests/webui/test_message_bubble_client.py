@@ -100,7 +100,12 @@ function runFrames() {
 const selectionInside = () => false;
 
 const renderMarkdown = (text) => text;
-const renderKaTeX = () => {};
+/* Formule e diagrammi: il banco guarda le bolle, non il loro contenuto ricco.
+   **E questo finto e' il motivo per cui un difetto e' passato**: quando le
+   librerie sono state cancellate lasciando i chiamanti, qui dentro non e'
+   cambiato niente. Che il chiamante e la libreria stiano insieme lo misura
+   `test_vendor_contract.py`, e come disegnano `test_rich_content_client.py`. */
+const renderRichContent = () => {};
 
 function makeChat() {
   return {

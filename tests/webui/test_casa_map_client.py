@@ -395,3 +395,182 @@ def test_a_name_may_graze_a_dot_and_that_is_on_purpose() -> None:
       assert.ok(dy.n0 > 0 && dy.n1 < 0, 'i due non si sono divisi: ' + JSON.stringify(dy));
       assert.equal(display.n2, 'none');
     """)
+
+
+# ── L'inquadratura non passa sopra al dito ──────────────────────────────────
+
+_CAMERA = """
+/* D3 ridotto a quel che queste due decisioni toccano: una selezione che
+   registra le chiamate, e `zoomIdentity` che restituisce una trasformazione
+   riconoscibile invece di una matrice vera — qui interessa **se** e **quante
+   volte** viene applicata, non cosa valga. */
+const d3 = {
+  zoomIdentity: {
+    translate(x, y) { return { ...this, tx: x, ty: y }; },
+    scale(k) { return { ...this, k }; },
+  },
+};
+
+function svgFinto() {
+  const applicate = [];
+  return { applicate, call(_che, t) { applicate.push(t); } };
+}
+
+const zoomFinto = { transform: 'TRANSFORM' };
+
+class Mappa {
+  constructor() {
+    this._inquadrataDaTe = false;
+    this.disegnato = [];
+  }
+__METODI__
+}
+
+/* Tre nodi in basso a destra: la nuvola che il difetto aveva reso famosa. */
+const NODI = [{ x: 260, y: 300 }, { x: 300, y: 320 }, { x: 280, y: 280 }];
+"""
+
+
+def _run_camera(script: str) -> None:
+    src = MAP_JS.read_text(encoding="utf-8")
+    harness = (
+        "import assert from 'node:assert/strict';\n"
+        + _const(src, "FIT_PADDING")
+        + "\n"
+        + _const(src, "FIT_MAX_SCALE")
+        + "\n"
+        + _CAMERA.replace(
+            "__METODI__",
+            "  " + _member(src, "_onZoom") + "\n  " + _member(src, "_inquadra"),
+        )
+    )
+    proc = subprocess.run(
+        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_at_rest_the_cloud_gets_framed() -> None:
+    """A fisica ferma la nuvola sta dove l'hanno lasciata le forze, che non e'
+    il centro: sei nodi in basso a destra e mezza stanza vuota. Senza questa
+    inquadratura la mappa si apre guardando il vuoto."""
+    _run_camera("""
+const m = new Mappa();
+const svg = svgFinto();
+m._inquadra(svg, zoomFinto, NODI, 590, 400);
+assert.equal(svg.applicate.length, 1, 'la nuvola non viene inquadrata');
+assert.ok(svg.applicate[0].k > 0, "l'inquadratura non porta una scala");
+""")
+
+
+def test_the_frame_never_writes_over_your_finger() -> None:
+    """**Il difetto del 21/09/2026**, chiesto cosi': «né drag né pan, niente».
+
+    L'inquadratura girava senza condizioni dentro `sim.on('end')`, e la fisica
+    si ferma cinque secondi circa dopo l'apertura della linguetta. Chi apriva la
+    mappa e spostava subito la vedeva tornare indietro da sola: lo spostamento
+    funzionava, e veniva riscritto un istante dopo.
+
+    Vale anche in avanti: un trascinamento di nodi fa ripartire la fisica, quindi
+    `end` scatta di nuovo — senza la guardia, ogni pallino trascinato costerebbe
+    un salto della vista nel momento in cui si alza il dito.
+    """
+    _run_camera("""
+const m = new Mappa();
+const radice = { attr() {} };
+
+// Il dito: D3 porta `sourceEvent` solo per un gesto vero.
+m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
+assert.equal(m._inquadrataDaTe, true, 'un gesto vero non viene riconosciuto');
+
+const svg = svgFinto();
+m._inquadra(svg, zoomFinto, NODI, 590, 400);
+assert.deepEqual(svg.applicate, [],
+  "l'inquadratura ha riscritto dove stava guardando l'utente");
+""")
+
+
+def test_framing_ourselves_does_not_count_as_your_finger() -> None:
+    """L'inquadratura *e'* un evento di zoom: applicandola, D3 richiama lo
+    stesso gestore. Se contasse come gesto, la mappa si inquadrerebbe una volta
+    e poi si dichiarerebbe "toccata dall'utente" per sempre — e un quaderno
+    ridisegnato si aprirebbe di nuovo guardando il vuoto. `sourceEvent` e' null
+    proprio per questo."""
+    _run_camera("""
+const m = new Mappa();
+const radice = { attr() {} };
+m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
+assert.equal(m._inquadrataDaTe, false,
+  'inquadrarsi da soli viene contato come un gesto dell\\'utente');
+
+const svg = svgFinto();
+m._inquadra(svg, zoomFinto, NODI, 590, 400);
+assert.equal(svg.applicate.length, 1, 'la nuvola non viene piu' + ' inquadrata');
+""")
+
+
+def test_the_transform_reaches_the_drawing_either_way() -> None:
+    """Gesto o no, la trasformazione va applicata al gruppo: la guardia decide
+    *chi inquadra*, non se il disegno si muove."""
+    _run_camera("""
+const m = new Mappa();
+const viste = [];
+const radice = { attr: (nome, v) => viste.push([nome, v]) };
+m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
+m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
+assert.deepEqual(viste, [['transform', 'MIA'], ['transform', 'NOSTRA']]);
+""")
+
+
+def test_a_redrawn_map_gets_its_frame_back_but_a_revisit_does_not() -> None:
+    """Dove si azzera il flag e' la mezza decisione che resta, e si legge dal
+    sorgente perche' vive in `_render`, che e' tutto D3.
+
+    In `_render`: un disegno nuovo e' una mappa nuova e merita la sua
+    inquadratura. **Non** in `draw`: per una risposta gia' disegnata `draw` esce
+    subito (`this._drawn === data`), quindi azzerarlo li' butterebbe via dove
+    l'utente stava guardando a ogni ritorno sulla linguetta.
+    """
+    src = MAP_JS.read_text(encoding="utf-8")
+    render = _member(src, "_render")
+    draw = _member(src, "draw")
+    assert "this._inquadrataDaTe = false;" in render, (
+        "un quaderno ridisegnato si apre guardando dove guardava il precedente"
+    )
+    assert "_inquadrataDaTe" not in draw, (
+        "tornare sulla linguetta butta via l'inquadratura dell'utente"
+    )
+
+
+def test_the_names_are_replaced_at_every_rest() -> None:
+    """I nomi dipendono da **dove stanno i nodi**, l'inquadratura da dove guarda
+    l'utente: due domande diverse, e solo la seconda ha una guardia.
+
+    Conta perche' i nomi si collocano una volta sola, a fisica ferma
+    (`_placeLabels` fa una misura di testo per etichetta, e a ogni frame sul
+    Titan non si regge). Ogni quiete successiva e' l'unica occasione di
+    rimetterli a posto: un trascinamento di nodi fa ripartire la fisica, e se la
+    ricollocazione finisse sotto la guardia dell'inquadratura i nomi resterebbero
+    dove li aveva messi la quiete precedente — accavallati, addosso al pallino
+    sbagliato.
+
+    Si legge dal sorgente: il gestore di `end` e' una chiusura dentro `_render`,
+    che e' tutto D3.
+    """
+    src = MAP_JS.read_text(encoding="utf-8")
+    m = re.search(r"this\._sim\.on\('end', \(\) => \{(.*?)\n    \}\);", src, re.S)
+    assert m, "il gestore della quiete non si trova piu'"
+    corpo = m.group(1)
+    assert "this._placeLabels(" in corpo, (
+        "a fisica ferma i nomi non si ricollocano: restano dove stavano prima"
+    )
+    assert "_inquadrataDaTe" not in corpo, (
+        "la ricollocazione dei nomi e' finita sotto la guardia dell'inquadratura: "
+        "chi ha spostato la mappa col dito non li vedrebbe piu' aggiustare"
+    )
+    assert corpo.index("this._placeLabels(") < corpo.index("this._inquadra("), (
+        "si inquadra prima di sapere dove stanno i nomi"
+    )

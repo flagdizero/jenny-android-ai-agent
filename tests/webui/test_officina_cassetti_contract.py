@@ -355,34 +355,34 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
         assert voce not in _UI_MANIFEST, f"il manifesto elenca ancora {voce}"
 
 
-def test_the_two_bundles_the_wiki_carried_are_gone_with_it() -> None:
-    """Mermaid (3,2 MB) e KaTeX (1,4 MB) avevano **un solo lettore ciascuno**,
-    ed era la wiki dell'officina: i diagrammi di una nota e il LaTeX a
-    richiesta. Nessuno dei due e' mai stato caricato dalla casa.
+def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
+    """Qui stava la frase piu' sbagliata di tutta la giornata: «Mermaid e KaTeX
+    avevano **un solo lettore ciascuno**, ed era la wiki».
 
-    Restano nel prodotto solo se qualcuno li carica: un vendor spedito e mai
-    eseguito e' peso nell'APK e una licenza da tenere aggiornata per niente.
-    Percio' si misurano tre cose insieme — il codice, il manifesto e le note di
-    licenza — perche' e' esattamente la terna che l'altra volta si era
-    disallineata (v. `test_third_party_licenses_are_actually_shipped`).
+    **Falso per KaTeX**, e questo banco non se n'e' accorto perche' chiedeva la
+    cosa comoda — che i file fossero spariti — invece di quella vera: che non
+    fosse rimasto nessuno a chiamarli. Le formule le disegnava anche la chat
+    dell'officina, da quattro punti, e quei quattro punti cominciavano tutti con
+    «se la libreria c'e'»: tolta la libreria, hanno smesso di fare qualcosa
+    **in silenzio**, e in chat le formule sono tornate `$...$` grezzo.
+
+    La regola giusta — o nessuno la chiama, o la libreria e' spedita — vale per
+    tutti i vendor e vive in `test_vendor_contract.py`. Qui resta la parte che
+    era davvero dell'officina, ed e' l'altra meta' del difetto originale:
+    **niente si carica all'avvio**. KaTeX stava in due `<script defer>` dentro
+    `officina.html`, cioe' 275 kB piu' il CSS a ogni partenza anche solo per
+    aprire la chat. Adesso e' pigro come mermaid, e questo banco tiene la porta
+    chiusa.
     """
-    from jenny.utils.android_assets import _UI_MANIFEST
-
-    for libreria in ("mermaid", "katex"):
-        assert not list((ASSETS / "vendor").glob(f"{libreria}*")), (
-            f"{libreria} e' tornato su disco senza nessuno che lo carichi"
-        )
-        assert not [v for v in _UI_MANIFEST if libreria in v], (
-            f"il manifesto spedisce ancora {libreria}"
-        )
-        note = (ASSETS.parents[3] / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-        assert libreria not in note.lower(), (
-            f"le note promettono ancora {libreria}, che non e' piu' nel bundle"
-        )
-
     html = OFFICINA.read_text(encoding="utf-8")
-    for morto in ("katex", "mermaid", "d3.min.js"):
-        assert morto not in html, f"officina.html carica ancora {morto}"
+    for pesante in ("katex", "mermaid", "d3.min.js"):
+        assert pesante not in html, (
+            f"officina.html carica {pesante} all'avvio: si carica quando serve, "
+            f"non a ogni partenza"
+        )
+    casa = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    for pesante in ("katex", "mermaid", "d3.min.js"):
+        assert pesante not in casa, f"index.html carica {pesante} all'avvio"
 
 
 def test_the_notebook_did_not_disappear_with_it() -> None:

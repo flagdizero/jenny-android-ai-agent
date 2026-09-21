@@ -10,6 +10,7 @@ import { scopeChip } from './shared/scope-chip.js';
 import { writeSwitch } from './shared/write-switch.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
+import { renderRich } from './shared/rich-content.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
@@ -134,22 +135,22 @@ function renderMarkdown(text) {
   return escapeHtml(text);
 }
 
-function renderKaTeX(container) {
-  if (typeof renderMathInElement === 'function') {
-    try {
-      renderMathInElement(container, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false },
-          { left: '\\[', right: '\\]', display: true },
-          { left: '\\(', right: '\\)', display: false },
-        ],
-        throwOnError: false,
-      });
-    } catch (e) {
-      console.warn('KaTeX error:', e);
-    }
-  }
+/** Formule e diagrammi dentro una bolla appena disegnata.
+ *
+ *  Era `renderKaTeX`, e chiamava KaTeX per conto proprio. Il 21/09/2026 le
+ *  librerie sono state cancellate «perche' le usava solo la wiki» — falso:
+ *  questi quattro punti le usavano — e la funzione, che cominciava con «se la
+ *  libreria c'e'», ha smesso di fare qualcosa **senza dirlo**. Adesso il come
+ *  sta in un posto solo (`shared/rich-content.js`), condiviso col lettore delle
+ *  pagine e con la chat di casa: e' l'unica forma in cui una libreria non puo'
+ *  perdere meta' dei suoi lettori senza che nessuno se ne accorga.
+ *
+ *  **Niente `$...$` in riga, qui.** In chat si parla di prezzi, e «costa $5,
+ *  forse $10» diventerebbe un tentativo di matematica. Nelle pagine della wiki,
+ *  dove la skill impone `$f(x)$`, il lettore lo accende.
+ */
+function renderRichContent(container) {
+  renderRich(container);
 }
 
 export class ChatController {
@@ -1047,7 +1048,7 @@ export class ChatController {
       const content = node.querySelector('.chat-content');
       if (content) {
         content.innerHTML = renderMarkdown(turn.content.trim());
-        renderKaTeX(content);
+        renderRichContent(content);
         this._makeFilePathsClickable(content);
       }
       this._setMessageSource(node, turn.content.trim());
@@ -1242,7 +1243,7 @@ export class ChatController {
       content.textContent = text;
     } else {
       content.innerHTML = renderMarkdown(String(text || ''));
-      renderKaTeX(content);
+      renderRichContent(content);
       this._makeFilePathsClickable(content);
     }
     msg.appendChild(content);
@@ -1779,7 +1780,7 @@ export class ChatController {
     const finalText = fullText || this._deltaBuffer;
     if (this._currentContent && finalText) {
       this._currentContent.innerHTML = renderMarkdown(finalText);
-      renderKaTeX(this._currentContent);
+      renderRichContent(this._currentContent);
       this._makeFilePathsClickable(this._currentContent);
       this._setMessageSource(this._currentMsg, finalText);
     }
@@ -1907,7 +1908,7 @@ export class ChatController {
       content.className = 'chat-content';
       this._currentMsg.appendChild(content);
       content.innerHTML = renderMarkdown(msg.text);
-      renderKaTeX(content);
+      renderRichContent(content);
       this._makeFilePathsClickable(content);
       this._setMessageSource(this._currentMsg, msg.text);
       /* Una consegna proattiva può non avere un `turn_end` dietro: la riga di

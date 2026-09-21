@@ -87,6 +87,34 @@ export function ensureVendor(src) {
   return p;
 }
 
+/** Come `ensureVendor`, ma per un foglio di stile.
+ *
+ *  Serve perche' una libreria puo' non essere fatta di solo codice: KaTeX
+ *  disegna con i suoi font e la sua spaziatura, e senza il CSS le formule
+ *  escono come lettere sparse — peggio del `$f(x)$` grezzo da cui si parte.
+ *
+ *  Stesso patto di `ensureVendor`: una promessa per URL, e il fallimento **non
+ *  si ricorda**, cosi' un secondo tentativo puo' riuscire (rete assente al
+ *  primo colpo, asset non ancora estratto dall'APK).
+ */
+export function ensureVendorStyle(href) {
+  const cached = _vendorLoads.get(href);
+  if (cached) return cached;
+  const p = new Promise((resolve, reject) => {
+    const el = document.createElement('link');
+    el.rel = 'stylesheet';
+    el.href = href;
+    el.onload = () => resolve();
+    el.onerror = () => {
+      _vendorLoads.delete(href);
+      reject(new Error(`Failed to load ${href}`));
+    };
+    document.head.appendChild(el);
+  });
+  _vendorLoads.set(href, p);
+  return p;
+}
+
 
 /**
  * Copia *text* negli appunti. Ritorna true se ha funzionato.
