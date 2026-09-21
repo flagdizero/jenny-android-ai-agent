@@ -1807,6 +1807,22 @@ body {
 }
 :root.mode-chat .chat-area { overflow: visible; }
 
+/* L'intestazione della chat, in cima e ferma — l'altra meta' di `.chat-bottom`,
+   e per la stessa ragione. Nelle altre viste dell'officina il mount sta in una
+   colonna alta quanto lo schermo e resta su da solo; qui a scorrere e' il
+   **documento** (v. sopra), quindi senza `sticky` il titolo se ne andrebbe al
+   primo dito — e in casa, dov'e' nato, quel titolo non se ne va mai.
+
+   `top` sull'inset e non su zero: `.app` si scansa la status bar con un
+   padding, ma un elemento appiccicato si misura sullo scrollport, cioe' sul
+   viewport intero, e con `top: 0` finirebbe sotto l'orologio. */
+#title-chat {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 6;
+  background: var(--bg);
+}
+
 /* Quello che sta fermo mentre la chat scorre resta in FLUSSO e si incolla al
    fondo del viewport: niente padding da calcolare, niente ResizeObserver. Il
    composer sopra il dock, il dock a filo. */

@@ -329,3 +329,107 @@ def test_il_taglio_fine_e_arrivato() -> None:
         assert vecchio not in SETTINGS, f"{vecchio} e' tornato: il ritaglio si e' richiuso"
     totale = sum(len(g) for g in _gruppi_dichiarati().values())
     assert totale >= 15, f"solo {totale} gruppi: il taglio fine non c'e'"
+
+
+# ── L'intestazione della Console ─────────────────────────────────────────────
+#
+# Fino al 21/09/2026 la chat dell'officina era l'unica vista a partire dal
+# bordo dello schermo: nessun titolo, e — visto che il tasto per tornare in
+# casa vive nell'intestazione — nessuna porta verso casa. Adesso ha la stessa
+# intestazione della casa, con due differenze volute: nessuna soprascritta, e
+# il nome e' «Console» invece di «Jenny».
+
+
+def test_la_console_ha_il_suo_mount() -> None:
+    """Senza mount `setMode` esce in silenzio — e' il difetto da cui e' nato
+    questo file, ripetuto su un'altra vista."""
+    assert 'id="title-chat"' in OFFICINA, "la vista chat non ha un mount per il titolo"
+    testa = OFFICINA.split('id="view-chat"', 1)[1]
+    mount = testa.index('id="title-chat"')
+    area = testa.index('id="chat-area"')
+    assert mount < area, "il mount non sta in cima alla vista: il titolo finirebbe sotto la chat"
+
+
+def test_la_console_ha_una_voce_in_modeconfigs() -> None:
+    m = re.search(r"this\.modeConfigs\s*=\s*\{(.*?)\n    \};", HEADER, re.S)
+    assert m, "modeConfigs non trovato"
+    assert re.search(r"\bchat\s*:\s*\{", m.group(1)), (
+        "la chat non ha una voce in modeConfigs: il mount resterebbe vuoto"
+    )
+
+
+def test_il_titolo_della_console_e_la_parola_del_dock() -> None:
+    """Una parola sola per due posti.
+
+    L'etichetta in fondo e il titolo in cima dicono la stessa cosa della stessa
+    vista: due chiavi diverse sono due traduzioni che divergono al primo giro.
+    """
+    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
+    assert m, "la voce chat di modeConfigs non si legge"
+    assert "i18n.t('nav.console')" in m.group(1), (
+        "il titolo della console non viene da `nav.console`, che e' la stessa "
+        "stringa dell'etichetta nel dock"
+    )
+    for lingua in LINGUE:
+        assert _i18n(lingua)["nav"]["console"].strip(), f"{lingua}: nav.console vuoto"
+
+
+def test_la_console_non_ha_soprascritta() -> None:
+    """La differenza chiesta rispetto alla casa.
+
+    In casa sopra il nome c'e' «conversazione personale». Qui no: la vista sta
+    gia' dentro l'officina, e `setMode` nasconde la riga quando manca — quindi
+    la si omette invece di riempirla.
+    """
+    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
+    assert m
+    assert "eyebrow" not in m.group(1), "la console ha una soprascritta: non deve averla"
+    assert "sub:" not in m.group(1), "la console ha un sottotitolo: non deve averlo"
+
+
+def test_dalla_console_si_torna_in_casa() -> None:
+    """Il pill «Jenny», come negli altri tre cassetti.
+
+    E' la porta che a questa vista mancava del tutto: l'unica per la casa sta
+    nell'intestazione, e la chat non ne aveva una.
+    """
+    m = re.search(r"\bchat:\s*\{(.*?)\n      \},", HEADER, re.S)
+    assert m
+    assert "'go-casa'" in m.group(1), "dalla console non si torna in casa"
+
+
+def test_il_titolo_della_console_resta_su_mentre_la_chat_scorre() -> None:
+    """In chat a scorrere e' il **documento**, non un riquadro interno.
+
+    Le altre viste dell'officina tengono il titolo su da sole, perche' il loro
+    mount sta in una colonna alta quanto lo schermo. Qui no: senza `sticky` il
+    titolo se ne va al primo dito, e in casa — dov'e' nato — non se ne va mai.
+    """
+    m = re.search(r"#title-chat\s*\{([^}]*)\}", CSS)
+    assert m, "#title-chat non ha stile: il titolo scorrerebbe via"
+    regola = m.group(1)
+    assert "position: sticky" in regola, "il titolo della console non e' appiccicato"
+    assert "safe-area-inset-top" in regola, (
+        "`top` non tiene conto della status bar: il titolo ci finirebbe sotto"
+    )
+    assert "background" in regola, "senza sfondo la chat scorre attraverso il titolo"
+
+
+def test_il_cambio_lingua_rifa_anche_la_console() -> None:
+    m = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
+    assert m, "_refreshTitles non trovato"
+    assert "modeConfigs.chat.title" in m.group(1), (
+        "al cambio lingua il titolo della console resta nella lingua di prima"
+    )
+
+
+def test_la_casa_non_e_stata_toccata() -> None:
+    """La modifica e' solo dell'officina.
+
+    La casa ha gia' la sua intestazione, con la sua soprascritta e il suo nome:
+    un `title-chat` o un `nav.console` comparsi li' vorrebbero dire che il
+    cambio e' tracimato nel documento sbagliato.
+    """
+    casa = (UI / "index.html").read_text(encoding="utf-8")
+    assert "title-chat" not in casa
+    assert "view-title-mount" not in casa

@@ -122,6 +122,15 @@ si vede subito.
    rimosse. Due gruppi della tavola **non** arrivano perché non esistono nel
    prodotto (v. sopra), e `personalization`/`system` restano parcheggiati.
 5. **Console esplosa**, senza i numeri. ← *il prossimo*
+   - ✅ **L'intestazione** (21/09/2026). Era l'unica vista dell'officina a
+     partire dal bordo dello schermo: nessun nome, e — visto che il pill
+     `Jenny` vive nella cornice — nessuna porta verso casa che non passasse da
+     un altro cassetto. Adesso ha la cornice come le altre, con due differenze
+     volute: niente soprascritta (la vista sta gia' dentro l'officina) e il
+     nome e' **Console**, la stessa stringa `nav.console` che l'etichetta in
+     fondo usa gia'. Unico suo: il mount e' `sticky`, perche' in chat a
+     scorrere e' il documento intero e senza quello il titolo se ne andrebbe
+     al primo dito.
 6. **Le decisioni**, se e quando: dove vanno tema/nome/icona; i tre interruttori
    per ambito con `/ro`; l'elenco dei file veri; i numeri della Console.
 

@@ -118,6 +118,13 @@
 
       <!-- VIEW: Chat -->
       <div id="view-chat" class="view" style="display:flex">
+        <!-- L'intestazione, come in casa. In casa dice «conversazione
+             personale / Jenny»; qui la soprascritta non c'e' e il nome e'
+             quello che la barra in fondo da' gia' a questa vista — Console.
+             A differenza degli altri mount questo si incolla in cima
+             (`mobile-style.css`), perche' in chat a scorrere e' il documento
+             intero: senza, il titolo sparirebbe al primo dito. -->
+        <div class="view-title-mount" id="title-chat"></div>
         <div class="chat-area" id="chat-area"></div>
         <!-- Tutto quello che sta fermo in fondo mentre la chat scorre: il
              blocco è `position: sticky` (mobile-style.css), quindi resta in

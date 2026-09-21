@@ -2,8 +2,8 @@
  *
  * Replaces the old fixed 40px header: each view owns a `.view-title-mount`
  * (index.html) where the big scrolling-style title and its action buttons
- * are rendered. Chat and onboarding have no mount (chat renders its own
- * identity line inside the scroll area).
+ * are rendered. Only onboarding has no mount: la chat ne ha uno dal
+ * 21/09/2026 — v. `chat` in `modeConfigs`.
  */
 
 import { i18n } from './shared/i18n.js';
@@ -67,6 +67,22 @@ export class ViewTitleController {
     this.titleEl = null;
     this.actionsEl = null;
     this.modeConfigs = {
+      /* La chat, con l'intestazione della casa.
+       *
+       *  Fino al 21/09/2026 questa vista era l'unica dell'officina a partire
+       *  dal bordo dello schermo: nessun titolo, e nessuna via verso casa che
+       *  non passasse da un altro cassetto. La casa qui sopra ha la stessa
+       *  intestazione con scritto «conversazione personale / Jenny»; qui la
+       *  soprascritta non c'e' — la vista sta gia' dentro l'officina, e
+       *  dirglielo di nuovo non aggiunge niente — e il nome e' quello che la
+       *  barra in fondo le da' gia', cosi' la parola e' **una sola**
+       *  (`nav.console`) e le due non possono divergere. */
+      chat: {
+        title: i18n.t('nav.console'),
+        actions: [
+          { icon: 'ti-home', title: i18n.t('casa.backHome'), action: 'go-casa', pill: i18n.t('officina.casaPill') },
+        ],
+      },
       apps: {
         title: i18n.t('nav.apps'),
         actions: [
@@ -122,6 +138,7 @@ export class ViewTitleController {
   }
 
   _refreshTitles() {
+    this.modeConfigs.chat.title = i18n.t('nav.console');
     this.modeConfigs.apps.title = i18n.t('nav.apps');
     this.modeConfigs.workspace.title = i18n.t('nav.workspace');
     this.modeConfigs.wiki.title = i18n.t('nav.wiki');
