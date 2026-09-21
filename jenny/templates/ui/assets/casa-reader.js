@@ -18,6 +18,7 @@
 import { api } from './shared/api-client.js';
 import { escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
+import { renderRich } from './shared/rich-content.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
  *
@@ -112,6 +113,15 @@ export class CasaReader {
 
     this.title = page.title || fallbackTitle || path;
     this.bodyEl.innerHTML = this._safeHtml(page.html, page.raw);
+    /* Diagrammi e formule, che il server lascia da rendere: marca i blocchi
+       mermaid (`webui/wiki.py`) e il LaTeX lo lascia nel testo.
+       **Non si aspetta**: la pagina e' gia' leggibile, e mermaid sono 3,3 MB —
+       tenere ferma la lettura finche' non sono scesi vorrebbe dire una schermata
+       bianca per un disegno in fondo.
+       `inlineDollar`: qui **si accende**, e solo qui. La skill `llm-wiki` impone
+       a Jenny il `$f(x)$` in riga, quindi in una pagina quel dollaro e' una
+       formula per regola della casa. In chat no — li' e' un prezzo. */
+    renderRich(this.bodyEl, { inlineDollar: true });
     this.bodyEl.scrollTop = 0;
     return this.title;
   }

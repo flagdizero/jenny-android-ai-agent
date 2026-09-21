@@ -37,6 +37,7 @@ import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
+import { renderRich } from './shared/rich-content.js';
 import { describeWireError } from './shared/wire-error.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
@@ -315,6 +316,12 @@ export class CasaChat {
     return true;
   }
 
+  /* Formule e diagrammi **non** si disegnano qui, ed e' l'unico dei quattro
+     punti in cui si scrive markdown a restarne fuori: qui il testo sta ancora
+     arrivando. Una formula a meta' (`$$E = mc`) non e' una formula, e un
+     diagramma a meta' e' un errore di sintassi — mermaid pianterebbe a schermo
+     il proprio messaggio in inglese, e lo rifarebbe a ogni pezzetto. Si disegna
+     quando il testo e' finito, cioe' in `_streamEnd` qui sotto. */
   _delta(text) {
     if (!text) return;
     this.buffer += text;
@@ -328,6 +335,7 @@ export class CasaChat {
     const finalText = fullText || this.buffer;
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
+      renderRich(this.blockNode);
       this._registra(this.turnNode, finalText);
     }
     this.blockNode = null;
@@ -350,6 +358,7 @@ export class CasaChat {
       const block = document.createElement('div');
       block.className = 'casa-block';
       block.innerHTML = renderMarkdown(msg.text);
+      renderRich(block);
       this._ensureTurn().appendChild(block);
       this._registra(this.turnNode, msg.text);
       // `blockNode` resta null: il delta dopo apre il proprio.
@@ -518,6 +527,7 @@ export class CasaChat {
       const block = document.createElement('div');
       block.className = 'casa-block';
       block.innerHTML = renderMarkdown(content);
+      renderRich(block);
       node.appendChild(block);
       this._registra(node, content);
     }

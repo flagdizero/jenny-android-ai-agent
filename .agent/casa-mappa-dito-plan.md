@@ -95,37 +95,17 @@ prima passata **verde**, che ha trovato il banco cieco: togliendo la
 ricollocazione dei nomi dal gestore della quiete non se ne accorgeva nessuno.
 Chiusa con una settima prova.
 
+**La regola, in una riga:** si inquadra una volta, e mai più dopo che l'utente
+ha toccato la mappa. Il flag si azzera in `_render()` e non in `draw()` — un
+quaderno nuovo merita la sua inquadratura, ma tornare sulla linguetta non
+ridisegna (`if (this._drawn === data) return`) e non deve buttare via dove
+l'utente aveva guardato.
 
-**Regola:** si inquadra **una volta**, e mai più dopo che l'utente ha toccato
-la mappa.
-
-Il modo esatto, e non è una convenzione inventata qui: d3 distingue da sé un
-gesto da una trasformazione programmata — in un evento `zoom`, `e.sourceEvent`
-è l'evento del dito, e su `zoom.transform` è `null`. Quindi:
-
-```js
-const zoom = d3.zoom()
-  .scaleExtent([0.4, 4])
-  .on('zoom', (e) => {
-    // Un gesto vero: da qui in poi l'inquadratura è dell'utente.
-    if (e.sourceEvent) this._inquadrataDaTe = true;
-    root.attr('transform', e.transform);
-  });
-```
-
-e nel `sim.on('end')`, prima di rifittare: `if (this._inquadrataDaTe) return;`
-(dopo aver ricollocato i nomi, che invece vanno rifatti sempre — non dipendono
-dalla camera).
-
-Il flag si azzera in `_render()`, non in `draw()`: un quaderno nuovo è una mappa
-nuova e merita la sua inquadratura; ritornare sulla linguetta invece non
-ridisegna (`if (this._drawn === data) return`), quindi non deve buttare via
-dove l'utente aveva guardato.
-
-**Questo passo da solo può chiudere la domanda che ha aperto il piano.** Va
-provato sul telefono e riportato *prima* di fare il Passo 2, perché se la
+**Resta da provare sul telefono, e va riportato prima del Passo 2:** se la
 risposta era «il pan tornava indietro», il trascinamento è una cosa che si
-aggiunge per scelta e non per rimediare.
+aggiunge per scelta e non per rimediare. Il Passo 0 resta valido così com'è
+scritto — con una differenza: adesso la prova «sposta entro il primo secondo»
+deve **funzionare**, ed è la conferma che questo passo era la causa.
 
 ## Passo 2 — il trascinamento dei nodi
 
