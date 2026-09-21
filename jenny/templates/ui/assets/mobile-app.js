@@ -16,7 +16,7 @@ import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { GraphController } from './mobile-graph.js';
 import { WikiController } from './mobile-wiki.js';
-import { SettingsController } from './mobile-settings.js';
+import { SettingsController, VISTA_DI } from './mobile-settings.js';
 import { OnboardingController } from './mobile-onboarding.js';
 import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
@@ -51,11 +51,6 @@ function ensureVisible(el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, 300);
 }
-
-/* Quale `<div id="view-...">` mostra un modo, quando non e' quello omonimo.
-   Cervello, Mani e Memoria sono tre voci del dock e una vista sola: il
-   controller e' lo stesso e cambia solo il cassetto che disegna. */
-const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };
 
 class MobileApp {
   constructor() {

@@ -571,8 +571,36 @@ body {
   gap: 8px;
   padding: 14px 16px 6px;
 }
-.view-title-text {
+/* La colonna soprascritta / nome / sottotitolo. `align-items: flex-start` sul
+   contenitore solo quando c'e' una pila: con il solo titolo il centraggio
+   verticale di prima resta quello giusto. */
+.view-title:has(.view-title-sub:not([hidden])) { align-items: flex-start; }
+.view-title-stack {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.view-title-eyebrow {
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+/* La riga che dice a cosa serve il cassetto. Va a capo di proposito — il
+   titolo no, ma questa e' una frase e troncarla la renderebbe inutile. */
+.view-title-sub {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.view-title-text {
+  /* Niente `flex: 1`: il titolo sta dentro una colonna, e li' crescere vuol
+     dire allungarsi in verticale. A prendersi lo spazio orizzontale e' la
+     pila (`.view-title-stack`). */
   min-width: 0;
   margin: 0;
   font-family: var(--font-display);
@@ -606,6 +634,25 @@ body {
 .ibtn:active { transform: scale(0.92); }
 
 .ibtn i { font-size: 14px; }
+
+/* Icona **e** parola, per un'azione la cui destinazione non si indovina
+   dall'icona: una casetta puo' voler dire home, casa, indietro; «Jenny» no.
+   Larghezza automatica — l'unico `.ibtn` che non e' un quadrato — e bordo
+   visibile, perche' senza sfondo una parola in cima alla pagina si confonde
+   con un titolo invece di leggersi come un tasto. */
+.ibtn-pill {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px 0 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ibtn-pill i { color: var(--accent); font-size: 15px; }
 
 /* Drawer buttons */
 .ibtn-drawer {
@@ -1181,11 +1228,14 @@ body {
 }
 
 .dock-item {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   flex: 1;
-  padding: 10px 0;
+  padding: 7px 0 9px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.2s cubic-bezier(.25,.1,.25,1);
@@ -1195,7 +1245,38 @@ body {
 .dock-item i { font-size: var(--dock-icon); line-height: 1; }
 .dock-flower { font-size: 19px; line-height: 1; }
 
+/* Il nome sotto l'icona. Quattro icone nude — un fiore, un cervello, una mano,
+   un cilindro — non dicono dove portano: la mano e il cilindro in particolare
+   si indovinano solo dopo averli toccati. La tavola le etichetta tutte, e le
+   stringhe esistevano gia' (`nav.*`), usate solo come `title` — cioe' visibili
+   a nessuno su un telefono, dove non esiste il passaggio del mouse. */
+.dock-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dock-item.active { color: var(--text); }
+.dock-item.active .dock-label { font-weight: 600; }
+
+/* Il puntino della voce attiva. Il colore da solo distingue male sui temi in
+   cui `--accent` *e'* il testo (Chanel, Fumetto): li' attivo e inattivo
+   differiscono per una sfumatura di grigio. Il puntino e' una seconda
+   differenza, di forma e non di tinta. */
+.dock-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
 
 /* ══ Drawer System ══ */
 

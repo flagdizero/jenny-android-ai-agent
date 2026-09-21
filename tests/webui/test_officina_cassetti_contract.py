@@ -97,8 +97,10 @@ def test_every_drawer_in_the_table_is_a_dock_voice_and_the_other_way_round() -> 
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     voci = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
 
-    app = _src("mobile-app.js")
-    m = re.search(r"const VISTA_DI = \{([^}]*)\}", app)
+    # `VISTA_DI` vive accanto a `CASSETTI` (mobile-settings.js): rispondono
+    # alla stessa domanda, e tenerle in due file ha gia' prodotto una copia
+    # mancante — v. tests/webui/test_officina_cornice_contract.py.
+    m = re.search(r"const VISTA_DI = \{([^}]*)\}", _src("mobile-settings.js"))
     assert m, "VISTA_DI non si trova piu'"
     condivisi = set(re.findall(r"(\w+): 'settings'", m.group(1)))
 

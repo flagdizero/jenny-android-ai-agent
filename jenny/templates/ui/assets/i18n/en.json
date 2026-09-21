@@ -1105,5 +1105,14 @@
       "snapshots": "Jenny also keeps a local history of the workspace, automatically: it's there to put back something deleted by mistake, and you can browse it in the workshop. It lives on this phone though — of a lost phone it saves nothing.",
       "snapshotsOff": "The local workspace history is off: the only net is the backup you export yourself. You can turn it back on in the workshop."
     }
+  },
+  "officina": {
+    "eyebrow": "workshop",
+    "casaPill": "Jenny",
+    "sub": {
+      "cervello": "which brands exist, which head she thinks with, and what the phone lets her do",
+      "mani": "what she can do, with which permissions, and when she acts on her own",
+      "memoria": "what she remembers, who fills it, and where it lives on disk"
+    }
   }
 }

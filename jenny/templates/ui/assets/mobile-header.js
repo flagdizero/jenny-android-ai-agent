@@ -7,8 +7,11 @@
  */
 
 import { i18n } from './shared/i18n.js';
+import { api } from './shared/api-client.js';
+import { escapeHtml } from './shared/utils.js';
 import { scopeChip } from './shared/scope-chip.js';
 import { isOpenableProjectName } from './shared/conversation-list.js';
+import { VISTA_DI } from './mobile-settings.js';
 
 /** Il tasto che dalla wiki porta nella chat del progetto che la possiede.
  *
@@ -36,6 +39,25 @@ function projectChatAction() {
     title: i18n.t('header.openProjectChat'),
     action: 'open-project-chat',
     hidden: true,
+  };
+}
+
+/** L'intestazione di un cassetto dell'officina.
+ *
+ *  `eyebrow` e `sub` sono le due righe che la tavola mette attorno al nome; il
+ *  bottone `home` e' il pill «Jenny» che riporta in casa — la stessa
+ *  destinazione del tasto in fondo a «Sistema», che da qui in poi e' un
+ *  doppione e se ne va (`_renderSystem`).
+ */
+function cassetto(nome) {
+  return {
+    eyebrow: i18n.t('officina.eyebrow'),
+    title: i18n.t(`nav.${nome}`),
+    sub: i18n.t(`officina.sub.${nome}`),
+    actions: [
+      { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' },
+      { icon: 'ti-home', title: i18n.t('casa.backHome'), action: 'go-casa', pill: i18n.t('officina.casaPill') },
+    ],
   };
 }
 
@@ -82,7 +104,18 @@ export class ViewTitleController {
         actions: [
           { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' }
         ]
-      }
+      },
+      /* I tre cassetti. Stessa vista e stesso mount (`title-settings`, via
+         `VISTA_DI`), titolo e sottotitolo diversi.
+
+         Il sottotitolo e' la differenza che si vede di piu' rispetto a prima:
+         un cassetto che si apre su quattro righe chiuse non dice a cosa serve,
+         e «Cervello» da solo nemmeno. La tavola mette una riga sotto il nome —
+         `officina` sopra, il nome in serif, la riga che spiega — ed e' quella
+         riga a trasformare quattro etichette in una pagina. */
+      cervello: { ...cassetto('cervello') },
+      mani: { ...cassetto('mani') },
+      memoria: { ...cassetto('memoria') },
     };
 
     i18n.onLocaleChange(() => this._refreshTitles());
@@ -94,11 +127,19 @@ export class ViewTitleController {
     this.modeConfigs.wiki.title = i18n.t('nav.wiki');
     this.modeConfigs.graph.title = i18n.t('nav.wiki');
     this.modeConfigs.settings.title = i18n.t('nav.settings');
+    /* I tre cassetti hanno tre stringhe a testa (soprascritta, nome,
+       sottotitolo) piu' il pill: si ricostruiscono interi invece di
+       riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */
+    for (const nome of Object.keys(VISTA_DI)) this.modeConfigs[nome] = cassetto(nome);
     if (this.currentMode) this.setMode(this.currentMode);
   }
 
+  /* Il mount di un modo e' `title-<modo>`, **tranne** per i tre cassetti, che
+     condividono la vista delle impostazioni e quindi il suo mount. Senza
+     questa riga `setMode('cervello')` cercava `title-cervello`, non lo
+     trovava, e usciva lasciando i cassetti senza intestazione. */
   _mount(mode) {
-    return document.getElementById(`title-${mode}`);
+    return document.getElementById(`title-${VISTA_DI[mode] || mode}`);
   }
 
   setMode(mode, customTitle = null) {
@@ -111,12 +152,26 @@ export class ViewTitleController {
       return;
     }
 
+    /* `eyebrow` e `sub` sono facoltativi: le viste che non li dichiarano
+       disegnano esattamente l'intestazione di prima. `textContent` e non
+       interpolazione perche' sono stringhe tradotte, non markup. */
     mount.innerHTML = '<div class="view-title">' +
-      '<h1 class="view-title-text"></h1>' +
+      '<div class="view-title-stack">' +
+        '<div class="view-title-eyebrow"></div>' +
+        '<h1 class="view-title-text"></h1>' +
+        '<div class="view-title-sub"></div>' +
+      '</div>' +
       '<div class="view-title-actions"></div>' +
       '</div>';
     this.titleEl = mount.querySelector('.view-title-text');
     this.actionsEl = mount.querySelector('.view-title-actions');
+
+    const eyebrowEl = mount.querySelector('.view-title-eyebrow');
+    const subEl = mount.querySelector('.view-title-sub');
+    eyebrowEl.textContent = config.eyebrow || '';
+    eyebrowEl.hidden = !config.eyebrow;
+    subEl.textContent = config.sub || '';
+    subEl.hidden = !config.sub;
 
     this.titleEl.textContent = customTitle || config.title;
     this.renderActions(config.actions);
@@ -179,6 +234,15 @@ export class ViewTitleController {
       }
       const dangerClass = action.danger ? ' ibtn-danger' : '';
       const hiddenStyle = action.hidden ? ' style="display:none"' : '';
+      /* Un'azione con `pill` non e' un'icona nuda ma icona + parola, come il
+         bottone «Jenny» della tavola. Serve quando la destinazione non si
+         indovina dall'icona: una casetta puo' voler dire tante cose, «Jenny»
+         una sola. */
+      if (action.pill) {
+        return `<button class="ibtn ibtn-action ibtn-pill${dangerClass}" data-action="${action.action}" title="${action.title}"${hiddenStyle}>
+          <i class="ti ${action.icon}"></i><span>${escapeHtml(action.pill)}</span>
+        </button>`;
+      }
       return `<button class="ibtn ibtn-action${dangerClass}" data-action="${action.action}" title="${action.title}"${hiddenStyle}>
         <i class="ti ${action.icon}"></i>
       </button>`;
@@ -222,6 +286,12 @@ export class ViewTitleController {
 
   handleAction(action) {
     const app = window.mobileApp;
+    /* La stessa destinazione del vecchio tasto in fondo a «Sistema»: la casa e'
+       un documento a parte, quindi si naviga, non si cambia vista. */
+    if (action === 'go-casa') {
+      api.navigate('/html-mobile/index.html');
+      return;
+    }
     if (action === 'graph') {
       if (app.currentMode === 'graph') {
         const wiki = app.controllers.graph?.currentWiki;

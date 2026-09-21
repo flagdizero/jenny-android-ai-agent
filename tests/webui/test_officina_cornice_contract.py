@@ -1,0 +1,203 @@
+"""La cornice dell'officina: intestazione dei cassetti e barra con le etichette.
+
+Il 20/09/2026 l'officina sul telefono apriva ogni cassetto su **quattro righe
+chiuse e nient'altro**: nessun titolo, nessuna riga che dicesse a cosa serve, e
+in fondo quattro icone nude — un fiore, un cervello, una mano, un cilindro —
+senza un nome sotto.
+
+La macchina dell'intestazione c'era gia' e funzionava. Il difetto era una
+tabella mancante: ``ViewTitleController._mount`` cercava ``title-<modo>``, e i
+tre cassetti (``cervello``, ``mani``, ``memoria``) condividono **una vista
+sola**, il cui mount si chiama ``title-settings``. Nessun mount, ``setMode``
+usciva subito, e l'intestazione non si disegnava — silenziosamente, che e' il
+modo peggiore.
+
+I banchi qui sotto difendono la cornice da tre lati: che ogni cassetto abbia le
+sue tre stringhe **in tutte e due le lingue**, che la barra porti i nomi, e che
+il tasto per tornare in casa stia in **un posto solo**.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+UI = ROOT / "jenny" / "templates" / "ui"
+ASSETS = UI / "assets"
+
+HEADER = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
+SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+OFFICINA = (UI / "officina.html").read_text(encoding="utf-8")
+CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
+
+CASSETTI = ("cervello", "mani", "memoria")
+LINGUE = ("it", "en")
+
+
+def _i18n(lingua: str) -> dict:
+    return json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+
+
+# ── Le stringhe ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("lingua", LINGUE)
+@pytest.mark.parametrize("cassetto", CASSETTI)
+def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, cassetto: str) -> None:
+    """Le tre stringhe che compongono l'intestazione, in tutte e due le lingue.
+
+    Una chiave che manca non rompe niente: `i18n.t` restituisce la chiave
+    grezza, e a schermo compare «officina.sub.mani». E' cosi' che una
+    traduzione mancante si presenta, ed e' indistinguibile da un difetto.
+    """
+    d = _i18n(lingua)
+    assert d["nav"][cassetto].strip(), f"{lingua}: nav.{cassetto} vuoto"
+    sub = d["officina"]["sub"][cassetto]
+    assert sub.strip(), f"{lingua}: officina.sub.{cassetto} vuoto"
+    # Una soprascritta che e' anche il sottotitolo vuol dire che qualcuno ha
+    # riempito la riga per far passare il banco.
+    assert sub != d["officina"]["eyebrow"]
+
+
+@pytest.mark.parametrize("lingua", LINGUE)
+def test_la_soprascritta_e_il_pill_esistono(lingua: str) -> None:
+    d = _i18n(lingua)["officina"]
+    assert d["eyebrow"].strip()
+    assert d["casaPill"].strip()
+
+
+def test_i_sottotitoli_dicono_cose_diverse() -> None:
+    """Tre cassetti, tre righe diverse — in ogni lingua.
+
+    Copiare la stessa riga sotto i tre nomi soddisfa il banco di sopra e non
+    aiuta nessuno: la riga serve a distinguere i cassetti, non a riempire uno
+    spazio.
+    """
+    for lingua in LINGUE:
+        subs = _i18n(lingua)["officina"]["sub"]
+        assert len(set(subs.values())) == len(CASSETTI), f"{lingua}: sottotitoli ripetuti"
+
+
+# ── L'aggancio che mancava ───────────────────────────────────────────────────
+
+
+def test_la_tabella_delle_viste_e_una_sola() -> None:
+    """`VISTA_DI` sta accanto a `CASSETTI` ed e' importata, non ricopiata.
+
+    Era dichiarata in `mobile-app.js` e serviva anche a `mobile-header.js`, che
+    non ce l'aveva: e' esattamente la copia mancante che ha lasciato i cassetti
+    senza intestazione.
+    """
+    assert "export const VISTA_DI" in SETTINGS, "VISTA_DI non e' piu' in mobile-settings.js"
+    assert re.search(r"import \{[^}]*VISTA_DI[^}]*\} from '\./mobile-settings\.js'", HEADER), (
+        "mobile-header.js non importa VISTA_DI: `_mount` tornerebbe a cercare "
+        "`title-cervello`, che non esiste"
+    )
+    app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
+    assert "const VISTA_DI = {" not in app, "mobile-app.js ha di nuovo una copia sua"
+
+
+def test_il_mount_passa_dalla_tabella() -> None:
+    """La riga che traduce il modo nel suo mount.
+
+    Si legge il corpo di `_mount`: senza `VISTA_DI` li' dentro, i tre cassetti
+    non trovano `title-settings` e `setMode` esce prima di disegnare.
+    """
+    m = re.search(r"_mount\(mode\)\s*\{(.*?)\}", HEADER, re.S)
+    assert m, "_mount non trovato"
+    assert "VISTA_DI" in m.group(1), f"_mount non consulta la tabella: {m.group(1).strip()}"
+
+
+@pytest.mark.parametrize("cassetto", CASSETTI)
+def test_ogni_cassetto_ha_una_intestazione(cassetto: str) -> None:
+    """Il cassetto compare fra le viste che sanno disegnarsi un'intestazione."""
+    m = re.search(r"this\.modeConfigs\s*=\s*\{(.*?)\n    \};", HEADER, re.S)
+    assert m, "modeConfigs non trovato"
+    assert re.search(rf"\b{cassetto}\s*:", m.group(1)), (
+        f"{cassetto} non ha una voce in modeConfigs: resterebbe senza titolo"
+    )
+
+
+def test_la_soprascritta_e_il_sottotitolo_finiscono_nel_dom() -> None:
+    """Non basta dichiararli: `setMode` deve anche scriverli."""
+    for classe in ("view-title-eyebrow", "view-title-sub"):
+        assert classe in HEADER, f"{classe} non e' disegnata da mobile-header.js"
+        assert classe in CSS, f"{classe} non ha stile: sarebbe testo nudo"
+
+
+def test_il_cambio_lingua_rifa_anche_i_cassetti() -> None:
+    """Tre stringhe a testa: se il refresh ne dimentica una resta in italiano."""
+    m = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
+    assert m, "_refreshTitles non trovato"
+    assert "VISTA_DI" in m.group(1), (
+        "_refreshTitles non ricostruisce i cassetti: al cambio lingua "
+        "l'intestazione resta nella lingua di prima"
+    )
+
+
+# ── La barra in fondo ────────────────────────────────────────────────────────
+
+
+def _voci_dock() -> list[re.Match]:
+    return list(re.finditer(r'<div class="dock-item[^"]*"([^>]*)>(.*?)</div>', OFFICINA))
+
+
+@pytest.mark.parametrize("modo", ("chat", "cervello", "mani", "memoria"))
+def test_ogni_voce_visibile_del_dock_ha_il_suo_nome(modo: str) -> None:
+    """Icona **e** parola.
+
+    `title=` non conta: su un telefono non esiste il passaggio del mouse, quindi
+    un `title` e' visibile a nessuno. Era gia' cosi' per tutte e quattro.
+    """
+    voci = [m for m in _voci_dock() if f'data-mode="{modo}"' in m.group(1)]
+    assert len(voci) == 1, f"{modo}: {len(voci)} voci nel dock"
+    corpo = voci[0].group(2)
+    assert 'class="dock-label"' in corpo, f"{modo} non ha etichetta visibile"
+    assert f'data-i18n="nav.{modo if modo != "chat" else "console"}"' in corpo, (
+        f"{modo}: l'etichetta non e' tradotta"
+    )
+
+
+def test_la_voce_attiva_si_distingue_anche_senza_colore() -> None:
+    """Il puntino.
+
+    Su Chanel e Fumetto `--accent` **e'** il colore del testo: attivo e inattivo
+    differirebbero per una sfumatura di grigio. Il puntino e' una differenza di
+    forma, che sopravvive a qualunque tema.
+    """
+    assert re.search(r"\.dock-item\.active::(after|before)\s*\{", CSS), (
+        "nessun indicatore di forma sulla voce attiva"
+    )
+
+
+def test_le_etichette_hanno_uno_stile() -> None:
+    assert ".dock-label {" in CSS, "dock-label senza stile: erediterebbe il corpo del testo"
+
+
+# ── Un posto solo per tornare a casa ─────────────────────────────────────────
+
+
+def test_tornare_in_casa_sta_in_un_posto_solo() -> None:
+    """La porta per la casa e' nell'intestazione, e **non** anche in Sistema.
+
+    E' la stessa regola dei cinque passi precedenti: se ce l'ha la cornice,
+    il cassetto non lo rifa'. Due tasti per la stessa destinazione, uno in cima
+    e uno in fondo a una pagina lunga, sono due modi di non trovarne nessuno.
+    """
+    assert "btn-open-casa" not in SETTINGS, (
+        "il tasto «Torna alla casa» e' tornato dentro le impostazioni: adesso "
+        "e' il pill dell'intestazione"
+    )
+    assert "_renderOpenCasa" not in SETTINGS
+    assert "'go-casa'" in HEADER, "l'intestazione non porta piu' in casa"
+    assert "/html-mobile/index.html" in HEADER
+
+
+def test_il_pill_porta_una_parola_e_non_solo_una_icona() -> None:
+    """Una casetta puo' voler dire home, casa o indietro. «Jenny» no."""
+    assert "ibtn-pill" in HEADER, "l'azione verso la casa non e' un pill"
+    assert ".ibtn-pill {" in CSS, "ibtn-pill senza stile: sarebbe un quadrato da 36px"

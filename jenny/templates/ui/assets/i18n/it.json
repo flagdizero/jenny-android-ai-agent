@@ -1108,5 +1108,14 @@
       "snapshots": "Jenny tiene anche una storia locale del workspace, automatica: serve a rimettere a posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive però su questo telefono — di un telefono perso non salva niente.",
       "snapshotsOff": "La storia locale del workspace è spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina."
     }
+  },
+  "officina": {
+    "eyebrow": "officina",
+    "casaPill": "Jenny",
+    "sub": {
+      "cervello": "quali marche ci sono, con che testa pensa, e cosa le lascia fare il telefono",
+      "mani": "cosa può fare, con che permessi, e quando parte da sola",
+      "memoria": "cosa ricorda, chi gliela riempie, e dove sta su disco"
+    }
   }
 }

@@ -639,8 +639,14 @@ def test_the_dock_is_a_console_and_three_faculties() -> None:
     modes = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
     assert modes == ["chat", "cervello", "mani", "memoria"], modes
 
+    # La tabella sta accanto a `CASSETTI`, non nel guscio: serve anche
+    # all'intestazione (`mobile-header.js::_mount`), e la copia che mancava li'
+    # lasciava i tre cassetti senza titolo.
+    assert (
+        "export const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };"
+        in _src("mobile-settings.js")
+    )
     app = _src("mobile-app.js")
-    assert "const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };" in app
     # Un controller solo per i tre cassetti: tre istanze vorrebbero dire tre
     # `/api/settings` e due copie che invecchiano mentre guardi la terza.
     assert "this._impostazioni ||= new SettingsController()" in app

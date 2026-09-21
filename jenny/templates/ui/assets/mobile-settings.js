@@ -88,6 +88,19 @@ export const CASSETTI = {
   },
 };
 
+/* Quale `<div id="view-...">` — e quale `<div id="title-...">` — serve un modo,
+   quando non e' quello omonimo.
+ *
+ * Cervello, Mani e Memoria sono tre voci del dock e **una vista sola**: stesso
+ * controller, cambia solo il cassetto disegnato. La tabella sta qui accanto a
+ * `CASSETTI` perche' risponde alla stessa domanda, e perche' averla in due
+ * copie e' costato un'intestazione: `mobile-app.js` ne aveva una per scegliere
+ * la vista, `mobile-header.js` non ne aveva nessuna e cercava `title-cervello`,
+ * che non esiste — quindi `setMode` usciva subito e i tre cassetti restavano
+ * **senza titolo**, su uno schermo che comincia con una riga vuota (visto sul
+ * telefono il 20/09/2026). */
+export const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };
+
 export class SettingsController {
   constructor() {
     this.contentEl = document.getElementById('settings-content');
@@ -1683,18 +1696,11 @@ export class SettingsController {
       </div>
       <p class="settings-hint" style="margin-top:6px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.advancedModeHint')}</p>
       <div class="settings-divider"></div>
-      ${this._renderOpenCasa()}
       <div class="settings-divider"></div>
       <div class="settings-subheading">${i18n.t('settings.tokenUsage')}</div>
       ${this._renderUsage(d)}`;
   }
 
-  _renderOpenCasa() {
-    return `
-      <div class="settings-subheading">${i18n.t('casa.backHome')}</div>
-      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('casa.backHomeHint')}</p>
-      <button class="settings-btn-add" id="btn-open-casa"><i class="ti ti-home"></i> ${i18n.t('casa.backHome')}</button>`;
-  }
 
   _wireBackup() {
     /* Esportare e ripristinare da file non si agganciano piu': quei due
@@ -2260,7 +2266,6 @@ export class SettingsController {
     const advToggle = this.contentEl.querySelector('#advanced-mode-toggle');
     if (advToggle) advToggle.addEventListener('change', () => setAdvancedMode(advToggle.checked));
 
-    this._wireBtn('btn-open-casa', () => api.navigate('/html-mobile/index.html'));
 
 
     // Mascotte: toggle visibilità (re-render per accendere/spegnere le
