@@ -310,18 +310,6 @@
 </dialog>
 
 
-<!-- Azioni di un messaggio di chat, aperte dal `⋯` della sua riga.
-     Figlio diretto di <body> come tutti gli altri, cioè FUORI da `.main`: là
-     dentro il listener di `setupSwipeNav` si prenderebbe il gesto, che è
-     esattamente il conflitto da cui nasce questo foglio. -->
-<dialog class="oc-sheet" id="chat-msg-sheet">
-  <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" data-i18n="chat.messageActions">Azioni messaggio</div>
-    <div class="oc-sheet-actions" id="chat-msg-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="chat-msg-sheet-cancel" data-i18n="common.cancel">Annulla</button>
-  </div>
-</dialog>
-
 <!-- Superficie di selezione isolata: il messaggio renderizzato, fermo, in un
      contenitore che nessuno riscrive e nessuno scrolla. -->
 <dialog class="oc-sheet" id="jenny-app-sheet">

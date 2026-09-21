@@ -2,9 +2,17 @@
  *
  *  Un filo solo, dall'alto verso il basso: cosa hai detto tu, cosa ha risposto
  *  Jenny. Quello che l'officina disegna e qui non esiste — pensieri, chiamate di
- *  strumento, subagent, token, tempi, latenza — non e' nascosto dietro un
- *  pannello: non viene proprio letto. I frame arrivano lo stesso, sullo stesso
- *  websocket, e restano lettera morta.
+ *  strumento, subagent, token — non e' nascosto dietro un pannello: non viene
+ *  proprio letto. I frame arrivano lo stesso, sullo stesso websocket, e restano
+ *  lettera morta.
+ *
+ *  **Una sola cosa e' rientrata, il 21/09/2026: la coda della risposta.** Qui
+ *  c'era scritto che nemmeno i tempi si leggevano, e il risultato a schermo era
+ *  che quattro risposte di fila sembravano un messaggio solo — niente le
+ *  separava, perche' in casa non c'e' ne' bolla ne' avatar, solo paragrafi. La
+ *  riga in coda (Copia e i secondi, v. `_codaDi`) e' il confine: dice dove una
+ *  risposta finisce, e lo dice con due cose che servono invece che con una
+ *  linea che non serve a niente.
  *
  *  **Le regole del filo non sono state inventate qui.** Sono quelle che
  *  `mobile-chat.js` ha imparato sbagliando, e che valgono identiche in casa
@@ -24,7 +32,7 @@
  *     una bolla sola.
  */
 
-import { escapeHtml } from './shared/utils.js';
+import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
@@ -91,6 +99,13 @@ export class CasaChat {
     this.buffer = '';
     this.turnId = null;
     this._empty = true;
+    /* Il markdown com'e' arrivato, per bolla. Si copia il sorgente e non il
+       reso: le recinzioni dei blocchi di codice sono esattamente cio' che
+       serve quando una risposta si incolla altrove. `WeakMap` perche' la
+       chiave e' il nodo, e una ricarica del filo li butta tutti. */
+    this._sorgente = new WeakMap();
+    /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
+    this._secondi = null;
     /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
        `null` = non c'è niente da riprendere. */
     this._pendingSend = null;
@@ -111,6 +126,15 @@ export class CasaChat {
     this._lastTop = 0;
     this._stick = true;
     this.el.addEventListener('scroll', () => this._onScroll());
+
+    /* Delegato, e non un ascoltatore per bolla: le bolle sono centinaia dopo
+       tre pagine di storia. Come in officina, e per la stessa ragione — la CSP
+       del guscio e' `script-src 'self'`, quindi niente `onclick` scritto nel
+       markup. */
+    this.el.addEventListener('click', (e) => {
+      const btn = e.target.closest('.casa-copia');
+      if (btn && this.el.contains(btn)) this._copia(btn.closest('.casa-msg'));
+    });
 
     /* La pagina precedente: stessa macchina dell'officina
        (`shared/history-pager.js`), appigli diversi. Qui il filo e' il proprio
@@ -170,7 +194,7 @@ export class CasaChat {
     for (const turn of this._buildTurns(messages)) {
       if (turn.boundary) this._appendBoundary();
       else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
-      else this._appendAssistant(turn.content, turn.media);
+      else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs);
     }
     this.pager.adopt(thread?.page);
     this.scrollToBottom();
@@ -191,7 +215,7 @@ export class CasaChat {
     for (const turn of this._buildTurns(messages).reverse()) {
       if (turn.boundary) this._appendBoundary(true);
       else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
-      else this._appendAssistant(turn.content, turn.media, true);
+      else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs);
     }
   }
 
@@ -226,9 +250,13 @@ export class CasaChat {
       // Regola 4: senza id non si accorpa. Mai.
       if (!current || !turnId || current.turnId !== turnId) {
         flush();
-        current = { turnId, content: '', media: [] };
+        current = { turnId, content: '', media: [], latencyMs: null };
       }
       if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
+      /* I secondi sono l'unica cosa che l'officina teneva e la casa buttava e
+         che adesso serve anche qui: sono meta' della riga che separa una
+         risposta dalla successiva. */
+      if (msg.latencyMs != null) current.latencyMs = msg.latencyMs;
       /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
          uno strumento, e in casa non e' niente: si butta, punto. L'officina la
          tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
@@ -262,7 +290,7 @@ export class CasaChat {
       case 'stream_end': this._streamEnd(msg.text); break;
       case 'message': this._message(msg); break;
       case 'user': this._externalUser(msg); break;
-      case 'turn_end': this._turnEnd(); break;
+      case 'turn_end': this._turnEnd(msg.latency_ms); break;
       default: break;
     }
   }
@@ -300,6 +328,7 @@ export class CasaChat {
     const finalText = fullText || this.buffer;
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
+      this._registra(this.turnNode, finalText);
     }
     this.blockNode = null;
     this.buffer = '';
@@ -322,6 +351,7 @@ export class CasaChat {
       block.className = 'casa-block';
       block.innerHTML = renderMarkdown(msg.text);
       this._ensureTurn().appendChild(block);
+      this._registra(this.turnNode, msg.text);
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
@@ -403,11 +433,34 @@ export class CasaChat {
     this._follow();
   }
 
-  _turnEnd() {
+  _turnEnd(latencyMs) {
+    this._secondi = latencyMs != null ? latencyMs : null;
     this._resetTurn();
   }
 
+  /** Chiude la bolla del turno in corso.
+   *
+   *  **La coda si posa qui e in nessun altro posto del percorso vivo**, e la
+   *  ragione e' che i modi di finire un turno sono piu' d'uno: il `turn_end`
+   *  del gateway, ma anche un frame di un turno nuovo che scavalca quello
+   *  aperto (`_crossesTurn`) e un invio partito da qui (`appendOwn`). Con la
+   *  coda attaccata al solo `turn_end`, una risposta seguita subito da
+   *  un'altra restava senza — cioe' proprio il caso che si voleva separare.
+   */
   _resetTurn() {
+    if (this.turnNode) {
+      const chiusa = this.turnNode;
+      this._codaDi(chiusa, this._secondi);
+      /* La bolla e' cresciuta di una riga **dopo** essere stata misurata: il
+         margine per scansare la mascotte va rifatto, e chi era in fondo deve
+         restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
+         qui con un nodo che sta per essere buttato. */
+      if (chiusa.isConnected) {
+        this.gap?.aggiorna();
+        this._follow();
+      }
+    }
+    this._secondi = null;
     this.turnNode = null;
     this.blockNode = null;
     this.buffer = '';
@@ -458,7 +511,7 @@ export class CasaChat {
     return this._append(node, toTop);
   }
 
-  _appendAssistant(content, media, toTop = false) {
+  _appendAssistant(content, media, toTop = false, latencyMs = null) {
     const node = document.createElement('div');
     node.className = 'casa-msg casa-msg-jenny';
     if (content) {
@@ -466,9 +519,78 @@ export class CasaChat {
       block.className = 'casa-block';
       block.innerHTML = renderMarkdown(content);
       node.appendChild(block);
+      this._registra(node, content);
     }
     if (media?.length) this._appendMedia(node, media);
+    /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
+       misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
+    this._codaDi(node, latencyMs);
     this._append(node, toTop);
+  }
+
+  /** La riga in coda a una risposta: il Copia e i secondi che ci ha messo.
+   *
+   *  **E' anche il confine fra una risposta e la successiva.** In casa non c'e'
+   *  ne' bolla ne' avatar: due risposte di fila sono due gruppi di paragrafi,
+   *  e a occhio diventano un messaggio solo. Serviva qualcosa che dicesse dove
+   *  una finisce — e invece di una linea che non fa niente, ci sono le due
+   *  cose che uno vorrebbe li'.
+   *
+   *  Una riga sola, icona e poi tempo, come in officina. I secondi possono
+   *  mancare del tutto: una consegna proattiva non ha un turno dietro, quindi
+   *  nessuno ha misurato niente, e in quel caso resta il solo Copia.
+   */
+  _codaDi(node, latencyMs) {
+    if (!node || node.querySelector('.casa-coda')) return;
+    // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
+    if (!this._testoDi(node)) return;
+    const riga = document.createElement('div');
+    riga.className = 'casa-coda';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'casa-copia';
+    btn.title = i18n.t('chat.copy');
+    btn.setAttribute('aria-label', i18n.t('chat.copy'));
+    btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
+    riga.appendChild(btn);
+    if (latencyMs != null) {
+      const s = document.createElement('span');
+      s.className = 'casa-secondi';
+      s.textContent = (latencyMs / 1000).toFixed(1) + 's';
+      riga.appendChild(s);
+    }
+    node.appendChild(riga);
+  }
+
+  /* Il markdown di una bolla si accumula: un turno testo → strumento → testo
+     apre piu' blocchi, e copiarne uno solo sarebbe copiare meta' risposta. */
+  _registra(node, testo) {
+    const pulito = String(testo || '').trim();
+    if (!node || !pulito) return;
+    const prima = this._sorgente.get(node);
+    this._sorgente.set(node, prima ? `${prima}\n\n${pulito}` : pulito);
+  }
+
+  /* Il sorgente se c'e', altrimenti la rete di `innerText`: perde le
+     recinzioni, ma non lascia mai un Copia che non copia niente. */
+  _testoDi(node) {
+    if (!node) return '';
+    const registrato = this._sorgente.get(node);
+    if (registrato) return registrato;
+    return [...node.querySelectorAll('.casa-block')]
+      .map((el) => (el.innerText || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  async _copia(node) {
+    const testo = this._testoDi(node);
+    if (!testo) return;
+    if (!(await copyToClipboard(testo))) {
+      showToast(i18n.t('chat.copyFailed'), 'error');
+      return;
+    }
+    showToast(i18n.t('chat.copied'), 'success');
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire

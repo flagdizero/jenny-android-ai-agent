@@ -48,6 +48,7 @@ import assert from 'node:assert/strict';
 function makeNode() {
   const node = {
     className: '', textContent: '', innerHTML: '', hidden: false,
+    type: '', title: '', isConnected: true,
     children: [],
     appendChild(child) { node.children.push(child); return child; },
     insertBefore(child, before) {
@@ -57,6 +58,18 @@ function makeNode() {
       return child;
     },
     get firstChild() { return node.children[0] || null; },
+    setAttribute() {},
+    /* Solo selettori di classe: e' tutto quel che il disegno usa. */
+    querySelectorAll(sel) {
+      const cls = sel.replace('.', '');
+      const out = [];
+      for (const c of node.children) {
+        if (String(c.className).split(' ').includes(cls)) out.push(c);
+        out.push(...c.querySelectorAll(sel));
+      }
+      return out;
+    },
+    querySelector(sel) { return node.querySelectorAll(sel)[0] || null; },
   };
   return node;
 }
@@ -74,6 +87,9 @@ function makeChat() {
     el: makeNode(),
     _empty: true,
     _stick: true,
+    _sorgente: new WeakMap(),
+    _secondi: null,
+    _follow() {},
     syncEmpty() {},
     scrollToBottom() {},
     _originBadge() { return null; },
@@ -91,6 +107,9 @@ function makeChat() {
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
     __APPEND__,
+    __CODA__,
+    __REGISTRA__,
+    __TESTO__,
   };
   return chat;
 }
@@ -118,6 +137,9 @@ def _harness() -> str:
         .replace("__APPEND_ASSISTANT__", _member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", _member(src, "_appendBoundary"))
         .replace("__APPEND__", _member(src, "_append"))
+        .replace("__CODA__", _member(src, "_codaDi"))
+        .replace("__REGISTRA__", _member(src, "_registra"))
+        .replace("__TESTO__", _member(src, "_testoDi"))
     )
 
 

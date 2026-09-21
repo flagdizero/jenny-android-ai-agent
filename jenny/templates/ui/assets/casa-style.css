@@ -331,6 +331,47 @@ body.casa {
   overflow-wrap: anywhere;
 }
 
+/* ── La coda di una risposta ──
+   Copia e i secondi, su una riga sola. E' anche il confine fra una risposta e
+   la successiva: qui non ci sono bolle attorno al testo di Jenny, quindi due
+   risposte di fila sono due gruppi di paragrafi e a occhio diventano un
+   messaggio unico. Discreta apposta — separa, non si fa guardare. */
+.casa-coda {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -2px;
+}
+
+.casa-copia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .12s, background .12s;
+}
+.casa-copia i { font-size: 14px; }
+.casa-copia:hover,
+.casa-copia:focus-visible {
+  color: var(--text);
+  background: var(--overlay);
+}
+.casa-copia:active { opacity: .7; }
+
+.casa-secondi {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
 .casa-msg-user .casa-block {
   padding: 9px 13px;
   border-radius: var(--radius-bubble);

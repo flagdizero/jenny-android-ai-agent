@@ -2003,23 +2003,22 @@ body {
   gap: 4px;
 }
 
-/* Turn latency */
+/* I secondi del turno. Stanno **dentro** la riga di azioni, accanto al Copia:
+   erano un nodo a se' sopra di essa, e due dati che si leggono insieme
+   occupavano due righe in coda a ogni risposta. */
 .chat-meta {
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--meta);
 }
 
-/* Riga di azioni in coda alla bolla (Copia · ⋯). Discreta come `.chat-meta`,
-   che le sta accanto: è un'affordance, non un pulsante di prima fila. */
+/* La riga in coda alla bolla: Copia e i secondi. Discreta come `.chat-meta`
+   che le sta dentro — e' un'affordance, non un pulsante di prima fila. */
 .chat-msg-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   margin-top: 2px;
-}
-.chat-msg-user .chat-msg-actions {
-  justify-content: flex-end;
 }
 .chat-msg-action {
   display: inline-flex;

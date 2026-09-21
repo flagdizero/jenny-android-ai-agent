@@ -456,9 +456,7 @@ export class ChatController {
       // shell è `script-src 'self'`, niente `onclick` inline.
       const msgAction = e.target.closest('.chat-msg-action');
       if (msgAction && this.chatArea.contains(msgAction)) {
-        const bubble = msgAction.closest('.chat-msg');
-        if (msgAction.classList.contains('chat-msg-copy')) this._copyMessage(bubble);
-        else this._showMessageSheet(bubble);
+        this._copyMessage(msgAction.closest('.chat-msg'));
         return;
       }
       // Tap su un'immagine (media allegato o immagine markdown inline) → lightbox.
@@ -1095,12 +1093,32 @@ export class ChatController {
     return meta;
   }
 
+  /** La riga in coda alla bolla: il pulsante Copia e i secondi del turno.
+   *
+   *  **Una riga sola.** Erano due nodi impilati — i secondi sopra, i pulsanti
+   *  sotto — e in coda a ogni risposta occupavano due righe per due dati che
+   *  stanno in una. Chi la crea non e' uno solo, e nemmeno sempre lo stesso:
+   *  i secondi arrivano col `turn_end`, il Copia quando il testo e' completo,
+   *  e nella cronologia arrivano insieme. Quindi la riga si prende con questa
+   *  funzione, che la crea se manca e in ogni caso **la rimette in fondo** —
+   *  fra le due chiamate la bolla puo' essersi allungata.
+   */
+  _ensureMsgActions(msg) {
+    let row = msg.querySelector(':scope > .chat-msg-actions');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'chat-msg-actions';
+    }
+    msg.appendChild(row);
+    return row;
+  }
+
   _appendLatency(msg, latencyMs) {
     if (!msg || latencyMs == null || msg.querySelector('.chat-meta')) return;
-    const meta = document.createElement('div');
+    const meta = document.createElement('span');
     meta.className = 'chat-meta';
     meta.textContent = (latencyMs / 1000).toFixed(1) + 's';
-    msg.appendChild(meta);
+    this._ensureMsgActions(msg).appendChild(meta);
   }
 
   /* Registra (accumulando) il sorgente di una bolla. Una bolla AI può contenere
@@ -1138,86 +1156,41 @@ export class ChatController {
     return btn;
   }
 
-  /* La riga di azioni in coda alla bolla. Idempotente e sempre ultima: se c'è
-     già la rimette in fondo invece di aggiungerne una seconda, perché nel
-     percorso vivo `_appendLatency` può appendere la meta-row dopo di lei.
+  /* Il pulsante Copia nella riga in coda alla bolla. Idempotente, e **primo**:
+     i secondi possono essere gia' arrivati (`_handleTurnEnd` li posa prima di
+     chiamare qui), e la riga va letta icona-poi-tempo in tutti e due i casi.
+
      Tre chiamanti — `_handleTurnEnd` (vivo), `_flushPersistedTurn` (storico) e
      il blocco `message` di `_handleMessage` (consegna proattiva): con il solo
-     aggancio vivo, riaprire l'app lascerebbe zero pulsanti Copia. */
+     aggancio vivo, riaprire l'app lascerebbe zero pulsanti Copia.
+
+     Sulle bolle utente non compare: sono corte, la selezione nativa riparata
+     basta, e da qui non esce piu' niente d'altro — il `⋯` che le raggiungeva
+     il foglio delle azioni se n'e' andato col foglio. */
   _appendMsgActions(msg) {
     if (!msg) return;
-    const isUser = msg.classList.contains('chat-msg-user');
+    if (msg.classList.contains('chat-msg-user')) return;
     // Un turno di soli tool non ha niente da copiare.
-    if (!isUser && !this._messageText(msg)) return;
-    const existing = msg.querySelector(':scope > .chat-msg-actions');
-    if (existing) { msg.appendChild(existing); return; }
-
-    const row = document.createElement('div');
-    row.className = 'chat-msg-actions';
-    // Sulle bolle utente niente Copia: sono corte e la selezione nativa
-    // riparata basta. Il `⋯` c'è lo stesso, che è come le raggiunge il foglio.
-    if (!isUser) {
-      row.appendChild(this._buildMsgActionButton('chat-msg-copy', 'ti-copy', i18n.t('chat.copy')));
-    }
-    row.appendChild(
-      this._buildMsgActionButton('chat-msg-more', 'ti-dots', i18n.t('chat.messageActions')));
-    msg.appendChild(row);
+    if (!this._messageText(msg)) return;
+    const row = this._ensureMsgActions(msg);
+    if (row.querySelector('.chat-msg-copy')) return;
+    row.insertBefore(
+      this._buildMsgActionButton('chat-msg-copy', 'ti-copy', i18n.t('chat.copy')),
+      row.firstChild);
   }
 
-  /** Il messaggio come lo leggerebbe un umano: niente `**` né `##`. Specchio di
-      `_messageText`, che invece rende il sorgente. */
-  _messagePlain(msg) {
-    if (!msg) return '';
-    const rendered = [...msg.querySelectorAll('.chat-content')]
-      .map((el) => (el.innerText || '').trim())
-      .filter(Boolean)
-      .join('\n\n');
-    return rendered || this._messageText(msg);
-  }
-
-  async _copyMessage(msg, markdown = true) {
-    const text = markdown ? this._messageText(msg) : this._messagePlain(msg);
+  /* Copia il sorgente, non il reso: le recinzioni dei blocchi di codice e il
+     loro linguaggio sono esattamente cio' che serve quando una risposta si
+     incolla altrove. La scelta fra sorgente e testo nudo era del foglio delle
+     azioni, che non c'e' piu': ne resta una, ed e' questa. */
+  async _copyMessage(msg) {
+    const text = this._messageText(msg);
     if (!text) return;
     if (!(await copyToClipboard(text))) {
       showToast(i18n.t('chat.copyFailed'), 'error');
       return;
     }
     showToast(i18n.t('chat.copied'), 'success');
-  }
-
-  /* Foglio delle azioni di un messaggio. Stesso schema di
-     `showAndroidAppSheet`, finestra di grazia sul backdrop compresa: il tap
-     sintetico che segue una pressione lunga non deve richiudere il foglio
-     appena aperto. */
-  _showMessageSheet(msg) {
-    const sheet = document.getElementById('chat-msg-sheet');
-    const actionsEl = document.getElementById('chat-msg-sheet-actions');
-    if (!sheet || !actionsEl || !msg) return;
-
-    const actions = [
-      { icon: 'ti-copy', label: i18n.t('chat.copyPlain'), run: () => this._copyMessage(msg, false) },
-      { icon: 'ti-markdown', label: i18n.t('chat.copyMarkdown'), run: () => this._copyMessage(msg, true) },
-    ];
-    actionsEl.innerHTML = '';
-    const close = () => sheet.close();
-    for (const a of actions) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'oc-sheet-action';
-      btn.innerHTML = `<i class="ti ${a.icon}"></i>`;
-      btn.appendChild(document.createTextNode(a.label));
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        close();
-        a.run();
-      });
-      actionsEl.appendChild(btn);
-    }
-    const cancelBtn = document.getElementById('chat-msg-sheet-cancel');
-    if (cancelBtn) cancelBtn.onclick = close;
-    const openedAt = Date.now();
-    sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
-    sheet.showModal();
   }
 
   _appendFileEdits(msg, edits) {

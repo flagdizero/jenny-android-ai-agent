@@ -8,8 +8,9 @@ resta come rete, così un pulsante Copia non copia mai il vuoto.
 
 Due cose che una asserzione sul sorgente non vedrebbe, e che qui girano davvero:
 una bolla con **più** ``.chat-content`` (turno testo → tool → testo) si copia
-intera, e ``_appendMsgActions`` chiamato due volte lascia una riga sola — in
-coda, anche se nel frattempo è arrivata la meta-row della latenza.
+intera, e la riga in coda — Copia **e** i secondi, dal 21/09/2026 una sola —
+resta una anche quando i due pezzi arrivano da chiamanti diversi e in ordine
+diverso.
 
 I metodi si estraggono dal sorgente e si eseguono in node su un `this` finto,
 come in ``test_message_bubble_client.py``.
@@ -34,9 +35,10 @@ pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
 _METHODS = (
     "_setMessageSource",
     "_messageText",
-    "_messagePlain",
     "_buildMsgActionButton",
+    "_ensureMsgActions",
     "_appendMsgActions",
+    "_appendLatency",
 )
 
 
@@ -62,6 +64,7 @@ function el(tag) {
     className: '',
     innerHTML: '',
     innerText: '',
+    textContent: '',
     title: '',
     attrs: {},
     children: [],
@@ -72,15 +75,28 @@ function el(tag) {
       this.children.push(child);
       return child;
     },
-    querySelector(sel) {
-      if (sel === ':scope > .chat-msg-actions') {
-        return this.children.find((c) => c.className.split(' ').includes('chat-msg-actions')) || null;
-      }
-      return null;
+    insertBefore(child, before) {
+      const at = this.children.indexOf(child);
+      if (at !== -1) this.children.splice(at, 1);
+      const i = before ? this.children.indexOf(before) : -1;
+      if (i === -1) this.children.push(child);
+      else this.children.splice(i, 0, child);
+      return child;
     },
+    get firstChild() { return this.children[0] || null; },
+    querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+    /* Ricorsivo, e `:scope >` si legge come "solo i figli": la riga in coda
+       ospita ora la `.chat-meta`, quindi cercarla solo fra i figli diretti
+       della bolla non la troverebbe piu'. */
     querySelectorAll(sel) {
-      const want = sel.replace('.', '');
-      return this.children.filter((c) => c.className.split(' ').includes(want));
+      const diretti = sel.startsWith(':scope > ');
+      const want = sel.replace(':scope > ', '').replace('.', '');
+      const out = [];
+      for (const c of this.children) {
+        if (c.className.split(' ').includes(want)) out.push(c);
+        if (!diretti) out.push(...c.querySelectorAll(sel));
+      }
+      return out;
     },
   };
   node.classList = { contains: (c) => node.className.split(' ').includes(c) };
@@ -108,10 +124,14 @@ function chat() {
   };
 }
 
-/* Le classi della riga di azioni, nell'ordine. */
+/* Cosa c'e' nella riga in coda, **nell'ordine**: le classi dei pulsanti e,
+   per i secondi, il testo che mostrano. L'ordine e' meta' del contratto. */
 function actions(msg) {
   const row = msg.children.find((c) => c.className.split(' ').includes('chat-msg-actions'));
-  return row ? row.children.map((b) => b.className.split(' ')[1]) : null;
+  if (!row) return null;
+  return row.children.map((b) => (
+    b.className === 'chat-meta' ? b.textContent : b.className.split(' ')[1]
+  ));
 }
 """.replace("__METHODS__", methods)
 
@@ -136,8 +156,6 @@ def test_the_recorded_source_wins_over_inner_text() -> None:
       const msg = bubble('ai', 'Ecco:\\n\\nprint(1)');
       c._setMessageSource(msg, {FENCED!r});
       assert.equal(c._messageText(msg), {FENCED!r});
-      // E la versione leggibile resta quella renderizzata, senza i backtick.
-      assert.equal(c._messagePlain(msg), 'Ecco:\\n\\nprint(1)');
     """)
 
 
@@ -157,7 +175,6 @@ def test_a_turn_with_several_segments_copies_whole() -> None:
       c._setMessageSource(msg, 'primo');
       c._setMessageSource(msg, 'secondo');
       assert.equal(c._messageText(msg), 'primo\\n\\nsecondo');
-      assert.equal(c._messagePlain(msg), 'primo\\n\\nsecondo');
     """)
 
 
@@ -167,10 +184,7 @@ def test_the_actions_row_is_added_once_and_stays_last() -> None:
       const c = chat();
       const msg = bubble('ai', 'risposta');
       c._appendMsgActions(msg);
-      // Nel frattempo arriva la meta-row della latenza.
-      const meta = el('div');
-      meta.className = 'chat-meta';
-      msg.appendChild(meta);
+      c._appendLatency(msg, 4000);
       c._appendMsgActions(msg);
 
       const rows = msg.children.filter((x) => x.className.split(' ').includes('chat-msg-actions'));
@@ -179,30 +193,79 @@ def test_the_actions_row_is_added_once_and_stays_last() -> None:
     """)
 
 
-def test_a_user_bubble_gets_the_menu_but_no_copy_button() -> None:
-    """Le bolle utente sono corte: basta la selezione nativa, più il `⋯`."""
-    _run_js("""
-      const c = chat();
-      const msg = bubble('user', 'ciao');
-      c._appendMsgActions(msg);
-      assert.deepEqual(actions(msg), ['chat-msg-more']);
-    """)
-
-
-def test_an_answer_gets_copy_and_the_menu() -> None:
+def test_the_seconds_share_the_row_with_copy() -> None:
+    """**Una riga sola.** Erano due nodi impilati: i secondi sopra, il Copia
+    sotto, due righe in coda a ogni risposta per due dati che si leggono
+    insieme."""
     _run_js("""
       const c = chat();
       const msg = bubble('ai', 'risposta');
       c._appendMsgActions(msg);
-      assert.deepEqual(actions(msg), ['chat-msg-copy', 'chat-msg-more']);
+      c._appendLatency(msg, 4000);
+      assert.deepEqual(actions(msg), ['chat-msg-copy', '4.0s']);
+      const fuori = msg.children.filter((x) => x.className === 'chat-meta');
+      assert.equal(fuori.length, 0, 'i secondi sono ancora un nodo a sé');
+    """)
+
+
+def test_the_order_holds_whichever_arrives_first() -> None:
+    """Nel vivo i secondi arrivano col `turn_end`, **prima** del Copia; nello
+    storico i due si posano insieme. La riga si legge icona-poi-tempo in tutti
+    e due i casi, o cambia forma a seconda di come sei arrivato lì."""
+    _run_js("""
+      const c = chat();
+      const msg = bubble('ai', 'risposta');
+      c._appendLatency(msg, 21300);   // prima i secondi
+      c._appendMsgActions(msg);
+      assert.deepEqual(actions(msg), ['chat-msg-copy', '21.3s']);
+    """)
+
+
+def test_the_seconds_are_written_once() -> None:
+    _run_js("""
+      const c = chat();
+      const msg = bubble('ai', 'risposta');
+      c._appendLatency(msg, 4000);
+      c._appendLatency(msg, 9999);
+      assert.deepEqual(actions(msg), ['4.0s']);
+    """)
+
+
+def test_a_user_bubble_gets_no_row_at_all() -> None:
+    """Le bolle utente sono corte: basta la selezione nativa.
+
+    Prima ci arrivava il `⋯`, che era la loro unica azione — apriva il foglio
+    «Copia testo / Copia come Markdown». Il foglio non c'è più, quindi la riga
+    resterebbe vuota: non si disegna.
+    """
+    _run_js("""
+      const c = chat();
+      const msg = bubble('user', 'ciao');
+      c._appendMsgActions(msg);
+      assert.equal(actions(msg), null);
+    """)
+
+
+def test_an_answer_gets_copy_and_nothing_else() -> None:
+    _run_js("""
+      const c = chat();
+      const msg = bubble('ai', 'risposta');
+      c._appendMsgActions(msg);
+      assert.deepEqual(actions(msg), ['chat-msg-copy']);
     """)
 
 
 def test_a_tools_only_turn_offers_nothing_to_copy() -> None:
-    """Un turno di soli tool non ha testo: nessuna riga, nessun pulsante muto."""
+    """Un turno di soli tool non ha testo: nessun Copia, nessun pulsante muto.
+
+    I secondi però ci arrivano lo stesso — il turno è durato — e da soli si
+    posano nella riga senza bisogno di nessuno che la crei prima.
+    """
     _run_js("""
       const c = chat();
       const msg = bubble('ai');
       c._appendMsgActions(msg);
       assert.equal(actions(msg), null);
+      c._appendLatency(msg, 1500);
+      assert.deepEqual(actions(msg), ['1.5s']);
     """)
