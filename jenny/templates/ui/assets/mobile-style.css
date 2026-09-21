@@ -5445,6 +5445,41 @@ body {
 .cron-riga-quando.is-tardi { color: var(--warning, var(--text-muted)); }
 .cron-riga-quando.is-muto { color: var(--text-faint); }
 
+/* ── La riga di un file ───────────────────────────────────────────────────
+   Icona, nome, peso. Non e' cliccabile di proposito: la scheda dice cosa c'e',
+   e ad aprirlo si va dal gestore file, che e' la riga sotto. Una riga che si
+   illumina al tocco e non fa niente e' peggio di una riga inerte. */
+.file-riga {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-top: 0.5px solid var(--border);
+}
+.file-riga:first-of-type { border-top: 0; }
+.file-riga-icona { flex-shrink: 0; font-size: 14px; color: var(--text-faint); }
+.file-riga-nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text);
+}
+/* In monospazio e a destra: incolonnati, otto pesi si confrontano a colpo
+   d'occhio — lo stesso motivo del «fra quanto» delle righe del cron. */
+.file-riga-peso {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.file-riga-avanzo {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 /* ── La riga di una marca ─────────────────────────────────────────────────
    Pallino, nome, indirizzo, chiave mascherata, freccina — piu' la pastiglia
    «risponde» su quella che risponde adesso. Era una scheda alta il triplo. */

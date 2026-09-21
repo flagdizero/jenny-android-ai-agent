@@ -1115,10 +1115,18 @@
       "parametri": "Parameters",
       "quantoRicorda": "How much she remembers",
       "dream": "Dream — who fills those three files",
-      "giardiniere": "Gardener — who fills the notebooks"
+      "giardiniere": "Gardener — who fills the notebooks",
+      "file": "The real files"
     },
     "rimando": {
       "dreamInMemoria": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
+    },
+    "file": {
+      "desc": "What sits in her working folder, at the root. Service files are not listed.",
+      "cartella": "folder",
+      "altri": "and {n} more",
+      "vuoto": "The working folder is empty.",
+      "errore": "I couldn't read the working folder."
     }
   }
 }

@@ -1118,10 +1118,18 @@
       "parametri": "Parametri",
       "quantoRicorda": "Quanto ricorda",
       "dream": "Dream — chi riempie quei tre file",
-      "giardiniere": "Giardiniere — chi riempie i quaderni"
+      "giardiniere": "Giardiniere — chi riempie i quaderni",
+      "file": "I file veri"
     },
     "rimando": {
       "dreamInMemoria": "Chi riempie la memoria — Dream e il giardiniere — sta accanto a quel che riempie, in Memoria."
+    },
+    "file": {
+      "desc": "Quel che c’è nella sua cartella di lavoro, alla radice. I file di servizio non si elencano.",
+      "cartella": "cartella",
+      "altri": "e altre {n} voci",
+      "vuoto": "La cartella di lavoro è vuota.",
+      "errore": "Non sono riuscita a leggere la cartella di lavoro."
     }
   }
 }

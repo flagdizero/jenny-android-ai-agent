@@ -124,7 +124,18 @@ def test_every_drawer_in_the_table_is_a_dock_voice_and_the_other_way_round() -> 
 def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     """App, file e wiki avevano una voce ciascuna e adesso no. Restano vive:
     senza una porta sarebbero raggiungibili solo da un `switchMode` scritto a
-    mano, cioe' da nessuno."""
+    mano, cioe' da nessuno.
+
+    **Una porta non e' per forza una voce di `porte`.** Dal 21/09/2026 il
+    gestore file si apre da una riga che la scheda «I file veri» si disegna da
+    se', in fondo alle cartelle che mostra: stesso attributo `data-porta`,
+    stesso cablaggio (`_wirePorte`), ma non passa dalla mappa. Il banco guarda
+    percio' le porte **come le vede il DOM**, che e' l'unica definizione che
+    conta per chi deve arrivarci col dito.
+
+    Il cassetto delle app non compare qui perche' non e' un modo: e' un foglio,
+    e la sua maniglia la difende `test_launcher_sheet_contract.py`.
+    """
     app = _src("mobile-app.js")
     fabbriche = re.search(r"(?s)this\.controllerFactories = \{(.*?)\n    \};", app)
     assert fabbriche, "le fabbriche dei controller non si trovano piu'"
@@ -134,7 +145,9 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     sul_dock = set(re.findall(r'data-mode="([a-z]+)"', nav))
 
+    impostazioni = _src("mobile-settings.js")
     porte = {p for c in _cassetti().values() for p in c["porte"]}
+    porte |= set(re.findall(r'data-porta="([a-z]+)"', impostazioni))
     cassetti = set(_cassetti())
     # `settings` e' il contenitore dei tre cassetti, `onboarding` e `wiki` si
     # aprono da dentro (il primo avvio, e una pagina del grafo).

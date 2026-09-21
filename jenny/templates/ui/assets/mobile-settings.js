@@ -21,6 +21,14 @@ import { runSnapshotRestore } from './shared/backup-flow.js';
 // parsimonioso al più affamato.
 const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
 
+/* Quante righe mostra la scheda «I file veri» prima di contare il resto.
+   Non e' estetica: alla radice di un workspace vissuto ci sono decine di voci,
+   e un elenco lungo dentro una scheda rifa' esattamente il difetto che questo
+   giro ha tolto dalla storia locale — duecento righe che rispondono a una
+   domanda che nessuno ha fatto. Quel che avanza si conta in una riga, e il
+   gestore file e' li' sotto. */
+export const TETTO_FILE = 8;
+
 /* I quattro cassetti dell'officina, e cosa contiene ognuno.
  *
  * **Una tabella e non undici `if`.** Prima le sezioni erano un elenco dentro
@@ -72,15 +80,14 @@ export const LAVORI_DI_MANI = (job) => job.kind !== 'system' || job.id === 'hear
  * motore — tre cose che si leggono, si amministrano e non si toccano quasi
  * mai. Il taglio nuovo e' questo, non un rinominare.
  *
- * Due voci della tavola qui non ci sono, e il motivo e' lo stesso per
- * entrambe: **non esistono nel prodotto**, e un gruppo vuoto e' peggio di un
- * gruppo assente.
+ * Una voce della tavola qui non c'e', e il motivo e' che **non esiste nel
+ * prodotto**: un gruppo vuoto e' peggio di un gruppo assente.
  *   - «permessi di scrittura» (Mani): tre interruttori per ambito e `/ro`.
  *     Nel config esiste solo `security.restrict_to_workspace`, che oggi
  *     nessuna schermata espone.
- *   - «i file veri» (Memoria): l'elenco delle cartelle del workspace. La porta
- *     `workspace` qui sopra ci porta gia'; mostrarlo anche qui vuole una
- *     lettura che questa schermata non fa.
+ * Ne restava una sola dal 21/09/2026, «permessi di scrittura»: «i file veri»
+ * adesso c'e' — e' il gruppo `file`, che legge davvero la radice del workspace
+ * invece di rimandare altrove.
  *
  * `system` (Cervello) invece **resta**, pur non stando in nessuna tavola: e' la
  * versione e il consumo di token. Toglierlo senza dargli una casa lo farebbe
@@ -96,8 +103,8 @@ export const CASSETTI = {
     porte: {},
   },
   memoria: {
-    sezioni: ['quantoRicorda', 'dream', 'workers', 'backup'],
-    porte: { workers: ['graph', 'workspace'] },
+    sezioni: ['quantoRicorda', 'dream', 'workers', 'file', 'backup'],
+    porte: { workers: ['graph'] },
   },
 };
 
@@ -263,6 +270,7 @@ export class SettingsController {
       quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d), this._portePerGruppo(cassetto, 'quantoRicorda')),
       dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d), this._portePerGruppo(cassetto, 'dream')),
       workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d), this._portePerGruppo(cassetto, 'workers')),
+      file: () => this._gruppo('file', i18n.t('officina.gruppi.file'), this._renderFile(), this._portePerGruppo(cassetto, 'file')),
       backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup(), this._portePerGruppo(cassetto, 'backup')),
     };
     const cassetto = CASSETTI[this._cassetto];
@@ -1739,6 +1747,92 @@ export class SettingsController {
     dialog.addEventListener('close', () => dialog.remove());
   }
 
+  // ── I file veri ────────────────────────────────────────────────────
+
+  /** Cosa c'e' davvero nel workspace, alla radice.
+   *
+   *  **La tavola la chiamava «i file veri», e fino al 21/09/2026 non
+   *  esisteva.** Al suo posto c'era una riga in fondo al giardiniere che
+   *  portava al gestore file: un collegamento, non un contenuto. Una scheda
+   *  che si legge scorrendo — il criterio di tutto il cassetto — qui vuol dire
+   *  vedere le cartelle senza andarci.
+   *
+   *  **Una richiesta sola.** Le righe si disegnano da `/api/workspace/list`
+   *  sulla radice. Dire anche «quante cose dentro» per ogni cartella
+   *  costerebbe una richiesta a cartella a ogni apertura di Memoria: e' una
+   *  misura che il server potrebbe dare in una risposta sola, e finche' non la
+   *  da' questa scheda non se la inventa a colpi di round trip.
+   *
+   *  **E i file di servizio non ci sono**, come nel gestore file: il flag
+   *  `internal` lo mette il server file per file.
+   */
+  _renderFile() {
+    return `
+      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('officina.file.desc')}</p>
+      <div id="settings-file-lista"><div class="settings-empty-state">${i18n.t('settings.loading')}</div></div>
+      <button class="settings-porta" data-porta="workspace" type="button">
+        <i class="ti ti-folder"></i>
+        <span>${escapeHtml(i18n.t('nav.workspace'))}</span>
+        <i class="ti ti-chevron-right"></i>
+      </button>`;
+  }
+
+  async _caricaFile() {
+    const box = this.contentEl?.querySelector('#settings-file-lista');
+    if (!box) return;
+    let items;
+    try {
+      const payload = await api.listWorkspace('');
+      items = payload?.items || [];
+    } catch (e) {
+      box.innerHTML = `<div class="settings-empty-state">${escapeHtml(i18n.t('officina.file.errore'))}</div>`;
+      return;
+    }
+    const visibili = items.filter((i) => !i.internal);
+    if (!visibili.length) {
+      box.innerHTML = `<div class="settings-empty-state">${escapeHtml(i18n.t('officina.file.vuoto'))}</div>`;
+      return;
+    }
+    /* Cartelle prima, e dentro ogni famiglia in ordine alfabetico: e' l'ordine
+       del gestore file, e due schermate sugli stessi dati che li ordinano
+       diversamente sembrano parlare di due cartelle diverse. */
+    const perNome = (a, b) => a.name.localeCompare(b.name);
+    const cartelle = visibili.filter((i) => i.type === 'directory').sort(perNome);
+    const file = visibili.filter((i) => i.type !== 'directory').sort(perNome);
+    const tutte = [...cartelle, ...file];
+    const mostrate = tutte.slice(0, TETTO_FILE);
+    const righe = mostrate.map((i) => {
+      const cartella = i.type === 'directory';
+      const sotto = cartella ? i18n.t('officina.file.cartella') : this._pesoFile(i.size);
+      return `<div class="file-riga">
+        <i class="ti ti-${cartella ? 'folder' : 'file'} file-riga-icona" aria-hidden="true"></i>
+        <span class="file-riga-nome">${escapeHtml(i.name)}</span>
+        <span class="file-riga-peso">${escapeHtml(sotto)}</span>
+      </div>`;
+    }).join('');
+    const avanzo = tutte.length - mostrate.length;
+    const coda = avanzo > 0
+      ? `<div class="file-riga file-riga-avanzo">${escapeHtml(i18n.t('officina.file.altri', { n: avanzo }))}</div>`
+      : '';
+    box.innerHTML = righe + coda;
+  }
+
+  /** Quanto pesa un file, in una parola.
+   *
+   *  `null` non e' zero, ed e' il valore che il server manda per le cartelle:
+   *  `Number(null)` fa 0, quindi senza questa prima riga una voce senza peso
+   *  si presenterebbe come «0 B» — un file vuoto e un peso che non sappiamo
+   *  sono due cose diverse, e la seconda non si scrive.
+   */
+  _pesoFile(byte) {
+    if (byte === null || byte === undefined) return '';
+    const n = Number(byte);
+    if (!Number.isFinite(n) || n < 0) return '';
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(1)} kB`;
+    return `${n} B`;
+  }
+
   // ── Backup e ripristino ──────────────────────────────────────────────
 
   /* La storia locale, e **non** il backup cifrato.
@@ -2340,6 +2434,11 @@ export class SettingsController {
     }
 
     this._wireWorkerSettings();
+
+    // I file veri: in cassetto la scheda nasce col segnaposto, e la radice del
+    // workspace arriva dopo. Fuori da Memoria il contenitore non esiste e il
+    // metodo esce subito.
+    this._caricaFile();
 
     // Telegram: in cassetto solo la riga. Il widget lo monta `_apriTelegram`
     // quando il pannello si apre — prima, il suo contenitore non esiste.
