@@ -479,7 +479,8 @@
     "providerSavedNotActive": "Marca salvata, ma non attivata: {error}",
     "updatesLiveInCasa": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti».",
     "addProviderHint": "Nome, formato, indirizzo, chiave e il primo modello. Una marca senza un modello che funziona non è una marca che c'è.",
-    "answersNow": "risponde"
+    "answersNow": "risponde",
+    "contextWindow": "Finestra di contesto"
   },
   "common": {
     "loading": "Caricamento...",
@@ -1132,6 +1133,13 @@
       "quantoRicorda": "Quanto ricorda",
       "dream": "Dream — chi riempie quei tre file",
       "giardiniere": "Giardiniere — chi riempie i quaderni"
+    },
+    "stato": {
+      "viva": "connessa",
+      "giu": "non connessa"
+    },
+    "rimando": {
+      "dreamInMemoria": "Chi riempie la memoria — Dream e il giardiniere — sta accanto a quel che riempie, in Memoria."
     }
   }
 }

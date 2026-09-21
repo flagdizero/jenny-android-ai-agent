@@ -87,12 +87,29 @@ Il token c'è già (`--font-mono`): è una questione di dove applicarlo.
 4. **La riga di rimando in fondo**: «Chi riempie la memoria — Dream e il
    giardiniere — sta accanto a quel che riempie, in Memoria».
 
+
+> ⚠️ **«CURRENT STATE» a interruttori è il secondo conflitto con la realtà.**
+>
+> La tavola disegna «Esenzione dalla batteria» e «Sveglie precise» come due
+> interruttori. **L'app non può azionarli.** Entrambi li concede Android da una
+> sua schermata — per questo esistono già una scheda con un bottone di richiesta
+> (`batteryExemptionHtml`) e `_renderExactAlarmRequest`. E il terzo, «CPU sveglia
+> adesso», non è nemmeno un'impostazione: è un fatto che si legge.
+>
+> Un interruttore che non commuta insegna che gli interruttori di questa
+> schermata non funzionano. Stessa regola dei bottoni del backup fuori da
+> Android, e stessa forma del conflitto SSH: la tavola descrive una cosa che il
+> sistema operativo non concede.
+>
+> **Deciso: non si converte.** Resta il referto, e restano i due bottoni che
+> aprono le schermate di sistema — che sono l'unico modo vero.
+
 ### G. Cose del cassetto che nella tavola non ci sono
 
 | nel cassetto | che farne |
 | --- | --- |
 | icona «aggiorna» nell'intestazione | la tavola non ce l'ha; le pagine si ricaricano da sole all'apertura |
-| «CURRENT STATE» (esenzione, sveglie precise, CPU ora) come elenco di ✓/✗ | la tavola li fa **interruttori**, non referto |
+| «CURRENT STATE» (esenzione, sveglie precise, CPU ora) come elenco di ✓/✗ | ⚠️ **secondo conflitto: non si fa.** Vedi sotto |
 | «RECORDED OUTAGES» | non c'è nella tavola |
 | PERSONALIZATION, SYSTEM | i due parcheggi già noti: decisione aperta |
 

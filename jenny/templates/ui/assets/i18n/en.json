@@ -479,7 +479,8 @@
     "providerSavedNotActive": "Brand saved, but not activated: {error}",
     "updatesLiveInCasa": "Checking for and installing updates happens in the house, under «Updates».",
     "addProviderHint": "Name, format, endpoint, key and the first model. A brand without a working model is not a brand you have.",
-    "answersNow": "answers"
+    "answersNow": "answers",
+    "contextWindow": "Context window"
   },
   "common": {
     "loading": "Loading...",
@@ -1129,6 +1130,13 @@
       "quantoRicorda": "How much she remembers",
       "dream": "Dream — who fills those three files",
       "giardiniere": "Gardener — who fills the notebooks"
+    },
+    "stato": {
+      "viva": "connected",
+      "giu": "disconnected"
+    },
+    "rimando": {
+      "dreamInMemoria": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
     }
   }
 }

@@ -284,7 +284,9 @@ WELCOME_TEMPLATES: dict[str, str] = {
     "en": "Hi, I'm {bot_name} and from today I live on your smartphone. Nice to meet you!",
 }
 
-_CONTEXT_WINDOW_TOKEN_OPTIONS = {65_536, 262_144}
+# Tupla e non `set`: la UI ne fa un menu', e l'ordine di un `set` non e'
+# garantito fra due esecuzioni. Il controllo `in` costa uguale su due voci.
+_CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 262_144)
 _ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Vocabolario accettato dal layer provider (``openai_compat_provider._build_kwargs``
 # normalizza "minimum" in "minimal"). La select della WebUI ne espone un
@@ -917,6 +919,10 @@ def settings_payload(
             "model": effective_preset.model,
             "max_tokens": effective_preset.max_tokens,
             "context_window_tokens": effective_preset.context_window_tokens,
+            # L'elenco accettato, non solo il valore scelto: senza, la UI
+            # dovrebbe ricopiarlo e una modifica qui divergerebbe in
+            # silenzio. Stessa forma di `power.modes`.
+            "context_window_options": list(_CONTEXT_WINDOW_TOKEN_OPTIONS),
             "temperature": effective_preset.temperature,
             "reasoning_effort": effective_preset.reasoning_effort,
             "timezone": defaults.timezone,

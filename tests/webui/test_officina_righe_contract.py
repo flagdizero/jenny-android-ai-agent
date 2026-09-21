@@ -453,3 +453,96 @@ def test_il_bottone_principale_e_pieno_e_uno_solo() -> None:
     assert m and "var(--on-accent)" in m.group(1), (
         "testo non su --on-accent: con un accento chiaro non si legge"
     )
+
+
+# ── Terzo giro: dettagli ─────────────────────────────────────────────────────
+
+
+def test_la_finestra_di_contesto_ha_finalmente_un_comando() -> None:
+    """Esisteva nello schema, nel payload e nella rotta — con due soli valori
+    accettati — e **nessuna schermata la mostrava**. Non era un dato mancante:
+    era un comando mancante."""
+    corpo = _corpo("_renderParametri")
+    assert "context_window_tokens" in corpo
+    # L'**espressione**, non la parola: `context_window_options` compare anche
+    # nel commento sopra, e cercarla lì lasciava passare la mutazione che
+    # ricopiava l'elenco a mano (misurato il 21/09/2026, banco verde su codice
+    # rotto). E nessun numero scritto qui: la rotta ne rifiuta ogni altro, e
+    # due copie divergono in silenzio alla prima aggiunta.
+    assert "a.context_window_options" in corpo, (
+        "le voci sono ricopiate qui invece di arrivare dal server"
+    )
+    codice = "\n".join(
+        r for r in SETTINGS.splitlines()
+        if not r.lstrip().startswith(("*", "//", "/*"))
+    )
+    assert not re.search(r"\b(65536|262144)\b", codice), (
+        "un valore della finestra di contesto è scritto a mano nel client"
+    )
+    # E si salva: senza questa chiave il menù cambia e non succede niente.
+    assert "'context_window_tokens'" in _corpo("_wireSections")
+
+
+def test_le_voci_della_finestra_vengono_dal_server() -> None:
+    """La rotta rifiuta qualunque altro valore: due copie dell'elenco
+    divergerebbero in silenzio alla prima aggiunta. Stessa forma di
+    `power.modes`, che era già così."""
+    api = (ROOT / "jenny" / "webui" / "settings_api.py").read_text(encoding="utf-8")
+    assert '"context_window_options": list(_CONTEXT_WINDOW_TOKEN_OPTIONS)' in api
+    # Tupla e non `set`: la UI ne fa un menù, e l'ordine di un `set` non è
+    # garantito fra due esecuzioni.
+    assert "_CONTEXT_WINDOW_TOKEN_OPTIONS = (" in api, (
+        "l'elenco è tornato un set: l'ordine del menù ballerebbe"
+    )
+
+
+def test_i_numeri_del_menu_hanno_i_separatori() -> None:
+    """«65536» non si conta a occhio; «65 536» sì."""
+    corpo = _corpo("_renderParametri")
+    assert "toLocaleString" in corpo
+    sel = _corpo("_select")
+    assert "typeof o === 'object'" in sel, (
+        "il menù non sa più separare quel che salva da quel che mostra"
+    )
+
+
+def test_la_pastiglia_dice_una_cosa_che_il_guscio_sa_davvero() -> None:
+    """La tavola scrive «idle», che è uno stato di **turno**: lo conosce la
+    chat, non il guscio, e duplicarlo qui vorrebbe dire tenerne due copie che
+    divergono. La connessione invece il guscio ce l'ha, ed è la più utile delle
+    due da un cassetto di impostazioni — se è caduta, quel che tocchi non
+    arriva da nessuna parte.
+    """
+    header = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
+    assert "wsManager.chatConnected" in header
+    assert "'chat:open'" in header and "'chat:close'" in header, (
+        "la pastiglia non segue le transizioni: un cassetto aperto da dieci "
+        "minuti con la WS caduta direbbe il falso"
+    )
+    assert "view-title-stato" in CSS
+    m = re.search(r"\.view-title-stato\.is-giu \.view-title-punto \{([^}]*)\}", CSS)
+    assert m and "inset" in m.group(1), (
+        "pieno e vuoto sono l'unica differenza che sopravvive a ogni tema"
+    )
+
+
+def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
+    """`activate()` ricarica a ogni apertura e ogni salvataggio ridisegna: un
+    bottone che rifà quel che è appena successo insegna a premerlo per
+    scaramanzia."""
+    header = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
+    m = re.search(r"function cassetto\(nome\) \{(.*?)\n\}", header, re.S)
+    assert m, "cassetto() non trovata"
+    assert "'refresh'" not in m.group(1), "l'icona «aggiorna» è tornata nei cassetti"
+
+
+def test_il_cassetto_dice_dove_sta_quel_che_non_ci_sta() -> None:
+    """Un cassetto che si chiama «Cervello» sembra il posto dove cercare Dream:
+    è l'errore che il giro dei cassetti ha già fatto una volta."""
+    assert "officina.rimando.dreamInMemoria" in SETTINGS
+    assert ".settings-rimando {" in CSS
+    import json
+
+    for lingua in ("it", "en"):
+        d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+        assert d["officina"]["rimando"]["dreamInMemoria"].strip()

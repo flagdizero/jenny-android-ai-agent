@@ -9,6 +9,7 @@
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
+import { wsManager } from './shared/ws-manager.js';
 import { scopeChip } from './shared/scope-chip.js';
 import { isOpenableProjectName } from './shared/conversation-list.js';
 import { VISTA_DI } from './mobile-settings.js';
@@ -70,12 +71,15 @@ function pillCasa() {
 function cassetto(nome) {
   return {
     eyebrow: i18n.t('officina.eyebrow'),
+    stato: true,
     title: i18n.t(`nav.${nome}`),
     sub: i18n.t(`officina.sub.${nome}`),
-    actions: [
-      { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' },
-      pillCasa(),
-    ],
+    /* Niente «aggiorna»: la tavola non ce l'ha, e non serve — `activate()`
+       ricarica a ogni apertura del cassetto, e ogni salvataggio ridisegna. Un
+       bottone che rifa' quel che e' appena successo insegna a premerlo per
+       scaramanzia, e occupa il posto accanto all'unico che porta da qualche
+       parte. */
+    actions: [pillCasa()],
   };
 }
 
@@ -159,6 +163,11 @@ export class ViewTitleController {
     };
 
     i18n.onLocaleChange(() => this._refreshTitles());
+    /* La pastiglia segue la connessione mentre la schermata e' aperta: un
+       cassetto aperto da dieci minuti con la WS caduta direbbe il falso. */
+    for (const ev of ['chat:open', 'chat:close']) {
+      wsManager.addEventListener(ev, () => this._dipingiStato());
+    }
   }
 
   _refreshTitles() {
@@ -204,6 +213,7 @@ export class ViewTitleController {
         '<h1 class="view-title-text"></h1>' +
         '<div class="view-title-sub"></div>' +
       '</div>' +
+      '<span class="view-title-stato" hidden><span class="view-title-punto"></span><span></span></span>' +
       '<div class="view-title-actions"></div>' +
       '</div>';
     this.titleEl = mount.querySelector('.view-title-text');
@@ -217,7 +227,27 @@ export class ViewTitleController {
     subEl.hidden = !config.sub;
 
     this.titleEl.textContent = customTitle || config.title;
+    this.statoEl = config.stato ? mount.querySelector('.view-title-stato') : null;
+    this._dipingiStato();
     this.renderActions(config.actions);
+  }
+
+  /** La pastiglia di stato dell'intestazione.
+   *
+   *  La tavola scrive «● idle», cioe' uno stato di **turno**. Quello lo
+   *  conosce la chat, non il guscio, e duplicarlo qui vorrebbe dire tenerne due
+   *  copie che divergono. Il guscio invece sa una cosa vera e sua: se la
+   *  connessione col gateway e' viva. E' la piu' utile delle due da un cassetto
+   *  di impostazioni — se e' caduta, quel che tocchi non arriva da nessuna
+   *  parte — quindi la pastiglia dice quella.
+   */
+  _dipingiStato() {
+    if (!this.statoEl) return;
+    const viva = wsManager.chatConnected;
+    this.statoEl.hidden = false;
+    this.statoEl.classList.toggle('is-giu', !viva);
+    this.statoEl.lastElementChild.textContent =
+      i18n.t(viva ? 'officina.stato.viva' : 'officina.stato.giu');
   }
 
   /** Scrive il titolo della vista, ma solo se chi lo scrive è ancora il

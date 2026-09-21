@@ -454,7 +454,13 @@ export class SettingsController {
       ? `<div id="settings-battery-card"></div><div class="settings-divider"></div>`
       : '';
     return this._gruppo('battery', i18n.t('settings.battery.title'),
-      `${card}${this._renderKeepAwake(d)}<div id="settings-power-diagnostics"></div>`,
+      `${card}${this._renderKeepAwake(d)}<div id="settings-power-diagnostics"></div>`
+      /* La riga che chiude il cassetto, come nella tavola: chi riempie la
+         memoria non sta qui, sta accanto a quel che riempie. Senza, un
+         cassetto che si chiama «Cervello» sembra il posto dove cercare
+         Dream — ed e' esattamente l'errore che il giro dei cassetti ha
+         fatto una volta. */
+      + `<p class="settings-rimando">${i18n.t('officina.rimando.dreamInMemoria')}</p>`,
     );
   }
 
@@ -813,7 +819,22 @@ export class SettingsController {
    */
   _renderParametri(d) {
     const a = d.agent || {};
+    /* La finestra di contesto esisteva nello schema, nel payload e nella rotta
+       — con due soli valori accettati — e **nessuna schermata la mostrava**
+       (verificato il 21/09/2026, ne' officina ne' casa). Non era un dato
+       mancante: era un comando mancante.
+
+       Le voci arrivano dal server (`context_window_options`) e non da un
+       elenco ricopiato qui: la rotta ne rifiuta qualunque altro, e due copie
+       divergerebbero in silenzio alla prima aggiunta. */
+    const finestre = a.context_window_options || [];
+    const finestra = finestre.length
+      ? this._select(i18n.t('settings.contextWindow'), 'context_window_tokens',
+          String(a.context_window_tokens || ''),
+          finestre.map((n) => ({ v: String(n), t: Number(n).toLocaleString(i18n.locale) })))
+      : '';
     return `
+      ${finestra}
       ${this._field(i18n.t('settings.maxTokens'), 'number', 'max_tokens', a.max_tokens || '', i18n.t('settings.maxTokensPlaceholder'))}
       ${this._field(i18n.t('settings.temperature'), 'number', 'temperature', a.temperature ?? '', i18n.t('settings.temperaturePlaceholder'))}
       ${this._select(i18n.t('settings.reasoningEffort'), 'reasoning_effort', a.reasoning_effort || '',
@@ -2197,10 +2218,16 @@ export class SettingsController {
     </div>`;
   }
 
+  /** Un menu'. Le voci sono stringhe, oppure `{v, t}` quando quel che si
+   *  salva e quel che si legge non sono la stessa cosa — un numero di token si
+   *  salva «65536» e si legge «65 536», e senza i separatori nessuno conta le
+   *  cifre. */
   _select(label, key, value, options) {
-    const opts = options.map(o =>
-      `<option value="${escapeHtml(o)}" ${o === value ? 'selected' : ''}>${o || '—'}</option>`
-    ).join('');
+    const opts = options.map(o => {
+      const v = typeof o === 'object' ? o.v : o;
+      const t = typeof o === 'object' ? o.t : o;
+      return `<option value="${escapeHtml(v)}" ${v === value ? 'selected' : ''}>${escapeHtml(t) || '—'}</option>`;
+    }).join('');
     return `<div class="settings-riga">
       <label class="settings-label">${label}</label>
       <select class="settings-select" data-key="${key}">${opts}</select>
@@ -2472,7 +2499,7 @@ export class SettingsController {
 
   _wireSections() {
     // Active config fields → auto-save on change
-    for (const key of ['bot_name', 'max_tokens', 'temperature', 'reasoning_effort']) {
+    for (const key of ['bot_name', 'max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
       if (!el) continue;
       el.addEventListener('change', () => this._debouncedSave(key, el.value));
