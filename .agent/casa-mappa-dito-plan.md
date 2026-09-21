@@ -239,3 +239,72 @@ tremolio finto da 8 px sì.
 verificato ai due lati, non nel mezzo — se un giorno «tocco un pallino e non si
 apre» torna, il sospetto è questo e si stringe.
 
+
+---
+
+# Coda: i nomi e gli spilli che restano
+
+*21/09/2026, sera. Due richieste dell'utente in una riga: «alzalo a 40 allora.
+E poi i nodi devono rimanere salvati».*
+
+## Il tetto dei nomi: da regola a rete
+
+Vedi il commento su `MAX_LABELS`. In breve: nato a 10 su una misura vera (31
+pagine, titoli che sono frasi, 566 px), ma il rimedio sbagliava bersaglio —
+escludeva **prima** che qualcuno misurasse lo spazio, e `placeLabels` ordina già
+per collegamenti. A 40 lo spazio decide su un quaderno normale e il tetto ferma
+il muro di testo su uno enorme.
+
+Con lui se n'è andato `LABEL_ALL_UNDER = 13`: una scorciatoia che col tetto a 10
+cambiava la risposta e a 40 non ne cambia nessuna.
+
+**Misurato sul telefono**, stesso quaderno da 21 pagine: **8 nomi prima, 15
+dopo** — e gli altri restano muti perché non ci stanno davvero, non per decreto.
+
+## Gli spilli: dove, e perché non `localStorage`
+
+Il posto è `workspace/.jenny/map-layout.json`, un file per tutti i quaderni, una
+chiave per ciascuno. Le tre ragioni, in ordine di quanto pesano:
+
+1. **`localStorage` non regge.** Il repo l'ha già misurato — il commento di
+   `MainActivity.kt` che cita `launcher-usage-store.js`: «il localStorage della
+   WebView non sopravvive al kill (persistenza asincrona di Chromium)». Jenny è
+   il launcher e il sistema la uccide di routine. Una mappa che *ogni tanto*
+   dimentica non sembra rotta: sembra che il salvataggio non funzioni.
+2. **Il ponte nativo ha un cassetto solo**, ed è del cassetto delle app.
+3. **Il workspace è dove stanno i quaderni**: sopravvive al kill, alla
+   reinstallazione, e se lo porta dietro un backup.
+
+Un file solo e non uno dentro `wikis/<nome>/` perché quella cartella la decide la
+config (`wiki.wikis_dir`) e il client non la conosce: cercarla sarebbe
+indovinarla.
+
+**Gli spilli si applicano prima che la fisica parta**, o la simulazione
+comincerebbe da posizioni casuali e strattonerebbe i nodi a posto sotto gli
+occhi. E si scrive quel che è a schermo adesso: una pagina cancellata esce dal
+file al primo trascinamento successivo. Una pagina **rinominata** cambia id,
+quindi il suo spillo resta orfano e viene buttato allo stesso giro — è il prezzo
+di una chiave che è il percorso, ed è scritto sul posto.
+
+## Provato sul telefono, 21/09/2026 ore 21:13–21:16
+
+Build da worktree pulito su `81d41e0`, firmata, installata alle 21:12:14, codice
+nuovo confermato sul telefono.
+
+| prova | misurato |
+|---|---|
+| il tetto morde ancora? | no: **15 nomi** dove prima erano 8 |
+| trascino un pallino → il file | `{"etf-finance":{"wiki/index.md":[166,301]}}`, 43 byte |
+| esco dal quaderno e rientro (rilettura del grafo, `_render` da capo) | il pallino è dove l'ho messo |
+| **`am force-stop` e riapro** | la mappa è **identica pixel per pixel** a prima del kill (differenza 0,0) |
+
+L'ultima è quella che giustifica la scelta del posto: è esattamente il caso in
+cui `localStorage` avrebbe perso tutto.
+
+## Quel che resta aperto
+
+- **Non c'è modo di togliere uno spillo** se non trascinando il pallino altrove.
+  Con la disposizione che adesso è permanente, un «rimetti a posto» avrebbe
+  senso — ma è UI nuova e non è stata chiesta.
+- Un quaderno cancellato lascia la sua chiave nel file: pochi byte, e nessuno li
+  legge più. Si potano solo le pagine del quaderno che si sta salvando.
