@@ -34,19 +34,6 @@
 <script src="/html-mobile/assets/vendor/codemirror@5.65.16/mode/shell/shell.min.js" defer></script>
 
 <!-- KaTeX -->
-<link rel="stylesheet" href="/html-mobile/assets/vendor/katex@0.16.10/dist/katex.min.css">
-<script src="/html-mobile/assets/vendor/katex@0.16.10/dist/katex.min.js" defer></script>
-<script src="/html-mobile/assets/vendor/katex@0.16.10/dist/contrib/auto-render.min.js" defer></script>
-
-<!-- Mermaid -->
-<!-- Mermaid (3,2 MB, l'asset piu pesante del bundle) NON e caricato qui: serve
-     solo alla wiki, e solo quando una nota contiene un diagramma. Lo inietta
-     `ensureVendor()` da shared/utils.js. L'asset resta servito e resta nel
-     _UI_MANIFEST: cambia solo il momento in cui viene eseguito. -->
-
-<!-- D3 -->
-<script src="/html-mobile/assets/vendor/d3@7/d3.min.js" defer></script>
-
 <!-- Marked.js (Markdown parser) -->
 <script src="/html-mobile/assets/vendor/marked@15.0.7/marked.min.js" defer></script>
 
@@ -73,18 +60,6 @@
 
       <!-- BACKDROP -->
       <div class="drawer-backdrop" id="backdrop"></div>
-
-      <!-- DRAWER: Audit -->
-      <div class="drawer" id="drawer-audit">
-        <div class="drawer-header">
-          <div class="drawer-handle"></div>
-          <div class="drawer-header-row">
-            <span class="drawer-title" data-i18n="header.audits">Audits</span>
-            <button class="drawer-close" data-close aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-          </div>
-        </div>
-        <div class="drawer-body" id="drawer-audit-body"></div>
-      </div>
 
       <!-- DRAWER: Storia locale ─ l'elenco delle istantanee.
            Stava disteso dentro il cassetto Memoria, una riga per istantanea:
@@ -164,18 +139,6 @@
           </div>
         </div>
         <div class="drawer-body" id="drawer-tetti-body"></div>
-      </div>
-
-      <!-- DRAWER: Wiki Files -->
-      <div class="drawer" id="drawer-files">
-        <div class="drawer-header">
-          <div class="drawer-handle"></div>
-          <div class="drawer-header-row">
-            <span class="drawer-title" data-i18n="header.files">Files</span>
-            <button class="drawer-close" data-close aria-label="Close" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-          </div>
-        </div>
-        <div class="drawer-body" id="drawer-files-body"></div>
       </div>
 
       <!-- VIEW: Workspace -->
@@ -295,44 +258,6 @@
         <div class="settings-content" id="settings-content"></div>
       </div>
 
-      <!-- VIEW: Wiki -->
-      <div id="view-wiki" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="wiki-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-wiki"></div>
-        <div class="wiki-content" id="wiki-content"></div>
-      </div>
-
-      <!-- VIEW: Graph -->
-      <div id="view-graph" class="view" style="display:none;flex-direction:column;height:100%">
-        <div class="loading-overlay" id="graph-loading"><div class="spinner"></div></div>
-        <div class="view-title-mount" id="title-graph"></div>
-        <div class="graph-wrap" id="graph-wrap">
-          <!-- Ricerca full-text: accende i nodi che corrispondono e spegne gli
-               altri. Sta nel flusso, sopra la tela e sotto i breadcrumb che
-               _renderBreadcrumbs inserisce come primo figlio: sovrapposta
-               coprirebbe i nodi proprio dove si sta guardando. -->
-          <div class="graph-search" id="graph-search" hidden>
-            <i class="ti ti-search graph-search-icon"></i>
-            <input type="search" id="graph-search-input" autocomplete="off"
-                   autocapitalize="off" autocorrect="off" spellcheck="false"
-                   enterkeyhint="search"
-                   placeholder="Cerca nelle pagine…" data-i18n-placeholder="graph.searchPlaceholder"
-                   aria-label="Cerca nelle pagine" data-i18n-aria="graph.searchPlaceholder">
-            <span class="graph-search-count" id="graph-search-count" hidden></span>
-            <button type="button" class="graph-search-clear" id="graph-search-clear" hidden
-                    aria-label="Cancella ricerca" data-i18n-aria="graph.searchClear">
-              <i class="ti ti-x"></i>
-            </button>
-          </div>
-          <svg id="graph-svg"></svg>
-          <div class="graph-legend" id="graph-legend">
-            <div class="legend-row"><div class="legend-dot concepts"></div><span data-i18n="graph.concepts">Concepts</span></div>
-            <div class="legend-row"><div class="legend-dot entities"></div><span data-i18n="graph.entities">Entities</span></div>
-            <div class="legend-row"><div class="legend-dot other"></div><span data-i18n="graph.other">Other</span></div>
-          </div>
-        </div>
-      </div>
-
       <!-- VIEW: Onboarding -->
       <div id="view-onboarding" class="view" style="display:none;flex-direction:column;height:100%">
         <div class="onboarding-content" id="onboarding-content"></div>
@@ -350,10 +275,13 @@
 
          Cervello, Mani e Memoria sono **la stessa vista e lo stesso
          controller**: cambia solo quale cassetto disegna (v. `CASSETTI` in
-         mobile-settings.js). Le viste che stavano qui e adesso non ci stanno
-         piu' — app, file, wiki — si aprono da una riga in cima al cassetto
-         che le ospitera'. L'ordine del DOM e' anche quello del carosello
-         orizzontale, che `_visibleModes()` deriva da qui. -->
+         mobile-settings.js). Delle tre viste che stavano qui e adesso no, due
+         hanno una maniglia altrove — il cassetto delle app accanto alla
+         graffetta del composer, i file in fondo alla scheda «I file veri» di
+         Memoria — e la terza, la wiki, e' uscita del tutto dall'officina il
+         21/09/2026: elenco, mappa e lettore vivono in casa. L'ordine del DOM
+         e' anche quello del carosello orizzontale, che `_visibleModes()`
+         deriva da qui. -->
     <div class="dock-item active" data-mode="chat" title="Console" data-i18n-title="nav.console"><span class="dock-flower">✿</span><span class="dock-label" data-i18n="nav.console">Console</span></div>
     <div class="dock-item" data-mode="cervello" title="Cervello" data-i18n-title="nav.cervello"><i class="ti ti-brain"></i><span class="dock-label" data-i18n="nav.cervello">Cervello</span></div>
     <div class="dock-item" data-mode="mani" title="Mani" data-i18n-title="nav.mani"><i class="ti ti-hand-finger"></i><span class="dock-label" data-i18n="nav.mani">Mani</span></div>
@@ -461,43 +389,6 @@
   <div class="launcher-list" id="launcher-list" role="listbox"
        aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
 </div>
-
-<!-- Wiki feedback popover -->
-<div class="wiki-popover hidden" id="wiki-feedback-popover">
-  <button class="wiki-popover-btn" id="wiki-feedback-trigger">
-    <i class="ti ti-clipboard-list"></i> <span data-i18n="wiki.addAudit">Add audit</span>
-  </button>
-</div>
-
-<!-- Wiki feedback dialog -->
-<dialog class="mobile-dialog" id="wiki-feedback-dialog">
-  <div class="dialog-inner">
-    <h3 data-i18n="wiki.addFeedback">Add Feedback</h3>
-    <div>
-      <label class="field-label" data-i18n="wiki.preview">Preview</label>
-      <div id="wiki-feedback-preview" style="font-size:12px;color:var(--text2);max-height:100px;overflow-y:auto;background:var(--bg);padding:8px;border-radius:var(--radius);border:0.5px solid var(--border);"></div>
-    </div>
-    <form id="wiki-feedback-form">
-      <div>
-        <label class="field-label" data-i18n="wiki.comment">Comment</label>
-        <textarea id="wiki-feedback-comment" placeholder="Describe the issue…" data-i18n-placeholder="wiki.describeIssue"></textarea>
-      </div>
-      <div>
-        <label class="field-label" data-i18n="wiki.severity">Severity</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="info"> <span data-i18n="wiki.severityInfo">info</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="suggest"> <span data-i18n="wiki.severitySuggest">suggest</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="warn" checked> <span data-i18n="wiki.severityWarn">warn</span></label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);"><input type="radio" name="severity" value="error"> <span data-i18n="wiki.severityError">error</span></label>
-        </div>
-      </div>
-      <div class="dialog-buttons">
-        <button type="button" id="wiki-feedback-cancel" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="primary" data-i18n="wiki.submit">Submit</button>
-      </div>
-    </form>
-  </div>
-</dialog>
 
 </body>
 </html>

@@ -37,12 +37,16 @@ export const TETTO_FILE = 8;
  * tutto qui dentro: spostare una sezione da un cassetto all'altro e' spostare
  * una stringa, e non c'e' nessun posto in cui possa restare scritta due volte.
  *
- * `porte` sono le viste che prima stavano sul dock e adesso no: si aprono da
- * una riga in fondo al gruppo che le riguarda. Senza, cambiare il dock le
- * lascerebbe irraggiungibili — un difetto che non si vede finche' non servono.
- * Il cassetto delle app **non** e' fra queste: stava sotto Telegram, dove non
- * c'entrava niente, e la sua maniglia vera e' il pulsante accanto alla
- * graffetta del composer della Console (v. `mobile-app.js`, `#btn-launcher`).
+ * **Le porte non sono piu' una tabella.** Erano tre viste uscite dal dock che
+ * il cassetto doveva pur far raggiungere — il cassetto delle app, i file, la
+ * wiki — e una mappa `gruppo -> porte` che le disegnava in fondo al gruppo
+ * giusto. Il 21/09/2026 ne e' rimasta una sola: il cassetto delle app ha la
+ * sua maniglia accanto alla graffetta del composer, la wiki e' uscita
+ * dall'officina (elenco, mappa e lettore vivono in casa), e i file sono
+ * diventati un gruppo che se la disegna da se', in fondo alle cartelle che
+ * mostra. Un meccanismo generico per una riga sola era piu' codice della cosa
+ * che reggeva; resta `_wirePorte`, che aggancia qualunque `data-porta` trovi
+ * nel DOM.
  *
  * **Dei due parcheggi ne resta uno.** `personalization` e' uscito il
  * 21/09/2026: temi, mascotte e finestra flottante vivevano gia' in casa, il
@@ -50,15 +54,6 @@ export const TETTO_FILE = 8;
  * versione e il consumo di token — che nessuna tavola disegna e che non ha
  * ancora un altro posto dove stare.
  */
-const PORTE_ICONE = { workspace: 'folder', graph: 'topology-star' };
-
-/* Come si chiama una porta. Di norma `nav.<modo>`, ma il modo non e' sempre il
-   nome della cosa: la vista del grafo si chiama `graph` e l'utente la conosce
-   come Wiki — il dock infatti la etichettava `nav.wiki`. Senza questa riga a
-   schermo compare la chiave grezza, «nav.graph», che e' il modo in cui una
-   traduzione mancante si presenta (visto sul rig). */
-const PORTE_ETICHETTE = { graph: 'nav.wiki' };
-
 /* Quali lavori periodici appartengono a Mani.
  *
  * «Programmazione» non era una famiglia: i quattro lavori di sistema finiscono
@@ -96,15 +91,12 @@ export const LAVORI_DI_MANI = (job) => job.kind !== 'system' || job.id === 'hear
 export const CASSETTI = {
   cervello: {
     sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'system'],
-    porte: {},
   },
   mani: {
     sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
-    porte: {},
   },
   memoria: {
     sezioni: ['quantoRicorda', 'dream', 'workers', 'file', 'backup'],
-    porte: { workers: ['graph'] },
   },
 };
 
@@ -255,23 +247,23 @@ export class SettingsController {
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
       // Cervello
-      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d), this._portePerGruppo(cassetto, 'chiPensa')),
-      marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d), this._portePerGruppo(cassetto, 'marche')),
-      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d), this._portePerGruppo(cassetto, 'parametri')),
+      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d)),
+      marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d)),
+      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d)),
       battery: () => this._renderBatterySection(d),
-      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d), this._portePerGruppo(cassetto, 'system')),
+      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
       // Mani
-      ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d), this._portePerGruppo(cassetto, 'ricercaWeb')),
-      posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d), this._portePerGruppo(cassetto, 'posizione')),
-      ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh(), this._portePerGruppo(cassetto, 'ssh')),
-      telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram(), this._portePerGruppo(cassetto, 'telegram')),
-      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling(), this._portePerGruppo(cassetto, 'scheduling')),
+      ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d)),
+      posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d)),
+      ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
+      telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
-      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d), this._portePerGruppo(cassetto, 'quantoRicorda')),
-      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d), this._portePerGruppo(cassetto, 'dream')),
-      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d), this._portePerGruppo(cassetto, 'workers')),
-      file: () => this._gruppo('file', i18n.t('officina.gruppi.file'), this._renderFile(), this._portePerGruppo(cassetto, 'file')),
-      backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup(), this._portePerGruppo(cassetto, 'backup')),
+      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
+      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d)),
+      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d)),
+      file: () => this._gruppo('file', i18n.t('officina.gruppi.file'), this._renderFile()),
+      backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup()),
     };
     const cassetto = CASSETTI[this._cassetto];
     const quali = cassetto ? cassetto.sezioni : Object.keys(sezioni);
@@ -369,30 +361,6 @@ export class SettingsController {
      silenzioso di perdere una schermata. Spariranno una alla volta, quando il
      cassetto che le ospita avra' la sua riga vera (workspace dentro Memoria,
      app dentro Mani). */
-  /** Le porte di un gruppo, in fondo al gruppo.
-   *
-   *  Stavano in cima al cassetto, tutte insieme e staccate dal loro argomento:
-   *  si apriva Memoria e la prima cosa erano due righe, «Workspace» e «Wiki»,
-   *  prima ancora di sapere di cosa parlasse la pagina. Nelle tavole di Mani e
-   *  Memoria **non c'e' niente prima del primo gruppo**: quelle destinazioni
-   *  stanno dentro il gruppo che le riguarda, come ultima riga.
-   *
-   *  Percio' `porte` non e' piu' un elenco per cassetto ma una mappa
-   *  gruppo -> porte: il cassetto delle app in fondo ai canali, la wiki e i
-   *  file in fondo al giardiniere, che e' chi li riempie.
-   */
-  _portePerGruppo(cassetto, gruppo) {
-    const porte = cassetto?.porte?.[gruppo] || [];
-    if (!porte.length) return '';
-    const voci = porte.map((mode) => `
-      <button class="settings-porta" data-porta="${escapeHtml(mode)}" type="button">
-        <i class="ti ti-${PORTE_ICONE[mode] || 'arrow-right'}"></i>
-        <span>${escapeHtml(i18n.t(PORTE_ETICHETTE[mode] || `nav.${mode}`))}</span>
-        <i class="ti ti-chevron-right"></i>
-      </button>`).join('');
-    return `<div class="settings-porte">${voci}</div>`;
-  }
-
   /** Un gruppo: una soprascritta fuori, e sotto una scheda **aperta**.
    *
    *  Era una fisarmonica — testa cliccabile, chevron, corpo chiuso di
@@ -410,10 +378,10 @@ export class SettingsController {
    *  aperto, serve a chi cerca un gruppo nel DOM (il banco, e il cron che
    *  scrive nel proprio segnaposto).
    */
-  _gruppo(id, etichetta, corpo, porte = '') {
+  _gruppo(id, etichetta, corpo) {
     return `<div class="settings-gruppo" data-gruppo="${id}">
       <div class="settings-gruppo-label">${etichetta}</div>
-      <section class="settings-card">${corpo}${porte}</section>
+      <section class="settings-card">${corpo}</section>
     </div>`;
   }
 
@@ -2415,6 +2383,14 @@ export class SettingsController {
     return `${head}<div class="cron-tasks">${tasks}</div>${orphans}`;
   }
 
+  /** Aggancia le righe che portano a un'altra vista.
+   *
+   *  Oggi ce n'e' una — il gestore file, in fondo alla scheda «I file veri» —
+   *  e sta nel markup di chi la disegna, non in una tabella. Il cablaggio
+   *  resta generico perche' costa una riga e perche' la riga che porta
+   *  altrove e' esattamente il pezzo che, sparendo, lascia una schermata viva
+   *  e irraggiungibile (v. `test_officina_cassetti_contract.py`).
+   */
   _wirePorte() {
     this.contentEl.querySelectorAll('[data-porta]').forEach((el) => {
       el.addEventListener('click', () => {

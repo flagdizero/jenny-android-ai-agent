@@ -22,6 +22,13 @@ il guscio non poteva accorgersi di aver perso la SPA.
 
 Asserzioni sul sorgente, nello stile di ``test_back_navigation_contract.py``: la
 WebUI non ha un runner JS con DOM.
+
+**La meta' della wiki e' uscita di qui il 21/09/2026.** Tre banchi guardavano
+``_wireWikiLinks`` in ``mobile-wiki.js``: quella vista non e' piu' in officina.
+La stessa regola vale ora per il lettore della casa, e la' e' **misurata** e non
+grepata — ``test_casa_reader_client.py`` la fa girare in node su un DOM finto:
+relativo, wikilink dello stesso quaderno, wikilink di un altro, web, ancora,
+link morto. Quel che resta qui e' la meta' della chat, che non ha un gemello.
 """
 
 from __future__ import annotations
@@ -160,50 +167,6 @@ def test_no_chat_link_branch_can_reach_a_navigation() -> None:
     )
     assert "_openOutsideWebView" in code
     assert "common.linkNotOpenable" in code, "il ramo inerte deve dirlo, non tacere"
-
-
-def test_the_wiki_wires_every_anchor_not_just_wikilinks() -> None:
-    """``a.wikilink`` copriva solo ``[[Target]]``: tutto il resto navigava."""
-    source = _wiki()
-    assert "querySelectorAll('a.wikilink')" not in source, (
-        "wiring per classe: un [testo](altra.md) resterebbe una navigazione vera"
-    )
-    body = _method(source, "_wireWikiLinks")
-    assert "querySelectorAll('a[href]')" in body
-    handler = re.search(r"addEventListener\('click', \(e\) => \{(.*)", body, re.S)
-    assert handler, "handler del click non trovato in _wireWikiLinks"
-    _assert_prevented_first(handler.group(1), "_wireWikiLinks")
-    code = _strip_comments(body)
-    assert "_scrollToHash" in code, "le ancore interne diventano scroll"
-    assert "url.origin !== window.location.origin" in code
-    assert "_openOutsideWebView" in code
-    assert "common.linkNotOpenable" in code
-
-
-def test_the_only_anchors_skipped_by_the_wiki_wiring_are_wired_elsewhere() -> None:
-    """L'unica esenzione è quella dei breadcrumb, che hanno già il loro handler:
-    e anche quello deve annullare il click, altrimenti il buco si riapre lì."""
-    source = _wiki()
-    body = _strip_comments(_method(source, "_wireWikiLinks"))
-    skipped = re.findall(r"hasAttribute\('([^']+)'\)", body)
-    assert set(skipped) == {"data-home", "data-wiki"}, (
-        "esenzione nuova nel wiring dei link: va wirata altrove o non va esentata"
-    )
-    crumbs = _strip_comments(_method(source, "_renderBreadcrumbs"))
-    for attr in skipped:
-        wiring = re.search(
-            rf"querySelectorAll\('a\[{attr}\]'\)\.forEach\(a => \{{(.*?)\n    \}}\);", crumbs, re.S
-        )
-        assert wiring, f"a[{attr}] non è wirato in _renderBreadcrumbs"
-        assert "e.preventDefault()" in wiring.group(1)
-
-
-def test_the_wiki_still_recognises_the_class_the_server_emits() -> None:
-    """Contratto cross-file: il ramo che carica una pagina è raggiungibile solo
-    se ``wiki.py`` continua a marcare i wikilink con quella classe."""
-    server = (ROOT / "jenny" / "webui" / "wiki.py").read_text(encoding="utf-8")
-    assert '<a class="wikilink"' in server
-    assert "classList.contains('wikilink')" in _method(_wiki(), "_wireWikiLinks")
 
 
 def test_both_locales_carry_the_inert_link_message() -> None:

@@ -17,6 +17,13 @@ la forma di difetto che tutto il lavoro sulla navigazione esiste per togliere:
 * ``_scrollToHash`` cercava l'ancora in tutto il documento mentre il gemello
   della chat era già ristretto al proprio contenitore.
 
+Gli ultimi due punti **non hanno più un banco qui** dal 21/09/2026: guardavano
+``mobile-wiki.js``, e la wiki è uscita dall'officina. Le due regole non sono
+cadute, hanno cambiato casa insieme alla vista: il lettore della casa le fa
+girare in node su un DOM finto (``test_casa_reader_client.py`` — un link
+relativo si risolve contro la pagina che lo contiene, un'ancora resta sulla
+pagina). Restano qui i primi due punti, che sono del guscio.
+
 Asserzioni sul sorgente, nello stile del resto di ``tests/webui/``.
 """
 
@@ -84,28 +91,6 @@ def test_open_chat_is_one_behaviour_in_one_place() -> None:
     # Il guscio deve poter distinguere "aperta" da "bloccata dall'onboarding",
     # altrimenti cancella una notifica che l'utente non ha ancora visto.
     assert "return false;" in body and "return true;" in body
-
-
-def test_a_relative_markdown_link_navigates_inside_the_wiki() -> None:
-    body = _method(_src("mobile-wiki.js"), "_resolveRelativePage")
-    assert "/\\.md$/i" in body, "solo i .md diventano navigazione"
-    for guard in ("startsWith('/')", "includes('..')"):
-        assert guard in body, f"manca il guard conservativo: {guard}"
-    assert "this.currentPath" in body, "il path si risolve contro la pagina corrente"
-
-    wiring = _method(_src("mobile-wiki.js"), "_wireWikiLinks")
-    assert "this._resolveRelativePage(href)" in wiring
-    assert wiring.index("_resolveRelativePage") < wiring.index("linkNotOpenable"), (
-        "il ramo dei relativi deve precedere quello che avvisa e non naviga"
-    )
-
-
-def test_the_anchor_is_looked_up_inside_the_page_content() -> None:
-    """``getElementById`` portava lo scroll su un elemento di chrome della SPA
-    quando la pagina conteneva un ``[x](#dock)``."""
-    body = _method(_src("mobile-wiki.js"), "_scrollToHash")
-    assert "this.contentEl" in body
-    assert "document.getElementById" not in body
 
 
 def test_the_session_popover_has_no_escape_listener_of_its_own() -> None:

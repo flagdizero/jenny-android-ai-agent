@@ -14,8 +14,6 @@ import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
-import { GraphController } from './mobile-graph.js';
-import { WikiController } from './mobile-wiki.js';
 import { SettingsController, VISTA_DI } from './mobile-settings.js';
 import { OnboardingController } from './mobile-onboarding.js';
 import { JennyCompanion } from './mobile-jenny.js';
@@ -77,8 +75,6 @@ class MobileApp {
       cervello:  impostazioni,
       mani:      impostazioni,
       memoria:   impostazioni,
-      graph:     () => new GraphController(),
-      wiki:      () => new WikiController(),
       onboarding: () => new OnboardingController(),
     };
     this.controllers = {};
@@ -95,9 +91,6 @@ class MobileApp {
     // dietro l'overlay e se ne vede solo la coda.
     this._shellReady = false;
     this._shellReadyCbs = [];
-    // Vista del grafo richiesta da chi sta per entrare nella sezione, consumata
-    // da GraphController.activate() (v. requestGraph).
-    this._pendingGraph = null;
     window.mobileApp = this;
     this.init();
   }
@@ -158,9 +151,11 @@ class MobileApp {
     document.getElementById('btn-launcher')
       ?.addEventListener('click', () => this.openLauncher());
 
-    // Drawer open/close sync
-    this.drawer.addEventListener('open', () => this.header.syncDrawerTabs());
-    this.drawer.addEventListener('close', () => this.header.syncDrawerTabs());
+    /* Qui c'erano due ascolti che ridipingevano le linguette dei pannelli
+       nell'intestazione: le portava solo la wiki, uscita dall'officina il
+       21/09/2026. I pannelli dei cassetti si aprono da una riga di riepilogo,
+       non da un'azione dell'intestazione, quindi non c'e' piu' niente da
+       sincronizzare. */
 
     // Browser back/forward
     window.addEventListener('popstate', (e) => {
@@ -177,28 +172,12 @@ class MobileApp {
       // La entry ripristinata porta con sé la propria posizione nello stack:
       // è così che handleHardwareBack sa se sotto c'è ancora roba nostra.
       this._navPos = typeof state.pos === 'number' ? state.pos : 0;
-      if (state.wikiPage) {
-        this.switchMode('wiki', false);
-        // Una entry lasciata da un altro progetto non ci riporta dentro, ma un
-        // Indietro deve pur disegnare qualcosa: si atterra sull'indice del
-        // progetto aperto. Il rifiuto parlante di `loadWikiPage` è per i link,
-        // dove l'utente ha appena chiesto quella pagina; qui non l'ha chiesta.
-        const pin = this.controllers.wiki.pinnedWiki;
-        if (pin && state.wiki && state.wiki !== pin) {
-          this.controllers.wiki.loadWikiPage(pin, 'index.md', false);
-        } else {
-          this.controllers.wiki.loadWikiPage(state.wiki, state.page || 'index.md', false);
-        }
-      } else if (state.mode === 'wiki') {
-        this.switchMode('wiki', false);
-        this.controllers.wiki.loadHome(false);
-      } else if (state.mode === 'graph') {
-        // Una sola sorgente di caricamento (v. requestGraph): prima qui si
-        // chiamava loadGraph *dopo* switchMode, che aveva già fatto partire
-        // quello di activate(). Un solo Indietro scatenava due fetch e due
-        // settleSimulation sincroni sul main thread.
-        this.requestGraph(state.wiki || null, false);
-      } else if (state.mode) {
+      /* Le entry `wikiPage`/`wiki`/`graph` non si producono piu' dal
+         21/09/2026 — wiki e grafo sono usciti dall'officina e vivono in casa —
+         ma una entry vecchia puo' ancora stare nella history di un WebView che
+         non e' stato chiuso: cade nel ramo `state.mode`, e `switchMode` di un
+         modo che non esiste non fa niente invece di esplodere. */
+      if (state.mode) {
         this.switchMode(state.mode, false);
       } else {
         return;
@@ -234,13 +213,6 @@ class MobileApp {
     const urlMode = urlParams.get('mode');
     const savedMode = localStorage.getItem('mobile-last-mode');
     let initialMode = urlMode || savedMode || 'chat';
-    const initialWiki = urlParams.get('wiki');
-    const initialPage = urlParams.get('page');
-
-    // If URL has wiki param but no explicit mode, force wiki mode
-    if (!urlMode && initialWiki) {
-      initialMode = 'wiki';
-    }
 
     // Radice dello stack, marcata *prima* dei due await qui sotto. I listener
     // del dock sono già registrati da un pezzo: un tap durante il boot impilava
@@ -248,7 +220,7 @@ class MobileApp {
     // tardiva la riscriveva con pos 0 riportando indietro la vista da sé — tap
     // annullato in silenzio, e sotto una entry che _navPos non contava più.
     this._navPos = 0;
-    this.replaceNav(this._navStateFor(initialMode, initialWiki, initialPage));
+    this.replaceNav(this._navStateFor(initialMode));
 
     // Check first-run: redirect to onboarding (always when first_run is true)
     let firstRunKnown = false;
@@ -291,12 +263,6 @@ class MobileApp {
     // eccezione — finché l'onboarding non è finito la navigazione è bloccata,
     // quindi la vista scelta dal tap non è una destinazione lecita.
     if (!this.currentMode || this._firstRun) {
-      // Il grafo iniziale si annuncia *prima* dello switch: è activate() a
-      // caricarlo. Chiamare loadGraph dopo switchMode significava caricarlo due
-      // volte, la prima con il wiki sbagliato (quello di default del controller).
-      if (initialMode === 'graph') {
-        this._pendingGraph = { wiki: initialWiki || null, push: false };
-      }
       // La entry iniziale *è* già la vista iniziale: va riscritta, non
       // impilata. Prima si faceva replaceState + switchMode(push) e restavano
       // due entry identiche, così il primo Indietro veniva ingoiato da
@@ -305,7 +271,7 @@ class MobileApp {
       // nuovo perché `initialMode` può essere cambiato durante gli await
       // (primo avvio → onboarding, onboarding appena concluso → chat).
       this._navPos = 0;
-      this.replaceNav(this._navStateFor(initialMode, initialWiki, initialPage));
+      this.replaceNav(this._navStateFor(initialMode));
       this.switchMode(initialMode, false);
     }
 
@@ -321,8 +287,6 @@ class MobileApp {
       'workspace': 'nav.workspace',
       'apps': 'nav.apps',
       'settings': 'nav.settings',
-      'graph': 'nav.wiki',
-      'wiki': 'nav.wiki',
       'onboarding': 'nav.onboarding',
     };
     document.querySelectorAll('.dock-item[data-mode]').forEach(item => {
@@ -418,17 +382,17 @@ class MobileApp {
   _navUrl(state) {
     const url = new URL(window.location);
     url.searchParams.set('mode', state.mode);
-    if (state.wiki) url.searchParams.set('wiki', state.wiki);
-    else url.searchParams.delete('wiki');
-    if (state.page) url.searchParams.set('page', state.page);
-    else url.searchParams.delete('page');
+    /* `wiki` e `page` erano i due parametri della sezione wiki, uscita
+       dall'officina il 21/09/2026. Si cancellano e non si scrivono piu': un
+       WebView riaperto su un vecchio indirizzo non deve portarseli dietro in
+       ogni entry successiva. */
+    url.searchParams.delete('wiki');
+    url.searchParams.delete('page');
     return url;
   }
 
   /** Stato di navigazione per una vista (usato al boot e dai controller). */
-  _navStateFor(mode, wiki, page) {
-    if (mode === 'wiki' && wiki) return { mode: 'wiki', wikiPage: true, wiki, page: page || 'index.md' };
-    if (mode === 'graph' && wiki) return { mode: 'graph', wiki };
+  _navStateFor(mode) {
     return { mode };
   }
 
@@ -437,9 +401,7 @@ class MobileApp {
       di Indietro che non cambia niente: in quel caso si riscrive e basta. */
   pushNav(state) {
     const cur = history.state;
-    if (cur && cur.mode === state.mode
-        && (cur.wiki || null) === (state.wiki || null)
-        && (cur.page || null) === (state.page || null)) {
+    if (cur && cur.mode === state.mode) {
       this.replaceNav(state);
       return;
     }
@@ -719,29 +681,6 @@ class MobileApp {
     chat.input.focus();
   }
 
-  /* Ingresso unico nella sezione grafo con una vista precisa.
-     `GraphController.activate()` è l'unico punto in cui il grafo si carica: la
-     vista voluta va depositata *prima* di switchMode, perché activate() viene
-     invocato sincronamente da lì. Prima ogni chiamante faceva
-     `switchMode('graph', false)` seguito da `loadGraph(...)`, e activate()
-     aveva già caricato per conto suo — due fetch e due `settleSimulation`
-     sincroni sul main thread per una sola pressione di Indietro. */
-  requestGraph(wiki, push = false) {
-    this._pendingGraph = { wiki: wiki || null, push };
-    this.switchMode('graph', false);
-    // switchMode non fa niente se siamo già sul grafo: in quel caso nessun
-    // activate() ha consumato la richiesta, e la serviamo qui.
-    const pending = this.takePendingGraph();
-    if (pending) this.controllers.graph?.loadGraph(pending.wiki, pending.push);
-  }
-
-  /** Consuma la richiesta depositata (null se non ce n'è). */
-  takePendingGraph() {
-    const pending = this._pendingGraph;
-    this._pendingGraph = null;
-    return pending;
-  }
-
   /** Blocco del dock durante il primo avvio, in un interruttore solo.
    *
    *  Prima esisteva solo il ramo che *accende*: `grep -rn nav-disabled` dava
@@ -830,8 +769,7 @@ class MobileApp {
       view.style.display = 'flex';
     }
 
-    // Update sidebar active state. La sezione Wiki ha come dock-mode "graph"
-    // (landing di default); resta attiva anche nella vista pagina ("wiki").
+    // Update sidebar active state.
     document.querySelectorAll('.dock-item').forEach(item => {
       item.classList.toggle('active', item.dataset.mode === mode);
     });
@@ -874,13 +812,7 @@ class MobileApp {
 
     // Update state and URL
     AppState.set('currentMode', mode);
-    if (pushState) {
-      // La vista graph ricorda il proprio wiki (activate() lo ricarica): senza
-      // riportarlo nello stato, tornare qui col back mostrerebbe un grafo che
-      // l'URL non descrive.
-      const wiki = mode === 'graph' ? this.controllers.graph?.currentWiki : null;
-      this.pushNav(wiki ? { mode, wiki } : { mode });
-    }
+    if (pushState) this.pushNav({ mode });
   }
 
   // Ordered list of navigable modes, derived from the dock DOM order.
@@ -981,7 +913,7 @@ class MobileApp {
 
       const modes = this._visibleModes();
       const idx = modes.indexOf(this.currentMode);
-      if (idx === -1) return; // e.g. graph/onboarding aren't in the dock — no swipe nav
+      if (idx === -1) return; // e.g. onboarding isn't in the dock — no swipe nav
 
       neighbors = {
         prev: idx > 0 ? modes[idx - 1] : null,

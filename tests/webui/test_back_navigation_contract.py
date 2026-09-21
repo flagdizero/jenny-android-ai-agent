@@ -484,35 +484,6 @@ def test_leaving_the_chat_takes_the_popover_with_it() -> None:
     assert "this._hideSessionInfo();" in _method(chat, "deactivate")
 
 
-def test_the_graph_focus_is_reachable_from_the_back_button() -> None:
-    """Il focus su un nodo zooma il grafo e spegne tutto il resto: è una
-    schermata. L'unica uscita era il tap su una zona vuota dell'SVG — che a
-    grafo zoomato può non esistere. L'azzeratore era una closure locale di
-    ``renderWikiGraph``: ora è stato del controller, e va lasciato cadere col
-    grafo che lo possiede (altrimenti consuma una pressione operando su nodi non
-    più a schermo)."""
-    graph = (ASSETS / "mobile-graph.js").read_text(encoding="utf-8")
-    back = _method(graph, "handleBack")
-    assert "this._clearFocus" in back
-    assert "this._clearFocus = () => {" in graph, "l'azzeratore deve essere stato del controller"
-    assert "this._clearFocus = null;" in _method(graph, "_cleanup")
-
-
-def test_the_svg_background_click_tolerates_a_missing_clear_focus() -> None:
-    """Il listener sullo sfondo è registrato sul nodo statico ``#graph-svg``:
-    d3 lo attacca all'elemento, non ai figli, quindi sopravvive sia a
-    ``svg.selectAll('*').remove()`` sia al cambio di sezione. ``_cleanup()``
-    invece azzera ``this._clearFocus``, e nessuno riregistra il listener
-    (``renderHomeGraph`` non chiama mai ``svg.on('click', …)``). Il tap su una
-    zona vuota dopo il teardown — o durante la fetch che lo segue — invocava un
-    null: TypeError non gestito, quindi ``window.onerror`` → toast +
-    ``/api/client-log``. L'azzeratore va invocato in modo tollerante al null,
-    perché il listener vive più a lungo dello stato."""
-    graph = (ASSETS / "mobile-graph.js").read_text(encoding="utf-8")
-    assert "svg.on('click', () => { this._clearFocus?.(); });" in graph
-    assert "svg.on('click', () => { this._clearFocus(); });" not in graph
-
-
 def test_settings_has_no_sub_screen_left_to_peel() -> None:
     """Il catalogo modelli era un livello dentro le impostazioni: ci si
     arrivava da un pulsante, lo si scorreva, e senza `handleBack` una

@@ -45,15 +45,12 @@ def _cassetti() -> dict[str, dict[str, list[str]]]:
         def elenco(chiave: str, aperta: str = "[", chiusa: str = "]") -> list[str]:
             voci = re.search(rf"{chiave}: \{aperta}([^\{chiusa}]*)\{chiusa}", dentro)
             return re.findall(r"'([^']+)'", voci.group(1)) if voci else []
-        # `porte` e' passata da elenco a **mappa gruppo -> porte**: le
-        # destinazioni stanno in fondo al gruppo che le riguarda, non in cima al
-        # cassetto. Qui si raccolgono comunque tutte, perche' i banchi che la
-        # usano chiedono «questa vista si apre da qualche parte?», e la risposta
-        # non dipende da quale gruppo la ospiti.
-        fuori[nome] = {
-            "sezioni": elenco("sezioni"),
-            "porte": elenco("porte", "{", "}"),
-        }
+        # `porte` non c'e' piu' dal 21/09/2026: era una mappa gruppo -> viste
+        # uscite dal dock, e ne e' rimasta una sola — il gestore file, che la
+        # scheda «I file veri» si disegna da se'. Un meccanismo generico per
+        # una riga era piu' codice della cosa che reggeva. Chi chiede «questa
+        # vista si apre da qualche parte?» guarda ora il `data-porta` nel DOM.
+        fuori[nome] = {"sezioni": elenco("sezioni")}
     assert fuori, "la tabella e' vuota"
     return fuori
 
@@ -126,15 +123,17 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     senza una porta sarebbero raggiungibili solo da un `switchMode` scritto a
     mano, cioe' da nessuno.
 
-    **Una porta non e' per forza una voce di `porte`.** Dal 21/09/2026 il
-    gestore file si apre da una riga che la scheda «I file veri» si disegna da
-    se', in fondo alle cartelle che mostra: stesso attributo `data-porta`,
-    stesso cablaggio (`_wirePorte`), ma non passa dalla mappa. Il banco guarda
-    percio' le porte **come le vede il DOM**, che e' l'unica definizione che
-    conta per chi deve arrivarci col dito.
+    **La mappa `porte` non esiste piu'.** Delle tre viste ne resta una sola da
+    difendere: il gestore file, che si apre da una riga che la scheda «I file
+    veri» si disegna da se', in fondo alle cartelle che mostra. Il banco guarda
+    percio' le porte **come le vede il DOM** — il `data-porta` nel markup — che
+    e' l'unica definizione che conta per chi deve arrivarci col dito.
 
-    Il cassetto delle app non compare qui perche' non e' un modo: e' un foglio,
-    e la sua maniglia la difende `test_launcher_sheet_contract.py`.
+    Le altre due hanno preso strade diverse, e nessuna delle due passa di qui:
+    il cassetto delle app non e' un modo ma un foglio, e la sua maniglia la
+    difende `test_launcher_sheet_contract.py`; la wiki e' **uscita
+    dall'officina** il 21/09/2026 — elenco, mappa e lettore vivono in casa —
+    quindi non c'e' piu' nessun modo `wiki` o `graph` da raggiungere.
     """
     app = _src("mobile-app.js")
     fabbriche = re.search(r"(?s)this\.controllerFactories = \{(.*?)\n    \};", app)
@@ -146,12 +145,13 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     sul_dock = set(re.findall(r'data-mode="([a-z]+)"', nav))
 
     impostazioni = _src("mobile-settings.js")
-    porte = {p for c in _cassetti().values() for p in c["porte"]}
-    porte |= set(re.findall(r'data-porta="([a-z]+)"', impostazioni))
+    porte = set(re.findall(r'data-porta="([a-z]+)"', impostazioni))
     cassetti = set(_cassetti())
-    # `settings` e' il contenitore dei tre cassetti, `onboarding` e `wiki` si
-    # aprono da dentro (il primo avvio, e una pagina del grafo).
-    esenti = {"settings", "onboarding", "wiki"} | cassetti
+    # `settings` e' il contenitore dei tre cassetti; `onboarding` si apre da
+    # dentro, al primo avvio. `wiki` era esente perche' «si apre dal grafo»:
+    # un anello di due viste che si aprivano a vicenda, e quando la porta e'
+    # sparita l'esenzione sarebbe diventata falsa. Sono uscite entrambe.
+    esenti = {"settings", "onboarding"} | cassetti
     orfani = sorted(modi - sul_dock - porte - esenti)
     assert not orfani, (
         f"queste viste non hanno piu' nessun modo di aprirsi: {orfani}. "
@@ -190,41 +190,41 @@ def test_the_three_drawers_share_one_screen_and_one_fetch() -> None:
     assert i < j, "il cassetto viene scelto dopo che la schermata si e' gia' disegnata"
 
 
-def test_every_door_says_its_name_in_words() -> None:
-    """Una chiave i18n che non esiste non fallisce: `i18n.t` torna la chiave, e
-    a schermo compare «nav.graph». Visto sul rig il 20/09/2026.
+def test_the_one_door_left_says_its_name_and_wears_its_own_icon() -> None:
+    """Due banchi, uniti quando la mappa delle porte e' sparita.
 
-    Il modo non e' sempre il nome della cosa — la vista del grafo si chiama
-    `graph` e l'utente la conosce come Wiki — quindi il nome di una porta puo'
-    avere bisogno di una riga sua.
+    Il primo: una chiave i18n che non esiste non fallisce — `i18n.t` torna la
+    chiave, e a schermo compare «nav.graph». Visto sul rig il 20/09/2026.
+    Il secondo: il ripiego dell'icona era una freccia generica, e due porte con
+    la stessa freccia si distinguono solo leggendo, che e' quel che un'icona
+    serve a evitare.
+
+    Oggi la porta e' una sola e sta nel markup della scheda «I file veri», non
+    in una tabella: percio' le due regole si misurano li'. L'icona non e' piu'
+    un ripiego ma una scelta scritta a mano, e la chiave dev'essere una vera.
     """
     import json
 
     src = _src("mobile-settings.js")
-    m = re.search(r"const PORTE_ETICHETTE = \{([^}]*)\}", src)
-    alias = dict(re.findall(r"(\w+): '([^']+)'", m.group(1))) if m else {}
-
-    porte = {p for c in _cassetti().values() for p in c["porte"]}
-    for locale in ("it", "en"):
-        voci = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))["nav"]
-        for porta in sorted(porte):
-            chiave = alias.get(porta, f"nav.{porta}").removeprefix("nav.")
-            assert voci.get(chiave, "").strip(), (
+    righe = re.findall(
+        r'<button class="settings-porta" data-porta="(\w+)"[^>]*>(.*?)</button>', src, re.S
+    )
+    assert righe, "nessuna riga-porta nel sorgente: il gestore file e' irraggiungibile"
+    for porta, corpo in righe:
+        chiave = re.search(r"i18n\.t\('nav\.(\w+)'\)", corpo)
+        assert chiave, f"la porta «{porta}» non prende il nome da una chiave `nav.*`"
+        for locale in ("it", "en"):
+            voci = json.loads(
+                (ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8")
+            )["nav"]
+            assert voci.get(chiave.group(1), "").strip(), (
                 f"la porta «{porta}» non ha un nome in {locale}.json: a schermo "
-                f"comparirebbe «nav.{chiave}»"
+                f"comparirebbe «nav.{chiave.group(1)}»"
             )
-
-
-def test_every_door_wears_an_icon() -> None:
-    """Il fallback e' una freccia generica: due porte con la stessa freccia si
-    distinguono solo leggendo, che e' quel che un'icona serve a evitare."""
-    src = _src("mobile-settings.js")
-    m = re.search(r"const PORTE_ICONE = \{([^}]*)\}", src)
-    assert m, "PORTE_ICONE non si trova piu'"
-    icone = dict(re.findall(r"(\w+): '([^']+)'", m.group(1)))
-    porte = {p for c in _cassetti().values() for p in c["porte"]}
-    senza = sorted(porte - set(icone))
-    assert not senza, f"porte senza icona, tutte uguali fra loro: {senza}"
+        icone = re.findall(r'class="ti ti-([\w-]+)"', corpo)
+        assert icone and icone[0] != "arrow-right", (
+            f"la porta «{porta}» porta la freccia generica invece di un'icona sua"
+        )
 
 
 # ── Quel che ha la casa, l'officina non lo rifa' ────────────────────────────
@@ -322,3 +322,87 @@ def test_adding_a_brand_finishes_the_job() -> None:
         "`default_provider` punta a un provider che non c'e'"
     )
     assert "usalaAdesso && primoModello" in salva, "si attiva anche senza un modello"
+
+
+# ── La wiki e' uscita dall'officina ─────────────────────────────────────────
+
+
+def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
+    """Due viste, 1.689 righe, e un duplicato di quel che la casa fa gia'.
+
+    L'utente ha tolto la riga «Wiki» da Memoria il 21/09/2026. Quella riga era
+    **l'unica entrata**: `wiki` si apriva dal grafo e `graph` dalla wiki — un
+    anello di due viste che si aprivano a vicenda — quindi toglierla le avrebbe
+    lasciate vive e raggiungibili solo scrivendo l'indirizzo a mano. Sono uscite
+    tutte e due.
+
+    Il banco guarda ogni traccia, perche' riportarne indietro una sola non
+    ricostruisce la vista ma basta a far ricomparire un bottone che non apre
+    niente — che e' il modo in cui questa rimozione puo' andare a meta'.
+    """
+    for nome in ("mobile-wiki.js", "mobile-graph.js"):
+        assert not (ASSETS / nome).exists(), f"{nome} e' tornato"
+
+    for js in sorted(ASSETS.rglob("*.js")):
+        if "vendor" in js.parts:
+            continue
+        for riga in js.read_text(encoding="utf-8").splitlines():
+            testa = riga.lstrip()
+            assert not (testa.startswith("import") and ("mobile-wiki" in riga or "mobile-graph" in riga)), (
+                f"{js.name} importa di nuovo una vista che non c'e'"
+            )
+
+    html = OFFICINA.read_text(encoding="utf-8")
+    for nodo in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
+                 'id="drawer-files"', 'id="wiki-feedback-dialog"'):
+        assert nodo not in html, f"{nodo} e' tornato in officina.html"
+
+    from jenny.utils.android_assets import _UI_MANIFEST
+
+    for voce in ("assets/mobile-wiki.js", "assets/mobile-graph.js"):
+        assert voce not in _UI_MANIFEST, f"il manifesto elenca ancora {voce}"
+
+
+def test_the_two_bundles_the_wiki_carried_are_gone_with_it() -> None:
+    """Mermaid (3,2 MB) e KaTeX (1,4 MB) avevano **un solo lettore ciascuno**,
+    ed era la wiki dell'officina: i diagrammi di una nota e il LaTeX a
+    richiesta. Nessuno dei due e' mai stato caricato dalla casa.
+
+    Restano nel prodotto solo se qualcuno li carica: un vendor spedito e mai
+    eseguito e' peso nell'APK e una licenza da tenere aggiornata per niente.
+    Percio' si misurano tre cose insieme — il codice, il manifesto e le note di
+    licenza — perche' e' esattamente la terna che l'altra volta si era
+    disallineata (v. `test_third_party_licenses_are_actually_shipped`).
+    """
+    from jenny.utils.android_assets import _UI_MANIFEST
+
+    for libreria in ("mermaid", "katex"):
+        assert not list((ASSETS / "vendor").glob(f"{libreria}*")), (
+            f"{libreria} e' tornato su disco senza nessuno che lo carichi"
+        )
+        assert not [v for v in _UI_MANIFEST if libreria in v], (
+            f"il manifesto spedisce ancora {libreria}"
+        )
+        note = (ASSETS.parents[3] / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        assert libreria not in note.lower(), (
+            f"le note promettono ancora {libreria}, che non e' piu' nel bundle"
+        )
+
+    html = OFFICINA.read_text(encoding="utf-8")
+    for morto in ("katex", "mermaid", "d3.min.js"):
+        assert morto not in html, f"officina.html carica ancora {morto}"
+
+
+def test_the_notebook_did_not_disappear_with_it() -> None:
+    """La wiki e' **uscita**, non cancellata: e' la differenza fra spostare una
+    stanza e demolirla, e senza questo banco i due sopra sarebbero soddisfatti
+    anche da un prodotto che non sa piu' aprire un quaderno.
+
+    La casa ne ha tre pezzi — l'elenco, la mappa e il lettore — e le route del
+    server che li nutrono non si sono toccate.
+    """
+    for nome in ("casa-pages.js", "casa-map.js", "casa-reader.js"):
+        assert (ASSETS / nome).exists(), f"{nome} manca: il quaderno non si apre da nessuna parte"
+    casa = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    for nodo in ('id="casa-pages"', 'id="casa-map"', 'id="casa-reader"'):
+        assert nodo in casa, f"{nodo} manca dalla casa"

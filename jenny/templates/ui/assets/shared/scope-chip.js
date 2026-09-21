@@ -153,9 +153,16 @@ export class ScopeChip {
 
   /** Pubblica su ``AppState`` la wiki a cui le viste sono agganciate.
    *
-   *  Le viste wiki e grafo hanno bisogno della stessa risposta che il chip ha
-   *  gia' — *in quale progetto siamo* — e questo e' l'unico punto in cui
-   *  cambia. Passa da ``AppState`` e non da un import diretto del chip perche'
+   *  **Nessuno la legge piu'**, misurato il 21/09/2026: le viste wiki e grafo
+   *  dell'officina erano i suoi due lettori e sono uscite — elenco, mappa e
+   *  lettore vivono in casa, dove il quaderno aperto *e'* la conversazione
+   *  aperta e non c'e' niente da agganciare. Resta qui invece di sparire in
+   *  coda a quel giro perche' toglierla e' un giro suo: sono cinque righe di
+   *  prodotto e sei banchi che provano proprio questa pubblicazione.
+   *
+   *  Quel che segue descrive perche' era fatta cosi'. Le viste avevano bisogno
+   *  della stessa risposta che il chip ha gia' — *in quale progetto siamo* — e
+   *  questo e' l'unico punto in cui cambia. Passa da ``AppState`` e non da un import diretto del chip perche'
    *  ``set`` avvisa chi ascolta: cambiare progetto mentre una vista e' aperta
    *  la deve riagganciare, e senza notifica resterebbe sul progetto di prima.
    *

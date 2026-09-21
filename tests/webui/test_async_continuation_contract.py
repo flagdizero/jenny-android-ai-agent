@@ -15,6 +15,12 @@ cattura **prima** del primo await ed esce se è cambiato. In più le sorgenti di
 caricamento sono una sola per sezione: due chiamanti che caricano la stessa
 vista non sono un raddoppio di traffico, sono due render concorrenti.
 
+**Sette banchi sono usciti di qui il 21/09/2026**, tutti insieme e per un solo
+motivo: guardavano ``mobile-wiki.js`` e ``mobile-graph.js``, e la wiki e' uscita
+dall'officina — elenco, mappa e lettore vivono in casa. Con loro se n'e' andato
+anche il banco di mermaid, che era il solo lettore di quel vendor. La regola
+generale resta e vale per i controller rimasti.
+
 Asserzioni sul sorgente, nello stile di ``test_back_navigation_contract.py``: la
 WebUI non ha un runner JS con DOM.
 """
@@ -28,8 +34,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "mobile-app.js"
-WIKI_JS = ASSETS / "mobile-wiki.js"
-GRAPH_JS = ASSETS / "mobile-graph.js"
 HEADER_JS = ASSETS / "mobile-header.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 TELEGRAM_JS = ASSETS / "shared" / "telegram-pairing.js"
@@ -63,123 +67,16 @@ def test_every_controller_with_async_loads_bumps_a_generation_on_leave() -> None
     quando si esce: la continuazione si crede ancora l'ultima — e lo è — solo che
     la sua sezione non è più a schermo.
     """
-    for path in (WIKI_JS, GRAPH_JS, SETTINGS_JS):
+    # Erano tre: la wiki e il grafo sono usciti dall'officina il 21/09/2026 e
+    # vivono in casa. La regola non cambia — resta quella di **ogni**
+    # controller che si sospende su un await — cambia quanti ce ne sono.
+    for path in (SETTINGS_JS,):
         source = _src(path)
         assert "this._gen = 0;" in source, f"{path.name}: manca il contatore di generazione"
         assert "this._gen++;" in _method(source, "deactivate"), (
             f"{path.name}: deactivate() non incrementa la generazione"
         )
         assert "_stale(" in source, f"{path.name}: nessuna guardia che legga la generazione"
-
-
-# ── #5 · WikiController.init() non naviga ──────────────────────────────
-
-
-def test_the_wiki_init_only_loads_config() -> None:
-    """``init()`` ri-derivava la vista dalla query string **dopo** il suo await.
-
-    Chi ci aveva appena portati in wiki fa ``switchMode('wiki', false)`` e subito
-    dopo, sincronamente, ``loadHome(true)``. La continuazione di ``init()``
-    arrivava più tardi, chiamava a sua volta ``load*`` e con essa incrementava
-    ``_loadToken``: la ``loadHome(true)`` del chiamante veniva invalidata prima
-    di arrivare alla propria ``pushNav``. A schermo la pagina giusta, dietro
-    nessuna entry — cioè un Indietro che salta fuori dalla sezione.
-    """
-    wiki = _src(WIKI_JS)
-    init = _method(wiki, "init")
-    assert "loadHome" not in init and "loadWikiPage" not in init, (
-        "init() naviga di nuovo: la prima vista non è affare suo"
-    )
-    assert "window.location.search" not in init, "init() non deve più leggere la query string"
-
-    # La prima vista, se nessun chiamante l'ha scelta, la decide activate().
-    assert "this._loadInitialView();" in _method(wiki, "activate")
-    initial = _method(wiki, "_loadInitialView")
-    assert "if (this._settled || this._inFlightGen === this._gen) return;" in initial, (
-        "senza questa guardia activate() rifà la navigazione già fatta dal chiamante"
-    )
-    assert "window.location.search" in initial
-    for name in ("loadHome", "loadWikiPage"):
-        body = _method(wiki, name)
-        assert "this._inFlightGen = gen;" in body, (
-            f"{name} non segnala il caricamento in volo: activate() ne farebbe un secondo"
-        )
-        assert "this._settled = true;" in body, (
-            f"{name} non segnala di aver disegnato: al rientro nella sezione activate() "
-            f"ricaricherebbe una vista già a schermo"
-        )
-
-
-def test_an_abandoned_first_load_is_retried_on_re_entry() -> None:
-    """Il contrappasso della guardia: un caricamento *condannato* non deve
-    trattenerla.
-
-    Uscire dalla wiki mentre la prima pagina è ancora in volo incrementa la
-    generazione, e quella continuazione non disegnerà mai. Se `_loadInitialView`
-    si accontentasse di "qualcuno ha già iniziato", al rientro non ricaricherebbe
-    e la sezione resterebbe sul suo "Caricamento…" per il resto della sessione.
-    Per questo la guardia confronta la *generazione* del caricamento in volo, non
-    la sua semplice esistenza.
-    """
-    initial = _method(_src(WIKI_JS), "_loadInitialView")
-    assert "this._inFlightGen === this._gen" in initial
-    assert "this._inFlightGen)" not in initial and "if (this._inFlightGen)" not in initial
-
-
-# ── #6 · le continuazioni della wiki ───────────────────────────────────
-
-
-def test_the_wiki_guard_is_checked_after_every_await_not_once() -> None:
-    """Il guard c'era, ma veniva controllato una volta sola.
-
-    Restavano scoperti — verificato riga per riga — ``pushNav``,
-    ``_renderLatex``, ``_renderMermaid`` e soprattutto ``loadTree``/
-    ``loadAudits``, che di token non ne avevano affatto: la loro fetch è
-    separata, e la risposta della pagina *vecchia* riempiva i drawer sopra
-    quelli della pagina nuova. (``setTitle`` invece era già dentro la zona
-    protetta: l'audit iniziale su questo punto era sbagliato.)
-    """
-    wiki = _src(WIKI_JS)
-    stale = _method(wiki, "_stale")
-    assert "token !== this._loadToken" in stale and "gen !== this._gen" in stale, (
-        "la guardia deve rispondere a entrambe le domande: superato, e sezione lasciata"
-    )
-
-    for name in ("loadTree", "loadAudits"):
-        signature = re.search(rf"async {name}\(([^)]*)\)", wiki)
-        assert signature, f"{name} non trovato"
-        args = signature.group(1)
-        assert "token = this._loadToken" in args and "gen = this._gen" in args, (
-            f"{name} deve ricevere il token del caricamento che lo ha chiesto "
-            f"(col default per i chiamanti esterni)"
-        )
-        assert "if (this._stale(token, gen)) return;" in _method(wiki, name), (
-            f"{name} scrive nel drawer senza controllare di essere ancora attuale"
-        )
-
-    for name in ("loadHome", "loadWikiPage"):
-        body = _method(wiki, name)
-        assert "this.loadTree(" in body and "token, gen)" in body, (
-            f"{name} non passa il proprio token ai drawer"
-        )
-        head = body.partition("pushNav")[0]
-        assert "loadAudits(" in head, f"{name}: ordine inatteso, il test va rivisto"
-        between = head[head.index("loadAudits("):]
-        assert "this._stale(token, gen)" in between, (
-            f"{name}: pushNav impila una entry senza ricontrollare dopo gli await dei drawer"
-        )
-
-
-def test_the_lazily_loaded_mermaid_renderer_can_be_superseded() -> None:
-    """``ensureVendor`` scarica 3,2 MB: lì dentro ci sta una navigazione intera,
-    e al ritorno i ``pre.mermaid-block`` catturati sono nodi staccati."""
-    wiki = _src(WIKI_JS)
-    body = _method(wiki, "_renderMermaid")
-    assert "async _renderMermaid(token = this._loadToken, gen = this._gen)" in wiki
-    assert body.index("ensureVendor(") < body.index("if (this._stale(token, gen)) return;")
-    assert body.count("this._stale(token, gen)") >= 2, (
-        "anche la promise di mermaid.render riscrive il blocco: va guardata"
-    )
 
 
 # ── N10 · il titolo appartiene a una modalità ──────────────────────────
@@ -211,82 +108,6 @@ def test_every_async_title_writer_declares_which_mode_it_belongs_to() -> None:
             assert re.search(r"\.setTitle\(.+,\s*'[a-z]+'\)", line), (
                 f"{js.name}:{lineno} scrive il titolo senza dichiarare la modalità proprietaria"
             )
-
-
-# ── #7 / N7 · il grafo ─────────────────────────────────────────────────
-
-
-def test_the_graph_load_can_discover_it_was_superseded() -> None:
-    """``loadGraph`` non aveva alcun token: due caricamenti concorrenti
-    disegnavano entrambi, l'ultimo a rispondere vinceva a caso."""
-    graph = _src(GRAPH_JS)
-    body = _method(graph, "loadGraph")
-    assert "const token = ++this._loadToken;" in body
-    assert "const gen = this._gen;" in body
-    assert body.index("await api.getGraph(") < body.index("if (this._stale(token, gen)) return;")
-    head = body.partition("pushNav")[0]
-    assert "this._stale(token, gen)" in head, "il grafo impila una entry per una schermata mai disegnata"
-
-
-def test_the_graph_has_exactly_one_load_source() -> None:
-    """Una sola pressione di Indietro ne scatenava **due**, di caricamenti.
-
-    ``activate()`` caricava per conto suo, e il chiamante (il ramo ``graph`` del
-    popstate, il boot, il pulsante Grafo dell'header) rifaceva ``loadGraph``
-    subito dopo ``switchMode``. Due fetch e — molto peggio — due
-    ``settleSimulation``, che sono 300 tick d3 sincroni sul main thread.
-
-    La vista voluta ora si *deposita* prima dello switch e la carica
-    ``activate()``, che è l'unico punto di caricamento della sezione.
-    """
-    app = _src(APP_JS)
-    graph = _src(GRAPH_JS)
-    header = _src(HEADER_JS)
-
-    assert "takePendingGraph" in _method(graph, "activate"), (
-        "activate() deve consumare la richiesta invece di indovinare la vista"
-    )
-    request = _method(app, "requestGraph")
-    assert "this._pendingGraph = { wiki: wiki || null, push };" in request
-    assert "this.switchMode('graph', false);" in request
-    assert "this.takePendingGraph()" in request, (
-        "se eravamo già sul grafo nessun activate() consuma la richiesta: va servita qui"
-    )
-
-    popstate = re.search(
-        r"window\.addEventListener\('popstate'.*?\n    \}\);", _code(app), re.S)
-    assert popstate, "listener popstate non trovato"
-    assert "this.requestGraph(state.wiki || null, false);" in popstate.group(0)
-    assert "loadGraph" not in popstate.group(0), (
-        "il popstate carica il grafo da sé: è la seconda sorgente"
-    )
-
-    assert "this.controllers.graph.loadGraph(initialWiki, false)" not in app, (
-        "il boot ricaricava il grafo subito dopo lo switch che lo aveva già caricato"
-    )
-    assert app.index("this._pendingGraph = { wiki: initialWiki || null, push: false };") \
-        < app.index("this.switchMode(initialMode, false);"), (
-        "la richiesta va depositata prima dello switch: activate() è sincrono"
-    )
-
-    assert "loadGraph" not in _code(header), (
-        "l'header entra nella sezione grafo da requestGraph, non caricando per conto suo"
-    )
-    assert "app.requestGraph(wiki || null, true);" in header
-
-
-def test_the_losing_simulation_is_stopped_not_merely_forgotten() -> None:
-    """``renderHomeGraph``/``renderWikiGraph`` riassegnano ``this.teardown``
-    senza mai invocare quello che c'era: la simulazione d3 perdente non veniva
-    fermata da nessuno e continuava a ticchettare su nodi non più a schermo."""
-    graph = _src(GRAPH_JS)
-    for name in ("renderHomeGraph", "renderWikiGraph"):
-        body = _method(graph, name)
-        assert "this._cleanup();" in body, f"{name} dimentica la simulazione precedente"
-        assert body.index("this._cleanup();") < body.index("this.teardown = () => {"), (
-            f"{name}: il cleanup deve precedere la riassegnazione, non seguirla"
-        )
-    assert "this.teardown();" in _method(graph, "_cleanup")
 
 
 # ── N4 · il poller di pairing Telegram ─────────────────────────────────

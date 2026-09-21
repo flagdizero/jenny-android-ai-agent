@@ -355,34 +355,33 @@ def test_le_parole_corte_dei_due_stati_esistono(lingua: str) -> None:
 # ── Secondo giro: struttura ──────────────────────────────────────────────────
 
 
-def test_le_porte_stanno_dentro_il_loro_gruppo() -> None:
+def test_la_porta_sta_dentro_la_scheda_del_suo_gruppo() -> None:
     """Stavano in cima al cassetto, tutte insieme e staccate dal loro argomento:
     si apriva Memoria e la prima cosa erano «Workspace» e «Wiki», prima ancora
-    di sapere di cosa parlasse la pagina. Nelle tavole di Mani e Memoria non c'è
+    di sapere di cosa parlasse la pagina. Nelle tavole di Mani e Memoria non c'e'
     niente prima del primo gruppo.
+
+    **E adesso non sono nemmeno piu' un meccanismo.** Delle tre viste uscite dal
+    dock ne resta una da raggiungere: il gestore file. Il cassetto delle app ha
+    la sua maniglia accanto alla graffetta del composer, la wiki e' uscita
+    dall'officina. Una mappa `gruppo -> porte`, una tabella di icone, una di
+    etichette e una fabbrica di righe erano piu' codice della cosa che
+    reggevano: la riga sta nel markup di chi la disegna, cioe' dentro la scheda
+    del suo gruppo per costruzione, ed e' quello che questo banco misura.
     """
-    assert "_renderPorte(" not in SETTINGS, "il blocco in cima è tornato"
-    assert "_portePerGruppo(" in SETTINGS
-    # E finiscono **dentro** la scheda: concatenarle fuori le lascerebbe
-    # fluttuare fra due gruppi, che è dove sono atterrate al primo tentativo.
-    m = re.search(r"_gruppo\(id, etichetta, corpo, porte = ''\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
-    assert m, "_gruppo non prende più le porte"
-    assert "${corpo}${porte}" in m.group(1), (
-        "le porte non sono dentro la scheda del gruppo"
+    for morto in ("_renderPorte(", "_portePerGruppo(", "PORTE_ICONE", "PORTE_ETICHETTE"):
+        assert morto not in SETTINGS, f"{morto} e' tornato: il meccanismo generico si e' rifatto"
+    assert "porte: {" not in SETTINGS, "la mappa delle porte e' tornata dentro CASSETTI"
+
+    # La riga vive nel corpo del gruppo che la ospita, non appesa dopo la scheda.
+    corpo = _corpo("_renderFile")
+    assert 'data-porta="workspace"' in corpo, "la porta non sta piu' dentro la scheda dei file"
+    m = re.search(r"_gruppo\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    assert m, "_gruppo ha cambiato forma"
+    assert "${corpo}</section>" in m.group(1), (
+        "il gruppo appende di nuovo qualcosa dopo il corpo: le porte fluttuavano "
+        "cosi' fra due schede, al primo tentativo"
     )
-
-
-def test_la_tabella_delle_porte_dice_a_quale_gruppo_appartengono() -> None:
-    """Da elenco per cassetto a mappa gruppo -> porte: senza, «dentro il gruppo»
-    non è esprimibile."""
-    m = re.search(r"export const CASSETTI = \{(.*?)\n\};", SETTINGS, re.S)
-    assert m
-    # **Nessuna** voce può essere un elenco piatto. Controllarne una sola
-    # lasciava passare la mutazione che ne riportava indietro un'altra:
-    # misurato il 21/09/2026, il banco era verde con `mani` già rotta.
-    piatte = re.findall(r"(\w+): \{\s*sezioni: \[[^\]]*\],\s*porte: \[", m.group(1))
-    assert not piatte, f"`porte` è tornata un elenco piatto in: {piatte}"
-    assert m.group(1).count("porte: {") == 3, "un cassetto non dichiara più le sue porte"
 
 
 def test_i_tetti_si_leggono_e_si_cambiano_altrove() -> None:

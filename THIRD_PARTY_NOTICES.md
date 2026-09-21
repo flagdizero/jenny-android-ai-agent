@@ -15,14 +15,9 @@ loads, which is why these are vendored in the first place.
 | [DOMPurify](https://github.com/cure53/DOMPurify) | 3.2.4 | Apache-2.0 **or** MPL-2.0 | `vendor/dompurify@3/LICENSE` |
 | [marked](https://github.com/markedjs/marked) | 15.0.7 | MIT | `vendor/marked@15.0.7/LICENSE` |
 | [highlight.js](https://github.com/highlightjs/highlight.js) | 11.11.1 | BSD-3-Clause | `vendor/highlight.js@11.11.1/LICENSE` |
-| [KaTeX](https://github.com/KaTeX/KaTeX) | 0.16.10 | MIT | `vendor/katex@0.16.10/LICENSE` |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | 10.9.6 | MIT | `vendor/mermaid@10/LICENSE` |
 | [D3](https://github.com/d3/d3) | 7.9.0 | ISC | `vendor/d3@7/LICENSE` |
 | [CodeMirror](https://github.com/codemirror/codemirror5) | 5.65.16 | MIT | `vendor/codemirror@5.65.16/LICENSE` |
 | [Tabler Icons](https://github.com/tabler/tabler-icons) (webfont) | 3.19.0 | MIT | `vendor/@tabler/icons-webfont@3.19.0/LICENSE` |
-
-The KaTeX distribution includes its own web fonts under
-`katex@0.16.10/dist/fonts/`; they are covered by the KaTeX license above.
 
 ## Bundled fonts
 
