@@ -100,18 +100,36 @@ protocollo** — `turn_end` non porta nessun campo di token (riverificato il
 Scelto perché nessun passo butta via il precedente, e perché il salto più grosso
 si vede subito.
 
-1. **Tema `kyoto`.** Zero codice. Porta colori, bordi e il serif.
-2. **La cornice.** Intestazione di cassetto (soprascritta `officina`, nome in
-   serif, la riga che dice a cosa serve, pastiglia di stato, bottone `Jenny`) e
-   barra sotto con **etichette** e il pallino sulla voce attiva. Indipendente dal
-   ritaglio, quindi si può fare prima; il gancio esiste già
-   (`officina.html:209`, `.view-title-text` usa già `--font-display`).
-3. **Il ritaglio.** Il mattone *soprascritta + scheda aperta*, la fisarmonica
-   rimossa, i quindici gruppi. Un cassetto alla volta: Cervello → Mani → Memoria,
-   ognuno col suo banco.
-4. **Console esplosa**, senza i numeri.
-5. **Le decisioni**, se e quando: i tre interruttori per ambito con `/ro`; i
-   numeri della Console.
+1. ~~**Tema `kyoto`.**~~ **Non serve un passo.** La tavolozza della tavola è un
+   tema che il prodotto ha già, e sceglierlo è dell'utente, non del codice. Ma
+   c'è un fatto in più, scoperto leggendo `Main.dc.html`: **la casa della tavola
+   è chiara** (`#ebe6de`/`#8b6a47`) e corrisponde a `pietra`, mentre l'officina è
+   scura e corrisponde a `kyoto`. Due temi diversi nello stesso disegno, e il
+   prodotto ne tiene uno alla volta: se casa-chiara-officina-scura è l'intento,
+   è una decisione a sé, non una riverniciatura.
+2. ✅ **La cornice** — `2a16f98`. Soprascritta `officina`, nome in serif, la riga
+   che dice a cosa serve, il pill `Jenny`; barra con le etichette e il puntino.
+   Il difetto era una tabella mancante: `_mount` cercava `title-<modo>` e i tre
+   cassetti condividono `title-settings`, quindi `setMode` usciva in silenzio.
+   `VISTA_DI` si sposta accanto a `CASSETTI` e resta una copia sola.
+3. ✅ **Le schede aperte** — `673285c`. `_section` → `_gruppo`: soprascritta
+   fuori, scheda dentro, niente chevron né stato. Se ne vanno **due pezze** che
+   aprivano una sezione d'ufficio perché «un accordion chiuso è esattamente il
+   posto in cui il problema resta invisibile».
+4. ✅ **Il ritaglio fine** — `18c9bc3`. Undici sezioni → **quindici gruppi**:
+   Modello si spezza in Chi pensa · Le marche · Parametri, Strumenti in Ricerca
+   web · Posizione, Memoria in Quanto ricorda · Dream. Otto chiavi i18n orfane
+   rimosse. Due gruppi della tavola **non** arrivano perché non esistono nel
+   prodotto (v. sopra), e `personalization`/`system` restano parcheggiati.
+5. **Console esplosa**, senza i numeri. ← *il prossimo*
+6. **Le decisioni**, se e quando: dove vanno tema/nome/icona; i tre interruttori
+   per ambito con `/ro`; l'elenco dei file veri; i numeri della Console.
+
+**Stato a schermo (banco locale, 21/09/2026).** Cervello: Chi pensa · Le marche ·
+Parametri · Attività in background · Personalizzazione · Sistema. Mani: Ricerca
+web · Posizione · SSH · Telegram · Quando agisce da sola. Memoria: Quanto ricorda
+· Dream · Giardiniere · Storia locale. Zero errori, zero schede vuote.
+**Non ancora provato sul telefono.**
 
 Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende —
 come nei cinque passi precedenti.
