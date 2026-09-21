@@ -216,11 +216,26 @@ E alla fine, sul telefono: apri la mappa, sposta subito, sposta dopo, trascina
 un pallino, **tocca un pallino dieci volte di fila e conta quante pagine si
 aprono** — dieci.
 
-**Stato al 21/09/2026, ore 20:40.** Lo spostamento è provato (v. Passo 0).
-Trascinamento e soglia del tocco **no**: la build è costruita da un worktree
-pulito su `9924828`, firmata (`CN=flagDiZero`), installata alle 20:36:30, e il
-JS nuovo è confermato *sul telefono* — `clickDistance` compare due volte in
-`files/workspace/ui/assets/casa-map.js`, riestratto alle 20:36:31. Ma il
-telefono si è bloccato (`KeyguardServiceDelegate showing=true`,
-`mInputRestricted=true`), quindi i tocchi non arrivano all'app. Il PIN non lo
-scrivo io: serve che lo sblocchi l'utente, e poi la prova è di un minuto.
+**Provato tutto sul telefono il 21/09/2026, ore 20:46–20:52.** Build da worktree
+pulito su `9924828`, firmata (`CN=flagDiZero`), installata alle 20:36:30, e il JS
+nuovo confermato *sul telefono* (`clickDistance` due volte in
+`files/workspace/ui/assets/casa-map.js`, riestratto alle 20:36:31). Quaderno
+«travel-wiki», tre pagine tutte collegate — tre bersagli chiari.
+
+| prova | atteso | misurato |
+|---|---|---|
+| trascino un pallino e aspetto 9 s (la fisica riparte e si riferma) | resta dove l'ho messo | **0,0 px di spostamento.** Fermo a (1141,9 / 625,2) in entrambe le catture |
+| e intanto gli altri? | si riassestano attorno allo spillo | l'altro verde è migrato da centro-basso a basso-sinistra: le forze lavorano, lo spillo no |
+| il trascinamento apre anche la pagina? | no | no: restiamo sulla mappa |
+| **tocco il pallino dieci volte** | dieci pagine | **10 su 10.** E lo spillo a (1141,9 / 625,2) dopo *ogni* ritorno — la linguetta non ridisegna, quindi la disposizione sopravvive ai dieci viaggi |
+| tocco **tremolante** di ~8 px (sotto la soglia) | è un tocco, apre | apre |
+| gesto di ~29 px (sopra la soglia) | è un trascinamento, non apre | non apre, e il pallino si sposta di 30,0 px — atterra dove il dito l'ha lasciato |
+
+Le ultime due sono la prova vera della soglia: un `input tap` è perfettamente
+immobile, cioè il caso facile, e non dice niente su un pollice che tremola. Il
+tremolio finto da 8 px sì.
+
+**Un limite che resta:** un dito vero non è né 8 px né 29. Il numero è
+verificato ai due lati, non nel mezzo — se un giorno «tocco un pallino e non si
+apre» torna, il sospetto è questo e si stringe.
+
