@@ -215,3 +215,12 @@ Mutazioni che devono far rosso:
 E alla fine, sul telefono: apri la mappa, sposta subito, sposta dopo, trascina
 un pallino, **tocca un pallino dieci volte di fila e conta quante pagine si
 aprono** — dieci.
+
+**Stato al 21/09/2026, ore 20:40.** Lo spostamento è provato (v. Passo 0).
+Trascinamento e soglia del tocco **no**: la build è costruita da un worktree
+pulito su `9924828`, firmata (`CN=flagDiZero`), installata alle 20:36:30, e il
+JS nuovo è confermato *sul telefono* — `clickDistance` compare due volte in
+`files/workspace/ui/assets/casa-map.js`, riestratto alle 20:36:31. Ma il
+telefono si è bloccato (`KeyguardServiceDelegate showing=true`,
+`mInputRestricted=true`), quindi i tocchi non arrivano all'app. Il PIN non lo
+scrivo io: serve che lo sblocchi l'utente, e poi la prova è di un minuto.
