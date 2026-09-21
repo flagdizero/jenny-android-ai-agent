@@ -73,17 +73,39 @@ export const LAVORI_DI_MANI = (job) => job.kind !== 'system' || job.id === 'hear
    piu'. Senza questa riga il cassetto resterebbe vivo e senza maniglia. */
 const PORTE_LANCIO = { launcher: (app) => app.openLauncher() };
 
+/* I gruppi di ogni cassetto, nell'ordine in cui si scorrono.
+ *
+ * Erano undici **sezioni**, una per pezzo di codice. La tavola ne ha quindici,
+ * piu' piccole e nominate per la domanda a cui rispondono: «Modello» da sola
+ * conteneva chi risponde adesso, l'elenco delle marche e le manopole del
+ * motore — tre cose che si leggono, si amministrano e non si toccano quasi
+ * mai. Il taglio nuovo e' questo, non un rinominare.
+ *
+ * Due voci della tavola qui non ci sono, e il motivo e' lo stesso per
+ * entrambe: **non esistono nel prodotto**, e un gruppo vuoto e' peggio di un
+ * gruppo assente.
+ *   - «permessi di scrittura» (Mani): tre interruttori per ambito e `/ro`.
+ *     Nel config esiste solo `security.restrict_to_workspace`, che oggi
+ *     nessuna schermata espone.
+ *   - «i file veri» (Memoria): l'elenco delle cartelle del workspace. La porta
+ *     `workspace` qui sopra ci porta gia'; mostrarlo anche qui vuole una
+ *     lettura che questa schermata non fa.
+ *
+ * `personalization` e `system` (Cervello) invece **restano**, pur non stando in
+ * nessuna tavola: sono tema, nome e icona di Jenny piu' la modalita'
+ * sviluppatore. Toglierli senza dargli una casa li farebbe sparire e basta.
+ */
 export const CASSETTI = {
   cervello: {
-    sezioni: ['models', 'battery', 'personalization', 'system'],
+    sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'personalization', 'system'],
     porte: [],
   },
   mani: {
-    sezioni: ['tools', 'ssh', 'telegram', 'scheduling'],
+    sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
     porte: ['launcher'],
   },
   memoria: {
-    sezioni: ['memory', 'workers', 'backup'],
+    sezioni: ['quantoRicorda', 'dream', 'workers', 'backup'],
     porte: ['workspace', 'graph'],
   },
 };
@@ -234,17 +256,24 @@ export class SettingsController {
        vorrebbe dire costruire ogni volta anche l'anagrafica delle marche e la
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
-      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d)),
-      models: () => this._gruppo('models', i18n.t('settings.model'), this._renderModelSettings(d)),
-      tools: () => this._gruppo('tools', i18n.t('settings.tools'), this._renderTools(d)),
-      memory: () => this._gruppo('memory', i18n.t('settings.memory.title'), this._renderMemory(d)),
-      workers: () => this._gruppo('workers', i18n.t('settings.workers.title'), this._renderWorkers(d)),
-      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
+      // Cervello
+      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d)),
+      marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d)),
+      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d)),
       battery: () => this._renderBatterySection(d),
+      personalization: () => this._gruppo('personalization', i18n.t('settings.personalization'), this._renderPersonalization(d)),
+      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
+      // Mani
+      ricercaWeb: () => this._gruppo('ricercaWeb', i18n.t('settings.webSearch'), this._renderRicercaWeb(d)),
+      posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d)),
       ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
+      // Memoria
+      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
+      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d)),
+      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d)),
       backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup()),
-      system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
     };
     const cassetto = CASSETTI[this._cassetto];
     const quali = cassetto ? cassetto.sezioni : Object.keys(sezioni);
@@ -693,7 +722,13 @@ export class SettingsController {
    * Sono due verbi diversi sullo stesso oggetto, e nessuno dei due e' la
    * copia dell'altro.
    */
-  _renderModelSettings(d) {
+  /* «Modello» era una sezione sola con dentro tre cose che non si somigliano:
+     chi risponde adesso, l'elenco delle marche, e le manopole del motore. La
+     tavola le tiene separate, con tre soprascritte — ed e' giusto: la prima si
+     legge, la seconda si amministra, la terza quasi mai. */
+
+  /** Chi risponde adesso. Si legge, non si tocca: la scelta e' in casa. */
+  _renderChiPensa(d) {
     const a = d.agent || {};
     const providers = d.providers || [];
     const active = providers.find(p => p.name === d.default_provider);
@@ -702,25 +737,35 @@ export class SettingsController {
       : i18n.t('settings.noProviderConfigured');
 
     return `
-      <div class="settings-subheading">${i18n.t('settings.inUse')}</div>
       <div class="model-inuse">
         <span class="model-inuse-name">${escapeHtml(a.model || '—')}</span>
         <span class="model-inuse-via">${via}</span>
       </div>
-      <p class="settings-hint" style="margin:8px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.modelLivesInCasa')}</p>
-      <div class="settings-divider"></div>
-      <div class="settings-subheading">${i18n.t('settings.brands')}</div>
+      <p class="settings-hint" style="margin:8px 0 0;font-size:12px;color:var(--text-faint)">${i18n.t('settings.modelLivesInCasa')}</p>`;
+  }
+
+  /** Quali marche esistono. Qui si amministra. */
+  _renderMarche(d) {
+    return `
       <div id="provider-list">
-        ${this._renderProviderListHtml(providers)}
+        ${this._renderProviderListHtml(d.providers || [])}
       </div>
-      <button class="settings-btn-add" id="btn-add-provider"><i class="ti ti-plus"></i> ${i18n.t('settings.addProvider')}</button>
-      <details class="settings-disclosure">
-        <summary>${i18n.t('settings.advancedParams')}</summary>
-        ${this._field(i18n.t('settings.maxTokens'), 'number', 'max_tokens', a.max_tokens || '', i18n.t('settings.maxTokensPlaceholder'))}
-        ${this._field(i18n.t('settings.temperature'), 'number', 'temperature', a.temperature ?? '', i18n.t('settings.temperaturePlaceholder'))}
-        ${this._select(i18n.t('settings.reasoningEffort'), 'reasoning_effort', a.reasoning_effort || '',
-          ['', 'low', 'medium', 'high'])}
-      </details>`;
+      <button class="settings-btn-add" id="btn-add-provider"><i class="ti ti-plus"></i> ${i18n.t('settings.addProvider')}</button>`;
+  }
+
+  /** Le manopole del motore.
+   *
+   *  Erano dentro un `<details>` chiuso — una fisarmonica dentro una
+   *  fisarmonica. Adesso che il gruppo e' suo e porta il proprio nome, il
+   *  secondo strato non serve: chi scorre fin qui sa gia' cosa sta guardando.
+   */
+  _renderParametri(d) {
+    const a = d.agent || {};
+    return `
+      ${this._field(i18n.t('settings.maxTokens'), 'number', 'max_tokens', a.max_tokens || '', i18n.t('settings.maxTokensPlaceholder'))}
+      ${this._field(i18n.t('settings.temperature'), 'number', 'temperature', a.temperature ?? '', i18n.t('settings.temperaturePlaceholder'))}
+      ${this._select(i18n.t('settings.reasoningEffort'), 'reasoning_effort', a.reasoning_effort || '',
+        ['', 'low', 'medium', 'high'])}`;
   }
 
   _renderProviderListHtml(providers) {
@@ -751,18 +796,19 @@ export class SettingsController {
 
   /* Le capacità dell'agente (ricerca web, posizione; i prossimi tool
      finiranno qui). I campi salvano da soli al cambio, come il resto. */
-  _renderTools(d) {
+  /* «Strumenti» teneva insieme la ricerca web e il GPS, separati da una riga.
+     Sono due cose che non si somigliano — una e' un motore di ricerca con i
+     suoi limiti, l'altra e' un permesso su un sensore del telefono — e la
+     tavola le tiene in due gruppi. `_renderLocation` era gia' un metodo suo:
+     qui resta solo da togliere la ricerca dal suo. */
+  _renderRicercaWeb(d) {
     const ws = d.web_search || {};
     const engines = ws.engines || ['bing'];
     return `
-      <div class="settings-subheading">${i18n.t('settings.webSearch')}</div>
       ${this._select(i18n.t('settings.searchEngine'), 'ws_engine', ws.search_engine || 'bing', engines)}
       ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 5, i18n.t('settings.maxResultsPlaceholder'))}
       ${this._field(i18n.t('settings.timeoutSec'), 'number', 'ws_timeout', ws.timeout ?? 30, i18n.t('settings.timeoutPlaceholder'))}
-      ${this._field(i18n.t('settings.fetchMaxChars'), 'number', 'ws_fetch_max', ws.fetch_max_chars ?? 50000, i18n.t('settings.fetchMaxCharsPlaceholder'))}
-      <div class="settings-divider"></div>
-      <div class="settings-subheading">${i18n.t('settings.location.section')}</div>
-      ${this._renderLocation(d)}`;
+      ${this._field(i18n.t('settings.fetchMaxChars'), 'number', 'ws_fetch_max', ws.fetch_max_chars ?? 50000, i18n.t('settings.fetchMaxCharsPlaceholder'))}`;
   }
 
   _renderLocation(d) {
@@ -830,23 +876,37 @@ export class SettingsController {
     return enabled ? (schedule || '') : '';
   }
 
-  _renderMemory(d) {
+  /* «Memoria» teneva insieme **cosa** ricorda e **chi** gliela riempie. La
+     tavola le separa, e l'ordine si rovescia: prima i tre file con le loro
+     barre — la risposta a «quanto ricorda», che e' la domanda per cui si apre
+     questo cassetto — e solo dopo le manopole di Dream, che e' il macchinario.
+
+     Le due funzioni tornano la stessa frase quando il payload non c'e': il
+     gruppo che non si puo' misurare lo dice al posto suo, invece di lasciare
+     una scheda vuota che sembra un guasto della pagina. */
+
+  /** I tre file e i loro tetti: la risposta a «quanto ricorda». */
+  _renderQuantoRicorda(d) {
     const m = d.memory;
     if (!m) return `<div class="settings-empty">${i18n.t('settings.memory.unavailable')}</div>`;
     return `
-      <div class="settings-subheading">${i18n.t('settings.memory.dream')}</div>
+      ${this._hint(i18n.t('settings.memory.budgetsHint'))}
+      ${this._renderBudget(m, 'MEMORY.md', 'memory_budget_chars')}
+      ${this._renderBudget(m, 'USER.md', 'user_budget_chars')}
+      ${this._renderBudget(m, 'SOUL.md', 'soul_budget_chars')}`;
+  }
+
+  /** Dream: chi riempie quei tre file, e ogni quanto. */
+  _renderDream(d) {
+    const m = d.memory;
+    if (!m) return `<div class="settings-empty">${i18n.t('settings.memory.unavailable')}</div>`;
+    return `
       ${this._toggleRow(i18n.t('settings.memory.dreamEnabled'), 'dream-enabled-toggle', m.enabled)}
       ${this._hint(`<span id="dream-schedule">${escapeHtml(this._scheduleText(m.enabled, m.schedule))}</span>`)}
       ${this._numberField(i18n.t('settings.memory.dreamInterval'), 'dream_interval_h', m.interval_h)}
       ${this._numberField(i18n.t('settings.memory.reviewCadence'), 'review_every_runs', m.review_every_runs)}
       ${this._hint(i18n.t('settings.memory.reviewHint', { floor: m.review_floor }))}
-      ${this._renderReviewState(m.review_state)}
-      <div class="settings-divider"></div>
-      <div class="settings-subheading">${i18n.t('settings.memory.budgets')}</div>
-      ${this._hint(i18n.t('settings.memory.budgetsHint'))}
-      ${this._renderBudget(m, 'MEMORY.md', 'memory_budget_chars')}
-      ${this._renderBudget(m, 'USER.md', 'user_budget_chars')}
-      ${this._renderBudget(m, 'SOUL.md', 'soul_budget_chars')}`;
+      ${this._renderReviewState(m.review_state)}`;
   }
 
   /* Una riga di tetto: il nome del file, quanto misura adesso, la barra, e il

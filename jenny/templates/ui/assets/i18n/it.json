@@ -173,11 +173,8 @@
     "advancedMode": "Modalità sviluppatore",
     "advancedModeHint": "Mostra anche quello che Jenny usa per lavorare: le skill di sistema e i file interni (memoria, configurazione) compaiono nelle liste. Serve solo per guardare sotto il cofano.",
     "personalization": "Personalizzazione",
-    "tools": "Strumenti",
     "memory": {
-      "title": "Memoria",
       "unavailable": "Non riesco a leggere le impostazioni della memoria. Riapri la schermata; se resta così, controlla config.json.",
-      "dream": "Dream",
       "dreamEnabled": "Consolidamento periodico",
       "dreamInterval": "Ogni quante ore",
       "reviewCadence": "Passata di review ogni N run",
@@ -186,7 +183,6 @@
       "sinceReview": "{runs} run dall'ultima passata di review.",
       "stuckRuns": "{runs} run di fila con scritture tentate e non atterrate.",
       "nothingNewRuns": "{runs} run di fila senza niente da consolidare.",
-      "budgets": "Tetti dei file",
       "budgetsHint": "Quanto può crescere ognuno dei tre file che entrano in ogni prompt. Zero vuol dire misura e non rifiutare mai. Un file al tetto non è un guasto, ma è il primo posto da guardare se Dream dice di non aver consolidato niente.",
       "ofBudget": "{chars} caratteri su {budget}",
       "measuredOnly": "{chars} caratteri, nessun tetto applicato",
@@ -194,7 +190,6 @@
       "unmeasured": "non misurabile adesso"
     },
     "workers": {
-      "title": "Wiki e progetti",
       "unavailable": "Non riesco a leggere le impostazioni dei lavoratori periodici. Riapri la schermata; se resta così, controlla config.json.",
       "gardener": "Giardiniere",
       "gardenerEnabled": "Passata periodica",
@@ -229,13 +224,10 @@
     "homeHint": "Dove atterra il tasto Home di Android quando Jenny è il tuo launcher.",
     "homeLast": "Dove ero rimasto",
     "tokenUsage": "Utilizzo token",
-    "model": "Modello",
     "version": "Versione",
-    "inUse": "In uso",
     "via": "via",
     "changeModel": "Cambia modello",
     "apiKeys": "Chiavi API",
-    "advancedParams": "Parametri avanzati",
     "customModelId": "ID modello personalizzato…",
     "maxTokens": "Token massimi",
     "maxTokensPlaceholder": "es. 4096",
@@ -1116,6 +1108,13 @@
       "cervello": "quali marche ci sono, con che testa pensa, e cosa le lascia fare il telefono",
       "mani": "cosa può fare, con che permessi, e quando parte da sola",
       "memoria": "cosa ricorda, chi gliela riempie, e dove sta su disco"
+    },
+    "gruppi": {
+      "chiPensa": "Chi pensa",
+      "parametri": "Parametri",
+      "quantoRicorda": "Quanto ricorda",
+      "dream": "Dream — chi riempie quei tre file",
+      "giardiniere": "Giardiniere — chi riempie i quaderni"
     }
   }
 }

@@ -253,3 +253,79 @@ def test_ogni_gruppo_ha_ancora_un_id_nel_dom() -> None:
     cerca un gruppo nel DOM — il banco, e i caricatori asincroni che scrivono
     nel proprio segnaposto."""
     assert 'data-gruppo="${id}"' in SETTINGS
+
+
+# ── Il ritaglio ──────────────────────────────────────────────────────────────
+
+
+def _gruppi_dichiarati() -> dict[str, list[str]]:
+    """`CASSETTI` letto dal sorgente: cassetto -> gruppi, nell'ordine."""
+    m = re.search(r"export const CASSETTI = \{(.*?)\n\};", SETTINGS, re.S)
+    assert m, "CASSETTI non trovato"
+    out = {}
+    for c in CASSETTI:
+        b = re.search(rf"{c}: \{{\s*sezioni: \[(.*?)\]", m.group(1), re.S)
+        assert b, f"{c} non ha una voce"
+        out[c] = re.findall(r"'([A-Za-z]+)'", b.group(1))
+    return out
+
+
+def _gruppi_disegnabili() -> set[str]:
+    """Le chiavi della mappa dentro `render()`."""
+    m = re.search(r"const sezioni = \{(.*?)\n    \};", SETTINGS, re.S)
+    assert m, "la mappa dei gruppi non si trova"
+    return set(re.findall(r"^      ([A-Za-z]+):", m.group(1), re.M))
+
+
+def test_ogni_gruppo_di_un_cassetto_si_sa_disegnare() -> None:
+    """Un id nella tabella senza il suo disegnatore e' un `TypeError`.
+
+    `render()` fa `quali.map((id) => sezioni[id]())`: un id che la mappa non
+    conosce e' `undefined()`, cioe' la schermata intera che non si apre. Il
+    file resta valido, la suite verde, e il difetto arriva sul telefono — la
+    stessa famiglia dei metodi fantasma (v. test_no_ghost_methods_contract).
+    """
+    disegnabili = _gruppi_disegnabili()
+    for cassetto, gruppi in _gruppi_dichiarati().items():
+        mancanti = [g for g in gruppi if g not in disegnabili]
+        assert not mancanti, f"{cassetto}: gruppi senza disegnatore {mancanti}"
+
+
+def test_nessun_gruppo_disegnabile_resta_orfano() -> None:
+    """E il contrario: un disegnatore che nessun cassetto usa e' codice morto."""
+    usati = {g for gruppi in _gruppi_dichiarati().values() for g in gruppi}
+    orfani = _gruppi_disegnabili() - usati
+    assert not orfani, f"gruppi che nessun cassetto mostra: {sorted(orfani)}"
+
+
+def test_un_gruppo_sta_in_un_cassetto_solo() -> None:
+    """Due cassetti che mostrano lo stesso gruppo sono due copie che invecchiano
+    separatamente — ed e' esattamente il difetto da cui il giro dei cassetti e'
+    partito."""
+    visti: dict[str, str] = {}
+    for cassetto, gruppi in _gruppi_dichiarati().items():
+        for g in gruppi:
+            assert g not in visti, f"{g} sta sia in {visti[g]} sia in {cassetto}"
+            visti[g] = cassetto
+
+
+@pytest.mark.parametrize("lingua", LINGUE)
+def test_le_soprascritte_nuove_sono_tradotte(lingua: str) -> None:
+    """I cinque gruppi che il ritaglio ha creato hanno un nome vero."""
+    gruppi = _i18n(lingua)["officina"]["gruppi"]
+    for chiave in ("chiPensa", "parametri", "quantoRicorda", "dream", "giardiniere"):
+        assert gruppi.get(chiave, "").strip(), f"{lingua}: officina.gruppi.{chiave} manca"
+
+
+def test_il_taglio_fine_e_arrivato() -> None:
+    """La misura del ritaglio: undici sezioni sono diventate almeno quindici
+    gruppi, e le tre grandi si sono spezzate.
+
+    `_renderModelSettings`, `_renderTools` e `_renderMemory` tenevano insieme
+    cose che la tavola separa; se uno di quei nomi ricompare, qualcuno ha
+    rimesso insieme quel che il ritaglio aveva diviso.
+    """
+    for vecchio in ("_renderModelSettings", "_renderTools(", "_renderMemory("):
+        assert vecchio not in SETTINGS, f"{vecchio} e' tornato: il ritaglio si e' richiuso"
+    totale = sum(len(g) for g in _gruppi_dichiarati().values())
+    assert totale >= 15, f"solo {totale} gruppi: il taglio fine non c'e'"

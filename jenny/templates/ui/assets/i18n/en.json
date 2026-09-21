@@ -173,11 +173,8 @@
     "advancedMode": "Developer mode",
     "advancedModeHint": "Also shows what Jenny uses to work: system skills and internal files (memory, configuration) appear in the lists. Only useful for looking under the hood.",
     "personalization": "Personalization",
-    "tools": "Tools",
     "memory": {
-      "title": "Memory",
       "unavailable": "The memory settings could not be read. Reopen this screen; if it stays like this, check config.json.",
-      "dream": "Dream",
       "dreamEnabled": "Periodic consolidation",
       "dreamInterval": "Every how many hours",
       "reviewCadence": "Review pass every N runs",
@@ -186,7 +183,6 @@
       "sinceReview": "{runs} runs since the last review pass.",
       "stuckRuns": "{runs} runs in a row with writes attempted and none landing.",
       "nothingNewRuns": "{runs} runs in a row with nothing to consolidate.",
-      "budgets": "File budgets",
       "budgetsHint": "How large each of the three files that go into every prompt may grow. Zero means measure and never refuse. A file at its budget is not a fault, but it is the first thing to check when Dream reports it consolidated nothing.",
       "ofBudget": "{chars} characters of {budget}",
       "measuredOnly": "{chars} characters, no budget enforced",
@@ -194,7 +190,6 @@
       "unmeasured": "cannot be measured right now"
     },
     "workers": {
-      "title": "Wiki and projects",
       "unavailable": "The periodic worker settings could not be read. Reopen this screen; if it stays like this, check config.json.",
       "gardener": "Gardener",
       "gardenerEnabled": "Periodic pass",
@@ -229,13 +224,10 @@
     "homeHint": "Where the Android Home button lands when Jenny is your launcher.",
     "homeLast": "Wherever I was",
     "tokenUsage": "Token Usage",
-    "model": "Model",
     "version": "Version",
-    "inUse": "In use",
     "via": "via",
     "changeModel": "Change model",
     "apiKeys": "API keys",
-    "advancedParams": "Advanced parameters",
     "customModelId": "Custom model ID…",
     "maxTokens": "Max Tokens",
     "maxTokensPlaceholder": "e.g. 4096",
@@ -1113,6 +1105,13 @@
       "cervello": "which brands exist, which head she thinks with, and what the phone lets her do",
       "mani": "what she can do, with which permissions, and when she acts on her own",
       "memoria": "what she remembers, who fills it, and where it lives on disk"
+    },
+    "gruppi": {
+      "chiPensa": "Who thinks",
+      "parametri": "Parameters",
+      "quantoRicorda": "How much she remembers",
+      "dream": "Dream — who fills those three files",
+      "giardiniere": "Gardener — who fills the notebooks"
     }
   }
 }
