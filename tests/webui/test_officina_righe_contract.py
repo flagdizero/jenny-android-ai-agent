@@ -226,3 +226,48 @@ def test_le_righe_di_riepilogo_si_agganciano_con_una_regola_sola() -> None:
     divergere una per volta."""
     assert "[data-riepilogo]" in SETTINGS, "il cablaggio non è generico"
     assert "_APRI_PANNELLO" in SETTINGS, "manca la tabella pannello -> chi lo riempie"
+
+
+def test_telegram_in_cassetto_e_una_riga() -> None:
+    """Il widget di accoppiamento è amministrazione: token, codice, disaccoppia.
+
+    In cassetto ne resta la risposta alla sola domanda che si fa da lì: «posso
+    scriverle da fuori, adesso?».
+    """
+    corpo = _corpo("_renderTelegram")
+    assert "_riepilogo(" in corpo
+    assert "settings-telegram-widget" not in SETTINGS, (
+        "il widget è ancora montato nel cassetto invece che nel pannello"
+    )
+    assert 'id="drawer-telegram-body"' in OFFICINA_HTML
+
+
+def test_il_widget_si_monta_all_apertura_del_pannello() -> None:
+    corpo = _corpo("_apriTelegram")
+    assert "TelegramPairingWidget" in corpo and "drawer-telegram-body" in corpo
+    assert "destroy()" in corpo, (
+        "riaprire il pannello lascerebbe due widget vivi sullo stesso stato"
+    )
+
+
+def test_la_riga_telegram_si_legge_senza_il_widget() -> None:
+    """La riga deve dire qualcosa **prima** che il pannello esista."""
+    corpo = _corpo("_caricaRiepilogoTelegram")
+    assert "getTelegramStatus" in corpo, "la riga aspetta il widget per sapere cosa dire"
+    assert "telegramSummary" in corpo
+
+
+def test_il_riassunto_telegram_copre_tutti_gli_stati() -> None:
+    """Quattro stati più «non leggibile»: se ne manca uno, la riga resta vuota
+    proprio nel caso che l'utente vuole capire."""
+    import json
+
+    pairing = (ASSETS / "shared" / "telegram-pairing.js").read_text(encoding="utf-8")
+    assert "export function telegramSummary" in pairing
+    for lingua in ("it", "en"):
+        tg = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+        tg = tg["settings"]["telegram"]
+        for k in ("summaryPaired", "summaryNotPaired", "summaryNoToken", "summaryOff",
+                  "summaryUnknown"):
+            assert tg.get(k, "").strip(), f"{lingua}: manca {k}"
+        assert "{who}" in tg["summaryPaired"]

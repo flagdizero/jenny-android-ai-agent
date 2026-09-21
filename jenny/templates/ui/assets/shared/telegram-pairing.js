@@ -302,3 +302,22 @@ export class TelegramPairingWidget {
     }
   }
 }
+
+/** Telegram in una riga sola, per il riepilogo in cassetto.
+ *
+ *  Le quattro combinazioni che contano — spento, acceso senza token, acceso
+ *  col token ma non collegato, collegato — rispondono tutte alla stessa
+ *  domanda: «posso scriverle da fuori, adesso?». La riga dice quella, e il
+ *  resto si apre col tocco.
+ *
+ *  Funzione e non metodo del widget: la riga vive **fuori** dal widget, in un
+ *  cassetto che il widget non ha ancora disegnato.
+ */
+export function telegramSummary(status) {
+  if (!status) return i18n.t('settings.telegram.summaryUnknown');
+  if (!status.enabled) return i18n.t('settings.telegram.summaryOff');
+  if (!status.configured) return i18n.t('settings.telegram.summaryNoToken');
+  if (!status.paired) return i18n.t('settings.telegram.summaryNotPaired');
+  const who = status.paired_username ? `@${status.paired_username}` : i18n.t('settings.telegram.aChat');
+  return i18n.t('settings.telegram.summaryPaired', { who });
+}

@@ -450,7 +450,12 @@
       "enabled": "Telegram channel enabled",
       "disabledTitle": "Channel disabled",
       "disabledPaired": "The bot does not reply. The token and the link to {who} are kept: switch it back on and it resumes where it was, with no new pairing.",
-      "disabledUnpaired": "The bot does not reply. The token is kept: switching it back on does not need another trip to BotFather."
+      "disabledUnpaired": "The bot does not reply. The token is kept: switching it back on does not need another trip to BotFather.",
+      "summaryPaired": "paired with {who}",
+      "summaryNotPaired": "on, not paired",
+      "summaryNoToken": "on, no token",
+      "summaryOff": "off",
+      "summaryUnknown": "could not read"
     },
     "brands": "Brands",
     "modelLivesInCasa": "Which model answers is chosen in the house, under «Who answers»: one tap on a model saves the model and the brand together. Here you decide which brands exist.",

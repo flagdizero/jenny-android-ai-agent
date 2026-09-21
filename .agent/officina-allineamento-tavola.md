@@ -278,6 +278,30 @@ nel pannello.
 | `_renderTelegram` (`:698`) | «Telegram: collegato · *@nome*» oppure «non collegato» | interruttore, accoppiamento, «disaccoppia» |
 | `_renderSsh` (`:1112`) | «N macchine registrate» + una riga per host | impronta, «verifica», modifica, elimina |
 
+> ⚠️ **SSH è un conflitto, non un allineamento — e va deciso, non eseguito.**
+>
+> Il codice contiene già una decisione **contraria** alla tavola, con la sua
+> motivazione scritta accanto (`_renderSshHost`):
+>
+> > «I due stati che decidono se l'host è usabile — credenziale pronta e
+> > impronta accettata — stanno in chiaro sulla card: sono i due passi che
+> > l'utente deve fare, e **nasconderli dietro un tap lascerebbe host mezzi
+> > configurati che falliscono solo al primo comando**.»
+>
+> La riga compatta della tavola mostra `alias · utente · porta` e **non** i due
+> stati. Seguirla alla lettera disfa quella decisione.
+>
+> Tre vie, e la scelta è dell'utente:
+> 1. **Tenere la decisione del codice** — SSH resta l'eccezione dichiarata, e la
+>    tavola si corregge.
+> 2. **Riga compatta con i due stati dentro** — si segue la forma senza perdere
+>    l'informazione: due pallini o due parole al posto dei badge grandi.
+> 3. **Seguire la tavola alla lettera** e accettare il difetto che il commento
+>    descrive.
+>
+> **Proposta: la 2.** È l'unica che rispetta tutte e due le cose — la forma
+> della tavola e il motivo per cui quei due stati sono in chiaro.
+
 - **Si sa che è finita quando:** Memoria scende sotto i 3 000 px (oggi 6 467) e
   Mani sotto i 2 500 (oggi 4 096), misurati con lo stesso `cuci.py`.
 - **Rischio:** i caricatori asincroni scrivono nel proprio segnaposto

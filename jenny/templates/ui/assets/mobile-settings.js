@@ -10,7 +10,7 @@ import { advancedMode, setAdvancedMode } from './shared/advanced-mode.js';
 import { mascotVisible, setMascotVisible, mascotSize, setMascotSize,
   MASCOT_SIZES } from './shared/mascot.js';
 import { homeView, setHomeView, HOME_VIEW_CHOICES } from './shared/home-view.js';
-import { TelegramPairingWidget } from './shared/telegram-pairing.js';
+import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import {
   BatteryExemptionCard,
   batteryExemptionSupported,
@@ -696,10 +696,38 @@ export class SettingsController {
 
   // ── Telegram ───────────────────────────────────────────────────────
 
+  /** Telegram, in cassetto, e' una riga: «collegato a @nome», o spento.
+   *
+   *  Il widget di accoppiamento — interruttore, token, codice, disaccoppia —
+   *  e' un pannello di amministrazione, e sta dietro il tocco. E' lo stesso
+   *  condiviso con l'onboarding: cambia dove lo si monta, non cosa fa.
+   */
   _renderTelegram() {
-    // Il contenuto vero lo disegna il TelegramPairingWidget (condiviso con
-    // l'onboarding) dentro questo placeholder, in _wireSections.
-    return `<div id="settings-telegram-widget"></div>`;
+    return this._riepilogo('telegram', i18n.t('settings.telegram.title'), i18n.t('settings.loading'));
+  }
+
+  /** Il widget, montato dentro il pannello all'apertura. */
+  _apriTelegram() {
+    const corpo = document.getElementById('drawer-telegram-body');
+    if (!corpo) return;
+    if (this._tgWidget) this._tgWidget.destroy();
+    this._tgWidget = new TelegramPairingWidget(corpo, { mode: 'settings' });
+    this._tgWidget.refresh();
+  }
+
+  /** La riga in cassetto. Legge lo stato per conto suo: il widget non esiste
+   *  finche' il pannello non si apre, e la riga deve dire qualcosa prima. */
+  async _caricaRiepilogoTelegram() {
+    const gen = this._gen;
+    let stato = null;
+    try {
+      stato = await api.getTelegramStatus();
+    } catch {
+      stato = null;
+    }
+    if (this._stale(gen)) return;
+    const el = this.contentEl?.querySelector('#riepilogo-telegram');
+    if (el) el.textContent = telegramSummary(stato);
   }
 
   // ── Models & Providers ─────────────────────────────────────────────
@@ -1718,7 +1746,7 @@ export class SettingsController {
      righe di riepilogo sono destinate a diventare tre (storia, Telegram, SSH)
      e un elenco di condizioni le farebbe divergere una per volta. */
   get _APRI_PANNELLO() {
-    return { storia: this._apriStoria };
+    return { storia: this._apriStoria, telegram: this._apriTelegram };
   }
 
   _renderBackup() {
@@ -2281,13 +2309,9 @@ export class SettingsController {
 
     this._wireWorkerSettings();
 
-    // Telegram: widget condiviso con lo step di onboarding
-    const tgContainer = this.contentEl.querySelector('#settings-telegram-widget');
-    if (tgContainer) {
-      if (this._tgWidget) this._tgWidget.destroy();
-      this._tgWidget = new TelegramPairingWidget(tgContainer, { mode: 'settings' });
-      this._tgWidget.refresh();
-    }
+    // Telegram: in cassetto solo la riga. Il widget lo monta `_apriTelegram`
+    // quando il pannello si apre — prima, il suo contenitore non esiste.
+    this._caricaRiepilogoTelegram();
 
     // Attività in background: stessa card condivisa con onboarding e Telegram.
     // Qui `grantedKey` è d'obbligo — è l'unica superficie che l'utente apre

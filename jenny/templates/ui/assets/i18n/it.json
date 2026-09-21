@@ -450,7 +450,12 @@
       "enabled": "Canale Telegram attivato",
       "disabledTitle": "Canale disattivato",
       "disabledPaired": "Il bot non risponde. Token e collegamento a {who} sono conservati: riaccendendo riprende da dove era, senza rifare il pairing.",
-      "disabledUnpaired": "Il bot non risponde. Il token è conservato: riaccendendo non serve ripassare da BotFather."
+      "disabledUnpaired": "Il bot non risponde. Il token è conservato: riaccendendo non serve ripassare da BotFather.",
+      "summaryPaired": "collegato a {who}",
+      "summaryNotPaired": "acceso, non collegato",
+      "summaryNoToken": "acceso, senza token",
+      "summaryOff": "spento",
+      "summaryUnknown": "non leggibile"
     },
     "brands": "Le marche",
     "modelLivesInCasa": "Quale modello risponde si sceglie in casa, da «Chi risponde»: un tocco su un modello salva modello e marca insieme. Qui si decide quali marche esistono.",
