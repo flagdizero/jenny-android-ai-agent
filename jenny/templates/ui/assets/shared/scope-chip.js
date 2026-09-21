@@ -147,32 +147,7 @@ export class ScopeChip {
       this.scope = { kind: 'project', name: rest.split('/')[0] || null };
       if (!this.scope.name) this.scope = { kind: 'personal', name: null };
     }
-    this._publishPin();
     this.render();
-  }
-
-  /** Pubblica su ``AppState`` la wiki a cui le viste sono agganciate.
-   *
-   *  **Nessuno la legge piu'**, misurato il 21/09/2026: le viste wiki e grafo
-   *  dell'officina erano i suoi due lettori e sono uscite — elenco, mappa e
-   *  lettore vivono in casa, dove il quaderno aperto *e'* la conversazione
-   *  aperta e non c'e' niente da agganciare. Resta qui invece di sparire in
-   *  coda a quel giro perche' toglierla e' un giro suo: sono cinque righe di
-   *  prodotto e sei banchi che provano proprio questa pubblicazione.
-   *
-   *  Quel che segue descrive perche' era fatta cosi'. Le viste avevano bisogno
-   *  della stessa risposta che il chip ha gia' — *in quale progetto siamo* — e
-   *  questo e' l'unico punto in cui cambia. Passa da ``AppState`` e non da un import diretto del chip perche'
-   *  ``set`` avvisa chi ascolta: cambiare progetto mentre una vista e' aperta
-   *  la deve riagganciare, e senza notifica resterebbe sul progetto di prima.
-   *
-   *  ``null`` = sessione personale, cioe' nessun aggancio: le viste tornano a
-   *  mostrare tutte le wiki, che e' la Home di sempre.
-   */
-  _publishPin() {
-    const pinned = this.scope.kind === 'project' ? this.scope.name : null;
-    if (AppState.pinnedWiki === pinned) return;
-    AppState.set('pinnedWiki', pinned);
   }
 
   /** Nome mostrato per la sessione personale (non è un nome di cartella). */
@@ -490,22 +465,25 @@ export class ScopeChip {
       : null;   // null = la conversazione personale, che la conosce il chiamante
   }
 
-  /** Cambia scope: il chip, il placeholder, l'aggancio delle viste, e la
-   *  conversazione sotto.
+  /** Cambia scope: il chip, il placeholder, e la conversazione sotto.
    *
-   *  L'aggancio si pubblica **qui**, non solo in `syncFromSession`. La risposta
-   *  la sappiamo già — l'utente ha appena scelto — e passare per il backend la
-   *  faceva arrivare alle viste wiki e grafo un giro di rete più tardi: fino a
-   *  quel momento il chip diceva un progetto e le due viste ne mostravano un
-   *  altro. Se poi il caricamento del thread fallisce `syncFromSession` non
-   *  viene chiamato affatto, e l'aggancio sbagliato ci restava per sempre.
-   *  Resta un solo scrittore di `pinnedWiki` (`_publishPin`), che è la regola
-   *  che tiene le viste su una sola risposta.
+   *  **Qui si pubblicava anche l'aggancio delle viste** (`AppState.pinnedWiki`,
+   *  scritto da `_publishPin`): le viste wiki e grafo dell'officina avevano
+   *  bisogno della stessa risposta che il chip ha gia', e pubblicarla subito
+   *  invece che al ritorno del backend era cio' che impediva al chip di
+   *  nominare un progetto mentre le due viste ne mostravano un altro. Quelle
+   *  viste sono uscite dall'officina il 21/09/2026 — elenco, mappa e lettore
+   *  vivono in casa, dove il quaderno aperto **e'** la conversazione aperta —
+   *  e con l'ultimo lettore se n'e' andata anche la pubblicazione.
+   *
+   *  Resta il patto che quel giro aveva stabilito, e che vale ancora: `select`
+   *  e' un'**anticipazione** di quel che il backend confermera', non una
+   *  verita'. Se il thread non si carica, `syncFromSession` non arriva mai e
+   *  quel che il chip mostra e' l'unica risposta che c'e'.
    */
   select(scope) {
     const changed = scope.kind !== this.scope.kind || scope.name !== this.scope.name;
     this.scope = scope;
-    this._publishPin();
     this.render();
     if (changed) this.onSwitch?.(ScopeChip.keyFor(scope), scope);
   }

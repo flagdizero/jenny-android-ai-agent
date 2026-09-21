@@ -1,15 +1,23 @@
-"""L'aggancio delle viste segue il chip, e un progetto appena creato si apre.
+"""Il chip non aspetta il backend, e un progetto appena creato si apre.
 
 Due difetti dello stesso modulo, entrambi sul «dopo».
 
-**(a) l'aggancio arrivava un giro di rete in ritardo.** `select()` cambiava il
-chip e chiamava `onSwitch`, ma `_publishPin()` si raggiungeva solo da
+**(a) la risposta arrivava un giro di rete in ritardo.** `select()` cambiava il
+chip e chiamava `onSwitch`, ma il resto si raggiungeva solo da
 `syncFromSession`, cioè dalla risposta del backend al caricamento del thread.
-Nel frattempo il chip diceva un progetto e le viste wiki e grafo ne mostravano
-un altro; e se quel caricamento **falliva** — il caso normale su un telefono, e
-proprio quello per cui `loadInitialHistory` ha una riga d'errore — l'aggancio
-sbagliato ci restava per sempre. La risposta la sapeva già `select`: l'utente
-l'aveva appena toccata.
+Se quel caricamento **falliva** — il caso normale su un telefono, e proprio
+quello per cui `loadInitialHistory` ha una riga d'errore — `syncFromSession`
+non arrivava affatto. La risposta la sapeva già `select`: l'utente l'aveva
+appena toccata.
+
+**Di (a) e' rimasto il patto, non il meccanismo.** Quel giro pubblicava anche
+`AppState.pinnedWiki`, l'aggancio che diceva alle viste wiki e grafo
+dell'officina quale progetto mostrare. Quelle viste sono uscite il 21/09/2026 —
+elenco, mappa e lettore vivono in casa, dove il quaderno aperto **e'** la
+conversazione aperta — e il 21/09/2026 se n'e' andata anche la pubblicazione,
+che da allora era scritta e mai letta. Quel che i banchi qui sotto misurano e'
+percio' lo scope del chip, che e' la cosa vera: quando cambia, chi lo decide, e
+che il backend resti l'ultima parola.
 
 **(b) creare un progetto non ci portava dentro.** Dopo il nome e la riga di scope
 il chip faceva `this.open()`: la tendina si riapriva sopra il toast, l'utente
@@ -24,10 +32,6 @@ non è una wiki, con il chip che nomina un progetto inesistente. In mezzo c'è i
 caso per cui lo scaffolder è a top-up: l'albero rimasto a metà, che il server
 **completa** invece di rifiutare — e in quel caso si entra, perché il progetto
 adesso c'è.
-
-Un solo scrittore di `pinnedWiki` resta la regola (``test_project_views_contract``
-la controlla su tutti i `.js`): qui si aggiunge un *chiamante* di `_publishPin`,
-non un secondo `AppState.set`.
 
 E come si dice, quel rifiuto. `err.message` è il testo di un `CommandError`,
 quindi **inglese**: interpolato nel toast localizzato dava «Creazione fallita:
@@ -124,8 +128,11 @@ __CREATE_ERROR_KEYS__
 __PROJECT_WORDS__
 __CREATE_FLOW__
 
+/* `published` resta anche senza l'aggancio, e adesso misura una cosa diversa:
+   scegliere un progetto **non scrive piu' niente di globale**. Era l'unico
+   campo che il chip pubblicava; un `set` che ricompare qui e' un secondo posto
+   in cui vive la risposta a «in che conversazione siamo». */
 const AppState = {
-  pinnedWiki: null,
   published: [],
   set(key, value) { AppState[key] = value; AppState.published.push([key, value]); },
 };
@@ -190,15 +197,13 @@ class ScopeChip {
   __PROJECTS__
   __LOAD_FAILED__
   __DIR__
-  __PUBLISH_PIN__
-  __SYNC_FROM_SESSION__
+    __SYNC_FROM_SESSION__
   __KEY_FOR__
   __SELECT__
   __CREATE__
 }
 
 function makeChip() {
-  AppState.pinnedWiki = null;
   AppState.published.length = 0;
   answers = [];
   asked.length = 0;
@@ -240,7 +245,6 @@ def _harness() -> str:
         .replace("__PROJECTS__", _member(src, "_projects"))
         .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
         .replace("__DIR__", _member(src, "_dir"))
-        .replace("__PUBLISH_PIN__", _member(src, "_publishPin"))
         .replace("__SYNC_FROM_SESSION__", _member(src, "syncFromSession"))
         .replace("__KEY_FOR__", _member(src, "keyFor"))
         .replace("__SELECT__", _member(src, "select"))
@@ -262,64 +266,76 @@ def _run_js(script: str) -> None:
 # ── (a) L'aggancio segue il chip ────────────────────────────────────────────
 
 
-def test_choosing_a_project_pins_the_views_at_once() -> None:
-    """Nessuna attesa in mezzo: la risposta la sa già il tocco."""
+def test_choosing_a_project_switches_the_conversation_at_once() -> None:
+    """Nessuna attesa in mezzo: la risposta la sa già il tocco.
+
+    E non si scrive niente di globale. Fino al 21/09/2026 qui partiva anche
+    `AppState.set('pinnedWiki', …)`, per le viste wiki e grafo dell'officina;
+    uscite quelle, il chip e' tornato a essere l'unico posto in cui vive la
+    risposta a «in che conversazione siamo». Una seconda copia altrove e' il
+    difetto che l'aggancio aveva gia' fatto pagare una volta.
+    """
     _run_js("""
       const chip = makeChip();
       chip.select({ kind: 'project', name: 'bordi' });
 
-      assert.equal(AppState.pinnedWiki, 'bordi',
-                   'le viste restano sul progetto di prima finché il backend non risponde');
-      assert.deepEqual(AppState.published, [['pinnedWiki', 'bordi']]);
+      assert.equal(chip.scope.kind, 'project');
+      assert.equal(chip.scope.name, 'bordi',
+                   'il chip non nomina il progetto che l\u2019utente ha appena scelto');
       assert.deepEqual(chip.switched, [['project:bordi', { kind: 'project', name: 'bordi' }]]);
+      assert.deepEqual(AppState.published, [], 'la risposta ha una seconda copia globale');
     """)
 
 
-def test_the_pin_is_right_even_when_the_thread_never_loads() -> None:
+def test_the_chip_is_right_even_when_the_thread_never_loads() -> None:
     """Il caso che rendeva il difetto permanente.
 
-    `syncFromSession` lo chiama solo il caricamento riuscito: se quello fallisce
-    non viene chiamato affatto, e prima di questa correzione l'aggancio restava
-    sul progetto di prima — con il chip che ne nominava un altro.
+    `syncFromSession` lo chiama solo il caricamento riuscito: se quello
+    fallisce non viene chiamato affatto, e tutto cio' che aspettasse la
+    risposta del backend resterebbe sul progetto di prima — per sempre. Quindi
+    `select` deve valere **da solo**: e' l'unica cosa che gira di sicuro.
     """
     _run_js("""
       const chip = makeChip();
-      // Si parte già dentro un progetto, con le viste agganciate.
       chip.select({ kind: 'project', name: 'patreon' });
-      assert.equal(AppState.pinnedWiki, 'patreon');
+      assert.equal(chip.scope.name, 'patreon');
 
       // Il caricamento del thread del prossimo progetto fallirà: chi possiede la
       // chat solleva e nessun `syncFromSession` arriverà mai.
       chip.onSwitch = () => { throw new Error('rete'); };
       assert.throws(() => chip.select({ kind: 'project', name: 'bordi' }));
 
-      assert.equal(chip.scope.name, 'bordi');
-      assert.equal(AppState.pinnedWiki, 'bordi',
-                   'wiki e grafo mostrano un progetto diverso da quello nominato dal chip');
+      assert.equal(chip.scope.name, 'bordi',
+                   'il chip e\u2019 rimasto sul progetto di prima, e non lo dira\u2019 mai piu\u2019');
     """)
 
 
-def test_going_back_to_the_personal_chat_dissolves_the_pin() -> None:
-    """`null` = nessun aggancio, cioè la Home di sempre."""
+def test_going_back_to_the_personal_chat_leaves_no_project_behind() -> None:
+    """La personale e' uno scope come gli altri, non «il progetto di prima
+    spento»: il nome deve cadere, o il prossimo messaggio va nel posto
+    sbagliato."""
     _run_js("""
       const chip = makeChip();
       chip.select({ kind: 'project', name: 'bordi' });
       chip.select({ kind: 'personal', name: null });
-      assert.equal(AppState.pinnedWiki, null);
-      assert.deepEqual(AppState.published, [['pinnedWiki', 'bordi'], ['pinnedWiki', null]]);
+      assert.equal(chip.scope.kind, 'personal');
+      assert.equal(chip.scope.name, null);
+      assert.deepEqual(chip.switched.at(-1), [null, { kind: 'personal', name: null }]);
     """)
 
 
-def test_the_backend_confirmation_does_not_publish_a_second_time() -> None:
-    """Due pubblicazioni uguali sono due riagganci: le viste ricaricherebbero due volte."""
+def test_the_backend_confirmation_changes_nothing() -> None:
+    """Il thread arriva e conferma quel che il chip sapeva già: dev'essere un
+    non-evento. Finché `select` anticipa, ogni conferma che *rifà* qualcosa e'
+    lavoro doppio su una risposta che non e' cambiata — ed era la forma del
+    difetto quando la conferma ripubblicava l'aggancio."""
     _run_js("""
       const chip = makeChip();
       chip.select({ kind: 'project', name: 'bordi' });
-      // Il thread arriva e conferma quel che il chip sapeva già.
       chip.syncFromSession({ project_path: '/w/wikis/bordi/wiki' });
       assert.equal(chip.scope.name, 'bordi');
-      assert.equal(AppState.pinnedWiki, 'bordi');
-      assert.deepEqual(AppState.published, [['pinnedWiki', 'bordi']]);
+      assert.equal(chip.switched.length, 1, 'la conferma ha rifatto il cambio di conversazione');
+      assert.deepEqual(AppState.published, []);
     """)
 
 
@@ -331,7 +347,7 @@ def test_the_backend_still_wins_when_it_disagrees() -> None:
       // Il thread torna dalla personale (la chiave non era un progetto).
       chip.syncFromSession(null);
       assert.equal(chip.scope.kind, 'personal');
-      assert.equal(AppState.pinnedWiki, null);
+      assert.equal(chip.scope.name, null);
     """)
 
 
@@ -342,7 +358,6 @@ def test_reselecting_the_same_project_switches_nothing() -> None:
       chip.select({ kind: 'project', name: 'bordi' });
       chip.select({ kind: 'project', name: 'bordi' });
       assert.equal(chip.switched.length, 1);
-      assert.deepEqual(AppState.published, [['pinnedWiki', 'bordi']]);
     """)
 
 
@@ -361,7 +376,6 @@ def test_creating_a_project_opens_it() -> None:
       assert.deepEqual(created, [['bordi', 'i bordi delle stampe']]);
       assert.equal(chip.scope.kind, 'project');
       assert.equal(chip.scope.name, 'bordi', 'il chip è rimasto sulla personale');
-      assert.equal(AppState.pinnedWiki, 'bordi', 'le viste sono rimaste sulla Home');
       assert.deepEqual(chip.switched, [['project:bordi', { kind: 'project', name: 'bordi' }]],
                        'la conversazione non è cambiata: il messaggio andrebbe nella personale');
       assert.equal(chip.opened, 0, 'la tendina si riapre sopra il toast invece di lasciar lavorare');
@@ -385,7 +399,6 @@ def test_completing_a_half_built_project_opens_it_too() -> None:
       await chip._createProject();
 
       assert.equal(chip.scope.name, 'bordi');
-      assert.equal(AppState.pinnedWiki, 'bordi');
       assert.deepEqual(chip.switched, [['project:bordi', { kind: 'project', name: 'bordi' }]]);
       assert.equal(chip.opened, 0);
     """)
@@ -403,7 +416,6 @@ def test_a_refusal_leaves_you_exactly_where_you_were() -> None:
       await chip._createProject();
 
       assert.equal(chip.scope.kind, 'personal', 'il chip nomina un progetto che non esiste');
-      assert.equal(AppState.pinnedWiki, null, 'le viste sono agganciate a una wiki inesistente');
       assert.deepEqual(AppState.published, []);
       assert.deepEqual(chip.switched, [], 'il prossimo messaggio andrebbe in una cartella qualsiasi');
       assert.equal(toasts.length, 1);
@@ -425,7 +437,6 @@ def test_a_project_that_already_exists_is_a_refusal_as_well() -> None:
       await chip._createProject();
 
       assert.equal(chip.scope.name, 'patreon', 'un rifiuto ha spostato la conversazione');
-      assert.equal(AppState.pinnedWiki, 'patreon');
       assert.deepEqual(AppState.published, []);
       assert.equal(chip.switched.length, 1, 'nessun cambio in più oltre a quello iniziale');
       assert.equal(toasts[0][0], 'i18n:scope.createRejected:bordi');
@@ -576,7 +587,6 @@ def test_the_warning_can_be_walked_through_because_the_server_may_accept() -> No
       assert.deepEqual(created, [['vecchio', 'la riga di stavolta']],
                        'il client ha rifiutato un nome che il server completa');
       assert.equal(chip.scope.name, 'vecchio');
-      assert.equal(AppState.pinnedWiki, 'vecchio');
     """)
 
 
@@ -663,22 +673,35 @@ def test_every_word_the_flow_names_exists_in_both_languages() -> None:
 # Deboli per costruzione: provano che una riga c'è, non che faccia effetto.
 
 
-def test_the_pin_still_has_a_single_writer_inside_the_chip() -> None:
-    """Guardia debole, e complemento di ``test_project_views_contract``.
+def test_the_pin_is_gone_from_the_product() -> None:
+    """L'aggancio delle viste non esiste piu' in nessun file.
 
-    Quello controlla che nessun altro file scriva `pinnedWiki`; questo che
-    dentro il chip la scrittura resti in `_publishPin` — `select` ne diventa un
-    *chiamante*, non un secondo scrittore.
+    Era il complemento di ``test_project_views_contract``, che teneva a **uno**
+    il numero di scrittori di `pinnedWiki`: due scrittori sono due risposte a
+    «in che progetto siamo», e divergono. Dal 21/09/2026 gli scrittori sono
+    zero, perche' i lettori erano zero — le viste wiki e grafo dell'officina
+    erano le uniche, e sono uscite. Quel banco e' sparito con loro; questo ne
+    prende il posto e dice la cosa piu' forte: il campo non c'e'.
+
+    Vale la pena di un banco perche' uno stato globale scritto e mai letto non
+    si nota — nessun test diventa rosso, niente si rompe a schermo — e il modo
+    in cui torna e' che qualcuno ne abbia di nuovo bisogno e lo ripubblichi
+    invece di chiedere al chip, che e' l'unico a saperlo.
     """
+    colpevoli = [
+        path.name
+        for path in sorted(ASSETS.rglob("*.js"))
+        if "vendor" not in path.parts and "pinnedWiki" in _read(path)
+    ]
+    # `scope-chip.js` lo **nomina** nel commento di `select`, che racconta dove
+    # era finito: il commento e' la ragione per cui questo file e' l'eccezione.
+    assert colpevoli == ["scope-chip.js"], colpevoli
     src = _read(CHIP_JS)
-    assert len(re.findall(r"AppState\.set\(\s*['\"]pinnedWiki['\"]", src)) == 1
-    callers = re.findall(r"(?m)^\s*(?:this\.)?_publishPin\(\);", src)
-    assert len(callers) == 2, (
-        "l'aggancio si pubblica da `select` (la scelta dell'utente) e da "
-        f"`syncFromSession` (la risposta del backend), non da {len(callers)} punti"
+    assert "_publishPin" not in _member(src, "select")
+    assert "AppState.set('pinnedWiki'" not in src
+    assert "pinnedWiki" not in _read(ASSETS / "shared" / "state.js"), (
+        "il campo e' tornato dentro AppState"
     )
-    body = _member(src, "select")
-    assert "this._publishPin()" in body
 
 
 def test_the_creation_no_longer_reopens_the_menu() -> None:

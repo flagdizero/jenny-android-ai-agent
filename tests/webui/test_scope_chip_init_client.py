@@ -85,7 +85,6 @@ const i18n = {
 
 const AppState = {
   readonlyTurn: false,
-  pinnedWiki: null,
   composeMenu: null,
   subs: [],
   on(key, fn) { this.subs.push([key, fn]); },

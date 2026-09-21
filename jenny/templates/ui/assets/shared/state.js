@@ -7,11 +7,6 @@ export const AppState = {
   // Theme (the boot script in index.html migrates legacy values first)
   theme: localStorage.getItem('tc-theme') || 'chanel',
 
-  // Il progetto aperto, o `null` nella conversazione personale. Lo scrive
-  // soltanto lo scope chip (`_publishPin`), che è l'unico a saperlo; lo
-  // leggono le viste wiki e grafo per mostrare quel progetto e non gli altri.
-  pinnedWiki: null,
-
   // Se il prossimo messaggio parte in sola lettura. Lo scrive soltanto
   // `write-switch.js`; lo leggono il placeholder del composer e `ws-manager`,
   // che lo mette nell'envelope di ogni invio.
