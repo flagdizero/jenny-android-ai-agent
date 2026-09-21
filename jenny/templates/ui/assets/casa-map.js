@@ -76,6 +76,28 @@ const SOGLIA_TOCCO = 10;
  */
 const FILE_SPILLI = '.jenny/map-layout.json';
 
+/* Quanto tira il punto dove hai lasciato un pallino.
+ *
+ *  **Non e' un chiodo, e' una molla** — chiesto dall'utente il 21/09/2026:
+ *  «non si puo' fare in modo che segua la fisica ma da quella posizione?
+ *  perche' ora e' proprio piantatissimo». Aveva ragione: con `fx`/`fy` il nodo
+ *  usciva del tutto dalle forze, il resto della nuvola si deformava attorno a
+ *  un peso morto, e la mappa in quel punto smetteva di essere viva.
+ *
+ *  Mollarlo e basta pero' non e' la risposta: a tirarlo indietro sono i
+ *  collegamenti (0,35 per filo), e su un nodo con dieci fili non c'e' partita —
+ *  tornerebbe nella matassa, cioe' il trascinamento non servirebbe a niente.
+ *
+ *  Quindi il posto dove l'hai lasciato diventa il **suo** centro invece di
+ *  quello della stanza: la stessa molla che tiene insieme gli altri (0,06),
+ *  solo puntata altrove e piu' tesa. Il nodo respira, si fa spingere dai
+ *  vicini, e resta in quel quartiere.
+ *
+ *  Il numero e' da pollice, come la soglia del tocco: troppo poco e il
+ *  trascinamento non lascia traccia, troppo e si torna al chiodo.
+ */
+const FORZA_ANCORA = 0.3;
+
 /* Quante pagine portano il nome scritto, e quanto lungo.
  *
  *  **Il tetto e' una rete di sicurezza, non una regola di disegno** — e per due
@@ -319,8 +341,11 @@ export class CasaMap {
     for (const n of nodes) {
       const p = spilli?.[n.id];
       if (!p) continue;
-      n.x = n.fx = p[0];
-      n.y = n.fy = p[1];
+      /* L'ancora **e** la posizione di partenza: la prima dice alle forze dove
+         richiamarlo, la seconda evita che parta da un punto a caso e ci venga
+         strattonato sotto gli occhi. */
+      n.ax = n.x = p[0];
+      n.ay = n.y = p[1];
     }
     this._drawn = data;
     this._render(nodes, links);
@@ -358,6 +383,10 @@ export class CasaMap {
     const box = this.el.getBoundingClientRect();
     const w = Math.max(240, Math.round(box.width) || 320);
     const h = Math.max(240, Math.round(box.height) || 320);
+    /* Le tiene il disegno perche' le rimettono le molle a fine trascinamento,
+       che sta fuori da questo metodo. */
+    this._w = w;
+    this._h = h;
     this.svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
     this.svgEl.innerHTML = '';
 
@@ -404,8 +433,8 @@ export class CasaMap {
          Il risultato, visto al banco, e' un nodo solo all'angolo opposto e
          mezza stanza vuota in mezzo. Una molla debole verso il centro li tiene
          nella stessa pagina senza appiattire il disegno. */
-      .force('x', d3.forceX(w / 2).strength(0.06))
-      .force('y', d3.forceY(h / 2).strength(0.06))
+      .force('x', this._molla('x', w, h))
+      .force('y', this._molla('y', w, h))
       .force('collision', d3.forceCollide().radius((d) => radiusOf(d.degree) + 14))
       .on('tick', () => {
         line
@@ -442,6 +471,25 @@ export class CasaMap {
   _onZoom(e, root) {
     if (e.sourceEvent) this._presaInMano = true;
     root.attr('transform', e.transform);
+  }
+
+  /** La molla che tiene un nodo in un posto: il suo, se l'hai spostato, o il
+   *  centro della stanza.
+   *
+   *  **Si ricostruisce**, non si aggiorna: `forceX` legge il bersaglio e la
+   *  forza una volta sola, quando entra nella simulazione (li precalcola in due
+   *  array). Cambiare `d.ax` dopo non lo vedrebbe nessuno — e sarebbe un
+   *  difetto silenzioso, perche' il pallino resterebbe dove il dito l'ha
+   *  lasciato finche' la fisica non lo tira via, cioe' *sembrerebbe* funzionare
+   *  per i primi istanti. Rimettere la forza la fa reinizializzare, ed e' la
+   *  strada di D3.
+   */
+  _molla(asse, w, h) {
+    const centro = asse === 'x' ? w / 2 : h / 2;
+    const ancora = (d) => (asse === 'x' ? d.ax : d.ay);
+    const f = asse === 'x' ? d3.forceX : d3.forceY;
+    return f((d) => ancora(d) ?? centro)
+      .strength((d) => (ancora(d) == null ? 0.06 : FORZA_ANCORA));
   }
 
   /** Gli spilli di questo quaderno, o null se non ce ne sono.
@@ -482,8 +530,11 @@ export class CasaMap {
     if (!this._quaderno) return;
     const miei = {};
     for (const n of nodes) {
-      if (n.fx === null || n.fx === undefined) continue;
-      miei[n.id] = [Math.round(n.fx), Math.round(n.fy)];
+      if (n.ax === null || n.ax === undefined) continue;
+      /* L'ancora, non dove il nodo si trova adesso: quella e' la scelta
+         dell'utente, questa e' dove le forze l'hanno lasciato riposare — e
+         salvare la seconda farebbe scivolare la disposizione a ogni apertura. */
+      miei[n.id] = [Math.round(n.ax), Math.round(n.ay)];
     }
     const tutti = { ...(this._spilli || {}), [this._quaderno]: miei };
     this._spilli = tutti;
@@ -551,9 +602,18 @@ export class CasaMap {
         d.fx = e.x;
         d.fy = e.y;
       })
-      .on('end', (e) => {
+      .on('end', (e, d) => {
         if (!e.active) this._sim.alphaTarget(0);
-        // E `fx`/`fy` restano: e' tutto lo spillo.
+        /* Qui il chiodo diventa molla: il punto dove il dito ha lasciato il
+           pallino diventa il suo centro, e `fx`/`fy` se ne vanno — da adesso
+           le forze lo toccano di nuovo. Le due molle si rimettono, o la
+           simulazione non si accorgerebbe della nuova ancora. */
+        d.ax = d.fx;
+        d.ay = d.fy;
+        d.fx = null;
+        d.fy = null;
+        this._sim.force('x', this._molla('x', this._w, this._h));
+        this._sim.force('y', this._molla('y', this._w, this._h));
         /* Si salva alzando il dito, che e' l'unico momento in cui uno spillo
            nasce o si sposta. Non si aspetta: la scrittura va su localhost e il
            gesto e' gia' finito. */

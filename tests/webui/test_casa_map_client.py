@@ -440,6 +440,10 @@ const d3 = {
     translate(x, y) { return { ...this, tx: x, ty: y }; },
     scale(k) { return { ...this, k }; },
   },
+  /* `forceX`/`forceY` ridotte a quel che il banco chiede loro: con che
+     bersaglio e con che forza sono state costruite. */
+  forceX(x) { return molla('x', x); },
+  forceY(y) { return molla('y', y); },
   /* `d3.drag()` ridotto a un registratore: tiene la soglia del click e i
      gestori, cosi' il banco puo' recitare un gesto chiamandoli. */
   drag() {
@@ -453,6 +457,12 @@ const d3 = {
     return api;
   },
 };
+
+function molla(asse, bersaglio) {
+  const f = { asse, bersaglio, forza: null };
+  f.strength = (v) => { f.forza = v; return f; };
+  return f;
+}
 
 /* Il disco, ridotto a una variabile. `letto` e' cio' che il file contiene,
    `scritture` cio' che ci finisce; `rotto` fa fallire la lettura, `mkdir` conta
@@ -478,6 +488,8 @@ function fisicaFinta() {
     diario,
     alphaTarget(v) { diario.push(['alphaTarget', v]); return sim; },
     restart() { diario.push(['restart']); return sim; },
+    molle: {},
+    force(nome, f) { sim.molle[nome] = f; diario.push(['force', nome]); return sim; },
   };
   return sim;
 }
@@ -495,6 +507,8 @@ class Mappa {
     this._sim = fisicaFinta();
     this._quaderno = quaderno;
     this._spilli = null;
+    this._w = 600;
+    this._h = 400;
   }
 __METODI__
 }
@@ -516,11 +530,13 @@ def _run_gesti(script: str) -> None:
         + "\n"
         + _const(src, "FILE_SPILLI")
         + "\n"
+        + _const(src, "FORZA_ANCORA")
+        + "\n"
         + _CAMERA.replace(
             "__METODI__",
             "\n".join(
                 "  " + _member(src, n)
-                for n in ("_onZoom", "_trascina", "_inquadra",
+                for n in ("_onZoom", "_trascina", "_inquadra", "_molla",
                           "_leggiSpilli", "_salvaSpilli")
             ),
         )
@@ -660,14 +676,16 @@ def test_the_names_are_replaced_at_every_rest() -> None:
 # ── Un pallino preso resta dove lo metti ────────────────────────────────────
 
 
-def test_a_dragged_dot_stays_where_you_put_it() -> None:
-    """**La decisione dell'utente, il 21/09/2026.** Il grafo dell'officina
-    rilasciava `fx`/`fy` all'`end`: il pallino tornava dove lo vuole la fisica, e
-    su una nuvola annodata la matassa si richiudeva appena mollata. Qui resta.
+def test_letting_go_anchors_the_dot_instead_of_nailing_it() -> None:
+    """**Il secondo pensiero dell'utente, il 21/09/2026:** «non si puo' fare in
+    modo che segua la fisica ma da quella posizione? perche' ora e' proprio
+    piantatissimo».
 
-    Lo spillo *e'* l'`end` che non rilascia. Se qualcuno lo rimettesse, il
-    trascinamento tornerebbe a servire solo a sbirciare — e il pallino ha gia'
-    un gesto che lo apre, quindi non sarebbe un motivo per metterci il dito.
+    Con `fx`/`fy` tenuti dopo il gesto il nodo usciva del tutto dalle forze: la
+    nuvola si deformava attorno a un peso morto. Mollarlo e basta pero' non e' la
+    risposta — a tirarlo indietro sono i collegamenti, e un nodo con molti fili
+    tornerebbe nella matassa. Quindi il punto dove l'hai lasciato diventa il
+    **suo** centro: tenuto col dito mentre trascini, ancorato quando alzi.
     """
     _run_gesti("""
 const m = new Mappa();
@@ -675,14 +693,56 @@ const d = { id: 'p1', x: 100, y: 100 };
 const t = m._trascina([d]);
 
 t.gestori.start({ active: 0 }, d);
-assert.deepEqual([d.fx, d.fy], [100, 100], 'il pallino non si inchioda per il gesto');
-
+assert.deepEqual([d.fx, d.fy], [100, 100], 'il pallino non si tiene sotto il dito');
 t.gestori.drag({ x: 260, y: 40 }, d);
 assert.deepEqual([d.fx, d.fy], [260, 40], 'il pallino non segue il dito');
 
 t.gestori.end({ active: 0 }, d);
-assert.deepEqual([d.fx, d.fy], [260, 40],
-  'mollando, il pallino e\\' tornato in mano alla fisica');
+assert.deepEqual([d.ax, d.ay], [260, 40], 'il punto lasciato non diventa la sua ancora');
+assert.deepEqual([d.fx, d.fy], [null, null],
+  'il pallino resta inchiodato: le forze non lo toccano piu\u2019');
+""")
+
+
+def test_the_springs_are_rebuilt_when_an_anchor_appears() -> None:
+    """**Il difetto silenzioso di questo giro.** `forceX` legge bersaglio e
+    forza una volta sola, quando entra nella simulazione: li precalcola in due
+    array. Scrivere `d.ax` dopo non lo vedrebbe nessuno.
+
+    E sarebbe silenzioso proprio perche' *sembra* funzionare: alzando il dito il
+    pallino e' gia' dove l'hai messo, e solo qualche secondo dopo la fisica se
+    lo riporterebbe via — cioe' esattamente il comportamento che questo giro
+    doveva togliere. Rimettere le forze le fa reinizializzare, ed e' la strada
+    di D3.
+    """
+    _run_gesti("""
+const m = new Mappa();
+const d = { id: 'p1', x: 1, y: 1 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.drag({ x: 300, y: 200 }, d);
+t.gestori.end({ active: 0 }, d);
+
+assert.deepEqual(Object.keys(m._sim.molle).sort(), ['x', 'y'],
+  'le molle non vengono rimesse: la nuova ancora resta invisibile alla fisica');
+assert.equal(m._sim.molle.x.bersaglio(d), 300, "la molla non punta all'ancora");
+assert.equal(m._sim.molle.x.forza(d), FORZA_ANCORA, "la molla dell'ancora e' quella debole");
+""")
+
+
+def test_a_dot_nobody_moved_is_still_pulled_to_the_middle() -> None:
+    """La molla dell'ancora e' la stessa che gia' teneva insieme la nuvola,
+    puntata altrove e piu' tesa. Un pallino mai toccato deve continuare a
+    sentire quella di prima: senza, le pagine scollegate volerebbero via e
+    mezza stanza resterebbe vuota — e' il difetto per cui quella molla esiste."""
+    _run_gesti("""
+const m = new Mappa();
+const f = m._molla('x', 600, 400);
+assert.equal(f.bersaglio({ id: 'libero' }), 300, 'un pallino libero non punta al centro');
+assert.equal(f.forza({ id: 'libero' }), 0.06, 'la molla debole ha cambiato valore');
+assert.ok(FORZA_ANCORA > 0.06,
+  "l'ancora non tira piu' del centro: il trascinamento non lascerebbe traccia");
+assert.ok(FORZA_ANCORA < 1, "un'ancora cosi' tesa e' di nuovo un chiodo");
 """)
 
 
@@ -740,7 +800,7 @@ const d = { id: 'p1', x: 1, y: 1 };
 const t = m._trascina([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
-assert.deepEqual(m._sim.diario,
+assert.deepEqual(m._sim.diario.filter((r) => r[0] === 'alphaTarget' || r[0] === 'restart'),
   [['alphaTarget', 0.3], ['restart'], ['alphaTarget', 0]],
   'la fisica non si riaccende per il gesto, o non si rispegne dopo');
 """)
@@ -754,9 +814,10 @@ def test_a_second_finger_does_not_restart_the_physics_twice() -> None:
     _run_gesti("""
 const m = new Mappa();
 const t = m._trascina([]);
-t.gestori.start({ active: 1 }, { x: 1, y: 1 });
-t.gestori.end({ active: 1 }, { x: 1, y: 1 });
-assert.deepEqual(m._sim.diario, [],
+const d = { id: 'p1', x: 1, y: 1 };
+t.gestori.start({ active: 1 }, d);
+t.gestori.end({ active: 1 }, d);
+assert.deepEqual(m._sim.diario.filter((r) => r[0] !== 'force'), [],
   'il secondo dito rimette mano alla fisica del primo');
 """)
 
@@ -829,7 +890,7 @@ letto = JSON.stringify({ piante: { 'Monstera.md': [1, 2], 'Sparita.md': [3, 4] }
 const m = new Mappa('piante');
 await m._leggiSpilli();
 // Nel disegno di oggi c'e' solo Monstera, ed e' spillata.
-const viva = { id: 'Monstera.md', x: 7, y: 8, fx: 7, fy: 8 };
+const viva = { id: 'Monstera.md', x: 7, y: 8, ax: 7, ay: 8 };
 const t = m._trascina([viva]);
 t.gestori.start({ active: 0 }, viva);
 t.gestori.end({ active: 0 }, viva);
@@ -892,7 +953,7 @@ def test_the_pins_are_applied_before_the_physics_starts() -> None:
     assert draw.index("_leggiSpilli()") < draw.index("this._render("), (
         "si disegna prima di sapere dove vanno i pallini spillati"
     )
-    assert "n.x = n.fx" in draw and "n.y = n.fy" in draw, (
-        "lo spillo fissa il nodo ma non lo mette li': la fisica partirebbe da "
-        "una posizione casuale e lo strattonerebbe a posto sotto gli occhi"
+    assert "n.ax = n.x" in draw and "n.ay = n.y" in draw, (
+        "l'ancora dice dove richiamarlo ma non da dove partire: la fisica "
+        "comincerebbe da un punto a caso e lo strattonerebbe li' sotto gli occhi"
     )
