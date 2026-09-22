@@ -141,6 +141,14 @@ export class CasaReader {
     this.barEl.hidden = false;
     this.bodyEl.hidden = true;
     this.editEl.focus();
+    /* **Dall'inizio, non dalla fine.** `focus()` su una textarea porta il
+       cursore in fondo al testo e ci trascina la vista: aperta la modifica su
+       una pagina di trenta righe ti ritrovavi in coda, lontano dal punto che
+       stavi leggendo. Visto sul Titan 2 il 22/09/2026, non da un banco.
+       L'inizio e' lo stesso posto in cui atterra il reso (`bodyEl.scrollTop =
+       0` in `load`), quindi entrare in modifica non sposta piu' niente. */
+    this.editEl.setSelectionRange(0, 0);
+    this.editEl.scrollTop = 0;
     this.onEditing?.();
     return true;
   }

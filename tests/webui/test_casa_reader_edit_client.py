@@ -62,7 +62,14 @@ const rpc = {
 const i18n = { t: (k) => k };
 function showToast(m, t) { toast.push([m, t]); }
 function confirmDialog() { return Promise.resolve(risposta); }
-function elemento() { return { value: '', hidden: true, focus() {}, blur() {} }; }
+function elemento() {
+  return {
+    value: '', hidden: true, scrollTop: 999, caret: null,
+    focus() { this.caret = [this.value.length, this.value.length]; },
+    blur() {},
+    setSelectionRange(a, b) { this.caret = [a, b]; },
+  };
+}
 
 class Lettore {
   constructor() {
@@ -114,6 +121,23 @@ def test_the_base_sent_is_the_loaded_source_not_the_edited_text() -> None:
       assert.equal(spedite[0].content, '# Orto\\n\\nlegare a maggio\\n');
       assert.equal(spedite[0].wiki, 'orto');
       assert.equal(spedite[0].page, 'index.md');
+    """)
+
+
+def test_the_editor_opens_at_the_top_not_at_the_end() -> None:
+    """`focus()` porta il cursore in fondo, e ci trascina la vista.
+
+    Su una pagina di trenta righe aprire la modifica ti lasciava in coda,
+    lontano dal punto che stavi leggendo — e il pulsante lo premi proprio
+    perche' stai guardando qualcosa. L'inizio e' dove atterra anche il reso.
+    Visto sul telefono, non da qui: questo banco tiene il risultato.
+    """
+    _run("""
+      const r = new Lettore();
+      r.raw = 'un testo lungo abbastanza da poter scorrere';
+      r.startEdit();
+      assert.deepEqual(r.editEl.caret, [0, 0]);
+      assert.equal(r.editEl.scrollTop, 0);
     """)
 
 
