@@ -124,8 +124,12 @@ async def test_the_cap_travels_with_the_list(env) -> None:
     """
     corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
     assert corpo["max"] == MAX_SCHERMATE
+    # Due, non le tre della tavola. Il cassetto non c'e' perche' si tira su;
+    # una conversazione perche' la chat in casa e' una sola e una pagina del
+    # genere non avrebbe contenuto proprio (deciso il 22 settembre 2026).
     assert "drawer" not in corpo["specie"]
-    assert set(corpo["specie"]) == {"app", "stanza", "conversazione"}
+    assert "conversazione" not in corpo["specie"]
+    assert set(corpo["specie"]) == {"app", "stanza"}
 
 
 # ── La scrittura ────────────────────────────────────────────────────────────

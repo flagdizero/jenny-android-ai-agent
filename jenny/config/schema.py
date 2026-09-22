@@ -483,10 +483,22 @@ class ProvidersConfig(Base):
 
 # ── Le pagine della casa ────────────────────────────────────────────────────
 
-#: Di che specie puo' essere una pagina. L'elenco e' quello della tavola
-#: `PagineGestione`, e **il cassetto delle app non c'e'**: «ce l'hai gia'
-#: tirando su. Due porte per la stessa cosa sono una di troppo».
-SPECIE_SCHERMATA = ("app", "stanza", "conversazione")
+#: Di che specie puo' essere una pagina.
+#:
+#: La tavola `PagineGestione` ne disegna tre e qui ce ne sono due. Le assenze
+#: sono decise, non dimenticate:
+#:
+#: * **il cassetto delle app** — «ce l'hai gia' tirando su. Due porte per la
+#:   stessa cosa sono una di troppo» (la tavola stessa);
+#: * **una conversazione** — la chat in casa e' **una sola**: un filo, un campo
+#:   di scrittura, un collegamento. Una pagina del genere non avrebbe contenuto
+#:   proprio, potrebbe solo far cambiare conversazione a quella che c'e' gia'.
+#:   Deciso il 22/09/2026: non si fa, invece di farla a meta'.
+#:
+#: Stanno qui e non solo nel client perche' cosi' la regola vale anche per un
+#: `config.json` scritto a mano: una pagina che il prodotto non sa disegnare
+#: non deve poter esistere nel file.
+SPECIE_SCHERMATA = ("app", "stanza")
 
 #: Quante se ne possono aggiungere, oltre alla chat. Non e' una limitazione
 #: tecnica: oltre questa soglia i pallini non si leggono piu' e attraversarle

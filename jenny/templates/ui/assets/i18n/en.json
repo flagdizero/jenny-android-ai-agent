@@ -1096,18 +1096,15 @@
       "indietro": "Back",
       "specie": {
         "app": "one of your Jenny Apps",
-        "stanza": "a room of the home",
-        "conversazione": "a conversation"
+        "stanza": "a room of the home"
       },
       "scegli": {
         "app": "A Jenny App",
-        "stanza": "A room of the home",
-        "conversazione": "A conversation"
+        "stanza": "A room of the home"
       },
       "niente": {
         "app": "You have no Jenny Apps to put on a page.",
-        "stanza": "No rooms available.",
-        "conversazione": "You have no conversations other than this one."
+        "stanza": "No rooms available."
       },
       "notaCassetto": "The app drawer is not listed: you already have it by pulling up. Two doors to the same room are one too many.",
       "notaViva": "Only the page you are looking at stays alive: the others are shut down, or you pay for them in battery."

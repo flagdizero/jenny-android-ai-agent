@@ -56,7 +56,7 @@ const STANZE = ['tu', 'jenny', 'model', 'updates', 'backup'];
 /** Un'icona per specie. Non quella dell'app: per averla servirebbe l'elenco
  *  caricato, e un foglio che aspetta la rete per disegnare una riga e' un
  *  foglio che a volte non si apre. */
-const ICONE = { app: 'ti-apps', stanza: 'ti-home', conversazione: 'ti-message-circle' };
+const ICONE = { app: 'ti-apps', stanza: 'ti-home' };
 
 export class CasaPagine {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
@@ -405,7 +405,7 @@ Object.assign(CasaPagine.prototype, {
     domanda.textContent = i18n.t('casa.foglio.vuota', { n: this.schermate.length + 1 });
     const scelte = document.createElement('div');
     scelte.className = 'casa-foglio-scelte';
-    for (const kind of ['app', 'stanza', 'conversazione']) {
+    for (const kind of ['app', 'stanza']) {
       scelte.appendChild(this._scelta(kind));
     }
     box.append(domanda, scelte);
@@ -474,20 +474,16 @@ Object.assign(CasaPagine.prototype, {
     if (kind === 'stanza') {
       return STANZE.map((ref) => ({ ref, nome: i18n.t(`casa.${ref}.title`) }));
     }
-    if (kind === 'app') {
-      const fonte = this.app?.appsSource?.();
-      await fonte?.ensureLoaded?.();
-      /* Un'app rotta non si puo' appendere: `openApp` per quelle chiede
-         conferma e propone la riparazione in chat, e una pagina fissa rotta e'
-         un'altra cosa — resterebbe li' a non funzionare tutti i giorni.
-         Un'app **esterna** apre un indirizzo che il guscio non controlla:
-         incastonarla in una pagina fissa e' una decisione a se'. */
-      return (fonte?.jennyApps || [])
-        .filter((a) => !a.broken && a.view_kind !== 'external')
-        .map((a) => ({ ref: a.slug, nome: a.name || a.slug }));
-    }
-    const progetti = await api.listProjects();
-    return (progetti || []).map((pr) => ({ ref: pr.name, nome: pr.name }));
+    const fonte = this.app?.appsSource?.();
+    await fonte?.ensureLoaded?.();
+    /* Un'app rotta non si puo' appendere: `openApp` per quelle chiede
+       conferma e propone la riparazione in chat, e una pagina fissa rotta e'
+       un'altra cosa — resterebbe li' a non funzionare tutti i giorni.
+       Un'app **esterna** apre un indirizzo che il guscio non controlla:
+       incastonarla in una pagina fissa e' una decisione a se'. */
+    return (fonte?.jennyApps || [])
+      .filter((a) => !a.broken && a.view_kind !== 'external')
+      .map((a) => ({ ref: a.slug, nome: a.name || a.slug }));
   },
 
   /** Come si chiama una pagina, per l'intestazione e per il foglio.

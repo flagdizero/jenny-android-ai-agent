@@ -596,13 +596,20 @@ def test_the_sheet_lists_the_pages_and_offers_the_next_one() -> None:
     )
 
 
-def test_the_three_choices_are_the_boards_three() -> None:
-    """E il cassetto non e' fra queste: ce l'hai gia' tirando su."""
+def test_the_choices_are_two_and_the_missing_ones_are_decided() -> None:
+    """La tavola ne disegna tre; qui sono due, e le assenze hanno un motivo.
+
+    Il **cassetto** ce l'hai gia' tirando su — lo dice la tavola stessa. Una
+    **conversazione** no perche' la chat in casa e' una sola: un filo, un campo
+    di scrittura, un collegamento. Una pagina cosi' non avrebbe contenuto
+    proprio, potrebbe solo far cambiare conversazione a quella che c'e' gia'
+    — e cambiarla e' gia' un tocco sul titolo.
+    """
     _run(
         "await tieniPremuto();\n"
         "const libera = elenco.children.find((c) => c.className === 'casa-foglio-libera');\n"
         "const scelte = libera.children[1].children.map((b) => b.dataset.kind);\n"
-        "assert.deepEqual(scelte, ['app', 'stanza', 'conversazione']);",
+        "assert.deepEqual(scelte, ['app', 'stanza']);",
         schermate=UNA,
     )
 

@@ -464,16 +464,27 @@ in un velo a tutto schermo» — e la casa usa la prima. La cornice si costruisc
 **solo per la pagina corrente** e si smonta uscendo (regola della tavola). Il
 tema non obbliga a ricostruire (Parte 0).
 
-**2) `stanza` — una stanza della casa.** Il riparentamento e la seconda via nel
+**2) `stanza` — una stanza della casa. ✅ Fatto il 22/09/2026.** Il riparentamento e la seconda via nel
 CSS di B2. Esempio della tavola: Quaderni.
 
-**3) `conversazione`.** La più economica in pixel e la più insidiosa: **non è
-contenuto nuovo**, è la stessa chat riagganciata a un'altra chiave
-(`switchTo`). Quindi una pagina `conversazione` che diventa corrente cambia
-conversazione, esattamente come in officina passare da un cassetto all'altro
-ridisegna la stessa vista (A2 — stessa forma, due volte). Da guardare: il
-composer, il riaggancio del filo, e il fatto che la pagina 0 **è** già una
-conversazione.
+**3) `conversazione`. ❌ Non si fa — decisione dell'utente, 22/09/2026.**
+
+Le altre due specie hanno contenuto proprio: un'app e' una cornice sua, una
+stanza e' un elemento suo. Una conversazione no: **la chat in casa e' una
+sola** — un filo, un campo di scrittura, un collegamento — quindi una pagina
+del genere non avrebbe niente da mostrare e potrebbe solo far cambiare
+conversazione a quella che c'e' gia'.
+
+Le strade erano quattro, tutte con un prezzo visibile: far sparire la pagina a
+meta' scorrimento (la chat che si sposta), rimbalzare indietro dopo averci
+scorso sopra, costruire una **seconda chat** vera (una funzione, non una specie
+di pagina), o farne una **porta**: una scheda col nome del quaderno che al
+tocco ci entra e riporta alla pagina 0.
+
+L'utente ha scelto di non farne niente per ora. La specie e' uscita **anche
+dallo schema**, non solo dal foglio: una pagina che il prodotto non sa
+disegnare non deve poter esistere nemmeno in un `config.json` scritto a mano —
+stessa regola del cassetto.
 
 ### B6. Prova sul telefono
 
