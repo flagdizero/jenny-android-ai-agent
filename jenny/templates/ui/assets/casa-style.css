@@ -1019,6 +1019,14 @@ body.casa {
 .casa-pista {
   flex: 1;
   min-height: 0;
+  /* `min-width: 0` non e' decorazione. La pista e' un elemento flessibile
+     della vetrina, e senza questa riga la sua larghezza minima e' quella del
+     suo contenuto: una parola che non va a capo in un messaggio — un percorso
+     `entities/...` lungo, in un quaderno — la allargava oltre lo schermo, e
+     con lei **ogni** pagina, che e' larga il 100% della pista. Visto sul
+     telefono il 23/09/2026 aprendo «piante»: chat tagliata a destra, tasto
+     d'invio fuori schermo, sulla pagina 0 come sulla pagina del quaderno. */
+  min-width: 0;
   display: flex;
   flex-direction: row;
 }

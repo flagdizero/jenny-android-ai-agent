@@ -17,6 +17,7 @@ memoria.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import textwrap
@@ -1478,4 +1479,25 @@ def test_a_pinned_notebook_that_is_gone_says_so_in_the_sheet() -> None:
         "assert.ok(riga.classList.contains('casa-foglio-sparita'));\n"
         "assert.equal(riga.querySelector('.casa-foglio-specie').textContent, 'casa.foglio.sparito');\n",
         sparita,
+    )
+
+
+def test_a_word_that_does_not_wrap_cannot_widen_every_page() -> None:
+    """**Trovato sul telefono il 23/09/2026**, aprendo il quaderno «piante».
+
+    La pista e' un elemento flessibile della vetrina, e senza `min-width: 0` la
+    sua larghezza minima e' quella del suo contenuto: un percorso lungo in un
+    messaggio (`entities/...`) la allargava oltre lo schermo, e con lei ogni
+    pagina, che e' larga il 100% della pista. Chat tagliata a destra, tasto
+    d'invio fuori schermo — sulla pagina 0 come su quella del quaderno.
+    Provato con una build che cambiava solo questa riga: sistemato tutto.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    pista = css.split(".casa-pista {", 1)[1].split("}", 1)[0]
+    # La dichiarazione, non la parola: il commento sopra la nomina, e un
+    # `in` sul testo del blocco era verde anche togliendo la riga — l'ha detto
+    # la mutazione.
+    assert re.search(r"^\s*min-width:\s*0\s*;", pista, re.M), (
+        "la pista ha perso `min-width: 0`: una parola che non va a capo "
+        "allarga di nuovo tutte le pagine oltre lo schermo"
     )

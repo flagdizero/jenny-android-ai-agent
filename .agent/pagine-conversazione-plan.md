@@ -256,3 +256,62 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
    lo stesso quaderno *può* stare in due posti — la pagina 0 e la sua — e il
    disegno lo regge: arrivare su una pagina la cui conversazione è già quella
    a schermo sposta la chat senza cambiarla.
+
+---
+
+## Stato (23/09/2026)
+
+- [x] **C0** — piegato dentro C7: `screencap` impiega mezzo secondo, troppo
+  grosso per misurare una lettura sotto il secondo. Il tetto parte da 600 ms e
+  si guarda col dito.
+  Lo scroll perso spostando la chat nel DOM **non** si è misurato ma si è
+  chiuso per costruzione: `inFondo` è `scrollToBottom()` e non `keepBottom()`,
+  perché quest'ultimo segue il fondo solo «se ci si era» e uno scroll azzerato
+  può fargli credere che l'utente sia risalito.
+- [x] **C1** — schema (`_quaderno_valido`, regola di `session/keys.py`),
+  rotte, `docs/reference/configuration.md` (che diceva ancora «tira su dai
+  pallini» per il cassetto: corretto).
+- [x] **C2** — il foglio: terza scelta, quaderni apribili dal più recente, fuori
+  i già fissati.
+- [x] **C3** — `#casa-chat` avvolge la chat; `casa-trasloco.js` la sposta.
+- [x] **C4** — la foto e l'arrivo; l'invariante vive in
+  `CasaPagine.apriConversazione`, e `switchConversation` del guscio passa di lì
+  (il corpo di prima è `mostraConversazione`).
+- [x] **C5** — l'intestazione di una chat sulla pagina di un quaderno.
+- [x] **C6** — il quaderno sparito, detto nel foglio.
+- [x] **C7** — prova sul telefono, 23/09/2026 notte. Verificato col dito:
+  - il foglio offre «A notebook», i quaderni dal più recente, e la pagina nasce
+    col nome del quaderno e «a notebook's chat» nella riga;
+  - l'intestazione sulla pagina è quella di una chat (occhiello, nome, «31
+    pages»), senza «Torna alla chat» e senza chevron;
+  - **a metà trascinamento** dall'app verso il quaderno entra la foto di
+    «piante» coi suoi messaggi, mentre la chat vera era sulla pagina 0 con la
+    personale; all'arrivo foto e chat vera hanno gli stessi messaggi negli
+    stessi punti — il passaggio non si vede;
+  - Indietro e Home dalla pagina del quaderno → pagina 0, personale;
+  - togliere la pagina del quaderno **mentre ci si è sopra** riporta la chat
+    intera nella pagina 0 (il ramo `riportaACasa`, provato dal vero);
+  - le pagine dell'utente rimesse com'erano, confrontate col `config.json`
+    salvato prima.
+
+**Trovato sul telefono, non nel piano:** in un quaderno con una parola che non
+va a capo (`entities/Pothos.md`) **tutte** le pagine si allargavano oltre lo
+schermo, tasto d'invio compreso — anche aprendo il quaderno dal titolo della
+pagina 0, quindi non era il trasloco. La pista, elemento flessibile della
+vetrina, non aveva `min-width: 0`: la sua larghezza minima era quella del
+contenuto. Provato con una build che cambiava **solo** quella riga, ed era
+quella. Il difetto c'era dal giorno della pista (B2); lo ha fatto vedere il
+primo quaderno con un percorso lungo dentro.
+
+**Trovato per strada:** ridisegnare le pagine buttava via una stanza prestata
+insieme al suo pannello. Il finto del banco lo nascondeva — prestava la stanza
+anche da un pannello staccato — e adesso si comporta come `getElementById`.
+
+**Home da una pagina di lato** ora torna alla pagina 0. È una conseguenza
+dell'invariante (Home chiede la personale, e una pagina quaderno non può
+mostrarla), ed è anche quel che fa ogni launcher.
+
+Banchi: `test_casa_trasloco_client.py` (18, diciannove mutazioni tutte rosse),
+più le aggiunte a `test_casa_pista_client.py`, `test_casa_switch_client.py` e
+`test_casa_schermate_routes.py` — ognuna provata rossa mutando il codice che
+difende.
