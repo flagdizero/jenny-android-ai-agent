@@ -122,7 +122,13 @@ globalThis.document = {
   documentElement: creaEl('html', ''),
   body: creaEl('body'),
 };
-globalThis.window = { innerWidth: 400 };
+/* La finestra ascolta davvero: da qui passano i gesti raccontati da dentro
+   una Jenny App, che la pista non la tocca mai. */
+globalThis.window = {
+  innerWidth: 400,
+  ascolto: {},
+  addEventListener(t, fn) { (this.ascolto[t] = this.ascolto[t] || []).push(fn); },
+};
 globalThis.getComputedStyle = () => ({ overflowX: 'visible' });
 
 /* Un gesto completo sulla pista. `verso` +1 = dito a destra (pagina
@@ -148,6 +154,31 @@ function tiraSu(su, { obliquo = 0 } = {}) {
   lancia(striscia, 'touchend', {
     changedTouches: [{ clientX: 200 + obliquo, clientY: 500 - su }],
   });
+}
+/* Il gesto **raccontato da dentro una app**: quel che il kit
+   (`apps/jenny-sdk.js`) manda al guscio dalla sua feritoia. Qui non c'e'
+   nessun dito, ed e' tutto il punto: la pagina di una app e' tutta l'app, e
+   il dito che la tocca al guscio non ci arriva mai. */
+function daApp(dettaglio, { sorgente } = {}) {
+  const e = { data: { type: 'jenny:gesto', slug: 'orto', ...dettaglio }, source: sorgente };
+  for (const fn of window.ascolto.message || []) fn(e);
+}
+/* La sorgente buona: la finestra della cornice che si sta guardando. */
+function finestraViva() {
+  const pannello = pista.children.filter((c) => c.dataset?.id)[pagine.indice - 1];
+  return pannello && pannello.children[0] && pannello.children[0].contentWindow;
+}
+function scorriDaApp(verso, { corto = false, sorgente } = {}) {
+  const dx = verso * (corto ? 20 : 200);
+  const da = { sorgente: sorgente === undefined ? finestraViva() : sorgente };
+  daApp({ fase: 'inizio' }, da);
+  daApp({ fase: 'muove', dx }, da);
+  daApp({
+    fase: 'fine',
+    verso: dx > 0 ? 'prev' : 'next',
+    // soglia = max(60, 400*0.22) = 88, come la calcola il modulo condiviso
+    conferma: Math.abs(dx) > 88,
+  }, da);
 }
 const DESTRA = +1;
 const SINISTRA = -1;
@@ -227,6 +258,9 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
             "export function cornicePerApp(slug) {\n"
             "  const f = document.createElement('iframe');\n"
             "  f.dataset.slug = slug;\n"
+            # La feritoia: il guscio riconosce chi parla confrontando
+            # **questa**, e senza il banco non vedrebbe la guardia.
+            "  f.contentWindow = { app: slug };\n"
             "  return f;\n"
             "}\n",
             encoding="utf-8",
@@ -950,3 +984,136 @@ def test_a_tap_outside_closes_the_pages_sheet() -> None:
     src = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
     apri = src.split("apriFoglio() {", 1)[1].split("\n  },", 1)[0]
     assert "getBoundingClientRect" in apri and "chiudiFoglio" in apri
+
+
+# ── Il gesto che arriva da dentro una app ───────────────────────────────────
+#
+# La pagina di una Jenny App e' **tutta** l'app, intestazione compresa: il dito
+# che la tocca al guscio non ci arriva mai, e lo scorrimento fra pagine — che
+# ovunque altro nella casa funziona — li' dentro non esisteva. Misurato sul
+# telefono il 22/09/2026: in nessuna delle due direzioni, non solo in una.
+#
+# Da allora il gesto lo riconosce la app (solo li' dentro si vede il suo DOM, e
+# quindi si puo' cedere il gesto a una sua tabella larga) e lo **decide** il
+# guscio (solo lui sa se una pagina di fianco c'e'). Quel che segue prova la
+# meta' del guscio: che dia retta a chi deve, e a nessun altro.
+
+
+def test_a_gesture_forwarded_from_an_app_page_changes_page() -> None:
+    """Il dito e' dentro l'app, la pista si muove lo stesso."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.ok(finestraViva(), 'la cornice non ha una finestra');\n"
+        "scorriDaApp(DESTRA);\n"
+        "assert.equal(pagine.indice, 0, 'da dentro l app non si torna alla chat');\n",
+        UNA,
+    )
+
+
+def test_a_short_forwarded_gesture_stays_put() -> None:
+    """Sotto la soglia si torna dov'eri: la soglia la calcola la app, col suo
+    schermo, ed e' la stessa del modulo condiviso."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "scorriDaApp(DESTRA, { corto: true });\n"
+        "assert.equal(pagine.indice, 1);\n",
+        UNA,
+    )
+
+
+def test_only_the_page_you_are_looking_at_may_move_the_track() -> None:
+    """Chi parla si riconosce dalla finestra, non dal fatto che parli.
+
+    Quel che arriva da un frame e' scritto da codice dell'app: senza questa
+    guardia, qualunque cosa sappia fare `postMessage` muoverebbe la casa.
+    """
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "scorriDaApp(DESTRA, { sorgente: { app: 'qualcun-altro' } });\n"
+        "assert.equal(pagine.indice, 1, 'una finestra estranea ha mosso la pista');\n",
+        UNA,
+    )
+
+
+def test_a_page_that_is_not_an_app_has_no_window_to_listen_to() -> None:
+    """Una stanza e' un elemento del guscio: una `contentWindow` non ce l'ha.
+
+    **La sorgente e' `null`, non `undefined`, e la differenza e' tutto il
+    banco.** `MessageEvent.source` e' nullabile per specifica, e su una pagina
+    che non e' una app anche la finestra cercata e' `null`: confrontarle senza
+    chiedersi prima se la finestra esiste vuol dire `null !== null`, cioe'
+    falso, cioe' passa. Scritto la prima volta con `undefined` il banco era
+    verde anche togliendo la guardia — l'ha detto la mutazione, non la
+    rilettura (22/09/2026).
+    """
+    _run(
+        "pagine.vaiA(2);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "scorriDaApp(DESTRA, { sorgente: null });\n"
+        "assert.equal(pagine.indice, 2, 'un messaggio senza sorgente ha mosso la pista');\n",
+        DUE,
+    )
+
+
+def test_the_shell_decides_at_every_gesture_whether_it_can_move() -> None:
+    """Fra un gesto e l'altro il cassetto puo' aprirsi, e allora il gesto e' suo.
+
+    La app non lo sa e non puo' saperlo: se la risposta se la portasse dietro
+    dalla costruzione del frame, sarebbe quella di allora e non quella di
+    adesso.
+    """
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "app.launcher.isOpen = () => true;\n"
+        "scorriDaApp(DESTRA);\n"
+        "assert.equal(pagine.indice, 1, 'col cassetto aperto la pista si e mossa');\n"
+        "app.launcher.isOpen = () => false;\n"
+        "scorriDaApp(DESTRA);\n"
+        "assert.equal(pagine.indice, 0, 'chiuso il cassetto, il gesto non torna');\n",
+        UNA,
+    )
+
+
+def test_a_forwarded_drag_without_its_start_moves_nothing() -> None:
+    """Un `muove` orfano userebbe una larghezza mai misurata."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "pista.style.transform = 'segno';\n"
+        "daApp({ fase: 'muove', dx: 120 }, { sorgente: finestraViva() });\n"
+        "assert.equal(pista.style.transform, 'segno', 'un muove orfano ha mosso la pista');\n",
+        UNA,
+    )
+
+
+def test_a_broken_number_never_reaches_the_track() -> None:
+    """`translateX(NaN)` e la pista sparisce — e i numeri li scrive l'app."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "const da = { sorgente: finestraViva() };\n"
+        "daApp({ fase: 'inizio' }, da);\n"
+        "pista.style.transform = 'segno';\n"
+        "daApp({ fase: 'muove', dx: 'boh' }, da);\n"
+        "assert.equal(pista.style.transform, 'segno', 'un dx non numerico e passato');\n",
+        UNA,
+    )
+
+
+def test_a_cancelled_forwarded_gesture_snaps_back() -> None:
+    """Il sistema si riprende il gesto a meta': la pagina resta quella."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "const da = { sorgente: finestraViva() };\n"
+        "daApp({ fase: 'inizio' }, da);\n"
+        "daApp({ fase: 'muove', dx: 150 }, da);\n"
+        "daApp({ fase: 'annulla' }, da);\n"
+        "assert.equal(pagine.indice, 1);\n"
+        "assert.equal(pista.style.transform, 'translateX(-100%)', 'non e tornata a posto');\n",
+        UNA,
+    )

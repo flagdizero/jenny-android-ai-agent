@@ -33,9 +33,17 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 MODULO = ASSETS / "shared" / "gesto-orizzontale.js"
 
+# `apps/` e' nell'elenco dal 22/09/2026: da quel giorno il kit che ogni Jenny
+# App carica e' anche lui un consumatore del gesto — dentro una app il dito non
+# arriva al guscio, e il riconoscimento tocca farlo li'. E' il posto piu'
+# probabile in cui un domani comparirebbe una seconda copia.
 SORGENTI = sorted(
-    [p for p in ASSETS.glob("*.js")] + [p for p in (ASSETS / "shared").glob("*.js")]
+    [p for p in ASSETS.glob("*.js")]
+    + [p for p in (ASSETS / "shared").glob("*.js")]
+    + [p for p in (ASSETS / "apps").glob("*.js")]
 )
+
+SDK = ASSETS / "apps" / "jenny-sdk.js"
 
 
 def test_only_the_shared_module_listens_to_touchmove() -> None:
@@ -90,3 +98,34 @@ def test_the_module_does_not_know_what_it_moves() -> None:
     assert not trovati, (
         f"il modulo condiviso nomina {trovati}: sa cosa muove, e non deve."
     )
+
+
+def test_the_app_kit_borrows_the_gesture_instead_of_writing_one() -> None:
+    """Dentro una app il dito non arriva al guscio, quindi il gesto si fa li'.
+
+    Ed e' esattamente il posto in cui una seconda copia sarebbe comoda: il kit
+    e' un file classico — le app lo caricano con `<script src>` e trasformarlo
+    in modulo le romperebbe tutte — quindi la strada corta sarebbe ricopiarci
+    dentro le tre soglie. L'import dinamico e' la strada lunga, ed e' quella
+    che tiene le soglie in un posto solo.
+    """
+    src = SDK.read_text(encoding="utf-8")
+    assert "import('/html-mobile/assets/shared/gesto-orizzontale.js')" in src, (
+        "il kit delle app non importa piu' il modulo condiviso: se il gesto "
+        "ora se lo scrive da solo, le soglie misurate sono diventate due."
+    )
+    assert "osservaGestoOrizzontale" in src
+
+
+def test_the_app_kit_only_tells_what_the_finger_did() -> None:
+    """Il kit racconta, il guscio decide.
+
+    Dentro una app non si puo' sapere se una pagina di fianco c'e' — e neanche
+    se il cassetto e' aperto. Il giorno che il kit provasse a deciderlo, la
+    risposta sarebbe quella di quando il frame e' stato costruito, non quella
+    di adesso.
+    """
+    src = SDK.read_text(encoding="utf-8")
+    for fase in ("'inizio'", "'muove'", "'fine'", "'annulla'"):
+        assert f"fase: {fase}" in src, f"il kit non manda piu' la fase {fase}"
+    assert "jenny:gesto" in src

@@ -182,10 +182,7 @@ export class CasaPagine {
    */
   _accendiSolo(indice) {
     if (!this.pista) return;
-    const pannelli = this.pista.children.filter
-      ? this.pista.children.filter((c) => c.dataset?.id)
-      : [...this.pista.querySelectorAll('.casa-pagina[data-id]')];
-    pannelli.forEach((pannello, i) => {
+    this._pannelli().forEach((pannello, i) => {
       const suo = i + 1 === indice;
       if (suo) this._riempi(pannello);
       else this._svuota(pannello);
@@ -252,28 +249,50 @@ export class CasaPagine {
     pannello.dataset.pieno = '';
   }
 
-  _armaGesto() {
+  /** I pannelli aggiunti, in ordine. Il pannello della chat non c'e': non ha
+   *  `data-id` e non e' una `schermata`. */
+  _pannelli() {
+    if (!this.pista) return [];
+    return this.pista.children.filter
+      ? this.pista.children.filter((c) => c.dataset?.id)
+      : [...this.pista.querySelectorAll('.casa-pagina[data-id]')];
+  }
+
+  /** Le guardie del guscio: si puo' cambiare pagina adesso?
+   *
+   *  Stanno in un posto solo perche' adesso le strade che ci arrivano sono
+   *  due — il dito sulla pista e il dito dentro una app — e una seconda copia
+   *  divergerebbe al primo caso particolare.
+   */
+  _puoScorrere() {
+    // Fuori dalla chat comandano le stanze, non le pagine.
+    if (this.app?.view && this.app.view !== 'chat') return false;
+    // Un cassetto aperto possiede il proprio gesto.
+    if (this.app?.launcher?.isOpen?.()) return false;
+    // Con la sola chat non c'e' nessun posto dove andare, e un elastico che
+    // risponde a vuoto sembra un difetto invece che un confine.
+    if (this.quante < 2) return false;
+    return true;
+  }
+
+  /** La risposta visiva al gesto, staccata da chi lo riconosce.
+   *
+   *  Due strade la percorrono: il dito **sulla pista**, e il dito **dentro
+   *  una app** — che la pista non la tocca mai e parla da dietro la feritoia.
+   *  La larghezza si misura all'inizio di ogni gesto e non a ogni movimento:
+   *  leggerla in mezzo a un trascinamento costa un ricalcolo di layout per
+   *  frame.
+   */
+  _risposta() {
     let larghezzaPista = 0;
-
-    this._staccaGesto = osservaGestoOrizzontale(this.pista, {
-      puoIniziare: () => {
-        // Guardia: fuori dalla chat comandano le stanze, non le pagine.
-        if (this.app?.view && this.app.view !== 'chat') return false;
-        // Guardia: un cassetto aperto possiede il proprio gesto.
-        if (this.app?.launcher?.isOpen?.()) return false;
-        // Con la sola chat non c'e' nessun posto dove andare, e un elastico
-        // che risponde a vuoto sembra un difetto invece che un confine.
-        if (this.quante < 2) return false;
+    return {
+      inizio: () => {
         larghezzaPista = this.pista.clientWidth || window.innerWidth;
-        return true;
-      },
-
-      onOrizzontale: () => {
         this.pista.style.transition = 'none';
         this.pista.style.willChange = 'transform';
       },
 
-      onTrascina: (dx) => {
+      trascina: (dx) => {
         /* Ai due capi il dito tira, ma di meno: la pista non si richiude in
            cerchio come le linguette dell'officina. Li' le voci sono quattro e
            note; qui quante siano lo decide l'utente, e girando in tondo fra
@@ -288,16 +307,110 @@ export class CasaPagine {
         this.pista.style.transform = `translateX(${(base + scostamento).toFixed(2)}px)`;
       },
 
-      onFine: ({ verso, conferma }) => {
+      fine: ({ verso, conferma }) => {
         this.pista.style.willChange = '';
         const passo = conferma ? (verso === 'prev' ? -1 : +1) : 0;
         this.vaiA(this.indice + passo);
       },
 
-      onAnnulla: () => {
+      annulla: () => {
         this.pista.style.willChange = '';
         this.vaiA(this.indice);
       },
+    };
+  }
+
+  _armaGesto() {
+    const risposta = this._risposta();
+
+    this._staccaGesto = osservaGestoOrizzontale(this.pista, {
+      puoIniziare: () => this._puoScorrere(),
+      onOrizzontale: risposta.inizio,
+      onTrascina: risposta.trascina,
+      onFine: risposta.fine,
+      onAnnulla: risposta.annulla,
+    });
+
+    this._ascoltaGestoDaApp(risposta);
+  }
+
+  /** La finestra della pagina che si sta guardando, se e' una app.
+   *
+   *  Serve a una cosa sola: **riconoscere chi parla**. Solo la pagina corrente
+   *  e' viva (v. `_accendiSolo`), quindi questa e' l'unica finestra da cui un
+   *  gesto possa arrivare davvero.
+   *
+   *  Non c'e' nessun controllo sulla specie della pagina, e non e' una
+   *  dimenticanza: una stanza e' un elemento del guscio e una `contentWindow`
+   *  non ce l'ha. Dirlo due volte vorrebbe dire due regole da tenere d'accordo.
+   */
+  _finestraPagina() {
+    if (this.indice === 0) return null;
+    const pannello = this._pannelli()[this.indice - 1];
+    const cornice = pannello && (pannello.children[0] || pannello.firstElementChild);
+    return cornice?.contentWindow || null;
+  }
+
+  /** Il gesto che arriva da **dentro** una app.
+   *
+   *  La pagina di una app e' tutta l'app, intestazione compresa: il dito che
+   *  la tocca non arriva mai al guscio, e lo scorrimento fra pagine — che
+   *  ovunque altro funziona — li' dentro non esisteva. Misurato sul telefono
+   *  il 22/09/2026: **in nessuna delle due direzioni**, non solo in una.
+   *
+   *  Il riconoscimento lo fa la app, perche' solo li' dentro si vede il DOM
+   *  della app e quindi si puo' dire che il gesto appartiene a un suo
+   *  scorrevole orizzontale. **Cosa farne lo decide il guscio**, perche' solo
+   *  lui sa se una pagina di fianco c'e' — e lo decide a ogni `inizio`, non
+   *  una volta per sempre: fra un gesto e l'altro il cassetto puo' aprirsi.
+   *
+   *  Vive qui e non in `apps-actions.js` perche' le cornici delle pagine sono
+   *  di questo file: solo qui si puo' dire se chi parla e' la pagina che si
+   *  sta guardando. `_onAppMessage` la scarta gia' — guarda solo la app
+   *  aperta sopra tutto — e allargare quella guardia vorrebbe dire due
+   *  proprietari per la stessa cornice.
+   *
+   *  **Tutto quel che arriva e' dell'app, cioe' non e' fidato**: la sorgente
+   *  si confronta con la cornice viva, e i numeri si ripassano. Un `dx` che
+   *  non e' un numero scriverebbe `translateX(NaN)` e la pista sparirebbe.
+   */
+  _ascoltaGestoDaApp(risposta) {
+    let nostro = false;
+    window.addEventListener?.('message', (e) => {
+      const msg = e?.data;
+      if (!msg || typeof msg !== 'object' || msg.type !== 'jenny:gesto') return;
+      /* `!finestra` **prima** del confronto, e non e' ridondante: su una
+         pagina che non e' una app qui c'e' `null`, e `MessageEvent.source` e'
+         nullabile per specifica. Senza, un messaggio con sorgente nulla si
+         confronterebbe `null !== null`, cioe' falso, cioe' passerebbe — e
+         muoverebbe la pista chiunque. L'ha detto la mutazione, non la
+         rilettura (22/09/2026). */
+      const finestra = this._finestraPagina();
+      if (!finestra || e.source !== finestra) return;
+
+      if (msg.fase === 'inizio') {
+        nostro = this._puoScorrere();
+        if (nostro) risposta.inizio();
+        return;
+      }
+      /* Senza questa, un `muove` che arrivasse senza il suo `inizio` —
+         perche' rifiutato, o perche' la pagina e' cambiata in mezzo —
+         muoverebbe la pista su una larghezza mai misurata. */
+      if (!nostro) return;
+
+      if (msg.fase === 'muove') {
+        const dx = Number(msg.dx);
+        if (Number.isFinite(dx)) risposta.trascina(dx);
+      } else if (msg.fase === 'fine') {
+        nostro = false;
+        risposta.fine({
+          verso: msg.verso === 'prev' ? 'prev' : 'next',
+          conferma: msg.conferma === true,
+        });
+      } else if (msg.fase === 'annulla') {
+        nostro = false;
+        risposta.annulla();
+      }
     });
   }
 }

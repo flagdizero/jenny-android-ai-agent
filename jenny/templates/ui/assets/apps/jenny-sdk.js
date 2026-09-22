@@ -227,6 +227,46 @@
     }
   });
 
+  /* ── Lo scorrimento fra le pagine della casa ─────────────────────────────
+     La pagina di una casa e' **tutta** l'app, intestazione compresa: il dito
+     che la tocca non arriva mai al guscio, e cambiare pagina con lo
+     scorrimento — che ovunque altro nella casa funziona — qui dentro non
+     esisteva. Misurato sul telefono il 22/09/2026: in nessuna delle due
+     direzioni, non solo in una.
+
+     **Perche' il riconoscimento sta qui e non di la'.** Solo da dentro si
+     vede il DOM dell'app, quindi solo da qui si puo' dire «questo gesto e' di
+     una tabella larga, non del guscio». Cosa farne lo decide il guscio, che
+     e' l'unico a sapere se una pagina di fianco c'e': di qua si racconta
+     soltanto cos'ha fatto il dito.
+
+     **E perche' e' importato invece che ricopiato.** E' lo stesso modulo che
+     usano la casa e l'officina, soglie comprese: una seconda copia imparerebbe
+     le cose una volta sola. L'import e' dinamico perche' questo file e' un
+     classico — le app lo caricano con un `<script src>`, e farne un modulo le
+     romperebbe tutte. Gli asset del kit escono con `Access-Control-Allow-Origin`
+     proprio per attraversare l'origine opaca di questo frame.
+
+     Se l'import non riesce — un guscio piu' vecchio del kit — l'app resta
+     esattamente com'era: niente scorrimento, nessun errore in faccia. */
+  async function armaScorrimento() {
+    let gesto;
+    try {
+      gesto = await import('/html-mobile/assets/shared/gesto-orizzontale.js');
+    } catch {
+      return;
+    }
+    const manda = (dettaglio) =>
+      window.parent.postMessage({ type: 'jenny:gesto', slug, ...dettaglio }, '*');
+    gesto.osservaGestoOrizzontale(document.documentElement, {
+      onOrizzontale: () => manda({ fase: 'inizio' }),
+      onTrascina: (dx) => manda({ fase: 'muove', dx }),
+      onFine: ({ verso, conferma }) => manda({ fase: 'fine', verso, conferma }),
+      onAnnulla: () => manda({ fase: 'annulla' }),
+    });
+  }
+  armaScorrimento();
+
   window.jenny = { slug, theme, lang, accent: null, action, discuss, navigate, back };
   applyTokens(qs.get('tokens'));
   applyAccent(qs.get('accent'), qs.get('onAccent'));
