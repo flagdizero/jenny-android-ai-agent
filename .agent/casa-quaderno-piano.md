@@ -273,14 +273,83 @@ e **controllare che il JS nuovo sia davvero sul telefono** leggendo
 - seleziono un testo che compare due volte: lo dice invece di ancorare a caso;
 - e dieci tocchi normali su una pagina non fanno comparire niente.
 
+---
+
+## Fatto il 22/09/2026 — e cosa e' cambiato per strada
+
+Tre commit, uno per parte, piu' una passata di pulizia:
+
+| | commit | |
+|---|---|---|
+| 1 | `e2ab6ad` | via il grafo di tutti i quaderni |
+| 2 | `d125531` | «Modifica» nel lettore, col 409 |
+| 3 | `4e79223` | «Segnala» nel lettore |
+| + | `c2d74f2` | passata sugli export morti |
+
+**Costruito, firmato e installato** (release da worktree pulito, cert
+`CN=flagDiZero`), e il JS nuovo e' **davvero sul telefono**: `casa-audit.js`
+esiste in `files/workspace/ui/assets/` e `rpc-client.js` li' dentro contiene
+`writePage`. La prova col pollice — le sei righe qui sopra — **non e' stata
+fatta**: il telefono era bloccato, e le password non le scrivo io.
+
+### Le tre cose che il piano non sapeva
+
+1. **`POST /api/page/write` non si poteva fare.** Quella superficie la serve
+   l'hook di handshake di `websockets`, che **non legge mai il body**: e' un
+   trasporto di sola lettura, 8192 byte per riga e solo ISO-8859-1. Il
+   contenuto di una pagina e' esattamente la cosa che non ci passa. Il
+   comando vive dove vivono gia' `workspace.write` e `audit.resolve`:
+   `webui/commands.py`, esposto dall'RPC WebSocket. Stessa firma, stesso 409
+   (che li' si chiama `conflict`).
+2. **`safe_wiki_page_path` ha cambiato casa.** Stava nell'adapter HTTP, e
+   `commands.py` non puo' importarlo — di trasporti non sa niente. E' andata in
+   `utils/wiki_paths.py`, il layer neutro, dove stanno le altre funzioni di
+   percorso.
+3. **Il commento di un audit ha un tetto, ed e' di trasporto.** Viaggia nella
+   query string, cioe' nella riga di richiesta, dove stanno 8192 byte in tutto;
+   un'emoji percent-encodata ne costa 12. Tetto a 500 caratteri lato client.
+
+### Quel che il giro ha trovato, e che decide qualcun altro
+
+**Tre rotte wiki senza nessun cliente**, verificate su tutto l'albero — le due
+interfacce, il guscio Android, gli script, i documenti (solo i banchi le
+toccano):
+
+- `/api/config` (`_wiki_config`) — torna `author: "me"` fisso e l'elenco delle
+  wiki, che `/api/projects` da' gia';
+- `/api/tree` (`_wiki_tree` + `build_tree`/`build_home_tree`) — l'albero delle
+  cartelle, che questo piano ha deciso di **non** rifare;
+- `/api/audit` (`_audit_list`) — l'elenco degli audit aperti, che questo piano
+  ha deciso di **non** mettere nell'interfaccia.
+
+Le ultime due sono orfane **perche' il piano le ha rese tali**: sono la coda di
+due decisioni prese qui. Non le ho tolte — e' una scelta, e va presa, non
+dedotta. `/api/config` invece era gia' orfana prima.
+
+### L'errore, la terza volta in tre giorni
+
+Nella passata di pulizia ho tolto `tokenize` da `shared/wiki-search.js` perche'
+nessun modulo lo importa. **Il banco e' andato rosso**: il suo consumatore e'
+un test che lo estrae dal file per confrontarlo con `wiki_search.py::tokenize`
+— le due devono spezzare le parole allo stesso modo, o la ricerca dal telefono
+non trova quel che il server ha indicizzato. Rimesso, con un commento che lo
+dice.
+
+Prima KaTeX, poi gli audit, ora questo. La regola va allargata di una voce: il
+consumatore puo' essere **anche un banco**, e una passata che guarda solo gli
+`import` non lo vede. `hashString` in `utils.js` invece era morto davvero, ed e'
+uscito.
+
 ### La lista «niente merda», da ripassare a fine giro
 
-- [ ] `build_home_graph`, `_home`, `group-home`: zero occorrenze ovunque.
-- [ ] Nessuna rotta server senza un cliente: rifare il conto fatto oggi su
-      `/api/tree` (resta orfana **di proposito**? allora deciderlo, non
-      dimenticarlo), `/api/audit`, `/api/audit/create`, `/api/page/write`.
-- [ ] Nessun export JS che non importa nessuno, nessun metodo senza chiamanti:
-      la stessa passata del 21/09 (`git log --grep "Sweep the dead code"`).
-- [ ] Manifesto `android_assets.py` e file su disco coincidono (uno sbilancio =
-      404 silenzioso sul telefono, invisibile in locale).
-- [ ] Chiavi i18n: stesse in `it.json` e `en.json`, e nessuna orfana.
+- [x] `build_home_graph`, `_home`, `group-home`: zero occorrenze ovunque
+      (i soli residui stanno in `android/app/build/`, che e' ignorato).
+- [x] Nessuna rotta server senza un cliente — **contate, non chiuse**: tre
+      restano orfane e la decisione e' di chi legge (v. sopra).
+      `/api/audit/create` e `page.write` adesso un cliente ce l'hanno.
+- [x] Nessun export JS senza importatori: due trovati, uno tolto
+      (`hashString`), uno rimesso col motivo scritto (`tokenize`).
+- [x] Manifesto `android_assets.py` e file su disco coincidono: 178 voci, zero
+      sbilanci in entrambi i versi.
+- [x] Chiavi i18n: `it.json` e `en.json` pari, nessuna chiave nuova orfana.
+- [ ] **La prova col pollice**, che resta da fare: telefono bloccato.
