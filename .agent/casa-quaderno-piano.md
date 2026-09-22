@@ -375,9 +375,11 @@ uscito.
 ### Quel che la prova ha trovato
 
 - **L'editor si apriva in fondo alla pagina** (`focus()` porta il cursore dopo
-  l'ultimo carattere e ci trascina la vista). Corretto in `35c9522`, con banco.
-  **Corretto ma non riprovato sul telefono**: la batteria e' arrivata all'1% e
-  il dispositivo si e' staccato prima dell'installazione.
+  l'ultimo carattere e ci trascina la vista). Corretto in `35c9522`, con banco,
+  **e riprovato sul telefono**: adesso apre sul frontmatter, cioe' in cima. Nello
+  stesso giro: Annulla senza aver scritto niente chiude subito e non chiede, e
+  il file resta bit per bit quello di prima; dieci tocchi normali sulla pagina
+  non fanno comparire la barra di «Segnala».
 - **Il primo tocco dopo aver scritto se lo mangia la tastiera.** Vale per
   Indietro *e* per Salva: la prima pressione chiude l'IME, la seconda fa la
   cosa. E' il comportamento normale di Android, non un difetto del codice —
