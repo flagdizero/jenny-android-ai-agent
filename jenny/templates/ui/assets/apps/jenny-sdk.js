@@ -247,12 +247,23 @@
      romperebbe tutte. Gli asset del kit escono con `Access-Control-Allow-Origin`
      proprio per attraversare l'origine opaca di questo frame.
 
+     **E l'indirizzo va calcolato intero, non scritto come percorso.** Questo
+     file arriva da un'altra origine e senza `crossorigin`, quindi per Chromium
+     e' uno «script CORS-cross-origin»: la sua base per `import()` diventa
+     `about:blank`, e un `/qualcosa.js` non si risolve affatto — `Failed to
+     resolve module specifier`. Misurato il 22/09/2026 su Chrome del telefono,
+     che e' lo stesso motore della WebView: col percorso l'import non parte
+     nemmeno, con l'indirizzo intero passa. `location.href` qui e' quello della
+     app, quindi `new URL` ricostruisce l'origine giusta.
+
      Se l'import non riesce — un guscio piu' vecchio del kit — l'app resta
      esattamente com'era: niente scorrimento, nessun errore in faccia. */
   async function armaScorrimento() {
     let gesto;
     try {
-      gesto = await import('/html-mobile/assets/shared/gesto-orizzontale.js');
+      const dove = new URL('/html-mobile/assets/shared/gesto-orizzontale.js',
+                           location.href);
+      gesto = await import(dove.href);
     } catch {
       return;
     }

@@ -110,11 +110,32 @@ def test_the_app_kit_borrows_the_gesture_instead_of_writing_one() -> None:
     che tiene le soglie in un posto solo.
     """
     src = SDK.read_text(encoding="utf-8")
-    assert "import('/html-mobile/assets/shared/gesto-orizzontale.js')" in src, (
-        "il kit delle app non importa piu' il modulo condiviso: se il gesto "
+    assert "shared/gesto-orizzontale.js" in src, (
+        "il kit delle app non nomina piu' il modulo condiviso: se il gesto "
         "ora se lo scrive da solo, le soglie misurate sono diventate due."
     )
     assert "osservaGestoOrizzontale" in src
+
+
+def test_the_app_kit_imports_by_a_whole_address() -> None:
+    """Un percorso li' dentro non si risolve, e il modulo non arriva mai.
+
+    Il kit e' servito da un'altra origine e senza `crossorigin`, quindi per
+    Chromium e' uno «script CORS-cross-origin»: la sua base per `import()` e'
+    `about:blank`, e `import('/qualcosa.js')` muore su «Failed to resolve
+    module specifier» prima di toccare la rete. Misurato il 22/09/2026 su
+    Chrome del telefono — lo stesso motore della WebView — dopo che sul
+    telefono lo scorrimento dentro le app non faceva niente e i banchi erano
+    tutti verdi: **nessun banco puo' vedere questo, tranne questo qui.**
+    """
+    src = SDK.read_text(encoding="utf-8")
+    assert re.search(r"new URL\(\s*'/html-mobile/assets/shared/gesto-orizzontale\.js'", src), (
+        "l'indirizzo del modulo non e' piu' costruito intero"
+    )
+    assert not re.search(r"import\(\s*['\"]/", src), (
+        "`import()` ha di nuovo un percorso invece di un indirizzo: dentro una "
+        "app non si risolve, e lo scorrimento smette di funzionare in silenzio."
+    )
 
 
 def test_the_app_kit_only_tells_what_the_finger_did() -> None:
