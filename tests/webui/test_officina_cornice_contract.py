@@ -104,12 +104,24 @@ def test_la_tabella_delle_viste_e_una_sola() -> None:
 def test_il_mount_passa_dalla_tabella() -> None:
     """La riga che traduce il modo nel suo mount.
 
-    Si legge il corpo di `_mount`: senza `VISTA_DI` li' dentro, i tre cassetti
+    Si legge il corpo di `_mount`: senza la tabella li' dentro, i tre cassetti
     non trovano `title-settings` e `setMode` esce prima di disegnare.
+
+    **Due forme valgono**, e la seconda e' la piu' forte. Il 22/09/2026 la
+    traduzione e' diventata una funzione — `elementoTitolo(mode)`, accanto a
+    `VISTA_DI` — perche' lo stesso errore era gia' uscito tre volte: qui, e due
+    volte nel carosello di `mobile-app.js`, dove aveva ucciso lo scorrimento su
+    tre linguette su quattro. Passare dalla funzione soddisfa questo banco
+    **meglio** che consultare la tabella a mano, ed e' difeso a parte da
+    `test_no_raw_view_lookup_contract.py`. Quel che resta vietato — costruire
+    `title-${mode}` da se' — e' vietato in tutte e due le forme.
     """
     m = re.search(r"_mount\(mode\)\s*\{(.*?)\}", HEADER, re.S)
     assert m, "_mount non trovato"
-    assert "VISTA_DI" in m.group(1), f"_mount non consulta la tabella: {m.group(1).strip()}"
+    corpo = m.group(1)
+    assert "VISTA_DI" in corpo or "elementoTitolo" in corpo, (
+        f"_mount non passa ne' dalla tabella ne' da elementoTitolo(): {corpo.strip()}"
+    )
 
 
 @pytest.mark.parametrize("cassetto", CASSETTI)

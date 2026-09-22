@@ -1,12 +1,16 @@
-# Scorrere di lato: l'officina su tutte le linguette, la casa a schermate
+# Scorrere di lato: l'officina su tutte le linguette, la casa a pagine
 
-**Aperto il 21/09/2026.** Due lavori che sembrano uno solo — «lo stesso
-scorrimento in tutte e due i gusci» — e che invece hanno una parte in comune
-(il gesto) e due comportamenti diversi (dove porta).
+**Aperto il 21/09/2026, riscritto il 22/09/2026** dopo che le tavole `Pagine`,
+`PaginaApp` e `PagineGestione` hanno deciso la forma della parte casa. Dove
+tavola e parola detta divergevano, **vince la tavola** (decisione dell'utente,
+22/09).
+
+Due lavori che sembrano uno: una parte in comune (il gesto) e due
+comportamenti diversi (dove porta).
 
 ---
 
-## Parte 0 — Quel che ho misurato prima di pianificare
+## Parte 0 — I fatti misurati (riverificati il 22/09/2026)
 
 ### L'officina ha già il gesto, ed è buono
 
@@ -16,267 +20,291 @@ apposta (il touch slop di Android è ~8dp e sotto quella soglia `preventDefault`
 uccide il long-press), e tre guardie giuste: cassetto aperto, testo selezionato,
 scorrevole orizzontale sotto il dito (`_insideHScroll`).
 
-### Ed è morto su tre linguette su quattro. So perché
+### Ed è morto su tre linguette su quattro
 
 ```js
-// mobile-app.js:980
+// mobile-app.js:923
 view = document.getElementById(`view-${this.currentMode}`);
 if (!view) return;                       // ← esce qui, in silenzio
 ```
 
-Nell'HTML esistono solo `view-chat`, `view-workspace`, `view-wiki`,
-`view-graph`, `view-settings`, `view-onboarding`. **`view-cervello`,
-`view-mani` e `view-memoria` non esistono**: i tre cassetti sono la stessa
-vista, e la tabella che lo dice è `VISTA_DI` in `mobile-settings.js:125`.
-Quindi da Console lo scorrimento parte (perché `view-chat` c'è) e dai tre
-cassetti non parte affatto.
+Gli id nell'HTML sono solo `view-chat`, `view-onboarding`, `view-settings`,
+`view-workspace`. **`view-cervello`, `view-mani` e `view-memoria` non
+esistono**: i tre cassetti sono la stessa vista, e la tabella che lo dice è
+`VISTA_DI` (`mobile-settings.js:116`). Da Console il gesto parte, dai tre
+cassetti no.
 
-Secondo sito dello stesso errore:
+Secondo sito, stessa forma: `mobile-app.js:994`,
+`_animateSlideIn(document.getElementById(\`view-${target}\`))`.
 
-```js
-// mobile-app.js:1051
-this._animateSlideIn(document.getElementById(`view-${target}`), goingPrev);
-```
+**È la terza volta che esce questo errore.** La prima è registrata nel piano
+dell'aspetto: «`_mount` cercava `title-<modo>` e i tre cassetti condividono
+`title-settings`, quindi `setMode` usciva in silenzio». Tre siti, una forma:
+qualcuno costruisce un id da `mode` invece che dalla tabella. **Quindi la
+correzione non è una terza pezza.**
 
-**È la terza volta che questo errore esce.** Il piano dell'aspetto registra la
-prima: «`_mount` cercava `title-<modo>` e i tre cassetti condividono
-`title-settings`, quindi `setMode` usciva in silenzio». Tre siti, stessa forma:
-qualcuno costruisce un `id` da `mode` invece che dalla tabella. **Quindi la
-correzione non può essere una terza pezza.**
+### La casa: com'è fatta davvero
 
-### La casa non ha nessuno scorrimento
+- **Nessun `touchstart`**: nessuno scorrimento, da nessuna parte.
+- Navigazione a pila di stanze (`BACK_TO`, `casa-app.js:72`), guidata da **un
+  attributo solo**, `data-view` su `.casa-shell`, col CSS che decide chi occupa
+  lo spazio.
+- **Chat e stanze sono tutte sorelle** dentro `.casa-shell`: `casa-thread`,
+  `casa-empty`, `casa-activity` da una parte; `casa-pages`, `casa-reader`,
+  `casa-tu`, `casa-jenny-room`, `casa-model-room`, `casa-updates-room`,
+  `casa-backup-room` dall'altra. Nessuna è figlia della chat.
+- **Il cassetto si apre da un bottone** accanto al composer (`#casa-drawer`,
+  `index.html:133`). L'officina ha **il suo**, separato (`#btn-launcher`,
+  `officina.html:229`), sullo stesso foglio condiviso. Toglierne uno non tocca
+  l'altro.
+- **Non esiste nessuna striscia di pallini.**
 
-La navigazione è una pila lineare di stanze (`BACK_TO` in `casa-app.js:70`),
-tutta guidata da **un attributo solo**, `data-view` su `.casa-shell`, col CSS
-che decide chi occupa lo spazio. È un impianto pulito su cui appoggiarsi.
-
-### Tre vincoli della casa che il piano deve rispettare
+### I tre vincoli della casa
 
 1. **«Pagine» è una parola già presa.** `casa-pages.js` sono le pagine di un
-   quaderno. Il concetto nuovo si chiama **schermata** nel codice
-   (`schermate`, `schermataCorrente`), e «pagina» resta solo nelle frasi
-   tradotte che legge l'utente. Senza questa regola, fra un mese nessuno capisce
-   più quale `pages` è quale.
-2. **Jenny sta sopra a tutto**, e nella casa il suo è l'unico `z-index` che
-   esista (`casa-style.css`). Il carosello deve ottenere la sovrapposizione con
-   l'ordine del DOM, **non** introducendo un secondo `z-index`: c'è già un banco
-   che conta gli `z-index` e diventerebbe rosso.
-3. **Il pavimento va dichiarato** fuori dalla chat. `_setView` scrive
-   `--casa-composer-h: 20px` quando il composer non c'è, «senza, l'osservatore
-   misurerebbe un elemento nascosto e lo troverebbe alto zero». Una schermata
-   senza composer ha lo stesso problema.
+   *quaderno*. Il concetto nuovo si chiama **`schermata`** nel codice; «pagina»
+   resta solo nelle frasi tradotte che legge l'utente — che è come le chiama la
+   tavola. Senza questa regola, fra un mese nessuno sa più quale `pages` è quale.
+2. **Jenny sta sopra a tutto.** Il suo `z-index: 5` (`casa-style.css:614`) è
+   ancora **l'unica regola** del foglio — ricontato il 22/09, gli altri due
+   riscontri sono prosa dentro i commenti. La tavola dice la stessa cosa
+   («unico z-index del disegno»), e in `PaginaApp` lei sta **sopra l'app**. Il
+   carosello deve impilare con l'ordine del DOM, non con un secondo `z-index`.
+3. **Il pavimento va dichiarato** dove il composer non c'è: `_setView` scrive
+   `--casa-composer-h: 20px` (`FLOOR_NO_COMPOSER`), «senza, l'osservatore
+   misurerebbe un elemento nascosto e lo troverebbe alto zero».
 
 ### Com'è fatta una Jenny App, oggi
 
-`apps-actions.js::openApp(slug)` costruisce un `<iframe sandbox="allow-scripts">`
-su `/apps/<slug>/index.html?token=…&theme=…&lang=…&tokens=…` e lo mette in un
-**velo a tutto schermo** con intestazione e bottone chiudi. Origine opaca
-apposta: l'app non deve raggiungere il DOM della SPA.
+`apps-actions.js::openApp(slug)` (`:145`) costruisce un
+`<iframe sandbox="allow-scripts">` su `/apps/<slug>/index.html?token=…&theme=…`
+e lo mette in un **velo a tutto schermo** con intestazione e bottone chiudi
+(`:177`). Origine opaca apposta: l'app non deve raggiungere il DOM della SPA.
 
-Due cose buone che tolgono lavoro al piano:
+Due cose che tolgono lavoro: **il tema arriva già a caldo** alle app
+(`MutationObserver` su `data-theme` → `jenny:theme`, `:61`), quindi cambiare
+tema non obbliga a ricostruire le cornici; e il foglio del cassetto è già
+condiviso fra i due gusci.
 
-- **Il tema è già gestito a caldo.** Un `MutationObserver` su `data-theme`
-  manda `jenny:theme` all'iframe (`apps-actions.js:47-50`), quindi cambiare tema
-  **non** obbliga a ricostruire le cornici.
-- Il cassetto (`mobile-launcher.js`) esiste in **tutti e due** i gusci
-  (`index.html:448`, `officina.html:380`), con lo stesso foglio e lo stesso CSS.
+### Cos'è «una conversazione»
 
-E una che ne aggiunge: il cassetto è un **foglio modale**
-(`launcher-sheet`, `role="dialog"`, `aria-modal`), e `open()` esce subito se il
-foglio non c'è. Metterlo *dentro* una schermata è un rifacimento vero, non una
-chiamata diversa.
+Una **chiave di sessione** (`sessionManager`, `shared/session-manager.js`):
+`unified:default` è quella personale, i quaderni e i progetti hanno la loro.
+`switchTo(key)` cambia conversazione e riaggancia il filo
+(`wsManager.attachChat`). **La chat a schermo è una sola**: due conversazioni
+non possono essere vive insieme.
 
 ---
 
 ## Parte A — L'officina: scorrere su tutte le linguette
 
+*(invariata dal 21/09: riverificata riga per riga, regge)*
+
 ### A1. Una sola ricerca, impossibile da dimenticare
 
 Non si correggono i due siti: si toglie la possibilità di sbagliare.
 
-- Accanto a `VISTA_DI`, una funzione sola: `elementoVista(mode)` che fa
-  `document.getElementById('view-' + (VISTA_DI[mode] || mode))`. Stessa cosa per
-  l'intestazione, `elementoTitolo(mode)`, così i due casi stanno in fila.
-- I due siti (`:980`, `:1051`) e quello dell'intestazione passano da lì.
-- `mobile-app.js:376` (`setupKeyboardHelpers`) **non** si tocca: ha una lista
-  sua (`['chat','workspace']`) e non costruisce un id da un modo qualsiasi.
+- Accanto a `VISTA_DI`, **una funzione sola**: `elementoVista(mode)` →
+  `getElementById('view-' + (VISTA_DI[mode] || mode))`. Idem
+  `elementoTitolo(mode)`, così i due casi stanno in fila.
+- I due siti (`:923`, `:994`) e quello dell'intestazione passano da lì.
+- `mobile-app.js:350` (`setupKeyboardHelpers`) **non** si tocca: ha una lista
+  sua (`['chat','workspace']`), non costruisce un id da un modo qualsiasi.
 
-**Banco** `test_no_raw_view_lookup_contract.py`: legge i sorgenti e fallisce se
-trova `getElementById(\`view-${…}\`)` o `` `title-${…}` `` con dentro qualcosa
-che non sia la funzione. È lo stesso tipo di guardia di
-`test_no_ghost_methods_contract.py`, ed è giustificata dallo stesso motivo: un
-difetto che il file valido e la suite verde non vedono, e che si manifesta solo
-col dito sul telefono.
+**Banco** `test_no_raw_view_lookup_contract.py`: fallisce se trova
+`` getElementById(`view-${…}`) `` o `` `title-${…}` `` con dentro qualcosa che
+non sia la funzione. Stessa famiglia di `test_no_ghost_methods_contract.py`, e
+stessa giustificazione: un difetto che file valido e suite verde non vedono, e
+che si manifesta solo col dito sul telefono.
+**Da provare rosso** rimettendo `view-${this.currentMode}`.
 
-**Da provare rosso**: rimettere `view-${this.currentMode}`, il banco deve
-fallire.
+### A2. Fra due cassetti non è uno scambio di viste
 
-### A2. Scorrere fra due cassetti non è uno scambio di viste
+`cervello → mani` è **lo stesso nodo del DOM** che si ridisegna. Oggi si anima
+«la vista di arrivo», che lì è anche quella di partenza: senza accorgimenti non
+si vede nessun cambio, o si vede un salto.
 
-`cervello → mani` è **lo stesso nodo del DOM** che si ridisegna. Oggi la parte
-che conclude il gesto anima «la vista di arrivo», che in quel caso è la vista di
-partenza: senza accorgimenti non si vede nessun cambio, o peggio si vede un
-salto.
+`setCassetto(nuovo)` + `render()` sono sincroni, quindi: **ridisegnare prima,
+animare dopo**, sullo stesso elemento. L'animazione resta una.
 
-Quel che serve: a gesto concluso, `setCassetto(nuovo)` + `render()` girano in
-modo sincrono, quindi si può **ridisegnare prima e animare dopo** sullo stesso
-elemento — l'animazione resta una sola (`_animateSlideIn`), cambia solo che il
-contenuto è già quello nuovo quando parte.
+**Banco**: per ogni coppia ordinata dei quattro modi l'elemento passato
+all'animazione non è mai `null`; per le coppie fra cassetti è lo stesso
+elemento col contenuto cambiato.
 
-**Banco**: per ogni coppia ordinata dei quattro modi, l'elemento passato
-all'animazione non è mai `null`, e per le coppie fra cassetti è lo stesso
-elemento con contenuto cambiato.
-
-### A3. I due capi: decisione
+### A3. I capi si richiudono
 
 Con quattro linguette in fila, su Console manca il verso sinistro e su Memoria
-quello destro. «Destra e sinistra su tutte le linguette» è letteralmente vero
-solo se i capi si richiudono.
-
-> **Proposta: sì, circolare.** Memoria → Console e Console → Memoria. Quattro
-> voci sono poche: il giro è corto e non ci si perde. L'alternativa — lasciare i
-> capi morti con la sbirciata elastica che già c'è — resta a una riga di
-> distanza se lo provi e non ti piace.
+quello destro; «destra e sinistra su tutte» è vero solo chiudendo il cerchio.
+Memoria → Console e Console → Memoria.
 
 **Banco**: `prev` e `next` definiti per tutti e quattro i modi.
 
-### A4. Provare sul telefono
+### A4. Prova sul telefono
 
-Costruire, installare, e guidare le quattro linguette con `adb input swipe` nei
-due versi (le tre trappole sono in memoria, `driving-touch-gestures-over-adb`),
-una foto per linguetta. Un gesto sintetico **non** prova che il dito ci arrivi —
-ma qui il difetto era una guardia che usciva subito, e quella un `input swipe`
-la vede.
+Costruire, installare, guidare le quattro linguette con `adb input swipe` nei
+due versi (le tre trappole: `driving-touch-gestures-over-adb`), una foto
+ciascuna. Un gesto sintetico non prova che il dito ci arrivi — ma qui il difetto
+era una guardia che usciva subito, e quella un `input swipe` la vede.
 
 ---
 
-## Parte B — La casa: le schermate
+## Parte B — La casa a pagine, come la tavola
+
+### Quel che la tavola ha deciso, e che il piano vecchio sbagliava
+
+| | piano del 21/09 | **tavola (vale questo)** |
+| --- | --- | --- |
+| come si aggiunge | scorri oltre l'ultima → «Aggiungi pagina» | **pressione lunga sui pallini** → foglio «Le pagine di casa» |
+| il cassetto come pagina | sì | **no**: «ce l'hai già tirando **su**. Due porte per la stessa cosa sono una di troppo» |
+| le specie | cassetto, app | **app · stanza della casa · conversazione** |
+| quanto resta vivo | corrente + due vicine | **solo la corrente**: «le altre si spengono, o te le paghi in batteria» |
+| togliere | passo rimandato | **stesso foglio dell'aggiunta** (la ✕ su ogni pagina piena) |
+
+Il motivo per cui la pressione lunga batte lo scorrimento non è solo che lo dice
+la tavola: «scorri oltre l'ultima» mette il comando **in fondo a un asse che si
+allunga** — con cinque pagine bisogna attraversarle tutte — mentre i pallini
+stanno sempre nello stesso punto.
 
 ### B0. Il gesto diventa condiviso
 
-I due gusci non si citano mai il DOM a vicenda, e non devono cominciare adesso.
-Ma il gesto è lo stesso, e le sue costanti sono state pagate con delle misure
-(il `24` del long-press, l'elastico, le guardie).
+I due gusci non si citano mai il DOM a vicenda e non devono cominciare adesso.
+Ma il gesto è lo stesso e le sue costanti sono state pagate con delle misure.
 
-Quindi: **il gesto si sposta in `assets/shared/`**, in un modulo che non sa
-niente di linguette né di schermate. Prende un contenitore, quante caselle ci
-sono, dov'è adesso, e chiama indietro: «sto sbirciando di tanto», «ho
-concluso verso destra», «sono tornato indietro». L'officina e la casa gli danno
-due risposte diverse.
+Il gesto si sposta in `assets/shared/`, in un modulo che non sa niente né di
+linguette né di pagine: riceve un contenitore, quante caselle, dov'è adesso, e
+richiama «sto sbirciando di tanto», «concluso a destra», «tornato indietro».
 
-**Regola di sicurezza:** è un rifacimento di codice che funziona. Il
-comportamento dell'officina dopo lo spostamento deve essere **identico** —
-stesse costanti, stesse guardie, stessi banchi verdi, più una foto di confronto.
+**Regola di sicurezza:** è un rifacimento di codice funzionante. Dopo lo
+spostamento l'officina deve comportarsi **identica** — stesse costanti, stesse
+guardie, banchi verdi, più una foto di confronto.
 
-### B1. Cos'è una schermata, e dove vive
+### B1. Cos'è una pagina, e dove vive
 
 ```
-schermate: [ { id, kind: 'drawer' | 'app', slug? }, … ]
+schermate: [ { id, kind: 'app' | 'stanza' | 'conversazione', ref }, … ]
 ```
 
-La **chat è la schermata 0**, non sta nell'elenco, non si sposta e non si
+`ref` è lo slug dell'app, il nome della stanza, o la chiave di sessione.
+**La chat personale è la pagina 0**: non sta nell'elenco, non si sposta, non si
 toglie. L'elenco contiene solo quelle aggiunte.
 
-**Dove si salva: in `config.json`**, non in `localStorage`. Le schermate sono la
-schermata iniziale del telefono dell'utente: perderle a un ripristino o a una
-reinstallazione sarebbe la sorpresa peggiore, e `localStorage` non entra nel
-backup. Si scrive **dentro `store.mutate`**, come ogni altra scrittura.
+**Si salva in `config.json`**, non in `localStorage`: sono la schermata iniziale
+del telefono, perderle a un ripristino sarebbe la sorpresa peggiore, e
+`localStorage` non entra nel backup. Scrittura **dentro `store.mutate`**, come
+ogni altra.
 
-- schema: un campo nuovo con default lista vuota, e validazione di `kind`
-- rotte: lettura e scrittura, sul modello di `/api/backup/exported` che è già il
-  precedente di una rotta piccola e dedicata
+- schema: campo nuovo, default lista vuota, `kind` validato
+- rotte piccole e dedicate, sul modello di `/api/backup/exported`
+- **un tetto** al numero di pagine (proposta: 8). Oltre, i pallini non si
+  leggono più e lo scorrimento diventa un viaggio.
 
-**Banchi**: default vuoto; un `kind` sconosciuto rifiutato; la scrittura passa
-da `mutate` (e non da `save_config`); uno `slug` che non corrisponde a nessuna
-app non fa sparire la schermata ma la fa disegnare come «app non più
-installata» — cancellare una schermata dell'utente perché un'app è sparita è una
-decisione che non spetta al codice.
+**Banchi**: default vuoto; `kind` sconosciuto rifiutato; la scrittura passa da
+`mutate` e non da `save_config`; un `ref` che non esiste più (app disinstallata,
+quaderno cancellato) **non fa sparire la pagina** ma la disegna come «non c'è
+più» — cancellare una pagina dell'utente perché il suo contenuto è sparito non
+è una decisione del codice.
 
 ### B2. La geometria
 
-Le schermate vivono **dentro** `data-view='chat'`: sono la casa, non una stanza.
-Le stanze (`tu`, `model`, `backup`…) restano sopra e non cambiano di una riga.
+La scoperta che cambia l'impianto: **chat e stanze sono sorelle**, non annidate.
+Quindi il carosello **non** sta «dentro la vista chat»: è l'area principale del
+guscio, e la pagina 0 mostra i pezzi della chat.
 
-- una pista dentro la vista chat, `transform: translateX(…)`, un pannello per
-  schermata
-- **niente `z-index`**: la sovrapposizione si ottiene con l'ordine del DOM
-  (vincolo 2)
-- sulle schermate senza composer, `--casa-composer-h` va dichiarato come fa
-  `_setView` (vincolo 3)
-- **i puntini**: quante schermate ci sono e dove sei. Non è un ornamento — senza,
-  una funzione che si attiva solo con un gesto è invisibile, e chi non sa che
-  c'è non la trova.
+- una pista nel guscio, `transform: translateX(…)`, un pannello per pagina
+- **niente `z-index` nuovo** (vincolo 2): si impila con l'ordine del DOM
+- dove il composer non c'è, `--casa-composer-h` va dichiarato (vincolo 3)
+- le stanze restano **sopra**, come oggi: entrare in `tu` o `model` copre le
+  pagine e non le sposta
 
-### B3. Il gesto, e «Aggiungi pagina»
+**La conseguenza sulle stanze, da dire adesso.** Una pagina di specie `stanza`
+deve mostrare un elemento che è **unico** (`casa-pages` è uno solo) e che oggi
+il CSS accende con `.casa-shell[data-view='pages'] .casa-pages { display:flex }`.
+Servono due cose: **riparentare** quell'elemento dentro il pannello della sua
+pagina (i controller lo prendono per id al momento della costruzione — v.
+`casa-tu.js:54` — quindi spostarlo non gli fa niente), e **una seconda via** nel
+CSS perché si accenda quando la sua pagina è quella corrente, non solo quando
+`data-view` la nomina. È la parte più delicata di B2 e ha il suo banco.
 
-Sull'**ultima** schermata, tirando ancora, al posto dell'elastico di fine corsa
-compare il pannello di aggiunta, nell'area che si scopre.
+### B3. La striscia dei pallini
 
-Gli stati, in fila:
+La tavola: «I pallini prendono il posto della maniglia — e restano la presa per
+tirare su il cassetto. **Su** il cassetto, **di lato** le pagine.»
 
-1. dito giù → in ascolto
-2. oltre `H_SLOP` (24) e orizzontale → si scopre l'area, che porta scritto
-   **«Aggiungi pagina»**
-3. oltre la soglia di conferma → l'area si accende (è il momento in cui dici
-   «se mollo, succede»)
-4. dito su oltre soglia → si apre la scelta
-5. dito su sotto soglia → torna indietro, niente
+Un asse, tre gesti:
 
-Le stesse guardie dell'officina valgono qui: cassetto aperto, testo selezionato,
-scorrevole orizzontale sotto il dito — e una in più, **non in una stanza**: da
-`tu` o da `model` il gesto non deve fare niente.
+| gesto | cosa fa |
+| --- | --- |
+| di lato | cambia pagina |
+| **su** | apre il cassetto delle app |
+| **pressione lunga** | apre il foglio «Le pagine di casa» |
 
-### B4. La scelta
+**Non è «aggiungo dei puntini».** È sostituire il bottone `#casa-drawer` che sta
+accanto al composer, quindi: la striscia va costruita, il gesto «su» va scritto
+(oggi non esiste: il cassetto si apre con un click), e il bottone va tolto
+**solo dalla casa** — l'officina tiene il suo, che è un elemento diverso sullo
+stesso foglio.
 
-Un foglio con due voci, nel vocabolario che la casa ha già (niente widget nuovi):
+Rischio dichiarato: si toglie un comando che funziona e lo si sostituisce con un
+gesto che non si vede. Per questo i pallini ci sono **sempre**, anche con zero
+pagine aggiunte: sono l'unica cosa che dice che il gesto esiste.
 
-- **Cassetto delle app**
-- **Una Jenny App** → secondo passo, quale, dalla lista di `AppsSource`
+### B4. Il foglio «Le pagine di casa»
 
-Casi da dire, non da lasciare al caso:
+Pressione lunga sui pallini → foglio dal basso, come lo disegna
+`PagineGestione`:
 
-- nessuna app installata → si dice, e si offre il cassetto
-- un'app **rotta** non si può scegliere (`openApp` oggi chiede conferma e
-  propone la riparazione in chat: una schermata rotta fissa è un'altra cosa)
-- un'app **esterna** (`view_kind === 'external'`, che apre un URL) **non** è
-  offribile come schermata in questo primo giro, e il piano dice perché: apre
-  una destinazione che il guscio non controlla, e incastonarla in una schermata
-  fissa è una decisione di sicurezza a sé
+- titolo, e la riga che insegna il gesto: «Tieni premuto sui pallini per tornare
+  qui»
+- **una riga per pagina piena**: icona, nome, «pagina N · una tua Jenny App» /
+  «· una stanza della casa», e la **✕** per toglierla
+- **una riga tratteggiata per la prossima, vuota**: «pagina N · vuota — cosa ci
+  metto?» con le tre scelte aperte
+- le due note in fondo, che sono parte del disegno e non decorazione: il
+  cassetto non è in elenco perché si tira su; e resta viva solo la pagina che
+  guardi
+
+Scegliere una specie apre il secondo passo (quale app / quale stanza / quale
+conversazione).
+
+**Togliere arriva con questo passo**, e non perché si sia cambiato idea sul
+rimandarlo: nella tavola la ✕ è sulla stessa riga dell'aggiunta, e costruire il
+foglio senza la ✕ costerebbe più che costruirlo intero. **Il riordino resta
+fuori**: nella tavola non c'è.
+
+Casi da dire, non da lasciare al caso: nessuna app installata; un'app **rotta**
+(oggi `openApp` chiede conferma e propone la riparazione in chat — una pagina
+fissa rotta è un'altra cosa, quindi non è scegliibile); un'app **esterna**
+(`view_kind === 'external'`, apre un URL che il guscio non controlla: fuori da
+questo giro, e il piano dice perché).
 
 Chiavi i18n nuove in `it.json` **e** `en.json`.
 
-### B5. Disegnare una schermata
+### B5. Le tre specie, in quest'ordine
 
-**`kind: 'drawer'`** — il cassetto oggi è un foglio modale. Serve una seconda
-modalità: disegnare la stessa griglia **dentro un contenitore dato**, senza velo,
-senza `aria-modal`, senza maniglia. Il riempimento (`_renderList`) non cambia;
-cambia dove finisce e cosa gli sta intorno.
-**È il pezzo più delicato della parte B**, perché il cassetto è condiviso con
-l'officina e lì deve restare identico.
+**1) `app` — una Jenny App.** La più autonoma, ed è quella con la tavola
+completa (`PaginaApp`): intestazione di una riga (soprascritta «pagina N», nome
+in serif, pastiglia **casa** per tornare), l'app a tutta pagina, i pallini sotto.
+`openApp` si spezza in due — «costruisci la cornice per questo slug» e «mettila
+in un velo a tutto schermo» — e la casa usa la prima. La cornice si costruisce
+**solo per la pagina corrente** e si smonta uscendo (regola della tavola). Il
+tema non obbliga a ricostruire (Parte 0).
 
-**`kind: 'app'`** — la stessa cornice di `openApp`, senza il velo e senza
-l'intestazione. Quindi `openApp` si spezza in due: «costruisci la cornice per
-questo slug» e «mettila in un velo a tutto schermo». La casa usa la prima.
+**2) `stanza` — una stanza della casa.** Il riparentamento e la seconda via nel
+CSS di B2. Esempio della tavola: Quaderni.
 
-- **pigrizia obbligatoria**: la cornice si costruisce solo per la schermata
-  corrente e le due vicine, e si smonta quando ci si allontana. Tre app che
-  girano insieme su un telefono non sono un dettaglio.
-- il tema **non** obbliga a ricostruire: c'è già `jenny:theme` (Parte 0)
-- il token sta nell'URL: è già così oggi, non cambia nulla
+**3) `conversazione`.** La più economica in pixel e la più insidiosa: **non è
+contenuto nuovo**, è la stessa chat riagganciata a un'altra chiave
+(`switchTo`). Quindi una pagina `conversazione` che diventa corrente cambia
+conversazione, esattamente come in officina passare da un cassetto all'altro
+ridisegna la stessa vista (A2 — stessa forma, due volte). Da guardare: il
+composer, il riaggancio del filo, e il fatto che la pagina 0 **è** già una
+conversazione.
 
-### B6. Togliere e riordinare
+### B6. Prova sul telefono
 
-Non è rimandabile: senza, una scelta sbagliata è per sempre.
-
-Minimo di questo giro: **pressione lunga su una schermata → togli**, con
-conferma. Il riordino può aspettare, e il piano lo dice invece di fingere che
-non serva.
-
-### B7. Provare sul telefono
-
-Costruire, installare, e col dito finto: scorrere dalla chat, vedere «Aggiungi
-pagina», completare, scegliere il cassetto, tornare, aggiungere un'app,
-scorrere fra le tre, toglierne una. Una foto per passo.
+Col dito finto: scorrere dalla chat, pressione lunga sui pallini, aggiungere
+un'app, scorrere, tornare con la pastiglia **casa**, tirare su il cassetto dalla
+striscia, togliere una pagina. Una foto per passo.
 
 ---
 
@@ -284,26 +312,27 @@ scorrere fra le tre, toglierne una. Una foto per passo.
 
 | # | cosa | perché lì |
 | --- | --- | --- |
-| 1 | A1 — una sola ricerca + banco | sblocca lo scorrimento sui tre cassetti, ed è una riga |
+| 1 | A1 — una sola ricerca + banco | sblocca tre linguette su quattro, ed è una riga |
 | 2 | A2 — cassetto→cassetto | senza, il passo 1 si vede a metà |
-| 3 | A3 — capi circolari | decisione tua, una riga |
-| 4 | A4 — prova sul telefono | l'officina è finita e verificata prima di aprire la casa |
+| 3 | A3 — capi circolari | una riga |
+| 4 | A4 — prova sul telefono | l'officina chiusa e verificata prima di aprire la casa |
 | 5 | B0 — il gesto in condiviso | rifacimento a comportamento identico, con l'officina come prova |
-| 6 | B1 — il modello e dove si salva | senza, non c'è niente da disegnare |
-| 7 | B2 — geometria e puntini | |
-| 8 | B3 — il gesto e «Aggiungi pagina» | |
-| 9 | B4 — la scelta | |
-| 10 | B5 — cassetto inline, poi app inline | il pezzo grosso, e in quest'ordine perché il cassetto non ha iframe |
-| 11 | B6 — togliere | |
-| 12 | B7 — prova sul telefono | |
+| 6 | B1 — modello, config, rotte, tetto | senza, non c'è niente da disegnare |
+| 7 | B2 — la pista e la pagina 0 | solo la chat: il carosello esiste ma ha una casella |
+| 8 | B3 — la striscia e i tre gesti | qui il cassetto cambia comando |
+| 9 | B4 — il foglio: aggiungi e togli | |
+| 10 | B5.1 — pagine `app` | la prima specie vera, e la tavola ce l'ha intera |
+| 11 | B5.2 — pagine `stanza` | riparentamento + seconda via CSS |
+| 12 | B5.3 — pagine `conversazione` | |
+| 13 | B6 — prova sul telefono | |
 
 Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
 
 ## Quel che questo piano non fa
 
-- Non tocca **dove stanno le cose** nell'officina: i quattro cassetti e il loro
-  contenuto restano quelli di `officina-tavole-plan.md`.
-- Non tocca le stanze della casa (`tu`, `model`, `updates`, `backup`, i
-  quaderni): le schermate vivono dentro la chat.
-- Non riordina le schermate (B6 le toglie soltanto).
-- Non offre le app esterne come schermata.
+- Non tocca **dove stanno le cose** nell'officina: i quattro cassetti restano
+  quelli di `officina-tavole-plan.md`.
+- **Non riordina** le pagine: nella tavola non c'è.
+- Non offre il **cassetto** come pagina (la tavola lo esclude, con motivo).
+- Non offre le **app esterne** come pagina.
+- Non tocca il bottone del cassetto **dell'officina**.

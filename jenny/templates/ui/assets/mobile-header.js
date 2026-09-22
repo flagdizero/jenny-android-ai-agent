@@ -9,7 +9,7 @@
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
-import { VISTA_DI } from './mobile-settings.js';
+import { VISTA_DI, elementoTitolo } from './mobile-settings.js';
 
 /** Il pill «Jenny»: l'unica porta dell'officina verso la casa.
  *
@@ -136,7 +136,7 @@ export class ViewTitleController {
      questa riga `setMode('cervello')` cercava `title-cervello`, non lo
      trovava, e usciva lasciando i cassetti senza intestazione. */
   _mount(mode) {
-    return document.getElementById(`title-${VISTA_DI[mode] || mode}`);
+    return elementoTitolo(mode);
   }
 
   setMode(mode, customTitle = null) {

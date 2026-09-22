@@ -14,7 +14,7 @@ import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
-import { SettingsController, VISTA_DI } from './mobile-settings.js';
+import { SettingsController, VISTA_DI, elementoVista } from './mobile-settings.js';
 import { OnboardingController } from './mobile-onboarding.js';
 import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
@@ -347,7 +347,7 @@ class MobileApp {
     // Ensure inputs stay visible when keyboard opens
     const modes = ['chat', 'workspace'];
     modes.forEach(mode => {
-      const view = document.getElementById(`view-${mode}`);
+      const view = elementoVista(mode);
       if (!view) return;
       const input = view.querySelector('input, textarea');
       if (input) {
@@ -774,7 +774,7 @@ class MobileApp {
     });
 
     // Show target view
-    const view = document.getElementById(`view-${VISTA_DI[mode] || mode}`);
+    const view = elementoVista(mode);
     if (view) {
       view.style.display = 'flex';
     }
@@ -920,17 +920,27 @@ class MobileApp {
       // della selezione non deve far scivolare la vista sotto le dita.
       if (hasSelection()) return;
 
-      view = document.getElementById(`view-${this.currentMode}`);
+      view = elementoVista(this.currentMode);
       if (!view) return;
 
       const modes = this._visibleModes();
       const idx = modes.indexOf(this.currentMode);
       if (idx === -1) return; // e.g. onboarding isn't in the dock — no swipe nav
 
-      neighbors = {
-        prev: idx > 0 ? modes[idx - 1] : null,
-        next: idx < modes.length - 1 ? modes[idx + 1] : null,
-      };
+      /* Il giro si chiude: da Memoria a destra si torna in Console, e da
+         Console a sinistra si va in Memoria. Con quattro voci in fila i due
+         capi erano l'unico posto in cui il gesto non faceva niente — e «di
+         lato si cambia linguetta» e' una regola che non regge se su due
+         linguette su quattro vale solo in un verso.
+         Sotto le due voci non c'e' nessun giro da fare: prev e next restano
+         nulli, e la sbirciata di fine corsa (`EDGE_PEEK`) resta per quel
+         caso. */
+      neighbors = modes.length > 1
+        ? {
+          prev: modes[(idx - 1 + modes.length) % modes.length],
+          next: modes[(idx + 1) % modes.length],
+        }
+        : { prev: null, next: null };
       const t = e.touches[0];
       startX = t.clientX; startY = t.clientY; startT = Date.now();
       startTarget = e.target;
@@ -991,7 +1001,7 @@ class MobileApp {
         setScrim(0, false);         // new view must not inherit the veil
         clearView(el);              // old view is about to be hidden by switchMode
         this.switchMode(target);
-        this._animateSlideIn(document.getElementById(`view-${target}`), goingPrev);
+        this._animateSlideIn(elementoVista(target), goingPrev);
       } else {
         // Spring back to rest (offset and grayout fade together).
         setScrim(0, true);

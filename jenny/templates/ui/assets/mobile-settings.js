@@ -115,6 +115,32 @@ export const CASSETTI = {
  * telefono il 20/09/2026). */
 export const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };
 
+/* E siccome averla in due copie e' costato un'intestazione, averla **senza una
+ * funzione** e' costato lo scorrimento.
+ *
+ * Il 22/09/2026 il carosello era morto su tre linguette su quattro, e il motivo
+ * era di nuovo questo: `setupSwipeNav` faceva `getElementById(\`view-${mode}\`)`,
+ * per `cervello` trovava `null` e usciva in silenzio alla prima riga. Stessa
+ * forma della volta prima, terzo sito — `mobile-app.js` due volte,
+ * `mobile-header.js` una.
+ *
+ * Tre volte e' il punto in cui la tabella non basta piu': finche' resta una
+ * cosa da **ricordarsi** di consultare, qualcuno scrivera' di nuovo l'id a
+ * mano, e il difetto che ne esce non si vede — non in un file rotto, non in un
+ * banco rosso, solo col dito sul telefono. Da qui in poi l'elemento di un modo
+ * si chiede a queste due, e il banco
+ * `tests/webui/test_no_raw_view_lookup_contract.py` rifiuta chi se le salta. */
+
+/** Il `<div id="view-…">` di un modo. `null` se quel modo non ha una vista. */
+export function elementoVista(mode) {
+  return document.getElementById(`view-${VISTA_DI[mode] || mode}`);
+}
+
+/** Il `<div id="title-…">` di un modo, dove si monta l'intestazione. */
+export function elementoTitolo(mode) {
+  return document.getElementById(`title-${VISTA_DI[mode] || mode}`);
+}
+
 export class SettingsController {
   constructor() {
     this.contentEl = document.getElementById('settings-content');
