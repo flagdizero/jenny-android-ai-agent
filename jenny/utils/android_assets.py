@@ -269,6 +269,7 @@ _UI_MANIFEST = [
     "assets/shared/cron-view.js",
     "assets/shared/dialog.js",
     "assets/shared/history-pager.js",
+    "assets/shared/gesto-orizzontale.js",
     "assets/shared/i18n.js",
     "assets/shared/image-handler.js",
     "assets/shared/image-lightbox.js",

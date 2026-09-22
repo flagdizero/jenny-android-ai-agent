@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "mobile-app.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
+GESTO_JS = ASSETS / "shared" / "gesto-orizzontale.js"
 
 _NODE = shutil.which("node")
 
@@ -90,6 +91,13 @@ def _metodo(source: str, nome: str) -> str:
     assert m, f"metodo {nome} non trovato"
     apertura = source.index("{", m.end())
     return source[m.start() + 1 : apertura] + _corpo(source, m.end())
+
+
+def _costante(source: str, nome: str) -> str:
+    """`export const NOME = ...;` su una riga, pronta da incollare."""
+    m = re.search(rf"^export const {re.escape(nome)} = .*$", source, re.M)
+    assert m, f"const {nome} non trovata"
+    return m.group(0).replace("export ", "")
 
 
 def _funzione(source: str, nome: str) -> str:
@@ -163,12 +171,19 @@ function hasSelection() { return false; }
 __VISTA_DI__
 __ELEMENTO_VISTA__
 
+/* Il riconoscimento del gesto, dal modulo condiviso. */
+__SOGLIA_ASSE__
+__SOGLIA_CONFERMA__
+__VELOCITA__
+__ELASTICO__
+__HSCROLL__
+__OSSERVA__
+
 const modiVisti = [];
 const animati = [];
 
 const app = {
   __VISIBLE_MODES__,
-  __INSIDE_HSCROLL__,
   __SETUP_SWIPE__,
   __ANIMATE__,
 
@@ -210,6 +225,7 @@ function scorri(da, verso, { corto = false } = {}) {
 def _harness() -> str:
     app = APP_JS.read_text(encoding="utf-8")
     impostazioni = SETTINGS_JS.read_text(encoding="utf-8")
+    gesto = GESTO_JS.read_text(encoding="utf-8")
     vista_di = re.search(r"^export const VISTA_DI = .*$", impostazioni, re.M)
     assert vista_di, "VISTA_DI non trovata"
     return (
@@ -217,7 +233,12 @@ def _harness() -> str:
         .replace("__VISTA_DI__", vista_di.group(0).replace("export ", ""))
         .replace("__ELEMENTO_VISTA__", _funzione(impostazioni, "elementoVista"))
         .replace("__VISIBLE_MODES__", _metodo(app, "_visibleModes"))
-        .replace("__INSIDE_HSCROLL__", _metodo(app, "_insideHScroll"))
+        .replace("__SOGLIA_ASSE__", _costante(gesto, "SOGLIA_ASSE"))
+        .replace("__VELOCITA__", _costante(gesto, "VELOCITA_CONFERMA"))
+        .replace("__SOGLIA_CONFERMA__", _funzione(gesto, "sogliaConferma"))
+        .replace("__ELASTICO__", _funzione(gesto, "elastico"))
+        .replace("__HSCROLL__", _funzione(gesto, "dentroScorrevoleOrizzontale"))
+        .replace("__OSSERVA__", _funzione(gesto, "osservaGestoOrizzontale"))
         .replace("__SETUP_SWIPE__", _metodo(app, "setupSwipeNav"))
         .replace("__ANIMATE__", _metodo(app, "_animateSlideIn"))
     )

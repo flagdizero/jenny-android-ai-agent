@@ -20,6 +20,7 @@ import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
 import { keyboard } from './shared/keyboard.js';
 import { hasSelection, exposeSelectionState, forwardTapsThroughChrome } from './shared/selection.js';
+import { osservaGestoOrizzontale, elastico } from './shared/gesto-orizzontale.js';
 import './shared/theme.js';
 
 export { showToast };
@@ -851,34 +852,24 @@ class MobileApp {
   // Walk up from `target` to `boundary` looking for a horizontally scrollable
   // ancestor that can still scroll in the gesture direction. If found, the
   // gesture belongs to that scroller (native scroll), not to tab navigation.
-  _insideHScroll(target, dx, boundary) {
-    let el = target;
-    while (el && el !== boundary && el !== document.body) {
-      if (el.scrollWidth > el.clientWidth + 2) {
-        const overflowX = getComputedStyle(el).overflowX;
-        if (overflowX === 'auto' || overflowX === 'scroll') {
-          const atStart = el.scrollLeft <= 0;
-          const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
-          // dx > 0 (finger right) scrolls content toward its start;
-          // dx < 0 (finger left) scrolls toward its end.
-          if (dx > 0 && !atStart) return true;
-          if (dx < 0 && !atEnd) return true;
-        }
-      }
-      el = el.parentElement;
-    }
-    return false;
-  }
 
   // Global horizontal swipe on the content area to move between dock tabs.
   // The current view follows the finger (damped) as an affordance; on release
   // past a threshold it commits with a crisp slide-in of the target view,
   // otherwise it springs back. See plan: "carosello a step".
+  /* Il carosello dell'officina: di lato si cambia linguetta.
+   *
+   *  Il *riconoscimento* del gesto — quando e' orizzontale, quando appartiene a
+   *  uno scorrevole sotto il dito, quando e' abbastanza — sta in
+   *  `shared/gesto-orizzontale.js`, perche' la casa fa lo stesso gesto per
+   *  cambiare pagina. Qui resta la **risposta**, che invece e' solo di qui: si
+   *  trascina la vista corrente con una sbirciata smorzata e un velo grigio, e
+   *  la vicina non viene mai disegnata. */
   setupSwipeNav() {
     const main = document.querySelector('.main');
     if (!main) return;
 
-    // Grayout veil layered above the peeking view (see .swipe-scrim CSS).
+    // Velo grigio sopra la vista che sbircia (v. .swipe-scrim nel CSS).
     const scrim = document.createElement('div');
     scrim.className = 'swipe-scrim';
     scrim.setAttribute('aria-hidden', 'true');
@@ -888,31 +879,11 @@ class MobileApp {
       scrim.style.opacity = String(opacity);
     };
 
-    // 24px, non 10: il touch slop di Android è ~8dp (≈20-24px reali), e sotto
-    // quella soglia `preventDefault()` cade dentro la finestra in cui Chromium
-    // sta ancora decidendo se la pressione è un long-press — che a quel punto
-    // viene scartato, e la selezione di testo non si apre più.
-    const H_SLOP = 24;       // px of travel before deciding the gesture is horizontal
-    const PEEK = 0.13;       // asymptotic peek offset toward a neighbor (fraction of width)
-    const EDGE_PEEK = 0.05;  // asymptotic peek offset at the ends
+    const PEEK = 0.13;       // sbirciata verso una vicina (frazione di larghezza)
+    const EDGE_PEEK = 0.05;  // sbirciata quando di la' non c'e' niente
 
-    // Exponential rubber-band: responsive near 0, decelerating toward `max`.
-    const rubber = (delta, max) => {
-      if (!max) return 0;
-      const sign = delta < 0 ? -1 : 1;
-      return sign * max * (1 - Math.exp(-Math.abs(delta) / (max * 1.8)));
-    };
-
-    let startX = 0, startY = 0, startT = 0;
-    let tracking = false;       // a candidate gesture is in progress
-    let horizontal = null;      // null = undecided; true once committed to horizontal
-    let view = null;            // the current view element being dragged
-    let neighbors = null;       // { prev, next } modes
-    let startTarget = null;
-
-    const reset = () => {
-      tracking = false; horizontal = null; view = null; neighbors = null; startTarget = null;
-    };
+    let view = null;         // la vista corrente, quella che segue il dito
+    let neighbors = null;    // { prev, next } come nomi di modo
 
     const clearView = (el) => {
       if (!el) return;
@@ -922,114 +893,84 @@ class MobileApp {
       el.style.filter = '';
     };
 
-    main.addEventListener('touchstart', (e) => {
-      reset();
-      if (e.touches.length !== 1) return;
-      // Guard: onboarding lock — navigation is blocked during first run.
-      if (this._firstRun && !localStorage.getItem('onboarding-complete')) return;
-      // Guard: an open drawer owns its own (vertical) swipe.
-      if (this.drawer.activeDrawer) return;
-      // Guard: c'è del testo selezionato. Trascinare per aggiustare i manici
-      // della selezione non deve far scivolare la vista sotto le dita.
-      if (hasSelection()) return;
+    osservaGestoOrizzontale(main, {
+      puoIniziare: () => {
+        view = null; neighbors = null;
+        // Guardia: durante il primo avvio la navigazione e' bloccata.
+        if (this._firstRun && !localStorage.getItem('onboarding-complete')) return false;
+        // Guardia: un cassetto aperto possiede il proprio gesto (verticale).
+        if (this.drawer.activeDrawer) return false;
+        // Guardia: c'e' del testo selezionato. Trascinare per aggiustare i
+        // manici della selezione non deve far scivolare la vista sotto le dita.
+        if (hasSelection()) return false;
 
-      view = elementoVista(this.currentMode);
-      if (!view) return;
+        view = elementoVista(this.currentMode);
+        if (!view) return false;
 
-      const modes = this._visibleModes();
-      const idx = modes.indexOf(this.currentMode);
-      if (idx === -1) return; // e.g. onboarding isn't in the dock — no swipe nav
+        const modes = this._visibleModes();
+        const idx = modes.indexOf(this.currentMode);
+        if (idx === -1) return false; // onboarding non e' nel dock — niente carosello
 
-      /* Il giro si chiude: da Memoria a destra si torna in Console, e da
-         Console a sinistra si va in Memoria. Con quattro voci in fila i due
-         capi erano l'unico posto in cui il gesto non faceva niente — e «di
-         lato si cambia linguetta» e' una regola che non regge se su due
-         linguette su quattro vale solo in un verso.
-         Sotto le due voci non c'e' nessun giro da fare: prev e next restano
-         nulli, e la sbirciata di fine corsa (`EDGE_PEEK`) resta per quel
-         caso. */
-      neighbors = modes.length > 1
-        ? {
-          prev: modes[(idx - 1 + modes.length) % modes.length],
-          next: modes[(idx + 1) % modes.length],
-        }
-        : { prev: null, next: null };
-      const t = e.touches[0];
-      startX = t.clientX; startY = t.clientY; startT = Date.now();
-      startTarget = e.target;
-      tracking = true;
-    }, { passive: true });
+        /* Il giro si chiude: da Memoria a destra si torna in Console, e da
+           Console a sinistra si va in Memoria. Con quattro voci in fila i due
+           capi erano l'unico posto in cui il gesto non faceva niente — e «di
+           lato si cambia linguetta» e' una regola che non regge se su due
+           linguette su quattro vale solo in un verso.
+           Sotto le due voci non c'e' nessun giro da fare: prev e next restano
+           nulli, e la sbirciata di fine corsa (`EDGE_PEEK`) resta per quel
+           caso. */
+        neighbors = modes.length > 1
+          ? {
+            prev: modes[(idx - 1 + modes.length) % modes.length],
+            next: modes[(idx + 1) % modes.length],
+          }
+          : { prev: null, next: null };
+        return true;
+      },
 
-    main.addEventListener('touchmove', (e) => {
-      if (!tracking) return;
-      const t = e.touches[0];
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-
-      if (horizontal === null) {
-        if (Math.abs(dx) < H_SLOP && Math.abs(dy) < H_SLOP) return;
-        // Dominanza orizzontale vera: un trascinamento diagonale (tipico di chi
-        // aggiusta una selezione) non arma più lo swipe.
-        if (Math.abs(dx) <= Math.abs(dy) * 1.5) { reset(); return; } // vertical → let it scroll
-        if (this._insideHScroll(startTarget, dx, main)) { reset(); return; }
-        horizontal = true;
+      onOrizzontale: () => {
         view.style.transition = 'none';
         view.style.willChange = 'transform';
-      }
+      },
 
-      e.preventDefault(); // we own the gesture now (listener is passive:false)
+      onTrascina: (dx, w) => {
+        const goingPrev = dx > 0;
+        const hasNeighbor = goingPrev ? neighbors.prev : neighbors.next;
+        const max = w * (hasNeighbor ? PEEK : EDGE_PEEK);
+        const tx = elastico(dx, max);
+        // Quanto si e' vicini all'asintoto guida il grigio.
+        const progress = hasNeighbor && max ? Math.min(1, Math.abs(tx) / max) : 0;
+        view.style.transform = `translateX(${tx.toFixed(2)}px)`;
+        setScrim(progress, false);
+      },
 
-      const goingPrev = dx > 0;
-      const hasNeighbor = goingPrev ? neighbors.prev : neighbors.next;
-      const w = main.clientWidth || window.innerWidth;
-      const max = w * (hasNeighbor ? PEEK : EDGE_PEEK);
-      const tx = rubber(dx, max);
-      // Progress toward the asymptote drives the grayout + slight recede.
-      const progress = hasNeighbor && max ? Math.min(1, Math.abs(tx) / max) : 0;
-      view.style.transform = `translateX(${tx.toFixed(2)}px)`;
-      setScrim(progress, false);
-    }, { passive: false });
+      onFine: ({ verso, conferma }) => {
+        const el = view;
+        const goingPrev = verso === 'prev';
+        const target = goingPrev ? neighbors.prev : neighbors.next;
+        view = null; neighbors = null;
 
-    const finish = (e) => {
-      if (!tracking) return;
-      const el = view;
-      const nb = neighbors;
-      const wasHorizontal = horizontal === true;
-      if (!wasHorizontal || !el) { reset(); return; }
+        if (conferma && target) {
+          setScrim(0, false);         // la vista nuova non deve ereditare il velo
+          clearView(el);              // la vecchia sta per essere nascosta da switchMode
+          this.switchMode(target);
+          this._animateSlideIn(elementoVista(target), goingPrev);
+        } else {
+          // Torna a riposo (offset e grigio insieme).
+          setScrim(0, true);
+          el.style.transition = 'transform .22s cubic-bezier(.22,.61,.36,1)';
+          el.style.transform = 'translateX(0)';
+          const onEnd = () => { clearView(el); el.removeEventListener('transitionend', onEnd); };
+          el.addEventListener('transitionend', onEnd);
+        }
+      },
 
-      const changed = (e.changedTouches && e.changedTouches[0]) || null;
-      const endX = changed ? changed.clientX : startX;
-      const dx = endX - startX;
-      const dt = Math.max(1, Date.now() - startT);
-      const vx = dx / dt; // px per ms
-      const w = main.clientWidth || window.innerWidth;
-      const threshold = Math.max(60, w * 0.22);
-      const goingPrev = dx > 0;
-      const target = goingPrev ? nb.prev : nb.next;
-      const commit = !!target && (Math.abs(dx) > threshold || Math.abs(vx) > 0.5);
-
-      reset();
-
-      if (commit) {
-        setScrim(0, false);         // new view must not inherit the veil
-        clearView(el);              // old view is about to be hidden by switchMode
-        this.switchMode(target);
-        this._animateSlideIn(elementoVista(target), goingPrev);
-      } else {
-        // Spring back to rest (offset and grayout fade together).
-        setScrim(0, true);
-        el.style.transition = 'transform .22s cubic-bezier(.22,.61,.36,1)';
-        el.style.transform = 'translateX(0)';
-        const onEnd = () => { clearView(el); el.removeEventListener('transitionend', onEnd); };
-        el.addEventListener('transitionend', onEnd);
-      }
-    };
-
-    main.addEventListener('touchend', finish, { passive: true });
-    main.addEventListener('touchcancel', () => {
-      if (horizontal && view) { setScrim(0, false); clearView(view); }
-      reset();
-    }, { passive: true });
+      onAnnulla: () => {
+        setScrim(0, false);
+        clearView(view);
+        view = null; neighbors = null;
+      },
+    });
   }
 
   // Slide the freshly-shown view in from the swipe direction.
