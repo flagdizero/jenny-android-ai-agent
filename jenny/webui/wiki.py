@@ -707,7 +707,6 @@ def create_audit(
     sel_start: int,
     sel_end: int,
     comment: str,
-    severity: str,
     author: str,
 ) -> dict[str, Any]:
     """Create a new audit entry under wiki_root / audit/."""
@@ -735,7 +734,6 @@ def create_audit(
         anchor_before=anchor.anchor_before,
         anchor_text=anchor.anchor_text,
         anchor_after=anchor.anchor_after,
-        severity=severity,
         author=author or "anonymous",
         source="web-viewer",
         created=datetime.now().isoformat(),
@@ -822,7 +820,6 @@ def list_audits(
             "anchor_before": e.anchor_before,
             "anchor_text": e.anchor_text,
             "anchor_after": e.anchor_after,
-            "severity": e.severity,
             "author": e.author,
             "created": e.created,
             "status": e.status,

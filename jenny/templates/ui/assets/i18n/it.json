@@ -1083,13 +1083,7 @@
       "needComment": "Scrivi cosa c'e' che non va.",
       "empty": "Scegli prima il pezzo di testo da segnalare.",
       "notFound": "Questo pezzo non lo ritrovo nel testo originale: prova a sceglierne uno senza grassetti o link dentro.",
-      "ambiguous": "Questo testo compare piu' volte nella pagina: scegline un pezzo piu' lungo, cosi' so a quale mi riferisco.",
-      "sev": {
-        "info": "nota",
-        "suggest": "idea",
-        "warn": "attenzione",
-        "error": "errore"
-      }
+      "ambiguous": "Questo testo compare piu' volte nella pagina: scegline un pezzo piu' lungo, cosi' so a quale mi riferisco."
     }
   },
   "officina": {

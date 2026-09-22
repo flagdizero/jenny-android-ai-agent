@@ -15,7 +15,6 @@ from datetime import datetime
 
 _CONTEXT_CHARS = 80
 
-_VALID_SEVERITIES: tuple[str, ...] = ("info", "suggest", "warn", "error")
 _VALID_SOURCES: tuple[str, ...] = ("obsidian-plugin", "web-viewer", "manual")
 _VALID_STATUSES: tuple[str, ...] = ("open", "resolved")
 
@@ -35,13 +34,23 @@ class _Anchor:
 
 @dataclass
 class AuditEntry:
+    """Un riscontro umano ancorato a un punto di una pagina.
+
+    **Niente ``severity``, e non e' una dimenticanza** (tolta il 22/09/2026).
+    Erano quattro livelli — info/suggest/warn/error — che chi segnala doveva
+    scegliere prima di scrivere: un campo nato per una coda di smistamento,
+    cioe' per una squadra. Qui chi segnala, chi corregge e chi possiede il
+    quaderno sono la stessa persona, e nessuno vuole dare un voto alla propria
+    lamentela. Quel che resta e' l'ordine di arrivo, che e' la fila di una coda
+    vera.
+    """
+
     id: str
     target: str
     target_lines: tuple[int, int]
     anchor_before: str
     anchor_text: str
     anchor_after: str
-    severity: str
     author: str
     source: str
     created: str
@@ -56,8 +65,6 @@ class AuditEntry:
             raise ValueError("target is required")
         if not self.anchor_text:
             raise ValueError("anchor_text is required")
-        if self.severity not in _VALID_SEVERITIES:
-            raise ValueError(f"severity must be one of {_VALID_SEVERITIES}")
         if self.source not in _VALID_SOURCES:
             raise ValueError(f"source must be one of {_VALID_SOURCES}")
         if self.status not in _VALID_STATUSES:
@@ -129,7 +136,6 @@ def to_markdown(entry: AuditEntry) -> str:
         "anchor_before": entry.anchor_before,
         "anchor_text": entry.anchor_text,
         "anchor_after": entry.anchor_after,
-        "severity": entry.severity,
         "author": entry.author,
         "source": entry.source,
         "created": entry.created,
@@ -173,7 +179,6 @@ def from_markdown(text: str) -> AuditEntry:
         anchor_before=front_raw.get("anchor_before", ""),
         anchor_text=front_raw.get("anchor_text", ""),
         anchor_after=front_raw.get("anchor_after", ""),
-        severity=front_raw.get("severity", "warn"),
         author=front_raw.get("author", ""),
         source=front_raw.get("source", "web-viewer"),
         created=front_raw.get("created", datetime.now().isoformat()),

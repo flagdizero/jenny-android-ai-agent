@@ -454,7 +454,6 @@ class TestAudit:
             sel_start=8,
             sel_end=15,
             comment="typo",
-            severity="warn",
             author="test",
         )
         assert "id" in result
@@ -479,7 +478,6 @@ class TestAudit:
                 sel_start=0,
                 sel_end=0,
                 comment="test",
-                severity="warn",
                 author="test",
             )
 
@@ -494,7 +492,6 @@ class TestAudit:
             sel_start=8,
             sel_end=15,
             comment="typo",
-            severity="warn",
             author="test",
         )
         audit_id = created["id"]
@@ -536,7 +533,6 @@ class TestAudit:
                 sel_start=8,
                 sel_end=15,
                 comment="typo",
-                severity="warn",
                 author="test",
             )
         assert load_audits(wiki_root, mode="all") == []
@@ -557,7 +553,6 @@ class TestAudit:
             sel_start=8,
             sel_end=15,
             comment="typo",
-            severity="warn",
             author="test",
         )
 
@@ -583,7 +578,6 @@ class TestAudit:
             sel_start=8,
             sel_end=15,
             comment="typo",
-            severity="warn",
             author="test",
         )
         audits_all = load_audits(wiki_root, mode="all")
@@ -719,7 +713,6 @@ class TestListAuditsCompat:
             sel_start=8,
             sel_end=15,
             comment="typo",
-            severity="warn",
             author="test",
         )
         entries = list_audits(wiki_root, target="index.md", mode="open")
@@ -727,7 +720,52 @@ class TestListAuditsCompat:
         if entries:
             assert isinstance(entries[0], dict)
             assert "id" in entries[0]
-            assert "severity" in entries[0]
+
+
+class TestNessunaGravita:
+    """La gravita' e' uscita dal formato il 22/09/2026, e va misurata **assente**.
+
+    Erano quattro livelli che chi segnalava sceglieva prima di scrivere — un
+    campo da coda di smistamento in un posto dove chi segnala e chi corregge
+    sono la stessa persona. Toglierla dalla tendina non bastava: sarebbe
+    rimasta una riga fissa in ogni file futuro, piu' il codice che la valida e
+    la ordina avendo un valore solo.
+
+    Le due asserzioni sono due perche' sono due bugie diverse: il **file** e'
+    quel che il linter e Jenny leggono, il **dizionario** e' quel che esce
+    dalla rotta. Un campo tolto da uno solo dei due passa inosservato.
+    """
+
+    def test_the_written_file_carries_no_severity(self, wikis_dir: Path):
+        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
+        created = create_audit(
+            wiki_root=wiki_root,
+            target="index.md",
+            raw_markdown="# Home\ncontent here",
+            sel_start=8,
+            sel_end=15,
+            comment="typo",
+            author="test",
+        )
+        testo = (wiki_root / created["path"]).read_text(encoding="utf-8")
+        assert "severity" not in testo
+        # …e il resto del frontmatter c'e' ancora: il taglio e' uno solo.
+        for chiave in ("id:", "target:", "anchor_text:", "author:", "status:"):
+            assert chiave in testo, chiave
+
+    def test_the_listed_entry_carries_no_severity(self, wikis_dir: Path):
+        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
+        create_audit(
+            wiki_root=wiki_root,
+            target="index.md",
+            raw_markdown="# Home\ncontent here",
+            sel_start=8,
+            sel_end=15,
+            comment="typo",
+            author="test",
+        )
+        voce = list_audits(wiki_root, target="index.md", mode="open")[0]
+        assert "severity" not in voce
 
 
 # ── Frontmatter allowlist (/api/page privacy) ───────────────────────────────

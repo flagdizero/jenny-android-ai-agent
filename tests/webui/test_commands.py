@@ -457,7 +457,6 @@ def _workspace_with_audit(workspace_root: Path) -> str:
         sel_start=8,
         sel_end=15,
         comment="typo",
-        severity="warn",
         author="test",
     )
     return created["id"]

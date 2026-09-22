@@ -77,7 +77,6 @@ def extract_comment_one_line(text: str) -> str:
     return "(no comment body)"
 
 
-SEVERITY_ORDER = {"error": 0, "warn": 1, "suggest": 2, "info": 3}
 
 
 def main(root: str, mode: str) -> int:
@@ -115,18 +114,19 @@ def main(root: str, mode: str) -> int:
 
     for target in sorted(grouped.keys()):
         entries = grouped[target]
-        entries.sort(key=lambda e: (
-            SEVERITY_ORDER.get(e.get("severity", "info"), 99),
-            e.get("created", ""),
-        ))
+        # **In ordine di arrivo, dalla piu' vecchia.** Qui c'era una gravita'
+        # scelta da chi segnalava, e ordinava questa fila; e' uscita dal formato
+        # il 22/09/2026 perche' era un campo da coda di smistamento in un
+        # posto dove chi segnala e chi corregge sono la stessa persona. Questa
+        # e' la riga in cui la priorita' tornerebbe, se un giorno servisse.
+        entries.sort(key=lambda e: e.get("created", ""))
         print(f"{target}  ({len(entries)} {mode})")
         for e in entries:
-            sev = e.get("severity", "?")
             aid = e.get("id", "?")
             author = e.get("author", "?")
             created = e.get("created", "?")[:10]  # date only
             line = e.get("_one_liner", "")
-            print(f"   [{aid}] {sev}: {line}  —  {author}, {created}")
+            print(f"   [{aid}] {line}  —  {author}, {created}")
         print()
 
     return 0

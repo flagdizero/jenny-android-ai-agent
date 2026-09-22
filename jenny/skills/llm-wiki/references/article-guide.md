@@ -197,7 +197,7 @@ Sequence:
 ````markdown
 ```mermaid
 sequenceDiagram
-    Human->>audit/: file comment (anchor + severity)
+    Human->>audit/: file comment (anchor + text)
     Agent->>Target: locate anchor, apply fix
     Agent->>resolved/: move file + append resolution
     Agent->>log/: record audit entry

@@ -110,30 +110,33 @@ def test_the_client_does_not_send_the_markdown_the_route_ignores() -> None:
     assert "raw" not in m.group(0).replace("rawMarkdown", "")
 
 
-def test_the_severities_are_the_four_the_format_allows() -> None:
-    """Un quinto valore lo rifiuta il linter della skill, che non e' qui e non
-    fallirebbe il banco: la lista va tenuta pari a mano, quindi si dice."""
+def test_nothing_in_the_flow_asks_for_a_severity() -> None:
+    """La gravita' e' uscita dal formato il 22/09/2026, e qui va misurata assente.
+
+    Qui c'erano due banchi: uno teneva le quattro voci del client pari a quelle
+    del linter della skill, l'altro le teneva tradotte in due lingue. Erano
+    banchi giusti su una cosa sbagliata — un menu' che chiede a chi segnala di
+    dare un voto alla propria lamentela, cioe' un campo da coda di smistamento
+    in un posto dove chi segnala e chi corregge sono la stessa persona.
+
+    **Quel che resta da misurare e' il verso opposto**, e in tre punti, perche'
+    sono tre modi diversi di lasciarla rientrare: il client non la manda, il
+    linter non la chiede, e le lingue non ne portano piu' le parole.
+    """
+    client = (AUDIT_JS.read_text(encoding="utf-8")
+              + API_JS.read_text(encoding="utf-8"))
+    assert "severity" not in client
+    assert "SEVERITIES" not in client
+
     lint = (
         Path(__file__).resolve().parents[2]
         / "jenny" / "skills" / "llm-wiki" / "scripts" / "lint_wiki.py"
-    )
-    m = re.search(r"VALID_SEVERITIES\s*=\s*\{([^}]*)\}", lint.read_text(encoding="utf-8"))
-    assert m, "VALID_SEVERITIES non trovata nel linter"
-    valide = set(re.findall(r'"([^"]+)"', m.group(1)))
+    ).read_text(encoding="utf-8")
+    assert "VALID_SEVERITIES" not in lint
+    m = re.search(r"AUDIT_REQUIRED_FIELDS = \{([^}]*)\}", lint)
+    assert m, "AUDIT_REQUIRED_FIELDS non trovata"
+    assert "severity" not in m.group(1)
 
-    src = AUDIT_JS.read_text(encoding="utf-8")
-    m2 = re.search(r"export const SEVERITIES = \[([^\]]*)\]", src)
-    assert m2, "SEVERITIES non trovata"
-    offerte = set(re.findall(r"'([^']+)'", m2.group(1)))
-    assert offerte == valide, (offerte, valide)
-
-
-def test_every_severity_has_a_word_in_both_languages() -> None:
-    src = AUDIT_JS.read_text(encoding="utf-8")
-    m = re.search(r"export const SEVERITIES = \[([^\]]*)\]", src)
-    assert m
-    sev = re.findall(r"'([^']+)'", m.group(1))
     for lang in ("it", "en"):
         data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
-        parole = data["casa"]["audit"]["sev"]
-        assert set(parole) == set(sev), (lang, sorted(parole), sorted(sev))
+        assert "sev" not in data["casa"]["audit"], lang

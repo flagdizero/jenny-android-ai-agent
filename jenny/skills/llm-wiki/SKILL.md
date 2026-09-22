@@ -225,7 +225,7 @@ This keeps the wiki repo git-friendly and portable.
 
 The wiki is AI-written; it will be wrong sometimes. The raw sources are human-written; they will contradict each other. The `audit/` directory is how humans correct both without losing the corrections in chat history.
 
-- Humans (or the agent) file feedback by adding one file to `audit/` with YAML frontmatter (anchor, target, severity) and a markdown body.
+- Humans (or the agent) file feedback by adding one file to `audit/` with YAML frontmatter (anchor, target) and a markdown body.
 - The AI **must** periodically run the `audit` op — never silently ignore `audit/*.md` files.
 - When feedback is applied, the file moves to `audit/resolved/` with a `# Resolution` section appended and a log entry recorded in `log/YYYYMMDD.md`.
 

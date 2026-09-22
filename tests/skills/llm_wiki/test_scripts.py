@@ -98,7 +98,6 @@ VALID_AUDIT = {
     "anchor_before": '""',
     "anchor_text": '"# Index"',
     "anchor_after": '""',
-    "severity": "warn",
     "author": "tester",
     "source": "manual",
     "created": "2026-01-01T09:00:00+01:00",
@@ -270,9 +269,36 @@ class AuditShape(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._wiki(tmp)
             fields = dict(VALID_AUDIT)
-            del fields["severity"]
+            del fields["author"]
             write_audit(root, "20260101-090000-note.md", fields)
             self.assertNotEqual(quiet(lint_wiki.lint, str(root)), 0)
+
+    def test_an_audit_without_severity_is_fine(self):
+        """La gravita' e' uscita dal formato il 22/09/2026.
+
+        ``VALID_AUDIT`` non ce l'ha piu', quindi questo e' il caso normale — e
+        vale dirlo per nome: il linter non deve chiederla, o ogni segnalazione
+        scritta dal telefono nascerebbe gia' segnalata.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._wiki(tmp)
+            self.assertNotIn("severity", VALID_AUDIT)
+            write_audit(root, "20260101-090000-note.md", VALID_AUDIT)
+            self.assertEqual(quiet(lint_wiki.lint, str(root)), 0)
+
+    def test_an_old_audit_that_still_has_severity_still_passes(self):
+        """Le chiavi obbligatorie sono un insieme **aperto**.
+
+        Il controllo e' ``REQUIRED - set(fm.keys())``, quindi una chiave in piu'
+        non e' un errore. Sul telefono non esiste nessun file di audit — contati
+        il 22/09 su quindici quaderni, aperti e risolti: zero — ma un corpus
+        altrui potrebbe averne, e toglierla dal formato non deve rompere i loro.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._wiki(tmp)
+            fields = dict(VALID_AUDIT, severity="warn")
+            write_audit(root, "20260101-090000-note.md", fields)
+            self.assertEqual(quiet(lint_wiki.lint, str(root)), 0)
 
     def test_filename_timestamp_mismatch_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:

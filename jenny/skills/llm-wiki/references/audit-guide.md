@@ -32,7 +32,6 @@ target_lines: [45, 52]
 anchor_before: "## 技术概览\n\n| 维度 | 详情 |\n|------|------|\n"
 anchor_text: "| **规模** | ~1,900 个文件，512,000+ 行代码 |"
 anchor_after: "\n| **语言** | TypeScript（strict 模式） |"
-severity: warn
 author: your-name
 source: manual
 created: 2026-04-09T14:30:22+08:00
@@ -59,20 +58,25 @@ status: open
 | `anchor_before` | string | yes | Up to ~80 chars of text immediately before the selection. Verbatim, preserves newlines. |
 | `anchor_text` | string | yes | The exact selected text. Verbatim. |
 | `anchor_after` | string | yes | Up to ~80 chars of text immediately after the selection. Verbatim. |
-| `severity` | enum | yes | One of `info`, `suggest`, `warn`, `error`. |
 | `author` | string | yes | Free text — who filed the feedback. |
 | `source` | string | yes | Identifies who/what filed it. `manual` for hand-filed; any tool that writes audits may use its own id. |
 | `created` | ISO 8601 | yes | Timestamp with timezone. |
 | `status` | enum | yes | `open` for files in `audit/`, `resolved` for files in `audit/resolved/`. |
 
-### Severity semantics
+### Processing order
 
-- **info** — "worth noting but not wrong". Example: additional context, alternate phrasing.
-- **suggest** — "consider this". Example: reword, reorganize.
-- **warn** — "something looks off". Example: stale number, ambiguous sentence.
-- **error** — "this is wrong". Example: factual mistake, broken link, wrong attribution.
+**Oldest first.** There is no severity field: audits carry no priority, and the
+queue is the order they arrived in.
 
-The AI should process `error` and `warn` first, then `suggest`, then `info`.
+This used to be a four-level `severity` the filer chose before writing the
+comment (`info` / `suggest` / `warn` / `error`), and it set this order. It was
+removed on 2026-09-22: it is a triage field, and triage is what a team does. In
+a wiki where the person who files the feedback, the person who applies it and
+the owner of the corpus are the same one, nobody wants to grade their own
+complaint — and every audit ended up at the default anyway.
+
+If a corpus ever needs priority again, it comes back in two places: this field,
+and the sort key in `scripts/audit_review.py`.
 
 ## Anchor strategy
 

@@ -1080,13 +1080,7 @@
       "needComment": "Write what's wrong.",
       "empty": "Pick the piece of text to report first.",
       "notFound": "I can't find this piece in the original text: try picking one without bold or links inside.",
-      "ambiguous": "This text appears more than once on the page: pick a longer piece so I know which one you mean.",
-      "sev": {
-        "info": "note",
-        "suggest": "idea",
-        "warn": "warning",
-        "error": "error"
-      }
+      "ambiguous": "This text appears more than once on the page: pick a longer piece so I know which one you mean."
     }
   },
   "officina": {

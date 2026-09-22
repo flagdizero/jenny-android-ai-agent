@@ -161,11 +161,14 @@ INLINE_CODE_RE = re.compile(r"(`{1,2})(?:(?!\1)[\s\S])*?\1")
 AUDIT_TS_RE = re.compile(r"^(\d{8}-\d{6})")  # YYYYMMDD-HHMMSS prefix
 
 # Required audit frontmatter fields
+# Nessun ``severity``: il campo e' uscito dal formato il 22/09/2026 (v. la
+# docstring di ``AuditEntry``). Questo e' un insieme di chiavi **obbligatorie**,
+# non chiuso — il controllo e' ``REQUIRED - set(fm.keys())`` — quindi un file
+# vecchio che se la porta dietro passa lo stesso.
 AUDIT_REQUIRED_FIELDS = {
     "id", "target", "target_lines", "anchor_before", "anchor_text",
-    "anchor_after", "severity", "author", "source", "created", "status",
+    "anchor_after", "author", "source", "created", "status",
 }
-VALID_SEVERITIES = {"info", "suggest", "warn", "error"}
 
 # Canonical op names for log/ entries (SKILL.md § log/ format).
 #
@@ -1225,10 +1228,6 @@ def lint(root: str) -> int:
                     f"   {rel} — missing fields: {', '.join(sorted(missing))}"
                 )
                 continue
-            if fm["severity"] not in VALID_SEVERITIES:
-                audit_issues.append(
-                    f"   {rel} — invalid severity '{fm['severity']}' (expected {sorted(VALID_SEVERITIES)})"
-                )
             if not str(fm["source"]).strip():
                 audit_issues.append(f"   {rel} — empty source field")
             # id must be unique and its timestamp prefix must match the filename.

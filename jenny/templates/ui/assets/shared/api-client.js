@@ -235,10 +235,10 @@ class ApiClient {
    *
    *  `author` e' la stessa costante che `/api/wiki/config` gia' dichiarava per
    *  questo campo: l'audit lo scrive chi legge, non lei. */
-  async createAudit({ wiki, target, selStart, selEnd, comment, severity }) {
+  async createAudit({ wiki, target, selStart, selEnd, comment }) {
     const params = new URLSearchParams({
       wiki, target, selStart: String(selStart), selEnd: String(selEnd),
-      comment, severity, author: 'me',
+      comment, author: 'me',
     });
     const res = await this._fetch(`/api/audit/create?${params}`);
     if (!res.ok) throw new Error(`Audit create failed: ${res.status}`);

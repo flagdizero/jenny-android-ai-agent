@@ -154,7 +154,7 @@ class TestAuditFiltering:
         (audit_dir / "20260101-000000-aaaa-page-a.md").write_text(
             "---\nid: 20260101-000000-aaaa\ntarget: page-a.md\ntarget_lines:\n- 1\n- 1\n"
             "anchor_before: ''\nanchor_text: some text\nanchor_after: ''\n"
-            "severity: warn\nauthor: test\nsource: web-viewer\n"
+            "author: test\nsource: web-viewer\n"
             "created: '2026-01-01T00:00:00'\nstatus: open\n---\n\nAudit for page A.",
             encoding="utf-8",
         )
@@ -162,7 +162,7 @@ class TestAuditFiltering:
         (audit_dir / "20260102-000000-bbbb-page-b.md").write_text(
             "---\nid: 20260102-000000-bbbb\ntarget: page-b.md\ntarget_lines:\n- 1\n- 1\n"
             "anchor_before: ''\nanchor_text: other text\nanchor_after: ''\n"
-            "severity: error\nauthor: test\nsource: web-viewer\n"
+            "author: test\nsource: web-viewer\n"
             "created: '2026-01-02T00:00:00'\nstatus: open\n---\n\nAudit for page B.",
             encoding="utf-8",
         )
@@ -170,7 +170,7 @@ class TestAuditFiltering:
         (resolved_dir / "20260103-000000-cccc-page-a.md").write_text(
             "---\nid: 20260103-000000-cccc\ntarget: page-a.md\ntarget_lines:\n- 1\n- 1\n"
             "anchor_before: ''\nanchor_text: resolved text\nanchor_after: ''\n"
-            "severity: info\nauthor: test\nsource: web-viewer\n"
+            "author: test\nsource: web-viewer\n"
             "created: '2026-01-03T00:00:00'\nstatus: resolved\n---\n\nResolved audit.",
             encoding="utf-8",
         )
@@ -256,7 +256,7 @@ class TestAuditCreateTraversal:
         with patch.object(handler, "_get_workspace_root", return_value=workspace):
             create_req = _make_request(
                 f"/api/audit/create?wiki=main&target={traversal}"
-                "&selStart=0&selEnd=5&comment=x&severity=warn&author=t"
+                "&selStart=0&selEnd=5&comment=x&author=t"
             )
             create_resp = await handler.wiki_routes._audit_create(create_req)
 
@@ -280,7 +280,7 @@ class TestAuditCreateTraversal:
         with patch.object(handler, "_get_workspace_root", return_value=workspace):
             create_req = _make_request(
                 "/api/audit/create?wiki=main&target=index.md"
-                "&selStart=8&selEnd=15&comment=typo&severity=warn&author=t"
+                "&selStart=8&selEnd=15&comment=typo&author=t"
             )
             create_resp = await handler.wiki_routes._audit_create(create_req)
 

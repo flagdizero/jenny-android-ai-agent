@@ -1399,29 +1399,6 @@ body.casa {
   white-space: pre-wrap;
 }
 
-.casa-audit-sev {
-  display: flex;
-  gap: 6px;
-}
-
-.casa-audit-chip {
-  flex: 1;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-
-.casa-audit-chip.is-on {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
 .casa-audit-comment {
   width: 100%;
   box-sizing: border-box;

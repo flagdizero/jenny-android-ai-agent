@@ -541,7 +541,6 @@ class WikiRoutes:
                 sel_start=sel_start,
                 sel_end=sel_end,
                 comment=query_first(query, "comment") or "",
-                severity=query_first(query, "severity") or "warn",
                 author=query_first(query, "author") or "anonymous",
             )
             result.pop("entry", None)

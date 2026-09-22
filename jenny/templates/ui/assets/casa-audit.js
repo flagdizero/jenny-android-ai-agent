@@ -12,6 +12,13 @@
  *  quando la selezione del testo e' uscita dal lettore, mancava solo il modo di
  *  metterci qualcosa: il canale c'era ed era muto.
  *
+ *  **Niente gravita'.** Il formato aveva quattro livelli — info/suggest/warn/
+ *  error — che chi segnalava sceglieva prima di scrivere. Sono usciti dal
+ *  formato il 22/09/2026 (v. la docstring di `webui/audit.py::AuditEntry`):
+ *  erano un campo da coda di smistamento, e qui chi segnala e chi corregge sono
+ *  la stessa persona. Un menu' che chiede di dare un voto alla propria
+ *  lamentela e' la cosa piu' innaturale che ci fosse in questa schermata.
+ *
  *  **Il server fa quasi tutto da solo.** `/api/audit/create` si rilegge il
  *  markdown dal disco e calcola le tre ancore (`anchor_before`/`anchor_text`/
  *  `anchor_after`). Il vecchio client gli mandava anche `rawMarkdown` e la
@@ -22,9 +29,6 @@ import { api } from './shared/api-client.js';
 import { showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { selectionInside, onSelectionChange } from './shared/selection.js';
-
-/** Le quattro gravita' che il formato prevede (v. `references/audit-guide.md`). */
-export const SEVERITIES = ['info', 'suggest', 'warn', 'error'];
 
 /** Tetto sul commento, e **non e' una misura di stile**: il commento viaggia
  *  nella query string, cioe' nella riga di richiesta, dove `websockets` ne
@@ -65,19 +69,16 @@ export class CasaAudit {
     this.dialog = document.getElementById('casa-audit-dialog');
     this.quoteEl = document.getElementById('casa-audit-quote');
     this.commentEl = document.getElementById('casa-audit-comment');
-    this.sevEl = document.getElementById('casa-audit-sev');
     this.sendBtn = document.getElementById('casa-audit-send');
     this.cancelBtn = document.getElementById('casa-audit-cancel');
     this.titleEl = document.getElementById('casa-audit-title');
     /** Il testo su cui si e' aperto il foglio: la selezione sparisce appena il
      *  dialogo prende il fuoco, quindi va copiata adesso. */
     this._selected = '';
-    this._severity = 'warn';
 
     this.openBtn?.addEventListener('click', () => this.open());
     this.cancelBtn?.addEventListener('click', () => this.dialog?.close());
     this.sendBtn?.addEventListener('click', () => this.send());
-    this.sevEl?.addEventListener('click', (e) => this._pickSeverity(e));
     if (this.commentEl) this.commentEl.maxLength = MAX_COMMENT;
     onSelectionChange(() => this.refresh());
   }
@@ -98,22 +99,6 @@ export class CasaAudit {
     if (this.sendBtn) this.sendBtn.textContent = i18n.t('casa.audit.send');
     if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('casa.audit.cancel');
     if (this.commentEl) this.commentEl.placeholder = i18n.t('casa.audit.placeholder');
-    this._renderSeverities();
-  }
-
-  _renderSeverities() {
-    if (!this.sevEl) return;
-    this.sevEl.innerHTML = SEVERITIES.map((s) => (
-      `<button class="casa-audit-chip${s === this._severity ? ' is-on' : ''}" `
-      + `type="button" data-sev="${s}">${i18n.t(`casa.audit.sev.${s}`)}</button>`
-    )).join('');
-  }
-
-  _pickSeverity(e) {
-    const chip = e.target.closest('[data-sev]');
-    if (!chip) return;
-    this._severity = chip.dataset.sev;
-    this._renderSeverities();
   }
 
   /** Apre il foglio sul testo scelto. */
@@ -121,10 +106,8 @@ export class CasaAudit {
     const selected = String(document.getSelection() || '');
     if (!selected.trim()) return;
     this._selected = selected;
-    this._severity = 'warn';
     if (this.quoteEl) this.quoteEl.textContent = selected;
     if (this.commentEl) this.commentEl.value = '';
-    this._renderSeverities();
     /* La selezione si chiude adesso: aperto il dialogo il fuoco va li' dentro e
        i manici resterebbero appesi sopra una pagina che non si tocca piu'. */
     document.getSelection()?.removeAllRanges();
@@ -151,7 +134,6 @@ export class CasaAudit {
         selStart: spot.start,
         selEnd: spot.end,
         comment,
-        severity: this._severity,
       });
     } catch (err) {
       console.warn('casa.audit: invio fallito', err);
