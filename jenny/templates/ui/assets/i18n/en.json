@@ -1082,6 +1082,10 @@
       "ambiguous": "This text appears more than once on the page: pick a longer piece so I know which one you mean.",
       "msgHead": "In “{page}”, where it says “{quote}”:",
       "msgRef": "report"
+    },
+    "pagine": {
+      "chat": "The conversation",
+      "numero": "Page {n} of {tot}"
     }
   },
   "officina": {

@@ -763,19 +763,34 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
         "da un cassetto, e il cassetto delle app torna irraggiungibile"
     )
 
-    # L'ingresso, nei due gusci.
+    # L'ingresso dell'officina: un pulsante, agganciato.
     assert 'id="btn-launcher"' in officina
-    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
-    assert 'id="casa-drawer"' in casa
-
-    # E i due pulsanti devono essere agganciati, non decorativi.
     assert "getElementById('btn-launcher')" in _src("mobile-app.js")
-    assert "getElementById('casa-drawer')" in _src("casa-app.js")
+
+    # 5. **22/09/2026: in casa l'ingresso diventa un gesto.** La tavola
+    #    `Pagine` sostituisce il pulsante con la striscia dei pallini — «su il
+    #    cassetto, di lato le pagine» — perche' quella striscia e' gia' li' per
+    #    dire dove sei, e due comandi per la stessa cosa sono uno di troppo.
+    #
+    #    E' la variazione piu' rischiosa delle cinque, e va detto: un pulsante
+    #    si vede, un gesto no. Quel che regge l'invariante e' che la striscia
+    #    **c'e' sempre**, anche con la sola chat — e' l'unica cosa a schermo
+    #    che annunci il gesto — e che ogni pallino e' un bottone vero, quindi
+    #    chi i gesti non li fa cambia comunque pagina.
+    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    assert 'id="casa-pallini"' in casa, "la casa non ha piu' nessun ingresso al cassetto"
+    assert 'id="casa-drawer"' not in casa, (
+        "il vecchio pulsante e' tornato: adesso gli ingressi sono due, e la "
+        "striscia non e' piu' l'unica cosa che insegni il gesto"
+    )
+    pagine = _src("casa-pagine.js")
+    assert "getElementById('casa-pallini')" in pagine
+    assert "openLauncher" in pagine, "la striscia non apre il cassetto: e' decorativa"
 
     # Il modulo del cassetto non conosce gli id dei due gusci: li aggancia chi
     # li possiede. Senza questo il foglio saprebbe di stare in due case.
     assert "btn-launcher" not in _src("mobile-launcher.js")
-    assert "casa-drawer" not in _src("mobile-launcher.js")
+    assert "casa-pallini" not in _src("mobile-launcher.js")
 
 
 def test_the_dead_dock_branch_is_gone() -> None:

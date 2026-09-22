@@ -914,17 +914,10 @@ class CasaApp {
   _bindComposer() {
     this.attach.addEventListener('click', () => this.files.trigger());
 
-    /* Il cassetto delle app, a sinistra del composer: lo stesso posto e lo
-       stesso foglio dell'officina. */
-    const cassetto = document.getElementById('casa-drawer');
-    cassetto?.addEventListener('click', () => this.openLauncher());
-    /* L'etichetta per chi legge lo schermo. La casa non ha una passata
-       generica sui `data-i18n-*` — non ne ha mai avuto bisogno — quindi
-       l'attributo da solo non basta e il valore va scritto. */
-    const dilloBene = () =>
-      cassetto?.setAttribute('aria-label', i18n.t('nav.launcher'));
-    dilloBene();
-    i18n.onLocaleChange(dilloBene);
+    /* Il cassetto non ha piu' un bottone qui: si tira su dalla striscia dei
+       pallini (v. `casa-pagine.js::_armaStriscia` e la tavola `Pagine`).
+       L'officina tiene il suo, che e' un elemento diverso sullo stesso
+       foglio condiviso. */
 
     this.pending.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-remove]');
@@ -961,7 +954,12 @@ class CasaApp {
          (v. `_setView`). */
       if (this.view !== 'chat') return;
       const h = document.querySelector('.casa-composer')?.offsetHeight || 64;
-      document.documentElement.style.setProperty('--casa-composer-h', `${h}px`);
+      /* **Anche la striscia dei pallini.** Sta sotto il composer, e da quando
+         ha preso il posto del bottone del cassetto e' alta 26px: senza
+         contarla Jenny ci finirebbe sopra, cioe' sopra la presa con cui si
+         tira su il cassetto. */
+      const striscia = document.getElementById('casa-pallini')?.offsetHeight || 0;
+      document.documentElement.style.setProperty('--casa-composer-h', `${h + striscia}px`);
     };
     /* Serve anche a chi rientra nella chat da un'altra stanza: li' il composer
        torna visibile e la sua altezza va rimisurata, o Jenny resta appoggiata

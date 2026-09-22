@@ -50,7 +50,12 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     # Chi ne avesse dimenticata una l'avrebbe lasciata a occupare spazio dentro
     # una stanza. L'invariante e' la stessa — fuori dalla conversazione il
     # composer non c'e' — e adesso ha un posto solo in cui rompersi.
-    assert ".casa-shell:not([data-view='chat']) .casa-pista { display: none; }" in css, (
+    # La striscia dei pallini sparisce con la pista: dice dove sei **fra le
+    # pagine**, e dentro una stanza quella domanda non esiste.
+    assert (
+        ".casa-shell:not([data-view='chat']) .casa-pista,\n"
+        ".casa-shell:not([data-view='chat']) .casa-pallini { display: none; }"
+    ) in css, (
         "il composer resta a schermo fuori dalla conversazione"
     )
     html_pista = html.split('class="casa-pista"', 1)[1]

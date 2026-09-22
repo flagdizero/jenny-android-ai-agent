@@ -146,16 +146,6 @@
       <div class="casa-pending" id="casa-pending" hidden></div>
 
       <div class="casa-composer">
-        <!-- Il cassetto delle app. Stesso posto e stesso gesto dell'officina — a
-             sinistra del composer — perché è lo stesso foglio: `mobile-launcher.js`
-             lo disegna per tutti e due i gusci, e una seconda copia qui sarebbe la
-             solita macchina duplicata che impara le cose una volta sola.
-             Fuori dall'APK il ponte delle app Android non c'è, ma le Jenny App sì:
-             il cassetto resta, più corto. -->
-        <button class="casa-drawer" id="casa-drawer" type="button"
-                aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
-          <i class="ti ti-layout-grid"></i>
-        </button>
         <label class="casa-field">
           <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
           <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
@@ -168,6 +158,20 @@
       </div>
     </div>
   </div>
+
+  <!-- ── La striscia: dove sei, e la presa del cassetto ───────────────────
+       «I pallini prendono il posto della maniglia — e restano la presa per
+       tirare su il cassetto. Su il cassetto, di lato le pagine» (tavola
+       `Pagine`). Un asse, due gesti, e il tocco su un pallino come terza via
+       per chi i gesti non li fa.
+
+       C'e' **sempre**, anche con la sola chat: e' l'unica cosa a schermo che
+       dica che i gesti esistono, e una funzione che si attiva solo con un
+       gesto che non si vede e' una funzione che nessuno trova. Con una pagina
+       sola il pallino e' uno, e la striscia fa solo la maniglia — che e'
+       comunque il mestiere per cui ha sostituito un bottone. -->
+  <div class="casa-pallini" id="casa-pallini" role="tablist"
+       aria-label="Pagine di casa"></div>
 
   <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────
        Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e

@@ -322,7 +322,43 @@ pagina (i controller lo prendono per id al momento della costruzione — v.
 CSS perché si accenda quando la sua pagina è quella corrente, non solo quando
 `data-view` la nomina. È la parte più delicata di B2 e ha il suo banco.
 
-### B3. La striscia dei pallini
+### B3. La striscia dei pallini — ✅
+
+**Fatto il 22/09/2026.** `casa-pallini` sotto la pista, un pallino per casella,
+quello corrente allungato (5px → 16px come la tavola). Il bottone `#casa-drawer`
+non c'e' piu'; l'officina tiene il suo, che e' un elemento diverso.
+
+**Tre gesti, e uno in piu' che la tavola non chiedeva:** di lato cambia pagina,
+**su** apre il cassetto, e — aggiunto — **toccare un pallino** ci va. I pallini
+sono `<button role="tab">` veri: chi i gesti non li fa, o non puo' farli, cambia
+pagina lo stesso, e chi legge lo schermo sente «Pagina 1 di 2» invece di
+silenzio.
+
+**Il «tira su» non usa `touchmove`,** e non e' una scorciatoia: si misura fra
+`touchstart` e `touchend`. Il foglio del cassetto non e' trascinabile — si apre
+e basta — quindi seguire il dito prometterebbe un movimento che poi non c'e'. E
+cosi' il riconoscimento di un trascinamento resta **tutto** in
+`shared/gesto-orizzontale.js`, che e' l'invariante di B0.
+
+**Il pavimento di Jenny conta anche la striscia** (`h + striscia`): senza, si
+appoggerebbe sopra la presa con cui si tira su il cassetto.
+
+**Il rischio, dichiarato.** `test_launcher_sheet_contract` porta la storia di un
+cassetto diventato irraggiungibile **due volte**. Questa e' la quinta variazione
+ed e' la piu' rischiosa: un pulsante si vede, un gesto no. Quel che regge
+l'invariante e' che la striscia **c'e' sempre**, anche con la sola chat, e il
+banco adesso chiede quello — piu' che il vecchio pulsante non torni, perche' due
+ingressi renderebbero la striscia muta.
+
+**Da verificare sul telefono e solo li':** lo swipe verso l'alto dal fondo dello
+schermo e' anche il gesto di home di Android. La striscia sta sopra
+`env(safe-area-inset-bottom)`, ma se sul Titan 2 le due zone si toccano il
+cassetto non si aprira' mai e sembrera' un difetto del codice.
+
+**Provato:** 24 casi (8 nuovi sulla striscia), quattro mutazioni tutte prese —
+via il controllo verticale/orizzontale, soglia a zero, pallini non ridipinti,
+pallino non cliccabile.
+
 
 La tavola: «I pallini prendono il posto della maniglia — e restano la presa per
 tirare su il cassetto. **Su** il cassetto, **di lato** le pagine.»

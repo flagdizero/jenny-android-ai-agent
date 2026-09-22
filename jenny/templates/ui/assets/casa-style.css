@@ -985,7 +985,8 @@ body.casa {
    pista, sparire dalla vista di una stanza e' una cosa sola da nascondere e
    non sei. Se ne fosse dimenticata una, quella resterebbe a occupare spazio
    dentro «Tu e Jenny». */
-.casa-shell:not([data-view='chat']) .casa-pista { display: none; }
+.casa-shell:not([data-view='chat']) .casa-pista,
+.casa-shell:not([data-view='chat']) .casa-pallini { display: none; }
 
 
 /* ── La pista delle pagine ───────────────────────────────────────────────
@@ -1018,6 +1019,62 @@ body.casa {
      comunque — un elemento trasformato ne crea uno — e lo stato vuoto
      salterebbe a meta' gesto. Dichiararlo adesso vuol dire che sta fermo. */
   position: relative;
+}
+
+/* ── La striscia dei pallini ─────────────────────────────────────────────
+   Dove sei fra le pagine, **e** la presa per tirare su il cassetto: un asse,
+   due gesti (tavola `Pagine`). Ha sostituito il bottone che stava a sinistra
+   del campo di scrittura, quindi deve leggersi come una maniglia e non come
+   una decorazione — per questo occupa una riga sua e non un angolo. */
+.casa-pallini {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  /* 26px come la tavola. Sotto c'e' gia' il `padding-bottom` del guscio con
+     l'inset di sistema: la presa non deve finire dentro la zona in cui Android
+     si prende lo swipe di home. */
+  height: 26px;
+  /* Il gesto e' verticale e parte da qui: il browser non deve interpretarlo
+     come uno scorrimento della pagina prima che lo veda il codice. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Ogni pallino e' un bottone vero: chi non fa gesti — o non puo' farli —
+   cambia pagina toccandolo, e chi legge lo schermo lo sente nominare. */
+.casa-pallino {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text-faint);
+  cursor: pointer;
+  position: relative;
+  transition: width .18s ease, background .18s ease;
+}
+
+.casa-pallino[aria-selected='true'] {
+  width: 16px;
+  background: var(--accent);
+}
+
+/* L'area toccabile e' piu' grande del disegno: cinque pixel non si centrano
+   col pollice, e 44 e' il minimo sotto cui un bersaglio non si prende. Il
+   pallino resta di cinque e la presa cresce **fuori** da lui, senza
+   allargare la riga: e' `absolute`, quindi non conta nel flusso. */
+.casa-pallino::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 /* ── L'intestazione che cambia stanza ── */

@@ -18,12 +18,23 @@
  */
 
 import { api } from './shared/api-client.js';
+import { i18n } from './shared/i18n.js';
 import { osservaGestoOrizzontale } from './shared/gesto-orizzontale.js';
 
 /** Quanto la pista si lascia tirare oltre il capo, in frazione di schermo.
  *  Serve a dire «di la' non c'e' niente» col dito invece che con un blocco
  *  secco, che sembra un difetto. */
 const OLTRE_IL_CAPO = 0.06;
+
+/** Quanto in su deve andare il dito sulla striscia perche' sia «tira su».
+ *
+ *  Si misura fra `touchstart` e `touchend` e non si segue il dito: il foglio
+ *  del cassetto non e' trascinabile — si apre e basta — quindi seguirlo
+ *  prometterebbe un movimento che poi non c'e'. E cosi' il riconoscimento di
+ *  un trascinamento resta **tutto** in `shared/gesto-orizzontale.js`, che e'
+ *  l'invariante che tiene i due gusci allineati.
+ */
+const TIRA_SU = 32;
 
 export class CasaPagine {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
@@ -36,8 +47,12 @@ export class CasaPagine {
     this.indice = 0;
     this._tetto = 8;
     this._staccaGesto = null;
+    this.striscia = document.getElementById('casa-pallini');
 
     if (this.pista) this._armaGesto();
+    if (this.striscia) this._armaStriscia();
+    this._pallini();
+    i18n.onLocaleChange(() => this._pallini());
   }
 
   /** Quante caselle ha la pista, chat compresa. */
@@ -86,6 +101,7 @@ export class CasaPagine {
       ? 'transform .22s cubic-bezier(.22,.61,.36,1)'
       : 'none';
     this.pista.style.transform = `translateX(${-bersaglio * 100}%)`;
+    this._pallini();
     this.app?.onPaginaCambiata?.(bersaglio, this.schermate[bersaglio - 1] || null);
   }
 
@@ -109,6 +125,65 @@ export class CasaPagine {
       pannello.dataset.kind = s.kind;
       this.pista.appendChild(pannello);
     }
+    this._pallini();
+  }
+
+  /** Un pallino per casella, quello corrente allungato.
+   *
+   *  Bottoni veri e non `<span>`: chi i gesti non li fa — o non puo' farli —
+   *  cambia pagina toccando, e chi legge lo schermo sente «pagina 2 di 3»
+   *  invece di silenzio. `role="tab"` perche' la striscia e' una `tablist`:
+   *  e' esattamente quel che e', un elenco di destinazioni di cui una e'
+   *  accesa.
+   */
+  _pallini() {
+    if (!this.striscia) return;
+    this.striscia.textContent = '';
+    for (let i = 0; i < this.quante; i += 1) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'casa-pallino';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(i === this.indice));
+      b.setAttribute(
+        'aria-label',
+        i === 0
+          ? i18n.t('casa.pagine.chat')
+          : i18n.t('casa.pagine.numero', { n: i, tot: this.quante - 1 }),
+      );
+      b.addEventListener('click', () => this.vaiA(i));
+      this.striscia.appendChild(b);
+    }
+  }
+
+  /** Il secondo gesto della striscia: **su** apre il cassetto.
+   *
+   *  Ha preso il posto del bottone che stava a sinistra del campo di
+   *  scrittura. Il rischio e' dichiarato: si toglie un comando che si vedeva e
+   *  lo si sostituisce con uno che non si vede — per questo la striscia c'e'
+   *  sempre, anche con la sola chat, ed e' l'unica cosa che lo annuncia.
+   */
+  _armaStriscia() {
+    let y0 = null;
+    let x0 = 0;
+    this.striscia.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { y0 = null; return; }
+      y0 = e.touches[0].clientY;
+      x0 = e.touches[0].clientX;
+    }, { passive: true });
+    this.striscia.addEventListener('touchend', (e) => {
+      if (y0 === null) return;
+      const t = (e.changedTouches && e.changedTouches[0]) || null;
+      const partenza = y0;
+      y0 = null;
+      if (!t) return;
+      const su = partenza - t.clientY;
+      /* Verticale davvero: sulla striscia passa anche il dito che sta
+         cambiando pagina, e quello non deve aprire il cassetto. */
+      if (su >= TIRA_SU && su > Math.abs(t.clientX - x0)) {
+        this.app?.openLauncher?.();
+      }
+    }, { passive: true });
   }
 
   _armaGesto() {

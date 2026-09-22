@@ -43,6 +43,13 @@ function creaEl(id, cls) {
     dataset: {},
     clientWidth: 400,
     children: [],
+    _testo: '',
+    /* `textContent = ''` svuota i figli, come nel DOM vero: senza, i pallini
+       si accumulerebbero a ogni ridisegno e il banco non lo vedrebbe. */
+    set textContent(v) { this._testo = v; if (v === '') this.children = []; },
+    get textContent() { return this._testo; },
+    setAttribute(k, v) { this.attrs = this.attrs || {}; this.attrs[k] = v; },
+    getAttribute(k) { return (this.attrs || {})[k]; },
     addEventListener(t, fn) { ascolto[t] = fn; },
     removeEventListener() {},
     appendChild(c) { this.children.push(c); c.parent = this; },
@@ -68,6 +75,9 @@ const pista = creaEl('casa-pista', 'casa-pista');
 const pannelloChat = creaEl(null, 'casa-pagina');
 pannelloChat.dataset.pagina = 'chat';
 pista.appendChild(pannelloChat);
+/* La striscia dei pallini: dove sei, e la presa del cassetto. */
+const striscia = creaEl('casa-pallini', 'casa-pallini');
+striscia.textContent = '';
 globalThis.document = {
   getElementById: (id) => elementi.get(id) || null,
   createElement: (t) => creaEl(null, ''),
@@ -88,6 +98,13 @@ function scorri(verso, { corto = false } = {}) {
     preventDefault() {},
   });
   pista.ascolto.touchend?.({ changedTouches: [{ clientX: x0 + dx, clientY: 100 }] });
+}
+/* Un gesto verticale sulla striscia. `su` in pixel. */
+function tiraSu(su, { obliquo = 0 } = {}) {
+  striscia.ascolto.touchstart?.({ touches: [{ clientX: 200, clientY: 500 }] });
+  striscia.ascolto.touchend?.({
+    changedTouches: [{ clientX: 200 + obliquo, clientY: 500 - su }],
+  });
 }
 const DESTRA = +1;
 const SINISTRA = -1;
@@ -125,6 +142,13 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
         )
         # Il client API finto: risponde quel che il caso vuole, e ricorda le
         # scritture. Non si tocca la rete e non si tocca `config.json`.
+        (radice / "shared" / "i18n.js").write_text(
+            "export const i18n = {\n"
+            "  t: (k, v) => k + (v ? ':' + JSON.stringify(v) : ''),\n"
+            "  onLocaleChange() {},\n"
+            "};\n",
+            encoding="utf-8",
+        )
         (radice / "shared" / "api-client.js").write_text(
             "export const api = {\n"
             f"  _elenco: {json.dumps(schermate or [])},\n"
@@ -300,7 +324,7 @@ def test_one_rule_hides_the_track_not_six_pieces() -> None:
     stanza precisa.
     """
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    assert ".casa-shell:not([data-view='chat']) .casa-pista { display: none; }" in css
+    assert ".casa-shell:not([data-view='chat']) .casa-pista,\n.casa-shell:not([data-view='chat']) .casa-pallini { display: none; }" in css
     for pezzo in ("casa-thread", "casa-composer", "casa-activity"):
         assert f":not([data-view='chat']) .{pezzo}" not in css
 
@@ -321,3 +345,93 @@ def test_the_track_adds_no_z_index() -> None:
     """Quello di Jenny resta l'unico: lei sta sopra la chat e sopra un'app."""
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
     assert len([r for r in css.splitlines() if r.strip().startswith("z-index:")]) == 1
+
+
+# ── La striscia: dove sei, e la presa del cassetto ──────────────────────────
+
+
+def test_the_strip_is_there_even_with_only_the_chat() -> None:
+    """E' l'unica cosa a schermo che annunci i gesti.
+
+    Ha sostituito il pulsante del cassetto: se sparisse quando non ci sono
+    pagine, con una casa appena installata non resterebbe **nessun** ingresso
+    al cassetto e nessun indizio che il gesto esista.
+    """
+    _run("assert.equal(striscia.children.length, 1);")
+
+
+def test_one_dot_per_page_and_the_current_one_is_marked() -> None:
+    _run(
+        "assert.equal(striscia.children.length, 3);\n"
+        "assert.equal(striscia.children[0].attrs['aria-selected'], 'true');\n"
+        "scorri(SINISTRA);\n"
+        "assert.equal(striscia.children.length, 3, 'i pallini si sono accumulati');\n"
+        "assert.equal(striscia.children[1].attrs['aria-selected'], 'true');\n"
+        "assert.equal(striscia.children[0].attrs['aria-selected'], 'false');",
+        schermate=DUE,
+    )
+
+
+def test_every_dot_is_a_real_button_that_moves() -> None:
+    """Chi i gesti non li fa — o non puo' farli — cambia pagina toccando."""
+    _run(
+        "assert.equal(striscia.children[2].attrs.role, 'tab');\n"
+        "striscia.children[2].ascolto.click();\n"
+        "assert.equal(pagine.indice, 2);",
+        schermate=DUE,
+    )
+
+
+def test_pulling_up_opens_the_drawer() -> None:
+    _run(
+        "let aperto = 0;\n"
+        "app.openLauncher = () => { aperto += 1; };\n"
+        "tiraSu(60);\n"
+        "assert.equal(aperto, 1);"
+    )
+
+
+def test_a_small_nudge_is_not_a_pull() -> None:
+    _run(
+        "let aperto = 0;\n"
+        "app.openLauncher = () => { aperto += 1; };\n"
+        "tiraSu(10);\n"
+        "assert.equal(aperto, 0);"
+    )
+
+
+def test_a_sideways_drag_across_the_strip_is_not_a_pull() -> None:
+    """Sulla striscia passa anche il dito che sta cambiando pagina.
+
+    Senza il confronto fra verticale e orizzontale, cambiare pagina con un
+    dito basso aprirebbe il cassetto a meta' gesto.
+    """
+    _run(
+        "let aperto = 0;\n"
+        "app.openLauncher = () => { aperto += 1; };\n"
+        "tiraSu(40, {obliquo: 200});\n"
+        "assert.equal(aperto, 0);"
+    )
+
+
+def test_the_old_drawer_button_is_gone_from_the_home() -> None:
+    """Due ingressi sarebbero uno di troppo, e la striscia non insegnerebbe piu'
+    niente: il gesto resterebbe sconosciuto perche' il bottone basta."""
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    assert 'id="casa-drawer"' not in html
+    assert 'id="casa-pallini"' in html
+    # L'officina tiene il suo: e' un elemento diverso sullo stesso foglio.
+    officina = (UI / "officina.html").read_text(encoding="utf-8")
+    assert 'id="btn-launcher"' in officina
+
+
+def test_jenny_stands_above_the_strip_not_on_it() -> None:
+    """Il pavimento della mascotte conta anche la striscia.
+
+    Senza, Jenny si appoggerebbe sopra la presa con cui si tira su il
+    cassetto — cioe' sopra il comando che ha appena sostituito un bottone.
+    """
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    misura = app_js.split("const measure = () => {", 1)[1].split("};", 1)[0]
+    assert "casa-pallini" in misura, "la striscia non entra nel pavimento"
+    assert "h + striscia" in misura

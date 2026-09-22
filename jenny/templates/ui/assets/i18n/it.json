@@ -1085,6 +1085,10 @@
       "ambiguous": "Questo testo compare piu' volte nella pagina: scegline un pezzo piu' lungo, cosi' so a quale mi riferisco.",
       "msgHead": "In «{page}», dove dice «{quote}»:",
       "msgRef": "segnalazione"
+    },
+    "pagine": {
+      "chat": "La conversazione",
+      "numero": "Pagina {n} di {tot}"
     }
   },
   "officina": {
