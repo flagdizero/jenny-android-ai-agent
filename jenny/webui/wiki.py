@@ -24,14 +24,21 @@ from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
 
 from jenny.utils.path import atomic_write
-from jenny.utils.wiki_paths import WIKI_PAGES_SKIP_DIRS, discover_wikis, is_wiki_page_rel
+
+# ``discover_wikis``: ri-esportazione voluta, e ora **solo** ri-esportazione —
+# da quando l'albero dei file se n'e' andato (22/09/2026) questo modulo non la
+# chiama piu' per conto suo. Resta perche' e' qui che i chiamanti l'hanno sempre
+# trovata: ``wiki_routes`` e ``commands`` la importano da ``webui.wiki``, non dal
+# layer neutro (v. la docstring di ``utils/wiki_paths``). La forma ``as`` dichiara
+# la ri-esportazione invece di farla sembrare un import morto.
+from jenny.utils.wiki_paths import discover_wikis as discover_wikis
 from jenny.utils.wiki_paths import extract_title as _extract_title
+from jenny.utils.wiki_paths import is_wiki_page_rel
 from jenny.utils.wiki_paths import strip_frontmatter as _strip_frontmatter
 from jenny.webui.audit import (
     AuditEntry,
     compute_anchor,
     filename_for,
-    from_markdown,
     make_id,
     to_markdown,
 )
@@ -39,27 +46,6 @@ from jenny.webui.audit import (
 # ── Constants ────────────────────────────────────────────────────────────────
 
 _WIKILINK_RE = re.compile(r"\[\[(.+?)\]\]")
-
-# Cartelle di primo livello nascoste da grafo e albero file: i summaries sono il
-# livello di *citazione* (digest delle fonti), non contenuto da navigare. Le
-# pagine restano servibili da /api/page (i link "Sources" continuano a funzionare).
-#
-# **La costante e' quella del package** (T9.5): era una seconda
-# ``frozenset({"summaries"})`` scritta qui, cioe' la stessa regola in due posti,
-# e la regola e' una — quel che non e' contenuto per l'iniettore non e'
-# contenuto neanche per il grafo.
-_HIDDEN_TOP_GROUPS = WIKI_PAGES_SKIP_DIRS
-
-
-# Tetti dell'albero dei file (:func:`_walk`). **Non sono numeri di stile**: sono
-# il limite oltre il quale una cartella ostile costa una risposta invece di un
-# errore. Le otto wiki vere hanno 188 pagine in tutto e la più profonda arriva a
-# tre livelli (``concepts/<Topic>/<aspect>.md``), quindi 12 e 4.000 sono ordini
-# di grandezza sopra qualunque wiki reale: chi li incontra non è un utente con
-# molte pagine, è un ciclo.
-_TREE_MAX_DEPTH = 12
-_TREE_MAX_ENTRIES = 4000
-
 
 def _top_group(rel: str) -> str:
     """Gruppo di primo livello di un path relativo alla pages-dir ``wiki/``."""
@@ -75,14 +61,6 @@ class RenderedPage:
     frontmatter: dict[str, Any] | None
     raw_markdown: str
     title: str | None
-
-
-@dataclass
-class TreeNode:
-    name: str
-    path: str
-    kind: str  # "file" | "dir"
-    children: list[TreeNode] | None = None
 
 
 @dataclass
@@ -154,101 +132,6 @@ def _split_wikilink(raw: str) -> tuple[str, str | None]:
     if len(parts) >= 2:
         return (parts[0].strip(), parts[1].strip())
     return (parts[0].strip(), None)
-
-
-# ── Tree ─────────────────────────────────────────────────────────────────────
-
-
-def _walk(
-    dir_path: Path,
-    rel: str,
-    top_name: str | None = None,
-    skip_names: frozenset[str] | None = None,
-    *,
-    depth: int = 0,
-    budget: list[int] | None = None,
-) -> TreeNode:
-    # ``skip_names`` si applica solo a questo livello (non alla ricorsione): serve
-    # a nascondere cartelle di primo livello come summaries/ dall'albero. Il
-    # filtro sui nascosti invece vale a **ogni** livello, ed è la stessa regola
-    # di ``wiki_paths.is_wiki_page_rel`` espressa per-voce: qui si cammina una
-    # cartella alla volta, quindi non entrare in una ``.qualcosa/`` è
-    # letteralmente non generarne i figli (T9.5).
-    skip = skip_names or frozenset()
-    # Il tetto di voci è condiviso da tutta la discesa: una lista di un elemento
-    # perché la ricorsione deve poterlo consumare (T9.4/G9).
-    if budget is None:
-        budget = [_TREE_MAX_ENTRIES]
-    try:
-        listing = list(dir_path.iterdir())
-    except OSError:
-        # Una cartella che non si apre è una cartella vuota nell'albero, non un
-        # 500 su tutto il drawer.
-        listing = []
-    entries = sorted(
-        [e for e in listing if not e.name.startswith(".") and e.name not in skip],
-        key=lambda e: (not e.is_dir(), e.name.lower()),
-    )
-    children: list[TreeNode] = []
-    for e in entries:
-        if budget[0] <= 0:
-            break
-        # Non anteporre lo slash quando ``rel`` è vuoto (radice della wiki): un
-        # path come ``/concepts/x.md`` verrebbe scartato come assoluto da
-        # ``safe_wiki_page_path`` (os.path.isabs) → 404/400 nel drawer file.
-        node_rel = f"{rel}/{e.name}" if rel else e.name
-        if e.is_dir():
-            # **Nei link simbolici non si entra, e la profondità è finita.**
-            # Questa è l'unica camminata della wiki che usa ``iterdir`` e non
-            # ``rglob``, e ``rglob`` non segue i symlink: un link a una cartella
-            # antenata — che i tool filesystem dell'agente sanno creare — ci
-            # faceva ricorrere fino a ``RecursionError``, cioè un drawer file
-            # rotto per tutta la wiki. E le pagine sotto un symlink erano
-            # comunque una bugia dell'albero: grafo, ricerca e iniettore non le
-            # vedono (``rglob``), e ``/api/page`` le rifiuta con 403 se il
-            # bersaglio esce da ``wiki/``.
-            if e.is_symlink() or depth >= _TREE_MAX_DEPTH:
-                continue
-            budget[0] -= 1
-            children.append(_walk(e, node_rel, depth=depth + 1, budget=budget))
-        elif e.name.endswith(".md"):
-            budget[0] -= 1
-            children.append(
-                TreeNode(
-                    name=e.name.removesuffix(".md"),
-                    path=node_rel,
-                    kind="file",
-                )
-            )
-    return TreeNode(name=top_name or dir_path.name, path=rel, kind="dir", children=children)
-
-
-def build_tree(wiki_root: Path) -> TreeNode:
-    """Build a tree for a single wiki.
-
-    wiki_root is the wiki root directory (contains wiki/ and audit/).
-    Pages are scanned from wiki_root / "wiki".
-    """
-    pages_dir = wiki_root / "wiki"
-    if not pages_dir.exists():
-        return TreeNode(name="wiki", path="wiki", kind="dir", children=[])
-    return _walk(pages_dir, "", skip_names=_HIDDEN_TOP_GROUPS)
-
-
-def build_home_tree(wikis_dir: Path) -> TreeNode:
-    """Build a combined tree across all discovered wikis."""
-    root = TreeNode(name="wikis", path="wikis", kind="dir", children=[])
-    index_path = wikis_dir / "_index.md"
-    if index_path.exists():
-        root.children.append(
-            TreeNode(name="Home", path="_index.md", kind="file")
-        )
-    wikis = discover_wikis(wikis_dir)
-    for name in sorted(wikis):
-        pages_dir = wikis[name]
-        subtree = _walk(pages_dir, f"{name}/wiki", top_name=name, skip_names=_HIDDEN_TOP_GROUPS)
-        root.children.append(subtree)
-    return root
 
 
 # ── Graph ────────────────────────────────────────────────────────────────────
@@ -666,40 +549,6 @@ def create_renderer(
 # ── Audit helpers ───────────────────────────────────────────────────────────
 
 
-def load_audits(
-    wiki_root: Path,
-    target: str | None = None,
-    mode: str = "open",
-) -> list[AuditEntry]:
-    """Load audit entries from audit/ and audit/resolved/ directories."""
-    entries: list[AuditEntry] = []
-    dirs: list[Path] = []
-    if mode in ("open", "all"):
-        dirs.append(wiki_root / "audit")
-    if mode in ("resolved", "all"):
-        dirs.append(wiki_root / "audit" / "resolved")
-
-    for dir_path in dirs:
-        if not dir_path.exists():
-            continue
-        for f in dir_path.iterdir():
-            if not f.name.endswith(".md") or not f.is_file():
-                continue
-            try:
-                text = f.read_text("utf-8")
-                entry = from_markdown(text)
-                if target and entry.target != target:
-                    continue
-                entries.append(entry)
-            except Exception as err:
-                import logging
-
-                logging.getLogger("wiki").warning("skipping malformed audit %s: %s", f, err)
-
-    entries.sort(key=lambda e: e.created)
-    return entries
-
-
 def create_audit(
     wiki_root: Path,
     target: str,
@@ -746,87 +595,3 @@ def create_audit(
         "filename": filename,
         "path": out_path.relative_to(wiki_root).as_posix(),
     }
-
-
-def resolve_audit(wiki_root: Path, audit_id: str, resolution: str | None = None) -> dict[str, Any]:
-    """Resolve an audit by moving it to audit/resolved/."""
-    if not re.match(r"^\d{8}-\d{6}-[0-9a-f]{4}$", audit_id):
-        raise ValueError("invalid audit id")
-
-    open_dir = wiki_root / "audit"
-    resolved_dir = wiki_root / "audit" / "resolved"
-    resolved_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate = None
-    for f in open_dir.iterdir():
-        if f.name.startswith(audit_id):
-            candidate = f
-            break
-    if not candidate:
-        raise FileNotFoundError("no open audit with that id")
-
-    open_path = candidate
-    text = open_path.read_text("utf-8")
-    entry = from_markdown(text)
-
-    today = datetime.now().isoformat()[:10]
-    res_text = (resolution or "").strip() or "(no details)"
-    new_body = _replace_resolution(
-        entry.body,
-        f"{today} · accepted.\n{res_text}\n",
-    )
-    entry.status = "resolved"
-    entry.body = new_body
-
-    resolved_path = resolved_dir / candidate.name
-    # Prima la copia risolta, poi la cancellazione dell'aperta: se il processo
-    # muore in mezzo resta un duplicato (recuperabile), non un audit perso.
-    atomic_write(resolved_path, to_markdown(entry))
-    open_path.unlink()
-    # Path relativi a wiki_root: non esporre il layout assoluto dell'host al
-    # client (coerente con create_audit).
-    return {
-        "id": audit_id,
-        "from": open_path.relative_to(wiki_root).as_posix(),
-        "to": resolved_path.relative_to(wiki_root).as_posix(),
-    }
-
-
-def _replace_resolution(body: str, new_block: str) -> str:
-    if re.search(r"# Resolution[\s\S]*$", body):
-        return re.sub(r"# Resolution[\s\S]*$", f"# Resolution\n\n{new_block}", body)
-    return f"{body.rstrip()}\n\n# Resolution\n\n{new_block}"
-
-
-# ── Public API for HTTP handlers (compatibility) ────────────────────────────
-
-
-def list_audits(
-    wiki_root: Path,
-    *,
-    target: str | None = None,
-    mode: str = "all",
-) -> list[dict[str, Any]]:
-    """List audit entries, optionally filtered by target and mode.
-
-    Returns list[dict] for HTTP JSON serialization compatibility.
-    """
-    entries = load_audits(wiki_root, target, mode)
-    return [
-        {
-            "id": e.id,
-            "target": e.target,
-            "target_lines": list(e.target_lines),
-            "anchor_before": e.anchor_before,
-            "anchor_text": e.anchor_text,
-            "anchor_after": e.anchor_after,
-            "author": e.author,
-            "created": e.created,
-            "status": e.status,
-            "body": e.body,
-        }
-        for e in entries
-    ]
-
-
-

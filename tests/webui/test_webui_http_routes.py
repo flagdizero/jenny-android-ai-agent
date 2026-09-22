@@ -134,106 +134,6 @@ class TestWorkspaceDownload:
         assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# /api/audit filtering
-# ---------------------------------------------------------------------------
-
-
-class TestAuditFiltering:
-    """Regression tests for /api/audit list filtering by target and mode."""
-
-    def _setup_wiki(self, tmp_path: Path) -> Path:
-        """Create a wiki directory with audit entries for testing."""
-        wiki_dir = tmp_path / "wiki"
-        audit_dir = wiki_dir / "audit"
-        resolved_dir = audit_dir / "resolved"
-        audit_dir.mkdir(parents=True)
-        resolved_dir.mkdir(parents=True)
-
-        # Create an open audit targeting page-a.md
-        (audit_dir / "20260101-000000-aaaa-page-a.md").write_text(
-            "---\nid: 20260101-000000-aaaa\ntarget: page-a.md\ntarget_lines:\n- 1\n- 1\n"
-            "anchor_before: ''\nanchor_text: some text\nanchor_after: ''\n"
-            "author: test\nsource: web-viewer\n"
-            "created: '2026-01-01T00:00:00'\nstatus: open\n---\n\nAudit for page A.",
-            encoding="utf-8",
-        )
-        # Create an open audit targeting page-b.md
-        (audit_dir / "20260102-000000-bbbb-page-b.md").write_text(
-            "---\nid: 20260102-000000-bbbb\ntarget: page-b.md\ntarget_lines:\n- 1\n- 1\n"
-            "anchor_before: ''\nanchor_text: other text\nanchor_after: ''\n"
-            "author: test\nsource: web-viewer\n"
-            "created: '2026-01-02T00:00:00'\nstatus: open\n---\n\nAudit for page B.",
-            encoding="utf-8",
-        )
-        # Create a resolved audit targeting page-a.md
-        (resolved_dir / "20260103-000000-cccc-page-a.md").write_text(
-            "---\nid: 20260103-000000-cccc\ntarget: page-a.md\ntarget_lines:\n- 1\n- 1\n"
-            "anchor_before: ''\nanchor_text: resolved text\nanchor_after: ''\n"
-            "author: test\nsource: web-viewer\n"
-            "created: '2026-01-03T00:00:00'\nstatus: resolved\n---\n\nResolved audit.",
-            encoding="utf-8",
-        )
-        return wiki_dir
-
-    def test_list_all_audits(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir)
-
-        assert len(result) == 3
-
-    def test_filter_by_target(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir, target="page-a.md")
-
-        assert len(result) == 2
-        assert all(a["target"] == "page-a.md" for a in result)
-
-    def test_filter_by_mode_open(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir, mode="open")
-
-        assert len(result) == 2
-        assert all(a["status"] == "open" for a in result)
-
-    def test_filter_by_mode_resolved(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir, mode="resolved")
-
-        assert len(result) == 1
-        assert result[0]["status"] == "resolved"
-
-    def test_filter_by_target_and_mode(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir, target="page-a.md", mode="open")
-
-        assert len(result) == 1
-        assert result[0]["id"] == "20260101-000000-aaaa"
-
-    def test_no_matches_returns_empty(self, tmp_path):
-        from jenny.webui.wiki import list_audits
-
-        wiki_dir = self._setup_wiki(tmp_path)
-        result = list_audits(wiki_dir, target="nonexistent.md")
-
-        assert result == []
-
-
-# ---------------------------------------------------------------------------
-# /api/audit/create path traversal (A1)
-# ---------------------------------------------------------------------------
-
-
 class TestAuditCreateTraversal:
     """A1: /api/audit/create must not read files outside the wiki pages dir."""
 
@@ -260,17 +160,21 @@ class TestAuditCreateTraversal:
             )
             create_resp = await handler.wiki_routes._audit_create(create_req)
 
-            # No audit entry must have been created.
-            list_req = _make_request("/api/audit?wiki=main&mode=all")
-            list_resp = await handler.wiki_routes._audit_list(list_req)
-
         assert create_resp.status_code in (403, 404)
-        # The audit directory must not contain the secret's content.
-        assert b"TOPSECRET-EXFIL-MARKER" not in list_resp.body
-        import json
 
-        entries = json.loads(list_resp.body.decode("utf-8"))["entries"]
-        assert entries == []
+        # Nessun audit deve essere nato, e **si guarda il disco**: la rotta che
+        # li elencava e' uscita il 22/09/2026 insieme alle altre senza clienti,
+        # e il disco e' comunque la misura piu' forte delle due — e' quel che
+        # Jenny legge, non quel che una risposta racconta.
+        audit_dir = workspace / "wikis" / "main" / "audit"
+        scritti = list(audit_dir.glob("**/*.md")) if audit_dir.exists() else []
+        assert scritti == []
+        # E il segreto non deve essere finito da nessuna parte dentro la wiki.
+        for f in (workspace / "wikis").rglob("*"):
+            if f.is_file():
+                assert "TOPSECRET-EXFIL-MARKER" not in f.read_text(
+                    encoding="utf-8", errors="replace"
+                ), f
 
     @pytest.mark.asyncio
     async def test_audit_on_real_page_succeeds(self, tmp_path):

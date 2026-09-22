@@ -9,14 +9,9 @@ import pytest
 from jenny.webui.wiki import (
     _split_wikilink,
     build_graph,
-    build_home_tree,
-    build_tree,
     create_audit,
     create_renderer,
     discover_wikis,
-    list_audits,
-    load_audits,
-    resolve_audit,
     resolve_wikilink,
 )
 
@@ -89,174 +84,6 @@ class TestDiscoverWikis:
         d.mkdir()
         result = discover_wikis(d)
         assert result == {}
-
-
-# ── Tree ────────────────────────────────────────────────────────────────────
-
-
-class TestBuildTree:
-    def test_single_wiki_tree(self, wikis_dir: Path):
-        _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home",
-            "sub/page.md": "# Page",
-        })
-        tree = build_tree(wikis_dir / "main")
-        assert tree.name == "wiki"
-        assert tree.kind == "dir"
-        names = {c.name for c in tree.children}
-        assert "index" in names
-        folders = [c for c in tree.children if c.kind == "dir"]
-        assert len(folders) == 1
-        assert folders[0].name == "sub"
-
-    def test_summaries_folder_excluded_from_tree(self, wikis_dir: Path):
-        _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home",
-            "concepts/foo.md": "# Foo",
-            "summaries/src.md": "# Src",
-        })
-        tree = build_tree(wikis_dir / "main")
-        top_names = {c.name for c in tree.children}
-        assert "summaries" not in top_names
-        assert "concepts" in top_names
-
-    def test_summaries_still_resolvable(self, wikis_dir: Path):
-        # Escluso dall'albero/grafo ma la pagina resta raggiungibile (link Sources).
-        wiki_root = _make_wiki(wikis_dir, "main", {"summaries/src.md": "# Src"})
-        assert resolve_wikilink(wiki_root, "summaries/src.md") is not None
-
-    def test_empty_wiki_returns_empty_tree(self, wikis_dir: Path):
-        (wikis_dir / "main" / "wiki").mkdir(parents=True)
-        tree = build_tree(wikis_dir / "main")
-        assert tree.kind == "dir"
-        assert tree.children == []
-
-    def test_missing_wiki_root(self, tmp_path: Path):
-        tree = build_tree(tmp_path / "nonexistent")
-        assert tree.name == "wiki"
-        assert tree.children == []
-
-    def test_file_paths_have_no_leading_slash(self, wikis_dir: Path):
-        # I path dei file non devono iniziare con '/' (verrebbero scartati come
-        # assoluti da safe_wiki_page_path → 400 nel drawer file).
-        from jenny.utils.wiki_paths import safe_wiki_page_path
-
-        _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home",
-            "concepts/page.md": "# Page",
-        })
-        tree = build_tree(wikis_dir / "main")
-
-        paths: list[str] = []
-
-        def collect(node):
-            if node.kind == "file":
-                paths.append(node.path)
-            for c in node.children or []:
-                collect(c)
-
-        collect(tree)
-        assert paths, "tree should contain files"
-        for p in paths:
-            assert not p.startswith("/"), p
-            assert safe_wiki_page_path(p) == p
-
-
-class TestUnAlberoOstileCostaUnaRisposta:
-    """T9.4/G9. ``_walk`` è **l'unica** camminata della wiki che usa ``iterdir``
-    e non ``rglob``, e ``rglob`` non segue i link simbolici: era quindi la sola
-    esposta a un ciclo. I tool filesystem dell'agente sanno creare un link, e
-    l'agente scrive dentro ``wiki/``.
-
-    Le pagine sotto un symlink erano comunque una bugia dell'albero: grafo,
-    ricerca e iniettore non le vedono, e ``/api/page`` risponde 403 se il
-    bersaglio esce da ``wiki/``.
-    """
-
-    @staticmethod
-    def _paths(node) -> list[str]:
-        out: list[str] = []
-        if node.kind == "file":
-            out.append(node.path)
-        for child in node.children or ():
-            out.extend(TestUnAlberoOstileCostaUnaRisposta._paths(child))
-        return out
-
-    def test_un_ciclo_di_link_non_e_un_recursionerror(self, wikis_dir: Path):
-        """Prima: ``RecursionError`` dentro l'executor, cioè drawer file rotto
-        per tutta la wiki finché qualcuno non trova il link dal telefono."""
-        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home"})
-        pages = wiki_root / "wiki"
-        (pages / "concepts").mkdir()
-        (pages / "concepts" / "loop").symlink_to(pages, target_is_directory=True)
-
-        tree = build_tree(wiki_root)
-
-        assert self._paths(tree) == ["index.md"]
-
-    def test_una_cartella_vera_e_profonda_arriva_fino_al_tetto(self, wikis_dir: Path):
-        """Il tetto non è un rifiuto: quel che sta sopra la profondità massima
-        non compare, il resto sì. Una wiki reale sta a tre livelli.
-        """
-        from jenny.webui.wiki import _TREE_MAX_DEPTH
-
-        deep = "/".join(f"d{i}" for i in range(_TREE_MAX_DEPTH + 2))
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home",
-            f"{deep}/troppo-giu.md": "# Giù",
-            "d0/vicina.md": "# Vicina",
-        })
-
-        paths = self._paths(build_tree(wiki_root))
-
-        assert "index.md" in paths
-        assert "d0/vicina.md" in paths
-        assert not any(p.endswith("troppo-giu.md") for p in paths)
-
-    def test_il_numero_di_voci_e_finito(self, wikis_dir: Path, monkeypatch):
-        """Il secondo tetto, e serve per una cartella che *esiste* — un unzip
-        finito nel posto sbagliato — dove la profondità non aiuta.
-        """
-        monkeypatch.setattr("jenny.webui.wiki._TREE_MAX_ENTRIES", 5)
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            f"p{i:02d}.md": f"# {i}" for i in range(20)
-        })
-
-        assert len(self._paths(build_tree(wiki_root))) == 5
-
-    def test_una_cartella_che_non_si_apre_non_rompe_il_drawer(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home"})
-        chiusa = wiki_root / "wiki" / "chiusa"
-        chiusa.mkdir()
-        (chiusa / "dentro.md").write_text("# Dentro")
-        chiusa.chmod(0o000)
-        try:
-            assert self._paths(build_tree(wiki_root)) == ["index.md"]
-        finally:
-            chiusa.chmod(0o755)
-
-
-class TestBuildHomeTree:
-    def test_home_tree_with_index(self, wikis_dir: Path):
-        (wikis_dir / "_index.md").write_text("# Home")
-        _make_wiki(wikis_dir, "main", {"index.md": "# Main"})
-        tree = build_home_tree(wikis_dir)
-        assert tree.name == "wikis"
-        names = {c.name for c in tree.children}
-        assert "Home" in names
-        assert "main" in names
-
-    def test_home_tree_without_index(self, wikis_dir: Path):
-        _make_wiki(wikis_dir, "main", {"index.md": "# Main"})
-        tree = build_home_tree(wikis_dir)
-        names = {c.name for c in tree.children}
-        assert "Home" not in names
-        assert "main" in names
-
-    def test_home_tree_empty(self, wikis_dir: Path):
-        tree = build_home_tree(wikis_dir)
-        assert tree.name == "wikis"
-        assert tree.children == []
 
 
 # ── Graph ───────────────────────────────────────────────────────────────────
@@ -440,33 +267,47 @@ class TestCreateRenderer:
 
 
 # ── Audit ───────────────────────────────────────────────────────────────────
+#
+# **Si scrivono e non si rileggono**, dal 22/09/2026. Le rotte che li elencavano
+# e il comando che li chiudeva sono usciti con lo stesso giro: dal telefono una
+# segnalazione si apre e basta, e chi la legge e' Jenny — con i suoi strumenti
+# file e ``llm-wiki/scripts/audit_review.py``, che ha il suo analizzatore. Quindi
+# qui si guarda **il disco**, che e' l'unica cosa che entrambe le parti vedono.
+
+
+def _audit_files(wiki_root: Path) -> list[Path]:
+    """I file di audit aperti, dal disco. Niente ``load_audits``: non c'e' piu'."""
+    return sorted((wiki_root / "audit").glob("*.md"))
 
 
 class TestAudit:
-    def test_create_and_list_audit(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home\ncontent here",
-        })
+    def test_create_audit_writes_one_anchored_file(self, wikis_dir: Path):
+        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
         result = create_audit(
             wiki_root=wiki_root,
             target="index.md",
             raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
+            sel_start=7,
+            sel_end=14,
             comment="typo",
             author="test",
         )
         assert "id" in result
         assert result["filename"]
+        # Il path che torna e' **relativo alla radice della wiki**: mai assoluto,
+        # o esporrebbe il layout del filesystem dell'host.
+        assert not result["path"].startswith("/")
+        assert result["path"].startswith("audit/")
 
-        audits = load_audits(wiki_root, target="index.md", mode="open")
-        assert len(audits) == 1
-        assert audits[0].target == "index.md"
-
-    def test_list_audits_empty(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home"})
-        audits = load_audits(wiki_root, target="index.md", mode="open")
-        assert audits == []
+        scritti = _audit_files(wiki_root)
+        assert len(scritti) == 1
+        testo = scritti[0].read_text(encoding="utf-8")
+        # L'ancora e' il punto di tutto: senza, il commento parla della pagina e
+        # non del punto, che e' quel che gli audit esistono per fare.
+        assert "anchor_text: content" in testo
+        assert "target: index.md" in testo
+        assert "status: open" in testo
+        assert "typo" in testo
 
     def test_create_audit_missing_target(self, wikis_dir: Path):
         wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home"})
@@ -474,50 +315,20 @@ class TestAudit:
             create_audit(
                 wiki_root=wiki_root,
                 target="nonexistent.md",
-                raw_markdown="",
+                raw_markdown="# Home",
                 sel_start=0,
-                sel_end=0,
-                comment="test",
+                sel_end=5,
+                comment="c",
                 author="test",
             )
-
-    def test_resolve_audit(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home\ncontent here",
-        })
-        created = create_audit(
-            wiki_root=wiki_root,
-            target="index.md",
-            raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
-            comment="typo",
-            author="test",
-        )
-        audit_id = created["id"]
-        resolve_result = resolve_audit(wiki_root, audit_id, "fixed")
-        assert "id" in resolve_result
-        # I path restituiti devono essere relativi a wiki_root, mai assoluti
-        # (non esporre il layout del filesystem dell'host).
-        assert not resolve_result["from"].startswith("/")
-        assert not resolve_result["to"].startswith("/")
-        assert resolve_result["from"].startswith("audit/")
-        assert resolve_result["to"].startswith("audit/resolved/")
-
-        open_audits = load_audits(wiki_root, mode="open")
-        assert len(open_audits) == 0
-
-        resolved_audits = load_audits(wiki_root, mode="resolved")
-        assert len(resolved_audits) == 1
-        assert resolved_audits[0].status == "resolved"
 
     def test_failed_write_leaves_no_half_written_audit(
         self, wikis_dir: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """Una scrittura fallita non deve lasciare un audit troncato sul disco.
 
-        Un audit a metà è illeggibile da ``load_audits`` ma occupa il suo id: il
-        rename finale dell'helper atomico rende il file visibile solo completo.
+        Un audit a meta' occuperebbe il suo id restando illeggibile: il rename
+        finale dell'helper atomico rende il file visibile solo completo.
         """
         wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
 
@@ -535,53 +346,7 @@ class TestAudit:
                 comment="typo",
                 author="test",
             )
-        assert load_audits(wiki_root, mode="all") == []
-
-    def test_failed_resolve_keeps_the_open_audit(
-        self, wikis_dir: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Se la copia risolta non riesce, l'audit aperto resta dov'è.
-
-        ``resolve_audit`` scrive la copia *prima* di cancellare l'originale, così
-        il caso peggiore è un duplicato — mai un audit perso.
-        """
-        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
-        created = create_audit(
-            wiki_root=wiki_root,
-            target="index.md",
-            raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
-            comment="typo",
-            author="test",
-        )
-
-        def boom(*_args, **_kwargs):
-            raise OSError("no space left on device")
-
-        monkeypatch.setattr("jenny.webui.wiki.atomic_write", boom)
-        with pytest.raises(OSError):
-            resolve_audit(wiki_root, created["id"], "fixed")
-
-        open_audits = load_audits(wiki_root, mode="open")
-        assert len(open_audits) == 1
-        assert load_audits(wiki_root, mode="resolved") == []
-
-    def test_list_audits_mode_all(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home\ncontent here",
-        })
-        create_audit(
-            wiki_root=wiki_root,
-            target="index.md",
-            raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
-            comment="typo",
-            author="test",
-        )
-        audits_all = load_audits(wiki_root, mode="all")
-        assert len(audits_all) == 1
+        assert _audit_files(wiki_root) == []
 
 
 # ── Wikilink Resolution ─────────────────────────────────────────────────
@@ -696,44 +461,17 @@ class TestSplitWikilink:
         assert _split_wikilink("target") == ("target", None)
 
 
-# ── list_audits() compatibility ─────────────────────────────────────────────
-
-
-class TestListAuditsCompat:
-    """Tests for the list_audits() HTTP-friendly wrapper."""
-
-    def test_list_audits_returns_list_of_dicts(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {
-            "index.md": "# Home\ncontent here",
-        })
-        create_audit(
-            wiki_root=wiki_root,
-            target="index.md",
-            raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
-            comment="typo",
-            author="test",
-        )
-        entries = list_audits(wiki_root, target="index.md", mode="open")
-        assert isinstance(entries, list)
-        if entries:
-            assert isinstance(entries[0], dict)
-            assert "id" in entries[0]
+# ── La gravita', misurata assente ──────────────────────────────────────────
 
 
 class TestNessunaGravita:
-    """La gravita' e' uscita dal formato il 22/09/2026, e va misurata **assente**.
+    """Tolta dal formato il 22/09/2026, e va misurata **assente**.
 
     Erano quattro livelli che chi segnalava sceglieva prima di scrivere — un
     campo da coda di smistamento in un posto dove chi segnala e chi corregge
-    sono la stessa persona. Toglierla dalla tendina non bastava: sarebbe
-    rimasta una riga fissa in ogni file futuro, piu' il codice che la valida e
-    la ordina avendo un valore solo.
-
-    Le due asserzioni sono due perche' sono due bugie diverse: il **file** e'
-    quel che il linter e Jenny leggono, il **dizionario** e' quel che esce
-    dalla rotta. Un campo tolto da uno solo dei due passa inosservato.
+    sono la stessa persona. Toglierla dalla tendina non bastava: sarebbe rimasta
+    una riga fissa in ogni file futuro, piu' il codice che la valida e la ordina
+    avendo un valore solo.
     """
 
     def test_the_written_file_carries_no_severity(self, wikis_dir: Path):
@@ -752,20 +490,6 @@ class TestNessunaGravita:
         # …e il resto del frontmatter c'e' ancora: il taglio e' uno solo.
         for chiave in ("id:", "target:", "anchor_text:", "author:", "status:"):
             assert chiave in testo, chiave
-
-    def test_the_listed_entry_carries_no_severity(self, wikis_dir: Path):
-        wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home\ncontent here"})
-        create_audit(
-            wiki_root=wiki_root,
-            target="index.md",
-            raw_markdown="# Home\ncontent here",
-            sel_start=8,
-            sel_end=15,
-            comment="typo",
-            author="test",
-        )
-        voce = list_audits(wiki_root, target="index.md", mode="open")[0]
-        assert "severity" not in voce
 
 
 # ── Frontmatter allowlist (/api/page privacy) ───────────────────────────────

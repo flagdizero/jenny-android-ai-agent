@@ -110,7 +110,7 @@ def due_progetti(handler) -> Path:
 # ── il contenimento: quel che il server garantisce ────────────────────────
 
 
-@pytest.mark.parametrize("route", ["/api/tree", "/api/graph", "/api/page"])
+@pytest.mark.parametrize("route", ["/api/graph", "/api/page"])
 @pytest.mark.parametrize(
     "name",
     [
@@ -180,7 +180,7 @@ async def test_a_symlink_out_of_the_pages_dir_is_refused_by_containment(
 # ── l'asimmetria, messa a verbale ─────────────────────────────────────────
 
 
-@pytest.mark.parametrize("route", ["/api/tree", "/api/graph"])
+@pytest.mark.parametrize("route", ["/api/graph"])
 async def test_the_server_serves_any_of_the_users_own_wikis_by_design(
     handler, due_progetti, route: str
 ) -> None:
@@ -197,19 +197,24 @@ async def test_the_server_serves_any_of_the_users_own_wikis_by_design(
     assert payload
 
 
-async def test_the_home_views_still_list_every_wiki(handler, due_progetti) -> None:
-    """Senza ``wiki=`` la vista è la Home, e la Home *è* l'elenco dei progetti.
+async def test_a_wiki_outside_wikis_is_not_reachable_by_name(handler, due_progetti) -> None:
+    """Quel che misurava la prova della Home, ora che la Home non c'e' piu'.
 
-    È la ragione per cui la chiusura del passo 5 sta in ``loadHome``/``loadGraph``
-    e non su queste risposte: la Home non è una vista di progetto con un filtro
-    da aggiungere, è una vista che dentro un progetto **non si apre**.
+    Qui c'era ``/api/tree`` senza nome: elencava le wiki di ``wikis/`` e doveva
+    **non** contenere la sorella ``fuori/``, che ha la forma giusta ma sta
+    altrove. L'albero e' uscito il 22/09/2026 insieme alle altre rotte senza
+    clienti, e la regola che difendeva vive comunque — l'appartenenza all'elenco
+    di ``discover_wikis``, non la forma della cartella. Questo e' lo stesso fatto
+    detto sull'unica rotta rimasta a chiedere un nome.
     """
-    response = await _call(handler, "/api/tree")
-    assert response is not None and response.status_code == 200
-    tree = json.loads(response.body.decode("utf-8"))
-    names = {child["name"] for child in tree.get("children", [])}
-    assert {"patreon", "etf"} <= names
-    assert "fuori" not in names, "la Home elenca le wiki di wikis/, non le cartelle vicine"
+    response = await _call(handler, "/api/graph", wiki="fuori")
+    assert response is not None
+    assert response.status_code == 404, response.status_code
+
+    # …e le due vere si raggiungono entrambe.
+    for nome in ("patreon", "etf"):
+        ok = await _call(handler, "/api/graph", wiki=nome)
+        assert ok is not None and ok.status_code == 200, nome
 
 
 # ── il tetto di lettura ───────────────────────────────────────────────────

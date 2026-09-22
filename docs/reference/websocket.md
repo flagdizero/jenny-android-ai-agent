@@ -311,7 +311,8 @@ Reply — always one `rpc_result` per request, correlated by the opaque `id`:
  "error": {"code": "too_large", "message": "file too large to save (1300000 > 1000000 bytes)"}}
 ```
 
-Error codes: `bad_request`, `forbidden`, `not_found`, `too_large`, `unavailable`, `internal`.
+Error codes: `bad_request`, `forbidden`, `not_found`, `too_large`, `conflict`, `unavailable`, `internal`.
+`conflict` is the only one that is not about the request but about the world: the request was fine, and the file changed underneath. A client that gets it should re-read, not correct what it sent.
 A frame whose `id` is missing or malformed is dropped with a log line — there is nothing to
 correlate a reply to.
 
@@ -319,7 +320,7 @@ correlate a reply to.
 |----------|----------|--------|
 | `workspace.write` | `path`, `content` | Write a workspace text file (1 MB cap). Honours `workspace.enabled` / `workspace.allow_write`. |
 | `soul.rules.write` | `content` | Save the user's standing rules (2 000-character cap) and re-project them into the marked block in `SOUL.md`. Honours the same workspace flags. |
-| `audit.resolve` | `audit_id`, `wiki`, `resolution` | Close a wiki audit item with a resolution note. |
+| `page.write` | `wiki`, `page`, `content`, `base` | Save a notebook page edited by hand from the reader. `base` is the markdown the editor opened on: if the file changed underneath, the answer is `conflict` and nothing is written. Honours `wiki.enabled` plus the same workspace flags. |
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
 | `project.delete` | `name` | Delete a project chat and its session. |
 

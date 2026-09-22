@@ -287,10 +287,8 @@ async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     qui vuol dire cancellare il lavoro di qualcun altro senza che nessuno se ne
     accorga — e nessuno dei due scrittori saprebbe di averlo fatto.
 
-    I cancelli sono tre, e sono tre apposta: la wiki accesa (``wiki.enabled``),
-    e le due del workspace. Quest'ultima coppia ``audit.resolve`` non la
-    guarda; la differenza è che quello chiude una nota dentro ``audit/``,
-    mentre questo riscrive una pagina — cioè esattamente ciò che
+    I cancelli sono tre, e sono tre apposta: la wiki accesa (``wiki.enabled``)
+    e le due del workspace — questo riscrive una pagina, cioè esattamente ciò che
     ``workspace.allow_write`` esiste per governare.
     """
     wiki_name = _require_str(params, "wiki")
@@ -322,32 +320,6 @@ async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
     return {"wiki": wiki_name, "page": page_path, "bytes": size}
-
-
-async def audit_resolve(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Chiude un item di audit con una nota di risoluzione (testo libero)."""
-    from jenny.webui.wiki import discover_wikis, resolve_audit
-
-    audit_id = _require_str(params, "audit_id")
-    wiki_name = _require_str(params, "wiki")
-    resolution = params.get("resolution")
-    if resolution is not None and not isinstance(resolution, str):
-        raise CommandError("bad_request", "resolution must be a string")
-
-    _require_wiki_enabled()
-
-    wikis = discover_wikis(_wikis_dir(ctx))
-    if wiki_name not in wikis:
-        raise CommandError("not_found", "wiki not found")
-    wiki_root = wikis[wiki_name].parent
-    try:
-        # Anche qui il lavoro è su disco (lettura, riscrittura, move): fuori dal loop.
-        return await asyncio.to_thread(resolve_audit, wiki_root, audit_id, resolution)
-    except FileNotFoundError as exc:
-        raise CommandError("not_found", str(exc)) from exc
-    except ValueError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
-
 
 
 _CONVERSATION_CHOICES = frozenset({"refuse", "keep", "discard"})
@@ -461,7 +433,6 @@ COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
     "soul.rules.write": soul_rules_write,
     "page.write": page_write,
-    "audit.resolve": audit_resolve,
     "project.create": project_create,
     "project.delete": project_delete,
 }

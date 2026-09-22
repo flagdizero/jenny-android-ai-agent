@@ -1,10 +1,16 @@
 """Adapter di route HTTP per le API Wiki + Audit della WebUI (estratto da
 ws_http). Stesso pattern di ``WebUISettingsRouter``/``SkillsRoutes``.
 
-Solo letture e parametri corti. La chiusura di un audit non è qui: porta una
-nota di testo libero, e questo trasporto non può trasportare contenuto (v. la
-docstring di ``webui.commands``). È il comando ``audit.resolve`` dell'RPC
-WebSocket.
+Solo letture e parametri corti — questo trasporto non può trasportare contenuto
+(v. la docstring di ``webui.commands``), e infatti la scrittura di una pagina sta
+di là (``page.write``).
+
+**Una segnalazione si apre e basta.** Leggerle e chiuderle non passa più di qui:
+dal 22/09/2026 confermarne una porta l'utente nella chat del quaderno, e di lì in
+poi sono Jenny e i suoi strumenti file a lavorarle, con lo script della skill
+(``llm-wiki/scripts/audit_review.py``). Le rotte che le elencavano e il comando
+che le chiudeva erano rimasti senza un cliente, e se ne sono andati con lo stesso
+giro.
 """
 
 from __future__ import annotations
@@ -52,10 +58,10 @@ _FRONTMATTER_ALLOWLIST = frozenset(
 # lunga, è un file finito lì per sbaglio.
 #
 # **Rifiuta invece di troncare**, e la ragione non è la prudenza: il client usa
-# il ``raw`` per calcolare gli offset di un audit, e ``audit.resolve`` rilegge il
-# file **intero** per ancorarlo. Un ``raw`` tagliato darebbe ancore giuste per un
-# testo che il server non ha, cioè un commento attaccato al punto sbagliato — un
-# guasto silenzioso al posto di un 413 che si legge.
+# il ``raw`` per calcolare gli offset di un audit, e ``/api/audit/create`` rilegge
+# il file **intero** per ancorarlo. Un ``raw`` tagliato darebbe ancore giuste per
+# un testo che il server non ha, cioè un commento attaccato al punto sbagliato —
+# un guasto silenzioso al posto di un 413 che si legge.
 _PAGE_MAX_BYTES = 1_048_576
 
 
@@ -203,56 +209,19 @@ class WikiRoutes:
     # -- dispatch --
 
     async def dispatch(self, request: WsRequest, path: str) -> Response | None:
-        if path == "/api/config":
-            return await self._wiki_config(request)
         if path == "/api/projects":
             return await self._projects_list(request)
         if path == "/api/project/describe":
             return await self._project_describe(request)
-        if path == "/api/tree":
-            return await self._wiki_tree(request)
         if path == "/api/graph":
             return await self._wiki_graph(request)
         if path == "/api/page":
             return await self._wiki_page(request)
-        if path == "/api/audit":
-            return await self._audit_list(request)
         if path == "/api/audit/create":
             return await self._audit_create(request)
         return None
 
     # -- wiki handlers --
-
-    async def _wiki_tree(self, request: WsRequest) -> Response:
-        if not self._check_api_token(request):
-            return http_error(401, "Unauthorized")
-        err = self._check_wiki_enabled()
-        if err:
-            return err
-        from jenny.webui.wiki import build_home_tree, build_tree, discover_wikis
-
-        query = parse_query(request.path)
-        wiki_name = query_first(query, "wiki") or ""
-        wikis_dir = self._get_wikis_dir()
-
-        if wiki_name:
-            wikis = discover_wikis(wikis_dir)
-            if wiki_name not in wikis:
-                return http_error(404, "wiki not found")
-            wiki_root = wikis[wiki_name].parent
-            loop = asyncio.get_running_loop()
-            tree = await loop.run_in_executor(None, build_tree, wiki_root)
-        else:
-            loop = asyncio.get_running_loop()
-            tree = await loop.run_in_executor(None, build_home_tree, wikis_dir)
-
-        def tree_to_dict(node):
-            result = {"name": node.name, "path": node.path, "kind": node.kind}
-            if node.children:
-                result["children"] = [tree_to_dict(c) for c in node.children]
-            return result
-
-        return http_json_response(tree_to_dict(tree))
 
     async def _wiki_graph(self, request: WsRequest) -> Response:
         if not self._check_api_token(request):
@@ -388,24 +357,6 @@ class WikiRoutes:
             }
         )
 
-    async def _wiki_config(self, request: WsRequest) -> Response:
-        if not self._check_api_token(request):
-            return http_error(401, "Unauthorized")
-        err = self._check_wiki_enabled()
-        if err:
-            return err
-        from jenny.webui.wiki import discover_wikis
-
-        wikis_dir = self._get_wikis_dir()
-        wikis = list(discover_wikis(wikis_dir).keys())
-        return http_json_response(
-            {
-                "author": "me",
-                "wikis": wikis,
-                "homePath": "_index.md",
-            }
-        )
-
     async def _projects_list(self, request: WsRequest) -> Response:
         """Elenco dei progetti per lo scope chip.
 
@@ -471,33 +422,6 @@ class WikiRoutes:
         return http_json_response(described)
 
     # -- audit handlers --
-
-    async def _audit_list(self, request: WsRequest) -> Response:
-        if not self._check_api_token(request):
-            return http_error(401, "Unauthorized")
-        err = self._check_wiki_enabled()
-        if err:
-            return err
-        from jenny.webui.wiki import discover_wikis, list_audits
-
-        query = parse_query(request.path)
-        wiki_name = query_first(query, "wiki") or ""
-        target = query_first(query, "target") or None
-        mode = query_first(query, "mode") or "open"
-        if mode not in {"open", "resolved", "all"}:
-            return http_error(400, "invalid mode")
-
-        if not wiki_name:
-            return http_json_response({"entries": []})
-
-        wikis = discover_wikis(self._get_wikis_dir())
-        if wiki_name not in wikis:
-            return http_error(404, "wiki not found")
-        pages_dir = wikis[wiki_name]
-        wiki_root = pages_dir.parent
-
-        audits = list_audits(wiki_root, target=target, mode=mode)
-        return http_json_response({"entries": audits})
 
     async def _audit_create(self, request: WsRequest) -> Response:
         if not self._check_api_token(request):

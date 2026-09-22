@@ -253,6 +253,11 @@ class TestCheCosaEUnaPagina:
     Ora la regola è una — ``is_wiki_page_rel`` — e questi test sono i primi che
     ``iter_wiki_pages`` ha di suo dopo T3.11/T3.12 (quelli provano la manopola
     ``titles`` e la costante dell'indice, non l'insieme).
+
+    **I consumatori sono due, non più tre** (22/09/2026): l'albero dei file se
+    n'è andato con ``/api/tree``, che non aveva più nessun cliente da quando la
+    wiki è uscita dall'officina. La regola resta una sola; è sparito uno dei
+    posti in cui poteva divergere.
     """
 
     def _wiki(self, tmp_path) -> Path:
@@ -341,21 +346,6 @@ class TestCheCosaEUnaPagina:
 
         assert rels == set(self._PAGES) | {"index.md"}
 
-    def test_l_albero_mostra_le_stesse_pagine_piu_la_mappa(self, tmp_path):
-        """Consumatore 3: ``webui/wiki.py::_walk`` (drawer dei file)."""
-        from jenny.webui.wiki import build_tree
-
-        root = self._wiki(tmp_path)
-
-        def files(node) -> set[str]:
-            if node.kind == "file":
-                return {node.path}
-            out: set[str] = set()
-            for child in node.children or ():
-                out |= files(child)
-            return out
-
-        assert files(build_tree(root)) == set(self._PAGES) | {"index.md"}
 
 class TestTheIndexFilenameHasOneDefinition:
     """T3.12. ``WIKI_INDEX_FILENAME`` esisteva, e serviva a **escludere** la mappa

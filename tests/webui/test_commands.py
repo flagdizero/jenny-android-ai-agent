@@ -1,11 +1,15 @@
 """Test del layer comando della WebUI (``jenny/webui/commands.py``).
 
-Qui è finita la logica che stava in ``/api/workspace/write`` e in
-``/api/audit/{id}/resolve``: entrambe portavano contenuto (il testo di un file,
-una nota libera) dentro un header HTTP, e su quel trasporto il contenuto non ci
-sta — 8192 byte per riga, solo ISO-8859-1. La copertura delle route rimosse
-(auth, flag, path traversal, atomicità) si trova qui, più la regressione che
-prima era impossibile far passare: un file italiano con emoji, oltre 8 KB.
+Qui è finita la logica di quel che porta **contenuto**: il testo di un file, una
+riga di regole, una pagina di quaderno. La superficie ``/api/`` non lo trasporta
+— è servita dall'hook di handshake di ``websockets``, che non legge body: 8192
+byte per riga e solo ISO-8859-1. La regressione che prima era impossibile far
+passare è qui: un file italiano con emoji, oltre 8 KB.
+
+C'era anche ``audit.resolve``, che chiudeva una segnalazione con una nota. Se
+n'è andato il 22/09/2026 con la metà «leggi e chiudi» del giro degli audit: dal
+telefono una segnalazione si apre e basta, e chi la lavora è Jenny, che il file
+lo sposta con i suoi strumenti come le dice la skill.
 """
 
 from __future__ import annotations
@@ -436,108 +440,6 @@ async def test_page_write_refuses_more_than_the_cap(
         )
     assert exc.value.code == "too_large"
     assert (pages_dir / "index.md").read_text(encoding="utf-8") == _PAGE
-
-
-# ---------------------------------------------------------------------------
-# audit.resolve
-# ---------------------------------------------------------------------------
-
-
-def _workspace_with_audit(workspace_root: Path) -> str:
-    """Crea ``wikis/main`` con una pagina e un audit aperto; ritorna il suo id."""
-    from jenny.webui.wiki import create_audit
-
-    pages_dir = workspace_root / "wikis" / "main" / "wiki"
-    pages_dir.mkdir(parents=True)
-    (pages_dir / "index.md").write_text("# Home\ncontent here", encoding="utf-8")
-    created = create_audit(
-        wiki_root=pages_dir.parent,
-        target="index.md",
-        raw_markdown="# Home\ncontent here",
-        sel_start=8,
-        sel_end=15,
-        comment="typo",
-        author="test",
-    )
-    return created["id"]
-
-
-async def test_audit_resolve_moves_the_item_and_keeps_the_note(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    from jenny.webui.wiki import load_audits
-
-    audit_id = _workspace_with_audit(workspace_root)
-
-    await dispatch_command(
-        ctx,
-        "audit.resolve",
-        {"audit_id": audit_id, "wiki": "main", "resolution": "corretto è già a posto 😏"},
-    )
-
-    wiki_root = workspace_root / "wikis" / "main"
-    assert load_audits(wiki_root, mode="open") == []
-    resolved = load_audits(wiki_root, mode="resolved")
-    assert len(resolved) == 1
-    # La nota arriva integra: era il motivo del percent-encoding nell'header.
-    assert "corretto è già a posto 😏" in resolved[0].body
-
-
-async def test_audit_resolve_requires_wiki(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    audit_id = _workspace_with_audit(workspace_root)
-    with pytest.raises(CommandError) as exc:
-        await dispatch_command(ctx, "audit.resolve", {"audit_id": audit_id})
-    assert exc.value.code == "bad_request"
-
-
-async def test_audit_resolve_unknown_wiki_is_not_found(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    audit_id = _workspace_with_audit(workspace_root)
-    with pytest.raises(CommandError) as exc:
-        await dispatch_command(
-            ctx, "audit.resolve", {"audit_id": audit_id, "wiki": "ghost"}
-        )
-    assert exc.value.code == "not_found"
-
-
-async def test_audit_resolve_malformed_id_is_a_bad_request(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    _workspace_with_audit(workspace_root)
-    with pytest.raises(CommandError) as exc:
-        await dispatch_command(
-            ctx, "audit.resolve", {"audit_id": "nope", "wiki": "main"}
-        )
-    assert exc.value.code == "bad_request"
-
-
-async def test_audit_resolve_absent_id_is_not_found(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    """Id ben formato ma inesistente: la distinzione 400/404 della route resta."""
-    _workspace_with_audit(workspace_root)
-    with pytest.raises(CommandError) as exc:
-        await dispatch_command(
-            ctx, "audit.resolve", {"audit_id": "20260812-215900-abcd", "wiki": "main"}
-        )
-    assert exc.value.code == "not_found"
-
-
-async def test_audit_resolve_blocked_when_wiki_disabled(
-    ctx: CommandContext, workspace_root: Path, config_path: Path
-) -> None:
-    audit_id = _workspace_with_audit(workspace_root)
-    config = load_config(config_path)
-    config.wiki.enabled = False
-    save_config(config, config_path)
-    with pytest.raises(CommandError) as exc:
-        await dispatch_command(
-            ctx, "audit.resolve", {"audit_id": audit_id, "wiki": "main"}
-        )
-    assert exc.value.code == "unavailable"
 
 
 # ---------------------------------------------------------------------------
