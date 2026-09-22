@@ -535,6 +535,19 @@ Il ritaglio non puo' salire al guscio: Jenny e' `position:absolute` con un
 `right` negativo — sporge apposta — e li' verrebbe tagliata. Quindi un elemento
 in mezzo: `.casa-vetrina` ritaglia, `.casa-pista` si muove.
 
+**5. Indietro non chiudeva il foglio.** Un `<dialog>` modale si chiude da se'
+con Escape, ma li' Indietro arriva dal guscio nativo come un evento suo: va
+nominato in `_closeOverlays()`. Il foglio di «Segnala» accanto porta **lo stesso
+commento** da prima, e non e' bastato a farmelo ricordare — adesso c'e' un
+banco. Aggiunto anche il tocco fuori, che un `<dialog>` non fa da se'.
+
+**Chiuso il giro (22/09/2026, sera).** Sul telefono: striscia, foglio, scelta
+app, scelta stanza, pagina con dentro la Jenny App **che si vede**, pagina con
+dentro la stanza Backup, ritorno alla chat, togliere le pagine, e — la prova che
+piu' mi premeva — **la stanza prestata torna a casa sua**: Backup si riapre dal
+suo percorso normale. Le impostazioni dell'utente sono state rimesse com'erano
+(zero pagine, tema Kyoto).
+
 **Quel che invece ha funzionato al primo colpo:** la striscia, il foglio, la
 scelta, il salvataggio (sopravvive al riavvio dell'app), il ritorno alla chat,
 il tocco sul pallino.
