@@ -278,3 +278,59 @@ superficie pubblica, e Jenny oggi il file lo sposta a mano con i suoi strumenti
 coerente con «niente codice morto»**, e va presa esplicitamente perché tocca una
 pagina pubblica. Insieme a `/api/tree` e `/api/config`, che sono già in attesa
 della stessa decisione.
+
+
+---
+
+## Fatto il 22/09/2026
+
+Quattro commit, e la prova sul telefono.
+
+| | commit | |
+|---|---|---|
+| 1 | `ce985f0` | la gravità esce dal formato, skill compresa |
+| 2 | `0ed8633` | la segnalazione atterra nella chat del quaderno |
+| 3 | `0abdc06` | via le quattro rotte orfane e quel che reggevano |
+| 4 | `699ded8` | la pagina pubblica descrive l'app che esiste |
+
+### Il giro intero, misurato sul telefono
+
+Su `piante/entities/Pothos.md`, con la pagina rimasta **bit per bit quella di
+prima** (md5 identico prima e dopo) e la segnalazione di prova cancellata a
+fine giro:
+
+- il foglio non ha più il menù della gravità: citazione, commento, Annulla e
+  Invia;
+- confermata, **si atterra nella chat del quaderno** con il messaggio già
+  partito — «In "Pothos", where it says "coltivato": … (report
+  20260922-141128-37f6)»;
+- il file nasce in `wikis/piante/audit/` **senza `severity`**, con l'ancora
+  giusta (`anchor_text: coltivato`, riga 14);
+- il linter della skill lo accetta: «audit/ shape OK», «All open-audit targets
+  exist»;
+- `audit_review.py` lo stampa senza la colonna della gravità;
+- **e lei ha risposto nel merito**: ha trovato il punto esatto, ha detto che è
+  l'unica occorrenza, e non ha toccato niente perché gliel'avevo chiesto.
+
+Cioè il pezzo che mancava: prima la segnalazione finiva in una cartella che
+nessuno guardava, adesso comincia una conversazione.
+
+### Cosa è cambiato rispetto a questo piano
+
+**Niente sulla sostanza.** Due cose in più, trovate strada facendo:
+
+- **`page.write` non era documentato.** L'avevo aggiunto ieri e mai scritto in
+  `docs/reference/websocket.md`, che è pubblica. Aggiunto, insieme al codice
+  `conflict` nell'elenco degli errori.
+- **Un'ancora rotta in `docs/`**, da prima di questo giro: un titolo rinominato
+  aveva lasciato un link che non atterrava. Corretta controllando **tutti** i
+  link interni dei documenti, non solo quelli toccati.
+
+### Cosa resta aperto
+
+- **`/api/audit` e `audit.resolve` sono stati tolti**, come deciso. Quindi
+  `audit.py` adesso **scrive un formato che non rilegge**: se un giorno servisse
+  un lettore Python, torna `from_markdown` — non è un buco, è una scelta scritta
+  nella sua docstring.
+- Le due prove del giro precedente restano valide: modifica, conflitto, uscita
+  con modifiche non salvate.
