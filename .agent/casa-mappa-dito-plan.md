@@ -308,3 +308,44 @@ cui `localStorage` avrebbe perso tutto.
   senso — ma è UI nuova e non è stata chiesta.
 - Un quaderno cancellato lascia la sua chiave nel file: pochi byte, e nessuno li
   legge più. Si potano solo le pagine del quaderno che si sta salvando.
+
+## La molla, tarata sul telefono — 22/09/2026, ore 08:44
+
+Build `f77b8ea`, installata alle 08:42:21, codice confermato sul telefono.
+
+**Il caso peggiore**, scelto apposta: il nodo più collegato del quaderno
+(`wiki/index.md`, l'indice — è quello che i collegamenti tirano di più).
+
+| | px |
+|---|---|
+| il dito l'ha portato a | 540 |
+| la fisica se l'è ripreso di | 203 |
+| **quanto ha tenuto** | **62 %** |
+
+Cioè: si muove, si fa spingere dai vicini, e resta nel quartiere dove l'hai
+messo. Con `FORZA_ANCORA = 0.3`, e sul nodo che tira di più — su uno normale
+tiene di più.
+
+**Una misura buttata per strada, e la stessa lezione di ieri.** Il primo
+tentativo dava numeri assurdi (la maschera di colore prendeva 16.000 pixel, una
+ventina di volte un pallino): raccoglieva anche lo sfondo. E il gesto prima
+ancora aveva *spostato la mappa* invece del nodo, perché la coordinata l'avevo
+stimata a occhio da una miniatura e sbagliata di 280 px. Risolto misurando il
+blob connesso più grande invece di un centroide su tutta l'immagine — e il
+pallino è risultato un cerchio da 116 px di diametro, non quello che credevo.
+
+## Uno spavento, e come si è chiuso
+
+Dopo il trascinamento il file aveva **12 ancore** dove io ne avevo fatta una.
+Sembrava che qualcosa le creasse da sé.
+
+Provato in modo controllato invece di dedurre: file cancellato, app riavviata,
+mappa aperta (**non scrive niente**), un trascinamento → **1 ancora**, un
+secondo → **2**. Il codice conta i gesti. Le altre erano dell'utente, che aveva
+il telefono in mano nello stesso quarto d'ora.
+
+**E per fare quella prova ho cancellato il suo file**, che è una cosa da
+copiare *prima*, non da rimpiangere dopo. Rimesso identico — 12 ancore di
+`etf-finance` più la Monstera di `piante` — con etichetta SELinux uguale a
+quella di `config.json`, e verificato che l'app lo rilegga e la mappa torni su
+disposta.
