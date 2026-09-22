@@ -587,3 +587,40 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
 - Non offre il **cassetto** come pagina (la tavola lo esclude, con motivo).
 - Non offre le **app esterne** come pagina.
 - Non tocca il bottone del cassetto **dell'officina**.
+
+## B7 — Lo scorrimento arriva dentro le app (22/09/2026, dopo il giro)
+
+Chiuso B6, l'utente ha provato a scorrere **stando dentro una Jenny App** e non
+succedeva niente. Misurato con `adb`: **in nessuna delle due direzioni**, non
+solo in una. La pagina di una app è tutta l'app, intestazione compresa, e il
+dito che la tocca al guscio non ci arriva mai.
+
+**Come è diviso.** Il gesto lo riconosce la app — solo lì dentro si vede il suo
+DOM, quindi solo lì si può cedere il gesto a una sua tabella larga. Cosa farne
+lo decide il guscio, che è l'unico a sapere se una pagina di fianco c'è, e lo
+decide **a ogni gesto**: fra l'uno e l'altro il cassetto può aprirsi. Il kit
+importa lo stesso `shared/gesto-orizzontale.js` della casa e dell'officina: le
+soglie restano in un posto solo.
+
+**La trappola, che nessun banco poteva vedere.** Il kit è servito da un'altra
+origine e senza `crossorigin`, quindi per Chromium è uno «script
+CORS-cross-origin»: la base per il suo `import()` è `about:blank`, e
+`import('/html-mobile/...')` muore su *Failed to resolve module specifier*
+prima di toccare la rete. Il primo giro sul telefono è stato verde in tutti i
+banchi e morto sullo schermo. Misurato su Chrome del telefono — stesso motore
+della WebView — con un banco di quattro file: col percorso l'import non parte,
+con l'indirizzo intero (`new URL(..., location.href)`) passa. Il pannello del
+browser del Mac **non** serve a questa prova: blocca lui gli iframe
+(`ERR_BLOCKED_BY_CLIENT`).
+
+**Provato sul telefono, non dedotto:** chat → todo scorrendo sulla chat; todo →
+chat scorrendo **dentro** l'app; un gesto corto e lento resta dov'è; lo scroll
+verticale dentro l'app va giù e torna su intatto; il tocco sui controlli
+dell'app funziona ancora.
+
+**Quel che resta fuori.** Una app che non carica il kit resta com'era — niente
+scorrimento, nessun errore. E una app che si facesse un suo aggeggio a dito
+orizzontale (un cursore, uno scorri-per-cancellare) non verrebbe riconosciuta:
+`dentroScorrevoleOrizzontale` cede solo a chi *scorre*. Nessuna delle quattro
+app installate usa il dito, quindi il caso non ha ancora un proprietario e non
+gli è stata data una via d'uscita: il giorno che serve, è una riga nel kit.
