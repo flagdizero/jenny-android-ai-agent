@@ -1275,7 +1275,26 @@ export class ChatController {
       this.loadInitialHistory();
     }
 
-    this.input.focus();
+    /* `preventScroll`, e non e' un dettaglio.
+     *
+     *  Entrando in chat da uno scorrimento laterale, la vista sta ancora
+     *  **fuori schermo**: `_animateSlideIn` le mette `translateX(100%)` e poi la
+     *  riporta a zero in due decimi di secondo. Finche' e' spostata, la pagina
+     *  e' larga il doppio — e in chat lo scroller **e' il documento**.
+     *
+     *  Mettere a fuoco un campo che sta fuori dallo scrollport fa una cosa
+     *  sola, e la fa bene: il browser **scorre per raggiungerlo**. Di lato.
+     *  Trascinandosi dietro tutto il guscio.
+     *
+     *  Misurato sul banco il 22/09/2026: vista a `translateX(100%)`, larghezza
+     *  del documento da 590 a 1180, `focus()` → `.app` a **x -384**; con
+     *  `preventScroll: true` → **x 0**. Sul telefono si vedeva come una pagina
+     *  schiacciata a sinistra e tagliata, col footer ridotto a una voce sola —
+     *  l'ultima, la sola rimasta dentro il pezzo visibile.
+     *
+     *  Ed e' per questo che il difetto aveva un verso solo: uscendo dalla chat
+     *  nessuno mette a fuoco niente. */
+    this.input.focus({ preventScroll: true });
 
     // I messaggi possono essere arrivati mentre la vista era nascosta (scrollHeight=0 rende
     // scrollToBottom() un no-op); riallinea lo scroll ora che la vista è di nuovo visibile.
