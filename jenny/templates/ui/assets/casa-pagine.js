@@ -241,12 +241,29 @@ export class CasaPagine {
       const cornice = cornicePerApp(schermata.ref);
       cornice.className = 'casa-pagina-app';
       pannello.appendChild(cornice);
+    } else if (schermata.kind === 'stanza') {
+      /* La stanza e' **prestata**: e' un elemento solo, i suoi controller lo
+         hanno preso per id, e duplicarlo vorrebbe dire due nodi con lo stesso
+         id. Chi la presta e' il guscio, che sa anche come riempirla. */
+      const stanza = this.app?.prestaStanza?.(schermata.ref);
+      if (stanza) pannello.appendChild(stanza);
     }
     pannello.dataset.pieno = '1';
   }
 
+  /** Spegne una pagina — e **restituisce** quel che le era stato prestato.
+   *
+   *  `textContent = ''` qui sarebbe un disastro silenzioso: cancellerebbe la
+   *  stanza vera, non una sua copia, e da quel momento aprirla dal percorso
+   *  normale non mostrerebbe piu' niente. Il difetto si vedrebbe una schermata
+   *  dopo, e non somiglierebbe affatto alla sua causa.
+   */
   _svuota(pannello) {
     if (pannello.dataset.pieno !== '1') return;
+    if (pannello.dataset.kind === 'stanza') {
+      const stanza = pannello.children[0] || pannello.firstElementChild;
+      if (stanza) this.app?.restituisciStanza?.(stanza);
+    }
     pannello.textContent = '';
     pannello.dataset.pieno = '';
   }

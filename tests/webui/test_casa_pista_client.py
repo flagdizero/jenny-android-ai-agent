@@ -57,7 +57,16 @@ function creaEl(id, cls) {
        Costato una stesura (22/09/2026). */
     addEventListener(t, fn) { (ascolto[t] = ascolto[t] || []).push(fn); },
     removeEventListener() {},
-    appendChild(c) { this.children.push(c); c.parent = this; return c; },
+    /* **Sposta**, come il DOM vero: un nodo sta in un posto solo. Senza,
+       una stanza prestata a una pagina resterebbe anche nel guscio, e la
+       prova «la stanza torna a casa» sarebbe vera comunque — cioe' verde su
+       codice che la distrugge. Costato una stesura (22/09/2026). */
+    appendChild(c) {
+      if (c.parent) c.parent.children = c.parent.children.filter((x) => x !== c);
+      this.children.push(c);
+      c.parent = this;
+      return c;
+    },
     append(...cs) { for (const c of cs) this.appendChild(c); },
     /* `<dialog>`: `showModal` e `close` sono quel che serve, piu' `open`. */
     open: false,
@@ -154,9 +163,22 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
         + textwrap.dedent(
             """
             const { CasaPagine } = await import('./casa-pagine.js');
+            /* Il guscio finto: la stanza e' un elemento vero che vive nel
+               guscio, cosi' il banco vede se viene restituito o distrutto. */
+            const guscio = creaEl('casa-shell', 'casa-shell');
+            const stanzaTu = creaEl('casa-tu', 'casa-tu');
+            guscio.appendChild(stanzaTu);
+            let aperture = 0;
             const app = {
               view: VISTA,
+              shell: guscio,
               launcher: { isOpen: () => false },
+              prestaStanza: (ref) => {
+                if (ref !== 'tu') return null;
+                aperture += 1;
+                return stanzaTu;
+              },
+              restituisciStanza: (el) => { guscio.appendChild(el); },
               appsSource: () => ({
                 ensureLoaded() {},
                 jennyApps: [
@@ -227,7 +249,7 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
 
 
 UNA = [{"id": "p1", "kind": "app", "ref": "orto"}]
-DUE = UNA + [{"id": "p2", "kind": "stanza", "ref": "pages"}]
+DUE = UNA + [{"id": "p2", "kind": "stanza", "ref": "tu"}]
 
 
 # ── La chat e' la pagina 0 ──────────────────────────────────────────────────
@@ -701,12 +723,15 @@ def test_an_app_page_mounts_that_app_frame() -> None:
 
 
 def test_a_room_page_mounts_no_app() -> None:
-    """La stanza arriva col suo passo: qui si prova che non monti un'app per
-    sbaglio — un `<iframe>` su `/apps/tu/index.html` sarebbe un 404 a schermo."""
+    """Una stanza non deve montare una cornice d'app per sbaglio.
+
+    Un `<iframe>` su `/apps/tu/index.html` sarebbe un 404 a tutta pagina, e da
+    fuori somiglierebbe a un'app che non parte.
+    """
     _run(
         "scorri(SINISTRA); scorri(SINISTRA);\n"
         "const pagina = pista.children.find((c) => c.dataset.id === 'p2');\n"
-        "assert.equal(pagina.children.length, 0);",
+        "assert.ok(!pagina.children.some((c) => c.dataset.slug), 'monta una cornice di app');",
         schermate=DUE,
     )
 
@@ -736,3 +761,57 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
     cambio = app_js.split("onPaginaCambiata(", 1)[1].split("_applyHead();", 1)[0]
     assert "data-pagina" in cambio, "l'attributo non viene aggiornato al cambio pagina"
+
+
+# ── Le stanze: prestate, non copiate ────────────────────────────────────────
+
+
+def test_a_room_page_borrows_the_real_room() -> None:
+    """Un elemento solo: i controller l'hanno preso per id alla costruzione, e
+    duplicarlo vorrebbe dire due nodi con lo stesso id."""
+    _run(
+        "scorri(SINISTRA); scorri(SINISTRA);\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p2');\n"
+        "assert.equal(pagina.children[0], stanzaTu, 'la pagina non ha la stanza vera');\n"
+        "assert.equal(aperture, 1, 'la stanza non e stata riempita');",
+        schermate=DUE,
+    )
+
+
+def test_leaving_a_room_page_gives_the_room_back() -> None:
+    """**Il difetto che questa prova esiste per impedire.**
+
+    `textContent = ''` su una pagina che tiene una stanza prestata non svuota
+    un contenitore: cancella la stanza vera. Da quel momento aprirla dal
+    percorso normale — «Tu e Jenny» dal menu — non mostra piu' niente, e il
+    guasto si vede una schermata dopo, dove non somiglia affatto alla causa.
+    """
+    _run(
+        "scorri(SINISTRA); scorri(SINISTRA);\n"
+        "scorri(DESTRA); scorri(DESTRA);\n"
+        "assert.equal(guscio.children.includes(stanzaTu), true,\n"
+        "  'la stanza non e tornata nel guscio: aprirla dal menu non mostrerebbe niente');\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p2');\n"
+        "assert.equal(pagina.children.length, 0);",
+        schermate=DUE,
+    )
+
+
+def test_the_css_lights_the_room_inside_the_page() -> None:
+    """Le stanze sono `display:none` e le accende la regola della vista.
+
+    Dentro una pagina la vista e' ancora `chat`: senza una seconda via la
+    pagina resterebbe vuota, e sembrerebbe che il prestito non abbia
+    funzionato mentre l'elemento e' li'.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    assert ".casa-pagina[data-kind='stanza'] > * { display: flex; }" in css
+
+
+def test_the_notebook_rooms_are_not_lendable() -> None:
+    """`pages` e `reader` dipendono da dove eri prima."""
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    tabella = app_js.split("const STANZE_IN_PAGINA = {", 1)[1].split("};", 1)[0]
+    assert "pages:" not in tabella and "reader:" not in tabella
+    for stanza in ("tu", "jenny", "model", "updates", "backup"):
+        assert f"{stanza}:" in tabella
