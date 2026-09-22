@@ -1,0 +1,270 @@
+# Il quaderno in casa: una cosa da togliere, due da mettere
+
+*22/09/2026 — branch `feat/la-casa`. Deciso dall'utente dopo l'analisi di cosa
+si era perso nel passaggio della wiki dall'officina alla casa.*
+
+**Il vincolo dato a voce: «non ci deve restare merda».** Nessun orfano — né
+codice senza chiamanti, né rotte senza clienti, né cartelle create per una cosa
+che non esiste più.
+
+---
+
+## Da dove si parte
+
+La wiki è uscita dall'officina il 21/09 (`0116b1f`) e vive in casa come
+«quaderno»: elenco pagine + mappa (`casa-pages.js`), lettore
+(`casa-reader.js`), mappa (`casa-map.js`). Nel passaggio sono rimaste indietro
+cinque cose; l'analisi le ha pesate una per una e la decisione è:
+
+| cosa | esito | perché |
+|---|---|---|
+| grafo di **tutti** i quaderni | **togliere** | è una stella senza collegamenti fra quaderni: l'unica informazione è quante pagine ha ciascuno, e l'elenco la dà già con nomi, date e ricerca |
+| **camminare** nel grafo (tocca un nodo → ricentra) | già fatto | era solo lato interfaccia, se n'è andato con `mobile-graph.js`. Niente da rimuovere |
+| **albero** delle cartelle | non si rifà | su 590 px un elenco ordinato e raggruppato si legge meglio, e si aprono pagine, non cartelle |
+| **ricerca dentro la mappa** | non ora | vale (v. in fondo), ma viene dopo queste tre |
+| **audit** | **non si toccano** | v. sotto |
+
+### L'errore da non rifare, scritto qui perché è successo due volte in due giorni
+
+Avevo raccomandato di **togliere gli audit**, sulla base di due misure giuste
+(zero file in quindici quaderni; nessun chiamante nell'interfaccia) e di una
+domanda mai fatta: **qualcun altro li consuma?**
+
+Sì. `audit` è una delle **cinque operazioni** della skill `llm-wiki`
+(`compile`, `ingest`, `query`, `lint`, `audit`), che è `locked: true`. Ha una
+guida (`references/audit-guide.md`), uno script che Jenny esegue a inizio
+passata (`scripts/audit_review.py`) e 41 righe di controlli in
+`scripts/lint_wiki.py`. E la guida risponde per iscritto all'alternativa che
+avevo proposto:
+
+> «Il feedback in chat si perde nel momento in cui la conversazione finisce. La
+> cartella audit dà alle correzioni una casa permanente e ancorata al punto, che
+> l'AI e il linter capiscono.»
+
+È lo stesso sbaglio di KaTeX il giorno prima («un lettore ciascuno, ed era la
+wiki» — e invece il lettore era `shared/rich-content.js`, usato anche dalla
+casa). **La regola che ne esce, e vale per la Parte 1 di questo piano: prima di
+togliere, cercare il consumatore fuori dall'interfaccia** — agente, skill,
+template, guscio Android, script. Una misura di «non usato» presa solo sul
+client non è una misura di non usato.
+
+E «zero file» qui non vuol dire «non lo vuole»: vuol dire che **quel giro non è
+mai partito**, plausibilmente perché l'unica porta comoda era proprio quella
+cancellata il 21/09. Da cui la Parte 3.
+
+---
+
+## Parte 1 — via il grafo di tutti i quaderni
+
+**Verificato prima di scrivere:** `build_home_graph` lo usa **solo** la sua
+rotta, più due test. Nessun consumatore agente, nessuna skill, nessun template.
+
+### Cosa cade
+
+1. `jenny/webui/wiki.py` → `build_home_graph()` per intero (docstring: *«Star
+   graph: central hub node + one node per wiki»*). **Non** toccare
+   `discover_wikis`, che serve ancora ad `_audit_create` e al resto.
+2. `jenny/webui/wiki_routes.py` → nel gestore di `/api/graph`: l'`import` di
+   `build_home_graph`, il ramo `else` che lo chiama, e il commento a ~riga 99
+   che lo cita. Il nome del quaderno diventa **obbligatorio**: senza, la rotta
+   risponde `400`, come già fa `/api/audit/create`.
+3. `jenny/templates/ui/assets/shared/api-client.js` → `getGraph(wiki)` perde la
+   forma senza parametro (`const url = wiki ? … : '/api/graph'`). Il parametro
+   diventa obbligatorio.
+4. `tests/webui/test_wiki_multi.py` → le due prove che lo coprono (~righe 347 e
+   359). **Non si cancellano e basta**: quel che misuravano — «scoprire i
+   quaderni» — resta vero e va misurato su `discover_wikis`, che sopravvive. Se
+   dopo la riscrittura non resta niente da asserire, si dice nel commit.
+
+### La verifica «niente merda»
+
+Dopo il taglio, questi devono dare **zero** su `jenny/`, `tests/`, `docs/`,
+`android/`:
+
+```
+build_home_graph        _home        group="home"        group-home
+```
+
+E `grep -rn "'/api/graph'" jenny/templates/ui/` non deve trovare la forma senza
+query.
+
+---
+
+## Parte 2 — «Modifica» nel lettore
+
+**Perché.** Le pagine sono `.md` in `workspace/wikis/<quaderno>/wiki/`, e
+`wikis` non è fra le cartelle nascoste: quindi **già oggi** si possono
+modificare — dal gestore file, in officina, sei tocchi e un altro guscio, dal
+lato opposto del telefono rispetto a dove ti accorgi dell'errore. Funziona e non
+lo fa nessuno.
+
+Il lettore **non ha mai avuto** un editor: né in casa, né nella vecchia wiki
+dell'officina (verificato su `mobile-wiki.js`: zero). Non è una cosa che si
+rimette, è una che non c'era.
+
+### Quel che già esiste, e va usato invece di rifarlo
+
+`/api/page` restituisce già tutto quel che serve:
+
+| campo | cos'è |
+|---|---|
+| `wiki` | il nome del quaderno |
+| `page` | il percorso della pagina **dentro** il quaderno |
+| `path` | il percorso relativo a `wikis_dir` |
+| `html` | il reso |
+| `raw` | **il markdown sorgente** |
+
+`casa-reader.js` lo riceve già intero: `_safeHtml(page.html, page.raw)`. Quindi
+**il testo da modificare è già in mano** — nessuna seconda richiesta.
+
+### Quel che manca: la scrittura
+
+Serve una rotta nuova, **speculare alla lettura**: `POST /api/page/write` con
+`wiki`, `page`, `content`, che risolve il percorso server-side esattamente come
+`_wiki_page` (stessa `relative_to` come guardia contro le uscite di cartella).
+
+**Non** si usa `workspace.write` con un percorso costruito dal client: la
+cartella dei quaderni la decide la config (`wiki.wikis_dir`) e il client non la
+conosce — costruirla vorrebbe dire indovinarla. È lo stesso ragionamento che ha
+portato gli spilli della mappa in `.jenny/` invece che dentro `wikis/<nome>/`.
+
+### Il conflitto con Jenny, che è la parte che morde
+
+**Le stesse pagine le scrive anche lei**, con gli strumenti file di sempre (non
+c'è uno strumento wiki dedicato: verificato). Quindi fra il momento in cui apri
+l'editor e quello in cui salvi, il file può essere cambiato sotto.
+
+La richiesta porta anche `base`: il `raw` che il client aveva caricato. Il
+server confronta col contenuto attuale e se differisce risponde **409**, senza
+scrivere. Il lettore dice «Jenny l'ha cambiata mentre la modificavi» e offre di
+ricaricare. Salvare a occhi chiusi qui vuol dire cancellare il lavoro di
+qualcun altro senza che nessuno se ne accorga.
+
+### La forma
+
+- Un bottone **Modifica** nell'intestazione del lettore, accanto a «Talk about
+  it».
+- Premuto: il corpo reso lascia il posto a una `<textarea>` col `raw`. Più
+  **Salva** e **Annulla**.
+- **Niente CodeMirror.** Sono 200+ kB per evidenziare del markdown su 590 px, e
+  la casa è rimasta magra apposta. Una textarea è la cosa onesta; se un giorno
+  servirà di più, si vedrà con una misura.
+- Salvato: si ricarica la pagina dal server (non si fida di quel che si è
+  scritto: il reso lo fa il server, ed è lui che deve dire com'è venuta).
+- **Uscire con modifiche non salvate chiede conferma.** Il repo ha già la
+  lezione scritta, e cara: v. `_closeEditor`/`_confirmDiscard` del gestore file,
+  dove il guard sul buffer sporco vale «solo se non esiste una seconda strada» —
+  e prima ce n'erano due che non lo guardavano.
+
+---
+
+## Parte 3 — «Segnala» nel lettore
+
+**Perché.** Il giro degli audit è vivo da entrambi i lati tranne uno: Jenny lo
+legge, il linter lo controlla, ogni quaderno ha le sue cartelle — e **tu non hai
+più come metterci niente**, da quando il 21/09 è sparita la selezione del testo
+nel lettore. Il canale esiste ed è muto.
+
+E non è un doppione di «Modifica»: sono due atti diversi.
+
+- **Modifica** = *lo aggiusto io adesso*. Refuso, riga storta.
+- **Segnala** = *è sbagliato nel merito, aggiustalo tu* — e resta scritto dove
+  il linter lo vede, con l'ancora al punto esatto.
+
+### Quel che già esiste
+
+`/api/audit/create` è intatta e **fa quasi tutto da sola**. Vuole in query:
+
+```
+wiki, target, selStart, selEnd, comment, severity, author
+```
+
+Il server **si rilegge il markdown da solo** (`raw_path.read_text`) e calcola le
+ancore (`anchor_before` / `anchor_text` / `anchor_after`). Il vecchio client
+passava anche `rawMarkdown`: **la rotta lo ignora**, e il client nuovo non deve
+mandarlo.
+
+Il file che nasce: `<wiki-root>/audit/YYYYMMDD-HHMMSS-<slug>.md`, frontmatter
+YAML con `target`, `target_lines`, le tre ancore, `severity`, `author`,
+`created`, `status: open`. Risolti → `audit/resolved/`, e **niente si cancella
+mai**, nemmeno i rifiuti.
+
+### Quel che manca: dalla selezione agli offset
+
+`selStart`/`selEnd` sono **offset nel markdown sorgente**, ma la selezione
+avviene nel reso. Il vecchio codice risolveva con `_resolveSelectionToOffsets`.
+
+Qui è più semplice, perché `raw` è già in mano: `raw.indexOf(testoSelezionato)`
+con un **controllo di unicità** — se quel testo compare più di una volta
+l'ancora è ambigua, e allora si dice invece di ancorare alla cieca (era già la
+scelta del vecchio codice: `wiki.createAuditAnyway`).
+
+### La forma
+
+- Selezioni del testo nella pagina → compare un bottoncino **Segnala**.
+- Premuto: un foglio con l'anteprima del testo scelto, un campo commento e la
+  gravità (`info` / `suggerimento` / `avviso` / `errore` — i quattro valori che
+  il formato già prevede).
+- `author`: il nome che Jenny ha in casa, o `anonymous`.
+- Inviato: un toast, e basta. Non serve una lista degli audit aperti nella casa
+  — quella la legge Jenny, ed è il suo mestiere, non una schermata da fare.
+
+**Attenzione al gesto.** La selezione del testo su questo telefono ha già i suoi
+conflitti noti (`shared/selection.js`, `TAP_SLOP = 12`, e la chrome che esce dal
+hit-test finché c'è una selezione). Il bottoncino non deve rubare il tocco alla
+selezione stessa, ed è la cosa da provare col pollice, non al banco.
+
+### Le chiavi i18n
+
+Tutte e 29 le `wiki.*` sono state cancellate il 21/09 e vanno ricreate **solo**
+per quel che si ridisegna, sotto `casa.audit.*`, in **it** e **en** (il banco di
+parità delle lingue fallisce se ne manca una).
+
+---
+
+## Cosa questo piano **non** fa
+
+- **Non** rimette la lista degli audit aperti/risolti nell'interfaccia.
+- **Non** rimette il grafo di tutti i quaderni, l'albero, il camminare.
+- **Non** tocca la skill `llm-wiki`, che è `locked`.
+- **Non** mette un modo per togliere uno spillo dalla mappa, né pota le chiavi
+  dei quaderni cancellati dal file degli spilli (v. fondo del piano della
+  mappa): restano aperte da ieri.
+
+---
+
+## Ordine, e come si verifica
+
+Un pezzo = un commit, `ruff check jenny/ tests/` + `python3 -m pytest -q` verdi a
+ogni passo, e **ogni banco nuovo provato rosso con una mutazione** prima di
+dirlo fatto.
+
+1. **Parte 1** (togliere) — è indipendente e non rischia niente: si fa per prima
+   e libera il campo.
+2. **Parte 2** (modifica) — prima la rotta col suo 409, poi il bottone.
+3. **Parte 3** (segnala) — per ultima, perché è quella con il gesto delicato.
+
+Alla fine, sul telefono (build release da worktree pulito, firmata, installata,
+e **controllare che il JS nuovo sia davvero sul telefono** leggendo
+`files/workspace/ui/assets/`, non il repo):
+
+- modifico una pagina, salvo, riapro: la modifica c'è;
+- modifico, e intanto cambio il file da fuori: al salvataggio esce il 409 e
+  **non** si perde niente;
+- esco con modifiche non salvate: chiede conferma;
+- seleziono, segnalo, e **il file compare** in `wikis/<q>/audit/` con
+  l'ancora giusta;
+- seleziono un testo che compare due volte: lo dice invece di ancorare a caso;
+- e dieci tocchi normali su una pagina non fanno comparire niente.
+
+### La lista «niente merda», da ripassare a fine giro
+
+- [ ] `build_home_graph`, `_home`, `group-home`: zero occorrenze ovunque.
+- [ ] Nessuna rotta server senza un cliente: rifare il conto fatto oggi su
+      `/api/tree` (resta orfana **di proposito**? allora deciderlo, non
+      dimenticarlo), `/api/audit`, `/api/audit/create`, `/api/page/write`.
+- [ ] Nessun export JS che non importa nessuno, nessun metodo senza chiamanti:
+      la stessa passata del 21/09 (`git log --grep "Sweep the dead code"`).
+- [ ] Manifesto `android_assets.py` e file su disco coincidono (uno sbilancio =
+      404 silenzioso sul telefono, invisibile in locale).
+- [ ] Chiavi i18n: stesse in `it.json` e `en.json`, e nessuna orfana.
