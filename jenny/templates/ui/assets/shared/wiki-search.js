@@ -43,7 +43,14 @@ export function foldText(text) {
     .toLowerCase();
 }
 
-/** Token indicizzabili di un testo, nell'ordine in cui compaiono. */
+/** Token indicizzabili di un testo, nell'ordine in cui compaiono.
+ *
+ *  **Nessun modulo la importa, e non e' morta**: il suo consumatore e' un banco
+ *  (`tests/webui/test_wiki_search_client.py::test_the_two_tokenizers_agree`),
+ *  che la estrae da qui per confrontarla con `wiki_search.py::tokenize`. Le due
+ *  devono spezzare le parole allo stesso modo o la ricerca dal telefono non
+ *  trova quel che il server ha indicizzato. Una passata di codice morto che
+ *  guardi solo gli `import` la segnala: e' successo il 22/09/2026. */
 export function tokenize(text) {
   return foldText(text).match(TOKEN_RE) || [];
 }
