@@ -1022,10 +1022,14 @@ body.casa {
 }
 
 /* ── La striscia dei pallini ─────────────────────────────────────────────
-   Dove sei fra le pagine, **e** la presa per tirare su il cassetto: un asse,
-   due gesti (tavola `Pagine`). Ha sostituito il bottone che stava a sinistra
-   del campo di scrittura, quindi deve leggersi come una maniglia e non come
-   una decorazione — per questo occupa una riga sua e non un angolo. */
+   Dove sei fra le pagine: toccare un pallino ci va, e tenere premuto apre il
+   foglio che le gestisce.
+
+   **Non** e' anche la presa del cassetto, come voleva la tavola. Misurato sul
+   telefono il 22/09/2026: con la navigazione a gesti accesa Android si prende
+   lo swipe dal bordo basso e all'app arriva `touchcancel`, mai `touchend` —
+   provato con una build diagnostica. La zona del gesto di home non si puo'
+   escludere. Il cassetto e' tornato al suo bottone. */
 .casa-pallini {
   flex: none;
   display: flex;
@@ -1036,8 +1040,8 @@ body.casa {
      l'inset di sistema: la presa non deve finire dentro la zona in cui Android
      si prende lo swipe di home. */
   height: 26px;
-  /* Il gesto e' verticale e parte da qui: il browser non deve interpretarlo
-     come uno scorrimento della pagina prima che lo veda il codice. */
+  /* La pressione lunga apre il foglio delle pagine: il browser non deve
+     interpretare il dito come uno scorrimento prima che il codice lo veda. */
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;

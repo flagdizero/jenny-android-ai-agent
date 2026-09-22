@@ -767,30 +767,32 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     assert 'id="btn-launcher"' in officina
     assert "getElementById('btn-launcher')" in _src("mobile-app.js")
 
-    # 5. **22/09/2026: in casa l'ingresso diventa un gesto.** La tavola
-    #    `Pagine` sostituisce il pulsante con la striscia dei pallini — «su il
-    #    cassetto, di lato le pagine» — perche' quella striscia e' gia' li' per
-    #    dire dove sei, e due comandi per la stessa cosa sono uno di troppo.
+    # 5. **22/09/2026, e questa e' la quinta volta.** Per un giro l'ingresso di
+    #    casa e' diventato un gesto: la tavola `Pagine` sostituiva il pulsante
+    #    con la striscia dei pallini — «su il cassetto, di lato le pagine».
     #
-    #    E' la variazione piu' rischiosa delle cinque, e va detto: un pulsante
-    #    si vede, un gesto no. Quel che regge l'invariante e' che la striscia
-    #    **c'e' sempre**, anche con la sola chat — e' l'unica cosa a schermo
-    #    che annunci il gesto — e che ogni pallino e' un bottone vero, quindi
-    #    chi i gesti non li fa cambia comunque pagina.
+    #    **Sul telefono non funziona, ed e' misurato.** Con la navigazione a
+    #    gesti (`navigation_mode = 2`, il caso normale) Android si prende lo
+    #    swipe verso l'alto dal bordo basso per il gesto di home: all'app
+    #    arriva `touchcancel`, mai `touchend`. Provato con una build
+    #    diagnostica che apriva il foglio proprio su `touchcancel` — e il
+    #    foglio si apriva. La zona di quel gesto **non e' escludibile**:
+    #    `setSystemGestureExclusionRects` vale per il gesto indietro.
+    #
+    #    Per quel giro il cassetto e' stato irraggiungibile dalla casa. Il
+    #    pulsante e' tornato, e questo banco lo pretende.
     casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
-    assert 'id="casa-pallini"' in casa, "la casa non ha piu' nessun ingresso al cassetto"
-    assert 'id="casa-drawer"' not in casa, (
-        "il vecchio pulsante e' tornato: adesso gli ingressi sono due, e la "
-        "striscia non e' piu' l'unica cosa che insegni il gesto"
+    assert 'id="casa-drawer"' in casa, "la casa non ha nessun ingresso al cassetto"
+    assert "getElementById('casa-drawer')" in _src("casa-app.js")
+    assert "openLauncher" not in _src("casa-pagine.js"), (
+        "la striscia riprova ad aprire il cassetto con un gesto che il sistema "
+        "non consegna"
     )
-    pagine = _src("casa-pagine.js")
-    assert "getElementById('casa-pallini')" in pagine
-    assert "openLauncher" in pagine, "la striscia non apre il cassetto: e' decorativa"
 
     # Il modulo del cassetto non conosce gli id dei due gusci: li aggancia chi
     # li possiede. Senza questo il foglio saprebbe di stare in due case.
     assert "btn-launcher" not in _src("mobile-launcher.js")
-    assert "casa-pallini" not in _src("mobile-launcher.js")
+    assert "casa-drawer" not in _src("mobile-launcher.js")
 
 
 def test_the_dead_dock_branch_is_gone() -> None:

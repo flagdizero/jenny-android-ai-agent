@@ -27,15 +27,6 @@ import { cornicePerApp } from './shared/apps-actions.js';
  *  secco, che sembra un difetto. */
 const OLTRE_IL_CAPO = 0.06;
 
-/** Quanto in su deve andare il dito sulla striscia perche' sia «tira su».
- *
- *  Si misura fra `touchstart` e `touchend` e non si segue il dito: il foglio
- *  del cassetto non e' trascinabile — si apre e basta — quindi seguirlo
- *  prometterebbe un movimento che poi non c'e'. E cosi' il riconoscimento di
- *  un trascinamento resta **tutto** in `shared/gesto-orizzontale.js`, che e'
- *  l'invariante che tiene i due gusci allineati.
- */
-const TIRA_SU = 32;
 
 /** Le stanze che si possono appendere a una pagina.
  *
@@ -74,7 +65,6 @@ export class CasaPagine {
     this.elenco = document.getElementById('casa-foglio-elenco');
 
     if (this.pista) this._armaGesto();
-    if (this.striscia) this._armaStriscia();
     if (this.striscia && this.foglio) this._armaFoglio();
     this._pallini();
     i18n.onLocaleChange(() => this._pallini());
@@ -180,36 +170,6 @@ export class CasaPagine {
       b.addEventListener('click', () => this.vaiA(i));
       this.striscia.appendChild(b);
     }
-  }
-
-  /** Il secondo gesto della striscia: **su** apre il cassetto.
-   *
-   *  Ha preso il posto del bottone che stava a sinistra del campo di
-   *  scrittura. Il rischio e' dichiarato: si toglie un comando che si vedeva e
-   *  lo si sostituisce con uno che non si vede — per questo la striscia c'e'
-   *  sempre, anche con la sola chat, ed e' l'unica cosa che lo annuncia.
-   */
-  _armaStriscia() {
-    let y0 = null;
-    let x0 = 0;
-    this.striscia.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) { y0 = null; return; }
-      y0 = e.touches[0].clientY;
-      x0 = e.touches[0].clientX;
-    }, { passive: true });
-    this.striscia.addEventListener('touchend', (e) => {
-      if (y0 === null) return;
-      const t = (e.changedTouches && e.changedTouches[0]) || null;
-      const partenza = y0;
-      y0 = null;
-      if (!t) return;
-      const su = partenza - t.clientY;
-      /* Verticale davvero: sulla striscia passa anche il dito che sta
-         cambiando pagina, e quello non deve aprire il cassetto. */
-      if (su >= TIRA_SU && su > Math.abs(t.clientX - x0)) {
-        this.app?.openLauncher?.();
-      }
-    }, { passive: true });
   }
 
   /** «Resta viva solo la pagina che guardi: le altre si spengono, o te le

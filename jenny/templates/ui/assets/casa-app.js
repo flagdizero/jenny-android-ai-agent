@@ -987,10 +987,18 @@ class CasaApp {
   _bindComposer() {
     this.attach.addEventListener('click', () => this.files.trigger());
 
-    /* Il cassetto non ha piu' un bottone qui: si tira su dalla striscia dei
-       pallini (v. `casa-pagine.js::_armaStriscia` e la tavola `Pagine`).
-       L'officina tiene il suo, che e' un elemento diverso sullo stesso
-       foglio condiviso. */
+    /* Il cassetto delle app, a sinistra del composer. Rimesso il 22/09/2026
+       dopo la prova sul telefono: il «tira su» dalla striscia che la tavola
+       chiedeva non arriva mai all'app, perche' con la navigazione a gesti il
+       bordo basso e' di Android. */
+    const cassetto = document.getElementById('casa-drawer');
+    cassetto?.addEventListener('click', () => this.openLauncher());
+    /* L'etichetta per chi legge lo schermo. La casa non ha una passata
+       generica sui `data-i18n-*`, quindi il valore va scritto. */
+    const dilloBene = () =>
+      cassetto?.setAttribute('aria-label', i18n.t('nav.launcher'));
+    dilloBene();
+    i18n.onLocaleChange(dilloBene);
 
     this.pending.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-remove]');

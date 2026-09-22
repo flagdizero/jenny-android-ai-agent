@@ -486,7 +486,33 @@ dallo schema**, non solo dal foglio: una pagina che il prodotto non sa
 disegnare non deve poter esistere nemmeno in un `config.json` scritto a mano —
 stessa regola del cassetto.
 
-### B6. Prova sul telefono
+### B6. Prova sul telefono — ✅ fatta il 22/09/2026, e ha trovato due difetti
+
+**1. «Non hai Jenny App» a chi ne ha quattro.** `AppsSource.ensureLoaded()` non
+e' asincrona: avvia le due fetch e torna. Il foglio leggeva `jennyApps` mentre
+era ancora l'array vuoto di partenza. Corretto con `attendiJennyApps()`, e il
+banco lo prende adesso perche' la fonte finta risponde **dopo un giro**, come la
+rete vera.
+
+**2. Il «tira su» della tavola non puo' funzionare.** Con la navigazione a gesti
+— `navigation_mode = 2`, il caso normale — Android si prende lo swipe dal bordo
+basso per il gesto di home: all'app arriva `touchcancel`, **mai** `touchend`.
+Provato con una build diagnostica che apriva il foglio proprio su
+`touchcancel`, e il foglio si apriva.
+
+La zona di quel gesto **non e' escludibile**: `setSystemGestureExclusionRects`
+vale per il gesto indietro, sui bordi laterali. Quindi non c'era niente da
+aggiustare nel codice: la tavola chiede una cosa che il sistema non concede.
+
+**Conseguenza: il bottone del cassetto e' tornato.** Per un giro il cassetto e'
+stato **irraggiungibile dalla casa** — la terza volta che questa porta sparisce,
+e stavolta l'ho tolta io. La striscia resta con i due gesti che funzionano:
+toccare un pallino per cambiare pagina, tenere premuto per il foglio.
+
+**Quel che invece ha funzionato al primo colpo:** la striscia, il foglio, la
+scelta, il salvataggio (sopravvive al riavvio dell'app), il ritorno alla chat,
+il tocco sul pallino.
+
 
 Col dito finto: scorrere dalla chat, pressione lunga sui pallini, aggiungere
 un'app, scorrere, tornare con la pastiglia **casa**, tirare su il cassetto dalla

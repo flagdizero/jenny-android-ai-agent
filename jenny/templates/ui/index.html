@@ -146,6 +146,21 @@
       <div class="casa-pending" id="casa-pending" hidden></div>
 
       <div class="casa-composer">
+        <!-- Il cassetto delle app. La tavola `Pagine` lo voleva a «tira su»
+             dalla striscia dei pallini — e **sul telefono non si puo'**:
+             il 22/09/2026, con la navigazione a gesti accesa
+             (`navigation_mode = 2`), Android si prende lo swipe dal bordo
+             basso e all'app arriva `touchcancel`, mai `touchend`. Provato con
+             una build diagnostica: il gesto arrivava *annullato*.
+             La zona del gesto di home **non e' escludibile**:
+             `setSystemGestureExclusionRects` vale per il gesto indietro, non
+             per quello. Quindi il cassetto ha di nuovo un comando che si vede
+             — ed e' la terza volta che questa porta va rimessa, v.
+             `test_launcher_sheet_contract`. -->
+        <button class="casa-drawer" id="casa-drawer" type="button"
+                aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
+          <i class="ti ti-layout-grid"></i>
+        </button>
         <label class="casa-field">
           <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
           <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">

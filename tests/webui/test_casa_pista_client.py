@@ -471,76 +471,30 @@ def test_every_dot_is_a_real_button_that_moves() -> None:
     )
 
 
-def test_pulling_up_opens_the_drawer() -> None:
-    _run(
-        "let aperto = 0;\n"
-        "app.openLauncher = () => { aperto += 1; };\n"
-        "tiraSu(60);\n"
-        "assert.equal(aperto, 1);"
-    )
+def test_the_strip_does_not_try_to_open_the_drawer() -> None:
+    """**La tavola voleva «tira su», e sul telefono non si puo'.**
 
+    Misurato il 22 settembre 2026 sul Titan 2, con la navigazione a gesti
+    accesa (`navigation_mode = 2`): uno swipe verso l'alto dal bordo basso lo
+    prende Android per il gesto di home, e all'app arriva `touchcancel` — mai
+    `touchend`. Provato con una build diagnostica che apriva il foglio proprio
+    su `touchcancel`: il foglio si apriva, cioe' il gesto arrivava annullato.
 
-def test_a_small_nudge_is_not_a_pull() -> None:
-    _run(
-        "let aperto = 0;\n"
-        "app.openLauncher = () => { aperto += 1; };\n"
-        "tiraSu(10);\n"
-        "assert.equal(aperto, 0);"
-    )
+    La zona del gesto di home **non e' escludibile**:
+    `setSystemGestureExclusionRects` vale per il gesto indietro, sui bordi
+    laterali, non per quello. Quindi il cassetto e' tornato al suo bottone, e
+    la striscia fa le due cose che funzionano: dire dove sei, e aprire il
+    foglio se la tieni premuta.
 
-
-def test_a_sideways_drag_across_the_strip_is_not_a_pull() -> None:
-    """Sulla striscia passa anche il dito che sta cambiando pagina.
-
-    Senza il confronto fra verticale e orizzontale, cambiare pagina con un
-    dito basso aprirebbe il cassetto a meta' gesto.
+    Il banco tiene il codice **onesto**: niente ascoltatori che aspettano un
+    evento che il sistema non manda mai.
     """
-    _run(
-        "let aperto = 0;\n"
-        "app.openLauncher = () => { aperto += 1; };\n"
-        "tiraSu(40, {obliquo: 200});\n"
-        "assert.equal(aperto, 0);"
+    sorgente = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
+    assert "openLauncher" not in sorgente, (
+        "la striscia prova di nuovo ad aprire il cassetto: quel gesto non "
+        "arriva mai all'app con la navigazione a gesti"
     )
-
-
-def test_the_old_drawer_button_is_gone_from_the_home() -> None:
-    """Due ingressi sarebbero uno di troppo, e la striscia non insegnerebbe piu'
-    niente: il gesto resterebbe sconosciuto perche' il bottone basta."""
-    html = (UI / "index.html").read_text(encoding="utf-8")
-    assert 'id="casa-drawer"' not in html
-    assert 'id="casa-pallini"' in html
-    # L'officina tiene il suo: e' un elemento diverso sullo stesso foglio.
-    officina = (UI / "officina.html").read_text(encoding="utf-8")
-    assert 'id="btn-launcher"' in officina
-
-
-def test_jenny_stands_above_the_strip_not_on_it() -> None:
-    """Il pavimento della mascotte conta anche la striscia.
-
-    Senza, Jenny si appoggerebbe sopra la presa con cui si tira su il
-    cassetto — cioe' sopra il comando che ha appena sostituito un bottone.
-    """
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
-    misura = app_js.split("const measure = () => {", 1)[1].split("};", 1)[0]
-    assert "casa-pallini" in misura, "la striscia non entra nel pavimento"
-    assert "h + striscia" in misura
-
-
-# ── Il foglio «Le pagine di casa» ───────────────────────────────────────────
-
-
-def test_holding_the_dots_opens_the_sheet() -> None:
-    _run("await tieniPremuto(); assert.equal(foglio.open, true);")
-
-
-def test_a_finger_that_moves_is_not_a_hold() -> None:
-    """Chi cambia pagina, o tira su il cassetto, non si ritrova il foglio.
-
-    La pressione la riconosce il modulo condiviso proprio per questo:
-    annullarla quando il dito si muove vuol dire guardare i movimenti, e i
-    movimenti si guardano in un posto solo.
-    """
-    _run("await tieniPremuto({muovi: 120}); assert.equal(foglio.open, false);")
+    assert "touchend" not in sorgente, "un ascoltatore che il sistema non fa scattare"
 
 
 def test_a_pull_up_is_not_a_hold() -> None:
