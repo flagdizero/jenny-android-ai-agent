@@ -179,13 +179,24 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
                 return stanzaTu;
               },
               restituisciStanza: (el) => { guscio.appendChild(el); },
+              /* La fonte risponde **dopo un giro**, come la rete vera: al
+                 momento della domanda `jennyApps` e' ancora vuota. Un finto
+                 che risponde subito avrebbe lasciato passare il difetto visto
+                 sul telefono il 22 settembre 2026 — «non hai Jenny App» a chi
+                 ne aveva quattro. */
               appsSource: () => ({
                 ensureLoaded() {},
-                jennyApps: [
-                  { slug: 'orto', name: 'Orto' },
-                  { slug: 'rotta', name: 'Rotta', broken: true },
-                  { slug: 'fuori', name: 'Fuori', view_kind: 'external' },
-                ],
+                jennyApps: [],
+                attendiJennyApps() {
+                  return new Promise((r) => setTimeout(() => {
+                    this.jennyApps = [
+                      { slug: 'orto', name: 'Orto' },
+                      { slug: 'rotta', name: 'Rotta', broken: true },
+                      { slug: 'fuori', name: 'Fuori', view_kind: 'external' },
+                    ];
+                    r(this.jennyApps);
+                  }, 30));
+                },
               }),
             };
             const pagine = new CasaPagine(app);
@@ -822,3 +833,34 @@ def test_the_notebook_rooms_are_not_lendable() -> None:
     assert "pages:" not in tabella and "reader:" not in tabella
     for stanza in ("tu", "jenny", "model", "updates", "backup"):
         assert f"{stanza}:" in tabella
+
+
+def test_the_app_list_is_waited_for_not_just_started() -> None:
+    """**Il difetto visto sul telefono il 22 settembre 2026.**
+
+    `ensureLoaded()` non e' asincrona: avvia le due fetch e torna subito.
+    Chi ci mette un `await` davanti aspetta `undefined`, cioe' niente — e
+    decide che l'elenco e' vuoto un istante prima che arrivi. A schermo:
+    «non hai Jenny App» a un utente che ne aveva quattro.
+
+    Il banco lo prende perche' la fonte finta risponde **dopo un giro**, come
+    la rete vera.
+    """
+    _run(
+        "const voci = await pagine._voci('app');\n"
+        "assert.deepEqual(voci.map((v) => v.ref), ['orto'],\n"
+        "  'l elenco e stato letto prima che arrivasse');"
+    )
+
+
+def test_the_empty_message_is_only_for_a_real_empty_list() -> None:
+    """Aprire la scelta e trovare «non hai Jenny App» mentre le hai e' peggio
+    di aspettare: si crede a quel che c'e' scritto."""
+    _run(
+        "await tieniPremuto();\n"
+        "await pagine._apriScelta('app');\n"
+        "const testi = elenco.children.map((c) => c.className);\n"
+        "assert.ok(!testi.includes('casa-foglio-nota'),\n"
+        "  'ha detto che non ci sono app');\n"
+        "assert.equal(elenco.children.length, 2, 'Indietro piu una app');"
+    )

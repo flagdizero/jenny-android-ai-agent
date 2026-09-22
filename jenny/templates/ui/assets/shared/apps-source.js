@@ -84,6 +84,31 @@ export class AppsSource {
     if (!this._androidLoaded || this._failed.android) this.loadAndroidApps();
   }
 
+  /** Le Jenny App, **attese**.
+   *
+   *  `ensureLoaded()` non e' asincrona: avvia le due fetch e torna subito, e
+   *  chi ci mette un `await` davanti aspetta `undefined` — cioe' niente. Sul
+   *  telefono il 22/09/2026 questo faceva dire «non hai Jenny App» a un utente
+   *  che ne aveva quattro: la lista arrivava un istante dopo che qualcuno
+   *  aveva gia' deciso che era vuota.
+   *
+   *  Qui si aspetta la risposta vera. Un guasto non alza: torna la lista che
+   *  c'e' — vuota — perche' chi chiede vuole sapere cosa mostrare, e
+   *  distinguere «vuota» da «non letta» e' gia' il mestiere di
+   *  `listsFailed()`.
+   */
+  attendiJennyApps() {
+    this.ensureLoaded();
+    if (this._jennyLoaded) return Promise.resolve(this.jennyApps);
+    return new Promise((risolvi) => {
+      const stacca = this.addChangeListener(() => {
+        if (!this._jennyLoaded) return;
+        stacca();
+        risolvi(this.jennyApps);
+      });
+    });
+  }
+
   /** Vero finche' una delle due risposte non e' tornata. Distingue «non c'e'
    *  niente» da «non e' ancora arrivato niente». */
   isLoadingLists() {

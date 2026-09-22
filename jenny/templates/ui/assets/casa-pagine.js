@@ -475,13 +475,16 @@ Object.assign(CasaPagine.prototype, {
       return STANZE.map((ref) => ({ ref, nome: i18n.t(`casa.${ref}.title`) }));
     }
     const fonte = this.app?.appsSource?.();
-    await fonte?.ensureLoaded?.();
+    /* **Attese**, non solo avviate: `ensureLoaded()` non e' asincrona e chi ci
+       mette un `await` davanti aspetta `undefined`. Sul telefono diceva «non
+       hai Jenny App» a chi ne aveva quattro. */
+    const app = (await fonte?.attendiJennyApps?.()) || [];
     /* Un'app rotta non si puo' appendere: `openApp` per quelle chiede
        conferma e propone la riparazione in chat, e una pagina fissa rotta e'
        un'altra cosa — resterebbe li' a non funzionare tutti i giorni.
        Un'app **esterna** apre un indirizzo che il guscio non controlla:
        incastonarla in una pagina fissa e' una decisione a se'. */
-    return (fonte?.jennyApps || [])
+    return app
       .filter((a) => !a.broken && a.view_kind !== 'external')
       .map((a) => ({ ref: a.slug, nome: a.name || a.slug }));
   },
