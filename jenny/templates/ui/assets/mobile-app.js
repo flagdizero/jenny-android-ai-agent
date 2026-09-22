@@ -779,6 +779,29 @@ class MobileApp {
       view.style.display = 'flex';
     }
 
+    /* La modalità corrente anche su <html>: serve al CSS, che altrimenti non
+       ha modo di sapere quale vista è a schermo (le viste si mostrano con un
+       `display` inline, non con una classe che risalga). Gancio generale, non
+       un caso speciale: la prima cosa che ne ha bisogno è la mascotte, v.
+       `:root.mode-apps .jenny-duo` in mobile-style.css.
+
+       **Va scritta qui, accanto al `display`, e non in fondo al metodo.** Sta
+       piu' in basso fino al 22/09/2026, cioe' *dopo* `activate()`, e per la
+       chat quella distanza e' un difetto: il suo scroller **e' il documento**,
+       e il documento scorre solo sotto `:root.mode-chat`
+       (`mobile-style.css:1617`). Entrando in chat, `activate()` misurava e
+       correggeva lo scroll di una pagina che in quell'istante non era ancora
+       scorrevole; poi la classe arrivava e la posizione era quella sbagliata.
+       Si vedeva a intermittenza, e in due modi che sembravano scollegati: la
+       chat che risaliva in mezzo alla cronologia invece di stare in fondo, e
+       il dock — `position: sticky; bottom: 0`, che si incolla solo se il
+       documento scorre — che sfarfallava. La classe e' *cosa c'e' a schermo*,
+       come il `display`: le due righe stanno insieme. */
+    document.documentElement.classList.forEach((c) => {
+      if (c.startsWith('mode-')) document.documentElement.classList.remove(c);
+    });
+    document.documentElement.classList.add(`mode-${mode}`);
+
     // Update sidebar active state.
     document.querySelectorAll('.dock-item').forEach(item => {
       item.classList.toggle('active', item.dataset.mode === mode);
@@ -811,16 +834,6 @@ class MobileApp {
     // che si sta lasciando, e restare aperto sopra quella nuova sarebbe un
     // overlay orfano che nessuno ha chiesto.
     this.launcher.close();
-
-    /* La modalità corrente anche su <html>: serve al CSS, che altrimenti non
-       ha modo di sapere quale vista è a schermo (le viste si mostrano con un
-       `display` inline, non con una classe che risalga). Gancio generale, non
-       un caso speciale: la prima cosa che ne ha bisogno è la mascotte, v.
-       `:root.mode-apps .jenny-duo` in mobile-style.css. */
-    document.documentElement.classList.forEach((c) => {
-      if (c.startsWith('mode-')) document.documentElement.classList.remove(c);
-    });
-    document.documentElement.classList.add(`mode-${mode}`);
 
     // Update state and URL
     AppState.set('currentMode', mode);

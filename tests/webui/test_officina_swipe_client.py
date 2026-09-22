@@ -47,36 +47,49 @@ pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
 MODI = ["chat", "cervello", "mani", "memoria"]
 
 
-def _metodo(source: str, nome: str) -> str:
-    """Un metodo intero, contando le graffe.
+def _corpo(src: str, inizio: int) -> str:
+    """Dalla graffa aperta alla sua chiusa, saltando commenti e stringhe.
 
-    Non con una regex non greedy: `setupSwipeNav` contiene template literal e
-    oggetti, e il primo `}` a due spazi di rientro non e' il suo.
+    I commenti vanno saltati sul serio: questo repo li scrive in italiano, e un
+    `dell'` dentro `//` fa credere a un contatore ingenuo che sia cominciata una
+    stringa — da li' in poi le graffe non si contano piu'. Costato una prima
+    stesura di questo banco, rossa su codice sano (22/09/2026).
     """
-    m = re.search(rf"\n  {re.escape(nome)}\(", source)
-    assert m, f"metodo {nome} non trovato"
-    inizio = m.start() + 1
-    i = source.index("{", m.end() - 1)
-    profondita, j = 0, i
-    in_stringa = None
-    while j < len(source):
-        c = source[j]
-        if in_stringa:
+    i = src.index("{", inizio)
+    profondita, j, stringa = 0, i, None
+    while j < len(src):
+        c = src[j]
+        due = src[j : j + 2]
+        if stringa:
             if c == "\\":
                 j += 2
                 continue
-            if c == in_stringa:
-                in_stringa = None
+            if c == stringa:
+                stringa = None
+        elif due == "//":
+            j = src.index("\n", j)
+            continue
+        elif due == "/*":
+            j = src.index("*/", j) + 2
+            continue
         elif c in "\"'`":
-            in_stringa = c
+            stringa = c
         elif c == "{":
             profondita += 1
         elif c == "}":
             profondita -= 1
             if profondita == 0:
-                return source[inizio : j + 1]
+                return src[i : j + 1]
         j += 1
-    raise AssertionError(f"graffe sbilanciate in {nome}")
+    raise AssertionError("graffe sbilanciate")
+
+
+def _metodo(source: str, nome: str) -> str:
+    """`nome(parametri) { corpo }`, pronto da incollare in un oggetto letterale."""
+    m = re.search(rf"\n  {re.escape(nome)}\(", source)
+    assert m, f"metodo {nome} non trovato"
+    apertura = source.index("{", m.end())
+    return source[m.start() + 1 : apertura] + _corpo(source, m.end())
 
 
 def _funzione(source: str, nome: str) -> str:
