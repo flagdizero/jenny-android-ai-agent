@@ -624,3 +624,45 @@ orizzontale (un cursore, uno scorri-per-cancellare) non verrebbe riconosciuta:
 `dentroScorrevoleOrizzontale` cede solo a chi *scorre*. Nessuna delle quattro
 app installate usa il dito, quindi il caso non ha ancora un proprietario e non
 gli è stata data una via d'uscita: il giorno che serve, è una riga nel kit.
+
+
+## B8 — Il righello (22/09/2026, subito dopo B7)
+
+Con B7 addosso, trascinare **dentro** una app faceva vibrare tutta la schermata.
+Non erano fotogrammi persi (`gfxinfo`: 0,22% di janky frames — la prima misura
+è stata sulla cosa sbagliata): era la schermata che inseguiva se stessa.
+
+`clientX` è relativo alla finestra di chi ascolta. Per l'officina e per il
+guscio della casa è indifferente — la loro finestra sta ferma, si muove solo la
+pista dentro. Ma dentro una Jenny App **la finestra è la cornice che la pista
+sta trascinando**: il dito si sposta di 20, la pista si sposta di 20, la
+cornice va con lei, e al battito dopo il dito «è tornato indietro di 20».
+Avanti, indietro, avanti.
+
+Misurato su Chrome del telefono con i due righelli fianco a fianco dentro una
+cornice trascinata, un solo scorrimento:
+
+| dx client | dx screen | | dx client | dx screen |
+| --- | --- | --- | --- | --- |
+| 237 | 284 | | 257 | 320 |
+| 268 | 296 | | 302 | 328 |
+| 243 | 300 | | 271 | 336 |
+| 288 | 311 | | 309 | 340 |
+
+Il primo oscilla, il secondo sale dritto. Lo scorrimento era 850 punti fisici a
+dpr 2,5: **340** — cioè `screenX` è in pixel CSS come `clientX`, e le soglie,
+che si confrontano con `clientWidth`, conservano il significato.
+
+**Una regola sola per tutti e tre i posti**, non due con un'eccezione: il giorno
+che qualcun altro trascina la cornice che lo contiene, non deve riscoprirlo.
+Vale finché non si muove la *finestra* a metà gesto, cosa che nessuno dei tre fa.
+
+Ogni dito finto dei banchi porta adesso **due righelli**, sfalsati apposta, e
+due casi nuovi li fanno litigare come in produzione — uno per verso, perché
+solo il secondo uccide la mutazione al contrario.
+
+**Provato sul telefono:** chat → pagina scorrendo sul guscio; pagina → chat e
+pagina → pagina scorrendo **dentro** l'app, nei due versi. L'officina non è
+stata riaperta col dito: la coprono i suoi banchi (che girano sul suo codice
+vero e diventano rossi mutando il righello) più il fatto che `screenX` funziona
+in quella stessa WebView al livello del guscio.
