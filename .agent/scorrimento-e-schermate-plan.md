@@ -509,6 +509,21 @@ stato **irraggiungibile dalla casa** — la terza volta che questa porta sparisc
 e stavolta l'ho tolta io. La striscia resta con i due gesti che funzionano:
 toccare un pallino per cambiare pagina, tenere premuto per il foglio.
 
+**3. Due difetti nel montaggio, trovati scrivendo il banco che la pagina bianca
+ha chiesto.** La cornice di una Jenny App porta il token nell'indirizzo, e
+`openApp` da sempre si assicura che il segreto ci sia prima di costruirne una:
+estraendo `cornicePerApp` quella precondizione era rimasta indietro — senza
+segreto l'indirizzo prende `token=undefined`, cioe' un 401 e una pagina bianca.
+E aspettare il segreto rende il montaggio asincrono, quindi un dito veloce fra
+due pagine faceva riempi → svuota → riempi e finiva con **due cornici**: la
+stessa app viva due volte. Un flag condiviso non distingue i due tentativi, e
+adesso ognuno porta il proprio numero.
+
+**Resta un debito:** la pagina «todo» sul telefono era bianca e **non so ancora
+perche'**. La guardia del segreto produce esattamente quel sintomo, quindi era
+giusto chiuderla per prima — ma l'esperimento di controllo (aprire la stessa app
+dal cassetto) non e' stato fatto, perche' il telefono si e' riaddormentato.
+
 **Quel che invece ha funzionato al primo colpo:** la striscia, il foglio, la
 scelta, il salvataggio (sopravvive al riavvio dell'app), il ritorno alla chat,
 il tocco sul pallino.
