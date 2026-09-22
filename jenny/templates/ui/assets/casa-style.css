@@ -997,14 +997,30 @@ body.casa {
    deve restarlo: la mascotte sta sopra la chat, sopra un'app e sopra tutto,
    e la sovrapposizione fra i pannelli si ottiene con l'ordine del DOM. C'e'
    un banco che li conta. */
+/* **L'involucro ritaglia, la pista si muove — e non possono essere lo stesso
+   elemento.** Misurato sul telefono il 22/09/2026: con `overflow: hidden`
+   sulla pista, che porta anche il `transform`, un `<iframe>` dentro una pagina
+   **si carica e non dipinge**. Provato passo per passo: il `load` arriva,
+   l'elemento e' visibile, ha 574x450, sta nel documento, `contentWindow` c'e'
+   — e a schermo resta nero. Spostata nel corpo del documento la stessa
+   cornice si vede subito; tolto `overflow` alla pista, pure.
+   Non bastano i rimedi soliti: un piano di composizione proprio
+   (`translateZ(0)`) sulla cornice o sul pannello non cambia niente, e nemmeno
+   montarla a scivolata finita.
+   Il ritaglio **non** puo' salire al guscio: Jenny e' `position:absolute` con
+   un `right` negativo — sporge apposta — e li' verrebbe tagliata. */
+.casa-vetrina {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .casa-pista {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: row;
-  /* La pista non scorre da sola: la muove il dito, e il browser non deve
-     aggiungerci il proprio scorrimento orizzontale. */
-  overflow: hidden;
 }
 
 .casa-pagina {

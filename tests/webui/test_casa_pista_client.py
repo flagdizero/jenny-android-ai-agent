@@ -867,3 +867,63 @@ def test_a_fast_finger_does_not_mount_two_frames() -> None:
         "assert.equal(pagina.children.length, 1, `cornici montate: ${pagina.children.length}`);",
         schermate=DUE,
     )
+
+
+def test_a_page_already_full_is_not_filled_again() -> None:
+    """La guardia d'ingresso guarda **se** e' pieno, non se vale `1`.
+
+    Da quando `pieno` porta il numero del tentativo, un confronto con `'1'`
+    lascerebbe passare ogni rientro dal secondo in poi.
+    """
+    _run(
+        "scorri(SINISTRA);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
+        "const segno = pagina.dataset.pieno;\n"
+        "await pagine._riempi(pagina);\n"
+        "await pagine._riempi(pagina);\n"
+        "assert.equal(pagina.dataset.pieno, segno, 'il segno e cambiato: e rientrato');\n"
+        "assert.equal(pagina.children.length, 1, `cornici: ${pagina.children.length}`);",
+        schermate=DUE,
+    )
+
+
+def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
+    """**Il difetto piu' caro di questo giro, e il piu' difficile da vedere.**
+
+    Con `overflow: hidden` sulla pista — l'elemento che porta anche il
+    `transform` — un `<iframe>` dentro una pagina **si carica e non dipinge**.
+    Misurato sul telefono il 22 settembre 2026, un passo per volta: l'evento
+    `load` arriva, l'elemento e' `visible`, opacita' 1, `display: block`, misura
+    574x450, sta nel documento e ha un `contentWindow`. E a schermo resta nero.
+
+    La stessa cornice spostata nel corpo del documento si vede subito. Tolto
+    `overflow` alla pista, pure. **Non** bastano i rimedi soliti: un piano di
+    composizione proprio (`translateZ(0)`) sulla cornice o sul pannello non
+    cambia niente, e nemmeno montarla a scivolata finita invece che durante.
+
+    Il ritaglio non puo' nemmeno salire al guscio: Jenny e' `position:absolute`
+    con un `right` negativo — sporge apposta dal bordo — e li' verrebbe
+    tagliata. Quindi ci vuole un elemento in mezzo: uno ritaglia, l'altro si
+    muove.
+
+    Un banco sul CSS e non sul comportamento, perche' il comportamento lo puo'
+    dire solo un telefono: in node l'iframe non esiste, e su un desktop il
+    difetto non si riproduce.
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    vetrina = css.split(".casa-vetrina {", 1)[1].split("}", 1)[0]
+    assert "overflow: hidden" in vetrina, "l'involucro non ritaglia piu'"
+    pista = css.split("\n.casa-pista {", 1)[1].split("}", 1)[0]
+    assert "overflow" not in pista, (
+        "la pista ritaglia di nuovo: con il transform addosso, un iframe dentro "
+        "una pagina si carica e non dipinge"
+    )
+    guscio = css.split(".casa-shell {", 1)[1].split("}", 1)[0]
+    assert "overflow: hidden" not in guscio, (
+        "il ritaglio e' salito al guscio: taglia Jenny, che sporge apposta"
+    )
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    i = html.index('class="casa-vetrina"')
+    j = html.index('class="casa-pista"')
+    assert i < j, "l'involucro non sta piu' attorno alla pista"

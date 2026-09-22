@@ -519,10 +519,21 @@ due pagine faceva riempi → svuota → riempi e finiva con **due cornici**: la
 stessa app viva due volte. Un flag condiviso non distingue i due tentativi, e
 adesso ognuno porta il proprio numero.
 
-**Resta un debito:** la pagina «todo» sul telefono era bianca e **non so ancora
-perche'**. La guardia del segreto produce esattamente quel sintomo, quindi era
-giusto chiuderla per prima — ma l'esperimento di controllo (aprire la stessa app
-dal cassetto) non e' stato fatto, perche' il telefono si e' riaddormentato.
+**4. La pagina bianca: trovata, ed era la piu' insidiosa.** Con
+`overflow: hidden` sulla **pista** — l'elemento che porta anche il `transform` —
+un `<iframe>` dentro una pagina **si carica e non dipinge**. Bisezionato sul
+telefono un passo per volta: `load` arriva, l'elemento e' `visible`, opacita' 1,
+`display: block`, misura 574x450, sta nel documento, ha un `contentWindow`. E a
+schermo resta nero. La stessa app aperta dal cassetto funziona benissimo, il che
+ha escluso l'app.
+
+Spostata la cornice nel corpo del documento si vede subito; tolto `overflow`
+alla pista, pure. **Non** bastano i rimedi soliti: `translateZ(0)` sulla cornice
+o sul pannello non cambia niente, e nemmeno montare a scivolata finita.
+
+Il ritaglio non puo' salire al guscio: Jenny e' `position:absolute` con un
+`right` negativo — sporge apposta — e li' verrebbe tagliata. Quindi un elemento
+in mezzo: `.casa-vetrina` ritaglia, `.casa-pista` si muove.
 
 **Quel che invece ha funzionato al primo colpo:** la striscia, il foglio, la
 scelta, il salvataggio (sopravvive al riavvio dell'app), il ritorno alla chat,

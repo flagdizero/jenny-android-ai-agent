@@ -194,7 +194,10 @@ export class CasaPagine {
 
   /** Il contenuto di una pagina, costruito adesso perche' adesso si guarda. */
   async _riempi(pannello) {
-    if (pannello.dataset.pieno === '1') return;
+    /* `pieno` porta il **numero del tentativo**, non un `1`: qui basta che sia
+       valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
+       c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
+    if (pannello.dataset.pieno) return;
     const schermata = this.schermate.find((x) => x.id === pannello.dataset.id);
     if (!schermata) return;
     /* Un segno **per tentativo**, non un flag condiviso.
