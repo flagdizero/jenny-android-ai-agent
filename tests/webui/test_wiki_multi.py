@@ -9,7 +9,6 @@ import pytest
 from jenny.webui.wiki import (
     _split_wikilink,
     build_graph,
-    build_home_graph,
     build_home_tree,
     build_tree,
     create_audit,
@@ -65,6 +64,21 @@ class TestDiscoverWikis:
         (wikis_dir / "not-a-wiki").mkdir()
         result = discover_wikis(wikis_dir)
         assert "not-a-wiki" not in result
+
+    def test_discover_finds_wikis_that_have_pages(self, wikis_dir: Path):
+        """Quel che misurava il grafo a stella, tolto il 22/09.
+
+        Le sue due prove dicevano «ogni quaderno compare», e lo dicevano su
+        quaderni costruiti con pagine dentro invece che con una ``mkdir``
+        nuda: e' l'unica parte che non era gia' coperta qui sopra. Il caso
+        della cartella vuota lo dice gia'
+        ``test_discover_returns_empty_for_empty_dir``.
+        """
+        _make_wiki(wikis_dir, "main", {"index.md": "# Main"})
+        _make_wiki(wikis_dir, "loops", {"index.md": "# Loops"})
+        result = discover_wikis(wikis_dir)
+        assert set(result) == {"main", "loops"}
+        assert result["main"] == wikis_dir / "main" / "wiki"
 
     def test_discover_returns_empty_for_missing_dir(self, tmp_path: Path):
         result = discover_wikis(tmp_path / "nonexistent")
@@ -338,28 +352,6 @@ class TestBuildGraph:
         edges = {(e.source, e.target) for e in graph.edges}
         assert ("wiki/index.md", "wiki/concepts/foo.md") in edges
         assert len(graph.edges) == 1
-
-
-class TestBuildHomeGraph:
-    def test_home_graph_star(self, wikis_dir: Path):
-        _make_wiki(wikis_dir, "main", {"index.md": "# Main"})
-        _make_wiki(wikis_dir, "loops", {"index.md": "# Loops"})
-        graph = build_home_graph(wikis_dir)
-        node_ids = {n.id for n in graph.nodes}
-        assert "_home" in node_ids
-        assert "main" in node_ids
-        assert "loops" in node_ids
-        edges = {(e.source, e.target) for e in graph.edges}
-        assert ("_home", "main") in edges
-        assert ("_home", "loops") in edges
-        home = next(n for n in graph.nodes if n.id == "_home")
-        assert home.group == "home"
-
-    def test_home_graph_empty(self, wikis_dir: Path):
-        graph = build_home_graph(wikis_dir)
-        assert len(graph.nodes) == 1
-        assert graph.nodes[0].id == "_home"
-        assert graph.edges == []
 
 
 # ── Renderer ────────────────────────────────────────────────────────────────

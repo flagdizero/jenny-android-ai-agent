@@ -386,32 +386,6 @@ def build_graph_from_pages(pages: list[PageSource]) -> GraphData:
     return GraphData(nodes=list(nodes.values()), edges=edges)
 
 
-def build_home_graph(wikis_dir: Path) -> GraphData:
-    """Star graph: central hub node + one node per wiki."""
-    wikis = discover_wikis(wikis_dir)
-    nodes: list[GraphNode] = [
-        GraphNode(id="_home", label="Wikis", path="", group="home", degree=0, title=None),
-    ]
-    edges: list[GraphEdge] = []
-
-    for name in sorted(wikis):
-        pages_dir = wikis[name]
-        page_count = len(list(pages_dir.rglob("*.md")))
-        nodes.append(
-            GraphNode(
-                id=name,
-                label=name,
-                path=f"{name}/wiki",
-                group="wiki",
-                degree=page_count,
-                title=None,
-            )
-        )
-        edges.append(GraphEdge(source="_home", target=name))
-
-    return GraphData(nodes=nodes, edges=edges)
-
-
 # ── Wikilink resolution ─────────────────────────────────────────────────────
 
 

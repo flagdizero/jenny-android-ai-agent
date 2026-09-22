@@ -427,13 +427,17 @@ def handler(tmp_path: Path, monkeypatch):
     )
 
 
-async def _get_graph(handler, wiki: str | None) -> dict:
+async def _graph_response(handler, wiki: str | None):
     path = "/api/graph"
     if wiki:
         path += f"?wiki={urllib.parse.quote(wiki)}"
     sep = "&" if "?" in path else "?"
     request = WsRequest(path=f"{path}{sep}token={_AUTH_SECRET}", headers=Headers())
-    response = await handler.wiki_routes.dispatch(request, "/api/graph")
+    return await handler.wiki_routes.dispatch(request, "/api/graph")
+
+
+async def _get_graph(handler, wiki: str) -> dict:
+    response = await _graph_response(handler, wiki)
     assert response is not None and response.status_code == 200
     return json.loads(response.body.decode("utf-8"))
 
@@ -455,13 +459,20 @@ class TestGraphRoute:
         ids = [n["id"] for n in payload["nodes"]]
         assert by_term["profondo"] == [ids.index("wiki/doze.md")]
 
-    async def test_home_graph_has_no_index(self, handler):
-        # I nodi della home sono le wiki, non le pagine: non c'è testo su cui
-        # cercare, e spedire un indice vuoto sarebbe solo rumore sul filo.
+    async def test_without_a_wiki_name_the_route_refuses(self, handler):
+        """Senza ``wiki=`` non c'è più una vista: è un 400.
+
+        Qui c'era il grafo a stella di *tutte* le wiki, tolto il 22/09. Lo
+        stato conta: un 404 direbbe «quel quaderno non c'è» e manderebbe a
+        cercare un nome, mentre il difetto è che il nome non è stato mandato.
+        E il 400 deve arrivare **prima** di leggere il disco — con una wiki
+        vera sotto, la risposta è la stessa.
+        """
         workspace = handler._get_workspace_root()
         _make_wiki(workspace / "wikis", "main", {"index.md": "# Home"})
-        payload = await _get_graph(handler, None)
-        assert payload["search"] is None
+        response = await _graph_response(handler, None)
+        assert response is not None
+        assert response.status_code == 400, response.status_code
 
     async def test_index_follows_an_edit(self, handler):
         workspace = handler._get_workspace_root()

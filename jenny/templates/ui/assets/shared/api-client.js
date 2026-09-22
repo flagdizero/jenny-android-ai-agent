@@ -217,9 +217,12 @@ class ApiClient {
   }
 
 
+  /** Nodi, archi e indice full-text di *wiki*, in una risposta sola.
+   *
+   *  Il nome e' **obbligatorio**: la forma senza — il grafo a stella di tutte
+   *  le wiki — non esiste piu' ne' qui ne' sul server, che risponde 400. */
   async getGraph(wiki) {
-    const url = wiki ? `/api/graph?wiki=${encodeURIComponent(wiki)}` : '/api/graph';
-    const res = await this._fetch(url);
+    const res = await this._fetch(`/api/graph?wiki=${encodeURIComponent(wiki)}`);
     if (!res.ok) throw new Error(`Graph failed: ${res.status}`);
     return res.json();
   }

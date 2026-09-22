@@ -95,10 +95,10 @@ def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[
     ``pages`` e' il numero di pagine della wiki, ed e' qui e non su una route
     sua perche' questa e' la sola chiamata che l'elenco fa gia'. Costa una
     ``rglob`` per quaderno: misurato sul Titan 2, contare ricorsivamente i
-    ``.md`` di quattordici quaderni (464 file) sta in **20 ms** di flash. La
-    stessa cifra la calcola gia' ``build_home_graph``, ma la mette nel
-    ``degree`` di un nodo del grafo — cioe' dentro una risposta da ~110 kB
-    (grafo + indice full-text) che non si puo' chiedere per scrivere "34".
+    ``.md`` di quattordici quaderni (464 file) sta in **20 ms** di flash.
+    L'alternativa sarebbe ``/api/graph``, che la stessa cifra la mette nel
+    ``degree`` di un nodo — cioe' dentro una risposta da ~110 kB (grafo +
+    indice full-text) che non si puo' chiedere per scrivere "34".
 
     **Conta con la regola di chi le elenca**, ``is_wiki_page_rel``, e non tutti
     i ``.md``: ``summaries/`` non e' fatto di pagine di contenuto e resta fuori
@@ -277,10 +277,17 @@ class WikiRoutes:
         err = self._check_wiki_enabled()
         if err:
             return err
-        from jenny.webui.wiki import build_home_graph, discover_wikis
+        from jenny.webui.wiki import discover_wikis
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""
+        # Il nome del quaderno è **obbligatorio**, come per ``/api/audit/create``.
+        # C'era una vista senza nome — il grafo a stella di *tutte* le wiki — e
+        # non c'è più: l'unica informazione che portava era quante pagine ha
+        # ciascuna, e l'elenco dei quaderni la dà già con nomi, date e ricerca,
+        # senza pagare una risposta da ~110 kB.
+        if not wiki_name:
+            return http_error(400, "wiki required")
         wikis_dir = self._get_wikis_dir()
         loop = asyncio.get_running_loop()
 
@@ -288,19 +295,14 @@ class WikiRoutes:
         # postings dell'indice sono indici nell'array ``nodes`` qui sotto.
         # Servirli da due endpoint aprirebbe la finestra in cui la wiki cambia
         # fra le due chiamate: il client accenderebbe i nodi sbagliati.
-        if wiki_name:
-            wikis = discover_wikis(wikis_dir)
-            if wiki_name not in wikis:
-                return http_error(404, "wiki not found")
-            bundle = await loop.run_in_executor(
-                None, self._get_search_service().bundle, wikis[wiki_name]
-            )
-            graph = bundle.graph
-            search = bundle.search
-        else:
-            # Vista home: nodi = wiki, non pagine. Non c'è testo da cercare.
-            graph = await loop.run_in_executor(None, build_home_graph, wikis_dir)
-            search = None
+        wikis = discover_wikis(wikis_dir)
+        if wiki_name not in wikis:
+            return http_error(404, "wiki not found")
+        bundle = await loop.run_in_executor(
+            None, self._get_search_service().bundle, wikis[wiki_name]
+        )
+        graph = bundle.graph
+        search = bundle.search
 
         return http_json_response(
             {

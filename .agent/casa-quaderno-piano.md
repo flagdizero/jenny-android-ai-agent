@@ -76,6 +76,22 @@ rotta, più due test. Nessun consumatore agente, nessuna skill, nessun template.
    quaderni» — resta vero e va misurato su `discover_wikis`, che sopravvive. Se
    dopo la riscrittura non resta niente da asserire, si dice nel commit.
 
+**Fatto il 22/09.** Le due prove del grafo a stella dicevano due cose, e solo
+una non era gia' detta altrove: la cartella vuota la copriva gia'
+`test_discover_returns_empty_for_empty_dir`, mentre «un quaderno **con pagine
+dentro** si scopre» no — le prove vicine costruivano i quaderni con una `mkdir`
+nuda. E' diventata una prova sola in `TestDiscoverWikis`.
+
+In piu' e' nata una prova che prima non c'era: **senza `wiki=` la rotta risponde
+400**, e non 404 (un 404 direbbe «quel quaderno non c'e'» e manderebbe a cercare
+un nome che non e' stato mandato). Provata rossa con due mutazioni: tolta la
+guardia, e 404 al posto di 400.
+
+**La cache del bytecode ha mentito una volta**, come da nota in memoria: la
+prima mutazione ripristinata nello stesso secondo e alla stessa lunghezza ha
+lasciato in giro un `.pyc` mutato, e la passata intera e' uscita rossa su
+sorgente sana. Si pulisce `__pycache__` fra una mutazione e la misura buona.
+
 ### La verifica «niente merda»
 
 Dopo il taglio, questi devono dare **zero** su `jenny/`, `tests/`, `docs/`,
