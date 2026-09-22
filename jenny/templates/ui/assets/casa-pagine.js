@@ -193,11 +193,33 @@ export class CasaPagine {
   }
 
   /** Il contenuto di una pagina, costruito adesso perche' adesso si guarda. */
-  _riempi(pannello) {
+  async _riempi(pannello) {
     if (pannello.dataset.pieno === '1') return;
     const schermata = this.schermate.find((x) => x.id === pannello.dataset.id);
     if (!schermata) return;
+    /* Un segno **per tentativo**, non un flag condiviso.
+       Un dito veloce fra due pagine fa: riempi → svuota → riempi. Il primo
+       tentativo e' fermo sull'attesa del segreto; quando riparte trova la
+       pagina di nuovo «piena» — ma piena per colpa del *secondo* — e monta
+       lui pure. Due cornici, cioe' la stessa app viva due volte.
+       Col numero di tentativo ognuno riconosce se e' ancora il suo giro.
+       Misurato dal banco, non ipotizzato (22/09/2026). */
+    const mio = String((this._tentativo = (this._tentativo || 0) + 1));
+    pannello.dataset.pieno = mio;
     if (schermata.kind === 'app') {
+      /* Il segreto **prima** della cornice: l'indirizzo se lo porta dentro, e
+         costruirla senza vorrebbe dire un `token=undefined`, cioe' un 401 e
+         una pagina bianca. `openApp` questa guardia ce l'ha da sempre; qui si
+         era persa estraendo la cornice. */
+      if (!api.getSecret()) {
+        try { await api.bootstrap(); } catch {
+          if (pannello.dataset.pieno === mio) pannello.dataset.pieno = '';
+          return;
+        }
+      }
+      /* Nel frattempo si puo' essere usciti dalla pagina, o rientrati: in tutti
+         e due i casi il giro buono non e' piu' il nostro. */
+      if (pannello.dataset.pieno !== mio) return;
       const cornice = cornicePerApp(schermata.ref);
       cornice.className = 'casa-pagina-app';
       pannello.appendChild(cornice);
@@ -208,7 +230,6 @@ export class CasaPagine {
       const stanza = this.app?.prestaStanza?.(schermata.ref);
       if (stanza) pannello.appendChild(stanza);
     }
-    pannello.dataset.pieno = '1';
   }
 
   /** Spegne una pagina — e **restituisce** quel che le era stato prestato.
@@ -219,7 +240,7 @@ export class CasaPagine {
    *  dopo, e non somiglierebbe affatto alla sua causa.
    */
   _svuota(pannello) {
-    if (pannello.dataset.pieno !== '1') return;
+    if (!pannello.dataset.pieno) return;
     if (pannello.dataset.kind === 'stanza') {
       const stanza = pannello.children[0] || pannello.firstElementChild;
       if (stanza) this.app?.restituisciStanza?.(stanza);

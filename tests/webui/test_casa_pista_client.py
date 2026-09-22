@@ -244,6 +244,12 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
             "  scritture: [],\n"
             "  async getSchermate() { return { schermate: this._elenco, max: 8 }; },\n"
             "  async setSchermate(s) { this.scritture.push(s); this._elenco = s; return s; },\n"
+            # Il segreto parte **vuoto**, come al primo avvio: la cornice di
+            # un'app se lo porta nell'indirizzo, e chi la costruisce senza
+            # aspettarlo produce un 401 e una pagina bianca.
+            "  _segreto: '',\n"
+            "  getSecret() { return this._segreto; },\n"
+            "  async bootstrap() { this._segreto = 'ok'; },\n"
             "};\n",
             encoding="utf-8",
         )
@@ -659,17 +665,21 @@ def test_only_the_page_you_look_at_is_alive() -> None:
     un telefono sono tre app vive.
     """
     _run(
+        # `pieno` porta il **numero del tentativo**, non un `1`: serve a
+        # riconoscere il proprio giro dopo un'attesa. Qui basta che sia
+        # valorizzato.
         "const pannelli = () => pista.children.filter((c) => c.dataset.id);\n"
-        "assert.equal(pannelli().filter((p) => p.dataset.pieno === '1').length, 0,\n"
+        "const vivi = () => pannelli().filter((p) => p.dataset.pieno);\n"
+        "assert.equal(vivi().length, 0,\n"
         "  'una pagina si e riempita senza che nessuno la guardi');\n"
         "scorri(SINISTRA);\n"
-        "const vivi = pannelli().filter((p) => p.dataset.pieno === '1');\n"
-        "assert.equal(vivi.length, 1);\n"
-        "assert.equal(vivi[0].dataset.id, 'p1');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(vivi().length, 1);\n"
+        "assert.equal(vivi()[0].dataset.id, 'p1');\n"
         "scorri(SINISTRA);\n"
-        "const dopo = pannelli().filter((p) => p.dataset.pieno === '1');\n"
-        "assert.equal(dopo.length, 1, 'la pagina di prima e rimasta accesa');\n"
-        "assert.equal(dopo[0].dataset.id, 'p2');",
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(vivi().length, 1, 'la pagina di prima e rimasta accesa');\n"
+        "assert.equal(vivi()[0].dataset.id, 'p2');",
         schermate=DUE,
     )
 
@@ -678,7 +688,8 @@ def test_going_back_to_the_chat_shuts_every_page_down() -> None:
     _run(
         "scorri(SINISTRA);\n"
         "scorri(DESTRA);\n"
-        "const vivi = pista.children.filter((c) => c.dataset.pieno === '1');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "const vivi = pista.children.filter((c) => c.dataset.pieno);\n"
         "assert.equal(vivi.length, 0);",
         schermate=DUE,
     )
@@ -687,6 +698,9 @@ def test_going_back_to_the_chat_shuts_every_page_down() -> None:
 def test_an_app_page_mounts_that_app_frame() -> None:
     _run(
         "scorri(SINISTRA);\n"
+        # Il montaggio aspetta il segreto, quindi non e' finito al ritorno
+        # del gesto: un giro di eventi e c'e'.
+        "await new Promise((r) => setTimeout(r, 20));\n"
         "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
         "assert.equal(pagina.children.length, 1);\n"
         "assert.equal(pagina.children[0].dataset.slug, 'orto');",
@@ -817,4 +831,39 @@ def test_the_empty_message_is_only_for_a_real_empty_list() -> None:
         "assert.ok(!testi.includes('casa-foglio-nota'),\n"
         "  'ha detto che non ci sono app');\n"
         "assert.equal(elenco.children.length, 2, 'Indietro piu una app');"
+    )
+
+
+def test_the_app_frame_is_not_built_without_the_secret() -> None:
+    """Il token viaggia **nell'indirizzo** della cornice.
+
+    Costruirla prima che il segreto ci sia vuol dire `token=undefined`, cioe'
+    un 401 e una pagina bianca. `openApp` questa guardia ce l'ha da sempre; si
+    era persa estraendo la cornice, e qui si prova che c'e' di nuovo.
+    """
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.equal(api.getSecret(), '', 'il finto parte senza segreto');\n"
+        "scorri(SINISTRA);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(api.getSecret(), 'ok', 'non ha atteso il segreto');\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
+        "assert.equal(pagina.children.length, 1, 'la cornice non e stata montata');",
+        schermate=DUE,
+    )
+
+
+def test_a_fast_finger_does_not_mount_two_frames() -> None:
+    """Segnare la pagina come piena **prima** dell'attesa.
+
+    Senza, due `vaiA` ravvicinati entrano tutti e due nel montaggio e la
+    pagina finisce con due cornici — due volte la stessa app, viva due volte.
+    """
+    _run(
+        "scorri(SINISTRA);\n"
+        "pagine.vaiA(0); pagine.vaiA(1); pagine.vaiA(0); pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 30));\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
+        "assert.equal(pagina.children.length, 1, `cornici montate: ${pagina.children.length}`);",
+        schermate=DUE,
     )
