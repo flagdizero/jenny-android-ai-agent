@@ -1037,6 +1037,28 @@ class MobileApp {
   _animateSlideIn(view, goingPrev) {
     if (!view) return;
     const from = goingPrev ? '-100%' : '100%';
+    /* L'ancoraggio automatico dello scroll, spento per la durata della scivolata.
+     *
+     *  In chat lo scroller **e' il documento** (v. `_scroller` in
+     *  mobile-chat.js). Chromium, per conto suo, tiene ferma la lettura quando
+     *  qualcosa sopra cambia: sceglie un nodo d'ancora e corregge `scrollTop`.
+     *  Far entrare una vista alta quanto la pagina con un `translateX` gli
+     *  sembra esattamente quel caso — e la correzione **combatte** il «vai in
+     *  fondo» che la chat ha appena chiesto.
+     *
+     *  Misurato fuori dall'app il 22/09/2026, su una pagina di 4000px: si va in
+     *  fondo (`scrollTop` 3115), parte la stessa animazione, e a fine corsa lo
+     *  scroll e' 2175 — **940px piu' su**. Con `overflow-anchor: none`: zero.
+     *  E' il difetto segnalato come «la chat torna in alto», e la sua
+     *  intermittenza e' quella della scelta del nodo d'ancora.
+     *
+     *  Si spegne **solo durante l'animazione** e non per sempre: fuori di qui
+     *  l'ancoraggio e' utile — e' quel che tiene il segno quando la cronologia
+     *  cresce sopra la riga che si sta leggendo. */
+    const radice = document.documentElement;
+    const ancoraPrima = radice.style.overflowAnchor;
+    radice.style.overflowAnchor = 'none';
+
     view.style.filter = '';
     view.style.transition = 'none';
     view.style.willChange = 'transform';
@@ -1044,13 +1066,21 @@ class MobileApp {
     void view.offsetWidth; // force reflow so the start transform sticks
     view.style.transition = 'transform .2s cubic-bezier(.22,.61,.36,1)';
     view.style.transform = 'translateX(0)';
+    let fatto = false;
     const onEnd = () => {
+      if (fatto) return;
+      fatto = true;
       view.style.transition = '';
       view.style.willChange = '';
       view.style.transform = '';
+      radice.style.overflowAnchor = ancoraPrima;
       view.removeEventListener('transitionend', onEnd);
     };
     view.addEventListener('transitionend', onEnd);
+    /* Rete di sicurezza: `transitionend` non arriva se la vista viene nascosta
+       a meta' corsa (un secondo gesto, il tasto Indietro). Senza, l'ancoraggio
+       resterebbe spento per il resto della sessione. */
+    setTimeout(onEnd, 400);
   }
 }
 

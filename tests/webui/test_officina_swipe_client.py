@@ -143,7 +143,10 @@ const VOCI_DOCK = __MODI__.map((m) => {
   return el;
 });
 
+const radice = creaEl('html');
+
 globalThis.document = {
+  documentElement: radice,
   getElementById: (id) => elementi.get(id) || null,
   querySelector: (sel) => (sel === '.main' ? main : null),
   querySelectorAll: (sel) => (sel.includes('dock-item') ? VOCI_DOCK : []),
@@ -151,6 +154,7 @@ globalThis.document = {
   body: creaEl('body'),
 };
 globalThis.window = { innerWidth: 400 };
+globalThis.setTimeout = globalThis.setTimeout;
 globalThis.getComputedStyle = () => ({ overflowX: 'visible' });
 function hasSelection() { return false; }
 
@@ -340,4 +344,48 @@ def test_an_open_drawer_owns_the_gesture() -> None:
       assert.equal(scorri('cervello', SINISTRA), null);
       app.drawer.activeDrawer = null;
       assert.equal(scorri('cervello', SINISTRA), 'mani');
+    """)
+
+
+# ── L'ancoraggio dello scroll, contro cui la scivolata perdeva ──────────────
+
+
+def test_the_slide_in_switches_scroll_anchoring_off_and_back_on() -> None:
+    """Perche' in chat lo scroller e' il documento, e il browser lo «aiuta».
+
+    Chromium tiene ferma la lettura correggendo `scrollTop` quando qualcosa
+    sopra cambia. Una vista alta quanto la pagina che entra con un `translateX`
+    gli sembra quel caso, e la sua correzione **disfa** il «vai in fondo» che la
+    chat ha appena chiesto. Misurato fuori dall'app: 940px di scarto con
+    l'ancoraggio acceso, zero con `overflow-anchor: none`.
+
+    Spento **solo** per la durata della scivolata: fuori di li' serve, ed e'
+    quel che tiene il segno quando la cronologia cresce sopra.
+    """
+    _run_js("""
+      radice.style.overflowAnchor = '';
+      scorri('memoria', SINISTRA);
+      assert.equal(radice.style.overflowAnchor, 'none', 'non spento durante la scivolata');
+      // fine animazione
+      const fine = animati[0].ascolto.transitionend;
+      assert.ok(fine, 'nessun ascoltatore di fine transizione');
+      fine();
+      assert.equal(radice.style.overflowAnchor, '', 'non rimesso a fine corsa');
+    """)
+
+
+def test_the_anchor_comes_back_even_if_the_transition_never_ends() -> None:
+    """La rete di sicurezza.
+
+    `transitionend` non arriva se la vista sparisce a meta' corsa — un secondo
+    gesto, il tasto Indietro. Senza il timeout l'ancoraggio resterebbe spento
+    per tutto il resto della sessione, e il difetto tornerebbe al contrario:
+    nessuno terrebbe piu' il segno quando la cronologia cresce.
+    """
+    _run_js("""
+      radice.style.overflowAnchor = '';
+      scorri('memoria', SINISTRA);
+      assert.equal(radice.style.overflowAnchor, 'none');
+      await new Promise(r => setTimeout(r, 500));   // nessun transitionend, solo la rete
+      assert.equal(radice.style.overflowAnchor, '', 'la rete di sicurezza non ha rimesso l ancoraggio');
     """)
