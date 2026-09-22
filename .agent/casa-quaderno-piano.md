@@ -352,4 +352,33 @@ uscito.
 - [x] Manifesto `android_assets.py` e file su disco coincidono: 178 voci, zero
       sbilanci in entrambi i versi.
 - [x] Chiavi i18n: `it.json` e `en.json` pari, nessuna chiave nuova orfana.
-- [ ] **La prova col pollice**, che resta da fare: telefono bloccato.
+- [x] **La prova col pollice, fatta il 22/09** su `piante/entities/Pothos.md`,
+      con la pagina rimessa a posto alla fine (md5 identico, etichetta SELinux
+      invariata) e l'audit di prova cancellato:
+
+      - modifico, salvo, riapro: la modifica c'e' (`SALVATO-DAL-TELEFONO`
+        scritto su disco, e il lettore ricaricato dal server);
+      - cambio il file da fuori mentre l'editor e' aperto: al salvataggio esce
+        il conflitto, **il file non viene toccato** (il gateway ha loggato
+        `rpc page.write failed: conflict`), e rispondendo «no» il testo resta
+        nell'editor;
+      - esco con modifiche non salvate: chiede conferma (dall'Indietro del
+        telefono), e un «no» tiene tutto;
+      - seleziono, segnalo: il file nasce in `wikis/piante/audit/` con l'ancora
+        giusta (`anchor_text: coltivato`, riga 14) e la gravita' scelta col
+        chip. **Il linter della skill lo accetta**: «audit/ shape OK»,
+        «All open-audit targets exist»;
+      - seleziono un testo che compare due volte (`Epipremnum`): lo dice invece
+        di ancorare a caso, e il foglio resta aperto col commento dentro;
+      - dieci tocchi normali su una pagina non fanno comparire niente.
+
+### Quel che la prova ha trovato
+
+- **L'editor si apriva in fondo alla pagina** (`focus()` porta il cursore dopo
+  l'ultimo carattere e ci trascina la vista). Corretto in `35c9522`, con banco.
+  **Corretto ma non riprovato sul telefono**: la batteria e' arrivata all'1% e
+  il dispositivo si e' staccato prima dell'installazione.
+- **Il primo tocco dopo aver scritto se lo mangia la tastiera.** Vale per
+  Indietro *e* per Salva: la prima pressione chiude l'IME, la seconda fa la
+  cosa. E' il comportamento normale di Android, non un difetto del codice —
+  ma sul Titan, che la tastiera fisica ce l'ha, si nota.
