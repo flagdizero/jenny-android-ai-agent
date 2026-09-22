@@ -20,6 +20,7 @@
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { osservaGestoOrizzontale } from './shared/gesto-orizzontale.js';
+import { cornicePerApp } from './shared/apps-actions.js';
 
 /** Quanto la pista si lascia tirare oltre il capo, in frazione di schermo.
  *  Serve a dire «di la' non c'e' niente» col dito invece che con un blocco
@@ -126,6 +127,7 @@ export class CasaPagine {
       : 'none';
     this.pista.style.transform = `translateX(${-bersaglio * 100}%)`;
     this._pallini();
+    this._accendiSolo(bersaglio);
     this.app?.onPaginaCambiata?.(bersaglio, this.schermate[bersaglio - 1] || null);
   }
 
@@ -208,6 +210,45 @@ export class CasaPagine {
         this.app?.openLauncher?.();
       }
     }, { passive: true });
+  }
+
+  /** «Resta viva solo la pagina che guardi: le altre si spengono, o te le
+   *  paghi in batteria» (tavola `PagineGestione`).
+   *
+   *  Non «la corrente piu' le due vicine»: tre `<iframe>` che girano insieme
+   *  su un telefono sono tre app vive, e la regola della tavola e' piu'
+   *  stretta **e** piu' semplice. Il prezzo e' che entrando in una pagina
+   *  l'app riparte; il prezzo dell'altra scelta lo paga la batteria sempre.
+   */
+  _accendiSolo(indice) {
+    if (!this.pista) return;
+    const pannelli = this.pista.children.filter
+      ? this.pista.children.filter((c) => c.dataset?.id)
+      : [...this.pista.querySelectorAll('.casa-pagina[data-id]')];
+    pannelli.forEach((pannello, i) => {
+      const suo = i + 1 === indice;
+      if (suo) this._riempi(pannello);
+      else this._svuota(pannello);
+    });
+  }
+
+  /** Il contenuto di una pagina, costruito adesso perche' adesso si guarda. */
+  _riempi(pannello) {
+    if (pannello.dataset.pieno === '1') return;
+    const schermata = this.schermate.find((x) => x.id === pannello.dataset.id);
+    if (!schermata) return;
+    if (schermata.kind === 'app') {
+      const cornice = cornicePerApp(schermata.ref);
+      cornice.className = 'casa-pagina-app';
+      pannello.appendChild(cornice);
+    }
+    pannello.dataset.pieno = '1';
+  }
+
+  _svuota(pannello) {
+    if (pannello.dataset.pieno !== '1') return;
+    pannello.textContent = '';
+    pannello.dataset.pieno = '';
   }
 
   _armaGesto() {
@@ -315,7 +356,7 @@ Object.assign(CasaPagine.prototype, {
     testo.className = 'casa-foglio-testo';
     const nome = document.createElement('span');
     nome.className = 'casa-foglio-nome';
-    nome.textContent = this._nomeDi(schermata);
+    nome.textContent = this.nomeDi(schermata);
     const specie = document.createElement('span');
     specie.className = 'casa-foglio-specie';
     specie.textContent = i18n.t('casa.foglio.riga', {
@@ -327,7 +368,7 @@ Object.assign(CasaPagine.prototype, {
     const togli = document.createElement('button');
     togli.type = 'button';
     togli.className = 'casa-foglio-togli';
-    togli.setAttribute('aria-label', i18n.t('casa.foglio.togli', { nome: this._nomeDi(schermata) }));
+    togli.setAttribute('aria-label', i18n.t('casa.foglio.togli', { nome: this.nomeDi(schermata) }));
     const x = document.createElement('i');
     x.className = 'ti ti-x';
     togli.appendChild(x);
@@ -432,7 +473,15 @@ Object.assign(CasaPagine.prototype, {
     return (progetti || []).map((pr) => ({ ref: pr.name, nome: pr.name }));
   },
 
-  _nomeDi(schermata) {
+  /** Come si chiama una pagina, per l'intestazione e per il foglio.
+   *
+   *  Una stanza porta **il nome che usa gia' di suo**: due copie dello stesso
+   *  nome divergono, e la seconda si scopre quando qualcuno rinomina la prima.
+   *  Un'app e una conversazione portano il loro riferimento, che e' gia' il
+   *  nome che l'utente ha visto quando l'ha scelta.
+   */
+  nomeDi(schermata) {
+    if (!schermata) return '';
     if (schermata.kind === 'stanza') return i18n.t(`casa.${schermata.ref}.title`);
     return schermata.ref;
   },

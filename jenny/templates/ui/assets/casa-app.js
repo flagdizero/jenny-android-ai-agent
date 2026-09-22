@@ -567,12 +567,36 @@ class CasaApp {
     this._setView(target);
   }
 
-  /** Indietro di **una** stanza. Vero se c'era dove tornare. */
+  /** Indietro di **una** stanza. Vero se c'era dove tornare.
+   *
+   *  Dentro la chat c'e' un gradino in piu' che le stanze non hanno: se sei su
+   *  una pagina di lato, «indietro» riporta alla conversazione. Sta qui e non
+   *  su un bottone suo perche' cosi' ci passa anche l'Indietro di Android —
+   *  che da una pagina deve tornare a casa, non uscire dall'app. */
   goBackOneRoom() {
+    if (this.view === 'chat') {
+      if (!this.pagine || this.pagine.indice === 0) return false;
+      this.pagine.vaiA(0);
+      return true;
+    }
     const target = BACK_TO[this.view];
     if (!target) return false;
     this._setView(target);
     return true;
+  }
+
+  /** La pista ha cambiato casella: l'intestazione dice dove sei. */
+  onPaginaCambiata(indice, schermata) {
+    this._pagina = indice;
+    this._schermata = schermata;
+    /* Su quale pagina si e' lo dice un attributo, come per le stanze: cosi' la
+       geometria — cosa sparisce quando non sei nella conversazione — resta nel
+       CSS e qui c'e' solo il numero. Serve perche' `data-view` da solo non
+       basta piu': su una pagina di lato la vista **e' ancora** `chat`, e le
+       regole scritte su quella lasciavano acceso il chevron della tendina
+       sopra il nome di un'app. */
+    this.shell?.setAttribute('data-pagina', String(indice));
+    this._applyHead();
   }
 
   /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
@@ -637,7 +661,12 @@ class CasaApp {
 
   /* Quali comandi dell'intestazione valgono in questa stanza. */
   _applyHead() {
-    const inChat = this.view === 'chat';
+    /* Una pagina di lato e' «dentro la chat» per le stanze, ma per
+       l'intestazione no: ci si sta come in una stanza, col nome di dove sei e
+       la via per tornare. Per questo `inChat` qui vuol dire **la
+       conversazione**, non la vista. */
+    const suPagina = this.view === 'chat' && (this._pagina || 0) > 0;
+    const inChat = this.view === 'chat' && !suPagina;
     /* «Parlane» riporta a parlare **di questo quaderno**: vale dalle sue
        pagine e dal lettore, e in nessun altro posto. Era `!inChat`, che con
        tre stanze diceva la stessa cosa e con cinque no — il bottone sarebbe
@@ -668,6 +697,13 @@ class CasaApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('casa.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('casa.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('casa.backup.title'));
+    if (suPagina) this._setHeadTitle(this.pagine.nomeDi(this._schermata));
+    /* Tornando alla pagina 0 il nome della conversazione va rimesso: il
+       titolo e' uno solo, e chi ci ha scritto sopra il nome di una pagina
+       l'ha coperto. */
+    else if (this.view === 'chat') {
+      this._setHeadTitle(projectNameOf(sessionManager.currentKey) || this._personalName);
+    }
     this._applyBackLabel();
   }
 

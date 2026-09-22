@@ -456,7 +456,7 @@ Chiavi i18n nuove in `it.json` **e** `en.json`.
 
 ### B5. Le tre specie, in quest'ordine
 
-**1) `app` — una Jenny App.** La più autonoma, ed è quella con la tavola
+**1) `app` — una Jenny App. ✅ Fatto il 22/09/2026.** La più autonoma, ed è quella con la tavola
 completa (`PaginaApp`): intestazione di una riga (soprascritta «pagina N», nome
 in serif, pastiglia **casa** per tornare), l'app a tutta pagina, i pallini sotto.
 `openApp` si spezza in due — «costruisci la cornice per questo slug» e «mettila

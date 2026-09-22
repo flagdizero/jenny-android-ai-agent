@@ -187,6 +187,17 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
         )
         # Il client API finto: risponde quel che il caso vuole, e ricorda le
         # scritture. Non si tocca la rete e non si tocca `config.json`.
+        # La cornice di una Jenny App: qui basta sapere **che** viene
+        # costruita e con quale slug — il vero `cornicePerApp` mette il token
+        # e i colori nell'indirizzo, e quello si prova dove vive.
+        (radice / "shared" / "apps-actions.js").write_text(
+            "export function cornicePerApp(slug) {\n"
+            "  const f = document.createElement('iframe');\n"
+            "  f.dataset.slug = slug;\n"
+            "  return f;\n"
+            "}\n",
+            encoding="utf-8",
+        )
         (radice / "shared" / "i18n.js").write_text(
             "export const i18n = {\n"
             "  t: (k, v) => k + (v ? ':' + JSON.stringify(v) : ''),\n"
@@ -641,3 +652,87 @@ def test_choosing_lands_you_on_the_new_page() -> None:
         "assert.equal(pagine.indice, 1);\n"
         "assert.equal(foglio.open, false, 'il foglio e rimasto aperto');"
     )
+
+
+# ── Cosa c'e' dentro una pagina ─────────────────────────────────────────────
+
+
+def test_only_the_page_you_look_at_is_alive() -> None:
+    """«Resta viva solo la pagina che guardi: le altre si spengono, o te le
+    paghi in batteria» (tavola `PagineGestione`).
+
+    Non «la corrente piu' le due vicine»: tre `<iframe>` che girano insieme su
+    un telefono sono tre app vive.
+    """
+    _run(
+        "const pannelli = () => pista.children.filter((c) => c.dataset.id);\n"
+        "assert.equal(pannelli().filter((p) => p.dataset.pieno === '1').length, 0,\n"
+        "  'una pagina si e riempita senza che nessuno la guardi');\n"
+        "scorri(SINISTRA);\n"
+        "const vivi = pannelli().filter((p) => p.dataset.pieno === '1');\n"
+        "assert.equal(vivi.length, 1);\n"
+        "assert.equal(vivi[0].dataset.id, 'p1');\n"
+        "scorri(SINISTRA);\n"
+        "const dopo = pannelli().filter((p) => p.dataset.pieno === '1');\n"
+        "assert.equal(dopo.length, 1, 'la pagina di prima e rimasta accesa');\n"
+        "assert.equal(dopo[0].dataset.id, 'p2');",
+        schermate=DUE,
+    )
+
+
+def test_going_back_to_the_chat_shuts_every_page_down() -> None:
+    _run(
+        "scorri(SINISTRA);\n"
+        "scorri(DESTRA);\n"
+        "const vivi = pista.children.filter((c) => c.dataset.pieno === '1');\n"
+        "assert.equal(vivi.length, 0);",
+        schermate=DUE,
+    )
+
+
+def test_an_app_page_mounts_that_app_frame() -> None:
+    _run(
+        "scorri(SINISTRA);\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
+        "assert.equal(pagina.children.length, 1);\n"
+        "assert.equal(pagina.children[0].dataset.slug, 'orto');",
+        schermate=DUE,
+    )
+
+
+def test_a_room_page_mounts_no_app() -> None:
+    """La stanza arriva col suo passo: qui si prova che non monti un'app per
+    sbaglio — un `<iframe>` su `/apps/tu/index.html` sarebbe un 404 a schermo."""
+    _run(
+        "scorri(SINISTRA); scorri(SINISTRA);\n"
+        "const pagina = pista.children.find((c) => c.dataset.id === 'p2');\n"
+        "assert.equal(pagina.children.length, 0);",
+        schermate=DUE,
+    )
+
+
+def test_the_name_of_a_page_comes_from_its_kind() -> None:
+    _run(
+        "assert.equal(pagine.nomeDi({kind: 'app', ref: 'orto'}), 'orto');\n"
+        "assert.equal(pagine.nomeDi({kind: 'stanza', ref: 'tu'}), 'casa.tu.title');\n"
+        "assert.equal(pagine.nomeDi(null), '', 'senza pagina il titolo deve restare vuoto');"
+    )
+
+
+def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
+    """Come `data-view`, e per lo stesso motivo.
+
+    Su una pagina di lato la vista **e' ancora** `chat`: le regole scritte solo
+    su `data-view` lasciavano acceso il chevron della tendina sopra il nome di
+    un'app — un comando che si vede, e' disabilitato, e non fa niente. Serviva
+    un secondo segnale, e sta dove sta l'altro.
+    """
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    assert '<main class="casa-shell" data-view="chat" data-pagina="0">' in html, (
+        "il guscio non nasce dichiarando su che pagina e'"
+    )
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    assert ".casa-shell:not([data-pagina='0']) .casa-who-open .ti-chevron-down" in css
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    cambio = app_js.split("onPaginaCambiata(", 1)[1].split("_applyHead();", 1)[0]
+    assert "data-pagina" in cambio, "l'attributo non viene aggiornato al cambio pagina"

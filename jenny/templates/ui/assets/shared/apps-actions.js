@@ -26,6 +26,37 @@ import { i18n } from './i18n.js';
 import { wsManager } from './ws-manager.js';
 import { currentTheme, themeTokens } from './theme.js';
 
+/** L'`<iframe>` di una Jenny App, senza decidere dove va a finire.
+ *
+ *  Estratta da `openApp` il 22/09/2026: la casa monta la stessa cornice
+ *  **dentro una pagina** invece che in un velo a tutto schermo (tavola
+ *  `PaginaApp`), e le due non devono divergere — l'indirizzo porta il token e
+ *  i colori del tema, e sbagliarne uno vuol dire un'app che si apre bianca o
+ *  che non parla col gateway.
+ *
+ *  `sandbox="allow-scripts"` e basta: origine opaca apposta, cosi' l'app non
+ *  raggiunge il DOM ne' il `localStorage` della SPA. Il tema poi arriva a caldo
+ *  via `jenny:theme` (v. sopra), quindi cambiare tema **non** obbliga a
+ *  ricostruirla.
+ *
+ *  Chi chiama deve gia' avere il segreto: `api.getSecret()` qui e' letto e non
+ *  atteso, perche' un `await` in mezzo alla costruzione di un nodo e' il modo
+ *  in cui una cornice finisce attaccata a una pagina che non c'e' piu'.
+ */
+export function cornicePerApp(slug) {
+  const t = currentTheme();
+  const lang = document.documentElement.lang || 'it';
+  const src = `/apps/${encodeURIComponent(slug)}/index.html`
+    + `?token=${encodeURIComponent(api.getSecret())}`
+    + `&theme=${encodeURIComponent(t.scheme)}&lang=${encodeURIComponent(lang)}`
+    + `&accent=${encodeURIComponent(t.accent)}&onAccent=${encodeURIComponent(t.onAccent)}`
+    + `&tokens=${encodeURIComponent(themeTokens())}`;
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('sandbox', 'allow-scripts');
+  iframe.src = src;
+  return iframe;
+}
+
 export class AppsActions {
   /** @param source {import('./apps-source.js').AppsSource}
    *  @param shell  `{ sendChatPrompt(testo) }` */
@@ -164,14 +195,6 @@ export class AppsActions {
       return;
     }
 
-    const t = currentTheme();
-    const lang = document.documentElement.lang || 'it';
-    const src = `/apps/${encodeURIComponent(slug)}/index.html`
-      + `?token=${encodeURIComponent(api.getSecret())}`
-      + `&theme=${encodeURIComponent(t.scheme)}&lang=${encodeURIComponent(lang)}`
-      + `&accent=${encodeURIComponent(t.accent)}&onAccent=${encodeURIComponent(t.onAccent)}`
-      + `&tokens=${encodeURIComponent(themeTokens())}`;
-
     this.closeApp();
     const overlay = document.createElement('div');
     overlay.className = 'app-frame-overlay';
@@ -181,10 +204,7 @@ export class AppsActions {
         <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
       </div>
     `;
-    const iframe = document.createElement('iframe');
-    // Opaque origin on purpose: the app must not reach the SPA DOM/localStorage.
-    iframe.setAttribute('sandbox', 'allow-scripts');
-    iframe.src = src;
+    const iframe = cornicePerApp(slug);
     overlay.appendChild(iframe);
     overlay.querySelector('.app-frame-close').addEventListener('click', () => this.closeApp());
 

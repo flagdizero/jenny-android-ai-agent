@@ -38,7 +38,10 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     hanno piu' `hidden`, che quel ruolo lo copriva a meta'.
     """
     html = INDEX.read_text(encoding="utf-8")
-    assert re.search(r'<main class="casa-shell" data-view="chat">', html), (
+    # `data-pagina` si e' aggiunto accanto il 22 settembre 2026, per la stessa
+    # ragione: su una pagina di lato la vista e' ancora `chat`, e le regole
+    # scritte solo su `data-view` non la distinguono.
+    assert re.search(r'<main class="casa-shell" data-view="chat"', html), (
         "il guscio non nasce piu' dichiarando la stanza attiva"
     )
     css = CSS.read_text(encoding="utf-8")
