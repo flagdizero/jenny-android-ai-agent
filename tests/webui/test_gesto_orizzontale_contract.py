@@ -150,3 +150,25 @@ def test_the_app_kit_only_tells_what_the_finger_did() -> None:
     for fase in ("'inizio'", "'muove'", "'fine'", "'annulla'"):
         assert f"fase: {fase}" in src, f"il kit non manda piu' la fase {fase}"
     assert "jenny:gesto" in src
+
+
+def test_the_finger_is_read_off_the_screen_ruler() -> None:
+    """Un righello solo, e non e' quello della finestra.
+
+    `clientX` e' relativo alla finestra di chi ascolta. Officina e guscio della
+    casa non se ne accorgono — la loro finestra sta ferma — ma dentro una Jenny
+    App la finestra **e'** la cornice che la pista trascina: il righello si
+    muove insieme al dito e il gesto insegue se stesso. L'utente l'ha visto
+    come la schermata che vibra; i due righelli fianco a fianco su Chrome del
+    telefono l'hanno mostrato riga per riga (22/09/2026).
+
+    Il rimedio e' una regola sola per tutti e tre i posti, non due con
+    un'eccezione: questo banco e' la regola.
+    """
+    src = MODULO.read_text(encoding="utf-8")
+    assert "t.screenX" in src and "t.screenY" in src
+    for letto in ("t.clientX", "t.clientY", "cambiato.clientX", "cambiato.clientY"):
+        assert letto not in src, (
+            f"il modulo legge di nuovo {letto}: dentro una cornice trascinata "
+            f"quel righello si muove insieme al dito, e la schermata vibra."
+        )

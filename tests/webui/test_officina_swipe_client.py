@@ -203,6 +203,18 @@ app.setupSwipeNav();
 const DESTRA = +1;   // dito verso destra → il vicino di sinistra (prev)
 const SINISTRA = -1; // dito verso sinistra → il vicino di destra (next)
 
+/* **Un dito porta due righelli**, come quello vero: `client` e' relativo alla
+   finestra di chi ascolta, `screen` allo schermo. Qui sono sfalsati di una
+   costante apposta — se qualcuno tornasse a misurare col primo, o peggio
+   mescolasse i due, lo scarto salterebbe fuori invece di nascondersi. Il
+   modulo condiviso legge **screen**, perche' dentro una Jenny App la finestra
+   e' la cornice che la pista sta trascinando (v. la sua testata). */
+const SFALSO_X = 1000;
+const SFALSO_Y = 500;
+function dito(x, y) {
+  return { clientX: x, clientY: y, screenX: x + SFALSO_X, screenY: y + SFALSO_Y };
+}
+
 /** Un gesto completo. Torna il modo su cui si e' atterrati, o null. */
 function scorri(da, verso, { corto = false } = {}) {
   app.currentMode = da;
@@ -211,12 +223,12 @@ function scorri(da, verso, { corto = false } = {}) {
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88; corto resta sotto, lungo la supera
   const dx = verso * (corto ? 20 : 200);
-  main.ascolto.touchstart({ touches: [{ clientX: x0, clientY: 100 }], target: contenuto });
+  main.ascolto.touchstart({ touches: [dito(x0, 100)], target: contenuto });
   main.ascolto.touchmove({
-    touches: [{ clientX: x0 + dx, clientY: 100 }],
+    touches: [dito(x0 + dx, 100)],
     preventDefault() {},
   });
-  main.ascolto.touchend({ changedTouches: [{ clientX: x0 + dx, clientY: 100 }] });
+  main.ascolto.touchend({ changedTouches: [dito(x0 + dx, 100)] });
   return modiVisti.length ? modiVisti[modiVisti.length - 1] : null;
 }
 """

@@ -19,6 +19,34 @@
  *  modalita', cioe' due moduli scritti nello stesso file.
  */
 
+/** **Il dito si misura contro lo schermo, non contro la finestra.**
+ *
+ *  `clientX` e' relativo alla finestra di chi ascolta. Per l'officina e per il
+ *  guscio della casa e' lo stesso: la loro finestra non si muove mai, si muove
+ *  solo la pista dentro. Ma dentro una Jenny App la finestra **e'** la cornice
+ *  che la pista sta trascinando: il righello si sposta insieme al dito, e
+ *  quello che ne esce e' un anello di reazione.
+ *
+ *  Misurato su Chrome del telefono il 22/09/2026, uno scorrimento solo, i due
+ *  righelli fianco a fianco dentro una cornice trascinata:
+ *
+ *      dx client=237  dx screen=284     dx client=257  dx screen=320
+ *      dx client=268  dx screen=296     dx client=302  dx screen=328
+ *      dx client=243  dx screen=300     dx client=271  dx screen=336
+ *      dx client=288  dx screen=311     dx client=309  dx screen=340
+ *
+ *  Il primo va avanti e indietro — ed e' letteralmente la schermata che
+ *  vibra, come l'ha vista l'utente; il secondo sale dritto. Lo scorrimento
+ *  era di 850 punti fisici su un dispositivo a 2,5: 340. Cioe' `screenX` e'
+ *  in pixel CSS **come `clientX`**, e le soglie qui sotto — che si
+ *  confrontano con `clientWidth` — conservano il significato che avevano.
+ *
+ *  Una regola sola per tutti e tre i posti, e non due con un'eccezione: il
+ *  giorno che qualcun altro trascina la cornice che lo contiene, non deve
+ *  riscoprirlo da capo. Resta vero finche' non si muove la **finestra** a meta'
+ *  gesto, cosa che nessuno dei tre fa.
+ */
+
 /** 24px, non 10.
  *
  *  Il touch slop di Android e' ~8dp (≈20-24px reali), e sotto quella soglia
@@ -130,8 +158,8 @@ export function osservaGestoOrizzontale(elemento, {
     if (e.touches.length !== 1) return;
     if (puoIniziare && puoIniziare() === false) return;
     const t = e.touches[0];
-    partenzaX = t.clientX;
-    partenzaY = t.clientY;
+    partenzaX = t.screenX;
+    partenzaY = t.screenY;
     partenzaT = Date.now();
     bersaglio = e.target;
     inAscolto = true;
@@ -151,8 +179,8 @@ export function osservaGestoOrizzontale(elemento, {
   const muove = (e) => {
     if (!inAscolto) return;
     const t = e.touches[0];
-    const dx = t.clientX - partenzaX;
-    const dy = t.clientY - partenzaY;
+    const dx = t.screenX - partenzaX;
+    const dy = t.screenY - partenzaY;
 
     if (!orizzontale) {
       if (Math.abs(dx) < SOGLIA_ASSE && Math.abs(dy) < SOGLIA_ASSE) return;
@@ -172,7 +200,7 @@ export function osservaGestoOrizzontale(elemento, {
     if (!inAscolto) return;
     const eraOrizzontale = orizzontale;
     const cambiato = (e.changedTouches && e.changedTouches[0]) || null;
-    const dx = (cambiato ? cambiato.clientX : partenzaX) - partenzaX;
+    const dx = (cambiato ? cambiato.screenX : partenzaX) - partenzaX;
     const dt = Math.max(1, Date.now() - partenzaT);
     const vx = dx / dt;
     const w = larghezza();

@@ -104,17 +104,29 @@ const elenco = creaEl('casa-foglio-elenco', 'casa-foglio-elenco');
 for (const id of ['casa-foglio-titolo', 'casa-foglio-occhiello',
                   'casa-foglio-nota-cassetto', 'casa-foglio-nota-viva']) creaEl(id, '');
 
+/* **Un dito porta due righelli**, come quello vero: `client` e' relativo alla
+   finestra di chi ascolta, `screen` allo schermo. Qui sono sfalsati di una
+   costante apposta — se qualcuno tornasse a misurare col primo, o peggio
+   mescolasse i due, lo scarto salterebbe fuori invece di nascondersi. Il
+   modulo condiviso legge **screen**, perche' dentro una Jenny App la finestra
+   e' la cornice che la pista sta trascinando (v. la sua testata). */
+const SFALSO_X = 1000;
+const SFALSO_Y = 500;
+function dito(x, y) {
+  return { clientX: x, clientY: y, screenX: x + SFALSO_X, screenY: y + SFALSO_Y };
+}
+
 /* Tenere premuto: giu', mezzo secondo, su. Il timer e' quello vero del
    modulo condiviso, quindi si aspetta davvero. */
 async function tieniPremuto({ muovi = 0 } = {}) {
-  lancia(striscia, 'touchstart', { touches: [{ clientX: 200, clientY: 550 }], target: striscia });
+  lancia(striscia, 'touchstart', { touches: [dito(200, 550)], target: striscia });
   if (muovi) {
     lancia(striscia, 'touchmove', {
-      touches: [{ clientX: 200 + muovi, clientY: 550 }], preventDefault() {},
+      touches: [dito(200 + muovi, 550)], preventDefault() {},
     });
   }
   await new Promise((r) => setTimeout(r, 620));
-  lancia(striscia, 'touchend', { changedTouches: [{ clientX: 200 + muovi, clientY: 550 }] });
+  lancia(striscia, 'touchend', { changedTouches: [dito(200 + muovi, 550)] });
 }
 globalThis.document = {
   getElementById: (id) => elementi.get(id) || null,
@@ -141,18 +153,18 @@ function scorri(verso, { corto = false } = {}) {
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88: corto resta sotto, lungo la supera
   const dx = verso * (corto ? 20 : 200);
-  lancia(pista, 'touchstart', { touches: [{ clientX: x0, clientY: 100 }], target: pista });
+  lancia(pista, 'touchstart', { touches: [dito(x0, 100)], target: pista });
   lancia(pista, 'touchmove', {
-    touches: [{ clientX: x0 + dx, clientY: 100 }],
+    touches: [dito(x0 + dx, 100)],
     preventDefault() {},
   });
-  lancia(pista, 'touchend', { changedTouches: [{ clientX: x0 + dx, clientY: 100 }] });
+  lancia(pista, 'touchend', { changedTouches: [dito(x0 + dx, 100)] });
 }
 /* Un gesto verticale sulla striscia. `su` in pixel. */
 function tiraSu(su, { obliquo = 0 } = {}) {
-  lancia(striscia, 'touchstart', { touches: [{ clientX: 200, clientY: 500 }] });
+  lancia(striscia, 'touchstart', { touches: [dito(200, 500)] });
   lancia(striscia, 'touchend', {
-    changedTouches: [{ clientX: 200 + obliquo, clientY: 500 - su }],
+    changedTouches: [dito(200 + obliquo, 500 - su)],
   });
 }
 /* Il gesto **raccontato da dentro una app**: quel che il kit
@@ -179,6 +191,19 @@ function scorriDaApp(verso, { corto = false, sorgente } = {}) {
     // soglia = max(60, 400*0.22) = 88, come la calcola il modulo condiviso
     conferma: Math.abs(dx) > 88,
   }, da);
+}
+/* Un dito i cui due righelli **non vanno d'accordo**. E' quel che succede
+   davvero dentro una Jenny App: la cornice si sposta insieme al dito, quindi
+   `client` racconta meno strada di quella fatta — o nessuna. */
+function ditoSfalsato(xc, xs, y) {
+  return { clientX: xc, clientY: y, screenX: xs, screenY: y + SFALSO_Y };
+}
+function scorriSfalsato(dxClient, dxScreen) {
+  const x0 = 200;
+  const a = ditoSfalsato(x0 + dxClient, x0 + dxScreen, 100);
+  lancia(pista, 'touchstart', { touches: [ditoSfalsato(x0, x0, 100)], target: pista });
+  lancia(pista, 'touchmove', { touches: [a], preventDefault() {} });
+  lancia(pista, 'touchend', { changedTouches: [a] });
 }
 const DESTRA = +1;
 const SINISTRA = -1;
@@ -546,10 +571,10 @@ def test_a_pull_up_is_not_a_hold() -> None:
     invece del cassetto.
     """
     _run(
-        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
-        "lancia(striscia, 'touchmove', {touches: [{clientX: 200, clientY: 480}], preventDefault(){}});\n"
+        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
+        "lancia(striscia, 'touchmove', {touches: [dito(200, 480)], preventDefault(){}});\n"
         "await new Promise((r) => setTimeout(r, 620));\n"
-        "lancia(striscia, 'touchend', {changedTouches: [{clientX: 200, clientY: 480}]});\n"
+        "lancia(striscia, 'touchend', {changedTouches: [dito(200, 480)]});\n"
         "assert.equal(foglio.open, false, 'tirare su ha aperto il foglio');"
     )
 
@@ -568,10 +593,10 @@ def test_a_hold_after_a_tap_still_needs_its_own_half_second() -> None:
     una prima stesura che raccontava un difetto piu' grosso di quello vero.
     """
     _run(
-        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
-        "lancia(striscia, 'touchend', {changedTouches: [{clientX: 200, clientY: 550}]});\n"
+        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
+        "lancia(striscia, 'touchend', {changedTouches: [dito(200, 550)]});\n"
         "await new Promise((r) => setTimeout(r, 120));\n"
-        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
+        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
         "await new Promise((r) => setTimeout(r, 400));\n"
         "assert.equal(foglio.open, false, 'il foglio si e aperto col contatore del tocco prima');\n"
         "await new Promise((r) => setTimeout(r, 220));\n"
@@ -1115,5 +1140,37 @@ def test_a_cancelled_forwarded_gesture_snaps_back() -> None:
         "daApp({ fase: 'annulla' }, da);\n"
         "assert.equal(pagine.indice, 1);\n"
         "assert.equal(pista.style.transform, 'translateX(-100%)', 'non e tornata a posto');\n",
+        UNA,
+    )
+
+
+# ── Quale righello ─────────────────────────────────────────────────────────
+
+
+def test_the_finger_is_measured_against_the_screen() -> None:
+    """La cornice si sposta insieme al dito, quindi il suo righello mente.
+
+    Dentro una Jenny App la finestra di chi ascolta **e'** la cornice che la
+    pista sta trascinando: al limite il dito si muove di 200 e `client` dice
+    zero. L'utente lo ha visto come una vibrazione — avanti, indietro, avanti —
+    e la misura su Chrome del telefono l'ha confermato riga per riga
+    (22/09/2026, v. la testata di `shared/gesto-orizzontale.js`).
+    """
+    _run(
+        "scorriSfalsato(0, -200);\n"
+        "assert.equal(pagine.indice, 1, 'col righello dello schermo non si e mossa');\n",
+        UNA,
+    )
+
+
+def test_a_finger_that_only_the_window_saw_moves_nothing() -> None:
+    """L'altro verso della stessa regola, ed e' quello che uccide la mutazione.
+
+    Se si tornasse a misurare con la finestra, questo gesto — 200 per lei,
+    zero per lo schermo — cambierebbe pagina pur non essendo mai esistito.
+    """
+    _run(
+        "scorriSfalsato(-200, 0);\n"
+        "assert.equal(pagine.indice, 0, 'un gesto che lo schermo non ha visto ha cambiato pagina');\n",
         UNA,
     )
