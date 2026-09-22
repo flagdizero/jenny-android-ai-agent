@@ -98,7 +98,7 @@ non possono essere vive insieme.
 
 ## Parte A — L'officina: scorrere su tutte le linguette
 
-*(invariata dal 21/09: riverificata riga per riga, regge)*
+**✅ Fatta il 22/09/2026 — `1baea1d`, provata sul telefono.**
 
 ### A1. Una sola ricerca, impossibile da dimenticare
 
@@ -139,12 +139,32 @@ Memoria → Console e Console → Memoria.
 
 **Banco**: `prev` e `next` definiti per tutti e quattro i modi.
 
-### A4. Prova sul telefono
+### A4. Prova sul telefono — fatta
 
-Costruire, installare, guidare le quattro linguette con `adb input swipe` nei
-due versi (le tre trappole: `driving-touch-gestures-over-adb`), una foto
-ciascuna. Un gesto sintetico non prova che il dito ci arrivi — ma qui il difetto
-era una guardia che usciva subito, e quella un `input swipe` la vede.
+Build firmata, installata alle 15:22, e dentro l'APK verificato: `elementoVista`
+c'e', ricerche grezze zero, i capi circolari ci sono.
+
+Le otto mosse guidate con `adb input swipe`, partendo **da un tocco sul dock**
+(riposizionarsi a scorrimenti fa derivare lo stato e il primo tentativo ha dato
+letture false).
+
+**Sette su otto al primo giro, e il buco non era dove sembrava.** Fallisce solo
+la Console, in un verso o nell'altro a seconda della volta, **mai** i tre
+cassetti. Misurato: a `y=250` — la fascia dell'intestazione, sopra i messaggi —
+**sei su sei**, tre per verso. Sotto, in mezzo ai messaggi, capita che non vada.
+
+**Non e' un difetto di questo passo: e' `_insideHScroll` che fa il suo
+mestiere.** La Console e' l'unica vista con dentro roba dell'utente che puo'
+scorrere di lato (un blocco di codice, una riga lunga), e li' il gesto **deve**
+appartenere a quella e non al carosello. Spiega anche l'asimmetria: dipende se
+quello scorrevole e' gia' a fondo corsa nel verso del dito.
+
+> **Resta una domanda aperta, e non la chiudo da solo:** su un messaggio largo
+> che occupa quasi tutto lo schermo, cambiare linguetta dalla Console diventa
+> difficile — bisogna trovare un punto libero. E' il prezzo giusto per non
+> rubare lo scorrimento a un blocco di codice, ma se da' fastidio si corregge
+> (per esempio riservando al carosello una fascia sicura, come fa la tavola con
+> la striscia dei pallini).
 
 ---
 
