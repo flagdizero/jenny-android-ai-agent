@@ -21,6 +21,11 @@ import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { osservaGestoOrizzontale } from './shared/gesto-orizzontale.js';
 import { cornicePerApp } from './shared/apps-actions.js';
+import {
+  isOpenableProjectName,
+  projectKey,
+  projectNameOf,
+} from './shared/conversation-list.js';
 
 /** Quanto la pista si lascia tirare oltre il capo, in frazione di schermo.
  *  Serve a dire «di la' non c'e' niente» col dito invece che con un blocco
@@ -47,7 +52,7 @@ const STANZE = ['tu', 'jenny', 'model', 'updates', 'backup'];
 /** Un'icona per specie. Non quella dell'app: per averla servirebbe l'elenco
  *  caricato, e un foglio che aspetta la rete per disegnare una riga e' un
  *  foglio che a volte non si apre. */
-const ICONE = { app: 'ti-apps', stanza: 'ti-home' };
+const ICONE = { app: 'ti-apps', stanza: 'ti-home', conversazione: 'ti-notebook' };
 
 export class CasaPagine {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
@@ -60,6 +65,11 @@ export class CasaPagine {
     this.indice = 0;
     this._tetto = 8;
     this._staccaGesto = null;
+    /** La conversazione della pagina 0 — la chat «libera», quella che scegli
+     *  dal titolo. Le pagine conversazione hanno la loro nel `ref`; questa
+     *  non sta nell'elenco perche' la pagina 0 non ci sta. Parte da quella che
+     *  la chat mostra all'avvio, cioe' la personale. */
+    this.conversazioneCasa = app?.chiaveAttuale?.() || null;
     this.striscia = document.getElementById('casa-pallini');
     this.foglio = document.getElementById('casa-pagine-dialog');
     this.elenco = document.getElementById('casa-foglio-elenco');
@@ -118,7 +128,54 @@ export class CasaPagine {
     this.pista.style.transform = `translateX(${-bersaglio * 100}%)`;
     this._pallini();
     this._accendiSolo(bersaglio);
+    /* La chat arriva **prima** che l'intestazione si ridisegni: il trasloco
+       cambia conversazione subito, e il titolo deve gia' leggere quella nuova. */
+    const chiave = this.conversazioneDi(bersaglio);
+    if (chiave) this.app?.trasloco?.arriva(this.pannelloDi(bersaglio), chiave);
     this.app?.onPaginaCambiata?.(bersaglio, this.schermate[bersaglio - 1] || null);
+  }
+
+  /** Quale conversazione mostra la casella `i`, o `null` se non e' di chat.
+   *
+   *  La pagina 0 ha la sua (`conversazioneCasa`), una pagina conversazione il
+   *  suo quaderno; app e stanze nessuna — attraversarle non cambia la chat.
+   */
+  conversazioneDi(i) {
+    if (i === 0) return this.conversazioneCasa;
+    const s = this.schermate[i - 1];
+    return s?.kind === 'conversazione' ? s.ref : null;
+  }
+
+  /** Il pannello della casella `i`. La chat e' la 0, e non ha `data-id`. */
+  pannelloDi(i) {
+    if (!this.pista) return null;
+    if (i === 0) return Array.from(this.pista.children).find((c) => c.dataset?.pagina === 'chat') || null;
+    return this._pannelli()[i - 1] || null;
+  }
+
+  /** Da fuori — il titolo, Home, un avviso — si chiede una conversazione.
+   *
+   *  **Una pagina conversazione mostra solo il suo quaderno**: e' l'invariante
+   *  di tutto il disegno. Quindi se la conversazione chiesta non e' quella
+   *  della pagina in cui sei, la si apre nella pagina 0, e ci si va. Oggi da
+   *  una pagina fissa il titolo non apre la tendina, ma le strade che cambiano
+   *  conversazione sono gia' cinque (titolo, nuovo quaderno, Home, Indietro,
+   *  un avviso) e la sesta arrivera'.
+   *
+   *  Dalla pagina 0 si apre li', anche un quaderno che ha una pagina sua: deciso
+   *  dall'utente il 23/09/2026 — «fai come ora, non scorrere».
+   *
+   *  Torna la promessa del cambio, e non per scrupolo: chi chiama ci manda
+   *  subito dopo un messaggio, e deve finire nella conversazione giusta.
+   */
+  apriConversazione(chiave) {
+    if (this.indice !== 0 && chiave === this.conversazioneDi(this.indice)) {
+      return this.app?.mostraConversazione?.(chiave);
+    }
+    this.conversazioneCasa = chiave;
+    if (this.indice === 0) return this.app?.mostraConversazione?.(chiave);
+    this.vaiA(0);
+    return this.app?.trasloco?.lettura;
   }
 
   /* ── Sotto ──────────────────────────────────────────────────────────── */
@@ -131,7 +188,17 @@ export class CasaPagine {
    */
   _disegna() {
     if (!this.pista) return;
+    /* Prima di buttare un pannello, si riprende quel che gli era stato
+       prestato. La stanza torna nel guscio e la chat nel pannello di casa: un
+       `remove()` secco le porterebbe via insieme al pannello — e per la chat
+       vorrebbe dire filo, composer e bozza. Per le stanze era un difetto
+       latente: sei su una stanza, apri il foglio, aggiungi una pagina, e la
+       stanza non si riapre piu' dal suo percorso (trovato il 23/09/2026
+       mettendo qui la chat). */
+    const casa = this.pannelloDi(0);
     for (const vecchio of this.pista.querySelectorAll('.casa-pagina[data-id]')) {
+      if (vecchio.dataset.kind === 'stanza') this._svuota(vecchio);
+      this.app?.trasloco?.riportaACasa(vecchio, casa);
       vecchio.remove();
     }
     for (const s of this.schermate) {
@@ -194,6 +261,9 @@ export class CasaPagine {
     /* `pieno` porta il **numero del tentativo**, non un `1`: qui basta che sia
        valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
+    /* Una pagina conversazione non si riempie: ci arriva la chat, e la porta
+       il trasloco da `vaiA`. */
+    if (pannello.dataset.kind === 'conversazione') return;
     if (pannello.dataset.pieno) return;
     const schermata = this.schermate.find((x) => x.id === pannello.dataset.id);
     if (!schermata) return;
@@ -240,6 +310,13 @@ export class CasaPagine {
    *  dopo, e non somiglierebbe affatto alla sua causa.
    */
   _svuota(pannello) {
+    /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
+       mentre guardi un'app. Spenta resta comunque — una foto non gira. */
+    if (pannello.dataset.kind === 'conversazione') {
+      const s = this.schermate.find((x) => x.id === pannello.dataset.id);
+      this.app?.trasloco?.fotoSeServe(pannello, s?.ref);
+      return;
+    }
     if (!pannello.dataset.pieno) return;
     if (pannello.dataset.kind === 'stanza') {
       const stanza = pannello.children[0] || pannello.firstElementChild;
@@ -466,6 +543,36 @@ Object.assign(CasaPagine.prototype, {
     this.elenco.textContent = '';
     this.schermate.forEach((s, i) => this.elenco.appendChild(this._riga(s, i + 1)));
     if (!this.pienoZeppo) this.elenco.appendChild(this._rigaLibera());
+    this._segnaSparite();
+  },
+
+  /** Un quaderno fissato che non c'e' piu' resta nel foglio, e lo dice.
+   *
+   *  Non si toglie da solo: cancellare una pagina dell'utente per conto proprio
+   *  sarebbe una decisione presa dal codice al posto suo (la stessa regola
+   *  delle app disinstallate, v. `test_a_page_pointing_at_nothing_is_kept`).
+   *  E la pagina resta visitabile senza danni: il gateway rifiuta gia' i turni
+   *  di un quaderno la cui cartella manca, e non la ricrea (`loop.py`).
+   *
+   *  Una lettura che fallisce non segna niente: «non lo so» non e' «sparito».
+   */
+  async _segnaSparite() {
+    const fissate = this.schermate.filter((s) => s.kind === 'conversazione');
+    if (!fissate.length) return;
+    let nomi;
+    try {
+      const dati = await api.listProjects();
+      nomi = new Set((dati?.projects || []).map((q) => q?.name));
+    } catch {
+      return;
+    }
+    for (const s of fissate) {
+      if (nomi.has(projectNameOf(s.ref))) continue;
+      const riga = Array.from(this.elenco.children).find((r) => r.dataset?.id === s.id);
+      const specie = riga?.querySelector?.('.casa-foglio-specie');
+      if (specie) specie.textContent = i18n.t('casa.foglio.sparito');
+      riga?.classList?.add('casa-foglio-sparita');
+    }
   },
 
   _riga(schermata, numero) {
@@ -515,7 +622,7 @@ Object.assign(CasaPagine.prototype, {
     domanda.textContent = i18n.t('casa.foglio.vuota', { n: this.schermate.length + 1 });
     const scelte = document.createElement('div');
     scelte.className = 'casa-foglio-scelte';
-    for (const kind of ['app', 'stanza']) {
+    for (const kind of ['app', 'stanza', 'conversazione']) {
       scelte.appendChild(this._scelta(kind));
     }
     box.append(domanda, scelte);
@@ -584,6 +691,7 @@ Object.assign(CasaPagine.prototype, {
     if (kind === 'stanza') {
       return STANZE.map((ref) => ({ ref, nome: i18n.t(`casa.${ref}.title`) }));
     }
+    if (kind === 'conversazione') return this._quaderni();
     const fonte = this.app?.appsSource?.();
     /* **Attese**, non solo avviate: `ensureLoaded()` non e' asincrona e chi ci
        mette un `await` davanti aspetta `undefined`. Sul telefono diceva «non
@@ -599,6 +707,28 @@ Object.assign(CasaPagine.prototype, {
       .map((a) => ({ ref: a.slug, nome: a.name || a.slug }));
   },
 
+  /** I quaderni che si possono fissare.
+   *
+   *  Solo `projects`, **mai** `unopenable`: una cartella di quel gruppo, aperta
+   *  come conversazione, aprirebbe *un'altra* conversazione — il guasto per cui
+   *  `wiki_routes.py::_collect_projects` divide i due elenchi. E fuori quelli
+   *  gia' fissati: due pagine sullo stesso quaderno sono una di troppo.
+   *
+   *  Dal piu' recente, come la tendina del titolo: il quaderno che si cerca e'
+   *  quasi sempre quello su cui si e' lavorato ieri, non il primo in ordine
+   *  alfabetico.
+   */
+  async _quaderni() {
+    const dati = await api.listProjects();
+    const fissati = new Set(
+      this.schermate.filter((s) => s.kind === 'conversazione').map((s) => s.ref),
+    );
+    return (dati?.projects || [])
+      .filter((q) => isOpenableProjectName(q?.name) && !fissati.has(projectKey(q.name)))
+      .sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name))
+      .map((q) => ({ ref: projectKey(q.name), nome: q.name }));
+  },
+
   /** Come si chiama una pagina, per l'intestazione e per il foglio.
    *
    *  Una stanza porta **il nome che usa gia' di suo**: due copie dello stesso
@@ -609,6 +739,7 @@ Object.assign(CasaPagine.prototype, {
   nomeDi(schermata) {
     if (!schermata) return '';
     if (schermata.kind === 'stanza') return i18n.t(`casa.${schermata.ref}.title`);
+    if (schermata.kind === 'conversazione') return projectNameOf(schermata.ref) || schermata.ref;
     return schermata.ref;
   },
 

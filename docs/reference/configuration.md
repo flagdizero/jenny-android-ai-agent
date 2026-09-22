@@ -401,15 +401,17 @@ She hides herself whenever Jenny's own UI is in the foreground: this app is the 
 
 ## casa
 
-The home screen's extra pages. Jenny's home is the conversation; beside it you can keep pages you swipe to, the way any launcher works. The page you are on is drawn with dots at the bottom edge — swipe sideways to change page, up to pull open the app drawer, and press and hold to manage the pages.
+The home screen's extra pages. Jenny's home is the conversation; beside it you can keep pages you swipe to, the way any launcher works. The page you are on is drawn with dots at the bottom edge — swipe sideways to change page, tap a dot to jump to it, and press and hold to manage the pages.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is either `app` (a Jenny App, `ref` is its slug) or `stanza` (a room of the home, `ref` names it). At most 8, and the ids must differ. |
+| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug), `stanza` (a room of the home, `ref` names it) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, and the ids must differ. |
 
 The conversation itself is **not** in this list: it is always the first page, it cannot be moved and it cannot be removed — putting it here would allow a config file that deletes it.
 
-Two things are deliberately not kinds. The **app drawer**, because you already reach it by swiping up from the dots, and two doors to the same room are one too many. And a **conversation**: the home has exactly one chat — one thread, one composer, one connection — so such a page would have no content of its own and could only change which conversation the chat below is showing. Switching conversation is already one tap on the title.
+The **app drawer** is deliberately not a kind: its button already sits next to where you write, and two doors to the same room are one too many.
+
+A **conversation page is a shortcut, not a second chat.** The home has exactly one chat — one thread, one composer, one connection. Landing on a notebook's page switches that chat to the notebook, and the swipe dresses the switch up as a page: while you drag, the page coming in shows the notebook as you last left it. A notebook you have not opened since the app started has nothing to show yet, so the first time it slides in empty and fills as you arrive. Only notebooks can be pinned — the personal conversation is already the first page — and the name must be one the gateway would open. The first page stays the free one: whatever you pick from the title opens there, even a notebook that also has a page of its own.
 
 Rooms that depend on where you came from are not pinnable either: the notebook pages read their notebook from the current conversation, and the reader needs a specific page. Pinned to a fixed place they would show something different every time.
 

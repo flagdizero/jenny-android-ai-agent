@@ -1037,6 +1037,27 @@ body.casa {
   position: relative;
 }
 
+/* La chat vera: un involucro solo, cosi' si sposta intera nella pagina di un
+   quaderno (v. `casa-trasloco.js`). Prende il flusso che prima aveva il
+   pannello, e il `relative` che ancora `.casa-empty`. */
+.casa-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* La foto della chat: da sola in una pagina che la chat non abita, o **sopra**
+   la chat vera finche' questa non ha finito di leggere la conversazione nuova.
+   Niente `z-index` — quello di Jenny resta l'unico del foglio: la foto e'
+   sempre l'ultimo figlio posizionato del pannello, e dentro la chat non c'e'
+   niente che ne porti uno, quindi si dipinge sopra da se'. */
+.casa-chat.casa-foto {
+  position: absolute;
+  inset: 0;
+}
+
 /* ── La striscia dei pallini ─────────────────────────────────────────────
    Dove sei fra le pagine: toccare un pallino ci va, e tenere premuto apre il
    foglio che le gestisce.

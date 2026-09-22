@@ -124,6 +124,11 @@
   <div class="casa-vetrina">
     <div class="casa-pista" id="casa-pista">
     <div class="casa-pagina" data-pagina="chat">
+      <!-- La chat vera, in un involucro solo: e' una, e si **sposta** intera
+           nella pagina di un quaderno quando ci arrivi (v. `casa-trasloco.js`).
+           Non si copia mai — i controller la prendono per id — e nelle pagine
+           che non abita c'e' la sua foto. -->
+      <div class="casa-chat" id="casa-chat">
       <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
       <div class="casa-thread" id="casa-thread"></div>
 
@@ -173,6 +178,7 @@
         </button>
       </div>
       </div>
+    </div>
     </div>
   </div>
 

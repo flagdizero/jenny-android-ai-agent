@@ -498,12 +498,41 @@ class ProvidersConfig(Base):
 #: Stanno qui e non solo nel client perche' cosi' la regola vale anche per un
 #: `config.json` scritto a mano: una pagina che il prodotto non sa disegnare
 #: non deve poter esistere nel file.
-SPECIE_SCHERMATA = ("app", "stanza")
+#: Le specie di pagina. ``conversazione`` e' una **scorciatoia**, non una seconda
+#: chat: arrivarci cambia la conversazione dell'unica chat che c'e', e lo
+#: scorrimento lo traveste da pagina (v. ``.agent/pagine-conversazione-plan.md``).
+SPECIE_SCHERMATA = ("app", "stanza", "conversazione")
 
 #: Quante se ne possono aggiungere, oltre alla chat. Non e' una limitazione
 #: tecnica: oltre questa soglia i pallini non si leggono piu' e attraversarle
 #: diventa un viaggio, cioe' la funzione smette di fare quel che prometteva.
 MAX_SCHERMATE = 8
+
+
+def _quaderno_valido(ref: Any) -> None:
+    """Una pagina conversazione punta a un **quaderno**, e a uno che si apre.
+
+    Solo quaderni: la conversazione personale e' gia' la pagina 0, e l'utente
+    ha chiesto «le chat quaderni». La regola sul nome e' quella di
+    ``session/keys.py``, che e' chi la applica a ogni messaggio in arrivo:
+    una seconda copia qui divergerebbe in silenzio.
+
+    Qui nello schema e non nella rotta, come la regola sulle specie: cosi' un
+    ``config.json`` scritto a mano non mette in casa una chiave che il gateway
+    rifiuterebbe al primo messaggio. L'import e' pigro perche' il pacchetto
+    ``jenny.session`` tira dentro il gestore delle sessioni, che legge la
+    configurazione.
+    """
+    from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name
+
+    if not isinstance(ref, str) or not ref.startswith(PROJECT_SESSION_PREFIX):
+        raise ValueError(
+            f"una pagina conversazione vuole un quaderno ({PROJECT_SESSION_PREFIX}<nome>), "
+            f"non {ref!r}"
+        )
+    nome = ref[len(PROJECT_SESSION_PREFIX):]
+    if not is_valid_project_name(nome):
+        raise ValueError(f"nome di quaderno non valido: {nome!r}")
 
 
 class SchermataConfig(Base):
@@ -530,6 +559,8 @@ class SchermataConfig(Base):
                     f"specie di schermata sconosciuta: {specie!r} "
                     f"(le sole sono {', '.join(SPECIE_SCHERMATA)})"
                 )
+            if specie == "conversazione":
+                _quaderno_valido(data.get("ref"))
         return data
 
 

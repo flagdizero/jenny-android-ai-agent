@@ -92,9 +92,16 @@ function makeEl(tag) {
 
 /* La lente ingrandita, quando c'è. */
 let lightbox = null;
+/* Un elemento per id, **lo stesso** a ogni domanda: il titolo della tendina
+   (`#casa-who`) si spegne con `disabled`, e un finto che ne dava uno nuovo
+   ogni volta non poteva dire se l'avevano spento. */
+const perId = new Map();
 const document = {
   querySelector: (sel) => (sel === '.image-lightbox' ? lightbox : null),
-  getElementById: () => makeEl('button'),
+  getElementById: (id) => {
+    if (!perId.has(id)) perId.set(id, makeEl('button'));
+    return perId.get(id);
+  },
   /* `_setView` dichiara il pavimento di Jenny quando non c'è un composer: la
      radice serve solo a ricevere quella proprietà, e il banco la legge. */
   documentElement: {
@@ -259,6 +266,7 @@ class App {
   _setRunning(running) { this._running = running; this.fatti.push('ferma:' + running); }
   _showThreadError() { this._threadFailed = true; this.fatti.push('non si legge'); }
   __SWITCH__
+  __MOSTRA__
   __APPLY_CONVERSATION__
   __RELEASE_TURN__
   __CLOSE_OVERLAYS__
@@ -304,6 +312,11 @@ def _harness() -> str:
         .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__DOT_COLOR__", _function(WHO_JS.read_text(encoding="utf-8"), "dotColor"))
         .replace("__SWITCH__", _member(src, "switchConversation"))
+        # Il corpo del cambio vive in `mostraConversazione` dal 23/09/2026:
+        # `switchConversation` decide solo **dove** (v. le pagine conversazione),
+        # e qui non c'e' una pista — quindi passa dritto al corpo, che e' la
+        # cosa che questo banco misura.
+        .replace("__MOSTRA__", _member(src, "mostraConversazione"))
         .replace("__APPLY_CONVERSATION__", _member(src, "_applyConversation"))
         .replace("__RELEASE_TURN__", _member(src, "_releaseTurn"))
         .replace("__CLOSE_OVERLAYS__", _member(src, "_closeOverlays"))
@@ -889,4 +902,65 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
       app.openUpdates();
       app._setView('chat');
       assert.ok(app.fatti.includes('aggiornamenti chiusa'));
+    """)
+
+
+
+# ── La pagina di un quaderno (23/09/2026) ───────────────────────────────────
+
+
+def test_a_notebook_page_wears_the_head_of_a_chat() -> None:
+    """E' una chat, non una pagina: niente «Torna alla chat», ci sei gia'.
+
+    Occhiello, nome del quaderno, pastiglia delle sue pagine — come la pagina
+    0 quando e' su un quaderno. Solo il titolo non apre la tendina: da una
+    pagina fissa non si cambia conversazione (l'invariante delle pagine
+    conversazione). Il confronto con la pagina di un'app dice che la
+    differenza la fa la specie, non il numero della pagina.
+    """
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('piante'));
+      app.pagine = { nomeDi: () => 'NOME DI PAGINA' };
+      const titolo = document.getElementById('casa-who');
+
+      app._pagina = 2;
+      app._schermata = { kind: 'conversazione', ref: 'project:piante' };
+      app._applyHead();
+      assert.equal(app.backBtn.hidden, true, '«Torna alla chat» sopra una chat');
+      assert.equal(app.kicker.hidden, false, 'l\u2019occhiello della chat manca');
+      assert.equal(app.pagesBtn.hidden, false, 'la pastiglia delle pagine del quaderno manca');
+      assert.equal(app.nameEl.textContent, 'piante');
+      assert.equal(titolo.disabled, true, 'da una pagina fissa il titolo apre la tendina');
+
+      app._schermata = { kind: 'app', ref: 'orto' };
+      app._applyHead();
+      assert.equal(app.backBtn.hidden, false, 'la pagina di un\u2019app ha perso la via di casa');
+      assert.equal(app.nameEl.textContent, 'NOME DI PAGINA');
+
+      app._pagina = 0;
+      app._schermata = null;
+      app._applyHead();
+      assert.equal(titolo.disabled, false, 'sulla pagina 0 il titolo deve aprire la tendina');
+    """)
+
+
+def test_every_switch_from_outside_asks_the_pages_where() -> None:
+    """Titolo, Home, Indietro, un avviso: passano **tutti** dalla regola delle pagine.
+
+    Una pagina quaderno mostra solo il suo quaderno, e a deciderlo e'
+    `CasaPagine.apriConversazione`. Un guscio che cambiasse la chat per conto
+    suo lascerebbe la personale dentro la pagina di «piante». E la personale si
+    chiede con la sua chiave, non con `null`: le pagine confrontano chiavi.
+    """
+    _run_js("""
+      const app = casa();
+      const chiesti = [];
+      app.pagine = { apriConversazione: (k) => { chiesti.push(k); return Promise.resolve('instradata'); } };
+      const r = await app.switchConversation(projectKey('piante'));
+      assert.deepEqual(chiesti, ['project:piante']);
+      assert.deepEqual(app.fatti, [], 'il guscio ha riletto il filo senza chiedere dove');
+      assert.equal(r, 'instradata', 'la promessa delle pagine non torna a chi chiama');
+      await app.switchConversation(null);
+      assert.equal(chiesti[1], sessionManager.personalKey);
     """)

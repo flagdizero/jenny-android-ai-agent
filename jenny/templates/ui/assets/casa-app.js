@@ -39,6 +39,7 @@ import { WhoPanel, dotColor } from './casa-who.js';
 import { JennyGap } from './shared/jenny-gap.js';
 import { LauncherController } from './mobile-launcher.js';
 import { CasaPagine } from './casa-pagine.js';
+import { Trasloco } from './casa-trasloco.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -259,6 +260,21 @@ class CasaApp {
        prima che un dito possa arrivarci — e si riempie dopo, quando il filo e'
        a schermo: l'elenco e' una lettura di rete, e farla aspettare dalla
        chat vorrebbe dire una casa vuota per il tempo di un giro. */
+    /* La chat e' una, e si sposta nella pagina di un quaderno quando ci
+       arrivi: il trasloco sa spostarla e fotografarla, questo guscio sa
+       cambiarle conversazione. Prima della pista, che lo usa dal primo
+       `vaiA`. */
+    this.trasloco = new Trasloco({
+      chat: document.getElementById('casa-chat'),
+      cambia: (chiave) => this.mostraConversazione(chiave),
+      chiaveAttuale: () => sessionManager.currentKey,
+      /* In fondo **senza condizioni**, non `keepBottom`: spostata nel
+         documento la chat riparte da scroll 0, e `keepBottom` segue il fondo
+         solo «se ci si era» — lo scroll azzerato puo' fargli credere che
+         l'utente sia risalito. E la foto che e' appena entrata mostrava il
+         fondo: arrivare altrove sarebbe il trucco che si vede. */
+      inFondo: () => this.chat?.scrollToBottom(),
+    });
     this.pagine = new CasaPagine(this);
     this._apps = null;
 
@@ -379,6 +395,31 @@ class CasaApp {
    *  filo butta da se' la storia di una conversazione gia' lasciata.
    */
   async switchConversation(key) {
+    const target = key || sessionManager.personalKey;
+    /* **Dove** la si apre lo decidono le pagine: una pagina di un quaderno
+       mostra solo il suo, quindi da li' un'altra conversazione si apre nella
+       pagina 0 (v. `CasaPagine.apriConversazione`). */
+    if (this.pagine) return this.pagine.apriConversazione(target);
+    return this.mostraConversazione(target);
+  }
+
+  /** La conversazione che la chat mostra adesso. */
+  chiaveAttuale() {
+    return sessionManager.currentKey;
+  }
+
+  /** Cambia la conversazione della chat, qui, senza chiedersi in che pagina.
+   *
+   *  E' il corpo che `switchConversation` aveva da solo prima delle pagine
+   *  conversazione. Lo chiamano la regola delle pagine e il trasloco — che
+   *  hanno gia' deciso dove — e nessun altro: da fuori si passa da
+   *  `switchConversation`, o una pagina fissa finirebbe a mostrare un
+   *  quaderno che non e' il suo.
+   *
+   *  **Cambia subito, prima della sua prima attesa**: il trasloco chiede la
+   *  conversazione attuale appena dopo, e l'intestazione la legge.
+   */
+  async mostraConversazione(key) {
     const from = sessionManager.currentKey;
     const target = key || sessionManager.personalKey;
     if (target === from) return;
@@ -702,7 +743,11 @@ class CasaApp {
        l'intestazione no: ci si sta come in una stanza, col nome di dove sei e
        la via per tornare. Per questo `inChat` qui vuol dire **la
        conversazione**, non la vista. */
-    const suPagina = this.view === 'chat' && (this._pagina || 0) > 0;
+    /* La pagina di un quaderno **e'** una chat: occhiello, nome, pastiglia
+       delle pagine del quaderno, e niente «Torna alla chat» — ci sei gia'.
+       Solo il chevron no: da una pagina fissa non si cambia conversazione. */
+    const suQuaderno = (this._pagina || 0) > 0 && this._schermata?.kind === 'conversazione';
+    const suPagina = this.view === 'chat' && (this._pagina || 0) > 0 && !suQuaderno;
     const inChat = this.view === 'chat' && !suPagina;
     /* «Parlane» riporta a parlare **di questo quaderno**: vale dalle sue
        pagine e dal lettore, e in nessun altro posto. Era `!inChat`, che con
@@ -727,7 +772,7 @@ class CasaApp {
        quaderno stai guardando, e un chevron che promette una scelta la' sopra
        porterebbe a cambiare stanza da dentro un'altra. */
     const whoBtn = document.getElementById('casa-who');
-    if (whoBtn) whoBtn.disabled = !inChat;
+    if (whoBtn) whoBtn.disabled = !inChat || suQuaderno;
     if (!inChat && this.view === 'pages') this._setHeadTitle(notebook);
     if (this.view === 'tu') this._setHeadTitle(i18n.t('casa.tu.title'));
     if (this.view === 'jenny') this._setHeadTitle(i18n.t('casa.jenny.title'));

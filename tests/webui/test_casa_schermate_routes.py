@@ -124,12 +124,13 @@ async def test_the_cap_travels_with_the_list(env) -> None:
     """
     corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
     assert corpo["max"] == MAX_SCHERMATE
-    # Due, non le tre della tavola. Il cassetto non c'e' perche' si tira su;
-    # una conversazione perche' la chat in casa e' una sola e una pagina del
-    # genere non avrebbe contenuto proprio (deciso il 22 settembre 2026).
+    # Il cassetto non c'e', e resta fuori: ce l'hai gia' accanto a dove scrivi.
+    # La conversazione era fuori anche lei (22/09/2026: «la chat e' una sola, una
+    # pagina del genere non avrebbe contenuto proprio») ed e' rientrata il
+    # 23/09 in un'altra forma — non una seconda chat, una scorciatoia che cambia
+    # quella che c'e'. V. `.agent/pagine-conversazione-plan.md`.
     assert "drawer" not in corpo["specie"]
-    assert "conversazione" not in corpo["specie"]
-    assert set(corpo["specie"]) == {"app", "stanza"}
+    assert set(corpo["specie"]) == {"app", "stanza", "conversazione"}
 
 
 # ── La scrittura ────────────────────────────────────────────────────────────
@@ -231,3 +232,39 @@ async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
     pagine = [{"id": "p1", "kind": "app", "ref": "app-che-non-esiste"}]
     await _dispatch(env, _set(pagine))
     assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == pagine
+
+
+# ── Le pagine conversazione (23/09/2026) ────────────────────────────────────
+#
+# Una scorciatoia che cambia la conversazione dell'unica chat, travestita da
+# pagina (v. `.agent/pagine-conversazione-plan.md`). Punta a un quaderno, e
+# solo a uno che il gateway aprirebbe.
+
+
+async def test_a_notebook_can_be_a_page(env) -> None:
+    pagine = [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}]
+    assert (await _dispatch(env, _set(pagine))).status_code == 200
+    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
+    assert corpo["schermate"] == pagine
+    assert "conversazione" in corpo["specie"]
+
+
+async def test_a_conversation_page_must_point_at_a_notebook(env) -> None:
+    """Non la personale, non un nome nudo, non un nome che il gateway rifiuta.
+
+    La personale e' gia' la pagina 0, e l'utente ha chiesto «le chat
+    quaderni». Un nome con `..` o vuoto e' un nome che `session/keys.py`
+    rifiuterebbe al primo messaggio: meglio saperlo al salvataggio, con un 400
+    che lo dice, che trovarsi una pagina che non risponde.
+    """
+    for ref in ("piante", "websocket:default", "project:", "project:..su", "project:a/b"):
+        pagine = [{"id": "p1", "kind": "conversazione", "ref": ref}]
+        risposta = await _dispatch(env, _set(pagine))
+        assert risposta.status_code == 400, ref
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+
+
+async def test_the_notebook_rule_does_not_leak_onto_apps(env) -> None:
+    """La regola vale per la sua specie: uno slug d'app non e' un quaderno."""
+    pagine = [{"id": "p1", "kind": "app", "ref": "orto"}]
+    assert (await _dispatch(env, _set(pagine))).status_code == 200

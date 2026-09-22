@@ -77,6 +77,31 @@ function creaEl(id, cls) {
       if (!this.parent) return;
       this.parent.children = this.parent.children.filter((x) => x !== this);
     },
+    /* Le classi come le tiene il DOM vero: un elenco di parole. */
+    get classList() {
+      const el = this;
+      const parole = () => (el.className || '').split(' ').filter(Boolean);
+      return {
+        add(c) { if (!parole().includes(c)) el.className = [...parole(), c].join(' '); },
+        remove(c) { el.className = parole().filter((x) => x !== c).join(' '); },
+        contains(c) { return parole().includes(c); },
+      };
+    },
+    /* Solo `.classe`, nei discendenti. Un altro selettore **alza**: rispondere
+       a caso e' il modo in cui un finto dice verde su codice rotto. */
+    querySelector(sel) {
+      if (!/^\\.[a-z-]+$/.test(sel)) throw new Error('selettore che il finto non capisce: ' + sel);
+      const cls = sel.slice(1);
+      const cerca = (n) => {
+        for (const c of n.children) {
+          if ((c.className || '').split(' ').includes(cls)) return c;
+          const r = cerca(c);
+          if (r) return r;
+        }
+        return null;
+      };
+      return cerca(this);
+    },
     querySelectorAll(sel) {
       /* Il selettore si rispetta davvero, non si approssima: un finto che
          risponde «tutti» comunque gli si chieda fa passare una mutazione che
@@ -225,12 +250,26 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
             const stanzaTu = creaEl('casa-tu', 'casa-tu');
             guscio.appendChild(stanzaTu);
             let aperture = 0;
+            /* Attaccato al documento: risalendo si arriva al guscio o alla
+               pista, e ogni anello sta davvero fra i figli del suo genitore. */
+            const attaccato = (el) => {
+              for (let n = el; n; n = n.parent) {
+                if (n === guscio || n === pista) return true;
+                if (n.parent && !n.parent.children.includes(n)) return false;
+              }
+              return false;
+            };
             const app = {
               view: VISTA,
               shell: guscio,
               launcher: { isOpen: () => false },
+              /* Come quello vero, che la cerca con `getElementById`: una
+                 stanza finita dentro un pannello **staccato** dal documento
+                 non si trova piu'. Un finto che la restituiva comunque
+                 nascondeva il difetto del ridisegno (23/09/2026). */
               prestaStanza: (ref) => {
                 if (ref !== 'tu') return null;
+                if (!attaccato(stanzaTu)) return null;
                 aperture += 1;
                 return stanzaTu;
               },
@@ -255,6 +294,24 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
                 },
               }),
             };
+            /* Il trasloco finto: registra, e dice se il pannello era ancora
+               attaccato quando gli si chiedeva di riprendere la chat — e'
+               l'unica domanda che conta per `riportaACasa`. Il trasloco vero
+               ha il suo banco (`test_casa_trasloco_client.py`). */
+            const traslochi = [];
+            app.trasloco = {
+              lettura: Promise.resolve('letto'),
+              arriva(p, k) { traslochi.push({ fa: 'arriva', p, k }); },
+              fotoSeServe(p, k) { traslochi.push({ fa: 'foto', p, k }); },
+              riportaACasa(v, c) {
+                traslochi.push({ fa: 'casa', v, c, attaccato: pista.children.includes(v) });
+              },
+            };
+            const arrivi = () => traslochi.filter((x) => x.fa === 'arriva');
+            const PERSONALE = 'websocket:default';
+            app.chiaveAttuale = () => PERSONALE;
+            const mostrate = [];
+            app.mostraConversazione = (k) => { mostrate.push(k); return Promise.resolve('mostrata'); };
             const pagine = new CasaPagine(app);
             await pagine.carica();
             """
@@ -270,6 +327,12 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
         radice = Path(tmp)
         (radice / "shared").mkdir()
         shutil.copy(ASSETS / "casa-pagine.js", radice / "casa-pagine.js")
+        # Le regole sui nomi dei quaderni, vere: sono le stesse del gateway, e
+        # una copia finta qui direbbe si' a un nome che il server rifiuta.
+        shutil.copy(
+            ASSETS / "shared" / "conversation-list.js",
+            radice / "shared" / "conversation-list.js",
+        )
         shutil.copy(
             ASSETS / "shared" / "gesto-orizzontale.js",
             radice / "shared" / "gesto-orizzontale.js",
@@ -309,6 +372,23 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
             "  _segreto: '',\n"
             "  getSecret() { return this._segreto; },\n"
             "  async bootstrap() { this._segreto = 'ok'; },\n"
+            # I quaderni su disco, come li da' `/api/projects`: `projects` si
+            # aprono, `unopenable` no. Rispondono **dopo un giro**, come la rete.
+            "  async listProjects() {\n"
+            "    await new Promise((r) => setTimeout(r, 15));\n"
+            # `zucca` e' piu' recente di `orto` ma viene dopo in ordine
+            # alfabetico: senza, i due ordini coincidono e il banco non li
+            # distingue. `a..b` e' un nome che il gateway non apre finito fra i
+            # `projects` — un server piu' vecchio, o un difetto dall'altra
+            # parte: offrirlo vorrebbe dire un salvataggio rifiutato.
+            "    return { projects: [\n"
+            "      { name: 'vecchio', modified: 100 },\n"
+            "      { name: 'piante', modified: 900 },\n"
+            "      { name: 'orto', modified: 500 },\n"
+            "      { name: 'zucca', modified: 800 },\n"
+            "      { name: 'a..b', modified: 950 },\n"
+            "    ], unopenable: [{ name: '.nascosto', reason: 'invalid_name' }] };\n"
+            "  },\n"
             "};\n",
             encoding="utf-8",
         )
@@ -626,20 +706,20 @@ def test_the_sheet_lists_the_pages_and_offers_the_next_one() -> None:
     )
 
 
-def test_the_choices_are_two_and_the_missing_ones_are_decided() -> None:
-    """La tavola ne disegna tre; qui sono due, e le assenze hanno un motivo.
+def test_the_choices_are_three_and_the_drawer_is_not_one() -> None:
+    """App, stanza, quaderno. Il **cassetto** resta fuori, e con motivo.
 
-    Il **cassetto** ce l'hai gia' tirando su — lo dice la tavola stessa. Una
-    **conversazione** no perche' la chat in casa e' una sola: un filo, un campo
-    di scrittura, un collegamento. Una pagina cosi' non avrebbe contenuto
-    proprio, potrebbe solo far cambiare conversazione a quella che c'e' gia'
-    — e cambiarla e' gia' un tocco sul titolo.
+    Il cassetto ha gia' il suo bottone accanto a dove scrivi: due porte per la
+    stessa stanza sono una di troppo. La **conversazione** era fuori anche lei
+    (22/09/2026: «la chat e' una sola») ed e' rientrata il 23/09 in un'altra
+    forma — non una seconda chat, una scorciatoia che cambia quella che c'e',
+    travestita da pagina (v. `casa-trasloco.js`).
     """
     _run(
         "await tieniPremuto();\n"
         "const libera = elenco.children.find((c) => c.className === 'casa-foglio-libera');\n"
         "const scelte = libera.children[1].children.map((b) => b.dataset.kind);\n"
-        "assert.deepEqual(scelte, ['app', 'stanza']);",
+        "assert.deepEqual(scelte, ['app', 'stanza', 'conversazione']);",
         schermate=UNA,
     )
 
@@ -1173,4 +1253,229 @@ def test_a_finger_that_only_the_window_saw_moves_nothing() -> None:
         "scorriSfalsato(-200, 0);\n"
         "assert.equal(pagine.indice, 0, 'un gesto che lo schermo non ha visto ha cambiato pagina');\n",
         UNA,
+    )
+
+
+# ── Le pagine conversazione (23/09/2026) ────────────────────────────────────
+#
+# Una scorciatoia che cambia la conversazione dell'unica chat, travestita da
+# pagina. Qui si prova l'aggancio: che le pagine chiamino il trasloco nei
+# momenti giusti, con i pannelli giusti, e la regola che le tiene insieme —
+# **una pagina quaderno mostra solo il suo quaderno**. Il trasloco vero, con
+# la foto e i suoi tranelli, ha il banco suo.
+
+MISTE = [
+    {"id": "a1", "kind": "app", "ref": "orto"},
+    {"id": "q1", "kind": "conversazione", "ref": "project:piante"},
+    {"id": "s1", "kind": "stanza", "ref": "tu"},
+]
+
+
+def test_arriving_on_a_notebook_page_brings_the_chat_there() -> None:
+    """Col pannello che la pista mostra davvero, e con la chiave del quaderno."""
+    _run(
+        "traslochi.length = 0;\n"
+        "pagine.vaiA(2);\n"
+        "const a = arrivi();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].k, 'project:piante');\n"
+        "assert.equal(a[0].p, pagine.pannelloDi(2));\n"
+        "assert.equal(a[0].p.dataset.id, 'q1');\n",
+        MISTE,
+    )
+
+
+def test_back_on_page_zero_the_chat_goes_home_with_its_own_conversation() -> None:
+    """La pagina 0 ha la sua, e il trasloco la rimette."""
+    _run(
+        "pagine.vaiA(2);\n"
+        "traslochi.length = 0;\n"
+        "pagine.vaiA(0);\n"
+        "const a = arrivi();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].p, pannelloChat);\n"
+        "assert.equal(a[0].k, PERSONALE);\n",
+        MISTE,
+    )
+
+
+def test_passing_through_an_app_or_a_room_does_not_touch_the_chat() -> None:
+    """Attraversarle non cambia conversazione: la chat resta dov'era."""
+    _run(
+        "traslochi.length = 0;\n"
+        "pagine.vaiA(1); pagine.vaiA(3);\n"
+        "assert.equal(arrivi().length, 0, 'una pagina senza conversazione ha chiamato il trasloco');\n",
+        MISTE,
+    )
+
+
+def test_a_notebook_page_off_screen_keeps_its_photo_and_is_never_emptied() -> None:
+    """Spenta, ma non vuota: la foto e' quel che si vede entrare scorrendo.
+
+    E soprattutto non si svuota col `textContent = ''` delle altre: se la
+    chat e' parcheggiata li' mentre guardi un'app, porterebbe via la chat.
+    """
+    _run(
+        "const q = pagine.pannelloDi(2);\n"
+        "const parcheggiata = creaEl(null, 'casa-chat');\n"
+        "q.appendChild(parcheggiata);\n"
+        "traslochi.length = 0;\n"
+        "pagine.vaiA(1);\n"
+        "const f = traslochi.filter((x) => x.fa === 'foto');\n"
+        "assert.equal(f.length, 1);\n"
+        "assert.equal(f[0].p, q);\n"
+        "assert.equal(f[0].k, 'project:piante');\n"
+        "assert.ok(q.children.includes(parcheggiata), 'la pagina quaderno e stata svuotata');\n",
+        MISTE,
+    )
+
+
+def test_redrawing_the_pages_takes_the_chat_back_before_throwing_a_panel() -> None:
+    """Salvare l'elenco ridisegna i pannelli: la chat torna a casa **prima**.
+
+    Il finto registra se il pannello era ancora attaccato al momento della
+    domanda: dopo, sarebbe troppo tardi — la chat sarebbe gia' andata via con
+    lui.
+    """
+    _run(
+        "traslochi.length = 0;\n"
+        "await pagine.salva(SCHERMATE);\n"
+        "const c = traslochi.filter((x) => x.fa === 'casa');\n"
+        "assert.equal(c.length, 3, 'non ha chiesto per ogni pannello');\n"
+        "assert.ok(c.every((x) => x.attaccato), 'ha chiesto dopo aver buttato il pannello');\n"
+        "assert.ok(c.every((x) => x.c === pannelloChat), 'la casa e il pannello della chat');\n",
+        MISTE,
+    )
+
+
+def test_redrawing_while_on_a_room_page_gives_the_room_back() -> None:
+    """**Un difetto latente**, trovato mettendo qui la chat (23/09/2026).
+
+    Sei su una stanza fissata, apri il foglio, aggiungi o togli una pagina:
+    il ridisegno buttava il pannello con la stanza dentro, e la stanza non si
+    riapriva piu' dal suo percorso — la stessa famiglia di «la stanza torna a
+    casa sua», che il giro sul telefono del 22 aveva provato solo uscendo.
+    """
+    _run(
+        "pagine.vaiA(3);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(stanzaTu.parent, pagine.pannelloDi(3), 'la stanza non e stata prestata');\n"
+        "await pagine.salva(SCHERMATE);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        # Ridisegnata, la pagina e' ancora quella: la stanza ci torna in
+        # prestito. Solo se non e' andata via col pannello vecchio.
+        "assert.ok(pagine.pannelloDi(3).children.includes(stanzaTu), 'la stanza e andata via col pannello');\n",
+        MISTE,
+    )
+
+
+def test_a_notebook_page_is_named_after_its_notebook() -> None:
+    """Il nome, non la chiave: `project:piante` in testa sarebbe gergo."""
+    _run(
+        "assert.equal(pagine.nomeDi(SCHERMATE[1]), 'piante');\n",
+        MISTE,
+    )
+
+
+# ── Da fuori: il titolo, Home, un avviso ────────────────────────────────────
+
+
+def test_from_page_zero_a_notebook_opens_right_there() -> None:
+    """Anche se ha una pagina sua. «Fai come ora, non scorrere» — l'utente, 23/09."""
+    _run(
+        "const r = await pagine.apriConversazione('project:piante');\n"
+        "assert.deepEqual(mostrate, ['project:piante']);\n"
+        "assert.equal(pagine.indice, 0, 'e scorso alla pagina del quaderno');\n"
+        "assert.equal(pagine.conversazioneCasa, 'project:piante');\n"
+        "assert.equal(r, 'mostrata', 'la promessa del cambio non torna a chi chiama');\n",
+        MISTE,
+    )
+
+
+def test_a_notebook_page_only_ever_shows_its_notebook() -> None:
+    """**L'invariante.** Da una pagina quaderno un'altra conversazione si apre
+    nella pagina 0, e ci si va.
+
+    E chi chiama riceve la lettura del trasloco, non un «fatto» anticipato: ci
+    manda subito dopo un messaggio, e deve finire nella conversazione giusta.
+    """
+    _run(
+        "pagine.vaiA(2);\n"
+        "traslochi.length = 0;\n"
+        "const r = await pagine.apriConversazione(PERSONALE);\n"
+        "assert.equal(pagine.indice, 0);\n"
+        "assert.equal(pagine.conversazioneCasa, PERSONALE);\n"
+        "assert.deepEqual(mostrate, [], 'ha cambiato la chat dentro la pagina del quaderno');\n"
+        "const a = arrivi();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].p, pannelloChat);\n"
+        "assert.equal(a[0].k, PERSONALE);\n"
+        "assert.equal(r, 'letto', 'chi chiama non aspetta la lettura');\n",
+        MISTE,
+    )
+
+
+def test_asking_a_notebook_page_for_its_own_notebook_stays_there() -> None:
+    """«Parlane» e «Segnala» dalle pagine del quaderno chiedono proprio quello."""
+    _run(
+        "pagine.vaiA(2);\n"
+        "await pagine.apriConversazione('project:piante');\n"
+        "assert.equal(pagine.indice, 2);\n"
+        "assert.deepEqual(mostrate, ['project:piante']);\n"
+        "assert.equal(pagine.conversazioneCasa, PERSONALE, 'la pagina 0 ha preso il quaderno');\n",
+        MISTE,
+    )
+
+
+def test_from_an_app_page_a_conversation_opens_on_page_zero() -> None:
+    """Home da una pagina di lato: si torna alla pagina 0, come ogni launcher."""
+    _run(
+        "pagine.vaiA(1);\n"
+        "await pagine.apriConversazione(PERSONALE);\n"
+        "assert.equal(pagine.indice, 0);\n"
+        "assert.deepEqual(mostrate, []);\n",
+        MISTE,
+    )
+
+
+# ── Il foglio: scegliere un quaderno ────────────────────────────────────────
+
+
+def test_the_notebooks_offered_are_openable_recent_first_and_not_pinned_twice() -> None:
+    """Solo `projects`, mai `unopenable`; dal piu' recente; fuori i gia' fissati.
+
+    Una cartella del gruppo `unopenable`, aperta come conversazione, aprirebbe
+    *un'altra* conversazione — il guasto per cui il server divide i due
+    elenchi. La fonte risponde dopo un giro, come la rete.
+    """
+    _run(
+        "const voci = await pagine._voci('conversazione');\n"
+        "assert.deepEqual(voci.map((v) => v.nome), ['zucca', 'orto', 'vecchio'],\n"
+        "  'piante e gia fissato; .nascosto e a..b non si aprono; dal piu recente');\n"
+        "assert.deepEqual(voci.map((v) => v.ref), ['project:zucca', 'project:orto', 'project:vecchio']);\n",
+        MISTE,
+    )
+
+
+def test_picking_a_notebook_saves_a_conversation_page() -> None:
+    _run(
+        "await pagine._aggiungi('conversazione', 'project:orto');\n"
+        "const ultima = pagine.schermate[pagine.schermate.length - 1];\n"
+        "assert.equal(ultima.kind, 'conversazione');\n"
+        "assert.equal(ultima.ref, 'project:orto');\n",
+        UNA,
+    )
+
+
+def test_a_pinned_notebook_that_is_gone_says_so_in_the_sheet() -> None:
+    """Resta, e lo dice: toglierla e' una decisione dell'utente, non del codice."""
+    sparita = [{"id": "q9", "kind": "conversazione", "ref": "project:sparito"}]
+    _run(
+        "await tieniPremuto();\n"
+        "await new Promise((r) => setTimeout(r, 40));\n"
+        "const riga = elenco.children.find((c) => c.dataset.id === 'q9');\n"
+        "assert.ok(riga, 'la riga del quaderno sparito non c e');\n"
+        "assert.ok(riga.classList.contains('casa-foglio-sparita'));\n"
+        "assert.equal(riga.querySelector('.casa-foglio-specie').textContent, 'casa.foglio.sparito');\n",
+        sparita,
     )

@@ -666,3 +666,9 @@ pagina → pagina scorrendo **dentro** l'app, nei due versi. L'officina non è
 stata riaperta col dito: la coprono i suoi banchi (che girano sul suo codice
 vero e diventano rossi mutando il righello) più il fatto che `screenX` funziona
 in quella stessa WebView al livello del guscio.
+
+## B5.3 riaperto — pagine conversazione (23/09/2026)
+
+Tagliato il 22/09 come «seconda chat viva»; riaperto il 23/09 in un'altra forma
+— una scorciatoia che cambia conversazione, travestita da pagina. Piano a sé:
+`.agent/pagine-conversazione-plan.md`.
