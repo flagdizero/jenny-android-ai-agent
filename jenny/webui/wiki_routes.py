@@ -29,7 +29,7 @@ from jenny.channels.http_utils import (
     parse_query,
     query_first,
 )
-from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME
+from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 
 QueryParams = dict[str, list[str]]
 
@@ -64,23 +64,6 @@ def _filter_frontmatter(fm: Any) -> dict[str, Any] | None:
     if not isinstance(fm, dict):
         return fm
     return {k: v for k, v in fm.items() if k in _FRONTMATTER_ALLOWLIST}
-
-
-def safe_wiki_page_path(input_path: str) -> str | None:
-    """Normalizza e valida un path di pagina wiki relativo.
-
-    Rifiuta path assoluti o che risalgono fuori dalla wiki (``..``). Ritorna il
-    path normalizzato relativo, la mappa (:data:`WIKI_INDEX_FILENAME`) se vuoto,
-    o ``None`` se invalido.
-    """
-    if not input_path:
-        return WIKI_INDEX_FILENAME
-    if os.path.isabs(input_path):
-        return None
-    normalized = os.path.normpath(input_path).replace(os.sep, "/")
-    if normalized.startswith(".."):
-        return None
-    return normalized
 
 
 def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

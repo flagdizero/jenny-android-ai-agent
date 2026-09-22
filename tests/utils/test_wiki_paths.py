@@ -457,7 +457,7 @@ class TestTheIndexFilenameHasOneDefinition:
         quella che dice la costante (T6.13). La route completa è provata in
         ``tests/webui/test_wiki_routes_server_scope.py``; qui basta il cancello
         che decide il nome."""
-        from jenny.webui.wiki_routes import safe_wiki_page_path
+        from jenny.utils.wiki_paths import safe_wiki_page_path
 
         assert safe_wiki_page_path("") == "index.md"
 

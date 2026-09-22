@@ -13,11 +13,25 @@
  *  Un collegamento fuori dal quaderno non si finge apribile: lo dice. E' la
  *  stessa frase che usa l'officina (`common.linkNotOpenable`), perche' e' la
  *  stessa verita' detta da due parti.
+ *
+ *  **Modifica.** Le pagine sono `.md` nel workspace e gia' oggi si potevano
+ *  cambiare — dal gestore file, in officina, sei tocchi e un altro guscio, dal
+ *  lato opposto del telefono rispetto a dove ti accorgi dell'errore. Da qui e'
+ *  una textarea col markdown che `/api/page` ha gia' mandato (`raw`), quindi
+ *  senza una seconda richiesta.
+ *
+ *  Il salvataggio non e' `workspace.write`: passa da `page.write`, che risolve
+ *  il percorso lato server. E porta con se' il testo da cui si e' partiti,
+ *  perche' **queste pagine le scrive anche Jenny**: se il file e' cambiato
+ *  sotto, il server risponde `conflict` e non scrive. Salvare a occhi chiusi
+ *  qui vuol dire cancellarle il lavoro senza che nessuno se ne accorga.
  */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
+import { confirmDialog } from './shared/dialog.js';
 import { renderRich } from './shared/rich-content.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
@@ -83,12 +97,128 @@ export class CasaReader {
   constructor() {
     this.el = document.getElementById('casa-reader');
     this.bodyEl = document.getElementById('casa-reader-body');
+    this.editEl = document.getElementById('casa-reader-edit');
+    this.barEl = document.getElementById('casa-reader-bar');
+    this.saveBtn = document.getElementById('casa-reader-save');
+    this.cancelBtn = document.getElementById('casa-reader-cancel');
     this.notebook = null;
     this.path = null;
     this.title = '';
+    /** Il markdown sorgente della pagina a schermo: e' quel che l'editor apre,
+     *  ed e' il `base` che il salvataggio manda al server. */
+    this.raw = '';
+    this.editing = false;
+    /** Chi disegna l'intestazione: entrare e uscire dall'editor cambia quali
+     *  comandi valgono lassu'. */
+    this.onEditing = null;
     /* Come per l'elenco: due pagine di fila, e solo l'ultima disegna. */
     this._token = 0;
     this.bodyEl?.addEventListener('click', (e) => this._onClick(e));
+    this.saveBtn?.addEventListener('click', () => this.save());
+    this.cancelBtn?.addEventListener('click', () => this.askCancel());
+  }
+
+  /** Le parole dei due bottoni in basso. Chiamata all'avvio e a ogni cambio
+   *  di lingua: sono scritte solo qui, mai nell'HTML. */
+  applyTranslations() {
+    if (this.saveBtn) this.saveBtn.textContent = i18n.t('casa.reader.save');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('casa.reader.cancel');
+  }
+
+  /* ── Modifica ── */
+
+  /** Vero se c'e' un testo aperto e cambiato. Lo chiede chi sta per uscire. */
+  isDirty() {
+    return this.editing && this.editEl?.value !== this.raw;
+  }
+
+  /** Apre l'editor sul markdown gia' in mano. Falso se non c'e' niente da aprire. */
+  startEdit() {
+    if (this.editing || !this.path || !this.editEl) return false;
+    this.editing = true;
+    this.editEl.value = this.raw;
+    this.editEl.hidden = false;
+    this.barEl.hidden = false;
+    this.bodyEl.hidden = true;
+    this.editEl.focus();
+    this.onEditing?.();
+    return true;
+  }
+
+  /** Chiude l'editor **buttando via** quel che c'e' dentro. Chi chiama ha gia'
+   *  chiesto, o sa che non c'era niente da chiedere. */
+  cancelEdit() {
+    if (!this.editing) return;
+    this.editing = false;
+    this.editEl.hidden = true;
+    this.barEl.hidden = true;
+    this.bodyEl.hidden = false;
+    this.onEditing?.();
+  }
+
+  /** La tastiera software scende **prima** di qualunque modale.
+   *
+   *  Un `<dialog>` chiuso ridà il fuoco a chi ce l'aveva, e con quello risale
+   *  l'IME: la pressione di Indietro successiva se la mangia la tastiera per
+   *  richiudersi, e a schermo non cambia niente. Lezione del gestore file,
+   *  trovata sul Titan 2 e non in un test. */
+  blurEditor() {
+    this.editEl?.blur();
+  }
+
+  /** Annulla dal bottone: se c'e' del lavoro dentro, chiede. */
+  async askCancel() {
+    if (!this.isDirty()) {
+      this.cancelEdit();
+      return;
+    }
+    this.blurEditor();
+    if (!(await confirmDialog(i18n.t('casa.reader.discardConfirm')))) return;
+    this.cancelEdit();
+  }
+
+  /** Salva, e **ricarica dal server**.
+   *
+   *  Non si fida di quel che ha appena scritto: il reso lo fa il server, ed e'
+   *  lui che deve dire com'e' venuta — un titolo nuovo, un wikilink che adesso
+   *  risolve, un frontmatter rotto. */
+  async save() {
+    if (!this.editing) return;
+    const content = this.editEl.value;
+    const notebook = this.notebook;
+    const path = this.path;
+    try {
+      await rpc.writePage(notebook, path, content, this.raw);
+    } catch (err) {
+      console.warn('casa.reader: salvataggio fallito', err?.code || '(no code)', err);
+      if (err?.code === 'conflict') {
+        await this._onConflict();
+        return;
+      }
+      showToast(i18n.t('casa.reader.saveFailed'), 'error');
+      return;
+    }
+    this.editing = false;
+    this.editEl.hidden = true;
+    this.barEl.hidden = true;
+    this.bodyEl.hidden = false;
+    this.onEditing?.();
+    const title = await this.load(notebook, path, this.title);
+    this.onTitle?.(title);
+    showToast(i18n.t('casa.reader.saved'), 'success');
+  }
+
+  /** Jenny ha riscritto la pagina mentre era aperta.
+   *
+   *  Non si sceglie al posto di chi ha scritto: rispondendo di no l'editor
+   *  resta aperto col suo testo dentro, che e' l'unica copia rimasta. */
+  async _onConflict() {
+    this.blurEditor();
+    const reload = await confirmDialog(i18n.t('casa.reader.conflict'));
+    if (!reload) return;
+    this.cancelEdit();
+    const title = await this.load(this.notebook, this.path, this.title);
+    this.onTitle?.(title);
   }
 
   /** Carica *path* dentro *notebook*. Torna il titolo da mettere in testa. */
@@ -97,6 +227,10 @@ export class CasaReader {
     this.notebook = notebook;
     this.path = path;
     this.title = fallbackTitle;
+    /* Azzerato **prima** della richiesta: se questa fallisce, il sorgente della
+       pagina precedente non deve restare qui — «Modifica» aprirebbe un testo
+       che non e' quello a schermo, e lo salverebbe sopra un'altra pagina. */
+    this.raw = '';
     this.bodyEl.innerHTML = '';
     this._say('casa.pages.loading');
 
@@ -112,6 +246,10 @@ export class CasaReader {
     if (token !== this._token) return this.title;
 
     this.title = page.title || fallbackTitle || path;
+    /* Il sorgente resta qui: e' quel che l'editor apre e il `base` che il
+       salvataggio confronta. `/api/page` lo manda gia', quindi «Modifica» non
+       costa una seconda richiesta. */
+    this.raw = page.raw || '';
     this.bodyEl.innerHTML = this._safeHtml(page.html, page.raw);
     /* Diagrammi e formule, che il server lascia da rendere: marca i blocchi
        mermaid (`webui/wiki.py`) e il LaTeX lo lascia nel testo.

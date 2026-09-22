@@ -1033,6 +1033,28 @@ body.casa {
 .casa-pages-open:active,
 .casa-talk:active { filter: brightness(0.94); }
 
+/* «Modifica»: solo l'icona, e senza pastiglia. Accanto a «Parlane» — che e' la
+   pastiglia piena, cioe' l'uscita — due pastiglie si contenderebbero l'occhio
+   e nessuna delle due direbbe piu' qual e' quella principale. Stessa misura e
+   stesso peso della porta di «Tu e Jenny», che e' l'altro comando-icona della
+   stessa barra. */
+.casa-edit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.casa-edit:active { color: var(--text); }
+
 /* L'occhiello, quando e' un comando. Sta dove stava la parola, e ne ha il peso:
    e' una via d'uscita, non un bottone che si contende l'occhio col titolo. */
 .casa-back {
@@ -1271,6 +1293,71 @@ body.casa {
   font-size: 15px;
   line-height: 1.55;
 }
+
+/* L'editor prende esattamente il posto del testo reso: stesso `flex`, stesso
+   riquadro. Cosi' entrando in modifica la pagina non salta ne' cambia misura —
+   quel che leggevi resta dov'era, in sorgente. */
+.casa-reader-edit {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: 4px 18px 16px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: none;
+  overscroll-behavior: contain;
+}
+
+/* `display: flex`/`inline-flex` su una classe batte il `[hidden]` del browser,
+   che di specificita' ne ha quanto una classe ma sta nel foglio dell'agente
+   utente. Va ridetto qui — v. `.casa-back[hidden]`. */
+.casa-reader-edit[hidden] { display: none; }
+
+.casa-reader-edit:focus { outline: none; }
+
+/* La barra dei comandi, in basso: sul Titan il pollice sta qui. Il bordo in
+   alto e non un'ombra — la stanza non ha profondita' da nessun'altra parte. */
+.casa-reader-bar {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 8px 18px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.casa-reader-bar[hidden] { display: none; }
+
+.casa-reader-cancel,
+.casa-reader-save {
+  flex: 1;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.casa-reader-cancel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.casa-reader-save {
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.casa-reader-cancel:active,
+.casa-reader-save:active { filter: brightness(0.94); }
 
 .casa-reader-note {
   margin: 12px 0;

@@ -213,6 +213,232 @@ async def test_write_that_fails_keeps_the_previous_content(
 
 
 # ---------------------------------------------------------------------------
+# page.write
+# ---------------------------------------------------------------------------
+
+
+_PAGE = "# Orto\n\nI pomodori vanno legati a giugno.\n"
+
+
+def _workspace_with_page(workspace_root: Path, body: str = _PAGE) -> Path:
+    """``wikis/main/wiki/index.md`` piu' i fratelli che il contenimento esclude."""
+    pages_dir = workspace_root / "wikis" / "main" / "wiki"
+    pages_dir.mkdir(parents=True)
+    (pages_dir / "index.md").write_text(body, encoding="utf-8")
+    (pages_dir / "note").mkdir()
+    (pages_dir / "note" / "orto.md").write_text("# Orto\n", encoding="utf-8")
+    raw = workspace_root / "wikis" / "main" / "raw"
+    raw.mkdir()
+    (raw / "appunti.md").write_text("# grezzo\n", encoding="utf-8")
+    return pages_dir
+
+
+async def test_page_write_saves_and_reads_back(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il giro intero, con il contenuto che il vecchio trasporto non spediva."""
+    pages_dir = _workspace_with_page(workspace_root)
+    nuovo = "# Orto\n\nI pomodori vanno legati a giugno — pero' gia' a maggio 😏\n"
+
+    out = await dispatch_command(
+        ctx,
+        "page.write",
+        {"wiki": "main", "page": "index.md", "content": nuovo, "base": _PAGE},
+    )
+
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == nuovo
+    assert out["bytes"] == len(nuovo.encode("utf-8"))
+
+
+async def test_page_write_in_a_subfolder(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    pages_dir = _workspace_with_page(workspace_root)
+    await dispatch_command(
+        ctx,
+        "page.write",
+        {"wiki": "main", "page": "note/orto.md", "content": "# Altro\n", "base": "# Orto\n"},
+    )
+    assert (pages_dir / "note" / "orto.md").read_text(encoding="utf-8") == "# Altro\n"
+
+
+async def test_page_write_refuses_a_stale_base_without_writing(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """**La prova che conta.** Jenny ha riscritto la pagina mentre era aperta.
+
+    Due asserzioni, e la seconda e' il punto: non basta che la risposta sia un
+    ``conflict``, deve essere vero che **il file non e' stato toccato**. Un
+    codice giusto su una scrittura avvenuta sarebbe il guasto peggiore dei due:
+    l'utente vedrebbe un errore e crederebbe di non aver perso niente.
+    """
+    pages_dir = _workspace_with_page(workspace_root)
+    intanto = "# Orto\n\nRiscritto da Jenny mentre l'editor era aperto.\n"
+    (pages_dir / "index.md").write_text(intanto, encoding="utf-8")
+
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx,
+            "page.write",
+            {"wiki": "main", "page": "index.md", "content": "il mio testo\n", "base": _PAGE},
+        )
+
+    assert exc.value.code == "conflict"
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == intanto
+
+
+async def test_page_write_needs_the_base(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Senza ``base`` non si scrive **e basta**: mancarlo non vale «vai avanti».
+
+    E' lo stesso ragionamento del default ``refuse`` di ``_conversation_choice``:
+    un parametro assente su un'operazione che puo' cancellare il lavoro di
+    qualcun altro non deve poter valere il permesso di farlo.
+    """
+    pages_dir = _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": "index.md", "content": "x"}
+        )
+    assert exc.value.code == "bad_request"
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == _PAGE
+
+
+@pytest.mark.parametrize(
+    "page",
+    ["../raw/appunti.md", "../../main/wiki/index.md", "/etc/passwd", "note/../../raw/appunti.md"],
+)
+async def test_page_write_refuses_a_path_that_climbs(
+    ctx: CommandContext, workspace_root: Path, config_path: Path, page: str
+) -> None:
+    """Gli stessi input di ``/api/page``, sull'altro verso: qui si scriverebbe."""
+    workspace_root_pages = _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": page, "content": "x", "base": ""}
+        )
+    assert exc.value.code in {"bad_request", "not_found", "forbidden"}
+    assert (workspace_root / "wikis" / "main" / "raw" / "appunti.md").read_text(
+        encoding="utf-8"
+    ) == "# grezzo\n"
+    assert (workspace_root_pages / "index.md").read_text(encoding="utf-8") == _PAGE
+
+
+async def test_page_write_refuses_a_symlink_out_of_the_pages_dir(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il secondo cancello, e il solo input che lo distingue dal primo.
+
+    ``safe_wiki_page_path`` guarda la stringa: ``scorciatoia.md`` non risale, e
+    la supera. A fermarla e' il ``resolve().relative_to(...)``.
+    """
+    pages_dir = _workspace_with_page(workspace_root)
+    bersaglio = workspace_root / "wikis" / "main" / "raw" / "appunti.md"
+    (pages_dir / "scorciatoia.md").symlink_to(bersaglio)
+
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx,
+            "page.write",
+            {"wiki": "main", "page": "scorciatoia.md", "content": "x", "base": "# grezzo\n"},
+        )
+
+    assert exc.value.code == "forbidden"
+    assert bersaglio.read_text(encoding="utf-8") == "# grezzo\n"
+
+
+async def test_page_write_only_touches_md(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il suffisso non si corregge al posto di chi salva (la lettura invece lo fa)."""
+    pages_dir = _workspace_with_page(workspace_root)
+    (pages_dir / "dati.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": "dati.json", "content": "x", "base": "{}"}
+        )
+    assert exc.value.code == "bad_request"
+    assert (pages_dir / "dati.json").read_text(encoding="utf-8") == "{}"
+
+
+async def test_page_write_does_not_create_a_new_page(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    pages_dir = _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": "nuova.md", "content": "x", "base": ""}
+        )
+    assert exc.value.code == "not_found"
+    assert not (pages_dir / "nuova.md").exists()
+
+
+async def test_page_write_unknown_wiki_is_not_found(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "ghost", "page": "index.md", "content": "x", "base": ""}
+        )
+    assert exc.value.code == "not_found"
+
+
+async def test_page_write_is_blocked_when_the_wiki_is_off(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    pages_dir = _workspace_with_page(workspace_root)
+    config = load_config(config_path)
+    config.wiki.enabled = False
+    save_config(config, config_path)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": "index.md", "content": "x", "base": _PAGE}
+        )
+    assert exc.value.code == "unavailable"
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == _PAGE
+
+
+async def test_page_write_is_blocked_when_writes_are_off(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """``workspace.allow_write`` vale anche qui.
+
+    ``audit.resolve`` non lo guarda, e la differenza e' voluta: quello chiude
+    una nota dentro ``audit/``, questo riscrive una pagina — cioe' esattamente
+    cio' che quel flag esiste per governare.
+    """
+    pages_dir = _workspace_with_page(workspace_root)
+    _set_workspace_config(config_path, allow_write=False)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "page.write", {"wiki": "main", "page": "index.md", "content": "x", "base": _PAGE}
+        )
+    assert exc.value.code == "forbidden"
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == _PAGE
+
+
+async def test_page_write_refuses_more_than_the_cap(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    pages_dir = _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx,
+            "page.write",
+            {
+                "wiki": "main",
+                "page": "index.md",
+                "content": "x" * (MAX_WRITE_BYTES + 1),
+                "base": _PAGE,
+            },
+        )
+    assert exc.value.code == "too_large"
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == _PAGE
+
+
+# ---------------------------------------------------------------------------
 # audit.resolve
 # ---------------------------------------------------------------------------
 

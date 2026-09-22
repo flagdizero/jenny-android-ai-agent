@@ -28,6 +28,8 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.utils.wiki_paths import safe_wiki_page_path
+
 # Tetto sul contenuto di una singola scrittura. Allineato al ``max_size`` di
 # ``workspace_files.read_file``: ciò che l'editor non può aprire non deve
 # nemmeno poter essere salvato, e il limite deve arrivare all'utente come un
@@ -43,9 +45,13 @@ class CommandError(Exception):
     """Errore di un comando, con un codice che il trasporto sa tradurre.
 
     I codici sono un insieme chiuso — ``bad_request``, ``forbidden``,
-    ``not_found``, ``too_large``, ``unavailable``, ``internal`` — così un
-    adapter può mapparli (a uno status HTTP, a un frame WS) senza indovinare
-    dal testo del messaggio.
+    ``not_found``, ``too_large``, ``conflict``, ``unavailable``, ``internal`` —
+    così un adapter può mapparli (a uno status HTTP, a un frame WS) senza
+    indovinare dal testo del messaggio.
+
+    ``conflict`` è l'unico che non parla della richiesta ma del *mondo*: la
+    richiesta era buona, e nel frattempo il file è cambiato sotto. Chi lo riceve
+    non deve correggere quel che ha mandato, deve rileggere.
     """
 
     def __init__(self, code: str, message: str) -> None:
@@ -209,6 +215,115 @@ async def soul_rules_write(ctx: CommandContext, params: Mapping[str, Any]) -> di
     return {"chars": len(saved)}
 
 
+def _wiki_page_file(ctx: CommandContext, wiki_name: str, page_path: str) -> Path:
+    """Il file di una pagina di quaderno, risolto e contenuto. Solo lettura di path.
+
+    Specchio della risoluzione di ``wiki_routes._wiki_page``, e volutamente **più
+    stretta in tre punti**, perché qui si scrive:
+
+    - niente ripiego su ``resolve_wikilink``: si modifica la pagina che si stava
+      leggendo, e il client rimanda il ``page`` che quella risposta gli ha dato;
+    - niente correzione del suffisso: ``.md`` o è un errore, non una cosa da
+      indovinare al posto di chi salva;
+    - il file **deve esistere**. Creare una pagina nuova è un altro gesto, e da
+      qui non passa.
+
+    Il contenimento è sulla pages-dir ``wiki/`` e non sull'intera ``wikis/``:
+    tiene fuori i fratelli ``raw/``, ``audit/``, ``log/``. E passa da
+    ``resolve()``, che è il solo cancello che vede un link simbolico —
+    ``safe_wiki_page_path`` guarda la stringa e un symlink non risale.
+    """
+    from jenny.webui.wiki import discover_wikis
+
+    wikis = discover_wikis(_wikis_dir(ctx))
+    if wiki_name not in wikis:
+        raise CommandError("not_found", "wiki not found")
+    pages_dir = wikis[wiki_name]
+
+    rel = safe_wiki_page_path(page_path)
+    if not rel or not rel.endswith(".md"):
+        raise CommandError("bad_request", "invalid page path")
+
+    full = pages_dir / rel
+    try:
+        full.resolve().relative_to(pages_dir.resolve())
+    except ValueError:
+        raise CommandError("forbidden", "path escapes wiki root") from None
+    if not full.is_file():
+        raise CommandError("not_found", "page not found")
+    return full
+
+
+def _write_page_unchanged(full: Path, content: str, base: str) -> None:
+    """Confronta e scrive **nello stesso thread**, per stringere la finestra.
+
+    Lettura, confronto e scrittura sono tre passi, e fra il primo e il terzo
+    Jenny potrebbe scrivere: qui non c'è un lock, c'è una finestra ridotta a
+    quel che il disco impiega. Il caso che conta — l'editor aperto per minuti
+    mentre lei lavora — lo chiude il confronto; questo chiude il resto per
+    quanto si può senza un lock che due scrittori diversi (gateway e strumenti
+    file dell'agente) non condividerebbero comunque.
+    """
+    from jenny.webui.workspace_files import write_file
+
+    if full.read_text("utf-8") != base:
+        raise CommandError("conflict", "page changed on disk")
+    write_file(full, content)
+
+
+async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Salva una pagina di quaderno modificata a mano dal lettore.
+
+    **Non è ``workspace.write`` su un path costruito dal client**, e non per
+    stile: la cartella dei quaderni la decide la config (``wiki.wikis_dir``) e
+    il client non la conosce — comporla di là vorrebbe dire indovinarla. Qui
+    arriva il nome del quaderno, che è quel che il client davvero sa.
+
+    **``base`` è la parte che morde.** Le stesse pagine le scrive anche Jenny,
+    con gli strumenti file di sempre: fra il momento in cui l'editor si apre e
+    quello in cui si salva, il file può essere cambiato sotto. ``base`` è il
+    testo da cui si è partiti; se non combacia con quel che c'è su disco la
+    risposta è ``conflict`` e **non si scrive niente**. Salvare a occhi chiusi
+    qui vuol dire cancellare il lavoro di qualcun altro senza che nessuno se ne
+    accorga — e nessuno dei due scrittori saprebbe di averlo fatto.
+
+    I cancelli sono tre, e sono tre apposta: la wiki accesa (``wiki.enabled``),
+    e le due del workspace. Quest'ultima coppia ``audit.resolve`` non la
+    guarda; la differenza è che quello chiude una nota dentro ``audit/``,
+    mentre questo riscrive una pagina — cioè esattamente ciò che
+    ``workspace.allow_write`` esiste per governare.
+    """
+    wiki_name = _require_str(params, "wiki")
+    page_path = _require_str(params, "page")
+    content = params.get("content")
+    if not isinstance(content, str):
+        raise CommandError("bad_request", "content must be a string")
+    base = params.get("base")
+    if not isinstance(base, str):
+        raise CommandError("bad_request", "base must be a string")
+
+    size = len(content.encode("utf-8"))
+    if size > MAX_WRITE_BYTES:
+        raise CommandError(
+            "too_large",
+            f"page too large to save ({size} > {MAX_WRITE_BYTES} bytes)",
+        )
+
+    _require_wiki_enabled()
+    _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
+    _require_workspace_flag("allow_write", "forbidden", "workspace writes are disabled")
+
+    full = _wiki_page_file(ctx, wiki_name, page_path)
+    try:
+        # Su disco, quindi fuori dal loop: stessa ragione di ``workspace.write``.
+        await asyncio.to_thread(_write_page_unchanged, full, content, base)
+    except PermissionError as exc:
+        raise CommandError("forbidden", "permission denied") from exc
+    except OSError as exc:
+        raise CommandError("bad_request", str(exc)) from exc
+    return {"wiki": wiki_name, "page": page_path, "bytes": size}
+
+
 async def audit_resolve(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Chiude un item di audit con una nota di risoluzione (testo libero)."""
     from jenny.webui.wiki import discover_wikis, resolve_audit
@@ -345,6 +460,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
     "soul.rules.write": soul_rules_write,
+    "page.write": page_write,
     "audit.resolve": audit_resolve,
     "project.create": project_create,
     "project.delete": project_delete,

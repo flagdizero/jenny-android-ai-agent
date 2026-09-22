@@ -1017,7 +1017,14 @@
       "failed": "I could not read this notebook’s pages."
     },
     "reader": {
-      "failed": "I could not open this page."
+      "failed": "I could not open this page.",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Saved.",
+      "saveFailed": "I couldn't save this page.",
+      "conflict": "Jenny changed this page while you were editing it. Reload it? What you wrote here will be lost.",
+      "discardConfirm": "Leave without saving? Your changes to this page will be lost."
     },
     "map": {
       "noLinks": "The pages do not point to each other yet: the map appears once they start to.",

@@ -98,6 +98,12 @@
         <i class="ti ti-message" aria-hidden="true"></i>
         <span id="casa-talk-label"></span>
       </button>
+      <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
+           mentre l'editor e' aperto — da quel momento i comandi sono Salva e
+           Annulla, e stanno in basso. -->
+      <button class="casa-edit" id="casa-edit" type="button" hidden>
+        <i class="ti ti-pencil" aria-hidden="true"></i>
+      </button>
     </div>
   </header>
 
@@ -185,6 +191,21 @@
        Audit, briciole di pane e LaTeX restano dell'officina. -->
   <section class="casa-reader" id="casa-reader">
     <article class="casa-reader-body" id="casa-reader-body"></article>
+    <!-- Modifica: una textarea, e niente CodeMirror. Sono 200+ kB per colorare
+         del markdown su 590 px, e la casa e' rimasta magra apposta. Il contatore
+         di righe, il fold, la ricerca: nessuna di quelle cose serve a correggere
+         un refuso in una nota che hai scritto tu.
+         `spellcheck` spento come nell'editor dell'officina: sottolinea di rosso
+         meta' di un testo tecnico, e la lingua qui non e' quella del sistema. -->
+    <textarea class="casa-reader-edit" id="casa-reader-edit" hidden
+              spellcheck="false" autocapitalize="sentences"></textarea>
+    <!-- In basso e non nell'intestazione: sul Titan il pollice sta qui, e
+         «Modifica» lassu' e' la porta d'ingresso, non il comando che si preme
+         due volte. -->
+    <div class="casa-reader-bar" id="casa-reader-bar" hidden>
+      <button class="casa-reader-cancel" id="casa-reader-cancel" type="button"></button>
+      <button class="casa-reader-save" id="casa-reader-save" type="button"></button>
+    </div>
   </section>
 
   <!-- ── La quarta stanza: «Tu e Jenny» ───────────────────────────────────

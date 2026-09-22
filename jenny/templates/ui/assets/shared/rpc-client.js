@@ -41,6 +41,19 @@ export const rpc = {
     return wsManager.request('project.create', { name, seed, conversation });
   },
 
+  /** Salva una pagina di quaderno modificata a mano dal lettore.
+   *
+   *  Non e' `writeWorkspaceFile` su `wikis/<q>/wiki/<pagina>`: la cartella dei
+   *  quaderni la decide la config (`wiki.wikis_dir`) e il client non la
+   *  conosce — comporla di qua vorrebbe dire indovinarla.
+   *
+   *  `base` e' il markdown da cui si e' partiti. **Queste pagine le scrive
+   *  anche Jenny**: se il file e' cambiato sotto, il server risponde con
+   *  `conflict` e non scrive niente. */
+  writePage(wiki, page, content, base) {
+    return wsManager.request('page.write', { wiki, page, content, base });
+  },
+
   /** Cancella un progetto: l'albero della wiki **e** la sua conversazione.
    *
    *  Non e' `api.deleteWorkspace` su `wikis/<nome>`, ed e' il punto di tutto:

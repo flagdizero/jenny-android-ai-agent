@@ -44,6 +44,7 @@ import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { setupLongPress } from './shared/longpress.js';
+import { confirmDialog } from './shared/dialog.js';
 import { i18n } from './shared/i18n.js';
 import { sessionManager } from './shared/session-manager.js';
 import { wsManager } from './shared/ws-manager.js';
@@ -127,6 +128,7 @@ class CasaApp {
     this.backBtn = document.getElementById('casa-back');
     this.backLabel = document.getElementById('casa-back-label');
     this.talkBtn = document.getElementById('casa-talk');
+    this.editBtn = document.getElementById('casa-edit');
     this.talkLabel = document.getElementById('casa-talk-label');
 
     /* «Tu e Jenny»: le impostazioni di chi la usa. La porta dell'officina vive
@@ -168,6 +170,8 @@ class CasaApp {
     });
     this.reader = new CasaReader();
     this.reader.onTitle = (title) => this._setHeadTitle(title);
+    /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione. */
+    this.reader.onEditing = () => this._applyHead();
     this.map = null;
 
     /** Quale stanza e' a schermo: `chat` o una delle chiavi di `BACK_TO`. */
@@ -301,6 +305,7 @@ class CasaApp {
        basso a destra col pollice. */
     this.backBtn?.addEventListener('click', () => this.goBackOneRoom());
     this.talkBtn?.addEventListener('click', () => this._setView('chat'));
+    this.editBtn?.addEventListener('click', () => this.reader.startEdit());
 
     sessionManager.init();
     this._applyConversation();
@@ -505,6 +510,21 @@ class CasaApp {
     return this._settings;
   }
 
+  /** Conferma di uscire dal lettore buttando via le modifiche.
+   *
+   *  Il cambio stanza e' **differito**, non annullato: alla risposta
+   *  affermativa si ripassa dallo stesso `_setView`, stavolta col buffer
+   *  pulito. La pressione che ha aperto la modale l'ha consumata la modale,
+   *  quindi nessuno naviga piu' al posto nostro. */
+  async _confirmLeaveReader(target) {
+    this.reader.blurEditor();
+    const ok = await confirmDialog(i18n.t('casa.reader.discardConfirm'));
+    if (!ok) return;
+    if (this.view !== 'reader') return;  // uscito da un'altra strada nel frattempo
+    this.reader.cancelEdit();
+    this._setView(target);
+  }
+
   /** Indietro di **una** stanza. Vero se c'era dove tornare. */
   goBackOneRoom() {
     const target = BACK_TO[this.view];
@@ -519,6 +539,21 @@ class CasaApp {
   _setView(name) {
     const view = Object.hasOwn(BACK_TO, name) ? name : 'chat';
     if (view === this.view) return;
+    /* Uscire dal lettore con modifiche non salvate chiede conferma, e la
+       guardia sta **qui** e non sui bottoni. Le strade per uscire sono gia'
+       quattro — l'occhiello, l'Indietro del telefono, «Parlane», un cambio di
+       conversazione — e una guardia per strada e' una guardia che la quinta
+       strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
+       il controllo sul buffer sporco valeva «solo se non esiste una seconda
+       strada» e le strade erano tre. */
+    if (this.view === 'reader' && this.reader?.isDirty()) {
+      this._confirmLeaveReader(view);
+      return;
+    }
+    /* Editor aperto ma intonso: si chiude senza chiedere. Lasciarlo aperto
+       vorrebbe dire ritrovarlo all'ingresso successivo, sopra una pagina che
+       nel frattempo puo' essere un'altra. */
+    if (this.view === 'reader') this.reader?.cancelEdit();
     if (this.view === 'chat') {
       /* Com'era quando hai lasciato la chat: al ritorno si rimette com'era, e
          non «fuori» d'ufficio. Metterla via era una tua decisione. */
@@ -571,6 +606,9 @@ class CasaApp {
     if (this.backBtn) this.backBtn.hidden = inChat;
     if (this.door) this.door.hidden = !inChat;
     if (this.talkBtn) this.talkBtn.hidden = !inNotebook;
+    /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
+       li' i comandi sono Salva e Annulla, e stanno in basso. */
+    if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing;
     if (this.pagesBtn) this.pagesBtn.hidden = !inChat || !notebook;
     if (this.dotEl) this.dotEl.hidden = !notebook || !inChat;
     /* Fuori dalla chat il titolo non apre piu' niente: nelle pagine dice quale
@@ -1110,6 +1148,8 @@ class CasaApp {
     if (this.door) this.door.setAttribute('aria-label', i18n.t('casa.tu.open'));
     this._applyBackLabel();
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
+    if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('casa.reader.edit'));
+    this.reader?.applyTranslations();
     this.tu?.applyTranslations();
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();

@@ -1020,7 +1020,14 @@
       "failed": "Non sono riuscita a leggere le pagine di questo quaderno."
     },
     "reader": {
-      "failed": "Non sono riuscita ad aprire questa pagina."
+      "failed": "Non sono riuscita ad aprire questa pagina.",
+      "edit": "Modifica",
+      "save": "Salva",
+      "cancel": "Annulla",
+      "saved": "Salvata.",
+      "saveFailed": "Non sono riuscita a salvare questa pagina.",
+      "conflict": "Jenny ha cambiato questa pagina mentre la modificavi. La ricarico? Quel che hai scritto qui si perde.",
+      "discardConfirm": "Esci senza salvare? Le modifiche a questa pagina si perdono."
     },
     "map": {
       "noLinks": "Le pagine non si rimandano ancora l’una all’altra: la mappa compare quando cominciano a farlo.",

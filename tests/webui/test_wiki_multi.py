@@ -139,7 +139,7 @@ class TestBuildTree:
     def test_file_paths_have_no_leading_slash(self, wikis_dir: Path):
         # I path dei file non devono iniziare con '/' (verrebbero scartati come
         # assoluti da safe_wiki_page_path → 400 nel drawer file).
-        from jenny.webui.wiki_routes import safe_wiki_page_path
+        from jenny.utils.wiki_paths import safe_wiki_page_path
 
         _make_wiki(wikis_dir, "main", {
             "index.md": "# Home",

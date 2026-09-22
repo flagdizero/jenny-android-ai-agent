@@ -9,6 +9,7 @@ suoi helper privati restano dove i chiamanti li hanno sempre trovati.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -202,6 +203,32 @@ def is_wiki_page_rel(
 # Da non confondere con :data:`_WIKIS_REGISTRY_FILENAME` (``wikis/_index.md``),
 # che e' il registro delle wiki e non la mappa di una.
 WIKI_INDEX_FILENAME = "index.md"
+
+
+def safe_wiki_page_path(input_path: str) -> str | None:
+    """Normalizza e valida un path di pagina wiki relativo.
+
+    Rifiuta path assoluti o che risalgono fuori dalla wiki (``..``). Ritorna il
+    path normalizzato relativo, la mappa (:data:`WIKI_INDEX_FILENAME`) se vuoto,
+    o ``None`` se invalido.
+
+    **E' una guardia sulla stringa, non sul filesystem**: un link simbolico
+    dentro ``wiki/`` la supera senza obiezioni e finisce comunque fuori. Il
+    secondo cancello e' il contenimento (``resolve().relative_to(...)``), e i
+    due servono a cose diverse — v. ``test_wiki_routes_server_scope``.
+
+    Sta qui, nel layer neutro, e non nell'adapter HTTP che l'aveva scritta:
+    la stessa domanda se la fa ora anche ``webui/commands.py``, che di trasporti
+    non sa niente e non puo' importare da ``wiki_routes``.
+    """
+    if not input_path:
+        return WIKI_INDEX_FILENAME
+    if os.path.isabs(input_path):
+        return None
+    normalized = os.path.normpath(input_path).replace(os.sep, "/")
+    if normalized.startswith(".."):
+        return None
+    return normalized
 
 
 def page_chars(text: str) -> int:
