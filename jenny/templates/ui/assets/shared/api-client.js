@@ -227,6 +227,24 @@ class ApiClient {
     return res.json();
   }
 
+  /** Crea un riscontro ancorato a un punto di una pagina.
+   *
+   *  `selStart`/`selEnd` sono offset nel **markdown sorgente**. Il server si
+   *  rilegge il file da solo e calcola le tre ancore: il vecchio client gli
+   *  mandava anche `rawMarkdown` e la rotta lo **ignorava**.
+   *
+   *  `author` e' la stessa costante che `/api/wiki/config` gia' dichiarava per
+   *  questo campo: l'audit lo scrive chi legge, non lei. */
+  async createAudit({ wiki, target, selStart, selEnd, comment, severity }) {
+    const params = new URLSearchParams({
+      wiki, target, selStart: String(selStart), selEnd: String(selEnd),
+      comment, severity, author: 'me',
+    });
+    const res = await this._fetch(`/api/audit/create?${params}`);
+    if (!res.ok) throw new Error(`Audit create failed: ${res.status}`);
+    return res.json();
+  }
+
   async getPage({ wiki, page } = {}) {
     const params = new URLSearchParams();
     if (wiki) params.set('wiki', wiki);

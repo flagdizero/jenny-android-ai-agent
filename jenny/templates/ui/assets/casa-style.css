@@ -1359,6 +1359,85 @@ body.casa {
 .casa-reader-cancel:active,
 .casa-reader-save:active { filter: brightness(0.94); }
 
+/* ── «Segnala» ──
+   La barra della selezione riusa la barra della modifica: stesso posto, stessa
+   misura, e non ci sono mai tutte e due — o stai leggendo, o stai scrivendo. */
+.casa-sel-bar[hidden] { display: none; }
+
+/* Il foglio. `.oc-sheet` lo veste (arriva da mobile-style.css, che anche la
+   casa carica); qui c'e' solo quel che dentro ci sta. */
+.casa-audit .casa-audit-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 18px;
+  box-sizing: border-box;
+  max-height: 92vh;
+}
+
+.casa-audit-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Il testo scelto. Tetto in altezza e scorrimento: una selezione lunga non deve
+   spingere fuori schermo il campo del commento, che e' il motivo del foglio. */
+.casa-audit-quote {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 22vh;
+  overflow-y: auto;
+  border-left: 2px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.casa-audit-sev {
+  display: flex;
+  gap: 6px;
+}
+
+.casa-audit-chip {
+  flex: 1;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.casa-audit-chip.is-on {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.casa-audit-comment {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: none;
+}
+
+.casa-audit-comment:focus { outline: none; border-color: var(--accent); }
+
 .casa-reader-note {
   margin: 12px 0;
   color: var(--text-muted);

@@ -206,7 +206,36 @@
       <button class="casa-reader-cancel" id="casa-reader-cancel" type="button"></button>
       <button class="casa-reader-save" id="casa-reader-save" type="button"></button>
     </div>
+
+    <!-- «Segnala», e sta **in basso** e non appeso alla selezione. Un
+         bottoncino flottante sopra il testo si contende il tocco con i manici
+         di Chromium, che al trascinamento ri-derivano l'estremo fermo con un
+         hit-test dalle proprie coordinate: se li' sotto c'e' della chrome,
+         vince lei e la selezione salta (v. `shared/selection.js`). Qui il
+         bottone e' fuori dal testo, e il problema non si pone. -->
+    <div class="casa-reader-bar casa-sel-bar" id="casa-sel-bar" hidden>
+      <button class="casa-reader-cancel" id="casa-sel-report" type="button"></button>
+    </div>
   </section>
+
+  <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
+       mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico
+       z-index che esista. -->
+  <dialog class="oc-sheet casa-audit" id="casa-audit-dialog">
+    <div class="oc-sheet-inner casa-audit-inner">
+      <h2 class="casa-audit-title" id="casa-audit-title"></h2>
+      <!-- Il testo scelto, come citazione: e' quel che l'ancora legherà, e
+           vederlo prima di scrivere e' l'unico modo di accorgersi che la
+           selezione ha preso una riga in piu'. -->
+      <blockquote class="casa-audit-quote" id="casa-audit-quote"></blockquote>
+      <div class="casa-audit-sev" id="casa-audit-sev"></div>
+      <textarea class="casa-audit-comment" id="casa-audit-comment" rows="3"></textarea>
+      <div class="oc-dialog-buttons">
+        <button class="oc-btn oc-btn-cancel" id="casa-audit-cancel" type="button"></button>
+        <button class="oc-btn oc-btn-confirm" id="casa-audit-send" type="button"></button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- ── La quarta stanza: «Tu e Jenny» ───────────────────────────────────
        Le impostazioni di chi la usa, non di chi la costruisce: la tavola

@@ -1071,6 +1071,25 @@
       "importHint": "Sostituisce tutto quello che c'è adesso con quello che c'è nel file, e riavvia Jenny.",
       "snapshots": "Jenny tiene anche una storia locale del workspace, automatica: serve a rimettere a posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive però su questo telefono — di un telefono perso non salva niente.",
       "snapshotsOff": "La storia locale del workspace è spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina."
+    },
+    "audit": {
+      "report": "Segnala",
+      "title": "Cosa c'e' che non va",
+      "placeholder": "Cos'e' sbagliato, e perche'.",
+      "send": "Invia",
+      "cancel": "Annulla",
+      "sent": "Segnalato. Jenny lo trova alla prossima passata.",
+      "failed": "Non sono riuscita a segnalarlo.",
+      "needComment": "Scrivi cosa c'e' che non va.",
+      "empty": "Scegli prima il pezzo di testo da segnalare.",
+      "notFound": "Questo pezzo non lo ritrovo nel testo originale: prova a sceglierne uno senza grassetti o link dentro.",
+      "ambiguous": "Questo testo compare piu' volte nella pagina: scegline un pezzo piu' lungo, cosi' so a quale mi riferisco.",
+      "sev": {
+        "info": "nota",
+        "suggest": "idea",
+        "warn": "attenzione",
+        "error": "errore"
+      }
     }
   },
   "officina": {

@@ -25,6 +25,7 @@ import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
 import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
+import { CasaAudit } from './casa-audit.js';
 import { CasaJenny } from './casa-jenny.js';
 import { CasaModel } from './casa-model.js';
 import { CasaUpdates } from './casa-updates.js';
@@ -170,8 +171,11 @@ class CasaApp {
     });
     this.reader = new CasaReader();
     this.reader.onTitle = (title) => this._setHeadTitle(title);
-    /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione. */
-    this.reader.onEditing = () => this._applyHead();
+    this.audit = new CasaAudit(this.reader);
+    /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
+       barra della selezione, che con l'editor aperto non ha piu' senso: li' il
+       gesto e' un altro. */
+    this.reader.onEditing = () => { this._applyHead(); this.audit.refresh(); };
     this.map = null;
 
     /** Quale stanza e' a schermo: `chat` o una delle chiavi di `BACK_TO`. */
@@ -609,6 +613,10 @@ class CasaApp {
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
     if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing;
+    /* Uscendo dal lettore la selezione se ne va con la stanza, ma il
+       `selectionchange` non e' garantito quando i nodi selezionati spariscono:
+       la barra va chiusa qui, o resterebbe accesa sopra un'altra stanza. */
+    this.audit?.refresh();
     if (this.pagesBtn) this.pagesBtn.hidden = !inChat || !notebook;
     if (this.dotEl) this.dotEl.hidden = !notebook || !inChat;
     /* Fuori dalla chat il titolo non apre piu' niente: nelle pagine dice quale
@@ -809,6 +817,16 @@ class CasaApp {
        `undefined`, cioe' «Indietro non chiude il cassetto» senza un errore). */
     if (this.launcher?.isOpen()) {
       this.launcher.close();
+      return true;
+    }
+    /* Il foglio di «Segnala»: `showModal()`, quindi top layer come la tendina.
+       Un `<dialog>` modale si chiude da se' con Escape, ma qui Indietro arriva
+       dal guscio nativo come un evento suo e nessuno lo traduce in Escape:
+       senza questa riga la pressione uscirebbe dalla *stanza* lasciando il
+       foglio aperto sopra un'altra. */
+    const sheet = document.getElementById('casa-audit-dialog');
+    if (sheet?.open) {
+      sheet.close();
       return true;
     }
     if (this.who.isOpen) {
@@ -1150,6 +1168,7 @@ class CasaApp {
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
     if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('casa.reader.edit'));
     this.reader?.applyTranslations();
+    this.audit?.applyTranslations();
     this.tu?.applyTranslations();
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
