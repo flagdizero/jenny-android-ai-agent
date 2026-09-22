@@ -927,3 +927,26 @@ def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
     i = html.index('class="casa-vetrina"')
     j = html.index('class="casa-pista"')
     assert i < j, "l'involucro non sta piu' attorno alla pista"
+
+
+def test_back_closes_the_pages_sheet() -> None:
+    """**Trovato sul telefono, non leggendo.**
+
+    Indietro usciva dalla stanza lasciando il foglio aperto sopra la
+    conversazione. Un `<dialog>` modale si chiude da se' con Escape, ma li'
+    Indietro arriva dal guscio nativo come un evento suo e nessuno lo traduce:
+    va nominato nella catena, come il foglio di «Segnala» accanto — che porta
+    lo stesso commento da prima, e non e' bastato a farmelo ricordare.
+    """
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }", 1)[0]
+    assert "casa-pagine-dialog" in catena, (
+        "Indietro non chiude il foglio delle pagine: resta aperto sopra un'altra stanza"
+    )
+
+
+def test_a_tap_outside_closes_the_pages_sheet() -> None:
+    """Come ogni foglio che sale dal basso. Un `<dialog>` non lo fa da se'."""
+    src = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
+    apri = src.split("apriFoglio() {", 1)[1].split("\n  },", 1)[0]
+    assert "getBoundingClientRect" in apri and "chiudiFoglio" in apri

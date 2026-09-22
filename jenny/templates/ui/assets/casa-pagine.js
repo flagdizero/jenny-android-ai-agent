@@ -323,6 +323,19 @@ Object.assign(CasaPagine.prototype, {
     if (!this.foglio || this.foglio.open) return;
     this._disegnaFoglio();
     this.foglio.showModal();
+    /* Toccare fuori chiude, come ogni foglio che sale dal basso. Un `<dialog>`
+       non lo fa da se': il click sul velo arriva **sul dialogo**, e si
+       riconosce perche' il punto e' fuori dal suo riquadro. */
+    if (!this._chiudeFuori) {
+      this._chiudeFuori = (e) => {
+        if (e.target !== this.foglio) return;
+        const r = this.foglio.getBoundingClientRect();
+        const dentro = e.clientX >= r.left && e.clientX <= r.right
+          && e.clientY >= r.top && e.clientY <= r.bottom;
+        if (!dentro) this.chiudiFoglio();
+      };
+      this.foglio.addEventListener('click', this._chiudeFuori);
+    }
   },
 
   chiudiFoglio() {

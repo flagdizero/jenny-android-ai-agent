@@ -930,6 +930,16 @@ class CasaApp {
       this.launcher.close();
       return true;
     }
+    /* Il foglio «Le pagine di casa», per lo stesso identico motivo del foglio
+       qui sotto — e l'ho scoperto sul telefono, non leggendo: Indietro usciva
+       dalla stanza lasciandolo aperto sopra la conversazione. Un `<dialog>`
+       modale si chiude da se' con Escape, ma qui Indietro arriva dal guscio
+       nativo come un evento suo e nessuno lo traduce. */
+    const pagine = document.getElementById('casa-pagine-dialog');
+    if (pagine?.open) {
+      pagine.close();
+      return true;
+    }
     /* Il foglio di «Segnala»: `showModal()`, quindi top layer come la tendina.
        Un `<dialog>` modale si chiude da se' con Escape, ma qui Indietro arriva
        dal guscio nativo come un evento suo e nessuno lo traduce in Escape:
