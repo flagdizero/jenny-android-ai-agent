@@ -50,9 +50,20 @@ function creaEl(id, cls) {
     get textContent() { return this._testo; },
     setAttribute(k, v) { this.attrs = this.attrs || {}; this.attrs[k] = v; },
     getAttribute(k) { return (this.attrs || {})[k]; },
-    addEventListener(t, fn) { ascolto[t] = fn; },
+    /* **Piu' di un ascoltatore per tipo.** Sulla striscia ce ne sono due —
+       il «tira su» di questo file e la pressione lunga del modulo condiviso —
+       e un finto che ne tiene uno solo li fa sovrascrivere a vicenda: il
+       banco vedrebbe verde proprio sul caso in cui i due si pestano i piedi.
+       Costato una stesura (22/09/2026). */
+    addEventListener(t, fn) { (ascolto[t] = ascolto[t] || []).push(fn); },
     removeEventListener() {},
-    appendChild(c) { this.children.push(c); c.parent = this; },
+    appendChild(c) { this.children.push(c); c.parent = this; return c; },
+    append(...cs) { for (const c of cs) this.appendChild(c); },
+    /* `<dialog>`: `showModal` e `close` sono quel che serve, piu' `open`. */
+    open: false,
+    showModal() { this.open = true; },
+    close() { this.open = false; },
+    click() { for (const fn of this.ascolto.click || []) fn(); },
     remove() {
       if (!this.parent) return;
       this.parent.children = this.parent.children.filter((x) => x !== this);
@@ -78,9 +89,28 @@ pista.appendChild(pannelloChat);
 /* La striscia dei pallini: dove sei, e la presa del cassetto. */
 const striscia = creaEl('casa-pallini', 'casa-pallini');
 striscia.textContent = '';
+/* Il foglio «Le pagine di casa» e i nodi che riempie. */
+const foglio = creaEl('casa-pagine-dialog', 'casa-foglio-pagine');
+const elenco = creaEl('casa-foglio-elenco', 'casa-foglio-elenco');
+for (const id of ['casa-foglio-titolo', 'casa-foglio-occhiello',
+                  'casa-foglio-nota-cassetto', 'casa-foglio-nota-viva']) creaEl(id, '');
+
+/* Tenere premuto: giu', mezzo secondo, su. Il timer e' quello vero del
+   modulo condiviso, quindi si aspetta davvero. */
+async function tieniPremuto({ muovi = 0 } = {}) {
+  lancia(striscia, 'touchstart', { touches: [{ clientX: 200, clientY: 550 }], target: striscia });
+  if (muovi) {
+    lancia(striscia, 'touchmove', {
+      touches: [{ clientX: 200 + muovi, clientY: 550 }], preventDefault() {},
+    });
+  }
+  await new Promise((r) => setTimeout(r, 620));
+  lancia(striscia, 'touchend', { changedTouches: [{ clientX: 200 + muovi, clientY: 550 }] });
+}
 globalThis.document = {
   getElementById: (id) => elementi.get(id) || null,
   createElement: (t) => creaEl(null, ''),
+  documentElement: creaEl('html', ''),
   body: creaEl('body'),
 };
 globalThis.window = { innerWidth: 400 };
@@ -88,21 +118,25 @@ globalThis.getComputedStyle = () => ({ overflowX: 'visible' });
 
 /* Un gesto completo sulla pista. `verso` +1 = dito a destra (pagina
    precedente), -1 = dito a sinistra (pagina successiva). */
+function lancia(el, tipo, evento) {
+  for (const fn of el.ascolto[tipo] || []) fn(evento);
+}
+
 function scorri(verso, { corto = false } = {}) {
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88: corto resta sotto, lungo la supera
   const dx = verso * (corto ? 20 : 200);
-  pista.ascolto.touchstart?.({ touches: [{ clientX: x0, clientY: 100 }], target: pista });
-  pista.ascolto.touchmove?.({
+  lancia(pista, 'touchstart', { touches: [{ clientX: x0, clientY: 100 }], target: pista });
+  lancia(pista, 'touchmove', {
     touches: [{ clientX: x0 + dx, clientY: 100 }],
     preventDefault() {},
   });
-  pista.ascolto.touchend?.({ changedTouches: [{ clientX: x0 + dx, clientY: 100 }] });
+  lancia(pista, 'touchend', { changedTouches: [{ clientX: x0 + dx, clientY: 100 }] });
 }
 /* Un gesto verticale sulla striscia. `su` in pixel. */
 function tiraSu(su, { obliquo = 0 } = {}) {
-  striscia.ascolto.touchstart?.({ touches: [{ clientX: 200, clientY: 500 }] });
-  striscia.ascolto.touchend?.({
+  lancia(striscia, 'touchstart', { touches: [{ clientX: 200, clientY: 500 }] });
+  lancia(striscia, 'touchend', {
     changedTouches: [{ clientX: 200 + obliquo, clientY: 500 - su }],
   });
 }
@@ -120,7 +154,18 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
         + textwrap.dedent(
             """
             const { CasaPagine } = await import('./casa-pagine.js');
-            const app = { view: VISTA, launcher: { isOpen: () => false } };
+            const app = {
+              view: VISTA,
+              launcher: { isOpen: () => false },
+              appsSource: () => ({
+                ensureLoaded() {},
+                jennyApps: [
+                  { slug: 'orto', name: 'Orto' },
+                  { slug: 'rotta', name: 'Rotta', broken: true },
+                  { slug: 'fuori', name: 'Fuori', view_kind: 'external' },
+                ],
+              }),
+            };
             const pagine = new CasaPagine(app);
             await pagine.carica();
             """
@@ -376,7 +421,7 @@ def test_every_dot_is_a_real_button_that_moves() -> None:
     """Chi i gesti non li fa — o non puo' farli — cambia pagina toccando."""
     _run(
         "assert.equal(striscia.children[2].attrs.role, 'tab');\n"
-        "striscia.children[2].ascolto.click();\n"
+        "striscia.children[2].click();\n"
         "assert.equal(pagine.indice, 2);",
         schermate=DUE,
     )
@@ -435,3 +480,164 @@ def test_jenny_stands_above_the_strip_not_on_it() -> None:
     misura = app_js.split("const measure = () => {", 1)[1].split("};", 1)[0]
     assert "casa-pallini" in misura, "la striscia non entra nel pavimento"
     assert "h + striscia" in misura
+
+
+# ── Il foglio «Le pagine di casa» ───────────────────────────────────────────
+
+
+def test_holding_the_dots_opens_the_sheet() -> None:
+    _run("await tieniPremuto(); assert.equal(foglio.open, true);")
+
+
+def test_a_finger_that_moves_is_not_a_hold() -> None:
+    """Chi cambia pagina, o tira su il cassetto, non si ritrova il foglio.
+
+    La pressione la riconosce il modulo condiviso proprio per questo:
+    annullarla quando il dito si muove vuol dire guardare i movimenti, e i
+    movimenti si guardano in un posto solo.
+    """
+    _run("await tieniPremuto({muovi: 120}); assert.equal(foglio.open, false);")
+
+
+def test_a_pull_up_is_not_a_hold() -> None:
+    """Il verso opposto dell'altra prova: tirare su non apre il foglio.
+
+    Qui non salva la guardia sull'orizzontale — un dito verticale non arma
+    quel ramo — ma `azzera()`, che disarma la pressione quando la dominanza
+    non passa. Senza una delle due, tirare su lentamente aprirebbe il foglio
+    invece del cassetto.
+    """
+    _run(
+        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
+        "lancia(striscia, 'touchmove', {touches: [{clientX: 200, clientY: 480}], preventDefault(){}});\n"
+        "await new Promise((r) => setTimeout(r, 620));\n"
+        "lancia(striscia, 'touchend', {changedTouches: [{clientX: 200, clientY: 480}]});\n"
+        "assert.equal(foglio.open, false, 'tirare su ha aperto il foglio');"
+    )
+
+
+def test_a_hold_after_a_tap_still_needs_its_own_half_second() -> None:
+    """Ogni tocco riparte da zero: il contatore del precedente non lo aiuta.
+
+    Il primo tocco arma un contatore. Se non venisse disarmato al tocco
+    successivo resterebbe pendente, e la pressione che arriva subito dopo si
+    aprirebbe **in anticipo** — al mezzo secondo del *primo* tocco, non del
+    suo. Non e' un'apertura spuria (la guardia su `inAscolto` copre il caso in
+    cui il dito non c'e' piu'): e' mezzo gesto contato due volte, che dal dito
+    si sente come un foglio che scatta prima del dovuto.
+
+    Misurato dopo che la mutazione «`azzera()` non disarma» era sopravvissuta a
+    una prima stesura che raccontava un difetto piu' grosso di quello vero.
+    """
+    _run(
+        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
+        "lancia(striscia, 'touchend', {changedTouches: [{clientX: 200, clientY: 550}]});\n"
+        "await new Promise((r) => setTimeout(r, 120));\n"
+        "lancia(striscia, 'touchstart', {touches: [{clientX: 200, clientY: 550}], target: striscia});\n"
+        "await new Promise((r) => setTimeout(r, 400));\n"
+        "assert.equal(foglio.open, false, 'il foglio si e aperto col contatore del tocco prima');\n"
+        "await new Promise((r) => setTimeout(r, 220));\n"
+        "assert.equal(foglio.open, true, 'la pressione vera non ha aperto niente');"
+    )
+
+
+def test_holding_does_not_also_open_the_drawer() -> None:
+    """I due gesti convivono sulla striscia e non devono sommarsi."""
+    _run(
+        "let aperto = 0;\n"
+        "app.openLauncher = () => { aperto += 1; };\n"
+        "await tieniPremuto();\n"
+        "assert.equal(foglio.open, true);\n"
+        "assert.equal(aperto, 0, 'la pressione ha aperto anche il cassetto');"
+    )
+
+
+def test_the_sheet_lists_the_pages_and_offers_the_next_one() -> None:
+    _run(
+        "await tieniPremuto();\n"
+        "const righe = elenco.children.filter((c) => c.className === 'casa-foglio-riga');\n"
+        "assert.equal(righe.length, 2);\n"
+        "const libera = elenco.children.filter((c) => c.className === 'casa-foglio-libera');\n"
+        "assert.equal(libera.length, 1, 'manca la riga vuota con la scelta');",
+        schermate=DUE,
+    )
+
+
+def test_the_three_choices_are_the_boards_three() -> None:
+    """E il cassetto non e' fra queste: ce l'hai gia' tirando su."""
+    _run(
+        "await tieniPremuto();\n"
+        "const libera = elenco.children.find((c) => c.className === 'casa-foglio-libera');\n"
+        "const scelte = libera.children[1].children.map((b) => b.dataset.kind);\n"
+        "assert.deepEqual(scelte, ['app', 'stanza', 'conversazione']);",
+        schermate=UNA,
+    )
+
+
+def test_with_the_ceiling_full_there_is_nothing_to_add() -> None:
+    piene = [{"id": f"p{i}", "kind": "app", "ref": "x"} for i in range(8)]
+    _run(
+        "await tieniPremuto();\n"
+        "assert.equal(elenco.children.filter((c) => c.className === 'casa-foglio-libera').length, 0);",
+        schermate=piene,
+    )
+
+
+def test_removing_a_page_saves_the_rest() -> None:
+    _run(
+        "await tieniPremuto();\n"
+        "const riga = elenco.children.find((c) => c.dataset.id === 'p1');\n"
+        "riga.children[2].click();\n"
+        "await new Promise((r) => setTimeout(r, 10));\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.deepEqual(api.scritture[0].map((x) => x.id), ['p2']);",
+        schermate=DUE,
+    )
+
+
+# ── Il secondo passo: quale ─────────────────────────────────────────────────
+
+
+def test_a_broken_or_external_app_cannot_become_a_page() -> None:
+    """Una pagina fissa rotta resterebbe li' a non funzionare tutti i giorni, e
+    un'app esterna apre un indirizzo che il guscio non controlla."""
+    _run(
+        "await tieniPremuto();\n"
+        "const voci = await pagine._voci('app');\n"
+        "assert.deepEqual(voci.map((v) => v.ref), ['orto']);"
+    )
+
+
+def test_the_notebooks_room_is_not_offered() -> None:
+    """`openPages()` legge il quaderno **dalla conversazione corrente**.
+
+    Appesa a una pagina mostrerebbe cose diverse a seconda di dov'eri prima.
+    La tavola la disegna come esempio, ma quella stanza fissa non esiste: chi
+    vuole un quaderno sotto il pollice ci mette la sua conversazione.
+    """
+    _run(
+        "const voci = await pagine._voci('stanza');\n"
+        "assert.ok(!voci.some((v) => v.ref === 'pages'), 'i quaderni sono in elenco');\n"
+        "assert.ok(voci.some((v) => v.ref === 'tu'));"
+    )
+
+
+def test_room_labels_are_the_rooms_own() -> None:
+    """Due copie dello stesso nome divergono, e la seconda si scopre quando
+    qualcuno rinomina la prima."""
+    _run(
+        "const voci = await pagine._voci('stanza');\n"
+        "for (const v of voci) assert.match(v.nome, /^casa\\.[a-z]+\\.title$/);"
+    )
+
+
+def test_choosing_lands_you_on_the_new_page() -> None:
+    """Chi l'ha appena aggiunta vuole vederla: restare sulla chat gli farebbe
+    credere che non sia successo niente."""
+    _run(
+        "await tieniPremuto();\n"
+        "await pagine._aggiungi('app', 'orto');\n"
+        "assert.equal(pagine.quante, 2);\n"
+        "assert.equal(pagine.indice, 1);\n"
+        "assert.equal(foglio.open, false, 'il foglio e rimasto aperto');"
+    )

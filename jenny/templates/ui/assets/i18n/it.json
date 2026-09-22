@@ -1089,6 +1089,31 @@
     "pagine": {
       "chat": "La conversazione",
       "numero": "Pagina {n} di {tot}"
+    },
+    "foglio": {
+      "titolo": "Le pagine di casa",
+      "occhiello": "Tieni premuto sui pallini per tornare qui.",
+      "riga": "pagina {n} · {specie}",
+      "vuota": "pagina {n} · vuota — cosa ci metto?",
+      "togli": "Togli {nome}",
+      "indietro": "Indietro",
+      "specie": {
+        "app": "una tua Jenny App",
+        "stanza": "una stanza della casa",
+        "conversazione": "una conversazione"
+      },
+      "scegli": {
+        "app": "Una Jenny App",
+        "stanza": "Una stanza della casa",
+        "conversazione": "Una conversazione"
+      },
+      "niente": {
+        "app": "Non hai Jenny App da mettere in una pagina.",
+        "stanza": "Nessuna stanza disponibile.",
+        "conversazione": "Non hai altre conversazioni oltre a questa."
+      },
+      "notaCassetto": "Il cassetto delle app non è in elenco: ce l'hai già tirando su. Due porte per la stessa cosa sono una di troppo.",
+      "notaViva": "Resta viva solo la pagina che guardi: le altre si spengono, o te le paghi in batteria."
     }
   },
   "officina": {

@@ -28,6 +28,9 @@
  */
 export const SOGLIA_ASSE = 24;
 
+/** Quanto deve stare fermo il dito perche' sia una pressione lunga. */
+export const PRESSIONE_LUNGA_MS = 500;
+
 /** Oltre quanto, in px, il gesto conta come cambio. */
 export function sogliaConferma(larghezza) {
   return Math.max(60, larghezza * 0.22);
@@ -81,6 +84,10 @@ export function dentroScorrevoleOrizzontale(bersaglio, dx, confine) {
  *  - `onFine({verso, conferma, dx, larghezza})` — `verso` e' `'prev'` (dito a
  *    destra) o `'next'`; `conferma` dice se ha superato spazio **o** velocita'.
  *  - `onAnnulla()` — il sistema si e' ripreso il gesto a meta'.
+ *  - `onPressioneLunga()` — il dito e' rimasto fermo mezzo secondo. Sta qui e
+ *    non nel guscio per un motivo preciso: **annullarla quando il dito si
+ *    muove** vuol dire guardare i movimenti, e i movimenti si guardano in un
+ *    posto solo. Chi la usa senza volere il trascinamento passa solo questa.
  *
  *  `onFine` e `onAnnulla` arrivano **solo** se l'asse era stato deciso: un
  *  tocco che non diventa mai orizzontale non deve far ridisegnare niente.
@@ -93,6 +100,7 @@ export function osservaGestoOrizzontale(elemento, {
   onTrascina,
   onFine,
   onAnnulla,
+  onPressioneLunga,
 } = {}) {
   let partenzaX = 0;
   let partenzaY = 0;
@@ -100,11 +108,19 @@ export function osservaGestoOrizzontale(elemento, {
   let inAscolto = false;     // un gesto candidato e' in corso
   let orizzontale = false;   // l'asse e' stato deciso
   let bersaglio = null;
+  let attesaPressione = null;
+
+  const disarmaPressione = () => {
+    if (attesaPressione === null) return;
+    clearTimeout(attesaPressione);
+    attesaPressione = null;
+  };
 
   const azzera = () => {
     inAscolto = false;
     orizzontale = false;
     bersaglio = null;
+    disarmaPressione();
   };
 
   const larghezza = () => elemento.clientWidth || window.innerWidth;
@@ -119,6 +135,17 @@ export function osservaGestoOrizzontale(elemento, {
     partenzaT = Date.now();
     bersaglio = e.target;
     inAscolto = true;
+    if (onPressioneLunga) {
+      attesaPressione = setTimeout(() => {
+        attesaPressione = null;
+        /* Le due guardie bastano da sole, ed e' misurato: un dito che si
+           muove o diventa **orizzontale** (`orizzontale`), o non supera la
+           dominanza e allora passa da `azzera()` — che disarma. Una terza
+           `disarmaPressione()` dentro `muove` non uccideva nessuna mutazione,
+           quindi e' uscita (22/09/2026). */
+        if (inAscolto && !orizzontale) onPressioneLunga();
+      }, PRESSIONE_LUNGA_MS);
+    }
   };
 
   const muove = (e) => {

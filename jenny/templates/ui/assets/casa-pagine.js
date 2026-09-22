@@ -36,6 +36,27 @@ const OLTRE_IL_CAPO = 0.06;
  */
 const TIRA_SU = 32;
 
+/** Le stanze che si possono appendere a una pagina.
+ *
+ *  **Non tutte.** `pages` — i quaderni — non c'e', e non e' una dimenticanza:
+ *  `openPages()` legge il quaderno **dalla conversazione corrente**
+ *  (`projectNameOf(sessionManager.currentKey)`), quindi «i quaderni» non sono
+ *  un posto fisso ma le pagine di quello con cui stai parlando. Appenderla a
+ *  una pagina vorrebbe dire una pagina che mostra cose diverse a seconda di
+ *  dov'eri prima. La tavola `PagineGestione` la disegna come esempio, ma il
+ *  prodotto non ha quella stanza: chi vuole un quaderno a portata di pollice
+ *  ci mette **la sua conversazione**, che e' la stessa cosa detta bene.
+ *
+ *  L'etichetta e' quella che la stanza usa gia' di suo: due copie dello stesso
+ *  nome divergono, e la seconda si scopre quando qualcuno rinomina la prima.
+ */
+const STANZE = ['tu', 'jenny', 'model', 'updates', 'backup'];
+
+/** Un'icona per specie. Non quella dell'app: per averla servirebbe l'elenco
+ *  caricato, e un foglio che aspetta la rete per disegnare una riga e' un
+ *  foglio che a volte non si apre. */
+const ICONE = { app: 'ti-apps', stanza: 'ti-home', conversazione: 'ti-message-circle' };
+
 export class CasaPagine {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
   constructor(app) {
@@ -48,9 +69,12 @@ export class CasaPagine {
     this._tetto = 8;
     this._staccaGesto = null;
     this.striscia = document.getElementById('casa-pallini');
+    this.foglio = document.getElementById('casa-pagine-dialog');
+    this.elenco = document.getElementById('casa-foglio-elenco');
 
     if (this.pista) this._armaGesto();
     if (this.striscia) this._armaStriscia();
+    if (this.striscia && this.foglio) this._armaFoglio();
     this._pallini();
     i18n.onLocaleChange(() => this._pallini());
   }
@@ -235,3 +259,195 @@ export class CasaPagine {
     });
   }
 }
+
+/* ── Il foglio «Le pagine di casa» ──────────────────────────────────────── */
+
+Object.assign(CasaPagine.prototype, {
+  /** La terza via della striscia: **tieni premuto**.
+   *
+   *  La pressione la riconosce il modulo condiviso e non questo file, per un
+   *  motivo solo: annullarla quando il dito si muove vuol dire guardare i
+   *  movimenti, e i movimenti si guardano in un posto solo. Cosi' chi tira su
+   *  il cassetto, o cambia pagina, non si ritrova il foglio in faccia.
+   */
+  _armaFoglio() {
+    osservaGestoOrizzontale(this.striscia, {
+      puoIniziare: () => true,
+      onPressioneLunga: () => this.apriFoglio(),
+    });
+  },
+
+  apriFoglio() {
+    if (!this.foglio || this.foglio.open) return;
+    this._disegnaFoglio();
+    this.foglio.showModal();
+  },
+
+  chiudiFoglio() {
+    if (this.foglio?.open) this.foglio.close();
+  },
+
+  /** Una riga per pagina piena, poi la prima libera con la scelta aperta. */
+  _disegnaFoglio() {
+    const t = (k, v) => i18n.t(k, v);
+    document.getElementById('casa-foglio-titolo').textContent = t('casa.foglio.titolo');
+    document.getElementById('casa-foglio-occhiello').textContent = t('casa.foglio.occhiello');
+    document.getElementById('casa-foglio-nota-cassetto').textContent = t('casa.foglio.notaCassetto');
+    document.getElementById('casa-foglio-nota-viva').textContent = t('casa.foglio.notaViva');
+
+    this.elenco.textContent = '';
+    this.schermate.forEach((s, i) => this.elenco.appendChild(this._riga(s, i + 1)));
+    if (!this.pienoZeppo) this.elenco.appendChild(this._rigaLibera());
+  },
+
+  _riga(schermata, numero) {
+    const riga = document.createElement('div');
+    riga.className = 'casa-foglio-riga';
+    riga.dataset.id = schermata.id;
+
+    const icona = document.createElement('span');
+    icona.className = 'casa-foglio-icona';
+    const i = document.createElement('i');
+    i.className = `ti ${ICONE[schermata.kind] || 'ti-square'}`;
+    icona.appendChild(i);
+
+    const testo = document.createElement('span');
+    testo.className = 'casa-foglio-testo';
+    const nome = document.createElement('span');
+    nome.className = 'casa-foglio-nome';
+    nome.textContent = this._nomeDi(schermata);
+    const specie = document.createElement('span');
+    specie.className = 'casa-foglio-specie';
+    specie.textContent = i18n.t('casa.foglio.riga', {
+      n: numero,
+      specie: i18n.t(`casa.foglio.specie.${schermata.kind}`),
+    });
+    testo.append(nome, specie);
+
+    const togli = document.createElement('button');
+    togli.type = 'button';
+    togli.className = 'casa-foglio-togli';
+    togli.setAttribute('aria-label', i18n.t('casa.foglio.togli', { nome: this._nomeDi(schermata) }));
+    const x = document.createElement('i');
+    x.className = 'ti ti-x';
+    togli.appendChild(x);
+    /* Niente conferma: una pagina si rimette con tre tocchi, e una conferma
+       per un gesto annullabile e' solo un tocco in piu' ogni volta. */
+    togli.addEventListener('click', () => this._togli(schermata.id));
+
+    riga.append(icona, testo, togli);
+    return riga;
+  },
+
+  _rigaLibera() {
+    const box = document.createElement('div');
+    box.className = 'casa-foglio-libera';
+    const domanda = document.createElement('div');
+    domanda.className = 'casa-foglio-domanda';
+    domanda.textContent = i18n.t('casa.foglio.vuota', { n: this.schermate.length + 1 });
+    const scelte = document.createElement('div');
+    scelte.className = 'casa-foglio-scelte';
+    for (const kind of ['app', 'stanza', 'conversazione']) {
+      scelte.appendChild(this._scelta(kind));
+    }
+    box.append(domanda, scelte);
+    return box;
+  },
+
+  _scelta(kind) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'casa-foglio-scelta';
+    b.dataset.kind = kind;
+    const i = document.createElement('i');
+    i.className = `ti ${ICONE[kind]}`;
+    const testo = document.createElement('span');
+    testo.textContent = i18n.t(`casa.foglio.scegli.${kind}`);
+    b.append(i, testo);
+    b.addEventListener('click', () => this._apriScelta(kind));
+    return b;
+  },
+
+  /** Secondo passo: **quale**. Stesso foglio, non un secondo: due fogli
+   *  impilati su un telefono lasciano metà schermo di velo e nessuno sa piu'
+   *  quale «indietro» chiude cosa. */
+  async _apriScelta(kind) {
+    this.elenco.textContent = '';
+    const indietro = document.createElement('button');
+    indietro.type = 'button';
+    indietro.className = 'casa-foglio-scelta';
+    const freccia = document.createElement('i');
+    freccia.className = 'ti ti-arrow-left';
+    const et = document.createElement('span');
+    et.textContent = i18n.t('casa.foglio.indietro');
+    indietro.append(freccia, et);
+    indietro.addEventListener('click', () => this._disegnaFoglio());
+    this.elenco.appendChild(indietro);
+
+    let voci = [];
+    try {
+      voci = await this._voci(kind);
+    } catch {
+      voci = [];
+    }
+    if (!voci.length) {
+      const vuoto = document.createElement('p');
+      vuoto.className = 'casa-foglio-nota';
+      vuoto.textContent = i18n.t(`casa.foglio.niente.${kind}`);
+      this.elenco.appendChild(vuoto);
+      return;
+    }
+    for (const v of voci) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'casa-foglio-scelta';
+      const i = document.createElement('i');
+      i.className = `ti ${ICONE[kind]}`;
+      const testo = document.createElement('span');
+      testo.textContent = v.nome;
+      b.append(i, testo);
+      b.addEventListener('click', () => this._aggiungi(kind, v.ref));
+      this.elenco.appendChild(b);
+    }
+  },
+
+  /** Cosa si puo' scegliere, per specie. */
+  async _voci(kind) {
+    if (kind === 'stanza') {
+      return STANZE.map((ref) => ({ ref, nome: i18n.t(`casa.${ref}.title`) }));
+    }
+    if (kind === 'app') {
+      const fonte = this.app?.appsSource?.();
+      await fonte?.ensureLoaded?.();
+      /* Un'app rotta non si puo' appendere: `openApp` per quelle chiede
+         conferma e propone la riparazione in chat, e una pagina fissa rotta e'
+         un'altra cosa — resterebbe li' a non funzionare tutti i giorni.
+         Un'app **esterna** apre un indirizzo che il guscio non controlla:
+         incastonarla in una pagina fissa e' una decisione a se'. */
+      return (fonte?.jennyApps || [])
+        .filter((a) => !a.broken && a.view_kind !== 'external')
+        .map((a) => ({ ref: a.slug, nome: a.name || a.slug }));
+    }
+    const progetti = await api.listProjects();
+    return (progetti || []).map((pr) => ({ ref: pr.name, nome: pr.name }));
+  },
+
+  _nomeDi(schermata) {
+    if (schermata.kind === 'stanza') return i18n.t(`casa.${schermata.ref}.title`);
+    return schermata.ref;
+  },
+
+  async _aggiungi(kind, ref) {
+    const id = `p${Date.now().toString(36)}`;
+    await this.salva([...this.schermate, { id, kind, ref }]);
+    this.chiudiFoglio();
+    /* Si atterra sulla pagina appena fatta: chi l'ha aggiunta vuole vederla,
+       e lasciarlo sulla chat gli farebbe credere che non sia successo niente. */
+    this.vaiA(this.schermate.length);
+  },
+
+  async _togli(id) {
+    await this.salva(this.schermate.filter((s) => s.id !== id));
+    this._disegnaFoglio();
+  },
+});

@@ -240,6 +240,25 @@
     </div>
   </section>
 
+  <!-- ── Il foglio «Le pagine di casa» ────────────────────────────────────
+       Si apre con una pressione lunga sui pallini (tavola `PagineGestione`).
+       `<dialog>` + `showModal()` e non un pannello, per lo stesso motivo del
+       foglio di «Segnala»: il top layer sta **sopra la mascotte** senza
+       bisogno di un secondo `z-index`, che in casa non deve esistere.
+
+       Aggiungere e togliere stanno nello stesso foglio perche' li' li mette
+       la tavola: le pagine piene hanno la ✕, la prima libera ha la scelta. -->
+  <dialog class="oc-sheet casa-foglio-pagine" id="casa-pagine-dialog">
+    <div class="oc-sheet-inner casa-foglio-pagine-inner">
+      <div class="casa-foglio-presa"></div>
+      <h2 class="casa-foglio-titolo" id="casa-foglio-titolo"></h2>
+      <p class="casa-foglio-occhiello" id="casa-foglio-occhiello"></p>
+      <div class="casa-foglio-elenco" id="casa-foglio-elenco"></div>
+      <p class="casa-foglio-nota" id="casa-foglio-nota-cassetto"></p>
+      <p class="casa-foglio-nota" id="casa-foglio-nota-viva"></p>
+    </div>
+  </dialog>
+
   <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
        mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico
        z-index che esista. -->

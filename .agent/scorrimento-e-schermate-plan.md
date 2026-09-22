@@ -381,7 +381,49 @@ Rischio dichiarato: si toglie un comando che funziona e lo si sostituisce con un
 gesto che non si vede. Per questo i pallini ci sono **sempre**, anche con zero
 pagine aggiunte: sono l'unica cosa che dice che il gesto esiste.
 
-### B4. Il foglio «Le pagine di casa»
+### B4. Il foglio «Le pagine di casa» — ✅
+
+**Fatto il 22/09/2026.** `<dialog>` + `showModal()`, come il foglio di
+«Segnala» e per lo stesso motivo: il top layer sta **sopra la mascotte** senza
+un secondo `z-index`. Elenco, ✕ per togliere, riga tratteggiata con le tre
+scelte, e il secondo passo (quale) **nello stesso foglio** — due fogli impilati
+su un telefono lasciano mezzo schermo di velo e nessuno sa piu' quale
+«indietro» chiuda cosa.
+
+**La pressione lunga e' entrata nel modulo condiviso**, non in `casa-pagine.js`:
+annullarla quando il dito si muove vuol dire guardare i movimenti, e i movimenti
+si guardano in un posto solo. Cosi' tirare su il cassetto o cambiare pagina non
+fa comparire il foglio.
+
+**Una stanza della tavola non esiste.** `PagineGestione` da' «Quaderni» come
+esempio di stanza, ma `openPages()` legge il quaderno **dalla conversazione
+corrente**: appesa a una pagina mostrerebbe cose diverse a seconda di dov'eri
+prima. Le stanze appendibili sono le cinque autonome — Tu e Jenny, Jenny, Chi
+risponde, Aggiornamenti, Backup — e chi vuole un quaderno sotto il pollice ci
+mette **la sua conversazione**, che e' la stessa cosa detta bene. Stessa
+famiglia di «permessi di scrittura»: la tavola disegna una cosa che il prodotto
+non ha.
+
+**Niente conferma sul togli:** una pagina si rimette con tre tocchi, e una
+conferma per un gesto annullabile e' solo un tocco in piu' ogni volta.
+
+**Sul banco sono cadute due cose mie.** Il DOM finto teneva **un ascoltatore per
+tipo**, e sulla striscia adesso ce ne sono due: si sovrascrivevano, e il banco
+sarebbe stato verde proprio sul caso in cui i due gesti si pestano i piedi. E
+una `disarmaPressione()` dentro `muove` non uccideva nessuna mutazione — era
+ridondante con le due guardie vere — quindi e' uscita invece di essere
+puntellata.
+
+**Una correzione che mi sono fatto da solo:** avevo scritto che senza il
+`clearTimeout` in `azzera()` due tocchi rapidi avrebbero aperto il foglio da
+soli. Falso — la guardia su `inAscolto` copre quel caso. Quel che davvero
+impedisce e' che una pressione **arrivi in anticipo** riusando il contatore del
+tocco precedente. La prova adesso dice quello, ed e' l'unica formulazione che
+uccide la mutazione.
+
+**Provato:** 37 casi, e sei mutazioni di cui due sopravvissute alla prima
+stesura e poi chiuse.
+
 
 Pressione lunga sui pallini → foglio dal basso, come lo disegna
 `PagineGestione`:
