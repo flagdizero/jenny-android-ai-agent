@@ -1,6 +1,6 @@
 # Wiki
 
-The Wiki tab is a browsable knowledge base that Jenny builds for you out of sources you feed it, not something you write by hand from scratch.
+A wiki — a **notebook**, in the app — is a browsable knowledge base that Jenny builds for you out of sources you feed it, not something you write by hand from scratch. You reach it through the conversation it belongs to: there is no separate tab for it.
 
 ## What it is
 
@@ -22,86 +22,121 @@ The one thing that *does* happen on its own is the reverse direction: the person
 
 Everything on this page describes a wiki as something you *ask* Jenny to build and maintain. There is a second way to work with one: open it as a **[project](./projects.md)** from the chip above the message box. A project is a wiki — the same folder, the same pages, the same graph — but the conversation is bound to it, its map and pages are put in front of Jenny on every turn, facts you mention are captured into a journal inside it, and a background pass (the [gardener](./gardener.md)) turns those journal lines into pages between conversations.
 
-So the two views are not alternatives: a wiki you created by asking can be opened as a project tomorrow, and a project you created from the chip appears in the Wiki tab immediately.
+So the two views are not alternatives: a wiki you created by asking can be opened as a project tomorrow, and a project you created from the chip is immediately a notebook you can open from the chat.
 
 ## Multiple wikis
 
 You can have more than one wiki side by side — for example, one about a research topic and a separate one for a hobby project. Each one lives under `workspace/wikis/<name>/`, entirely isolated from the others; Jenny works on one wiki root at a time and won't mix content across them unless you ask it to. A top-level `wikis/_index.md` file lists all of them.
 
-Because everything is plain Markdown under the workspace, wiki pages are files like any other: you can open and edit them directly from the Workspace tab's file browser if you want to (see [Tour of the WebUI](webui-tour.md)), and they're included in [backups and snapshots](backup.md) exactly like the rest of your workspace.
+Because everything is plain Markdown under the workspace, wiki pages are files like any other: you can open and edit them from the file manager as well as from the page itself (see [Tour of the WebUI](webui-tour.md)), and they're included in [backups and snapshots](backup.md) exactly like the rest of your workspace.
 
-## Navigating a wiki
+## Opening a notebook
 
-Opening the **Wiki** tab from the dock actually lands you on a **graph overview** first — a star layout showing each of your wikis as a node, with no per-page detail. From there:
+A wiki is reached through the conversation that belongs to it, not from a tab of
+its own. Pick a notebook from the chevron next to the title at the top of the
+chat, and the header grows a pill with that notebook's page count. Tapping the
+pill opens its pages.
 
-- **Tap** a wiki's node to open that wiki's own graph, now scoped to just its pages and links (not the page view yet).
-- From a wiki's scoped graph, use the "Pages" button in the header to switch to the **page view**: the actual rendered article, with a breadcrumb trail above it (Home → wiki name → folder → page) and a collapsible file tree (the folder icon in the header) for jumping around — or **double-tap** a specific page node in the graph to jump straight into that page.
-- From the page view, the "Graph" button in the header switches back to that wiki's scoped graph.
-- Inside a page, `[[wikilinks]]` are clickable and take you straight to the linked page.
+There are two tabs over the same data — **Pages** and **Map** — and one search
+box shared by both.
 
-### Graph view
+### Pages
 
-The graph view renders pages as nodes and links between them as edges, laid out automatically (drag to reposition, pinch/scroll to zoom, tap a node to focus its immediate neighbors). Nodes are colored by group, with a legend in the corner:
+A list, grouped by kind (Concepts, Entities, Other) and alphabetical inside each
+group. The grouping only appears when it separates something: a notebook whose
+pages are all of one kind gets a plain list instead of one heading over
+everything.
 
-| Legend color | Meaning |
-|---|---|
-| Concepts | Concept/topic pages |
-| Entities | People, tools, papers, organizations |
-| Other | Anything that doesn't fit the two groups above |
+Tapping a page opens it. Back returns to the list.
 
-The top-level graph overview (all your wikis at once) does not use this legend — there, each wiki gets its own color just to tell them apart, not a semantic one.
+### Map
 
-### Searching a wiki
+The same pages as nodes, links as edges, laid out by a force simulation. Drag to
+pan, pinch to zoom, drag a node to move it — and a node you have moved **stays
+where you put it** across openings, kept per notebook in
+`workspace/.jenny/map-layout.json`. It is not frozen: it keeps following the
+physics from the position you gave it, so the rest of the map still settles
+around it.
 
-A wiki's scoped graph has a search box above it. It searches **page contents**, not just titles: as you type, nodes that match stay lit and get an accent ring, everything else dims, and a counter shows how many pages matched. The last word you type matches by prefix, so results narrow letter by letter without waiting for you to finish the word.
+Names are drawn for up to forty nodes, chosen by how connected they are —
+because the one question a map answers better than a list is where the notebook
+knots together. Below that cap every name is drawn.
+
+### Searching
+
+The search box searches **page contents**, not just titles: as you type, matching
+pages stay and the rest fall away, and on the map the matches stay lit while the
+others dim. The last word matches by prefix, so results narrow letter by letter.
 
 - Accents are optional — typing `citta` finds "Città".
-- Several words are an **and**: `doze batteria` keeps only pages containing both.
-- Page titles, file paths, headings, and frontmatter tags all count, and a hit in a title ranks above one buried in a paragraph.
-- Very common words are ignored rather than treated as a failed search, so a query like `il sonno` behaves like `sonno`.
-- Tapping a result focuses it as usual, lighting its neighbors even if they didn't match; the matched pages stay ringed so you can still tell them apart. Back steps out of the focus first, then clears the search.
+- Page titles, file paths, headings and frontmatter tags all count, and a hit in
+  a title ranks above one buried in a paragraph.
+- Very common words are ignored rather than treated as a failed search.
 
-The search box does not appear on the top-level overview, where the nodes are whole wikis rather than pages. Search runs entirely on-device: the index is built alongside the graph and rebuilt only when a page actually changes, so typing never waits on anything.
+Search runs entirely on-device: the index is built alongside the map and rebuilt
+only when a page actually changes, so typing never waits on anything.
 
-Mermaid diagrams are the one place in Jenny's UI where they actually render as diagrams: if a wiki page contains a fenced ` ```mermaid ` block, it's drawn as a real diagram here. Chat replies do not render Mermaid at all, even though they render most other markdown — see [Chat basics](chat.md).
+### Reading a page
 
-### Empty or broken states
+The page is rendered from its Markdown, with `[[wikilinks]]` clickable. A link
+that leaves the notebook is not pretended to be openable — it says so instead.
 
-These apply to the top-level Wiki home (the landing page before you pick a specific wiki), not to an individual wiki:
+Mermaid diagrams are the one place in Jenny's UI where they render as diagrams:
+a fenced ` ```mermaid ` block in a wiki page is drawn. Chat replies do not render
+Mermaid at all — see [Chat basics](chat.md). LaTeX renders here too, including
+`$inline$` maths, which chat deliberately leaves alone (there a `$` is a price).
 
-- If you have no wikis at all yet (no Markdown pages anywhere under `workspace/wikis/`), it shows: "The wiki is empty. Ask Jenny to create one."
-- If wikis with pages exist but the top-level `workspace/wikis/_index.md` file itself is missing, it shows a message pointing out the problem and inviting you to ask Jenny to fix it.
+## Fixing a page yourself
 
-Both are dead ends by design — the fix is a chat message, not a button in the UI.
+The pencil in the header opens the page's Markdown source in a plain text box.
+Save, and the page reloads from the server — what you see afterwards is the
+server's rendering of what you wrote, not a guess.
 
-## Feedback and audits
+**Jenny writes these pages too**, so the save carries the text you started from.
+If the file changed underneath while you had the editor open, nothing is written
+and you are told: reload and lose what you typed, or keep it and sort it out.
+Leaving the editor with unsaved changes asks first.
 
-If you spot something wrong or missing in a wiki page, you can leave feedback directly on the text, without switching to chat:
+## Telling Jenny something is wrong
 
-1. Select a stretch of text in a wiki page. A small "Add audit" button appears near the selection.
-2. Tap it. A dialog titled "Add Feedback" opens, showing a preview of the selected text, a comment box ("Describe the issue…"), and a severity picker with four levels: **info**, **suggest**, **warn**, **error**.
-3. Submit. The feedback is saved as an audit entry tied to that page.
+Editing is for things you can fix. When a page is wrong on the substance — and
+the fix means going back to the source, not rewording a line — select the passage
+and use **Report**.
 
-This only works inside an actual wiki page — there is no way to file an audit from the graph view or from the wiki's home page. If your selected text can't be matched precisely back to the page's source (for example, because whitespace or formatting makes it ambiguous), Jenny asks for confirmation before creating an anchor-less audit rather than silently guessing at the location.
+1. Select a stretch of text in a page. A **Report** bar appears at the bottom.
+2. Tap it, and write what is wrong in your own words.
+3. Confirm. Two things happen at once: an audit file is written next to the
+   notebook's pages, anchored to the exact passage, and you land in that
+   notebook's chat with the message already sent.
 
-Audits are reviewed from the **Audits** drawer (clipboard icon in the page-view header, next to the file tree):
+So a report is not filed and forgotten — it starts a conversation, and Jenny
+answers there, where she has the files and the wiki skill. The audit file is the
+durable half: it survives the conversation, the linter checks it, and it is what
+lets her mark the thing as done afterwards.
 
-- Two tabs: **Open** and **Resolved**.
-- Each entry shows the flagged text, severity tag, author, and timestamp.
-- From the Open tab, "mark resolved" lets you add a short resolution note before the entry moves to Resolved.
+If the selected text can't be found exactly once in the page's source — because
+it spans formatting, or because that phrase appears twice — you are told, rather
+than the comment being anchored to a guess.
 
-Jenny is expected to process open audits when you ask it to run a wiki lint or maintenance pass — filing an audit doesn't make Jenny act on it by itself.
+Audits carry no priority. There used to be a four-level severity picker, and it
+was removed: grading your own complaint is a triage step, and triage is
+something a team does. Jenny works them oldest first.
+
+There is no list of open reports in the app. Each one has a conversation you can
+scroll back to, and processing them is Jenny's job, not a screen.
 
 ## Privacy notes
 
-- The wiki only shows a small, fixed set of page metadata to the UI: title, type, entity type, tags, and created/updated dates. Anything else in a page's frontmatter — including source URLs and provenance notes Jenny records internally — stays server-side and out of the interface, even though it's present in the raw file if you open it in the Workspace editor.
-- Every ingested source keeps a `summaries/` folder of per-source digest pages. These are deliberately hidden from the file tree and the graph view to avoid cluttering navigation, but they are **not** encrypted or otherwise access-controlled — the pages are still readable if you know (or Jenny gives you) a direct link, and they still live as plain files in your workspace.
+- The wiki only shows a small, fixed set of page metadata to the UI: title, type, entity type, tags, and created/updated dates. Anything else in a page's frontmatter — including source URLs and provenance notes Jenny records internally — stays server-side and out of the interface, even though it's present in the raw file — which the page's own editor shows you in full.
+- Every ingested source keeps a `summaries/` folder of per-source digest pages. These are deliberately kept out of the page list, the map and search to avoid cluttering navigation, but they are **not** encrypted or otherwise access-controlled — the pages are still readable if you know (or Jenny gives you) a direct link, and they still live as plain files in your workspace.
 
 ## Turning it off
 
 A config key, `wiki.enabled` (default `true`), can disable the wiki backend entirely; when it's off, wiki API calls fail. There is no toggle for this in Settings — it's config.json-only, see [Configuration reference](../reference/configuration.md).
 
-<!-- TODO: verify on-device (O-12) whether the Wiki tab in the dock disappears when wiki.enabled=false, or stays visible and simply fails to load content -->
+With it off, the notebook list still shows what is on disk, and opening a
+notebook's pages reports that the wiki is switched off rather than failing
+silently.
 
 ## See also
 

@@ -177,7 +177,7 @@ Registration is kept in sync by `AppToolsSyncer` (`jenny/agent/tools/app_actions
 
 - It stats every `app.json` under `workspace/apps/`; if nothing changed since the last sync, it's a cheap no-op (one `stat()` per app).
 - On any change (new app, edited manifest, deleted app), it unregisters that app's old tools and re-registers from the fresh manifest — no gateway restart needed. A broken app (bad JSON, invalid action) contributes zero tools rather than crashing the sync.
-- **Name collisions with a non-app tool are skipped with an explicit warning** (`App tool '<name>' collides with an existing tool; skipped`) — a deliberately gentler path than the built-in loader's raise (see [Write a tool](write-a-tool.md#name-collisions-never-overwrite)), because an app manifest can be LLM-generated and imperfect; the sync must degrade gracefully rather than disturb the agent loop. Slugs keep their hyphens in the tool name (`my-app` → `my-app_list`), deliberately, so `my-app` and `my_app` can't fold into each other.
+- **Name collisions with a non-app tool are skipped with an explicit warning** (`App tool '<name>' collides with an existing tool; skipped`) — a deliberately gentler path than the built-in loader's raise (see [Write a tool](write-a-tool.md#name-collisions-abort-startup)), because an app manifest can be LLM-generated and imperfect; the sync must degrade gracefully rather than disturb the agent loop. Slugs keep their hyphens in the tool name (`my-app` → `my-app_list`), deliberately, so `my-app` and `my_app` can't fold into each other.
 - This means Jenny can call `plants_water` (and mutate `data/`) even while the app is fully closed — a closed app is just unrendered HTML.
 
 ## Testing

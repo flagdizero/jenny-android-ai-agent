@@ -30,7 +30,7 @@ A few guards keep this from fighting with normal scrolling:
 - If the content under your finger can scroll horizontally in the direction you're dragging (for example, a wide code block or a horizontally scrollable list), that content gets the gesture instead of the tab swipe.
 - A mostly-vertical drag is treated as ordinary scrolling, not a tab change.
 - Swipe navigation is disabled entirely during onboarding, and while a drawer/side panel is open (it owns its own vertical swipe).
-- Swipe only moves between the four dock tabs in the table above, in dock order. It does **not** work while you're inside an individual Wiki page (only the Wiki tab's own landing/graph view is swipeable) — reading a specific article is a state the dock doesn't know about.
+- Swipe only moves between the four dock tabs in the table above, in dock order. Notebooks are not one of them: their pages are reached from the conversation they belong to (see [Wiki](wiki.md)), and reading one is a state the dock doesn't know about.
 
 ### The Android hardware back button
 

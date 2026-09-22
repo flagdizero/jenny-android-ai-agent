@@ -6,7 +6,7 @@ You switch between them with the chip above the message box. The chip says `jenn
 
 ## What a project is
 
-A project is a folder under `workspace/wikis/<name>/` — the same place [wikis](./wiki.md) live, because a project *is* a wiki. There is no separate `projects/` directory, and a project you create from the chip shows up in the Wiki tab like any other.
+A project is a folder under `workspace/wikis/<name>/` — the same place [wikis](./wiki.md) live, because a project *is* a wiki. There is no separate `projects/` directory, and a project you create from the chip is a notebook like any other.
 
 A freshly created project looks like this:
 
@@ -150,6 +150,6 @@ Two folders swapping names is refused rather than guessed at, and a project whos
 ## See also
 
 - [The gardener](./gardener.md) — the background pass that turns journal lines into pages, when it runs, and how to turn it off.
-- [Wiki](./wiki.md) — the graph and page views, and the audit/feedback workflow, which work on projects too.
+- [Wiki](./wiki.md) — the page list, the map, editing a page and reporting one, which work on projects too.
 - [Memory and Dream](./memory.md) — the personal side of remembering, and the budgets.
 - [Slash commands](./slash-commands.md) — `/gardener`, `/init` and the rest.

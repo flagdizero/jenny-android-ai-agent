@@ -97,7 +97,7 @@ Assistant replies are rendered as GitHub-flavored markdown (tables, links, inlin
 - **Code blocks** get a header with the detected language and a **"Copy"** button that turns into **"Copied!"** for a couple of seconds after you tap it.
 - **Math (KaTeX)** is supported with the delimiters `$...$`, `$$...$$`, `\(...\)`, and `\[...\]` — but only in the final render, once the stream has finished (or when replaying history). While a reply is still streaming, you'll see the raw `$$...$$` source instead of rendered math.
 - **Inline video** (`.mp4`, `.mov`, `.webm`) plays inline in the chat.
-- **Mermaid diagrams are NOT rendered in chat.** A ` ```mermaid ` code block just stays a plain code block here — Mermaid diagrams only render in the [Wiki](wiki.md) tab. This is easy to be surprised by if you've seen a diagram render elsewhere in the app.
+- **Mermaid diagrams are NOT rendered in chat.** A ` ```mermaid ` code block just stays a plain code block here — Mermaid diagrams only render on a [wiki](wiki.md) page. This is easy to be surprised by if you've seen a diagram render elsewhere in the app.
 - **Your own messages are never rendered as markdown.** What you type is shown back to you as plain text, even if it contains markdown syntax.
 - All of the rendering libraries are bundled with the app and work fully offline.
 

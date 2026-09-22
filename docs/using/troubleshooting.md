@@ -119,11 +119,9 @@ If you deliberately want the agent to reach something on your own private networ
 
 Note that this whitelist only affects the agent's *tools*. It does not affect calls to your configured LLM provider itself — those never pass through the SSRF filter at all, so a self-hosted provider endpoint on a private network is not blocked by this setting either way.
 
-## Wiki tab shows an error (503)
+## A notebook's pages show an error (503)
 
-If opening the Wiki tab returns a `503` error rather than the wiki interface, the wiki feature has been disabled in configuration (`wiki.enabled: false` in `config.json`). Re-enable it there and restart the app.
-
-<!-- TODO: verify on-device (O-12): with wiki.enabled=false, does the WebUI hide the Wiki tab entirely, or show it and return this 503? -->
+If opening a notebook's pages says the wiki is switched off, the feature has been disabled in configuration (`wiki.enabled: false` in `config.json`). Re-enable it there and restart the app. The notebook list itself still shows what is on disk — it reads the folders, not the wiki API.
 
 ## Collecting information before asking for help
 
