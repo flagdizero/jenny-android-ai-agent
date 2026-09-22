@@ -481,6 +481,74 @@ class ProvidersConfig(Base):
     default: str | None = None
 
 
+# ── Le pagine della casa ────────────────────────────────────────────────────
+
+#: Di che specie puo' essere una pagina. L'elenco e' quello della tavola
+#: `PagineGestione`, e **il cassetto delle app non c'e'**: «ce l'hai gia'
+#: tirando su. Due porte per la stessa cosa sono una di troppo».
+SPECIE_SCHERMATA = ("app", "stanza", "conversazione")
+
+#: Quante se ne possono aggiungere, oltre alla chat. Non e' una limitazione
+#: tecnica: oltre questa soglia i pallini non si leggono piu' e attraversarle
+#: diventa un viaggio, cioe' la funzione smette di fare quel che prometteva.
+MAX_SCHERMATE = 8
+
+
+class SchermataConfig(Base):
+    """Una pagina di casa: di che specie e', e cosa ci sta dentro.
+
+    Si chiama «schermata» e non «pagina» perche' quel nome e' **gia' preso**:
+    `casa-pages.js` sono le pagine di un *quaderno*. All'utente si dice
+    «pagina» — come la tavola — ma nel codice e nel file no, o fra un mese
+    nessuno sa piu' quale delle due e' quale.
+    """
+
+    id: str
+    kind: str
+    #: Lo slug dell'app, il nome della stanza, o la chiave di sessione.
+    ref: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _specie_nota(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            specie = data.get("kind")
+            if specie is not None and specie not in SPECIE_SCHERMATA:
+                raise ValueError(
+                    f"specie di schermata sconosciuta: {specie!r} "
+                    f"(le sole sono {', '.join(SPECIE_SCHERMATA)})"
+                )
+        return data
+
+
+class CasaConfig(Base):
+    """Quel che la casa ricorda fra un avvio e l'altro.
+
+    **Perche' qui e non in `localStorage`.** Sono la schermata iniziale del
+    telefono: perderle a un ripristino o a una reinstallazione sarebbe la
+    sorpresa peggiore, e `localStorage` non entra nel backup cifrato. Il prezzo
+    e' una rotta in piu'; il guadagno e' che le pagine seguono l'utente come
+    tutto il resto.
+
+    **La chat non e' in elenco.** E' la pagina 0, c'e' sempre, non si sposta e
+    non si toglie: metterla qui vorrebbe dire permettere un file che la
+    cancella.
+    """
+
+    schermate: list[SchermataConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _entro_il_tetto(self) -> "CasaConfig":
+        if len(self.schermate) > MAX_SCHERMATE:
+            raise ValueError(
+                f"troppe pagine: {len(self.schermate)} (il tetto e' {MAX_SCHERMATE})"
+            )
+        visti = [s.id for s in self.schermate]
+        if len(set(visti)) != len(visti):
+            raise ValueError("due pagine con lo stesso id")
+        return self
+
+
 class HeartbeatConfig(Base):
     """Heartbeat service configuration (now backed by cron)."""
 
@@ -841,6 +909,7 @@ class Config(BaseSettings):
     snapshots: SnapshotConfig = Field(default_factory=SnapshotConfig)
     updates: UpdatesConfig = Field(default_factory=UpdatesConfig)
     floating: FloatingConfig = Field(default_factory=FloatingConfig)
+    casa: CasaConfig = Field(default_factory=CasaConfig)
     model_presets: dict[str, ModelPresetConfig] = Field(
         default_factory=dict,
         validation_alias=AliasChoices("modelPresets", "model_presets"),

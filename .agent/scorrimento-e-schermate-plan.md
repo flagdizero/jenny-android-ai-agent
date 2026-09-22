@@ -185,7 +185,25 @@ la tavola: «scorri oltre l'ultima» mette il comando **in fondo a un asse che s
 allunga** — con cinque pagine bisogna attraversarle tutte — mentre i pallini
 stanno sempre nello stesso punto.
 
-### B0. Il gesto diventa condiviso
+### B0. Il gesto diventa condiviso — ✅ `f8f87b3`
+
+**Fatto il 22/09/2026.** Ed e' venuto fuori un taglio piu' pulito di quello
+previsto: **si e' spostato il riconoscimento, non la risposta**. I due gusci
+hanno due risposte visive diverse (l'officina trascina la vista corrente con
+sbirciata smorzata e velo, e la vicina non si disegna mai; la casa fara'
+scorrere una pista con le pagine affiancate), e metterle tutte e due nel modulo
+avrebbe voluto dire un modulo con due modalita', cioe' due moduli in un file.
+
+La prova che non e' cambiato niente sono le **dieci prove di
+`test_officina_swipe_client.py`, intatte e verdi**, e le due mutazioni che le
+rifanno rosse (ricerca grezza → 8 rosse; capi non piu' circolari → 3 rosse).
+
+Presidio nuovo, `test_gesto_orizzontale_contract.py`: `gesto-orizzontale.js` e'
+**l'unico file di tutta la UI che ascolta `touchmove`** e l'unico che decide un
+asse — misurato subito dopo l'estrazione, era gia' vero. E non puo' nominare una
+vista, una linguetta, un cassetto o una pagina: il giorno che lo fa smette di
+essere condiviso.
+
 
 I due gusci non si citano mai il DOM a vicenda e non devono cominciare adesso.
 Ma il gesto è lo stesso e le sue costanti sono state pagate con delle misure.
@@ -198,7 +216,32 @@ richiama «sto sbirciando di tanto», «concluso a destra», «tornato indietro�
 spostamento l'officina deve comportarsi **identica** — stesse costanti, stesse
 guardie, banchi verdi, più una foto di confronto.
 
-### B1. Cos'è una pagina, e dove vive
+### B1. Cos'è una pagina, e dove vive — ✅
+
+**Fatto il 22/09/2026.** `SchermataConfig` / `CasaConfig` nello schema,
+`MAX_SCHERMATE = 8`, e le rotte in `jenny/webui/casa_routes.py`.
+
+**Un vincolo trovato costruendo, che vale per tutto quel che segue:** il livello
+HTTP del gateway (`websockets` http11) **rifiuta qualunque metodo diverso da GET
+e qualunque body**, al parser, prima delle rotte — lo dice gia' `apps_api` per
+le azioni delle app. Quindi la scrittura e' una GET con l'elenco url-encoded in
+`?v=`. Non e' una svista da correggere in POST: senza sostituire il livello HTTP
+non puo' funzionare.
+
+Due scelte prese scrivendo:
+
+- **si manda l'elenco intero, non una riga.** Aggiungere, togliere e spostare
+  diventano la stessa scrittura: tre rotte in meno e, soprattutto, niente caso
+  in cui due di quelle si incrociano lasciando un ordine che nessuno ha chiesto.
+- **la validazione sta al confine, non dentro `mutate`:** li' il lock e' preso
+  per tutta la callback, e una `ValueError` alzata dentro diventa un 500 invece
+  di un 400.
+
+Tredici prove in `test_casa_schermate_routes.py`, provate rosse su due
+mutazioni (`save_config` al posto del funnel; il cassetto rimesso fra le
+specie). La sezione nuova e' documentata in `docs/reference/configuration.md`,
+come pretende `test_configuration_doc_covers_the_schema`.
+
 
 ```
 schermate: [ { id, kind: 'app' | 'stanza' | 'conversazione', ref }, … ]

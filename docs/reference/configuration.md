@@ -399,6 +399,20 @@ The floating mascot: Jenny above your other apps. Tap her and a text field opens
 
 She hides herself whenever Jenny's own UI is in the foreground: this app is the phone's launcher, and the home screen already has a mascot in it. The window lives inside the gateway service and is destroyed with it, so it can never sit there with no agent behind it. See [Android permissions](android-permissions.md#requested-permissions) for what the overlay permission does and does not allow.
 
+## casa
+
+The home screen's extra pages. Jenny's home is the conversation; beside it you can keep pages you swipe to, the way any launcher works. The page you are on is drawn with dots at the bottom edge — swipe sideways to change page, up to pull open the app drawer, and press and hold to manage the pages.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is one of `app` (a Jenny App, `ref` is its slug), `stanza` (a room of the home, `ref` names it) or `conversazione` (`ref` is a session key). At most 8, and the ids must differ. |
+
+The conversation itself is **not** in this list: it is always the first page, it cannot be moved and it cannot be removed — putting it here would allow a config file that deletes it.
+
+The app drawer is deliberately not one of the kinds. You already reach it by swiping up from the dots, and two doors to the same room are one too many.
+
+These live in `config.json` and not in the browser's storage on purpose: they are the phone's home screen, and losing them to a restore or a reinstall would be the worst kind of surprise — browser storage is not part of the [encrypted backup](../using/backup.md). A page whose `ref` no longer resolves (an app you uninstalled) is kept, not silently dropped: it is drawn as missing, and removing it stays your decision.
+
 ## wiki
 
 | Key | Type | Default | Effect |

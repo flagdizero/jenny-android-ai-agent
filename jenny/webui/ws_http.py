@@ -273,6 +273,13 @@ class GatewayHTTPHandler:
             log=self._log,
         )
 
+        from jenny.webui.casa_routes import CasaRoutes
+
+        self.casa_routes = CasaRoutes(
+            check_api_token=self.check_api_secret,
+            log=self._log,
+        )
+
         from jenny.webui.cron_routes import CronRoutes
 
         # Getter late-binding come quello dei subagent: ``GatewayContainer.cron``
@@ -570,6 +577,10 @@ class GatewayHTTPHandler:
         backup_response = await self.backup_routes.dispatch(request, got)
         if backup_response is not None:
             return backup_response
+
+        casa_response = await self.casa_routes.dispatch(request, got)
+        if casa_response is not None:
+            return casa_response
 
         # Stato della programmazione (delegato a CronRoutes)
         cron_response = await self.cron_routes.dispatch(request, got)
