@@ -23,6 +23,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "casa-audit.js"
+APP_JS = ASSETS / "casa-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
 
 _NODE = shutil.which("node")
@@ -140,3 +141,117 @@ def test_nothing_in_the_flow_asks_for_a_severity() -> None:
     for lang in ("it", "en"):
         data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
         assert "sev" not in data["casa"]["audit"], lang
+
+
+# ── L'atterraggio in chat ───────────────────────────────────────────────────
+
+
+def _member(source: str, name: str) -> str:
+    m = re.search(
+        rf"\n  ((?:async )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}", source, re.S
+    )
+    assert m, f"{name} non trovato"
+    return m.group(1) + "\n  }"
+
+
+_HARNESS = """
+import assert from 'node:assert/strict';
+
+const parole = {
+  'casa.audit.msgHead': 'In «{page}», dove dice «{quote}»:',
+  'casa.audit.msgRef': 'segnalazione',
+};
+const i18n = { t: (k) => parole[k] ?? k };
+
+__MESSAGGIO__
+
+const mandati = [];
+class Casa {
+  constructor() {
+    this.input = { value: '', };
+    this.view = 'reader';
+    this.autosize = 0;
+  }
+  _setView(v) { this.view = v; }
+  _send() { mandati.push(this.input.value); this.input.value = ''; }
+  _autosize() { this.autosize += 1; }
+  __PORTA__
+}
+"""
+
+
+def _run_app(script: str) -> None:
+    harness = (
+        _HARNESS
+        .replace("__MESSAGGIO__", _function(AUDIT_JS.read_text(encoding="utf-8"),
+                                            "messaggioSegnalazione"))
+        .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_portaInChat"))
+    )
+    proc = subprocess.run(
+        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_the_message_carries_the_page_the_quote_and_the_id() -> None:
+    """I tre pezzi, e ognuno serve a una cosa sola.
+
+    **L'id e' quello che si dimentica**, ed e' l'unico che lei non puo'
+    ricostruire: senza, corregge la pagina e il file resta aperto per sempre —
+    cioe' esattamente il vicolo cieco che questo atterraggio esiste per
+    chiudere.
+    """
+    _run_app("""
+      const m = messaggioSegnalazione({
+        title: 'Orto', quote: 'legare a giugno',
+        comment: 'e\\' marzo', id: '20260922-143012-a1b2',
+      });
+      assert.ok(m.includes('Orto'), m);
+      assert.ok(m.includes('legare a giugno'), m);
+      assert.ok(m.includes("e\\' marzo"), m);
+      assert.ok(m.includes('20260922-143012-a1b2'), m);
+    """)
+
+
+def test_without_an_id_there_is_no_empty_parenthesis() -> None:
+    _run_app("""
+      const m = messaggioSegnalazione({ title: 'X', quote: 'y', comment: 'z', id: '' });
+      assert.ok(!m.includes('('), m);
+    """)
+
+
+def test_filing_lands_in_the_chat_with_the_message_already_sent() -> None:
+    """Il file e' gia' nato quando si arriva qui.
+
+    Lasciare il messaggio nella casella senza inviarlo riporterebbe nel vuoto
+    proprio quella segnalazione — che e' il difetto per cui questo atterraggio
+    esiste. Quindi le due asserzioni sono due: **la stanza** e **la partenza**.
+    """
+    _run_app("""
+      const c = new Casa();
+      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      assert.equal(c.view, 'chat');
+      assert.equal(mandati.length, 1);
+      assert.ok(mandati[0].includes('non va'), mandati[0]);
+      mandati.length = 0;
+    """)
+
+
+def test_a_draft_in_the_composer_is_not_eaten() -> None:
+    """Quel che stavi scrivendo non e' un danno collaterale.
+
+    La casella viene usata come veicolo — e' l'unico modo di far disegnare la
+    bolla da chi la disegna sempre — quindi la bozza va tolta e rimessa.
+    """
+    _run_app("""
+      const c = new Casa();
+      c.input.value = 'stavo scrivendo questo';
+      c._portaInChat({ title: 'X', quote: 'q', comment: 'w', id: 'abc' });
+      assert.equal(mandati.length, 1);
+      assert.ok(!mandati[0].includes('stavo scrivendo'), mandati[0]);
+      assert.equal(c.input.value, 'stavo scrivendo questo');
+      mandati.length = 0;
+    """)

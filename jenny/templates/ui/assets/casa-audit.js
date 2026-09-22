@@ -61,9 +61,32 @@ export function offsetsIn(raw, selected) {
   return { ok: true, start: first, end: first + needle.length };
 }
 
+/** Il messaggio che la casa manda in chat dopo aver segnalato.
+ *
+ *  Tre pezzi, e ognuno serve a una cosa sola:
+ *
+ *    - il **titolo**, perche' lei sappia quale pagina senza aprire il file;
+ *    - la **citazione**, perche' la rivedi tu nella tua cronologia — ed e' il
+ *      modo in cui un umano dice «questa frase qui»;
+ *    - **l'id**, perche' e' l'unica cosa che le permette di *chiudere* la
+ *      segnalazione quando ha finito. Senza, corregge e il file resta aperto
+ *      per sempre. E' l'unico pezzo di vocabolario del file che passa, e passa
+ *      fra parentesi.
+ */
+export function messaggioSegnalazione({ title, quote, comment, id }) {
+  const testa = i18n.t('casa.audit.msgHead')
+    .replace('{page}', String(title || ''))
+    .replace('{quote}', String(quote || '').trim());
+  const coda = id ? `\n(${i18n.t('casa.audit.msgRef')} ${id})` : '';
+  return `${testa}\n${String(comment || '').trim()}${coda}`;
+}
+
 export class CasaAudit {
   constructor(reader) {
     this.reader = reader;
+    /** Chi porta la segnalazione in chat. Sta fuori perche' questa classe non
+     *  sa niente di stanze ne' di sessioni: sa solo che e' stata depositata. */
+    this.onFiled = null;
     this.barEl = document.getElementById('casa-sel-bar');
     this.openBtn = document.getElementById('casa-sel-report');
     this.dialog = document.getElementById('casa-audit-dialog');
@@ -127,8 +150,9 @@ export class CasaAudit {
       showToast(i18n.t(`casa.audit.${spot.reason}`), 'error');
       return;
     }
+    let creata;
     try {
-      await api.createAudit({
+      creata = await api.createAudit({
         wiki: this.reader.notebook,
         target: this.reader.path,
         selStart: spot.start,
@@ -141,6 +165,11 @@ export class CasaAudit {
       return;
     }
     this.dialog?.close();
-    showToast(i18n.t('casa.audit.sent'), 'success');
+    this.onFiled?.({
+      title: this.reader.title || this.reader.path,
+      quote: this._selected,
+      comment,
+      id: creata?.id || '',
+    });
   }
 }

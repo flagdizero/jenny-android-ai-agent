@@ -1075,12 +1075,13 @@
       "placeholder": "What's wrong, and why.",
       "send": "Send",
       "cancel": "Cancel",
-      "sent": "Reported. Jenny will find it on her next pass.",
       "failed": "I couldn't report it.",
       "needComment": "Write what's wrong.",
       "empty": "Pick the piece of text to report first.",
       "notFound": "I can't find this piece in the original text: try picking one without bold or links inside.",
-      "ambiguous": "This text appears more than once on the page: pick a longer piece so I know which one you mean."
+      "ambiguous": "This text appears more than once on the page: pick a longer piece so I know which one you mean.",
+      "msgHead": "In “{page}”, where it says “{quote}”:",
+      "msgRef": "report"
     }
   },
   "officina": {

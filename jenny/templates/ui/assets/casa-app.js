@@ -25,7 +25,7 @@ import { CasaChat } from './casa-chat.js';
 import { CasaMascot } from './casa-mascot.js';
 import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
-import { CasaAudit } from './casa-audit.js';
+import { CasaAudit, messaggioSegnalazione } from './casa-audit.js';
 import { CasaJenny } from './casa-jenny.js';
 import { CasaModel } from './casa-model.js';
 import { CasaUpdates } from './casa-updates.js';
@@ -172,6 +172,7 @@ class CasaApp {
     this.reader = new CasaReader();
     this.reader.onTitle = (title) => this._setHeadTitle(title);
     this.audit = new CasaAudit(this.reader);
+    this.audit.onFiled = (segnalazione) => this._portaInChat(segnalazione);
     /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
        barra della selezione, che con l'editor aperto non ha piu' senso: li' il
        gesto e' un altro. */
@@ -512,6 +513,33 @@ class CasaApp {
       });
     }
     return this._settings;
+  }
+
+  /** Segnalata una cosa: si atterra nella chat del quaderno, col messaggio
+   *  gia' partito.
+   *
+   *  **Non e' una funzione nuova, e' una giunzione.** «Parlane» porta gia' in
+   *  questa stanza; `_send()` legge gia' dalla casella e disegna la bolla; e la
+   *  sessione corrente, dal lettore, **e' gia' quella del quaderno** — ci sei
+   *  dentro. Qui si mettono in fila tre cose che esistevano separate.
+   *
+   *  **Parte da solo e non resta nella casella.** Il file della segnalazione e'
+   *  gia' nato in quel momento: lasciarlo li' senza inviare riporterebbe nel
+   *  vuoto proprio quella segnalazione — che e' il difetto per cui questo
+   *  atterraggio esiste. Un gesto, un atto completo.
+   *
+   *  Quel che l'utente stava scrivendo non si perde: se la casella non e'
+   *  vuota, la bozza torna dov'era appena il messaggio e' partito. */
+  _portaInChat(segnalazione) {
+    if (!this.input) return;
+    const bozza = this.input.value;
+    this._setView('chat');
+    this.input.value = messaggioSegnalazione(segnalazione);
+    this._send();
+    if (bozza.trim()) {
+      this.input.value = bozza;
+      this._autosize();
+    }
   }
 
   /** Conferma di uscire dal lettore buttando via le modifiche.
