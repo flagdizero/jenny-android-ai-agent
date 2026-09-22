@@ -981,12 +981,44 @@ body.casa {
 .casa-shell[data-view='updates'] .casa-updates-room,
 .casa-shell[data-view='backup'] .casa-backup-room { display: flex; }
 
-.casa-shell:not([data-view='chat']) .casa-thread,
-.casa-shell:not([data-view='chat']) .casa-empty,
-.casa-shell:not([data-view='chat']) .casa-activity,
-.casa-shell:not([data-view='chat']) .casa-wire,
-.casa-shell:not([data-view='chat']) .casa-pending,
-.casa-shell:not([data-view='chat']) .casa-composer { display: none; }
+/* Sei righe diventate una: da quando la chat sta dentro un pannello della
+   pista, sparire dalla vista di una stanza e' una cosa sola da nascondere e
+   non sei. Se ne fosse dimenticata una, quella resterebbe a occupare spazio
+   dentro «Tu e Jenny». */
+.casa-shell:not([data-view='chat']) .casa-pista { display: none; }
+
+
+/* ── La pista delle pagine ───────────────────────────────────────────────
+   La casa e' un launcher: di lato alla chat ci sono le pagine aggiunte
+   (tavola `Pagine`). La chat e' la pagina 0.
+
+   **Niente `z-index` qui dentro.** Quello di Jenny e' l'unico del foglio e
+   deve restarlo: la mascotte sta sopra la chat, sopra un'app e sopra tutto,
+   e la sovrapposizione fra i pannelli si ottiene con l'ordine del DOM. C'e'
+   un banco che li conta. */
+.casa-pista {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  /* La pista non scorre da sola: la muove il dito, e il browser non deve
+     aggiungerci il proprio scorrimento orizzontale. */
+  overflow: hidden;
+}
+
+.casa-pagina {
+  flex: 0 0 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* `relative` non e' decorazione: `.casa-empty` e' `position:absolute;
+     inset:0`, e senza un contenitore posizionato qui si ancorerebbe al
+     guscio. Appena la pista prende un `transform` il contenitore cambierebbe
+     comunque — un elemento trasformato ne crea uno — e lo stato vuoto
+     salterebbe a meta' gesto. Dichiararlo adesso vuol dire che sta fermo. */
+  position: relative;
+}
 
 /* ── L'intestazione che cambia stanza ── */
 

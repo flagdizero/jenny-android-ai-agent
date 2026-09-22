@@ -107,48 +107,66 @@
     </div>
   </header>
 
-  <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
-  <div class="casa-thread" id="casa-thread"></div>
+  <!-- ── La pista delle pagine ────────────────────────────────────────────
+       La casa e' un launcher: di lato alla chat ci sono le pagine che
+       l'utente ha aggiunto (v. la tavola `Pagine`). La chat e' la **pagina
+       0**: c'e' sempre, non si sposta e non si toglie.
 
-  <!-- Lo stato vuoto sta FUORI dal filo, sovrapposto. Dentro sarebbe il primo
-       figlio, e il primo figlio del filo porta il `margin-top:auto` che tiene
-       una conversazione corta appoggiata al fondo: un nodo nascosto se lo
-       prenderebbe lui, e i messaggi resterebbero incollati in cima. -->
-  <div class="casa-empty" id="casa-empty" hidden>
-    <div class="casa-empty-text" id="casa-empty-text"></div>
-  </div>
+       L'intestazione resta **fuori** dalla pista, ed e' una scelta: e' gia'
+       cromatura del guscio — fuori dalla chat diventa il titolo della stanza,
+       col tasto indietro — e duplicarla in ogni pannello vorrebbe dire
+       tenerne N allineate. Il suo *contenuto* cambiera' con la pagina, come
+       in officina fa `ViewTitleController` fra i cassetti.
 
-  <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
-       aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
-  <div class="casa-activity" id="casa-activity" hidden></div>
+       Le stanze (`casa-pages`, `casa-tu`, …) restano sorelle della pista e le
+       passano sopra: entrare in «Tu e Jenny» copre le pagine, non le
+       sposta. -->
+  <div class="casa-pista" id="casa-pista">
+    <div class="casa-pagina" data-pagina="chat">
+      <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
+      <div class="casa-thread" id="casa-thread"></div>
 
-  <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
-       riconnessione). A filo funzionante non occupa spazio. -->
-  <div class="casa-wire" id="casa-wire" hidden></div>
+      <!-- Lo stato vuoto sta FUORI dal filo, sovrapposto. Dentro sarebbe il primo
+           figlio, e il primo figlio del filo porta il `margin-top:auto` che tiene
+           una conversazione corta appoggiata al fondo: un nodo nascosto se lo
+           prenderebbe lui, e i messaggi resterebbero incollati in cima. -->
+      <div class="casa-empty" id="casa-empty" hidden>
+        <div class="casa-empty-text" id="casa-empty-text"></div>
+      </div>
 
-  <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
-  <div class="casa-pending" id="casa-pending" hidden></div>
+      <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
+           aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
+      <div class="casa-activity" id="casa-activity" hidden></div>
 
-  <div class="casa-composer">
-    <!-- Il cassetto delle app. Stesso posto e stesso gesto dell'officina — a
-         sinistra del composer — perché è lo stesso foglio: `mobile-launcher.js`
-         lo disegna per tutti e due i gusci, e una seconda copia qui sarebbe la
-         solita macchina duplicata che impara le cose una volta sola.
-         Fuori dall'APK il ponte delle app Android non c'è, ma le Jenny App sì:
-         il cassetto resta, più corto. -->
-    <button class="casa-drawer" id="casa-drawer" type="button"
-            aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
-      <i class="ti ti-layout-grid"></i>
-    </button>
-    <label class="casa-field">
-      <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
-      <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
-        <i class="ti ti-paperclip"></i>
-      </button>
-    </label>
-    <button class="casa-send" id="casa-send" type="button" aria-label="Manda">
-      <i class="ti ti-arrow-up"></i>
-    </button>
+      <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
+           riconnessione). A filo funzionante non occupa spazio. -->
+      <div class="casa-wire" id="casa-wire" hidden></div>
+
+      <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
+      <div class="casa-pending" id="casa-pending" hidden></div>
+
+      <div class="casa-composer">
+        <!-- Il cassetto delle app. Stesso posto e stesso gesto dell'officina — a
+             sinistra del composer — perché è lo stesso foglio: `mobile-launcher.js`
+             lo disegna per tutti e due i gusci, e una seconda copia qui sarebbe la
+             solita macchina duplicata che impara le cose una volta sola.
+             Fuori dall'APK il ponte delle app Android non c'è, ma le Jenny App sì:
+             il cassetto resta, più corto. -->
+        <button class="casa-drawer" id="casa-drawer" type="button"
+                aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
+          <i class="ti ti-layout-grid"></i>
+        </button>
+        <label class="casa-field">
+          <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
+          <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
+            <i class="ti ti-paperclip"></i>
+          </button>
+        </label>
+        <button class="casa-send" id="casa-send" type="button" aria-label="Manda">
+          <i class="ti ti-arrow-up"></i>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────

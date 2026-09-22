@@ -222,6 +222,7 @@ _UI_MANIFEST = [
     "assets/casa-mascot.js",
     "assets/casa-model.js",
     "assets/casa-pages.js",
+    "assets/casa-pagine.js",
     "assets/casa-reader.js",
     "assets/casa-style.css",
     "assets/casa-tu.js",

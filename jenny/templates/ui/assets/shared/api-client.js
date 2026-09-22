@@ -593,6 +593,31 @@ class ApiClient {
   /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui
      prepara il container cifrato in staging, e se quel file finisca su disco
      lo decide il picker SAF, che risponde solo di qua. */
+  /* ── Le pagine della casa ────────────────────────────────────────────── */
+
+  /** `{schermate, max, specie}`. Il tetto arriva dal server e non se lo tiene
+   *  scritto il client: due copie di quel numero divergerebbero, e la seconda
+   *  si scoprirebbe solo quando un salvataggio viene rifiutato. */
+  async getSchermate() {
+    const res = await this._fetch('/api/casa/schermate');
+    if (!res.ok) throw new Error(`Pages read failed: ${res.status}`);
+    return res.json();
+  }
+
+  /** L'elenco **intero**, non una riga.
+   *
+   *  Ed e' una GET con i dati nell'indirizzo, non una POST: il livello HTTP
+   *  del gateway rifiuta qualunque metodo diverso da GET e qualunque body, al
+   *  parser (v. `apps_api`). Non e' una svista da correggere.
+   */
+  async setSchermate(schermate) {
+    const v = encodeURIComponent(JSON.stringify(schermate));
+    const res = await this._fetch(`/api/casa/schermate/set?v=${v}`);
+    if (!res.ok) throw new Error(`Pages write failed: ${res.status}`);
+    const body = await res.json();
+    return body.schermate;
+  }
+
   async noteBackupExported() {
     const res = await this._fetch('/api/backup/exported');
     if (!res.ok) throw new Error(`Backup record failed: ${res.status}`);

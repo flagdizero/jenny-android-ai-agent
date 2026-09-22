@@ -44,8 +44,18 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     css = CSS.read_text(encoding="utf-8")
     for room in ("pages", "reader", "tu"):
         assert f".casa-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
-    assert ".casa-shell:not([data-view='chat']) .casa-composer" in css, (
+    # Dal 22 settembre 2026 la chat sta dentro un pannello della pista, e quel
+    # che si nasconde e' la pista: una riga invece delle sei che nominavano
+    # filo, stato vuoto, riga di lavoro, stato del filo, allegati e composer.
+    # Chi ne avesse dimenticata una l'avrebbe lasciata a occupare spazio dentro
+    # una stanza. L'invariante e' la stessa — fuori dalla conversazione il
+    # composer non c'e' — e adesso ha un posto solo in cui rompersi.
+    assert ".casa-shell:not([data-view='chat']) .casa-pista { display: none; }" in css, (
         "il composer resta a schermo fuori dalla conversazione"
+    )
+    html_pista = html.split('class="casa-pista"', 1)[1]
+    assert "casa-composer" in html_pista.split("</main>", 1)[0], (
+        "il composer e' uscito dalla pista: la regola sopra non lo copre piu'"
     )
 
 

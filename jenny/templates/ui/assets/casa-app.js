@@ -38,6 +38,7 @@ import { WhoPanel, dotColor } from './casa-who.js';
    che li ospitava e' stata cancellata. */
 import { JennyGap } from './shared/jenny-gap.js';
 import { LauncherController } from './mobile-launcher.js';
+import { CasaPagine } from './casa-pagine.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -240,6 +241,11 @@ class CasaApp {
        apertura (v. `appsSource()`), che e' la stessa scelta che il cassetto fa
        gia' di suo in `_attachSource()`. */
     this.launcher = new LauncherController(this);
+    /* La pista delle pagine. Si costruisce subito — il gesto va agganciato
+       prima che un dito possa arrivarci — e si riempie dopo, quando il filo e'
+       a schermo: l'elenco e' una lettura di rete, e farla aspettare dalla
+       chat vorrebbe dire una casa vuota per il tempo di un giro. */
+    this.pagine = new CasaPagine(this);
     this._apps = null;
 
     window.mobileApp = this;
@@ -315,6 +321,10 @@ class CasaApp {
     sessionManager.init();
     this._applyConversation();
     wsManager.connectChat();
+
+    /* Non `await`: le pagine aggiunte arrivano quando arrivano, e finche' non
+       ci sono la casa e' la chat — che e' esattamente quel che deve essere. */
+    this.pagine.carica();
 
     try {
       await this.chat.load();

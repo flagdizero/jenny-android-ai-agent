@@ -267,7 +267,41 @@ quaderno cancellato) **non fa sparire la pagina** ma la disegna come «non c'è
 più» — cancellare una pagina dell'utente perché il suo contenuto è sparito non
 è una decisione del codice.
 
-### B2. La geometria
+### B2. La geometria — ✅
+
+**Fatto il 22/09/2026.** `casa-pista` con dentro un `casa-pagina` per pagina, la
+chat nel primo; `CasaPagine` in `casa-pagine.js`; `getSchermate`/`setSchermate`
+nel client.
+
+Tre cose decise costruendo, diverse da come le avevo scritte:
+
+- **L'intestazione resta fuori dalla pista.** E' gia' cromatura del guscio —
+  fuori dalla chat diventa il titolo della stanza col tasto indietro — e
+  duplicarla in ogni pannello vorrebbe dire tenerne N allineate. Il suo
+  *contenuto* cambiera' con la pagina, come in officina fra i cassetti.
+- **I pallini non si ripetono per pagina**, anche se le tavole li disegnano
+  dentro ognuna: quelle sono schermate autoportanti e dovevano. Il comando che
+  dice dove sei non deve muoversi mentre ti muovi.
+- **Sei regole CSS diventate una.** Nascondere la chat fuori dalla sua vista
+  nominava filo, stato vuoto, riga di lavoro, stato del filo, allegati e
+  composer; adesso si nasconde la pista. Dimenticarne una avrebbe lasciato quel
+  pezzo a occupare spazio dentro una stanza.
+
+**Un effetto collaterale dichiarato:** `.casa-empty` e' `position:absolute;
+inset:0` e finora si ancorava al guscio. Adesso si ancora al pannello — e
+doveva comunque, perche' appena la pista prende un `transform` il contenitore
+cambia da se' e lo stato vuoto salterebbe a meta' gesto. Il centro della frase
+scende di mezza intestazione.
+
+**Provato:** 16 casi in node **sui file veri** (import compresi, con un finto
+client API), e **quattro mutazioni**. Due sono sopravvissute alla prima
+stesura — la guardia «con la sola chat il gesto non parte» e «il pannello della
+chat non si ridisegna» — perche' il DOM finto non aveva il pannello della chat
+e `querySelectorAll` ignorava il selettore. Corretto il finto, tutte e quattro
+cadono. Geometria verificata anche nel browser: intestazione 64px, pista 502px
+esatti sotto, composer in fondo, tre pannelli a 0/590/1180 e ognuno che atterra
+a zero.
+
 
 La scoperta che cambia l'impianto: **chat e stanze sono sorelle**, non annidate.
 Quindi il carosello **non** sta «dentro la vista chat»: è l'area principale del
