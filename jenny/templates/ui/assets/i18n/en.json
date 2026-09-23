@@ -617,7 +617,13 @@
     "jumpToLetter": "Jump to letter {letter}",
     "frameCleartextBlocked": "{host} will not load: it is plain http, and the app's network policy allows cleartext only to the local gateway. It needs an https server, or an external-view app.",
     "frameLoadFailed": "{host} failed to load: {reason}",
-    "viewProxyFailed": "Could not open the external view: {error}"
+    "viewProxyFailed": "Could not open the external view: {error}",
+    "pinAsPage": "Add as a page",
+    "unpinPage": "Remove from pages",
+    "unpinned": "Removed from pages",
+    "pageExternal": "It opens outside Jenny, so it can't be a page",
+    "pageBroken": "It's broken: fix it first",
+    "pageFull": "The pages are full"
   },
   "graph": {
     "concepts": "Concepts",

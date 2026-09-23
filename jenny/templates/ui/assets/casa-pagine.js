@@ -162,6 +162,59 @@ export class CasaPagine {
     return this.app?.trasloco?.lettura;
   }
 
+  /* ── Appendere e staccare ───────────────────────────────────────────── */
+  /* Si appende **dal posto dove la cosa vive** — l'app dal cassetto, il
+     quaderno dalla tendina — con una pressione lunga, come ogni launcher
+     Android fa «aggiungi alla schermata principale». Queste tre sono l'unica
+     porta: le schede chiedono, e qui si decide. */
+
+  /** E' gia' una pagina? */
+  appesa(kind, ref) {
+    return this.schermate.some((s) => s.kind === kind && s.ref === ref);
+  }
+
+  /** La appende e ci porta sopra. `false` se c'era gia' o se il tetto e' pieno.
+   *
+   *  **Ci si atterra**: chi l'ha appena aggiunta vuole vederla, e lasciarlo
+   *  dov'era gli farebbe credere che non sia successo niente.
+   */
+  async appendi(kind, ref) {
+    if (this.appesa(kind, ref) || this.pienoZeppo) return false;
+    const id = `p${Date.now().toString(36)}`;
+    await this.salva([...this.schermate, { id, kind, ref }]);
+    this.vaiA(this.schermate.length);
+    return true;
+  }
+
+  /** La stacca. Niente conferma: una pagina si rimette con una pressione, e
+   *  una domanda per un gesto annullabile e' solo un tocco in piu' ogni volta. */
+  async stacca(kind, ref) {
+    if (!this.appesa(kind, ref)) return false;
+    await this.salva(this.schermate.filter((s) => !(s.kind === kind && s.ref === ref)));
+    return true;
+  }
+
+  /** Rilegge dal server **senza** riportarti alla chat.
+   *
+   *  Serve dopo una cancellazione: il gateway ha tolto la pagina insieme alla
+   *  cosa, e qui bisogna saperlo. `carica()` qui sarebbe sbagliato — riporta
+   *  sempre alla pagina 0, cioe' ti sposta anche quando la tua c'e' ancora.
+   */
+  async ricarica() {
+    let dati;
+    try {
+      dati = await api.getSchermate();
+    } catch {
+      return;
+    }
+    const nuove = Array.isArray(dati?.schermate) ? dati.schermate : [];
+    const dove = this.schermate[this.indice - 1]?.id;
+    this.schermate = nuove;
+    this._disegna();
+    const ancora = dove ? nuove.findIndex((s) => s.id === dove) : -1;
+    this.vaiA(ancora >= 0 ? ancora + 1 : Math.min(this.indice, nuove.length), { animato: false });
+  }
+
   /* ── Sotto ──────────────────────────────────────────────────────────── */
 
   /** Un pannello per schermata, accanto a quello della chat.

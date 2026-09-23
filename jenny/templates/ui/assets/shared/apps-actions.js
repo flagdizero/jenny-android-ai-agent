@@ -457,18 +457,20 @@ export class AppsActions {
         <div class="app-sheet-name">${escapeHtml(app.name || app.slug)}</div>
       </div>`;
 
+    /* Le quattro righe della casa, nello stesso ordine della scheda di un
+       quaderno: Apri · Metti come pagina · Modifica · Elimina. La seconda c'e'
+       solo se il guscio ha le pagine — l'officina no, e la scheda non deve
+       sapere in che guscio vive: lo dice la porta che le passano. */
+    const pagine = this.shell?.pagine?.() || null;
     const actions = [
       { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
+      ...(pagine ? [rigaPagina(pagine.stato('app', slug), app)] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
       { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
     ];
 
     const actionsEl = document.getElementById('jenny-app-sheet-actions');
-    actionsEl.innerHTML = actions.map(a =>
-      `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
-        <i class="ti ${a.icon}"></i>${a.label}
-      </button>`
-    ).join('');
+    actionsEl.innerHTML = actions.map(disegnaRiga).join('');
 
     const close = () => sheet.close();
 
@@ -493,6 +495,12 @@ export class AppsActions {
     const slug = app.slug;
     if (action === 'open') {
       this.openApp(slug);
+    } else if (action === 'pin') {
+      await this.shell?.pagine?.()?.appendi('app', slug);
+    } else if (action === 'unpin') {
+      if (await this.shell?.pagine?.()?.stacca('app', slug)) {
+        showToast(i18n.t('apps.unpinned'), 'success');
+      }
     } else if (action === 'edit') {
       this._startAppModification(app);
     } else if (action === 'delete') {
@@ -503,6 +511,10 @@ export class AppsActions {
       try {
         await api.deleteJennyApp(slug);
         await this.source.loadJennyApps();
+        /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
+           `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
+           pallino verso un'app che non c'e' piu'. */
+        await this.shell?.pagine?.()?.ricarica();
         showToast(i18n.t('apps.appDeleted'), 'success');
       } catch {
         showToast(i18n.t('apps.deleteFailed'), 'error');
@@ -512,4 +524,41 @@ export class AppsActions {
   _startAppModification(app) {
     this.shell.sendChatPrompt(i18n.t('apps.editAppPrompt', { name: app.name || app.slug, slug: app.slug }));
   }
+}
+
+/** La riga «Metti come pagina», o perche' non si puo'.
+ *
+ *  **Spenta, non assente**, quando l'app non puo' stare in una pagina: una
+ *  riga che manca fa chiedere «perche' Todo si' e WaterBot no?», una spenta
+ *  lo dice. Un'app *esterna* apre un indirizzo che il guscio non controlla;
+ *  una *rotta* resterebbe li' a non funzionare tutti i giorni.
+ */
+function rigaPagina(stato, app) {
+  const perche = app.broken
+    ? 'apps.pageBroken'
+    : app.view_kind === 'external'
+      ? 'apps.pageExternal'
+      : stato === 'piena' ? 'apps.pageFull' : null;
+  if (stato === 'appesa') {
+    return { icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' };
+  }
+  return {
+    icon: 'ti-pin',
+    label: i18n.t('apps.pinAsPage'),
+    action: 'pin',
+    ...(perche ? { disabled: true, reason: i18n.t(perche) } : {}),
+  };
+}
+
+function disegnaRiga(a) {
+  const classi = `oc-sheet-action${a.danger ? ' danger' : ''}`;
+  const spenta = a.disabled ? ' disabled aria-disabled="true"' : '';
+  /* Il testo nudo come prima, se non c'e' un perche': la stessa scheda la
+     disegna anche l'officina, e li' non deve cambiare niente. */
+  const testo = a.reason
+    ? `<span class="oc-sheet-label">${a.label}<span class="oc-sheet-reason">${escapeHtml(a.reason)}</span></span>`
+    : a.label;
+  return `<button class="${classi}" data-action="${a.action}"${spenta}>
+        <i class="ti ${a.icon}"></i>${testo}
+      </button>`;
 }

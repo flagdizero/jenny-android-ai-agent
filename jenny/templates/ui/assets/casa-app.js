@@ -858,7 +858,38 @@ class CasaApp {
   appsActions() {
     return (this._azioniApp ||= new AppsActions(this.appsSource(), {
       sendChatPrompt: (testo) => this._mandaInChat(testo),
+      pagine: () => this.portaPagine(),
     }));
+  }
+
+  /** Quel che le schede — dell'app, del quaderno — possono chiedere alle
+   *  pagine, e nient'altro.
+   *
+   *  La scheda dell'app e' **condivisa con l'officina**, che le pagine non le
+   *  ha: la riga «Metti come pagina» compare solo se il guscio le passa questa
+   *  porta, e l'officina non gliela passa. Cosi' la scheda non deve sapere in
+   *  che guscio vive.
+   *
+   *  Appendere **chiude tutto quel che c'e' sopra** prima di atterrare sulla
+   *  pagina nuova: si appende dal cassetto o dalla tendina, e atterrare sotto
+   *  un cassetto aperto vorrebbe dire non vedere di aver fatto niente.
+   */
+  portaPagine() {
+    return (this._portaPagine ||= {
+      stato: (kind, ref) => {
+        if (this.pagine.appesa(kind, ref)) return 'appesa';
+        return this.pagine.pienoZeppo ? 'piena' : 'libera';
+      },
+      appendi: async (kind, ref) => {
+        /* Uno strato per giro, e con un tetto: `_closeOverlays` torna vero
+           anche quando delega la chiusura (la lightbox), e un ciclo senza
+           fine qui sarebbe la casa bloccata su un tocco. */
+        for (let i = 0; i < 8 && this._closeOverlays(); i += 1) { /* avanti */ }
+        return this.pagine.appendi(kind, ref);
+      },
+      stacca: (kind, ref) => this.pagine.stacca(kind, ref),
+      ricarica: () => this.pagine.ricarica(),
+    });
   }
 
   /** Porta una richiesta gia' scritta dentro la conversazione e la manda.

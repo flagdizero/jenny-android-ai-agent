@@ -617,7 +617,13 @@
     "jumpToLetter": "Vai alla lettera {letter}",
     "frameCleartextBlocked": "{host} non si carica: usa http e la policy di rete dell'app permette il traffico in chiaro solo verso il gateway locale. Servono un server in https, oppure un'app di tipo vista esterna.",
     "frameLoadFailed": "{host} non si è caricato: {reason}",
-    "viewProxyFailed": "Impossibile aprire la vista esterna: {error}"
+    "viewProxyFailed": "Impossibile aprire la vista esterna: {error}",
+    "pinAsPage": "Metti come pagina",
+    "unpinPage": "Togli dalle pagine",
+    "unpinned": "Tolta dalle pagine",
+    "pageExternal": "Si apre fuori da Jenny: non può stare in una pagina",
+    "pageBroken": "È rotta: va riparata prima",
+    "pageFull": "Le pagine sono piene"
   },
   "graph": {
     "concepts": "Concetti",

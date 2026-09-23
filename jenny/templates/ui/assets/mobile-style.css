@@ -4806,6 +4806,27 @@ body {
 .oc-sheet-action.danger {
   color: var(--error, #e74c3c);
 }
+/* Una riga che non si puo' usare resta **visibile**, e dice perche': in casa
+   «Metti come pagina» su un'app che si apre fuori da Jenny. Una riga che
+   manca fa chiedere cosa c'e' di diverso; una spenta lo spiega. */
+.oc-sheet-action:disabled {
+  cursor: default;
+  opacity: .55;
+}
+.oc-sheet-action:disabled:active {
+  background: transparent;
+  opacity: .55;
+}
+.oc-sheet-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.oc-sheet-reason {
+  font-size: 11px;
+  color: var(--text-faint);
+}
 .oc-sheet-action.danger i {
   color: var(--error, #e74c3c);
 }

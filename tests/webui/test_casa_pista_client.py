@@ -1383,3 +1383,103 @@ def test_a_word_that_does_not_wrap_cannot_widen_every_page() -> None:
         "la pista ha perso `min-width: 0`: una parola che non va a capo "
         "allarga di nuovo tutte le pagine oltre lo schermo"
     )
+
+
+# ── Appendere e staccare (23/09/2026) ───────────────────────────────────────
+#
+# Una cosa si appende **dal posto dove vive** — l'app dal cassetto, il quaderno
+# dalla tendina — e queste tre sono l'unica porta. V. `.agent/pagine-dal-posto-plan.md`.
+
+
+def test_pinning_saves_the_page_and_lands_on_it() -> None:
+    """Chi l'ha appena aggiunta vuole vederla."""
+    _run(
+        "const fatto = await pagine.appendi('app', 'orto');\n"
+        "assert.equal(fatto, true);\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.deepEqual(api.scritture.at(-1).map((s) => [s.kind, s.ref]), [['app', 'orto']]);\n"
+        "assert.equal(pagine.indice, 1, 'non si e atterrati sulla pagina nuova');\n"
+        "assert.equal(pagine.appesa('app', 'orto'), true);\n"
+    )
+
+
+def test_pinning_twice_is_one_page() -> None:
+    """Due pagine sulla stessa cosa sono una di troppo."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "const prima = api.scritture.length;\n"
+        "assert.equal(await pagine.appendi('app', 'orto'), false);\n"
+        "assert.equal(api.scritture.length, prima, 'ha scritto una pagina doppia');\n"
+        "assert.equal(pagine.quante, 2);\n",
+        UNA,
+    )
+
+
+def test_with_the_ceiling_full_nothing_is_pinned() -> None:
+    piene = [{"id": f"p{i}", "kind": "app", "ref": f"x{i}"} for i in range(8)]
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.equal(await pagine.appendi('app', 'orto'), false);\n"
+        "assert.equal(api.scritture.length, 0, 'ha scritto oltre il tetto');\n",
+        piene,
+    )
+
+
+def test_the_same_ref_under_another_kind_is_another_page() -> None:
+    """`appesa` guarda specie **e** riferimento: un'app e un quaderno possono
+    chiamarsi uguale senza essere la stessa pagina."""
+    _run(
+        "assert.equal(pagine.appesa('app', 'orto'), true);\n"
+        "assert.equal(pagine.appesa('conversazione', 'orto'), false);\n",
+        UNA,
+    )
+
+
+def test_unpinning_saves_the_rest() -> None:
+    _run(
+        "assert.equal(await pagine.stacca('app', 'orto'), true);\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.deepEqual(api.scritture.at(-1).map((s) => s.id), ['p2']);\n"
+        "assert.equal(await pagine.stacca('app', 'orto'), false, 'ha staccato due volte');\n",
+        DUE,
+    )
+
+
+def test_rereading_keeps_you_on_your_page_when_it_is_still_there() -> None:
+    """Dopo una cancellazione fatta altrove la tua pagina puo' esserci ancora:
+    rileggere non deve riportarti alla chat, come farebbe `carica()`."""
+    _run(
+        "pagine.vaiA(2);\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._elenco = [SCHERMATE[1]];\n"
+        "await pagine.ricarica();\n"
+        "assert.equal(pagine.quante, 2);\n"
+        "assert.equal(pagine.indice, 1, 'non e rimasta sulla sua pagina');\n"
+        "assert.equal(pagine.schermate[0].id, 'p2');\n",
+        DUE,
+    )
+
+
+def test_rereading_when_your_page_is_gone_moves_you_to_a_neighbour() -> None:
+    _run(
+        "pagine.vaiA(2);\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._elenco = [SCHERMATE[0]];\n"
+        "await pagine.ricarica();\n"
+        "assert.equal(pagine.quante, 2);\n"
+        "assert.equal(pagine.indice, 1);\n",
+        DUE,
+    )
+
+
+def test_pinning_from_a_sheet_closes_what_is_above_first() -> None:
+    """Si appende dal cassetto o dalla tendina: atterrare sotto un cassetto
+    aperto vorrebbe dire non vedere di aver fatto niente. E il giro che chiude
+    gli strati ha un tetto, perche' `_closeOverlays` torna vero anche quando
+    delega la chiusura."""
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    porta = app_js.split("portaPagine() {", 1)[1].split("\n  }\n", 1)[0]
+    appendi = porta.split("appendi:", 1)[1].split("stacca:", 1)[0]
+    assert "this._closeOverlays()" in appendi
+    assert appendi.index("_closeOverlays") < appendi.index("this.pagine.appendi")
+    assert "i < 8" in appendi, "il giro che chiude gli strati non ha piu' un tetto"
