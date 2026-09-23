@@ -42,6 +42,25 @@ def test_the_notebooks_are_a_page_of_the_home() -> None:
     assert "this.pagine.registra('quaderni', { accendi: () => this.who.mostra() });" in app
 
 
+def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
+    """Il + tondo sta **nel pannello** della pagina e non nell'elenco che
+    scorre: e' tutto il motivo per cui ha preso il posto della riga. Si vede
+    anche con zero quaderni — e' li' che serve di piu' — e crea come prima."""
+    html = INDEX.read_text(encoding="utf-8")
+    pagina = html.split('data-pagina="quaderni"', 1)[1].split('data-pagina="impostazioni"', 1)[0]
+    assert 'id="casa-quaderni-nuovo"' in pagina, "la pagina Quaderni non ha il +"
+    elenco = pagina.split('id="casa-quaderni"', 1)[1].split("</div>", 1)[0]
+    assert "casa-quaderni-nuovo" not in elenco, "il + e' finito dentro l'elenco che scorre"
+    app = APP_JS.read_text(encoding="utf-8")
+    assert "getElementById('casa-quaderni-nuovo')" in app
+    assert "addEventListener('click', () => this.createNotebook())" in app
+    css = CSS.read_text(encoding="utf-8")
+    regola = css.split("\n.casa-quaderni-nuovo {", 1)[1].split("}", 1)[0]
+    assert "position: absolute" in regola and "z-index" not in regola
+    elenco_css = css.split("\n.casa-quaderni {", 1)[1].split("}", 1)[0]
+    assert "max(88px" in elenco_css, "l'ultimo quaderno finisce sotto il +"
+
+
 def test_the_old_dropdown_left_nothing_behind() -> None:
     """Un titolo che apre una tendina che non c'e' e' una porta disegnata sul
     muro; un `<dialog>` che nessuno apre e' codice che chi legge crede vivo."""

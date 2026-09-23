@@ -222,7 +222,6 @@ class CasaApp {
       personalName: () => this._personalName,
       currentProject: () => projectNameOf(sessionManager.currentKey),
       onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
-      onCreate: () => this.createNotebook(),
       onHold: (name) => this.schedaQuaderno().mostra(name),
     });
 
@@ -343,6 +342,9 @@ class CasaApp {
       this._autosize();
     };
     this.pagesBtn?.addEventListener('click', () => this.openPages());
+    /* Il + tondo della pagina Quaderni: un quaderno nuovo, e ci si entra. */
+    this.nuovoQuaderno = document.getElementById('casa-quaderni-nuovo');
+    this.nuovoQuaderno?.addEventListener('click', () => this.createNotebook());
     /* Le due vie d'uscita della stessa stanza, e fanno la stessa cosa: si esce
        da dove stai guardando — in alto a sinistra se leggi l'intestazione, in
        basso a destra col pollice. */
@@ -1474,6 +1476,7 @@ class CasaApp {
     this.jennyRoom?.applyTranslations();
     this.tu?.sayJenny(this.jennyRoom?.value());
     if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));
+    this.nuovoQuaderno?.setAttribute('aria-label', i18n.t('casa.who.newNotebook'));
     this.pages?.applyTranslations();
     // La pagina Quaderni ha le sue righe gia' disegnate: vanno riscritte.
     this.who?.render();

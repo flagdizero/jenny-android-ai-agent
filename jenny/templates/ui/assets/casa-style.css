@@ -917,8 +917,35 @@ body.casa {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  padding: 2px 18px calc(20px + var(--jenny-size) * var(--jenny-art-h));
+  /* In fondo il posto per il + tondo (16 + 56 + un respiro), o per Jenny se
+     e' piu' alta: l'ultimo quaderno non deve finire sotto nessuno dei due. */
+  padding: 2px 18px max(88px, calc(20px + var(--jenny-size) * var(--jenny-art-h)));
 }
+
+/* Il + tondo della pagina Quaderni: la sola cosa accesa della pagina, come il
+   tasto che manda nella chat. Sta nel pannello e non nell'elenco, quindi non
+   scorre. Niente `z-index`: e' posizionato e viene dopo l'elenco, quindi gli
+   sta sopra da se', e quello di Jenny resta l'unico del foglio. */
+.casa-quaderni-nuovo {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 26px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.casa-quaderni-nuovo:active { filter: brightness(0.92); }
 
 /* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
    vestito da bottone — il pannello e' una lista, non una pulsantiera — e tiene
@@ -1002,26 +1029,6 @@ body.casa {
   line-height: 1;
   text-align: center;
   color: var(--flower);
-}
-
-/* «Nuovo quaderno»: un comando, non una conversazione. Per questo ha il colore
-   dell'accento e non quello del testo, e una riga sopra che lo stacca
-   dall'elenco. */
-.casa-who-new {
-  gap: 10px;
-  min-height: 44px;
-  margin-top: 2px;
-  border-top: 1px solid var(--border);
-  color: var(--accent);
-}
-
-.casa-who-new i {
-  flex: none;
-  font-size: 18px;
-}
-
-.casa-who-new .casa-who-row-name {
-  font-size: 14px;
 }
 
 .casa-who-dot {

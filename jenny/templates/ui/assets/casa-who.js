@@ -43,18 +43,15 @@ export class WhoPanel {
    *         dove sta la spunta.
    *  @param onPick chiamata col nome del quaderno toccato — `null` per la
    *         conversazione personale.
-   *  @param onCreate chiamata da «Nuovo quaderno». Le due domande e le regole
-   *         stanno in `shared/project-create.js`: qui c'e' solo la riga.
    *  @param onHold chiamata col nome del quaderno **tenuto premuto**: apre la
    *         sua scheda (Apri · Metti come pagina · Rinomina · Elimina), come la
    *         pressione lunga su un'app nel cassetto. Una cosa si appende dal
    *         posto dove vive, e i quaderni vivono qui.
    */
-  constructor(contenitore, { personalName, currentProject, onPick, onCreate, onHold } = {}) {
+  constructor(contenitore, { personalName, currentProject, onPick, onHold } = {}) {
     this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
-    this._onCreate = onCreate || null;
     this._onHold = onHold || null;
     this._list = new ConversationList(() => api.listProjects());
     this._body = contenitore || null;
@@ -158,27 +155,9 @@ export class WhoPanel {
       }
     }
 
-    /* **Fuori dall'elenco.** E' un comando della pagina, non l'ultima delle
-       conversazioni. */
-    body.appendChild(this._newRow());
-  }
-
-  _newRow() {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'casa-who-row casa-who-new';
-    row.addEventListener('click', () => this._onCreate?.());
-
-    const plus = document.createElement('i');
-    plus.className = 'ti ti-plus';
-    plus.setAttribute('aria-hidden', 'true');
-    row.appendChild(plus);
-
-    const label = document.createElement('span');
-    label.className = 'casa-who-row-name';
-    label.textContent = i18n.t('casa.who.newNotebook');
-    row.appendChild(label);
-    return row;
+    /* «Nuovo quaderno» non sta qui: e' il tasto + tondo della pagina, fermo
+       sopra l'elenco che scorre (index.html, `#casa-quaderni-nuovo`). Una riga
+       in fondo all'elenco, con tanti quaderni, finiva sotto il bordo. */
   }
 
   _label(text, divided = false) {

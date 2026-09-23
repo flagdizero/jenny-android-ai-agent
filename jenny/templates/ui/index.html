@@ -179,6 +179,14 @@
          disegna `casa-who.js` qui dentro invece che in un `<dialog>`. -->
     <div class="casa-pagina" data-pagina="quaderni">
       <div class="casa-quaderni" id="casa-quaderni"></div>
+      <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.
+           Era una riga in fondo all'elenco, e con tanti quaderni finiva sotto il
+           bordo. Fuori da `#casa-quaderni` apposta: quello scorre, e il
+           pannello no. -->
+      <button class="casa-quaderni-nuovo" id="casa-quaderni-nuovo" type="button"
+              aria-label="Nuovo quaderno">
+        <i class="ti ti-plus" aria-hidden="true"></i>
+      </button>
     </div>
     <div class="casa-pagina" data-pagina="impostazioni">
       <!-- La pagina Impostazioni: «Tu e Jenny», che fino al 23/09/2026 era una
