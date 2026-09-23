@@ -964,3 +964,29 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
       await app.switchConversation(null);
       assert.equal(chiesti[1], sessionManager.personalKey);
     """)
+
+
+def test_back_closes_an_app_sheet_before_the_drawer_under_it() -> None:
+    """**Visto sul telefono il 23/09/2026.** Il cassetto aperto, e sopra il
+    foglio di un'app — Open, Edit, Delete — aperto con una pressione lunga.
+
+    Indietro chiudeva il cassetto *sotto* e lasciava il foglio sopra la chat,
+    tasto Delete compreso. I due fogli delle app sono `<dialog>` aperti con
+    `showModal()`: stanno nel top layer, **sopra** il cassetto, e il loro stesso
+    commento in `apps-actions.js` dice che Indietro chiude prima loro. La casa
+    non li nominava.
+    """
+    _run_js("""
+      const app = casa();
+      app.launcher = { aperto: true, isOpen() { return this.aperto; }, close() { this.aperto = false; } };
+      for (const id of ['jenny-app-sheet', 'android-app-sheet']) {
+        const foglio = document.getElementById(id);
+        foglio.open = true;
+        foglio.close = function () { this.open = false; };
+        assert.equal(app._closeOverlays(), true);
+        assert.equal(foglio.open, false, id + ': Indietro ha lasciato il foglio aperto');
+        assert.equal(app.launcher.aperto, true, id + ': ha chiuso il cassetto sotto invece del foglio');
+      }
+      assert.equal(app._closeOverlays(), true);
+      assert.equal(app.launcher.aperto, false, 'la seconda pressione deve chiudere il cassetto');
+    """)

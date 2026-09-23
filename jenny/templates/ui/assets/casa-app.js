@@ -964,13 +964,28 @@ class CasaApp {
    *  l'ordine e' una garanzia, non una scelta fra due candidati.
    */
   _closeOverlays() {
-    /* Il cassetto per primo: e' il piu' alto di tutti, e in officina sta nello
-       stesso posto della catena (fra la mini-app e la tendina). Il suo
-       `close()` e' idempotente, quindi `isOpen()` e' l'unica domanda da fare —
-       e si chiama cosi', non `present()`: quello e' il nome della *proprieta'*
-       che l'officina mette nei suoi livelli di overlay, e scriverlo qui sarebbe
-       passato in silenzio (optional chaining su un metodo che non c'e' torna
-       `undefined`, cioe' «Indietro non chiude il cassetto» senza un errore). */
+    /* Prima ancora del cassetto, i due fogli delle app che si aprono **dal**
+       cassetto con una pressione lunga (Open, Edit, Delete). Sono `<dialog>`
+       con `showModal()`: stanno nel top layer, sopra il cassetto, e il loro
+       commento in `apps-actions.js` lo dice — Indietro chiude prima loro. Qui
+       non c'erano: visto sul telefono il 23/09/2026, Indietro chiudeva il
+       cassetto sotto e lasciava il foglio aperto sopra la chat, Delete
+       compreso. */
+    for (const id of ['jenny-app-sheet', 'android-app-sheet']) {
+      const foglio = document.getElementById(id);
+      if (foglio?.open) {
+        foglio.close();
+        return true;
+      }
+    }
+    /* Poi il cassetto: sotto i suoi fogli, sopra tutto il resto, e in officina
+       sta nello stesso posto della catena (fra la mini-app e la tendina). Il
+       suo `close()` e' idempotente, quindi `isOpen()` e' l'unica domanda da
+       fare — e si chiama cosi', non `present()`: quello e' il nome della
+       *proprieta'* che l'officina mette nei suoi livelli di overlay, e
+       scriverlo qui sarebbe passato in silenzio (optional chaining su un metodo
+       che non c'e' torna `undefined`, cioe' «Indietro non chiude il cassetto»
+       senza un errore). */
     if (this.launcher?.isOpen()) {
       this.launcher.close();
       return true;
