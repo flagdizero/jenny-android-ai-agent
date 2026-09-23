@@ -306,6 +306,7 @@ class App {
   __NOME_CHAT__
   __HA_COMPOSER__
   __POSA_JENNY__
+  __CHIEDI_NOMI_APP__
   __OPEN_JENNY__
   __OPEN_UPDATES__
   __ASK_SETTINGS__
@@ -362,6 +363,7 @@ def _harness() -> str:
         .replace("__NOME_CHAT__", _member(src, "_nomeChat"))
         .replace("__HA_COMPOSER__", _member(src, "_haComposer"))
         .replace("__POSA_JENNY__", _member(src, "_posaJenny"))
+        .replace("__CHIEDI_NOMI_APP__", _member(src, "_chiediNomiApp"))
         .replace("__OPEN_JENNY__", _member(src, "openJenny"))
         .replace("__OPEN_UPDATES__", _member(src, "openUpdates"))
         .replace("__ASK_SETTINGS__", _member(src, "_askSettings"))
@@ -1055,4 +1057,30 @@ def test_back_leaves_the_moving_mode_without_saving() -> None:
       app.fila.ordinando = true;
       assert.equal(app._closeOverlays(), true);
       assert.deepEqual(app.fatti, ['ordina chiusa']);
+    """)
+
+
+def test_the_row_asks_for_the_app_names_once_and_only_the_light_list() -> None:
+    """Lo slug non e' il nome: «todo» invece di «Todo» (telefono, 23/09/2026).
+    Si chiede l'elenco delle Jenny App e basta — non quello delle app Android,
+    che porta le icone — una volta, e solo se c'e' un'app appesa."""
+    _run_js("""
+      const app = casa();
+      const chieste = [];
+      let disegni = 0;
+      app.fila.disegna = () => { disegni += 1; };
+      app.appsSource = () => ({
+        jennyApps: [],
+        loadJennyApps: () => { chieste.push('jenny'); return Promise.resolve(); },
+        ensureLoaded: () => chieste.push('tutto'),
+      });
+      app.pagine.schermate = [{ id: 'q1', kind: 'conversazione', ref: 'project:piante' }];
+      app._chiediNomiApp();
+      assert.deepEqual(chieste, [], 'senza app appese ha letto un elenco');
+      app.pagine.schermate.push({ id: 'p1', kind: 'app', ref: 'todo' });
+      app._chiediNomiApp();
+      app._chiediNomiApp();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.deepEqual(chieste, ['jenny']);
+      assert.equal(disegni, 1, 'la fila non si e ridisegnata coi nomi');
     """)

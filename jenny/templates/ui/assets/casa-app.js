@@ -743,6 +743,22 @@ class CasaApp {
    *  ordine nuovo. */
   onPagineCambiate() {
     this.fila?.disegna();
+    this._chiediNomiApp();
+  }
+
+  /* Il nome vero di un'app appesa lo sa l'elenco delle Jenny App, che all'avvio
+     nessuno ha ancora letto: la fila scriveva lo slug, «todo» invece di «Todo»
+     (visto sul telefono il 23/09/2026, nella modalita' ordina). Si chiede
+     **solo quell'elenco**, che e' una lettura leggera, e non `ensureLoaded`:
+     quella porta anche le app Android con le icone in base64, che il cassetto
+     legge quando lo apri. Una volta sola, e solo se c'e' un'app appesa. */
+  _chiediNomiApp() {
+    if (this._nomiAppChiesti) return;
+    if (!this.pagine?.schermate?.some((s) => s.kind === 'app')) return;
+    this._nomiAppChiesti = true;
+    const fonte = this.appsSource();
+    if (fonte.jennyApps?.length) return;
+    fonte.loadJennyApps?.().then(() => this.fila?.disegna()).catch(() => {});
   }
 
   /* Le pagine su cui si scrive: la chat, e una pagina quaderno che la ospita. */
