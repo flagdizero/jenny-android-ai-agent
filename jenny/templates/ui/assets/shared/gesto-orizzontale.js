@@ -144,6 +144,39 @@ export function tieneOrizzontale(el) {
   return !/pan-(x|left|right)/.test(valore);
 }
 
+/** **Mentre la pagina scorre di lato, niente scorre su e giu'.** Lo chiede
+ *  l'utente (23/09/2026), e il `preventDefault` sul `touchmove` da solo non
+ *  basta: l'asse si decide a 24px (v. `SOGLIA_ASSE`), ma il browser comincia a
+ *  scorrere in verticale gia' a ~8. Da li' i suoi `touchmove` non sono piu'
+ *  annullabili, e il filo sotto seguiva il dito in su e in giu' insieme alla
+ *  pagina che andava di lato.
+ *
+ *  Uno scorrevole con `overflow-y: hidden` invece non si fa scorrere dal dito,
+ *  nemmeno a gesto iniziato. Si bloccano quelli sotto il dito — piu' la pagina
+ *  intera, che dentro una app e' lo scorrevole di tutto — e si liberano al
+ *  rilascio, ciascuno col valore che aveva. La posizione non cambia: `hidden`
+ *  toglie lo scorrimento al dito, non lo `scrollTop`.
+ *
+ *  @returns {() => void} per liberarli.
+ */
+export function bloccaVerticali(bersaglio) {
+  const bloccati = [];
+  const blocca = (el) => {
+    if (!el?.style || bloccati.some((b) => b.el === el)) return;
+    if (!(el.scrollHeight > el.clientHeight + 1)) return;
+    bloccati.push({ el, prima: el.style.overflowY });
+    el.style.overflowY = 'hidden';
+  };
+  for (let el = bersaglio; el && el !== document.body; el = el.parentElement) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') blocca(el);
+  }
+  blocca(document.scrollingElement);
+  return () => {
+    for (const { el, prima } of bloccati) el.style.overflowY = prima;
+  };
+}
+
 /** Un elemento che si tocca per premere, non per trascinare. */
 export function eUnComando(el) {
   if (/^(BUTTON|A|LABEL|SELECT|SUMMARY|INPUT)$/.test(el.tagName || '')) return true;
@@ -206,10 +239,14 @@ export function osservaGestoOrizzontale(elemento, {
   let puntatore = null;      // l'id del puntatore del dito, per annullarlo (esclusivo)
   let sintetico = false;     // stiamo mandando noi l'annullo: non e' un evento vero
 
+  let libera = null;         // libera gli scorrevoli verticali bloccati
+
   const azzera = () => {
     inAscolto = false;
     orizzontale = false;
     bersaglio = null;
+    libera?.();
+    libera = null;
   };
 
   const larghezza = () => elemento.clientWidth || window.innerWidth;
@@ -247,6 +284,7 @@ export function osservaGestoOrizzontale(elemento, {
       if (Math.abs(dx) <= Math.abs(dy) * 1.5) { azzera(); return; }
       if (gestoDiUnComponente(bersaglio, elemento)) { azzera(); return; }
       orizzontale = true;
+      libera = bloccaVerticali(bersaglio);
       if (esclusivo) annullaPerLAltro(e);
       onOrizzontale?.();
     }

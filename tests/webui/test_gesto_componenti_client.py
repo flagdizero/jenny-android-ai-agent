@@ -34,11 +34,12 @@ import assert from 'node:assert/strict';
 
 /* ── Il DOM finto ──────────────────────────────────────────────────────── */
 
-function el(tag = 'DIV', { touchAction = 'auto', overflowX = 'visible', role = null,
-                           type = null, parent = null } = {}) {
+function el(tag = 'DIV', { touchAction = 'auto', overflowX = 'visible', overflowY = 'visible',
+                           role = null, type = null, parent = null } = {}) {
   const e = {
-    tagName: tag, type, parentElement: parent, touchAction, overflowX,
-    scrollWidth: 0, clientWidth: 400, scrollLeft: 0,
+    tagName: tag, type, parentElement: parent, touchAction, overflowX, overflowY,
+    scrollWidth: 0, clientWidth: 400, scrollLeft: 0, scrollHeight: 0, clientHeight: 400,
+    style: {},
     ricevuti: [],
     getAttribute: (n) => (n === 'role' ? role : null),
     dispatchEvent(ev) { this.ricevuti.push(ev); lancia(ev.type, ev); return true; },
@@ -47,7 +48,9 @@ function el(tag = 'DIV', { touchAction = 'auto', overflowX = 'visible', role = n
 }
 
 globalThis.document = { body: el('BODY') };
-globalThis.getComputedStyle = (e) => ({ overflowX: e.overflowX, touchAction: e.touchAction });
+globalThis.getComputedStyle = (e) => ({
+  overflowX: e.overflowX, overflowY: e.overflowY, touchAction: e.touchAction,
+});
 let selezione = '';
 globalThis.getSelection = () => ({ isCollapsed: !selezione, toString: () => selezione });
 
@@ -119,6 +122,7 @@ function scorri(bersaglio, { app = null, fine = true } = {}) {
 
 const radice = el('HTML');
 document.body.parentElement = radice;
+document.scrollingElement = radice;
 const dentro = (tag, opz = {}) => el(tag, { parent: document.body, ...opz });
 """
 
@@ -326,5 +330,54 @@ stacca();
 const { stacca: s2 } = osserva({ esclusivo: true });
 s2();
 assert.equal(ascolti.length, prima, 'staccare ha lasciato ascolti appesi');
+"""
+    )
+
+
+def test_while_the_page_swipes_nothing_scrolls_up_and_down() -> None:
+    """«Se ho lo swipe destra sinistra in corso non posso fare anche scroll su giu».
+
+    Il browser comincia a scorrere in verticale prima che l'asse sia deciso, e
+    da li' il `preventDefault` non vale: si blocca lo scorrevole stesso.
+    """
+    _run_js(
+        """
+radice.scrollHeight = 2000;
+const filo = dentro('DIV', { overflowY: 'auto' });
+filo.scrollHeight = 3000;
+filo.style.overflowY = 'scroll';        // un valore suo, da restituire
+const corto = el('DIV', { overflowY: 'auto', parent: filo });
+corto.scrollHeight = 100;               // non scorre: non si tocca
+const alto = el('DIV', { parent: corto });  // sfora ma non scorre: `hidden` lo taglierebbe
+alto.scrollHeight = 5000;
+const riga = el('P', { parent: alto });
+
+const { visto } = osserva();
+scorri(riga, { fine: false });
+assert.equal(visto[0], 'inizio');
+assert.equal(filo.style.overflowY, 'hidden', 'il filo scorre ancora su e giu');
+assert.equal(radice.style.overflowY, 'hidden', 'la pagina intera scorre ancora');
+assert.equal(corto.style.overflowY, undefined, 'bloccato uno che non scorre');
+assert.equal(alto.style.overflowY, undefined, 'tagliato un elemento che non e\\' uno scorrevole');
+
+lancia('touchend', { target: riga, changedTouches: [dito(150)] });
+assert.equal(filo.style.overflowY, 'scroll', 'il filo non e\\' tornato com\\'era');
+assert.equal(radice.style.overflowY, undefined);
+
+// annullato dal sistema a meta': si libera lo stesso
+scorri(riga, { fine: false });
+assert.equal(filo.style.overflowY, 'hidden');
+lancia('touchcancel', { target: riga });
+assert.equal(filo.style.overflowY, 'scroll');
+
+// e un gesto che resta al componente, o verticale, non blocca niente
+const striscia = el('DIV', { overflowX: 'auto', parent: filo });
+striscia.scrollWidth = 900;
+scorri(el('BUTTON', { parent: striscia }), { fine: false });
+assert.equal(filo.style.overflowY, 'scroll');
+lancia('touchend', { target: riga, changedTouches: [dito(150)] });
+lancia('touchstart', { target: riga, touches: [dito(300, 100)] });
+lancia('touchmove', { target: riga, touches: [dito(302, 180)] });
+assert.equal(filo.style.overflowY, 'scroll');
 """
     )

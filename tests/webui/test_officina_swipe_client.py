@@ -257,6 +257,7 @@ def _harness() -> str:
                 _funzione(gesto, nome)
                 for nome in (
                     "gestoDiUnComponente", "tieneOrizzontale", "eUnComando", "testoSelezionato",
+                    "bloccaVerticali",
                 )
             ),
         )
