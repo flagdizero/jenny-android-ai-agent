@@ -75,6 +75,9 @@ export class Trasloco {
        filo e' vuoto, o e' gia' quello nuovo: la foto della conversazione
        lasciata direbbe il falso, e resterebbe li' fino alla visita dopo. */
     this._affidabile = true;
+    /** Il pannello in cui la chat e' stata riportata **senza** cambiarle
+     *  conversazione (v. `riportaACasa`), o `null`. */
+    this._fuoriPosto = null;
   }
 
   /** La chat arriva in `pannello`, che mostra la conversazione `chiave`.
@@ -94,8 +97,13 @@ export class Trasloco {
     if (da && da !== pannello) {
       const lasciata = this._chiaveAttuale?.();
       if (this._affidabile) this._negativi.set(lasciata, this._negativo());
-      this._mettiFoto(da, lasciata);
+      /* ...tranne quando la chat li' era **fuori posto**: riportata a casa da
+         un ridisegno, mostrava ancora il quaderno da cui veniva. La pagina che
+         lascia ha gia' la foto giusta — la sua — e appenderci questa vorrebbe
+         dire far entrare il quaderno nella pagina 0, a meta' scorrimento. */
+      if (da !== this._fuoriPosto) this._mettiFoto(da, lasciata);
     }
+    this._fuoriPosto = null;
 
     /* 2. La chat entra **sotto** la foto della pagina d'arrivo. Se la pagina
           una foto non ce l'ha — appena disegnata — gliene si da' una adesso,
@@ -154,6 +162,9 @@ export class Trasloco {
     if (!this.chat || !casa || this.chat.parentElement !== vecchio) return;
     this._arrivi += 1;  // un arrivo in volo verso `vecchio` non tocca piu' niente
     casa.insertBefore(this.chat, fotoIn(casa));
+    /* La chat e' a casa ma con la conversazione di prima, sotto la foto di
+       casa: il prossimo arrivo lo deve sapere (v. il passo 1 di `arriva`). */
+    this._fuoriPosto = casa;
   }
 
   /* ── La foto ─────────────────────────────────────────────────────────── */

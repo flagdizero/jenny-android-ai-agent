@@ -447,3 +447,58 @@ def test_giving_back_from_a_panel_that_does_not_hold_it_does_nothing() -> None:
         "assert.equal(chat.parentElement, p0);\n"
         "assert.equal(p0.children.filter((c) => c === chat).length, 1);\n"
     )
+
+
+def test_after_coming_home_out_of_place_page_zero_keeps_its_own_photo() -> None:
+    """**Trovato rileggendo, dopo il giro sul telefono del 23/09/2026.**
+
+    Sei sulla pagina di un quaderno e aggiungi o togli una pagina: il
+    ridisegno riporta la chat a casa **cosi' com'e'**, cioe' mostrando il
+    quaderno, sotto la foto della pagina 0. Subito dopo la pista torna sulla
+    pagina del quaderno, e la chat riparte da casa. Se a quel punto il trasloco
+    fotografasse la chat e appendesse la foto nella pagina che lascia, la
+    pagina 0 riceverebbe la foto **del quaderno**: la si vedrebbe entrare a
+    meta' scorrimento, e il trucco si vedrebbe.
+    """
+    _run(
+        "let a = t.arriva(p1, 'B'); letture[0].finisci(); await a;\n"
+        "assert.deepEqual(messaggiDi(fotoDi(p0)), ['A1', 'A2']);\n"
+        "t.riportaACasa(p1, p0);\n"            # il ridisegno
+        "await t.arriva(p2, 'B');\n"           # la pagina del quaderno, rifatta
+        "assert.equal(chat.parentElement, p2);\n"
+        "assert.deepEqual(messaggiDi(fotoDi(p0)), ['A1', 'A2'],\n"
+        "  'la pagina 0 ha preso la foto del quaderno');\n"
+    )
+
+
+def test_coming_home_out_of_place_then_arriving_home_still_switches() -> None:
+    """E se dopo il ridisegno si torna proprio alla pagina 0, la chat cambia:
+    era a casa, ma con la conversazione sbagliata sotto la foto."""
+    _run(
+        "let a = t.arriva(p1, 'B'); letture[0].finisci(); await a;\n"
+        "t.riportaACasa(p1, p0);\n"
+        "a = t.arriva(p0, 'A');\n"
+        "assert.ok(fotoDi(p0), 'la chat sbagliata e scoperta durante la lettura');\n"
+        "letture[1].finisci(); await a;\n"
+        "assert.deepEqual(cambi, ['B', 'A']);\n"
+        "assert.equal(fotoDi(p0), null);\n"
+        "assert.deepEqual(messaggiDi(chat), ['A1', 'A2']);\n"
+    )
+
+
+def test_the_out_of_place_mark_lasts_one_arrival_only() -> None:
+    """Il segno vale per l'arrivo dopo il ridisegno, e poi si spegne.
+
+    Se restasse, la pagina 0 non aggiornerebbe piu' la sua foto: la
+    conversazione va avanti, e scorrendo entrerebbe quella di ieri.
+    """
+    _run(
+        "let a = t.arriva(p1, 'B'); letture[0].finisci(); await a;\n"
+        "t.riportaACasa(p1, p0);\n"
+        "await t.arriva(p2, 'B');\n"                         # consuma il segno
+        "storie.A = ['A1', 'A2', 'A3 nuovo'];\n"
+        "a = t.arriva(p0, 'A'); letture[1].finisci(); await a;\n"
+        "a = t.arriva(p2, 'B'); letture[2].finisci(); await a;\n"
+        "assert.deepEqual(messaggiDi(fotoDi(p0)), ['A1', 'A2', 'A3 nuovo'],\n"
+        "  'la pagina 0 ha smesso di aggiornare la sua foto');\n"
+    )
