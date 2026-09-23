@@ -124,11 +124,6 @@ pista.appendChild(pannelloChat);
 /* La striscia dei pallini: dove sei, e la presa del cassetto. */
 const striscia = creaEl('casa-pallini', 'casa-pallini');
 striscia.textContent = '';
-/* Il foglio «Le pagine di casa» e i nodi che riempie. */
-const foglio = creaEl('casa-pagine-dialog', 'casa-foglio-pagine');
-const elenco = creaEl('casa-foglio-elenco', 'casa-foglio-elenco');
-for (const id of ['casa-foglio-titolo', 'casa-foglio-occhiello',
-                  'casa-foglio-nota-cassetto', 'casa-foglio-nota-viva']) creaEl(id, '');
 
 /* **Un dito porta due righelli**, come quello vero: `client` e' relativo alla
    finestra di chi ascolta, `screen` allo schermo. Qui sono sfalsati di una
@@ -142,18 +137,6 @@ function dito(x, y) {
   return { clientX: x, clientY: y, screenX: x + SFALSO_X, screenY: y + SFALSO_Y };
 }
 
-/* Tenere premuto: giu', mezzo secondo, su. Il timer e' quello vero del
-   modulo condiviso, quindi si aspetta davvero. */
-async function tieniPremuto({ muovi = 0 } = {}) {
-  lancia(striscia, 'touchstart', { touches: [dito(200, 550)], target: striscia });
-  if (muovi) {
-    lancia(striscia, 'touchmove', {
-      touches: [dito(200 + muovi, 550)], preventDefault() {},
-    });
-  }
-  await new Promise((r) => setTimeout(r, 620));
-  lancia(striscia, 'touchend', { changedTouches: [dito(200 + muovi, 550)] });
-}
 globalThis.document = {
   getElementById: (id) => elementi.get(id) || null,
   createElement: (t) => creaEl(null, ''),
@@ -528,7 +511,7 @@ def test_a_read_that_fails_leaves_the_chat_standing() -> None:
     )
 
 
-# ── La forma nel documento e nel foglio ─────────────────────────────────────
+# ── La forma nel documento ──────────────────────────────────────────────────
 
 
 def test_the_chat_lives_inside_a_page_panel() -> None:
@@ -569,7 +552,7 @@ def test_the_track_adds_no_z_index() -> None:
     assert len([r for r in css.splitlines() if r.strip().startswith("z-index:")]) == 1
 
 
-# ── La striscia: dove sei, e la presa del cassetto ──────────────────────────
+# ── La striscia: dove sei ───────────────────────────────────────────────────
 
 
 def test_the_strip_is_there_even_with_only_the_chat() -> None:
@@ -616,8 +599,9 @@ def test_the_strip_does_not_try_to_open_the_drawer() -> None:
     La zona del gesto di home **non e' escludibile**:
     `setSystemGestureExclusionRects` vale per il gesto indietro, sui bordi
     laterali, non per quello. Quindi il cassetto e' tornato al suo bottone, e
-    la striscia fa le due cose che funzionano: dire dove sei, e aprire il
-    foglio se la tieni premuta.
+    la striscia fa quel che funziona: dire dove sei, e cambiare pagina
+    toccando. (Per un giro la si poteva anche tenere premuta per aprire il
+    foglio delle pagine; il foglio e' uscito il 23/09/2026.)
 
     Il banco tiene il codice **onesto**: niente ascoltatori che aspettano un
     evento che il sistema non manda mai.
@@ -628,135 +612,6 @@ def test_the_strip_does_not_try_to_open_the_drawer() -> None:
         "arriva mai all'app con la navigazione a gesti"
     )
     assert "touchend" not in sorgente, "un ascoltatore che il sistema non fa scattare"
-
-
-def test_a_pull_up_is_not_a_hold() -> None:
-    """Il verso opposto dell'altra prova: tirare su non apre il foglio.
-
-    Qui non salva la guardia sull'orizzontale — un dito verticale non arma
-    quel ramo — ma `azzera()`, che disarma la pressione quando la dominanza
-    non passa. Senza una delle due, tirare su lentamente aprirebbe il foglio
-    invece del cassetto.
-    """
-    _run(
-        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
-        "lancia(striscia, 'touchmove', {touches: [dito(200, 480)], preventDefault(){}});\n"
-        "await new Promise((r) => setTimeout(r, 620));\n"
-        "lancia(striscia, 'touchend', {changedTouches: [dito(200, 480)]});\n"
-        "assert.equal(foglio.open, false, 'tirare su ha aperto il foglio');"
-    )
-
-
-def test_a_hold_after_a_tap_still_needs_its_own_half_second() -> None:
-    """Ogni tocco riparte da zero: il contatore del precedente non lo aiuta.
-
-    Il primo tocco arma un contatore. Se non venisse disarmato al tocco
-    successivo resterebbe pendente, e la pressione che arriva subito dopo si
-    aprirebbe **in anticipo** — al mezzo secondo del *primo* tocco, non del
-    suo. Non e' un'apertura spuria (la guardia su `inAscolto` copre il caso in
-    cui il dito non c'e' piu'): e' mezzo gesto contato due volte, che dal dito
-    si sente come un foglio che scatta prima del dovuto.
-
-    Misurato dopo che la mutazione «`azzera()` non disarma» era sopravvissuta a
-    una prima stesura che raccontava un difetto piu' grosso di quello vero.
-    """
-    _run(
-        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
-        "lancia(striscia, 'touchend', {changedTouches: [dito(200, 550)]});\n"
-        "await new Promise((r) => setTimeout(r, 120));\n"
-        "lancia(striscia, 'touchstart', {touches: [dito(200, 550)], target: striscia});\n"
-        "await new Promise((r) => setTimeout(r, 400));\n"
-        "assert.equal(foglio.open, false, 'il foglio si e aperto col contatore del tocco prima');\n"
-        "await new Promise((r) => setTimeout(r, 220));\n"
-        "assert.equal(foglio.open, true, 'la pressione vera non ha aperto niente');"
-    )
-
-
-def test_holding_does_not_also_open_the_drawer() -> None:
-    """I due gesti convivono sulla striscia e non devono sommarsi."""
-    _run(
-        "let aperto = 0;\n"
-        "app.openLauncher = () => { aperto += 1; };\n"
-        "await tieniPremuto();\n"
-        "assert.equal(foglio.open, true);\n"
-        "assert.equal(aperto, 0, 'la pressione ha aperto anche il cassetto');"
-    )
-
-
-def test_the_sheet_lists_the_pages_and_offers_the_next_one() -> None:
-    _run(
-        "await tieniPremuto();\n"
-        "const righe = elenco.children.filter((c) => c.className === 'casa-foglio-riga');\n"
-        "assert.equal(righe.length, 2);\n"
-        "const libera = elenco.children.filter((c) => c.className === 'casa-foglio-libera');\n"
-        "assert.equal(libera.length, 1, 'manca la riga vuota con la scelta');",
-        schermate=DUE,
-    )
-
-
-def test_the_choices_are_two_and_the_drawer_is_not_one() -> None:
-    """App e quaderno. Il **cassetto** resta fuori, e con motivo; le stanze sono
-    uscite il 23/09/2026 (posti dove si va, non dove si sta).
-
-    Il cassetto ha gia' il suo bottone accanto a dove scrivi: due porte per la
-    stessa stanza sono una di troppo. La **conversazione** era fuori anche lei
-    (22/09/2026: «la chat e' una sola») ed e' rientrata il 23/09 in un'altra
-    forma — non una seconda chat, una scorciatoia che cambia quella che c'e',
-    travestita da pagina (v. `casa-trasloco.js`).
-    """
-    _run(
-        "await tieniPremuto();\n"
-        "const libera = elenco.children.find((c) => c.className === 'casa-foglio-libera');\n"
-        "const scelte = libera.children[1].children.map((b) => b.dataset.kind);\n"
-        "assert.deepEqual(scelte, ['app', 'conversazione']);",
-        schermate=UNA,
-    )
-
-
-def test_with_the_ceiling_full_there_is_nothing_to_add() -> None:
-    piene = [{"id": f"p{i}", "kind": "app", "ref": "x"} for i in range(8)]
-    _run(
-        "await tieniPremuto();\n"
-        "assert.equal(elenco.children.filter((c) => c.className === 'casa-foglio-libera').length, 0);",
-        schermate=piene,
-    )
-
-
-def test_removing_a_page_saves_the_rest() -> None:
-    _run(
-        "await tieniPremuto();\n"
-        "const riga = elenco.children.find((c) => c.dataset.id === 'p1');\n"
-        "riga.children[2].click();\n"
-        "await new Promise((r) => setTimeout(r, 10));\n"
-        "const api = (await import('./shared/api-client.js')).api;\n"
-        "assert.deepEqual(api.scritture[0].map((x) => x.id), ['p2']);",
-        schermate=DUE,
-    )
-
-
-# ── Il secondo passo: quale ─────────────────────────────────────────────────
-
-
-def test_a_broken_or_external_app_cannot_become_a_page() -> None:
-    """Una pagina fissa rotta resterebbe li' a non funzionare tutti i giorni, e
-    un'app esterna apre un indirizzo che il guscio non controlla."""
-    _run(
-        "await tieniPremuto();\n"
-        "const voci = await pagine._voci('app');\n"
-        "assert.deepEqual(voci.map((v) => v.ref), ['orto', 'lampo']);"
-    )
-
-
-def test_choosing_lands_you_on_the_new_page() -> None:
-    """Chi l'ha appena aggiunta vuole vederla: restare sulla chat gli farebbe
-    credere che non sia successo niente."""
-    _run(
-        "await tieniPremuto();\n"
-        "await pagine._aggiungi('app', 'orto');\n"
-        "assert.equal(pagine.quante, 2);\n"
-        "assert.equal(pagine.indice, 1);\n"
-        "assert.equal(foglio.open, false, 'il foglio e rimasto aperto');"
-    )
 
 
 # ── Cosa c'e' dentro una pagina ─────────────────────────────────────────────
@@ -854,37 +709,6 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     assert "data-pagina" in cambio, "l'attributo non viene aggiornato al cambio pagina"
 
 
-def test_the_app_list_is_waited_for_not_just_started() -> None:
-    """**Il difetto visto sul telefono il 22 settembre 2026.**
-
-    `ensureLoaded()` non e' asincrona: avvia le due fetch e torna subito.
-    Chi ci mette un `await` davanti aspetta `undefined`, cioe' niente — e
-    decide che l'elenco e' vuoto un istante prima che arrivi. A schermo:
-    «non hai Jenny App» a un utente che ne aveva quattro.
-
-    Il banco lo prende perche' la fonte finta risponde **dopo un giro**, come
-    la rete vera.
-    """
-    _run(
-        "const voci = await pagine._voci('app');\n"
-        "assert.deepEqual(voci.map((v) => v.ref), ['orto', 'lampo'],\n"
-        "  'l elenco e stato letto prima che arrivasse');"
-    )
-
-
-def test_the_empty_message_is_only_for_a_real_empty_list() -> None:
-    """Aprire la scelta e trovare «non hai Jenny App» mentre le hai e' peggio
-    di aspettare: si crede a quel che c'e' scritto."""
-    _run(
-        "await tieniPremuto();\n"
-        "await pagine._apriScelta('app');\n"
-        "const testi = elenco.children.map((c) => c.className);\n"
-        "assert.ok(!testi.includes('casa-foglio-nota'),\n"
-        "  'ha detto che non ci sono app');\n"
-        "assert.equal(elenco.children.length, 3, 'Indietro piu due app');"
-    )
-
-
 def test_the_app_frame_is_not_built_without_the_secret() -> None:
     """Il token viaggia **nell'indirizzo** della cornice.
 
@@ -978,29 +802,6 @@ def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
     i = html.index('class="casa-vetrina"')
     j = html.index('class="casa-pista"')
     assert i < j, "l'involucro non sta piu' attorno alla pista"
-
-
-def test_back_closes_the_pages_sheet() -> None:
-    """**Trovato sul telefono, non leggendo.**
-
-    Indietro usciva dalla stanza lasciando il foglio aperto sopra la
-    conversazione. Un `<dialog>` modale si chiude da se' con Escape, ma li'
-    Indietro arriva dal guscio nativo come un evento suo e nessuno lo traduce:
-    va nominato nella catena, come il foglio di «Segnala» accanto — che porta
-    lo stesso commento da prima, e non e' bastato a farmelo ricordare.
-    """
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
-    catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }", 1)[0]
-    assert "casa-pagine-dialog" in catena, (
-        "Indietro non chiude il foglio delle pagine: resta aperto sopra un'altra stanza"
-    )
-
-
-def test_a_tap_outside_closes_the_pages_sheet() -> None:
-    """Come ogni foglio che sale dal basso. Un `<dialog>` non lo fa da se'."""
-    src = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
-    apri = src.split("apriFoglio() {", 1)[1].split("\n  },", 1)[0]
-    assert "getBoundingClientRect" in apri and "chiudiFoglio" in apri
 
 
 # ── Il gesto che arriva da dentro una app ───────────────────────────────────
@@ -1329,47 +1130,7 @@ def test_from_an_app_page_a_conversation_opens_on_page_zero() -> None:
     )
 
 
-# ── Il foglio: scegliere un quaderno ────────────────────────────────────────
-
-
-def test_the_notebooks_offered_are_openable_recent_first_and_not_pinned_twice() -> None:
-    """Solo `projects`, mai `unopenable`; dal piu' recente; fuori i gia' fissati.
-
-    Una cartella del gruppo `unopenable`, aperta come conversazione, aprirebbe
-    *un'altra* conversazione — il guasto per cui il server divide i due
-    elenchi. La fonte risponde dopo un giro, come la rete.
-    """
-    _run(
-        "const voci = await pagine._voci('conversazione');\n"
-        "assert.deepEqual(voci.map((v) => v.nome), ['zucca', 'orto', 'vecchio'],\n"
-        "  'piante e gia fissato; .nascosto e a..b non si aprono; dal piu recente');\n"
-        "assert.deepEqual(voci.map((v) => v.ref), ['project:zucca', 'project:orto', 'project:vecchio']);\n",
-        MISTE,
-    )
-
-
-def test_picking_a_notebook_saves_a_conversation_page() -> None:
-    _run(
-        "await pagine._aggiungi('conversazione', 'project:orto');\n"
-        "const ultima = pagine.schermate[pagine.schermate.length - 1];\n"
-        "assert.equal(ultima.kind, 'conversazione');\n"
-        "assert.equal(ultima.ref, 'project:orto');\n",
-        UNA,
-    )
-
-
-def test_a_pinned_notebook_that_is_gone_says_so_in_the_sheet() -> None:
-    """Resta, e lo dice: toglierla e' una decisione dell'utente, non del codice."""
-    sparita = [{"id": "q9", "kind": "conversazione", "ref": "project:sparito"}]
-    _run(
-        "await tieniPremuto();\n"
-        "await new Promise((r) => setTimeout(r, 40));\n"
-        "const riga = elenco.children.find((c) => c.dataset.id === 'q9');\n"
-        "assert.ok(riga, 'la riga del quaderno sparito non c e');\n"
-        "assert.ok(riga.classList.contains('casa-foglio-sparita'));\n"
-        "assert.equal(riga.querySelector('.casa-foglio-specie').textContent, 'casa.foglio.sparito');\n",
-        sparita,
-    )
+# ── La larghezza ────────────────────────────────────────────────────────────
 
 
 def test_a_word_that_does_not_wrap_cannot_widen_every_page() -> None:
@@ -1640,3 +1401,35 @@ def test_a_notebook_that_comes_back_loses_its_notice() -> None:
         "assert.equal(avviso(), undefined, 'l avviso e rimasto su un quaderno tornato');\n",
         QUADERNO,
     )
+
+
+
+# ── «Your home pages» non c'e' piu' (23/09/2026) ────────────────────────────
+
+
+def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
+    """Tutti i suoi mestieri si sono spostati sulla cosa: aggiungere e togliere
+    dal cassetto e dalla tendina, «non c'e' piu'» sulla pagina stessa.
+
+    Un pezzo rimasto — il markup, una chiave, un ascoltatore sui pallini — e' un
+    foglio che non si apre ma che chi legge il codice crede vivo.
+    """
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    assert "casa-pagine-dialog" not in html and "casa-foglio" not in html
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    assert "casa-foglio" not in css
+    pagine_js = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
+    assert "osservaGestoOrizzontale(this.striscia" not in pagine_js, (
+        "i pallini hanno di nuovo una pressione lunga: nessuno la troverebbe"
+    )
+    for lingua in ("it", "en"):
+        voci = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
+        assert "foglio" not in voci["casa"], f"{lingua}: casa.foglio e' rimasto"
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    assert "casa-pagine-dialog" not in app_js
+
+
+def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
+    """Aveva un solo chiamante, i pallini, ed e' uscita con lui."""
+    src = (ASSETS / "shared" / "gesto-orizzontale.js").read_text(encoding="utf-8")
+    assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src

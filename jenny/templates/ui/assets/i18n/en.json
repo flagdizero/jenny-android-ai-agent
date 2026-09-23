@@ -1096,32 +1096,6 @@
       "quadernoSparito": "The notebook “{nome}” is gone.",
       "togliPagina": "Remove the page"
     },
-    "foglio": {
-      "titolo": "Your home pages",
-      "occhiello": "Press and hold the dots to come back here.",
-      "riga": "page {n} · {specie}",
-      "vuota": "page {n} · empty — what goes here?",
-      "togli": "Remove {nome}",
-      "indietro": "Back",
-      "specie": {
-        "app": "one of your Jenny Apps",
-        "stanza": "a room of the home",
-        "conversazione": "a notebook's chat"
-      },
-      "scegli": {
-        "app": "A Jenny App",
-        "stanza": "A room of the home",
-        "conversazione": "A notebook"
-      },
-      "niente": {
-        "app": "You have no Jenny Apps to put on a page.",
-        "stanza": "No rooms available.",
-        "conversazione": "You have no notebooks to put on a page."
-      },
-      "notaCassetto": "The app drawer is not listed: you already have it next to where you write. Two doors to the same room are one too many.",
-      "notaViva": "Only the page you are looking at stays alive: the others are shut down, or you pay for them in battery.",
-      "sparito": "this notebook is gone"
-    },
     "quaderno": {
       "rinomina": "Rename",
       "eliminato": "Notebook “{name}” deleted",

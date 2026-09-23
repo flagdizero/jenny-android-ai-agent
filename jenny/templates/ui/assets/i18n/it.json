@@ -1099,32 +1099,6 @@
       "quadernoSparito": "Il quaderno «{nome}» non c'è più.",
       "togliPagina": "Togli la pagina"
     },
-    "foglio": {
-      "titolo": "Le pagine di casa",
-      "occhiello": "Tieni premuto sui pallini per tornare qui.",
-      "riga": "pagina {n} · {specie}",
-      "vuota": "pagina {n} · vuota — cosa ci metto?",
-      "togli": "Togli {nome}",
-      "indietro": "Indietro",
-      "specie": {
-        "app": "una tua Jenny App",
-        "stanza": "una stanza della casa",
-        "conversazione": "la chat di un quaderno"
-      },
-      "scegli": {
-        "app": "Una Jenny App",
-        "stanza": "Una stanza della casa",
-        "conversazione": "Un quaderno"
-      },
-      "niente": {
-        "app": "Non hai Jenny App da mettere in una pagina.",
-        "stanza": "Nessuna stanza disponibile.",
-        "conversazione": "Non hai quaderni da mettere in una pagina."
-      },
-      "notaCassetto": "Il cassetto delle app non è in elenco: ce l'hai già lì accanto a dove scrivi. Due porte per la stessa cosa sono una di troppo.",
-      "notaViva": "Resta viva solo la pagina che guardi: le altre si spengono, o te le paghi in batteria.",
-      "sparito": "questo quaderno non c'è più"
-    },
     "quaderno": {
       "rinomina": "Rinomina",
       "eliminato": "Quaderno «{name}» eliminato",
