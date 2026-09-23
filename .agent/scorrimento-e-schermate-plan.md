@@ -712,3 +712,14 @@ Life Counter conta ancora all'appoggio.
 cambia pagina e la casella resta com'era (47/79 prima e dopo); il filo di Todo scorre
 ancora in verticale; Impostazioni ↔ Quaderni ↔ Todo ↔ chat scorrono. Banco:
 `tests/webui/test_gesto_componenti_client.py`, 10 test, 18 mutazioni tutte uccise.
+
+**Lo stesso giorno, 18:26 — la registrazione dell'utente** (`screenrecord` + `getevent`,
+11 gesti tutti sulla striscia dei temi). La striscia sta all'inizio, il dito va prima a
+destra: «di la' non c'e' niente», il gesto passa alla pagina, che spunta Quaderni da
+sinistra e poi segue il dito anche quando torna indietro. La regola «cedi solo se puo'
+ancora scorrere in quel verso» (quella di Android fra scorrevoli annidati) contraddiceva
+quella dell'utente, e aveva un secondo difetto: una striscia che sfora di poco arriva al
+bordo dentro i primi 24px, quando il browser la sta gia' scorrendo, e si muovevano tutte e
+due. Ora uno scorrevole che sfora davvero si tiene il gesto ovunque sia — `d972539`.
+Rifatto sul telefono lo stesso gesto (destra poi sinistra): scorre solo la striscia,
+nessun tema scelto per sbaglio; fuori dalla striscia le pagine scorrono.
