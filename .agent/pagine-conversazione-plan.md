@@ -315,3 +315,21 @@ Banchi: `test_casa_trasloco_client.py` (18, diciannove mutazioni tutte rosse),
 più le aggiunte a `test_casa_pista_client.py`, `test_casa_switch_client.py` e
 `test_casa_schermate_routes.py` — ognuna provata rossa mutando il codice che
 difende.
+
+**Secondo giro sul telefono (23/09/2026, notte):**
+
+- **Un messaggio vero** dalla pagina di nomadismo, con permesso dell'utente
+  («prova»): è finito in nomadismo, Jenny ha risposto lì («ok»), niente nella
+  personale; scorrendo via a metà risposta e tornando la risposta c'era.
+- **La foto fuori posto** (`9bcea5c`): sulla pagina del quaderno si aggiunge una
+  pagina, si torna indietro, e a metà trascinamento la pagina 0 entra con **la
+  personale** — prima della correzione avrebbe mostrato il quaderno. Pagine
+  dell'utente rimesse com'erano, confrontate col `config.json`.
+- Non riprodotto: una volta, durante tre swipe di fila, si è aperto il cassetto e
+  poi il foglio di Telecomando. Rifatti uno per uno non è più successo. Il
+  difetto vero che ne è uscito — Indietro chiude il cassetto sotto e lascia il
+  foglio dell'app sopra — è fuori da questo piano, e ha il suo compito a parte.
+- Non spiegato: all'inizio del giro la pagina 0 mostrava nomadismo con
+  `conversazioneCasa` evidentemente personale. Il percorso più probabile
+  (nomadismo dal titolo della pagina 0 → pagina del quaderno → Indietro) si
+  comporta come deve.
