@@ -215,15 +215,44 @@ assert.deepEqual(visto, []);
     )
 
 
-def test_a_native_sideways_scroller_still_yields() -> None:
-    """La striscia dei temi in Impostazioni: misurata sul telefono, da tenere."""
+def test_a_sideways_scroller_keeps_the_swipe_even_at_its_edge() -> None:
+    """La striscia dei temi in Impostazioni, come l'ha registrata l'utente.
+
+    La striscia sta all'inizio e il dito va prima a destra: «di la' non c'e'
+    niente», e fino al 23/09/2026 il gesto passava alla pagina — che poi seguiva
+    il dito anche quando tornava a sinistra.
+    """
     _run_js(
         """
 const striscia = dentro('DIV', { overflowX: 'auto' });
-striscia.scrollWidth = 900; striscia.scrollLeft = 0;
+striscia.scrollWidth = 900;
+const tema = el('BUTTON', { parent: striscia });
+for (const [dove, scrollLeft] of [['all inizio', 0], ['alla fine', 500], ['a meta', 200]]) {
+  striscia.scrollLeft = scrollLeft;
+  for (const verso of [-1, +1]) {
+    const { visto, stacca } = osserva();
+    lancia('touchstart', { target: tema, touches: [dito(700)] });
+    for (const passo of [10, 50, 150]) {
+      lancia('touchmove', { target: tema, touches: [dito(700 + verso * passo)] });
+    }
+    lancia('touchend', { target: tema, changedTouches: [dito(700 + verso * 150)] });
+    assert.deepEqual(visto, [], `striscia ${dove}, dito verso ${verso}: ha scorso la pagina`);
+    stacca();
+  }
+}
+"""
+    )
+
+
+def test_a_container_where_everything_fits_keeps_nothing() -> None:
+    """Una tabella stretta in chat: `overflow-x: auto`, ma non sfora."""
+    _run_js(
+        """
+const tabella = dentro('DIV', { overflowX: 'auto' });
+tabella.scrollWidth = 400;
 const { visto } = osserva();
-scorri(el('BUTTON', { parent: striscia }));
-assert.deepEqual(visto, []);
+scorri(el('TD', { parent: tabella }));
+assert.equal(visto[0], 'inizio');
 """
     )
 

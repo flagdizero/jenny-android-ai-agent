@@ -71,26 +71,33 @@ export function elastico(delta, max) {
   return segno * max * (1 - Math.exp(-Math.abs(delta) / (max * 1.8)));
 }
 
-/** C'e' uno scorrevole orizzontale, sotto il dito, che puo' ancora scorrere in
- *  quel verso? Allora il gesto e' suo, non del carosello.
+/** C'e' uno scorrevole orizzontale sotto il dito? Allora il gesto e' suo, non
+ *  del carosello — **anche se e' gia' al bordo**.
  *
- *  Si sale da `bersaglio` fino a `confine` cercandone uno. E' la regola che sul
- *  telefono fa «fallire» lo scorrimento sopra un blocco di codice largo: non e'
- *  un difetto, e' questa funzione che fa il suo mestiere.
+ *  Fino al 23/09/2026 cedeva solo se lo scorrevole poteva ancora scorrere in
+ *  quel verso, come fa Android fra scorrevoli annidati. L'utente l'ha visto
+ *  rompersi sulla striscia dei temi in Impostazioni, e l'ha registrato: la
+ *  striscia sta all'inizio, il dito va prima a destra — «di la' non c'e'
+ *  niente», quindi il gesto passa alla pagina — e poi torna a sinistra, e la
+ *  pagina lo segue invece della striscia. Il verso del primo movimento non
+ *  dice cosa vuole il dito; il posto in cui si appoggia si'. La regola
+ *  dell'utente e' che sopra un componente che scorre di lato vince lui.
+ *
+ *  E c'era un secondo modo di rompersi, piu' nascosto: una striscia che sfora
+ *  di poco arriva al bordo **dentro** i primi 24px, prima che l'asse sia
+ *  deciso. A quel punto «non puo' piu' scorrere», la pagina si arma, ma il
+ *  browser ha gia' cominciato a scorrere la striscia e il nostro
+ *  `preventDefault` non vale piu': si muovevano tutte e due.
+ *
+ *  Conta solo chi sfora davvero: un contenitore `overflow-x: auto` in cui
+ *  tutto ci sta — una tabella stretta in chat — non si tiene niente.
  */
-export function dentroScorrevoleOrizzontale(bersaglio, dx, confine) {
+export function dentroScorrevoleOrizzontale(bersaglio, confine) {
   let el = bersaglio;
   while (el && el !== confine && el !== document.body) {
     if (el.scrollWidth > el.clientWidth + 2) {
       const overflowX = getComputedStyle(el).overflowX;
-      if (overflowX === 'auto' || overflowX === 'scroll') {
-        const alBordo = el.scrollLeft <= 0;
-        const allaFine = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
-        // dx > 0 (dito a destra) scorre il contenuto verso il suo inizio;
-        // dx < 0 (dito a sinistra) verso la sua fine.
-        if (dx > 0 && !alBordo) return true;
-        if (dx < 0 && !allaFine) return true;
-      }
+      if (overflowX === 'auto' || overflowX === 'scroll') return true;
     }
     el = el.parentElement;
   }
@@ -114,8 +121,8 @@ export function dentroScorrevoleOrizzontale(bersaglio, dx, confine) {
  *  Life Counter lo mette sui suoi − e + perche' tenerli premuti non faccia
  *  scorrere la pagina, non perche' ci si trascini sopra: sono bottoni.
  */
-export function gestoDiUnComponente(bersaglio, dx, confine) {
-  if (dentroScorrevoleOrizzontale(bersaglio, dx, confine)) return true;
+export function gestoDiUnComponente(bersaglio, confine) {
+  if (dentroScorrevoleOrizzontale(bersaglio, confine)) return true;
   /* Fino in cima, `body` compreso: dentro una app il confine e' la finestra,
      e un gioco che si prende tutto lo schermo lo dice proprio li'. */
   let el = bersaglio;
@@ -238,7 +245,7 @@ export function osservaGestoOrizzontale(elemento, {
       /* Dominanza orizzontale vera: un trascinamento diagonale (tipico di chi
          aggiusta una selezione) non arma il gesto. */
       if (Math.abs(dx) <= Math.abs(dy) * 1.5) { azzera(); return; }
-      if (gestoDiUnComponente(bersaglio, dx, elemento)) { azzera(); return; }
+      if (gestoDiUnComponente(bersaglio, elemento)) { azzera(); return; }
       orizzontale = true;
       if (esclusivo) annullaPerLAltro(e);
       onOrizzontale?.();
