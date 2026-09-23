@@ -395,3 +395,91 @@ async def test_a_delete_does_not_reach_across_kinds(env) -> None:
     ])
     assert await stacca_pagine_di("conversazione", "project:piante") == 1
     assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
+
+
+# ── L'ordine (23/09/2026) ───────────────────────────────────────────────────
+#
+# Dal 23/09 si spostano tutte le pagine, la chat e le tre fisse comprese
+# (`.agent/pagine-in-alto-plan.md`). La rotta accetta `{schermate, ordine}` e
+# ancora l'elenco nudo; l'ordine che arriva dev'essere **esatto** — la
+# tolleranza e' del file, non di chi scrive.
+
+FISSE = ["app", "chat", "quaderni", "impostazioni"]
+
+
+def _set_tutto(schermate: list[dict], ordine) -> str:
+    v = urllib.parse.quote(json.dumps({"schermate": schermate, "ordine": ordine}))
+    return f"/api/casa/schermate/set?v={v}"
+
+
+async def test_a_fresh_install_reads_the_default_order(env) -> None:
+    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
+    assert corpo["ordine"] == FISSE
+    assert corpo["fisse"] == FISSE
+
+
+async def test_the_order_is_saved_and_read_back(env) -> None:
+    todo = {"id": "p1", "kind": "app", "ref": "todo"}
+    ordine = ["p1", "app", "chat", "quaderni", "impostazioni"]
+    corpo = _corpo(await _dispatch(env, _set_tutto([todo], ordine)))
+    assert corpo["ordine"] == ordine
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == ordine
+    su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
+    assert su_disco["casa"]["ordine"] == ordine
+
+
+async def test_moving_a_page_alone_is_a_write(env) -> None:
+    """Stesse schermate, ordine nuovo: e' un cambiamento, e si scrive."""
+    await _dispatch(env, _set_tutto([], FISSE))
+    spostato = ["chat", "app", "quaderni", "impostazioni"]
+    await _dispatch(env, _set_tutto([], spostato))
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == spostato
+
+
+async def test_the_bare_list_keeps_the_saved_order(env) -> None:
+    """L'elenco nudo di prima: l'ordine salvato resta, la pagina nuova va dopo la chat."""
+    await _dispatch(env, _set_tutto([], ["impostazioni", "chat", "app", "quaderni"]))
+    await _dispatch(env, _set([{"id": "p1", "kind": "app", "ref": "todo"}]))
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == [
+        "impostazioni", "chat", "p1", "app", "quaderni",
+    ]
+
+
+@pytest.mark.parametrize(
+    "ordine",
+    [
+        ["app", "chat", "quaderni"],  # manca una fissa
+        ["app", "chat", "quaderni", "impostazioni", "chat"],  # doppione
+        ["app", "chat", "quaderni", "impostazioni", "p9"],  # id che non c'e'
+        ["app", "chat", "quaderni", "impostazioni"],  # manca la schermata
+        "app,chat",
+        ["app", "chat", "quaderni", 4],
+    ],
+    ids=["missing-fixed", "duplicate", "unknown", "missing-page", "not-a-list", "not-strings"],
+)
+async def test_a_crooked_order_is_a_400_and_nothing_is_written(env, ordine) -> None:
+    todo = {"id": "p1", "kind": "app", "ref": "todo"}
+    risposta = await _dispatch(env, _set_tutto([todo], ordine))
+    assert risposta.status_code == 400
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+
+
+async def test_a_page_cannot_take_a_fixed_page_id(env) -> None:
+    risposta = await _dispatch(env, _set([{"id": "chat", "kind": "app", "ref": "todo"}]))
+    assert risposta.status_code == 400
+    assert "chat" in risposta.body.decode("utf-8")
+
+
+async def test_an_object_without_pages_is_refused(env) -> None:
+    v = urllib.parse.quote(json.dumps({"ordine": FISSE}))
+    assert (await _dispatch(env, f"/api/casa/schermate/set?v={v}")).status_code == 400
+
+
+async def test_deleting_an_app_takes_its_id_out_of_the_order(env) -> None:
+    from jenny.webui.casa_routes import stacca_pagine_di
+
+    todo = {"id": "p1", "kind": "app", "ref": "todo"}
+    await _dispatch(env, _set_tutto([todo], ["p1", "app", "chat", "quaderni", "impostazioni"]))
+    assert await stacca_pagine_di("app", "todo") == 1
+    su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
+    assert su_disco["casa"]["ordine"] == FISSE

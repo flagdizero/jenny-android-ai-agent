@@ -6,7 +6,7 @@ https://claude.ai/artifact/GL3CdWwskXzi57gkRagPTb (pagina «Quattro pagine»).
 ## Checklist
 
 - [x] P0 piano nel repo
-- [ ] P1 `ordine`: schema, rotte, client API, test, docs
+- [x] P1 `ordine`: schema, rotte, client API, test, docs
 - [ ] P2 modello di casa-pagine: la chat ovunque, pannelli fissi statici
 - [ ] P3 la fila al posto della testa, via i pallini
 - [ ] P4 pagina App: launcher incorporato, via il cassetto, pastiglia wiki nella barra, overlay app

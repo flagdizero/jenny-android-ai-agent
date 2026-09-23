@@ -595,7 +595,7 @@ class ApiClient {
      lo decide il picker SAF, che risponde solo di qua. */
   /* ── Le pagine della casa ────────────────────────────────────────────── */
 
-  /** `{schermate, max, specie}`. Il tetto arriva dal server e non se lo tiene
+  /** `{schermate, ordine, fisse, max, specie}`. Il tetto arriva dal server e non se lo tiene
    *  scritto il client: due copie di quel numero divergerebbero, e la seconda
    *  si scoprirebbe solo quando un salvataggio viene rifiutato. */
   async getSchermate() {
@@ -616,6 +616,17 @@ class ApiClient {
     if (!res.ok) throw new Error(`Pages write failed: ${res.status}`);
     const body = await res.json();
     return body.schermate;
+  }
+
+  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{schermate,
+   *  ordine}` torna com'e' stato salvato. L'ordine deve nominare ogni pagina
+   *  una volta sola, o il server lo rifiuta con un 400. */
+  async salvaPagine(schermate, ordine) {
+    const v = encodeURIComponent(JSON.stringify({ schermate, ordine }));
+    const res = await this._fetch(`/api/casa/schermate/set?v=${v}`);
+    if (!res.ok) throw new Error(`Pages write failed: ${res.status}`);
+    const body = await res.json();
+    return { schermate: body.schermate, ordine: body.ordine };
   }
 
   async noteBackupExported() {

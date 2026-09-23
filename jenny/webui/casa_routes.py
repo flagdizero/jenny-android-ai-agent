@@ -30,7 +30,14 @@ from jenny.channels.http_utils import (
     parse_query,
     query_first,
 )
-from jenny.config.schema import MAX_SCHERMATE, SPECIE_SCHERMATA, Config, SchermataConfig
+from jenny.config.schema import (
+    MAX_SCHERMATE,
+    PAGINE_FISSE,
+    SPECIE_SCHERMATA,
+    Config,
+    SchermataConfig,
+    ordine_normale,
+)
 
 
 async def stacca_pagine_di(kind: str, ref: str) -> int:
@@ -45,7 +52,7 @@ async def stacca_pagine_di(kind: str, ref: str) -> int:
     ``tests/webui/test_casa_schermate_routes.py``). Li' la cosa se ne va per
     altre strade e nessuno ha deciso niente sulla pagina; qui l'utente ha
     **cancellato la cosa** dalla sua scheda, e la pagina e' della cosa. Tenerla
-    vorrebbe dire un pallino verso il nulla, lasciato li' apposta.
+    vorrebbe dire una pagina verso il nulla, lasciata li' apposta.
 
     Torna quante ne ha tolte. Se non ce n'erano il file non si tocca.
     """
@@ -61,6 +68,9 @@ async def stacca_pagine_di(kind: str, ref: str) -> int:
         if not tolte:
             return False
         config.casa.schermate = dopo
+        # L'id staccato esce anche dall'ordine: lo farebbe la prossima lettura,
+        # ma un file che dice il vero non deve aspettare quella.
+        config.casa.ordine = ordine_normale(config.casa.ordine, [s.id for s in dopo])
         return True
 
     await store.mutate(_applica)
@@ -131,6 +141,8 @@ class CasaRoutes:
         return http_json_response(
             {
                 "schermate": [s.model_dump() for s in config.casa.schermate],
+                "ordine": list(config.casa.ordine),
+                "fisse": list(PAGINE_FISSE),
                 "max": MAX_SCHERMATE,
                 "specie": list(SPECIE_SCHERMATA),
             }
@@ -143,6 +155,12 @@ class CasaRoutes:
         l'elenco completo toglie di mezzo tre rotte e, soprattutto, il caso in
         cui due di quelle si incrociano lasciando un ordine che nessuno ha
         chiesto.
+
+        ``v`` e' ``{schermate, ordine}``, oppure il solo elenco delle schermate
+        come prima del 23/09/2026 — allora l'ordine salvato resta, e le pagine
+        nuove ci entrano dopo la chat. L'ordine che arriva deve essere
+        **esattamente** le fisse piu' le schermate, ognuna una volta: la
+        tolleranza di :func:`ordine_normale` e' per il file, non per chi scrive.
         """
         from jenny.config import store
 
@@ -153,8 +171,14 @@ class CasaRoutes:
             dati = json.loads(grezzo)
         except ValueError:
             return http_error(400, "invalid v")
-        if not isinstance(dati, list):
-            return http_error(400, "v must be a list")
+        ordine: list[str] | None = None
+        if isinstance(dati, dict):
+            if not isinstance(dati.get("schermate"), list):
+                return http_error(400, "v.schermate must be a list")
+            ordine = dati.get("ordine")
+            dati = dati["schermate"]
+        elif not isinstance(dati, list):
+            return http_error(400, "v must be a list or {schermate, ordine}")
 
         # Validare **prima** di entrare in `mutate`: dentro si tiene un lock per
         # tutta la durata della callback, e una `ValueError` alzata li' dentro
@@ -168,13 +192,30 @@ class CasaRoutes:
         identificativi = [s.id for s in schermate]
         if len(set(identificativi)) != len(identificativi):
             return http_error(400, "duplicate page id")
+        riservati = sorted(set(identificativi) & set(PAGINE_FISSE))
+        if riservati:
+            return http_error(400, f"reserved page id: {', '.join(riservati)}")
+        if ordine is not None:
+            attesi = [*PAGINE_FISSE, *identificativi]
+            if (
+                not isinstance(ordine, list)
+                or not all(isinstance(v, str) for v in ordine)
+                or sorted(ordine) != sorted(attesi)
+            ):
+                return http_error(
+                    400, "ordine must list every fixed page and every page id, once each"
+                )
 
         def _applica(config: Config) -> bool:
             prima = [s.model_dump() for s in config.casa.schermate]
             dopo = [s.model_dump() for s in schermate]
-            if prima == dopo:
+            ordine_dopo = ordine_normale(
+                ordine if ordine is not None else config.casa.ordine, identificativi
+            )
+            if prima == dopo and config.casa.ordine == ordine_dopo:
                 return False
             config.casa.schermate = list(schermate)
+            config.casa.ordine = ordine_dopo
             return True
 
         try:
@@ -182,6 +223,12 @@ class CasaRoutes:
         except Exception:
             self._log.exception("Saving the casa pages failed")
             return http_error(500, "could not save the pages")
+        from jenny.config.loader import load_config
+
         return http_json_response(
-            {"ok": True, "schermate": [s.model_dump() for s in schermate]}
+            {
+                "ok": True,
+                "schermate": [s.model_dump() for s in schermate],
+                "ordine": list(load_config().casa.ordine),
+            }
         )

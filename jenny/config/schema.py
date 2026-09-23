@@ -493,8 +493,8 @@ class ProvidersConfig(Base):
 #:
 #: Le assenze sono decise, non dimenticate:
 #:
-#: * **il cassetto delle app** — «ce l'hai gia' tirando su. Due porte per la
-#:   stessa cosa sono una di troppo» (la tavola `PagineGestione`);
+#: * **il cassetto delle app** come pagina *appendibile* — dal 23/09/2026 e'
+#:   una delle :data:`PAGINE_FISSE`, che ci sono sempre e non si appendono;
 #: * **le stanze** — backup, aggiornamenti, modello: posti dove si *va* a
 #:   sbrigare una cosa e si esce. Ci sono state dal 22 al 23/09/2026 e sono
 #:   uscite per decisione dell'utente — «mettere per esteso le impostazioni
@@ -507,16 +507,50 @@ class ProvidersConfig(Base):
 #: non deve poter esistere nel file.
 SPECIE_SCHERMATA = ("app", "conversazione")
 
-#: Quante se ne possono aggiungere, oltre alla chat. Non e' una limitazione
-#: tecnica: oltre questa soglia i pallini non si leggono piu' e attraversarle
-#: diventa un viaggio, cioe' la funzione smette di fare quel che prometteva.
+#: Quante se ne possono aggiungere, oltre alle :data:`PAGINE_FISSE`. Non e'
+#: una limitazione tecnica: oltre questa soglia i nomi della fila in alto non
+#: ci stanno piu' nemmeno scorrendo, e attraversarle diventa un viaggio.
 MAX_SCHERMATE = 8
+
+#: Le pagine che ci sono sempre, nell'ordine in cui le trova chi non ha mai
+#: spostato niente: il cassetto, la chat, i quaderni, le impostazioni
+#: (``.agent/pagine-in-alto-plan.md``). **Si spostano, non si tolgono**: una
+#: casa senza la pagina Impostazioni non avrebbe piu' una strada per tornarci.
+#: Sono id riservati in :attr:`CasaConfig.ordine`, e nessuna schermata puo'
+#: portarne uno.
+PAGINE_FISSE = ("app", "chat", "quaderni", "impostazioni")
+
+
+def ordine_normale(ordine: Any, id_schermate: list[str]) -> list[str]:
+    """L'ordine delle pagine reso coerente con quel che c'e', **senza rifiutare**.
+
+    Toglie gli id che non sono ne' fissi ne' di una schermata, e i doppioni;
+    rimette in fondo le fisse che mancano; mette le schermate che mancano
+    **subito dopo la chat**, che e' dove stavano prima che l'ordine esistesse.
+    Un ordine vuoto e' l'ordine di chi non ha mai spostato niente.
+
+    Tollerante di proposito: qui un errore costa l'intero file (v.
+    :meth:`CasaConfig._stanze_uscite`), e un ordine con un id orfano — una
+    pagina appena staccata — e' uno stato normale, non un file rotto. La
+    severita' sta nella rotta, che un ordine storto lo rifiuta con un 400.
+    """
+    validi = set(PAGINE_FISSE) | set(id_schermate)
+    visti: list[str] = []
+    for voce in ordine if isinstance(ordine, list) else []:
+        if isinstance(voce, str) and voce in validi and voce not in visti:
+            visti.append(voce)
+    if not visti:
+        return ["app", "chat", *id_schermate, "quaderni", "impostazioni"]
+    visti.extend(f for f in PAGINE_FISSE if f not in visti)
+    mancanti = [i for i in id_schermate if i not in visti]
+    dopo_la_chat = visti.index("chat") + 1
+    return visti[:dopo_la_chat] + mancanti + visti[dopo_la_chat:]
 
 
 def _quaderno_valido(ref: Any) -> None:
     """Una pagina conversazione punta a un **quaderno**, e a uno che si apre.
 
-    Solo quaderni: la conversazione personale e' gia' la pagina 0, e l'utente
+    Solo quaderni: la conversazione personale ha gia' la sua pagina, la chat, e l'utente
     ha chiesto «le chat quaderni». La regola sul nome e' quella di
     ``session/keys.py``, che e' chi la applica a ogni messaggio in arrivo:
     una seconda copia qui divergerebbe in silenzio.
@@ -577,12 +611,19 @@ class CasaConfig(Base):
     e' una rotta in piu'; il guadagno e' che le pagine seguono l'utente come
     tutto il resto.
 
-    **La chat non e' in elenco.** E' la pagina 0, c'e' sempre, non si sposta e
-    non si toglie: metterla qui vorrebbe dire permettere un file che la
-    cancella.
+    **Due elenchi, non uno.** ``schermate`` sono le pagine *aggiunte* — cosa
+    c'e' dentro ciascuna. ``ordine`` e' **dove sta ogni pagina**, le fisse
+    comprese: la chat non e' piu' la pagina 0 e si sposta come le altre (dal
+    23/09/2026, v. ``.agent/pagine-in-alto-plan.md``). Le fisse non stanno in
+    ``schermate`` perche' non hanno niente da ricordare oltre al posto, e un
+    file che le potesse elencare le potrebbe anche togliere.
     """
 
     schermate: list[SchermataConfig] = Field(default_factory=list)
+    #: Gli id delle pagine nell'ordine in cui si vedono: :data:`PAGINE_FISSE`
+    #: e gli ``id`` delle schermate. Normalizzato a ogni lettura
+    #: (:func:`ordine_normale`), quindi vuoto vuol dire «mai spostato niente».
+    ordine: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -611,6 +652,22 @@ class CasaConfig(Base):
             return data
         return {**data, "schermate": rimaste}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _ordine_grezzo(cls, data: Any) -> Any:
+        """Un ``ordine`` che non e' un elenco di stringhe si pulisce, non si rifiuta.
+
+        Il tipo del campo lo rifiuterebbe prima di :func:`ordine_normale`, e un
+        rifiuto qui costa l'intero file come per le stanze (v. sopra).
+        """
+        if not isinstance(data, dict) or "ordine" not in data:
+            return data
+        grezzo = data["ordine"]
+        pulito = [v for v in grezzo if isinstance(v, str)] if isinstance(grezzo, list) else []
+        if pulito == grezzo:
+            return data
+        return {**data, "ordine": pulito}
+
     @model_validator(mode="after")
     def _entro_il_tetto(self) -> "CasaConfig":
         if len(self.schermate) > MAX_SCHERMATE:
@@ -620,6 +677,11 @@ class CasaConfig(Base):
         visti = [s.id for s in self.schermate]
         if len(set(visti)) != len(visti):
             raise ValueError("due pagine con lo stesso id")
+        riservati = sorted(set(visti) & set(PAGINE_FISSE))
+        if riservati:
+            # Come l'id doppio: l'ordine non saprebbe piu' quale delle due e'.
+            raise ValueError(f"id di pagina riservato: {', '.join(riservati)}")
+        self.ordine = ordine_normale(self.ordine, visti)
         return self
 
 

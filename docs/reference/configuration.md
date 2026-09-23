@@ -401,21 +401,22 @@ She hides herself whenever Jenny's own UI is in the foreground: this app is the 
 
 ## casa
 
-The home screen's extra pages. Jenny's home is the conversation; beside it you can keep pages you swipe to, the way any launcher works. The page you are on is drawn with dots at the bottom edge — swipe sideways to change page, tap a dot to jump to it, and press and hold to manage the pages.
+The home screen's pages. The home is a row of pages you swipe between, the way any launcher works, and their names run along the top of the screen: the page you are on is written large, the others small. Tap a name to jump to it, or swipe sideways. Four pages are always there — **App** (the app drawer), **Jenny** (the conversation), **Notebooks** and **Settings** — and the home always opens on Jenny. Beside them you can keep pages of your own: press and hold an app or a notebook and choose *Add as a page*.
+
+Every page can be moved, the four fixed ones included: press and hold a name at the top and drag it where you want it. The pages you added can also be removed there; the four fixed ones cannot, or a home without its Settings page would have no way back to them. Back always returns to Jenny, wherever it sits in the row.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, and the ids must differ. Pages of kind `stanza` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
+| `casa.schermate` | list | `[]` | The pages you added. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, the ids must differ, and none may be one of the fixed page ids below. Pages of kind `stanza` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
+| `casa.ordine` | list | `[]` | Where each page sits, left to right: the fixed ids `app`, `chat`, `quaderni`, `impostazioni` and the `id` of each page you added. Empty means you never moved anything, and reads as `app, chat, <your pages>, quaderni, impostazioni`. |
 
-The conversation itself is **not** in this list: it is always the first page, it cannot be moved and it cannot be removed — putting it here would allow a config file that deletes it.
+`casa.ordine` is **tidied on every read, never rejected**: ids that match nothing and repeats are dropped, a fixed page that is missing comes back at the end, and a page of yours that is missing goes right after the chat. A config file that fails validation falls back to the backup and then to the defaults — losing providers and keys over a page order would be the wrong trade. Writes from the app are stricter: an order that does not list every fixed page and every page of yours exactly once is refused.
 
-The **app drawer** is deliberately not a kind: its button already sits next to where you write, and two doors to the same room are one too many.
-
-A **conversation page is a shortcut, not a second chat.** The home has exactly one chat — one thread, one composer, one connection. Landing on a notebook's page switches that chat to the notebook, and the swipe dresses the switch up as a page: while you drag, the page coming in shows the notebook as you last left it. A notebook you have not opened since the app started has nothing to show yet, so the first time it slides in empty and fills as you arrive. Only notebooks can be pinned — the personal conversation is already the first page — and the name must be one the gateway would open. The first page stays the free one: whatever you pick from the title opens there, even a notebook that also has a page of its own.
+A **conversation page is a shortcut, not a second chat.** The home has exactly one chat — one thread, one composer, one connection. Landing on a notebook's page switches that chat to the notebook, and the swipe dresses the switch up as a page: while you drag, the page coming in shows the notebook as you last left it. A notebook you have not opened since the app started has nothing to show yet, so the first time it slides in empty and fills as you arrive. Only notebooks can be pinned — the personal conversation already has its page — and the name must be one the gateway would open.
 
 Rooms that depend on where you came from are not pinnable either: the notebook pages read their notebook from the current conversation, and the reader needs a specific page. Pinned to a fixed place they would show something different every time.
 
-These live in `config.json` and not in the browser's storage on purpose: they are the phone's home screen, and losing them to a restore or a reinstall would be the worst kind of surprise — browser storage is not part of the [encrypted backup](../using/backup.md). A page whose `ref` no longer resolves (an app you uninstalled) is kept, not silently dropped: it is drawn as missing, and removing it stays your decision.
+These live in `config.json` and not in the browser's storage on purpose: they are the phone's home screen, and losing them to a restore or a reinstall would be the worst kind of surprise — browser storage is not part of the [encrypted backup](../using/backup.md). A page whose `ref` no longer resolves (an app you uninstalled) is kept, not silently dropped: it is drawn as missing, and removing it stays your decision. Deleting the app or the notebook itself, from its own sheet, takes its page with it.
 
 ## wiki
 
