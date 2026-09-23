@@ -13,13 +13,13 @@ https://claude.ai/artifact/GL3CdWwskXzi57gkRagPTb (pagina «Quattro pagine»).
 - [x] P5 pagina Quaderni
 - [x] P6 pagina Impostazioni
 - [x] P7 modalità ordina
-- [ ] P8 pulizia
+- [x] P8 pulizia
 
   P2–P7 sono finiti in **un commit solo** (`361a129`), non sei: il modello della
   pista, la fila e le tre pagine fisse si toccano negli stessi file e negli
   stessi banchi, e a meta' la casa non si reggeva (tre pagine vuote, o una testa
   senza le sue porte). I passi restano come elenco di cosa c'e' dentro.
-- [ ] P9 giro sul Titan
+- [x] P9 giro sul Titan
 
 
 ## Context
@@ -198,3 +198,57 @@ Da riusare: `shared/longpress.js`, `shared/gesto-orizzontale.js` (il gesto non c
   - la modalità ordina: portare Todo in prima posizione, Fatto, riavviare l'app e l'ordine è rimasto; la × toglie Todo; Indietro annulla;
   - l'officina è invariata, col cassetto a foglio.
 - **Il telefono si lascia com'era:** pagine `[todo]` nell'ordine di default, sulla chat personale.
+
+
+## Com'è andata (23/09/2026)
+
+Tutto fatto e provato col dito sul Titan 2, release firmata installata sopra.
+
+**Commit:** `2a4872e` piano · `148bb16` P1 (`casa.ordine`) · `361a129` P2–P7 in uno
+(v. la nota nella checklist) · `bf8b9ac` trascinamento e commenti · `761fcfa`
+nomi delle app nella fila.
+
+**Sul telefono, nell'ordine in cui l'ho provato:**
+
+- La migrazione del file vero: `[todo]` si e' letto come `APPS · Jenny · TODO ·
+  NOTEBOOKS · SETTINGS`, e la casa si apre su Jenny.
+- Tocco su ogni nome e scorrimento di lato su ogni pagina, **anche da dentro
+  Todo** (il gesto raccontato dall'app). I temi in Impostazioni scorrono senza
+  cambiare pagina: il riconoscitore cede allo scorrevole.
+- Pagina App: la tastiera fisica cerca (`tel` → Telecomando, Telegram X);
+  Indietro svuota la ricerca, poi riporta a Jenny. Pressione lunga su un'app →
+  la scheda di sempre, con «Remove from pages» / «Add as a page». «Open» apre
+  l'app a tutto schermo e **Indietro la chiude** — prima era un TypeError.
+- Pagina Quaderni: tocco su «piante» → Jenny col nome del quaderno e il suo
+  pallino nella fila, e la pastiglia «31 pages» nella barra; le pagine wiki si
+  aprono da li'; Indietro rifa' la strada una stanza per volta.
+- Pagina Impostazioni: una sottostanza (Updates) torna su Impostazioni, e da
+  li' Indietro va a Jenny. L'Officina si apre dalla sua riga, e il suo cassetto
+  e' ancora il foglio di prima.
+- Modalita' ordina: si apre tenendo premuto un nome; trascinare, «Fatto» salva
+  e l'ordine resta dopo un riavvio; Indietro annulla; la × toglie Todo, e «Add as
+  a page» lo rimette **subito dopo Jenny** e ci atterra.
+
+**Difetti trovati sul telefono, tutti corretti con un banco:**
+
+1. La pastiglia trascinata restava sollevata al rilascio e stava un'intestazione
+   sopra il dito: spostata nel DOM perdeva la cattura del puntatore, e la base
+   era letta da `offsetTop` (misurato dal guscio). Ora il dito si segue sul
+   documento e la base si legge dal rettangolo senza `transform`.
+2. Le app appese si chiamavano col loro slug («todo») finche' nessuno leggeva
+   l'elenco: ora la casa legge **solo** quello delle Jenny App, una volta, se ce
+   n'e' una appesa.
+
+**Prova per mutazione:** 25 mutazioni sulle guardie nuove (cassetto incorporato,
+fila, pista, Indietro, overlay app), 25 uccise.
+
+**Il telefono e' come l'ho trovato:** Todo unica pagina aggiunta, ordine di
+partenza, conversazione personale. La pagina di Todo ha un id nuovo, perche'
+l'ho tolta e rimessa per provare la ×.
+
+**Resta aperto:**
+
+- La modalita' ordina ha frecce da tastiera ma nessun annuncio a voce di dove
+  e' finita la pastiglia; TalkBack non l'ho provato.
+- `casa-who.js` non ha piu' la forma a tendina. Se un giorno servisse di nuovo
+  un elenco a comparsa, e' da rifare, non da riaccendere.
