@@ -1118,6 +1118,13 @@
       "notaCassetto": "The app drawer is not listed: you already have it next to where you write. Two doors to the same room are one too many.",
       "notaViva": "Only the page you are looking at stays alive: the others are shut down, or you pay for them in battery.",
       "sparito": "this notebook is gone"
+    },
+    "quaderno": {
+      "rinomina": "Rename",
+      "eliminato": "Notebook “{name}” deleted",
+      "deleteConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
+      "deleteConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
+      "deleteFailed": "I could not delete the notebook “{name}”. Nothing was changed."
     }
   },
   "officina": {

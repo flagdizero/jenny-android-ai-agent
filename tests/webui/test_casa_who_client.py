@@ -88,6 +88,7 @@ function makeEl(tag) {
     textContent: '',
     style: {},
     attrs: {},
+    dataset: {},
     listeners: [],
     children: [],
     setAttribute(k, v) { el.attrs[k] = v; },
@@ -120,6 +121,18 @@ const api = {
 
 __DOT_COLOR__
 
+/* La pressione lunga finta: quella vera sta in `shared/longpress.js` e si
+   prova li'. Qui conta **quali righe** la armano, e che il tocco che la segue
+   non cambi conversazione — per questo mette lo stesso segno di quella vera. */
+const premute = [];
+function setupLongPress(el, cb) { premute.push({ el, cb }); }
+function tieni(riga) {
+  const p = premute.find((x) => x.el === riga);
+  assert.ok(p, 'quella riga non si puo tenere premuta');
+  riga.dataset.longpress = 'true';
+  p.cb();
+}
+
 class Panel {
   constructor() {
     this._trigger = makeEl('button');
@@ -132,6 +145,7 @@ class Panel {
     this.storia = [];
     this._onPick = (name) => this.storia.push('scelto:' + name);
     this._onCreate = () => this.storia.push('nuovo');
+    this._onHold = (name) => this.storia.push('tenuto:' + name);
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = makeEl('div');
@@ -599,3 +613,59 @@ def test_the_panel_answers_how_many_pages_and_reads_the_list_if_it_has_to() -> N
       assert.equal(await panel.pagesOf('sconosciuto'), null);
       assert.equal(await panel.pagesOf(''), null);
     """)
+
+
+# ── La pressione lunga: la scheda del quaderno (23/09/2026) ─────────────────
+#
+# Una cosa si appende dal posto dove vive, e i quaderni vivono qui: tenerne
+# premuto uno apre la sua scheda, come un'app nel cassetto.
+
+
+def test_holding_a_notebook_asks_for_its_sheet() -> None:
+    _run_js(
+        "const panel = await open(ELENCO);\n"
+        "const riga = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
+        "tieni(riga);\n"
+        "assert.deepEqual(panel.storia, ['tenuto:etf']);\n"
+    )
+
+
+def test_the_tap_after_a_hold_does_not_switch_conversation() -> None:
+    """Senza, tenere premuto un quaderno aprirebbe la scheda **e** cambierebbe
+    conversazione sotto. E il tocco dopo quello torna a essere un tocco."""
+    _run_js(
+        "const panel = await open(ELENCO);\n"
+        "const riga = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
+        "tieni(riga);\n"
+        "tocca(riga);\n"
+        "assert.deepEqual(panel.storia, ['tenuto:etf'], 'il tocco dopo la pressione ha cambiato conversazione');\n"
+        "tocca(riga);\n"
+        "assert.deepEqual(panel.storia.slice(1), ['chiuso', 'scelto:etf']);\n"
+    )
+
+
+def test_the_personal_row_cannot_be_held() -> None:
+    """Non e' un quaderno: e' gia' la pagina 0, e non si cancella."""
+    _run_js(
+        "const panel = await open(ELENCO);\n"
+        "const personale = righeDi(panel).find((r) => String(r.className).includes('is-personal'));\n"
+        "assert.ok(!premute.some((p) => p.el === personale), 'la riga personale si puo tenere premuta');\n"
+    )
+
+
+def test_a_folder_that_does_not_open_cannot_be_held() -> None:
+    _run_js(
+        "const panel = await open({ ...ELENCO, unopenable: [{ name: 'Foto Mare', reason: 'invalid-name' }] });\n"
+        "const inerte = walk(panel._body).find((n) => String(n.className).includes('is-blocked'));\n"
+        "assert.ok(inerte, 'la cartella inerte non c e');\n"
+        "assert.ok(!premute.some((p) => p.el === inerte), 'una cartella inerte si puo tenere premuta');\n"
+    )
+
+
+def test_every_openable_notebook_can_be_held() -> None:
+    _run_js(
+        "const panel = await open(ELENCO);\n"
+        "const quaderni = righeDi(panel).filter((r) => !String(r.className).includes('is-personal'));\n"
+        "assert.equal(quaderni.length, 3);\n"
+        "assert.ok(quaderni.every((q) => premute.some((p) => p.el === q)));\n"
+    )

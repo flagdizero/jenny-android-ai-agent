@@ -39,11 +39,14 @@ import { WhoPanel, dotColor } from './casa-who.js';
 import { JennyGap } from './shared/jenny-gap.js';
 import { LauncherController } from './mobile-launcher.js';
 import { CasaPagine } from './casa-pagine.js';
+import { SchedaQuaderno } from './casa-quaderno.js';
 import { Trasloco } from './casa-trasloco.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
+import { deleteProjectFlow } from './shared/project-delete.js';
+import { showToast } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { setupLongPress } from './shared/longpress.js';
@@ -98,6 +101,14 @@ const NOTEBOOK_WORDS = {
   rejected: 'casa.who.create.rejected',
   leftoverBody: 'casa.who.create.leftover',
   leftoverBodyNoCount: 'casa.who.create.leftoverNoCount',
+};
+
+/* ...e quelle della cancellazione, per la stessa ragione: il giro e' uno
+   (`shared/project-delete.js`), e in casa quel che si cancella e' un quaderno. */
+const NOTEBOOK_DELETE_WORDS = {
+  confirm: 'casa.quaderno.deleteConfirm',
+  confirmWithChat: 'casa.quaderno.deleteConfirmWithChat',
+  failed: 'casa.quaderno.deleteFailed',
 };
 
 class CasaApp {
@@ -213,6 +224,7 @@ class CasaApp {
       currentProject: () => projectNameOf(sessionManager.currentKey),
       onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
       onCreate: () => this.createNotebook(),
+      onHold: (name) => this.schedaQuaderno().mostra(name),
     });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
@@ -453,6 +465,36 @@ class CasaApp {
     if (!name) return;
     this.who.invalidate();              // l'elenco su disco e' cambiato
     await this.switchConversation(projectKey(name));
+  }
+
+  /** La scheda di un quaderno, nata al primo uso. */
+  schedaQuaderno() {
+    return (this._schedaQuaderno ||= new SchedaQuaderno({
+      pagine: () => this.portaPagine(),
+      apri: (nome) => {
+        this.who.close();
+        return this.switchConversation(projectKey(nome));
+      },
+      elimina: (nome) => this.deleteNotebook(nome),
+    }));
+  }
+
+  /** Cancella un quaderno dalla sua scheda, e fa il seguito che e' di casa.
+   *
+   *  La domanda la fa `deleteProjectFlow`, con le parole della casa. Il seguito:
+   *  se eri li' dentro torni alla conversazione personale — restare in una
+   *  chat che non esiste piu' vorrebbe dire scrivere a vuoto; la tendina, che
+   *  e' ancora aperta sotto la scheda, si ridisegna senza quella riga; e le
+   *  pagine si rileggono, perche' il gateway ha tolto anche la sua, se ne aveva
+   *  una (v. `project_delete.py`).
+   */
+  async deleteNotebook(nome) {
+    if (!(await deleteProjectFlow(nome, NOTEBOOK_DELETE_WORDS))) return false;
+    if (projectNameOf(sessionManager.currentKey) === nome) await this.switchConversation(null);
+    await this.who.refresh();
+    await this.portaPagine().ricarica();
+    showToast(i18n.t('casa.quaderno.eliminato', { name: nome }), 'success');
+    return true;
   }
 
   /* ── Le stanze ──
@@ -958,14 +1000,15 @@ class CasaApp {
    *  l'ordine e' una garanzia, non una scelta fra due candidati.
    */
   _closeOverlays() {
-    /* Prima ancora del cassetto, i due fogli delle app che si aprono **dal**
-       cassetto con una pressione lunga (Open, Edit, Delete). Sono `<dialog>`
+    /* Prima ancora del cassetto, i fogli che si aprono con una pressione lunga:
+       quello di un quaderno **dalla** tendina, e i due delle app **dal**
+       cassetto (Open, Edit, Delete). Sono `<dialog>`
        con `showModal()`: stanno nel top layer, sopra il cassetto, e il loro
        commento in `apps-actions.js` lo dice — Indietro chiude prima loro. Qui
        non c'erano: visto sul telefono il 23/09/2026, Indietro chiudeva il
        cassetto sotto e lasciava il foglio aperto sopra la chat, Delete
        compreso. */
-    for (const id of ['jenny-app-sheet', 'android-app-sheet']) {
+    for (const id of ['casa-quaderno-sheet', 'jenny-app-sheet', 'android-app-sheet']) {
       const foglio = document.getElementById(id);
       if (foglio?.open) {
         foglio.close();

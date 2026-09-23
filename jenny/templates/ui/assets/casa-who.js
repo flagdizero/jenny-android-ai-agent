@@ -30,6 +30,7 @@
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
 import { ConversationList, UNOPENABLE_HINT_KEYS, ago } from './shared/conversation-list.js';
+import { setupLongPress } from './shared/longpress.js';
 
 /** Quanto il pannello sta sotto l'intestazione.
  *
@@ -54,14 +55,19 @@ export class WhoPanel {
    *         conversazione personale.
    *  @param onCreate chiamata da «Nuovo quaderno». Le due domande e le regole
    *         stanno in `shared/project-create.js`: qui c'e' solo la riga.
+   *  @param onHold chiamata col nome del quaderno **tenuto premuto**: apre la
+   *         sua scheda (Apri · Metti come pagina · Rinomina · Elimina), come la
+   *         pressione lunga su un'app nel cassetto. Una cosa si appende dal
+   *         posto dove vive, e i quaderni vivono qui.
    */
-  constructor(trigger, { head, personalName, currentProject, onPick, onCreate }) {
+  constructor(trigger, { head, personalName, currentProject, onPick, onCreate, onHold }) {
     this._trigger = trigger;
     this._head = head;
     this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
     this._onCreate = onCreate || null;
+    this._onHold = onHold || null;
     this._list = new ConversationList(() => api.listProjects());
     this._dialog = null;
     this._body = null;
@@ -100,6 +106,15 @@ export class WhoPanel {
   /** L'elenco su disco e' cambiato: si rilegge alla prossima apertura. */
   invalidate() {
     this._list.invalidate();
+  }
+
+  /** L'elenco su disco e' cambiato **adesso**, sotto la tendina aperta — un
+   *  quaderno cancellato dalla sua scheda: si rilegge e si ridisegna subito,
+   *  o la riga di quello che non c'e' piu' resterebbe li' a farsi toccare. */
+  async refresh() {
+    this._list.invalidate();
+    await this._list.load();
+    if (this.isOpen) this.render();
   }
 
   toggle() {
@@ -287,6 +302,10 @@ export class WhoPanel {
       ? document.createElement('div')
       : this._command(item.name === this._currentProject(), () => this._pick(item.name));
     if (blocked) row.className = 'casa-who-row is-blocked';
+    /* La pressione lunga solo sui quaderni che si aprono: una cartella inerte
+       non ha niente da offrire, e la riga personale non e' un quaderno — non
+       si appende (e' gia' la pagina 0) e non si cancella. */
+    if (!blocked && this._onHold) setupLongPress(row, () => this._onHold(item.name));
 
     const dot = document.createElement('span');
     dot.className = 'casa-who-dot';
@@ -318,7 +337,16 @@ export class WhoPanel {
       row.classList.add('is-current');
       row.setAttribute('aria-current', 'true');
     }
-    row.addEventListener('click', onPick);
+    /* Il tocco che segue una pressione lunga non e' un tocco: senza questa
+       riga tenere premuto un quaderno aprirebbe la sua scheda **e** ci
+       cambierebbe conversazione sotto. Stesso segno del cassetto. */
+    row.addEventListener('click', () => {
+      if (row.dataset.longpress) {
+        delete row.dataset.longpress;
+        return;
+      }
+      onPick();
+    });
     return row;
   }
 

@@ -550,7 +550,10 @@ function rigaPagina(stato, app) {
   };
 }
 
-function disegnaRiga(a) {
+/** Una riga di scheda, come testo. Esportata perche' la scheda di un quaderno
+ *  in casa e' **la stessa cosa a vedersi**: stesso markup, stesse classi, e una
+ *  seconda copia divergerebbe al primo ritocco. */
+export function disegnaRiga(a) {
   const classi = `oc-sheet-action${a.danger ? ' danger' : ''}`;
   const spenta = a.disabled ? ' disabled aria-disabled="true"' : '';
   /* Il testo nudo come prima, se non c'e' un perche': la stessa scheda la

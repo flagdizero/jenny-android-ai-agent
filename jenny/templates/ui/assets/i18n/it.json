@@ -1121,6 +1121,13 @@
       "notaCassetto": "Il cassetto delle app non è in elenco: ce l'hai già lì accanto a dove scrivi. Due porte per la stessa cosa sono una di troppo.",
       "notaViva": "Resta viva solo la pagina che guardi: le altre si spengono, o te le paghi in batteria.",
       "sparito": "questo quaderno non c'è più"
+    },
+    "quaderno": {
+      "rinomina": "Rinomina",
+      "eliminato": "Quaderno «{name}» eliminato",
+      "deleteConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
+      "deleteConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
+      "deleteFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente."
     }
   },
   "officina": {
