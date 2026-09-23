@@ -672,3 +672,43 @@ in quella stessa WebView al livello del guscio.
 Tagliato il 22/09 come «seconda chat viva»; riaperto il 23/09 in un'altra forma
 — una scorciatoia che cambia conversazione, travestita da pagina. Piano a sé:
 `.agent/pagine-conversazione-plan.md`.
+
+## B9 — Chi si tiene il gesto dentro una pagina (23/09/2026) — ✅ `c0988df`
+
+**Il difetto.** Dentro una app il riconoscimento cedeva il gesto a una cosa sola,
+lo scorrevole nativo. Un componente col suo gesto — un carosello, una mappa, il
+«tieni premuto» di Life Counter — si muoveva **insieme** alla pagina.
+
+**La regola, dell'utente:** «se swipe orizzontale è swipe, se click è click. Se però
+ci sono eventi di swipe su pagina vince lo swipe sul componente». Prima c'era stata
+una proposta sbagliata, «chi prende il dito per primo se lo tiene», e l'utente l'ha
+bocciata con la domanda giusta: «se il bottone mi ruba lo swipe non potrò mai
+swipare?». Un bottone reagisce subito anche lui: decide il **movimento**, non il tocco.
+
+**Come si riconosce chi si trascina** (`gestoDiUnComponente` + il `muove`):
+
+- scorrevole nativo che può ancora scorrere in quel verso (com'era, e la striscia
+  dei temi in Impostazioni ci conta);
+- `<input type="range">`;
+- un `touch-action` che l'orizzontale non lo lascia al browser (`none`, `pan-y`,
+  `pinch-zoom`) **su qualcosa che non è un comando**. I − e + di Life Counter hanno
+  `touch-action: none` e sono bottoni: non contano. La risalita arriva al `body`,
+  dove un gioco a tutto schermo lo dichiara;
+- un `preventDefault` sul `touchmove` prima che l'asse sia deciso: è così che un
+  carosello scritto a mano blocca il browser, e un bottone non lo fa mai;
+- più testo selezionato e secondo dito, che fermano la pagina in tutti e tre i gusci.
+
+**Quando vince la pagina, dentro una app** (`esclusivo`, solo il kit): l'app riceve
+`pointercancel` + `touchcancel` e fino al rilascio non sente più il dito — fermato in
+discesa sulla finestra. È l'ACTION_CANCEL di Android. Il kit ora ascolta sulla
+finestra e non sulla radice, per sentire il dito **dopo** l'app.
+
+**Resta fuori:** un `+1` che un'app conta al `pointerdown` è già contato quando si
+capisce che era uno scorrimento. Non si rimedia dal guscio: la skill `app-creator`
+ora dice di agire al `click` e di dichiarare con `pan-y` i componenti che si trascinano.
+Life Counter conta ancora all'appoggio.
+
+**Telefono, 23/09/2026 18:22:** da dentro Todo, uno scorrimento partito su una casella
+cambia pagina e la casella resta com'era (47/79 prima e dopo); il filo di Todo scorre
+ancora in verticale; Impostazioni ↔ Quaderni ↔ Todo ↔ chat scorrono. Banco:
+`tests/webui/test_gesto_componenti_client.py`, 10 test, 18 mutazioni tutte uccise.
