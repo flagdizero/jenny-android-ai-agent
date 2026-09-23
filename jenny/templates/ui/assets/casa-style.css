@@ -836,6 +836,14 @@ body.casa {
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  /* Tenere premuto un quaderno apre la sua scheda, e il testo della riga non
+     deve selezionarsi: la selezione di Chromium scatta a ~500 ms, **prima** dei
+     600 della pressione lunga, e il suo `pointercancel` la spegne. Visto sul
+     telefono il 23/09/2026: «Copy, Share, Select all» sopra il nome, e nessuna
+     scheda. E' la stessa lezione della riga di attivita' qui sopra. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Il solo segnale di pressione: senza, su un telefono un tocco su una riga
@@ -1085,9 +1093,9 @@ body.casa {
      l'inset di sistema: la presa non deve finire dentro la zona in cui Android
      si prende lo swipe di home. */
   height: 26px;
-  /* La pressione lunga apre il foglio delle pagine: il browser non deve
-     interpretare il dito come uno scorrimento prima che il codice lo veda. */
-  touch-action: none;
+  /* Pallini da toccare, niente testo da selezionare. (Per un giro la striscia
+     aveva anche una pressione lunga, e con lei un `touch-action: none`; sono
+     usciti insieme al foglio delle pagine, il 23/09/2026.) */
   -webkit-user-select: none;
   user-select: none;
 }

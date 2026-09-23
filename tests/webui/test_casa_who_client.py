@@ -669,3 +669,16 @@ def test_every_openable_notebook_can_be_held() -> None:
         "assert.equal(quaderni.length, 3);\n"
         "assert.ok(quaderni.every((q) => premute.some((p) => p.el === q)));\n"
     )
+
+
+
+def test_holding_a_row_does_not_select_its_text() -> None:
+    """**Trovato sul telefono il 23/09/2026.** La selezione di Chromium scatta a
+    ~500 ms, prima dei 600 della pressione lunga, e il suo `pointercancel` la
+    spegne: sopra il nome compariva «Copy, Share, Select all», e la scheda non
+    si apriva. Nessun banco in node lo vede — il DOM finto non seleziona niente
+    — quindi lo tiene questo, sul foglio di stile."""
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    riga = css.split("\n.casa-who-row {", 1)[1].split("}", 1)[0]
+    for regola in ("user-select: none;", "-webkit-user-select: none;", "-webkit-touch-callout: none;"):
+        assert regola in riga, f"la riga della tendina ha perso `{regola}`"
