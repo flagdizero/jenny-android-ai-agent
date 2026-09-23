@@ -1104,7 +1104,10 @@
       "eliminato": "Quaderno «{name}» eliminato",
       "deleteConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
       "deleteConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
-      "deleteFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente."
+      "deleteFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente.",
+      "renamePrompt": "Nuovo nome per «{name}»",
+      "renamed": "Quaderno rinominato in «{name}»",
+      "renameFailed": "Non ho potuto rinominare «{name}». {error}"
     }
   },
   "officina": {

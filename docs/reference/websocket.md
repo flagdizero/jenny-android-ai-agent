@@ -322,7 +322,8 @@ correlate a reply to.
 | `soul.rules.write` | `content` | Save the user's standing rules (2 000-character cap) and re-project them into the marked block in `SOUL.md`. Honours the same workspace flags. |
 | `page.write` | `wiki`, `page`, `content`, `base` | Save a notebook page edited by hand from the reader. `base` is the markdown the editor opened on: if the file changed underneath, the answer is `conflict` and nothing is written. Honours `wiki.enabled` plus the same workspace flags. |
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
-| `project.delete` | `name` | Delete a project chat and its session. |
+| `project.delete` | `name` | Delete a project chat and its session. A home page pinned to it goes with it. |
+| `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open or is already taken by a folder or a conversation. A home page pinned to it follows the new name. |
 
 **Authorization is the handshake's, not the frame's.** When `token_issue_secret` is set, only
 a connection that presented the token at handshake time may run a command, even if

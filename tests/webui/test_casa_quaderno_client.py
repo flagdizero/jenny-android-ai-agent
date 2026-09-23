@@ -297,3 +297,107 @@ def test_the_workshop_still_asks_about_a_project() -> None:
     assert "confirmWithChat: 'workspace.deleteProjectConfirmWithChat'" in parole
     assert "failed: 'workspace.deleteProjectFailed'" in parole
     assert "export async function deleteProjectFlow(name, words = PROJECT_DELETE_WORDS)" in src
+
+
+# ── Rinomina, dal lato della casa ───────────────────────────────────────────
+
+
+def _run_rinomina(corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool = False) -> None:
+    metodo = _member((ASSETS / "casa-app.js").read_text(encoding="utf-8"), "renameNotebook")
+    script = textwrap.dedent(
+        f"""
+        import assert from 'node:assert/strict';
+        const {{ isOpenableProjectName }} = await import({json.dumps((ASSETS / "shared" / "conversation-list.js").as_uri())});
+        const storia = [];
+        const projectKey = (n) => 'project:' + n;
+        async function promptDialog(msg, opz) {{ storia.push(['chiede', opz.initial]); return {json.dumps(scritto)}; }}
+        const rpc = {{
+          async renameProject(a, b) {{
+            storia.push(['rpc', a, b]);
+            if ({json.dumps(rifiuta)}) throw new Error('a folder named viaggi already exists');
+          }},
+        }};
+        const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
+        const i18n = {{ t: (k) => k }};
+        function showToast(t, tipo) {{ storia.push(['avviso', t, tipo]); }}
+        class Guscio {{
+          constructor() {{
+            this.who = {{ refresh: async () => storia.push(['tendina']) }};
+            this.pagine = {{ rinominaConversazione: (a, b) => storia.push(['pagina0', a, b]) }};
+          }}
+          async switchConversation(k) {{ storia.push(['conversazione', k]); }}
+          portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
+          {metodo}
+        }}
+        const g = new Guscio();
+        """
+    ) + corpo
+    proc = subprocess.run(
+        [str(_NODE), "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -> None:
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), true);\n"
+        "assert.deepEqual(storia[0], ['chiede', 'viaggio'], 'la domanda non parte dal nome attuale');\n"
+        "assert.deepEqual(storia[1], ['rpc', 'viaggio', 'viaggi']);\n"
+        "assert.ok(storia.some((x) => x[0] === 'pagina0' && x[2] === 'project:viaggi'));\n"
+        "assert.ok(storia.some((x) => x[0] === 'conversazione' && x[1] === 'project:viaggi'),\n"
+        "  'eri nel quaderno e non ci sei rimasta');\n"
+        "assert.ok(storia.some((x) => x[0] === 'tendina'));\n"
+        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n",
+        scritto=" viaggi ",
+        corrente="project:viaggio",
+    )
+
+
+def test_renaming_another_notebook_leaves_you_where_you_are() -> None:
+    _run_rinomina(
+        "await g.renameNotebook('viaggio');\n"
+        "assert.ok(!storia.some((x) => x[0] === 'conversazione'), 'ti ha spostato');\n"
+        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n",
+        scritto="viaggi",
+        corrente=None,
+    )
+
+
+@pytest.mark.parametrize("scritto", [None, "", "   ", "viaggio"], ids=["annulla", "vuoto", "spazi", "uguale"])
+def test_nothing_to_rename_asks_nothing_of_the_gateway(scritto) -> None:
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), false);\n"
+        "assert.deepEqual(storia.map((x) => x[0]), ['chiede']);\n",
+        scritto=scritto,
+        corrente="project:viaggio",
+    )
+
+
+def test_a_name_that_would_not_open_is_said_before_the_round_trip() -> None:
+    """La stessa regola del gateway, detta subito: senza, «Ricerca ETF»
+    andrebbe e tornerebbe col suo rifiuto."""
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), false);\n"
+        "assert.ok(!storia.some((x) => x[0] === 'rpc'), 'un nome non valido e arrivato al gateway');\n"
+        "assert.deepEqual(storia.at(-1), ['avviso', 'scope.invalidName', 'error']);\n",
+        scritto="Ricerca ETF",
+        corrente=None,
+    )
+
+
+def test_a_refused_rename_changes_nothing_at_home() -> None:
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), false);\n"
+        "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'rpc', 'avviso']);\n"
+        "assert.equal(storia.at(-1)[2], 'error');\n",
+        scritto="viaggi",
+        corrente="project:viaggio",
+        rifiuta=True,
+    )
+
+
+def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:
+    """La riga «Rinomina» c'e' solo se il guscio sa rinominare: adesso sa."""
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    scheda = app_js.split("schedaQuaderno() {", 1)[1].split("\n  }\n", 1)[0]
+    assert "rinomina: (nome) => this.renameNotebook(nome)" in scheda

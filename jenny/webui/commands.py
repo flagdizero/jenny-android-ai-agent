@@ -440,12 +440,61 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     return esito
 
 
+async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Rinomina un quaderno: la cartella, la sua chat, e le sue pagine in casa.
+
+    Fra i comandi e non su ``/api/`` per la stessa ragione della cancellazione:
+    cambia il disco, e questa e' la superficie autenticata all'handshake. Il
+    lavoro sta in :mod:`jenny.webui.project_rename`, in un thread; qui c'e' il
+    seguito che e' della casa — le pagine appese col nome vecchio — **dopo**, e
+    fuori dal thread: se non riesce il quaderno resta rinominato, e la pagina
+    verso il nome vecchio si disegna «non c'e' piu'».
+    """
+    from jenny.session.keys import is_valid_project_name, project_session_key
+    from jenny.webui.project_rename import ProjectRenameError, rename_project
+
+    name = _require_str(params, "name").strip()
+    new_name = _require_str(params, "new_name").strip()
+    if not is_valid_project_name(name):
+        raise CommandError("bad_request", "invalid project name")
+    if not is_valid_project_name(new_name):
+        raise CommandError("bad_request", "invalid new name")
+
+    _require_wiki_enabled()
+
+    try:
+        esito = await asyncio.to_thread(
+            rename_project,
+            wikis_dir=_wikis_dir(ctx),
+            scripts_dir=_skill_scripts_dir(ctx),
+            workspace=ctx.get_workspace_root(),
+            name=name,
+            new_name=new_name,
+            invalidate_session=ctx.invalidate_session,
+        )
+    except ProjectRenameError as exc:
+        raise CommandError("bad_request", str(exc)) from exc
+    except OSError as exc:
+        raise CommandError("bad_request", str(exc)) from exc
+
+    from jenny.webui.casa_routes import rinomina_pagine_di
+
+    try:
+        await rinomina_pagine_di(
+            "conversazione", project_session_key(name), project_session_key(new_name)
+        )
+    except Exception:  # noqa: BLE001 — il rinomino e' gia' riuscito
+        logger.opt(exception=True).warning("Pages of renamed notebook {} not followed", name)
+    return esito
+
+
 COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
     "soul.rules.write": soul_rules_write,
     "page.write": page_write,
     "project.create": project_create,
     "project.delete": project_delete,
+    "project.rename": project_rename,
 }
 
 

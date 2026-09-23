@@ -1433,3 +1433,15 @@ def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
     """Aveva un solo chiamante, i pallini, ed e' uscita con lui."""
     src = (ASSETS / "shared" / "gesto-orizzontale.js").read_text(encoding="utf-8")
     assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src
+
+
+def test_page_zero_follows_a_renamed_notebook_only_if_it_was_its_own() -> None:
+    """La conversazione della pagina 0 non sta nell'elenco salvato: le pagine
+    appese le rinomina il gateway, questa no."""
+    _run(
+        "pagine.conversazioneCasa = 'project:viaggio';\n"
+        "pagine.rinominaConversazione('project:altro', 'project:nuovo');\n"
+        "assert.equal(pagine.conversazioneCasa, 'project:viaggio', 'ha seguito un altro quaderno');\n"
+        "pagine.rinominaConversazione('project:viaggio', 'project:viaggi');\n"
+        "assert.equal(pagine.conversazioneCasa, 'project:viaggi');\n"
+    )

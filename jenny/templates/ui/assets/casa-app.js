@@ -43,14 +43,15 @@ import { SchedaQuaderno } from './casa-quaderno.js';
 import { Trasloco } from './casa-trasloco.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
-import { projectKey, projectNameOf } from './shared/conversation-list.js';
+import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { deleteProjectFlow } from './shared/project-delete.js';
 import { showToast } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { setupLongPress } from './shared/longpress.js';
-import { confirmDialog } from './shared/dialog.js';
+import { confirmDialog, promptDialog } from './shared/dialog.js';
+import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { sessionManager } from './shared/session-manager.js';
 import { wsManager } from './shared/ws-manager.js';
@@ -476,7 +477,43 @@ class CasaApp {
         return this.switchConversation(projectKey(nome));
       },
       elimina: (nome) => this.deleteNotebook(nome),
+      rinomina: (nome) => this.renameNotebook(nome),
     }));
+  }
+
+  /** Rinomina un quaderno dalla sua scheda.
+   *
+   *  La regola del nome si controlla **qui prima** che sul gateway — e' la
+   *  stessa (`isOpenableProjectName` e' la copia fedele di quella del server) —
+   *  solo per dirlo subito, senza un giro; il gateway la riapplica comunque.
+   *  Il seguito e' quello della cancellazione, all'incontrario: se eri li'
+   *  dentro ci resti, sotto il nome nuovo; la tendina, il titolo e le pagine
+   *  (che il gateway ha gia' rinominato) si rileggono.
+   */
+  async renameNotebook(nome) {
+    const scritto = await promptDialog(i18n.t('casa.quaderno.renamePrompt', { name: nome }), {
+      initial: nome,
+    });
+    const nuovo = (scritto || '').trim();
+    if (!nuovo || nuovo === nome) return false;
+    if (!isOpenableProjectName(nuovo)) {
+      showToast(i18n.t('scope.invalidName'), 'error');
+      return false;
+    }
+    try {
+      await rpc.renameProject(nome, nuovo);
+    } catch (err) {
+      showToast(i18n.t('casa.quaderno.renameFailed', { name: nome, error: err?.message || '' }), 'error');
+      return false;
+    }
+    const vecchia = projectKey(nome);
+    const nuova = projectKey(nuovo);
+    this.pagine.rinominaConversazione(vecchia, nuova);
+    if (sessionManager.currentKey === vecchia) await this.switchConversation(nuova);
+    await this.who.refresh();
+    await this.portaPagine().ricarica();
+    showToast(i18n.t('casa.quaderno.renamed', { name: nuovo }), 'success');
+    return true;
   }
 
   /** Cancella un quaderno dalla sua scheda, e fa il seguito che e' di casa.

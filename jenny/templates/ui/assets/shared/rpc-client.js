@@ -65,4 +65,11 @@ export const rpc = {
     return wsManager.request('project.delete', { name });
   },
 
+  /** Rinomina un quaderno: la cartella, la sua chat, le sue pagine in casa.
+   *  Fra i comandi per la stessa ragione della cancellazione: cambia il disco
+   *  (v. `webui/commands.py::project_rename`). */
+  renameProject(name, newName) {
+    return wsManager.request('project.rename', { name, new_name: newName });
+  },
+
 };

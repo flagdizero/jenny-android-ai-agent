@@ -1101,7 +1101,10 @@
       "eliminato": "Notebook “{name}” deleted",
       "deleteConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
       "deleteConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
-      "deleteFailed": "I could not delete the notebook “{name}”. Nothing was changed."
+      "deleteFailed": "I could not delete the notebook “{name}”. Nothing was changed.",
+      "renamePrompt": "New name for “{name}”",
+      "renamed": "Notebook renamed to “{name}”",
+      "renameFailed": "I could not rename “{name}”. {error}"
     }
   },
   "officina": {

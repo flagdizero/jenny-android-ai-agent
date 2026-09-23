@@ -183,6 +183,14 @@ export class CasaPagine {
     return true;
   }
 
+  /** Un quaderno ha cambiato nome: la pagina 0 lo segue, se era il suo.
+   *  Le pagine appese le ha gia' rinominate il gateway; la conversazione della
+   *  pagina 0 non sta nell'elenco salvato, e senza questa resterebbe puntata
+   *  a un nome che non c'e' piu'. */
+  rinominaConversazione(vecchia, nuova) {
+    if (this.conversazioneCasa === vecchia) this.conversazioneCasa = nuova;
+  }
+
   /** Rilegge dal server **senza** riportarti alla chat.
    *
    *  Serve dopo una cancellazione: il gateway ha tolto la pagina insieme alla
