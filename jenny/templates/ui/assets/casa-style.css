@@ -1126,13 +1126,6 @@ body.casa {
   transform: translate(-50%, -50%);
 }
 
-/* Una stanza prestata a una pagina si accende li'.
-   Le stanze sono `display:none` di default e le accende la regola della vista
-   (`[data-view='tu']`): dentro una pagina la vista e' ancora `chat`, quindi
-   senza questa riga la pagina resterebbe vuota — e sembrerebbe che il prestito
-   non abbia funzionato, mentre l'elemento e' li' e basta nessuno lo mostra. */
-.casa-pagina[data-kind='stanza'] > * { display: flex; }
-
 /* Una Jenny App dentro una pagina: prende tutto lo spazio che la pagina ha.
    Niente cornice e niente intestazione propria — quella e' dell'app quando si
    apre a tutto schermo dal cassetto; qui il nome sta gia' in cima alla casa

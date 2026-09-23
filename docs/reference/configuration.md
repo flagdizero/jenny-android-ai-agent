@@ -405,7 +405,7 @@ The home screen's extra pages. Jenny's home is the conversation; beside it you c
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug), `stanza` (a room of the home, `ref` names it) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, and the ids must differ. |
+| `casa.schermate` | list | `[]` | The pages you added, in order. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, and the ids must differ. Pages of kind `stanza` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
 
 The conversation itself is **not** in this list: it is always the first page, it cannot be moved and it cannot be removed — putting it here would allow a config file that deletes it.
 

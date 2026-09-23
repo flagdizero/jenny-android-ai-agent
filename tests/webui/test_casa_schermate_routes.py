@@ -129,8 +129,9 @@ async def test_the_cap_travels_with_the_list(env) -> None:
     # pagina del genere non avrebbe contenuto proprio») ed e' rientrata il
     # 23/09 in un'altra forma — non una seconda chat, una scorciatoia che cambia
     # quella che c'e'. V. `.agent/pagine-conversazione-plan.md`.
+    # Le stanze sono uscite il 23/09/2026: posti dove si va, non dove si sta.
     assert "drawer" not in corpo["specie"]
-    assert set(corpo["specie"]) == {"app", "stanza", "conversazione"}
+    assert set(corpo["specie"]) == {"app", "conversazione"}
 
 
 # ── La scrittura ────────────────────────────────────────────────────────────
@@ -143,10 +144,10 @@ async def test_saving_a_page_and_reading_it_back(env) -> None:
 
 
 async def test_the_write_lands_in_the_config_file(env) -> None:
-    await _dispatch(env, _set([{"id": "p1", "kind": "stanza", "ref": "pages"}]))
+    await _dispatch(env, _set([{"id": "p1", "kind": "app", "ref": "orto"}]))
     su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
     assert su_disco["casa"]["schermate"] == [
-        {"id": "p1", "kind": "stanza", "ref": "pages"}
+        {"id": "p1", "kind": "app", "ref": "orto"}
     ]
 
 
@@ -194,6 +195,15 @@ async def test_the_app_drawer_is_not_a_kind(env) -> None:
     # `http_error` risponde in testo semplice, non in JSON: il messaggio deve
     # nominare la specie rifiutata, o chi legge il 400 non sa cosa ha sbagliato.
     assert "drawer" in risposta.body.decode("utf-8")
+
+
+async def test_a_room_is_no_longer_a_kind(env) -> None:
+    """Uscita il 23/09/2026. Il file vecchio la perde in silenzio (v.
+    `tests/config/test_casa_pages_config.py`); chi prova a scriverne una
+    nuova se la vede rifiutare, con il nome della specie nel messaggio."""
+    risposta = await _dispatch(env, _set([{"id": "p1", "kind": "stanza", "ref": "backup"}]))
+    assert risposta.status_code == 400
+    assert "stanza" in risposta.body.decode("utf-8")
 
 
 async def test_over_the_cap_is_a_400_not_a_500(env) -> None:

@@ -33,26 +33,10 @@ import {
 const OLTRE_IL_CAPO = 0.06;
 
 
-/** Le stanze che si possono appendere a una pagina.
- *
- *  **Non tutte.** `pages` — i quaderni — non c'e', e non e' una dimenticanza:
- *  `openPages()` legge il quaderno **dalla conversazione corrente**
- *  (`projectNameOf(sessionManager.currentKey)`), quindi «i quaderni» non sono
- *  un posto fisso ma le pagine di quello con cui stai parlando. Appenderla a
- *  una pagina vorrebbe dire una pagina che mostra cose diverse a seconda di
- *  dov'eri prima. La tavola `PagineGestione` la disegna come esempio, ma il
- *  prodotto non ha quella stanza: chi vuole un quaderno a portata di pollice
- *  ci mette **la sua conversazione**, che e' la stessa cosa detta bene.
- *
- *  L'etichetta e' quella che la stanza usa gia' di suo: due copie dello stesso
- *  nome divergono, e la seconda si scopre quando qualcuno rinomina la prima.
- */
-const STANZE = ['tu', 'jenny', 'model', 'updates', 'backup'];
-
 /** Un'icona per specie. Non quella dell'app: per averla servirebbe l'elenco
  *  caricato, e un foglio che aspetta la rete per disegnare una riga e' un
  *  foglio che a volte non si apre. */
-const ICONE = { app: 'ti-apps', stanza: 'ti-home', conversazione: 'ti-notebook' };
+const ICONE = { app: 'ti-apps', conversazione: 'ti-notebook' };
 
 export class CasaPagine {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
@@ -138,7 +122,7 @@ export class CasaPagine {
   /** Quale conversazione mostra la casella `i`, o `null` se non e' di chat.
    *
    *  La pagina 0 ha la sua (`conversazioneCasa`), una pagina conversazione il
-   *  suo quaderno; app e stanze nessuna — attraversarle non cambia la chat.
+   *  suo quaderno; un'app nessuna — attraversarla non cambia la chat.
    */
   conversazioneDi(i) {
     if (i === 0) return this.conversazioneCasa;
@@ -188,16 +172,12 @@ export class CasaPagine {
    */
   _disegna() {
     if (!this.pista) return;
-    /* Prima di buttare un pannello, si riprende quel che gli era stato
-       prestato. La stanza torna nel guscio e la chat nel pannello di casa: un
-       `remove()` secco le porterebbe via insieme al pannello — e per la chat
-       vorrebbe dire filo, composer e bozza. Per le stanze era un difetto
-       latente: sei su una stanza, apri il foglio, aggiungi una pagina, e la
-       stanza non si riapre piu' dal suo percorso (trovato il 23/09/2026
-       mettendo qui la chat). */
+    /* Prima di buttare un pannello, si riprende la chat se era parcheggiata li':
+       un `remove()` secco la porterebbe via insieme al pannello — cioe' filo,
+       composer e bozza (trovato il 23/09/2026 mettendo qui la chat, quando le
+       pagine tenevano anche le stanze del guscio e perdevano pure quelle). */
     const casa = this.pannelloDi(0);
     for (const vecchio of this.pista.querySelectorAll('.casa-pagina[data-id]')) {
-      if (vecchio.dataset.kind === 'stanza') this._svuota(vecchio);
       this.app?.trasloco?.riportaACasa(vecchio, casa);
       vecchio.remove();
     }
@@ -293,22 +273,10 @@ export class CasaPagine {
       const cornice = cornicePerApp(schermata.ref);
       cornice.className = 'casa-pagina-app';
       pannello.appendChild(cornice);
-    } else if (schermata.kind === 'stanza') {
-      /* La stanza e' **prestata**: e' un elemento solo, i suoi controller lo
-         hanno preso per id, e duplicarlo vorrebbe dire due nodi con lo stesso
-         id. Chi la presta e' il guscio, che sa anche come riempirla. */
-      const stanza = this.app?.prestaStanza?.(schermata.ref);
-      if (stanza) pannello.appendChild(stanza);
     }
   }
 
-  /** Spegne una pagina — e **restituisce** quel che le era stato prestato.
-   *
-   *  `textContent = ''` qui sarebbe un disastro silenzioso: cancellerebbe la
-   *  stanza vera, non una sua copia, e da quel momento aprirla dal percorso
-   *  normale non mostrerebbe piu' niente. Il difetto si vedrebbe una schermata
-   *  dopo, e non somiglierebbe affatto alla sua causa.
-   */
+  /** Spegne una pagina: la cornice dell'app se ne va, e con lei l'app viva. */
   _svuota(pannello) {
     /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
        mentre guardi un'app. Spenta resta comunque — una foto non gira. */
@@ -318,10 +286,6 @@ export class CasaPagine {
       return;
     }
     if (!pannello.dataset.pieno) return;
-    if (pannello.dataset.kind === 'stanza') {
-      const stanza = pannello.children[0] || pannello.firstElementChild;
-      if (stanza) this.app?.restituisciStanza?.(stanza);
-    }
     pannello.textContent = '';
     pannello.dataset.pieno = '';
   }
@@ -418,7 +382,7 @@ export class CasaPagine {
    *  gesto possa arrivare davvero.
    *
    *  Non c'e' nessun controllo sulla specie della pagina, e non e' una
-   *  dimenticanza: una stanza e' un elemento del guscio e una `contentWindow`
+   *  dimenticanza: una pagina quaderno ospita la chat, che una `contentWindow`
    *  non ce l'ha. Dirlo due volte vorrebbe dire due regole da tenere d'accordo.
    */
   _finestraPagina() {
@@ -622,7 +586,7 @@ Object.assign(CasaPagine.prototype, {
     domanda.textContent = i18n.t('casa.foglio.vuota', { n: this.schermate.length + 1 });
     const scelte = document.createElement('div');
     scelte.className = 'casa-foglio-scelte';
-    for (const kind of ['app', 'stanza', 'conversazione']) {
+    for (const kind of ['app', 'conversazione']) {
       scelte.appendChild(this._scelta(kind));
     }
     box.append(domanda, scelte);
@@ -688,9 +652,6 @@ Object.assign(CasaPagine.prototype, {
 
   /** Cosa si puo' scegliere, per specie. */
   async _voci(kind) {
-    if (kind === 'stanza') {
-      return STANZE.map((ref) => ({ ref, nome: i18n.t(`casa.${ref}.title`) }));
-    }
     if (kind === 'conversazione') return this._quaderni();
     const fonte = this.app?.appsSource?.();
     /* **Attese**, non solo avviate: `ensureLoaded()` non e' asincrona e chi ci
@@ -731,14 +692,11 @@ Object.assign(CasaPagine.prototype, {
 
   /** Come si chiama una pagina, per l'intestazione e per il foglio.
    *
-   *  Una stanza porta **il nome che usa gia' di suo**: due copie dello stesso
-   *  nome divergono, e la seconda si scopre quando qualcuno rinomina la prima.
-   *  Un'app e una conversazione portano il loro riferimento, che e' gia' il
-   *  nome che l'utente ha visto quando l'ha scelta.
+   *  Un'app e un quaderno portano il loro riferimento, che e' gia' il nome
+   *  che l'utente ha visto quando l'ha scelto.
    */
   nomeDi(schermata) {
     if (!schermata) return '';
-    if (schermata.kind === 'stanza') return i18n.t(`casa.${schermata.ref}.title`);
     if (schermata.kind === 'conversazione') return projectNameOf(schermata.ref) || schermata.ref;
     return schermata.ref;
   },

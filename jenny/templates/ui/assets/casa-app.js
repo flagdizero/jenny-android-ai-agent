@@ -81,20 +81,6 @@ const BACK_TO = {
   backup: 'tu',
 };
 
-/* Le stanze che una pagina di casa puo' tenere: quale elemento sono, e chi le
-   riempie quando si aprono.
-   **Non tutte.** `pages` e `reader` non ci sono: la prima legge il quaderno
-   dalla conversazione corrente, la seconda ha bisogno di una pagina precisa.
-   Sono stanze che dipendono da dove eri prima, e appese a un posto fisso
-   mostrerebbero cose diverse ogni volta. */
-const STANZE_IN_PAGINA = {
-  tu: { elemento: 'casa-tu', apri: (app) => app.tu.open() },
-  jenny: { elemento: 'casa-jenny-room', apri: (app) => app.jennyRoom.open() },
-  model: { elemento: 'casa-model-room', apri: (app) => app.modelRoom.open() },
-  updates: { elemento: 'casa-updates-room', apri: (app) => app.updatesRoom.open() },
-  backup: { elemento: 'casa-backup-room', apri: (app) => app.backupRoom.open() },
-};
-
 /* Le stesse domande dell'officina, dette come si dicono in casa.
  *
  *  Il giro di creazione e' uno solo (`shared/project-create.js`) e non sa come
@@ -638,29 +624,6 @@ class CasaApp {
     if (!target) return false;
     this._setView(target);
     return true;
-  }
-
-  /** Presta una stanza a una pagina, e la riempie.
-   *
-   *  **Prestata, non copiata.** L'elemento e' uno solo e i suoi controller lo
-   *  hanno preso per id alla costruzione: duplicarlo vorrebbe dire due nodi
-   *  con lo stesso id e un controller che ne comanda uno a caso. Quindi si
-   *  sposta — e si rimette a posto uscendo, o aprire «Tu e Jenny» dal suo
-   *  percorso normale troverebbe una stanza finita dentro una pagina, cioe'
-   *  dentro qualcosa che quella vista nasconde.
-   */
-  prestaStanza(ref) {
-    const stanza = STANZE_IN_PAGINA[ref];
-    if (!stanza) return null;
-    const el = document.getElementById(stanza.elemento);
-    if (!el) return null;
-    stanza.apri(this);
-    return el;
-  }
-
-  /** ...e la rimette dov'era. */
-  restituisciStanza(el) {
-    if (el && this.shell && el.parentElement !== this.shell) this.shell.appendChild(el);
   }
 
   /** La pista ha cambiato casella: l'intestazione dice dove sei. */

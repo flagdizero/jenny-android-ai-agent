@@ -483,25 +483,29 @@ class ProvidersConfig(Base):
 
 # ── Le pagine della casa ────────────────────────────────────────────────────
 
-#: Di che specie puo' essere una pagina.
+#: Di che specie puo' essere una pagina: **un posto dove si sta**.
 #:
-#: La tavola `PagineGestione` ne disegna tre e qui ce ne sono due. Le assenze
-#: sono decise, non dimenticate:
+#: * ``app`` — una Jenny App, ``ref`` e' il suo slug;
+#: * ``conversazione`` — un quaderno, ``ref`` e' ``project:<nome>``. E' una
+#:   **scorciatoia**, non una seconda chat: arrivarci cambia la conversazione
+#:   dell'unica chat che c'e', e lo scorrimento lo traveste da pagina (v.
+#:   ``.agent/pagine-conversazione-plan.md``).
+#:
+#: Le assenze sono decise, non dimenticate:
 #:
 #: * **il cassetto delle app** — «ce l'hai gia' tirando su. Due porte per la
-#:   stessa cosa sono una di troppo» (la tavola stessa);
-#: * **una conversazione** — la chat in casa e' **una sola**: un filo, un campo
-#:   di scrittura, un collegamento. Una pagina del genere non avrebbe contenuto
-#:   proprio, potrebbe solo far cambiare conversazione a quella che c'e' gia'.
-#:   Deciso il 22/09/2026: non si fa, invece di farla a meta'.
+#:   stessa cosa sono una di troppo» (la tavola `PagineGestione`);
+#: * **le stanze** — backup, aggiornamenti, modello: posti dove si *va* a
+#:   sbrigare una cosa e si esce. Ci sono state dal 22 al 23/09/2026 e sono
+#:   uscite per decisione dell'utente — «mettere per esteso le impostazioni
+#:   non ha alcun senso» — portandosi via il pezzo piu' fragile della casa, il
+#:   prestito di un elemento del guscio a una pagina. Un ``config.json`` che ne
+#:   ha ancora una non si rompe: v. ``CasaConfig._stanze_uscite``.
 #:
 #: Stanno qui e non solo nel client perche' cosi' la regola vale anche per un
 #: `config.json` scritto a mano: una pagina che il prodotto non sa disegnare
 #: non deve poter esistere nel file.
-#: Le specie di pagina. ``conversazione`` e' una **scorciatoia**, non una seconda
-#: chat: arrivarci cambia la conversazione dell'unica chat che c'e', e lo
-#: scorrimento lo traveste da pagina (v. ``.agent/pagine-conversazione-plan.md``).
-SPECIE_SCHERMATA = ("app", "stanza", "conversazione")
+SPECIE_SCHERMATA = ("app", "conversazione")
 
 #: Quante se ne possono aggiungere, oltre alla chat. Non e' una limitazione
 #: tecnica: oltre questa soglia i pallini non si leggono piu' e attraversarle
@@ -546,7 +550,7 @@ class SchermataConfig(Base):
 
     id: str
     kind: str
-    #: Lo slug dell'app, il nome della stanza, o la chiave di sessione.
+    #: Lo slug dell'app, o la chiave di sessione del quaderno.
     ref: str
 
     @model_validator(mode="before")
@@ -579,6 +583,33 @@ class CasaConfig(Base):
     """
 
     schermate: list[SchermataConfig] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _stanze_uscite(cls, data: Any) -> Any:
+        """Le pagine stanza del 22-23/09/2026 escono in silenzio, non con un errore.
+
+        **Qui un errore costa l'intero file.** Lo schema rifiuta una specie che
+        non conosce, e il loader davanti a un ``config.json`` che non valida
+        prova il ``.bak`` — che ha la stessa pagina — e poi **parte dai
+        default** (``loader.py::_load_with_recovery``): chi aveva una stanza
+        appesa si ritroverebbe senza provider e senza chiavi, per una pagina.
+        Quindi le stanze si tolgono **prima** della validazione, e solo loro:
+        una specie davvero sconosciuta continua a essere rifiutata, perche' li'
+        l'errore dice una cosa vera.
+        """
+        if not isinstance(data, dict):
+            return data
+        schermate = data.get("schermate")
+        if not isinstance(schermate, list):
+            return data
+        rimaste = [
+            s for s in schermate
+            if not (isinstance(s, dict) and s.get("kind") == "stanza")
+        ]
+        if len(rimaste) == len(schermate):
+            return data
+        return {**data, "schermate": rimaste}
 
     @model_validator(mode="after")
     def _entro_il_tetto(self) -> "CasaConfig":
