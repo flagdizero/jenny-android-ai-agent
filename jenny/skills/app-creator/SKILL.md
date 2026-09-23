@@ -60,6 +60,22 @@ hand-rolled overlay `<div>`. See "Internal navigation and the Android back butto
 </rule>
 
 <rule>
+**A sideways swipe belongs to the home screen, unless the component under the finger is
+dragged sideways.** The user can pin an app as a page of the home, and a left/right swipe
+there changes page — a button never keeps it, a sideways-dragged component always does:
+
+- Buttons act on `click`, never on `pointerdown`/`touchstart`: a press that counts on
+  touch-down has already counted when the finger turns out to be swiping. Hold-to-repeat
+  starts after a delay and stops on `pointercancel` — the app gets one when the page takes
+  the swipe.
+- A component dragged sideways by your own code (carousel, swipe-to-delete row, map,
+  drawing area) declares it with CSS `touch-action: pan-y` (`none` if it also takes
+  vertical drags). `<input type="range">` and `overflow-x: auto` rows need nothing.
+- `touch-action: none` on `body` takes the swipe from the whole app: only for a full-screen
+  game.
+</rule>
+
+<rule>
 **Follow the Guided Conversation Flow below.** Ask ONE question at a time. Only write files
 AFTER the user has confirmed name and actions in Phase 3.
 Never write real secrets into app.json or index.html, and never declare `server.auth` at all (see Secrets below).

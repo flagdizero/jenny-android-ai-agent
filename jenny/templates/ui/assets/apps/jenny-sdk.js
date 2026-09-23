@@ -269,7 +269,13 @@
     }
     const manda = (dettaglio) =>
       window.parent.postMessage({ type: 'jenny:gesto', slug, ...dettaglio }, '*');
-    gesto.osservaGestoOrizzontale(document.documentElement, {
+    /* Sulla finestra e non sulla radice: si ascolta in risalita, e dev'essere
+       **l'ultimo** a sentire il dito — anche dopo chi nell'app ascolta sul
+       `document` — perche' e' da quel che l'app ha fatto (un `preventDefault`
+       mentre si trascina) che si capisce se il gesto era suo. `esclusivo`:
+       quando invece e' della pagina, l'app riceve l'annullo e si ferma. */
+    gesto.osservaGestoOrizzontale(window, {
+      esclusivo: true,
       onOrizzontale: () => manda({ fase: 'inizio' }),
       onTrascina: (dx) => manda({ fase: 'muove', dx }),
       onFine: ({ verso, conferma }) => manda({ fase: 'fine', verso, conferma }),

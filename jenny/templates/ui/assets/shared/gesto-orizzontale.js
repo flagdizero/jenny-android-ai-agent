@@ -97,6 +97,60 @@ export function dentroScorrevoleOrizzontale(bersaglio, dx, confine) {
   return false;
 }
 
+/** **Di lato e' scorrimento, un tocco e' un tocco — tranne dove il componente
+ *  sotto il dito si trascina di lato: li' vince lui.** E' la regola dell'utente
+ *  (23/09/2026), e prima di lei ce n'era una sola, lo scorrevole nativo qui
+ *  sopra. Tutto quello che una app fa col suo codice non si vedeva, e il dito
+ *  muoveva tutte e due le cose insieme.
+ *
+ *  Chi si trascina di lato si riconosce da quel che **dichiara** — uno
+ *  scorrevole, un cursore a slitta, un `touch-action` che l'orizzontale non lo
+ *  lascia al browser — e da quel che **fa** mentre il dito si muove (v. il
+ *  `defaultPrevented` in `osservaGestoOrizzontale`). Mai da quel che fa quando
+ *  il dito si appoggia: un bottone reagisce subito anche lui, e se bastasse
+ *  quello una app piena di bottoni sarebbe una trappola da cui non si esce.
+ *
+ *  Per lo stesso motivo un `touch-action: none` **su un comando** non conta.
+ *  Life Counter lo mette sui suoi − e + perche' tenerli premuti non faccia
+ *  scorrere la pagina, non perche' ci si trascini sopra: sono bottoni.
+ */
+export function gestoDiUnComponente(bersaglio, dx, confine) {
+  if (dentroScorrevoleOrizzontale(bersaglio, dx, confine)) return true;
+  /* Fino in cima, `body` compreso: dentro una app il confine e' la finestra,
+     e un gioco che si prende tutto lo schermo lo dice proprio li'. */
+  let el = bersaglio;
+  while (el && el !== confine) {
+    if (el.tagName === 'INPUT' && el.type === 'range') return true;
+    if (tieneOrizzontale(el) && !eUnComando(el)) return true;
+    el = el.parentElement;
+  }
+  return false;
+}
+
+/** Il `touch-action` di `el` si tiene lo scorrimento orizzontale? `none`,
+ *  `pan-y`, `pinch-zoom` si'; `auto` e `manipulation` lo lasciano al browser,
+ *  e cosi' ogni valore che nomina un pan orizzontale. Non si eredita: per
+ *  questo `gestoDiUnComponente` risale. */
+export function tieneOrizzontale(el) {
+  const valore = getComputedStyle(el).touchAction;
+  if (!valore || valore === 'auto' || valore === 'manipulation') return false;
+  return !/pan-(x|left|right)/.test(valore);
+}
+
+/** Un elemento che si tocca per premere, non per trascinare. */
+export function eUnComando(el) {
+  if (/^(BUTTON|A|LABEL|SELECT|SUMMARY|INPUT)$/.test(el.tagName || '')) return true;
+  const ruolo = el.getAttribute?.('role') || '';
+  return /^(button|link|switch|tab|checkbox|radio|menuitem|option)$/.test(ruolo);
+}
+
+/** C'e' del testo selezionato? Trascinare per aggiustarne i manici non deve
+ *  far scivolare niente sotto le dita. */
+export function testoSelezionato() {
+  const sel = globalThis.getSelection?.();
+  return Boolean(sel && !sel.isCollapsed && String(sel));
+}
+
 /** Aggancia il riconoscimento a `elemento` e richiama il guscio.
  *
  *  I richiami, nell'ordine in cui possono arrivare:
@@ -118,6 +172,14 @@ export function dentroScorrevoleOrizzontale(bersaglio, dx, confine) {
  *  `onFine` e `onAnnulla` arrivano **solo** se l'asse era stato deciso: un
  *  tocco che non diventa mai orizzontale non deve far ridisegnare niente.
  *
+ *  `esclusivo` e' per chi ascolta **sopra il contenuto di qualcun altro** — il
+ *  kit, dentro una Jenny App. Quando il gesto diventa nostro, l'app riceve un
+ *  annullo (`pointercancel` e `touchcancel`) e da li' al rilascio non sente piu'
+ *  il dito: e' quel che fa Android col suo ACTION_CANCEL quando un genitore si
+ *  prende lo scorrimento. Senza, l'app continuava il suo gesto sotto la pagina
+ *  che scorreva — Life Counter contava la vita a ripetizione, perche' il suo
+ *  «tieni premuto» non sapeva che il dito era gia' altrove.
+ *
  *  @returns {() => void} per staccarlo.
  */
 export function osservaGestoOrizzontale(elemento, {
@@ -126,6 +188,7 @@ export function osservaGestoOrizzontale(elemento, {
   onTrascina,
   onFine,
   onAnnulla,
+  esclusivo = false,
 } = {}) {
   let partenzaX = 0;
   let partenzaY = 0;
@@ -133,6 +196,8 @@ export function osservaGestoOrizzontale(elemento, {
   let inAscolto = false;     // un gesto candidato e' in corso
   let orizzontale = false;   // l'asse e' stato deciso
   let bersaglio = null;
+  let puntatore = null;      // l'id del puntatore del dito, per annullarlo (esclusivo)
+  let sintetico = false;     // stiamo mandando noi l'annullo: non e' un evento vero
 
   const azzera = () => {
     inAscolto = false;
@@ -145,6 +210,7 @@ export function osservaGestoOrizzontale(elemento, {
   const giu = (e) => {
     azzera();
     if (e.touches.length !== 1) return;
+    if (testoSelezionato()) return;
     if (puoIniziare && puoIniziare() === false) return;
     const t = e.touches[0];
     partenzaX = t.screenX;
@@ -156,17 +222,25 @@ export function osservaGestoOrizzontale(elemento, {
 
   const muove = (e) => {
     if (!inAscolto) return;
+    /* Un secondo dito e' un pizzico, non uno scorrimento. */
+    if (e.touches.length > 1) { annulla(); return; }
     const t = e.touches[0];
     const dx = t.screenX - partenzaX;
     const dy = t.screenY - partenzaY;
 
     if (!orizzontale) {
+      /* **Quel che il componente fa mentre il dito si muove.** Chi si trascina
+         col suo codice blocca lo scorrimento del browser col `preventDefault`,
+         e lo fa prima di noi: si ascolta in risalita, dopo di lui. Un bottone
+         non lo fa mai — e' questa la differenza, non chi reagisce per primo. */
+      if (e.defaultPrevented) { azzera(); return; }
       if (Math.abs(dx) < SOGLIA_ASSE && Math.abs(dy) < SOGLIA_ASSE) return;
       /* Dominanza orizzontale vera: un trascinamento diagonale (tipico di chi
          aggiusta una selezione) non arma il gesto. */
       if (Math.abs(dx) <= Math.abs(dy) * 1.5) { azzera(); return; }
-      if (dentroScorrevoleOrizzontale(bersaglio, dx, elemento)) { azzera(); return; }
+      if (gestoDiUnComponente(bersaglio, dx, elemento)) { azzera(); return; }
       orizzontale = true;
+      if (esclusivo) annullaPerLAltro(e);
       onOrizzontale?.();
     }
 
@@ -195,20 +269,76 @@ export function osservaGestoOrizzontale(elemento, {
   };
 
   const annulla = () => {
+    if (sintetico) return;
     const eraOrizzontale = orizzontale;
     azzera();
     if (eraOrizzontale) onAnnulla?.();
   };
 
+  /** Il gesto e' nostro: chi c'e' sotto riceve l'annullo e si ferma. Un
+   *  costruttore che manca, o che rifiuta i suoi argomenti, non deve fermare
+   *  lo scorrimento: l'annullo e' una cortesia, il gesto no. */
+  const annullaPerLAltro = (e) => {
+    if (!bersaglio?.dispatchEvent) return;
+    sintetico = true;
+    try {
+      if (puntatore !== null && typeof PointerEvent === 'function') {
+        bersaglio.dispatchEvent(new PointerEvent('pointercancel', {
+          bubbles: true, pointerId: puntatore, pointerType: 'touch', isPrimary: true,
+        }));
+      }
+      if (typeof TouchEvent === 'function') {
+        bersaglio.dispatchEvent(new TouchEvent('touchcancel', {
+          bubbles: true, touches: [], targetTouches: [],
+          changedTouches: Array.from(e.touches || []),
+        }));
+      }
+    } catch {
+      /* v. sopra */
+    } finally {
+      sintetico = false;
+    }
+  };
+
+  /** Da quando il gesto e' nostro al rilascio, il dito non arriva piu' a chi
+   *  sta sotto. Si ferma **in discesa, sulla finestra** — prima di chiunque —
+   *  e il riconoscimento lo si fa girare da qui: fermato, non arriverebbe
+   *  nemmeno a noi, che ascoltiamo in risalita. */
+  const trattieni = (e) => {
+    if (sintetico || !orizzontale) return;
+    e.stopImmediatePropagation();
+    if (e.type === 'touchmove') muove(e);
+    else if (e.type === 'touchend') su(e);
+    else if (e.type === 'touchcancel') annulla();
+  };
+  const segnaPuntatore = (e) => {
+    if (e.isPrimary) puntatore = e.pointerId;
+  };
+  const DA_TRATTENERE = [
+    'touchmove', 'touchend', 'touchcancel', 'pointermove', 'pointerup', 'pointercancel',
+  ];
+
   elemento.addEventListener('touchstart', giu, { passive: true });
   elemento.addEventListener('touchmove', muove, { passive: false });
   elemento.addEventListener('touchend', su, { passive: true });
   elemento.addEventListener('touchcancel', annulla, { passive: true });
+  if (esclusivo) {
+    window.addEventListener('pointerdown', segnaPuntatore, { capture: true, passive: true });
+    for (const tipo of DA_TRATTENERE) {
+      window.addEventListener(tipo, trattieni, { capture: true, passive: false });
+    }
+  }
 
   return () => {
     elemento.removeEventListener('touchstart', giu);
     elemento.removeEventListener('touchmove', muove);
     elemento.removeEventListener('touchend', su);
     elemento.removeEventListener('touchcancel', annulla);
+    if (esclusivo) {
+      window.removeEventListener('pointerdown', segnaPuntatore, { capture: true });
+      for (const tipo of DA_TRATTENERE) {
+        window.removeEventListener(tipo, trattieni, { capture: true });
+      }
+    }
   };
 }

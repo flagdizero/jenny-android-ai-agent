@@ -177,6 +177,7 @@ __SOGLIA_CONFERMA__
 __VELOCITA__
 __ELASTICO__
 __HSCROLL__
+__COMPONENTE__
 __OSSERVA__
 
 const modiVisti = [];
@@ -250,6 +251,15 @@ def _harness() -> str:
         .replace("__SOGLIA_CONFERMA__", _funzione(gesto, "sogliaConferma"))
         .replace("__ELASTICO__", _funzione(gesto, "elastico"))
         .replace("__HSCROLL__", _funzione(gesto, "dentroScorrevoleOrizzontale"))
+        .replace(
+            "__COMPONENTE__",
+            "\n".join(
+                _funzione(gesto, nome)
+                for nome in (
+                    "gestoDiUnComponente", "tieneOrizzontale", "eUnComando", "testoSelezionato",
+                )
+            ),
+        )
         .replace("__OSSERVA__", _funzione(gesto, "osservaGestoOrizzontale"))
         .replace("__SETUP_SWIPE__", _metodo(app, "setupSwipeNav"))
         .replace("__ANIMATE__", _metodo(app, "_animateSlideIn"))
