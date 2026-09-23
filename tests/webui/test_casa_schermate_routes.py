@@ -278,3 +278,120 @@ async def test_the_notebook_rule_does_not_leak_onto_apps(env) -> None:
     """La regola vale per la sua specie: uno slug d'app non e' un quaderno."""
     pagine = [{"id": "p1", "kind": "app", "ref": "orto"}]
     assert (await _dispatch(env, _set(pagine))).status_code == 200
+
+
+# ── Cancellare la cosa porta via la sua pagina (23/09/2026) ─────────────────
+#
+# Non contraddice il punto 4 della testata. Li' la cosa sparisce per altre
+# strade e nessuno ha deciso niente sulla pagina; qui l'utente **cancella la
+# cosa** dalla sua scheda, e la pagina e' della cosa.
+
+
+def _pagine_su_disco(env) -> list[dict]:
+    return json.loads(env.config_path.read_text(encoding="utf-8"))["casa"]["schermate"]
+
+
+async def _con_pagine(env, pagine: list[dict]) -> None:
+    assert _corpo(await _dispatch(env, _set(pagine)))["ok"] is True
+
+
+async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:
+    (env.workspace / "apps" / "orto").mkdir(parents=True)
+    await _con_pagine(env, [
+        {"id": "p1", "kind": "app", "ref": "orto"},
+        {"id": "p2", "kind": "app", "ref": "lampo"},
+        {"id": "p3", "kind": "conversazione", "ref": "project:orto"},
+    ])
+    req = _richiesta("/api/webui/apps/orto/delete")
+    risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+
+    assert risposta.status_code == 200
+    assert not (env.workspace / "apps" / "orto").exists()
+    # Solo l'app: un quaderno che si chiama come lei e' un'altra cosa.
+    assert [p["id"] for p in _pagine_su_disco(env)] == ["p2", "p3"]
+
+
+async def test_a_failed_app_delete_leaves_the_pages_alone(env) -> None:
+    """Un'app che non c'e' e' un 404, e le pagine non si toccano: la pagina
+    se ne va **con** la cosa, non al posto suo."""
+    await _con_pagine(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
+    req = _richiesta("/api/webui/apps/orto/delete")
+    risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+
+    assert risposta.status_code == 404
+    assert [p["id"] for p in _pagine_su_disco(env)] == ["p1"]
+
+
+async def test_deleting_a_notebook_takes_its_page(env, monkeypatch) -> None:
+    from jenny.webui import commands
+    from jenny.webui import project_delete as modulo
+
+    monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
+    await _con_pagine(env, [
+        {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
+        {"id": "p2", "kind": "app", "ref": "piante"},
+    ])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    await commands.project_delete(ctx, {"name": "piante"})
+
+    assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
+
+
+async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch) -> None:
+    from jenny.webui import commands
+    from jenny.webui import project_delete as modulo
+    from jenny.webui.commands import CommandError
+
+    def _rifiuta(**kw):
+        raise modulo.ProjectDeleteError("no project named piante")
+
+    monkeypatch.setattr(modulo, "delete_project", _rifiuta)
+    await _con_pagine(env, [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    with pytest.raises(CommandError):
+        await commands.project_delete(ctx, {"name": "piante"})
+
+    assert [p["id"] for p in _pagine_su_disco(env)] == ["p1"]
+
+
+async def test_nothing_to_take_means_no_write(env) -> None:
+    """Se la cosa non aveva pagine il file non si riscrive: niente backup
+    ruotato per un'operazione che in casa non ha cambiato niente."""
+    from jenny.webui.casa_routes import stacca_pagine_di
+
+    await _con_pagine(env, [{"id": "p1", "kind": "app", "ref": "lampo"}])
+    prima = env.config_path.stat().st_mtime_ns
+    assert await stacca_pagine_di("app", "orto") == 0
+    assert env.config_path.stat().st_mtime_ns == prima
+
+
+async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeypatch) -> None:
+    """La cancellazione e' gia' avvenuta e non si disfa: un guaio con la
+    pagina non deve diventare un 500 su un'operazione riuscita."""
+    from jenny.webui import casa_routes
+
+    async def _rotto(kind, ref):
+        raise RuntimeError("disco pieno")
+
+    monkeypatch.setattr(casa_routes, "stacca_pagine_di", _rotto)
+    (env.workspace / "apps" / "orto").mkdir(parents=True)
+    req = _richiesta("/api/webui/apps/orto/delete")
+    risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+    assert risposta.status_code == 200
+
+
+async def test_a_delete_does_not_reach_across_kinds(env) -> None:
+    """Oggi i riferimenti delle due specie non si toccano — uno slug d'app non
+    ha i due punti, un quaderno e' `project:<nome>` — ma lo schema **non vieta**
+    a una pagina app un `ref` a forma di quaderno. E' la specie, non la forma
+    del riferimento, a dire di chi e' una pagina: senza, cancellare il quaderno
+    toglierebbe anche quella. Trovato mutando: il controllo sulla specie
+    sopravviveva a tutti gli altri banchi (23/09/2026)."""
+    from jenny.webui.casa_routes import stacca_pagine_di
+
+    await _con_pagine(env, [
+        {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
+        {"id": "p2", "kind": "app", "ref": "project:piante"},
+    ])
+    assert await stacca_pagine_di("conversazione", "project:piante") == 1
+    assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]

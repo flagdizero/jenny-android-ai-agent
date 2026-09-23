@@ -415,7 +415,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     _require_wiki_enabled()
 
     try:
-        return await asyncio.to_thread(
+        esito = await asyncio.to_thread(
             delete_project,
             wikis_dir=_wikis_dir(ctx),
             scripts_dir=_skill_scripts_dir(ctx),
@@ -427,6 +427,17 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", str(exc)) from exc
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
+    # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
+    # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
+    # cancellato: la pagina verso il nulla la toglie l'utente.
+    from jenny.session.keys import project_session_key
+    from jenny.webui.casa_routes import stacca_pagine_di
+
+    try:
+        await stacca_pagine_di("conversazione", project_session_key(name))
+    except Exception:  # noqa: BLE001 — la cancellazione e' gia' riuscita
+        logger.opt(exception=True).warning("Page of deleted notebook {} not removed", name)
+    return esito
 
 
 COMMANDS: dict[str, Command] = {

@@ -258,10 +258,12 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
               appsSource: () => ({
                 ensureLoaded() {},
                 jennyApps: [],
+                jennyListFailed() { return globalThis.LISTA_ROTTA === true; },
                 attendiJennyApps() {
                   return new Promise((r) => setTimeout(() => {
                     this.jennyApps = [
                       { slug: 'orto', name: 'Orto' },
+                      { slug: 'lampo', name: 'Lampo' },
                       { slug: 'rotta', name: 'Rotta', broken: true },
                       { slug: 'fuori', name: 'Fuori', view_kind: 'external' },
                     ];
@@ -348,9 +350,15 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
             "  _segreto: '',\n"
             "  getSecret() { return this._segreto; },\n"
             "  async bootstrap() { this._segreto = 'ok'; },\n"
+            # Un caso puo' imporre i suoi quaderni — un elenco di nomi, o
+            # 'rotto' per una lettura che fallisce — e allora vale quello:
+            # serve alla pagina «non c'e' piu'». Altrimenti l'elenco di sotto.
+            "  _quaderni: null,\n"
             # I quaderni su disco, come li da' `/api/projects`: `projects` si
             # aprono, `unopenable` no. Rispondono **dopo un giro**, come la rete.
             "  async listProjects() {\n"
+            "    if (this._quaderni === 'rotto') throw new Error('500');\n"
+            "    if (this._quaderni) return { projects: this._quaderni.map((name) => ({ name })) };\n"
             "    await new Promise((r) => setTimeout(r, 15));\n"
             # `zucca` e' piu' recente di `orto` ma viene dopo in ordine
             # alfabetico: senza, i due ordini coincidono e il banco non li
@@ -735,7 +743,7 @@ def test_a_broken_or_external_app_cannot_become_a_page() -> None:
     _run(
         "await tieniPremuto();\n"
         "const voci = await pagine._voci('app');\n"
-        "assert.deepEqual(voci.map((v) => v.ref), ['orto']);"
+        "assert.deepEqual(voci.map((v) => v.ref), ['orto', 'lampo']);"
     )
 
 
@@ -859,7 +867,7 @@ def test_the_app_list_is_waited_for_not_just_started() -> None:
     """
     _run(
         "const voci = await pagine._voci('app');\n"
-        "assert.deepEqual(voci.map((v) => v.ref), ['orto'],\n"
+        "assert.deepEqual(voci.map((v) => v.ref), ['orto', 'lampo'],\n"
         "  'l elenco e stato letto prima che arrivasse');"
     )
 
@@ -873,7 +881,7 @@ def test_the_empty_message_is_only_for_a_real_empty_list() -> None:
         "const testi = elenco.children.map((c) => c.className);\n"
         "assert.ok(!testi.includes('casa-foglio-nota'),\n"
         "  'ha detto che non ci sono app');\n"
-        "assert.equal(elenco.children.length, 2, 'Indietro piu una app');"
+        "assert.equal(elenco.children.length, 3, 'Indietro piu due app');"
     )
 
 
@@ -1483,3 +1491,152 @@ def test_pinning_from_a_sheet_closes_what_is_above_first() -> None:
     assert "this._closeOverlays()" in appendi
     assert appendi.index("_closeOverlays") < appendi.index("this.pagine.appendi")
     assert "i < 8" in appendi, "il giro che chiude gli strati non ha piu' un tetto"
+
+
+# ── La pagina di una cosa che non c'e' piu' (23/09/2026) ────────────────────
+#
+# Cancellata dalla sua scheda, la cosa si porta via la pagina (lo fa il
+# gateway). Sparita per altre strade, la pagina resta — toglierla da se' sarebbe
+# una decisione presa al posto dell'utente — e lo dice, con il bottone per
+# toglierla. Col foglio delle pagine andato, e' l'unico posto da cui si toglie
+# una pagina verso un quaderno che nella tendina non c'e' piu'.
+
+SPARITA = [{"id": "g1", "kind": "app", "ref": "svanita"}]
+QUADERNO = [{"id": "q1", "kind": "conversazione", "ref": "project:piante"}]
+
+
+def _sparita_in(indice: int) -> str:
+    return (
+        f"const pannello = pagine.pannelloDi({indice});\n"
+        "const avviso = () => pannello.children.find((c) => c.className === 'casa-pagina-sparita');\n"
+    )
+
+
+def test_an_app_that_is_gone_says_so_instead_of_a_blank_frame() -> None:
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in(1)
+        + "assert.ok(avviso(), 'nessun avviso sulla pagina di un app sparita');\n"
+        "assert.ok(!pannello.children.some((c) => c.dataset?.slug), 'la cornice verso il nulla e rimasta');\n"
+        "assert.match(avviso().children[0].textContent, /casa\\.pagine\\.appSparita.*svanita/);\n",
+        SPARITA,
+    )
+
+
+def test_the_gone_page_can_remove_itself() -> None:
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in(1)
+        + "avviso().children[1].click();\n"
+        "await new Promise((r) => setTimeout(r, 10));\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "assert.deepEqual(api.scritture.at(-1), []);\n"
+        "assert.equal(pagine.quante, 1);\n",
+        SPARITA,
+    )
+
+
+def test_an_app_that_is_there_mounts_as_always() -> None:
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in(1)
+        + "assert.equal(avviso(), undefined);\n"
+        "assert.equal(pannello.children[0].dataset.slug, 'orto');\n",
+        UNA,
+    )
+
+
+def test_a_list_that_could_not_be_read_marks_nothing() -> None:
+    """«Non lo so» non e' «sparita»: con la lista rotta, dire a un'app che
+    c'e' che non c'e' piu' sarebbe peggio di tacere."""
+    _run(
+        "globalThis.LISTA_ROTTA = true;\n"
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in(1)
+        + "assert.equal(avviso(), undefined);\n"
+        "assert.equal(pannello.children[0].dataset.slug, 'svanita');\n",
+        SPARITA,
+    )
+
+
+def test_leaving_before_the_answer_draws_nothing() -> None:
+    """Sei gia' uscito quando l'elenco risponde: la pagina che hai lasciato
+    non si riempie di un avviso che nessuno guarda.
+
+    Si esce **dopo** che la cornice e' montata e **prima** che l'elenco
+    risponda (il finto risponde dopo 30 ms). Uscire subito, com'era scritto la
+    prima volta, provava la guardia sull'attesa del segreto e non questa: la
+    mutazione che la toglieva sopravviveva (23/09/2026).
+    """
+    _run(
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 5));\n"
+        "assert.ok(pagine.pannelloDi(1).children.some((c) => c.dataset?.slug), 'la cornice non e montata');\n"
+        "pagine.vaiA(0);\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in(1)
+        + "assert.equal(avviso(), undefined);\n",
+        SPARITA,
+    )
+
+
+def test_a_notebook_that_is_gone_is_covered_not_emptied() -> None:
+    """Sopra la chat e non al suo posto: sotto c'e' il trasloco, con le sue
+    regole. E coprendola non si scrive a una conversazione sparita."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._quaderni = ['altro'];\n"
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        + _sparita_in(1)
+        + "assert.ok(avviso(), 'nessun avviso sulla pagina di un quaderno sparito');\n"
+        "assert.match(avviso().children[0].textContent, /casa\\.pagine\\.quadernoSparito.*piante/);\n",
+        QUADERNO,
+    )
+
+
+def test_a_notebook_that_is_there_is_left_alone() -> None:
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._quaderni = ['piante'];\n"
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        + _sparita_in(1)
+        + "assert.equal(avviso(), undefined);\n",
+        QUADERNO,
+    )
+
+
+def test_a_notebook_list_that_fails_marks_nothing() -> None:
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._quaderni = 'rotto';\n"
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        + _sparita_in(1)
+        + "assert.equal(avviso(), undefined);\n",
+        QUADERNO,
+    )
+
+
+def test_a_notebook_that_comes_back_loses_its_notice() -> None:
+    """E un avviso solo, mai due: ogni arrivo ricomincia da capo."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._quaderni = [];\n"
+        "pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "pagine.vaiA(0); pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        + _sparita_in(1)
+        + "assert.equal(pannello.children.filter((c) => c.className === 'casa-pagina-sparita').length, 1);\n"
+        "api._quaderni = ['piante'];\n"
+        "pagine.vaiA(0); pagine.vaiA(1);\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(avviso(), undefined, 'l avviso e rimasto su un quaderno tornato');\n",
+        QUADERNO,
+    )

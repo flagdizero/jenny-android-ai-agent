@@ -101,7 +101,7 @@ class AppsRoutes:
             return self._list(request)
         m = re.match(r"^/api/webui/apps/([^/]+)/delete$", path)
         if m:
-            return self._delete(request, m.group(1))
+            return await self._delete(request, m.group(1))
         m = re.match(r"^/api/webui/apps/([^/]+)/view$", path)
         if m:
             return await self._view(request, m.group(1))
@@ -123,7 +123,7 @@ class AppsRoutes:
 
         return http_json_response(list_apps_payload(self._get_workspace_root()))
 
-    def _delete(self, request: WsRequest, raw_slug: str) -> Response:
+    async def _delete(self, request: WsRequest, raw_slug: str) -> Response:
         if not self._check_api_token(request):
             return http_error(401, "Unauthorized")
         disabled = self._check_apps_enabled()
@@ -135,7 +135,7 @@ class AppsRoutes:
         from jenny.webui.apps_api import delete_app
 
         try:
-            return http_json_response(delete_app(self._get_workspace_root(), slug))
+            esito = delete_app(self._get_workspace_root(), slug)
         except ValueError:
             return http_error(400, "invalid app slug")
         except FileNotFoundError:
@@ -143,6 +143,8 @@ class AppsRoutes:
         except Exception as e:
             self._log.warning("app delete {} failed: {}", slug, e)
             return http_error(500, "internal error")
+        await _stacca_la_pagina(self._log, "app", slug)
+        return http_json_response(esito)
 
     def _resolve_view_app(self, raw_slug: str) -> tuple[str, str] | Response:
         """``(slug, base_url)`` per una vista esterna, o il ``Response`` d'errore."""
@@ -295,3 +297,20 @@ class AppsRoutes:
             content_type=ctype,
             extra_headers=[("Cache-Control", "no-store")],
         )
+
+
+async def _stacca_la_pagina(log: Any, kind: str, ref: str) -> None:
+    """La pagina se ne va con la cosa; se non ci riesce, la cosa resta cancellata.
+
+    La cancellazione e' gia' avvenuta e non si disfa: un errore qui non deve
+    diventare un 500 su un'operazione riuscita. Resta una pagina verso il
+    nulla, che il client disegna «non c'e' piu'» e l'utente toglie.
+    """
+    from jenny.webui.casa_routes import stacca_pagine_di
+
+    try:
+        await stacca_pagine_di(kind, ref)
+    except Exception as exc:  # noqa: BLE001 — v. docstring
+        # Solo `warning`: il log iniettato non e' per forza loguru, e un
+        # `opt()` che non esiste qui dentro farebbe proprio il 500 da evitare.
+        log.warning("Page of deleted {} {} not removed: {}", kind, ref, exc)

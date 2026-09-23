@@ -116,6 +116,7 @@ export class CasaPagine {
        cambia conversazione subito, e il titolo deve gia' leggere quella nuova. */
     const chiave = this.conversazioneDi(bersaglio);
     if (chiave) this.app?.trasloco?.arriva(this.pannelloDi(bersaglio), chiave);
+    if (bersaglio > 0 && chiave) this._controllaQuaderno(this.pannelloDi(bersaglio), this.schermate[bersaglio - 1]);
     this.app?.onPaginaCambiata?.(bersaglio, this.schermate[bersaglio - 1] || null);
   }
 
@@ -326,6 +327,11 @@ export class CasaPagine {
       const cornice = cornicePerApp(schermata.ref);
       cornice.className = 'casa-pagina-app';
       pannello.appendChild(cornice);
+      /* La cornice si monta **subito**, e intanto si chiede se l'app c'e'
+         ancora: aspettare l'elenco prima di montare vorrebbe dire una pagina
+         vuota a ogni ingresso, per un caso raro. Sul telefono l'elenco e' gia'
+         in cache e la risposta arriva prima che l'app abbia dipinto. */
+      this._controllaApp(pannello, schermata, mio);
     }
   }
 
@@ -341,6 +347,74 @@ export class CasaPagine {
     if (!pannello.dataset.pieno) return;
     pannello.textContent = '';
     pannello.dataset.pieno = '';
+  }
+
+  /* ── La pagina di una cosa che non c'e' piu' ─────────────────────────── */
+  /* Cancellata dalla sua scheda, la cosa si porta via la pagina (lo fa il
+     gateway). Ma un'app o un quaderno possono sparire anche per altre strade —
+     Jenny, una mano sui file — e allora la pagina resta: **toglierla per conto
+     proprio sarebbe una decisione presa dal codice al posto dell'utente**. La
+     pagina lo dice, e offre di togliersi. Prima c'era il foglio delle pagine a
+     farlo; il foglio non c'e' piu', e senza questo una pagina verso un quaderno
+     sparito non si toglierebbe da nessuna parte: nella tendina non c'e'.
+
+     Una lettura che fallisce non segna niente: «non lo so» non e' «sparito». */
+
+  async _controllaApp(pannello, schermata, mio) {
+    const fonte = this.app?.appsSource?.();
+    if (!fonte?.attendiJennyApps) return;
+    let elenco;
+    try {
+      elenco = await fonte.attendiJennyApps();
+    } catch {
+      return;
+    }
+    if (fonte.jennyListFailed?.()) return;
+    if (pannello.dataset.pieno !== mio) return;       // nel frattempo sei uscito
+    if (elenco.some((a) => a.slug === schermata.ref)) return;
+    pannello.textContent = '';                        // via la cornice verso il nulla
+    this._sparita(pannello, schermata);
+  }
+
+  async _controllaQuaderno(pannello, schermata) {
+    if (!pannello || !schermata) return;
+    let nomi;
+    try {
+      const dati = await api.listProjects();
+      nomi = new Set((dati?.projects || []).map((q) => q?.name));
+    } catch {
+      return;
+    }
+    if (nomi.has(projectNameOf(schermata.ref))) this._togliSparita(pannello);
+    else this._sparita(pannello, schermata);
+  }
+
+  /** L'avviso, **sopra** quel che c'e' nel pannello e non al suo posto: in una
+   *  pagina quaderno sotto c'e' la chat, portata dal trasloco, e toccarla da
+   *  qui vorrebbe dire rompere un meccanismo che ha le sue regole. Coprendola
+   *  si impedisce anche di scrivere a una conversazione che non c'e' piu'. */
+  _sparita(pannello, schermata) {
+    this._togliSparita(pannello);
+    const scheda = document.createElement('div');
+    scheda.className = 'casa-pagina-sparita';
+    const testo = document.createElement('p');
+    testo.textContent = i18n.t(
+      schermata.kind === 'app' ? 'casa.pagine.appSparita' : 'casa.pagine.quadernoSparito',
+      { nome: this.nomeDi(schermata) },
+    );
+    const togli = document.createElement('button');
+    togli.type = 'button';
+    togli.className = 'casa-pagina-sparita-togli';
+    togli.textContent = i18n.t('casa.pagine.togliPagina');
+    togli.addEventListener('click', () => this.stacca(schermata.kind, schermata.ref));
+    scheda.append(testo, togli);
+    pannello.appendChild(scheda);
+  }
+
+  _togliSparita(pannello) {
+    for (const c of Array.from(pannello.children)) {
+      if (c.className === 'casa-pagina-sparita') c.remove();
+    }
   }
 
   /** I pannelli aggiunti, in ordine. Il pannello della chat non c'e': non ha

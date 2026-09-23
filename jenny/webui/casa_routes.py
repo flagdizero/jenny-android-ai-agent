@@ -33,6 +33,40 @@ from jenny.channels.http_utils import (
 from jenny.config.schema import MAX_SCHERMATE, SPECIE_SCHERMATA, Config, SchermataConfig
 
 
+async def stacca_pagine_di(kind: str, ref: str) -> int:
+    """Toglie da ``casa.schermate`` le pagine che puntano a (*kind*, *ref*).
+
+    La chiamano le due cancellazioni — un'app, un quaderno — **dopo** aver
+    cancellato: la cancellazione e' I/O lento e fuori dal lucchetto ci deve
+    restare, qui dentro c'e' solo un filtro.
+
+    **Non contraddice** la regola per cui il server non toglie una pagina da
+    se' quando il suo contenuto sparisce (v. la testata di
+    ``tests/webui/test_casa_schermate_routes.py``). Li' la cosa se ne va per
+    altre strade e nessuno ha deciso niente sulla pagina; qui l'utente ha
+    **cancellato la cosa** dalla sua scheda, e la pagina e' della cosa. Tenerla
+    vorrebbe dire un pallino verso il nulla, lasciato li' apposta.
+
+    Torna quante ne ha tolte. Se non ce n'erano il file non si tocca.
+    """
+    from jenny.config import store
+
+    tolte = 0
+
+    def _applica(config: Config) -> bool:
+        nonlocal tolte
+        prima = list(config.casa.schermate)
+        dopo = [s for s in prima if not (s.kind == kind and s.ref == ref)]
+        tolte = len(prima) - len(dopo)
+        if not tolte:
+            return False
+        config.casa.schermate = dopo
+        return True
+
+    await store.mutate(_applica)
+    return tolte
+
+
 class CasaRoutes:
     def __init__(
         self,

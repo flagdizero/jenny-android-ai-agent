@@ -1094,7 +1094,10 @@
     },
     "pagine": {
       "chat": "La conversazione",
-      "numero": "Pagina {n} di {tot}"
+      "numero": "Pagina {n} di {tot}",
+      "appSparita": "L'app «{nome}» non c'è più.",
+      "quadernoSparito": "Il quaderno «{nome}» non c'è più.",
+      "togliPagina": "Togli la pagina"
     },
     "foglio": {
       "titolo": "Le pagine di casa",

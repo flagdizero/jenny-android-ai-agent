@@ -1091,7 +1091,10 @@
     },
     "pagine": {
       "chat": "The conversation",
-      "numero": "Page {n} of {tot}"
+      "numero": "Page {n} of {tot}",
+      "appSparita": "The app “{nome}” is gone.",
+      "quadernoSparito": "The notebook “{nome}” is gone.",
+      "togliPagina": "Remove the page"
     },
     "foglio": {
       "titolo": "Your home pages",

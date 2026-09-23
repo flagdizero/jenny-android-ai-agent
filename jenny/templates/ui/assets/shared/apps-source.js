@@ -124,6 +124,13 @@ export class AppsSource {
     return this._failed.jenny || this._failed.android;
   }
 
+  /** La lista delle **Jenny App** non si e' potuta leggere. Serve a chi deve
+   *  dire «quest'app non c'e' piu'»: con la lista rotta la risposta e' «non lo
+   *  so», e dire «sparita» a un'app che c'e' sarebbe peggio di tacere. */
+  jennyListFailed() {
+    return this._failed.jenny;
+  }
+
   /** Riprova. `ensureLoaded()` fa gia' lo stesso a ogni apertura, quindi
    *  chiudere e riaprire basta; questo e' il pulsante per chi il foglio ce
    *  l'ha gia' aperto sotto gli occhi e non deve indovinare che riaprirlo
