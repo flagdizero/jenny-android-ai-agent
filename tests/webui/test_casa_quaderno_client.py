@@ -271,12 +271,14 @@ def test_saying_no_changes_nothing() -> None:
 # ── Il guscio ───────────────────────────────────────────────────────────────
 
 
-def test_back_closes_the_notebook_sheet_before_the_dropdown_under_it() -> None:
-    """La scheda sta **sopra** la tendina: Indietro chiude prima lei."""
+def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
+    """La scheda sta nel top layer, **sopra** la pagina Quaderni da cui si
+    apre: Indietro chiude prima lei, e solo alla pressione dopo lascia la
+    pagina."""
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
     catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
     assert "'casa-quaderno-sheet'" in catena
-    assert catena.index("casa-quaderno-sheet") < catena.index("this.who.isOpen")
+    assert catena.index("casa-quaderno-sheet") < catena.index("handleBack()")
 
 
 def test_the_sheet_is_in_the_page_and_shipped() -> None:

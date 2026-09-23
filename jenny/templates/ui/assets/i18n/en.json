@@ -962,18 +962,15 @@
     "attach": "Attach",
     "removeAttachment": "Remove attachment",
     "closeImage": "Close",
-    "kicker": "personal conversation",
-    "kickerNotebook": "notebook",
     "workshop": "Workshop",
     "back": {
       "chat": "back to the chat",
       "pages": "back to the pages",
-      "tu": "You and Jenny"
+      "impostazioni": "Settings"
     },
     "tu": {
       "title": "You and Jenny",
-      "open": "You and Jenny",
-      "workshopHint": "watch, tune, repair — or hold the avatar"
+      "workshopHint": "watch, tune, repair"
     },
     "jenny": {
       "title": "Jenny",
@@ -992,7 +989,6 @@
     "backHome": "Back to the house",
     "backHomeHint": "The simple interface: the conversation and nothing else.",
     "who": {
-      "open": "Who you are talking to",
       "title": "Talking to",
       "personal": "personal",
       "notebooks": "Notebooks",
@@ -1090,8 +1086,6 @@
       "msgRef": "report"
     },
     "pagine": {
-      "chat": "The conversation",
-      "numero": "Page {n} of {tot}",
       "appSparita": "The app “{nome}” is gone.",
       "quadernoSparito": "The notebook “{nome}” is gone.",
       "togliPagina": "Remove the page"
@@ -1105,6 +1099,16 @@
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
       "renameFailed": "I could not rename “{name}”. {error}"
+    },
+    "fila": {
+      "label": "Home pages",
+      "app": "Apps",
+      "quaderni": "Notebooks",
+      "impostazioni": "Settings",
+      "ordinaAiuto": "Drag to move · × to remove",
+      "fatto": "Done",
+      "sposta": "Move {nome}: left and right arrows",
+      "togli": "Remove {nome} from the pages"
     }
   },
   "officina": {

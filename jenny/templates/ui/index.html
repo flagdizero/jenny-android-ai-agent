@@ -35,65 +35,37 @@
 </head>
 <body class="casa">
 
-<main class="casa-shell" data-view="chat" data-pagina="0">
+<main class="casa-shell" data-view="chat" data-pagina="chat">
 
-  <!-- L'intestazione della tavola `Main.dc.html`, ridotta a cio' che esiste.
-       Il titolo porta il chevron e apre «con chi parli»: la tendina che dice
-       con quale conversazione stai parlando e quali quaderni ci sono. Il
-       bottone a destra e' la porta per l'officina — nel disegno finale
-       portera' a «Tu e Jenny», che quella porta se la tiene in fondo; finche'
-       quella pagina non c'e', porta dritto dove deve portare, e l'icona lo
-       dice.
+  <!-- ── La fila delle pagine ─────────────────────────────────────────────
+       I nomi delle pagine, quella dove sei grande: prende il posto del titolo
+       «Jenny ⌄», dell'ingranaggio, del bottone del cassetto e dei pallini
+       (v. `.agent/pagine-in-alto-plan.md`). La disegna `casa-fila.js`; c'e'
+       solo nella conversazione e nelle sue pagine di lato, le stanze hanno
+       l'intestazione qui sotto. Tenere premuto un nome apre la modalita'
+       ordina. -->
+  <div class="casa-fila" id="casa-fila"></div>
 
-       Il bottone sta *dentro* l'h1 e non attorno: un <button> accetta solo
-       contenuto di frase, quindi un h1 dentro un bottone non e' markup valido
-       — al contrario, ed e' l'unico modo di avere sia il titolo che il
-       comando. -->
+  <!-- L'intestazione delle stanze — le pagine di un quaderno, il lettore, le
+       stanze delle impostazioni. Nella conversazione non c'e': li' la fila dice
+       gia' dove sei. Qui dice dove sei **e da dove si torna**: l'occhiello e'
+       la via d'uscita, e i comandi a destra cambiano con la stanza.
+
+       Il titolo non apre piu' niente, quindi non e' piu' un bottone: la tendina
+       delle conversazioni e' diventata la pagina Quaderni. -->
   <header class="casa-head">
     <div class="casa-title">
-      <div class="casa-kicker" id="casa-kicker"></div>
-      <!-- Nelle pagine l'occhiello e' la via d'uscita in alto. Un bottone a
-           parte e non l'occhiello travestito: quello e' una parola, questo e'
-           un comando, e un <div> con un gestore sopra e' un comando che la
-           tastiera non trova. -->
-      <button class="casa-back" id="casa-back" type="button" hidden>
+      <!-- Un bottone a parte e non l'occhiello travestito: quello e' una
+           parola, questo e' un comando, e un <div> con un gestore sopra e' un
+           comando che la tastiera non trova. -->
+      <button class="casa-back" id="casa-back" type="button">
         <i class="ti ti-chevron-left" aria-hidden="true"></i>
         <span id="casa-back-label"></span>
       </button>
-      <h1>
-        <button class="casa-who-open" id="casa-who" type="button"
-                aria-haspopup="dialog" aria-expanded="false">
-          <!-- Il pallino del quaderno aperto: stesso colore della sua riga nel
-               pannello, ed e' l'unica cosa che lega il tocco alla stanza in cui
-               sei finito. Nella conversazione personale non c'e': quella non e'
-               un quaderno fra i quaderni. -->
-          <span class="casa-who-dot casa-title-dot" id="casa-who-dot" hidden></span>
-          <span class="casa-who-name">Jenny</span>
-          <i class="ti ti-chevron-down" aria-hidden="true"></i>
-        </button>
-      </h1>
+      <h1><span class="casa-head-name" id="casa-head-name">Jenny</span></h1>
     </div>
-    <!-- Cosa si puo' fare da qui. Cambia con la stanza: dalla chat di un
-         quaderno si entra nelle sue pagine; dalle pagine si torna a parlarne.
-         Sono due bottoni e non uno che cambia mestiere, perche' il mestiere lo
-         dice l'icona e un bottone che ne cambia due volte non lo dice piu'. -->
     <div class="casa-actions">
-      <button class="casa-pages-open" id="casa-pages-open" type="button" hidden>
-        <i class="ti ti-book" aria-hidden="true"></i>
-        <span id="casa-pages-count"></span>
-      </button>
-      <!-- L'avatar: apre «Tu e Jenny». **Tocco lungo per l'officina**, che e'
-           la scorciatoia che la tavola scrive sulla scheda in fondo a quella
-           pagina — «oppure tieni premuto l'avatar». Fino al 19/09/2026 questo
-           bottone era una chiave inglese e portava dritto in officina; adesso
-           l'officina sta dove la tavola la mette, e resta a un tocco lungo da
-           qui per chi ci va dieci volte al giorno. -->
-      <button class="casa-door" id="casa-door" type="button" aria-label="Tu e Jenny">
-        <i class="ti ti-settings"></i>
-      </button>
-      <!-- Dalle pagine: torna a parlarne. La tavola qui disegna il segno di
-           Jenny; in casa quel segno e' il fiore, ed e' identita' — su un
-           comando ci va l'icona di cio' che il comando fa. -->
+      <!-- Dalle pagine: torna a parlarne. -->
       <button class="casa-talk" id="casa-talk" type="button" hidden>
         <i class="ti ti-message" aria-hidden="true"></i>
         <span id="casa-talk-label"></span>
@@ -108,21 +80,52 @@
   </header>
 
   <!-- ── La pista delle pagine ────────────────────────────────────────────
-       La casa e' un launcher: di lato alla chat ci sono le pagine che
-       l'utente ha aggiunto (v. la tavola `Pagine`). La chat e' la **pagina
-       0**: c'e' sempre, non si sposta e non si toglie.
+       La casa e' un launcher: una fila di pagine. **Quattro ci sono sempre**
+       — App, la chat, Quaderni, Impostazioni — e i loro pannelli stanno qui
+       nell'HTML; quelle che l'utente aggiunge le crea `casa-pagine.js`. Tutte
+       si spostano, la chat compresa, e l'ordine in cui compaiono qui sotto e'
+       solo quello di chi non ha mai spostato niente.
 
-       L'intestazione resta **fuori** dalla pista, ed e' una scelta: e' gia'
-       cromatura del guscio — fuori dalla chat diventa il titolo della stanza,
-       col tasto indietro — e duplicarla in ogni pannello vorrebbe dire
-       tenerne N allineate. Il suo *contenuto* cambiera' con la pagina, come
-       in officina fa `ViewTitleController` fra i cassetti.
+       La fila e l'intestazione restano **fuori** dalla pista, ed e' una
+       scelta: sono cromatura del guscio, e duplicarle in ogni pannello
+       vorrebbe dire tenerne N allineate.
 
-       Le stanze (`casa-pages`, `casa-tu`, …) restano sorelle della pista e le
-       passano sopra: entrare in «Tu e Jenny» copre le pagine, non le
+       Le stanze (`casa-pages`, `casa-reader`, …) restano sorelle della pista
+       e le passano sopra: entrare in una stanza copre le pagine, non le
        sposta. -->
   <div class="casa-vetrina">
     <div class="casa-pista" id="casa-pista">
+    <!-- La pagina App: il cassetto delle app, che fino al 23/09/2026 era un
+         foglio che saliva dalla barra dove scrivi. Stesso codice
+         (`mobile-launcher.js`, in modalita' incorporata) e stessi id, quindi
+         ricerca, classifica e schede sono quelle di sempre; mancano solo le
+         cose di un foglio — maniglia, velo, ✕. -->
+    <div class="casa-pagina" data-pagina="app">
+      <div class="casa-cassetto" id="launcher-sheet" tabindex="-1">
+        <div class="launcher-search-row">
+          <i class="ti ti-search launcher-search-icon"></i>
+          <input class="launcher-search" id="launcher-search" type="text"
+                 autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+                 enterkeyhint="go" role="combobox" aria-controls="launcher-list"
+                 aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox"
+                 placeholder="Cerca un'app…" data-i18n-placeholder="launcher.searchPlaceholder"
+                 aria-label="Cerca app, skill…" data-i18n-aria="launcher.searchPlaceholder">
+          <button class="launcher-search-clear" id="launcher-search-clear" type="button"
+                  aria-label="Pulisci" data-i18n-aria="launcher.clearSearch"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="launcher-status" id="launcher-status" role="status" hidden>
+          <i class="ti ti-alert-triangle launcher-status-icon" aria-hidden="true"></i>
+          <span class="launcher-status-text" data-i18n="launcher.loadFailed">Elenco incompleto: qualcosa non ha risposto.</span>
+          <button class="launcher-status-retry" id="launcher-status-retry" type="button"
+                  data-i18n="launcher.retry">Riprova</button>
+        </div>
+        <div class="launcher-head">
+          <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
+        </div>
+        <div class="launcher-list" id="launcher-list" role="listbox"
+             aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
+      </div>
+    </div>
     <div class="casa-pagina" data-pagina="chat">
       <!-- La chat vera, in un involucro solo: e' una, e si **sposta** intera
            nella pagina di un quaderno quando ci arrivi (v. `casa-trasloco.js`).
@@ -152,20 +155,13 @@
       <div class="casa-pending" id="casa-pending" hidden></div>
 
       <div class="casa-composer">
-        <!-- Il cassetto delle app. La tavola `Pagine` lo voleva a «tira su»
-             dalla striscia dei pallini — e **sul telefono non si puo'**:
-             il 22/09/2026, con la navigazione a gesti accesa
-             (`navigation_mode = 2`), Android si prende lo swipe dal bordo
-             basso e all'app arriva `touchcancel`, mai `touchend`. Provato con
-             una build diagnostica: il gesto arrivava *annullato*.
-             La zona del gesto di home **non e' escludibile**:
-             `setSystemGestureExclusionRects` vale per il gesto indietro, non
-             per quello. Quindi il cassetto ha di nuovo un comando che si vede
-             — ed e' la terza volta che questa porta va rimessa, v.
-             `test_launcher_sheet_contract`. -->
-        <button class="casa-drawer" id="casa-drawer" type="button"
-                aria-label="Cassetto delle app" data-i18n-aria="nav.launcher">
-          <i class="ti ti-layout-grid"></i>
+        <!-- Le pagine del quaderno in cui sei. Stava in testa, accanto al titolo;
+             la testa e' diventata la fila delle pagine, e la pastiglia e' scesa
+             qui, al posto che era del bottone del cassetto — il cassetto oggi e'
+             la pagina App. Compare solo dentro un quaderno. -->
+        <button class="casa-pages-open" id="casa-pages-open" type="button" hidden>
+          <i class="ti ti-book" aria-hidden="true"></i>
+          <span id="casa-pages-count"></span>
         </button>
         <label class="casa-field">
           <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
@@ -179,22 +175,96 @@
       </div>
       </div>
     </div>
+    <!-- La pagina Quaderni: «Con chi parli», che era la tendina del titolo. La
+         disegna `casa-who.js` qui dentro invece che in un `<dialog>`. -->
+    <div class="casa-pagina" data-pagina="quaderni">
+      <div class="casa-quaderni" id="casa-quaderni"></div>
+    </div>
+    <div class="casa-pagina" data-pagina="impostazioni">
+      <!-- La pagina Impostazioni: «Tu e Jenny», che fino al 23/09/2026 era una
+           stanza dietro l'ingranaggio. E' **nell'HTML del pannello** e non
+           prestata a runtime: il prestito delle stanze alle pagine era il pezzo
+           fragile del 22-23/09, e una pagina fissa non ne ha bisogno.
+
+         Le impostazioni di chi la usa, non di chi la costruisce: la tavola
+         `TuEJenny.dc.html`. Righe da 42 px, e ognuna dice a destra **come sta
+         adesso** — una riga che non porta il suo valore e' un collegamento, non
+         un'impostazione.
+
+         **La lingua non c'e', ed e' una decisione.** Quella riga cambierebbe le
+         scritte dei bottoni, non la lingua di Jenny: quella viene da `SOUL.md`,
+         da `USER.md` e dal modello. La segue il sistema, che e' cio' che
+         `i18n.detectLocale()` fa gia' quando nessuno ha scelto. Misure e ragioni
+         in `.agent/casa-tu-e-jenny-plan.md`. -->
+    <section class="casa-tu" id="casa-tu">
+      <div class="casa-tu-scroll">
+
+        <!-- Il tema non apre una stanza: si tocca e c'e'. E' l'unica impostazione
+             della casa il cui effetto e' tutto a schermo, e mandarla a scegliere
+             altrove vorrebbe dire sceglierla senza vederla. -->
+        <div class="casa-card">
+          <div class="casa-card-head">
+            <i class="ti ti-palette" aria-hidden="true"></i>
+            <span class="casa-card-label" id="casa-theme-label"></span>
+            <span class="casa-card-value" id="casa-theme-value"></span>
+          </div>
+          <div class="casa-themes" id="casa-themes" role="radiogroup"></div>
+          <div class="casa-card-note" id="casa-theme-desc"></div>
+        </div>
+
+        <!-- Lei. La riga dice come sta adesso — «piccola · flottante» — perche'
+             una riga che non porta il suo valore e' un collegamento. -->
+        <div class="casa-rows">
+          <!-- Chi risponde. La riga porta la **marca**, non l'id del modello:
+               un id sta fra i venti e i trenta caratteri e in questa riga ci
+               starebbe troncato, che e' l'errore gia' pagato una volta sulle
+               pastiglie dei temi. L'id sta dentro, dove c'e' larghezza. -->
+          <button class="casa-row" id="casa-row-model" type="button">
+            <i class="ti ti-message-2" aria-hidden="true"></i>
+            <span class="casa-row-label" id="casa-model-label"></span>
+            <span class="casa-row-value" id="casa-model-value"></span>
+            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+          </button>
+          <button class="casa-row" id="casa-row-jenny" type="button">
+            <i class="ti ti-flower" aria-hidden="true"></i>
+            <span class="casa-row-label" id="casa-jenny-label"></span>
+            <span class="casa-row-value" id="casa-jenny-value"></span>
+            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+          </button>
+          <!-- Gli aggiornamenti. La riga porta la versione, quindi la riga muta
+               che la scriveva in fondo alla pagina non serve piu': un numero e
+               basta non e' un'impostazione, e' un'etichetta. -->
+          <button class="casa-row" id="casa-row-updates" type="button">
+            <i class="ti ti-refresh" aria-hidden="true"></i>
+            <span class="casa-row-label" id="casa-updates-label"></span>
+            <span class="casa-row-value" id="casa-updates-value"></span>
+            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+          </button>
+          <!-- Il backup. La riga porta **quando l'hai esportato**, non quando il
+               telefono ha fatto l'ultimo snapshot: sono due cose diverse, e
+               quella che la parola promette e' la prima. -->
+          <button class="casa-row" id="casa-row-backup" type="button">
+            <i class="ti ti-archive" aria-hidden="true"></i>
+            <span class="casa-row-label" id="casa-backup-label"></span>
+            <span class="casa-row-value" id="casa-backup-value"></span>
+            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
+        <button class="casa-workshop" id="casa-workshop" type="button">
+          <i class="ti ti-tool" aria-hidden="true"></i>
+          <span class="casa-workshop-text">
+            <span class="casa-workshop-name" id="casa-workshop-name"></span>
+            <span class="casa-workshop-hint" id="casa-workshop-hint"></span>
+          </span>
+          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+    </div>
     </div>
   </div>
-
-  <!-- ── La striscia: dove sei, e la presa del cassetto ───────────────────
-       «I pallini prendono il posto della maniglia — e restano la presa per
-       tirare su il cassetto. Su il cassetto, di lato le pagine» (tavola
-       `Pagine`). Un asse, due gesti, e il tocco su un pallino come terza via
-       per chi i gesti non li fa.
-
-       C'e' **sempre**, anche con la sola chat: e' l'unica cosa a schermo che
-       dica che i gesti esistono, e una funzione che si attiva solo con un
-       gesto che non si vede e' una funzione che nessuno trova. Con una pagina
-       sola il pallino e' uno, e la striscia fa solo la maniglia — che e'
-       comunque il mestiere per cui ha sostituito un bottone. -->
-  <div class="casa-pallini" id="casa-pallini" role="tablist"
-       aria-label="Pagine di casa"></div>
 
   <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────
        Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e
@@ -282,83 +352,6 @@
     </div>
   </dialog>
 
-  <!-- ── La quarta stanza: «Tu e Jenny» ───────────────────────────────────
-       Le impostazioni di chi la usa, non di chi la costruisce: la tavola
-       `TuEJenny.dc.html`. Righe da 42 px, e ognuna dice a destra **come sta
-       adesso** — una riga che non porta il suo valore e' un collegamento, non
-       un'impostazione.
-
-       **La lingua non c'e', ed e' una decisione.** Quella riga cambierebbe le
-       scritte dei bottoni, non la lingua di Jenny: quella viene da `SOUL.md`,
-       da `USER.md` e dal modello. La segue il sistema, che e' cio' che
-       `i18n.detectLocale()` fa gia' quando nessuno ha scelto. Misure e ragioni
-       in `.agent/casa-tu-e-jenny-plan.md`. -->
-  <section class="casa-tu" id="casa-tu">
-    <div class="casa-tu-scroll">
-
-      <!-- Il tema non apre una stanza: si tocca e c'e'. E' l'unica impostazione
-           della casa il cui effetto e' tutto a schermo, e mandarla a scegliere
-           altrove vorrebbe dire sceglierla senza vederla. -->
-      <div class="casa-card">
-        <div class="casa-card-head">
-          <i class="ti ti-palette" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-theme-label"></span>
-          <span class="casa-card-value" id="casa-theme-value"></span>
-        </div>
-        <div class="casa-themes" id="casa-themes" role="radiogroup"></div>
-        <div class="casa-card-note" id="casa-theme-desc"></div>
-      </div>
-
-      <!-- Lei. La riga dice come sta adesso — «piccola · flottante» — perche'
-           una riga che non porta il suo valore e' un collegamento. -->
-      <div class="casa-rows">
-        <!-- Chi risponde. La riga porta la **marca**, non l'id del modello:
-             un id sta fra i venti e i trenta caratteri e in questa riga ci
-             starebbe troncato, che e' l'errore gia' pagato una volta sulle
-             pastiglie dei temi. L'id sta dentro, dove c'e' larghezza. -->
-        <button class="casa-row" id="casa-row-model" type="button">
-          <i class="ti ti-message-2" aria-hidden="true"></i>
-          <span class="casa-row-label" id="casa-model-label"></span>
-          <span class="casa-row-value" id="casa-model-value"></span>
-          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
-        </button>
-        <button class="casa-row" id="casa-row-jenny" type="button">
-          <i class="ti ti-flower" aria-hidden="true"></i>
-          <span class="casa-row-label" id="casa-jenny-label"></span>
-          <span class="casa-row-value" id="casa-jenny-value"></span>
-          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
-        </button>
-        <!-- Gli aggiornamenti. La riga porta la versione, quindi la riga muta
-             che la scriveva in fondo alla pagina non serve piu': un numero e
-             basta non e' un'impostazione, e' un'etichetta. -->
-        <button class="casa-row" id="casa-row-updates" type="button">
-          <i class="ti ti-refresh" aria-hidden="true"></i>
-          <span class="casa-row-label" id="casa-updates-label"></span>
-          <span class="casa-row-value" id="casa-updates-value"></span>
-          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
-        </button>
-        <!-- Il backup. La riga porta **quando l'hai esportato**, non quando il
-             telefono ha fatto l'ultimo snapshot: sono due cose diverse, e
-             quella che la parola promette e' la prima. -->
-        <button class="casa-row" id="casa-row-backup" type="button">
-          <i class="ti ti-archive" aria-hidden="true"></i>
-          <span class="casa-row-label" id="casa-backup-label"></span>
-          <span class="casa-row-value" id="casa-backup-value"></span>
-          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
-        </button>
-      </div>
-
-      <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
-      <button class="casa-workshop" id="casa-workshop" type="button">
-        <i class="ti ti-tool" aria-hidden="true"></i>
-        <span class="casa-workshop-text">
-          <span class="casa-workshop-name" id="casa-workshop-name"></span>
-          <span class="casa-workshop-hint" id="casa-workshop-hint"></span>
-        </span>
-        <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
-      </button>
-    </div>
-  </section>
 
   <!-- ── La quinta stanza: «Jenny» ────────────────────────────────────────
        Com'e' fatta — quanto e' grande, se si vede, se sta sopra le altre app.
@@ -547,75 +540,6 @@
 </main>
 
 <script type="module" src="/html-mobile/assets/casa-app.js"></script>
-
-<!-- IL CASSETTO DELLE APP — lo stesso foglio dell'officina.
-     Il markup e' copiato perche' i due gusci sono due documenti, ma il codice
-     che lo riempie e' uno solo (`assets/mobile-launcher.js`) e lo stile pure
-     (`mobile-style.css`, che la casa carica gia'). Fuori da `.casa-shell` di
-     proposito: cosi' copre tutto, e l'inerzia che il foglio mette allo sfondo
-     non se lo mette addosso da solo. -->
-<!-- LAUNCHER SHEET — il cassetto delle app.
-     Vive qui, fuori da `.app`, come `.app-frame-overlay`: così copre anche il
-     dock, resta fuori dall'inerzia che DrawerManager mette allo sfondo, e una
-     mini-app aperta *dal* foglio gli si sovrappone senza trucchi di z-index.
-     Contenuto costruito da assets/mobile-launcher.js. -->
-<div class="launcher-scrim" id="launcher-scrim" aria-hidden="true"></div>
-<div class="launcher-sheet" id="launcher-sheet" role="dialog" aria-modal="true"
-     aria-labelledby="launcher-title" aria-hidden="true" tabindex="-1">
-  <!-- Da qui — maniglia e riga del titolo — si trascina il foglio, e **dalla
-       lista mai** (D7): decide l'origine del tocco, e decide sempre allo stesso
-       modo. Sotto c'è una chat, dove i trascinamenti verticali sono già
-       promessi allo scroller da `setupSwipeNav`; contendere i verticali della
-       propria lista è la ragione per cui i bottom sheet dentro contenuto
-       scrollabile sembrano rotti. V. `LauncherController._setupDrag`. -->
-  <div class="launcher-handle-row" id="launcher-handle-row">
-    <div class="launcher-handle"></div>
-  </div>
-  <div class="launcher-head">
-    <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
-    <button class="launcher-close" id="launcher-close" type="button"
-            aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
-  </div>
-  <!-- Il campo di ricerca è il corpo del cassetto, non un accessorio: è la
-       direzione *Digita* del rilievo (su 68 voci, cercare batte scorrere a
-       partire dalla quarta). Niente `autofocus` — alzerebbe la tastiera
-       software e si mangerebbe il foglio (D6); il type-ahead è del passo 4, e
-       così `enterkeyhint="go"`, che promette un ⏎ che qui ancora non apre. -->
-  <div class="launcher-search-row">
-    <i class="ti ti-search launcher-search-icon"></i>
-    <input class="launcher-search" id="launcher-search" type="text"
-           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-           enterkeyhint="go" role="combobox" aria-controls="launcher-list"
-           aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox"
-           placeholder="Cerca un'app…" data-i18n-placeholder="launcher.searchPlaceholder"
-           aria-label="Cerca app, skill…" data-i18n-aria="launcher.searchPlaceholder">
-    <button class="launcher-search-clear" id="launcher-search-clear" type="button"
-            aria-label="Pulisci" data-i18n-aria="launcher.clearSearch"><i class="ti ti-x"></i></button>
-  </div>
-  <!-- Passo 4 — la semantica giusta dalla nascita (4.5). La lista è un
-       `listbox` e le righe sono `option`: una lista di risultati con una
-       selezione attiva è quello, non un mucchio di pulsanti. Il campo è il
-       `combobox` che la governa, e la riga selezionata gliela dice
-       `aria-activedescendant` (scritto da JS) — così le frecce muovono la
-       selezione senza spostare il fuoco, che è ciò che tiene il campo
-       scrivibile mentre si scorre. Le righe restano comunque focalizzabili
-       una per una: con TalkBack ci si arriva a scorrimento, non a frecce. -->
-  <!-- Passo 6.2 — l'avviso che distingue "non c'è niente" da "non si è potuto
-       leggere". Serve al caso peggiore, che è quello *parziale*: se il ponte
-       nativo non risponde, le skill e le Jenny App ci sono tutte e mancano solo
-       le app del telefono — nessuno stato vuoto comparirebbe, e il cassetto
-       sembrerebbe un telefono con poche app. `role="status"` e non un dialog:
-       è un'informazione, non una domanda. -->
-  <div class="launcher-status" id="launcher-status" role="status" hidden>
-    <i class="ti ti-alert-triangle launcher-status-icon" aria-hidden="true"></i>
-    <span class="launcher-status-text" data-i18n="launcher.loadFailed">Elenco incompleto: qualcosa non ha risposto.</span>
-    <button class="launcher-status-retry" id="launcher-status-retry" type="button"
-            data-i18n="launcher.retry">Riprova</button>
-  </div>
-  <div class="launcher-list" id="launcher-list" role="listbox"
-       aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
-</div>
-
 
 <!-- Le schede di una voce del cassetto: tocco lungo su una riga.
      Stesso markup dell'officina, perche' e' lo stesso codice a riempirle

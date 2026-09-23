@@ -965,18 +965,15 @@
     "attach": "Allega",
     "removeAttachment": "Togli l'allegato",
     "closeImage": "Chiudi",
-    "kicker": "conversazione personale",
-    "kickerNotebook": "quaderno",
     "workshop": "Officina",
     "back": {
       "chat": "torna alla chat",
       "pages": "torna alle pagine",
-      "tu": "Tu e Jenny"
+      "impostazioni": "Impostazioni"
     },
     "tu": {
       "title": "Tu e Jenny",
-      "open": "Tu e Jenny",
-      "workshopHint": "osserva, regola, ripara — oppure tieni premuto l'avatar"
+      "workshopHint": "osserva, regola, ripara"
     },
     "jenny": {
       "title": "Jenny",
@@ -995,7 +992,6 @@
     "backHome": "Torna alla casa",
     "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
     "who": {
-      "open": "Con chi parli",
       "title": "Con chi parli",
       "personal": "personale",
       "notebooks": "Quaderni",
@@ -1093,8 +1089,6 @@
       "msgRef": "segnalazione"
     },
     "pagine": {
-      "chat": "La conversazione",
-      "numero": "Pagina {n} di {tot}",
       "appSparita": "L'app «{nome}» non c'è più.",
       "quadernoSparito": "Il quaderno «{nome}» non c'è più.",
       "togliPagina": "Togli la pagina"
@@ -1108,6 +1102,16 @@
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
       "renameFailed": "Non ho potuto rinominare «{name}». {error}"
+    },
+    "fila": {
+      "label": "Pagine di casa",
+      "app": "App",
+      "quaderni": "Quaderni",
+      "impostazioni": "Impostazioni",
+      "ordinaAiuto": "Trascina per spostare · × per togliere",
+      "fatto": "Fatto",
+      "sposta": "Sposta {nome}: frecce sinistra e destra",
+      "togli": "Togli {nome} dalle pagine"
     }
   },
   "officina": {

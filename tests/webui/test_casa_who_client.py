@@ -135,22 +135,17 @@ function tieni(riga) {
 
 class Panel {
   constructor() {
-    this._trigger = makeEl('button');
-    this._head = null;
     this._personalName = () => 'Jenny';
     this._currentProject = () => null;
-    /* Cosa e' successo e in che ordine: il pannello deve chiudersi **prima** di
-       cambiare conversazione, o lo scambio si scoprirebbe gia' finito dietro un
-       pannello ancora aperto. */
+    /* Cosa e' successo e in che ordine. Dal 23/09/2026 e' una pagina: non c'e'
+       niente da chiudere prima di cambiare conversazione. */
     this.storia = [];
     this._onPick = (name) => this.storia.push('scelto:' + name);
     this._onCreate = () => this.storia.push('nuovo');
     this._onHold = (name) => this.storia.push('tenuto:' + name);
     this._list = new ConversationList(() => api.listProjects());
-    this._dialog = null;
     this._body = makeEl('div');
   }
-  close() { this.storia.push('chiuso'); }
   __RENDER__
   __LABEL__
   __NOTE__
@@ -412,7 +407,7 @@ def test_the_name_you_touch_is_the_name_that_comes_back() -> None:
       const panel = await open(ELENCO);
       const etf = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));
       tocca(etf);
-      assert.deepEqual(panel.storia, ['chiuso', 'scelto:etf'],
+      assert.deepEqual(panel.storia, ['scelto:etf'],
                        'il pannello deve chiudersi prima di cambiare conversazione');
     """)
 
@@ -425,7 +420,7 @@ def test_the_personal_row_takes_you_home() -> None:
       panel.render();
       const casa = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
       tocca(casa);
-      assert.deepEqual(panel.storia, ['chiuso', 'scelto:null']);
+      assert.deepEqual(panel.storia, ['scelto:null']);
     """)
 
 
@@ -531,7 +526,7 @@ def test_the_new_notebook_row_is_a_command_of_the_panel() -> None:
       assert.equal(nuovo.tag, 'button');
       assert.ok(readout(panel).at(-1).startsWith('+ '), 'non è in fondo al pannello');
       tocca(nuovo);
-      assert.deepEqual(panel.storia, ['chiuso', 'nuovo']);
+      assert.deepEqual(panel.storia, ['nuovo']);
     """)
 
 
@@ -640,7 +635,7 @@ def test_the_tap_after_a_hold_does_not_switch_conversation() -> None:
         "tocca(riga);\n"
         "assert.deepEqual(panel.storia, ['tenuto:etf'], 'il tocco dopo la pressione ha cambiato conversazione');\n"
         "tocca(riga);\n"
-        "assert.deepEqual(panel.storia.slice(1), ['chiuso', 'scelto:etf']);\n"
+        "assert.deepEqual(panel.storia.slice(1), ['scelto:etf']);\n"
     )
 
 

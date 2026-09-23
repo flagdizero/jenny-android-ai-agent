@@ -45,7 +45,7 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
         "il guscio non nasce piu' dichiarando la stanza attiva"
     )
     css = CSS.read_text(encoding="utf-8")
-    for room in ("pages", "reader", "tu"):
+    for room in ("pages", "reader"):
         assert f".casa-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
     # Dal 22 settembre 2026 la chat sta dentro un pannello della pista, e quel
     # che si nasconde e' la pista: una riga invece delle sei che nominavano
@@ -53,11 +53,11 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     # Chi ne avesse dimenticata una l'avrebbe lasciata a occupare spazio dentro
     # una stanza. L'invariante e' la stessa — fuori dalla conversazione il
     # composer non c'e' — e adesso ha un posto solo in cui rompersi.
-    # La striscia dei pallini sparisce con la pista: dice dove sei **fra le
-    # pagine**, e dentro una stanza quella domanda non esiste.
+    # Dal 23/09/2026 si nasconde la vetrina, che contiene la pista: i pallini
+    # non ci sono piu', e la fila dei nomi ha la sua regola accanto a quella
+    # dell'intestazione delle stanze.
     assert (
-        ".casa-shell:not([data-view='chat']) .casa-pista,\n"
-        ".casa-shell:not([data-view='chat']) .casa-pallini { display: none; }"
+        ".casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }"
     ) in css, (
         "il composer resta a schermo fuori dalla conversazione"
     )
@@ -75,7 +75,9 @@ def test_the_rooms_after_the_chat_are_not_in_the_flow_by_default() -> None:
     quinta non puo' essere accesa e dimenticata qui.
     """
     css = CSS.read_text(encoding="utf-8")
-    accese = set(re.findall(r"\.casa-shell\[data-view='\w+'\] (\.casa-[\w-]+)", css))
+    # `[data-view='chat']` non accende una stanza: e' la regola che nella
+    # conversazione **spegne** l'intestazione delle stanze.
+    accese = set(re.findall(r"\.casa-shell\[data-view='(?!chat')\w+'\] (\.casa-[\w-]+)", css))
     assert accese, "nessuna stanza nel foglio: la grep non morde piu'"
     spente = set()
     for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
@@ -131,15 +133,17 @@ def test_the_two_ways_out_of_the_pages_do_the_same_thing() -> None:
     assert "this.talkBtn?.addEventListener" in app
 
 
-def test_the_title_stops_being_a_command_outside_the_chat() -> None:
-    """Un chevron che promette una scelta, su un bottone spento, e' una porta
-    disegnata sul muro."""
-    app = APP_JS.read_text(encoding="utf-8")
-    body = re.search(r"\n  _applyHead\(\) \{(.*?)\n  \}", app, re.S)
-    assert body, "_applyHead non trovato"
-    assert "disabled = !inChat" in body.group(1)
+def test_the_rooms_have_a_head_and_the_conversation_has_the_row() -> None:
+    """Mai tutte e due. Nella conversazione la fila dice gia' dove sei; nelle
+    stanze l'intestazione dice dove sei **e da dove si torna**, e la fila li'
+    porterebbe a cambiare pagina da dentro una stanza."""
     css = CSS.read_text(encoding="utf-8")
-    assert ".casa-shell:not([data-view='chat']) .casa-who-open .ti-chevron-down" in css
+    assert (
+        ".casa-shell:not([data-view='chat']) .casa-fila,\n"
+        ".casa-shell[data-view='chat'] .casa-head { display: none; }"
+    ) in css
+    html = INDEX.read_text(encoding="utf-8")
+    assert html.index('id="casa-fila"') < html.index('class="casa-head"') < html.index('class="casa-vetrina"')
 
 
 # ── Le parole ───────────────────────────────────────────────────────────────

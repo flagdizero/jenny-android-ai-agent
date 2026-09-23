@@ -76,9 +76,19 @@ const COMPACT_HEIGHT = 220;
 const DRAG_CLOSE_RATIO = 0.3;
 
 export class LauncherController {
-  /** @param {object} app istanza di MobileApp (per il ritorno del fuoco). */
-  constructor(app) {
+  /** @param {object} app istanza di MobileApp (per il ritorno del fuoco).
+   *  @param {object} [opzioni]
+   *  @param {boolean} [opzioni.incorporato] il cassetto **e' una pagina** e non
+   *         un foglio: la pagina App della casa (v. `.agent/pagine-in-alto-plan.md`).
+   *         Niente velo, niente sfondo inerte, niente trascinamento per
+   *         chiudere e niente geometria della tastiera — cose di un foglio che
+   *         sale sopra la chat. «Aperto» vuol dire allora **la pagina che
+   *         guardi**: chi lo ospita chiama `open()` quando ci arrivi e `close()`
+   *         quando la lasci, e i tasti sono suoi solo in quel mentre.
+   *         L'officina non lo passa, e il suo foglio resta com'era. */
+  constructor(app, { incorporato = false } = {}) {
     this.app = app;
+    this._incorporato = incorporato;
     this.sheet = document.getElementById('launcher-sheet');
     this.scrim = document.getElementById('launcher-scrim');
     this.list = document.getElementById('launcher-list');
@@ -236,6 +246,9 @@ export class LauncherController {
     });
 
 
+    /* Un foglio si trascina e si adatta alla tastiera; una pagina no: sta
+       dentro la pista, e la sua altezza e' quella della pagina. */
+    if (this._incorporato) return;
     this._setupDrag();
     this._setupGeometry();
   }
@@ -482,7 +495,10 @@ export class LauncherController {
 
   /** Il foglio è a schermo e reattivo? Letto da `_overlayLayers().present`. */
   isOpen() {
-    return this._open;
+    /* Incorporato non e' uno strato sopra niente: chi chiede «e' aperto?» —
+       Indietro, il gesto fra le pagine — vuole sapere se c'e' un foglio da
+       chiudere, e non c'e'. */
+    return this._incorporato ? false : this._open;
   }
 
   open() {
@@ -518,12 +534,21 @@ export class LauncherController {
        passati a tre pulsanti, si è ruotato lo schermo, la tastiera è su per il
        composer della chat. Si rilegge prima di mostrarlo, non dopo: il foglio
        arriva già dell'altezza giusta invece di assestarsi a fine corsa. */
-    this._syncGestureInset();
-    this._syncViewport();
+    if (!this._incorporato) {
+      this._syncGestureInset();
+      this._syncViewport();
+    }
     // Prima di mostrarlo: la lista è già quella giusta quando il foglio arriva
     // a fine corsa, e non c'è un fotogramma con dentro l'elenco di ieri.
     this._attachSource();
     this._render();
+    /* Una pagina non sale e non copre niente: niente velo, niente sfondo
+       inerte, e il fuoco resta dov'e'. Spostarlo qui vorrebbe dire far
+       scorrere la vetrina della pista mentre la pagina sta ancora entrando. */
+    if (this._incorporato) {
+      this.search?.setAttribute('aria-expanded', 'true');
+      return;
+    }
     this.sheet.classList.add('open');
     this.sheet.setAttribute('aria-hidden', 'false');
     this.scrim?.classList.add('open');
@@ -553,6 +578,13 @@ export class LauncherController {
   close() {
     if (!this.sheet || !this._open) return;
     this._open = false;
+    if (this._incorporato) {
+      this.search?.setAttribute('aria-expanded', 'false');
+      /* Lasciando la pagina, il fuoco non resta su un campo che non si vede:
+         i tasti che seguono andrebbero li' dentro. */
+      if (this.sheet.contains(document.activeElement)) document.activeElement.blur?.();
+      return;
+    }
     /* Home può arrivare a metà trascinamento (1.8: `goHome()` smonta ogni
        livello). Gli stili in linea del gesto vanno via qui, altrimenti alla
        riapertura il foglio comparirebbe già spostato in giù di quanto era il

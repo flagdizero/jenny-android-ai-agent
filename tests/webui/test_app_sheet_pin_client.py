@@ -252,3 +252,21 @@ def test_deleting_from_the_workshop_needs_no_pages() -> None:
         app=ORTO,
         pagine=None,
     )
+
+
+def test_back_on_an_app_opened_from_the_home_closes_it() -> None:
+    """In casa non ci sono le schede dell'officina: chiusa l'app, sotto c'e'
+    gia' la pagina da cui l'hai aperta. `handleBack` chiamava lo `switchMode`
+    dell'officina, che in casa non esiste — un TypeError a ogni Indietro, e
+    l'app restava aperta (trovato il 23/09/2026 scrivendo la pagina App)."""
+    _run(
+        "let tolta = false;\n"
+        "azioni._openApp = { slug: 'orto', depth: 1, iframe: {},\n"
+        "  overlay: { classList: { remove() {} }, remove() { tolta = true; } } };\n"
+        "window.mobileApp = { launcher: { isOpen: () => false } };\n"
+        "assert.equal(azioni.handleBack(), true);\n"
+        "assert.equal(azioni._openApp, null, 'l app e rimasta aperta');\n"
+        "assert.equal(azioni.handleBack(), false, 'con niente aperto Indietro non e suo');\n",
+        app=ORTO,
+        pagine=_porta("libera"),
+    )

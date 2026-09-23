@@ -1,4 +1,4 @@
-/** «Con chi parli» — la tendina del titolo.
+/** «Con chi parli» — la pagina Quaderni.
  *
  *  Dice con quale conversazione stai parlando, e quali quaderni ci sono. Un
  *  quaderno e' un progetto, che e' una wiki: l'elenco, l'ordine e le sue regole
@@ -20,11 +20,11 @@
  *  toccato, e chi lo ospita ne fa una conversazione. Cosi' la forma della
  *  chiave resta in un posto solo (`shared/conversation-list.js`).
  *
- *  E' un `<dialog>` aperto con `showModal()`: cosi' sta nel *top layer*, cioe'
- *  sopra la mascotte, senza una guerra di `z-index` con un elemento che in
- *  casa e' disegnato sopra tutto. Il velo e' il suo `::backdrop`. Il tasto
- *  Indietro di Android **non** arriva qui — il guscio nativo lo intercetta
- *  prima della WebView — quindi lo chiude `CasaApp.handleHardwareBack`.
+ *  **E' una pagina, non piu' una tendina.** Fino al 23/09/2026 si apriva dal
+ *  titolo in un `<dialog>`; da allora e' la pagina Quaderni della pista (v.
+ *  `.agent/pagine-in-alto-plan.md`): chi la ospita le da' il contenitore e la
+ *  ridisegna quando ci arrivi (`mostra`). Non c'e' niente da aprire ne' da
+ *  chiudere, e toccare una riga lascia al guscio di portarti alla chat.
  */
 
 import { i18n } from './shared/i18n.js';
@@ -32,18 +32,8 @@ import { api } from './shared/api-client.js';
 import { ConversationList, UNOPENABLE_HINT_KEYS, ago } from './shared/conversation-list.js';
 import { setupLongPress } from './shared/longpress.js';
 
-/** Quanto il pannello sta sotto l'intestazione.
- *
- *  Si misura invece di fissarlo: l'altezza dell'intestazione dipende dal font
- *  del titolo, e i temi ne cambiano tre (`--font-display`). Un `top` scritto a
- *  mano andrebbe bene su un tema e taglierebbe il titolo su un altro.
- */
-const GAP_UNDER_HEAD = 8;
-
 export class WhoPanel {
-  /** @param trigger il bottone dentro l'h1 — e' anche cio' che porta lo stato
-   *         `aria-expanded`.
-   *  @param head l'intestazione: da li' si misura dove comincia il pannello.
+  /** @param contenitore dove si disegna: il pannello della pagina Quaderni.
    *  @param personalName funzione che da' il nome della conversazione
    *         personale. **Non** si legge dal titolo: da quando il titolo porta
    *         il nome del quaderno aperto, leggerlo di li' farebbe dire alla riga
@@ -60,21 +50,14 @@ export class WhoPanel {
    *         pressione lunga su un'app nel cassetto. Una cosa si appende dal
    *         posto dove vive, e i quaderni vivono qui.
    */
-  constructor(trigger, { head, personalName, currentProject, onPick, onCreate, onHold }) {
-    this._trigger = trigger;
-    this._head = head;
+  constructor(contenitore, { personalName, currentProject, onPick, onCreate, onHold } = {}) {
     this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
     this._onCreate = onCreate || null;
     this._onHold = onHold || null;
     this._list = new ConversationList(() => api.listProjects());
-    this._dialog = null;
-    this._body = null;
-  }
-
-  get isOpen() {
-    return Boolean(this._dialog && this._dialog.open);
+    this._body = contenitore || null;
   }
 
   /** I quaderni che il pannello conosce, per chi sta per crearne uno.
@@ -88,9 +71,9 @@ export class WhoPanel {
 
   /** Quante pagine ha il quaderno *name*, o `null` se non si sa.
    *
-   *  Legge la stessa cache della tendina, e la riempie se e' vuota: la
-   *  pastiglia dell'intestazione compare entrando in un quaderno, che di solito
-   *  e' prima che il pannello sia stato aperto anche una volta.
+   *  Legge la stessa cache della pagina, e la riempie se e' vuota: la
+   *  pastiglia delle pagine compare entrando in un quaderno, che puo' essere
+   *  prima che la pagina Quaderni sia stata guardata anche una volta.
    *
    *  `null` e **non** zero quando la lettura non e' riuscita o la voce non c'e':
    *  «non lo so» e «e' vuoto» sono due cose diverse, e la seconda si scrive a
@@ -108,71 +91,23 @@ export class WhoPanel {
     this._list.invalidate();
   }
 
-  /** L'elenco su disco e' cambiato **adesso**, sotto la tendina aperta — un
-   *  quaderno cancellato dalla sua scheda: si rilegge e si ridisegna subito,
-   *  o la riga di quello che non c'e' piu' resterebbe li' a farsi toccare. */
+  /** L'elenco su disco e' cambiato **adesso**, sotto la scheda aperta — un
+   *  quaderno cancellato o rinominato: si rilegge e si ridisegna subito, o la
+   *  riga di quello che non c'e' piu' resterebbe li' a farsi toccare. */
   async refresh() {
     this._list.invalidate();
     await this._list.load();
-    if (this.isOpen) this.render();
-  }
-
-  toggle() {
-    if (this.isOpen) this.close();
-    else this.open();
-  }
-
-  async open() {
-    if (this.isOpen) return;
-    const dialog = this._ensure();
-    const bottom = this._head ? this._head.getBoundingClientRect().bottom : 64;
-    dialog.style.top = `${Math.round(bottom + GAP_UNDER_HEAD)}px`;
-    dialog.showModal();
-    this._trigger?.setAttribute('aria-expanded', 'true');
-    // Subito, con quel che c'e' in cache: una tendina che compare vuota e si
-    // riempie dopo sembra rotta anche quando l'elenco e' gia' noto.
     this.render();
+  }
+
+  /** La pagina Quaderni e' diventata quella che guardi: si ridisegna subito con
+   *  quel che c'e' e poi con l'elenco riletto, perche' i quaderni cambiano
+   *  anche mentre non la guardi — Jenny ne crea, una mano ne cancella. */
+  async mostra() {
+    this.render();
+    this._list.invalidate();
     await this._list.load();
-    if (this.isOpen) this.render();
-  }
-
-  close() {
-    if (!this.isOpen) return;
-    this._dialog.close();
-    this._trigger?.setAttribute('aria-expanded', 'false');
-  }
-
-  /* Il pannello nasce alla prima apertura, come il dialogo dei provider in
-     officina: il guscio resta senza nodi inerti, e chi non lo apre mai non se
-     lo porta nel DOM. */
-  _ensure() {
-    if (this._dialog) return this._dialog;
-    const dialog = document.createElement('dialog');
-    dialog.className = 'casa-who';
-    const body = document.createElement('div');
-    body.className = 'casa-who-body';
-    dialog.appendChild(body);
-    /* Un click il cui bersaglio e' il `<dialog>` stesso e non il suo contenuto
-       e' per definizione un click sul velo: il corpo lo riempie tutto. */
-    dialog.addEventListener('click', (e) => {
-      if (e.target === dialog) this.close();
-    });
-    /* Esc. Il `<dialog>` lo chiuderebbe da se' — e quando lo fa arriva di qui
-       il `cancel`, che serve a rimettere `aria-expanded` — ma il Titan ha una
-       tastiera fisica e quella via non si riesce a provare da un'automazione:
-       un tasto sintetico non arriva alla chiusura del browser. Un tasto che
-       *forse* funziona non e' una via d'uscita, quindi la si chiude anche da
-       qui. Il secondo `close` e' un no-op. */
-    dialog.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.close();
-    });
-    dialog.addEventListener('cancel', () => {
-      this._trigger?.setAttribute('aria-expanded', 'false');
-    });
-    document.body.appendChild(dialog);
-    this._dialog = dialog;
-    this._body = body;
-    return dialog;
+    this.render();
   }
 
   /** Ridisegna il contenuto. Pubblico: lo richiama un cambio di lingua. */
@@ -185,9 +120,8 @@ export class WhoPanel {
     body.appendChild(this._personalRow());
 
     body.appendChild(this._label(i18n.t('casa.who.notebooks'), true));
-    /* Solo i quaderni scorrono: il resto del pannello e' alto quanto e' alto e
-       non deve sparire quando l'elenco cresce. Stessa divisione della tendina
-       dell'officina. */
+    /* L'elenco dei quaderni ha un contenitore suo: e' la parte che cresce, e
+       il banco lo trova per nome. */
     const list = document.createElement('div');
     list.className = 'casa-who-list';
     body.appendChild(list);
@@ -224,10 +158,8 @@ export class WhoPanel {
       }
     }
 
-    /* **Fuori dall'elenco che scorre.** Nella tavola sta in fondo alle righe, e
-       dentro l'elenco lo sarebbe davvero: con dodici quaderni si troverebbe
-       sotto un bordo, raggiungibile solo scorrendo fino in fondo. E' un comando
-       del pannello, non l'ultima delle conversazioni. */
+    /* **Fuori dall'elenco.** E' un comando della pagina, non l'ultima delle
+       conversazioni. */
     body.appendChild(this._newRow());
   }
 
@@ -235,10 +167,7 @@ export class WhoPanel {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'casa-who-row casa-who-new';
-    row.addEventListener('click', () => {
-      this.close();
-      this._onCreate?.();
-    });
+    row.addEventListener('click', () => this._onCreate?.());
 
     const plus = document.createElement('i');
     plus.className = 'ti ti-plus';
@@ -304,7 +233,7 @@ export class WhoPanel {
     if (blocked) row.className = 'casa-who-row is-blocked';
     /* La pressione lunga solo sui quaderni che si aprono: una cartella inerte
        non ha niente da offrire, e la riga personale non e' un quaderno — non
-       si appende (e' gia' la pagina 0) e non si cancella. */
+       si appende (ha gia' la sua pagina, la chat) e non si cancella. */
     if (!blocked && this._onHold) setupLongPress(row, () => this._onHold(item.name));
 
     const dot = document.createElement('span');
@@ -358,10 +287,9 @@ export class WhoPanel {
     row.appendChild(check);
   }
 
-  /* Prima si chiude, poi si cambia: il cambio ricarica il filo, e farlo dietro
-     un pannello aperto vorrebbe dire scoprirlo gia' finito. */
+  /* Il nome toccato va a chi ospita la pagina: lui cambia conversazione e
+     porta alla chat. */
   _pick(name) {
-    this.close();
     this._onPick?.(name);
   }
 }

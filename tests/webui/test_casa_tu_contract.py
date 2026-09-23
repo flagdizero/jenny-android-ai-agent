@@ -34,32 +34,26 @@ def _app() -> str:
 # ── La porta ────────────────────────────────────────────────────────────────
 
 
-def test_the_avatar_opens_you_and_jenny_and_the_workshop_is_a_long_press() -> None:
-    """Il bottone in testa era una chiave inglese e portava in officina.
+def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
+    """Il bottone in testa — chiave inglese, poi avatar — apriva «Tu e Jenny»
+    e, tenuto premuto, l'officina. Dal 23/09/2026 «Tu e Jenny» e' la pagina
+    Impostazioni, e il suo nome sta nella fila in alto
+    (`.agent/pagine-in-alto-plan.md`).
 
-    Adesso e' l'avatar, e apre «Tu e Jenny» — dove l'officina sta in fondo,
-    come nella tavola. La scorciatoia per chi in officina ci va dieci volte al
-    giorno resta, ed e' quella che la tavola scrive sulla scheda: tenere
-    premuto l'avatar.
-
-    Il cablaggio vive in `init()`, che nessun banco puo' far girare senza un
-    DOM vero: qui si misura sul sorgente.
+    La scorciatoia per l'officina non si e' spostata sul nome: la pressione
+    lunga su un nome della fila apre la modalita' ordina, e due gesti non
+    possono condividerla. All'officina si arriva dalla sua riga, in fondo alla
+    pagina — la porta che la tavola ha sempre disegnato.
     """
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="casa-door"' not in html, "l'avatar e' tornato in testa"
+    pagina = html.split('data-pagina="impostazioni"', 1)[1]
+    assert '<section class="casa-tu" id="casa-tu">' in pagina, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
-    assert "setupLongPress(this.door, () => this._openInWorkshop(null));" in app, (
-        "l'officina non e' piu' sotto il tocco lungo sull'avatar"
-    )
-    click = re.search(r"this\.door\.addEventListener\('click', \(\) => \{(.*?)\n    \}\);", app, re.S)
-    assert click, "l'avatar non ha piu' un gestore del tocco"
-    corpo = click.group(1)
-    assert "this.openTu()" in corpo, "l'avatar non apre piu' «Tu e Jenny»"
-    assert "this.door.dataset.longpress" in corpo and "delete" in corpo, (
-        "il flag della pressione lunga non viene consumato: un tocco lungo "
-        "aprirebbe l'officina **e** la pagina sotto"
-    )
-    assert "<i class=\"ti ti-settings\">" in INDEX.read_text(encoding="utf-8"), (
-        "l'icona non dice piu' dove porta il bottone"
-    )
+    assert "this.door" not in app
+    assert "this.pagine.registra('impostazioni', { accendi: () => this._apriImpostazioni() });" in app
+    tu_parole = json.loads((I18N / "it.json").read_text(encoding="utf-8"))["casa"]["tu"]
+    assert "avatar" not in tu_parole["workshopHint"], "il suggerimento parla di un bottone che non c'e'"
 
 
 def test_the_workshop_card_is_the_other_way_in() -> None:
@@ -160,7 +154,10 @@ def test_the_back_chain_lands_somewhere_real() -> None:
     stessa: una stanza che rimanda a se' e' un tasto Indietro che non fa
     niente, ed e' peggio di un tasto che non c'e'."""
     catena = _rooms_in_back_chain()
-    stanze = set(catena) | {"chat"}
+    # `impostazioni` non e' una stanza, e' la **pagina** da cui si aprono le
+    # stanze delle impostazioni: Indietro ci torna sopra (`goBackOneRoom`).
+    stanze = set(catena) | {"chat", "impostazioni"}
+    assert "target === 'impostazioni'" in _app(), "Indietro non sa tornare alla pagina Impostazioni"
     for da, a in catena.items():
         assert a in stanze, f"{da} torna a {a}, che non e' una stanza"
         assert da != a, f"{da} torna in se' stessa"
@@ -186,7 +183,7 @@ def test_the_fourth_room_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         casa = data["casa"]
-        for key in ("title", "open", "workshopHint"):
+        for key in ("title", "workshopHint"):
             assert casa["tu"].get(key, "").strip(), f"casa.tu.{key} manca in {locale}.json"
         # La versione ha cambiato posto: era una riga muta in fondo alla
         # pagina, adesso e' il valore della riga che apre gli aggiornamenti.

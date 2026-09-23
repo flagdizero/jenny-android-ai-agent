@@ -1,4 +1,4 @@
-"""Il contratto della tendina «con chi parli»: come si apre e come si chiude.
+"""Il contratto della pagina Quaderni, «con chi parli»: dove sta e come se ne esce.
 
 Grep e struttura, non comportamento: le righe che scrive hanno il loro banco in
 `test_casa_who_client.py`. Qui stanno le cose che si rompono in silenzio — un
@@ -27,53 +27,40 @@ def _member(source: str, name: str) -> str:
     return m.group(1)
 
 
-# ── Il titolo è il comando ──────────────────────────────────────────────────
+# ── E' una pagina ───────────────────────────────────────────────────────────
 
 
-def test_the_title_is_what_opens_the_panel() -> None:
-    """Il chevron senza la tendina era la bugia che questo lavoro toglie."""
+def test_the_notebooks_are_a_page_of_the_home() -> None:
+    """Fino al 23/09/2026 era la tendina del titolo; da allora e' la pagina
+    Quaderni della pista (`.agent/pagine-in-alto-plan.md`). Il pannello si
+    disegna dentro il suo pannello, e si rilegge quando ci arrivi."""
     html = INDEX.read_text(encoding="utf-8")
-    m = re.search(r"<h1>\s*(<button[^>]*id=\"casa-who\".*?</button>)\s*</h1>", html, re.S)
-    assert m, "il comando non è più il titolo (o non è più dentro l'h1)"
-    button = m.group(1)
-    assert 'aria-haspopup="dialog"' in button
-    assert 'aria-expanded="false"' in button, "lo stato iniziale deve dire che è chiusa"
-    assert "ti-chevron-down" in button, "senza chevron niente dice che si apre"
-    assert 'class="casa-who-name"' in button, (
-        "il nome sta in uno span suo: è da lì che il pannello lo legge, "
-        "e senza si porterebbe dentro anche il testo dell'icona"
-    )
+    pagina = html.split('data-pagina="quaderni"', 1)[1].split('data-pagina="impostazioni"', 1)[0]
+    assert 'id="casa-quaderni"' in pagina, "la pagina Quaderni non ha dove disegnarsi"
+    app = APP_JS.read_text(encoding="utf-8")
+    assert "new WhoPanel(document.getElementById('casa-quaderni')" in app
+    assert "this.pagine.registra('quaderni', { accendi: () => this.who.mostra() });" in app
 
 
-def test_the_button_is_inside_the_heading_and_not_the_other_way_round() -> None:
-    """Un `<h1>` dentro un `<button>` non è markup valido: il bottone accetta
-    solo contenuto di frase. La tavola usa un `<a>`, che è trasparente; qui
-    serve un comando, e l'unico annidamento valido è questo."""
+def test_the_old_dropdown_left_nothing_behind() -> None:
+    """Un titolo che apre una tendina che non c'e' e' una porta disegnata sul
+    muro; un `<dialog>` che nessuno apre e' codice che chi legge crede vivo."""
     html = INDEX.read_text(encoding="utf-8")
-    assert not re.search(r"<button[^>]*>\s*<h1", html), "h1 dentro button: markup non valido"
+    assert 'id="casa-who"' not in html, "il titolo e' tornato un comando"
+    assert not re.search(r"<h1>\s*<button", html), "c'e' di nuovo un bottone nel titolo"
+    src = WHO_JS.read_text(encoding="utf-8")
+    for resto in ("showModal", "createElement('dialog')", "::backdrop", "aria-expanded"):
+        assert resto not in src, f"{resto}: il pannello e' ancora una tendina"
+    assert ".casa-who::backdrop" not in CSS.read_text(encoding="utf-8")
 
 
 # ── Le vie d'uscita ─────────────────────────────────────────────────────────
 
 
-def test_hardware_back_closes_the_panel_first() -> None:
-    """Il guscio nativo intercetta Indietro prima della WebView, quindi il
-    `cancel` del `<dialog>` non arriva mai: se non lo chiude questo metodo, sul
-    telefono il tasto non lo chiude nessuno.
-
-    E per primo: `showModal()` mette il pannello nel top layer, cioè sopra
-    tutto — compresa l'immagine ingrandita.
-    """
-    body = _member(APP_JS.read_text(encoding="utf-8"), "_closeOverlays")
-    chiusura = body.index("this.who.close()")
-    lightbox = body.index("image-lightbox")
-    assert chiusura < lightbox, "il pannello va chiuso prima dello strato che gli sta sotto"
-
-
 def test_back_leaves_the_notebook_only_after_the_overlays() -> None:
-    """Una pressione, una cosa sola. Chiudere la tendina *e* uscire dal
-    quaderno con lo stesso tasto farebbe sparire due cose per un gesto — e la
-    seconda senza che nessuno l'abbia chiesta."""
+    """Una pressione, una cosa sola. Chiudere la scheda di un quaderno *e*
+    uscire dal quaderno con lo stesso tasto farebbe sparire due cose per un
+    gesto — e la seconda senza che nessuno l'abbia chiesta."""
     body = _member(APP_JS.read_text(encoding="utf-8"), "handleHardwareBack")
     assert "if (this._closeOverlays()) return;" in body, "gli strati non hanno più la precedenza"
     assert "projectNameOf" in body, "Indietro non riporta più a casa da un quaderno"
@@ -115,26 +102,6 @@ def test_a_tapped_alert_lands_in_the_personal_conversation() -> None:
     assert "this.switchConversation(null)" in body
 
 
-def test_the_veil_and_escape_are_both_wired() -> None:
-    src = WHO_JS.read_text(encoding="utf-8")
-    assert "if (e.target === dialog) this.close();" in src, "il velo non chiude più"
-    assert "if (e.key === 'Escape') this.close();" in src, "Esc non chiude più"
-
-
-def test_the_panel_is_a_modal_dialog() -> None:
-    """Il top layer non è un vezzo: in casa la mascotte è disegnata sopra il
-    resto, e senza `showModal()` il pannello dovrebbe contenderle uno
-    `z-index`."""
-    assert "showModal()" in WHO_JS.read_text(encoding="utf-8")
-
-
-def test_the_veil_has_a_rule_of_its_own() -> None:
-    css = CSS.read_text(encoding="utf-8")
-    assert re.search(r"\.casa-who::backdrop\s*\{[^}]*background:", css), (
-        "senza velo il pannello galleggia su uno schermo che sembra ancora vivo"
-    )
-
-
 # ── Le parole ───────────────────────────────────────────────────────────────
 
 
@@ -165,7 +132,7 @@ def test_the_panel_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["casa"]["who"]
-        for key in ("open", "title", "personal", "notebooks", "none", "loadFailed"):
+        for key in ("title", "personal", "notebooks", "none", "loadFailed"):
             assert section.get(key, "").strip(), f"casa.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"

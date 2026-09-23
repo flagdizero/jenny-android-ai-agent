@@ -1,7 +1,11 @@
-"""La pista della casa: di lato alla chat ci sono le pagine.
+"""La pista della casa: una fila di pagine, la chat fra le altre.
 
-La casa e' un launcher (tavola `Pagine`), e la chat e' la **pagina 0**: c'e'
-sempre, non si sposta e non si toglie.
+La casa e' un launcher (tavola `Pagine`). Quattro pagine ci sono sempre — App,
+la chat, Quaderni, Impostazioni — e accanto quelle che l'utente aggiunge. Dal
+23/09/2026 **si spostano tutte**, la chat compresa: nessun indice vuol dire «la
+chat» da solo (v. `.agent/pagine-in-alto-plan.md`). Per questo i casi qui
+parlano **per nome di pagina** (`I('p1')`, `CHAT()`) e non per numero: un
+banco che scrivesse `indice === 1` proverebbe un ordine, non la pista.
 
 **Perche' in node sui file veri.** Il modulo si importa davvero — con il suo
 `shared/gesto-orizzontale.js` accanto e un finto client API — invece di
@@ -103,6 +107,16 @@ function creaEl(id, cls) {
       };
       return cerca(this);
     },
+    /* Anche questo **sposta**: la pista rimette in fila i pannelli fissi, e
+       un finto che li copiasse li lascerebbe in due posti. */
+    insertBefore(c, rif) {
+      if (c.parent) c.parent.children = c.parent.children.filter((x) => x !== c);
+      const i = rif ? this.children.indexOf(rif) : -1;
+      if (i < 0) this.children.push(c);
+      else this.children.splice(i, 0, c);
+      c.parent = this;
+      return c;
+    },
     querySelectorAll(sel) {
       /* Il selettore si rispetta davvero, non si approssima: un finto che
          risponde «tutti» comunque gli si chieda fa passare una mutazione che
@@ -116,14 +130,19 @@ function creaEl(id, cls) {
   return el;
 }
 const pista = creaEl('casa-pista', 'casa-pista');
-/* Il pannello della chat c'e' gia' nell'HTML e non ha `data-id`: e' la
-   pagina 0, e il controller non deve toccarlo mai. */
-const pannelloChat = creaEl(null, 'casa-pagina');
-pannelloChat.dataset.pagina = 'chat';
-pista.appendChild(pannelloChat);
-/* La striscia dei pallini: dove sei, e la presa del cassetto. */
-const striscia = creaEl('casa-pallini', 'casa-pallini');
-striscia.textContent = '';
+/* I pannelli delle quattro fisse ci sono gia' nell'HTML, in quest'ordine, e
+   non hanno `data-id`: il controller li sposta e basta, non li crea e non li
+   butta. */
+function fisso(nome) {
+  const p = creaEl(null, 'casa-pagina');
+  p.dataset.pagina = nome;
+  pista.appendChild(p);
+  return p;
+}
+const pannelloApp = fisso('app');
+const pannelloChat = fisso('chat');
+const pannelloQuaderni = fisso('quaderni');
+const pannelloImpostazioni = fisso('impostazioni');
 
 /* **Un dito porta due righelli**, come quello vero: `client` e' relativo alla
    finestra di chi ascolta, `screen` allo schermo. Qui sono sfalsati di una
@@ -169,13 +188,6 @@ function scorri(verso, { corto = false } = {}) {
   });
   lancia(pista, 'touchend', { changedTouches: [dito(x0 + dx, 100)] });
 }
-/* Un gesto verticale sulla striscia. `su` in pixel. */
-function tiraSu(su, { obliquo = 0 } = {}) {
-  lancia(striscia, 'touchstart', { touches: [dito(200, 500)] });
-  lancia(striscia, 'touchend', {
-    changedTouches: [dito(200 + obliquo, 500 - su)],
-  });
-}
 /* Il gesto **raccontato da dentro una app**: quel che il kit
    (`apps/jenny-sdk.js`) manda al guscio dalla sua feritoia. Qui non c'e'
    nessun dito, ed e' tutto il punto: la pagina di una app e' tutta l'app, e
@@ -186,8 +198,8 @@ function daApp(dettaglio, { sorgente } = {}) {
 }
 /* La sorgente buona: la finestra della cornice che si sta guardando. */
 function finestraViva() {
-  const pannello = pista.children.filter((c) => c.dataset?.id)[pagine.indice - 1];
-  return pannello && pannello.children[0] && pannello.children[0].contentWindow;
+  const pannello = pagine.pannelloDi(pagine.indice);
+  return pannello?.dataset?.id && pannello.children[0] && pannello.children[0].contentWindow;
 }
 function scorriDaApp(verso, { corto = false, sorgente } = {}) {
   const dx = verso * (corto ? 20 : 200);
@@ -232,7 +244,8 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
             const app = {
               view: VISTA,
               shell: guscio,
-              launcher: { isOpen: () => false },
+              /* La modalita' ordina: finche' e' aperta il dito e' suo. */
+              fila: { ordinando: false },
               /* La fonte risponde **dopo un giro**, come la rete vera: al
                  momento della domanda `jennyApps` e' ancora vuota. Un finto
                  che risponde subito avrebbe lasciato passare il difetto visto
@@ -275,13 +288,23 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
             app.mostraConversazione = (k) => { mostrate.push(k); return Promise.resolve('mostrata'); };
             const pagine = new CasaPagine(app);
             await pagine.carica();
+            /* Dove sta una pagina, per nome: i casi non contano caselle. */
+            const I = (id) => pagine.indiceDi(id);
+            const CHAT = () => pagine.indiceChat;
             """
         )
         + corpo
     )
 
 
-def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -> None:
+def _run(
+    corpo: str,
+    schermate: list[dict] | None = None,
+    vista: str = "chat",
+    ordine: list[str] | None = None,
+) -> None:
+    """*ordine*: quello salvato sul server; `None` e' chi non ha mai spostato
+    niente, e il client lo normalizza come lo schema."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -324,9 +347,20 @@ def _run(corpo: str, schermate: list[dict] | None = None, vista: str = "chat") -
         (radice / "shared" / "api-client.js").write_text(
             "export const api = {\n"
             f"  _elenco: {json.dumps(schermate or [])},\n"
+            f"  _ordine: {json.dumps(ordine)},\n"
+            # Le scritture si ricordano in due elenchi: cosa (le schermate) e
+            # dove (l'ordine). Il server vero le prende insieme.
             "  scritture: [],\n"
-            "  async getSchermate() { return { schermate: this._elenco, max: 8 }; },\n"
-            "  async setSchermate(s) { this.scritture.push(s); this._elenco = s; return s; },\n"
+            "  ordini: [],\n"
+            "  async getSchermate() {\n"
+            "    return { schermate: this._elenco, ordine: this._ordine, max: 8,\n"
+            "             fisse: ['app', 'chat', 'quaderni', 'impostazioni'] };\n"
+            "  },\n"
+            "  async salvaPagine(s, o) {\n"
+            "    this.scritture.push(s); this.ordini.push(o);\n"
+            "    this._elenco = s; this._ordine = o;\n"
+            "    return { schermate: s, ordine: o };\n"
+            "  },\n"
             # Il segreto parte **vuoto**, come al primo avvio: la cornice di
             # un'app se lo porta nell'indirizzo, e chi la costruisce senza
             # aspettarlo produce un 401 e una pagina bianca.
@@ -379,43 +413,93 @@ DUE = UNA + [{"id": "p2", "kind": "conversazione", "ref": "project:piante"}]
 DUE_APP = UNA + [{"id": "p2", "kind": "app", "ref": "lampo"}]
 
 
-# ── La chat e' la pagina 0 ──────────────────────────────────────────────────
+# ── Le quattro fisse, e la chat fra loro ────────────────────────────────────
 
 
-def test_a_fresh_home_is_just_the_chat() -> None:
-    _run("assert.equal(pagine.quante, 1); assert.equal(pagine.indice, 0);")
-
-
-def test_with_no_pages_the_gesture_does_not_even_start() -> None:
-    """Un elastico che risponde a vuoto sembra un difetto, non un confine.
-
-    Con la sola chat non c'e' nessun posto dove andare: meglio che il dito non
-    muova niente, invece di far tremare la conversazione per dire «di la' non
-    c'e' nulla» quando di la' non c'e' nulla **mai**.
-    """
+def test_a_fresh_home_is_the_four_fixed_pages_opened_on_jenny() -> None:
+    """App · Jenny · Quaderni · Impostazioni, e si parte da Jenny."""
     _run(
-        "pista.style.transform = undefined;\n"
-        "scorri(SINISTRA);\n"
-        "assert.equal(pagine.indice, 0);\n"
-        # `vaiA` scrive sempre un transform: se il gesto fosse partito e poi
-        # tornato indietro, qui ce ne sarebbe uno. Che resti `undefined` vuol
-        # dire che il dito non ha armato proprio niente.
-        "assert.equal(pista.style.transform, undefined, 'il gesto e partito');"
+        "assert.equal(pagine.quante, 4);\n"
+        "assert.deepEqual(pagine.ordine, ['app', 'chat', 'quaderni', 'impostazioni']);\n"
+        "assert.equal(pagine.indice, CHAT());\n"
+        "assert.equal(CHAT(), 1);"
     )
 
 
-def test_the_chat_panel_is_never_redrawn() -> None:
-    """Ridisegnarlo vorrebbe dire buttare via la conversazione a ogni salvataggio.
+def test_the_home_starts_on_the_chat_even_before_the_server_answers() -> None:
+    """Nell'HTML la chat e' la seconda: senza un `transform` scritto subito il
+    primo fotogramma sarebbe il cassetto."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api.getSchermate = () => new Promise(() => {});\n"
+        "pista.style.transform = undefined;\n"
+        "const altre = new CasaPagine(app);\n"
+        "assert.equal(pista.style.transform, 'translateX(-100%)');\n"
+        "assert.equal(altre.indice, altre.indiceChat);"
+    )
 
-    Il pannello della chat sta nell'HTML — dentro ci vivono il filo e il
-    composer — e i pannelli aggiunti gli si mettono accanto.
+
+def test_with_no_pages_added_there_is_still_somewhere_to_go() -> None:
+    """Le fisse sono pagine vere: il dito ci va anche in una casa appena
+    installata, e ai due capi si ferma."""
+    _run(
+        "scorri(SINISTRA);\n"
+        "assert.equal(pagine.indice, I('quaderni'));\n"
+        "scorri(DESTRA); scorri(DESTRA);\n"
+        "assert.equal(pagine.indice, I('app'));"
+    )
+
+
+def test_the_fixed_panels_are_moved_never_redrawn() -> None:
+    """Ridisegnarli vorrebbe dire buttare via la conversazione a ogni
+    salvataggio — e il cassetto, i quaderni, le impostazioni con lei.
+
+    Stanno nell'HTML; i pannelli aggiunti si mettono **dove dice l'ordine**, e
+    l'ordine nel documento e' l'ordine a schermo.
     """
     _run(
-        "assert.equal(pista.children[0], pannelloChat);\n"
-        "await pagine.salva(SCHERMATE.concat([{id:'p3',kind:'app',ref:'x'}]));\n"
-        "assert.equal(pista.children[0], pannelloChat, 'la chat e stata ridisegnata');\n"
-        "assert.equal(pista.children.length, 4);",
+        "const fissi = [pannelloApp, pannelloChat, pannelloQuaderni, pannelloImpostazioni];\n"
+        "await pagine.salva(SCHERMATE.concat([{id:'p3',kind:'app',ref:'x'}]),\n"
+        "  ['p3', 'impostazioni', 'app', 'chat', 'p1', 'p2', 'quaderni']);\n"
+        "for (const f of fissi) assert.ok(pista.children.includes(f), 'un pannello fisso e stato buttato');\n"
+        "assert.equal(pista.children.length, 7);\n"
+        "assert.deepEqual(pista.children.map((c) => c.dataset.pagina || c.dataset.id), pagine.ordine);\n"
+        "assert.equal(pista.children[3], pannelloChat);",
         schermate=DUE,
+    )
+
+
+def test_the_chat_can_sit_anywhere_and_the_home_still_opens_on_it() -> None:
+    """Si sposta come le altre; la casa si apre comunque su di lei."""
+    _run(
+        "assert.deepEqual(pagine.ordine, ['p1', 'quaderni', 'app', 'impostazioni', 'chat']);\n"
+        "assert.equal(pagine.indice, 4);\n"
+        "assert.equal(pista.style.transform, 'translateX(-400%)');\n"
+        "assert.equal(pista.children[4], pannelloChat);",
+        schermate=UNA,
+        ordine=["p1", "quaderni", "app", "impostazioni", "chat"],
+    )
+
+
+def test_a_page_missing_from_the_saved_order_goes_right_after_the_chat() -> None:
+    """La stessa regola dello schema: mai un ordine che perde una pagina."""
+    _run(
+        "assert.deepEqual(pagine.ordine, ['quaderni', 'chat', 'p1', 'app', 'impostazioni']);",
+        schermate=UNA,
+        ordine=["quaderni", "chat", "app", "impostazioni"],
+    )
+
+
+def test_the_client_order_rule_is_the_schema_one() -> None:
+    """Due copie della stessa regola, una per lato: la seconda serve quando il
+    server non ha detto l'ordine. Qui si provano gli stessi casi dello schema."""
+    _run(
+        "const { ordineNormale } = await import('./casa-pagine.js');\n"
+        "const s = [{ id: 'p1' }, { id: 'p2' }];\n"
+        "assert.deepEqual(ordineNormale(null, s), ['app', 'chat', 'p1', 'p2', 'quaderni', 'impostazioni']);\n"
+        "assert.deepEqual(ordineNormale(['chat', 'x', 'p1', 'chat', 7], s),\n"
+        "  ['chat', 'p2', 'p1', 'app', 'quaderni', 'impostazioni']);\n"
+        "assert.deepEqual(ordineNormale(['impostazioni'], []), ['impostazioni', 'app', 'chat', 'quaderni']);"
     )
 
 
@@ -423,15 +507,15 @@ def test_the_chat_panel_is_never_redrawn() -> None:
 
 
 def test_swiping_left_moves_to_the_next_page() -> None:
-    _run("scorri(SINISTRA); assert.equal(pagine.indice, 1);", schermate=DUE)
+    _run("scorri(SINISTRA); assert.equal(pagine.indice, I('p1'));", schermate=DUE)
 
 
 def test_swiping_right_comes_back() -> None:
     _run(
         "scorri(SINISTRA); scorri(SINISTRA);\n"
-        "assert.equal(pagine.indice, 2);\n"
+        "assert.equal(pagine.indice, I('p2'));\n"
         "scorri(DESTRA);\n"
-        "assert.equal(pagine.indice, 1);",
+        "assert.equal(pagine.indice, I('p1'));",
         schermate=DUE,
     )
 
@@ -442,31 +526,32 @@ def test_the_ends_do_not_wrap_around() -> None:
     Li' le voci sono quattro e note; qui quante siano lo decide l'utente, e
     girando in tondo fra otto pagine non si sa piu' dove si e'.
     """
-    _run("scorri(DESTRA); assert.equal(pagine.indice, 0);", schermate=DUE)
+    _run("scorri(DESTRA); scorri(DESTRA); assert.equal(pagine.indice, 0);", schermate=DUE)
     _run(
-        "scorri(SINISTRA); scorri(SINISTRA); scorri(SINISTRA);\n"
-        "assert.equal(pagine.indice, 2);",
+        "for (let i = 0; i < 9; i += 1) scorri(SINISTRA);\n"
+        "assert.equal(pagine.indice, pagine.quante - 1);",
         schermate=DUE,
     )
 
 
 def test_a_short_drag_springs_back() -> None:
-    _run("scorri(SINISTRA, {corto: true}); assert.equal(pagine.indice, 0);", schermate=DUE)
+    _run("scorri(SINISTRA, {corto: true}); assert.equal(pagine.indice, CHAT());", schermate=DUE)
 
 
 # ── Le guardie ──────────────────────────────────────────────────────────────
 
 
 def test_inside_a_room_the_rooms_are_in_charge() -> None:
-    """Da «Tu e Jenny» il dito non deve cambiare pagina sotto la stanza."""
-    _run("scorri(SINISTRA); assert.equal(pagine.indice, 0);", schermate=DUE, vista="tu")
+    """Dalle pagine di un quaderno il dito non deve cambiare pagina sotto la stanza."""
+    _run("scorri(SINISTRA); assert.equal(pagine.indice, CHAT());", schermate=DUE, vista="pages")
 
 
-def test_an_open_drawer_owns_the_gesture() -> None:
+def test_while_the_pages_are_being_moved_the_finger_is_theirs() -> None:
+    """In modalita' ordina il dito trascina pastiglie, non la pista."""
     _run(
-        "app.launcher.isOpen = () => true;\n"
+        "app.fila.ordinando = true;\n"
         "scorri(SINISTRA);\n"
-        "assert.equal(pagine.indice, 0);",
+        "assert.equal(pagine.indice, CHAT());",
         schermate=DUE,
     )
 
@@ -477,36 +562,51 @@ def test_an_open_drawer_owns_the_gesture() -> None:
 def test_saving_sends_the_whole_list(tmp_path: Path) -> None:
     """Aggiungere, togliere e spostare sono la stessa scrittura."""
     _run(
-        "await pagine.salva([SCHERMATE[1]]);\n"
+        "await pagine.salva([SCHERMATE[1]], ['p2', 'app', 'chat', 'quaderni', 'impostazioni']);\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "assert.equal(api.scritture.length, 1);\n"
         "assert.deepEqual(api.scritture[0], [SCHERMATE[1]]);\n"
-        "assert.equal(pagine.quante, 2);",
+        "assert.deepEqual(api.ordini[0], ['p2', 'app', 'chat', 'quaderni', 'impostazioni']);\n"
+        "assert.deepEqual(pagine.ordine, api.ordini[0]);\n"
+        "assert.equal(pagine.quante, 5);",
         schermate=DUE,
     )
 
 
-def test_removing_the_page_you_are_on_does_not_strand_you() -> None:
-    """Si resta dentro la pista, non su una casella che non c'e' piu'."""
+def test_moving_a_page_keeps_you_on_the_page_you_were_on() -> None:
+    """Spostare le pagine non ti sposta: resti dove guardavi, ovunque sia finita."""
+    _run(
+        "pagine.vaiAId('p2');\n"
+        "await pagine.riordina(['p2', 'chat', 'p1', 'app', 'quaderni', 'impostazioni']);\n"
+        "assert.equal(pagine.indice, 0);\n"
+        "assert.equal(pagine.voce(pagine.indice).id, 'p2');",
+        schermate=DUE,
+    )
+
+
+def test_removing_the_page_you_are_on_takes_you_to_the_chat() -> None:
+    """Non una casella che non c'e' piu', e nemmeno una vicina a caso: la chat,
+    che e' dove Indietro ti porterebbe comunque."""
     _run(
         "scorri(SINISTRA); scorri(SINISTRA);\n"
-        "assert.equal(pagine.indice, 2);\n"
-        "await pagine.salva([SCHERMATE[0]]);\n"
-        "assert.equal(pagine.quante, 2);\n"
-        "assert.ok(pagine.indice <= 1, `indice fuori pista: ${pagine.indice}`);",
+        "assert.equal(pagine.indice, I('p2'));\n"
+        "await pagine.salva([SCHERMATE[0]], pagine.ordine.filter((x) => x !== 'p2'));\n"
+        "assert.equal(pagine.quante, 5);\n"
+        "assert.equal(pagine.indice, CHAT());",
         schermate=DUE,
     )
 
 
 def test_a_read_that_fails_leaves_the_chat_standing() -> None:
     """Una casa che non apre perche' non ha saputo leggere le sue pagine e'
-    peggio di una casa con la sola chat."""
+    peggio di una casa con le sole quattro."""
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api.getSchermate = async () => { throw new Error('rete giu'); };\n"
         "const altre = new CasaPagine(app);\n"
         "await altre.carica();\n"
-        "assert.equal(altre.quante, 1);",
+        "assert.equal(altre.quante, 4);\n"
+        "assert.equal(altre.indice, altre.indiceChat);",
         schermate=DUE,
     )
 
@@ -529,7 +629,7 @@ def test_one_rule_hides_the_track_not_six_pieces() -> None:
     stanza precisa.
     """
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    assert ".casa-shell:not([data-view='chat']) .casa-pista,\n.casa-shell:not([data-view='chat']) .casa-pallini { display: none; }" in css
+    assert ".casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }" in css
     for pezzo in ("casa-thread", "casa-composer", "casa-activity"):
         assert f":not([data-view='chat']) .{pezzo}" not in css
 
@@ -552,39 +652,19 @@ def test_the_track_adds_no_z_index() -> None:
     assert len([r for r in css.splitlines() if r.strip().startswith("z-index:")]) == 1
 
 
-# ── La striscia: dove sei ───────────────────────────────────────────────────
+# ── I pallini se ne sono andati (23/09/2026) ────────────────────────────────
 
 
-def test_the_strip_is_there_even_with_only_the_chat() -> None:
-    """E' l'unica cosa a schermo che annunci i gesti.
-
-    Ha sostituito il pulsante del cassetto: se sparisse quando non ci sono
-    pagine, con una casa appena installata non resterebbe **nessun** ingresso
-    al cassetto e nessun indizio che il gesto esista.
-    """
-    _run("assert.equal(striscia.children.length, 1);")
-
-
-def test_one_dot_per_page_and_the_current_one_is_marked() -> None:
-    _run(
-        "assert.equal(striscia.children.length, 3);\n"
-        "assert.equal(striscia.children[0].attrs['aria-selected'], 'true');\n"
-        "scorri(SINISTRA);\n"
-        "assert.equal(striscia.children.length, 3, 'i pallini si sono accumulati');\n"
-        "assert.equal(striscia.children[1].attrs['aria-selected'], 'true');\n"
-        "assert.equal(striscia.children[0].attrs['aria-selected'], 'false');",
-        schermate=DUE,
-    )
-
-
-def test_every_dot_is_a_real_button_that_moves() -> None:
-    """Chi i gesti non li fa — o non puo' farli — cambia pagina toccando."""
-    _run(
-        "assert.equal(striscia.children[2].attrs.role, 'tab');\n"
-        "striscia.children[2].click();\n"
-        "assert.equal(pagine.indice, 2);",
-        schermate=DUE,
-    )
+def test_the_dots_are_gone_and_the_row_took_their_place() -> None:
+    """I pallini dicevano quante pagine c'erano, non che cosa: li ha sostituiti
+    la fila dei nomi in alto (`casa-fila.js`), che ha il suo banco. Qui si
+    prova che non ne resta un pezzo — una striscia vuota da 26 px e' spazio
+    tolto a ogni pagina per niente."""
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    assert "casa-pallini" not in html
+    assert 'id="casa-fila"' in html
+    for nome in ("casa-pagine.js", "casa-app.js", "casa-style.css"):
+        assert "casa-pallin" not in (ASSETS / nome).read_text(encoding="utf-8"), nome
 
 
 def test_the_strip_does_not_try_to_open_the_drawer() -> None:
@@ -699,11 +779,9 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     un secondo segnale, e sta dove sta l'altro.
     """
     html = (UI / "index.html").read_text(encoding="utf-8")
-    assert '<main class="casa-shell" data-view="chat" data-pagina="0">' in html, (
+    assert '<main class="casa-shell" data-view="chat" data-pagina="chat">' in html, (
         "il guscio non nasce dichiarando su che pagina e'"
     )
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    assert ".casa-shell:not([data-pagina='0']) .casa-who-open .ti-chevron-down" in css
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
     cambio = app_js.split("onPaginaCambiata(", 1)[1].split("_applyHead();", 1)[0]
     assert "data-pagina" in cambio, "l'attributo non viene aggiornato al cambio pagina"
@@ -736,7 +814,7 @@ def test_a_fast_finger_does_not_mount_two_frames() -> None:
     """
     _run(
         "scorri(SINISTRA);\n"
-        "pagine.vaiA(0); pagine.vaiA(1); pagine.vaiA(0); pagine.vaiA(1);\n"
+        "pagine.vaiA(CHAT()); pagine.vaiAId('p1'); pagine.vaiA(CHAT()); pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 30));\n"
         "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
         "assert.equal(pagina.children.length, 1, `cornici montate: ${pagina.children.length}`);",
@@ -787,7 +865,7 @@ def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
     difetto non si riproduce.
     """
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    vetrina = css.split(".casa-vetrina {", 1)[1].split("}", 1)[0]
+    vetrina = css.split("\n.casa-vetrina {", 1)[1].split("}", 1)[0]
     assert "overflow: hidden" in vetrina, "l'involucro non ritaglia piu'"
     pista = css.split("\n.casa-pista {", 1)[1].split("}", 1)[0]
     assert "overflow" not in pista, (
@@ -820,11 +898,11 @@ def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
 def test_a_gesture_forwarded_from_an_app_page_changes_page() -> None:
     """Il dito e' dentro l'app, la pista si muove lo stesso."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "assert.ok(finestraViva(), 'la cornice non ha una finestra');\n"
         "scorriDaApp(DESTRA);\n"
-        "assert.equal(pagine.indice, 0, 'da dentro l app non si torna alla chat');\n",
+        "assert.equal(pagine.indice, CHAT(), 'da dentro l app non si torna alla chat');\n",
         UNA,
     )
 
@@ -833,10 +911,10 @@ def test_a_short_forwarded_gesture_stays_put() -> None:
     """Sotto la soglia si torna dov'eri: la soglia la calcola la app, col suo
     schermo, ed e' la stessa del modulo condiviso."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "scorriDaApp(DESTRA, { corto: true });\n"
-        "assert.equal(pagine.indice, 1);\n",
+        "assert.equal(pagine.indice, I('p1'));\n",
         UNA,
     )
 
@@ -848,10 +926,10 @@ def test_only_the_page_you_are_looking_at_may_move_the_track() -> None:
     guardia, qualunque cosa sappia fare `postMessage` muoverebbe la casa.
     """
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "scorriDaApp(DESTRA, { sorgente: { app: 'qualcun-altro' } });\n"
-        "assert.equal(pagine.indice, 1, 'una finestra estranea ha mosso la pista');\n",
+        "assert.equal(pagine.indice, I('p1'), 'una finestra estranea ha mosso la pista');\n",
         UNA,
     )
 
@@ -868,30 +946,31 @@ def test_a_page_that_is_not_an_app_has_no_window_to_listen_to() -> None:
     rilettura (22/09/2026).
     """
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('p2');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "scorriDaApp(DESTRA, { sorgente: null });\n"
-        "assert.equal(pagine.indice, 2, 'un messaggio senza sorgente ha mosso la pista');\n",
+        "assert.equal(pagine.indice, I('p2'), 'un messaggio senza sorgente ha mosso la pista');\n",
         DUE,
     )
 
 
 def test_the_shell_decides_at_every_gesture_whether_it_can_move() -> None:
-    """Fra un gesto e l'altro il cassetto puo' aprirsi, e allora il gesto e' suo.
+    """Fra un gesto e l'altro la modalita' ordina puo' aprirsi, e allora il
+    dito e' suo.
 
     La app non lo sa e non puo' saperlo: se la risposta se la portasse dietro
     dalla costruzione del frame, sarebbe quella di allora e non quella di
     adesso.
     """
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        "app.launcher.isOpen = () => true;\n"
+        "app.fila.ordinando = true;\n"
         "scorriDaApp(DESTRA);\n"
-        "assert.equal(pagine.indice, 1, 'col cassetto aperto la pista si e mossa');\n"
-        "app.launcher.isOpen = () => false;\n"
+        "assert.equal(pagine.indice, I('p1'), 'con le pagine da spostare la pista si e mossa');\n"
+        "app.fila.ordinando = false;\n"
         "scorriDaApp(DESTRA);\n"
-        "assert.equal(pagine.indice, 0, 'chiuso il cassetto, il gesto non torna');\n",
+        "assert.equal(pagine.indice, CHAT(), 'chiusa la modalita, il gesto non torna');\n",
         UNA,
     )
 
@@ -899,7 +978,7 @@ def test_the_shell_decides_at_every_gesture_whether_it_can_move() -> None:
 def test_a_forwarded_drag_without_its_start_moves_nothing() -> None:
     """Un `muove` orfano userebbe una larghezza mai misurata."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "pista.style.transform = 'segno';\n"
         "daApp({ fase: 'muove', dx: 120 }, { sorgente: finestraViva() });\n"
@@ -911,7 +990,7 @@ def test_a_forwarded_drag_without_its_start_moves_nothing() -> None:
 def test_a_broken_number_never_reaches_the_track() -> None:
     """`translateX(NaN)` e la pista sparisce — e i numeri li scrive l'app."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "const da = { sorgente: finestraViva() };\n"
         "daApp({ fase: 'inizio' }, da);\n"
@@ -925,14 +1004,14 @@ def test_a_broken_number_never_reaches_the_track() -> None:
 def test_a_cancelled_forwarded_gesture_snaps_back() -> None:
     """Il sistema si riprende il gesto a meta': la pagina resta quella."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "const da = { sorgente: finestraViva() };\n"
         "daApp({ fase: 'inizio' }, da);\n"
         "daApp({ fase: 'muove', dx: 150 }, da);\n"
         "daApp({ fase: 'annulla' }, da);\n"
-        "assert.equal(pagine.indice, 1);\n"
-        "assert.equal(pista.style.transform, 'translateX(-100%)', 'non e tornata a posto');\n",
+        "assert.equal(pagine.indice, I('p1'));\n"
+        "assert.equal(pista.style.transform, `translateX(${-I('p1') * 100}%)`, 'non e tornata a posto');\n",
         UNA,
     )
 
@@ -951,7 +1030,7 @@ def test_the_finger_is_measured_against_the_screen() -> None:
     """
     _run(
         "scorriSfalsato(0, -200);\n"
-        "assert.equal(pagine.indice, 1, 'col righello dello schermo non si e mossa');\n",
+        "assert.equal(pagine.indice, I('p1'), 'col righello dello schermo non si e mossa');\n",
         UNA,
     )
 
@@ -964,7 +1043,7 @@ def test_a_finger_that_only_the_window_saw_moves_nothing() -> None:
     """
     _run(
         "scorriSfalsato(-200, 0);\n"
-        "assert.equal(pagine.indice, 0, 'un gesto che lo schermo non ha visto ha cambiato pagina');\n",
+        "assert.equal(pagine.indice, CHAT(), 'un gesto che lo schermo non ha visto ha cambiato pagina');\n",
         UNA,
     )
 
@@ -988,22 +1067,22 @@ def test_arriving_on_a_notebook_page_brings_the_chat_there() -> None:
     """Col pannello che la pista mostra davvero, e con la chiave del quaderno."""
     _run(
         "traslochi.length = 0;\n"
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('q1');\n"
         "const a = arrivi();\n"
         "assert.equal(a.length, 1);\n"
         "assert.equal(a[0].k, 'project:piante');\n"
-        "assert.equal(a[0].p, pagine.pannelloDi(2));\n"
+        "assert.equal(a[0].p, pagine.pannelloDi(I('q1')));\n"
         "assert.equal(a[0].p.dataset.id, 'q1');\n",
         MISTE,
     )
 
 
-def test_back_on_page_zero_the_chat_goes_home_with_its_own_conversation() -> None:
-    """La pagina 0 ha la sua, e il trasloco la rimette."""
+def test_back_on_the_chat_page_the_chat_goes_home_with_its_own_conversation() -> None:
+    """La pagina chat ha la sua, e il trasloco la rimette."""
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('q1');\n"
         "traslochi.length = 0;\n"
-        "pagine.vaiA(0);\n"
+        "pagine.vaiA(CHAT());\n"
         "const a = arrivi();\n"
         "assert.equal(a.length, 1);\n"
         "assert.equal(a[0].p, pannelloChat);\n"
@@ -1016,7 +1095,7 @@ def test_passing_through_apps_does_not_touch_the_chat() -> None:
     """Attraversarle non cambia conversazione: la chat resta dov'era."""
     _run(
         "traslochi.length = 0;\n"
-        "pagine.vaiA(1); pagine.vaiA(3);\n"
+        "pagine.vaiAId('a1'); pagine.vaiAId('a2');\n"
         "assert.equal(arrivi().length, 0, 'una pagina senza conversazione ha chiamato il trasloco');\n",
         MISTE,
     )
@@ -1029,11 +1108,11 @@ def test_a_notebook_page_off_screen_keeps_its_photo_and_is_never_emptied() -> No
     chat e' parcheggiata li' mentre guardi un'app, porterebbe via la chat.
     """
     _run(
-        "const q = pagine.pannelloDi(2);\n"
+        "const q = pagine.pannelloDi(I('q1'));\n"
         "const parcheggiata = creaEl(null, 'casa-chat');\n"
         "q.appendChild(parcheggiata);\n"
         "traslochi.length = 0;\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('a1');\n"
         "const f = traslochi.filter((x) => x.fa === 'foto');\n"
         "assert.equal(f.length, 1);\n"
         "assert.equal(f[0].p, q);\n"
@@ -1069,15 +1148,15 @@ def test_a_notebook_page_is_named_after_its_notebook() -> None:
     )
 
 
-# ── Da fuori: il titolo, Home, un avviso ────────────────────────────────────
+# ── Da fuori: i Quaderni, Home, un avviso ────────────────────────────────────
 
 
-def test_from_page_zero_a_notebook_opens_right_there() -> None:
+def test_from_the_chat_page_a_notebook_opens_right_there() -> None:
     """Anche se ha una pagina sua. «Fai come ora, non scorrere» — l'utente, 23/09."""
     _run(
         "const r = await pagine.apriConversazione('project:piante');\n"
         "assert.deepEqual(mostrate, ['project:piante']);\n"
-        "assert.equal(pagine.indice, 0, 'e scorso alla pagina del quaderno');\n"
+        "assert.equal(pagine.indice, CHAT(), 'e scorso alla pagina del quaderno');\n"
         "assert.equal(pagine.conversazioneCasa, 'project:piante');\n"
         "assert.equal(r, 'mostrata', 'la promessa del cambio non torna a chi chiama');\n",
         MISTE,
@@ -1086,16 +1165,16 @@ def test_from_page_zero_a_notebook_opens_right_there() -> None:
 
 def test_a_notebook_page_only_ever_shows_its_notebook() -> None:
     """**L'invariante.** Da una pagina quaderno un'altra conversazione si apre
-    nella pagina 0, e ci si va.
+    nella pagina chat, e ci si va.
 
     E chi chiama riceve la lettura del trasloco, non un «fatto» anticipato: ci
     manda subito dopo un messaggio, e deve finire nella conversazione giusta.
     """
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('q1');\n"
         "traslochi.length = 0;\n"
         "const r = await pagine.apriConversazione(PERSONALE);\n"
-        "assert.equal(pagine.indice, 0);\n"
+        "assert.equal(pagine.indice, CHAT());\n"
         "assert.equal(pagine.conversazioneCasa, PERSONALE);\n"
         "assert.deepEqual(mostrate, [], 'ha cambiato la chat dentro la pagina del quaderno');\n"
         "const a = arrivi();\n"
@@ -1110,21 +1189,21 @@ def test_a_notebook_page_only_ever_shows_its_notebook() -> None:
 def test_asking_a_notebook_page_for_its_own_notebook_stays_there() -> None:
     """«Parlane» e «Segnala» dalle pagine del quaderno chiedono proprio quello."""
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('q1');\n"
         "await pagine.apriConversazione('project:piante');\n"
-        "assert.equal(pagine.indice, 2);\n"
+        "assert.equal(pagine.indice, I('q1'));\n"
         "assert.deepEqual(mostrate, ['project:piante']);\n"
-        "assert.equal(pagine.conversazioneCasa, PERSONALE, 'la pagina 0 ha preso il quaderno');\n",
+        "assert.equal(pagine.conversazioneCasa, PERSONALE, 'la pagina chat ha preso il quaderno');\n",
         MISTE,
     )
 
 
-def test_from_an_app_page_a_conversation_opens_on_page_zero() -> None:
-    """Home da una pagina di lato: si torna alla pagina 0, come ogni launcher."""
+def test_from_an_app_page_a_conversation_opens_on_the_chat_page() -> None:
+    """Home da una pagina di lato: si torna alla chat, come ogni launcher."""
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('a1');\n"
         "await pagine.apriConversazione(PERSONALE);\n"
-        "assert.equal(pagine.indice, 0);\n"
+        "assert.equal(pagine.indice, CHAT());\n"
         "assert.deepEqual(mostrate, []);\n",
         MISTE,
     )
@@ -1167,8 +1246,23 @@ def test_pinning_saves_the_page_and_lands_on_it() -> None:
         "assert.equal(fatto, true);\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "assert.deepEqual(api.scritture.at(-1).map((s) => [s.kind, s.ref]), [['app', 'orto']]);\n"
-        "assert.equal(pagine.indice, 1, 'non si e atterrati sulla pagina nuova');\n"
+        "const nuova = api.scritture.at(-1)[0].id;\n"
+        "assert.equal(pagine.indice, I(nuova), 'non si e atterrati sulla pagina nuova');\n"
+        "assert.equal(I(nuova), CHAT() + 1, 'la prima pagina aggiunta non sta dopo la chat');\n"
         "assert.equal(pagine.appesa('app', 'orto'), true);\n"
+    )
+
+
+def test_a_new_page_goes_after_the_last_one_added() -> None:
+    """Le aggiunte restano vicine fra loro, anche dopo che l'utente ha spostato
+    le fisse — e anche se le ha messe **prima** della chat."""
+    _run(
+        "await pagine.appendi('app', 'lampo');\n"
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "const nuova = api.scritture.at(-1).at(-1).id;\n"
+        "assert.deepEqual(pagine.ordine, ['p1', nuova, 'impostazioni', 'chat', 'app', 'quaderni']);\n",
+        UNA,
+        ordine=["p1", "impostazioni", "chat", "app", "quaderni"],
     )
 
 
@@ -1179,7 +1273,7 @@ def test_pinning_twice_is_one_page() -> None:
         "const prima = api.scritture.length;\n"
         "assert.equal(await pagine.appendi('app', 'orto'), false);\n"
         "assert.equal(api.scritture.length, prima, 'ha scritto una pagina doppia');\n"
-        "assert.equal(pagine.quante, 2);\n",
+        "assert.equal(pagine.quante, 5);\n",
         UNA,
     )
 
@@ -1209,6 +1303,7 @@ def test_unpinning_saves_the_rest() -> None:
         "assert.equal(await pagine.stacca('app', 'orto'), true);\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "assert.deepEqual(api.scritture.at(-1).map((s) => s.id), ['p2']);\n"
+        "assert.ok(!api.ordini.at(-1).includes('p1'), 'la pagina staccata e rimasta nell ordine');\n"
         "assert.equal(await pagine.stacca('app', 'orto'), false, 'ha staccato due volte');\n",
         DUE,
     )
@@ -1218,25 +1313,25 @@ def test_rereading_keeps_you_on_your_page_when_it_is_still_there() -> None:
     """Dopo una cancellazione fatta altrove la tua pagina puo' esserci ancora:
     rileggere non deve riportarti alla chat, come farebbe `carica()`."""
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('p2');\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._elenco = [SCHERMATE[1]];\n"
         "await pagine.ricarica();\n"
-        "assert.equal(pagine.quante, 2);\n"
-        "assert.equal(pagine.indice, 1, 'non e rimasta sulla sua pagina');\n"
+        "assert.equal(pagine.quante, 5);\n"
+        "assert.equal(pagine.indice, I('p2'), 'non e rimasta sulla sua pagina');\n"
         "assert.equal(pagine.schermate[0].id, 'p2');\n",
         DUE,
     )
 
 
-def test_rereading_when_your_page_is_gone_moves_you_to_a_neighbour() -> None:
+def test_rereading_when_your_page_is_gone_takes_you_to_the_chat() -> None:
     _run(
-        "pagine.vaiA(2);\n"
+        "pagine.vaiAId('p2');\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._elenco = [SCHERMATE[0]];\n"
         "await pagine.ricarica();\n"
-        "assert.equal(pagine.quante, 2);\n"
-        "assert.equal(pagine.indice, 1);\n",
+        "assert.equal(pagine.quante, 5);\n"
+        "assert.equal(pagine.indice, CHAT());\n",
         DUE,
     )
 
@@ -1266,18 +1361,18 @@ SPARITA = [{"id": "g1", "kind": "app", "ref": "svanita"}]
 QUADERNO = [{"id": "q1", "kind": "conversazione", "ref": "project:piante"}]
 
 
-def _sparita_in(indice: int) -> str:
+def _sparita_in(pagina: str) -> str:
     return (
-        f"const pannello = pagine.pannelloDi({indice});\n"
+        f"const pannello = pagine.pannelloDi(I('{pagina}'));\n"
         "const avviso = () => pannello.children.find((c) => c.className === 'casa-pagina-sparita');\n"
     )
 
 
 def test_an_app_that_is_gone_says_so_instead_of_a_blank_frame() -> None:
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('g1');\n"
         "await new Promise((r) => setTimeout(r, 60));\n"
-        + _sparita_in(1)
+        + _sparita_in('g1')
         + "assert.ok(avviso(), 'nessun avviso sulla pagina di un app sparita');\n"
         "assert.ok(!pannello.children.some((c) => c.dataset?.slug), 'la cornice verso il nulla e rimasta');\n"
         "assert.match(avviso().children[0].textContent, /casa\\.pagine\\.appSparita.*svanita/);\n",
@@ -1287,23 +1382,23 @@ def test_an_app_that_is_gone_says_so_instead_of_a_blank_frame() -> None:
 
 def test_the_gone_page_can_remove_itself() -> None:
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('g1');\n"
         "await new Promise((r) => setTimeout(r, 60));\n"
-        + _sparita_in(1)
+        + _sparita_in('g1')
         + "avviso().children[1].click();\n"
         "await new Promise((r) => setTimeout(r, 10));\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "assert.deepEqual(api.scritture.at(-1), []);\n"
-        "assert.equal(pagine.quante, 1);\n",
+        "assert.equal(pagine.quante, 4);\n",
         SPARITA,
     )
 
 
 def test_an_app_that_is_there_mounts_as_always() -> None:
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 60));\n"
-        + _sparita_in(1)
+        + _sparita_in('p1')
         + "assert.equal(avviso(), undefined);\n"
         "assert.equal(pannello.children[0].dataset.slug, 'orto');\n",
         UNA,
@@ -1315,9 +1410,9 @@ def test_a_list_that_could_not_be_read_marks_nothing() -> None:
     c'e' che non c'e' piu' sarebbe peggio di tacere."""
     _run(
         "globalThis.LISTA_ROTTA = true;\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('g1');\n"
         "await new Promise((r) => setTimeout(r, 60));\n"
-        + _sparita_in(1)
+        + _sparita_in('g1')
         + "assert.equal(avviso(), undefined);\n"
         "assert.equal(pannello.children[0].dataset.slug, 'svanita');\n",
         SPARITA,
@@ -1334,12 +1429,12 @@ def test_leaving_before_the_answer_draws_nothing() -> None:
     mutazione che la toglieva sopravviveva (23/09/2026).
     """
     _run(
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('g1');\n"
         "await new Promise((r) => setTimeout(r, 5));\n"
-        "assert.ok(pagine.pannelloDi(1).children.some((c) => c.dataset?.slug), 'la cornice non e montata');\n"
-        "pagine.vaiA(0);\n"
+        "assert.ok(pagine.pannelloDi(I('g1')).children.some((c) => c.dataset?.slug), 'la cornice non e montata');\n"
+        "pagine.vaiA(CHAT());\n"
         "await new Promise((r) => setTimeout(r, 60));\n"
-        + _sparita_in(1)
+        + _sparita_in('g1')
         + "assert.equal(avviso(), undefined);\n",
         SPARITA,
     )
@@ -1351,9 +1446,9 @@ def test_a_notebook_that_is_gone_is_covered_not_emptied() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._quaderni = ['altro'];\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        + _sparita_in(1)
+        + _sparita_in('q1')
         + "assert.ok(avviso(), 'nessun avviso sulla pagina di un quaderno sparito');\n"
         "assert.match(avviso().children[0].textContent, /casa\\.pagine\\.quadernoSparito.*piante/);\n",
         QUADERNO,
@@ -1364,9 +1459,9 @@ def test_a_notebook_that_is_there_is_left_alone() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._quaderni = ['piante'];\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        + _sparita_in(1)
+        + _sparita_in('q1')
         + "assert.equal(avviso(), undefined);\n",
         QUADERNO,
     )
@@ -1376,9 +1471,9 @@ def test_a_notebook_list_that_fails_marks_nothing() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._quaderni = 'rotto';\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        + _sparita_in(1)
+        + _sparita_in('q1')
         + "assert.equal(avviso(), undefined);\n",
         QUADERNO,
     )
@@ -1389,14 +1484,14 @@ def test_a_notebook_that_comes_back_loses_its_notice() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api._quaderni = [];\n"
-        "pagine.vaiA(1);\n"
+        "pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        "pagine.vaiA(0); pagine.vaiA(1);\n"
+        "pagine.vaiA(CHAT()); pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
-        + _sparita_in(1)
+        + _sparita_in('q1')
         + "assert.equal(pannello.children.filter((c) => c.className === 'casa-pagina-sparita').length, 1);\n"
         "api._quaderni = ['piante'];\n"
-        "pagine.vaiA(0); pagine.vaiA(1);\n"
+        "pagine.vaiA(CHAT()); pagine.vaiAId('q1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "assert.equal(avviso(), undefined, 'l avviso e rimasto su un quaderno tornato');\n",
         QUADERNO,
@@ -1435,13 +1530,62 @@ def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
     assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src
 
 
-def test_page_zero_follows_a_renamed_notebook_only_if_it_was_its_own() -> None:
-    """La conversazione della pagina 0 non sta nell'elenco salvato: le pagine
-    appese le rinomina il gateway, questa no."""
+def test_the_chat_page_follows_a_renamed_notebook_only_if_it_was_its_own() -> None:
+    """La conversazione della pagina chat non sta nell'elenco salvato: le
+    pagine appese le rinomina il gateway, questa no."""
     _run(
         "pagine.conversazioneCasa = 'project:viaggio';\n"
         "pagine.rinominaConversazione('project:altro', 'project:nuovo');\n"
         "assert.equal(pagine.conversazioneCasa, 'project:viaggio', 'ha seguito un altro quaderno');\n"
         "pagine.rinominaConversazione('project:viaggio', 'project:viaggi');\n"
         "assert.equal(pagine.conversazioneCasa, 'project:viaggi');\n"
+    )
+
+
+# ── Le pagine fisse si accendono quando le guardi (23/09/2026) ──────────────
+
+
+def test_a_fixed_page_lights_up_when_you_arrive_and_goes_dark_when_you_leave() -> None:
+    """Il cassetto prende la tastiera solo mentre lo guardi; i Quaderni e le
+    Impostazioni si rileggono quando ci arrivi."""
+    _run(
+        "const visto = [];\n"
+        "pagine.registra('app', { accendi: () => visto.push('app+'), spegni: () => visto.push('app-') });\n"
+        "pagine.registra('quaderni', { accendi: () => visto.push('q+') });\n"
+        "pagine.vaiAId('app');\n"
+        "pagine.vaiAId('app');\n"
+        "pagine.vaiA(CHAT());\n"
+        "pagine.vaiAId('quaderni');\n"
+        "pagine.vaiAId('app');\n"
+        "assert.deepEqual(visto, ['app+', 'app-', 'q+', 'app+']);\n"
+    )
+
+
+def test_a_page_registered_while_you_look_at_it_lights_up_at_once() -> None:
+    """Il guscio registra i ganci dopo aver costruito la pista: se la casa
+    fosse gia' su quella pagina, aspettare il prossimo `vaiA` la lascerebbe
+    spenta."""
+    _run(
+        "pagine.vaiAId('impostazioni');\n"
+        "let accesa = 0;\n"
+        "pagine.registra('impostazioni', { accendi: () => { accesa += 1; } });\n"
+        "assert.equal(accesa, 1);\n"
+    )
+
+
+def test_a_fixed_page_has_no_app_window_to_listen_to() -> None:
+    """La finestra da cui un gesto puo' arrivare e' solo quella di un'app
+    appesa: il cassetto e' un pannello del guscio, non una cornice."""
+    _run(
+        # Qualcosa con una finestra dentro il pannello del cassetto: senza, la
+        # guardia sulla specie non si vedrebbe — un pannello vuoto non ha
+        # finestre comunque, e la mutazione che la toglie sopravvivrebbe.
+        "const finta = creaEl(null, '');\n"
+        "finta.contentWindow = { app: 'dentro-il-cassetto' };\n"
+        "pannelloApp.appendChild(finta);\n"
+        "pagine.vaiAId('app');\n"
+        "assert.equal(pagine._finestraPagina(), null);\n"
+        "scorriDaApp(SINISTRA, { sorgente: finta.contentWindow });\n"
+        "assert.equal(pagine.indice, I('app'), 'una finestra nel cassetto ha mosso la pista');\n",
+        UNA,
     )

@@ -37,7 +37,218 @@ body.casa {
   box-sizing: border-box;
 }
 
-/* ── L'intestazione ── */
+/* ── La fila delle pagine ──
+   I nomi delle pagine al posto di titolo, ingranaggio, cassetto e pallini
+   (v. `.agent/pagine-in-alto-plan.md`): quello dove sei e' grande, nel
+   carattere del titolo di prima; gli altri piccoli, maiuscoli e spaziati come
+   l'occhiello che c'era sopra. Costa **una** riga di intestazione, dove prima
+   ce n'erano due in alto e una striscia in basso. */
+
+.casa-fila {
+  flex: none;
+  padding: 10px 18px 6px;
+  /* Nomi da toccare e da tenere premuti, niente testo da selezionare. Senza,
+     Chromium seleziona la parola a meta' della pressione lunga e annulla il
+     puntatore — visto sul telefono il 23/09/2026 sulle righe dei quaderni. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* La fila e' della conversazione e delle sue pagine di lato; le stanze hanno
+   l'intestazione loro, con la via del ritorno. Mai tutte e due. */
+.casa-shell:not([data-view='chat']) .casa-fila,
+.casa-shell[data-view='chat'] .casa-head { display: none; }
+
+.casa-fila-nomi {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.casa-fila-nomi::-webkit-scrollbar { display: none; }
+
+/* Dal lato in cui qualcosa non ci sta, la fila sfuma: un nome tagliato di
+   netto sul bordo sembra un difetto, uno che svanisce dice «di qua ce n'e'
+   ancora». */
+.casa-fila-nomi.sfuma-dopo {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+}
+.casa-fila-nomi.sfuma-prima {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px);
+  mask-image: linear-gradient(90deg, transparent, #000 40px);
+}
+.casa-fila-nomi.sfuma-prima.sfuma-dopo {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+
+.casa-fila-voce {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  /* 40px: il bersaglio e' alto quanto la voce grande, anche per le piccole. */
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.casa-fila-voce.is-on {
+  /* Il nome dove sei: tronca prima di spingere fuori le altre. Un quaderno
+     arriva a 64 caratteri, e senza un tetto la fila mostrerebbe solo lui. */
+  max-width: 62%;
+  color: var(--heading);
+  font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.casa-fila-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.casa-fila-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+.casa-fila-voce.is-on .casa-fila-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.casa-fila-voce:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── La modalita' ordina ──
+   Tenendo premuto un nome la fila si apre: le pagine diventano pastiglie che
+   si trascinano, e la pagina sotto si spegne. Quello che conta qui e' dove va
+   il dito, e la conversazione non deve contenderglielo. */
+
+.casa-fila.is-ordina {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.casa-ordina-testa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.casa-ordina-aiuto {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.casa-ordina-fatto {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.casa-ordina-pastiglie {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.casa-ordina-pastiglia {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--heading);
+  font-size: 14px;
+  font-weight: 600;
+  /* Il dito che trascina una pastiglia non deve anche scorrere la pagina:
+     senza, Chromium si prende il movimento e manda `pointercancel`. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.casa-ordina-pastiglia .ti-grip-vertical {
+  color: var(--text-faint);
+  font-size: 16px;
+}
+
+/* Sollevata. Sta sopra le altre **senza** `z-index` — quello di Jenny resta
+   l'unico del foglio: un elemento trasformato si dipinge dopo i fratelli che
+   non lo sono. */
+.casa-ordina-pastiglia.is-sollevata {
+  border-color: var(--accent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+}
+
+.casa-ordina-pastiglia:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.casa-ordina-togli {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.casa-shell[data-ordina] .casa-vetrina {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* ── L'intestazione delle stanze ── */
 
 .casa-head {
   flex: none;
@@ -47,43 +258,24 @@ body.casa {
   padding: 14px 18px 6px;
 }
 
-.casa-kicker {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-
-/* Il titolo cede, la porta no. Un nome di quaderno arriva a 64 caratteri: senza
-   `min-width: 0` una scatola flex non si stringe sotto il proprio contenuto, e
-   quel nome spingerebbe il bottone dell'officina fuori dallo schermo. */
+/* Il titolo cede, i comandi no. Un nome di quaderno arriva a 64 caratteri:
+   senza `min-width: 0` una scatola flex non si stringe sotto il proprio
+   contenuto, e quel nome spingerebbe «Parlane» fuori dallo schermo. */
 .casa-title {
   min-width: 0;
 }
 
 .casa-title h1 {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
   font-weight: 500;
   font-size: 26px;
   line-height: 1.1;
   color: var(--heading);
-}
-
-.casa-door {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0;
 }
 
 /* ── Il filo ── */
@@ -240,26 +432,16 @@ body.casa {
 
 .casa-input::placeholder { color: var(--text-faint); }
 
-/* Il cassetto delle app: gemello sinistro del tasto manda, e volutamente
-   spento. In questa riga la cosa accesa resta una sola — quella che manda il
-   messaggio. Due tondi pieni farebbero due primi attori, e nessuno dei due si
-   leggerebbe piu' come «il» gesto. Stessa taglia, cosi' la riga resta
-   simmetrica. Gemello anche di `.compose-drawer` in officina: stesso posto,
-   stessa icona, stesso foglio dietro. */
-.casa-drawer {
-  flex: none;
-  width: 40px;
+/* La pastiglia delle pagine del quaderno, a sinistra del composer: il posto
+   che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
+   questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
+   il campo, cosi' la riga resta allineata. */
+.casa-composer .casa-pages-open {
   height: 40px;
-  display: grid;
-  place-items: center;
   border: none;
-  border-radius: 50%;
   background: var(--overlay);
-  color: var(--text);
-  font-size: 20px;
-  cursor: pointer;
 }
-.casa-drawer:active { background: var(--overlay-strong); }
+.casa-composer .casa-pages-open[hidden] { display: none; }
 
 .casa-send {
   flex: none;
@@ -709,90 +891,7 @@ body.casa {
 
 /* ── «Con chi parli» ── */
 
-/* Il comando sta dentro l'h1: qui si spoglia del vestito da bottone e riprende
-   quello del titolo. Il chevron e' piu' piccolo e piu' smorto del nome —
-   e' un invito, non una seconda parola. */
-.casa-who-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  /* Il bersaglio e' il titolo intero, e il titolo e' alto 29 px: tocca bene
-     anche senza allargarlo, e allargarlo lo staccherebbe dal kicker. */
-  -webkit-tap-highlight-color: transparent;
-}
 
-.casa-who-open {
-  max-width: 100%;
-}
-
-/* Il nome tronca; il chevron e il pallino no. Sono i due pezzi che dicono
-   *cos'e'* questo titolo, e un nome lungo non deve mangiarseli. */
-.casa-who-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.casa-who-open i {
-  flex: none;
-  font-size: 18px;
-  color: var(--text-muted);
-}
-
-/* L'anello del fuoco sta qui, che e' il comando. Sul pannello no: un `<dialog>`
-   modale prende il fuoco all'apertura, e Chrome gli disegna attorno un anello
-   bianco che sembra un bordo acceso — ma quello non e' un comando, e' la
-   stanza. */
-.casa-who-open:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-.casa-who:focus { outline: none; }
-
-/* La tendina. `showModal()` la mette nel top layer: sopra la mascotte, che in
-   casa e' disegnata sopra tutto il resto, senza doverle contendere uno
-   `z-index`. Il `top` lo scrive il JS misurando l'intestazione — l'altezza del
-   titolo dipende dal font del tema. */
-.casa-who {
-  position: fixed;
-  left: 18px;
-  /* Il pannello non e' mai piu' largo dello schermo meno i due margini: su uno
-     schermo stretto la tavola sarebbe sfondata. */
-  width: min(330px, calc(100vw - 36px));
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-/* Il velo. La tavola ne dà uno al 28%, ma è misurato sulla sua tavolozza
-   chiara: sui temi scuri della casa sparisce, e un velo che non si vede lascia
-   il pannello a galleggiare su uno schermo che sembra ancora vivo. Questo è il
-   valore che l'app usa già per i suoi dialoghi e per la tendina laterale. */
-.casa-who::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.casa-who-body {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 14px 6px;
-}
 
 .casa-who-label {
   padding: 4px 4px 2px;
@@ -809,13 +908,16 @@ body.casa {
   border-top: 1px solid var(--border);
 }
 
-/* Solo l'elenco scorre. Il tetto e' quel che resta di schermo sotto il
-   pannello: il `top` e' gia' scritto sul `<dialog>`, quindi qui basta lasciare
-   un margine sotto perche' l'ultimo quaderno non tocchi il bordo. */
-.casa-who-list {
-  max-height: 46dvh;
+/* La pagina Quaderni: scorre tutta, e in fondo lascia il posto a Jenny come
+   le impostazioni (v. `.casa-tu-scroll`). */
+.casa-quaderni {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 18px calc(20px + var(--jenny-size) * var(--jenny-art-h));
 }
 
 /* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
@@ -930,12 +1032,6 @@ body.casa {
   background: var(--text-faint);
 }
 
-/* Lo stesso pallino, nel titolo. Un filo piu' piccolo: li' sta accanto a un
-   nome di 26 px e deve accompagnarlo, non annunciarlo. */
-.casa-title-dot {
-  width: 9px;
-  height: 9px;
-}
 
 /* Una cartella che non si apre e' una cosa da sistemare, non una scelta: il
    pallino perde il colore, la riga si smorza, e resta un `<div>` — il gateway
@@ -970,7 +1066,6 @@ body.casa {
 
 .casa-pages,
 .casa-reader,
-.casa-tu,
 .casa-jenny-room,
 .casa-model-room,
 .casa-updates-room,
@@ -983,7 +1078,6 @@ body.casa {
 
 .casa-shell[data-view='pages'] .casa-pages,
 .casa-shell[data-view='reader'] .casa-reader,
-.casa-shell[data-view='tu'] .casa-tu,
 .casa-shell[data-view='jenny'] .casa-jenny-room,
 .casa-shell[data-view='model'] .casa-model-room,
 .casa-shell[data-view='updates'] .casa-updates-room,
@@ -993,8 +1087,7 @@ body.casa {
    pista, sparire dalla vista di una stanza e' una cosa sola da nascondere e
    non sei. Se ne fosse dimenticata una, quella resterebbe a occupare spazio
    dentro «Tu e Jenny». */
-.casa-shell:not([data-view='chat']) .casa-pista,
-.casa-shell:not([data-view='chat']) .casa-pallini { display: none; }
+.casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }
 
 
 /* ── La pista delle pagine ───────────────────────────────────────────────
@@ -1022,11 +1115,20 @@ body.casa {
   min-height: 0;
   display: flex;
   overflow: hidden;
+  /* `clip` dove c'e': ritaglia come `hidden` ma **non scorre**, nemmeno da
+     programma. Un `focus()` su un campo di una pagina che sta ancora entrando
+     — il composer dopo «Home», la ricerca del cassetto al primo tasto — farebbe
+     scorrere una vetrina `hidden` di lato per mostrarlo, e la pista finirebbe
+     spostata di quanto ha scorso. */
+  overflow: clip;
 }
 
 .casa-pista {
   flex: 1;
   min-height: 0;
+  /* Si parte sulla chat, che nell'HTML e' la seconda pagina: questo e' il
+     primo fotogramma, prima che il JS scriva il suo `transform`. */
+  transform: translateX(-100%);
   /* `min-width: 0` non e' decorazione. La pista e' un elemento flessibile
      della vetrina, e senza questa riga la sua larghezza minima e' quella del
      suo contenuto: una parola che non va a capo in un messaggio — un percorso
@@ -1074,65 +1176,6 @@ body.casa {
   inset: 0;
 }
 
-/* ── La striscia dei pallini ─────────────────────────────────────────────
-   Dove sei fra le pagine: toccare un pallino ci va, e tenere premuto apre il
-   foglio che le gestisce.
-
-   **Non** e' anche la presa del cassetto, come voleva la tavola. Misurato sul
-   telefono il 22/09/2026: con la navigazione a gesti accesa Android si prende
-   lo swipe dal bordo basso e all'app arriva `touchcancel`, mai `touchend` —
-   provato con una build diagnostica. La zona del gesto di home non si puo'
-   escludere. Il cassetto e' tornato al suo bottone. */
-.casa-pallini {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  /* 26px come la tavola. Sotto c'e' gia' il `padding-bottom` del guscio con
-     l'inset di sistema: la presa non deve finire dentro la zona in cui Android
-     si prende lo swipe di home. */
-  height: 26px;
-  /* Pallini da toccare, niente testo da selezionare. (Per un giro la striscia
-     aveva anche una pressione lunga, e con lei un `touch-action: none`; sono
-     usciti insieme al foglio delle pagine, il 23/09/2026.) */
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Ogni pallino e' un bottone vero: chi non fa gesti — o non puo' farli —
-   cambia pagina toccandolo, e chi legge lo schermo lo sente nominare. */
-.casa-pallino {
-  flex: none;
-  width: 5px;
-  height: 5px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--text-faint);
-  cursor: pointer;
-  position: relative;
-  transition: width .18s ease, background .18s ease;
-}
-
-.casa-pallino[aria-selected='true'] {
-  width: 16px;
-  background: var(--accent);
-}
-
-/* L'area toccabile e' piu' grande del disegno: cinque pixel non si centrano
-   col pollice, e 44 e' il minimo sotto cui un bersaglio non si prende. Il
-   pallino resta di cinque e la presa cresce **fuori** da lui, senza
-   allargare la riga: e' `absolute`, quindi non conta nel flusso. */
-.casa-pallino::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 44px;
-  height: 44px;
-  transform: translate(-50%, -50%);
-}
 
 /* La pagina di una cosa che non c'e' piu': lo dice, e offre di togliersi.
    Sta **sopra** il contenuto del pannello — in una pagina quaderno sotto c'e'
@@ -1270,21 +1313,6 @@ body.casa {
 
 .casa-back:active { color: var(--text); }
 
-/* Fuori dalla chat il titolo dice dove sei e non apre piu' niente. Il chevron
-   se ne va con lui: un segno che promette una tendina, su un bottone spento,
-   e' una porta disegnata sul muro. */
-.casa-who-open:disabled {
-  color: inherit;
-  opacity: 1;
-  cursor: default;
-}
-
-/* Il chevron promette la tendina delle conversazioni: sparisce dove quella
-   tendina non si apre — fuori dalla conversazione, e **anche su una pagina di
-   lato**, dove la vista e' ancora `chat` ma il titolo dice il nome di un'app.
-   Restava acceso e disabilitato: un comando che si vede e non fa niente. */
-.casa-shell:not([data-view='chat']) .casa-who-open .ti-chevron-down,
-.casa-shell:not([data-pagina='0']) .casa-who-open .ti-chevron-down { display: none; }
 
 /* ── Le pagine di un quaderno ── */
 
@@ -1676,7 +1704,32 @@ body.casa {
 
 /* ── «Tu e Jenny» ────────────────────────────────────────────────────────────
    La tavola `TuEJenny.dc.html`: schede su fondo chiaro, righe basse, e il
-   valore corrente a destra di ogni etichetta. */
+   valore corrente a destra di ogni etichetta. Dal 23/09/2026 e' la pagina
+   Impostazioni, e sta aperta nel suo pannello: niente `data-view` da
+   aspettare. */
+
+.casa-tu {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── La pagina App ──
+   Il cassetto, senza le cose di un foglio: prende l'altezza della pagina, e
+   in fondo lascia il posto a Jenny come le impostazioni. */
+
+.casa-cassetto {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.casa-cassetto .launcher-list {
+  padding-bottom: calc(20px + var(--jenny-size) * var(--jenny-art-h));
+}
 
 .casa-tu-scroll {
   flex: 1;

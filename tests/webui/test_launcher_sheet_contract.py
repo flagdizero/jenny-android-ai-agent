@@ -780,12 +780,26 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     #    `setSystemGestureExclusionRects` vale per il gesto indietro.
     #
     #    Per quel giro il cassetto e' stato irraggiungibile dalla casa. Il
-    #    pulsante e' tornato, e questo banco lo pretende.
+    #    pulsante e' tornato.
+    #
+    # 6. **23/09/2026, e stavolta il pulsante se ne va per una ragione.** In
+    #    casa il cassetto non e' piu' un foglio: e' la **pagina App**, e il suo
+    #    nome sta nella fila in alto, che c'e' su ogni pagina
+    #    (`.agent/pagine-in-alto-plan.md`). L'invariante e' la stessa — un
+    #    ingresso che esiste e si vede — e qui la pretende il banco: la pagina
+    #    c'e', e' una delle fisse (che non si tolgono), e il cassetto dentro e'
+    #    quello vero, incorporato. Nessun gesto dal bordo basso, di nuovo.
     casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
-    assert 'id="casa-drawer"' in casa, "la casa non ha nessun ingresso al cassetto"
-    assert "getElementById('casa-drawer')" in _src("casa-app.js")
+    assert 'data-pagina="app"' in casa, "la casa non ha piu' la pagina App"
+    pagina_app = casa.split('data-pagina="app"', 1)[1].split('data-pagina="chat"', 1)[0]
+    assert 'id="launcher-list"' in pagina_app, "la pagina App non contiene il cassetto"
+    assert re.search(r"export const FISSE = \['app',", _src("casa-pagine.js")), (
+        "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
+    )
+    assert "new LauncherController(this, { incorporato: true })" in _src("casa-app.js")
+    assert "casa-drawer" not in casa, "il bottone del cassetto e' tornato accanto a una pagina"
     assert "openLauncher" not in _src("casa-pagine.js"), (
-        "la striscia riprova ad aprire il cassetto con un gesto che il sistema "
+        "la pista riprova ad aprire il cassetto con un gesto che il sistema "
         "non consegna"
     )
 
@@ -793,6 +807,9 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     # li possiede. Senza questo il foglio saprebbe di stare in due case.
     assert "btn-launcher" not in _src("mobile-launcher.js")
     assert "casa-drawer" not in _src("mobile-launcher.js")
+    assert "casa-shell" not in _src("mobile-launcher.js").split("_setBackgroundInert(on) {", 1)[0], (
+        "il cassetto ha imparato un id della casa fuori dall'unico punto che la nomina"
+    )
 
 
 def test_the_dead_dock_branch_is_gone() -> None:
