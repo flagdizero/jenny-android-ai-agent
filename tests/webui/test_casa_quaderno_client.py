@@ -347,7 +347,13 @@ def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -
         "assert.ok(storia.some((x) => x[0] === 'conversazione' && x[1] === 'project:viaggi'),\n"
         "  'eri nel quaderno e non ci sei rimasta');\n"
         "assert.ok(storia.some((x) => x[0] === 'tendina'));\n"
-        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n",
+        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n"
+        # La tendina rilegge prima del cambio: il titolo chiede alla sua cache
+        # quante pagine ha il quaderno, e sul telefono la pastiglia perdeva il
+        # numero (23/09/2026).
+        "const ordine = storia.map((x) => x[0]);\n"
+        "assert.ok(ordine.indexOf('tendina') < ordine.indexOf('conversazione'),\n"
+        "  'la tendina rilegge dopo il cambio: la pastiglia perde il numero');\n",
         scritto=" viaggi ",
         corrente="project:viaggio",
     )

@@ -509,8 +509,12 @@ class CasaApp {
     const vecchia = projectKey(nome);
     const nuova = projectKey(nuovo);
     this.pagine.rinominaConversazione(vecchia, nuova);
-    if (sessionManager.currentKey === vecchia) await this.switchConversation(nuova);
+    /* La tendina rilegge **prima** del cambio: il titolo, ridisegnandosi, chiede
+       alla sua cache quante pagine ha il quaderno — e con la cache ancora sul
+       nome vecchio la pastiglia perdeva il numero. Visto sul telefono il
+       23/09/2026 rinominando un quaderno di prova. */
     await this.who.refresh();
+    if (sessionManager.currentKey === vecchia) await this.switchConversation(nuova);
     await this.portaPagine().ricarica();
     showToast(i18n.t('casa.quaderno.renamed', { name: nuovo }), 'success');
     return true;
