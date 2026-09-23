@@ -194,3 +194,62 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
 - Non riordina le pagine.
 - Non offre le app Android come pagina.
 - Non tocca l'officina, se non per garantire che la sua scheda resti com'è.
+
+## Com'è andata (23/09/2026)
+
+Fatto tutto, nell'ordine del piano, un commit per passo. Le decisioni rimaste
+aperte sono state prese così: **A1** il foglio è tolto del tutto; **A2**
+«Rinomina» c'è, col suo nome; **A3** dopo «Metti come pagina» si **atterra** sulla
+pagina — lo diceva già il codice di prima, con un motivo (chi l'ha aggiunta
+vuole vederla), e dal cassetto è anche quel che fa Android.
+
+| passo | commit | mutazioni |
+| --- | --- | --- |
+| P1 stanze fuori, con migrazione | `1bbd6f3` | 2/2 |
+| P2+P3 registro e cassetto | `50769de` | 10/10 |
+| P4 tendina e scheda del quaderno | `3b69bf4` | 12/12 |
+| P5 cancellare porta via la pagina; «non c'è più» | `15cb319` | 14/14 |
+| P6 via il foglio | `3a4c07f` | — (un banco sulla pulizia) |
+| P7 rinomina | `008099e` | 17/17 |
+| P8 due difetti visti sul telefono | `c208469`, `6f6df76` | 1/1 |
+
+**Quel che la mutazione ha trovato e nessuna rilettura avrebbe visto.**
+
+- In P5 il controllo sulla **specie** nella potatura sopravviveva a tutto: i
+  riferimenti di app e quaderni oggi non si toccano mai. Ma lo schema non vieta
+  a una pagina app un `ref` a forma di quaderno — ora c'è il caso che lo prova.
+- In P7 due controlli sopravvivevano, per la stessa ragione: un quaderno
+  **senza chat** non passa dalla macchina di inseguimento, quindi le sue
+  protezioni li' non valgono. Senza i controlli del modulo nuovo, `../fuori`
+  avrebbe portato la cartella fuori da `wikis/` rispondendo «fatto», e una
+  chat rimasta sotto il nome nuovo sarebbe stata adottata da un quaderno che
+  non ne aveva.
+- In P5 un banco usciva dalla pagina **prima** che la cornice fosse montata, e
+  provava la guardia di un altro. Riscritto per uscire nel momento giusto.
+
+**Quel che ha trovato il telefono.**
+
+- Tenere premuto un quaderno faceva partire la **selezione del testo** di
+  Chromium (a ~500 ms, prima dei 600 della pressione lunga) e la scheda non si
+  apriva. Il cassetto non l'aveva mai avuto; la tendina non era mai stata
+  tenuta premuta. Stesse tre regole CSS della riga d'attività.
+- Dopo una rinomina la pastiglia delle pagine **perdeva il numero**: il titolo
+  si ridisegnava prima che la tendina rileggesse. Invertito l'ordine.
+
+**Provato col dito:** togli e rimetti Todo dal cassetto (si chiude tutto e si
+atterra); WaterBot con la riga spenta e il perché; Indietro chiude prima la
+scheda, poi il cassetto — e in tendina prima la scheda, poi la tendina; la
+pressione su un quaderno non cambia conversazione; in officina la scheda di
+un'app ha ancora tre righe; un quaderno di prova creato, appeso, rinominato (la
+pagina segue, la pastiglia tiene il numero), cancellato (la pagina se ne va, si
+torna alla personale); un secondo quaderno appeso e poi tolto **a mano**: la
+sua pagina dice «non c'è più» e si toglie da sé.
+
+Stato del telefono lasciato com'era trovato: pagine = `[todo]`. Dei quaderni di
+prova non resta niente — l'unica traccia, una riga di `wikis/_index.md` lasciata
+dalla cancellazione *a mano* (voluta, per simulare «sparito per altre strade»),
+è stata tolta riscrivendo lo stesso file.
+
+**Resta fuori, e lo si sa:** la pastiglia di un quaderno sparito per altre
+strade mostra ancora il numero di pagine finche' la tendina non si rilegge —
+e' la cache della tendina, e si sistema da sola alla prossima apertura.
