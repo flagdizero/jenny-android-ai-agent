@@ -2,8 +2,8 @@
  *
  *  Le impostazioni di chi la usa, non di chi la costruisce: la tavola
  *  `TuEJenny.dc.html`. Quel che serve a osservare, regolare e riparare resta
- *  in officina, e da qui ci si arriva — dalla scheda in fondo, o tenendo
- *  premuto l'avatar.
+ *  in officina, e da qui ci si arriva: dalla scheda in fondo. Dal 23/09/2026
+ *  e' la pagina Impostazioni (v. `.agent/pagine-in-alto-plan.md`).
  *
  *  **La lingua non c'e', ed e' una decisione presa con una misura.** Quella
  *  riga cambierebbe le scritte dei bottoni, non la lingua in cui Jenny

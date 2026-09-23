@@ -35,9 +35,9 @@ import { setupLongPress } from './shared/longpress.js';
 export class WhoPanel {
   /** @param contenitore dove si disegna: il pannello della pagina Quaderni.
    *  @param personalName funzione che da' il nome della conversazione
-   *         personale. **Non** si legge dal titolo: da quando il titolo porta
-   *         il nome del quaderno aperto, leggerlo di li' farebbe dire alla riga
-   *         personale «piante».
+   *         personale. **Non** si legge dalla testa: la testa delle stanze
+   *         porta il nome del quaderno aperto, e leggerlo di li' farebbe dire
+   *         alla riga personale «piante».
    *  @param currentProject funzione che da' il nome del quaderno aperto, o
    *         `null` se sei nella conversazione personale. E' cio' che decide
    *         dove sta la spunta.

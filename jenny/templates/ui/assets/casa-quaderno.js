@@ -1,7 +1,7 @@
-/** La scheda di un quaderno — la pressione lunga nella tendina «Con chi parli».
+/** La scheda di un quaderno — la pressione lunga nella pagina Quaderni.
  *
- *  **Una cosa si appende dal posto dove vive.** Le app vivono nel cassetto e la
- *  loro scheda si apre di li'; i quaderni vivono nella tendina del titolo, e
+ *  **Una cosa si appende dal posto dove vive.** Le app vivono nella pagina App
+ *  e la loro scheda si apre di li'; i quaderni vivono nella pagina Quaderni, e
  *  questa e' la loro. Le due hanno le stesse righe nello stesso ordine e lo
  *  stesso aspetto — Apri · Metti come pagina · Rinomina · Elimina — perche'
  *  chi ha imparato una ha imparato l'altra (`.agent/pagine-dal-posto-plan.md`).
@@ -15,8 +15,8 @@
  *  La scheda non fa niente da se': chiede al guscio. Qui c'e' solo il disegno
  *  e la scelta di quale riga, come in `shared/apps-actions.js`.
  *
- *  E' un `<dialog>` con `showModal()`: sta nel top layer **sopra** la tendina,
- *  che resta aperta sotto. Indietro chiude prima lei (`_closeOverlays`).
+ *  E' un `<dialog>` con `showModal()`: sta nel top layer **sopra** la pagina
+ *  Quaderni. Indietro chiude prima lei (`_closeOverlays`).
  */
 
 import { i18n } from './shared/i18n.js';

@@ -90,7 +90,13 @@ function creaEl(tag) {
   };
   return el;
 }
-globalThis.document = { createElement: creaEl };
+const docAscolto = {};
+globalThis.document = {
+  createElement: creaEl,
+  addEventListener(t, fn) { (docAscolto[t] = docAscolto[t] || []).push(fn); },
+  removeEventListener(t, fn) { docAscolto[t] = (docAscolto[t] || []).filter((x) => x !== fn); },
+};
+function sulDocumento(tipo, e) { for (const fn of [...(docAscolto[tipo] || [])]) fn(e); }
 globalThis.CSS = { escape: (s) => s };
 function lancia(el, tipo, e = {}) { for (const fn of el.ascolto[tipo] || []) fn(e); }
 function tutti(el, out = []) { for (const c of el.children) { out.push(c); tutti(c, out); } return out; }
@@ -306,17 +312,23 @@ def test_the_arrows_move_a_page_too() -> None:
 
 def test_dragging_a_page_past_a_neighbour_swaps_them() -> None:
     """Il dito porta la pastiglia oltre la meta' della vicina: la bozza cambia,
-    e al rilascio la pastiglia torna a posto senza `transform`."""
+    e al rilascio la pastiglia torna a posto senza `transform`.
+
+    Il dito si segue **sul documento**: spostata nel DOM, Chromium toglie alla
+    pastiglia la cattura del puntatore, e il rilascio arriva a chi sta sotto il
+    dito — misurato sul telefono il 23/09/2026, la pastiglia restava sollevata.
+    Qui il rilascio arriva al documento e basta, come la'."""
     _run("""
       fila.apriOrdina();
       pastiglie().forEach((p, i) => { p.offsetLeft = i * 70; });
       const app = pastiglie()[0];
       lancia(app, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
       assert.ok(app.classList.contains('is-sollevata'));
-      lancia(app, 'pointermove', { pointerId: 1, clientX: 110, clientY: 20 });
-      lancia(app, 'pointerup', { pointerId: 1 });
+      sulDocumento('pointermove', { pointerId: 1, clientX: 110, clientY: 20 });
+      sulDocumento('pointerup', { pointerId: 1 });
       assert.equal(app.style.transform, '');
       assert.ok(!app.classList.contains('is-sollevata'));
+      assert.equal((docAscolto.pointermove || []).length, 0, 'il documento ascolta ancora il dito');
       await fila.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste.at(-1)[2].slice(0, 2), ['chat', 'app']);
     """)
@@ -340,6 +352,22 @@ def test_a_dragged_page_does_not_scroll_the_page() -> None:
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
     regola = css.split("\n.casa-ordina-pastiglia {", 1)[1].split("}", 1)[0]
     assert "touch-action: none" in regola
+
+
+def test_the_lifted_page_sits_under_the_finger() -> None:
+    """La base si legge dal rettangolo vero, **senza** il `transform` di prima:
+    con `offsetTop`, misurato dal guscio, la pastiglia finiva un'intestazione
+    piu' in alto del dito (telefono, 23/09/2026)."""
+    _run("""
+      fila.apriOrdina();
+      const app = pastiglie()[0];
+      app.getBoundingClientRect = () => app.style.transform
+        ? { left: 999, top: 999, width: 60, height: 40 }   // col transform: falso
+        : { left: 0, top: 200, width: 60, height: 40 };    // senza: il posto vero
+      lancia(app, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 210 });
+      sulDocumento('pointermove', { pointerId: 1, clientX: 15, clientY: 212 });
+      assert.equal(app.style.transform, 'translate(5.0px, 2.0px)');
+    """)
 
 
 def test_the_row_is_shipped() -> None:

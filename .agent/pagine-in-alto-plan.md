@@ -7,13 +7,18 @@ https://claude.ai/artifact/GL3CdWwskXzi57gkRagPTb (pagina «Quattro pagine»).
 
 - [x] P0 piano nel repo
 - [x] P1 `ordine`: schema, rotte, client API, test, docs
-- [ ] P2 modello di casa-pagine: la chat ovunque, pannelli fissi statici
-- [ ] P3 la fila al posto della testa, via i pallini
-- [ ] P4 pagina App: launcher incorporato, via il cassetto, pastiglia wiki nella barra, overlay app
-- [ ] P5 pagina Quaderni
-- [ ] P6 pagina Impostazioni
-- [ ] P7 modalità ordina
+- [x] P2 modello di casa-pagine: la chat ovunque, pannelli fissi statici
+- [x] P3 la fila al posto della testa, via i pallini
+- [x] P4 pagina App: launcher incorporato, via il cassetto, pastiglia wiki nella barra, overlay app
+- [x] P5 pagina Quaderni
+- [x] P6 pagina Impostazioni
+- [x] P7 modalità ordina
 - [ ] P8 pulizia
+
+  P2–P7 sono finiti in **un commit solo** (`361a129`), non sei: il modello della
+  pista, la fila e le tre pagine fisse si toccano negli stessi file e negli
+  stessi banchi, e a meta' la casa non si reggeva (tre pagine vuote, o una testa
+  senza le sue porte). I passi restano come elenco di cosa c'e' dentro.
 - [ ] P9 giro sul Titan
 
 

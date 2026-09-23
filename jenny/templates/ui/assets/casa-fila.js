@@ -236,17 +236,20 @@ export class CasaFila {
       this.el.querySelector(`.casa-ordina-pastiglia[data-id="${CSS.escape(voce.id)}"]`)?.focus();
     });
     p.addEventListener('pointerdown', (e) => this._prendi(e, p, contenitore));
-    p.addEventListener('pointermove', (e) => this._muovi(e));
-    p.addEventListener('pointerup', (e) => this._lascia(e));
-    p.addEventListener('pointercancel', (e) => this._lascia(e));
     return p;
   }
 
   /* Il trascinamento. La pastiglia presa **si sposta nel DOM** al posto in
      cui cadrebbe, e un `transform` la tiene sotto il dito: cosi' il buco che
      lascia e' il suo posto vero, e al rilascio non c'e' niente da ricalcolare.
-     La base della pastiglia si legge da `offsetLeft/Top`, che il `transform`
-     non tocca: leggerla da `getBoundingClientRect` la conterebbe due volte. */
+
+     Due cose misurate sul telefono il 23/09/2026, alla prima prova:
+     - **il dito si ascolta sul documento**, non sulla pastiglia. Spostata nel
+       DOM, Chromium le toglie la cattura del puntatore: il `pointerup` andava
+       a chi stava sotto il dito, e la pastiglia restava sollevata a mezz'aria;
+     - **la base si legge senza `transform`**, dal rettangolo vero. Con
+       `offsetTop` era misurata dal guscio e non dal contenitore — contata due
+       volte — e la pastiglia finiva un'intestazione piu' in alto del dito. */
 
   _prendi(e, p, contenitore) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -259,8 +262,12 @@ export class CasaFila {
       presaY: e.clientY - r.top,
       pointerId: e.pointerId,
     };
-    p.setPointerCapture?.(e.pointerId);
     p.classList.add('is-sollevata');
+    this._suMuovi = (ev) => this._muovi(ev);
+    this._suLascia = (ev) => this._lascia(ev);
+    document.addEventListener('pointermove', this._suMuovi);
+    document.addEventListener('pointerup', this._suLascia);
+    document.addEventListener('pointercancel', this._suLascia);
   }
 
   _muovi(e) {
@@ -290,9 +297,10 @@ export class CasaFila {
         t.contenitore.insertBefore(t.el, nodo);
       }
     }
-    const base = t.contenitore.getBoundingClientRect();
-    const x = e.clientX - t.presaX - (base.left + t.el.offsetLeft - t.contenitore.scrollLeft);
-    const y = e.clientY - t.presaY - (base.top + t.el.offsetTop - t.contenitore.scrollTop);
+    t.el.style.transform = '';
+    const base = t.el.getBoundingClientRect();
+    const x = e.clientX - t.presaX - base.left;
+    const y = e.clientY - t.presaY - base.top;
     t.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
   }
 
@@ -300,6 +308,9 @@ export class CasaFila {
     const t = this._trascina;
     if (!t || e.pointerId !== t.pointerId) return;
     this._trascina = null;
+    document.removeEventListener?.('pointermove', this._suMuovi);
+    document.removeEventListener?.('pointerup', this._suLascia);
+    document.removeEventListener?.('pointercancel', this._suLascia);
     t.el.style.transform = '';
     t.el.classList.remove('is-sollevata');
   }

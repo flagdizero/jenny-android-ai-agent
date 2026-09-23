@@ -100,7 +100,7 @@ export class Trasloco {
       /* ...tranne quando la chat li' era **fuori posto**: riportata a casa da
          un ridisegno, mostrava ancora il quaderno da cui veniva. La pagina che
          lascia ha gia' la foto giusta — la sua — e appenderci questa vorrebbe
-         dire far entrare il quaderno nella pagina 0, a meta' scorrimento. */
+         dire far entrare il quaderno nella pagina chat, a meta' scorrimento. */
       if (da !== this._fuoriPosto) this._mettiFoto(da, lasciata);
     }
     this._fuoriPosto = null;
@@ -111,7 +111,7 @@ export class Trasloco {
     if (cambia && !fotoIn(pannello)) this._mettiFoto(pannello, chiave);
     pannello.insertBefore(this.chat, fotoIn(pannello));
 
-    /* Stessa conversazione in due pagine (la pagina 0 e quella del quaderno):
+    /* Stessa conversazione in due pagine (la pagina chat e quella del quaderno):
        la chat e' gia' giusta, basta spostarla. */
     if (!cambia) {
       togliFoto(pannello);

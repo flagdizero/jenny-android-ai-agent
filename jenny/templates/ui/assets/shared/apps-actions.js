@@ -518,7 +518,7 @@ export class AppsActions {
         await this.source.loadJennyApps();
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
            `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
-           pallino verso un'app che non c'e' piu'. */
+           pagina verso un'app che non c'e' piu'. */
         await this.shell?.pagine?.()?.ricarica();
         showToast(i18n.t('apps.appDeleted'), 'success');
       } catch {

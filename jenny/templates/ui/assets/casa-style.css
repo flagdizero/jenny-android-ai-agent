@@ -1092,7 +1092,8 @@ body.casa {
 
 /* ── La pista delle pagine ───────────────────────────────────────────────
    La casa e' un launcher: di lato alla chat ci sono le pagine aggiunte
-   (tavola `Pagine`). La chat e' la pagina 0.
+   (tavola `Pagine`). Dal 23/09/2026 la chat e' una pagina fra le altre, e si
+   sposta come loro.
 
    **Niente `z-index` qui dentro.** Quello di Jenny e' l'unico del foglio e
    deve restarlo: la mascotte sta sopra la chat, sopra un'app e sopra tutto,
@@ -1135,7 +1136,7 @@ body.casa {
      `entities/...` lungo, in un quaderno — la allargava oltre lo schermo, e
      con lei **ogni** pagina, che e' larga il 100% della pista. Visto sul
      telefono il 23/09/2026 aprendo «piante»: chat tagliata a destra, tasto
-     d'invio fuori schermo, sulla pagina 0 come sulla pagina del quaderno. */
+     d'invio fuori schermo, sulla pagina chat come sulla pagina del quaderno. */
   min-width: 0;
   display: flex;
   flex-direction: row;

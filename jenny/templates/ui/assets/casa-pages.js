@@ -119,7 +119,7 @@ export class CasaPages {
     this._index = null;
     this._tab = 'list';
     /* Token di carico monotono: `/api/graph` su una wiki grossa non torna in
-       un frame, e dalla tendina si puo' saltare in un altro quaderno mentre
+       un frame, e dai Quaderni si puo' saltare in un altro quaderno mentre
        arriva. Solo l'ultimo chiamante disegna. */
     this._token = 0;
 

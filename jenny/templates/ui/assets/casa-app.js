@@ -319,8 +319,8 @@ class CasaApp {
        sempre. In officina lo stesso evento serve alla stessa cosa
        (`mobile-jenny.js`, `_releaseTrackedTurn`). */
     sessionManager.addEventListener('chat:switch', () => this._releaseTurn());
-    /* E riporta nella conversazione. Le pagine parlano di *un* quaderno: dalla
-       tendina si puo' saltare in un altro, e restare li' vorrebbe dire leggere
+    /* E riporta nella conversazione. Le pagine parlano di *un* quaderno: dai
+       Quaderni si puo' saltare in un altro, e restare li' vorrebbe dire leggere
        l'elenco di una stanza in cui non sei piu'. */
     sessionManager.addEventListener('chat:switch', () => this._setView('chat'));
 
@@ -401,7 +401,7 @@ class CasaApp {
     const target = key || sessionManager.personalKey;
     /* **Dove** la si apre lo decidono le pagine: una pagina di un quaderno
        mostra solo il suo, quindi da li' un'altra conversazione si apre nella
-       pagina 0 (v. `CasaPagine.apriConversazione`). */
+       pagina chat (v. `CasaPagine.apriConversazione`). */
     if (this.pagine) return this.pagine.apriConversazione(target);
     return this.mostraConversazione(target);
   }
@@ -488,7 +488,7 @@ class CasaApp {
    *  stessa (`isOpenableProjectName` e' la copia fedele di quella del server) —
    *  solo per dirlo subito, senza un giro; il gateway la riapplica comunque.
    *  Il seguito e' quello della cancellazione, all'incontrario: se eri li'
-   *  dentro ci resti, sotto il nome nuovo; la tendina, il titolo e le pagine
+   *  dentro ci resti, sotto il nome nuovo; i Quaderni, la fila e le pagine
    *  (che il gateway ha gia' rinominato) si rileggono.
    */
   async renameNotebook(nome) {
@@ -510,10 +510,10 @@ class CasaApp {
     const vecchia = projectKey(nome);
     const nuova = projectKey(nuovo);
     this.pagine.rinominaConversazione(vecchia, nuova);
-    /* La tendina rilegge **prima** del cambio: il titolo, ridisegnandosi, chiede
-       alla sua cache quante pagine ha il quaderno — e con la cache ancora sul
-       nome vecchio la pastiglia perdeva il numero. Visto sul telefono il
-       23/09/2026 rinominando un quaderno di prova. */
+    /* I Quaderni rileggono **prima** del cambio: la pastiglia delle pagine,
+       ridisegnandosi, chiede alla loro cache quante pagine ha il quaderno — e
+       con la cache ancora sul nome vecchio perdeva il numero. Visto sul
+       telefono il 23/09/2026 rinominando un quaderno di prova. */
     await this.who.refresh();
     if (sessionManager.currentKey === vecchia) await this.switchConversation(nuova);
     await this.portaPagine().ricarica();
@@ -525,8 +525,8 @@ class CasaApp {
    *
    *  La domanda la fa `deleteProjectFlow`, con le parole della casa. Il seguito:
    *  se eri li' dentro torni alla conversazione personale — restare in una
-   *  chat che non esiste piu' vorrebbe dire scrivere a vuoto; la tendina, che
-   *  e' ancora aperta sotto la scheda, si ridisegna senza quella riga; e le
+   *  chat che non esiste piu' vorrebbe dire scrivere a vuoto; la pagina
+   *  Quaderni, sotto la scheda, si ridisegna senza quella riga; e le
    *  pagine si rileggono, perche' il gateway ha tolto anche la sua, se ne aveva
    *  una (v. `project_delete.py`).
    */
@@ -541,10 +541,10 @@ class CasaApp {
 
   /* ── Le stanze ──
    *
-   *  La casa ne ha tre: la conversazione, le pagine del quaderno, una pagina.
-   *  Si entra dall'intestazione e si torna indietro una alla volta — mai due
-   *  per un gesto, che e' la stessa regola con cui Indietro chiude la tendina
-   *  senza uscire anche dal quaderno.
+   *  Le pagine del quaderno, il lettore, e le stanze delle impostazioni: si
+   *  entra da una pagina e si torna indietro una alla volta — mai due per un
+   *  gesto, che e' la stessa regola con cui Indietro chiude una scheda senza
+   *  uscire anche dal quaderno.
    */
 
   /** Le pagine del quaderno in cui sei. Dalla chat personale non c'e' nulla da
@@ -913,7 +913,7 @@ class CasaApp {
   }
 
   /* Il numero sulla pastiglia. Arriva quando arriva — il conteggio sta nello
-     stesso elenco della tendina — e fino ad allora la pastiglia c'e' con la sua
+     stesso elenco dei Quaderni — e fino ad allora la pastiglia c'e' con la sua
      icona: un quaderno le pagine ce le ha comunque, e aspettare la cifra per
      mostrare la porta vorrebbe dire nascondere la porta.
 
@@ -992,8 +992,9 @@ class CasaApp {
    *  che guscio vive.
    *
    *  Appendere **chiude tutto quel che c'e' sopra** prima di atterrare sulla
-   *  pagina nuova: si appende dal cassetto o dalla tendina, e atterrare sotto
-   *  un cassetto aperto vorrebbe dire non vedere di aver fatto niente.
+   *  pagina nuova: si appende da una scheda aperta sopra la pagina App o i
+   *  Quaderni, e atterrare sotto la scheda vorrebbe dire non vedere di aver
+   *  fatto niente.
    */
   portaPagine() {
     return (this._portaPagine ||= {
@@ -1057,16 +1058,17 @@ class CasaApp {
   /** Il tasto Indietro di Android.
    *
    *  In officina e' una catena di cinque livelli di overlay piu' lo stack di
-   *  navigazione. In casa gli strati sono due — la tendina e l'immagine
-   *  ingrandita — e sotto c'e' una cosa sola da cui si puo' tornare: un
-   *  quaderno. Indietro allora e' la porta di casa, cioe' la conversazione
-   *  personale.
+   *  navigazione. In casa gli strati sono pochi — una scheda, un'app aperta,
+   *  la modalita' ordina, l'immagine ingrandita — poi le stanze, poi le
+   *  pagine, che tornano alla chat; e sotto la chat c'e' una cosa sola da cui
+   *  si puo' tornare: un quaderno. Indietro allora e' la porta di casa, cioe'
+   *  la conversazione personale.
    *
    *  Nella conversazione personale, senza niente sopra, **non si fa niente**, e
    *  non e' una dimenticanza: questa app e' il launcher del telefono, e
    *  Indietro non deve mai chiudere il task.
    *
-   *  Una pressione, una cosa sola: chiudere la tendina *e* uscire dal quaderno
+   *  Una pressione, una cosa sola: chiudere una scheda *e* uscire dal quaderno
    *  con lo stesso tasto farebbe sparire due cose per un gesto.
    */
   handleHardwareBack() {
@@ -1079,12 +1081,9 @@ class CasaApp {
     if (projectNameOf(sessionManager.currentKey)) this.switchConversation(null);
   }
 
-  /** Chiude cio' che sta sopra la conversazione. Vero se c'era qualcosa.
-   *
-   *  La tendina per prima: `showModal()` la mette nel top layer, quindi e' lo
-   *  strato piu' in alto che ci sia. Aperta, copre il filo con il suo velo — da
-   *  li' non si apre nessuna immagine — quindi le due cose non convivono e
-   *  l'ordine e' una garanzia, non una scelta fra due candidati.
+  /** Chiude cio' che sta sopra le pagine. Vero se c'era qualcosa. Uno strato
+   *  per pressione, dall'alto: l'ordine qui sotto e' quello in cui stanno a
+   *  schermo, non una scelta fra candidati.
    */
   _closeOverlays() {
     /* Prima di tutto, i fogli che si aprono con una pressione lunga: quello di
@@ -1119,7 +1118,7 @@ class CasaApp {
       this.launcher.dismiss();
       return true;
     }
-    /* Il foglio di «Segnala»: `showModal()`, quindi top layer come la tendina.
+    /* Il foglio di «Segnala»: `showModal()`, quindi top layer come le schede.
        Un `<dialog>` modale si chiude da se' con Escape, ma qui Indietro arriva
        dal guscio nativo come un evento suo e nessuno lo traduce in Escape:
        senza questa riga la pressione uscirebbe dalla *stanza* lasciando il
