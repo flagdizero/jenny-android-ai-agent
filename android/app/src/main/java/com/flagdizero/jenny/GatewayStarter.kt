@@ -5,7 +5,11 @@ import android.content.Intent
 import android.util.Log
 
 /**
- * Unico punto del progetto da cui parte `startForegroundService(GatewayService)`.
+ * Il punto da cui parte `startForegroundService(GatewayService)`: le reti di
+ * sicurezza, il boot, il watchdog, le sveglie e l'activity passano tutte da qui.
+ * L'unica eccezione è `ReplyReceiver`, che consegna una risposta dalla notifica:
+ * extra suoi, lock di handoff senza `EXTRA_WAKE_TICK`, e un fallimento che deve
+ * tornare all'utente (`postReplyFailure`) invece di finire in un log.
  *
  * Perché centralizzarlo: le reti di sicurezza anti-doze sono ormai SEI, e sono
  * indipendenti per costruzione — sticky restart, sveglia di `onDestroy`,

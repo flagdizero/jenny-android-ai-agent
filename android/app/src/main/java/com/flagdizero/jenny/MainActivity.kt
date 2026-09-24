@@ -737,8 +737,11 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    /* Da qui un avvio rifiutato non risale più: `GatewayStarter` lo scrive nel
+       log e l'attesa del socket finisce in `showError()`, che è quel che
+       l'utente deve vedere invece di un'app che si chiude. */
     private fun startGatewayService() {
-        ContextCompat.startForegroundService(this, Intent(this, GatewayService::class.java))
+        GatewayStarter.ensureUp(this, reason = "activity")
     }
 
     /**

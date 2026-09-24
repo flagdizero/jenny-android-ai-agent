@@ -1,7 +1,6 @@
 package com.flagdizero.jenny
 
 import android.content.Context
-import android.content.Intent
 import android.os.PowerManager
 import android.util.Log
 
@@ -158,7 +157,7 @@ object Watchdog {
                         "gatewayThreadDead=${GatewayService.isGatewayThreadDead}, " +
                         "heartbeatAgeMs=${heartbeatAgeMs(appContext)}): restarting"
                 )
-                appContext.startForegroundService(Intent(appContext, GatewayService::class.java))
+                GatewayStarter.ensureUp(appContext, reason = "watchdog")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Watchdog check failed", e)

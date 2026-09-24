@@ -94,10 +94,6 @@ class BootReceiver : BroadcastReceiver() {
         // dispositivo), quindi la rete resta, più lenta ma viva. `arm` legge il
         // flag dalle prefs e si disarma da sé se l'utente l'ha spenta.
         AlarmClockFallback.arm(context)
-        try {
-            context.startForegroundService(Intent(context, GatewayService::class.java))
-        } catch (e: Exception) {
-            Log.e("Jenny", "Failed to start gateway on $action", e)
-        }
+        GatewayStarter.ensureUp(context, reason = "boot/$action")
     }
 }

@@ -83,7 +83,7 @@ class ReplyReceiver : BroadcastReceiver() {
             manager?.cancel(NotifierBridge.FAILED_TAG, NotifierBridge.ALERT_ID)
         }
 
-        // Il lock corto di handoff, come in `WakeReceiver.ensureGatewayUp`:
+        // Il lock corto di handoff, come in `GatewayStarter.ensureUp`:
         // senza, il device può risospendere all'uscita di `onReceive` e il
         // service partire minuti dopo. Lo rilascia `GatewayService` a consegna
         // tentata, in ogni esito.
