@@ -521,7 +521,7 @@ def test_the_new_step_six_strings_exist_in_both_locales() -> None:
     import json
 
     i18n_dir = ASSETS / "i18n"
-    expected = {"launcher.manage", "launcher.error", "launcher.loadFailed",
+    expected = {"launcher.error", "launcher.loadFailed",
                 "launcher.retry", "apps.launchFailed"}
     for locale in ("it", "en"):
         data = json.loads((i18n_dir / f"{locale}.json").read_text(encoding="utf-8"))

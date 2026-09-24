@@ -184,8 +184,9 @@ def test_the_fourth_room_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         casa = data["casa"]
-        for key in ("title", "workshopHint"):
-            assert casa["tu"].get(key, "").strip(), f"casa.tu.{key} manca in {locale}.json"
+        # Il titolo della stanza non c'e' piu': dal 23/09 la testata porta il
+        # nome della pagina (361a129).
+        assert casa["tu"].get("workshopHint", "").strip(), f"casa.tu.workshopHint manca in {locale}.json"
         # La versione ha cambiato posto: era una riga muta in fondo alla
         # pagina, adesso e' il valore della riga che apre gli aggiornamenti.
         for key in ("title", "current", "waiting", "upToDate"):

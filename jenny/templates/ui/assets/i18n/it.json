@@ -15,7 +15,6 @@
   },
   "chat": {
     "placeholder": "Chiedi qualcosa…",
-    "error": "Errore",
     "attach": "Allega",
     "wsError": "WebSocket non connesso. In attesa di riconnessione...",
     "agentRunning": "Agent in esecuzione",
@@ -218,9 +217,6 @@
     "tokenUsage": "Utilizzo token",
     "version": "Versione",
     "via": "via",
-    "changeModel": "Cambia modello",
-    "apiKeys": "Chiavi API",
-    "customModelId": "ID modello personalizzato…",
     "maxTokens": "Token massimi",
     "maxTokensPlaceholder": "es. 4096",
     "temperature": "Temperatura",
@@ -230,8 +226,6 @@
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
     "delete": "Elimina",
-    "filterModels": "Cerca tra tutti i modelli…",
-    "couldNotFetch": "Impossibile recuperare i modelli",
     "failedToLoad": "Caricamento impostazioni fallito",
     "nameAndKeyRequired": "Nome e chiave API sono obbligatori",
     "providerSaved": "Provider salvato",
@@ -475,7 +469,6 @@
   },
   "common": {
     "loading": "Caricamento...",
-    "error": "Errore",
     "cancel": "Annulla",
     "close": "Chiudi",
     "genericError": "Si è verificato un errore. Controlla la console.",
@@ -558,53 +551,27 @@
     "resultsList": "Risultati",
     "error": "Non è stato possibile leggere l'elenco delle app.",
     "loadFailed": "Elenco incompleto: qualcosa non ha risposto.",
-    "retry": "Riprova",
-    "manage": "Gestisci app e skill"
+    "retry": "Riprova"
   },
   "apps": {
     "invalidManifest": "manifest non valido",
-    "newApp": "Nuova App",
-    "noResults": "Nessun risultato",
-    "noAppsFound": "Nessuna app trovata",
-    "loading": "Caricamento...",
     "open": "Apri",
     "edit": "Modifica",
     "delete": "Elimina",
     "uninstall": "Disinstalla",
-    "show": "Mostra",
-    "hide": "Nascondi",
     "appInfo": "Info app",
     "enable": "Abilita",
-    "disable": "Disabilita",
     "close": "Chiudi",
-    "search": "Cerca...",
     "brokenConfirm": "L'app \"{name}\" è rotta: {error}. Chiedo a Jenny di sistemarla?",
     "brokenPrompt": "L'app \"{slug}\" risulta rotta con questo errore: {error}. Puoi sistemarla?",
     "uninstalled": "{name} disinstallata",
     "uninstalledMany": "Disinstallate: {names}",
     "deleteAppConfirm": "Eliminare l'app \"{name}\"? Verrà rimossa definitivamente.",
-    "cannotOpen": "Impossibile aprire {name}",
     "launchFailed": "Impossibile avviare {name}: forse è stata disinstallata o disattivata.",
-    "operationFailed": "Operazione non riuscita",
     "deleteFailed": "Eliminazione non riuscita",
     "appDeleted": "App eliminata",
     "editAppPrompt": "Voglio modificare la Jenny App \"{name}\" (slug: {slug}). Puoi aiutarmi?",
-    "createAppPrompt": "Voglio creare una nuova Jenny App. Usa la skill \"app-creator\" e guidami passo passo.",
     "chatAboutApp": "Parliamo dell'app \"{name}\": {text}",
-    "updateFailed": "Aggiornamento fallito",
-    "roomJenny": "Jenny App",
-    "roomAndroid": "Android",
-    "roomsLabel": "Stanze",
-    "searchJenny": "Cerca fra le Jenny App…",
-    "searchAndroid": "Cerca fra le app…",
-    "repair": "Ripara",
-    "brokenBand": "«{name}» non si apre: {error}",
-    "brokenBandMany": "{count} app non si aprono. Tocca «Ripara» su ognuna.",
-    "unavailable": "Non disponibile",
-    "unavailableWhy": "Non disponibile: {reason}",
-    "loadFailed": "Non è stato possibile leggere l'elenco.",
-    "azGuide": "Guida alfabetica",
-    "jumpToLetter": "Vai alla lettera {letter}",
     "frameCleartextBlocked": "{host} non si carica: usa http e la policy di rete dell'app permette il traffico in chiaro solo verso il gateway locale. Servono un server in https, oppure un'app di tipo vista esterna.",
     "frameLoadFailed": "{host} non si è caricato: {reason}",
     "viewProxyFailed": "Impossibile aprire la vista esterna: {error}",
@@ -624,7 +591,6 @@
   "header": {
     "back": "Indietro",
     "refresh": "Aggiorna",
-    "new": "Nuovo",
     "showHiddenApps": "Mostra app nascoste"
   },
   "jenny": {
@@ -666,15 +632,9 @@
     "unknown": "Sconosciuto"
   },
   "backup": {
-    "sectionTitle": "Backup e ripristino",
-    "exportDesc": "Esporta tutto (memoria, conversazioni, impostazioni e chiavi) in un unico file cifrato da salvare su Drive o dove preferisci.",
-    "exportButton": "Esporta backup cifrato",
     "exporting": "Preparazione del backup...",
     "exportSuccess": "Backup salvato!",
     "exportCancelled": "Export annullato",
-    "importDesc": "Ripristina Jenny da un file di backup. Il contenuto attuale verrà sostituito.",
-    "importButton": "Ripristina da file",
-    "importConfirm": "Il ripristino sostituirà TUTTI i dati attuali di Jenny con quelli del backup. Continuare?",
     "invalidPassphrase": "Passphrase errata o file corrotto",
     "passphraseTitle": "Passphrase del backup",
     "passphrase": "Passphrase",
@@ -715,7 +675,6 @@
     "snapshotSummaryEmpty": "nessuna istantanea"
   },
   "cron": {
-    "sectionTitle": "Programmazione",
     "asOf": "Aggiornato alle {time}",
     "refresh": "Aggiorna",
     "empty": "Nessuna attività programmata.",
@@ -764,14 +723,10 @@
       "oneShot": "una volta sola",
       "disabled": "spento",
       "inert": "non fa niente",
-      "next": "Prossima",
-      "nextOverdue": "In ritardo",
-      "last": "Ultima",
       "neverRun": "mai eseguito",
       "noNext": "nessuna scadenza",
       "runs": "Ultime esecuzioni",
       "noRuns": "Nessuna esecuzione registrata.",
-      "detail": "Dettagli",
       "text": "Testo del promemoria"
     },
     "health": {
@@ -962,7 +917,6 @@
       "impostazioni": "Impostazioni"
     },
     "tu": {
-      "title": "Tu e Jenny",
       "workshopHint": "osserva, regola, ripara"
     },
     "jenny": {
@@ -980,7 +934,6 @@
       "rulesFailed": "Non sono riuscita a salvare quel che hai scritto."
     },
     "backHome": "Torna alla casa",
-    "backHomeHint": "L'interfaccia semplice: solo la conversazione.",
     "who": {
       "title": "Con chi parli",
       "personal": "personale",

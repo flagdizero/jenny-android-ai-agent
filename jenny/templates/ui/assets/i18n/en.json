@@ -15,7 +15,6 @@
   },
   "chat": {
     "placeholder": "Ask something…",
-    "error": "Error",
     "attach": "Attach",
     "wsError": "WebSocket not connected. Waiting for reconnection...",
     "agentRunning": "Agent running",
@@ -218,9 +217,6 @@
     "tokenUsage": "Token Usage",
     "version": "Version",
     "via": "via",
-    "changeModel": "Change model",
-    "apiKeys": "API keys",
-    "customModelId": "Custom model ID…",
     "maxTokens": "Max Tokens",
     "maxTokensPlaceholder": "e.g. 4096",
     "temperature": "Temperature",
@@ -230,8 +226,6 @@
     "noProviders": "No providers configured.",
     "edit": "Edit",
     "delete": "Delete",
-    "filterModels": "Search all models…",
-    "couldNotFetch": "Could not fetch models",
     "failedToLoad": "Failed to load settings",
     "nameAndKeyRequired": "Name and API Key are required",
     "providerSaved": "Provider saved",
@@ -475,7 +469,6 @@
   },
   "common": {
     "loading": "Loading...",
-    "error": "Error",
     "cancel": "Cancel",
     "close": "Close",
     "genericError": "An error occurred. Check console.",
@@ -558,53 +551,27 @@
     "resultsList": "Results",
     "error": "Could not read the list of apps.",
     "loadFailed": "Incomplete list: something did not answer.",
-    "retry": "Retry",
-    "manage": "Manage apps & skills"
+    "retry": "Retry"
   },
   "apps": {
     "invalidManifest": "invalid manifest",
-    "newApp": "New App",
-    "noResults": "No results",
-    "noAppsFound": "No apps found",
-    "loading": "Loading...",
     "open": "Open",
     "edit": "Edit",
     "delete": "Delete",
     "uninstall": "Uninstall",
-    "show": "Show",
-    "hide": "Hide",
     "appInfo": "App info",
     "enable": "Enable",
-    "disable": "Disable",
     "close": "Close",
-    "search": "Search...",
     "brokenConfirm": "The app \"{name}\" is broken: {error}. Ask Jenny to fix it?",
     "brokenPrompt": "The app \"{slug}\" is broken with this error: {error}. Can you fix it?",
     "uninstalled": "{name} uninstalled",
     "uninstalledMany": "Uninstalled: {names}",
     "deleteAppConfirm": "Delete app \"{name}\"? It will be removed permanently.",
-    "cannotOpen": "Cannot open {name}",
     "launchFailed": "Could not start {name} — it may have been uninstalled or disabled.",
-    "operationFailed": "Operation failed",
     "deleteFailed": "Delete failed",
     "appDeleted": "App deleted",
     "editAppPrompt": "I want to edit the Jenny App \"{name}\" (slug: {slug}). Can you help me?",
-    "createAppPrompt": "I want to create a new Jenny App. Use the \"app-creator\" skill and guide me step by step.",
     "chatAboutApp": "Let's talk about the app \"{name}\": {text}",
-    "updateFailed": "Update failed",
-    "roomJenny": "Jenny Apps",
-    "roomAndroid": "Android",
-    "roomsLabel": "Rooms",
-    "searchJenny": "Search Jenny Apps…",
-    "searchAndroid": "Search apps…",
-    "repair": "Repair",
-    "brokenBand": "“{name}” won't open: {error}",
-    "brokenBandMany": "{count} apps won't open. Tap “Repair” on each one.",
-    "unavailable": "Unavailable",
-    "unavailableWhy": "Unavailable: {reason}",
-    "loadFailed": "The list could not be read.",
-    "azGuide": "Alphabet guide",
-    "jumpToLetter": "Jump to letter {letter}",
     "frameCleartextBlocked": "{host} will not load: it is plain http, and the app's network policy allows cleartext only to the local gateway. It needs an https server, or an external-view app.",
     "frameLoadFailed": "{host} failed to load: {reason}",
     "viewProxyFailed": "Could not open the external view: {error}",
@@ -624,7 +591,6 @@
   "header": {
     "back": "Back",
     "refresh": "Refresh",
-    "new": "New",
     "showHiddenApps": "Show hidden apps"
   },
   "jenny": {
@@ -666,15 +632,9 @@
     "unknown": "Unknown"
   },
   "backup": {
-    "sectionTitle": "Backup & restore",
-    "exportDesc": "Export everything (memory, conversations, settings and keys) into a single encrypted file to keep on Drive or wherever you like.",
-    "exportButton": "Export encrypted backup",
     "exporting": "Preparing backup...",
     "exportSuccess": "Backup saved!",
     "exportCancelled": "Export cancelled",
-    "importDesc": "Restore Jenny from a backup file. Current content will be replaced.",
-    "importButton": "Restore from file",
-    "importConfirm": "Restoring will replace ALL of Jenny's current data with the backup. Continue?",
     "invalidPassphrase": "Wrong passphrase or corrupt file",
     "passphraseTitle": "Backup passphrase",
     "passphrase": "Passphrase",
@@ -715,7 +675,6 @@
     "snapshotSummaryEmpty": "no snapshots yet"
   },
   "cron": {
-    "sectionTitle": "Scheduling",
     "asOf": "As of {time}",
     "refresh": "Refresh",
     "empty": "Nothing scheduled.",
@@ -764,14 +723,10 @@
       "oneShot": "once only",
       "disabled": "off",
       "inert": "does nothing",
-      "next": "Next",
-      "nextOverdue": "Overdue",
-      "last": "Last",
       "neverRun": "never ran",
       "noNext": "no next run",
       "runs": "Recent runs",
       "noRuns": "No runs recorded.",
-      "detail": "Details",
       "text": "Reminder text"
     },
     "health": {
@@ -959,7 +914,6 @@
       "impostazioni": "Settings"
     },
     "tu": {
-      "title": "You and Jenny",
       "workshopHint": "watch, tune, repair"
     },
     "jenny": {
@@ -977,7 +931,6 @@
       "rulesFailed": "I could not save what you wrote."
     },
     "backHome": "Back to the house",
-    "backHomeHint": "The simple interface: the conversation and nothing else.",
     "who": {
       "title": "Talking to",
       "personal": "personal",
