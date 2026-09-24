@@ -124,3 +124,35 @@ def test_the_real_retired_keys_load_without_a_warning(tmp_path) -> None:
     })
 
     assert _warnings_while(lambda: load_config_with_raw(path)) == []
+
+
+async def test_the_mood_model_preset_is_retired_for_real(tmp_path) -> None:
+    """La prima chiave ritirata che e' **davvero** uscita dallo schema.
+
+    ``mascotMoodModelPreset`` sceglieva il modello della richiesta dell'umore,
+    che dal 24/09/2026 non esiste piu' (l'umore si legge dagli emoji). Un file
+    che la porta ancora si carica senza avvisi, e alla prima scrittura
+    ordinaria la chiave cade mentre le vicine restano.
+    """
+    from jenny.config.store import mutate
+
+    path = tmp_path / "config.json"
+    _write(path, {
+        "configVersion": CURRENT_CONFIG_VERSION,
+        "agents": {"defaults": {
+            "mascotMood": True,
+            "mascotMoodModelPreset": "cheap",
+            "mascot_mood_model_preset": "cheap",
+        }},
+    })
+
+    assert _warnings_while(lambda: load_config_with_raw(path)) == []
+
+    def _spegni(config) -> None:
+        config.agents.defaults.mascot_mood = False
+
+    await mutate(_spegni, config_path=path)
+    defaults = json.loads(path.read_text(encoding="utf-8"))["agents"]["defaults"]
+    assert defaults["mascotMood"] is False
+    assert "mascotMoodModelPreset" not in defaults
+    assert "mascot_mood_model_preset" not in defaults

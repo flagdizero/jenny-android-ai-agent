@@ -22,13 +22,7 @@ from jenny.bus.runtime_events import (
 from jenny.config.loader import load_config
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session, SessionManager
-from jenny.session.mascot_mood import (
-    MOOD_TOKEN_USAGE_SOURCE,
-    NEUTRAL_MOOD,
-    classify_mood,
-    mood_inputs,
-    resolve_mood_model,
-)
+from jenny.session.mascot_mood import NEUTRAL_MOOD, last_reply, mood_from_reply
 from jenny.session.turn_visibility import resolve_turn_visibility
 from jenny.utils.llm_runtime import LLMRuntime
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
@@ -123,8 +117,8 @@ class WebuiTurnCoordinator:
     sessions: SessionManager
     schedule_background: Callable[[Awaitable[None]], None]
     # Il config si legge **al momento della chiamata**, non alla costruzione:
-    # ``mascotMood`` e il suo preset valgono dal turno dopo senza riavvio. In
-    # test si inietta un lettore che non tocca il disco.
+    # ``mascotMood`` vale dal turno dopo senza riavvio. In test si inietta un
+    # lettore che non tocca il disco.
     config_loader: Callable[[], Config] = load_config
 
     def subscribe(self, runtime_events: RuntimeEventBus) -> Callable[[], None]:
@@ -226,49 +220,39 @@ class WebuiTurnCoordinator:
         self._schedule_mood_from_event(event, msg)
 
     def _schedule_mood_from_event(self, event: TurnCompleted, msg: InboundMessage) -> None:
-        """Il sidecar dell'umore della mascotte, in background, dopo il ``turn_end``.
+        """L'umore della mascotte, in background, dopo il ``turn_end``.
 
-        ``runtime`` e' la foto di provider/modello scattata da ``_state_build``: un
-        turno-comando non la scatta (``None``) e non ha un umore. Tutto il resto —
-        il flag di config, l'ultimo scambio, la richiesta, il frame — sta nel task
-        in background, cosi' il gestore dell'evento resta a costo zero e un
-        errore qualunque lascia la mascotte ``idle``, com'era prima.
+        Si legge dagli emoji della risposta (``session/mascot_mood.py``): nessuna
+        richiesta al modello. ``runtime`` resta il criterio di *quali* turni ne
+        hanno uno — un turno-comando non scatta la foto del provider (``None``)
+        e non ha una risposta da sentire. Il resto sta nel task in background:
+        il frame deve partire dopo il ``turn_end``, il config si legge dal
+        disco, e un errore qualunque lascia la mascotte ``idle``, com'era prima.
         """
-        runtime = event.runtime
-        if not isinstance(runtime, LLMRuntime):
+        if not isinstance(event.runtime, LLMRuntime):
             return
 
-        async def _classify_and_notify(turtime: LLMRuntime = runtime) -> None:
+        async def _read_and_notify() -> None:
             try:
                 config = self.config_loader()
             except Exception:
                 logger.debug("mascot mood: config unreadable, skipping", exc_info=True)
                 return
-            defaults = config.agents.defaults
-            if not defaults.mascot_mood:
+            if not config.agents.defaults.mascot_mood:
                 return
             session = self.sessions.get_or_create(event.context.session_key)
-            inputs = mood_inputs(session)
-            if inputs is None:
+            verdict = mood_from_reply(last_reply(session))
+            if verdict.mood == NEUTRAL_MOOD:
                 return
-            model = resolve_mood_model(config, turtime.model)
-            mood, response = await classify_mood(
-                turtime.provider, model, inputs, bot_name=defaults.bot_name,
-                session_key=session.key,
+            # Sul telefono i DEBUG non si vedono: questa riga e' l'unico modo di
+            # sapere che il dizionario ha deciso, e da cosa. Mai il testo.
+            logger.info(
+                "mascot mood: {} (from {}, {} vote{})",
+                verdict.mood,
+                verdict.decided_by,
+                verdict.votes,
+                "" if verdict.votes == 1 else "s",
             )
-            if response is not None:
-                # Import qui e non in testa: ``jenny.agent`` carica il loop intero
-                # e ``jenny.session`` deve reggere da primo import
-                # (``tests/session/test_cold_imports.py``).
-                from jenny.agent.token_usage import record_response_token_usage
-
-                record_response_token_usage(
-                    response,
-                    source=MOOD_TOKEN_USAGE_SOURCE,
-                    timezone_name=defaults.timezone or None,
-                )
-            if mood == NEUTRAL_MOOD:
-                return
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
@@ -276,11 +260,11 @@ class WebuiTurnCoordinator:
                 metadata={
                     **dict(event.context.metadata or {}),
                     "_mascot_mood": True,
-                    "mascot_mood": mood,
+                    "mascot_mood": verdict.mood,
                 },
             ))
 
-        self.schedule_background(_classify_and_notify())
+        self.schedule_background(_read_and_notify())
 
     async def _handle_runtime_model_changed(self, event: RuntimeModelChanged) -> None:
         await self.bus.publish_outbound(

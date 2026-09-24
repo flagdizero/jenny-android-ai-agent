@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
@@ -21,7 +23,6 @@ from jenny.bus.runtime_events import (
     TurnRunStatusChanged,
 )
 from jenny.config.schema import Config
-from jenny.providers.base import LLMResponse
 from jenny.session import webui_turns as wt
 from jenny.session.keys import HEARTBEAT_SESSION_KEY
 from jenny.session.manager import Session, SessionManager
@@ -185,22 +186,24 @@ async def test_handle_turn_completed_event_ignores_non_websocket(tmp_path):
     assert scheduled == []
 
 
-# --- il sidecar dell'umore della mascotte -------------------------------------------
+# --- l'umore della mascotte ---------------------------------------------------------
+#
+# Si legge dagli emoji della risposta (``session/mascot_mood.py``): il provider
+# del turno c'e' solo come criterio di *quali* turni hanno un umore, e **non
+# deve mai essere chiamato**. Ogni test lo verifica.
 
-_REPLY = "Fatto: ho spostato la riunione alle 16 e avvisato tutti. Spero vada bene!"
+_REPLY = "Fatto: ho spostato la riunione alle 16 e avvisato tutti 😊"
 
 
-def _mood_coordinator(tmp_path, *, config: Config | None = None, letter: str = "A"):
+def _mood_coordinator(tmp_path, *, config: Config | None = None, reply: str = _REPLY):
     coordinator, bus, scheduled = _coordinator(tmp_path)
     on = Config.model_validate({"agents": {"defaults": {"mascotMood": True}}})
     coordinator.config_loader = lambda: config if config is not None else on
     session = coordinator.sessions.get_or_create("websocket:c1")
     session.add_message("user", "sposta la riunione")
-    session.add_message("assistant", _REPLY)
+    session.add_message("assistant", reply)
     provider = MagicMock()
-    provider.chat_with_retry = AsyncMock(
-        return_value=LLMResponse(content=letter, usage={"total_tokens": 5})
-    )
+    provider.chat_with_retry = AsyncMock(side_effect=AssertionError("nessuna richiesta"))
     ctx = RuntimeEventContext(
         channel="websocket",
         chat_id="c1",
@@ -218,88 +221,79 @@ async def _run_scheduled(scheduled: list) -> None:
         await coro
 
 
-async def test_turn_completed_schedules_the_mood_and_publishes_the_frame(tmp_path, monkeypatch):
-    recorded: list = []
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage",
-        lambda response, **kw: recorded.append((response, kw)),
-    )
-    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, letter="A")
+async def test_turn_completed_reads_the_mood_and_publishes_the_frame(tmp_path):
+    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
 
     await coordinator._handle_turn_completed_event(event)
 
-    # Il gestore pubblica solo il ``turn_end``: il resto e' nel background.
+    # Il gestore pubblica solo il ``turn_end``: l'umore parte dopo, dal background.
     assert bus.publish_outbound.await_count == 1
     assert len(scheduled) == 1
     await _run_scheduled(scheduled)
 
-    provider.chat_with_retry.assert_awaited_once()
-    assert provider.chat_with_retry.await_args.kwargs["model"] == "turn-model"
     frame = bus.publish_outbound.await_args_list[-1][0][0]
     assert frame.channel == "websocket" and frame.chat_id == "c1" and frame.content == ""
     assert frame.metadata["_mascot_mood"] is True
     assert frame.metadata["mascot_mood"] == "happy"
     assert frame.metadata["webui_turn_id"] == "t-1"
-    # Contato, nel suo bucket: il titolo che questo sostituisce non lo era.
-    assert len(recorded) == 1
-    assert recorded[0][1]["source"] == "mascot"
+    provider.chat_with_retry.assert_not_called()
 
 
-async def test_neutral_mood_publishes_nothing(tmp_path, monkeypatch):
+async def test_no_token_usage_is_recorded(tmp_path, monkeypatch):
+    """La fonte ``mascot`` resta per lo storico, ma nessuno ci scrive piu'."""
+    recorded: list = []
     monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
+        "jenny.agent.token_usage.record_response_token_usage",
+        lambda *a, **kw: recorded.append(kw),
     )
-    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, letter="E")
-    await coordinator._handle_turn_completed_event(event)
-    await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_awaited_once()
-    assert bus.publish_outbound.await_count == 1  # solo il turn_end
-
-
-async def test_provider_failure_leaves_the_mascot_idle(tmp_path):
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
-    provider.chat_with_retry = AsyncMock(side_effect=RuntimeError("boom"))
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    assert bus.publish_outbound.await_count == 1
+    assert recorded == []
 
 
-async def test_default_config_asks_the_question(tmp_path, monkeypatch):
-    """Con ``Config()`` nudo il sidecar parte: e' lo stato in cui si spedisce.
+@pytest.mark.parametrize("reply", ["Promemoria impostato.", "Buongiorno ☀️ oggi piove"])
+async def test_a_reply_without_an_emotion_publishes_nothing(tmp_path, reply):
+    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, reply=reply)
+    await coordinator._handle_turn_completed_event(event)
+    await _run_scheduled(scheduled)
+    assert bus.publish_outbound.await_count == 1  # solo il turn_end
+    provider.chat_with_retry.assert_not_called()
 
-    Fino all'08/09/2026 era il contrario (standby, in attesa dell'arte).
-    """
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
-    )
+
+async def test_the_verdict_is_logged_without_the_text(tmp_path):
+    """Sul telefono i DEBUG non si vedono: la riga INFO e' la sola prova. Il
+    testo della risposta non ci finisce mai."""
+    from loguru import logger as loguru_logger
+
+    lines: list[str] = []
+    handler = loguru_logger.add(lambda m: lines.append(str(m)), level="INFO")
+    try:
+        coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
+        await coordinator._handle_turn_completed_event(event)
+        await _run_scheduled(scheduled)
+    finally:
+        loguru_logger.remove(handler)
+    moods = [line for line in lines if "mascot mood:" in line]
+    assert len(moods) == 1
+    assert "happy (from 😊, 1 vote)" in moods[0]
+    assert "riunione" not in moods[0]
+
+
+async def test_default_config_reads_the_mood(tmp_path):
+    """Con ``Config()`` nudo le facce sono accese: e' lo stato in cui si spedisce."""
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, config=Config())
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_awaited_once()
     assert bus.publish_outbound.await_args_list[-1][0][0].metadata["mascot_mood"] == "happy"
 
 
-async def test_mood_disabled_in_config_costs_no_request(tmp_path):
+async def test_mood_disabled_in_config_publishes_nothing(tmp_path):
     config = Config.model_validate({"agents": {"defaults": {"mascotMood": False}}})
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, config=config)
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_not_awaited()
     assert bus.publish_outbound.await_count == 1
-
-
-async def test_mood_uses_the_configured_preset_model(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
-    )
-    config = Config.model_validate({
-        "agents": {"defaults": {"mascotMood": True, "mascotMoodModelPreset": "cheap"}},
-        "modelPresets": {"cheap": {"model": "tiny-1"}},
-    })
-    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path, config=config)
-    await coordinator._handle_turn_completed_event(event)
-    await _run_scheduled(scheduled)
-    assert provider.chat_with_retry.await_args.kwargs["model"] == "tiny-1"
 
 
 async def test_command_turn_has_no_runtime_and_no_mood(tmp_path):
@@ -310,12 +304,12 @@ async def test_command_turn_has_no_runtime_and_no_mood(tmp_path):
     assert bus.publish_outbound.await_count == 1
 
 
-async def test_turn_ended_in_error_costs_no_request(tmp_path):
+async def test_turn_ended_in_error_has_no_mood(tmp_path):
+    """L'ultima riga e' dell'utente: l'errore ha gia' la sua faccia dal client."""
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
     coordinator.sessions.get_or_create("websocket:c1").add_message("user", "riprova")
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_not_awaited()
     assert bus.publish_outbound.await_count == 1
 
 
@@ -328,23 +322,20 @@ async def test_unreadable_config_skips_quietly(tmp_path):
     coordinator.config_loader = _boom
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    provider.chat_with_retry.assert_not_awaited()
+    assert bus.publish_outbound.await_count == 1
 
 
-async def test_telegram_turn_mood_lands_on_the_webui_view(tmp_path, monkeypatch):
+async def test_telegram_turn_mood_lands_on_the_webui_view(tmp_path):
     """Un turno da Telegram e' la stessa conversazione: la mascotte reagisce nella WebUI."""
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
-    )
     coordinator, bus, scheduled = _coordinator(tmp_path)
     coordinator.config_loader = lambda: Config.model_validate(
         {"agents": {"defaults": {"mascotMood": True}}}
     )
     session = coordinator.sessions.get_or_create("unified:default")
     session.add_message("user", "sposta la riunione")
-    session.add_message("assistant", _REPLY)
+    session.add_message("assistant", "di nuovo lo stesso errore 😤")
     provider = MagicMock()
-    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="C"))
+    provider.chat_with_retry = AsyncMock(side_effect=AssertionError("nessuna richiesta"))
     event = TurnCompleted(
         context=_telegram_ctx(), latency_ms=1, runtime=LLMRuntime(provider=provider, model="m")
     )
@@ -353,35 +344,6 @@ async def test_telegram_turn_mood_lands_on_the_webui_view(tmp_path, monkeypatch)
     frame = bus.publish_outbound.await_args_list[-1][0][0]
     assert (frame.channel, frame.chat_id) == ("websocket", "default")
     assert frame.metadata["mascot_mood"] == "angry"
-
-
-async def test_la_richiesta_dell_umore_dichiara_la_conversazione(tmp_path, monkeypatch):
-    """La classificazione è una chiamata ausiliaria, e deve dire di chi parla.
-
-    Parte fuori dal turno, quindi senza questo passaggio arriverebbe al provider
-    anonima: è la forma di difetto su cui la stessa integrazione si è rotta
-    altrove (v. ``tests/agent/test_opencode_conversation_scope.py``).
-    """
-    from jenny.providers.opencode import SESSION_HEADER, conversation_scope, session_headers
-
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage", lambda *a, **kw: None
-    )
-    go_base = "https://opencode.ai/zen/go/v1"
-    seen: list[str] = []
-    coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
-    provider.chat_with_retry = AsyncMock(
-        side_effect=lambda *a, **k: seen.append(
-            session_headers(go_base, fallback_id="NESSUNO-SCOPE")[SESSION_HEADER]
-        ) or LLMResponse(content="A", usage={}),
-    )
-
-    await coordinator._handle_turn_completed_event(event)
-    await _run_scheduled(scheduled)
-
-    with conversation_scope("websocket:c1"):
-        atteso = session_headers(go_base, fallback_id="x")[SESSION_HEADER]
-    assert seen == [atteso]
 
 
 # --- proiezione dei turni esterni sulla vista WebUI --------------------------------

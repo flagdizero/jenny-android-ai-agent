@@ -1,23 +1,23 @@
-"""Il sidecar dell'umore, nelle parti che non parlano col provider.
+"""L'umore della mascotte, letto dagli emoji della risposta.
 
-Selezione dell'input dalla coda della sessione, costruzione della richiesta,
-lettura della lettera, scelta del modello, e la chiamata con un provider finto.
-Le regole sono quelle di ``.agent/mascot-mood-plan.md`` (D3–D7, D9).
+Due parti, tutte e due pure e senza rete: quale riga si legge (``last_reply``)
+e che faccia ne esce (``mood_from_reply``). Le regole sono quelle di
+``.agent/mascot-mood-emoji-plan.md`` (D2–D5). Gli esempi sono inventati: il
+repository e' pubblico.
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import unicodedata
 
-from jenny.config.schema import Config
+import pytest
+
 from jenny.cron.session_turns import CRON_HISTORY_META
-from jenny.providers.base import LLMResponse
 from jenny.session import mascot_mood as mm
 from jenny.session.history_meta import INJECTED_EVENT_META, SUBAGENT_RESULT_EVENT
 from jenny.session.manager import Session
 
-LONG_REPLY = "Fatto: ho spostato la riunione alle 16 e avvisato tutti. Spero vada bene!"
-assert len(LONG_REPLY) >= mm.MOOD_MIN_ASSISTANT_CHARS
+REPLY = "Fatto: ho spostato la riunione alle 16 e avvisato tutti 😊"
 
 
 def _session(*rows: tuple) -> Session:
@@ -27,45 +27,47 @@ def _session(*rows: tuple) -> Session:
     return session
 
 
-# --- mood_inputs -------------------------------------------------------------------
+def _mood(text: str) -> str:
+    return mm.mood_from_reply(text).mood
 
 
-def test_inputs_take_the_last_exchange_not_the_first():
+# --- last_reply ----------------------------------------------------------------------
+
+
+def test_the_last_reply_not_the_first():
     session = _session(
         ("user", "prima domanda"),
-        ("assistant", "prima risposta abbastanza lunga da contare come tale, ok"),
+        ("assistant", "prima risposta 😢"),
         ("user", "seconda domanda"),
-        ("assistant", LONG_REPLY),
+        ("assistant", REPLY),
     )
-    inputs = mm.mood_inputs(session)
-    assert inputs == mm.MoodInputs(user="seconda domanda", assistant=LONG_REPLY)
+    assert mm.last_reply(session) == REPLY
 
 
-def test_inputs_none_when_the_last_row_is_the_user():
+def test_none_when_the_last_row_is_the_user():
     """Dopo un errore l'ultima riga e' dell'utente: l'errore ha gia' la sua faccia."""
-    session = _session(
-        ("user", "domanda"),
-        ("assistant", LONG_REPLY),
-        ("user", "riprova"),
-    )
-    assert mm.mood_inputs(session) is None
+    session = _session(("user", "domanda"), ("assistant", REPLY), ("user", "riprova"))
+    assert mm.last_reply(session) is None
 
 
-def test_inputs_none_when_the_reply_is_too_short():
-    session = _session(("user", "ok?"), ("assistant", "Ok."))
-    assert mm.mood_inputs(session) is None
+def test_a_short_reply_still_counts():
+    """Il vecchio minimo di 40 caratteri serviva al modello: «ok 😊» e' un umore."""
+    session = _session(("user", "tutto bene?"), ("assistant", "ok 😊"))
+    assert mm.last_reply(session) == "ok 😊"
+    assert _mood("ok 😊") == "happy"
 
 
-def test_inputs_none_without_messages_or_without_a_user_line():
-    assert mm.mood_inputs(Session(key="k")) is None
-    assert mm.mood_inputs(_session(("assistant", LONG_REPLY))) is None
+def test_no_user_line_is_needed_any_more():
+    """La domanda serviva a chi giudicava; il dizionario guarda solo lei."""
+    assert mm.last_reply(Session(key="k")) is None
+    assert mm.last_reply(_session(("assistant", REPLY))) == REPLY
 
 
-def test_inputs_skip_command_and_synthetic_rows():
-    """Un ``/model`` o un rientro di subagent in coda non sono "l'utente ha detto"."""
+def test_command_and_synthetic_rows_are_skipped():
+    """Un ``/model`` o un rientro di subagent in coda non sono la sua risposta."""
     session = _session(
         ("user", "com'e' andato il backup?"),
-        ("assistant", LONG_REPLY),
+        ("assistant", REPLY),
         ("user", "/model deep", {"_command": True}),
         ("assistant", "Switched model preset to `deep`.", {"_command": True}),
         (
@@ -73,194 +75,170 @@ def test_inputs_skip_command_and_synthetic_rows():
             "Scheduled cron job triggered: 30s-test\n\nInternal reminder prompt",
             {CRON_HISTORY_META: True},
         ),
-        (
-            "user",
-            "Subagent result: done",
-            {INJECTED_EVENT_META: SUBAGENT_RESULT_EVENT},
-        ),
+        ("user", "Subagent result: done", {INJECTED_EVENT_META: SUBAGENT_RESULT_EVENT}),
     )
-    inputs = mm.mood_inputs(session)
-    assert inputs is not None
-    assert inputs.user == "com'e' andato il backup?"
-    assert inputs.assistant == LONG_REPLY
+    assert mm.last_reply(session) == REPLY
 
 
-def test_inputs_skip_tool_rows_and_blank_content():
+def test_tool_rows_blank_content_and_think_blocks_are_skipped():
     session = _session(
         ("user", "domanda"),
-        ("assistant", LONG_REPLY),
+        ("assistant", "<think>ci penso 😡</think>" + REPLY),
         ("tool", "risultato di uno strumento"),
         ("assistant", "   "),
     )
     session.messages.append({"role": "assistant", "content": None, "tool_calls": [{}]})
-    inputs = mm.mood_inputs(session)
-    assert inputs is not None
-    assert inputs.assistant == LONG_REPLY
+    assert mm.last_reply(session) == REPLY
 
 
-def test_inputs_strip_think_blocks():
-    session = _session(
-        ("user", "domanda"),
-        ("assistant", "<think>ragiono a lungo</think>" + LONG_REPLY),
-    )
-    inputs = mm.mood_inputs(session)
-    assert inputs is not None
-    assert inputs.assistant == LONG_REPLY
+# --- mood_from_reply: le tre facce e il neutro ------------------------------------
 
 
-def test_inputs_truncate_the_reply_from_the_head_and_the_question_from_the_tail():
-    reply = "x" * 1000 + " purtroppo non ci sono riuscita."
-    question = "perche' " * 100
-    session = _session(("user", question), ("assistant", reply))
-    inputs = mm.mood_inputs(session)
-    assert inputs is not None
-    assert len(inputs.assistant) == mm.MOOD_ASSISTANT_MAX_CHARS
-    assert inputs.assistant.startswith("…")
-    assert inputs.assistant.endswith("purtroppo non ci sono riuscita.")
-    assert len(inputs.user) == mm.MOOD_USER_MAX_CHARS
-    assert inputs.user.startswith("perche'")
-    assert inputs.user.endswith("…")
+@pytest.mark.parametrize(
+    ("text", "mood"),
+    [
+        ("Ecco la lista 😏", "happy"),
+        ("Tutto sistemato, finalmente 😌", "happy"),
+        ("Complimenti! 🎉", "happy"),
+        ("ci tengo ❤️", "happy"),
+        ("Mi dispiace, non ci sono riuscita 😔", "sad"),
+        ("il server non risponde 😰", "sad"),
+        ("è saltato tutto 💔", "sad"),
+        ("di nuovo lo stesso errore 😤", "angry"),
+        ("ancora spam 🙄", "angry"),
+    ],
+)
+def test_each_face(text, mood):
+    assert _mood(text) == mood
 
 
-# --- build_mood_request --------------------------------------------------------------
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Promemoria impostato per domani alle 9.",
+        "Buongiorno ☀️ oggi piove 🌧️",
+        "Ho trovato tre ristoranti 🍝📅",
+        "Boh 🤔",
+        "Ops 😅",
+        "",
+    ],
+)
+def test_no_face_without_an_emotion(text):
+    """Gli ambigui e gli oggetti restano fuori: meglio nessuna faccia che la sbagliata."""
+    verdict = mm.mood_from_reply(text)
+    assert verdict == mm.MoodVerdict(mm.NEUTRAL_MOOD)
 
 
-def test_request_is_first_person_with_the_bot_name_and_only_the_exchange():
-    inputs = mm.MoodInputs(user="ciao", assistant=LONG_REPLY)
-    messages = mm.build_mood_request(inputs, bot_name="Nina")
-    assert [m["role"] for m in messages] == ["system", "user"]
-    assert messages[0]["content"].startswith("You are Nina,")
-    assert "ONE letter" in messages[0]["content"]
-    for letter in "ABCD":
-        assert f"{letter} = " in messages[0]["content"]
-    assert "E = " not in messages[0]["content"]
-    assert messages[1]["content"] == f"They wrote:\nciao\n\nYou replied:\n{LONG_REPLY}\n\nLetter:"
-    # Sotto le sessanta parole: e' il vincolo di costo del piano (D6).
-    assert len(messages[0]["content"].split()) < 60
+def test_none_is_neutral():
+    assert mm.mood_from_reply(None).mood == mm.NEUTRAL_MOOD
 
 
-def test_request_falls_back_to_jenny_when_the_name_is_blank():
-    inputs = mm.MoodInputs(user="ciao", assistant=LONG_REPLY)
-    assert mm.build_mood_request(inputs, bot_name="  ")[0]["content"].startswith("You are Jenny,")
+# --- il voto -----------------------------------------------------------------------
 
 
-# --- parse_mood --------------------------------------------------------------------
+def test_the_majority_wins():
+    verdict = mm.mood_from_reply("non ci sono riuscita 😞 davvero 😞 però ecco 😊")
+    assert verdict == mm.MoodVerdict("sad", decided_by="😞", votes=2)
 
 
-def test_parse_reads_the_letter_in_any_dress():
-    assert mm.parse_mood("A") == "happy"
-    assert mm.parse_mood(" b") == "sad"
-    assert mm.parse_mood("C.") == "angry"
-    assert mm.parse_mood("(D)") == "neutral"
-    assert mm.parse_mood("**B**") == "sad"
+def test_a_tie_goes_to_the_last_one():
+    """Il tono sta in coda: «scusa il ritardo 😔 ma eccolo 🎉» e' contenta."""
+    assert _mood("scusa il ritardo 😔 ma eccolo 🎉") == "happy"
+    assert _mood("eccolo 🎉 ma è rotto 😔") == "sad"
 
 
-def test_the_retired_fifth_letter_is_neutral_and_not_a_mood():
-    """L'alfabeto e' passato da cinque lettere a quattro: la E non vale piu' niente."""
-    assert mm.parse_mood("E") == "neutral"
-    assert "worried" not in mm.MOODS
-    assert "surprised" not in mm.MOODS
+# --- cosa non e' suo ---------------------------------------------------------------
 
 
-def test_parse_is_neutral_for_words_blanks_and_strays():
-    assert mm.parse_mood("Bene, sono felice") == "neutral"
-    assert mm.parse_mood("") == "neutral"
-    assert mm.parse_mood(None) == "neutral"
-    assert mm.parse_mood("F") == "neutral"
-    assert mm.parse_mood("Sono A") == "neutral"
+def test_emoji_inside_code_do_not_count():
+    assert _mood('```python\nprint("😭")\n```\nfatto 👍') == "happy"
+    assert _mood("usa `echo 😡` e basta") == mm.NEUTRAL_MOOD
+    assert _mood("```\n😭 non chiuso") == mm.NEUTRAL_MOOD
 
 
-def test_every_letter_maps_to_a_known_mood():
-    assert set(mm._LETTER_TO_MOOD.values()) == set(mm.MOODS)
+def test_quoted_lines_do_not_count():
+    """Una citazione e' di qualcun altro, spesso di chi le ha scritto."""
+    assert _mood("> uffa 😡\nva bene, lo sistemo io 😊") == "happy"
+    assert _mood("> uffa 😡\nva bene") == mm.NEUTRAL_MOOD
 
 
-# --- resolve_mood_model --------------------------------------------------------------
+# --- normalizzazione ---------------------------------------------------------------
 
 
-def test_model_is_the_turn_model_without_a_preset():
-    config = Config()
-    assert mm.resolve_mood_model(config, "turn-model") == "turn-model"
+def test_variation_selector_and_skin_tones_are_ignored():
+    assert _mood("ok 👍🏽") == "happy"
+    assert _mood("ok ❤") == "happy"  # senza U+FE0F
+    assert _mood("ok ☹️") == "sad"   # con U+FE0F
 
 
-def test_model_comes_from_the_preset_when_configured():
-    config = Config.model_validate({
-        "agents": {"defaults": {"mascotMoodModelPreset": "cheap"}},
-        "modelPresets": {"cheap": {"model": "tiny-1", "provider": "other"}},
-    })
-    assert mm.resolve_mood_model(config, "turn-model") == "tiny-1"
+def test_zwj_sequences_are_looked_up_whole_then_by_their_first_emoji():
+    assert _mood("che fatica 😮‍💨") == "sad"          # intera, nel dizionario
+    assert _mood("ti adoro ❤️‍🔥") == "happy"          # non c'e': vale il ❤️
+    assert _mood("nebbia 😶‍🌫️") == mm.NEUTRAL_MOOD    # 😶 e' fuori
 
 
-def test_unknown_or_modelless_preset_falls_back_to_the_turn_model():
-    unknown = Config.model_validate({"agents": {"defaults": {"mascotMoodModelPreset": "nope"}}})
-    assert mm.resolve_mood_model(unknown, "turn-model") == "turn-model"
-    modelless = Config.model_validate({
-        "agents": {"defaults": {"mascotMoodModelPreset": "p"}},
-        "modelPresets": {"p": {"temperature": 0.1}},
-    })
-    assert mm.resolve_mood_model(modelless, "turn-model") == "turn-model"
+# --- faccine di testo --------------------------------------------------------------
 
 
-# --- classify_mood -------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("text", "mood"),
+    [
+        ("grazie :)", "happy"),
+        ("grazie :-)", "happy"),
+        ("grazie :))", "happy"),
+        ("fatto :D", "happy"),
+        ("ok ;)", "happy"),
+        ("peccato :(", "sad"),
+        ("peccato :'(", "sad"),
+        ("uffa >:(", "angry"),
+    ],
+)
+def test_text_emoticons(text, mood):
+    assert _mood(text) == mood
 
 
-def _provider(content: str | None, *, raises: bool = False, finish_reason: str = "stop"):
-    provider = MagicMock()
-    if raises:
-        provider.chat_with_retry = AsyncMock(side_effect=RuntimeError("boom"))
-    else:
-        provider.chat_with_retry = AsyncMock(
-            return_value=LLMResponse(
-                content=content, finish_reason=finish_reason, usage={"total_tokens": 7}
-            )
-        )
-    return provider
+@pytest.mark.parametrize(
+    "text",
+    [
+        "vedi https://example.com/:D",
+        "alle 12:30) ci vediamo",
+        "Nota:Domani",
+        "array[i]:(x)",
+    ],
+)
+def test_text_emoticons_need_clean_edges(text):
+    assert _mood(text) == mm.NEUTRAL_MOOD
 
 
-async def test_classify_calls_the_provider_small_and_returns_mood_and_response():
-    provider = _provider("B")
-    inputs = mm.MoodInputs(user="ciao", assistant=LONG_REPLY)
-
-    mood, response = await mm.classify_mood(provider, "m", inputs, bot_name="Jenny")
-
-    assert mood == "sad"
-    assert response is not None and response.usage == {"total_tokens": 7}
-    kwargs = provider.chat_with_retry.await_args.kwargs
-    assert kwargs["model"] == "m"
-    assert kwargs["max_tokens"] == mm.MOOD_MAX_TOKENS
-    assert kwargs["temperature"] == mm.MOOD_TEMPERATURE
-    assert kwargs["reasoning_effort"] == mm.MOOD_REASONING_EFFORT
-    assert kwargs["tools"] is None
-    messages = provider.chat_with_retry.await_args.args[0]
-    assert messages == mm.build_mood_request(inputs, bot_name="Jenny")
+# --- il dizionario -----------------------------------------------------------------
 
 
-async def test_classify_is_neutral_and_silent_on_provider_failure():
-    inputs = mm.MoodInputs(user="ciao", assistant=LONG_REPLY)
-    assert await mm.classify_mood(_provider(None, raises=True), "m", inputs, bot_name="J") == (
-        "neutral",
-        None,
-    )
-    mood, response = await mm.classify_mood(
-        _provider("A", finish_reason="error"), "m", inputs, bot_name="J"
-    )
-    assert mood == "neutral"
-    assert response is not None  # la risposta d'errore torna comunque, per la contabilita'
+def test_every_face_in_the_dictionary_is_a_mood_with_a_drawing():
+    assert set(mm.MOOD_EMOJI) == set(mm.MOODS) - {mm.NEUTRAL_MOOD}
 
 
-async def test_classify_is_neutral_when_the_budget_went_to_thinking():
-    """Contenuto vuoto e ``finish_reason="length"``: il modello ha pensato e basta.
+def test_no_emoji_sits_in_two_faces():
+    seen: dict[str, str] = {}
+    for mood, emojis in mm.MOOD_EMOJI.items():
+        for emoji in emojis:
+            key = mm._normalize(emoji)
+            assert key not in seen, f"{emoji} e' sia {seen[key]} sia {mood}"
+            seen[key] = mood
 
-    E' il caso misurato sul telefono con DeepSeek V4 prima della mappa di
-    thinking: neutro, ma con la risposta restituita per la contabilita'.
-    """
-    inputs = mm.MoodInputs(user="ciao", assistant=LONG_REPLY)
-    mood, response = await mm.classify_mood(
-        _provider("", finish_reason="length"), "thinker", inputs, bot_name="J"
-    )
-    assert mood == "neutral"
-    assert response is not None
-    # La seconda volta non deve rifare l'avviso, ma il verdetto e' lo stesso.
-    mood, _ = await mm.classify_mood(
-        _provider(None, finish_reason="length"), "thinker", inputs, bot_name="J"
-    )
-    assert mood == "neutral"
+
+def test_every_entry_is_an_emoji_and_not_a_letter():
+    """Una lettera finita nel dizionario per sbaglio (``"D"``) accenderebbe una
+    faccia su ogni parola che la contiene."""
+    for emojis in mm.MOOD_EMOJI.values():
+        for emoji in emojis:
+            for ch in mm._normalize(emoji):
+                if ch == "‍":
+                    continue
+                assert unicodedata.category(ch) == "So", f"{emoji!r} contiene {ch!r}"
+
+
+def test_the_ambiguous_ones_stay_out():
+    """Fuori di proposito (v. il piano, D4): se uno ci entra, e' una decisione."""
+    index = {mm._normalize(e) for es in mm.MOOD_EMOJI.values() for e in es}
+    for emoji in ("😅", "🙃", "😬", "🤔", "😐", "😑", "😶", "👀", "🤷", "😳", "😱", "🫠", "☀️"):
+        assert mm._normalize(emoji) not in index, emoji

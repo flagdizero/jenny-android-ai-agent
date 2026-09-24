@@ -88,8 +88,8 @@ def conversation_scope(session_key: str | None) -> Iterator[None]:
     """Dichiara a quale conversazione appartengono le richieste fatte qui dentro.
 
     Va aperto da **ogni** percorso che chiama il provider, non solo dal turno
-    dell'utente: le chiamate ausiliarie fuori dal turno — compattazione,
-    classificazione dell'umore della mascotte — sono esattamente quelle che negli
+    dell'utente: le chiamate ausiliarie fuori dal turno — come la compattazione
+    — sono esattamente quelle che negli
     altri client restano scoperte, e il sintomo non è un errore ma un degrado
     silenzioso (cache mancata, e nei casi peggiori un 400 che fa ripiegare la
     richiesta su un altro modello).

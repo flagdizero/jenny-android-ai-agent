@@ -2,7 +2,7 @@
 
 Gli header di OpenCode li mette il provider (``tests/providers/test_opencode_session_header.py``),
 ma il provider può solo leggere quello che qualcuno ha dichiarato prima di lui.
-Qui si verifica che quel qualcuno esista **su tutti e tre** i percorsi che
+Qui si verifica che quel qualcuno esista **su tutti** i percorsi che
 chiamano il provider in questo albero, e non solo sul turno dell'utente.
 
 Perché il turno da solo non basta: negli altri client la stessa integrazione si è
@@ -11,14 +11,15 @@ pre-analisi di un'immagine — che partono fuori dal contesto del turno e restan
 senza header. Il sintomo non è un errore: è un degrado silenzioso, cache mancata
 e nei casi peggiori un 400 che fa ripiegare la richiesta altrove.
 
-In Jenny i percorsi sono tre: ``AgentRunner.run`` (il turno, e con lui cron,
-Dream e heartbeat), ``Consolidator.archive`` (la compattazione) e
-``classify_mood`` (l'umore della mascotte).
+In Jenny i percorsi sono due: ``AgentRunner.run`` (il turno, e con lui cron,
+Dream e heartbeat) e ``Consolidator.archive`` (la compattazione). Il terzo era
+``classify_mood``, l'umore della mascotte: dal 24/09/2026 l'umore si legge dagli
+emoji e non chiama piu' nessun provider.
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,7 +27,6 @@ from jenny.agent.memory import Consolidator, MemoryStore
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMProvider, LLMResponse
 from jenny.providers.opencode import SESSION_HEADER, session_headers
-from jenny.session import mascot_mood as mm
 
 GO_BASE = "https://opencode.ai/zen/go/v1"
 
@@ -141,36 +141,4 @@ class TestLaCompattazione:
     async def test_senza_chiave_non_rompe(self, _consolidator) -> None:
         consolidator, seen = _consolidator
         await consolidator.archive([{"role": "user", "content": "ciao"}])
-        assert seen == ["NESSUNO-SCOPE"]
-
-
-# --- l'umore della mascotte ---------------------------------------------------------
-
-
-class TestLUmoreDellaMascotte:
-
-    async def test_dichiara_la_sessione_quando_la_riceve(self) -> None:
-        provider, seen = _spying_provider()
-        provider.chat_with_retry = AsyncMock(
-            side_effect=lambda *a, **k: seen.append(_observed_id())
-            or LLMResponse(content="B", finish_reason="stop", usage={}),
-        )
-        await mm.classify_mood(
-            provider, "m", mm.MoodInputs(user="ciao", assistant="ok"),
-            bot_name="Jenny", session_key="unified:default",
-        )
-        assert seen and seen[0] != "NESSUNO-SCOPE"
-
-    async def test_resta_invocabile_senza_sessione(self) -> None:
-        # Il parametro è opzionale di proposito: la classificazione deve reggere
-        # da sola, e il ripiego del provider copre il resto.
-        provider, seen = _spying_provider()
-        provider.chat_with_retry = AsyncMock(
-            side_effect=lambda *a, **k: seen.append(_observed_id())
-            or LLMResponse(content="B", finish_reason="stop", usage={}),
-        )
-        mood, _ = await mm.classify_mood(
-            provider, "m", mm.MoodInputs(user="ciao", assistant="ok"), bot_name="Jenny",
-        )
-        assert mood == "sad"
         assert seen == ["NESSUNO-SCOPE"]

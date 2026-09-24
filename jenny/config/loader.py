@@ -246,6 +246,10 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     "agents.defaults.atlas",
     "wiki.defaultWiki",
     "wiki.default_wiki",
+    # Il modello della richiesta dell'umore, ritirata il 24/09/2026 con la
+    # richiesta stessa: l'umore si legge dagli emoji (``session/mascot_mood.py``).
+    "agents.defaults.mascotMoodModelPreset",
+    "agents.defaults.mascot_mood_model_preset",
 })
 
 

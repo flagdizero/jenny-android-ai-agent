@@ -208,8 +208,8 @@ status simply replaces a pending one. `started_at` appears only with `"running"`
 {"event": "goal_status", "chat_id": "default", "status": "running", "started_at": 1756640000.0}
 ```
 
-**`mascot_mood`** — how Jenny feels about the reply she just gave, for the on-screen mascot.
-Sent after `turn_end`, only to subscribers of that chat, never retried and never persisted: the
+**`mascot_mood`** — how Jenny feels about the reply she just gave, for the on-screen mascot,
+read by the server from the emoji in that reply (no model request). Sent after `turn_end`, only to subscribers of that chat, never retried and never persisted: the
 next turn replaces it, and a reload starts from a neutral face. `mood` is one of `happy`, `sad`,
 `angry` — the three expressions that exist as artwork (a neutral verdict sends nothing). `turn_id` is present when the turn had
 one, so the client can drop a reaction to a reply that is no longer the latest. Off with

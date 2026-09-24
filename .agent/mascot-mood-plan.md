@@ -1,5 +1,13 @@
 # La mascotte che sente — il piano
 
+> **Il sidecar è superato dal 24/09/2026** da
+> [`mascot-mood-emoji-plan.md`](./mascot-mood-emoji-plan.md): l'umore si legge
+> dagli emoji della risposta, senza nessuna richiesta al modello, e
+> `mascotMoodModelPreset` è una chiave ritirata. Il motivo, misurato: su un
+> modello che ragiona di default i tre token finivano a pensare e le facce non
+> sono mai comparse. Di questo documento restano validi il frame, le facce e le
+> regole del client.
+
 > **Superato in parte dal 08/09/2026** da
 > [`mascot-faces-plan.md`](./mascot-faces-plan.md), che porta l'arte a due
 > livelli (corpo + faccia). Non valgono più: **D7** (le etichette: `worried` e

@@ -67,7 +67,7 @@ const TALK_QUIET_TO_THINK_MS = 1000; // silenzio testo -> torna a pensa
 /* ── Umore ──
    Dopo il turn_end il backend può mandare un frame `mascot_mood` con la
    reazione di Jenny alla risposta appena data (jenny/session/mascot_mood.py:
-   una lettera chiesta al modello fuori dal turno). Qui è la FACCIA, non un
+   letta dagli emoji che lei stessa ha scritto). Qui è la FACCIA, non un
    quarto stato: si mostra solo a mascotte intera (dove c'è il livello), perde
    contro il pensa, e decade da sé dopo MOOD_HOLD_MS.
 
