@@ -317,6 +317,12 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # crashato. Non ``False``, che incrementerebbe ``stuck`` e quindi
             # dichiarerebbe un livelock del budget dove c'è stata un'eccezione.
             advanced: bool | None = None
+            # Il ``finally`` lo legge su **ogni** uscita, compresa quella del ramo
+            # senza storia qui sotto, che torna prima di costruire i tool: nato
+            # solo accanto a ``build_dream_tools``, quel ``return`` lo trovava non
+            # definito e il ``finally`` sollevava, portandosi via la chiusura del
+            # ciclo e aggiungendo un «Dream failed» al messaggio «niente da fare».
+            dream_file_states = None
             try:
                 result = store.build_dream_prompt(gauge=render_gauge(prologue.report))
                 if result is None:
@@ -343,12 +349,9 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                 dream_tools = store.build_dream_tools(
                     write_size_guard=prologue.guard, scope=scope,
                 )
-                # Legato prima del turno: il ``finally`` qui sotto lo legge, e un
-                # ``process_direct`` che solleva lascerebbe altrimenti il nome non
-                # definito — cioè un ``NameError`` dentro il ``finally``, che si
-                # porterebbe via la chiusura del ciclo. È lo stesso guasto che
-                # quel ``finally`` esiste per chiudere, reintrodotto un livello
-                # più in basso.
+                # Riassegnato prima del turno, non dopo: un ``process_direct`` che
+                # solleva deve comunque lasciare al ``finally`` i rifiuti contati
+                # fin lì.
                 dream_file_states = getattr(dream_tools, "file_states", None)
                 resp = await loop.process_direct(
                     prompt,

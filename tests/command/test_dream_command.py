@@ -219,6 +219,35 @@ class TestPlainDreamIsUntouched:
         assert _config_path(workspace).stat().st_mtime_ns == before
 
 
+class TestNothingNewToDream:
+    """`/dream` senza storia nuova: un messaggio, e il ciclo si chiude lo stesso.
+
+    Il ramo esce dal ``try`` prima che il turno parta, e il ``finally`` che
+    chiude il ciclo legge lo stato file del turno. Finché quel nome nasceva solo
+    più in basso, il ``finally`` sollevava ``UnboundLocalError``: il ciclo non si
+    chiudeva (``runs_since_review`` fermo, quindi un review pass che non arriva
+    mai per chi ha poca storia) e all'utente arrivava, dopo «niente da fare»,
+    anche un «Dream failed» che parlava di una variabile.
+    """
+
+    @pytest.mark.asyncio
+    async def test_one_message_and_the_cycle_still_closes(
+        self, router, loop, memory, published
+    ):
+        runs_before, _ = memory.get_review_state()
+
+        ack = await router.dispatch(_ctx(loop, "/dream"))
+        await _drain()
+
+        assert ack.content == "Dreaming..."
+        assert loop.prompts == [], "senza storia il turno non deve partire"
+        assert len(published) == 1, [m.content for m in published]
+        assert "no conversation history" in published[0].content
+        assert "failed" not in published[0].content.lower()
+        runs_after, _ = memory.get_review_state()
+        assert runs_after == runs_before + 1
+
+
 class TestTheFormsThatMoved:
     """Chi digita `/dream budget` deve trovare la strada, non il silenzio."""
 

@@ -1,6 +1,7 @@
 # Pulizia del codice — quello che resta dopo l'audit del 24/09/2026
 
-> Stato: **da fare**. Le cancellazioni a rischio zero sono già atterrate
+> Stato: **in corso** — fase 0 avviata il 24/09; le decisioni della fase 1
+> sono prese (tutte come da raccomandazione). Le cancellazioni a rischio zero sono già atterrate
 > (`94cdd49`…`0060788`, otto commit, ~1.300 righe in meno, installate sul
 > Titan 2). Qui c'è tutto il resto: tre difetti, le decisioni che spettano a te,
 > i duplicati di Python, WebUI, Kotlin e test.
@@ -44,11 +45,14 @@ usati solo dai test su cui molti test si appoggiano, `vendorize_ui.py`,
 
 ## Fase 0 — I tre difetti (prima di tutto)
 
-Due di questi hanno già un task pronto nella sessione dell'audit
-(«Restore app-refresh push handling», «Make alert-clearing work in the casa
-shell»): se li lanci da lì, qui si spunta con il commit che arriva.
+Tutti e quattro si fanno nella sessione dell'audit (i due task separati che
+erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
 
-- [ ] **0.1 `/dream` senza storia nuova rompe la chiusura del ciclo**
+- [x] **0.1 `/dream` senza storia nuova rompe la chiusura del ciclo** — fatto
+  24/09. Il test nuovo (`TestNothingNewToDream`) ha fallito esattamente come
+  previsto: due messaggi, il secondo «Dream failed after 0.0s: cannot access
+  local variable 'dream_file_states'». Il cron verificato sano: il suo turno è
+  una funzione a sé che rende una tupla, senza `finally` che legga il nome.
   - `command/builtin.py:330` fa `return` dentro il `try` quando
     `build_dream_prompt` torna `None`; il `finally` (`:417-427`) legge
     `dream_file_states`, assegnata solo a `:352` → `UnboundLocalError`.
@@ -135,26 +139,25 @@ shell»): se li lanci da lì, qui si spunta con il commit che arriva.
 
 ## Fase 1 — Le decisioni tue
 
-Ogni riga ha una raccomandazione. Quando decidi, scrivi la scelta nella
-colonna e il passo corrispondente di **1.x** diventa eseguibile. Nessuna di
-queste si tocca prima.
+Ogni riga ha una raccomandazione. **Decise il 24/09/2026: tutte come da
+raccomandazione** («ok alle raccomandazioni»), quindi 1.1 è eseguibile.
 
 | # | Cosa | Fatti | Raccomandazione | Scelta |
 |---|---|---|---|---|
-| D1 | `CronService.enable_job` / `update_job` / `run_job` (`cron/service.py:1318,1338,1381`) | Nessuna produzione: il tool cron espone solo add/list/remove, le rotte sono in sola lettura per scelta (`cron_routes.py:1-13`). `run_job` è l'innesco di ~30 test; `update_job` è l'unico scrittore di azioni `"update"` in `action.jsonl` | Cancellare `enable_job`, `update_job` e il ramo `update` di `_merge_action`; **tenere** `run_job` (o spostarlo in un helper dei test) | |
-| D2 | `WikiConfig.extensions` (`config/schema.py:855`) + `create_renderer(extensions=)` | Mai letto: l'unica chiamata non lo passa. La tabella pubblica `docs/reference/configuration.md:426` lo dà per configurabile — oggi la doc mente | Cancellare campo, parametro e riga di doc (collegarlo è una riga, ma un'estensione Markdown scelta dall'utente è superficie da validare che nessuno ha chiesto) | |
-| D3 | `IntegerSchema` / `NumberSchema` primo argomento posizionale (`agent/tools/schema.py:96,132`) | Salvato in `_value`, mai emesso. Metà delle chiamate lo intendeva come default (`android_web.py:352` → 5), l'altra metà è riempitivo o contraddittorio (`android_web.py:456` → 0 con `minimum=100`; `filesystem.py:882-894` → 1 su campi opzionali) | Cancellare il parametro e i valori alle chiamate; se serve, `default=` keyword come `BooleanSchema`, solo dove è vero | |
-| D4 | Rotta `/api/webui/skills/{n}/delete` + `delete_workspace_skill` + `SkillsLoader.delete_skill` | Nessun client; la decisione del 21/09 toglie la cancellazione dalla UI; `62e55ed` l'ha rinforzata col 403 sulle integrate. Nessun tool la usa | Cancellare (una capacità HTTP senza client, contro una decisione presa) | |
-| D5 | Frame `session_updated` (`ws_sender.py:310`, flag in `bus/events.py:62`) | Esce a **ogni** `turn_end` verso tutte le connessioni, nessun JS lo legge dal 0.3.0; il produttore via metadata è morto con `de79d28`. `docs/reference/websocket.md:229` promette motivi che nessuno emette | Cancellare frame, flag, test e sezione di doc | |
-| D6a | Kotlin `UpdateBridge.canSelfUpdateSilently()` (`:173`) | Mai chiamata; l'esito silent/prompt è già gestito dopo il commit; nessun «aggiorna di notte» in piano | Cancellare | |
-| D6b | Kotlin `JennyBrowserBridge.isIsolated()` (`:331`) | Mai chiamata; il commento a `:216-219` dice «lo diciamo a Python invece di fingere isolamento» e non lo dice nessuno | **Collegarla**: `browser.py` la chiede su `browser_open` e, se `false`, aggiunge un avviso («cookie condivisi con web_fetch») — poche righe, e il commento diventa vero | |
-| D7 | `i18n.setLocale` / `onLocaleChange` e i 10 iscritti | Nessun chiamante dal `3d57980`; la lingua viene da `localStorage.locale` poi `navigator.language`. Chi aveva scelto col vecchio selettore **resta bloccato** su quel valore. `casa-tu-e-jenny-checklist.md:25-41`: «La lingua non c'è, ed è una decisione misurata»; aperta solo l'idea di `android:localeConfig` | Cancellare `setLocale`, `onLocaleChange`, gli iscritti; **smettere di leggere `localStorage.locale`** così nessuno resta bloccato. Con `localeConfig` l'Activity si ricrea, il cambio dal vivo non serve | |
-| D8 | `power.is_device_idle` + `PowerBridge.isDeviceIdleMode` | Solo test; `Watchdog.kt:247` usa `pm.isDeviceIdleMode` direttamente | Cancellare entrambi | |
-| D9 | `template_sync_error`, `MessageBus.dropped_outbound`, `soul_rules.extract_rules` | Il primo lo leggono solo i test (il log ERROR c'è già); il secondo solo un test (il conteggio è già nel log ogni 100); il terzo è l'oracolo di ~10 asserzioni | Cancellare i primi due (tenere il contatore interno); tenere `extract_rules`; tenere `outbound_size` (helper di ~12 test) | |
-| D10 | MyTool: `workspace_sandbox` in `READ_ONLY`, in `_inspect_all`, e in `RuntimeState` | `AgentLoop` quell'attributo non l'ha mai avuto: `check` risponde «not found», l'inspect lo salta | Cancellare i tre punti e la riga del mock (`test_self_tool.py:38`). Alternativa, se vuoi che Jenny veda il sandbox: una property su `AgentLoop` che rende `workspace_scopes.sandbox_status` | |
-| D11 | `/api/casa/schermate/set` accetta ancora la lista nuda (`casa_routes.py:159-181`) | L'unico mittente (`setSchermate`) è uscito con `03b1e15`; UI e server escono dallo stesso APK | Cancellare il ramo e `test_the_bare_list_keeps_the_saved_order`, `ordine` obbligatorio | |
-| D12 | `display_name` sui quattro canali | Nessuno lo legge (quello in `settings_api.py:490` è un altro) | Cancellare attributi e assegnazioni nei mock | |
-| D13 | `android/image_source/talk_2a.PNG`, `talk_2b.PNG` (1,65 MB) + README | Nessun riferimento; `talk_2b` = `idle` byte per byte. Il README dice «15 webp» (sono 10 + 9 a livelli) e cita pose uscite da `FILES` con `9d6c603`; `SOSTITUIRE_UNA_POSA.md:17-23` elenca pose che non si esportano più | Cancellare le due PNG; **correggere** README e tabella (talk_1a/1b/think segnate «solo riferimento dei test», `test_mascot_layer_sources.py:50-59`) | |
+| D1 | `CronService.enable_job` / `update_job` / `run_job` (`cron/service.py:1318,1338,1381`) | Nessuna produzione: il tool cron espone solo add/list/remove, le rotte sono in sola lettura per scelta (`cron_routes.py:1-13`). `run_job` è l'innesco di ~30 test; `update_job` è l'unico scrittore di azioni `"update"` in `action.jsonl` | Cancellare `enable_job`, `update_job` e il ramo `update` di `_merge_action`; **tenere** `run_job` (o spostarlo in un helper dei test) || raccomandazione (24/09) |
+| D2 | `WikiConfig.extensions` (`config/schema.py:855`) + `create_renderer(extensions=)` | Mai letto: l'unica chiamata non lo passa. La tabella pubblica `docs/reference/configuration.md:426` lo dà per configurabile — oggi la doc mente | Cancellare campo, parametro e riga di doc (collegarlo è una riga, ma un'estensione Markdown scelta dall'utente è superficie da validare che nessuno ha chiesto) || raccomandazione (24/09) |
+| D3 | `IntegerSchema` / `NumberSchema` primo argomento posizionale (`agent/tools/schema.py:96,132`) | Salvato in `_value`, mai emesso. Metà delle chiamate lo intendeva come default (`android_web.py:352` → 5), l'altra metà è riempitivo o contraddittorio (`android_web.py:456` → 0 con `minimum=100`; `filesystem.py:882-894` → 1 su campi opzionali) | Cancellare il parametro e i valori alle chiamate; se serve, `default=` keyword come `BooleanSchema`, solo dove è vero || raccomandazione (24/09) |
+| D4 | Rotta `/api/webui/skills/{n}/delete` + `delete_workspace_skill` + `SkillsLoader.delete_skill` | Nessun client; la decisione del 21/09 toglie la cancellazione dalla UI; `62e55ed` l'ha rinforzata col 403 sulle integrate. Nessun tool la usa | Cancellare (una capacità HTTP senza client, contro una decisione presa) || raccomandazione (24/09) |
+| D5 | Frame `session_updated` (`ws_sender.py:310`, flag in `bus/events.py:62`) | Esce a **ogni** `turn_end` verso tutte le connessioni, nessun JS lo legge dal 0.3.0; il produttore via metadata è morto con `de79d28`. `docs/reference/websocket.md:229` promette motivi che nessuno emette | Cancellare frame, flag, test e sezione di doc || raccomandazione (24/09) |
+| D6a | Kotlin `UpdateBridge.canSelfUpdateSilently()` (`:173`) | Mai chiamata; l'esito silent/prompt è già gestito dopo il commit; nessun «aggiorna di notte» in piano | Cancellare || raccomandazione (24/09) |
+| D6b | Kotlin `JennyBrowserBridge.isIsolated()` (`:331`) | Mai chiamata; il commento a `:216-219` dice «lo diciamo a Python invece di fingere isolamento» e non lo dice nessuno | **Collegarla**: `browser.py` la chiede su `browser_open` e, se `false`, aggiunge un avviso («cookie condivisi con web_fetch») — poche righe, e il commento diventa vero || raccomandazione (24/09) |
+| D7 | `i18n.setLocale` / `onLocaleChange` e i 10 iscritti | Nessun chiamante dal `3d57980`; la lingua viene da `localStorage.locale` poi `navigator.language`. Chi aveva scelto col vecchio selettore **resta bloccato** su quel valore. `casa-tu-e-jenny-checklist.md:25-41`: «La lingua non c'è, ed è una decisione misurata»; aperta solo l'idea di `android:localeConfig` | Cancellare `setLocale`, `onLocaleChange`, gli iscritti; **smettere di leggere `localStorage.locale`** così nessuno resta bloccato. Con `localeConfig` l'Activity si ricrea, il cambio dal vivo non serve || raccomandazione (24/09) |
+| D8 | `power.is_device_idle` + `PowerBridge.isDeviceIdleMode` | Solo test; `Watchdog.kt:247` usa `pm.isDeviceIdleMode` direttamente | Cancellare entrambi || raccomandazione (24/09) |
+| D9 | `template_sync_error`, `MessageBus.dropped_outbound`, `soul_rules.extract_rules` | Il primo lo leggono solo i test (il log ERROR c'è già); il secondo solo un test (il conteggio è già nel log ogni 100); il terzo è l'oracolo di ~10 asserzioni | Cancellare i primi due (tenere il contatore interno); tenere `extract_rules`; tenere `outbound_size` (helper di ~12 test) || raccomandazione (24/09) |
+| D10 | MyTool: `workspace_sandbox` in `READ_ONLY`, in `_inspect_all`, e in `RuntimeState` | `AgentLoop` quell'attributo non l'ha mai avuto: `check` risponde «not found», l'inspect lo salta | Cancellare i tre punti e la riga del mock (`test_self_tool.py:38`). Alternativa, se vuoi che Jenny veda il sandbox: una property su `AgentLoop` che rende `workspace_scopes.sandbox_status` || raccomandazione (24/09) |
+| D11 | `/api/casa/schermate/set` accetta ancora la lista nuda (`casa_routes.py:159-181`) | L'unico mittente (`setSchermate`) è uscito con `03b1e15`; UI e server escono dallo stesso APK | Cancellare il ramo e `test_the_bare_list_keeps_the_saved_order`, `ordine` obbligatorio || raccomandazione (24/09) |
+| D12 | `display_name` sui quattro canali | Nessuno lo legge (quello in `settings_api.py:490` è un altro) | Cancellare attributi e assegnazioni nei mock || raccomandazione (24/09) |
+| D13 | `android/image_source/talk_2a.PNG`, `talk_2b.PNG` (1,65 MB) + README | Nessun riferimento; `talk_2b` = `idle` byte per byte. Il README dice «15 webp» (sono 10 + 9 a livelli) e cita pose uscite da `FILES` con `9d6c603`; `SOSTITUIRE_UNA_POSA.md:17-23` elenca pose che non si esportano più | Cancellare le due PNG; **correggere** README e tabella (talk_1a/1b/think segnate «solo riferimento dei test», `test_mascot_layer_sources.py:50-59`) || raccomandazione (24/09) |
 
 - [ ] **1.1 Esecuzione delle decisioni.** Un commit per decisione, nell'ordine
   della tabella; ogni commit porta con sé i test che asserivano la cosa tolta
