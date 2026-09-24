@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageInstaller
-import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -156,41 +155,6 @@ class UpdateBridge(context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Cannot read own package info", e)
             -1L
-        }
-    }
-
-    /**
-     * **Stima**, non garanzia: dice se le precondizioni note sono soddisfatte,
-     * non se il sistema concederà l'update senza conferma. La verità la si sa
-     * solo al `commit` — l'update ownership e le policy della ROM non sono
-     * interrogabili da qui — e infatti [installApk] gestisce il rifiuto invece
-     * di fidarsi di questa risposta.
-     *
-     * Vale la pena chiamarla lo stesso: costa tre letture in memoria e permette
-     * al lato Python di scegliere *quando* aggiornare (di notte e da solo, o
-     * chiedendo all'utente mentre ha il telefono in mano).
-     */
-    fun canSelfUpdateSilently(): Boolean {
-        // Sotto API 31 non esiste proprio il concetto: l'installer di sistema
-        // chiede conferma e basta.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-        val pm = appContext.packageManager
-        // Permesso normale, concesso all'installazione: se risulta negato vuol
-        // dire che manca dal manifest di questa build, non che l'utente l'abbia
-        // revocato.
-        val hasSilentPermission = pm.checkPermission(
-            android.Manifest.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION,
-            appContext.packageName
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!hasSilentPermission) return false
-        return try {
-            // Questo invece l'utente lo concede a mano ("Installa app
-            // sconosciute") ed è revocabile: senza, non si installa nulla,
-            // nemmeno col prompt.
-            pm.canRequestPackageInstalls()
-        } catch (e: Exception) {
-            Log.e(TAG, "canRequestPackageInstalls failed", e)
-            false
         }
     }
 
