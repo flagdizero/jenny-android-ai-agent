@@ -5,13 +5,9 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.View
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.ProfileStore
@@ -54,9 +50,6 @@ class JennyBrowserBridge(context: Context) {
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
-        private const val USER_AGENT_MOBILE =
-            "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
         /**
          * Le stesse reti di ``jenny/security/network.py::_BLOCKED_NETWORKS``.
@@ -192,25 +185,7 @@ class JennyBrowserBridge(context: Context) {
 
     private fun ensureWebViewOnMain() {
         if (webView != null) return
-        val wv = WebView(appContext).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.databaseEnabled = true
-            settings.setSupportZoom(false)
-            settings.builtInZoomControls = false
-            settings.displayZoomControls = false
-            settings.loadsImagesAutomatically = false
-            settings.mediaPlaybackRequiresUserGesture = true
-            settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.userAgentString = USER_AGENT_MOBILE
-            visibility = View.GONE
-            webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(msg: ConsoleMessage?): Boolean {
-                    Log.d(TAG, "JS console [${msg?.lineNumber()}] ${msg?.message()}")
-                    return super.onConsoleMessage(msg)
-                }
-            }
+        val wv = HiddenWebView.create(appContext, TAG).apply {
             webViewClient = sessionClient()
         }
         // Incognito: cookie e storage separati dal barattolo globale che usa

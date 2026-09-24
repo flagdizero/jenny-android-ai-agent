@@ -5,12 +5,8 @@ import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.View
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.net.Uri
@@ -32,9 +28,6 @@ class AgenticSearchBridge(context: Context) {
         private const val TAG = "AgenticSearchBridge"
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val MAX_RESULTS_DEFAULT = 10
-        private const val USER_AGENT_MOBILE =
-            "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
         @Volatile
         private var debuggingConfigured = false
@@ -81,26 +74,7 @@ class AgenticSearchBridge(context: Context) {
 
     private fun ensureWebView() {
         if (webView != null) return
-        webView = WebView(appContext).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.databaseEnabled = true
-            settings.setSupportZoom(false)
-            settings.builtInZoomControls = false
-            settings.displayZoomControls = false
-            settings.loadsImagesAutomatically = false
-            settings.mediaPlaybackRequiresUserGesture = true
-            settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.userAgentString = USER_AGENT_MOBILE
-            visibility = View.GONE
-            webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(msg: ConsoleMessage?): Boolean {
-                    Log.d(TAG, "JS console [${msg?.sourceId()}:${msg?.lineNumber()}] ${msg?.message()}")
-                    return super.onConsoleMessage(msg)
-                }
-            }
-        }
+        webView = HiddenWebView.create(appContext, TAG, logSource = true)
     }
 
     /**
