@@ -113,8 +113,6 @@ export class ViewTitleController {
       mani: { ...cassetto('mani') },
       memoria: { ...cassetto('memoria') },
     };
-
-    i18n.onLocaleChange(() => this._refreshTitles());
   }
 
   _refreshTitles() {

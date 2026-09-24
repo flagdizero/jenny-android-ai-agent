@@ -43,7 +43,7 @@ export function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(
 export function showToast(testo, tipo) { avvisi.push([testo, tipo]); }
 """,
     "dialog.js": "export async function confirmDialog() { return true; }\n",
-    "i18n.js": "export const i18n = { t: (k) => k, onLocaleChange() {} };\n",
+    "i18n.js": "export const i18n = { t: (k) => k };\n",
     "ws-manager.js": "export const wsManager = { on() {}, off() {}, request() {} };\n",
     "theme.js": """
 export function currentTheme() { return { scheme: 'dark', accent: '#b2543f', onAccent: '#fff' }; }

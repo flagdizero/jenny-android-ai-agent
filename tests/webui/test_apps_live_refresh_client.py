@@ -44,7 +44,7 @@ export function escapeHtml(s) { return String(s); }
 export function showToast() {}
 """,
     "dialog.js": "export async function confirmDialog() { return true; }\n",
-    "i18n.js": "export const i18n = { t: (k) => k, locale: 'it', onLocaleChange() {} };\n",
+    "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
     "ws-manager.js": "export const wsManager = new EventTarget();\n",
     "theme.js": """
 export function currentTheme() { return { scheme: 'dark', accent: '#b2543f', onAccent: '#fff' }; }

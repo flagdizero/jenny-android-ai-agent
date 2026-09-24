@@ -97,7 +97,6 @@ export class JennyCompanion extends JennyMascot {
       const t = i18n.t('chat.placeholder');
       if (t && t !== 'chat.placeholder') this.input.placeholder = t;
     };
-    i18n.onLocaleChange(syncPlaceholder);
     i18n.load(i18n.locale).then(syncPlaceholder).catch(() => {});
   }
 

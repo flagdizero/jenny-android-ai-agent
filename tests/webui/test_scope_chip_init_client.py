@@ -79,8 +79,6 @@ const api = { listProjects: () => Promise.resolve({}) };
 
 const i18n = {
   t: (key, vars) => 'i18n:' + key + (vars ? ':' + Object.values(vars).join(',') : ''),
-  localeSubs: 0,
-  onLocaleChange() { this.localeSubs++; },
 };
 
 const AppState = {
@@ -164,7 +162,6 @@ function mount(complete = true) {
   menuEl = makeEl('scope-menu');
   inputEl = { placeholder: '' };
   docListeners = 0;
-  i18n.localeSubs = 0;
   AppState.subs.length = 0;
   AppState.readonlyTurn = false;
   return new ScopeChip();
@@ -209,7 +206,7 @@ def test_a_second_init_registers_nothing() -> None:
       chip.init();
       const after = {
         doc: docListeners, chip: chipEl.listeners, menu: menuEl.listeners,
-        locale: i18n.localeSubs, state: AppState.subs.length,
+        state: AppState.subs.length,
       };
       assert.equal(after.doc, 2, 'click fuori ed Escape: due, non di più');
 
@@ -219,7 +216,6 @@ def test_a_second_init_registers_nothing() -> None:
                    'ogni tap fuori chiuderebbe la tendina una volta per init');
       assert.equal(chipEl.listeners, after.chip);
       assert.equal(menuEl.listeners, after.menu);
-      assert.equal(i18n.localeSubs, after.locale);
       assert.equal(AppState.subs.length, after.state);
     """)
 
@@ -232,7 +228,6 @@ def test_the_latch_does_not_swallow_the_first_init() -> None:
       assert.equal(chip._initialized, true);
       assert.equal(docListeners, 2);
       assert.deepEqual(AppState.subs.map(([key]) => key), ['composeMenu', 'readonlyTurn']);
-      assert.equal(i18n.localeSubs, 1);
       // E `init` disegna: il chip nomina la personale già prima di ogni rete.
       assert.equal(chipEl.dataset.scope, 'personal');
       assert.equal(inputEl.placeholder, 'i18n:chat.placeholder');

@@ -125,13 +125,9 @@ class MobileApp {
       this.header._refreshTitles();
       // Il chip dello scope scrive il proprio testo da JS, quindi
       // _applyStaticTranslations non lo raggiunge: senza questo resterebbe con
-      // le chiavi grezze ("scope.personal") fino al primo cambio di lingua.
+      // le chiavi grezze ("scope.personal").
       scopeChip.render();
       writeSwitch.render();
-    });
-    i18n.onLocaleChange(() => {
-      this._updateSidebarTitles();
-      this._applyStaticTranslations();
     });
 
     // Sidebar navigation

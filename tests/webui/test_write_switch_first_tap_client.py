@@ -58,7 +58,7 @@ def _member(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const i18n = { t: (key) => 'i18n:' + key, onLocaleChange() {} };
+const i18n = { t: (key) => 'i18n:' + key };
 
 /* Lo stato condiviso: `AppState.readonlyTurn` è ciò che `ws-manager.sendToChat`
    legge per mettere `readonly: true` nell'envelope. Qui si tiene anche l'elenco

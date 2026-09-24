@@ -93,10 +93,6 @@ export class ScopeChip {
       if (e.key === 'Escape') this.close();
     });
     onOtherComposeMenu('scope', () => this.close());
-    i18n.onLocaleChange(() => {
-      this.render();
-      if (this._open) this._renderMenu();
-    });
     // Il placeholder dipende da due cose con due proprietari: lo scope (questo
     // modulo) e il modo di scrittura (`write-switch.js`). Iscriversi invece di
     // farsi chiamare rende l'ordine dei due `syncFromSession` irrilevante —

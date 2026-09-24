@@ -1,8 +1,14 @@
+/* La lingua e' quella del telefono, e non si cambia da dentro l'app: il
+   selettore dell'officina e' uscito col «Trim 2/5» (3d57980) e la casa non ne
+   ha uno per scelta (casa-tu-e-jenny-checklist). Fino al 24/09/2026 qui si
+   leggeva ancora `localStorage.locale`, che solo quel selettore scriveva: chi
+   l'aveva usato restava fermo sulla lingua scelta allora, senza piu' un modo
+   di cambiarla. Se tornera' una scelta per-app sara' `android:localeConfig`,
+   che ricrea l'Activity: un cambio a caldo non serve. */
 export class I18n {
   constructor() {
-    this.locale = localStorage.getItem('locale') || this.detectLocale();
+    this.locale = this.detectLocale();
     this.translations = {};
-    this._listeners = [];
   }
 
   detectLocale() {
@@ -16,7 +22,7 @@ export class I18n {
       const res = await fetch(`/assets/i18n/${locale}.json`);
       if (!res.ok) {
         // Risposta non valida: non sovrascrivere translations[locale] con dati
-        // errati, altrimenti setLocale() creda che il caricamento sia riuscito.
+        // errati.
         console.warn(`Failed to load locale ${locale}: HTTP ${res.status}`);
         return;
       }
@@ -39,30 +45,6 @@ export class I18n {
     }
     return value;
   }
-
-  async setLocale(locale) {
-    // Carica le traduzioni prima di cambiare lingua: evita che i listener
-    // onLocaleChange girino su this.translations[locale] non ancora popolato
-    // (altrimenti t() ritorna la chiave grezza, es. "nav.chat").
-    if (!this.translations[locale]) {
-      await this.load(locale);
-    }
-    if (!this.translations[locale]) {
-      // Load fallito (es. rete): mantieni la lingua corrente invece di
-      // passare a chiavi grezze.
-      console.warn(`Locale ${locale} non disponibile: switch annullato`);
-      return;
-    }
-    this.locale = locale;
-    localStorage.setItem('locale', locale);
-    document.documentElement.lang = locale;
-    this._listeners.forEach(cb => cb(locale));
-  }
-
-  onLocaleChange(cb) {
-    this._listeners.push(cb);
-  }
-
 }
 
 export const i18n = new I18n();

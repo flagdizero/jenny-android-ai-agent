@@ -12,8 +12,11 @@
   localStorage.setItem('tc-theme', t);
   document.documentElement.setAttribute('data-theme', t);
 
-  var savedLocale = localStorage.getItem('locale');
-  if (savedLocale) document.documentElement.lang = savedLocale;
+  // La lingua della pagina, con la regola di `i18n.detectLocale()`: quella del
+  // telefono, italiano o inglese. Non piu' `localStorage.locale`, che solo il
+  // selettore tolto dall'officina scriveva (v. shared/i18n.js).
+  var nav = navigator.language || '';
+  document.documentElement.lang = nav.indexOf('it') === 0 ? 'it' : 'en';
 
   // Mascotte: anti-flash come il tema. La verità a runtime resta in
   // shared/mascot.js (localStorage + evento 'mascotchange'); qui solo

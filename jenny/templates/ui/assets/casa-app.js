@@ -316,7 +316,6 @@ class CasaApp {
        prima vorrebbe dire scriverci dentro le chiavi grezze. */
     await i18n.load(i18n.locale);
     this._applyTranslations();
-    i18n.onLocaleChange(() => this._applyTranslations());
 
     /* Quel che apparteneva alla conversazione lasciata scade qui. Il `turn_end`
        del turno in volo arrivera' a una chat che non guardiamo piu' e verra'

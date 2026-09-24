@@ -31,7 +31,6 @@ _VICINI = {
     "i18n.js": """
 export const i18n = {
   t: (k, v) => k + (v ? ':' + JSON.stringify(v) : ''),
-  onLocaleChange() {},
 };
 """,
     "api-client.js": "export const api = { async listProjects() { return { projects: [] }; } };\n",

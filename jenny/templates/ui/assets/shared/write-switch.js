@@ -62,7 +62,6 @@ export class WriteSwitch {
       e.stopPropagation();
       this.toggle();
     });
-    i18n.onLocaleChange(() => this.render());
     this.render();
   }
 

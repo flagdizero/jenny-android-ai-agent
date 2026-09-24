@@ -288,7 +288,6 @@ export class ChatController {
     this._setupSubagentPanel();
 
     i18n.load(i18n.locale).then(() => this._updatePlaceholders());
-    i18n.onLocaleChange(() => this._updatePlaceholders());
 
     this.setupEventListeners();
     this.setupInfiniteScroll();
@@ -2250,7 +2249,6 @@ export class ChatController {
       e.preventDefault();
       this._openSubagentDetail(row.dataset.taskId);
     });
-    i18n.onLocaleChange(() => this._renderSubagents(this._subagentSnapshot));
     // A vista nascosta non c'è nulla da invecchiare: il poll si spegne e riparte
     // con una lettura immediata al ritorno in foreground (v. _syncSubagentPolling).
     document.addEventListener('visibilitychange', () => {

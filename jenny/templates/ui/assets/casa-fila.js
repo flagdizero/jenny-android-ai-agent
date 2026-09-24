@@ -37,7 +37,6 @@ export class CasaFila {
     /** In modalita' ordina: la bozza dell'ordine, finche' non si preme Fatto. */
     this._bozza = null;
     this._trascina = null;
-    i18n.onLocaleChange?.(() => this.disegna());
   }
 
   get ordinando() {

@@ -29,7 +29,7 @@ _NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
 
 _VICINI = {
-    "i18n.js": "export const i18n = { t: (k) => k, onLocaleChange() {} };\n",
+    "i18n.js": "export const i18n = { t: (k) => k };\n",
     "launcher-usage-store.js": """
 export function usageStore() {
   const m = new Map();

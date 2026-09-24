@@ -347,7 +347,7 @@ def _run(
         (radice / "shared" / "i18n.js").write_text(
             "export const i18n = {\n"
             "  t: (k, v) => k + (v ? ':' + JSON.stringify(v) : ''),\n"
-            "  onLocaleChange() {},\n"
+
             "};\n",
             encoding="utf-8",
         )

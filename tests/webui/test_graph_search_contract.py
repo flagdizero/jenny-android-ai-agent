@@ -60,7 +60,7 @@ _PAGES = {
 # payload già pronto) e le traduzioni. Tutto il resto — d3, il DOM, il
 # controller — è quello vero.
 _API_STUB = "export const api = { getGraph: async () => globalThis.__GRAPH__ };\n"
-_I18N_STUB = "export const i18n = { t: (k) => k, onLocaleChange: () => {} };\n"
+_I18N_STUB = "export const i18n = { t: (k) => k };\n"
 
 _HARNESS = r"""
 import fs from 'node:fs';

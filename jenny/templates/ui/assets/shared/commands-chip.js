@@ -74,10 +74,6 @@ export class CommandsChip {
       if (e.key === 'Escape') this.close();
     });
     onOtherComposeMenu('commands', () => this.close());
-    i18n.onLocaleChange(() => {
-      this.render();
-      if (this._open) this._renderMenu();
-    });
     this.render();
   }
 

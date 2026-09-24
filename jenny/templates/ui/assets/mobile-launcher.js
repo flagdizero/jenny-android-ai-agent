@@ -230,22 +230,6 @@ export class LauncherController {
        lista, così funziona anche partendo dalla riga di ricerca. */
     this.sheet.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
 
-    /* I nomi dei tipi cambiano con la lingua, e questa lista la costruisce JS:
-       `_applyStaticTranslations()` passa sui `data-i18n` che *sono già in
-       pagina*, quindi copre le righe esistenti ma non quelle che nasceranno
-       dopo. Ridisegnare al cambio di lingua le copre entrambe. Il primo disegno
-       non è qui ma in `open()`: al boot le traduzioni non sono ancora arrivate
-       (`i18n.load` è asincrona) e disegnare adesso vorrebbe dire scrivere le
-       chiavi grezze in un foglio che nessuno sta guardando. */
-    i18n.onLocaleChange(() => {
-      // Le righe portano dentro testo tradotto (il tipo, l'errore di un
-      // manifest rotto): la cache va buttata, non riordinata.
-      this._rows.clear();
-      this._applyStaticTranslations();
-      this._render();
-    });
-
-
     /* Un foglio si trascina e si adatta alla tastiera; una pagina no: sta
        dentro la pista, e la sua altezza e' quella della pagina. */
     if (this._incorporato) return;
