@@ -35,7 +35,6 @@ def _make_mock_loop(**overrides):
     loop._concurrency_gate = None
     loop._extra_hooks = []
     loop.model_preset = None
-    loop.workspace_sandbox = None
 
     # android_web_config mock — needed for check tests
     loop.android_web_config = MagicMock()

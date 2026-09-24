@@ -43,9 +43,6 @@ class RuntimeState(Protocol):
     def exec_config(self) -> Any: ...
 
     @property
-    def workspace_sandbox(self) -> Any: ...
-
-    @property
     def subagents(self) -> Any: ...
 
     @property
