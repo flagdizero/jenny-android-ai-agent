@@ -131,7 +131,6 @@ class WebSocketChannel(OutboundSenderMixin):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 
     name = "websocket"
-    display_name = "WebSocket"
 
     def __init__(
         self,

@@ -55,7 +55,6 @@ class FloatingChannel:
     """Consegna la risposta al fumetto della mascotte flottante."""
 
     name = FLOATING_CHANNEL
-    display_name = "Mascotte"
     # Un fumetto sopra una testa non è un posto per spinner e tool hint: l'unica
     # cosa che ha senso disegnarci è il messaggio finale. Mentre aspetta, lo
     # stato lo dice la faccia — che decide Kotlin, senza passare di qua.

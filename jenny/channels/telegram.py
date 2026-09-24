@@ -237,7 +237,6 @@ class TelegramChannel:
     """Canale bot Telegram con pairing a codice singolo owner."""
 
     name = "telegram"
-    display_name = "Telegram"
     send_progress = False
     send_tool_hints = False
     show_reasoning = False

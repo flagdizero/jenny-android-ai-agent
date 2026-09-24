@@ -25,7 +25,6 @@ class MockChannel(WebSocketChannel):
     """Mock channel for testing."""
 
     name = "mock"
-    display_name = "Mock"
 
     def __init__(self, config, bus):
         super().__init__(config, bus, gateway=_mock_gateway())

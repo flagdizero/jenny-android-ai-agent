@@ -67,7 +67,6 @@ class NotificationChannel:
     """Consegna la risposta come alert di sistema Android."""
 
     name = NOTIFICATION_CHANNEL
-    display_name = "Notifiche"
     # Niente spinner né tool hint in una tendina: l'unica cosa che ha senso
     # postare è il messaggio finale.
     send_progress = False

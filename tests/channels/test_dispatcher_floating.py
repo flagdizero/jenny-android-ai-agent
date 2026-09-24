@@ -25,7 +25,6 @@ from jenny.config.schema import Config
 
 class MockWebSocket:
     name = "websocket"
-    display_name = "websocket"
     send_progress = True
     send_tool_hints = True
     show_reasoning = False

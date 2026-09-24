@@ -35,7 +35,6 @@ def _mock_gateway() -> MagicMock:
 
 class _MockChannel(WebSocketChannel):
     name = "mock"
-    display_name = "Mock"
 
     def __init__(self, config, bus):
         super().__init__(config, bus, gateway=_mock_gateway())
@@ -192,7 +191,6 @@ async def test_base_channel_reasoning_primitives_are_noop_safe():
 
     class _Plain(WebSocketChannel):
         name = "plain"
-        display_name = "Plain"
 
         async def start(self):  # pragma: no cover
             pass
@@ -231,7 +229,6 @@ async def test_file_edit_events_route_to_channel_capability(manager):
 async def test_base_channel_file_edit_events_are_noop_safe():
     class _Plain(WebSocketChannel):
         name = "plain"
-        display_name = "Plain"
 
         async def start(self):  # pragma: no cover
             pass

@@ -15,7 +15,6 @@ from jenny.config.schema import Config
 class MockChannel:
     def __init__(self, name: str, *, send_progress: bool = True) -> None:
         self.name = name
-        self.display_name = name
         self.send_progress = send_progress
         self.send_tool_hints = send_progress
         self.show_reasoning = False
