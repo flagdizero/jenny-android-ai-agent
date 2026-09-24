@@ -19,7 +19,6 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from jenny.config.tool_schemas import PythonExecConfig
 
 DEFAULT_YIELD_MS = 1000
 MAX_YIELD_MS = 30_000
@@ -484,11 +483,6 @@ class WriteStdinTool(Tool):
     """Poll, wait for output, or terminate a running Python exec session."""
 
     _scopes = {"core", "subagent"}
-    config_key = "python_exec"
-
-    @classmethod
-    def config_cls(cls):
-        return PythonExecConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
@@ -611,11 +605,6 @@ class ListExecSessionsTool(Tool):
     """List active exec sessions."""
 
     _scopes = {"core", "subagent"}
-    config_key = "python_exec"
-
-    @classmethod
-    def config_cls(cls):
-        return PythonExecConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

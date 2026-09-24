@@ -14,9 +14,6 @@ from loguru import logger
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
-from jenny.config.tool_schemas import (
-    DiagnosticsToolConfig,  # re-export (def in config.tool_schemas)
-)
 
 _BUFFER_SIZE = 500
 _DEFAULT_COUNT = 50
@@ -69,12 +66,6 @@ class GetRecentLogsTool(Tool):
         "(e.g. 'android_web' to debug web_search failures). Lines are "
         "returned in chronological order."
     )
-
-    config_key = "diagnostics"
-
-    @classmethod
-    def config_cls(cls):
-        return DiagnosticsToolConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

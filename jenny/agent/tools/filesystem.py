@@ -23,7 +23,9 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.agent.wiki_provenance import wiki_page_provenance_guard
-from jenny.config.tool_schemas import FileToolsConfig  # re-export (def in config.tool_schemas)
+from jenny.config.tool_schemas import (
+    FileToolsConfig,  # noqa: F401 — re-export (def in config.tool_schemas)
+)
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
 from jenny.security.workspace_policy import ReadOnlyTurnError, _path_key, _safe_expanduser
 from jenny.utils.helpers import build_image_content_blocks, detect_image_mime
@@ -69,12 +71,6 @@ def _page_over_ceiling_note(rel: str, chars: int, ceiling: int) -> str:
 
 class _FsTool(Tool):
     """Shared base for filesystem tools — common init and path resolution."""
-
-    config_key = "file"
-
-    @classmethod
-    def config_cls(cls):
-        return FileToolsConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

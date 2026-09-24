@@ -6,8 +6,8 @@ normalized, to avoid ``my-app``/``my_app`` collisions). ``AppToolsSyncer``
 diffs the apps folder against the registry on every turn, so manifest edits
 become live tools on the next turn without a restart.
 
-These tools are not loader-discovered (no ``_plugin_discoverable``): the
-syncer owns their lifecycle.
+These tools are not in the loader's ``TOOLS`` lists: the syncer owns their
+lifecycle.
 """
 
 from __future__ import annotations
@@ -37,8 +37,6 @@ def _apps_runtime_config() -> tuple[bool, float, int]:
 
 class AppActionTool(Tool):
     """One typed action of one Jenny App, exposed as a native tool."""
-
-    _plugin_discoverable = False
 
     def __init__(
         self,

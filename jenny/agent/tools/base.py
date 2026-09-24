@@ -9,7 +9,6 @@ from typing import Any, TypeVar
 
 if typing.TYPE_CHECKING:
     from jenny.agent.tools.context import ToolContext
-    from jenny.pydantic_compat import BaseModel
 
 _ToolT = TypeVar("_ToolT", bound="Tool")
 
@@ -167,13 +166,7 @@ class Tool(ABC):
 
     # --- Plugin metadata ---
 
-    config_key: str = ""
-    _plugin_discoverable: bool = True
     _scopes: set[str] = {"core"}
-
-    @classmethod
-    def config_cls(cls) -> type[BaseModel] | None:
-        return None
 
     @classmethod
     def enabled(cls, ctx: ToolContext) -> bool:

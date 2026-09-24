@@ -15,9 +15,6 @@ from typing import Any
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
-from jenny.config.tool_schemas import (
-    IntrospectToolConfig,  # re-export (def in config.tool_schemas)
-)
 
 _MAX_SOURCE_CHARS = 50_000
 
@@ -64,12 +61,6 @@ class GetSourceTool(Tool):
         "Use this to understand or debug the framework's behavior — do not "
         "reconstruct logic from bytecode via python_exec."
     )
-
-    config_key = "introspect"
-
-    @classmethod
-    def config_cls(cls):
-        return IntrospectToolConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

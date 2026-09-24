@@ -18,9 +18,6 @@ from typing import Any
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import BooleanSchema, tool_parameters_schema
 
-# re-export (def in config.tool_schemas)
-from jenny.config.tool_schemas import LocationConfig
-
 
 @tool_parameters(
     tool_parameters_schema(
@@ -48,12 +45,6 @@ class GetLocationTool(Tool):
         "maps link or distance calc, or with precise=true when you need an "
         "accurate live GPS fix."
     )
-
-    config_key = "location"
-
-    @classmethod
-    def config_cls(cls):
-        return LocationConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

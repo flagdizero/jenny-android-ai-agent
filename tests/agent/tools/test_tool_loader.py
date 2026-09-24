@@ -34,14 +34,6 @@ class _MinimalTool(Tool):
         return "ok"
 
 
-def test_tool_default_config_cls_is_none():
-    assert _MinimalTool.config_cls() is None
-
-
-def test_tool_default_config_key_is_empty():
-    assert _MinimalTool.config_key == ""
-
-
 def test_tool_default_enabled_is_true():
     assert _MinimalTool.enabled(None) is True
 
@@ -50,10 +42,6 @@ def test_tool_default_create_returns_instance():
     tool = _MinimalTool.create(None)
     assert isinstance(tool, _MinimalTool)
     assert tool.name == "test_minimal"
-
-
-def test_tool_plugin_discoverable_default_is_true():
-    assert _MinimalTool._plugin_discoverable is True
 
 
 # --- ToolContext tests ---
@@ -217,12 +205,6 @@ def test_cron_tool_create():
 # --- Task 6: PythonExecTool, WebTools ---
 
 
-def test_python_exec_tool_config_cls():
-    from jenny.agent.tools.python_exec import PythonExecConfig, PythonExecTool
-    assert PythonExecTool.config_cls() is PythonExecConfig
-    assert PythonExecTool.config_key == "python_exec"
-
-
 def test_python_exec_tool_enabled():
     from jenny.agent.tools.python_exec import PythonExecTool
     mock_config = MagicMock()
@@ -249,12 +231,6 @@ def test_python_exec_tool_create():
 
 
 # --- Task 7: MyToolConfig ---
-
-
-def test_my_tool_config_cls():
-    from jenny.agent.tools.self import MyTool, MyToolConfig
-    assert MyTool.config_key == "my"
-    assert MyTool.config_cls() is MyToolConfig
 
 
 def test_my_tool_enabled():

@@ -20,8 +20,6 @@ _HINT = "[Analyze the error above and try a different approach.]"
 class _StructuredEchoTool(Tool):
     """Tool migrato: ritorna ToolResult.success anche se il testo inizia per 'Error'."""
 
-    _plugin_discoverable = False
-
     @property
     def name(self) -> str:
         return "echo_report"

@@ -3167,14 +3167,9 @@ class PythonExecTool(Tool):
     """Execute Python code or call registered functions."""
 
     _scopes = {"core", "subagent"}
-    config_key = "python_exec"
 
     _MAX_TIMEOUT = 600
     _MAX_OUTPUT = 10_000
-
-    @classmethod
-    def config_cls(cls):
-        return PythonExecConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

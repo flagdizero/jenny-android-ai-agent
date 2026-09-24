@@ -533,7 +533,6 @@ class MemoryEntryTool(Tool):
     # Non scopribile come plugin: chi lo monta lo fa esplicitamente, perché a
     # chi darlo è una decisione aperta (punto 1.12 del piano) e un tool che si
     # auto-registra la prenderebbe per omissione.
-    _plugin_discoverable = False
 
     def __init__(
         self,
@@ -956,8 +955,7 @@ class MemoryEntryTool(Tool):
         dalla rete al confine del file, e un ``replace`` costruito da qui
         tornerebbe a essere il buco fra i due.
 
-        Il percorso è irraggiungibile oggi (nessun ``TOOLS``,
-        ``_plugin_discoverable = False``), quindi la scelta è fra un commento e un
+        Il percorso è irraggiungibile oggi (nessun ``TOOLS``), quindi la scelta è fra un commento e un
         rifiuto per il giorno in cui qualcuno mette questo modulo in
         ``_HARDCODED_TOOL_MODULES``. Vale il rifiuto: un ``create()`` che solleva
         non aborta il boot — ``ToolLoader`` lo registra in ``failures`` e logga a

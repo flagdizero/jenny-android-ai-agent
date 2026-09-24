@@ -15,7 +15,6 @@ from loguru import logger
 
 from jenny.agent.tools import diagnostics
 from jenny.agent.tools.diagnostics import GetRecentLogsTool, install_log_buffer
-from jenny.config.tool_schemas import DiagnosticsToolConfig
 
 
 @pytest.fixture(autouse=True)
@@ -195,12 +194,10 @@ def test_ring_buffer_evicts_oldest_beyond_max_size():
 # ---------------------------------------------------------------------------
 
 
-def test_tool_name_and_config_key():
+def test_tool_name_and_read_only():
     tool = _tool()
 
     assert tool.name == "get_recent_logs"
-    assert tool.config_key == "diagnostics"
-    assert tool.config_cls() is DiagnosticsToolConfig
     assert tool.read_only is True
 
 

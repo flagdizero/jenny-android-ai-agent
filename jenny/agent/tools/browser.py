@@ -33,7 +33,6 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from jenny.config.tool_schemas import AndroidWebToolsConfig
 
 _BROWSER_LOCK = asyncio.Lock()
 _BROWSER_INSTANCE: Any = None
@@ -296,15 +295,9 @@ class _BrowserToolBase(Tool):
 
     _scopes = {"core", "subagent"}
 
-    config_key = "androidWeb"
-
     @property
     def exclusive(self) -> bool:
         return True
-
-    @classmethod
-    def config_cls(cls):
-        return AndroidWebToolsConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

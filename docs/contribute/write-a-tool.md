@@ -78,12 +78,6 @@ class GetLocationTool(Tool):
     _scopes = {"core", "subagent"}
     name = "get_location"
     description = "Get the user's current location (reverse-geocoded place plus latitude/longitude)..."
-    config_key = "location"
-
-    @classmethod
-    def config_cls(cls):
-        return LocationConfig
-
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
         return (
@@ -114,7 +108,6 @@ Piece by piece:
 | `name`, `description` | Required abstract properties on `Tool`; `description` is what the LLM reads to decide when to call it — write it for the model, not for a human changelog. |
 | `@tool_parameters(...)` | Class decorator (`jenny/agent/tools/base.py`) that attaches a JSON Schema and synthesizes the `parameters` property for you, instead of hand-writing `@property def parameters(self): return {...}`. Build the schema with the helpers in `jenny/agent/tools/schema.py` (`StringSchema`, `BooleanSchema`, `tool_parameters_schema`, etc.). |
 | `_scopes` | Which execution contexts register this tool — see below. Defaults to `{"core"}` if omitted. |
-| `config_key` / `config_cls()` | Declares which config section (if any) backs this tool's settings, as a self-description hook. `config_cls()` defaults to `None` on `Tool`; override it to return the Pydantic-compat config class (see the config toggle pattern below). Nothing in the framework currently reads these back automatically — they document the tool's config binding for humans and future tooling, not a live wiring mechanism. |
 | `enabled(ctx)` classmethod | Gate that decides whether this tool registers at all for a given `ToolContext` — return `False` and the tool simply doesn't exist in that run (no error, no stub). Defaults to always `True` on `Tool`. |
 | `create(ctx)` classmethod | Builds the tool instance from a `ToolContext` (workspace path, config, bus, subagent manager, cron service, ...). Defaults to `cls()` (no-arg construction) — override it whenever your tool needs config or workspace access. |
 | `read_only` property | Defaults to `False`. Set it to `True` when the tool has no side effects — the runner uses this to decide what can run concurrently with other read-only tools (see `concurrency_safe` / `exclusive` on `Tool`). |
@@ -152,8 +145,7 @@ To wire a new toggle:
 
 1. Add a `<Thing>Config(Base)` class to `tool_schemas.py` with your fields and defaults (use `Field(..., ge=..., le=...)` for anything that needs range validation).
 2. Add a field for it on `ToolsConfig` in `jenny/config/schema.py` (`location: LocationConfig = Field(default_factory=LocationConfig)` is the existing example). `ToolContext.config` is set to the app's `ToolsConfig` instance directly (see `AgentLoop._register_default_tools` in `jenny/agent/loop.py`), so inside a tool it's reached as `ctx.config.location`, not `ctx.config.tools.location`; from the top-level `Config` object elsewhere in the codebase it's `config.tools.location`.
-3. In your tool, use `enabled(ctx)` to check the toggle (`ctx.config.location.enable`) and `create(ctx)` to hand the config object to the instance.
-4. Set `config_key` and override `config_cls()` on the tool class so the binding is self-documented next to the tool, even though nothing currently consumes those two attributes automatically.
+3. In your tool, use `enabled(ctx)` to check the toggle (`ctx.config.location.enable`) and `create(ctx)` to hand the config object to the instance. Those two classmethods are the whole binding — there is no separate attribute naming the config section.
 
 `camelCase` aliases (e.g. a JSON key like `freshTimeoutS`) are handled by the `Base`/`Field` layer the same way as the rest of the config — see [Configuration reference](../reference/configuration.md) for how the alias system works; you don't need anything tool-specific for it.
 
@@ -165,7 +157,7 @@ What existing tests check, worth copying:
 
 - **Unit-test `execute()` directly**, constructing the tool with `Tool.create`-equivalent arguments rather than going through the full `AgentRunner`.
 - **Mock outbound I/O.** `test_download.py` builds an `httpx.MockTransport` and monkeypatches `validate_url_target` to bypass DNS/SSRF resolution in tests (`monkeypatch.setattr(download_mod, "validate_url_target", lambda url: (True, None))`) — don't let a tool's test suite make real network calls.
-- **Test the registration surface too**, not just `execute()`: `tests/agent/tools/test_tool_loader.py` checks the defaults every `Tool` subclass gets (`config_cls() is None`, `config_key == ""`, `enabled(None) is True`, `_plugin_discoverable is True`) and exercises `ToolContext`'s required fields — useful as a checklist for anything you override.
+- **Test the registration surface too**, not just `execute()`: `tests/agent/tools/test_tool_loader.py` checks the defaults every `Tool` subclass gets (`enabled(None) is True`, `create(None)` returning an instance) and exercises `ToolContext`'s required fields — useful as a checklist for anything you override.
 - **The loader's failure policy is under test** — `tests/agent/tools/test_tool_loader.py` asserts that a collision and a module without `TOOLS` raise `ToolLoadError` out of `load()`, that a failing `enabled()`/`create()` is recorded in `ToolLoader.failures` instead, and that the shipped tool set loads with `failures == []`. If you touch that code path, extend those tests rather than relying on it only failing at gateway startup.
 
 ## Before opening a PR

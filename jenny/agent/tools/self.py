@@ -10,7 +10,6 @@ from loguru import logger
 from jenny.agent.tools.base import Tool
 from jenny.agent.tools.context import ContextAware, RequestContext
 from jenny.agent.tools.runtime_state import RuntimeState
-from jenny.config.tool_schemas import MyToolConfig  # re-export (def in config.tool_schemas)
 
 if TYPE_CHECKING:
     from jenny.agent.subagent import SubagentStatus
@@ -37,13 +36,6 @@ def _is_subagent_status(value: Any) -> bool:
 
 class MyTool(Tool, ContextAware):
     """Check and set the agent loop's runtime configuration."""
-
-    _plugin_discoverable = False  # Requires AgentLoop reference; registered manually
-    config_key = "my"
-
-    @classmethod
-    def config_cls(cls):
-        return MyToolConfig
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

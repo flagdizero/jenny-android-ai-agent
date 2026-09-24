@@ -16,7 +16,6 @@ import pytest
 import jenny.agent.tools.diagnostics as diagnostics_module
 from jenny.agent.tools import introspect
 from jenny.agent.tools.introspect import GetSourceTool
-from jenny.config.tool_schemas import IntrospectToolConfig
 
 
 def _tool() -> GetSourceTool:
@@ -253,12 +252,10 @@ def test_resolve_target_raises_import_error_for_unimportable_prefix():
 # ---------------------------------------------------------------------------
 
 
-def test_tool_name_and_config_key():
+def test_tool_name_and_read_only():
     tool = _tool()
 
     assert tool.name == "get_source"
-    assert tool.config_key == "introspect"
-    assert tool.config_cls() is IntrospectToolConfig
     assert tool.read_only is True
 
 
