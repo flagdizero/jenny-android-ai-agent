@@ -138,10 +138,8 @@ async def test_turn_end_partial_failure_retries_only_failed_connection(
     )
     await dispatcher._send_with_retry(channel, msg)
 
-    # `send()`'s _turn_end branch also broadcasts a *separate* session_updated
-    # event to every connection once turn_end fully lands — that's expected
-    # and orthogonal to this bug. What must not happen is either connection
-    # seeing the *turn_end* frame itself more than once.
+    # What must not happen is either connection seeing the *turn_end* frame
+    # more than once.
     conn1_turn_ends = [json.loads(r) for r in conn1.sent if json.loads(r).get("event") == "turn_end"]
     conn2_turn_ends = [json.loads(r) for r in conn2.sent if json.loads(r).get("event") == "turn_end"]
     assert len(conn1_turn_ends) == 1

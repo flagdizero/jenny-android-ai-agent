@@ -59,7 +59,7 @@ COORDINATION_FLAGS = (
     "_progress", "_stream_delta", "_stream_end", "_streamed",
     "_reasoning_delta", "_reasoning_end", "_retry_wait",
     "_turn_end", "_file_edit_events", "_goal_status",
-    "_session_updated", "_runtime_model_updated", "_app_data_changed",
+    "_runtime_model_updated", "_app_data_changed",
     "_apps_list_changed", "_user_echo",
     "_subagent_status", "_subagent_activity",
 )

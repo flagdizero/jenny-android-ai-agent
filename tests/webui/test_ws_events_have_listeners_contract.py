@@ -37,9 +37,6 @@ SENZA_ASCOLTATORE = {
     # ha niente da farci.
     "ready": "conferma di protocollo",
     "attached": "conferma di protocollo",
-    # Nessun client lo legge dal 0.3.0; si toglie col passo D5 di
-    # .agent/pulizia-codice-plan.md, e con lui questa riga.
-    "session_updated": "da togliere (piano, D5)",
 }
 
 def _emitted_events() -> set[str]:

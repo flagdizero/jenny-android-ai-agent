@@ -384,7 +384,7 @@ async def test_turn_end_is_ignored() -> None:
 
 async def test_webui_only_events_are_ignored() -> None:
     ch, api, bus = _channel(paired="42")
-    for key in ("_progress", "_session_updated", "_stream_delta", "_user_echo"):
+    for key in ("_progress", "_runtime_model_updated", "_stream_delta", "_user_echo"):
         await ch.send(
             OutboundMessage(
                 channel="telegram", chat_id="42", content="x", metadata={key: True}

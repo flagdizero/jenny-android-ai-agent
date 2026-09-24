@@ -226,13 +226,6 @@ appended to the transcript, so a reload replays it:
 {"event": "file_edit", "chat_id": "default", "edits": [{"path": "SOUL.md", "added": 2, "deleted": 1, "status": "done"}]}
 ```
 
-**`session_updated`** — the session changed underneath the client (compaction, rename, a
-project switch); `scope` narrows what to refresh when present:
-
-```json
-{"event": "session_updated", "chat_id": "default", "scope": "history"}
-```
-
 **`app_data_changed`** — a Jenny App's stored data changed, so an open app iframe should
 refresh itself. Broadcast to every connection, not just one chat's subscribers:
 

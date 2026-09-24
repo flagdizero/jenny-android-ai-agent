@@ -236,7 +236,6 @@ class OutboundSenderMixin:
                 msg.metadata.get("_progress")
                 or msg.metadata.get("_file_edit_events")
                 or msg.metadata.get("_turn_end")
-                or msg.metadata.get("_session_updated")
                 or msg.metadata.get("_goal_status")
                 or msg.metadata.get("_mascot_mood")
                 or msg.metadata.get(OUTBOUND_META_SUBAGENT_STATUS) is not None
@@ -304,19 +303,7 @@ class OutboundSenderMixin:
                 only_conns=only_conns,
                 skip_persist=skip_persist,
             )
-            if not pending:
-                # Only announce the session refresh once turn_end has fully
-                # landed — otherwise a retry would re-broadcast it too.
-                await self.send_session_updated(msg.chat_id, scope="thread")
             return pending
-        if msg.metadata.get("_session_updated"):
-            if conns:
-                scope = msg.metadata.get("_session_update_scope")
-                await self.send_session_updated(
-                    msg.chat_id,
-                    scope=scope if isinstance(scope, str) else None,
-                )
-            return []
         if msg.metadata.get("_file_edit_events"):
             edits = msg.metadata.get("_file_edit_events")
             return await self.send_file_edit_events(
@@ -950,18 +937,6 @@ class OutboundSenderMixin:
             if payload is None or not payload["events"]:
                 continue
             await self.send_subagent_activity(task_id, payload)
-
-    async def send_session_updated(self, chat_id: str, *, scope: str | None = None) -> None:
-        """Notify WebUI clients that a session row should refresh."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        body: dict[str, Any] = {"event": "session_updated", "chat_id": chat_id}
-        if scope:
-            body["scope"] = scope
-        raw = json.dumps(body, ensure_ascii=False)
-        # Idempotent refresh-hint: discard pending, no retry (next update replaces it).
-        await self._fanout(conns, raw, label=" session_updated ")
 
     async def send_app_data_changed(self, slug: str) -> None:
         """Broadcast that a Jenny App's data changed (open app iframes refresh)."""
