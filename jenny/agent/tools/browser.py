@@ -225,6 +225,36 @@ async def _call(
     return _decode(raw)
 
 
+async def _session_isolated() -> bool | None:
+    """La sessione aperta ha un profilo suo, o divide i cookie con ``web_fetch``?
+
+    Il bridge mette la sessione in un profilo separato (``MULTI_PROFILE``) e lo
+    butta alla chiusura; dove la WebView non lo supporta resta sul profilo di
+    default, cioe' sullo stesso barattolo di cookie di ``web_fetch``, e
+    ``browser_close`` non cancella niente. Il modello lo deve sapere: la
+    descrizione del tool gli promette il contrario.
+
+    ``None`` se non si sa (nessuna sessione, bridge vecchio, errore): nel dubbio
+    non si avvisa di un difetto che forse non c'e'. Non passa da ``_call`` perche'
+    il metodo rende un booleano, non JSON.
+    """
+    async with _BROWSER_LOCK:
+        bridge = _BROWSER_INSTANCE
+        if bridge is None:
+            return None
+        try:
+            return bool(await asyncio.to_thread(bridge.isIsolated))
+        except Exception:
+            logger.opt(exception=True).debug("isIsolated non disponibile")
+            return None
+
+
+_NOT_ISOLATED_NOTICE = (
+    "⚠ This device's WebView cannot give the browser its own profile: this session "
+    "shares cookies and logins with web_fetch, and browser_close will not erase them."
+)
+
+
 def _render_snapshot(data: dict[str, Any]) -> str:
     """Compone lo snapshot per il modello, e aggiorna l'indice dei ref."""
     # I ref si accumulano dentro lo stesso documento, quindi l'indice si somma
@@ -366,7 +396,10 @@ class BrowserOpenTool(_BrowserToolBase):
         )
         if shot.get("error"):
             return f"Error: {shot['error']}"
-        return _render_snapshot(shot)
+        text = _render_snapshot(shot)
+        if await _session_isolated() is False:
+            text += f"\n\n{_NOT_ISOLATED_NOTICE}"
+        return text
 
 
 @tool_parameters(

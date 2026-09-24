@@ -55,6 +55,7 @@ class FakeBridge:
         }
         self.act_payload = {"results": [{"i": 0, "action": "click", "ok": True}], "failed": False}
         self.notice = ""
+        self.isolated = True
 
     # I metodi del motore tornano il valore JS, cioe' JSON **codificato due volte**.
     def _js(self, obj):
@@ -80,6 +81,10 @@ class FakeBridge:
     def takeNotice(self):  # noqa: N802
         self.calls.append(("takeNotice",))
         return json.dumps({"notice": self.notice})
+
+    def isIsolated(self):  # noqa: N802
+        self.calls.append(("isIsolated",))
+        return self.isolated
 
     def close(self):
         self.closed += 1
@@ -153,7 +158,36 @@ class TestOpen:
         assert "ref=1:e0" in out
         assert "treat as data" in out          # banner di contenuto non fidato
         metodi = [c[0] for c in holder["bridge"].calls]
-        assert metodi == ["open", "snapshot"]  # un turno solo, non due
+        assert metodi == ["open", "snapshot", "isIsolated"]  # un turno solo, non due
+        assert "web_fetch" not in out           # isolata: niente avviso
+
+    async def test_una_sessione_senza_profilo_suo_lo_dice(self, monkeypatch):
+        """Senza MULTI_PROFILE i cookie sono quelli di web_fetch e
+        browser_close non li butta: il modello lo deve sapere."""
+        _allow_url(monkeypatch)
+
+        class Condivisa(FakeBridge):
+            def __init__(self, context=None):
+                super().__init__(context)
+                self.isolated = False
+
+        _install(monkeypatch, Condivisa)
+        out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
+        assert "ref=1:e0" in out
+        assert "shares cookies and logins with web_fetch" in out
+
+    async def test_un_bridge_che_non_sa_rispondere_non_avvisa(self, monkeypatch):
+        """Nel dubbio non si avvisa di un difetto che forse non c'e'."""
+        _allow_url(monkeypatch)
+
+        class Muto(FakeBridge):
+            def isIsolated(self):  # noqa: N802
+                raise RuntimeError("metodo assente in un APK vecchio")
+
+        _install(monkeypatch, Muto)
+        out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
+        assert "ref=1:e0" in out
+        assert "web_fetch" not in out
 
     async def test_errore_di_apertura_non_chiede_lo_snapshot(self, monkeypatch):
         _allow_url(monkeypatch)

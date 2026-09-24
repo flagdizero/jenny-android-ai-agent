@@ -328,6 +328,8 @@ class JennyBrowserBridge(context: Context) {
         return """{"notice":${quote(describeBlock(raw))}}"""
     }
 
+    /** La sessione ha un profilo suo? Lo chiede ``browser_open`` (``browser.py``)
+     *  per avvisare il modello quando i cookie sono quelli di ``web_fetch``. */
     fun isIsolated(): Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
 
     // ------------------------------------------------------------------ attese
