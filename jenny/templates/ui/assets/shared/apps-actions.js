@@ -204,6 +204,14 @@ export class AppsActions {
       return;
     }
 
+    this._montaVelo(slug, app, cornicePerApp(slug));
+  }
+
+  /* Il velo sopra tutto con la testata e la *iframe* dentro: è lo stesso per
+     l'app del gateway e per la vista esterna, che differiscono solo nella
+     cornice (sandbox e origine, v. `_openExternalView`) e nel proxy da
+     chiudere, che `closeApp` riconosce da *external*. */
+  _montaVelo(slug, app, iframe, { external = false } = {}) {
     this.closeApp();
     const overlay = document.createElement('div');
     overlay.className = 'app-frame-overlay';
@@ -213,13 +221,13 @@ export class AppsActions {
         <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
       </div>
     `;
-    const iframe = cornicePerApp(slug);
     overlay.appendChild(iframe);
     overlay.querySelector('.app-frame-close').addEventListener('click', () => this.closeApp());
 
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('visible'));
     this._openApp = { slug, overlay, iframe, depth: 1 };
+    if (external) this._openApp.external = true;
   }
   async _openExternalView(slug, app) {
     let url;
@@ -235,15 +243,6 @@ export class AppsActions {
       return;
     }
 
-    this.closeApp();
-    const overlay = document.createElement('div');
-    overlay.className = 'app-frame-overlay';
-    overlay.innerHTML = `
-      <div class="app-frame-header">
-        <span class="app-frame-title">${escapeHtml(app.name || slug)}</span>
-        <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
-      </div>
-    `;
     const iframe = document.createElement('iframe');
     /* Sandbox più largo che per una app normale, e la differenza è l'ORIGINE,
        non la fiducia.
@@ -268,12 +267,7 @@ export class AppsActions {
       'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
     );
     iframe.src = url;
-    overlay.appendChild(iframe);
-    overlay.querySelector('.app-frame-close').addEventListener('click', () => this.closeApp());
-
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('visible'));
-    this._openApp = { slug, overlay, iframe, depth: 1, external: true };
+    this._montaVelo(slug, app, iframe, { external: true });
   }
   closeApp() {
     const open = this._openApp;
