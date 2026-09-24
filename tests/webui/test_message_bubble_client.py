@@ -30,18 +30,15 @@ testo si perde — e c'è un doppio minimo di `document`/`requestAnimationFrame`
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # I metodi veri sotto misura: il rendering di un testo completo, quello di un testo
 # che cresce, e la chiusura di segmento che i due condividono.
@@ -156,13 +153,7 @@ function stream(chat, text) {
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _harness() + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_harness() + script)
 
 
 AVVISO = "ciao papi, sono le 20:00 — ora di mollare tutto"

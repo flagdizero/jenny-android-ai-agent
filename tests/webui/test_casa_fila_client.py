@@ -13,18 +13,16 @@ come fa il modulo, e il banco li legge.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 _VICINI = {
@@ -154,8 +152,7 @@ def _run(corpo: str) -> None:
             (radice / "shared" / nome).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
-        proc = subprocess.run([str(_NODE), str(entry)], capture_output=True, text=True, timeout=60)
-        assert proc.returncode == 0, proc.stderr or proc.stdout
+        run_module(entry)
 
 
 # ── La fila ─────────────────────────────────────────────────────────────────

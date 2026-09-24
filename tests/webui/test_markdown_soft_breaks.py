@@ -17,13 +17,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
+from support.js_harness import NODE, requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 MARKED = ASSETS / "vendor" / "marked@15.0.7" / "marked.min.js"
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _casa_render(text: str) -> str:
@@ -46,9 +45,7 @@ def _casa_render(text: str) -> str:
             f"process.stdout.write(JSON.stringify(renderMarkdown({json.dumps(text)})));\n",
             encoding="utf-8",
         )
-        proc = subprocess.run([str(_NODE), str(entry)], capture_output=True, text=True, timeout=60)
-        assert proc.returncode == 0, proc.stderr
-        return json.loads(proc.stdout)
+        return json.loads(run_module(entry))
 
 
 def test_a_single_newline_is_a_line_break_in_the_casa() -> None:
@@ -79,7 +76,7 @@ def test_the_workshop_renderer_survives_the_shared_configuration() -> None:
         "marked.setOptions({ gfm: true, breaks: true });\n"
         "process.stdout.write(marked.parse('```js\\nx\\n```\\n\\na\\nb'));\n"
     )
-    proc = subprocess.run([str(_NODE), "-e", script], capture_output=True, text=True, timeout=60)
+    proc = subprocess.run([str(NODE), "-e", script], capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, proc.stderr
     assert 'class="chat-code-block"' in proc.stdout, proc.stdout
     assert "a<br>b" in proc.stdout, proc.stdout

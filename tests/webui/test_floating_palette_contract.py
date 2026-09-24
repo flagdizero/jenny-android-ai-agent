@@ -21,11 +21,9 @@ tenere allineati. Qui si prova il giro intero, che nessun compilatore vede:
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -33,7 +31,6 @@ THEME_JS = ASSETS / "shared" / "theme.js"
 SPA_CSS = ASSETS / "mobile-style.css"
 ANDROID = ROOT / "android/app/src/main/java/com/flagdizero/jenny"
 
-_NODE = shutil.which("node")
 
 # I sei token che vestono la finestra, nell'ordine in cui viaggiano sul ponte.
 TOKENS = ["--surface", "--border-strong", "--text", "--text-faint", "--accent", "--on-accent"]
@@ -69,17 +66,10 @@ def _run_js(script: str) -> str:
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
-@pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+@requires_node
 class TestLaConversione:
     """``argbHex``: da come lo scrive il CSS a come lo legge Android."""
 

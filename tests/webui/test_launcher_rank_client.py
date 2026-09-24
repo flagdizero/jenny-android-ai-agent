@@ -15,20 +15,17 @@ semplicemente sbagliato, e nessuno saprebbe dire rispetto a cosa.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 RANK_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "launcher-rank.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # Storage finto: `UsageRanking` prende lo storage dal costruttore proprio per
 # questo — sotto node `localStorage` non esiste, e stubbarlo globalmente
@@ -52,14 +49,7 @@ def _run_js(script: str) -> str:
         + _FAKE_STORAGE
         + script
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
 def _entries_js(entries: list[dict]) -> str:

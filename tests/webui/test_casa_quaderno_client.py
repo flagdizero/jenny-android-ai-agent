@@ -16,18 +16,17 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
 
 import pytest
+from support.js_harness import requires_node, run_js, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 _VICINI = {
     "api-client.js": "export const api = { getSecret() { return 'ok'; } };\n",
@@ -109,8 +108,7 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
             (radice / "shared" / nome).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
-        proc = subprocess.run([str(_NODE), str(entry)], capture_output=True, text=True, timeout=60)
-        assert proc.returncode == 0, proc.stderr or proc.stdout
+        run_module(entry)
 
 
 # ── Le righe ────────────────────────────────────────────────────────────────
@@ -220,10 +218,7 @@ def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
         const g = new Guscio();
         """
     ) + corpo
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(script)
 
 
 def test_a_delete_asks_with_the_notebook_words() -> None:
@@ -334,10 +329,7 @@ def _run_rinomina(corpo: str, *, scritto: str | None, corrente: str | None, rifi
         const g = new Guscio();
         """
     ) + corpo
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(script)
 
 
 def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -> None:

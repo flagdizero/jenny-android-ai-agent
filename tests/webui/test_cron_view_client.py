@@ -16,20 +16,17 @@ niente si rompe, l'informazione si limita a diventare inutile.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 VIEW_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "cron-view.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # ``tr`` finta: ritorna la chiave piu' i parametri, cosi' un'asserzione dice
 # quale stringa e' stata scelta senza dipendere da una traduzione vera. Il
@@ -44,15 +41,7 @@ const NOW = 1_700_000_000_000;
 
 def _run_js(script: str) -> str:
     source = VIEW_JS.read_text(encoding="utf-8") + _HARNESS + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env={"TZ": "Europe/Rome", "PATH": "/usr/bin:/bin:/usr/local/bin"},
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source, env={"TZ": "Europe/Rome", "PATH": "/usr/bin:/bin:/usr/local/bin"})
 
 
 # ── il vocabolario dei cinque esiti ─────────────────────────────────────────

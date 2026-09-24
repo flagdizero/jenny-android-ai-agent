@@ -23,18 +23,16 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
 import textwrap
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 ASSETS = UI / "assets"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 _FINTO_DOM = """
@@ -406,10 +404,7 @@ def _run(
             + _script(corpo, schermate or [], vista),
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            [str(_NODE), str(entry)], capture_output=True, text=True, timeout=60
-        )
-        assert proc.returncode == 0, proc.stderr or proc.stdout
+        run_module(entry)
 
 
 UNA = [{"id": "p1", "kind": "app", "ref": "orto"}]

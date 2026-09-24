@@ -19,11 +19,9 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
@@ -33,7 +31,6 @@ FOGLI = {
     "casa": ASSETS / "casa-style.css",
 }
 
-_NODE = shutil.which("node")
 
 ANCORAGGIO = re.compile(r"(?:left|right):\s*calc\([^;]*--jenny-size[^;]*\);")
 SPRITE = (r"\.jenny-duo",)
@@ -74,7 +71,7 @@ def test_the_two_anchors_live_in_the_shared_module() -> None:
     )
 
 
-@pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+@requires_node
 def test_the_anchors_reach_the_css_before_any_sprite_exists() -> None:
     """All'import, e non da un costruttore.
 
@@ -101,13 +98,7 @@ assert.deepEqual(
     JSON.stringify([...scritte]),
 );
 """.replace("__URL__", json.dumps(MASCOT_JS.as_uri()))
-    done = subprocess.run(
-        [_NODE, "--input-type=module", "-e", sorgente],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert done.returncode == 0, done.stderr or done.stdout
+    run_js(sorgente, timeout=30)
 
 
 def test_no_stylesheet_spells_the_ratio_out_again() -> None:

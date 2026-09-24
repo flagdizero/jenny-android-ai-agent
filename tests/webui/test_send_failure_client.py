@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -32,9 +30,8 @@ CHAT_JS = ASSETS / "mobile-chat.js"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
 I18N = ASSETS / "i18n"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _member(source: str, name: str) -> str:
@@ -144,13 +141,7 @@ def _harness_src() -> str:
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _harness_src() + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_harness_src() + "\n" + script)
 
 
 # ── Socket chiuso ────────────────────────────────────────────────────────────

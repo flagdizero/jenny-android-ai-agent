@@ -25,20 +25,20 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from support.js_harness import NODE
 
 from jenny.webui.wiki import build_graph, read_pages
 from jenny.webui.wiki_search import SearchIndex, pack_index
 
 UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 
-_NODE = shutil.which("node")
 
 
 def _jsdom_available() -> bool:
-    if _NODE is None:
+    if NODE is None:
         return False
     probe = subprocess.run(
-        [_NODE, "-e", "require.resolve('jsdom')"], capture_output=True, text=True
+        [NODE, "-e", "require.resolve('jsdom')"], capture_output=True, text=True
     )
     return probe.returncode == 0
 
@@ -252,9 +252,9 @@ def harness_dir(tmp_path: Path) -> Path:
 
 
 def test_search_lights_and_dims_the_right_nodes(harness_dir: Path) -> None:
-    assert _NODE is not None
+    assert NODE is not None
     proc = subprocess.run(
-        [_NODE, str(harness_dir / "harness.mjs")],
+        [NODE, str(harness_dir / "harness.mjs")],
         capture_output=True,
         text=True,
         timeout=120,

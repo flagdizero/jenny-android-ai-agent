@@ -16,11 +16,9 @@ scritto nel dizionario, e la ricerca "non trova" senza dire perché.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 from jenny.webui.wiki import build_graph, read_pages
 from jenny.webui.wiki_search import SearchIndex, pack_index, tokenize
@@ -30,21 +28,13 @@ SEARCH_JS = (
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "wiki-search.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _run_js(script: str) -> str:
     source = SEARCH_JS.read_text(encoding="utf-8") + "\nimport assert from 'node:assert/strict';\n" + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
 def _wire(tmp_path: Path, pages: dict[str, str]) -> tuple[dict, list[str]]:

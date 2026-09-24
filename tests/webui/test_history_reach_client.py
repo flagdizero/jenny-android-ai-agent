@@ -23,18 +23,15 @@ sola, e il test la importa davvero invece di ritagliarne il testo da un guscio.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 PAGER_JS = ASSETS / "shared" / "history-pager.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 _HARNESS = """
@@ -108,13 +105,7 @@ def _harness() -> str:
 
 def _run_js(script: str) -> None:
     source = _harness() + "\n" + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(source)
 
 
 def test_the_button_appears_when_there_is_more_but_nothing_to_scroll() -> None:

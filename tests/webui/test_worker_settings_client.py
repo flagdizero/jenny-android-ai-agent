@@ -19,18 +19,16 @@ bugia entrerebbe:
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+from support.js_harness import requires_node, run_module
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _member(name: str) -> str:
@@ -151,14 +149,7 @@ def _run(script: str, tmp_path: Path) -> str:
     harness = _HARNESS.replace("__MEMBERS__", members).replace("__PAYLOAD__", _PAYLOAD)
     (tmp_path / "harness.mjs").write_text(harness, encoding="utf-8")
     (tmp_path / "test.mjs").write_text(script, encoding="utf-8")
-    result = subprocess.run(
-        [_NODE, str(tmp_path / "test.mjs")],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stderr or result.stdout
-    return result.stdout
+    return run_module(tmp_path / "test.mjs", timeout=30)
 
 
 def _toggles() -> str:

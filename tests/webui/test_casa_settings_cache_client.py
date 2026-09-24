@@ -14,17 +14,14 @@ della casa.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "casa-app.js"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _member(source: str, name: str) -> str:
@@ -52,13 +49,7 @@ class Casa {{
 const casa = new Casa();
 const giro = () => new Promise((r) => setTimeout(r, 0));
 """
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + script)
 
 
 def test_reopening_settings_reads_the_switch_as_it_ended() -> None:

@@ -20,11 +20,9 @@ finisce lei, che non ha stato leggibile da fuori se non il ``transform``.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 UI_ASSETS = UI / "assets"
@@ -35,8 +33,7 @@ ANDROID = (
     / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny"
 )
 
-_NODE = shutil.which("node")
-node = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+node = requires_node
 
 
 def _mascot_js() -> str:
@@ -161,13 +158,7 @@ function fly(vw, path, { out = false } = {}) {
 
 def _run_flight(source: str) -> None:
     script = _HARNESS.replace("DRAG_URL", json.dumps(DRAG_JS.as_uri())) + source
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", script],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(script, timeout=30)
 
 
 @node

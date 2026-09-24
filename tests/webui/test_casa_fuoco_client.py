@@ -16,20 +16,17 @@ WebView lo dice il telefono, non questo banco.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 FUOCO_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "casa-fuoco.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 _HARNESS = """
@@ -70,14 +67,7 @@ function tocco(el) {
 
 def _run_js(script: str) -> dict:
     source = _HARNESS.replace("__URL__", FUOCO_JS.as_uri()) + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return json.loads(proc.stdout)
+    return json.loads(run_js(source))
 
 
 def test_a_character_typed_into_the_void_lands_in_the_field() -> None:

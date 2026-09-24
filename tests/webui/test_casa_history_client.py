@@ -15,18 +15,15 @@ sopra, o incollata al contrario — e quello si vede solo leggendo il filo.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CASA_CHAT_JS = ASSETS / "casa-chat.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _member(source: str, name: str) -> str:
@@ -150,13 +147,7 @@ def _harness() -> str:
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _harness() + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_harness() + "\n" + script)
 
 
 def test_an_older_page_lands_above_what_was_already_there() -> None:
@@ -329,13 +320,7 @@ def _stick_harness() -> str:
 
 
 def _run_stick(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _stick_harness() + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_stick_harness() + "\n" + script)
 
 
 def test_a_row_appearing_below_does_not_unstick_the_thread() -> None:

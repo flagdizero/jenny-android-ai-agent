@@ -24,19 +24,16 @@ la WebUI non ha un runner con DOM, ma queste due funzioni non lo toccano.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _method(source: str, name: str) -> str:
@@ -83,13 +80,7 @@ function frame(event, turn_id) {{
 
 def _run_js(script: str) -> None:
     source = _harness() + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(source)
 
 
 # ── Chat: ogni turno la sua bolla ───────────────────────────────────────────

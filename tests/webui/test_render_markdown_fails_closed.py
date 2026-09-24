@@ -12,16 +12,14 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 ESCAPE = """
 function escapeHtml(s) {
@@ -49,9 +47,7 @@ def _run(setup: str, text: str) -> str:
             f"process.stdout.write(JSON.stringify(renderMarkdown({json.dumps(text)})));\n",
             encoding="utf-8",
         )
-        proc = subprocess.run([str(_NODE), str(entry)], capture_output=True, text=True, timeout=60)
-        assert proc.returncode == 0, proc.stderr
-        return json.loads(proc.stdout)
+        return json.loads(run_module(entry))
 
 
 MARKED = (

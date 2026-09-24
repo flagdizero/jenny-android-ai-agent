@@ -20,20 +20,17 @@ Il modulo prende ``activeElement`` come argomento invece di leggerlo da
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 TYPE_AHEAD_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "type-ahead.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _run_js(script: str) -> str:
@@ -42,14 +39,7 @@ def _run_js(script: str) -> str:
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
 def test_a_physical_keyboard_keydown_without_key_is_not_text() -> None:

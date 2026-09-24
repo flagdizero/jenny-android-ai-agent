@@ -19,19 +19,16 @@ diverso di far sparire del lavoro senza che nessuno se ne accorga:
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 READER_JS = ASSETS / "casa-reader.js"
 APP_JS = ASSETS / "casa-app.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 _MEMBERS = ("isDirty", "startEdit", "cancelEdit", "blurEditor", "askCancel", "save", "_onConflict")
 
@@ -95,13 +92,7 @@ def _run(script: str) -> None:
     src = READER_JS.read_text(encoding="utf-8")
     body = "\n\n  ".join(_member(src, n) for n in _MEMBERS)
     harness = _HARNESS.replace("__MEMBERS__", body)
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + "\n" + script)
 
 
 def test_the_base_sent_is_the_loaded_source_not_the_edited_text() -> None:

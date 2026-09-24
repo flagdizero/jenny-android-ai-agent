@@ -15,20 +15,17 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "casa-audit.js"
 APP_JS = ASSETS / "casa-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _function(source: str, name: str) -> str:
@@ -40,13 +37,7 @@ def _function(source: str, name: str) -> str:
 def _run(script: str) -> None:
     src = AUDIT_JS.read_text(encoding="utf-8")
     harness = "import assert from 'node:assert/strict';\n" + _function(src, "offsetsIn")
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + "\n" + script)
 
 
 def test_a_unique_selection_gives_its_offsets_in_the_source() -> None:
@@ -187,13 +178,7 @@ def _run_app(script: str) -> None:
                                             "messaggioSegnalazione"))
         .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_portaInChat"))
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + "\n" + script)
 
 
 def test_the_message_carries_the_page_the_quote_and_the_id() -> None:

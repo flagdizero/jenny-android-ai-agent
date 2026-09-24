@@ -11,20 +11,17 @@ avvio, quindi no — e un interruttore che mente è peggio di un lucchetto.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 VIEW_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "skills-view.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _run_js(script: str) -> None:
@@ -33,13 +30,7 @@ def _run_js(script: str) -> None:
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(source)
 
 
 def test_each_kind_of_skill_lands_where_the_plan_says() -> None:

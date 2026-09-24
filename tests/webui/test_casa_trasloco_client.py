@@ -22,18 +22,16 @@ Quel che non prova: come si vede. Lo scorrimento lo prova il telefono.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 _DOM = r"""
@@ -192,10 +190,7 @@ def _run(corpo: str) -> None:
             + corpo,
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            [str(_NODE), str(entry)], capture_output=True, text=True, timeout=60
-        )
-        assert proc.returncode == 0, proc.stderr or proc.stdout
+        run_module(entry)
 
 
 # ── L'arrivo ────────────────────────────────────────────────────────────────

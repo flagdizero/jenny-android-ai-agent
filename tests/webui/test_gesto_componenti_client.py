@@ -17,17 +17,14 @@ che il dito ci arrivi (quello l'ha detto il telefono).
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULO = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "gesto-orizzontale.js"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 _HARNESS = """
 import assert from 'node:assert/strict';
@@ -128,14 +125,7 @@ const dentro = (tag, opz = {}) => el(tag, { parent: document.body, ...opz });
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _HARNESS + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env={"MODULO": MODULO.as_uri(), "PATH": "/usr/bin:/bin"},
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_HARNESS + "\n" + script, env={"MODULO": MODULO.as_uri(), "PATH": "/usr/bin:/bin"})
 
 
 def test_a_plain_area_swipes_the_page() -> None:

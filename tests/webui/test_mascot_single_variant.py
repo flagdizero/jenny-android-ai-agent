@@ -16,11 +16,9 @@ non dentro una funzione.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 from jenny.utils.android_assets import _UI_MANIFEST
 
@@ -28,8 +26,7 @@ ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "a
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 DEAD_KEY = "jenny-mascotte-color"
 
-_NODE = shutil.which("node")
-node = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+node = requires_node
 
 
 # Importare il modulo scrive i due ancoraggi su <html> (v.
@@ -41,13 +38,7 @@ globalThis.document = { documentElement: { style: { setProperty() {} } } };
 
 
 def _run(source: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _DOM + source],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_DOM + source, timeout=30)
 
 
 def test_no_asset_path_asks_for_a_color_twin() -> None:

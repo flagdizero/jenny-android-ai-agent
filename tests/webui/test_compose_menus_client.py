@@ -20,20 +20,17 @@ aggiungono è una riga a testa.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 STATE_JS = ASSETS / "shared" / "state.js"
 SCOPE_JS = ASSETS / "shared" / "scope-chip.js"
 COMMANDS_JS = ASSETS / "shared" / "commands-chip.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 # `state.js` legge il tema da `localStorage` al caricamento del modulo, e in node
@@ -49,13 +46,7 @@ def _state_source() -> str:
 
 def _run_js(script: str) -> None:
     source = _state_source() + "\n" + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(source)
 
 
 _TWO_MENUS = """

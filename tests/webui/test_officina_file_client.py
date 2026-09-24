@@ -28,11 +28,9 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -41,9 +39,8 @@ WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _member(source: str, name: str) -> str:
@@ -195,13 +192,7 @@ def _harness() -> str:
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _harness() + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_harness() + "\n" + script)
 
 
 def test_outside_memoria_nothing_is_read() -> None:
@@ -210,12 +201,7 @@ def test_outside_memoria_nothing_is_read() -> None:
     sarebbe traffico per un disegno che nessuno vedra'."""
     settings = SETTINGS_JS.read_text(encoding="utf-8")
     monta = _member(settings, "_montaFile")
-    proc = subprocess.run(
-        [
-            str(_NODE),
-            "--input-type=module",
-            "-e",
-            """
+    run_js("""
 import assert from 'node:assert/strict';
 let montaggi = 0;
 globalThis.window = { mobileApp: {
@@ -233,13 +219,7 @@ assert.equal(montaggi, 0, 'il gestore file si monta fuori da Memoria');
 // E in Memoria si monta, o il banco sopra passerebbe per un refuso.
 new C({ querySelector: () => ({}) })._montaFile();
 assert.equal(montaggi, 1, 'in Memoria il gestore non si monta affatto');
-""",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+""",)
 
 
 def test_service_files_are_never_listed() -> None:

@@ -18,11 +18,9 @@ difetto senza che servisse inciamparci.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 HANDLER_JS = (ROOT / "jenny" / "templates" / "ui" / "assets" / "shared"
@@ -158,7 +156,6 @@ def test_the_officina_hook_comes_after_the_handler_exists() -> None:
 
 # ── E che i tetti mordano davvero ────────────────────────────────────────────
 
-_NODE = shutil.which("node")
 HANDLER_PATH = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "image-handler.js"
 
 _HARNESS = """
@@ -184,17 +181,10 @@ const kinds = (h) => h._items.map((it) => it.kind);
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e",
-         _HARNESS.replace("__HANDLER_URL__", HANDLER_PATH.as_uri()) + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_HARNESS.replace("__HANDLER_URL__", HANDLER_PATH.as_uri()) + "\n" + script)
 
 
-dynamic = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+dynamic = requires_node
 
 
 @dynamic

@@ -17,18 +17,16 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 # Un DOM minimo: il fiore crea nodi SVG e scrive attributi, nient'altro.
@@ -60,10 +58,7 @@ def _run(corpo: str) -> None:
             + textwrap.dedent(corpo),
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            [str(_NODE), str(entry)], capture_output=True, text=True, timeout=60
-        )
-        assert proc.returncode == 0, proc.stderr or proc.stdout
+        run_module(entry)
 
 
 def test_nessuna_posa_sfasa_grandezza_o_spinta_fra_i_petali() -> None:

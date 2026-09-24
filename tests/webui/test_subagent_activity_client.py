@@ -26,20 +26,17 @@ Le cinque che costa di più perdere, in ordine:
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 POLICY_JS = (
     Path(__file__).resolve().parents[2]
     / "jenny" / "templates" / "ui" / "assets" / "shared" / "subagent-policy.js"
 )
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # Helper JS condivisi dai casi: la forma del frame è quella di
 # ``channels/subagent_activity_wire.py::activity_frame`` (envelope + finestra,
@@ -74,14 +71,7 @@ function seqs(state) { return state.events.map(e => e.seq); }
 
 def _run_js(script: str) -> str:
     source = POLICY_JS.read_text(encoding="utf-8") + _PRELUDE + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
 # ---------------------------------------------------------------------------

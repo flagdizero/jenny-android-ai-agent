@@ -20,11 +20,9 @@ rimasta.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 STORE_JS = (
     Path(__file__).resolve().parents[2]
@@ -32,9 +30,8 @@ STORE_JS = (
 )
 RANK_JS = STORE_JS.parent / "launcher-rank.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # Un `localStorage` finto (con `removeItem`, che la migrazione usa) e un ponte
 # nativo finto che si puo' rompere a comando — i due guasti che contano sono
@@ -70,14 +67,7 @@ def _run_js(script: str, *, with_rank: bool = False) -> str:
     if with_rank:
         source += "\n" + RANK_JS.read_text(encoding="utf-8")
     source += "\nimport assert from 'node:assert/strict';\n" + _FINTI + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", source],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(source)
 
 
 # ── La scelta del posto ─────────────────────────────────────────────────────

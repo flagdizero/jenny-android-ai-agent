@@ -22,19 +22,16 @@ esattamente cosa sta appeso al chip e quando — quindi lo stub tiene `dataset`,
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 STYLE_CSS = ASSETS / "mobile-style.css"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 _METHODS = (
     "_renderToolEvents",
@@ -141,13 +138,7 @@ const BOOM = {
 
 
 def _run_js(script: str) -> None:
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", _harness() + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(_harness() + script)
 
 
 def test_a_failed_tool_starts_collapsed() -> None:

@@ -22,18 +22,16 @@ davvero vorrebbe dire provare il browser invece della sintassi.
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import NODE, requires_node
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 # Il parser sta in una stringa e non in un file del repo: e' un attrezzo di
 # questo banco, e tenerlo qui significa che non puo' divergere da chi lo usa.
@@ -66,7 +64,7 @@ def test_every_ui_module_parses_as_an_es_module() -> None:
     assert len(sorgenti) > 30, f"trovati solo {len(sorgenti)} moduli: il banco guarda male"
 
     proc = subprocess.run(
-        [str(_NODE), "--experimental-vm-modules", "--input-type=module",
+        [str(NODE), "--experimental-vm-modules", "--input-type=module",
          "--eval", _PARSER, "--", *[str(p) for p in sorgenti]],
         capture_output=True, text=True, timeout=120,
     )
@@ -99,7 +97,7 @@ export class Prova {
     finto.write_text(rotto, encoding="utf-8")
     try:
         proc = subprocess.run(
-            [str(_NODE), "--experimental-vm-modules", "--input-type=module",
+            [str(NODE), "--experimental-vm-modules", "--input-type=module",
              "--eval", _PARSER, "--", str(finto)],
             capture_output=True, text=True, timeout=60,
         )
@@ -126,7 +124,7 @@ def test_node_check_would_not_have_caught_it() -> None:
     )
     try:
         proc = subprocess.run(
-            [str(_NODE), "--check", str(finto)], capture_output=True, text=True, timeout=60,
+            [str(NODE), "--check", str(finto)], capture_output=True, text=True, timeout=60,
         )
         assert proc.returncode == 0, (
             "node --check adesso lo vede: il parser di questo banco si puo' "

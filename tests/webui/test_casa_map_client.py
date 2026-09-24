@@ -15,18 +15,15 @@ sembra rotta anche quando disegna gli stessi nodi.
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MAP_JS = ASSETS / "casa-map.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _function(source: str, name: str) -> str:
@@ -95,13 +92,7 @@ def _run(script: str) -> None:
         ]
     )
     harness += _APPLICA.replace("__PLACE__", _member(src, "_placeLabels"))
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + "\n" + script)
 
 
 def test_a_small_notebook_shows_every_name() -> None:
@@ -541,13 +532,7 @@ def _run_gesti(script: str) -> None:
             ),
         )
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", harness + "\n" + script],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(harness + "\n" + script)
 
 
 def test_at_rest_the_cloud_gets_framed() -> None:

@@ -20,19 +20,16 @@ nessuno — cioe' rifare, piu' piccolo, il difetto che si stava correggendo.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 GAP_JS = ASSETS / "shared" / "jenny-gap.js"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 
-_NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 
 def _run_js(script: str) -> str:
@@ -49,12 +46,7 @@ def _run_js(script: str) -> str:
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", sorgente],
-        capture_output=True, text=True, timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
-    return proc.stdout
+    return run_js(sorgente)
 
 
 def test_the_ratios_still_say_what_this_module_assumes() -> None:

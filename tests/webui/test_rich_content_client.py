@@ -14,17 +14,14 @@ conta.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 RICH = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "rich-content.js"
 
-_NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(_NODE is None, reason="node non disponibile")
+pytestmark = requires_node
 
 _IMPORT = "import { ensureVendor, ensureVendorStyle } from './utils.js';"
 
@@ -138,11 +135,7 @@ def _run(script: str) -> None:
     modulo = RICH.read_text(encoding="utf-8").replace(_IMPORT, "")
     assert _IMPORT not in modulo, "l'import di rich-content e' cambiato: il banco non lo stubba piu'"
     sorgente = _HARNESS.replace("__MODULO__", modulo) + "\n" + script
-    proc = subprocess.run(
-        [str(_NODE), "--input-type=module", "-e", sorgente],
-        capture_output=True, text=True, timeout=60,
-    )
-    assert proc.returncode == 0, proc.stderr or proc.stdout
+    run_js(sorgente)
 
 
 def test_plain_text_loads_nothing_at_all() -> None:
