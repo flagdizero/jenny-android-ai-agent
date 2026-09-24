@@ -415,7 +415,14 @@ body.casa {
   line-height: 1.4;
   resize: none;
   outline: none;
+  /* Niente barra, mai. `_autosize` scrive `scrollHeight`, che e' un intero,
+     ma con `font_scale` 1.1 la riga e' 23,1px: il testo sfora il campo di una
+     frazione di pixel e la barra compare — a due righe si', a una e a tre no,
+     secondo come arrotonda. Al tetto si scorre col dito lo stesso, come in
+     `#chat-input`. */
+  scrollbar-width: none;
 }
+.casa-input::-webkit-scrollbar { display: none; }
 
 .casa-attach {
   flex: none;
