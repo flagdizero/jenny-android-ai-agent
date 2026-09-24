@@ -28,6 +28,7 @@ from jenny.agent.tools.exec_session import (
     DEFAULT_YIELD_MS,
     MAX_OUTPUT_CHARS,
     MAX_YIELD_MS,
+    PythonExecGateMixin,
     _SessionStopped,
     clamp_session_int,
     format_result_line,
@@ -3161,20 +3162,13 @@ async def run_python_async(
         ),
     )
 )
-class PythonExecTool(Tool):
+class PythonExecTool(PythonExecGateMixin, Tool):
     """Execute Python code or call registered functions."""
 
     _scopes = {"core", "subagent"}
 
     _MAX_TIMEOUT = 600
     _MAX_OUTPUT = 10_000
-
-    @classmethod
-    def enabled(cls, ctx: Any) -> bool:
-        cfg = getattr(ctx.config, "python_exec", None)
-        if cfg is None:
-            return True
-        return cfg.enable
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:

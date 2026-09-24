@@ -23,7 +23,7 @@ from loguru import logger
 
 # Stessa dicitura di web_search/web_fetch, una sola volta: se cambia la formula
 # con cui si marca il contenuto non fidato, deve cambiare per tutti insieme.
-from jenny.agent.tools.android_web import _UNTRUSTED_BANNER
+from jenny.agent.tools.android_web import _UNTRUSTED_BANNER, AndroidWebGateMixin
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import (
     ArraySchema,
@@ -312,7 +312,7 @@ def _refuse_step(steps: list[dict[str, Any]]) -> str | None:
     return None
 
 
-class _BrowserToolBase(Tool):
+class _BrowserToolBase(AndroidWebGateMixin, Tool):
     """Base dei tool di sessione: interruttore, config e concorrenza.
 
     ``exclusive`` e' la proprieta' che conta, non ``read_only``: in Jenny
@@ -328,23 +328,6 @@ class _BrowserToolBase(Tool):
     @property
     def exclusive(self) -> bool:
         return True
-
-    @classmethod
-    def enabled(cls, ctx: Any) -> bool:
-        return (
-            bool(ctx.android_context)
-            and getattr(ctx.config, "android_web", None) is not None
-            and ctx.config.android_web.enable
-        )
-
-    @classmethod
-    def disabled_reason(cls, ctx: Any) -> str | None:
-        if not ctx.android_context:
-            return None
-        web = getattr(ctx.config, "android_web", None)
-        if web is not None and not web.enable:
-            return "web access is off (Settings > Tools > Web Search)"
-        return None
 
     def __init__(self, android_context: Any, cfg: Any) -> None:
         self.android_context = android_context

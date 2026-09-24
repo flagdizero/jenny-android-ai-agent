@@ -441,6 +441,39 @@ def format_session_poll(session_id: str, poll: _SessionPoll) -> str:
     return "\n".join(parts) if parts else "(no output yet)"
 
 
+class PythonExecGateMixin:
+    """L'interruttore di ``python_exec``, per lui e per le sue sessioni.
+
+    Senza la sezione in config si resta accesi (è il default storico); con la
+    sezione vale ``enable``. Era copiato identico in tre classi. Qui e non in
+    ``python_exec.py`` perché è quello a importare questo modulo.
+    """
+
+    @classmethod
+    def enabled(cls, ctx: Any) -> bool:
+        cfg = getattr(ctx.config, "python_exec", None)
+        if cfg is None:
+            return True
+        return cfg.enable
+
+
+class _ExecSessionTool(PythonExecGateMixin, Tool):
+    """Base dei due tool che guardano le sessioni: stesso gestore, stesso scope."""
+
+    _scopes = {"core", "subagent"}
+
+    def __init__(
+        self,
+        *,
+        manager: ExecSessionManager | None = None,
+    ) -> None:
+        self._manager = manager or DEFAULT_EXEC_SESSION_MANAGER
+
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        return cls()
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -475,28 +508,8 @@ def format_session_poll(session_id: str, poll: _SessionPoll) -> str:
         required=["session_id"],
     )
 )
-class WriteStdinTool(Tool):
+class WriteStdinTool(_ExecSessionTool):
     """Poll, wait for output, or terminate a running Python exec session."""
-
-    _scopes = {"core", "subagent"}
-
-    @classmethod
-    def enabled(cls, ctx: Any) -> bool:
-        cfg = getattr(ctx.config, "python_exec", None)
-        if cfg is None:
-            return True
-        return cfg.enable
-
-    def __init__(
-        self,
-        *,
-        manager: ExecSessionManager | None = None,
-    ) -> None:
-        self._manager = manager or DEFAULT_EXEC_SESSION_MANAGER
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls()
 
     @property
     def exclusive(self) -> bool:
@@ -597,28 +610,8 @@ class WriteStdinTool(Tool):
 
 
 @tool_parameters(tool_parameters_schema())
-class ListExecSessionsTool(Tool):
+class ListExecSessionsTool(_ExecSessionTool):
     """List active exec sessions."""
-
-    _scopes = {"core", "subagent"}
-
-    @classmethod
-    def enabled(cls, ctx: Any) -> bool:
-        cfg = getattr(ctx.config, "python_exec", None)
-        if cfg is None:
-            return True
-        return cfg.enable
-
-    def __init__(
-        self,
-        *,
-        manager: ExecSessionManager | None = None,
-    ) -> None:
-        self._manager = manager or DEFAULT_EXEC_SESSION_MANAGER
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls()
 
     @property
     def name(self) -> str:
