@@ -580,7 +580,6 @@ export class WorkspaceController {
   // ── Context menu ──
 
   showContextSheet(info) {
-    const sheet = document.getElementById('ws-context-sheet');
     document.getElementById('ws-context-title').textContent = info.name;
 
     // Lo sheet è uno solo e viene riusato: senza azzerare, il testo del file
@@ -611,12 +610,23 @@ export class WorkspaceController {
       actions.push({ icon: 'ti-trash', label: i18n.t('workspace.delete'), action: 'delete', danger: true });
     }
 
+    this._apriFoglio(
+      actions.map(a =>
+        `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
+          <i class="ti ${a.icon}"></i>${a.label}
+        </button>`
+      ).join(''),
+      (action) => this.handleSheetAction(action, info),
+    );
+  }
+
+  /* Il foglio delle azioni (`ws-context-sheet`) è uno e lo usano due menu, il
+     contestuale e «Nuovo»: qui si mettono i pulsanti, si aggancia la scelta
+     (*onPick* riceve il `data-action`), Annulla e il backdrop, e si apre. */
+  _apriFoglio(actionsHtml, onPick) {
+    const sheet = document.getElementById('ws-context-sheet');
     const actionsEl = document.getElementById('ws-context-actions');
-    actionsEl.innerHTML = actions.map(a =>
-      `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
-        <i class="ti ${a.icon}"></i>${a.label}
-      </button>`
-    ).join('');
+    actionsEl.innerHTML = actionsHtml;
 
     const cancelBtn = document.getElementById('ws-context-cancel');
     const closeSheet = () => sheet.close();
@@ -625,14 +635,15 @@ export class WorkspaceController {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         sheet.close();
-        this.handleSheetAction(btn.dataset.action, info);
+        onPick(btn.dataset.action);
       });
     });
 
     cancelBtn.onclick = closeSheet;
     // Ignora per un attimo il tap sintetico che segue il long-press, così non
     // richiude subito dal backdrop lo sheet appena aperto (stessa finestra di
-    // grazia della sezione App).
+    // grazia della sezione App). Vale anche per «Nuovo», che non nasce da un
+    // long-press ma condivide il <dialog>.
     const openedAt = Date.now();
     sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) closeSheet(); };
     sheet.addEventListener('close', () => {
@@ -1041,41 +1052,15 @@ export class WorkspaceController {
   }
 
   _showNewMenu() {
-    const sheet = document.getElementById('ws-context-sheet');
     document.getElementById('ws-context-title').textContent = i18n.t('workspace.new');
-
-    const actionsEl = document.getElementById('ws-context-actions');
-    actionsEl.innerHTML = `
+    this._apriFoglio(`
       <button class="oc-sheet-action" data-action="newFile">
         <i class="ti ti-file-plus"></i>${i18n.t('workspace.newFile')}
       </button>
       <button class="oc-sheet-action" data-action="newFolder">
         <i class="ti ti-folder-plus"></i>${i18n.t('workspace.newFolder')}
       </button>
-    `;
-
-    const cancelBtn = document.getElementById('ws-context-cancel');
-    const closeSheet = () => sheet.close();
-
-    actionsEl.querySelectorAll('.oc-sheet-action').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sheet.close();
-        this._handleNewAction(btn.dataset.action);
-      });
-    });
-
-    cancelBtn.onclick = closeSheet;
-    // Stessa finestra di grazia dello sheet contestuale: il menu "Nuovo" non
-    // nasce da un long-press, ma condivide il <dialog> e quindi il percorso.
-    const openedAt = Date.now();
-    sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) closeSheet(); };
-    sheet.addEventListener('close', () => {
-      cancelBtn.onclick = null;
-      sheet.onclick = null;
-    }, { once: true });
-
-    sheet.showModal();
+    `, (action) => this._handleNewAction(action));
   }
 
   async _handleNewAction(action) {
