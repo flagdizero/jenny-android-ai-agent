@@ -1,7 +1,11 @@
 # Pulizia del codice — quello che resta dopo l'audit del 24/09/2026
 
-> Stato: **in corso** — fasi 0 e 1 fatte il 24/09 (resta la prova sul
-> telefono di 0.3); prossima: fase 2. Le cancellazioni a rischio zero sono già atterrate
+> Stato: **in corso** — fasi 0, 1 e 2 fatte il 24/09 (resta la prova sul
+> telefono di 0.3); prossime: 3 (WebUI), 4 (Kotlin), 5 (test).
+> Metodo della fase 2, da tenere per le prossime: per ogni passo prima un test
+> che fissa il comportamento e passa sul codice vecchio, poi il refactor, poi
+> una mutazione che deve farlo diventare rosso, poi la suite intera su 3.14 e
+> 3.11. Le cancellazioni a rischio zero sono già atterrate
 > (`94cdd49`…`0060788`, otto commit, ~1.300 righe in meno, installate sul
 > Titan 2). Qui c'è tutto il resto: tre difetti, le decisioni che spettano a te,
 > i duplicati di Python, WebUI, Kotlin e test.
@@ -229,7 +233,7 @@ raccomandazione** («ok alle raccomandazioni»), quindi 1.1 è eseguibile.
 Ordine per valore/rischio. Le trappole sono le differenze fra le copie: ognuna
 va o conservata o scelta consapevolmente, e scritta nel commit.
 
-- [ ] **2.1 `run_dream_turn` unico in `agent/dream_cycle.py`** (dopo 0.1)
+- [x] **2.1 `run_dream_turn` unico in `agent/dream_cycle.py`** (dopo 0.1) — fatto 24/09 (`45f23ae`). Test di parità su 8 scenari da `/dream` e dal cron, verde sul codice vecchio prima del refactor.
   - Copie: `command/builtin.py:318-414` e `runtime/cron_dispatch.py:689-809`.
   - `run_dream_turn(agent, store, prologue, *, take_snapshot) ->
     DreamTurnResult(outcome, resp, refused, last_cursor)`, con `DreamOutcome =
@@ -243,7 +247,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - Test nuovo parametrizzato su ogni `DreamOutcome`: cursore e contatori
     identici lanciando da `/dream` e dal cron. ~60 righe, rischio medio.
 
-- [ ] **2.2 [SICUREZZA] Fetch con redirect rivalidati a ogni hop**
+- [x] **2.2 [SICUREZZA] Fetch con redirect rivalidati a ogni hop** — fatto 24/09 (`93eca48`). Irrigidimento https a ogni salto per il manifest (test rosso sul vecchio). Il validatore lo passa il chiamante, così i seam dei test restano. `apps/http.py` non è una copia: non segue i redirect.
   - Copie: `runtime/update_check.py:419-445`, `runtime/update_install.py:
     280-305`, `agent/tools/download.py:100-130`, `webui/media_ingest.py:70-100`;
     `MAX_REDIRECTS` ×4, User-Agent browser ×2.
@@ -261,7 +265,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - Test nuovo in `tests/security/`: redirect verso la LAN, downgrade a http
     con `https_only`, sesto hop, `Location` mancante. ~60 righe.
 
-- [ ] **2.3 [SICUREZZA] `is_path_within` pubblico**
+- [x] **2.3 [SICUREZZA] `is_path_within` pubblico** — fatto 24/09 (`41d4d7c`). Convertiti solo gli 8 siti con path e radice già risolti; restano fuori `apps_routes` (più severo di proposito), `transcript_markdown` e il guard di provenienza con radice dal chiamante. Tre siti senza test ne hanno preso uno.
   - Siti a mano: `webui/ws_http.py:761`, `media_api.py:214`,
     `wiki_routes.py:323,447`, `transcript_markdown.py:58`, `commands.py:249`,
     `wiki.py:565`, `apps_routes.py:279`, `agent/wiki_provenance.py:162,214,358`
@@ -274,7 +278,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
     scriverlo.
   - Test nuovo: fuga via symlink e via `..` su una rotta wiki e una apps.
 
-- [ ] **2.4 Metadati d'errore dei provider** (copie già divergenti)
+- [x] **2.4 Metadati d'errore dei provider** (copie già divergenti) — fatto 24/09 (`33b0b54`). Trovato un difetto latente: `OpenAICompatProvider._handle_error` solleva su una risposta in streaming non letta. Corretto; ognuno tiene il suo `error_retry_after_s`.
   - `anthropic_provider.py:138-198` ↔ `openai_compat_provider.py:644-731` →
     `LLMProvider._error_response(e, *, partial_content, message=None)`.
   - Scelte da fare e fissare con un test: guardia `ResponseNotRead` (c'è solo
@@ -285,7 +289,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - Test nuovo: la stessa eccezione finta dà lo stesso `LLMResponse` coi due
     provider, anche su una response in streaming non letta. ~45 righe.
 
-- [ ] **2.5 `stream_timeout_response` e parser SSE unico**
+- [x] **2.5 `stream_timeout_response` e parser SSE unico** — fatto 24/09 (`1f441a8`). Aggiunto il test dello stallo Anthropic, che non c'era.
   - «Stream stalled» ×2 (`anthropic_provider.py:604-615`,
     `openai_compat_provider.py:1037-1047`) → helper in `base.py`.
   - `_iter_chat_completion_sse` (`openai_compat_provider.py:757-790`) =
@@ -293,7 +297,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
     perché `test_stream_first_output_timeout.py:45` lo patcha. L'SSE di
     Anthropic resta suo (legge `event:`). ~45 righe.
 
-- [ ] **2.6 Mixin di abilitazione dei tool**
+- [x] **2.6 Mixin di abilitazione dei tool** — fatto 24/09 (`cbc75b6`). Tabella di gating su 10 tool.
   - `enabled()`/`disabled_reason()` identici in `android_web.py:371,474` e
     `browser.py:303` → `AndroidWebGateMixin`; `enabled()` di python_exec in
     `exec_session.py:487,609` e `python_exec.py:3175` → `PythonExecGateMixin`;
@@ -301,7 +305,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - Il mixin sta prima di `Tool` nell'MRO; la docstring italiana di
     `disabled_reason` si sposta sul mixin. ~45 righe.
 
-- [ ] **2.7 Diff di righe e path delle modifiche file**
+- [x] **2.7 Diff di righe e path delle modifiche file** — fatto 24/09 (`7877935`).
   - `apply_patch.py:42-61` → `file_edit_events.line_diff_stats`. Unica
     differenza misurata: con `before == ""` i separatori Unicode (`\f`, `\x85`,
     ` `) contano come a capo per `splitlines` e non per
@@ -310,7 +314,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - `resolve_file_edit_path` (`file_edit_events.py:50-73`) delega a
     `_resolve_raw_file_edit_path` (`:239`). ~30 righe.
 
-- [ ] **2.8 `utils/file_edit_streaming.py`**
+- [x] **2.8 `utils/file_edit_streaming.py`** — fatto 24/09 (`52b71aa`).
   - I due decoder di stringa JSON (`:496`, `:537`) → uno con `partial: bool`;
     su `\u` troncato / stringa aperta il «prefix» rende il parziale, il
     «complete» `None`; entrambi lasciano `\b`, `\f`, `\/` letterali (da
@@ -319,7 +323,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
     `_StreamingPatchFileState.should_emit` aggiorna `last_added/last_deleted`,
     letti da `flush` (`:164`). ~40 righe.
 
-- [ ] **2.9 Persistenza minuta**
+- [x] **2.9 Persistenza minuta** — fatto 24/09 (`bd2279a`). Trovato un difetto: `get_review_state` lasciava uscire `UnicodeDecodeError`.
   - `.dream_review` letto ×3 in `agent/memory.py` (`:959`, `:994`, `:1024`) →
     `_read_review_state()`.
   - Append JSONL durevole ×3 (`memory.py:621`, `consolidator.py:729`,
@@ -328,20 +332,20 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
     — nel consolidator deve propagarsi, il chiamante cancella gli originali
     subito dopo. ~25 righe.
 
-- [ ] **2.10 Alias e helper web** (rischio minimo)
+- [x] **2.10 Alias e helper web** (rischio minimo) — fatto 24/09 (`b239b2c`).
   - `QueryParams` ridefinito in 7 moduli webui → da `channels/http_utils.py`;
     `_query_first` in `settings_api:316` e `ssh_api:81` →
     `http_utils.query_first`; `apps_routes.APP_ACTION_RE` →
     `apps/manifest.ACTION_NAME_RE` (non toccare lo script autonomo della skill
     `app-creator`). ~20 righe.
 
-- [ ] **2.11 [SICUREZZA] Regex degli id sul wire**
+- [x] **2.11 [SICUREZZA] Regex degli id sul wire** — fatto 24/09 (`a31018c`). Confermato: `"abc\n"` passava in RPC, correlation-id e rotta dei subagent.
   - `subagent_routes.py:52`, `ws_rpc.py:28`, `ui_query.py:27`,
     `subagent_activity_wire.py:108` usano `^…$` con `.match` — `$` accetta un
     `\n` finale; `ssh_jobs.py:70` usa `\A…\Z`. Un `WIRE_ID_RE` unico con
     `\A…\Z` (irrigidimento, scritto nel commit). Test: `"abc\n"` rifiutato.
 
-- [ ] **2.12 Costanti e utility minori**
+- [x] **2.12 Costanti e utility minori** — fatto 24/09 (`1f38c06`). `now_ms` in `utils/clock.py` (modulo senza dipendenze), importato come `_now_ms`.
   - `CHARS_PER_TOKEN = 4` in `utils/helpers.py` (usi: `helpers.py:357,600,634`,
     `consolidator.py:84`, `memory.py:499`; il consolidator dipende dalla stessa
     convenzione di `truncate_text_to_tokens`).
@@ -351,7 +355,7 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   - Troncamento testa+coda ×2 (`exec_session.py:226`, `python_exec.py:3097`) →
     `truncate_head_tail`, con un test che oggi non c'è. ~25 righe.
 
-- [ ] **2.13 Facoltativi** (rinviabili senza perdita)
+- [x] **2.13 Facoltativi** (rinviabili senza perdita) — fatti `_NumericSchema` (`af6556b`) e `NonStreamingChannelMixin` (`8e60614`). **Saltato** `BridgeCache.call_bool`: i test di floating e power sostituiscono `_get_bridge`/`get_android_context` per modulo, e spostare la logica romperebbe quei seam per ~10 righe.
   - Base `_NumericSchema` (dopo D3); `NonStreamingChannelMixin` per gli stub
     di floating/notification/telegram; `BridgeCache.call_bool` per
     `floating._call`/`power._call` (log `warning` vs `debug` e timeout diversi
