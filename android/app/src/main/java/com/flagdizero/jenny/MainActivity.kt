@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -1203,6 +1204,22 @@ class MainActivity : AppCompatActivity() {
          */
         @JavascriptInterface
         fun getBottomGestureInset(): Int = bottomGestureInsetPx
+
+        /**
+         * C'è una tastiera fisica attaccata e aperta? Sul Titan 2 sì, sempre:
+         * `qwerty` con `hardKeyboardHidden=NO`. La casa lo chiede per tenere il
+         * fuoco sul campo dove scrivi (`casa-fuoco.js`) — con la tastiera a
+         * schermo, invece, il fuoco è una tastiera alzata sopra la chat.
+         *
+         * Letto a ogni chiamata: una tastiera Bluetooth si attacca e si stacca,
+         * e `resources.configuration` è una lettura, non tocca la WebView.
+         */
+        @JavascriptInterface
+        fun hasHardwareKeyboard(): Boolean {
+            val config = resources.configuration
+            return config.keyboard == Configuration.KEYBOARD_QWERTY &&
+                config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        }
 
         /**
          * Allinea le barre di sistema al tema attivo della WebUI: `background`

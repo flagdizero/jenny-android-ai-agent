@@ -798,3 +798,36 @@ Banco nel pannello (modulo vero, i due fogli veri, frame iniettati): mano alzata
 al cambio di gesto, faccia felice dopo `turn_end`, cancellata dal turno nuovo
 con la bocca che riparte, triste sull'errore, posa di profilo messa via. Piedi
 sul composer: bordo basso a 516,7 px = 566 − 64 + 0,1224 × 120.
+
+## Ritocco — il fuoco resta sul campo (24/09/2026)
+
+Segnalato dall'utente: «se clicco da una parte si toglie il focus e non posso
+più scrivere». Riprodotto sul Titan 2: tocco sul filo, poi un tasto, e il tasto
+non arrivava da nessuna parte. La casa non aveva il type-ahead dell'officina
+(`_maybeTypeAheadFocus`), né altro che rimettesse il fuoco sul campo; e ogni
+tocco — filo, bolla, tasto manda, fila — glielo toglieva.
+
+- [x] `casa-fuoco.js`: **type-ahead** (un carattere nel vuoto rimette il fuoco
+      sul campo, stesse guardie di `shared/type-ahead.js`) e **il tocco non
+      ruba il fuoco** (`preventDefault` sul `mousedown` di `#casa-chat` e
+      `#casa-fila`, fuorché su un altro campo) — il secondo solo con la
+      tastiera fisica, perché altrove il fuoco è una tastiera a schermo alzata.
+- [x] `JennyNative.hasHardwareKeyboard()`: `qwerty` e `hardKeyboardHidden=NO`
+      da `Configuration`, letto a ogni chiamata.
+- [x] Il fuoco torna da sé rientrando sulla pagina chat, uscendo da ordina,
+      rientrando nella stanza chat, con Home e tornando all'app da un'altra.
+      Sempre con `preventScroll`: la pista può essere a metà scivolata.
+- [x] Mai quando la chat non è a schermo o c'è qualcosa sopra
+      (`_composerAttivo`: stanza, pagina, strati, `dialog[open]`, lightbox).
+
+Sul Titan 2 (IME Pastiera, tastiera fisica), dopo l'installazione: tocco sul
+filo → tasto nel campo; tocco su «Jenny» nella fila → idem; tasto manda a campo
+vuoto → il fuoco resta; graffetta → selettore → Indietro → il fuoco resta;
+Home, e ritorno dalle Impostazioni di Android → il tasto arriva senza toccare;
+avvio a freddo → idem; pagina App → i tasti vanno alla ricerca, non alla chat;
+pressione lunga su una bolla → la selezione c'è ancora, e un tocco la chiude.
+La striscia da 30 px in fondo che compare col campo a fuoco è di Pastiera
+(`requestedHeight = 30`), non una tastiera a schermo: c'è anche toccando il
+campo a mano.
+
+Banco: `test_casa_fuoco_client.py`, il modulo vero sotto node.

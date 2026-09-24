@@ -40,6 +40,7 @@ import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { CasaPagine } from './casa-pagine.js';
 import { CasaFila } from './casa-fila.js';
+import { FuocoComposer } from './casa-fuoco.js';
 import { SchedaQuaderno } from './casa-quaderno.js';
 import { Trasloco } from './casa-trasloco.js';
 import { AppsSource } from './shared/apps-source.js';
@@ -332,6 +333,15 @@ class CasaApp {
     });
 
     this._bindComposer();
+    /* Il fuoco resta sul campo: sul Titan la tastiera e' fisica, e un tocco sul
+       filo che glielo toglie manda i tasti dopo nel vuoto (v. `casa-fuoco.js`).
+       La fila ne fa parte: toccare «Jenny» mentre scrivi non deve fermarti. */
+    this.fuoco = new FuocoComposer({
+      input: this.input,
+      superfici: [document.getElementById('casa-chat'), document.getElementById('casa-fila')],
+      attivo: () => this._composerAttivo(),
+    });
+    this.fuoco.rimetti();
     /* Un messaggio rifiutato dal gateway torna nel campo, così puoi correggere
        invece di riscrivere — a meno che tu non abbia già ricominciato a
        scrivere: quello vince sempre, non si sovrascrive del testo vivo con del
@@ -736,6 +746,7 @@ class CasaApp {
     /* La tastiera non resta aperta su un campo che e' uscito di scena: i tasti
        dopo finirebbero nella chat che non guardi. */
     if (!this._haComposer(voce)) this.input?.blur();
+    else this.fuoco?.rimetti();
     this._posaJenny();
     this.fila?.disegna();
     this._applyHead();
@@ -797,6 +808,17 @@ class CasaApp {
   _onOrdina(aperta) {
     this.shell?.toggleAttribute('data-ordina', aperta);
     if (aperta) this.input?.blur();
+    else this.fuoco?.rimetti();
+  }
+
+  /* Il campo dove scrivi e' a schermo e niente gli sta sopra: e' la domanda
+     che `casa-fuoco.js` fa prima di prendersi un tasto o un tocco. Oltre agli
+     strati della casa, qualunque `<dialog>` aperto — anche quelli condivisi di
+     conferma — e l'immagine ingrandita, che non sono strati del cassetto. */
+  _composerAttivo() {
+    if (this.view !== 'chat' || !this._haComposer(this._voce)) return false;
+    if (this.hasOverlayAbove()) return false;
+    return !document.querySelector('dialog[open], .image-lightbox');
   }
 
   /** C'e' qualcosa sopra il cassetto? Lo chiede lui prima di prendersi un
@@ -848,6 +870,7 @@ class CasaApp {
       this.jenny.setOut(this._jennyWasOut);
       this._applyConversation();
       this.chat.keepBottom();
+      this.fuoco?.rimetti();
     } else {
       /* Niente composer, quindi il pavimento va dichiarato: senza, l'osservatore
          misurerebbe un elemento nascosto e lo troverebbe alto zero. */
@@ -1060,14 +1083,17 @@ class CasaApp {
    *  sotto-stato di ogni sezione. Qui Home vuol dire una cosa sola: **sei a
    *  casa**. Si chiude quel che sta sopra, si torna nella conversazione
    *  personale — se eri dentro un quaderno, quella e' la casa da cui il tasto
-   *  prende il nome — si chiude la tastiera e si torna in fondo al filo, che e'
-   *  il presente della conversazione.
+   *  prende il nome — si chiude la tastiera a schermo (con quella fisica il
+   *  campo tiene il fuoco) e si torna in fondo al filo, che e' il presente
+   *  della conversazione.
    */
   goHome() {
     this._closeOverlays();
     this._setView('chat');
     this.switchConversation(null);
-    this.input?.blur();
+    /* Con la tastiera fisica non c'e' niente da chiudere, e a casa si torna
+       per scrivere: il fuoco resta sul campo. */
+    if (!this.fuoco?.rimetti()) this.input?.blur();
     this.chat.scrollToBottom();
   }
 
