@@ -99,18 +99,17 @@ restano sopra), quindi le icone grandi **non invertono mai i colori**.
 
 Lo script:
 1. Ritaglia `icon.png` al bounding box del contenuto non trasparente.
-2. Genera tre famiglie di output sotto `android/app/src/main/res/`:
+2. Genera due famiglie di output sotto `android/app/src/main/res/`:
    - **A. Adaptive foreground** (`mipmap-<dpi>/ic_launcher_foreground.png`):
      mascotte scalata al 54% del canvas — valore scelto perché la maschera
      circolare del launcher misura ~76% del canvas e la sua sagoma quadrata
      inscritta limita la dimensione massima della mascotte a quella cifra;
      sotto questa soglia niente viene tagliato dalla maschera.
-   - **B. Silhouette status bar** (`drawable-<dpi>/ic_stat_jenny.png`):
-     bianco pieno con i tratti scuri "bucati" a trasparente. Le forme sottili
-     (contorno, capelli, ciglia) vengono rimosse con un'apertura morfologica
-     (erode+dilate, kernel 9) che invece preserva le masse spesse (occhi,
-     bocca) — quindi la silhouette non è un semplice threshold, è
-     "solo le macchie scure abbastanza larghe".
+   - **B. Icona della status bar**: non esce più da qui. È il fiore ✿,
+     un vettore tenuto a mano in `drawable/ic_stat_jenny.xml` (il perché è
+     nel commento del file): la sagoma della mascotte a 24dp non si leggeva.
+     Non rimettere i PNG `drawable-<dpi>/ic_stat_jenny.png`: vincerebbero sul
+     vettore e tornerebbe l'icona vecchia.
    - **C. Notification large icon** (`drawable-nodpi/ic_notification_large.png`):
      sfondo nero pieno + mascotte all'80% del canvas.
 3. Nessuna icona raster legacy (`ic_launcher.png`/`ic_launcher_round.png`):
@@ -119,7 +118,7 @@ Lo script:
    mascherato. L'adaptive icon è l'unica fonte di verità.
 
 Rilancia lo script dopo ogni modifica a `icon.png` o alle costanti di tuning
-(`FOREGROUND`, `STAT`, le frazioni 0.54/0.80/0.90): è idempotente.
+(`FOREGROUND`, le frazioni 0.54/0.80): è idempotente.
 
 ## 2. Pose della mascotte — `gen_pose_webp.py`
 

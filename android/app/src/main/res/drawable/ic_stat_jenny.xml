@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L'icona di Jenny nella status bar: il fiore ✿, lo stesso segno che la
+     WebUI le mette accanto al nome. È il glifo U+273F di
+     NotoSansSymbols-Regular-Subsetted.ttf — il font con cui il telefono lo
+     disegna nella WebView — ricalcato in 24dp con 1dp di margine.
+
+     Prima qui c'era il viso della mascotte, ridotto a sagoma: a 24dp occhi,
+     capelli e contorno diventavano puntini e non si riconosceva niente. Il
+     fiore è una sagoma piena con un buco solo, e si legge anche così piccolo.
+     La mascotte resta dov'è grande, in `ic_notification_large`.
+
+     Il sistema usa solo l'alfa, quindi il colore non conta. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.02 9.374Q15.545 8.119 16.654 7.266Q17.763 6.412 19.017 6.412Q20.622 6.412 21.811 7.587Q23 8.761 23 10.439Q23 12.015 21.884 13.218Q20.768 14.422 19.236 14.422Q17.865 14.422 16.391 13.605L16.099 14.568Q17.879 14.743 19.112 15.873Q20.345 17.004 20.345 18.623Q20.345 20.228 19.156 21.461Q17.967 22.694 16.333 22.694Q14.626 22.694 13.495 21.519Q12.365 20.345 12.365 18.477Q12.365 17.748 12.511 17.194H11.489Q11.65 17.806 11.65 18.477Q11.65 20.316 10.512 21.505Q9.374 22.694 7.667 22.694Q6.062 22.694 4.866 21.483Q3.67 20.272 3.67 18.623Q3.67 17.019 4.866 15.888Q6.062 14.757 7.915 14.568L7.609 13.605Q6.996 13.955 6.23 14.188Q5.464 14.422 4.808 14.422Q3.188 14.422 2.094 13.225Q1 12.029 1 10.439Q1 8.747 2.182 7.58Q3.363 6.412 4.983 6.412Q6.223 6.412 7.346 7.281Q8.469 8.149 8.98 9.374L9.768 8.776Q8.951 8.046 8.462 7.113Q7.973 6.179 7.973 5.362Q7.973 3.684 9.148 2.495Q10.322 1.306 11.971 1.306Q13.634 1.306 14.838 2.51Q16.041 3.714 16.041 5.362Q16.041 6.179 15.531 7.127Q15.02 8.076 14.247 8.776ZM8.324 12.715Q8.324 14.261 9.396 15.341Q10.468 16.42 11.971 16.42Q13.503 16.42 14.59 15.334Q15.676 14.247 15.676 12.715Q15.676 11.183 14.59 10.096Q13.503 9.009 11.971 9.009Q10.454 9.009 9.389 10.096Q8.324 11.183 8.324 12.715Z" />
+</vector>
