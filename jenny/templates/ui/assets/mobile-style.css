@@ -4423,13 +4423,16 @@ body {
    Nome e natura a sinistra, l'esito dell'ultimo giro sotto, **quando tocca di
    nuovo** a destra. Era una scheda alta con «Next:» e «Last:» su due righe
    intere: con cinque lavori faceva oltre un terzo di Mani. */
-.cron-riga {
+/* La riga delle liste dell'officina — lavori, marche, host SSH: un pulsante
+   largo quanto la lista, filetto sopra tranne la prima, e il tocco che la
+   sbiadisce. Il `min-height` resta in ogni riga: è il bersaglio del dito, e i
+   contratti di ciascuna lo cercano lì. */
+.cron-riga, .marca-riga, .ssh-riga {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 52px;
-  padding: 6px 0;
+  padding: 4px 0;
   border: 0;
   border-top: 0.5px solid var(--border);
   background: transparent;
@@ -4439,8 +4442,10 @@ body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.cron-riga:first-of-type { border-top: 0; }
-.cron-riga:active { opacity: .6; }
+.cron-riga:first-of-type, .marca-riga:first-of-type, .ssh-riga:first-of-type { border-top: 0; }
+.cron-riga:active, .marca-riga:active, .ssh-riga:active { opacity: .6; }
+/* Il lavoro periodico ha due righe di testo, e un filo d'aria in più. */
+.cron-riga { min-height: 52px; padding: 6px 0; }
 .cron-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cron-riga-nome {
   display: flex;
@@ -4475,24 +4480,7 @@ body {
 /* ── La riga di una marca ─────────────────────────────────────────────────
    Pallino, nome, indirizzo, chiave mascherata, freccina — piu' la pastiglia
    «risponde» su quella che risponde adesso. Era una scheda alta il triplo. */
-.marca-riga {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 52px;
-  padding: 4px 0;
-  border: 0;
-  border-top: 0.5px solid var(--border);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.marca-riga:first-of-type { border-top: 0; }
-.marca-riga:active { opacity: .6; }
+.marca-riga { min-height: 52px; }
 /* Il bordo tiene il pallino visibile anche quando la sua tinta e' vicina al
    fondo del tema di turno. */
 .marca-pallino {
@@ -4544,24 +4532,7 @@ body {
    l'utente deve fare, e nasconderli dietro il tocco lascerebbe host mezzi
    configurati che falliscono solo al primo comando. Qui costano due parole
    invece di due targhette. */
-.ssh-riga {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 52px;
-  padding: 4px 0;
-  border: 0;
-  border-top: 0.5px solid var(--border);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.ssh-riga:first-of-type { border-top: 0; }
-.ssh-riga:active { opacity: .6; }
+.ssh-riga { min-height: 52px; }
 .ssh-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ssh-riga-nome { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
 .ssh-riga-dove {
