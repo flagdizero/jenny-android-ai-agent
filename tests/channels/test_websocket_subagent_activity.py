@@ -28,6 +28,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from port_alloc import free_port
+from support.aio import wait_until
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 
@@ -551,10 +552,7 @@ class TestPumpLifecycle:
         assert channel._activity_pump_task is not None
         connection.send.reset_mock()
         log.append(_TASK, "iteration", summary="pumped")
-        for _ in range(50):
-            await asyncio.sleep(0.01)
-            if connection.send.await_count:
-                break
+        await wait_until(lambda: connection.send.await_count)
 
         assert [e["summary"] for e in _frames(connection)[0]["events"]] == ["pumped"]
         channel.stop_subagent_activity_pump()
@@ -568,12 +566,7 @@ class TestPumpLifecycle:
         assert task is not None
 
         channel._cleanup_connection(connection)
-        for _ in range(50):
-            await asyncio.sleep(0.01)
-            if task.done():
-                break
-
-        assert task.done()
+        await wait_until(task.done)
         assert channel._activity_pump_task is None
 
     async def test_the_pump_is_not_started_twice(self, monkeypatch) -> None:

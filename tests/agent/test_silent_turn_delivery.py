@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import drain_nowait
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnDisposition
@@ -75,10 +76,7 @@ def _announce(session_key: str) -> InboundMessage:
 
 
 async def _drain(loop: AgentLoop) -> list[OutboundMessage]:
-    out = []
-    while loop.bus.outbound_size:
-        out.append(await loop.bus.consume_outbound())
-    return out
+    return drain_nowait(loop.bus.outbound)
 
 
 class TestTheSubagentAnnounceInheritsTheOriginVisibility:

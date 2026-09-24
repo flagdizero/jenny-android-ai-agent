@@ -12,6 +12,7 @@ import asyncio
 import pathlib
 
 import pytest
+from support.aio import wait_until
 
 from jenny.bus.events import NOTIFICATION_CHANNEL, InboundMessage
 from jenny.runtime import native_input as ni
@@ -256,10 +257,7 @@ class TestConsegna:
         bus = await _bound()
         assert ni.on_native_text("primo") is True
         assert ni.on_native_text("secondo") is True
-        for _ in range(50):
-            if len(bus.inbound) == 2:
-                break
-            await asyncio.sleep(0.005)
+        await wait_until(lambda: len(bus.inbound) == 2)
         assert [m.content for m in bus.inbound] == ["primo", "secondo"]
 
     async def test_il_rebind_sposta_il_bus(self):

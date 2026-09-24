@@ -1,22 +1,18 @@
 import asyncio
+import functools
 import json
 import time
 
 import pytest
+from support.aio import wait_until
 from support.cron import disable_job
 
 from jenny.cron.service import CronJobSkippedError, CronService
 from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload, CronSchedule
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
-
-async def _wait_until(predicate, *, timeout: float = 1.0, interval: float = 0.01) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        await asyncio.sleep(interval)
-    assert predicate()
+# La scadenza di questo file: un secondo.
+_wait_until = functools.partial(wait_until, timeout=1.0)
 
 
 async def _settle(*, ignore: set[asyncio.Task] | None = None, timeout: float = 1.0) -> None:

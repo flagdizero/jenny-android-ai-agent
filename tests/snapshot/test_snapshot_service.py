@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import time
 from pathlib import Path
+
+from support.aio import wait_until
 
 from jenny.config.schema import SnapshotConfig
 from jenny.snapshot.engine import SnapshotEngine
 from jenny.snapshot.service import SnapshotService
 
-
 # Timeout largo: il predicato esce subito quando è vero, ma sotto carico
 # esterno (CPU satura) i timer sub-secondo del servizio possono slittare.
-async def _wait_until(predicate, *, timeout: float = 15.0, interval: float = 0.02) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        await asyncio.sleep(interval)
-    assert predicate()
+# Le scadenze di questo file: 15 s, controllando ogni 20 ms.
+_wait_until = functools.partial(wait_until, timeout=15.0, interval=0.02)
 
 
 async def _wait_for_baseline(engine: SnapshotEngine, service: SnapshotService) -> None:

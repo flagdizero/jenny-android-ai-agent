@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import drain_nowait
 
 from jenny.agent.subagent import (
     MAX_AUTO_ATTEMPTS,
@@ -59,10 +60,7 @@ def _manager(tmp_path: Path, **kw) -> SubagentManager:
 
 
 def _drain(bus: MessageBus) -> list:
-    out = []
-    while not bus.outbound.empty():
-        out.append(bus.outbound.get_nowait())
-    return out
+    return drain_nowait(bus.outbound)
 
 
 def _record(mgr: SubagentManager, **kw) -> SubagentRecord:

@@ -14,9 +14,11 @@ modulo e non i simboli importati).
 from __future__ import annotations
 
 import asyncio
+import functools
 import time
 
 import pytest
+from support.aio import wait_until
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronSchedule
@@ -31,13 +33,8 @@ def _bound_chat(chat_id: str = "chat-1") -> dict[str, str]:
     }
 
 
-async def _wait_until(predicate, *, timeout: float = 1.0, interval: float = 0.01) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        await asyncio.sleep(interval)
-    assert predicate()
+# La scadenza di questo file: un secondo.
+_wait_until = functools.partial(wait_until, timeout=1.0)
 
 
 async def _settle(service=None, *, timeout: float = 5.0) -> None:

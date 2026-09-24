@@ -25,6 +25,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from support.aio import drain_nowait
+
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.turn_types import TurnOutcome
@@ -45,10 +47,7 @@ def _make_loop(tmp_path: Path) -> AgentLoop:
 
 
 def _drain(loop: AgentLoop) -> list[OutboundMessage]:
-    out: list[OutboundMessage] = []
-    while not loop.bus.outbound.empty():
-        out.append(loop.bus.outbound.get_nowait())
-    return out
+    return drain_nowait(loop.bus.outbound)
 
 
 async def _stream_callback(loop: AgentLoop):

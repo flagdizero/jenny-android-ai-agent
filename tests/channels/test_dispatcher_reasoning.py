@@ -15,6 +15,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import queue_idle, wait_until
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -263,12 +264,18 @@ async def test_reasoning_routing_does_not_consult_send_progress(manager):
 
 
 async def _pump_one(manager: WebSocketDispatcher) -> None:
-    """Drive the dispatcher until the outbound queue drains, then cancel."""
+    """Drive the dispatcher until it has handled the whole queue, then cancel.
+
+    Il ciclo di prima usciva dopo 50 giri anche con la coda piena, e i test
+    negativi di questo file («non è stato mandato niente») passavano senza che
+    il dispatcher avesse mai lavorato; e «coda vuota» non vuol dire «ultimo
+    messaggio lavorato». Qui si aspetta che torni fermo sulla coda, o si
+    fallisce (v. ``support.aio.queue_idle``)."""
     task = asyncio.create_task(manager._dispatch_outbound())
-    for _ in range(50):
-        await asyncio.sleep(0.01)
-        if manager.bus.outbound.qsize() == 0:
-            break
+    await wait_until(
+        lambda: queue_idle(manager.bus.outbound),
+        msg="il dispatcher non ha smaltito la coda",
+    )
     task.cancel()
     try:
         await task

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import wait_until
 
 from jenny.agent.hook import AgentHookContext
 from jenny.agent.runner import AgentRunResult
@@ -231,11 +232,7 @@ class TestWatchdogTask:
         await sm.spawn("slow work", session_key="s1")
         task_id, status = next(iter(sm._task_statuses.items()))
 
-        for _ in range(50):
-            await asyncio.sleep(0.01)
-            if status.state == "stalled":
-                break
-        assert status.state == "stalled"
+        await wait_until(lambda: status.state == "stalled")
         assert not sm._running_tasks[task_id].done()
 
         await _settle(sm, block)
@@ -286,11 +283,7 @@ class TestWatchdogTask:
         assert watchdog is not None
         await asyncio.gather(*sm._running_tasks.values(), return_exceptions=True)
 
-        for _ in range(50):
-            await asyncio.sleep(0.01)
-            if watchdog.done():
-                break
-        assert watchdog.done()
+        await wait_until(watchdog.done)
         assert not watchdog.cancelled()
 
         # Uno spawn successivo ne crea uno nuovo.

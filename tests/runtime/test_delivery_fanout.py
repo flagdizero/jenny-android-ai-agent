@@ -3,8 +3,9 @@ sessione, copia websocket sempre primaria, copie extra marcate ``_mirror``."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
+
+from support.aio import drain_nowait
 
 from jenny.bus.events import INTERNAL_CHANNEL, OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -37,12 +38,7 @@ class StubSessionManager:
 
 
 def _drain(bus: MessageBus) -> list[OutboundMessage]:
-    out: list[OutboundMessage] = []
-    while True:
-        try:
-            out.append(bus.outbound.get_nowait())
-        except asyncio.QueueEmpty:
-            return out
+    return drain_nowait(bus.outbound)
 
 
 def _bubbles(published: list[OutboundMessage]) -> list[OutboundMessage]:
