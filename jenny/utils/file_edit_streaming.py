@@ -162,12 +162,9 @@ class StreamingFileEditTracker:
         for state in self._states.values():
             for file_state in state.patch_files.values():
                 added, deleted = file_state.last_added, file_state.last_deleted
-                if not file_state.emitted_once:
+                if not file_state.throttle.emitted_once:
                     continue
-                if (
-                    file_state.last_emitted_added == added
-                    and file_state.last_emitted_deleted == deleted
-                ):
+                if file_state.throttle.already_sent(added, deleted):
                     continue
                 file_state.mark_emitted(added, deleted, now)
                 events.append(build_file_edit_live_event(
@@ -178,11 +175,7 @@ class StreamingFileEditTracker:
             if state.tracker is None:
                 continue
             added, deleted = state.live_diff_counts()
-            if (
-                state.last_emitted_added == added
-                and state.last_emitted_deleted == deleted
-                and state.emitted_once
-            ):
+            if state.live.already_sent(added, deleted):
                 continue
             state.mark_emitted(added, deleted, now)
             events.append(build_file_edit_live_event(
@@ -327,36 +320,57 @@ class _StreamingJsonStringField:
 
 
 @dataclass(slots=True)
+class _EmitThrottle:
+    """Quando una riga «live» si riemette: la regola, una volta sola.
+
+    La prima volta sempre; con gli stessi numeri mai; con un salto di almeno
+    ``_LIVE_EMIT_LINE_STEP`` righe (aggiunte o tolte) subito; altrimenti non prima
+    di ``_LIVE_EMIT_INTERVAL_S`` dall'ultima. Era scritta tre volte.
+    """
+
+    emitted_once: bool = False
+    added: int = -1
+    deleted: int = -1
+    at: float = 0.0
+
+    def should_emit(self, added: int, deleted: int, now: float) -> bool:
+        if not self.emitted_once:
+            return True
+        if added == self.added and deleted == self.deleted:
+            return False
+        if max(abs(added - self.added), abs(deleted - self.deleted)) >= _LIVE_EMIT_LINE_STEP:
+            return True
+        return now - self.at >= _LIVE_EMIT_INTERVAL_S
+
+    def mark(self, added: int, deleted: int, now: float) -> None:
+        self.emitted_once = True
+        self.added = added
+        self.deleted = deleted
+        self.at = now
+
+    def already_sent(self, added: int, deleted: int) -> bool:
+        """Questi numeri sono gli ultimi emessi (e qualcosa è stato emesso)."""
+        return self.emitted_once and added == self.added and deleted == self.deleted
+
+
+@dataclass(slots=True)
 class _StreamingPatchFileState:
     tracker: FileEditTracker
-    emitted_once: bool = False
-    last_emitted_added: int = -1
-    last_emitted_deleted: int = -1
-    last_emit_at: float = 0.0
+    throttle: _EmitThrottle = field(default_factory=_EmitThrottle)
+    # Gli ultimi numeri **visti**, emessi o no: ``flush`` li rilegge per chiudere
+    # con il conto vero anche se l'ultimo aggiornamento era stato trattenuto.
     last_added: int = 0
     last_deleted: int = 0
 
     def should_emit(self, added: int, deleted: int, now: float) -> bool:
         self.last_added = added
         self.last_deleted = deleted
-        if not self.emitted_once:
-            return True
-        if added == self.last_emitted_added and deleted == self.last_emitted_deleted:
-            return False
-        if max(
-            abs(added - self.last_emitted_added),
-            abs(deleted - self.last_emitted_deleted),
-        ) >= _LIVE_EMIT_LINE_STEP:
-            return True
-        return now - self.last_emit_at >= _LIVE_EMIT_INTERVAL_S
+        return self.throttle.should_emit(added, deleted, now)
 
     def mark_emitted(self, added: int, deleted: int, now: float) -> None:
-        self.emitted_once = True
         self.last_added = added
         self.last_deleted = deleted
-        self.last_emitted_added = added
-        self.last_emitted_deleted = deleted
-        self.last_emit_at = now
+        self.throttle.mark(added, deleted, now)
 
 
 @dataclass(slots=True)
@@ -377,14 +391,10 @@ class _StreamingFileEditState:
         default_factory=lambda: _StreamingJsonStringField("new_text")
     )
     patch_files: dict[str, _StreamingPatchFileState] = field(default_factory=dict)
-    emitted_once: bool = False
-    last_emitted_added: int = -1
-    last_emitted_deleted: int = -1
-    last_emit_at: float = 0.0
-    pending_emitted: bool = False
-    last_pending_added: int = -1
-    last_pending_deleted: int = -1
-    last_pending_at: float = 0.0
+    # Due ritmi separati: il conteggio prima che il path sia noto (``pending``) e
+    # quello dopo, sul file vero (``live``).
+    live: _EmitThrottle = field(default_factory=_EmitThrottle)
+    pending: _EmitThrottle = field(default_factory=_EmitThrottle)
 
     def apply_delta(self, payload: dict[str, Any]) -> None:
         call_id = payload.get("call_id")
@@ -416,40 +426,16 @@ class _StreamingFileEditState:
         return 0, 0
 
     def should_emit(self, added: int, deleted: int, now: float) -> bool:
-        if not self.emitted_once:
-            return True
-        if added == self.last_emitted_added and deleted == self.last_emitted_deleted:
-            return False
-        if max(
-            abs(added - self.last_emitted_added),
-            abs(deleted - self.last_emitted_deleted),
-        ) >= _LIVE_EMIT_LINE_STEP:
-            return True
-        return now - self.last_emit_at >= _LIVE_EMIT_INTERVAL_S
+        return self.live.should_emit(added, deleted, now)
 
     def mark_emitted(self, added: int, deleted: int, now: float) -> None:
-        self.emitted_once = True
-        self.last_emitted_added = added
-        self.last_emitted_deleted = deleted
-        self.last_emit_at = now
+        self.live.mark(added, deleted, now)
 
     def should_emit_pending(self, added: int, deleted: int, now: float) -> bool:
-        if not self.pending_emitted:
-            return True
-        if added == self.last_pending_added and deleted == self.last_pending_deleted:
-            return False
-        if max(
-            abs(added - self.last_pending_added),
-            abs(deleted - self.last_pending_deleted),
-        ) >= _LIVE_EMIT_LINE_STEP:
-            return True
-        return now - self.last_pending_at >= _LIVE_EMIT_INTERVAL_S
+        return self.pending.should_emit(added, deleted, now)
 
     def mark_pending_emitted(self, added: int, deleted: int, now: float) -> None:
-        self.pending_emitted = True
-        self.last_pending_added = added
-        self.last_pending_deleted = deleted
-        self.last_pending_at = now
+        self.pending.mark(added, deleted, now)
 
     def matches_final_tool_call(self, tool_call: Any) -> bool:
         call_id = getattr(tool_call, "id", None)
@@ -493,7 +479,20 @@ def _json_bool_true(source: str, key: str) -> bool:
     return re.search(rf'"{re.escape(key)}"\s*:\s*true\b', source) is not None
 
 
-def _extract_json_string_prefix(source: str, key: str) -> str | None:
+def _scan_json_string(source: str, key: str) -> tuple[str, bool] | None:
+    """Il valore della stringa JSON di *key*, decodificato, e se è chiusa.
+
+    ``None`` se la chiave non c'è. Altrimenti ``(testo, completa)``: il testo fin
+    dove si è riusciti a leggere, e ``completa`` solo se si è arrivati alle
+    virgolette di chiusura. Un ``\\u`` troncato o non esadecimale ferma la lettura
+    lì (la stringa resta incompleta). ``\\b``, ``\\f`` e ``\\/`` rendono la lettera
+    che segue il backslash: è il comportamento di sempre, e in un argomento di
+    modifica file non compaiono.
+
+    Uno scanner solo per i due usi (quanto testo c'è durante lo streaming, il
+    valore a stringa chiusa): erano due copie che differivano solo in cosa
+    rendere quando la stringa non è finita.
+    """
     match = re.search(rf'"{re.escape(key)}"\s*:\s*"', source)
     if match is None:
         return None
@@ -513,11 +512,11 @@ def _extract_json_string_prefix(source: str, key: str) -> str | None:
             elif ch == "u":
                 digits = source[i + 1:i + 5]
                 if len(digits) < 4:
-                    break
+                    return "".join(out), False
                 try:
                     out.append(chr(int(digits, 16)))
                 except ValueError:
-                    break
+                    return "".join(out), False
                 i += 4
             else:
                 out.append(ch)
@@ -528,49 +527,20 @@ def _extract_json_string_prefix(source: str, key: str) -> str | None:
             i += 1
             continue
         if ch == '"':
-            return "".join(out)
+            return "".join(out), True
         out.append(ch)
         i += 1
-    return "".join(out)
+    return "".join(out), False
+
+
+def _extract_json_string_prefix(source: str, key: str) -> str | None:
+    """Il testo della stringa letto finora, chiusa o no (durante lo streaming)."""
+    scanned = _scan_json_string(source, key)
+    return None if scanned is None else scanned[0]
 
 
 def _extract_complete_json_string(source: str, key: str) -> str | None:
-    match = re.search(rf'"{re.escape(key)}"\s*:\s*"', source)
-    if match is None:
-        return None
-    out: list[str] = []
-    i = match.end()
-    escape = False
-    while i < len(source):
-        ch = source[i]
-        if escape:
-            escape = False
-            if ch == "n":
-                out.append("\n")
-            elif ch == "r":
-                out.append("\r")
-            elif ch == "t":
-                out.append("\t")
-            elif ch == "u":
-                digits = source[i + 1:i + 5]
-                if len(digits) < 4:
-                    return None
-                try:
-                    out.append(chr(int(digits, 16)))
-                except ValueError:
-                    return None
-                i += 4
-            else:
-                out.append(ch)
-            i += 1
-            continue
-        if ch == "\\":
-            escape = True
-            i += 1
-            continue
-        if ch == '"':
-            return "".join(out)
-        out.append(ch)
-        i += 1
-    return None
+    """Il valore della stringa, solo se è chiusa."""
+    scanned = _scan_json_string(source, key)
+    return scanned[0] if scanned is not None and scanned[1] else None
 
