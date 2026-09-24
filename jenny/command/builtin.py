@@ -220,18 +220,6 @@ async def cmd_model(ctx: CommandContext) -> OutboundMessage:
     )
 
 
-def _int_or_zero(value: object) -> int:
-    """Un contatore che arriva da un doppio può non essere un intero.
-
-    Stava nel blocco di ``/dream budget``, che il 31/08/2026 è stato spostato in
-    Impostazioni. Il suo chiamante però è il ramo che **lancia** Dream (v.
-    ``refused=`` più sotto), quindi è risalita qui invece di andarsene con il
-    resto: cancellarla insieme al blocco rompeva un percorso che quel lavoro non
-    doveva toccare.
-    """
-    return value if isinstance(value, int) else 0
-
-
 async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     """Manually trigger a Dream consolidation run, or read/tune the memory budgets."""
     loop = ctx.loop
@@ -254,27 +242,22 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     )
 
     async def _dream_cycle():
-        async def _silent(*_args, **_kwargs):
-            pass
-
         # Prologo ed epilogo del ciclo sono gli stessi del job cron, e stanno in
         # un modulo solo: erano due copie della stessa sequenza, e ogni volta che
         # una cresceva l'altra restava indietro in silenzio — il guard del budget,
         # il gauge, i contatori del review sono arrivati qui tre commit dopo che
-        # erano di là. Qui resta ciò che è davvero di questo percorso: il turno
-        # incrementale e la frase da dire a chi ha lanciato il comando.
+        # erano di là. Dal 24/09/2026 anche il turno incrementale è condiviso
+        # (``run_dream_turn``): qui resta la frase da dire a chi ha lanciato il
+        # comando.
         from jenny.agent.dream_cycle import (
-            NO_ENTRIES,
-            batch_was_not_consolidated,
+            DreamOutcome,
             begin_dream_cycle,
             finish_dream_cycle,
-            take_dream_snapshot,
+            run_dream_turn,
         )
         from jenny.agent.memory import MemoryStore
-        from jenny.agent.memory_budget import render_gauge
         from jenny.config.loader import load_config
 
-        dream_session_key = MemoryStore.dream_session_key
         prune_dream_sessions = MemoryStore.prune_dream_sessions
 
         store = loop.context.memory
@@ -291,7 +274,6 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
         snapshot_cb = getattr(loop, "snapshot_before_dream", None)
         content = ""
         review_note = ""
-        resp = None
         t0 = time.monotonic()
         try:
             # Le due metà di `/dream` devono raccontare la stessa cosa, e per
@@ -316,16 +298,20 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # valore del ramo senza storia, e anche quello di un turno che è
             # crashato. Non ``False``, che incrementerebbe ``stuck`` e quindi
             # dichiarerebbe un livelock del budget dove c'è stata un'eccezione.
+            # Legati **prima** del ``try``: il ``finally`` li legge su ogni
+            # uscita, compresa quella del ramo senza storia (fino al 24/09/2026 un
+            # nome nato più in basso faceva sollevare il ``finally``).
             advanced: bool | None = None
-            # Il ``finally`` lo legge su **ogni** uscita, compresa quella del ramo
-            # senza storia qui sotto, che torna prima di costruire i tool: nato
-            # solo accanto a ``build_dream_tools``, quel ``return`` lo trovava non
-            # definito e il ``finally`` sollevava, portandosi via la chiusura del
-            # ciclo e aggiungendo un «Dream failed» al messaggio «niente da fare».
-            dream_file_states = None
+            refused = 0
             try:
-                result = store.build_dream_prompt(gauge=render_gauge(prologue.report))
-                if result is None:
+                # Il turno è lo stesso del job cron (``run_dream_turn``): qui resta
+                # la frase da dire a chi ha lanciato il comando.
+                turn = await run_dream_turn(
+                    loop, store, prologue, take_snapshot=snapshot_cb,
+                )
+                advanced, refused = turn.advanced, turn.refused
+                elapsed = time.monotonic() - t0
+                if turn.outcome is DreamOutcome.NO_INPUT:
                     await loop.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel, chat_id=msg.chat_id,
                         content=_prefix_review_note(
@@ -334,67 +320,15 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                         metadata={"render_as": "text"},
                     ))
                     return
-                prompt, last_cursor = result[0], result[1]
-                # V. il gemello in ``runtime/cron_dispatch.py``: il tipo del batch
-                # sceglie la cassetta, e un doppio che ritorna una coppia nuda
-                # resta un batch personale.
-                scope = getattr(result, "scope", "personal")
-                if prologue.review is None:
-                    # Un solo checkpoint per ciclo: se il review è appena girato
-                    # lo snapshot è già stato preso e copre anche il turno
-                    # incrementale che segue, mentre un secondo "pre_dream"
-                    # archiviato dopo il review non sarebbe pre-niente.
-                    await take_dream_snapshot(snapshot_cb)
-                key = dream_session_key()
-                dream_tools = store.build_dream_tools(
-                    write_size_guard=prologue.guard, scope=scope,
-                )
-                # Riassegnato prima del turno, non dopo: un ``process_direct`` che
-                # solleva deve comunque lasciare al ``finally`` i rifiuti contati
-                # fin lì.
-                dream_file_states = getattr(dream_tools, "file_states", None)
-                resp = await loop.process_direct(
-                    prompt,
-                    session_key=key,
-                    ephemeral=True,
-                    tools=dream_tools,
-                    on_progress=_silent,
-                )
-                elapsed = time.monotonic() - t0
-                advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
-                # Stessa domanda in più del percorso cron, e per la stessa
-                # ragione: "ha scritto" non è "il batch è atterrato". Chi lancia
-                # `/dream` a mano deve vedere lo stesso esito del job, o il
-                # comando torna a essere la porta di servizio del meccanismo.
-                # Il tool per voci del run appena concluso. ``getattr`` con un default
-                # perché ``build_dream_tools`` è sostituito nei test da doppi che non lo
-                # espongono: un run senza quel tool è un run con zero voci, non un errore.
-                entries = getattr(dream_tools, "memory_entries", None) or NO_ENTRIES
-                held_batch = advanced and batch_was_not_consolidated(
-                    before=prologue.report,
-                    history_text=MemoryStore.dream_prompt_history(prompt),
-                    stuck=prologue.stuck + prologue.nothing_new,
-                    # L'esito in voci del run, dal tool esposto sul registry: sono questi
-                    # numeri a rendere la domanda una verifica invece di una stima.
-                    added=entries.entries_added,
-                    replaced=entries.entries_replaced,
-                    already_present=entries.entries_already_present,
-                    # Se non ha tentato nessuna scrittura non ha mancato niente:
-                    # ha deciso che non c'era da scrivere. V. il docstring.
-                    attempted=getattr(dream_file_states, "writes_attempted", 0),
-                )
-                if held_batch:
-                    advanced = False
-                if advanced:
-                    store.set_last_dream_cursor(last_cursor)
+                if turn.outcome is DreamOutcome.ADVANCED:
                     content = f"Dream completed in {elapsed:.1f}s."
-                elif held_batch:
+                elif turn.outcome is DreamOutcome.HELD_BATCH:
                     content = (
                         f"Dream completed in {elapsed:.1f}s but consolidated nothing "
                         "from its batch (no memory file grew); memory cursor was not "
                         "advanced, so those entries come back next run."
                     )
-                elif MemoryStore.dream_run_completed(resp):
+                elif turn.outcome is DreamOutcome.BLOCKED:
                     content = (
                         f"Dream completed in {elapsed:.1f}s but wrote nothing "
                         "(attempts blocked/refused); memory cursor was not advanced."
@@ -425,9 +359,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     # La causa, che è ciò che decide quale dei due contatori sale:
                     # un rifiuto rimasto aperto significa "manca spazio" e un review
                     # può liberarlo; senza rifiuti non c'è niente da liberare.
-                    refused=_int_or_zero(
-                        getattr(dream_file_states, "unrecovered_refusals", 0)
-                    ),
+                    refused=refused,
                 )
         except Exception as e:
             elapsed = time.monotonic() - t0

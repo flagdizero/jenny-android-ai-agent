@@ -16,12 +16,14 @@ ricostruzione delle misure dopo il review — e l'epilogo, cioè l'aritmetica de
 contatori: la parte che per costruzione deve essere la stessa. Più la presa che
 tiene i due percorsi a **un ciclo per volta** (:func:`claim_dream_cycle`), che sta
 qui per la stessa ragione: duplicarla nei due chiamanti sarebbe due copie da
-tenere d'accordo. Ai chiamanti
-resta ciò che è davvero loro: costruire il prompt, il turno incrementale, lo
-snapshot pre-turno, la contabilità token, ``compact_history`` più il pruning, e
-la traduzione dell'esito — una riga di log per il cron, una frase in chat per il
-comando, che è il motivo per cui ``DreamPrologue.review`` viaggia fino a loro
-invece di essere consumato qui.
+tenere d'accordo. Dal 24/09/2026 c'è anche il turno incrementale
+(:func:`run_dream_turn`): prompt, snapshot, tool, ``process_direct``, gate del
+cursore e batch trattenuto erano ancora copiati nei due chiamanti, con la
+normalizzazione dei rifiuti già divergente. Ai chiamanti resta ciò che è davvero
+loro: ``compact_history`` più il pruning, e la traduzione dell'esito — una riga
+di log per il cron, una frase in chat per il comando, che è il motivo per cui
+``DreamPrologue.review`` e :class:`DreamOutcome` viaggiano fino a loro invece di
+essere consumati qui.
 
 Il modulo vive sotto ``jenny/agent`` e non sotto ``jenny/runtime`` di proposito:
 ``jenny/command`` importava da ``jenny/runtime/cron_dispatch`` la costante del
@@ -34,6 +36,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -645,6 +648,129 @@ async def begin_dream_cycle(
         stuck=stuck,
         nothing_new=nothing_new,
         review=outcome,
+    )
+
+
+class DreamOutcome(Enum):
+    """Come è finito il turno incrementale. L'ordine dei rami conta (v. sotto)."""
+
+    NO_INPUT = "no_input"        # niente storia nuova: il turno non è partito
+    ADVANCED = "advanced"        # batch atterrato, cursore avanzato
+    HELD_BATCH = "held_batch"    # ha scritto, ma il batch non è atterrato
+    BLOCKED = "blocked"          # completato senza scritture riuscite (rifiuti/blocchi)
+    INCOMPLETE = "incomplete"    # il turno non si è chiuso pulito
+
+
+@dataclass(frozen=True)
+class DreamTurnResult:
+    """L'esito del turno, per chi lo chiude e per chi lo racconta.
+
+    ``advanced`` è il valore per :func:`finish_dream_cycle`: ``None`` se non
+    c'era niente da consolidare. ``refused`` sono i rifiuti di budget rimasti
+    aperti, cioè la **causa** che decide quale dei due contatori del livelock
+    sale. ``last_cursor`` è quello del batch, anche quando non si è avanzati.
+    """
+
+    outcome: DreamOutcome
+    advanced: bool | None
+    refused: int
+    resp: Any = None
+    last_cursor: int | None = None
+
+
+async def _silent(*_args: Any, **_kwargs: Any) -> None:
+    """``on_progress`` muto: un run interno non ha nessuno a cui riferire."""
+
+
+def _int_or_zero(value: object) -> int:
+    """Un contatore che arriva da un doppio può non essere un intero."""
+    return value if isinstance(value, int) else 0
+
+
+async def run_dream_turn(
+    agent: Any,
+    store: "MemoryStore",
+    prologue: "DreamPrologue",
+    *,
+    take_snapshot: Callable[[], Awaitable[Any]] | None,
+) -> DreamTurnResult:
+    """Il turno incrementale di Dream, lo stesso per il cron e per ``/dream``.
+
+    Non chiude il ciclo: :func:`finish_dream_cycle` va chiamato dal chiamante in
+    un ``finally``, perché un turno che solleva deve comunque far avanzare
+    ``runs_since_review`` (un Dream che fallisce sempre non arriverebbe mai a un
+    review pass). Le eccezioni del turno risalgono: il chiamante le racconta a
+    modo suo, e chiude con ``advanced=None``.
+    """
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.memory_budget import render_gauge
+
+    result = store.build_dream_prompt(gauge=render_gauge(prologue.report))
+    if result is None:
+        return DreamTurnResult(DreamOutcome.NO_INPUT, advanced=None, refused=0)
+    prompt, last_cursor = result[0], result[1]
+    # ``getattr`` con un default: ``build_dream_prompt`` è sostituito nei test da
+    # doppi che ritornano una coppia nuda, e un batch che non dichiara il proprio
+    # tipo è un batch personale, che è il comportamento di sempre. Il tipo del
+    # batch sceglie la cassetta in cui Dream può scrivere.
+    scope = getattr(result, "scope", "personal")
+    if prologue.review is None:
+        # Un solo checkpoint per ciclo. Se il review è appena girato lo snapshot
+        # è già stato preso pochi secondi fa e copre anche il turno che segue;
+        # rifarlo qui archivierebbe lo stato *dopo* il review sotto l'etichetta
+        # "pre_dream", cioè un secondo checkpoint che non è pre-niente.
+        await take_dream_snapshot(take_snapshot)
+    dream_tools = store.build_dream_tools(write_size_guard=prologue.guard, scope=scope)
+    # ``getattr``: il registry Dream espone ``file_states``, ma il contratto resta
+    # tollerante verso registry di altra provenienza (e verso i doppi dei test).
+    dream_file_states = getattr(dream_tools, "file_states", None)
+    resp = await agent.process_direct(
+        prompt,
+        session_key=MemoryStore.dream_session_key(),
+        ephemeral=True,
+        tools=dream_tools,
+        on_progress=_silent,
+    )
+    advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
+    # Il run ha scritto, ma il batch è atterrato? Sono due domande diverse e fino
+    # al 2026-08-18 se ne faceva una sola (v. :func:`batch_was_not_consolidated`).
+    # Sta dopo il gate e non dentro perché ``internal_run_should_commit`` è
+    # condiviso col giardiniere, che non ha un batch di storia da far atterrare.
+    # Il tool per voci del run: un doppio che non lo espone è un run a zero voci.
+    entries = getattr(dream_tools, "memory_entries", None) or NO_ENTRIES
+    held_batch = advanced and batch_was_not_consolidated(
+        before=prologue.report,
+        history_text=MemoryStore.dream_prompt_history(prompt),
+        stuck=prologue.stuck + prologue.nothing_new,
+        added=entries.entries_added,
+        replaced=entries.entries_replaced,
+        already_present=entries.entries_already_present,
+        # Se non ha tentato nessuna scrittura non ha mancato niente: ha deciso
+        # che non c'era da scrivere.
+        attempted=getattr(dream_file_states, "writes_attempted", 0),
+    )
+    refused = _int_or_zero(getattr(dream_file_states, "unrecovered_refusals", 0))
+    if held_batch:
+        # Ramo **prima** di quello dei rifiuti, e non è ordine estetico: la prima
+        # stesura lo teneva a parte e uscivano due diagnosi, la seconda "attempts
+        # blocked/refused" su un run senza né blocchi né rifiuti (logcat,
+        # 2026-08-18 14:02:35). Un run, un esito.
+        return DreamTurnResult(
+            DreamOutcome.HELD_BATCH, advanced=False, refused=refused,
+            resp=resp, last_cursor=last_cursor,
+        )
+    if advanced:
+        store.set_last_dream_cursor(last_cursor)
+        return DreamTurnResult(
+            DreamOutcome.ADVANCED, advanced=True, refused=refused,
+            resp=resp, last_cursor=last_cursor,
+        )
+    outcome = (
+        DreamOutcome.BLOCKED if MemoryStore.dream_run_completed(resp)
+        else DreamOutcome.INCOMPLETE
+    )
+    return DreamTurnResult(
+        outcome, advanced=False, refused=refused, resp=resp, last_cursor=last_cursor,
     )
 
 
