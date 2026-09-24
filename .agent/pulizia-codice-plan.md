@@ -1,7 +1,7 @@
 # Pulizia del codice — quello che resta dopo l'audit del 24/09/2026
 
-> Stato: **in corso** — fase 0 avviata il 24/09; le decisioni della fase 1
-> sono prese (tutte come da raccomandazione). Le cancellazioni a rischio zero sono già atterrate
+> Stato: **in corso** — fasi 0 e 1 fatte il 24/09 (resta la prova sul
+> telefono di 0.3); prossima: fase 2. Le cancellazioni a rischio zero sono già atterrate
 > (`94cdd49`…`0060788`, otto commit, ~1.300 righe in meno, installate sul
 > Titan 2). Qui c'è tutto il resto: tre difetti, le decisioni che spettano a te,
 > i duplicati di Python, WebUI, Kotlin e test.
@@ -194,7 +194,27 @@ raccomandazione** («ok alle raccomandazioni»), quindi 1.1 è eseguibile.
 | D12 | `display_name` sui quattro canali | Nessuno lo legge (quello in `settings_api.py:490` è un altro) | Cancellare attributi e assegnazioni nei mock || raccomandazione (24/09) |
 | D13 | `android/image_source/talk_2a.PNG`, `talk_2b.PNG` (1,65 MB) + README | Nessun riferimento; `talk_2b` = `idle` byte per byte. Il README dice «15 webp» (sono 10 + 9 a livelli) e cita pose uscite da `FILES` con `9d6c603`; `SOSTITUIRE_UNA_POSA.md:17-23` elenca pose che non si esportano più | Cancellare le due PNG; **correggere** README e tabella (talk_1a/1b/think segnate «solo riferimento dei test», `test_mascot_layer_sources.py:50-59`) || raccomandazione (24/09) |
 
-- [ ] **1.1 Esecuzione delle decisioni.** Un commit per decisione, nell'ordine
+- [x] **1.1 Esecuzione delle decisioni** — fatto 24/09, un commit per
+  decisione. Cosa si è scoperto facendolo:
+  - **D1**: un `CronService` fermo non scrive `jobs.json` ma accoda al giornale
+    delle azioni, che ogni caricamento riapplica: gli helper di test
+    (`tests/support/cron.py`) scrivono come il servizio, upsert nel giornale da
+    fermo. Il «ramo update» del merge non esisteva come ramo: tutto ciò che non
+    è `del` è un upsert.
+  - **D2**: `wiki.extensions` è in ogni `config.json` (il dump scriveva i
+    default), quindi è entrata in `RETIRED_KEY_PATHS`, con un test.
+  - **D3**: difetto latente trovato — `browser.py` passava la **descrizione**
+    di `amount` e `ms` come primo posizionale, e il modello non l'ha mai vista.
+    Argomenti ora solo keyword.
+  - **D4**: togliere `import shutil` da `skills.py` ha rivelato tre stub di
+    test (`jenny.agent.skills.shutil.which`) che non facevano niente.
+  - **D6b**: `isIsolated()` rende un booleano, non JSON: interrogato fuori da
+    `_call`; un bridge che non sa rispondere non avvisa.
+  - **D7**: `bootstrap.js` ora imposta `<html lang>` con la regola di
+    `detectLocale()` invece del valore salvato.
+  - **D11**: il `_set` dei test di rotta manda l'ordine semplice.
+  - **D13**: il README dell'arte era fermo a prima dei due livelli; riscritte
+    le parti di stato, uscita e runtime. Un commit per decisione, nell'ordine
   della tabella; ogni commit porta con sé i test che asserivano la cosa tolta
   e la doc pubblica che la descriveva (`docs/` è la fonte del sito: modifiche
   di contenuto, nessun rename di file). D5 toglie anche `session_updated`
