@@ -856,12 +856,12 @@ object FloatingOverlayController {
             // la maniglia, che è l'unica a poter crescere fino a coprire lo
             // schermo senza che si veda.
             val box = buildMascotWindow(ctx)
-            val blp = mascotWinParams(ctx)
+            val blp = parkedSquareParams(ctx)
             wm.addView(box, blp)
             mascotWin = box
             mascotWinParams = blp
             val handle = buildGrip(ctx)
-            val glp = gripParams(ctx)
+            val glp = parkedSquareParams(ctx)
             wm.addView(handle, glp)
             grip = handle
             gripParams = glp
@@ -969,32 +969,18 @@ object FloatingOverlayController {
     }
 
     /**
-     * La maniglia: un riquadro trasparente grande quanto lo sprite, sopra di
-     * lei, che porta il `setOnTouchListener`.
+     * Un quadrato grande quanto lo sprite, parcheggiato al bordo: così partono
+     * la finestra di lei (toccabile di proposito, v. [buildMascotWindow]) e la
+     * maniglia, un riquadro trasparente sopra di lei che porta il
+     * `setOnTouchListener`.
      *
-     * È l'unica finestra che cambia taglia — piccola da parcheggiata, intera
+     * Si chiama due volte e l'oggetto non si condivide, perché la maniglia è
+     * l'unica finestra che cambia taglia — piccola da parcheggiata, intera
      * durante il volo (l'arena) — e siccome non disegna niente, cambiarla non
      * si vede. Tutta la classe di difetti «la mascotte salta quando la
      * finestra cambia» muore qui.
      */
-    /** La finestra di lei. Toccabile di proposito: v. [buildMascotWindow]. */
-    private fun mascotWinParams(ctx: Context): WindowManager.LayoutParams {
-        val size = mascotSize(ctx)
-        val lp = WindowManager.LayoutParams(
-            size,
-            size,
-            overlayType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = Gravity.TOP or Gravity.START
-        lp.x = parkX(ctx)
-        lp.y = parkTop(ctx)
-        return lp
-    }
-
-    private fun gripParams(ctx: Context): WindowManager.LayoutParams {
+    private fun parkedSquareParams(ctx: Context): WindowManager.LayoutParams {
         val size = mascotSize(ctx)
         val lp = WindowManager.LayoutParams(
             size,
