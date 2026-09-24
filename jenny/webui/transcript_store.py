@@ -9,7 +9,6 @@ dipende. Nessuna logica di replay/rendering vive qui: è il solo strato di I/O.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 from pathlib import Path
@@ -19,7 +18,7 @@ from loguru import logger
 
 from jenny.config.paths import get_webui_dir
 from jenny.session.manager import SessionManager
-from jenny.utils.path import atomic_write
+from jenny.utils.path import append_lines_durable, atomic_write
 
 _MAX_TRANSCRIPT_FILE_BYTES = 8 * 1024 * 1024
 _TARGET_ACTIVE_TRANSCRIPT_BYTES = _MAX_TRANSCRIPT_FILE_BYTES // 2
@@ -328,14 +327,8 @@ def _append_to_active_transcript(session_key: str, obj: dict[str, Any]) -> None:
         raise ValueError(msg)
     path = webui_transcript_path(session_key)
     path.parent.mkdir(parents=True, exist_ok=True)
-    line = raw + "\n"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(line)
-        f.flush()
-        try:
-            os.fsync(f.fileno())
-        except OSError:
-            pass
+    # Un ``fsync`` fallito non fa fallire il turno: la riga è nel file.
+    append_lines_durable(path, [raw], tolerate_fsync_error=True)
 
 
 def append_transcript_object(session_key: str, obj: dict[str, Any]) -> None:

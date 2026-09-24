@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import threading
 from collections.abc import Callable
@@ -32,7 +31,7 @@ from jenny.utils.helpers import (
     strip_think,
     truncate_text,
 )
-from jenny.utils.path import atomic_write
+from jenny.utils.path import append_lines_durable, atomic_write
 from jenny.utils.prompt_templates import render_template
 
 # Separatore fra il template di Dream e il batch di storia, dentro il prompt che
@@ -618,10 +617,7 @@ class MemoryStore:
             # sempre comportate le voci gia' su disco.
             if not prompt_visible:
                 record["prompt_visible"] = False
-            with open(self.history_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                f.flush()
-                os.fsync(f.fileno())
+            append_lines_durable(self.history_file, [json.dumps(record, ensure_ascii=False)])
             # Small full-file replacement each append: use the same atomic
             # temp-file+fsync+rename helper as every other on-disk cursor/state
             # file in this codebase (cron store, session manager, sidebar
@@ -937,6 +933,20 @@ class MemoryStore:
             return 0
         return counter
 
+    def _read_review_state(self) -> dict[str, Any]:
+        """Il contenuto di ``.dream_review``, o ``{}`` se non si riesce a leggerlo.
+
+        Una lettura sola per i tre getter, che la ripetevano ognuno a modo suo:
+        uno lasciava uscire un ``UnicodeDecodeError`` (un file troncato in mezzo a
+        un carattere multibyte), gli altri due no. File assente, byte che non sono
+        UTF-8, JSON rotto e radice non-dict danno tutti ``{}``.
+        """
+        try:
+            data = json.loads(self._review_state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # ValueError include JSONDecodeError e UnicodeDecodeError
+            return {}
+        return data if isinstance(data, dict) else {}
+
     def get_review_state(self) -> tuple[int, int]:
         """Return ``(runs_since_review, stuck_runs)`` for the Dream review pass.
 
@@ -955,16 +965,7 @@ class MemoryStore:
         rimacinare per sempre lo stesso batch). Entrambi i contatori li consuma
         il chiamante: qui c'è solo lo stato su disco.
         """
-        try:
-            raw = self._review_state_file.read_text(encoding="utf-8")
-        except OSError:
-            return (0, 0)
-        try:
-            data = json.loads(raw)
-        except ValueError:  # include JSONDecodeError
-            return (0, 0)
-        if not isinstance(data, dict):
-            return (0, 0)
+        data = self._read_review_state()
         return (
             self._review_counter(data.get("runs_since_review")),
             self._review_counter(data.get("stuck_runs")),
@@ -990,13 +991,7 @@ class MemoryStore:
         lettura giusta: il vecchio ``stuck_runs`` si eredita come *no room*, che è
         il ramo che tiene armata la via d'uscita dal livelock.
         """
-        try:
-            data = json.loads(self._review_state_file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return 0
-        if not isinstance(data, dict):
-            return 0
-        return self._review_counter(data.get("nothing_new_runs"))
+        return self._review_counter(self._read_review_state().get("nothing_new_runs"))
 
     def get_review_forced_at_stuck(self) -> int:
         """A quale valore di ``stuck_runs`` il review è stato forzato l'ultima volta.
@@ -1020,13 +1015,7 @@ class MemoryStore:
         :meth:`set_review_state` lo azzera insieme al contatore: sopravvivergli lo
         trasformerebbe da freno in blocco — v. il commento lì.
         """
-        try:
-            data = json.loads(self._review_state_file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return 0
-        if not isinstance(data, dict):
-            return 0
-        return self._review_counter(data.get("forced_at_stuck"))
+        return self._review_counter(self._read_review_state().get("forced_at_stuck"))
 
     def set_review_state(
         self,

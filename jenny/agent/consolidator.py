@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -37,6 +36,7 @@ from jenny.utils.helpers import (
     truncate_text,
     truncate_text_to_tokens,
 )
+from jenny.utils.path import append_lines_durable
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import discover_wiki_roots
 
@@ -725,11 +725,9 @@ class Consolidator:
         page = directory / f"{datetime.now():%Y%m%d-%H%M%S}.jsonl"
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            with page.open("a", encoding="utf-8") as fh:
-                for message in messages:
-                    fh.write(json.dumps(message, ensure_ascii=False) + "\n")
-                fh.flush()
-                os.fsync(fh.fileno())
+            append_lines_durable(
+                page, [json.dumps(message, ensure_ascii=False) for message in messages],
+            )
         except (OSError, TypeError, ValueError) as exc:
             # ``TypeError``/``ValueError``: un messaggio non serializzabile in
             # JSON. Non è mai capitato — le sessioni si salvano con lo stesso

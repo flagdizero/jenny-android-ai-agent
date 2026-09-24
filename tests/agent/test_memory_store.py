@@ -352,7 +352,10 @@ class TestHistoryWithCursor:
             fsynced_fds.append(fd)
             return real_fsync(fd)
 
-        monkeypatch.setattr("jenny.agent.memory.os.fsync", spy_fsync)
+        # Sul modulo ``os``: dal 24/09/2026 la scrittura passa da
+        # ``utils.path.append_lines_durable``, e conta che il fsync avvenga, non
+        # da quale modulo parta.
+        monkeypatch.setattr(os_module, "fsync", spy_fsync)
 
         store.append_history("event 1")
 

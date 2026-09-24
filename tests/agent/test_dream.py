@@ -367,6 +367,26 @@ class TestDreamReviewState:
     def test_corrupted_state_reads_as_zero_without_raising(self, store, payload):
         store._review_state_file.write_text(payload, encoding="utf-8")
         assert store.get_review_state() == (0, 0)
+        # Le altre due letture dello stesso file seguono la stessa regola.
+        assert store.get_nothing_new_runs() == 0
+        assert store.get_review_forced_at_stuck() == 0
+
+    def test_bytes_that_are_not_utf8_read_as_zero(self, store):
+        """Un file scritto a meta' puo' finire in mezzo a un carattere multibyte:
+        la decodifica fallisce con un ``ValueError``, non un ``OSError``, e fino al
+        24/09/2026 ``get_review_state`` lo lasciava uscire."""
+        store._review_state_file.write_bytes(b'{"runs_since_review": 3, "x": "\xe8\xff')
+        assert store.get_review_state() == (0, 0)
+        assert store.get_nothing_new_runs() == 0
+        assert store.get_review_forced_at_stuck() == 0
+
+    def test_the_four_fields_round_trip(self, store):
+        store.set_review_state(
+            runs_since_review=5, stuck_runs=2, forced_at_stuck=2, nothing_new_runs=3,
+        )
+        assert store.get_review_state() == (5, 2)
+        assert store.get_review_forced_at_stuck() == 2
+        assert store.get_nothing_new_runs() == 3
 
     def test_partial_state_keeps_the_readable_half(self, store):
         store._review_state_file.write_text(
