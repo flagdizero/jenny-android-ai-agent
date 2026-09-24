@@ -548,7 +548,7 @@
     "kindJennyApp": "Jenny App",
     "kindAndroidApp": "Android App",
     "loading": "Loading...",
-    "empty": "No app, Jenny App or skill to open.",
+    "empty": "No app or Jenny App to open.",
     "recent": "Most used",
     "results": "Results",
     "searchPlaceholder": "Search apps…",
