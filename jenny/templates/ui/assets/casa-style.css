@@ -350,6 +350,22 @@ body.casa {
 
 .casa-activity[hidden] { display: none; }
 
+/* Lasciata a sinistra, Jenny sta con i piedi proprio sul pavimento della riga:
+   il fiore e l'inizio della parola le finirebbero dietro (visto sul Titan 2 il
+   24/09/2026: fiore a 18-34 px, lei fino a 57). La riga allora parte da dove
+   finisce la figura — non il riquadro, che ai lati e' trasparente: 0,725 e'
+   `1 - MARGINE_LATERALE` di `shared/jenny-gap.js`, cioe' il suo bordo destro
+   dentro il quadrato. Stesso scivolamento di lei, cosi' si spostano insieme. */
+.casa-activity {
+  transition: padding-left 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
+}
+:root:has(.casa-jenny.side-left:not([hidden])) .casa-activity {
+  padding-left: max(18px, calc(var(--jenny-size) * (0.725 - var(--jenny-dock)) + 8px));
+}
+:root:has(.casa-jenny.side-left.out:not([hidden])) .casa-activity {
+  padding-left: max(18px, calc(var(--jenny-size) * (0.725 - var(--jenny-out)) + 8px));
+}
+
 .casa-activity-fiore {
   flex: none;
   width: 16px;
@@ -415,6 +431,7 @@ body.casa {
   .casa-lettera,
   .casa-puntino,
   .casa-parola.esce { animation: none; }
+  .casa-activity { transition: none; }
 }
 
 /* ── Lo stato del filo ── */
