@@ -559,8 +559,13 @@ export class JennyMascot {
     return this._streamTurnId === turnId;
   }
 
-  _handleChatStream(msg) {
-    const mine = this._trackedTurnMatches(msg);
+  /* *mine* lo passa chi ha già interrogato il tracciamento (la minichat, che
+     ci decide la sua guardia): chiederlo due volte non cambierebbe l'esito, ma
+     l'adozione del turno resta così in un punto solo. */
+  _handleChatStream(msg, mine = this._trackedTurnMatches(msg)) {
+    // Prima dello stato: chi mostra parole (il fumetto della minichat) passa
+    // da `talking`, e lo stato che il frame lascia deve venire per ultimo.
+    this._beforeChatState(msg);
     switch (msg.event) {
       case 'delta':
         this._setAgentState('talking');
@@ -611,4 +616,8 @@ export class JennyMascot {
         break;
     }
   }
+
+  /* Gancio per chi ha qualcosa da mostrare oltre allo stato: qui niente, la
+     mascotte della casa e quella in chat parlano solo col corpo. */
+  _beforeChatState(_msg) {}
 }

@@ -288,65 +288,39 @@ export class JennyCompanion extends JennyMascot {
     // chiude la domanda in volo, la cui risposta sta ancora arrivando.
     const mine = this._trackedTurnMatches(msg);
     if (closing && !mine) return;
+    this._handleChatStream(msg, mine);
+  }
 
+  /* La minichat mette il fumetto sopra la macchina a stati della madre, che
+     resta l'unica. Si arriva qui solo da `_handleFrame` fuori dalla chat e
+     oltre la sua guardia: una chiusura, qui, è sempre del turno seguito. */
+  _beforeChatState(msg) {
+    if (this.mode === 'chat') return;
     switch (msg.event) {
       case 'delta':
-        this._setAgentState('talking');
         this._deltaBuffer += (msg.text || '');
         this._showReply(plainText(this._deltaBuffer));
         break;
       case 'stream_end':
         if (msg.text) this._showReply(plainText(msg.text));
-        this._setAgentState(this._turnActive ? 'thinking' : 'idle');
         break;
       case 'message':
         if (msg.text && msg.kind !== 'tool_hint' && msg.kind !== 'progress') {
-          this._setAgentState('talking');
           this._showReply(plainText(msg.text));
-        } else if (msg.tool_events || msg.kind === 'tool_hint' || msg.kind === 'progress') {
-          this._setAgentState('thinking');
-        }
-        break;
-      case 'reasoning_delta':
-        this._setAgentState('thinking');
-        break;
-      case 'reasoning_end':
-        break;
-      case 'file_edit':
-        this._setAgentState('thinking');
-        break;
-      case 'goal_status':
-        if (msg.status === 'running') {
-          this._turnActive = true;
-          this._setAgentState('thinking');
-        } else if (msg.status === 'idle') {
-          this._turnActive = false;
-          this._setAgentState('idle');
         }
         break;
       case 'turn_end':
-        this._turnActive = false;
-        this._pendingTurn = false;
-        this._noteTurnClosed(msg);
-        this._streamTurnId = null;
         this.awaiting = false;
         if (this._replyTimer) {
           clearTimeout(this._replyTimer);
           this._replyTimer = null;
         }
         if (!this._replyShown) this._showReply('✿');
-        this._setAgentState('idle');
         this._invalidateChatHistory();
         break;
       case 'error':
-        this._turnActive = false;
-        this._pendingTurn = false;
-        this._noteTurnClosed(msg);
-        this._streamTurnId = null;
         this.awaiting = false;
         this._showReply(plainText(msg.detail || msg.reason || i18n.t('jenny.genericError')));
-        this._setAgentState('idle');
-        this._applyMood('sad'); // livello 0: l'errore ha la sua faccia, gratis
         break;
     }
   }

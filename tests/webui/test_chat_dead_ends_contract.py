@@ -37,7 +37,11 @@ MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 
 
 def _method(source: str, name: str) -> str:
-    body = re.search(rf"\n  (?:async )?{name}\([^)]*\)\s*\{{(.*?)\n  \}}", source, re.S)
+    # I parametri possono avere un default con le sue parentesi
+    # (`mine = this._trackedTurnMatches(msg)`): un livello di annidamento basta.
+    body = re.search(
+        rf"\n  (?:async )?{name}\((?:[^()]|\([^()]*\))*\)\s*\{{(.*?)\n  \}}", source, re.S
+    )
     assert body, f"{name} non trovato"
     return body.group(1)
 
@@ -109,9 +113,16 @@ def test_turn_end_reaches_the_history_invalidation_with_the_minichat_closed() ->
         "invisibile non servono a nessuno"
     )
 
-    # E la chiusura deve continuare a fare l'unica cosa che conta per la chat.
-    assert "this._invalidateChatHistory();" in body
-    assert body.count("this._pendingTurn = false;") == 2, (
+    # Oltre la guardia il frame va alla macchina della madre, che chiude il
+    # flag su entrambi gli esiti (turn_end ed error); il fumetto e
+    # l'invalidazione stanno nel gancio. L'esecuzione vera di tutto questo e' in
+    # `test_minichat_frames_client.py`.
+    assert "this._handleChatStream(msg, mine);" in body
+    hook = _method(source, "_beforeChatState")
+    assert "this._invalidateChatHistory();" in hook
+    mother = _method(MASCOT_JS.read_text(encoding="utf-8"), "_handleChatStream")
+    closing = mother.split("case 'turn_end':", 1)[1]
+    assert "case 'error':" in closing.split("this._pendingTurn = false;", 1)[0], (
         "il flag va chiuso su entrambi gli esiti (turn_end ed error), altrimenti resta alzato"
     )
 
