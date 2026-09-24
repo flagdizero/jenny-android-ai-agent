@@ -14,6 +14,7 @@ promemoria esiste.
 import time
 
 import pytest
+from support.cron import reschedule_job
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronSchedule
@@ -88,7 +89,7 @@ async def test_deadline_missed_while_the_app_was_down_runs_at_the_next_start(tmp
         **_bound_chat(),
     )
     # La scadenza arriva e passa a processo spento.
-    first.update_job(job.id, schedule=CronSchedule(kind="at", at_ms=at_ms))
+    reschedule_job(first, job.id, CronSchedule(kind="at", at_ms=at_ms), next_run_at_ms=at_ms)
 
     # Riavvio.
     fired: list[str] = []

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from support.cron import disable_job
 
 from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.cron import CronTool
@@ -443,7 +444,7 @@ def test_list_excludes_disabled_jobs(tmp_path) -> None:
         schedule=CronSchedule(kind="cron", expr="0 9 * * *", tz="UTC"),
         message="test",
     )
-    tool._cron.enable_job(job.id, enabled=False)
+    disable_job(tool._cron, job.id)
 
     result = tool._list_jobs()
     assert "Paused job" not in result

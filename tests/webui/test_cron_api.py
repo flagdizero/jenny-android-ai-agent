@@ -15,6 +15,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from support.cron import disable_job
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronPayload, CronSchedule, CronTaskCheckState
@@ -80,7 +81,7 @@ def test_a_disabled_job_is_listed_not_hidden(cron, tmp_path):
     che e' una delle domande per cui il pannello esiste.
     """
     job = cron.add_job("gocce", CronSchedule(kind="every", every_ms=60_000), _PILLS)
-    cron.enable_job(job.id, False)
+    disable_job(cron, job.id)
 
     payload = webui_cron_payload(cron, config=_config(tmp_path))
 

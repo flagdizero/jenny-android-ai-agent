@@ -858,7 +858,7 @@ class CronService:
         execution is running *inside* ``self._timer_task`` itself (mid-await
         in ``_on_timer``'s ``due_jobs`` loop -> ``_execute_job``). Cancelling
         and replacing the task here -- as would happen from an unrelated
-        ``add_job``/``remove_job``/``enable_job``/``update_job`` call made
+        ``add_job``/``remove_job`` call made
         while that job's agent turn is still running -- would abort the
         in-flight job mid-execution, lose its result, and leave its
         ``next_run_at_ms`` stale, causing a silent double-fire on the next
@@ -1128,7 +1128,7 @@ class CronService:
             # Compute next run
             job.state.next_run_at_ms = _compute_next_run(job.schedule, _now_ms())
 
-    def _append_action(self, action: Literal["add", "del", "update"], params: dict):
+    def _append_action(self, action: Literal["add", "del"], params: dict):
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
             with open(self._action_path, "a", encoding="utf-8") as f:
@@ -1314,69 +1314,6 @@ class CronService:
             job_id, dropped,
         )
         return True
-
-    def enable_job(self, job_id: str, enabled: bool = True) -> CronJob | None:
-        """Enable or disable a job."""
-        store = self._load_store()
-        for job in store.jobs:
-            if job.id == job_id:
-                job.enabled = enabled
-                job.updated_at_ms = _now_ms()
-                self._enforce_agent_binding(job)
-                if job.enabled:
-                    job.state.next_run_at_ms = _next_run_with_catch_up(job.schedule, _now_ms())
-                else:
-                    job.state.next_run_at_ms = None
-                if self._running:
-                    self._save_store()
-                    self._arm_timer()
-                else:
-                    self._append_action("update", asdict(job))
-                return job
-        return None
-
-    def update_job(
-        self,
-        job_id: str,
-        *,
-        name: str | None = None,
-        schedule: CronSchedule | None = None,
-        message: str | None = None,
-        delete_after_run: bool | None = None,
-    ) -> CronJob | Literal["not_found", "protected"]:
-        """Update mutable fields of an existing job. System jobs cannot be updated."""
-        store = self._load_store()
-        job = next((j for j in store.jobs if j.id == job_id), None)
-        if job is None:
-            return "not_found"
-        if job.payload.kind == "system_event":
-            return "protected"
-
-        if schedule is not None:
-            _validate_schedule_for_add(schedule)
-            job.schedule = schedule
-        if name is not None:
-            job.name = name
-        if message is not None:
-            job.payload.message = message
-        if delete_after_run is not None:
-            job.delete_after_run = delete_after_run
-        self._enforce_agent_binding(job)
-
-        job.updated_at_ms = _now_ms()
-        if job.enabled:
-            job.state.next_run_at_ms = _next_run_with_catch_up(job.schedule, _now_ms())
-        else:
-            job.state.next_run_at_ms = None
-
-        if self._running:
-            self._save_store()
-            self._arm_timer()
-        else:
-            self._append_action("update", asdict(job))
-
-        logger.info("Cron: updated job '{}' ({})", job.name, job.id)
-        return job
 
     async def run_job(self, job_id: str, force: bool = False) -> bool:
         """Manually run a job without disturbing the service's running state."""

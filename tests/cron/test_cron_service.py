@@ -3,6 +3,7 @@ import json
 import time
 
 import pytest
+from support.cron import disable_job
 
 from jenny.cron.service import CronJobSkippedError, CronService
 from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload, CronSchedule
@@ -518,7 +519,7 @@ async def test_run_job_disabled_does_not_flip_running_state(tmp_path) -> None:
         message="hello",
         **_bound_chat(),
     )
-    service.enable_job(job.id, enabled=False)
+    disable_job(service, job.id)
 
     result = await service.run_job(job.id)
 
@@ -566,8 +567,7 @@ async def test_running_service_honors_external_disable(tmp_path) -> None:
         # a short sleep here can overrun the 200ms schedule and let the job fire
         # before the external update is written.
         external = CronService(store_path)
-        updated = external.enable_job(job.id, enabled=False)
-        assert updated is not None
+        updated = disable_job(external, job.id)
         assert updated.enabled is False
 
         await asyncio.sleep(0.35)
@@ -720,8 +720,7 @@ async def test_external_update_preserves_run_history_records(tmp_path):
     await service.run_job(job.id, force=True)
 
     external = CronService(store_path)
-    updated = external.enable_job(job.id, enabled=False)
-    assert updated is not None
+    disable_job(external, job.id)
 
     fresh = CronService(store_path)
     loaded = fresh.get_job(job.id)
@@ -775,7 +774,7 @@ async def test_timer_execution_is_not_rolled_back_by_list_jobs_reload(tmp_path):
 
 @pytest.mark.asyncio
 async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) -> None:
-    """Regression: add_job/remove_job/enable_job/update_job on a DIFFERENT job
+    """Regression: add_job/remove_job on a DIFFERENT job
     must not cancel a job whose execution is currently in-flight inside the
     timer task. Previously, _arm_timer() unconditionally cancelled
     self._timer_task -- the same task running the in-flight job's turn --
@@ -819,8 +818,6 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
             message="hello",
             **_bound_chat("b"),
         )
-        service.enable_job(job_b.id, enabled=False)
-        service.update_job(job_b.id, name="renamed")
         service.remove_job(job_b.id)
 
         # ``Task.cancelling()`` conta le richieste di cancellazione ricevute e
@@ -862,141 +859,6 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
         assert calls == [job_a.id]
     finally:
         service.stop()
-
-
-# ── update_job tests ──
-
-
-def test_update_job_changes_name(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="old name",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="hello",
-        **_bound_chat(),
-    )
-    result = service.update_job(job.id, name="new name")
-    assert isinstance(result, CronJob)
-    assert result.name == "new name"
-    assert result.payload.message == "hello"
-
-
-def test_update_job_changes_schedule(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="sched",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="hello",
-        **_bound_chat(),
-    )
-    old_next = job.state.next_run_at_ms
-
-    new_sched = CronSchedule(kind="every", every_ms=120_000)
-    result = service.update_job(job.id, schedule=new_sched)
-    assert isinstance(result, CronJob)
-    assert result.schedule.every_ms == 120_000
-    assert result.state.next_run_at_ms != old_next
-
-
-def test_update_job_changes_message(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="msg",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="old message",
-        **_bound_chat(),
-    )
-    result = service.update_job(job.id, message="new message")
-    assert isinstance(result, CronJob)
-    assert result.payload.message == "new message"
-
-
-def test_update_job_changes_cron_expression(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="cron-job",
-        schedule=CronSchedule(kind="cron", expr="0 9 * * *", tz="UTC"),
-        message="hello",
-        **_bound_chat(),
-    )
-    result = service.update_job(
-        job.id,
-        schedule=CronSchedule(kind="cron", expr="0 18 * * *", tz="UTC"),
-    )
-    assert isinstance(result, CronJob)
-    assert result.schedule.expr == "0 18 * * *"
-    assert result.state.next_run_at_ms is not None
-
-
-def test_update_job_not_found(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    result = service.update_job("nonexistent", name="x")
-    assert result == "not_found"
-
-
-def test_update_job_rejects_system_job(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    service.register_system_job(CronJob(
-        id="dream",
-        name="dream",
-        schedule=CronSchedule(kind="cron", expr="0 */2 * * *", tz="UTC"),
-        payload=CronPayload(kind="system_event"),
-    ))
-    result = service.update_job("dream", name="hacked")
-    assert result == "protected"
-    assert service.get_job("dream").name == "dream"
-
-
-def test_update_job_validates_schedule(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="validate",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="hello",
-        **_bound_chat(),
-    )
-    with pytest.raises(ValueError, match="unknown timezone"):
-        service.update_job(
-            job.id,
-            schedule=CronSchedule(kind="cron", expr="0 9 * * *", tz="Bad/Zone"),
-        )
-
-
-@pytest.mark.asyncio
-async def test_update_job_preserves_run_history(tmp_path) -> None:
-    import asyncio
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
-    job = service.add_job(
-        name="hist",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="hello",
-        **_bound_chat(),
-    )
-    await service.run_job(job.id)
-
-    result = service.update_job(job.id, name="renamed")
-    assert isinstance(result, CronJob)
-    assert len(result.state.run_history) == 1
-    assert result.state.run_history[0].status == "ok"
-
-
-def test_update_job_offline_writes_action(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
-    job = service.add_job(
-        name="offline",
-        schedule=CronSchedule(kind="every", every_ms=60_000),
-        message="hello",
-        **_bound_chat(),
-    )
-    service.update_job(job.id, name="updated-offline")
-
-    action_path = tmp_path / "cron" / "action.jsonl"
-    assert action_path.exists()
-    lines = [line for line in action_path.read_text().strip().split("\n") if line]
-    last = json.loads(lines[-1])
-    assert last["action"] == "update"
-    assert last["params"]["name"] == "updated-offline"
 
 
 @pytest.mark.asyncio
