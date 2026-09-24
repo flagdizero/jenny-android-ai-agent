@@ -17,7 +17,7 @@
  */
 
 import { i18n } from './i18n.js';
-import { AppState, claimComposeMenu, onOtherComposeMenu } from './state.js';
+import { AppState, armComposeMenu, claimComposeMenu } from './state.js';
 import { api } from './api-client.js';
 import { showToast } from './utils.js';
 import { deleteProjectFlow } from './project-delete.js';
@@ -82,17 +82,9 @@ export class ScopeChip {
   init() {
     if (!this.enabled || this._initialized) return;
     this._initialized = true;
-    this.el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggle();
-    });
-    this.menu.addEventListener('click', (e) => e.stopPropagation());
-    // Chiusura: tap fuori ed Escape, come gli sheet dell'app.
-    document.addEventListener('click', () => this.close());
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.close();
-    });
-    onOtherComposeMenu('scope', () => this.close());
+    // Chiusura: tap fuori ed Escape, come gli sheet dell'app; e l'apertura
+    // dell'altra tendina (v. `armComposeMenu`).
+    armComposeMenu(this, 'scope');
     // Il placeholder dipende da due cose con due proprietari: lo scope (questo
     // modulo) e il modo di scrittura (`write-switch.js`). Iscriversi invece di
     // farsi chiamare rende l'ordine dei due `syncFromSession` irrilevante —

@@ -27,7 +27,7 @@
 import { api } from './api-client.js';
 import { i18n } from './i18n.js';
 import { sessionManager } from './session-manager.js';
-import { claimComposeMenu, onOtherComposeMenu } from './state.js';
+import { armComposeMenu, claimComposeMenu } from './state.js';
 
 export class CommandsChip {
   constructor() {
@@ -58,22 +58,9 @@ export class CommandsChip {
   init() {
     if (!this.enabled || this._initialized) return;
     this._initialized = true;
-    this.el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggle();
-    });
-    this.menu.addEventListener('click', (e) => e.stopPropagation());
     // Chiusura: tap fuori ed Escape, come gli sheet dell'app e come lo scope
-    // chip. Questo **non** basta a chiudere l'altra tendina quando si apre
-    // questa: il `stopPropagation()` qui sopra è necessario — senza, il click
-    // che apre arriverebbe a `document` e richiuderebbe subito — ed è anche il
-    // motivo per cui l'altro chip non vede mai quel click. Ci pensa la riga
-    // sotto (`onOtherComposeMenu`).
-    document.addEventListener('click', () => this.close());
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.close();
-    });
-    onOtherComposeMenu('commands', () => this.close());
+    // chip; e l'apertura dell'altra tendina (v. `armComposeMenu`).
+    armComposeMenu(this, 'commands');
     this.render();
   }
 

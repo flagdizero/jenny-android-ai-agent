@@ -133,4 +133,64 @@ def test_both_chips_claim_and_listen() -> None:
     for path, ident in ((SCOPE_JS, "scope"), (COMMANDS_JS, "commands")):
         src = path.read_text(encoding="utf-8")
         assert f"claimComposeMenu('{ident}')" in src, f"{path.name} non dichiara l'apertura"
-        assert f"onOtherComposeMenu('{ident}'" in src, f"{path.name} non ascolta le altre"
+        assert f"armComposeMenu(this, '{ident}')" in src, f"{path.name} non ascolta le altre"
+
+
+# ── L'aggancio comune ────────────────────────────────────────────────────────
+
+_ARMED = """
+import assert from 'node:assert/strict';
+/* Un `document` e due elementi che tengono i loro listener, e un evento che
+   ricorda se qualcuno ne ha fermato la propagazione. */
+function target() {
+  const t = { on: {} };
+  t.addEventListener = (type, fn) => { (t.on[type] ||= []).push(fn); };
+  t.fire = (type, extra = {}) => {
+    const e = { stopped: false, stopPropagation() { this.stopped = true; }, ...extra };
+    for (const fn of t.on[type] || []) fn(e);
+    return e;
+  };
+  return t;
+}
+globalThis.document = target();
+function chip(id) {
+  const c = { el: target(), menu: target(), toggles: 0, closes: 0 };
+  c.toggle = () => { c.toggles += 1; };
+  c.close = () => { c.closes += 1; };
+  armComposeMenu(c, id);
+  return c;
+}
+"""
+
+
+def test_the_chip_click_toggles_and_does_not_reach_document() -> None:
+    _run_js(_ARMED + """
+      const c = chip('scope');
+      const e = c.el.fire('click');
+      assert.equal(c.toggles, 1);
+      assert.equal(e.stopped, true, 'senza, il click che apre la richiuderebbe');
+      assert.equal(c.menu.fire('click').stopped, true, 'un tocco dentro la tendina non la chiude');
+      assert.equal(c.closes, 0);
+    """)
+
+
+def test_outside_tap_and_escape_close_other_keys_do_not() -> None:
+    _run_js(_ARMED + """
+      const c = chip('commands');
+      document.fire('click');
+      assert.equal(c.closes, 1);
+      document.fire('keydown', { key: 'Enter' });
+      assert.equal(c.closes, 1);
+      document.fire('keydown', { key: 'Escape' });
+      assert.equal(c.closes, 2);
+    """)
+
+
+def test_opening_another_menu_closes_the_armed_one() -> None:
+    _run_js(_ARMED + """
+      const scope = chip('scope');
+      const commands = chip('commands');
+      claimComposeMenu('commands');
+      assert.equal(scope.closes, 1);
+      assert.equal(commands.closes, 0, 'la propria apertura non la chiude');
+    """)

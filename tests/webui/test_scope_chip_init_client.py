@@ -30,6 +30,7 @@ import pytest
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
+STATE_JS = ASSETS / "shared" / "state.js"
 
 _NODE = shutil.which("node")
 
@@ -90,11 +91,13 @@ const AppState = {
 };
 /* «Una sola tendina aperta» passa dallo stesso canale, e per questo test è
    un'iscrizione come le altre: quel che si misura qui è che `init` non ne
-   registri due. Il comportamento sta in `test_compose_menus_client.py`. */
+   registri due. Il comportamento sta in `test_compose_menus_client.py`.
+   `armComposeMenu` è quella vera di `state.js`, dal sorgente. */
 function claimComposeMenu(id) { AppState.set('composeMenu', id); }
 function onOtherComposeMenu(id, close) {
   AppState.on('composeMenu', (who) => { if (who !== id) close(); });
 }
+__ARM_COMPOSE_MENU__
 
 /* Un elemento ridotto a quel che `render()` e `init()` toccano. `inner` decide
    quali figli esistono: `null` è il caso dell'index a cui manca lo span. */
@@ -182,6 +185,11 @@ def _harness() -> str:
         .replace("__PATH_SEGMENTS__", _member(src, "pathSegments"))
         .replace("__RENDER__", _member(src, "render"))
         .replace("__SYNC_PLACEHOLDER__", _member(src, "syncPlaceholder"))
+        .replace(
+            "__ARM_COMPOSE_MENU__",
+            _function(STATE_JS.read_text(encoding="utf-8").replace("export function", "function"),
+                      "armComposeMenu"),
+        )
     )
 
 
