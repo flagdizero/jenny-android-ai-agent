@@ -112,9 +112,6 @@ class WebSocketManager extends EventTarget {
           return;
         }
         this.dispatchEvent(new CustomEvent('chat:message', { detail: msg }));
-        if (msg.chat_id) {
-          this.dispatchEvent(new CustomEvent(`chat:${msg.chat_id}:message`, { detail: msg }));
-        }
       } catch (err) {
         console.error('Invalid WS message:', event.data);
       }

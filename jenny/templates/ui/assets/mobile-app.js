@@ -23,8 +23,6 @@ import { hasSelection, exposeSelectionState, forwardTapsThroughChrome } from './
 import { osservaGestoOrizzontale, elastico } from './shared/gesto-orizzontale.js';
 import './shared/theme.js';
 
-export { showToast };
-
 /* ── Global Error Handling ── */
 // Oltre al toast, l'errore viene inoltrato al log del gateway (/api/client-log):
 // la console del WebView è visibile solo via adb, quindi senza inoltro un

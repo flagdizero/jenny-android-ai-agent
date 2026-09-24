@@ -621,23 +621,13 @@ class ApiClient {
     return res.json();
   }
 
-  /** L'elenco **intero**, non una riga.
+  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{schermate,
+   *  ordine}` torna com'e' stato salvato. L'ordine deve nominare ogni pagina
+   *  una volta sola, o il server lo rifiuta con un 400.
    *
    *  Ed e' una GET con i dati nell'indirizzo, non una POST: il livello HTTP
    *  del gateway rifiuta qualunque metodo diverso da GET e qualunque body, al
-   *  parser (v. `apps_api`). Non e' una svista da correggere.
-   */
-  async setSchermate(schermate) {
-    const v = encodeURIComponent(JSON.stringify(schermate));
-    const res = await this._fetch(`/api/casa/schermate/set?v=${v}`);
-    if (!res.ok) throw new Error(`Pages write failed: ${res.status}`);
-    const body = await res.json();
-    return body.schermate;
-  }
-
-  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{schermate,
-   *  ordine}` torna com'e' stato salvato. L'ordine deve nominare ogni pagina
-   *  una volta sola, o il server lo rifiuta con un 400. */
+   *  parser (v. `apps_api`). Non e' una svista da correggere. */
   async salvaPagine(schermate, ordine) {
     const v = encodeURIComponent(JSON.stringify({ schermate, ordine }));
     const res = await this._fetch(`/api/casa/schermate/set?v=${v}`);
