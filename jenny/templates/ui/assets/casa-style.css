@@ -2322,23 +2322,3 @@ body.casa {
 #casa-backup-export, #casa-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
 .casa-card-label.is-warn { color: var(--warning); }
 #casa-backup-snapshots { padding: 0 4px; }
-
-/* ── Un diagramma disegnato (shared/rich-content.js) ── */
-
-/* Sostituisce l'involucro del blocco di codice: in chat quello portava
-   l'intestazione «mermaid» e il tasto Copia, che accanto a un disegno non
-   vogliono dire piu' niente.
-
-   **Scorre invece di rimpicciolirsi.** Su 590 px un flowchart largo ridotto a
-   tutta larghezza ha etichette da quattro pixel — l'immagine di un diagramma,
-   non un diagramma. Si legge scorrendo di lato, come una tabella larga.
-   (Da guardare sul telefono: e' l'unico posto dove questa scelta si giudica.) */
-.diagramma {
-  margin: 10px 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.diagramma svg {
-  display: block;
-  height: auto;
-}
