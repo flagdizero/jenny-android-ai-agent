@@ -16,42 +16,27 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from support.gateway_http import AUTH_SECRET, make_handler
 from websockets.http11 import Headers
 from websockets.http11 import Request as WsRequest
 
 from jenny.webui.ws_http import GatewayHTTPHandler
 
-_AUTH_SECRET = "test-secret"
 _PATH = "/api/webui/cron"
 
 
 def _make_handler(workspace: Path, *, get_cron_service=None) -> GatewayHTTPHandler:
-    config = SimpleNamespace(
-        workspace=SimpleNamespace(enabled=True),
-        wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-        token_issue_secret=_AUTH_SECRET,
-        verbose=False,
-    )
-    return GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=workspace,
-        get_cron_service=get_cron_service,
-    )
+    return make_handler(workspace, get_cron_service=get_cron_service)
 
 
-def _request(path: str = _PATH, *, token: str | None = _AUTH_SECRET) -> WsRequest:
+def _request(path: str = _PATH, *, token: str | None = AUTH_SECRET) -> WsRequest:
     if token is None:
         return WsRequest(path=path, headers=Headers())
     sep = "&" if "?" in path else "?"
     return WsRequest(path=f"{path}{sep}token={urllib.parse.quote(token)}", headers=Headers())
 
 
-def _dispatch(handler: GatewayHTTPHandler, path: str = _PATH, *, token=_AUTH_SECRET):
+def _dispatch(handler: GatewayHTTPHandler, path: str = _PATH, *, token=AUTH_SECRET):
     return asyncio.run(handler.cron_routes.dispatch(_request(path, token=token), path))
 
 

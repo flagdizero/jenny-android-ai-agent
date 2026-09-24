@@ -4,51 +4,27 @@ from __future__ import annotations
 
 import urllib.parse
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from websockets.http11 import Headers
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.webui.ws_http import GatewayHTTPHandler
 
-_AUTH_SECRET = "test-secret"
-
 
 def _make_request(
     path: str,
-    token: str | None = _AUTH_SECRET,
+    token: str | None = AUTH_SECRET,
     headers: list[tuple[str, str]] | None = None,
 ) -> WsRequest:
     """Create a minimal WsRequest for testing."""
-    if token is not None and "token=" not in path:
-        sep = "&" if "?" in path else "?"
-        path = f"{path}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path, headers=Headers(headers or []))
+    return make_request(path, token, headers)
 
 
 def _make_handler(tmp_path: Path) -> GatewayHTTPHandler:
     """Create a GatewayHTTPHandler with minimal mocked dependencies."""
-    media = MagicMock()
-    workspaces = MagicMock()
-    bus = MagicMock()
-    config = SimpleNamespace(
-        workspace=SimpleNamespace(enabled=True),
-        wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-        token_issue_secret=_AUTH_SECRET,
-        verbose=False,
-    )
-    handler = GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=bus,
-        media=media,
-        workspaces=workspaces,
-        skills_workspace_path=tmp_path / "skills",
-    )
-    return handler
+    return make_handler(tmp_path / "skills")
 
 
 # ---------------------------------------------------------------------------

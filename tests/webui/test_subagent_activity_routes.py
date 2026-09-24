@@ -21,14 +21,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from websockets.http11 import Headers
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.agent.subagent_activity import SubagentActivityLog, build_digest
 from jenny.channels.subagent_activity_wire import MAX_HTTP_EVENTS
 from jenny.webui.ws_http import GatewayHTTPHandler
 
-_AUTH_SECRET = "test-secret"
 _TASK = "d2ee4342"
 
 
@@ -60,33 +59,15 @@ class FakeManager:
         return {"running": [], "recent": []}
 
 
-def _make_request(path_with_query: str, *, token: str | None = _AUTH_SECRET) -> WsRequest:
-    if token is not None:
-        sep = "&" if "?" in path_with_query else "?"
-        path_with_query = f"{path_with_query}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path_with_query, headers=Headers())
+def _make_request(path_with_query: str, *, token: str | None = AUTH_SECRET) -> WsRequest:
+    return make_request(path_with_query, token, always_append=True)
 
 
 def _make_handler(get_manager: Any) -> GatewayHTTPHandler:
-    config = SimpleNamespace(
-        workspace=SimpleNamespace(enabled=True),
-        wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-        token_issue_secret=_AUTH_SECRET,
-        verbose=False,
-    )
-    return GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=Path("/nonexistent"),
-        get_subagent_manager=get_manager,
-    )
+    return make_handler(Path("/nonexistent"), get_subagent_manager=get_manager)
 
 
-async def _dispatch(handler, path_with_query: str, *, token: str | None = _AUTH_SECRET):
+async def _dispatch(handler, path_with_query: str, *, token: str | None = AUTH_SECRET):
     clean_path = path_with_query.split("?", 1)[0]
     request = _make_request(path_with_query, token=token)
     return await handler.subagent_routes.dispatch(request, clean_path)

@@ -12,18 +12,15 @@ eccezioni con quei nomi, senza importare nulla dall'agente.
 from __future__ import annotations
 
 import json
-import urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from websockets.http11 import Headers
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.webui.ws_http import GatewayHTTPHandler
-
-_AUTH_SECRET = "test-secret"
 
 _SNAPSHOT = {
     "running": [{
@@ -100,14 +97,11 @@ class FakeManager:
         return self.cancel_result
 
 
-def _make_request(path_with_query: str, *, token: str | None = _AUTH_SECRET) -> WsRequest:
-    if token is not None:
-        sep = "&" if "?" in path_with_query else "?"
-        path_with_query = f"{path_with_query}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path_with_query, headers=Headers())
+def _make_request(path_with_query: str, *, token: str | None = AUTH_SECRET) -> WsRequest:
+    return make_request(path_with_query, token, always_append=True)
 
 
-async def _dispatch(handler, path_with_query: str, *, token: str | None = _AUTH_SECRET):
+async def _dispatch(handler, path_with_query: str, *, token: str | None = AUTH_SECRET):
     clean_path = path_with_query.split("?", 1)[0]
     request = _make_request(path_with_query, token=token)
     return await handler.subagent_routes.dispatch(request, clean_path)
@@ -118,22 +112,7 @@ def _json(response) -> dict:
 
 
 def _make_handler(get_manager) -> GatewayHTTPHandler:
-    config = SimpleNamespace(
-        workspace=SimpleNamespace(enabled=True),
-        wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-        token_issue_secret=_AUTH_SECRET,
-        verbose=False,
-    )
-    return GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=Path("/nonexistent"),
-        get_subagent_manager=get_manager,
-    )
+    return make_handler(Path("/nonexistent"), get_subagent_manager=get_manager)
 
 
 @pytest.fixture()

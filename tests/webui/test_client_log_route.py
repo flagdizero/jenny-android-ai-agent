@@ -4,41 +4,20 @@ from __future__ import annotations
 
 import urllib.parse
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 from loguru import logger
-from websockets.http11 import Headers
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.webui.ws_http import GatewayHTTPHandler
 
-_AUTH_SECRET = "test-secret"
 
-
-def _make_request(path: str, token: str | None = _AUTH_SECRET) -> WsRequest:
-    if token is not None and "token=" not in path:
-        sep = "&" if "?" in path else "?"
-        path = f"{path}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path, headers=Headers())
+def _make_request(path: str, token: str | None = AUTH_SECRET) -> WsRequest:
+    return make_request(path, token)
 
 
 def _make_handler(tmp_path: Path) -> GatewayHTTPHandler:
-    config = SimpleNamespace(
-        workspace=SimpleNamespace(enabled=True),
-        wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-        token_issue_secret=_AUTH_SECRET,
-        verbose=False,
-    )
-    return GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=tmp_path / "skills",
-    )
+    return make_handler(tmp_path / "skills")
 
 
 def test_client_log_writes_gateway_log(tmp_path):
