@@ -15,16 +15,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
 from loguru import logger
 
+from jenny.security.wire_ids import WIRE_ID_RE
+
 # Valida i correlation-id "uiq-<uuid4hex>" generati qui: charset
 # [A-Za-z0-9_-], nessun ':' nel formato.
-_CORRELATION_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_CORRELATION_RE = WIRE_ID_RE
 
 # Cintura + bretelle contro un client ostile: il payload di una risposta oltre
 # questa soglia viene rifiutato (il transport WS cappa comunque a max_size).

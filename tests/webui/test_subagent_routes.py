@@ -317,7 +317,7 @@ async def test_cancel_unexpected_error_maps_to_500_generic(env) -> None:
 # -- validazione dell'id -----------------------------------------------------
 
 
-@pytest.mark.parametrize("raw_id", ["a%2Fb", "a%5Cb", "with%20space", "a" * 65])
+@pytest.mark.parametrize("raw_id", ["a%2Fb", "a%5Cb", "with%20space", "a" * 65, "abc%0A"])
 async def test_invalid_ids_are_rejected(env, raw_id: str) -> None:
     for action in ("restart", "cancel"):
         response = await _dispatch(env.handler, f"/api/subagents/{raw_id}/{action}")

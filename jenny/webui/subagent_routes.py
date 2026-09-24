@@ -44,12 +44,13 @@ from jenny.channels.subagent_activity_wire import (
     empty_window_payload,
     window_payload,
 )
+from jenny.security.wire_ids import WIRE_ID_RE
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 # Gli id (task e lineage) sono esadecimali corti generati dal manager; il regex
 # è volutamente più larguccio per non rompersi se il formato cambia, ma esclude
 # separatori di path e caratteri non stampabili.
-_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_ID_RE = WIRE_ID_RE
 
 _ACTION_RE = re.compile(r"^/api/subagents/([^/]+)/(restart|cancel)$")
 

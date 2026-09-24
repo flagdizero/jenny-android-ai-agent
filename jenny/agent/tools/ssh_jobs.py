@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import shlex
 import uuid
 from dataclasses import asdict, dataclass
@@ -42,6 +41,7 @@ from loguru import logger
 from jenny.agent.tools.ssh_backends.base import SshError, SshTarget
 from jenny.config.paths import get_runtime_subdir
 from jenny.runtime.power import keep_awake
+from jenny.security.wire_ids import WIRE_ID_RE
 from jenny.utils.path import atomic_write
 
 # Margine fra la scadenza del wakelock e il timeout del comando di poll: il lock
@@ -67,7 +67,7 @@ _MARKER = "__JENNY_SSH_JOB__"
 
 # Solo caratteri sicuri in un path: gli id li generiamo noi, questo è il
 # controllo che lo *dimostra* al lettore prima di interpolarli in un comando.
-_SAFE_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
+_SAFE_ID_RE = WIRE_ID_RE
 
 # Tetto sui record conservati: senza, il file cresce per sempre e ogni avvio
 # rilegge job di sei mesi fa. Si potano i terminati, mai i vivi.

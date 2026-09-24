@@ -29,9 +29,10 @@ già documentato in ``webui/subagent_routes.py``.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from typing import Any
+
+from jenny.security.wire_ids import WIRE_ID_RE
 
 __all__ = [
     "ACTIVITY_FRAME_EVENT",
@@ -105,7 +106,7 @@ MAX_WATCHES_PER_CONNECTION = 3
 # Charset chiuso del task id: diventa una chiave di dizionario lato gateway e un
 # nome di file lato digest, quindi passa da una whitelist invece che da una
 # sanitizzazione per sottrazione. Identico al ``_ID_RE`` delle route.
-_TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_TASK_ID_RE = WIRE_ID_RE
 
 # Cursore massimo accettato da un client. Un ``since`` fuori scala viene da un
 # bug, non da un ring: ammetterlo significherebbe tenere per sempre un cursore
