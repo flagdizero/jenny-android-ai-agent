@@ -640,60 +640,6 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         return body
 
-    @classmethod
-    def _extract_error_metadata(cls, e: Exception) -> dict[str, Any]:
-        response = getattr(e, "response", None)
-        # Gli header stanno sull'eccezione (``ProviderHTTPError``, che se li porta
-        # dietro perché la risposta a quel punto è già chiusa) oppure sulla
-        # risposta appesa dall'SDK. Nell'ordine: l'eccezione vince, è la fonte
-        # più vicina al punto in cui l'errore è stato costruito.
-        headers = getattr(e, "headers", None)
-        if headers is None:
-            headers = getattr(response, "headers", None)
-        payload = (
-            getattr(e, "body", None)
-            or getattr(e, "doc", None)
-            or getattr(response, "text", None)
-        )
-        if payload is None and response is not None:
-            response_json = getattr(response, "json", None)
-            if callable(response_json):
-                try:
-                    payload = response_json()
-                except Exception:
-                    payload = None
-        error_type, error_code = LLMProvider._extract_error_type_code(payload)
-
-        status_code = getattr(e, "status_code", None)
-        if status_code is None and response is not None:
-            status_code = getattr(response, "status_code", None)
-
-        should_retry: bool | None = None
-        if headers is not None:
-            raw = headers.get("x-should-retry")
-            if isinstance(raw, str):
-                lowered = raw.strip().lower()
-                if lowered == "true":
-                    should_retry = True
-                elif lowered == "false":
-                    should_retry = False
-
-        error_kind: str | None = None
-        error_name = e.__class__.__name__.lower()
-        if "timeout" in error_name:
-            error_kind = "timeout"
-        elif "connection" in error_name:
-            error_kind = "connection"
-
-        return {
-            "error_status_code": int(status_code) if status_code is not None else None,
-            "error_kind": error_kind,
-            "error_type": error_type,
-            "error_code": error_code,
-            "error_retry_after_s": cls._extract_retry_after_from_headers(headers),
-            "error_should_retry": should_retry,
-        }
-
     @staticmethod
     def _handle_error(
         e: Exception,
@@ -716,10 +662,8 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
             body_text = body if isinstance(body, str) else str(body) if body is not None else ""
             msg = f"Error: {body_text.strip()[:500]}" if body_text.strip() else f"Error calling LLM: {describe_exc(e)}"
 
-        headers = getattr(e, "headers", None)
-        if headers is None:
-            headers = getattr(getattr(e, "response", None), "headers", None)
-        retry_after = LLMProvider._extract_retry_after_from_headers(headers)
+        metadata = LLMProvider._error_metadata(e)
+        retry_after = metadata["error_retry_after_s"]
         if retry_after is None:
             retry_after = LLMProvider._extract_retry_after(msg)
         return LLMResponse(
@@ -727,7 +671,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
             finish_reason="error",
             retry_after=retry_after,
             partial_content=partial_content or None,
-            **OpenAICompatProvider._extract_error_metadata(e),
+            **metadata,
         )
 
     # ------------------------------------------------------------------

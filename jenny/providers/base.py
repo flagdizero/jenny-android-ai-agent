@@ -45,7 +45,7 @@ class ProviderHTTPError(RuntimeError):
     """Errore HTTP di un provider, con addosso i metadati che lo classificano.
 
     Esiste perché un ``RuntimeError`` nudo li perde tutti. La catena a valle —
-    ``_extract_error_metadata`` → ``is_transient_response`` — legge lo status per
+    ``_error_metadata`` → ``is_transient_response`` — legge lo status per
     decidere se ritentare, e senza status ripiega sul testo, dove il marker
     ``"429"`` fa passare per transitorio anche un ``insufficient_quota`` che non
     lo è: quella richiesta veniva ritentata a vuoto fino a esaurire i tentativi.
@@ -342,6 +342,91 @@ class LLMProvider(ABC):
     @classmethod
     def _extract_error_type_code(cls, payload: Any) -> tuple[str | None, str | None]:
         return extract_error_type_code(payload)
+
+    @staticmethod
+    def _error_headers(e: Exception) -> Any:
+        """Gli header di un errore: quelli dell'eccezione, se li porta, poi quelli
+        della risposta. ``ProviderHTTPError`` se li tiene addosso perché a quel
+        punto la risposta è già chiusa: è la fonte più vicina all'errore."""
+        headers = getattr(e, "headers", None)
+        if headers is None:
+            headers = getattr(getattr(e, "response", None), "headers", None)
+        return headers
+
+    @staticmethod
+    def _error_payload(e: Exception) -> Any:
+        """Il corpo dell'errore, nella forma in cui c'è: ``body``, ``doc``, il testo
+        della risposta, il suo JSON.
+
+        La lettura di ``.text`` è protetta: su una risposta in streaming non ancora
+        letta solleva ``ResponseNotRead``, e qui l'errore vero è *e*, non il
+        fallimento della lettura. Fino al 24/09/2026 la protezione c'era solo
+        dal lato Anthropic, e dal lato OpenAI-compat era il gestore d'errore a
+        sollevare.
+        """
+        response = getattr(e, "response", None)
+        try:
+            payload = (
+                getattr(e, "body", None)
+                or getattr(e, "doc", None)
+                or getattr(response, "text", None)
+            )
+        except Exception:
+            payload = None
+        if payload is None and response is not None:
+            response_json = getattr(response, "json", None)
+            if callable(response_json):
+                try:
+                    payload = response_json()
+                except Exception:
+                    payload = None
+        return payload
+
+    @classmethod
+    def _error_metadata(cls, e: Exception, *, payload: Any = None) -> dict[str, Any]:
+        """I campi ``error_*`` di un ``LLMResponse`` d'errore, uguali per ogni provider.
+
+        Erano copiati in ``AnthropicProvider._handle_error`` e in
+        ``OpenAICompatProvider._extract_error_metadata``, e già divergenti (la
+        lettura protetta del corpo, l'ordine degli header). *payload* si passa se
+        il chiamante l'ha già letto; ``error_retry_after_s`` viene dagli header e
+        basta — il ripiego sul testo del messaggio lo fa chi decide l'attesa.
+        """
+        response = getattr(e, "response", None)
+        headers = cls._error_headers(e)
+        if payload is None:
+            payload = cls._error_payload(e)
+        error_type, error_code = cls._extract_error_type_code(payload)
+
+        status_code = getattr(e, "status_code", None)
+        if status_code is None and response is not None:
+            status_code = getattr(response, "status_code", None)
+
+        should_retry: bool | None = None
+        if headers is not None:
+            raw = headers.get("x-should-retry")
+            if isinstance(raw, str):
+                lowered = raw.strip().lower()
+                if lowered == "true":
+                    should_retry = True
+                elif lowered == "false":
+                    should_retry = False
+
+        error_kind: str | None = None
+        error_name = e.__class__.__name__.lower()
+        if "timeout" in error_name:
+            error_kind = "timeout"
+        elif "connection" in error_name:
+            error_kind = "connection"
+
+        return {
+            "error_status_code": int(status_code) if status_code is not None else None,
+            "error_kind": error_kind,
+            "error_type": error_type,
+            "error_code": error_code,
+            "error_retry_after_s": cls._extract_retry_after_from_headers(headers),
+            "error_should_retry": should_retry,
+        }
 
     @staticmethod
     def _enforce_role_alternation(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

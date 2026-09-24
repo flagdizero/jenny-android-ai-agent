@@ -136,65 +136,24 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
 
     @classmethod
     def _handle_error(cls, e: Exception, *, partial_content: str | None = None) -> LLMResponse:
-        response = getattr(e, "response", None)
-        headers = getattr(response, "headers", None)
-        # ``.text`` su una response in streaming non ancora letta solleva
-        # ResponseNotRead: qui l'errore vero è ``e``, non il fallimento della
-        # lettura, quindi si degrada a payload assente.
-        try:
-            payload = (
-                getattr(e, "body", None)
-                or getattr(e, "doc", None)
-                or getattr(response, "text", None)
-            )
-        except Exception:
-            payload = None
-        if payload is None and response is not None:
-            response_json = getattr(response, "json", None)
-            if callable(response_json):
-                try:
-                    payload = response_json()
-                except Exception:
-                    payload = None
+        # I metadati sono quelli di ogni provider (``LLMProvider._error_metadata``);
+        # qui resta il messaggio, che per Anthropic è il corpo dell'errore.
+        payload = cls._error_payload(e)
         payload_text = payload if isinstance(payload, str) else str(payload) if payload is not None else ""
         msg = f"Error: {payload_text.strip()[:500]}" if payload_text.strip() else f"Error calling LLM: {describe_exc(e)}"
-        retry_after = cls._extract_retry_after_from_headers(headers)
+        metadata = cls._error_metadata(e, payload=payload)
+        retry_after = metadata["error_retry_after_s"]
         if retry_after is None:
             retry_after = LLMProvider._extract_retry_after(msg)
-
-        status_code = getattr(e, "status_code", None)
-        if status_code is None and response is not None:
-            status_code = getattr(response, "status_code", None)
-
-        should_retry: bool | None = None
-        if headers is not None:
-            raw = headers.get("x-should-retry")
-            if isinstance(raw, str):
-                lowered = raw.strip().lower()
-                if lowered == "true":
-                    should_retry = True
-                elif lowered == "false":
-                    should_retry = False
-
-        error_kind: str | None = None
-        error_name = e.__class__.__name__.lower()
-        if "timeout" in error_name:
-            error_kind = "timeout"
-        elif "connection" in error_name:
-            error_kind = "connection"
-        error_type, error_code = LLMProvider._extract_error_type_code(payload)
-
+        # Qui il ritardo scritto nel messaggio va anche nel campo strutturato,
+        # com'è sempre stato per Anthropic: chi decide l'attesa li legge entrambi.
+        metadata["error_retry_after_s"] = retry_after
         return LLMResponse(
             content=msg,
             finish_reason="error",
             retry_after=retry_after,
             partial_content=partial_content or None,
-            error_status_code=int(status_code) if status_code is not None else None,
-            error_kind=error_kind,
-            error_type=error_type,
-            error_code=error_code,
-            error_retry_after_s=retry_after,
-            error_should_retry=should_retry,
+            **metadata,
         )
 
     @staticmethod
