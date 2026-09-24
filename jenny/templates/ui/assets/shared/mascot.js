@@ -18,14 +18,8 @@
 const VISIBLE_KEY = 'jenny-mascotte-visible';
 const SIZE_KEY = 'jenny-mascotte-size';
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
-   non una per lettura: non hanno più un getter in cui nascondersi. Le due del
-   lato: la prima era la scelta esplicita di un tempo, la seconda il ricordo di
-   dove l'avevi lasciata. */
-const DEAD_KEYS = [
-  'jenny-mascotte-color',
-  'jenny-mascotte-side',
-  'jenny-mascotte-dock-side',
-];
+   non una per lettura: non hanno più un getter in cui nascondersi. */
+const DEAD_KEYS = ['jenny-mascotte-color'];
 for (const key of DEAD_KEYS) {
   try {
     localStorage.removeItem(key);

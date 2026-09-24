@@ -77,8 +77,15 @@ accelerare il passo sopra una certa distanza.
 
 In Kotlin sparisce `parkedRight`: le bolle mettono il tuo messaggio sempre a
 sinistra (`atStart = line.mine`), niente specchio in `syncFace`, `parkX` ha un
-ramo solo, `dockPivotX` è un `Float`. La chiave `park_right` si cancella al primo
-salvataggio (`PREF_DEAD_RIGHT`).
+ramo solo, `dockPivotX` è un `Float`.
+
+**Niente codice di transizione** (deciso subito dopo, su richiesta dell'utente):
+in un primo giro le vecchie chiavi del lato (`jenny-mascotte-side`,
+`jenny-mascotte-dock-side` in `localStorage`, `park_right` nelle SharedPreferences)
+venivano cancellate all'avvio. Tolto: nessuno le legge più, quindi restano inerti
+e non serve codice per il passato. Via anche il test che sorvegliava la vecchia
+scelta del lato nelle impostazioni: ora lo copre la scansione «nessun avanzo»,
+estesa ai `.json` delle traduzioni. `SIDE_SLIDE_MS` → `ANCHOR_SLIDE_MS`.
 
 Test toccati: `test_mascot_side_contract.py` riscritto (contratto nuovo + tre
 voli veri in node con orologio finto), `test_mascot_single_variant.py`

@@ -6,7 +6,7 @@ si allineavano male (v. ``.agent/tre-ritocchi-plan.md``, voce 1). Adesso il bord
 è uno solo. Qui si tiene fermo:
 
 - che il lato non esista più come stato: niente getter, niente chiave in
-  ``localStorage`` (la vecchia si ripulisce), niente regole ``.side-left``;
+  ``localStorage``, niente regole ``.side-left``, niente stringhe;
 - che il volo, lasciata dovunque, **arrivi a piedi** al dock destro invece di
   teletrasportarsi alla scadenza — la camminata adesso può essere lo schermo
   intero, e la scadenza fissa di 6 s non la copre su uno schermo largo;
@@ -20,7 +20,6 @@ finisce lei, che non ha stato leggibile da fuori se non il ``transform``.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -50,22 +49,16 @@ def test_the_side_is_no_longer_a_state() -> None:
     assert "export function setMascotSide" not in source
 
 
-def test_the_old_side_keys_are_cleaned_up() -> None:
-    """Chi l'aveva lasciata a sinistra non se lo porta dietro nello storage."""
-    dead = re.search(r"const DEAD_KEYS = \[(.*?)\];", _mascot_js(), re.S)
-    assert dead, "DEAD_KEYS non è più dichiarata in shared/mascot.js"
-    keys = re.findall(r"'([^']+)'", dead.group(1))
-    assert "jenny-mascotte-side" in keys
-    assert "jenny-mascotte-dock-side" in keys
-
-
 def test_no_left_side_rules_or_hooks_remain() -> None:
     offenders = []
     for path in sorted(UI.rglob("*")):
-        if path.suffix not in {".js", ".css", ".html"} or "vendor" in path.parts:
+        if path.suffix not in {".js", ".css", ".html", ".json"} or "vendor" in path.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        for needle in ("side-left", "onSideChange", "mascotSide", "_setSide"):
+        for needle in (
+            "side-left", "onSideChange", "mascotSide", "_setSide", "mascotte-side",
+            "mascotte-dock-side", "data-mascot-side",
+        ):
             if needle in text:
                 offenders.append(f"{path.name}: {needle}")
     assert not offenders, offenders
@@ -78,18 +71,7 @@ def test_the_floating_mascot_has_one_edge_too() -> None:
     assert "dockPivotX: Float" in flight
     assert "chooseSide" not in flight
     assert "parkedRight" not in overlay
-    assert "getBoolean(PREF_DEAD_RIGHT" not in overlay
-
-
-def test_settings_no_longer_offer_the_side_choice() -> None:
-    settings = (UI_ASSETS / "mobile-settings.js").read_text("utf-8")
-    assert "data-mascot-side" not in settings
-    assert "setMascotSide" not in settings
-    for locale in ("it", "en"):
-        keys = json.loads((UI_ASSETS / "i18n" / f"{locale}.json").read_text("utf-8"))["settings"]
-        assert not [k for k in keys if k.startswith("mascotSide")], (
-            f"stringhe della scelta del lato ancora in {locale}.json"
-        )
+    assert "park_right" not in overlay
 
 
 # ── Il volo, davvero ────────────────────────────────────────────────────────

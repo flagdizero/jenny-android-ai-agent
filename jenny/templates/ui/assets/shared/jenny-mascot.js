@@ -167,8 +167,8 @@ export class JennyMascot {
   }
 
   /* ── Gesture di sistema (Android) ──
-     Jenny vive su un bordo verticale, e da entrambi uno swipe che parte da lì
-     viene letto come back edge-swipe di sistema. Riportiamo la sua area (in px
+     Jenny vive sul bordo destro, e uno swipe che parte da lì viene letto
+     come back edge-swipe di sistema. Riportiamo la sua area (in px
      fisici) al bridge nativo JennyNative, che la esclude via
      setSystemGestureExclusionRects.
      No-op su WebView senza il bridge (browser desktop, ecc.). */

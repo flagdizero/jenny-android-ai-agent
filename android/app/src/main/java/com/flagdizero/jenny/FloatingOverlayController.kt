@@ -137,7 +137,7 @@ object FloatingOverlayController {
 
     /** Quanto dura lo scivolamento fra i due ancoraggi. `.jenny-duo` usa
      *  0,3 s con questa curva, ed è la stessa transizione. */
-    private const val SIDE_SLIDE_MS = 300L
+    private const val ANCHOR_SLIDE_MS = 300L
 
     /** Quanto è larga la pillola, in frazione dello schermo. Su 574 dp fa 356. */
     private const val PILL_WIDTH_RATIO = 0.62f
@@ -343,19 +343,15 @@ object FloatingOverlayController {
     private const val PREFS = "jenny_floating"
 
     /**
-     * Su quale bordo si era posata. **Non si legge più** (24/09/2026): il
-     * bordo è sempre il destro, e la chiave resta solo per essere cancellata
-     * al primo salvataggio.
+     * Il bordo non si ricorda: è sempre il destro (24/09/2026).
      *
-     * **E l'altezza non si è mai ricordata.** È la riga sopra la barra di input, in ogni stato —
+     * **E nemmeno l'altezza.** È la riga sopra la barra di input, in ogni stato —
      * l'invariante che `.jenny-duo` dichiara nel CSS («Non deve mai cambiare
      * in Y») — ed è anche il pavimento del volo, come `fs.y0` in JS. Per un
      * giro (17/09) si è provato a farla cadere fino in fondo e restare dove
      * atterrava: finiva sempre in un angolo, mezza fuori, sotto le icone del
      * dock di chiunque. La UI ha una riga sola, e questa è quella.
      */
-    private const val PREF_DEAD_RIGHT = "park_right"
-
     /** La taglia spinta dalla SPA, in px. */
     private const val PREF_SIZE = "mascot_px"
 
@@ -2506,7 +2502,7 @@ object FloatingOverlayController {
         sliding = true
         slide?.cancel()
         slide = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = SIDE_SLIDE_MS
+            duration = ANCHOR_SLIDE_MS
             interpolator = OvershootInterpolator(1.1f)
             addUpdateListener { a ->
                 val k = a.animatedValue as Float
@@ -2744,8 +2740,6 @@ object FloatingOverlayController {
     private fun saveParkPosition(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            // Il bordo non si ricorda più: è sempre il destro.
-            .remove(PREF_DEAD_RIGHT)
             // La taglia può essere arrivata dalla SPA prima che ci fosse un
             // contesto con cui scriverla: qui c'è di sicuro.
             .apply { if (mascotPx > 0) putInt(PREF_SIZE, mascotPx) }
