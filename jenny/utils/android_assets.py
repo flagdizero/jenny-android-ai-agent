@@ -293,6 +293,7 @@ _UI_MANIFEST = [
     "assets/shared/rich-content.js",
     "assets/shared/scope-chip.js",
     "assets/shared/selection.js",
+    "assets/shared/skills-view.js",
     "assets/shared/wire-error.js",
     "assets/shared/write-switch.js",
     "assets/shared/session-manager.js",

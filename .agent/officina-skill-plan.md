@@ -1,6 +1,6 @@
 # Le skill tornano in vista — in officina, cassetto Mani
 
-> Stato: **in corso** (24/09/2026) — passo 1 fatto. Mockup visto
+> Stato: **in corso** (24/09/2026) — passi 1–2 fatti. Mockup visto
 > e approvato in chat il 24/09 (tre schermate: Mani, pannello, «Le tue» vuota).
 > Si spunta qui, passo per passo, man mano che il lavoro atterra.
 
@@ -132,7 +132,7 @@ Commit: *Skills say whether they ship with the app, and the ones that do can't b
 
 ## Passo 2 — la divisione, in un modulo puro
 
-- [ ] `jenny/templates/ui/assets/shared/skills-view.js`, senza DOM e senza rete:
+- [x] `jenny/templates/ui/assets/shared/skills-view.js`, senza DOM e senza rete:
   - `dividiSkill(skills)` → `{ tue: [...], integrate: [...], servizio: n }`,
     con le regole della tabella sopra;
   - `riassuntoSkill(skill, locale)` → stringa o `''`;
@@ -141,11 +141,11 @@ Commit: *Skills say whether they ship with the app, and the ones that do can't b
   - `controllabile(skill)` → `!bundled && !internal && !locked`.
   Stesso idioma di `telegramSummary` in `shared/telegram-pairing.js`: la riga in
   cassetto e il pannello leggono la stessa funzione, e il banco la esegue.
-- [ ] **`_UI_MANIFEST`** in `utils/android_assets.py`: aggiungere
+- [x] **`_UI_MANIFEST`** in `utils/android_assets.py`: aggiungere
       `"assets/shared/skills-view.js"`. Senza, sul telefono il file non esiste e
       l'import di `mobile-settings.js` fallisce — l'intero cassetto, non solo le
       skill.
-- [ ] `tests/webui/test_skills_view_client.py` sotto node (idioma di
+- [x] `tests/webui/test_skills_view_client.py` sotto node (idioma di
       `test_launcher_rank_client.py`): una voce per ciascuna riga della tabella;
       `riassuntoSkill` che non ripete il nome; `user_summary` nella lingua
       giusta e i due ripieghi; `riepilogoSkill` con 0 tue.
