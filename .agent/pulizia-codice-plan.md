@@ -553,7 +553,7 @@ Collezione di oggi: **10.649** test. `tests/support/` esiste già (import
   modifica che **cambia la lunghezza** del file (o `sleep 1; touch`), v. la
   memoria sul `.pyc` stantio.
 
-- [ ] **5.1 Harness JS** (~850 righe nette) — `tests/support/js_harness.py`:
+- [x] **5.1 Harness JS** (~850 righe nette) — `tests/support/js_harness.py`:
   `NODE`, `requires_node`, `ASSETS`, `I18N_DIR`, `run_js(script, *, prelude="",
   timeout=60, env=None) -> str`, `member(src, name, *, prefixes=("async ",
   "get "), body_only=False)`, `function(src, name)`, `locale(name)`,
@@ -571,7 +571,7 @@ Collezione di oggi: **10.649** test. `tests/support/` esiste già (import
     altre, poi `_member` standard, `_function`, `_locale`, `brace_block`.
   - Facoltativo: meta-test che vieta nuove copie di `_NODE = shutil.which`.
 
-- [ ] **5.2 Attese asincrone** — `tests/support/aio.py`: `wait_until(pred, *,
+- [x] **5.2 Attese asincrone** — `tests/support/aio.py`: `wait_until(pred, *,
   timeout=5.0, interval=0.01, msg=None)` che alla scadenza **fallisce**,
   `settle_tasks(get_tasks, *, timeout=5.0)` che rilegge i task a ogni giro,
   `drain_outbound(bus)`.
@@ -587,7 +587,7 @@ Collezione di oggi: **10.649** test. `tests/support/` esiste già (import
   - Il rafforzamento di `_drain_background_tasks` in un sotto-commit: può far
     emergere difetti veri.
 
-- [ ] **5.3 `make_loop` / `make_provider`** (~200 righe) — spostati in
+- [x] **5.3 `make_loop` / `make_provider`** (~200 righe) — spostati in
   `tests/support/agent.py`, `conftest.py` li reimporta (la fixture
   `loop_factory` resta). Correggere i tre import `tests.agent.*`
   (`test_model_preset.py:7`, `test_loop_provider.py:22`, `test_task_cancel.py`)
@@ -601,34 +601,56 @@ Collezione di oggi: **10.649** test. `tests/support/` esiste già (import
     `test_runner_governance.py:16`, `test_runner_injections.py:28`), le coppie,
     le singole.
 
-- [ ] **5.4 Runner** (~200 righe, rischio medio) — `support/runner.py` con
+- [x] **5.4 Runner** (~200 righe, rischio medio) — `support/runner.py` con
   `empty_tools()` e `make_spec(**overrides)`; `max_iterations` sempre esplicito
   dove si verifica lo `stop_reason`; `_MAX_TOOL_RESULT_CHARS` non è sempre il
   default (`test_tool_error_budget.py:36` usa 16.000). `script_provider` solo
   dove il test sostituiva già sia `chat_with_retry` sia lo streaming, o un
   test che deve restare sul non-streaming passerebbe a torto.
 
-- [ ] **5.5 `GatewayHTTPHandler`** (~150 righe) — `support/gateway_http.py`:
+- [x] **5.5 `GatewayHTTPHandler`** (~150 righe) — `support/gateway_http.py`:
   `AUTH_SECRET`, `make_request(path, token=AUTH_SECRET, headers=None, *,
   always_append=False)`, `make_handler(skills_path, **extra)`. Fuori:
   `test_websocket_http_routes.py:21` (costruisce `GatewayServices`, altra
   cosa), la coppia CSP/integrity. Tre `_make_request` accodano il token anche
   se è già nel path → `always_append`.
 
-- [ ] **5.6 Sessioni finte heartbeat/cron** (~80 righe) — `support/sessions.py`:
+- [x] **5.6 Sessioni finte heartbeat/cron** (~80 righe) — `support/sessions.py`:
   `FakeSession(key="")`, `FakeSessions(*, shared=False)` con `saved:
   list[str]`, `.session`, `.save_count`. In `test_cron_dispatch_heartbeat.py:60`
   e `_update.py:50` ogni chiave dà **la stessa** sessione e `saved` è un int;
   in `test_bound_runner.py:81` dipende dalla chiave. Fuori
   `test_heartbeat_user_rearm.py:111` (usa `Session` veri).
 
-- [ ] **5.7 `parametrize`** (per ultimo, rischio più alto) — candidati
+- [x] **5.7 `parametrize`** (per ultimo, rischio più alto) — candidati
   verificati: la tripla `*_keeps_task_local_context` in
   `test_tool_contextvars.py:17,49,100`, i `test_save_turn_drops_*` in
   `test_loop_save_turn.py`. `ids=` riprende i vecchi nomi; il diff della
   collezione deve mostrare solo i rinomini della mappa. Gli altri file
   (`test_loop_progress.py`, `test_subagent_tools.py`,
   `test_websocket_channel.py`) si valutano uno per uno.
+
+
+**Esito della fase 5 (25/09).** Dieci commit (`0408c4e`…`98a2b3c`). Dopo ognuno:
+collezione identica (10.900 id; solo in 5.7 i due rinomini previsti), `ruff`
+pulito, i file toccati verdi su 3.14 e 3.11, e almeno una mutazione di
+produzione che fa diventare rosso un test migrato.
+- 5.1: `support/js_harness.py` (`NODE`, `requires_node`, `run_js`, `run_module`,
+  `member`, `function`, `locale`) al posto di 76 copie; stessi 931 skip con node
+  nascosto; gli estrattori verificati vecchio-contro-nuovo su 35.116 coppie
+  (sorgente, nome) senza differenze. Fuori: la famiglia `_method` dei contratti
+  (13 varianti con ritorni diversi), i `_const`, `brace_block` (non esisteva
+  come helper).
+- 5.2: `support/aio.py`. **Il falso positivo c'era davvero**: in
+  `test_dispatcher_reasoning.py` con un dispatcher che non parte mai i due test
+  negativi passavano; ora falliscono. `_drain_background_tasks` rafforzato a
+  parte: nessun difetto emerso. Memoria aggiornata.
+- 5.3–5.6: `support/agent.py` (dieci copie di `_make_loop`, gli import
+  `tests.*` corretti), `support/runner.py` (85 spec), `support/gateway_http.py`
+  (sette file), `support/sessions.py` (sette coppie).
+- 5.7: parametrizzati solo i due `test_save_turn_drops_*`; la tripla dei
+  contextvars ha avuto un aiutante invece di `parametrize` (asserzioni troppo
+  diverse), e i nomi sono rimasti. Gli altri candidati non toccati.
 
 ---
 
