@@ -30,6 +30,7 @@ from jenny.channels.http_utils import (
     http_response as _http_response,
 )
 from jenny.config.paths import get_media_dir
+from jenny.security.workspace_policy import is_path_within
 from jenny.utils.helpers import safe_filename
 
 MediaDirProvider = Callable[[str | None], Path]
@@ -211,8 +212,9 @@ def serve_signed_media(
     try:
         media_root = media_dir(None).resolve()
         candidate = (media_root / rel_str).resolve()
-        candidate.relative_to(media_root)
     except (OSError, ValueError):
+        return _http_error(404, "not found")
+    if not is_path_within(candidate, media_root, path_resolved=True):
         return _http_error(404, "not found")
     if not candidate.is_file():
         return _http_error(404, "not found")

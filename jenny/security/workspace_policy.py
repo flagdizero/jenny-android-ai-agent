@@ -162,6 +162,36 @@ def _is_path_within(path: str | Path, root: str | Path, *, path_resolved: bool =
         return False
 
 
+def is_path_within(path: str | Path, root: str | Path, *, path_resolved: bool = False) -> bool:
+    """*path*, risolto, e' *root* o sta sotto *root* (anch'essa risolta)?
+
+    La versione pubblica di :func:`_is_path_within`, per chi controlla un
+    confine fuori dalla policy dei tool: le rotte della WebUI, la wiki, la
+    provenienza. Fino al 24/09/2026 ognuno scriveva a mano
+    ``x.resolve().relative_to(root.resolve())``, con eccezioni catturate a
+    caso — un ``OSError`` (un loop di symlink) usciva come 500 da una rotta e
+    come ``False`` da un'altra.
+
+    A differenza di quella privata **non** usa la cache delle radici: le radici
+    di chi la chiama (le cartelle di una wiki, di un progetto) si creano e
+    spariscono a runtime, e la cache si invalida solo all'ingresso di
+    ``python_exec``. ``path_resolved=True`` evita di risolvere due volte un
+    percorso gia' passato da ``resolve()``. Qualunque errore di risoluzione e'
+    un no: nel dubbio si sta fuori.
+    """
+    try:
+        resolved_path = (
+            (path if isinstance(path, Path) else Path(path))
+            if path_resolved
+            else _safe_expanduser(path).resolve(strict=False)
+        )
+        resolved_root = _safe_expanduser(root).resolve(strict=False)
+        resolved_path.relative_to(resolved_root)
+        return True
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return False
+
+
 def _is_path_allowed(
     path: str | Path, roots: Iterable[str | Path], *, path_resolved: bool = False
 ) -> bool:

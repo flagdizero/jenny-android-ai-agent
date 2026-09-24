@@ -23,6 +23,7 @@ from markdown import Markdown
 from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
 
+from jenny.security.workspace_policy import is_path_within
 from jenny.utils.path import atomic_write
 
 # ``discover_wikis``: ri-esportazione voluta, e ora **solo** ri-esportazione —
@@ -564,10 +565,8 @@ def create_audit(
     """Create a new audit entry under wiki_root / audit/."""
     pages_dir = wiki_root / "wiki"
     target_full = (pages_dir / target).resolve()
-    try:
-        target_full.relative_to(pages_dir.resolve())
-    except ValueError:
-        raise FileNotFoundError(f"target file not found: {target}") from None
+    if not is_path_within(target_full, pages_dir, path_resolved=True):
+        raise FileNotFoundError(f"target file not found: {target}")
     if not target_full.is_file():
         raise FileNotFoundError(f"target file not found: {target}")
 

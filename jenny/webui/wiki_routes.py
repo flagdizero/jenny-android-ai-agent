@@ -35,6 +35,7 @@ from jenny.channels.http_utils import (
     parse_query,
     query_first,
 )
+from jenny.security.workspace_policy import is_path_within
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 
 QueryParams = dict[str, list[str]]
@@ -319,9 +320,9 @@ class WikiRoutes:
         if not full.is_file():
             return http_error(404, "file not found")
 
-        try:
-            full.resolve().relative_to(containment_root.resolve())
-        except ValueError:
+        # Anche un errore di risoluzione (un loop di symlink) e' un 403: fino al
+        # 24/09/2026 usciva come 500, perche' qui si catturava solo ValueError.
+        if not is_path_within(full, containment_root):
             return http_error(403, "path escapes wiki root")
 
         try:
@@ -443,9 +444,7 @@ class WikiRoutes:
 
         pages_dir = wikis[wiki_name]
         raw_path = (pages_dir / (target or WIKI_INDEX_FILENAME)).resolve()
-        try:
-            raw_path.relative_to(pages_dir.resolve())
-        except ValueError:
+        if not is_path_within(raw_path, pages_dir, path_resolved=True):
             return http_error(403, "Forbidden")
         raw_markdown = ""
         if raw_path.is_file():

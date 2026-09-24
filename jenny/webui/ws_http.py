@@ -62,6 +62,7 @@ from jenny.channels.http_utils import (
     safe_host_header as _safe_host_header,
 )
 from jenny.config.paths import get_workspace_path
+from jenny.security.workspace_policy import is_path_within
 from jenny.session.keys import UNIFIED_SESSION_KEY, is_project_session_key
 from jenny.session.webui_turns import websocket_turn_wall_started_at
 from jenny.webui.android_apps_api import (
@@ -757,9 +758,7 @@ class GatewayHTTPHandler:
         if ".." in rel.split("/") or rel.startswith("/"):
             return _http_error(403, "Forbidden")
         candidate = (self.static_dist_path / rel).resolve()
-        try:
-            candidate.relative_to(self.static_dist_path)
-        except ValueError:
+        if not is_path_within(candidate, self.static_dist_path, path_resolved=True):
             return _http_error(403, "Forbidden")
         served_rel = rel
         if not candidate.is_file():

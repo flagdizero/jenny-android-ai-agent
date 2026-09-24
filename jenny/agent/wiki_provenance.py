@@ -34,6 +34,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from jenny.security.workspace_policy import is_path_within
 from jenny.utils.wiki_paths import wiki_page_rel
 
 _PROVENANCE_REFUSAL_TEMPLATE = (
@@ -156,10 +157,11 @@ def _journal_line_provenance(root: Path, source: str) -> str:
         return _UNRESOLVED
     minute, ordinal = match.group(1), match.group(2)
     page = (root / rel.strip()).resolve()
+    # Contenuta nel progetto: ``source:`` e' testo che il modello scrive, quindi
+    # ``../..`` e' una cosa che puo' capitare — qui non serve leggere fuori.
+    if not is_path_within(page, root, path_resolved=True):
+        return _UNRESOLVED
     try:
-        # Contenuta nel progetto: ``source:`` e' testo che il modello scrive, quindi
-        # ``../..`` e' una cosa che puo' capitare — qui non serve leggere fuori.
-        page.relative_to(root.resolve())
         text = page.read_text(encoding="utf-8")
     except (OSError, ValueError):
         return _UNRESOLVED
@@ -355,7 +357,11 @@ def _names_a_document(root: Path, source: str) -> bool:
         return False
     try:
         page = (root / rel).resolve()
-        page.relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    if not is_path_within(page, root, path_resolved=True):
+        return False
+    try:
         text = page.read_text(encoding="utf-8")
     except (OSError, ValueError):
         return False

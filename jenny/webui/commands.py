@@ -28,6 +28,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.security.workspace_policy import is_path_within
 from jenny.utils.wiki_paths import safe_wiki_page_path
 
 # Tetto sul contenuto di una singola scrittura. Allineato al ``max_size`` di
@@ -245,10 +246,8 @@ def _wiki_page_file(ctx: CommandContext, wiki_name: str, page_path: str) -> Path
         raise CommandError("bad_request", "invalid page path")
 
     full = pages_dir / rel
-    try:
-        full.resolve().relative_to(pages_dir.resolve())
-    except ValueError:
-        raise CommandError("forbidden", "path escapes wiki root") from None
+    if not is_path_within(full, pages_dir):
+        raise CommandError("forbidden", "path escapes wiki root")
     if not full.is_file():
         raise CommandError("not_found", "page not found")
     return full
