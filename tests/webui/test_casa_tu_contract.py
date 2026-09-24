@@ -541,8 +541,8 @@ def test_the_key_field_never_carries_a_key() -> None:
 def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     """`[hidden]` e' a specificita' zero: una classe con `display` lo scavalca.
 
-    La casa quel difetto l'ha gia' pagato due volte — `.casa-back` e
-    `.casa-version` portano tutte e due il loro `[hidden]` con un commento —
+    La casa quel difetto l'ha gia' pagato due volte — `.casa-back` porta il
+    suo `[hidden]` con un commento, e cosi' la riga della versione finche' c'e' stata —
     e una terza volta con la riga della chiave, che si vedeva senza nessuna
     marca da guardare. Un caso per volta e' una riga di CSS; il banco invece
     li cerca tutti, anche quelli di domani.

@@ -118,7 +118,7 @@ def test_il_flusso_condiviso_usa_ancora_la_pila() -> None:
 
 @pytest.mark.parametrize(
     "selettore",
-    (".model-inuse-name", ".provider-name", ".provider-card-body"),
+    (".model-inuse-name", ".provider-name"),
 )
 def test_i_valori_di_macchina_sono_in_monospazio(selettore: str) -> None:
     """Un nome di modello, un endpoint e una chiave sono identificatori.

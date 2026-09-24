@@ -879,7 +879,6 @@ body.casa {
 /* ── «Con chi parli» ── */
 
 
-
 .casa-who-label {
   padding: 4px 4px 2px;
   color: var(--text-muted);
@@ -1802,18 +1801,6 @@ body.casa {
 
 .casa-row-go { flex: none; color: var(--text-muted); font-size: 16px; }
 
-.casa-version {
-  flex: none;
-  padding: 2px 4px;
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-/* La riga nasce nascosta, e qui sopra non c'e' nessun `display` che lo
-   scavalchi: questa regola e' per il giorno in cui ce ne fosse uno. `[hidden]`
-   e' a specificita' zero, e la casa quella trappola l'ha gia' pagata una volta
-   — v. `.casa-back[hidden]`, cinquanta righe piu' su. */
-.casa-version[hidden] { display: none; }
 
 /* ── Il tema ─────────────────────────────────────────────────────────────────
    Una striscia che scorre di lato, non una griglia: i temi sono sette e la

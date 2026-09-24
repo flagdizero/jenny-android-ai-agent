@@ -507,15 +507,13 @@ def test_a_failed_launch_says_something() -> None:
 
 def test_the_step_six_chrome_gets_out_of_the_way_of_the_keyboard() -> None:
     """La cornice `.compact` esiste per far entrare **una riga intera** (5.5),
-    e i due elementi del passo 6 se la riprendono tutta: misurato con la
-    tastiera su, la riga «Gestisci» costa 30 px su 46 di lista e l'avviso 28 —
-    con l'avviso a schermo la lista scende a 14 px, cioè zero righe intere. È
-    il difetto che 5.5 ha chiuso, reintrodotto da un bordo."""
+    e l'avviso del passo 6 se la riprende: misurato con la tastiera su costa
+    28 px, e insieme alla riga «Gestisci» di allora (30) la lista scendeva a
+    14 px, cioè zero righe intere. È il difetto che 5.5 ha chiuso,
+    reintrodotto da un bordo."""
     css = _src("mobile-style.css")
-    rule = re.search(
-        r"\.launcher-sheet\.compact \.launcher-manage,\s*\n"
-        r"\.launcher-sheet\.compact \.launcher-status \{ display: none; \}", css)
-    assert rule, "in `.compact` la riga «Gestisci» e l'avviso devono sparire"
+    rule = re.search(r"^\.launcher-sheet\.compact \.launcher-status \{ display: none; \}", css, re.M)
+    assert rule, "in `.compact` l'avviso deve sparire"
 
 
 def test_the_new_step_six_strings_exist_in_both_locales() -> None:

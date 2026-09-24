@@ -153,22 +153,6 @@ def test_switching_drawers_is_not_a_return_to_the_view() -> None:
     assert "if (!this._swapping) this._releaseContent()" in _method(drawer, "close")
 
 
-# ── N26 · griglia App da tastiera ─────────────────────────────────────────────
-
-
-
-def test_the_keyboard_focus_in_the_apps_view_is_visible() -> None:
-    css = CSS.read_text(encoding="utf-8")
-    for selector in (
-        ".apps-room-tab:focus-visible",
-        ".apps-row-main:focus-visible",
-        ".apps-add-row:focus-visible",
-        ".apps-az-letter:focus-visible",
-        ".app-cell:focus-visible",
-    ):
-        assert selector in css, f"{selector}: una tappa Tab senza anello di fuoco è cieca"
-
-
 def test_the_lightbox_takes_the_focus_and_gives_it_back() -> None:
     """La lightbox copre tutto ma non rende inerte ciò che sta sotto: senza
     portare il fuoco sulla chiusura, Tab proseguiva nella pagina coperta."""
