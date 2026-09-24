@@ -156,11 +156,12 @@ class CasaRoutes:
         cui due di quelle si incrociano lasciando un ordine che nessuno ha
         chiesto.
 
-        ``v`` e' ``{schermate, ordine}``, oppure il solo elenco delle schermate
-        come prima del 23/09/2026 — allora l'ordine salvato resta, e le pagine
-        nuove ci entrano dopo la chat. L'ordine che arriva deve essere
-        **esattamente** le fisse piu' le schermate, ognuna una volta: la
-        tolleranza di :func:`ordine_normale` e' per il file, non per chi scrive.
+        ``v`` e' ``{schermate, ordine}``. Fino al 24/09/2026 valeva anche il solo
+        elenco delle schermate, com'era prima del 23/09, ma il suo unico
+        mittente (``api.setSchermate``) non c'e' piu', e UI e gateway escono
+        dallo stesso APK. L'ordine che arriva deve essere **esattamente** le
+        fisse piu' le schermate, ognuna una volta: la tolleranza di
+        :func:`ordine_normale` e' per il file, non per chi scrive.
         """
         from jenny.config import store
 
@@ -171,14 +172,12 @@ class CasaRoutes:
             dati = json.loads(grezzo)
         except ValueError:
             return http_error(400, "invalid v")
-        ordine: list[str] | None = None
-        if isinstance(dati, dict):
-            if not isinstance(dati.get("schermate"), list):
-                return http_error(400, "v.schermate must be a list")
-            ordine = dati.get("ordine")
-            dati = dati["schermate"]
-        elif not isinstance(dati, list):
-            return http_error(400, "v must be a list or {schermate, ordine}")
+        if not isinstance(dati, dict):
+            return http_error(400, "v must be {schermate, ordine}")
+        if not isinstance(dati.get("schermate"), list):
+            return http_error(400, "v.schermate must be a list")
+        ordine = dati.get("ordine")
+        dati = dati["schermate"]
 
         # Validare **prima** di entrare in `mutate`: dentro si tiene un lock per
         # tutta la durata della callback, e una `ValueError` alzata li' dentro
@@ -195,23 +194,20 @@ class CasaRoutes:
         riservati = sorted(set(identificativi) & set(PAGINE_FISSE))
         if riservati:
             return http_error(400, f"reserved page id: {', '.join(riservati)}")
-        if ordine is not None:
-            attesi = [*PAGINE_FISSE, *identificativi]
-            if (
-                not isinstance(ordine, list)
-                or not all(isinstance(v, str) for v in ordine)
-                or sorted(ordine) != sorted(attesi)
-            ):
-                return http_error(
-                    400, "ordine must list every fixed page and every page id, once each"
-                )
+        attesi = [*PAGINE_FISSE, *identificativi]
+        if (
+            not isinstance(ordine, list)
+            or not all(isinstance(v, str) for v in ordine)
+            or sorted(ordine) != sorted(attesi)
+        ):
+            return http_error(
+                400, "ordine must list every fixed page and every page id, once each"
+            )
 
         def _applica(config: Config) -> bool:
             prima = [s.model_dump() for s in config.casa.schermate]
             dopo = [s.model_dump() for s in schermate]
-            ordine_dopo = ordine_normale(
-                ordine if ordine is not None else config.casa.ordine, identificativi
-            )
+            ordine_dopo = ordine_normale(ordine, identificativi)
             if prima == dopo and config.casa.ordine == ordine_dopo:
                 return False
             config.casa.schermate = list(schermate)

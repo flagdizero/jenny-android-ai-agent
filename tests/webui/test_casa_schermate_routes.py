@@ -48,7 +48,11 @@ def _richiesta(path: str, token: str | None = _AUTH_SECRET) -> WsRequest:
 
 
 def _set(schermate: list[dict]) -> str:
-    v = urllib.parse.quote(json.dumps(schermate))
+    """Le schermate con l'ordine piu' semplice: le fisse, poi le pagine. Per i
+    casi che provano le schermate e non l'ordine (quello ha i suoi, in fondo)."""
+    ids = [r.get("id") for r in schermate if isinstance(r, dict)]
+    ordine = ["app", "chat", "quaderni", "impostazioni", *ids]
+    v = urllib.parse.quote(json.dumps({"schermate": schermate, "ordine": ordine}))
     return f"/api/casa/schermate/set?v={v}"
 
 
@@ -400,8 +404,8 @@ async def test_a_delete_does_not_reach_across_kinds(env) -> None:
 # ── L'ordine (23/09/2026) ───────────────────────────────────────────────────
 #
 # Dal 23/09 si spostano tutte le pagine, la chat e le tre fisse comprese
-# (`.agent/pagine-in-alto-plan.md`). La rotta accetta `{schermate, ordine}` e
-# ancora l'elenco nudo; l'ordine che arriva dev'essere **esatto** — la
+# (`.agent/pagine-in-alto-plan.md`). La rotta accetta `{schermate, ordine}`, e
+# dal 24/09 solo quello; l'ordine che arriva dev'essere **esatto** — la
 # tolleranza e' del file, non di chi scrive.
 
 FISSE = ["app", "chat", "quaderni", "impostazioni"]
@@ -436,13 +440,19 @@ async def test_moving_a_page_alone_is_a_write(env) -> None:
     assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == spostato
 
 
-async def test_the_bare_list_keeps_the_saved_order(env) -> None:
-    """L'elenco nudo di prima: l'ordine salvato resta, la pagina nuova va dopo la chat."""
-    await _dispatch(env, _set_tutto([], ["impostazioni", "chat", "app", "quaderni"]))
-    await _dispatch(env, _set([{"id": "p1", "kind": "app", "ref": "todo"}]))
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == [
-        "impostazioni", "chat", "p1", "app", "quaderni",
-    ]
+async def test_the_bare_list_is_refused(env) -> None:
+    """L'elenco nudo di prima del 23/09 non ha piu' un mittente: e' un 400, e
+    il file non cambia."""
+    v = urllib.parse.quote(json.dumps([{"id": "p1", "kind": "app", "ref": "todo"}]))
+    risposta = await _dispatch(env, f"/api/casa/schermate/set?v={v}")
+    assert risposta.status_code == 400
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+
+
+async def test_an_object_without_an_order_is_refused(env) -> None:
+    todo = {"id": "p1", "kind": "app", "ref": "todo"}
+    v = urllib.parse.quote(json.dumps({"schermate": [todo]}))
+    assert (await _dispatch(env, f"/api/casa/schermate/set?v={v}")).status_code == 400
 
 
 @pytest.mark.parametrize(
