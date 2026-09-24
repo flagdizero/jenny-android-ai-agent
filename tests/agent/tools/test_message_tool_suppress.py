@@ -5,19 +5,16 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.message import MessageTool
 from jenny.bus.events import InboundMessage, OutboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse, ToolCallRequest
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    return AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+    return make_loop(tmp_path, bare=True, context_window_tokens=None)
 
 
 class TestMessageToolSuppressLogic:

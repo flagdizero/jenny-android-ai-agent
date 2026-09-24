@@ -423,7 +423,7 @@ class TestSubagentCancellation:
 
         # Entrambi i path: un subagent chiede lo streaming, quindi il runner passa
         # da ``chat_stream_with_retry``.
-        from tests.agent.subagent_provider_fakes import script_provider
+        from support.subagent_provider_fakes import script_provider
         script_provider(provider, _scripted)
         mgr = SubagentManager(
             provider=provider,
@@ -496,7 +496,7 @@ class TestSubagentCancellation:
         provider = MagicMock()
         provider.get_default_model.return_value = "test-model"
         # Entrambi i path: un subagent chiede lo streaming.
-        from tests.agent.subagent_provider_fakes import script_provider
+        from support.subagent_provider_fakes import script_provider
         script_provider(provider, [LLMResponse(
             content="thinking",
             tool_calls=[ToolCallRequest(id="call_1", name="list_dir", arguments={"path": "."})],
@@ -541,7 +541,7 @@ class TestSubagentCancellation:
         provider = MagicMock()
         provider.get_default_model.return_value = "test-model"
         # Entrambi i path: un subagent chiede lo streaming.
-        from tests.agent.subagent_provider_fakes import script_provider
+        from support.subagent_provider_fakes import script_provider
         script_provider(provider, [LLMResponse(
             content="thinking",
             tool_calls=[ToolCallRequest(id="call_1", name="list_dir", arguments={"path": "."})],

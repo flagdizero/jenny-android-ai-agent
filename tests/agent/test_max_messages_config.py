@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session
@@ -18,15 +18,7 @@ DEFAULT_MAX_MESSAGES = 120
 
 
 def _make_loop(tmp_path: Path, max_messages: int = DEFAULT_MAX_MESSAGES) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    return AgentLoop(
-        bus=MessageBus(),
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-        max_messages=max_messages,
-    )
+    return make_loop(tmp_path, bare=True, context_window_tokens=None, max_messages=max_messages)
 
 
 def _populated_session(n: int) -> Session:

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse
@@ -14,19 +15,8 @@ _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 def _make_loop(tmp_path):
-    from jenny.agent.loop import AgentLoop
-    from jenny.bus.queue import MessageBus
+    return make_loop(tmp_path, bare=True, model=None, context_window_tokens=None, patch_deps=True)
 
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
-    return loop
 
 async def test_runner_uses_raw_messages_when_context_governance_fails():
     from jenny.agent.runner import AgentRunner, AgentRunSpec

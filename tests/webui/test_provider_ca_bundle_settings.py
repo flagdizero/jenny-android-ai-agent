@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from support.tls import write_test_ca
 
 from jenny.config.loader import load_config, save_config
 from jenny.config.schema import Config, ProviderConfig
@@ -23,7 +24,6 @@ from jenny.webui.settings_api import (
     provider_models_payload,
     update_provider,
 )
-from tests.support.tls import write_test_ca
 
 
 @pytest.fixture

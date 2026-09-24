@@ -12,14 +12,14 @@ Covers:
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.memory import MemoryStore
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.command.builtin import cmd_new, register_builtin_commands
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.config.schema import Config
@@ -32,19 +32,10 @@ from jenny.session.manager import Session, SessionManager
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
     """Create a minimal AgentLoop for dispatch-level tests."""
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-
-    with patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(
-            bus=bus,
-            provider=provider,
-            workspace=tmp_path,
-        )
-    return loop
+    return make_loop(
+        tmp_path, bare=True, model=None, context_window_tokens=None,
+        patches=("jenny.agent.loop.SessionManager", "jenny.agent.loop.SubagentManager"),
+    )
 
 
 def _make_msg(channel: str = "websocket", chat_id: str = "111",

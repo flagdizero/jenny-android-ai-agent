@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from tests.agent.conftest import make_loop
+from support.agent import make_loop
 
 PRESETS = {
     "fast": {

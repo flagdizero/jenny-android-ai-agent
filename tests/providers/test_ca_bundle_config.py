@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from support.tls import CA_COMMON_NAME, write_test_ca
 
 from jenny.config.paths import get_workspace_path
 from jenny.config.schema import Config, ProviderConfig, ProvidersConfig
@@ -20,7 +21,6 @@ from jenny.providers.anthropic_provider import AnthropicProvider
 from jenny.providers.factory import make_provider
 from jenny.providers.openai_compat_provider import OpenAICompatProvider
 from jenny.providers.tls import CaBundleError, build_ssl_context, resolve_ca_bundle
-from tests.support.tls import CA_COMMON_NAME, write_test_ca
 
 
 def _ca(tmp_path: Path) -> Path:

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.progress_events import (
@@ -19,10 +20,7 @@ from jenny.utils.llm_runtime import LLMRuntime
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    return AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+    return make_loop(tmp_path, bare=True, context_window_tokens=None)
 
 
 def _attach_webui_runtime_events(loop: AgentLoop, bus: MessageBus) -> None:

@@ -11,30 +11,19 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage, OutboundMessage
-from jenny.bus.queue import MessageBus
-
-
-def _make_provider():
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    provider.generation = SimpleNamespace(
-        max_tokens=4096, temperature=0.1, reasoning_effort=None
-    )
-    provider.estimate_prompt_tokens.return_value = (10_000, "test")
-    return provider
 
 
 def _make_loop(tmp_path) -> AgentLoop:
-    bus = MessageBus()
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(bus=bus, provider=_make_provider(), workspace=tmp_path)
+    loop = make_loop(
+        tmp_path, provider=make_provider(spec=False), model=None,
+        context_window_tokens=None, patch_deps=True,
+    )
     loop.runtime_event_publisher = MagicMock(
         turn_completed=AsyncMock(),
         run_status_changed=AsyncMock(),

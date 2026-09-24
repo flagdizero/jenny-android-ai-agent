@@ -23,6 +23,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.tools import nothing_to_report as ntr
 from jenny.agent.tools.context import RequestContext
@@ -32,7 +33,6 @@ from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.providers.base import LLMResponse, ToolCallRequest
 from jenny.session.keys import HEARTBEAT_SESSION_KEY
 from jenny.session.turn_visibility import TurnVisibility, silent_turn_metadata
-from tests.agent.conftest import make_loop, make_provider
 
 
 def _tool(*, silent: bool) -> NothingToReportTool:

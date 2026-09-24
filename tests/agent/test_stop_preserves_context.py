@@ -13,30 +13,17 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
-from jenny.bus.queue import MessageBus
-
-
-def _make_provider():
-    """Create an LLM provider mock with required attributes."""
-    from types import SimpleNamespace
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    provider.generation = SimpleNamespace(max_tokens=4096, temperature=0.1, reasoning_effort=None)
-    provider.estimate_prompt_tokens.return_value = (10_000, "test")
-    return provider
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
     """Create a real AgentLoop with mocked provider — avoids patching __init__."""
-    bus = MessageBus()
-    provider = _make_provider()
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        return AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
+    return make_loop(
+        tmp_path, provider=make_provider(spec=False), model=None,
+        context_window_tokens=None, patch_deps=True,
+    )
 
 
 class TestStopPreservesContext:

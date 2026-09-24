@@ -16,10 +16,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop_provider import ProviderPresetMixin
 from jenny.config.schema import ModelPresetConfig
-from tests.agent.conftest import make_loop, make_provider
 
 
 class TestApplyProviderSwitch:

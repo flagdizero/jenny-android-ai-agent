@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import DEFAULT_PATCHES, make_loop, make_provider
 
 from jenny.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext, CompositeHook
 
@@ -349,23 +350,12 @@ async def test_composite_can_wrap_another_composite():
 
 
 def _make_loop(tmp_path, hooks=None):
-    from jenny.agent.loop import AgentLoop
-    from jenny.bus.queue import MessageBus
-
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation.max_tokens = 4096
-
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr, \
-         patch("jenny.agent.loop.Consolidator"):
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(
-            bus=bus, provider=provider, workspace=tmp_path, hooks=hooks,
-        )
-    return loop
+    return make_loop(
+        tmp_path, provider=provider, model=None, context_window_tokens=None, hooks=hooks,
+        patches=DEFAULT_PATCHES + ("jenny.agent.loop.Consolidator",),
+    )
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from support.subagent_provider_fakes import script_provider
 
 from jenny.agent.agent_types import AGENT_TYPES
 from jenny.agent.subagent import (
@@ -30,7 +31,6 @@ from jenny.bus.queue import MessageBus
 from jenny.config.schema import ToolsConfig
 from jenny.config.tool_schemas import SshConfig, SshHostConfig
 from jenny.providers.base import LLMProvider, LLMResponse
-from tests.agent.subagent_provider_fakes import script_provider
 
 SSH_TOOLS = {"ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer"}
 
