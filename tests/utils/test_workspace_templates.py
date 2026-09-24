@@ -205,7 +205,6 @@ class TestContainerTemplateSync:
         container = _bare_container(workspace)
         container._sync_templates()
 
-        assert container.template_sync_error is None
         assert (workspace / "output").is_dir()
 
     def test_startup_survives_a_broken_sync(self, tmp_path, monkeypatch):
@@ -219,7 +218,15 @@ class TestContainerTemplateSync:
 
         monkeypatch.setattr(helpers_module, "sync_workspace_templates", _raise)
 
-        container = _bare_container(workspace)
-        container._sync_templates()
+        from loguru import logger
 
-        assert container.template_sync_error is boom
+        errors: list[str] = []
+        sink = logger.add(lambda m: errors.append(m.record["message"]), level="ERROR")
+        try:
+            container = _bare_container(workspace)
+            container._sync_templates()
+        finally:
+            logger.remove(sink)
+
+        # Non solleva, e lo dice a ERROR nominando la conseguenza vera.
+        assert any("prompt di sistema" in e for e in errors), errors

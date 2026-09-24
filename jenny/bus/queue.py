@@ -72,11 +72,6 @@ class MessageBus:
             return False
 
     @property
-    def dropped_outbound(self) -> int:
-        """Numero di messaggi transient scartati per coda outbound piena."""
-        return self._dropped_outbound
-
-    @property
     def outbound_size(self) -> int:
         """Number of pending outbound messages."""
         return self.outbound.qsize()

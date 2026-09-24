@@ -42,8 +42,6 @@ class GatewayContainer:
         # tramite set_agent.
         self._agent: Any = None
         self.onboarding_event = asyncio.Event()
-        # Ultimo errore della sync dei template, se c'è stato (vedi _sync_templates).
-        self.template_sync_error: Exception | None = None
 
         # Collaboratori popolati da build().
         self.bus: Any = None
@@ -234,9 +232,9 @@ class GatewayContainer:
 
         Il prezzo è che un refresh fallito diventa invisibile, quindi si paga con
         un log a ERROR (non warning: non è un dettaglio) che nomina la conseguenza
-        vera — i prompt possono essere quelli della versione precedente — e con
-        ``template_sync_error``, così chi vorrà mostrarlo in UI ha da dove
-        leggerlo. Il fallimento *noto* di questo passo (la cartella dei risultati
+        vera — i prompt possono essere quelli della versione precedente. (Fino al
+        24/09/2026 l'errore restava anche in un campo per una UI che non l'ha mai
+        letto.) Il fallimento *noto* di questo passo (la cartella dei risultati
         occupata da un file) è già gestito alla fonte in ``config/paths.py``:
         questo è la rete, non il rimedio.
         """
@@ -251,9 +249,7 @@ class GatewayContainer:
             from jenny.runtime.retired_artifacts import sweep_retired_artifacts
 
             sweep_retired_artifacts(self.config.workspace_path)
-            self.template_sync_error = None
-        except Exception as exc:
-            self.template_sync_error = exc
+        except Exception:
             logger.opt(exception=True).error(
                 "Estrazione degli asset di pacchetto in {} fallita — i prompt di sistema "
                 "potrebbero essere quelli della versione precedente e la WebUI potrebbe "

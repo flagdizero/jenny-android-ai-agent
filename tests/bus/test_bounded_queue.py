@@ -26,7 +26,6 @@ async def test_unbounded_default_never_drops() -> None:
     bus = MessageBus()
     for i in range(1000):
         assert bus.try_publish_outbound(_out(str(i))) is True
-    assert bus.dropped_outbound == 0
     assert bus.outbound_size == 1000
 
 
@@ -35,7 +34,6 @@ async def test_bounded_outbound_drops_transient_when_full() -> None:
     assert bus.try_publish_outbound(_out("a")) is True
     assert bus.try_publish_outbound(_out("b")) is True
     assert bus.try_publish_outbound(_out("c")) is False  # piena → scartato
-    assert bus.dropped_outbound == 1
     assert bus.outbound_size == 2
 
 
