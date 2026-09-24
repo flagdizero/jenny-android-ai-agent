@@ -21,7 +21,7 @@
  *  la Jenny della casa e quella dell'officina sono la stessa.
  */
 
-import { mascotSide, OUT_SHIFT_RATIO } from './mascot.js';
+import { OUT_SHIFT_RATIO } from './mascot.js';
 
 /* Tutta l'arte (riposo + pose di volo) vive sullo stesso canvas QUADRATO
    3000x3000, esportato cosi' com'e' da gen_pose_webp.py: scala e posizioni
@@ -53,6 +53,7 @@ const FLOOR_REST = 0.12; // rimbalzo sul pavimento molto smorzato
 const WALK_SPEED = 150; // rientro a passo costante (px/s), tipo camminata
 const GETUP_MS = 700; // pausa a terra dopo il tonfo (tempo per "rialzarsi")
 const RETURN_TIMEOUT_MS = 6000; // failsafe: oltre, snap allo stato finale
+const WALK_MARGIN_MS = 1500; // aria sopra la camminata prevista, prima dello snap
 export const DRAG_THRESHOLD = 24;
 export const TAP_SLOP = 6;
 export const HOLD_DELAY_MS = 250; // soglia per distinguere tap da hold
@@ -85,7 +86,6 @@ export function buildFlyLayer(parent) {
  *   setOut(v)          applica lo stato voluto dal gesto (a fine volo)
  *   onDragCommit()     il trascinamento e' cominciato davvero
  *   onTap()            tocco secco, senza trascinamento
- *   onSideChange(side) e' atterrata sull'altro bordo
  *   onFlightEnd()      il volo e' finito: rimetti l'arte a posto
  */
 export function bindMascotDrag(host) {
@@ -93,7 +93,6 @@ export function bindMascotDrag(host) {
   const setOut = host.setOut || (() => {});
   const onDragCommit = host.onDragCommit || (() => {});
   const onTap = host.onTap || (() => {});
-  const onSideChange = host.onSideChange || (() => {});
   const onFlightEnd = host.onFlightEnd || (() => {});
 
   let startX = 0;
@@ -111,7 +110,7 @@ export function bindMascotDrag(host) {
     phase: 'held', // held -> fall -> down (a terra) -> slide
     downUntil: 0,
     grounded: false, // true dal primo contatto col pavimento (per la posa ground)
-    settled: true, // false dal rilascio finché settle() non sceglie bordo e arrivo
+    settled: true, // false dal rilascio finché settle() non sceglie l'arrivo
     targetOut: false, // stato out voluto dal gesto, applicato a fine volo
     dir: 1, // facing: 1 verso destra (arte originale), -1 verso sinistra (flip)
     x: 0, y: 0, vx: 0, vy: 0,
@@ -185,22 +184,15 @@ export function bindMascotDrag(host) {
     fs.raf = requestAnimationFrame(loop);
   };
 
-  /* Atterraggio: sceglie il bordo più vicino al punto in cui è caduta e ce
-     la manda a piedi. Il cambio di lato si applica subito, non a fine volo:
-     con .flying attivo l'ancoraggio non transiziona, e il layer vive in
-     coordinate viewport (fs.x/fs.y), quindi ri-misurare la base del
-     transform lo lascia esattamente dov'è — nessun salto. Solo dopo si sa
-     dov'è il dock, e quindi dove deve arrivare la camminata. */
+  /* Atterraggio. Il bordo è uno solo, il destro (v. shared/mascot.js): da
+     dovunque sia caduta ci torna a piedi. Qui si decide solo *dove* del bordo
+     arriva — al dock o fuori — e quanto tempo le serve per arrivarci. */
   const settle = () => {
     if (fs.settled) return;
     fs.settled = true;
-    const side = fs.x < vw() / 2 ? 'left' : 'right';
-    if (side !== mascotSide()) {
-      onSideChange(side);
-      // Attraversare lo schermo è già il gesto: la si ritrova a riposo sul
-      // bordo nuovo, non aperta.
-      fs.targetOut = false;
-    }
+    // Lasciata nella metà sinistra, attraversare lo schermo è già il gesto:
+    // la si ritrova a riposo al bordo, non aperta.
+    if (fs.x < vw() / 2) fs.targetOut = false;
     const r = host.el.getBoundingClientRect();
     fs.bx = r.left + fs.w * PIVOT_X;
     fs.by = r.top + fs.h * PIVOT_Y;
@@ -208,14 +200,28 @@ export function bindMascotDrag(host) {
     if (fs.targetOut === wasOut) {
       fs.xT = fs.bx;
       fs.after = null;
-      return;
+    } else {
+      // Il cambio di stato out avviene solo a fine volo (fs.after): la x di
+      // arrivo la anticipa di uno scarto d'ancoraggio, verso l'interno se si
+      // apre e verso il bordo se si chiude.
+      const shift = fs.w * OUT_SHIFT_RATIO;
+      fs.xT = fs.bx + (fs.targetOut ? -shift : shift);
+      fs.after = () => setOut(fs.targetOut);
     }
-    // Il cambio di stato out avviene solo a fine volo (fs.after): la x di
-    // arrivo la anticipa di uno scarto d'ancoraggio, verso l'interno se si
-    // apre e verso il bordo se si chiude.
-    const shift = fs.w * OUT_SHIFT_RATIO * (side === 'left' ? -1 : 1);
-    fs.xT = fs.bx + (fs.targetOut ? -shift : shift);
-    fs.after = () => setOut(fs.targetOut);
+    /* La scadenza fissa del rilascio bastava quando il bordo era quello più
+       vicino. Adesso la camminata può essere lo schermo intero — ~3,5 s sul
+       Titan 2 — e senza allungarla lei si teletrasporterebbe a metà strada.
+       Solo a volo vivo: da endFlight() il volo è già chiuso. */
+    if (fs.active) {
+      const now = performance.now();
+      const walkMs = (Math.abs(fs.xT - fs.x) / WALK_SPEED) * 1000;
+      const until = now + GETUP_MS + walkMs + WALK_MARGIN_MS;
+      if (until > fs.deadline) {
+        fs.deadline = until;
+        clearTimeout(fs.snapT);
+        fs.snapT = setTimeout(endFlight, until - now + 300);
+      }
+    }
   };
 
   /* Chiude il volo: applica l'eventuale cambio di stato e ripulisce.
@@ -351,7 +357,7 @@ export function bindMascotDrag(host) {
     if (fs.phase === 'down' && now >= fs.downUntil) fs.phase = 'slide';
     step(dt);
     // Toccato terra (fall -> down): da qui in poi si sa dov'è caduta, quindi
-    // quale bordo le tocca. Prima del disegno, perché settle() sposta la
+    // quanta strada ha davanti. Prima del disegno, perché settle() sposta la
     // base del transform.
     if (!fs.settled && fs.phase !== 'fall') settle();
 
@@ -441,8 +447,8 @@ export function bindMascotDrag(host) {
   });
 
   /* Rilascio: decide con le soglie di sempre se il gesto era un apri/chiudi,
-     poi la lascia cadere sulla y di partenza. Dove atterrerà — e quindi su
-     che bordo finirà — non si sa ancora: lo fissa settle() al tonfo. */
+     poi la lascia cadere sulla y di partenza. Dove atterrerà — e quindi
+     quanta strada farà a piedi — non si sa ancora: lo fissa settle() al tonfo. */
   const finish = (clientX) => {
     if (!dragging) return;
     clearHoldTimer();
@@ -460,12 +466,10 @@ export function bindMascotDrag(host) {
 
     const dx = clientX - startX;
     const out = isOut();
-    // Apri/chiudi è relativo al bordo su cui si trova adesso: da sinistra i
-    // versi si specchiano (v. .jenny-duo.side-left in mobile-style.css).
-    const sideSign = mascotSide() === 'left' ? -1 : 1;
+    // Verso l'interno (sinistra) apre, verso il bordo chiude.
     fs.targetOut = out;
-    if (!out && dx * sideSign < -DRAG_THRESHOLD) fs.targetOut = true;
-    else if (out && dx * sideSign > DRAG_THRESHOLD) fs.targetOut = false;
+    if (!out && dx < -DRAG_THRESHOLD) fs.targetOut = true;
+    else if (out && dx > DRAG_THRESHOLD) fs.targetOut = false;
     fs.xT = fs.bx; // provvisorio: la x di arrivo vera la fissa settle()
     fs.after = null;
     fs.settled = false;

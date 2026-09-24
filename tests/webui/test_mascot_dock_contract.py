@@ -119,8 +119,10 @@ def test_no_stylesheet_spells_the_ratio_out_again() -> None:
     casa carica. La casa non ne dichiara nessuno: se ne ricomparisse uno li',
     sarebbe un secondo posto dove Jenny si ancora — cioe' di nuovo due Jenny."""
     ancoraggi = _anchors(FOGLI["officina"].read_text(encoding="utf-8"))
-    assert len(ancoraggi) >= 4, (
-        f"mi aspetto i due ancoraggi per ciascun bordo, ne trovo {len(ancoraggi)}"
+    # Un bordo solo dal 24/09/2026 (Jenny sta sempre a destra): due ancoraggi,
+    # al dock e fuori.
+    assert len(ancoraggi) >= 2, (
+        f"mi aspetto i due ancoraggi del bordo destro, ne trovo {len(ancoraggi)}"
     )
     for decl in ancoraggi:
         assert "--jenny-dock" in decl or "--jenny-out" in decl, (

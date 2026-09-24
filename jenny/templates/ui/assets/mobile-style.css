@@ -1723,11 +1723,6 @@ body {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
-/* Quando la mascotte è agganciata a sinistra (drag dell'utente) l'angolo
-   destro è libero: lo scostamento sopra serve solo quando lei è lì. */
-:root:has(.jenny-duo.side-left) .chat-scroll-fab {
-  right: 14px;
-}
 .chat-scroll-fab.visible {
   opacity: 1;
   transform: translateY(0);
@@ -6850,21 +6845,6 @@ body {
 }
 .jenny-art-stack img.jenny-face.off { visibility: hidden; }
 
-/* Lato sinistro (v. shared/mascot.js): mirroring completo, stesso offset di
-   destra ma ancorato a left invece che a right. L'arte si specchia così Jenny
-   guarda verso l'interno dello schermo.
-   Lo specchio sta sul contenitore e non sulle img: le due sono un solo
-   disegno, e `transform` non si compone con sé stesso sullo stesso elemento —
-   quando era sull'img il respiro di .out (che scrive transform) lo annullava e
-   da sinistra, uscita, Jenny finiva per guardare fuori dallo schermo. */
-.jenny-duo.side-left {
-  left: calc(var(--jenny-size) * var(--jenny-dock) * -1);
-  right: auto;
-  transition: left 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
-}
-.jenny-duo.side-left.out { left: calc(var(--jenny-size) * var(--jenny-out) * -1); }
-.jenny-duo.side-left .jenny-art-stack { transform: scaleX(-1); }
-
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:
    hang/fall/ground/walk1/walk2, una sola visibile via .on) sostituisce
    l'art normale e vola via transform (rAF in JS). Tutta l'arte condivide
@@ -6956,16 +6936,6 @@ body {
   border-right: 6px solid transparent;
   border-top: 7px solid var(--accent);
 }
-/* Lato sinistro (v. .jenny-duo.side-left sopra): stessi ancoraggi ma
-   riflessi, applicati anche a .jenny-mc via mobile-jenny.js#_applySide. */
-.jenny-mc.side-left .jenny-mc-bubble {
-  right: auto;
-  left: 14px;
-}
-.jenny-mc.side-left .jenny-mc-bubble::after {
-  right: auto;
-  left: 12px;
-}
 .jenny-mc-think {
   display: none;
   position: absolute;
@@ -6979,10 +6949,6 @@ body {
   padding: 3px 12px;
   border-radius: var(--radius-pill);
   animation: jenny-pulse 1.1s ease-in-out infinite;
-}
-.jenny-mc.side-left .jenny-mc-think {
-  right: auto;
-  left: 30px;
 }
 /* Il form della minichat È il compose condiviso (.compose-row/.compose-pill/
    .compose-send): qui solo posizionamento e visibilità. */

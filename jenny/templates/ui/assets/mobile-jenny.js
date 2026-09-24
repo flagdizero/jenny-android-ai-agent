@@ -143,12 +143,6 @@ export class JennyCompanion extends JennyMascot {
     this.setMode(this.mode);
   }
 
-  /* Il lato vale anche per la minichat: stessi ancoraggi, riflessi via CSS. */
-  _setSide(side) {
-    this.mc?.classList.toggle('side-left', side === 'left');
-    super._setSide(side);
-  }
-
   /* ── Drag / tap ── */
 
   /* La minichat si chiude quando il trascinamento comincia. */

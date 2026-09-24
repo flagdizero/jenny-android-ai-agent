@@ -135,8 +135,8 @@ object FloatingOverlayController {
     private const val DOCKED_OUT_RATIO = 0.469f
     private const val OUT_RATIO = 0.25f
 
-    /** Quanto dura lo scivolamento fra i due ancoraggi. `.jenny-duo.side-left`
-     *  usa 0,3 s con questa curva, ed è la stessa transizione. */
+    /** Quanto dura lo scivolamento fra i due ancoraggi. `.jenny-duo` usa
+     *  0,3 s con questa curva, ed è la stessa transizione. */
     private const val SIDE_SLIDE_MS = 300L
 
     /** Quanto è larga la pillola, in frazione dello schermo. Su 574 dp fa 356. */
@@ -178,7 +178,7 @@ object FloatingOverlayController {
      * Misurati sui pixel opachi di `jenny-body-front-idle` (768 px): i piedi
      * finiscono alla riga 668 e il corpo occupa le colonne 229–572, quindi il
      * suo asse sta a 0,52 del quadrato — non a metà — con l'arte che guarda a
-     * sinistra, cioè non specchiata; specchiata, l'asse è a 1 − 0,52. Servono
+     * sinistra, cioè com'è sul bordo destro, l'unico. Servono
      * a metterla **in piedi sul cap** della pillola invece che al centro del
      * suo quadrato trasparente.
      *
@@ -343,16 +343,18 @@ object FloatingOverlayController {
     private const val PREFS = "jenny_floating"
 
     /**
-     * L'unica cosa che si ricorda: su quale bordo si è posata.
+     * Su quale bordo si era posata. **Non si legge più** (24/09/2026): il
+     * bordo è sempre il destro, e la chiave resta solo per essere cancellata
+     * al primo salvataggio.
      *
-     * **L'altezza no.** È la riga sopra la barra di input, in ogni stato —
+     * **E l'altezza non si è mai ricordata.** È la riga sopra la barra di input, in ogni stato —
      * l'invariante che `.jenny-duo` dichiara nel CSS («Non deve mai cambiare
      * in Y») — ed è anche il pavimento del volo, come `fs.y0` in JS. Per un
      * giro (17/09) si è provato a farla cadere fino in fondo e restare dove
      * atterrava: finiva sempre in un angolo, mezza fuori, sotto le icone del
      * dock di chiunque. La UI ha una riga sola, e questa è quella.
      */
-    private const val PREF_RIGHT = "park_right"
+    private const val PREF_DEAD_RIGHT = "park_right"
 
     /** La taglia spinta dalla SPA, in px. */
     private const val PREF_SIZE = "mascot_px"
@@ -540,9 +542,6 @@ object FloatingOverlayController {
     private var column: FrameLayout? = null
 
     private val sprites = HashMap<String, Bitmap?>()
-
-    /** Su quale dei due bordi. Default destra, come la mascotte in chat. */
-    private var parkedRight = true
 
     /**
      * Lato dello sprite in px, così com'è nella WebUI. `0` = non lo so ancora.
@@ -1835,9 +1834,9 @@ object FloatingOverlayController {
         ).apply { gravity = Gravity.CENTER_HORIZONTAL })
         for (line in history) {
             val bubble = bubbleView(ctx, line)
-            // Il tuo messaggio sta dal lato dove lei **non** sta, il suo dal
-            // suo: è tutto il legame fra la conversazione e chi la tiene.
-            val atStart = if (line.mine) parkedRight else !parkedRight
+            // Il tuo messaggio sta dal lato dove lei **non** sta — lei è a
+            // destra, quindi il tuo a sinistra — il suo dal suo.
+            val atStart = line.mine
             list.addView(bubble, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1947,7 +1946,7 @@ object FloatingOverlayController {
 
     /** Una bolla: il fondo, l'angolo stretto dal lato di chi parla, il testo. */
     private fun bubbleView(ctx: Context, line: Line): TextView {
-        val atStart = if (line.mine) parkedRight else !parkedRight
+        val atStart = line.mine
         val r = dp(ctx, BUBBLE_RADIUS_DP).toFloat()
         val c = dp(ctx, BUBBLE_CORNER_DP).toFloat()
         // topLeft, topRight, bottomRight, bottomLeft — due valori ciascuno.
@@ -2272,7 +2271,6 @@ object FloatingOverlayController {
 
         val width = screenWidth(ctx)
         val dockY = parkTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
-        val leftDock = -(size * DOCKED_OUT_RATIO) + size * FloatingFlight.PIVOT_X
         val rightDock = width - size + size * DOCKED_OUT_RATIO +
             size * FloatingFlight.PIVOT_X
         flight = FloatingFlight(
@@ -2281,9 +2279,9 @@ object FloatingOverlayController {
             viewportH = screenHeight(ctx).toFloat(),
             density = metrics.density,
             dockPivotY = dockY,
-            dockPivotX = leftDock to rightDock,
+            dockPivotX = rightDock,
             onFrame = { left, top, rot, pose, flip -> drawFlight(left, top, rot, pose, flip) },
-            onSettled = { right -> endFlight(ctx, right) },
+            onSettled = { endFlight(ctx) },
         ).also {
             it.grab(
                 startLeft + size * FloatingFlight.PIVOT_X,
@@ -2320,9 +2318,8 @@ object FloatingOverlayController {
     /** Atterrata e riagganciata alla sua riga: torna docked, con l'arte del
      *  bordo. La camminata finisce esattamente sull'ancoraggio docked, quindi
      *  il passaggio alla finestra piccola non la sposta di un pixel. */
-    private fun endFlight(ctx: Context, right: Boolean) {
+    private fun endFlight(ctx: Context) {
         flight = null
-        parkedRight = right
         saveParkPosition(ctx)
         syncFace()
         // La camminata finisce esattamente sull'ancoraggio docked: la maniglia
@@ -2338,7 +2335,7 @@ object FloatingOverlayController {
                 applyStage(STAGE_ASLEEP, WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED)
             }
         }
-        Log.i(TAG, "Pegman flight settled (right=$right)")
+        Log.i(TAG, "Pegman flight settled")
     }
 
     // ------------------------------------------------------------------ //
@@ -2426,12 +2423,10 @@ object FloatingOverlayController {
      * con la faccia già disegnata dentro — esiste. Quando è *out* torna la
      * pila a due livelli, corpo × faccia, che è dove le espressioni si leggono.
      *
-     * Lo specchio è quello di `.jenny-duo.side-left .jenny-art-stack`: l'arte
-     * nasce guardando verso sinistra, cioè giusta sul bordo destro, e si
-     * ribalta sull'altro.
+     * Niente specchio: l'arte nasce guardando verso sinistra, cioè giusta sul
+     * bordo destro, che è l'unico.
      */
     private fun syncFace(sad: Boolean = false) {
-        column?.scaleX = if (parkedRight) 1f else -1f
         if (!expanded) {
             mascotBody?.setImageBitmap(sprite("jenny-side"))
             mascotFace?.visibility = View.GONE
@@ -2487,7 +2482,7 @@ object FloatingOverlayController {
     /**
      * Scivola fino a *(left, top)* dentro la finestra grande, e **ci resta**.
      *
-     * La curva e la durata sono quelle di `.jenny-duo.side-left` nel CSS —
+     * La curva e la durata sono quelle di `.jenny-duo` nel CSS —
      * 0,3 s con un rimbalzino finale — così il gesto è lo stesso che si vede
      * in chat. La differenza importante è la fine: la traslazione viene
      * *committata* nel margine e azzerata, altrimenti resta addosso al
@@ -2601,7 +2596,7 @@ object FloatingOverlayController {
      * L'ascissa del bordo, docked o *out*.
      *
      * Gli stessi due ancoraggi della mascotte in chat: `-0.469 × lato` a riposo,
-     * `-0.25 × lato` quando è attiva, specchiati sul bordo sinistro.
+     * `-0.25 × lato` quando è attiva.
      */
     /** Il lato dello sprite: quello della WebUI, o il suo default. */
     private fun mascotSize(ctx: Context): Int =
@@ -2613,7 +2608,7 @@ object FloatingOverlayController {
      * Parcheggiata sta al bordo, per [DOCKED_OUT_RATIO] fuori schermo. «Out»
      * con la chat aperta sta **in piedi sul cap della pillola** dal suo lato:
      * l'asse del corpo ([AXIS_RATIO]) cade sul centro del cap — la pallina
-     * d'invio a destra, il suo specchio a sinistra. «Out» senza chat — il
+     * d'invio, a destra. «Out» senza chat — il
      * solo fumetto di risposta — rientra a un quarto dal bordo, come prima:
      * lì la pillola non c'è, e non c'è niente su cui stare.
      */
@@ -2624,14 +2619,10 @@ object FloatingOverlayController {
             val pillW = pillWidth(ctx)
             val pillLeft = (width - pillW) / 2
             val cap = dp(ctx, BAR_PAD_DP) + dp(ctx, SEND_DP) / 2
-            return if (parkedRight) {
-                pillLeft + pillW - cap - (size * AXIS_RATIO).toInt()
-            } else {
-                pillLeft + cap - (size * (1f - AXIS_RATIO)).toInt()
-            }
+            return pillLeft + pillW - cap - (size * AXIS_RATIO).toInt()
         }
         val hidden = (size * if (out) OUT_RATIO else DOCKED_OUT_RATIO).toInt()
-        return if (parkedRight) width - size + hidden else -hidden
+        return width - size + hidden
     }
 
     /**
@@ -2746,7 +2737,6 @@ object FloatingOverlayController {
 
     private fun loadParkPosition(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        parkedRight = prefs.getBoolean(PREF_RIGHT, true)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
         storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
     }
@@ -2754,7 +2744,8 @@ object FloatingOverlayController {
     private fun saveParkPosition(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putBoolean(PREF_RIGHT, parkedRight)
+            // Il bordo non si ricorda più: è sempre il destro.
+            .remove(PREF_DEAD_RIGHT)
             // La taglia può essere arrivata dalla SPA prima che ci fosse un
             // contesto con cui scriverla: qui c'è di sicuro.
             .apply { if (mascotPx > 0) putInt(PREF_SIZE, mascotPx) }

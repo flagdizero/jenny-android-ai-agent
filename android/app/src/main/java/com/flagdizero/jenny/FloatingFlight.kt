@@ -32,6 +32,9 @@ import kotlin.math.sin
  * `HELD` in mano, appesa al pivot e oscillante → `FALL` al rilascio, con la
  * gravità e le pareti morbide → `DOWN` a terra per il tempo di rialzarsi →
  * `SLIDE` a piedi fino al bordo, e lì finisce.
+ *
+ * Il bordo è uno solo, il **destro** (24/09/2026, come `shared/mascot.js`):
+ * da dovunque sia caduta ci torna a piedi.
  */
 class FloatingFlight(
     private val sizePx: Float,
@@ -46,10 +49,10 @@ class FloatingFlight(
      *  risultato era una mascotte che finiva sempre in un angolo, sotto le
      *  icone di chiunque. La UI ha una riga sola, e questa e' quella. */
     private val dockPivotY: Float,
-    /** Ascissa del pivot agganciata, per lato: `(sinistra, destra)`. */
-    private val dockPivotX: Pair<Float, Float>,
+    /** Ascissa del pivot agganciata al bordo destro. */
+    private val dockPivotX: Float,
     private val onFrame: (left: Float, top: Float, rotationDeg: Float, pose: Pose, flip: Boolean) -> Unit,
-    private val onSettled: (right: Boolean) -> Unit,
+    private val onSettled: () -> Unit,
 ) {
 
     enum class Pose { HANG, FALL, GROUND, WALK1, WALK2 }
@@ -77,6 +80,8 @@ class FloatingFlight(
         const val GETUP_MS = 700L
         const val WALK_FRAME_MS = 500L
         const val RETURN_TIMEOUT_MS = 6_000L
+        /** Aria sopra la camminata prevista, prima dello snap. */
+        const val WALK_MARGIN_MS = 1_500L
 
         // --- lunghezze: px CSS là, px dispositivo qui ---
         const val MAX_SPEED_CSS = 5_000f
@@ -186,8 +191,8 @@ class FloatingFlight(
 
         if (phase == Phase.DOWN && nowMs >= downUntil) setPhase(Phase.SLIDE)
         step(dt, nowMs)
-        // Toccato terra: da qui si sa dov'è caduta, quindi quale bordo le tocca.
-        if (!settled && phase != Phase.FALL && phase != Phase.HELD) chooseSide()
+        // Toccato terra: da qui si sa dov'è caduta, quindi quanta strada ha davanti.
+        if (!settled && phase != Phase.FALL && phase != Phase.HELD) settleTarget()
 
         draw(nowMs)
 
@@ -198,7 +203,7 @@ class FloatingFlight(
         if (phase != Phase.HELD && phase != Phase.SLIDE && nowMs >= deadline) {
             // Failsafe: oltre il tetto si consegna lo stato finale invece di
             // restare a mezz'aria. Stessa rete di ``RETURN_TIMEOUT_MS`` in JS.
-            if (!settled) chooseSide()
+            if (!settled) settleTarget()
             settleNow()
             return
         }
@@ -311,10 +316,6 @@ class FloatingFlight(
         if (th < -maxTilt) { th = -maxTilt; om *= -0.35f }
     }
 
-    /**
-     * Sceglie il bordo di rientro dalla metà schermo in cui è atterrata, e da
-     * lì la camminata ha una meta.
-     */
     /** Ogni passaggio di fase si legge in `logcat`: senza, un volo che finisce
      *  troppo presto ha quattro spiegazioni indistinguibili. */
     private fun setPhase(next: Phase) {
@@ -324,18 +325,24 @@ class FloatingFlight(
             "vx=${vx.toInt()} vy=${vy.toInt()}")
     }
 
-    /** Consegna l'atterraggio: su quale bordo si e' riagganciata. */
+    /** Consegna l'atterraggio. */
     private fun settleNow() {
         running = false
         Choreographer.getInstance().removeFrameCallback(frames)
-        onSettled(targetPx > viewportW / 2f)
+        onSettled()
     }
 
-    private fun chooseSide() {
+    /**
+     * La meta della camminata è sempre il dock destro. La scadenza la copre
+     * tutta: lasciata al bordo sinistro la strada è lo schermo intero, e con i
+     * soli [RETURN_TIMEOUT_MS] lei si teletrasporterebbe a metà.
+     */
+    private fun settleTarget() {
         settled = true
-        val right = px >= viewportW / 2f
-        targetPx = if (right) dockPivotX.second else dockPivotX.first
-        deadline = System.currentTimeMillis() + RETURN_TIMEOUT_MS
+        targetPx = dockPivotX
+        val walkMs = (abs(targetPx - px) / walkSpeed * 1000f).toLong()
+        deadline = System.currentTimeMillis() +
+            maxOf(RETURN_TIMEOUT_MS, GETUP_MS + walkMs + WALK_MARGIN_MS)
     }
 
     private fun draw(nowMs: Long) {

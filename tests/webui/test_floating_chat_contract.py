@@ -138,8 +138,9 @@ class TestSiAzzeraSoloChiudendo:
 class TestIDueLati:
     def test_il_tuo_messaggio_sta_dove_lei_non_sta(self):
         source = _read()
-        # `mine` a sinistra quando lei è a destra, e viceversa.
-        assert source.count("if (line.mine) parkedRight else !parkedRight") == 2, (
+        # Lei sta sempre a destra (24/09/2026), quindi `mine` sta sempre a
+        # sinistra: la regola è una riga, nelle due funzioni che la usano.
+        assert source.count("val atStart = line.mine") == 2, (
             "la regola dei lati è cambiata o si è duplicata altrove"
         )
         body = _fun(source, "private fun renderHistory()")

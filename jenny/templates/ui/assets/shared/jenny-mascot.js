@@ -25,7 +25,7 @@ import { wsManager } from './ws-manager.js';
 import { sessionManager } from './session-manager.js';
 import { bindMascotDrag, buildFlyLayer } from './mascot-drag.js';
 import {
-  mascotVisible, mascotSide, setMascotSide, applyMascotSize,
+  mascotVisible, applyMascotSize,
 } from './mascot.js';
 
 /* Arte "cotta" (faccia disegnata dentro, una sola img): serve al bordo, dove
@@ -129,13 +129,12 @@ export class JennyMascot {
     this._onChatSwitch = () => this._releaseTrackedTurn();
     sessionManager.addEventListener('chat:switch', this._onChatSwitch);
 
-    // Preferenze mascotte (Impostazioni → Personalizzazione): visibilità,
-    // taglia e lato dello schermo, v. shared/mascot.js.
+    // Preferenze mascotte (Impostazioni → Personalizzazione): visibilità e
+    // taglia, v. shared/mascot.js.
     this._onMascotChange = () => this._applyMascotPrefs();
     window.addEventListener('mascotchange', this._onMascotChange);
 
     applyMascotSize();
-    this._applySide();
     this._enterInitialState();
 
     // Da qui in poi la visibilità è governata a runtime dalla classe
@@ -153,10 +152,8 @@ export class JennyMascot {
     }
     // La transizione di right (docked <-> out) sposta il rettangolo: riallinea
     // a fine slide, così l'esclusione combacia con la posizione finale.
-    // Docked <-> out transiziona su 'right' a destra, su 'left' a sinistra
-    // (v. mobile-style.css .jenny-duo.side-left).
     this.el.addEventListener('transitionend', (e) => {
-      if (e.propertyName === 'right' || e.propertyName === 'left') this._updateGestureExclusion();
+      if (e.propertyName === 'right') this._updateGestureExclusion();
     });
     this._updateGestureExclusion();
   }
@@ -207,8 +204,8 @@ export class JennyMascot {
     this.el.className = 'jenny-duo';
     this.el.setAttribute('aria-label', 'Jenny');
     this.el.setAttribute('tabindex', '-1');
-    // I due livelli in un contenitore solo: lo specchio del lato sinistro va
-    // su di lui (v. mobile-style.css), il respiro resta sulle img.
+    // I due livelli (corpo e faccia) in un contenitore solo; il respiro resta
+    // sulle img.
     const stack = document.createElement('div');
     stack.className = 'jenny-art-stack';
     const img = document.createElement('img');
@@ -431,22 +428,8 @@ export class JennyMascot {
      hanno src fisso a creazione e non si ricablano più: da quando l'arte ha
      una sola variante, il loro path non dipende da nessuna preferenza. */
   _applyMascotPrefs() {
-    this._applySide();
     this._applyVisibility();
     if (!this._talk.timer) this._syncArt();
-  }
-
-  /* Lato dello schermo (mirroring completo, v. mobile-style.css .side-left).
-     Non è una preferenza: è dove l'hai lasciata l'ultima volta, quindi lo
-     stato si scrive qui e non passa dall'evento 'mascotchange'. */
-  _setSide(side) {
-    this.el.classList.toggle('side-left', side === 'left');
-    setMascotSide(side);
-    this._updateGestureExclusion();
-  }
-
-  _applySide() {
-    this._setSide(mascotSide());
   }
 
   /* ── Drag / tap ── */
@@ -462,7 +445,6 @@ export class JennyMascot {
       setOut: (v) => this._setOut(v),
       onDragCommit: () => this._onDragCommit(),
       onTap: () => this._setOut(!this.el.classList.contains('out')),
-      onSideChange: (side) => this._setSide(side),
       onFlightEnd: () => {
         this._syncArt();
         this._updateGestureExclusion();

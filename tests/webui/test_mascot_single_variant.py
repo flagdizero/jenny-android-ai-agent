@@ -96,7 +96,7 @@ for (const gone of ['poseUrl', 'mascotColor', 'setMascotColor']) {{
   assert.ok(!(gone in mod), `{{gone}} è ancora esportato`.replace('{{gone}}', gone));
 }}
 // Quello che resta, resta.
-for (const kept of ['mascotVisible', 'mascotSide', 'mascotSize', 'applyMascotSize']) {{
+for (const kept of ['mascotVisible', 'mascotSize', 'applyMascotSize']) {{
   assert.ok(kept in mod, kept + ' non è più esportato');
 }}
 """)

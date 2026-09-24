@@ -1,26 +1,31 @@
-/** Preferenze della mascotte (JennyCompanion) — visibilità, aspetto e lato.
+/** Preferenze della mascotte (JennyCompanion) — visibilità e aspetto.
  *
  * Stato puramente client-side (localStorage), come tema/lingua/modalità
  * avanzata: non passa mai dal backend. Visibilità e taglia sono scelte
- * dell'utente (Impostazioni → Personalizzazione); il lato invece non è più
- * un'impostazione ma il ricordo di dove l'hai lasciata: lo scrive la
- * companion quando lei atterra dopo un lancio (v. mobile-jenny.js#settle).
+ * dell'utente (Impostazioni → Personalizzazione).
+ *
+ * Il lato non c'è più (24/09/2026): Jenny sta **sempre a destra**, in casa e in
+ * officina, e dopo un lancio ci torna a piedi da dovunque l'hai lasciata. A
+ * sinistra il resto dell'interfaccia — testo, fumetti, riga di lavoro — le si
+ * allineava male; e il lato non era una scelta, solo il ricordo dell'ultimo
+ * lancio.
+ * V. .agent/tre-ritocchi-plan.md, voce 1.
  *
  * Il bianco/nero non c'è più (08/09/2026): l'arte esiste in una sola
  * variante, a colori, col nome piano — v. .agent/mascot-faces-plan.md, F9.
  */
 
 const VISIBLE_KEY = 'jenny-mascotte-visible';
-/* Chiave nuova rispetto a 'jenny-mascotte-side': il vecchio valore era una
-   preferenza esplicita, e chi aveva scelto "destra" se la ritroverebbe come
-   posizione di partenza di una feature che quella scelta non ce l'ha più.
-   Ripartono tutti da sinistra; la chiave morta si ripulisce sotto. */
-const SIDE_KEY = 'jenny-mascotte-dock-side';
-const LEGACY_SIDE_KEY = 'jenny-mascotte-side';
 const SIZE_KEY = 'jenny-mascotte-size';
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
-   non una per lettura: non hanno più un getter in cui nascondersi. */
-const DEAD_KEYS = ['jenny-mascotte-color'];
+   non una per lettura: non hanno più un getter in cui nascondersi. Le due del
+   lato: la prima era la scelta esplicita di un tempo, la seconda il ricordo di
+   dove l'avevi lasciata. */
+const DEAD_KEYS = [
+  'jenny-mascotte-color',
+  'jenny-mascotte-side',
+  'jenny-mascotte-dock-side',
+];
 for (const key of DEAD_KEYS) {
   try {
     localStorage.removeItem(key);
@@ -43,30 +48,9 @@ export function mascotVisible() {
 export function setMascotVisible(on) {
   localStorage.setItem(VISIBLE_KEY, on ? '1' : '0');
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: on, side: mascotSide() },
+    detail: { visible: on },
   }));
   return on;
-}
-
-export function mascotSide() {
-  try {
-    localStorage.removeItem(LEGACY_SIDE_KEY);
-  } catch (_) {
-    /* storage non disponibile */
-  }
-  const s = localStorage.getItem(SIDE_KEY);
-  return s === 'right' ? 'right' : 'left'; // default: sinistra
-}
-
-/* Diversamente dalle altre preferenze NON emette 'mascotchange': lo scrive la
-   companion mentre lei sta atterrando, e l'evento la farebbe passare da
-   _applyMascotPrefs -> setMode -> _abortFlight, cioè ucciderebbe il volo
-   nell'istante esatto in cui sceglie il bordo. La classe .side-left la
-   applica direttamente chi chiama (v. mobile-jenny.js#_setSide). */
-export function setMascotSide(side) {
-  const normalized = side === 'right' ? 'right' : 'left';
-  localStorage.setItem(SIDE_KEY, normalized);
-  return normalized;
 }
 
 export function mascotSize() {
@@ -79,7 +63,7 @@ export function setMascotSize(size) {
   localStorage.setItem(SIZE_KEY, normalized);
   applyMascotSize();
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: mascotVisible(), side: mascotSide(), size: normalized },
+    detail: { visible: mascotVisible(), size: normalized },
   }));
   return normalized;
 }
@@ -107,7 +91,7 @@ export function applyMascotSize() {
    resto della sua geometria, e perché il numero deve esistere una volta sola:
    lo legge il foglio di stile per ancorarla (uno solo per i due gusci, da quando
    la Jenny e' una) e `mascot-drag.js` per sapere
-   dove farla arrivare a piedi dopo un lancio. Cinque dichiarazioni CSS e una
+   dove farla arrivare a piedi dopo un lancio. Due dichiarazioni CSS e una
    moltiplicazione, un numero solo.
 
    0.469 e 0.25 sono misurati sull'arte, non scelti: **in larghezza** il
