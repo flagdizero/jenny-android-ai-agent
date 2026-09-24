@@ -23,7 +23,6 @@ import { api } from './api-client.js';
 import { escapeHtml, showToast } from './utils.js';
 import { confirmDialog } from './dialog.js';
 import { i18n } from './i18n.js';
-import { wsManager } from './ws-manager.js';
 import { currentTheme, themeTokens } from './theme.js';
 
 /** L'`<iframe>` di una Jenny App, senza decidere dove va a finire.
@@ -92,6 +91,16 @@ export class AppsActions {
         { type: 'jenny:theme', theme: t.scheme, accent: t.accent, onAccent: t.onAccent,
           tokens: themeTokens() }, '*');
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    /* I dati della mini-app aperta sono cambiati da fuori — Jenny ha girato
+       una sua azione in chat — e la mini-app se ne accorge solo se glielo si
+       dice: `jenny:data-changed` e' cio' che `jenny-sdk.js` ascolta per
+       rileggersi. Stesso incidente del tema qui sopra, e dell'errore di
+       caricamento: stava nella scheda «App» ed e' andato via con lei. */
+    source.onAppDataChanged((slug) => {
+      const open = this._openApp;
+      if (open?.slug !== slug) return;
+      open.iframe.contentWindow?.postMessage({ type: 'jenny:data-changed', slug }, '*');
+    });
   }
 
   /** «Annulla» sui due fogli.

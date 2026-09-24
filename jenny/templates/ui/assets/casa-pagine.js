@@ -446,7 +446,29 @@ export class CasaPagine {
          vuota a ogni ingresso, per un caso raro. Sul telefono l'elenco e' gia'
          in cache e la risposta arriva prima che l'app abbia dipinto. */
       this._controllaApp(pannello, schermata, mio);
+      this._ascoltaDatiApp();
     }
+  }
+
+  /** La pagina app che si guarda si rilegge quando i suoi dati cambiano da
+   *  fuori (Jenny ha girato una sua azione): `jenny:data-changed` e' cio' che
+   *  `jenny-sdk.js` ascolta. Come la mini-app sopra tutto in `apps-actions.js`,
+   *  ma la cornice e' di questo file — v. `_finestraPagina`.
+   *
+   *  Ci si iscrive una volta sola, alla prima pagina app riempita: prima non
+   *  c'e' nessuna cornice da avvisare, e chiedere la sorgente al boot la
+   *  costruirebbe per niente. Solo la pagina corrente e' viva, quindi si avvisa
+   *  lei e solo se e' l'app di cui si parla.
+   */
+  _ascoltaDatiApp() {
+    if (this._staccaDatiApp) return;
+    const fonte = this.app?.appsSource?.();
+    if (!fonte?.onAppDataChanged) return;
+    this._staccaDatiApp = fonte.onAppDataChanged((slug) => {
+      const voce = this.voce(this.indice);
+      if (voce?.kind !== 'app' || voce.ref !== slug) return;
+      this._finestraPagina()?.postMessage({ type: 'jenny:data-changed', slug }, '*');
+    });
   }
 
   /** Spegne una pagina: la cornice dell'app se ne va, e con lei l'app viva. */

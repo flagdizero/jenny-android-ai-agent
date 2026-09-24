@@ -32,6 +32,7 @@
 import { api } from './api-client.js';
 import { i18n } from './i18n.js';
 import { showToast } from './utils.js';
+import { wsManager } from './ws-manager.js';
 
 export class AppsSource {
   constructor() {
@@ -45,6 +46,9 @@ export class AppsSource {
     this._failed = { jenny: false, android: false };
 
     this._listeners = new Set();
+    /** Chi vuole sapere che i dati di una Jenny App sono cambiati: riceve lo
+     *  slug. Separati da `_listeners`, che parlano delle **liste**. */
+    this._datiListeners = new Set();
     /* Ogni fetch delle app Android prende un numero: solo la piu' recente ha
        il diritto di scrivere. */
     this._seqAndroid = 0;
@@ -53,6 +57,11 @@ export class AppsSource {
     this._annunciate = new Set();
     this._timerAndroid = null;
     this._rientroArmato = false;
+    /* I due frame del gateway sulle Jenny App (v. `_onFrame`). L'ascolto sta
+       qui e non in una vista perche' ogni cornice di app — la mini-app sopra
+       tutto, la pagina app della casa — nasce dopo che la sorgente e' stata
+       costruita: chi c'e' da avvisare, trova gia' qualcuno in ascolto. */
+    wsManager.addEventListener('chat:message', (e) => this._onFrame(e.detail));
   }
 
   /* ── Chi guarda ─────────────────────────────────────────────────────────── */
@@ -249,7 +258,46 @@ export class AppsSource {
     document.addEventListener('visibilitychange', quandoTorna);
   }
 
-  /** Il gateway dice che i dati di una Jenny App sono cambiati. */
+  /** Il gateway dice che una Jenny App ha cambiato i suoi dati (una sua
+   *  azione girata come tool) o che l'elenco delle app e' cambiato (un turno
+   *  che ha scritto in `apps/`).
+   *
+   *  **Sono stati senza ascoltatore dal 21/09 al 24/09/2026.** Stavano nel
+   *  costruttore della scheda «App» e se ne sono andati con lei (`98a0230`):
+   *  il gateway ha continuato a mandarli, la mini-app aperta ha smesso di
+   *  rileggersi da sola e il cassetto di accorgersi di un'app nuova, e nessun
+   *  errore l'ha detto. Ora c'e' un banco che lo dice
+   *  (`test_ws_events_have_listeners_contract.py`).
+   *
+   *  L'elenco si rilegge **solo se era gia' stato letto**: se nessuno l'ha mai
+   *  chiesto non c'e' niente da tenere aggiornato, e la prima lettura avverra'
+   *  comunque quando servira'. E si rilegge senza tornare «non caricato» —
+   *  com'era prima — perche' quello riaccendeva il «caricamento» nel cassetto
+   *  aperto per una risposta che arriva in un istante; se le righe non sono
+   *  cambiate il cassetto non le ridisegna nemmeno (confronto di firma).
+   */
+  _onFrame(msg) {
+    if (msg?.event === 'apps_list_changed') {
+      if (this._jennyLoaded) this.loadJennyApps();
+      return;
+    }
+    if (msg?.event === 'app_data_changed' && msg.slug) {
+      for (const fn of this._datiListeners) {
+        try {
+          fn(msg.slug);
+        } catch (err) {
+          console.error('App data listener failed:', err);
+        }
+      }
+    }
+  }
+
+  /** Iscrive chi ha una cornice di app da avvisare; ritorna la funzione che lo
+   *  disiscrive. */
+  onAppDataChanged(fn) {
+    this._datiListeners.add(fn);
+    return () => this._datiListeners.delete(fn);
+  }
 
   /* ── Le righe del cassetto ──────────────────────────────────────────────── */
 
@@ -304,6 +352,4 @@ export class AppsSource {
       || a.key.localeCompare(b.key));
     return righe;
   }
-
-  /** La riga di una voce, per chi ha solo la chiave. */
 }

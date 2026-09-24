@@ -255,6 +255,12 @@ def _script(corpo: str, schermate: list[dict], vista: str = "chat") -> str:
                 ensureLoaded() {},
                 jennyApps: [],
                 jennyListFailed() { return globalThis.LISTA_ROTTA === true; },
+                /* Chi si iscrive ai cambi dei dati delle app: il banco li
+                   chiama a mano, come farebbe un frame del gateway. */
+                onAppDataChanged(fn) {
+                  (globalThis.DATI_APP ||= []).push(fn);
+                  return () => {};
+                },
                 attendiJennyApps() {
                   return new Promise((r) => setTimeout(() => {
                     this.jennyApps = [
@@ -332,7 +338,8 @@ def _run(
             "  f.dataset.slug = slug;\n"
             # La feritoia: il guscio riconosce chi parla confrontando
             # **questa**, e senza il banco non vedrebbe la guardia.
-            "  f.contentWindow = { app: slug };\n"
+            # Ricorda anche cosa le si manda: `jenny:data-changed`.
+            "  f.contentWindow = { app: slug, posta: [], postMessage(m) { this.posta.push(m); } };\n"
             "  return f;\n"
             "}\n",
             encoding="utf-8",
@@ -745,6 +752,30 @@ def test_an_app_page_mounts_that_app_frame() -> None:
         "assert.equal(pagina.children.length, 1);\n"
         "assert.equal(pagina.children[0].dataset.slug, 'orto');",
         schermate=DUE,
+    )
+
+
+def test_the_app_page_you_look_at_hears_that_its_data_changed() -> None:
+    """Jenny gira un'azione dell'app in chat: la pagina di quell'app si rilegge.
+
+    `jenny:data-changed` e' cio' che `jenny-sdk.js` ascolta. Arriva solo alla
+    pagina corrente — l'unica viva — e solo se e' l'app di cui si parla.
+    """
+    _run(
+        "pagine.vaiAId('p1');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(globalThis.DATI_APP?.length, 1, 'la pagina app non si e iscritta');\n"
+        "globalThis.DATI_APP[0]('lampo');\n"
+        "assert.deepEqual(finestraViva().posta, [], 'avvisata per un\\'altra app');\n"
+        "globalThis.DATI_APP[0]('orto');\n"
+        "assert.deepEqual(finestraViva().posta,\n"
+        "  [{ type: 'jenny:data-changed', slug: 'orto' }]);\n"
+        # Una seconda pagina app non iscrive una seconda volta: lo stesso
+        # frame arriverebbe due volte alla stessa cornice.
+        "pagine.vaiAId('p2');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(globalThis.DATI_APP.length, 1, 'iscritta due volte');\n",
+        DUE_APP,
     )
 
 

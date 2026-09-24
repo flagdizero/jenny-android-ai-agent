@@ -42,12 +42,6 @@ SENZA_ASCOLTATORE = {
     "session_updated": "da togliere (piano, D5)",
 }
 
-# Ascoltatori persi, da rimettere (piano, passo 0.3). ``strict``: quando il
-# passo atterra il caso passa, e un xfail che passa è rosso — così questa riga
-# se ne va insieme al difetto.
-DA_RIPARARE = {"app_data_changed", "apps_list_changed"}
-
-
 def _emitted_events() -> set[str]:
     src = "".join(p.read_text(encoding="utf-8") for p in sorted(CHANNELS.glob("*.py")))
     names = set(re.findall(r'"event"\s*:\s*"([a-z_]+)"', src))
@@ -77,18 +71,9 @@ def test_the_scan_still_finds_the_events() -> None:
 def test_the_exceptions_are_still_emitted() -> None:
     """Un'eccezione per un evento che non esiste più è una riga morta."""
     assert set(SENZA_ASCOLTATORE) <= EMITTED
-    assert DA_RIPARARE <= EMITTED
 
 
-def _cases():
-    for name in sorted(EMITTED - set(SENZA_ASCOLTATORE)):
-        marks = ()
-        if name in DA_RIPARARE:
-            marks = (pytest.mark.xfail(strict=True, reason="ascoltatore perso in 98a0230"),)
-        yield pytest.param(name, marks=marks, id=name)
-
-
-@pytest.mark.parametrize("event", list(_cases()))
+@pytest.mark.parametrize("event", sorted(EMITTED - set(SENZA_ASCOLTATORE)))
 def test_every_emitted_event_has_a_listener(event: str) -> None:
     assert re.search(rf"""['"`]{re.escape(event)}['"`]""", UI_JS), (
         f"il gateway manda `{event}` ma nessun JS della WebUI lo nomina: "

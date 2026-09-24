@@ -105,6 +105,7 @@ def _run(corpo: str, *, app: dict, pagine: str | None) -> None:
             const fonte = {{
               jennyApps: [APP],
               async loadJennyApps() {{ chiamate.push(['rilette']); }},
+              onAppDataChanged() {{ return () => {{}}; }},
             }};
             const PORTA = {porta};
             const shell = {{ sendChatPrompt() {{}} }};

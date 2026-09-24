@@ -81,7 +81,18 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
   - Deve fallire su `app_data_changed` e `apps_list_changed` finché 0.3 non
     atterra. È il banco che avrebbe preso `98a0230`.
 
-- [ ] **0.3 Le Jenny App tornano ad accorgersi dei cambi**
+- [x] **0.3 Le Jenny App tornano ad accorgersi dei cambi** — fatto 24/09.
+  Come pianificato, con tre scarti: il commento di `mobile-launcher.js:23-24`
+  non era falso, lo era diventato ed è tornato vero (l'ascolto sta di nuovo in
+  `apps-source.js`), quindi resta; `CasaPagine` si iscrive alla prima pagina
+  app riempita (`_ascoltaDatiApp`) e non nel costruttore, per non costruire la
+  sorgente al boot; il fake di `test_casa_pista_client` ha preso
+  `onAppDataChanged` e una finestra con `postMessage`, quello di
+  `test_app_sheet_pin_client` il metodo nuovo. Mutazioni provate (guardia
+  «solo se già letta», iscrizione al WS, confronto dello slug in
+  `AppsActions` e in `CasaPagine`, iscrizione della pagina): tutte rosse. Lo
+  `strict` dei due xfail di 0.2 ha fatto rosso finché non sono stati tolti.
+  Da provare sul telefono a fine fase.
   - Il gateway emette `app_data_changed` (slug) e `apps_list_changed`
     (`channels/ws_sender.py:219-225`, `:966-982`; da
     `agent/tools/app_actions.py:102` e `agent/turn_states.py:211-224`), ma
