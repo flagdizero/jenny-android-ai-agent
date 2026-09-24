@@ -35,6 +35,11 @@
   --active:        rgba(255, 255, 255, 0.09);
   --shadow:        0 8px 40px rgba(0, 0, 0, 0.5), 0 2px 12px rgba(0, 0, 0, 0.3);
   --flower:        #c8a96a;
+  /* Il luccichio che attraversa la riga di lavoro, e l'alone che lo
+     accompagna. Fumetto e Pietra l'alone lo spengono: sulla carta e sulla
+     pietra una luce sfumata si legge come un'ombra, e l'ombra e' profondita'. */
+  --glint:         #fff1cf;
+  --glow:          rgba(200, 169, 106, 0.55);
   --meta:          #c8a96a;
   --bubble-user-bg: #f4f1ea;
   --bubble-user-text: #141414;
@@ -92,6 +97,8 @@
   --active:        rgba(255, 255, 255, 0.08);
   --shadow:        0 8px 40px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.3);
   --flower:        #03edf9;
+  --glint:         #eaffff;
+  --glow:          rgba(3, 237, 249, 0.7);
   --meta:          #03edf9;
   --bubble-user-bg: rgba(3, 237, 249, 0.12);
   --bubble-user-text: #f2ecff;
@@ -125,6 +132,8 @@
   --active:        rgba(255, 255, 255, 0.07);
   --shadow:        0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 10px rgba(0, 0, 0, 0.25);
   --flower:        #b2543f;
+  --glint:         #f2b7a3;
+  --glow:          rgba(178, 84, 63, 0.55);
   --meta:          #94897a;
   --bubble-user-bg: transparent;
   --bubble-user-text: #e5ddd0;
@@ -160,6 +169,8 @@
   --active:        rgba(255, 255, 255, 0.1);
   --shadow:        4px 4px 0 rgba(0, 0, 0, 0.4);
   --flower:        #a78bfa;
+  --glint:         #ffe27a;
+  --glow:          rgba(167, 139, 250, 0.6);
   --meta:          #9d92ab;
   --bubble-user-bg: #a78bfa;
   --bubble-user-text: #221833;
@@ -195,6 +206,8 @@
   --active:        rgba(27, 24, 32, 0.08);
   --shadow:        3px 3px 0 rgba(27, 24, 32, 0.15);
   --flower:        #7c5cff;
+  --glint:         #ff4fa3;
+  --glow:          transparent;
   --meta:          #7c5cff;
   --bubble-user-bg: #1b1820;
   --bubble-user-text: #faf6ef;
@@ -229,6 +242,8 @@
   --active:        rgba(70, 36, 90, 0.08);
   --shadow:        0 3px 8px rgba(245, 106, 181, 0.25);
   --flower:        #b76bf0;
+  --glint:         #f56ab5;
+  --glow:          rgba(245, 106, 181, 0.35);
   --meta:          #9a7fae;
   --bubble-user-bg: linear-gradient(180deg, #ffa7dd, #f56ab5);
   --bubble-user-text: #ffffff;
@@ -263,6 +278,8 @@
   --active:        rgba(55, 51, 44, 0.08);
   --shadow:        0 4px 16px rgba(55, 51, 44, 0.12), 0 1px 4px rgba(55, 51, 44, 0.08);
   --flower:        #8c6f4e;
+  --glint:         #d2ab78;
+  --glow:          transparent;
   --meta:          #8b8478;
   --bubble-user-bg: #37332c;
   --bubble-user-text: #f4f1ec;

@@ -14,10 +14,16 @@
  *  arriva, e dirti che sto scrivendo mentre leggi quel che scrivo e' rumore.
  *  Torna se dopo il testo ricominciano gli strumenti — un turno puo' alternare
  *  le due cose piu' volte.
+ *
+ *  La parola entra lettera per lettera nel colore del fiore del tema, e un
+ *  luccichio la attraversa; i puntini finali saltellano. Davanti le gira il ✿
+ *  (`casa-fiore.js`), che si muove secondo la stessa famiglia: il fiore non
+ *  racconta niente che la parola non dica gia'.
  */
 
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
+import { Fiore } from './casa-fiore.js';
 
 /* Da quale famiglia e' ogni strumento. Tabella e non una catena di if perche'
    e' un dizionario, e perche' e' l'unico posto da aggiornare quando nasce uno
@@ -57,6 +63,18 @@ const SHOW_AFTER_MS = 500;
    sembra bloccata. Non cambia la *famiglia*: cambia solo il modo di dirla. */
 const ROTATE_MS = 4_000;
 
+/* Quanto resta a schermo la parola che esce, mentre entra la nuova: la durata
+   della sua animazione in `casa-style.css` (`casa-parola-esce`). */
+const WORD_OUT_MS = 280;
+
+function reducedMotion() {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 export class ActivityLine {
   constructor(el, { onOpenInWorkshop } = {}) {
     this.el = el;
@@ -66,6 +84,20 @@ export class ActivityLine {
     this._showTimer = null;
     this._rotateTimer = null;
     this._onOpen = onOpenInWorkshop;
+    this._reduced = reducedMotion();
+
+    /* Il fiore, le lettere animate e — per chi legge con un lettore di schermo
+       — la parola intera in chiaro: le lettere spezzate una per una si
+       leggerebbero una per una. */
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'casa-activity-fiore');
+    this.words = document.createElement('span');
+    this.words.className = 'casa-activity-parole';
+    this.words.setAttribute('aria-hidden', 'true');
+    this.plain = document.createElement('span');
+    this.plain.className = 'casa-activity-testo';
+    this.el.append(svg, this.words, this.plain);
+    this.fiore = new Fiore(svg, { reducedMotion: this._reduced });
 
     if (this._onOpen) {
       const line = this.el;
@@ -138,12 +170,50 @@ export class ActivityLine {
   }
 
   _paint() {
-    this.el.textContent = this._word();
+    this.fiore.setMode(this.family);
+    this._setWord(this._word());
     this.el.hidden = false;
+    this.fiore.start();
     clearInterval(this._rotateTimer);
     this._rotateTimer = setInterval(() => {
-      this.el.textContent = this._word();
+      this._setWord(this._word());
     }, ROTATE_MS);
+  }
+
+  /* La parola nuova entra mentre la vecchia esce verso l'alto: stanno nella
+     stessa cella di una griglia, quindi per un attimo si sovrappongono invece
+     di spingersi. Ogni lettera porta il proprio indice (`--i`), da cui il CSS
+     ricava il ritardo d'entrata e il passaggio del luccichio. */
+  _setWord(word) {
+    for (const old of this.words.querySelectorAll('.casa-parola:not(.esce)')) {
+      if (this._reduced) { old.remove(); continue; }
+      old.classList.add('esce');
+      setTimeout(() => old.remove(), WORD_OUT_MS);
+    }
+    const base = word.replace(/…$/, '');
+    const w = document.createElement('span');
+    w.className = 'casa-parola';
+    [...base].forEach((ch, i) => {
+      const l = document.createElement('span');
+      l.className = 'casa-lettera';
+      l.style.setProperty('--i', String(i));
+      l.textContent = ch === ' ' ? '\u00a0' : ch;
+      w.appendChild(l);
+    });
+    if (base !== word) {
+      const dots = document.createElement('span');
+      dots.className = 'casa-puntini';
+      for (let k = 0; k < 3; k++) {
+        const d = document.createElement('span');
+        d.className = 'casa-puntino';
+        d.style.setProperty('--k', String(k));
+        d.textContent = '.';
+        dots.appendChild(d);
+      }
+      w.appendChild(dots);
+    }
+    this.words.appendChild(w);
+    this.plain.textContent = word;
   }
 
   /* Una parola a caso della famiglia in corso, mai due volte di fila la stessa.
@@ -169,6 +239,8 @@ export class ActivityLine {
     this.family = null;
     this.lastWord = null;
     this.el.hidden = true;
-    this.el.textContent = '';
+    this.words.replaceChildren();
+    this.plain.textContent = '';
+    this.fiore.reset();
   }
 }

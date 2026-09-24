@@ -326,13 +326,19 @@ body.casa {
 
 /* ── La riga di lavoro ── */
 
-/* Smorta e piccola: deve farsi notare quanto basta a dire "sto lavorando" e non
-   un grammo di piu'. Sta sotto la conversazione, sopra il composer, dove
-   l'occhio va gia' fra una domanda e la sua risposta. */
+/* Piccola, nel colore del fiore del tema: e' Jenny che lavora, e porta il suo
+   segno. Sta sotto la conversazione, sopra il composer, dove l'occhio va gia'
+   fra una domanda e la sua risposta.
+   Ogni movimento qui resta nel piano — lettere che salgono, puntini che
+   saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
+   sembrare arrivare da lontano. */
 .casa-activity {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 4px 18px 6px;
-  color: var(--text-faint);
+  color: var(--flower);
   font-size: 12.5px;
   font-style: italic;
   /* Il tocco lungo apre il turno in officina: qui il testo non si seleziona, o
@@ -343,6 +349,73 @@ body.casa {
 }
 
 .casa-activity[hidden] { display: none; }
+
+.casa-activity-fiore {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  filter: drop-shadow(0 0 3px var(--glow));
+}
+.casa-fiore-petalo { fill: var(--flower); }
+.casa-fiore-vena { fill: color-mix(in oklab, var(--flower), var(--glint) 55%); opacity: 0.55; }
+.casa-fiore-cuore { fill: var(--bg); stroke: var(--flower); stroke-width: 3.2; }
+.casa-fiore-polline { fill: var(--glint); }
+
+/* La parola che esce e quella che entra stanno nella stessa cella. */
+.casa-activity-parole { display: inline-grid; white-space: nowrap; }
+.casa-parola { grid-area: 1 / 1; display: inline-flex; align-items: baseline; }
+.casa-parola.esce { animation: casa-parola-esce 0.26s ease forwards; }
+
+.casa-lettera {
+  display: inline-block;
+  color: var(--flower);
+  animation:
+    casa-lettera-entra 0.46s cubic-bezier(0.2, 0.9, 0.25, 1.15) both,
+    casa-luccichio 2.6s linear infinite;
+  animation-delay:
+    calc(var(--i) * 26ms),
+    calc(var(--i) * 55ms + 0.5s);
+}
+
+.casa-puntini { display: inline-flex; margin-left: 0.04em; }
+.casa-puntino {
+  display: inline-block;
+  animation: casa-puntino 1.15s ease-in-out infinite;
+  animation-delay: calc(var(--k) * 0.15s);
+}
+
+/* Per il lettore di schermo: la parola intera, fuori dalla vista. */
+.casa-activity-testo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes casa-lettera-entra {
+  from { opacity: 0; transform: translateY(0.55em) rotate(8deg); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes casa-luccichio {
+  0%, 58%, 100% { color: var(--flower); text-shadow: none; }
+  68% { color: var(--glint); text-shadow: 0 0 0.6em var(--glow); }
+}
+@keyframes casa-parola-esce {
+  to { opacity: 0; transform: translateY(-0.55em); }
+}
+@keyframes casa-puntino {
+  0%, 55%, 100% { transform: translateY(0); opacity: 0.45; }
+  25% { transform: translateY(-0.3em); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .casa-lettera,
+  .casa-puntino,
+  .casa-parola.esce { animation: none; }
+}
 
 /* ── Lo stato del filo ── */
 
