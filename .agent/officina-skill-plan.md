@@ -1,6 +1,7 @@
 # Le skill tornano in vista — in officina, cassetto Mani
 
-> Stato: **in corso** (24/09/2026) — passi 1–5 fatti. Mockup visto
+> Stato: **fatto** (24/09/2026), installato sul Titan 2. Restano due verifiche
+> sul telefono, dette al passo 6. Mockup visto
 > e approvato in chat il 24/09 (tre schermate: Mani, pannello, «Le tue» vuota).
 > Si spunta qui, passo per passo, man mano che il lavoro atterra.
 
@@ -265,33 +266,55 @@ Commit: *The Skills panel: read them all, switch yours on and off*.
 
 Commit: *Drop the skill strings nobody reads, and tell the docs where skills went*.
 
-## Passo 6 — prova
+## Passo 6 — prova (24/09/2026)
 
 Suite:
 
-- [ ] `ruff check jenny/ tests/`
-- [ ] `python3 -m pytest -q` (non `pytest` nudo: sul Mac `jenny` non è
-      installato) **e** il venv 3.11 (`/tmp/py311/bin/python -m pytest -q`),
-      che è la versione del telefono.
-- [ ] `npx pyright jenny/bus jenny/command jenny/runtime jenny/session`
+- [x] `ruff check jenny/ tests/` — pulito.
+- [x] `python3 -m pytest -q` su 3.14: **10617 passati**, dopo un rosso che la
+      suite webui da sola non vedeva — `tests/channels/test_websocket_http_routes.py`
+      confronta per uguaglianza l'intero payload di una skill, e il campo nuovo
+      lo rompeva (`de4c0d3`). Venv 3.11: **10608 passati, 0 rossi**.
+- [x] `npx pyright jenny/bus jenny/command jenny/runtime jenny/session` — 0 errori.
 
-Sul telefono (build + install da sé; poi guida dal Mac con `adb forward` +
-`#bs=<token>`, il JS vero dell'APK sui dati veri):
+**Sul Mac, UI vera su un gateway vero** (`run_gateway()` in un workspace di
+prova nello scratchpad, provider finto, le dieci integrate copiate e due tue
+inventate, una con un requisito mancante):
 
-- [ ] Mani mostra «Skill · Cosa sa fare  5 integrate, N tue ›» coi numeri veri
-      (oggi: 5 locked → integrate, 5 internal → servizio).
-- [ ] Il pannello scende, «Integrate» ha le cinque col lucchetto e il riassunto
-      nella lingua dell'interfaccia; «Più 5 di servizio» in fondo.
-- [ ] «Le tue»: vuota → il blocco + «Chiedi a Jenny» chiude il pannello, va in
-      Console, il composer ha la frase e **non** è partita.
-- [ ] Con una skill tua (fatta scrivere a Jenny, o messa con `su` in
-      `workspace/skills/`, rispettando le categorie MLS): interruttore spento →
-      il frontmatter ha `disabled: true`; il turno dopo, `/skill` non la elenca.
-      Riacceso → torna.
-- [ ] Force-stop + riavvio: la tua resta spenta; le integrate invariate.
-- [ ] Una chiamata a mano `…/skills/cron/update?disabled=1` → 403, e
-      `workspace/skills/cron/SKILL.md` non è cambiato.
-- [ ] Tema chiaro e scuro (screenshot): il pallino e il lucchetto si leggono.
+- [x] Mani: «Skill · Cosa sa fare  5 integrate, 2 tue ›», fra Telegram e
+      «Quando agisce da sola».
+- [x] Pannello: le tue con l'interruttore, la non disponibile col pallino e
+      «Missing: …» in testo; le integrate col lucchetto e il `user_summary`
+      italiano; «Più 5 di servizio» in fondo; il tocco sul testo scioglie le
+      due righe.
+- [x] Interruttore spento → `disabled: true` nel frontmatter, sul disco.
+- [x] Errore del server simulato (fetch sostituita solo per `/update?`) →
+      l'interruttore torna com'era e compare «Errore nel salvataggio».
+- [x] `…/skills/cron/update?disabled=1` → 403, md5 di `cron/SKILL.md` uguale
+      prima e dopo.
+- [x] «Le tue» vuota (skill spostate via, pannello riaperto: rilegge davvero)
+      → il blocco; «Chiedi a Jenny» chiude il pannello, va in Console, la frase
+      è nel composer col fuoco, e non è partita.
+- [x] Tema chiaro (Pietra) e scuro (Chanel): pallino, lucchetto e interruttori
+      si leggono.
+
+**Sul telefono** — release firmata da un worktree pulito su `de4c0d3`
+(`grep '[jenny]'` vuoto), `adb install -r` → Success; poi guidata dal Mac con
+`adb forward` + `#bs=`, cioè il JS dell'APK sui dati veri:
+
+- [x] «5 integrate, 4 tue» — i numeri veri; il pannello elenca le quattro tue
+      con l'interruttore e le descrizioni.
+- [ ] **Non fatto sul telefono, di proposito:** spegnere una skill vera.
+      `update_skill` riscrive il frontmatter via YAML (le descrizioni lunghe
+      vanno a capo, visto sul Mac): sarebbe una modifica a un file dell'utente
+      per provare un codice già provato sul Mac. Se serve, con una skill usa e
+      getta messa con `su` (e le categorie MLS, v. memoria).
+- [ ] **Non verificato:** che `/skill` in chat non elenchi una spenta al turno
+      dopo, e che resti spenta dopo force-stop + riavvio. Il primo lo
+      garantisce `list_skills` (filtra i `disabled`, testato in
+      `tests/agent/test_skills_loader.py`), il secondo il fatto che l'estrazione
+      non tocca le cartelle fuori dal manifest — ma nessuno dei due è stato
+      guardato sul telefono.
 
 ## Rischi da tenere d'occhio
 
