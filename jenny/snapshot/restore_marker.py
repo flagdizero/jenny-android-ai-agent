@@ -32,12 +32,8 @@ from jenny.snapshot.locations import (
     STAGED_SNAPSHOTS_DIR_NAME,
     STAGED_WORKSPACE_DIR_NAME,
 )
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
-
 
 # -- marker -------------------------------------------------------------------
 

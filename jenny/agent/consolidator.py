@@ -28,6 +28,7 @@ from jenny.security.workspace_access import WorkspaceScopeResolver
 from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
 from jenny.session.manager import Session
 from jenny.utils.helpers import (
+    CHARS_PER_TOKEN,
     channel_delivery_aware_user_start,
     estimate_message_tokens,
     estimate_prompt_tokens_chain,
@@ -81,7 +82,7 @@ def _estimate_tokens(text: str) -> int:
     applicato divergerebbero, e la differenza si manifesterebbe come una
     richiesta fuori finestra invece che come un troncamento.
     """
-    return len(text) // 4
+    return len(text) // CHARS_PER_TOKEN
 
 
 class Consolidator:

@@ -19,6 +19,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.utils.helpers import truncate_head_tail
 
 DEFAULT_YIELD_MS = 1000
 MAX_YIELD_MS = 30_000
@@ -221,12 +222,7 @@ class _PythonSession:
             output = "".join(self._output_chunks)
             self._output_chunks.clear()
 
-        # Truncate
-        truncated = 0
-        if len(output) > max_output_chars:
-            half = max_output_chars // 2
-            truncated = len(output) - max_output_chars
-            output = output[:half] + f"\n\n... ({truncated:,} chars truncated) ...\n\n" + output[-half:]
+        output, truncated = truncate_head_tail(output, max_output_chars)
 
         return _SessionPoll(
             output=output,

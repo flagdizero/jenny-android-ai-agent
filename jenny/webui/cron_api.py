@@ -26,7 +26,6 @@ worker appena spento dall'utente.
 
 from __future__ import annotations
 
-import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -36,6 +35,7 @@ from loguru import logger
 from jenny.cron.heartbeat_tasks import parse_heartbeat_tasks
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.types import CronJob
+from jenny.utils.clock import now_ms as _now_ms
 
 # Quanto testo di un promemoria entra nell'elenco. Il resto arriva col dettaglio:
 # una riga di elenco che porta un promemoria intero smette di essere un elenco.
@@ -53,9 +53,6 @@ _WORKER_ENABLED_PATHS: dict[str, tuple[str, ...]] = {
     "update_check": ("updates", "enabled"),
 }
 
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
 
 
 def _dig(root: Any, path: tuple[str, ...]) -> Any:

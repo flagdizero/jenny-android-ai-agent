@@ -27,6 +27,7 @@ from jenny.session.keys import (
     session_kind,
 )
 from jenny.utils.helpers import (
+    CHARS_PER_TOKEN,
     ensure_dir,
     strip_think,
     truncate_text,
@@ -495,7 +496,7 @@ class MemoryStore:
             "",
         ])
 
-        budget = (max_tokens * 4 - len(head)) if max_tokens > 0 else None
+        budget = (max_tokens * CHARS_PER_TOKEN - len(head)) if max_tokens > 0 else None
         if budget is not None and budget <= 0:
             return head.rstrip() + "\n"
 

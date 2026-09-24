@@ -16,22 +16,19 @@ Lifecycle modellato su ``jenny/cron/service.py::CronService``: timer
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from jenny.snapshot.engine import SnapshotEngine
 from jenny.snapshot.types import SnapshotManifest
+from jenny.utils.clock import now_ms as _now_ms
 
 if TYPE_CHECKING:
     from jenny.config.schema import SnapshotConfig
 
 _DAY_MS = 86_400_000
 
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
 
 
 class SnapshotService:

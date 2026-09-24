@@ -347,14 +347,35 @@ def truncate_text(text: str, max_chars: int) -> str:
     return text[:max_chars] + _TRUNCATED_SUFFIX
 
 
+# Caratteri per token nelle stime a occhio. **Una** costante perché le stime
+# devono essere d'accordo fra loro: il consolidator sottrae dal budget quello
+# che il troncatore qui sotto applica, e due convenzioni diverse si
+# manifesterebbero come una richiesta fuori finestra invece che come un taglio.
+CHARS_PER_TOKEN = 4
+
+
+def truncate_head_tail(text: str, max_chars: int) -> tuple[str, int]:
+    """*text* entro *max_chars*, tenendo metà in testa e metà in coda.
+
+    Ritorna il testo e quanti caratteri sono spariti (0 se ci stava). In mezzo
+    resta la riga che lo dice. Era copiato in ``python_exec`` e nelle sue
+    sessioni.
+    """
+    if len(text) <= max_chars:
+        return text, 0
+    half = max_chars // 2
+    cut = len(text) - max_chars
+    return text[:half] + f"\n\n... ({cut:,} chars truncated) ...\n\n" + text[-half:], cut
+
+
 def truncate_text_to_tokens(text: str, max_tokens: int) -> str:
     """Truncate text to a token budget with a stable suffix.
 
-    Uses a character-based estimate (~4 chars/token).
+    Uses a character-based estimate (``CHARS_PER_TOKEN``).
     """
     if max_tokens <= 0:
         return text
-    max_chars = max_tokens * 4
+    max_chars = max_tokens * CHARS_PER_TOKEN
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n... (truncated)"
@@ -597,7 +618,7 @@ def estimate_prompt_tokens(
     total_chars = sum(len(str(m.get("content", ""))) for m in messages)
     if tools:
         total_chars += len(json.dumps(tools, ensure_ascii=False))
-    return total_chars // 4 + len(messages) * 4
+    return total_chars // CHARS_PER_TOKEN + len(messages) * 4
 
 
 def estimate_message_tokens(message: dict[str, Any]) -> int:
@@ -631,7 +652,7 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
     payload = "\n".join(parts)
     if not payload:
         return 4
-    return max(4, len(payload) // 4 + 4)
+    return max(4, len(payload) // CHARS_PER_TOKEN + 4)
 
 
 # Token di output riservati di default quando il provider non specifica altro.

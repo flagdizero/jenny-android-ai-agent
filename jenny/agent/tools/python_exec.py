@@ -44,6 +44,7 @@ from jenny.agent.tools.schema import (
 )
 from jenny.config.paths import get_workspace_path
 from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in config.tool_schemas)
+from jenny.utils.helpers import truncate_head_tail
 
 logger = logging.getLogger(__name__)
 
@@ -3094,15 +3095,7 @@ async def run_python_async(
 
     output = "\n".join(parts) if parts else "(no output)"
 
-    # Truncate
-    if len(output) > max_output_chars:
-        half = max_output_chars // 2
-        output = (
-            output[:half]
-            + f"\n\n... ({len(output) - max_output_chars:,} chars truncated) ...\n\n"
-            + output[-half:]
-        )
-
+    output, _cut = truncate_head_tail(output, max_output_chars)
     return output
 
 

@@ -32,6 +32,7 @@ from jenny.cron.types import (
 # non arriverebbe qui.
 from jenny.runtime import power
 from jenny.session.keys import normalize_user_session_key
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write
 
 if TYPE_CHECKING:
@@ -59,9 +60,6 @@ class _LoadedStore(NamedTuple):
 class CronJobSkippedError(Exception):
     """Raised by cron callbacks when a job was intentionally skipped."""
 
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
 
 
 _CRON_MODES: tuple[str, ...] = ("reminder", "monitor")
