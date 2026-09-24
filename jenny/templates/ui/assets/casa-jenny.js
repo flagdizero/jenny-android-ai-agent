@@ -58,8 +58,10 @@ export function jennyValue({ visible, size, floating }) {
 }
 
 export class CasaJenny {
-  /** @param onChange  la riga di «Tu e Jenny» si riscrive da se'. */
-  constructor({ onChange } = {}) {
+  /** @param onChange  la riga di «Tu e Jenny» si riscrive da se'.
+   *  @param onFloating  com'e' finita la finestra flottante dopo un tocco: la
+   *    casa ne tiene una copia (v. `CasaApp._keepFloating`). */
+  constructor({ onChange, onFloating } = {}) {
     this.el = document.getElementById('casa-jenny-room');
     this.visibleBtn = document.getElementById('casa-jenny-visible');
     this.visibleLabel = document.getElementById('casa-jenny-visible-label');
@@ -79,6 +81,7 @@ export class CasaJenny {
     this.rulesSave = document.getElementById('casa-rules-save');
 
     this._onChange = onChange;
+    this._onFloating = onFloating;
     /* Quel che il server dice della finestra: `null` finche' non l'ha detto. */
     this.floating = null;
     this._painted = false;
@@ -215,6 +218,7 @@ export class CasaJenny {
     }
     this._mark();
     this._onChange?.();
+    this._onFloating?.(this.floating);
   }
 
   /* Quel che ha scritto, una volta per apertura della stanza. Un campo che

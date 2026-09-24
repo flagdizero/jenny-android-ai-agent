@@ -166,7 +166,10 @@ class CasaApp {
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
-    this.jennyRoom = new CasaJenny({ onChange: () => this.tu.sayJenny(this.jennyRoom.value()) });
+    this.jennyRoom = new CasaJenny({
+      onChange: () => this.tu.sayJenny(this.jennyRoom.value()),
+      onFloating: (floating) => this._keepFloating(floating),
+    });
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
        `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
        riga di «Tu e Jenny» resterebbe sulla marca di prima. */
@@ -636,6 +639,16 @@ class CasaApp {
       if (data) data.version = version;
     });
     this.tu.sayUpdates(this.updatesRoom.value());
+  }
+
+  /* La finestra flottante appena accesa o spenta: va nella cache, o alla
+     prossima apertura delle Impostazioni `setFloating` rimetterebbe lo stato
+     letto la prima volta — l'interruttore tornava spento con la finestra
+     accesa (visto sul telefono il 25/09). */
+  _keepFloating(floating) {
+    this._settings?.then?.((data) => {
+      if (data && floating) data.floating = floating;
+    });
   }
 
   /* Il payload fresco che torna da un salvataggio: ha la stessa forma di

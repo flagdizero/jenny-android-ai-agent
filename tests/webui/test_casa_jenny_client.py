@@ -190,6 +190,8 @@ class CasaJenny {
 }
 
 let cambi = 0;
+/* Cosa la stanza ha detto alla casa della finestra flottante (v. `onFloating`). */
+const flottanti = [];
 /* `disco` e' quel che il file delle regole contiene: `undefined` = non c'e'
    (404). `rotta` e' l'altro caso, quello che conta: la lettura non e' arrivata
    affatto. Si passano alla costruzione perche' la stanza legge all'apertura. */
@@ -208,7 +210,11 @@ function stanza(floating, disco, rotta) {
   nomeRotto = false;
   brindisi.length = 0;
   cambi = 0;
-  const lei = new CasaJenny({ onChange: () => { cambi += 1; } });
+  flottanti.length = 0;
+  const lei = new CasaJenny({
+    onChange: () => { cambi += 1; },
+    onFloating: (f) => { flottanti.push(f); },
+  });
   lei.open();
   if (floating !== undefined) lei.setFloating(floating);
   return lei;
@@ -389,6 +395,27 @@ def test_a_call_that_failed_puts_the_switch_back() -> None:
       await lei.toggleFloating();
       assert.equal(lei.floatingBtn.classList.contains('is-on'), false);
       assert.equal(lei.value(), jennyValue({ visible: true, size: 'sm', floating: false }));
+    """)
+
+
+
+def test_the_house_hears_what_the_switch_ended_up_as() -> None:
+    """La casa tiene in cache il payload di `/api/settings`, e a ogni apertura
+    delle Impostazioni lo ripassa a `setFloating`. Se nessuno le dice com'e'
+    finito l'interruttore, rimette quello letto la prima volta: acceso da qui,
+    alla riapertura si ridisegnava spento con la finestra accesa (visto sul
+    telefono il 25/09). Si dice lo stato finale — quello del server, o quello
+    rimesso a posto se la chiamata e' fallita — non l'ipotesi ottimista."""
+    _run_js("""
+      const lei = stanza({ available: true, enabled: false, active: false });
+      risposta = { floating: { available: true, enabled: true, active: true } };
+      await lei.toggleFloating();
+      assert.deepEqual(flottanti.at(-1), { available: true, enabled: true, active: true });
+
+      const lui = stanza({ available: true, enabled: false, active: false });
+      errore = new Error('gateway giu');
+      await lui.toggleFloating();
+      assert.equal(flottanti.at(-1).enabled, false, 'una chiamata fallita non ha acceso niente');
     """)
 
 
