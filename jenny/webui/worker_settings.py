@@ -41,7 +41,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.channels.http_utils import parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag
 from jenny.config import store
 from jenny.config.loader import load_config
 from jenny.config.schema import Config, DreamConfig, GardenerConfig
@@ -53,8 +53,6 @@ from jenny.webui.settings_api import (
     _parse_int,
     settings_payload,
 )
-
-QueryParams = dict[str, list[str]]
 
 # Il pavimento operativo della cadenza di review. **Non e' nello schema**
 # (``review_every_runs`` resta ``ge=1``) perche' un ``config.json`` restaurato

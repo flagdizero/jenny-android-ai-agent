@@ -18,7 +18,13 @@ from loguru import logger
 
 from jenny import __version__
 from jenny.agent.token_usage import token_usage_payload
-from jenny.channels.http_utils import FALSY_VALUES, TRUTHY_VALUES, parse_flag
+from jenny.channels.http_utils import (
+    FALSY_VALUES,
+    TRUTHY_VALUES,
+    QueryParams,
+    parse_flag,
+    query_first,
+)
 from jenny.config import store
 from jenny.config.loader import get_config_path, load_config
 from jenny.config.schema import KEEP_AWAKE_MODES, Config, FloatingConfig
@@ -29,9 +35,6 @@ from jenny.security.workspace_access import workspace_sandbox_status
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.utils.helpers import validate_timezone_name
-
-QueryParams = dict[str, list[str]]
-
 
 # Fasi che il layer di installazione può dichiarare. Serve a non far arrivare
 # alla UI una stringa che nessuna traduzione conosce (`i18n.t` stamperebbe la
@@ -313,15 +316,11 @@ class WebUISettingsError(ValueError):
 
 
 
-def _query_first(query: QueryParams, key: str) -> str | None:
-    values = query.get(key)
-    return values[0] if values else None
-
 
 def _query_first_alias(query: QueryParams, *names: str) -> str | None:
     """Il primo valore fra più nomi accettati (snake_case e camelCase)."""
     for name in names:
-        value = _query_first(query, name)
+        value = query_first(query, name)
         if value is not None:
             return value
     return None
@@ -523,7 +522,7 @@ def provider_models_payload(query: QueryParams) -> dict[str, Any]:
     helper deliberately avoids mutating config so probing model lists never
     changes runtime behavior.
     """
-    provider_name = (_query_first(query, "provider") or "").strip()
+    provider_name = (query_first(query, "provider") or "").strip()
     if not provider_name:
         raise WebUISettingsError("provider is required")
 
@@ -534,11 +533,11 @@ def provider_models_payload(query: QueryParams) -> dict[str, Any]:
             provider_config = p
             break
     if provider_config is None:
-        api_key = (_query_first(query, "api_key") or "").strip()
+        api_key = (query_first(query, "api_key") or "").strip()
         if not api_key:
             raise WebUISettingsError("unknown provider")
-        provider_format = (_query_first(query, "format") or "openai_compat").strip()
-        api_base = (_query_first(query, "api_base") or "").strip()
+        provider_format = (query_first(query, "format") or "openai_compat").strip()
+        api_base = (query_first(query, "api_base") or "").strip()
         from jenny.config.schema import ProviderConfig
         provider_config = ProviderConfig(
             name=provider_name,
@@ -569,7 +568,7 @@ def provider_models_payload(query: QueryParams) -> dict[str, Any]:
         }
 
     api_key = _resolve_env_placeholders(provider_config.api_key)
-    override_key = (_query_first(query, "api_key") or "").strip()
+    override_key = (query_first(query, "api_key") or "").strip()
     if override_key:
         api_key = override_key
     if not api_key:
@@ -1086,7 +1085,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         defaults.max_tokens = max_tokens
         changed = True
 
-    temperature = _parse_temperature(_query_first(query, "temperature"))
+    temperature = _parse_temperature(query_first(query, "temperature"))
     if temperature is not None and defaults.temperature != temperature:
         defaults.temperature = temperature
         changed = True
@@ -1317,7 +1316,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             setattr(fetch_config, attr, value)
             changed = True
 
-    search_engine = _query_first(query, "search_engine")
+    search_engine = query_first(query, "search_engine")
     if search_engine is not None:
         search_engine = search_engine.strip().lower()
         if search_engine != _ANDROID_WEB_SEARCH_ENGINE:
@@ -1331,7 +1330,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             _parse_int(max_results, "max_results", AndroidWebSearchConfig, "max_results"),
         )
 
-    timeout = _query_first(query, "timeout")
+    timeout = query_first(query, "timeout")
     if timeout is not None:
         set_search_value(
             "timeout", _parse_int(timeout, "timeout", AndroidWebSearchConfig, "timeout")
@@ -1360,7 +1359,7 @@ async def update_location_settings(query: QueryParams) -> dict[str, Any]:
 
     def _apply(config: Config) -> bool:
         loc = config.tools.location
-        enabled = _query_first(query, "enabled")
+        enabled = query_first(query, "enabled")
         if enabled is None:
             return False
         value = parse_flag(enabled)

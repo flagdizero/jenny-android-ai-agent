@@ -32,9 +32,6 @@ from jenny.channels.http_utils import (
 # ``workspace_files`` resta importato dentro gli handler.
 from jenny.webui.workspace_files import WorkspaceBinaryFileError
 
-QueryParams = dict[str, list[str]]
-
-
 
 def _project_delete_refusal(workspace_root: Path, target: Path) -> str | None:
     """Il motivo per cui *target* non si cancella da qui, o ``None``.

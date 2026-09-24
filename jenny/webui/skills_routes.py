@@ -17,13 +17,11 @@ from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from jenny.channels.http_utils import parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag
 from jenny.webui.skills_api import (
     update_workspace_skill,
     webui_skills_payload,
 )
-
-QueryParams = dict[str, list[str]]
 
 
 class SkillsRoutes:

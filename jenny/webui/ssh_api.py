@@ -43,7 +43,7 @@ from jenny.agent.tools.ssh_transport import (
     record_host_key,
     ssh_key_path,
 )
-from jenny.channels.http_utils import parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag, query_first
 from jenny.config import store
 from jenny.config.loader import load_config
 from jenny.config.schema import Config
@@ -51,8 +51,6 @@ from jenny.config.tool_schemas import SshHostConfig
 from jenny.security.network import validate_ssh_target
 from jenny.utils.path import atomic_write
 from jenny.webui.settings_api import WebUISettingsError
-
-QueryParams = dict[str, list[str]]
 
 # L'alias è l'identità dell'host *e* il nome del file di chiave
 # (``ssh_transport.ssh_key_path`` lo filtra a caratteri sicuri). Accettando qui
@@ -78,20 +76,16 @@ _PROBE_TTL_S = 600.0
 # -- helper di query ---------------------------------------------------------
 
 
-def _query_first(query: QueryParams, key: str) -> str | None:
-    values = query.get(key)
-    return values[0] if values else None
-
 
 def _required(query: QueryParams, key: str) -> str:
-    value = (_query_first(query, key) or "").strip()
+    value = (query_first(query, key) or "").strip()
     if not value:
         raise WebUISettingsError(f"{key} is required")
     return value
 
 
 def _flag(query: QueryParams, key: str) -> bool:
-    return parse_flag(_query_first(query, key))
+    return parse_flag(query_first(query, key))
 
 
 def _parse_alias(query: QueryParams) -> str:
@@ -112,7 +106,7 @@ def _parse_auth_or_keep(query: QueryParams) -> str | None:
     Come per la porta, il default non si risolve qui: dipende dall'host già
     salvato, e quello si legge solo dentro il lock di ``mutate``.
     """
-    value = (_query_first(query, "auth") or "").strip().lower()
+    value = (query_first(query, "auth") or "").strip().lower()
     if not value:
         return None
     if value not in _AUTH_MODES:
@@ -131,7 +125,7 @@ def _parse_password(query: QueryParams) -> str | None:
     password: quella salvata non le è mai stata mostrata, quindi non può
     rimandarla indietro.
     """
-    value = _query_first(query, "password")
+    value = query_first(query, "password")
     if value is None or not value.strip():
         return None
     return value
@@ -292,7 +286,7 @@ async def update_ssh_settings(query: QueryParams) -> dict[str, Any]:
     """
 
     def _apply(config: Config) -> bool:
-        enabled = _query_first(query, "enabled")
+        enabled = query_first(query, "enabled")
         if enabled is None:
             return False
         value = _flag(query, "enabled")
@@ -325,9 +319,9 @@ async def save_ssh_host(query: QueryParams) -> dict[str, Any]:
     alias = _parse_alias(query)
     host = _required(query, "host")
     username = _required(query, "username")
-    requested_port = _parse_port_or_keep(_query_first(query, "port"))
-    description = (_query_first(query, "description") or "").strip()
-    job_log_dir = (_query_first(query, "job_log_dir") or "").strip()
+    requested_port = _parse_port_or_keep(query_first(query, "port"))
+    description = (query_first(query, "description") or "").strip()
+    job_log_dir = (query_first(query, "job_log_dir") or "").strip()
     requested_auth = _parse_auth_or_keep(query)
     password = _parse_password(query)
 

@@ -38,8 +38,6 @@ from jenny.channels.http_utils import (
 from jenny.security.workspace_policy import is_path_within
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 
-QueryParams = dict[str, list[str]]
-
 # Chiavi frontmatter esposte al client in ``/api/page``. Tutto il resto (URL
 # sorgente, provenance, slug/flag interni) resta lato server: il frontmatter
 # integrale non è usato dalla UI e ne inoltrerebbe chiavi arbitrarie inserite

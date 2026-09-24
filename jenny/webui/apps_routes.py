@@ -17,6 +17,7 @@ from urllib.parse import unquote
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
+from jenny.apps.manifest import ACTION_NAME_RE
 from jenny.apps.manifest import SLUG_RE as APP_SLUG_RE
 from jenny.channels.http_utils import (
     http_error,
@@ -26,7 +27,6 @@ from jenny.channels.http_utils import (
     query_first,
 )
 
-APP_ACTION_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 # Request-line budget is 8192 bytes (websockets); leave headroom for path+token.
 APP_PARAMS_MAX_CHARS = 6000
 # App iframes run with an opaque origin (sandbox without allow-same-origin):
@@ -230,7 +230,7 @@ class AppsRoutes:
         action = unquote(raw_action)
         if not slug or APP_SLUG_RE.match(slug) is None:
             return respond({"ok": False, "error": "invalid app slug"}, 400)
-        if not action or APP_ACTION_RE.match(action) is None:
+        if not action or ACTION_NAME_RE.match(action) is None:
             return respond({"ok": False, "error": "invalid action name"}, 400)
 
         raw_params = query_first(parse_query(request.path), "params") or ""

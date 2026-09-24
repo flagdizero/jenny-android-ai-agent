@@ -15,7 +15,7 @@ from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
 from jenny.bus.queue import MessageBus
-from jenny.channels.http_utils import parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag
 from jenny.webui.settings_api import (
     WebUISettingsError,
     delete_provider,
@@ -48,8 +48,6 @@ from jenny.webui.worker_settings import (
     update_memory_settings,
     update_worker_settings,
 )
-
-QueryParams = dict[str, list[str]]
 
 
 async def _enrich_floating(payload: dict) -> None:
