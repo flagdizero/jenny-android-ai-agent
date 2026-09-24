@@ -24,10 +24,9 @@ la propria copia.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -38,22 +37,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 _HARNESS = """
@@ -216,30 +199,30 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__BRAND_URL__", BRAND_JS.as_uri())
-        .replace("__SHORT_BRAND__", _function(src, "shortBrand"))
-        .replace("__TILE_NAMES__", _function(src, "tileNames"))
-        .replace("__MODEL_VALUE__", _function(src, "modelValue"))
-        .replace("__CTOR__", _member(src, "constructor"))
-        .replace("__OPEN__", _member(src, "open"))
-        .replace("__SET_SETTINGS__", _member(src, "setSettings"))
-        .replace("__VIEW_NAME__", _member(src, "viewName"))
-        .replace("__VALUE__", _member(src, "value"))
-        .replace("__APPLY_TRANSLATIONS__", _member(src, "applyTranslations"))
-        .replace("__PICK_PROVIDER__", _member(src, "pickProvider"))
-        .replace("__PICK_MODEL__", _member(src, "pickModel"))
-        .replace("__TOGGLE_KEY_EDIT__", _member(src, "toggleKeyEdit"))
-        .replace("__SAVE_KEY__", _member(src, "saveKey"))
-        .replace("__PROVIDER__", _member(src, "_provider"))
-        .replace("__APPLY__", _member(src, "_apply"))
-        .replace("__LOAD_MODELS__", _member(src, "_loadModels"))
-        .replace("__PAINT__", _member(src, "_paint"))
-        .replace("__PAINT_BRANDS__", _member(src, "_paintBrands"))
-        .replace("__PAINT_KEY__", _member(src, "_paintKey"))
-        .replace("__PAINT_MODELS__", _member(src, "_paintModels"))
-        .replace("__SAY_MODELS__", _member(src, "_sayModels"))
-        .replace("__SAY_RESTART__", _member(src, "_sayRestart"))
+        .replace("__SHORT_BRAND__", function(src, "shortBrand"))
+        .replace("__TILE_NAMES__", function(src, "tileNames"))
+        .replace("__MODEL_VALUE__", function(src, "modelValue"))
+        .replace("__CTOR__", member(src, "constructor"))
+        .replace("__OPEN__", member(src, "open"))
+        .replace("__SET_SETTINGS__", member(src, "setSettings"))
+        .replace("__VIEW_NAME__", member(src, "viewName"))
+        .replace("__VALUE__", member(src, "value"))
+        .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
+        .replace("__PICK_PROVIDER__", member(src, "pickProvider"))
+        .replace("__PICK_MODEL__", member(src, "pickModel"))
+        .replace("__TOGGLE_KEY_EDIT__", member(src, "toggleKeyEdit"))
+        .replace("__SAVE_KEY__", member(src, "saveKey"))
+        .replace("__PROVIDER__", member(src, "_provider"))
+        .replace("__APPLY__", member(src, "_apply"))
+        .replace("__LOAD_MODELS__", member(src, "_loadModels"))
+        .replace("__PAINT__", member(src, "_paint"))
+        .replace("__PAINT_BRANDS__", member(src, "_paintBrands"))
+        .replace("__PAINT_KEY__", member(src, "_paintKey"))
+        .replace("__PAINT_MODELS__", member(src, "_paintModels"))
+        .replace("__SAY_MODELS__", member(src, "_sayModels"))
+        .replace("__SAY_RESTART__", member(src, "_sayRestart"))
     )
 
 

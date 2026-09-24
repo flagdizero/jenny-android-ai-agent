@@ -19,7 +19,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -31,20 +31,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}", source, re.S
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _const(source: str, name: str) -> str:
@@ -147,33 +133,33 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__STALE_MS__", _const(flow, "STALE_MS"))
         .replace("__POLL_MS__", _const(flow, "POLL_MS"))
         .replace("__POLL_MAX__", _const(flow, "POLL_MAX"))
-        .replace("__PHASE_KEY__", _function(flow, "phaseKey"))
-        .replace("__WHEN_TEXT__", _function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
-        .replace("__CHECK_LINES__", _function(flow, "checkLines"))
-        .replace("__FLOW_CTOR__", _member(flow, "constructor"))
-        .replace("__FLOW_BUSY__", _member(flow, "busy"))
-        .replace("__FLOW_IDLE__", _member(flow, "idleTimer"))
-        .replace("__FLOW_STALE__", _member(flow, "_stale"))
-        .replace("__FLOW_CHANGED__", _member(flow, "_changed"))
-        .replace("__FLOW_STOP__", _member(flow, "stop"))
-        .replace("__FLOW_RESUME__", _member(flow, "resume"))
-        .replace("__FLOW_SCHEDULE__", _member(flow, "_schedulePoll"))
-        .replace("__UPDATES_VALUE__", _function(room, "updatesValue"))
-        .replace("__UPDATES_MOOD__", _function(room, "updatesMood"))
-        .replace("__CTOR__", _member(room, "constructor"))
-        .replace("__SET_VERSION__", _member(room, "setVersion"))
-        .replace("__OPEN__", _member(room, "open"))
-        .replace("__CLOSE__", _member(room, "close"))
-        .replace("__VALUE__", _member(room, "value"))
-        .replace("__APPLY_TRANSLATIONS__", _member(room, "applyTranslations"))
-        .replace("__PAINT__", _member(room, "_paint"))
-        .replace("__PAINT_STATE__", _member(room, "_paintState"))
-        .replace("__PAINT_PROGRESS__", _member(room, "_paintProgress"))
-        .replace("__PAINT_LINES__", _member(room, "_paintLines"))
+        .replace("__PHASE_KEY__", function(flow, "phaseKey"))
+        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__CHECK_LINES__", function(flow, "checkLines"))
+        .replace("__FLOW_CTOR__", member(flow, "constructor"))
+        .replace("__FLOW_BUSY__", member(flow, "busy"))
+        .replace("__FLOW_IDLE__", member(flow, "idleTimer"))
+        .replace("__FLOW_STALE__", member(flow, "_stale"))
+        .replace("__FLOW_CHANGED__", member(flow, "_changed"))
+        .replace("__FLOW_STOP__", member(flow, "stop"))
+        .replace("__FLOW_RESUME__", member(flow, "resume"))
+        .replace("__FLOW_SCHEDULE__", member(flow, "_schedulePoll"))
+        .replace("__UPDATES_VALUE__", function(room, "updatesValue"))
+        .replace("__UPDATES_MOOD__", function(room, "updatesMood"))
+        .replace("__CTOR__", member(room, "constructor"))
+        .replace("__SET_VERSION__", member(room, "setVersion"))
+        .replace("__OPEN__", member(room, "open"))
+        .replace("__CLOSE__", member(room, "close"))
+        .replace("__VALUE__", member(room, "value"))
+        .replace("__APPLY_TRANSLATIONS__", member(room, "applyTranslations"))
+        .replace("__PAINT__", member(room, "_paint"))
+        .replace("__PAINT_STATE__", member(room, "_paintState"))
+        .replace("__PAINT_PROGRESS__", member(room, "_paintProgress"))
+        .replace("__PAINT_LINES__", member(room, "_paintLines"))
     )
 
 

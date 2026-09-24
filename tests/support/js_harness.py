@@ -15,6 +15,7 @@ una settantina di file; qui una volta.
   cartella temporanea, dove lo script deve stare in un file accanto a loro.
 - :func:`member`, :func:`function`: ritagliano dal sorgente un metodo di classe
   o una funzione di modulo, come faceva ogni file per conto suo.
+- :func:`locale`: il file i18n vero di una lingua, per confrontare le stringhe.
 
 *env* **sostituisce** l'ambiente di node, non si fonde con quello del test: è
 così che i test che fissano ``TZ`` o passano l'URL di un modulo lo usavano.
@@ -22,6 +23,7 @@ così che i test che fissano ``TZ`` o passano l'URL di un modulo lo usavano.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -87,7 +89,12 @@ def member(
 def function(source: str, name: str, *, strip_export: bool = True) -> str:
     """La funzione di modulo *name*, dalla firma alla graffa di chiusura in
     colonna zero. ``export`` si toglie, così si incolla in uno script."""
-    m = re.search(rf"(?ms)^(?:export )?function {re.escape(name)}\(.*?^\}}$", source)
+    m = re.search(rf"(?ms)^(?:export )?(?:async )?function {re.escape(name)}\(.*?^\}}$", source)
     assert m, f"function {name} non trovata"
     text = m.group(0)
     return text.removeprefix("export ") if strip_export else text
+
+
+def locale(name: str) -> dict:
+    """Il dizionario i18n *name* (``it``, ``en``) com'è nel pacchetto."""
+    return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))

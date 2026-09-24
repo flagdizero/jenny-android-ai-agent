@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -27,16 +27,6 @@ I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -117,15 +107,15 @@ def _harness_src() -> str:
     return (
         _HARNESS.replace("__WORDS__", json.dumps({"common": words["common"]}, ensure_ascii=False))
         .replace("__WIRE_ERROR_URL__", WIRE_ERROR_JS.as_uri())
-        .replace("__APPEND_OWN__", _member(src, "appendOwn"))
-        .replace("__ERROR__", _member(src, "_error"))
-        .replace("__TAKE_BACK__", _member(src, "_takeBackPendingSend"))
-        .replace("__NOTE__", _member(src, "_appendNote"))
-        .replace("__APPEND_USER__", _member(src, "_appendUser"))
-        .replace("__APPEND__", _member(src, "_append"))
-        .replace("__BELONGS__", _member(src, "_belongsHere"))
-        .replace("__CROSSES__", _member(src, "_crossesTurn"))
-        .replace("__HANDLE_FRAME__", _member(src, "handleFrame"))
+        .replace("__APPEND_OWN__", member(src, "appendOwn"))
+        .replace("__ERROR__", member(src, "_error"))
+        .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
+        .replace("__NOTE__", member(src, "_appendNote"))
+        .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__APPEND__", member(src, "_append"))
+        .replace("__BELONGS__", member(src, "_belongsHere"))
+        .replace("__CROSSES__", member(src, "_crossesTurn"))
+        .replace("__HANDLE_FRAME__", member(src, "handleFrame"))
     )
 
 
@@ -230,7 +220,7 @@ def test_the_thread_keeps_its_bottom_when_the_rows_below_it_grow() -> None:
     assert "keepBottom()" in body, "l'osservatore misura e basta, non riaggancia il fondo"
 
     chat = CASA_CHAT_JS.read_text(encoding="utf-8")
-    keep = _member(chat, "keepBottom")
+    keep = member(chat, "keepBottom")
     assert "_follow()" in keep, (
         "riagganciare deve rispettare chi sta rileggendo più su: `_follow` "
         "scorre solo se ci si era"

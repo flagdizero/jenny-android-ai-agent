@@ -53,7 +53,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -71,13 +71,7 @@ def _read(path: Path) -> str:
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get |static )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
+    return member(source, name, prefixes=("async ", "get ", "static "))
 
 
 def _const(source: str, name: str) -> str:
@@ -96,18 +90,6 @@ def _const_block(source: str, name: str) -> str:
     m = re.search(rf"(?ms)^export const {re.escape(name)} = \{{.*?^\}};$", source)
     assert m, f"const {name} non trovata"
     return m.group(0)
-
-
-def _function(source: str, name: str) -> str:
-    """Una funzione di modulo, presa dal sorgente. `export` cade: qui non serve.
-
-    Stessa ragione di :func:`_const`: `isOpenableProjectName` è la regola che
-    decide quali nomi arrivano al server, e una copia a mano nel test
-    smetterebbe di misurare quella vera al primo cambio.
-    """
-    m = re.search(rf"(?ms)^export (?:async )?function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"funzione {name} non trovata"
-    return m.group(0).removeprefix("export ")
 
 
 _HARNESS = """
@@ -233,11 +215,11 @@ def _harness() -> str:
     return (
         _HARNESS.replace(
             "__VALID_NAME__",
-            _const(lst, "VALID_NAME") + "\n" + _function(lst, "isOpenableProjectName"),
+            _const(lst, "VALID_NAME") + "\n" + function(lst, "isOpenableProjectName"),
         )
         .replace("__CREATE_ERROR_KEYS__", _const_block(flow, "CREATE_ERROR_KEYS"))
         .replace("__PROJECT_WORDS__", _const_block(flow, "PROJECT_WORDS"))
-        .replace("__CREATE_FLOW__", _function(flow, "createProjectFlow"))
+        .replace("__CREATE_FLOW__", function(flow, "createProjectFlow"))
         .replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__PROJECTS__", _member(src, "_projects"))
         .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))

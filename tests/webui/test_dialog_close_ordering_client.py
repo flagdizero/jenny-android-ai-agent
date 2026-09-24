@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 DIALOG_JS = ASSETS / "shared" / "dialog.js"
@@ -39,16 +39,6 @@ pytestmark = requires_node
 
 def _source() -> str:
     return DIALOG_JS.read_text(encoding="utf-8")
-
-
-def _function(source: str, name: str) -> str:
-    """Il corpo di una funzione di modulo, preso dal sorgente e non riscritto."""
-    m = re.search(
-        rf"(?ms)^(?:export )?function {re.escape(name)}\(.*?^\}}$",
-        source,
-    )
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 _HARNESS = """
@@ -144,8 +134,8 @@ __PROMPT_DIALOG__
 def _harness() -> str:
     src = _source()
     return (
-        _HARNESS.replace("__CLOSE_THEN_RESOLVE__", _function(src, "closeThenResolve"))
-        .replace("__PROMPT_DIALOG__", _function(src, "promptDialog"))
+        _HARNESS.replace("__CLOSE_THEN_RESOLVE__", function(src, "closeThenResolve"))
+        .replace("__PROMPT_DIALOG__", function(src, "promptDialog"))
     )
 
 
@@ -265,7 +255,7 @@ def test_no_modal_resolves_on_a_timer() -> None:
     niente.
     """
     src = _source()
-    body = _function(src, "closeThenResolve")
+    body = function(src, "closeThenResolve")
     assert "setTimeout" not in body, "la risoluzione torna a dipendere dall'ordine di due task source"
     assert "addEventListener('close'" in body and "{ once: true }" in body
     timers = re.findall(r"setTimeout\(\(\) => ([^,]+),", src)

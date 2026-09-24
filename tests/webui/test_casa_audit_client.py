@@ -17,7 +17,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "casa-audit.js"
@@ -28,15 +28,9 @@ API_JS = ASSETS / "shared" / "api-client.js"
 pytestmark = requires_node
 
 
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
-
-
 def _run(script: str) -> None:
     src = AUDIT_JS.read_text(encoding="utf-8")
-    harness = "import assert from 'node:assert/strict';\n" + _function(src, "offsetsIn")
+    harness = "import assert from 'node:assert/strict';\n" + function(src, "offsetsIn")
     run_js(harness + "\n" + script)
 
 
@@ -138,11 +132,7 @@ def test_nothing_in_the_flow_asks_for_a_severity() -> None:
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}", source, re.S
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
+    return member(source, name, prefixes=("async ",))
 
 
 _HARNESS = """
@@ -174,7 +164,7 @@ class Casa {
 def _run_app(script: str) -> None:
     harness = (
         _HARNESS
-        .replace("__MESSAGGIO__", _function(AUDIT_JS.read_text(encoding="utf-8"),
+        .replace("__MESSAGGIO__", function(AUDIT_JS.read_text(encoding="utf-8"),
                                             "messaggioSegnalazione"))
         .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_portaInChat"))
     )

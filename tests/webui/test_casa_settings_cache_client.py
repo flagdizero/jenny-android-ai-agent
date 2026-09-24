@@ -13,10 +13,9 @@ della casa.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "casa-app.js"
@@ -25,9 +24,7 @@ pytestmark = requires_node
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(rf"\n  ({re.escape(name)}\([^)]*\)\s*\{{.*?\n  \}})", source, re.S)
-    assert m, f"{name} non trovato"
-    return m.group(1)
+    return member(source, name, prefixes=())
 
 
 def _run_js(script: str) -> None:

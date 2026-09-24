@@ -17,19 +17,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MAP_JS = ASSETS / "casa-map.js"
 
 
 pytestmark = requires_node
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _private(source: str, name: str) -> str:
@@ -46,11 +40,7 @@ def _const(source: str, name: str) -> str:
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}", source, re.S
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
+    return member(source, name, prefixes=("async ",))
 
 
 _APPLICA = """
@@ -86,7 +76,7 @@ def _run(script: str) -> None:
         ]
         + [_private(src, "overlap")]
         + [
-            _function(src, n)
+            function(src, n)
             for n in ("radiusOf", "toSimulation", "shortLabel", "labelledNodes",
                       "labelOffsets", "labelBox", "placeLabels")
         ]

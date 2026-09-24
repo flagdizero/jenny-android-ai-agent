@@ -14,14 +14,13 @@ divergerebbe al primo ritocco.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import tempfile
 import textwrap
 from pathlib import Path
 
 import pytest
-from support.js_harness import requires_node, run_js, run_module
+from support.js_harness import member, requires_node, run_js, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -185,11 +184,7 @@ def test_each_row_asks_the_shell(azione, attesa) -> None:
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}", source, re.S
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
+    return member(source, name, prefixes=("async ",))
 
 
 def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:

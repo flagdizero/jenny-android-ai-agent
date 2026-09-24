@@ -19,10 +19,9 @@ funzioni sono state chiamate: il difetto è tutto in quella differenza.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -32,16 +31,6 @@ I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -132,11 +121,11 @@ def _harness_src() -> str:
         _HARNESS.replace("__WORDS__", json.dumps({"common": words["common"], "chat": words["chat"]},
                                                  ensure_ascii=False))
         .replace("__WIRE_ERROR_URL__", WIRE_ERROR_JS.as_uri())
-        .replace("__SEND__", _member(src, "sendMessage"))
-        .replace("__SHOW_ERROR__", _member(src, "_showChatError"))
-        .replace("__HANDLE_ERROR__", _member(src, "_handleError"))
-        .replace("__TAKE_BACK__", _member(src, "_takeBackPendingSend"))
-        .replace("__DISPATCH__", _member(src, "handleMessage"))
+        .replace("__SEND__", member(src, "sendMessage"))
+        .replace("__SHOW_ERROR__", member(src, "_showChatError"))
+        .replace("__HANDLE_ERROR__", member(src, "_handleError"))
+        .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
+        .replace("__DISPATCH__", member(src, "handleMessage"))
     )
 
 

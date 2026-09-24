@@ -22,7 +22,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -37,27 +37,11 @@ I18N_DIR = ASSETS / "i18n"
 pytestmark = requires_node
 
 
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
 def _const_block(source: str, name: str) -> str:
     """Una costante di modulo su più righe, presa dal sorgente e non riscritta."""
     m = re.search(rf"(?ms)^(?:export )?const {re.escape(name)} = \{{.*?^\}};$", source)
     assert m, f"const {name} non trovata"
     return m.group(0).removeprefix("export ")
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 _HARNESS = """
@@ -340,42 +324,42 @@ def _harness() -> str:
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__DOT_COLOR__", _function(WHO_JS.read_text(encoding="utf-8"), "dotColor"))
-        .replace("__SWITCH__", _member(src, "switchConversation"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__DOT_COLOR__", function(WHO_JS.read_text(encoding="utf-8"), "dotColor"))
+        .replace("__SWITCH__", member(src, "switchConversation"))
         # Il corpo del cambio vive in `mostraConversazione` dal 23/09/2026:
         # `switchConversation` decide solo **dove** (v. le pagine conversazione),
         # e qui non c'e' una pista — quindi passa dritto al corpo, che e' la
         # cosa che questo banco misura.
-        .replace("__MOSTRA__", _member(src, "mostraConversazione"))
-        .replace("__APPLY_CONVERSATION__", _member(src, "_applyConversation"))
-        .replace("__RELEASE_TURN__", _member(src, "_releaseTurn"))
-        .replace("__CLOSE_OVERLAYS__", _member(src, "_closeOverlays"))
-        .replace("__BACK__", _member(src, "handleHardwareBack"))
-        .replace("__GO_HOME__", _member(src, "goHome"))
-        .replace("__OPEN_CHAT__", _member(src, "openChat"))
-        .replace("__APPLY_TRANSLATIONS__", _member(src, "_applyTranslations"))
-        .replace("__CREATE_NOTEBOOK__", _member(src, "createNotebook"))
+        .replace("__MOSTRA__", member(src, "mostraConversazione"))
+        .replace("__APPLY_CONVERSATION__", member(src, "_applyConversation"))
+        .replace("__RELEASE_TURN__", member(src, "_releaseTurn"))
+        .replace("__CLOSE_OVERLAYS__", member(src, "_closeOverlays"))
+        .replace("__BACK__", member(src, "handleHardwareBack"))
+        .replace("__GO_HOME__", member(src, "goHome"))
+        .replace("__OPEN_CHAT__", member(src, "openChat"))
+        .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
+        .replace("__CREATE_NOTEBOOK__", member(src, "createNotebook"))
         .replace("__PROJECT_WORDS__", _const_block(_read_create(), "PROJECT_WORDS"))
         .replace("__NOTEBOOK_WORDS__", _const_block(src, "NOTEBOOK_WORDS"))
-        .replace("__OPEN_PAGES__", _member(src, "openPages"))
-        .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
-        .replace("__APRI_IMPOSTAZIONI__", _member(src, "_apriImpostazioni"))
-        .replace("__NOME_CHAT__", _member(src, "_nomeChat"))
-        .replace("__HA_COMPOSER__", _member(src, "_haComposer"))
-        .replace("__POSA_JENNY__", _member(src, "_posaJenny"))
-        .replace("__CHIEDI_NOMI_APP__", _member(src, "_chiediNomiApp"))
-        .replace("__OPEN_JENNY__", _member(src, "openJenny"))
-        .replace("__OPEN_UPDATES__", _member(src, "openUpdates"))
-        .replace("__ASK_SETTINGS__", _member(src, "_askSettings"))
-        .replace("__APPLY_BACK_LABEL__", _member(src, "_applyBackLabel"))
-        .replace("__SET_VIEW__", _member(src, "_setView"))
-        .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
-        .replace("__UPDATE_PAGES_COUNT__", _member(src, "_updatePagesCount"))
-        .replace("__SET_HEAD_TITLE__", _member(src, "_setHeadTitle"))
-        .replace("__ON_PAGINA__", _member(src, "onPaginaCambiata"))
-        .replace("__IS_CHAT_ON_SCREEN__", _member(src, "isChatOnScreen"))
-        .replace("__SEGNALA_CHAT__", _member(src, "_segnalaChatAschermo"))
+        .replace("__OPEN_PAGES__", member(src, "openPages"))
+        .replace("__GO_BACK_ONE_ROOM__", member(src, "goBackOneRoom"))
+        .replace("__APRI_IMPOSTAZIONI__", member(src, "_apriImpostazioni"))
+        .replace("__NOME_CHAT__", member(src, "_nomeChat"))
+        .replace("__HA_COMPOSER__", member(src, "_haComposer"))
+        .replace("__POSA_JENNY__", member(src, "_posaJenny"))
+        .replace("__CHIEDI_NOMI_APP__", member(src, "_chiediNomiApp"))
+        .replace("__OPEN_JENNY__", member(src, "openJenny"))
+        .replace("__OPEN_UPDATES__", member(src, "openUpdates"))
+        .replace("__ASK_SETTINGS__", member(src, "_askSettings"))
+        .replace("__APPLY_BACK_LABEL__", member(src, "_applyBackLabel"))
+        .replace("__SET_VIEW__", member(src, "_setView"))
+        .replace("__APPLY_HEAD__", member(src, "_applyHead"))
+        .replace("__UPDATE_PAGES_COUNT__", member(src, "_updatePagesCount"))
+        .replace("__SET_HEAD_TITLE__", member(src, "_setHeadTitle"))
+        .replace("__ON_PAGINA__", member(src, "onPaginaCambiata"))
+        .replace("__IS_CHAT_ON_SCREEN__", member(src, "isChatOnScreen"))
+        .replace("__SEGNALA_CHAT__", member(src, "_segnalaChatAschermo"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
@@ -971,7 +955,6 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
       app._setView('chat');
       assert.ok(app.fatti.includes('aggiornamenti chiusa'));
     """)
-
 
 
 # ── Dove appoggia Jenny, pagina per pagina (23/09/2026) ─────────────────────

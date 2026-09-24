@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -37,22 +37,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _const(source: str, name: str) -> str:
@@ -224,29 +208,29 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__SIZES__", _const(MASCOT_JS.read_text(encoding="utf-8"), "MASCOT_SIZES"))
-        .replace("__JENNY_VALUE__", _function(src, "jennyValue"))
+        .replace("__JENNY_VALUE__", function(src, "jennyValue"))
         .replace("__SIZE_LIST__", _const(src, "SIZES"))
         .replace("__SIZE_KEYS__", _const(src, "SIZE_KEYS"))
-        .replace("__CTOR__", _member(src, "constructor"))
-        .replace("__OPEN__", _member(src, "open"))
-        .replace("__SET_NAME__", _member(src, "setName"))
-        .replace("__MARK_NOME__", _member(src, "_markNome"))
-        .replace("__SAVE_NOME__", _member(src, "saveNome"))
-        .replace("__SET_FLOATING__", _member(src, "setFloating"))
-        .replace("__APPLY_TRANSLATIONS__", _member(src, "applyTranslations"))
-        .replace("__VALUE__", _member(src, "value"))
-        .replace("__TOGGLE_VISIBLE__", _member(src, "toggleVisible"))
-        .replace("__PICK_SIZE__", _member(src, "pickSize"))
-        .replace("__TOGGLE_FLOATING__", _member(src, "toggleFloating"))
-        .replace("__PAINT_SIZES__", _member(src, "_paintSizes"))
-        .replace("__MARK__", _member(src, "_mark"))
-        .replace("__SWITCH__", _member(src, "_switch"))
-        .replace("__SAY_FLOATING__", _member(src, "_sayFloating"))
-        .replace("__LOAD_RULES__", _member(src, "_loadRules"))
-        .replace("__MARK_RULES__", _member(src, "_markRules"))
-        .replace("__SAVE_RULES__", _member(src, "saveRules"))
+        .replace("__CTOR__", member(src, "constructor"))
+        .replace("__OPEN__", member(src, "open"))
+        .replace("__SET_NAME__", member(src, "setName"))
+        .replace("__MARK_NOME__", member(src, "_markNome"))
+        .replace("__SAVE_NOME__", member(src, "saveNome"))
+        .replace("__SET_FLOATING__", member(src, "setFloating"))
+        .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
+        .replace("__VALUE__", member(src, "value"))
+        .replace("__TOGGLE_VISIBLE__", member(src, "toggleVisible"))
+        .replace("__PICK_SIZE__", member(src, "pickSize"))
+        .replace("__TOGGLE_FLOATING__", member(src, "toggleFloating"))
+        .replace("__PAINT_SIZES__", member(src, "_paintSizes"))
+        .replace("__MARK__", member(src, "_mark"))
+        .replace("__SWITCH__", member(src, "_switch"))
+        .replace("__SAY_FLOATING__", member(src, "_sayFloating"))
+        .replace("__LOAD_RULES__", member(src, "_loadRules"))
+        .replace("__MARK_RULES__", member(src, "_markRules"))
+        .replace("__SAVE_RULES__", member(src, "saveRules"))
         .replace("__RULES_PATH__", _const(src, "RULES_PATH"))
     )
 
@@ -387,7 +371,6 @@ def test_a_call_that_failed_puts_the_switch_back() -> None:
       assert.equal(lei.floatingBtn.classList.contains('is-on'), false);
       assert.equal(lei.value(), jennyValue({ visible: true, size: 'sm', floating: false }));
     """)
-
 
 
 def test_the_house_hears_what_the_switch_ended_up_as() -> None:

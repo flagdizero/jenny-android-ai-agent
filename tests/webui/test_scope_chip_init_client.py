@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -39,24 +39,12 @@ def _source() -> str:
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get |static )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
+    return member(source, name, prefixes=("async ", "get ", "static "))
 
 
 def _const(source: str, name: str) -> str:
     m = re.search(rf"(?m)^const {re.escape(name)} = .*;$", source)
     assert m, f"const {name} non trovata"
-    return m.group(0)
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
     return m.group(0)
 
 
@@ -175,7 +163,7 @@ def _harness() -> str:
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__NAME_IN_PLACEHOLDER__", _const(src, "NAME_IN_PLACEHOLDER"))
         .replace("__DIR__", _member(src, "_dir"))
-        .replace("__SHORT__", _function(src, "_short"))
+        .replace("__SHORT__", function(src, "_short"))
         .replace("__CTOR__", _member(src, "constructor"))
         .replace("__INIT__", _member(src, "init"))
         .replace("__PERSONAL_LABEL__", _member(src, "personalLabel"))
@@ -184,7 +172,7 @@ def _harness() -> str:
         .replace("__SYNC_PLACEHOLDER__", _member(src, "syncPlaceholder"))
         .replace(
             "__ARM_COMPOSE_MENU__",
-            _function(STATE_JS.read_text(encoding="utf-8").replace("export function", "function"),
+            function(STATE_JS.read_text(encoding="utf-8").replace("export function", "function"),
                       "armComposeMenu"),
         )
     )

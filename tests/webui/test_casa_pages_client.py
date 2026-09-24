@@ -29,7 +29,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -39,22 +39,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _const_block(source: str, name: str) -> str:
@@ -219,20 +203,20 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__GROUPS__", _const_block(src, "GROUPS"))
         .replace("__GROUP_KEYS__", _const_block(src, "GROUP_KEYS"))
-        .replace("__SANITIZE_GROUP__", _function(src, "sanitizeGroup"))
-        .replace("__LABEL_OF__", _function(src, "labelOf"))
-        .replace("__ORDER_PAGES__", _function(src, "orderPages"))
-        .replace("__GROUPS_MEANINGFUL__", _function(src, "groupsAreMeaningful"))
-        .replace("__APPLY_TRANSLATIONS__", _member(src, "applyTranslations"))
-        .replace("__LOAD__", _member(src, "load"))
-        .replace("__SHOW_TAB__", _member(src, "showTab"))
-        .replace("__SAY__", _member(src, "_say"))
-        .replace("__RENDER__", _member(src, "_render"))
-        .replace("__ROW__", _member(src, "_row"))
-        .replace("__APPLY_SEARCH__", _member(src, "_applySearch"))
+        .replace("__SANITIZE_GROUP__", function(src, "sanitizeGroup"))
+        .replace("__LABEL_OF__", function(src, "labelOf"))
+        .replace("__ORDER_PAGES__", function(src, "orderPages"))
+        .replace("__GROUPS_MEANINGFUL__", function(src, "groupsAreMeaningful"))
+        .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
+        .replace("__LOAD__", member(src, "load"))
+        .replace("__SHOW_TAB__", member(src, "showTab"))
+        .replace("__SAY__", member(src, "_say"))
+        .replace("__RENDER__", member(src, "_render"))
+        .replace("__ROW__", member(src, "_row"))
+        .replace("__APPLY_SEARCH__", member(src, "_applySearch"))
     )
 
 

@@ -12,6 +12,8 @@ import json
 import re
 from pathlib import Path
 
+from support.js_harness import member
+
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
@@ -22,9 +24,7 @@ I18N = UI / "assets" / "i18n"
 
 
 def _member(source: str, name: str) -> str:
-    m = re.search(rf"\n  (?:async )?{re.escape(name)}\([^)]*\)\s*\{{(.*?)\n  \}}", source, re.S)
-    assert m, f"{name} non trovato"
-    return m.group(1)
+    return member(source, name, prefixes=("async ",), body_only=True)
 
 
 # ── E' una pagina ───────────────────────────────────────────────────────────

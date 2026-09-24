@@ -36,7 +36,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import locale, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -53,26 +53,11 @@ def _chip() -> str:
     return CHIP_JS.read_text(encoding="utf-8")
 
 
-def _member(source: str, name: str) -> str:
-    """Il corpo di un metodo, dal sorgente e non riscritto."""
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
 def _const(source: str, name: str) -> str:
     """Un `const NOME = {...};` di modulo, dal sorgente."""
     m = re.search(rf"\n(?:export )?const {re.escape(name)} = \{{.*?\n\}};", source, re.S)
     assert m, f"const {name} non trovato"
     return m.group(0).replace("export const", "const")
-
-
-def _locale(name: str) -> dict:
-    return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
 _HARNESS = """
@@ -202,19 +187,19 @@ def _harness() -> str:
                          _const(LIST_JS.read_text(encoding="utf-8"),
                                 "UNOPENABLE_HINT_KEYS"))
         .replace("__LIST_URL__", LIST_JS.as_uri())
-        .replace("__PROJECTS__", _member(src, "_projects"))
-        .replace("__UNOPENABLE__", _member(src, "_unopenable"))
-        .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
-        .replace("__DIR__", _member(src, "_dir"))
-        .replace("__TRANSLATIONS__", json.dumps({"it": _locale("it")}))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__LOAD_PROJECTS__", _member(src, "_loadProjects"))
-        .replace("__RENDER_MENU__", _member(src, "_renderMenu"))
-        .replace("__LABEL__", _member(src, "_label"))
-        .replace("__SEP__", _member(src, "_sep"))
-        .replace("__NOTE__", _member(src, "_note"))
-        .replace("__ITEM__", _member(src, "_item"))
-        .replace("__AGO__", _member(src, "_ago"))
+        .replace("__PROJECTS__", member(src, "_projects"))
+        .replace("__UNOPENABLE__", member(src, "_unopenable"))
+        .replace("__LOAD_FAILED__", member(src, "_loadFailed"))
+        .replace("__DIR__", member(src, "_dir"))
+        .replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__LOAD_PROJECTS__", member(src, "_loadProjects"))
+        .replace("__RENDER_MENU__", member(src, "_renderMenu"))
+        .replace("__LABEL__", member(src, "_label"))
+        .replace("__SEP__", member(src, "_sep"))
+        .replace("__NOTE__", member(src, "_note"))
+        .replace("__ITEM__", member(src, "_item"))
+        .replace("__AGO__", member(src, "_ago"))
     )
 
 
@@ -229,7 +214,7 @@ def _run_js(script: str) -> None:
 # raccolta di tutto il file — cioè della suite, che si interrompe su un errore di
 # collect.
 def _it(key: str) -> str:
-    return _locale("it")["scope"].get(key, f"(scope.{key} manca)")
+    return locale("it")["scope"].get(key, f"(scope.{key} manca)")
 
 
 def _rule() -> str:
@@ -518,16 +503,16 @@ def test_the_payload_the_route_builds_is_the_payload_the_chip_reads(tmp_path) ->
 
 def test_the_new_strings_exist_in_both_locales() -> None:
     """Grep, non comportamento: nessuna delle due lingue resta con la chiave."""
-    for locale in ("it", "en"):
-        scope = _locale(locale)["scope"]
+    for lang in ("it", "en"):
+        scope = locale(lang)["scope"]
         for key in ("unopenableSection", "unopenableInvalidName", "unopenableOther"):
-            assert key in scope, f"chiave scope.{key} mancante in {locale}.json"
+            assert key in scope, f"chiave scope.{key} mancante in {lang}.json"
             assert scope[key].strip()
         assert "{rule}" in scope["unopenableInvalidName"], (
-            f"{locale}: la nota non ha il posto in cui va la regola dei nomi"
+            f"{lang}: la nota non ha il posto in cui va la regola dei nomi"
         )
         assert "{rule}" not in scope["unopenableOther"], (
-            f"{locale}: un motivo sconosciuto si prende la regola dei nomi"
+            f"{lang}: un motivo sconosciuto si prende la regola dei nomi"
         )
 
 
@@ -538,13 +523,13 @@ def test_the_name_rule_is_not_copied_a_fourth_time() -> None:
     skill, e la `VALID_NAME` del client). La nota non ne aggiunge una quarta in
     prosa: interpola quella che c'è.
     """
-    for locale in ("it", "en"):
-        scope = _locale(locale)["scope"]
+    for lang in ("it", "en"):
+        scope = locale(lang)["scope"]
         for key in ("unopenableInvalidName", "unopenableOther", "unopenableSection"):
             lowered = scope[key].lower()
             for word in ("underscore", "64"):
                 assert word not in lowered, (
-                    f"{locale}: scope.{key} riscrive la regola dei nomi invece di citarla"
+                    f"{lang}: scope.{key} riscrive la regola dei nomi invece di citarla"
                 )
     # I tre moduli che hanno a che fare con la regola, da quando è stata portata
     # dove stanno le conversazioni: chi la applica, chi la cita nella tendina,

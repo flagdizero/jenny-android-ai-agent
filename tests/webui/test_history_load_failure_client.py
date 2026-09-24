@@ -36,7 +36,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
@@ -50,17 +50,6 @@ pytestmark = requires_node
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
-
-
-def _member(source: str, name: str) -> str:
-    """Il testo vero di un membro, dalla dichiarazione alla chiusura a due spazi."""
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -215,16 +204,16 @@ def _harness() -> str:
     chat = _read(CHAT_JS)
     session = _read(SESSION_JS)
     return (
-        _HARNESS.replace("__CTOR__", _member(session, "constructor"))
-        .replace("__SWITCH_TO__", _member(session, "switchTo"))
-        .replace("__GENERATION__", _member(session, "switchGeneration"))
-        .replace("__LOAD_THREAD__", _member(session, "loadThread"))
-        .replace("__INVALIDATE__", _member(chat, "invalidateHistory"))
-        .replace("__LOAD_INITIAL__", _member(chat, "loadInitialHistory"))
-        .replace("__SHOW_ERROR__", _member(chat, "_showHistoryError"))
-        .replace("__CLEAR_ERROR__", _member(chat, "_clearHistoryError"))
-        .replace("__RESYNC__", _member(chat, "_resyncThreadAfterReconnect"))
-        .replace("__SWITCH_CONVERSATION__", _member(chat, "_switchConversation"))
+        _HARNESS.replace("__CTOR__", member(session, "constructor"))
+        .replace("__SWITCH_TO__", member(session, "switchTo"))
+        .replace("__GENERATION__", member(session, "switchGeneration"))
+        .replace("__LOAD_THREAD__", member(session, "loadThread"))
+        .replace("__INVALIDATE__", member(chat, "invalidateHistory"))
+        .replace("__LOAD_INITIAL__", member(chat, "loadInitialHistory"))
+        .replace("__SHOW_ERROR__", member(chat, "_showHistoryError"))
+        .replace("__CLEAR_ERROR__", member(chat, "_clearHistoryError"))
+        .replace("__RESYNC__", member(chat, "_resyncThreadAfterReconnect"))
+        .replace("__SWITCH_CONVERSATION__", member(chat, "_switchConversation"))
         .replace("__PAGER_URL__", PAGER_JS.as_uri())
     )
 
@@ -479,7 +468,7 @@ def test_the_row_is_shown_after_the_generation_guard_not_before() -> None:
     Il test eseguito sopra lo misura, ma solo per la corsa che sa costruire.
     Questa è la regola, scritta dove si vede.
     """
-    body = _member(_read(CHAT_JS), "loadInitialHistory")
+    body = member(_read(CHAT_JS), "loadInitialHistory")
     catch = re.search(r"\} catch \(err\) \{(.*?)\n    \} finally \{", body, re.S)
     assert catch is not None, "il catch di loadInitialHistory non è più riconoscibile"
     src = catch.group(1)

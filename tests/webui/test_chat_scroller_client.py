@@ -9,10 +9,9 @@ devono.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
@@ -20,16 +19,6 @@ PAGER_JS = ASSETS / "shared" / "history-pager.js"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -96,11 +85,11 @@ function makeChat({ scrollTop = 0, scrollHeight = 3000, clientHeight = 1000, are
 def _harness() -> str:
     src = CHAT_JS.read_text(encoding="utf-8")
     return (
-        _HARNESS.replace("__NEAR__", _member(src, "_isNearBottom"))
-        .replace("__BOTTOM__", _member(src, "scrollToBottom"))
-        .replace("__REMEMBER__", _member(src, "_rememberScrollAnchor"))
-        .replace("__RESTORE__", _member(src, "_restoreScrollAnchor"))
-        .replace("__INFINITE__", _member(src, "setupInfiniteScroll"))
+        _HARNESS.replace("__NEAR__", member(src, "_isNearBottom"))
+        .replace("__BOTTOM__", member(src, "scrollToBottom"))
+        .replace("__REMEMBER__", member(src, "_rememberScrollAnchor"))
+        .replace("__RESTORE__", member(src, "_restoreScrollAnchor"))
+        .replace("__INFINITE__", member(src, "setupInfiniteScroll"))
         .replace("__PAGER_URL__", PAGER_JS.as_uri())
     )
 

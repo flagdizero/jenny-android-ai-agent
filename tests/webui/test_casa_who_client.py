@@ -24,10 +24,9 @@ legge l'utente.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, locale, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -42,26 +41,6 @@ pytestmark = requires_node
 
 def _who() -> str:
     return WHO_JS.read_text(encoding="utf-8")
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
-
-
-def _locale(name: str) -> dict:
-    return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
 _HARNESS = """
@@ -223,18 +202,18 @@ def _harness() -> str:
     src = _who()
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
-        .replace("__TRANSLATIONS__", json.dumps({"it": _locale("it")}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__DOT_COLOR__", _function(src, "dotColor"))
-        .replace("__RENDER__", _member(src, "render"))
-        .replace("__LABEL__", _member(src, "_label"))
-        .replace("__NOTE__", _member(src, "_note"))
-        .replace("__PERSONAL_ROW__", _member(src, "_personalRow"))
-        .replace("__ROW__", _member(src, "_row"))
-        .replace("__COMMAND__", _member(src, "_command"))
-        .replace("__MAYBE_CHECK__", _member(src, "_maybeCheck"))
-        .replace("__PICK__", _member(src, "_pick"))
-        .replace("__PAGES_OF__", _member(src, "pagesOf"))
+        .replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}, ensure_ascii=False))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__DOT_COLOR__", function(src, "dotColor"))
+        .replace("__RENDER__", member(src, "render"))
+        .replace("__LABEL__", member(src, "_label"))
+        .replace("__NOTE__", member(src, "_note"))
+        .replace("__PERSONAL_ROW__", member(src, "_personalRow"))
+        .replace("__ROW__", member(src, "_row"))
+        .replace("__COMMAND__", member(src, "_command"))
+        .replace("__MAYBE_CHECK__", member(src, "_maybeCheck"))
+        .replace("__PICK__", member(src, "_pick"))
+        .replace("__PAGES_OF__", member(src, "pagesOf"))
     )
 
 
@@ -627,7 +606,6 @@ def test_every_openable_notebook_can_be_held() -> None:
         "assert.equal(quaderni.length, 3);\n"
         "assert.ok(quaderni.every((q) => premute.some((p) => p.el === q)));\n"
     )
-
 
 
 def test_holding_a_row_does_not_select_its_text() -> None:

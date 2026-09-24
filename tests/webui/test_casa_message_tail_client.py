@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CASA_CHAT_JS = ASSETS / "casa-chat.js"
@@ -41,16 +41,6 @@ _METODI = (
     "_turnEnd",
     "_ensureTurn",
 )
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -127,7 +117,7 @@ const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 
 def _harness() -> str:
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
-    metodi = ",\n    ".join(_member(src, nome) for nome in _METODI)
+    metodi = ",\n    ".join(member(src, nome) for nome in _METODI)
     return _HARNESS.replace("__METODI__", metodi)
 
 
@@ -297,7 +287,7 @@ def test_the_source_is_recorded_wherever_the_text_is_complete() -> None:
     """
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
     for metodo in ("_streamEnd", "_message", "_appendAssistant"):
-        assert "_registra(" in _member(src, metodo), f"{metodo} non registra il sorgente"
+        assert "_registra(" in member(src, metodo), f"{metodo} non registra il sorgente"
 
 
 # ── Il contorno ──────────────────────────────────────────────────────────────
@@ -334,6 +324,6 @@ def test_history_keeps_the_seconds() -> None:
     """La cronologia li ha: se `_buildTurns` li butta, riaprire l'app toglie il
     tempo a tutto quello che è già stato detto."""
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
-    assert "msg.latencyMs" in _member(src, "_buildTurns"), (
+    assert "msg.latencyMs" in member(src, "_buildTurns"), (
         "_buildTurns scarta i secondi: dopo una ricarica la coda resta muta"
     )

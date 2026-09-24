@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
@@ -45,21 +45,6 @@ pytestmark = requires_node
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
-
-
-def _member(source: str, name: str) -> str:
-    """Il testo vero di un membro, dalla dichiarazione alla chiusura a due spazi.
-
-    Conserva `async`/`get`: senza `async` un `await` nel corpo non compila, e il
-    test misurerebbe un errore di sintassi invece del comportamento.
-    """
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -197,15 +182,15 @@ def _harness() -> str:
     chat = _read(CHAT_JS)
     session = _read(SESSION_JS)
     return (
-        _HARNESS.replace("__CTOR__", _member(session, "constructor"))
-        .replace("__SWITCH_TO__", _member(session, "switchTo"))
-        .replace("__GENERATION__", _member(session, "switchGeneration"))
-        .replace("__LOAD_THREAD__", _member(session, "loadThread"))
-        .replace("__INVALIDATE__", _member(chat, "invalidateHistory"))
-        .replace("__LOAD_INITIAL__", _member(chat, "loadInitialHistory"))
-        .replace("__BEGIN_PAGE__", _member(chat, "_beginHistoryPage"))
+        _HARNESS.replace("__CTOR__", member(session, "constructor"))
+        .replace("__SWITCH_TO__", member(session, "switchTo"))
+        .replace("__GENERATION__", member(session, "switchGeneration"))
+        .replace("__LOAD_THREAD__", member(session, "loadThread"))
+        .replace("__INVALIDATE__", member(chat, "invalidateHistory"))
+        .replace("__LOAD_INITIAL__", member(chat, "loadInitialHistory"))
+        .replace("__BEGIN_PAGE__", member(chat, "_beginHistoryPage"))
         .replace("__PAGER_URL__", PAGER_JS.as_uri())
-        .replace("__SWITCH_CONVERSATION__", _member(chat, "_switchConversation"))
+        .replace("__SWITCH_CONVERSATION__", member(chat, "_switchConversation"))
     )
 
 

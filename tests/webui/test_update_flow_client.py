@@ -31,7 +31,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -42,22 +42,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _const(source: str, name: str) -> str:
@@ -155,26 +139,26 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__STALE_MS__", _const(src, "STALE_MS"))
         .replace("__POLL_MS__", _const(src, "POLL_MS"))
         .replace("__POLL_MAX__", _const(src, "POLL_MAX"))
-        .replace("__PHASE_KEY__", _function(src, "phaseKey"))
-        .replace("__WHEN_TEXT__", _function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
-        .replace("__CHECK_LINES__", _function(src, "checkLines"))
-        .replace("__CTOR__", _member(src, "constructor"))
-        .replace("__BUSY__", _member(src, "busy"))
-        .replace("__IDLE_TIMER__", _member(src, "idleTimer"))
-        .replace("__STALE__", _member(src, "_stale"))
-        .replace("__CHANGED__", _member(src, "_changed"))
-        .replace("__CHECK__", _member(src, "check"))
-        .replace("__START__", _member(src, "start"))
-        .replace("__STOP__", _member(src, "stop"))
-        .replace("__RESUME__", _member(src, "resume"))
-        .replace("__SETTLE__", _member(src, "_settleAtPrompt"))
-        .replace("__FAIL__", _member(src, "_fail"))
-        .replace("__SCHEDULE__", _member(src, "_schedulePoll"))
-        .replace("__POLL__", _member(src, "_poll"))
+        .replace("__PHASE_KEY__", function(src, "phaseKey"))
+        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__CHECK_LINES__", function(src, "checkLines"))
+        .replace("__CTOR__", member(src, "constructor"))
+        .replace("__BUSY__", member(src, "busy"))
+        .replace("__IDLE_TIMER__", member(src, "idleTimer"))
+        .replace("__STALE__", member(src, "_stale"))
+        .replace("__CHANGED__", member(src, "_changed"))
+        .replace("__CHECK__", member(src, "check"))
+        .replace("__START__", member(src, "start"))
+        .replace("__STOP__", member(src, "stop"))
+        .replace("__RESUME__", member(src, "resume"))
+        .replace("__SETTLE__", member(src, "_settleAtPrompt"))
+        .replace("__FAIL__", member(src, "_fail"))
+        .replace("__SCHEDULE__", member(src, "_schedulePoll"))
+        .replace("__POLL__", member(src, "_poll"))
     )
 
 

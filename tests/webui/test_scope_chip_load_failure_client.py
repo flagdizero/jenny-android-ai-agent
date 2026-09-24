@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -40,16 +40,6 @@ pytestmark = requires_node
 
 def _chip() -> str:
     return CHIP_JS.read_text(encoding="utf-8")
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -155,17 +145,17 @@ def _harness() -> str:
     src = _chip()
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
-        .replace("__PROJECTS__", _member(src, "_projects"))
-        .replace("__UNOPENABLE__", _member(src, "_unopenable"))
-        .replace("__LOAD_FAILED__", _member(src, "_loadFailed"))
-        .replace("__DIR__", _member(src, "_dir"))
-        .replace("__LOAD_PROJECTS__", _member(src, "_loadProjects"))
-        .replace("__RENDER_MENU__", _member(src, "_renderMenu"))
-        .replace("__LABEL__", _member(src, "_label"))
-        .replace("__SEP__", _member(src, "_sep"))
-        .replace("__NOTE__", _member(src, "_note"))
-        .replace("__ITEM__", _member(src, "_item"))
-        .replace("__AGO__", _member(src, "_ago"))
+        .replace("__PROJECTS__", member(src, "_projects"))
+        .replace("__UNOPENABLE__", member(src, "_unopenable"))
+        .replace("__LOAD_FAILED__", member(src, "_loadFailed"))
+        .replace("__DIR__", member(src, "_dir"))
+        .replace("__LOAD_PROJECTS__", member(src, "_loadProjects"))
+        .replace("__RENDER_MENU__", member(src, "_renderMenu"))
+        .replace("__LABEL__", member(src, "_label"))
+        .replace("__SEP__", member(src, "_sep"))
+        .replace("__NOTE__", member(src, "_note"))
+        .replace("__ITEM__", member(src, "_item"))
+        .replace("__AGO__", member(src, "_ago"))
     )
 
 

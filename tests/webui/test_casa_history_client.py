@@ -17,23 +17,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CASA_CHAT_JS = ASSETS / "casa-chat.js"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 _HARNESS = """
@@ -134,15 +124,15 @@ const trace = (turn) => ({ role: 'tool', kind: 'trace', content: 'read_file: x',
 def _harness() -> str:
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
     return (
-        _HARNESS.replace("__BUILD_TURNS__", _member(src, "_buildTurns"))
-        .replace("__PREPEND__", _member(src, "prependTurns"))
-        .replace("__APPEND_USER__", _member(src, "_appendUser"))
-        .replace("__APPEND_ASSISTANT__", _member(src, "_appendAssistant"))
-        .replace("__APPEND_BOUNDARY__", _member(src, "_appendBoundary"))
-        .replace("__APPEND__", _member(src, "_append"))
-        .replace("__CODA__", _member(src, "_codaDi"))
-        .replace("__REGISTRA__", _member(src, "_registra"))
-        .replace("__TESTO__", _member(src, "_testoDi"))
+        _HARNESS.replace("__BUILD_TURNS__", member(src, "_buildTurns"))
+        .replace("__PREPEND__", member(src, "prependTurns"))
+        .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
+        .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
+        .replace("__APPEND__", member(src, "_append"))
+        .replace("__CODA__", member(src, "_codaDi"))
+        .replace("__REGISTRA__", member(src, "_registra"))
+        .replace("__TESTO__", member(src, "_testoDi"))
     )
 
 
@@ -241,7 +231,7 @@ def test_the_house_measures_and_listens_on_the_same_element() -> None:
     e `window`); in casa il filo è entrambi. È la sola asimmetria fra i gusci, e
     scambiarla significa un bottone che non compare mai o non sparisce mai."""
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
-    ctor = _member(src, "constructor")
+    ctor = member(src, "constructor")
     assert "scroller: () => this.el," in ctor
     assert "listenOn: this.el," in ctor
     assert "container: () => this.el," in ctor
@@ -264,7 +254,7 @@ def test_the_first_page_is_drawn_before_the_button_is_measured() -> None:
     """`ensureReach` chiede se il filo trabocca: prima del disegno la risposta è
     sempre no, e il bottone comparirebbe su ogni apertura."""
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
-    load = _member(src, "load")
+    load = member(src, "load")
     order = [
         load.index("this._buildTurns(messages)"),
         load.index("this.pager.adopt("),
@@ -311,11 +301,11 @@ def _stick_harness() -> str:
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
     return (
         _STICK_HARNESS.replace("__STICK_PX__", _stick_px(src))
-        .replace("__ON_SCROLL__", _member(src, "_onScroll"))
-        .replace("__AT_BOTTOM__", _member(src, "_atBottom"))
-        .replace("__FOLLOW__", _member(src, "_follow"))
-        .replace("__KEEP__", _member(src, "keepBottom"))
-        .replace("__SCROLL__", _member(src, "scrollToBottom"))
+        .replace("__ON_SCROLL__", member(src, "_onScroll"))
+        .replace("__AT_BOTTOM__", member(src, "_atBottom"))
+        .replace("__FOLLOW__", member(src, "_follow"))
+        .replace("__KEEP__", member(src, "keepBottom"))
+        .replace("__SCROLL__", member(src, "scrollToBottom"))
     )
 
 

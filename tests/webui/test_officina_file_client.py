@@ -27,10 +27,9 @@ non dimostra:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -41,16 +40,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
 
 
 # I metodi del gestore file che il banco fa girare davvero. Gli altri sono
@@ -183,10 +172,10 @@ async function apri(items, { rotto = false } = {}) {
 def _harness() -> str:
     ws = WORKSPACE_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
-    metodi = "\n".join("  " + _member(ws, nome) for nome in _VERI)
+    metodi = "\n".join("  " + member(ws, nome) for nome in _VERI)
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__METODI__", metodi)
     )
 
@@ -200,7 +189,7 @@ def test_outside_memoria_nothing_is_read() -> None:
     contenitore non esiste, e una richiesta al workspace partita comunque
     sarebbe traffico per un disegno che nessuno vedra'."""
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    monta = _member(settings, "_montaFile")
+    monta = member(settings, "_montaFile")
     run_js("""
 import assert from 'node:assert/strict';
 let montaggi = 0;

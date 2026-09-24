@@ -10,12 +10,11 @@ due chat. (Prima del refactor gli stessi quattro casi giravano sulle due copie.)
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import tempfile
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
+from support.js_harness import function, requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -26,12 +25,6 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 """
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^(?:export )?function {name}\(.*?^\}}$", source)
-    assert m, name
-    return m.group(0).removeprefix("export ")
 
 
 def _run(setup: str, text: str) -> str:
@@ -82,6 +75,6 @@ def test_both_chats_use_the_shared_function() -> None:
     assert "import { renderMarkdown } from './shared/markdown.js';" in casa
     assert "function renderMarkdown" not in casa
     assert "from './shared/markdown.js';" in officina
-    body = _function(officina, "renderMarkdown")
+    body = function(officina, "renderMarkdown")
     assert "initMarked();" in body and "renderSafeMarkdown(text)" in body
     assert "DOMPurify" not in body, "la regola di sicurezza sta in shared/markdown.js"

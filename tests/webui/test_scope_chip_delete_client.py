@@ -21,7 +21,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import locale, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -36,20 +36,6 @@ pytestmark = requires_node
 
 def _chip() -> str:
     return CHIP_JS.read_text(encoding="utf-8")
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _locale(name: str) -> dict:
-    return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
 _HARNESS = """
@@ -128,11 +114,11 @@ function row(chip, name) {
 
 def _harness() -> str:
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": _locale("it")}))
+        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
         .replace("__LIST_URL__", LIST_JS.as_uri())
-        .replace("__PROJECTS__", _member(_chip(), "_projects"))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__PROJECT_ROW__", _member(_chip(), "_projectRow"))
+        .replace("__PROJECTS__", member(_chip(), "_projects"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__PROJECT_ROW__", member(_chip(), "_projectRow"))
     )
 
 
@@ -144,7 +130,7 @@ def _run_js(script: str) -> None:
 
 
 def test_a_project_row_carries_a_delete_button() -> None:
-    it = _locale("it")
+    it = locale("it")
     expected = it["scope"]["deleteProject"].replace("{name}", "patreon")
     _run_js(f"""
       const chip = new Chip();

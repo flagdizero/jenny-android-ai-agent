@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -37,22 +37,6 @@ I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
-
-
-def _member(source: str, name: str) -> str:
-    m = re.search(
-        rf"\n  ((?:async |get )?{re.escape(name)}\([^)]*\)\s*\{{.*?)\n  \}}",
-        source,
-        re.S,
-    )
-    assert m, f"{name} non trovato"
-    return m.group(1) + "\n  }"
-
-
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
 
 
 def _const_block(source: str, name: str) -> str:
@@ -149,20 +133,20 @@ def _harness() -> str:
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
-        .replace("__T__", _member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__THEMES__", _const_block(theme, "THEMES"))
-        .replace("__SWATCH__", _function(src, "swatchGradient"))
-        .replace("__SHORT_NAME__", _function(src, "shortThemeName"))
-        .replace("__CTOR__", _member(src, "constructor"))
-        .replace("__OPEN__", _member(src, "open"))
-        .replace("__APPLY_TRANSLATIONS__", _member(src, "applyTranslations"))
-        .replace("__PICK_THEME__", _member(src, "pickTheme"))
-        .replace("__PAINT_THEMES__", _member(src, "_paintThemes"))
-        .replace("__THEME_CARD__", _member(src, "_themeCard"))
-        .replace("__MARK_THEME__", _member(src, "_markTheme"))
-        .replace("__SAY_THEME__", _member(src, "_sayTheme"))
-        .replace("__SHOW_VERSION__", _member(src, "sayUpdates"))
-        .replace("__SAY_JENNY__", _member(src, "sayJenny"))
+        .replace("__SWATCH__", function(src, "swatchGradient"))
+        .replace("__SHORT_NAME__", function(src, "shortThemeName"))
+        .replace("__CTOR__", member(src, "constructor"))
+        .replace("__OPEN__", member(src, "open"))
+        .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
+        .replace("__PICK_THEME__", member(src, "pickTheme"))
+        .replace("__PAINT_THEMES__", member(src, "_paintThemes"))
+        .replace("__THEME_CARD__", member(src, "_themeCard"))
+        .replace("__MARK_THEME__", member(src, "_markTheme"))
+        .replace("__SAY_THEME__", member(src, "_sayTheme"))
+        .replace("__SHOW_VERSION__", member(src, "sayUpdates"))
+        .replace("__SAY_JENNY__", member(src, "sayJenny"))
     )
 
 

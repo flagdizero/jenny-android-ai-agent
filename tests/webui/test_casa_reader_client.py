@@ -13,10 +13,9 @@ buco in mezzo: qui si dice solo di no.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import function, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 READER_JS = ASSETS / "casa-reader.js"
@@ -25,19 +24,13 @@ READER_JS = ASSETS / "casa-reader.js"
 pytestmark = requires_node
 
 
-def _function(source: str, name: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
-    assert m, f"function {name} non trovata"
-    return m.group(0).replace("export function", "function")
-
-
 def _run(script: str) -> None:
     src = READER_JS.read_text(encoding="utf-8")
     harness = (
         "import assert from 'node:assert/strict';\n"
-        + _function(src, "resolveRelativePage")
+        + function(src, "resolveRelativePage")
         + "\n"
-        + _function(src, "linkTarget")
+        + function(src, "linkTarget")
         + "\n"
     )
     run_js(harness + script)
