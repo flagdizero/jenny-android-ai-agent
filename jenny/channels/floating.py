@@ -48,10 +48,11 @@ from typing import Any
 from loguru import logger
 
 from jenny.bus.events import COORDINATION_FLAGS, FLOATING_CHANNEL, OutboundMessage
+from jenny.channels.non_streaming import NonStreamingChannelMixin
 from jenny.runtime.floating import show_reply
 
 
-class FloatingChannel:
+class FloatingChannel(NonStreamingChannelMixin):
     """Consegna la risposta al fumetto della mascotte flottante."""
 
     name = FLOATING_CHANNEL
@@ -125,21 +126,3 @@ class FloatingChannel:
             )
         return []
 
-    # ------------------------------------------------------------------ #
-    # No-op per il contratto dispatcher (nessuno streaming nel fumetto)   #
-    # ------------------------------------------------------------------ #
-
-    async def send_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_end(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_file_edit_events(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    def discard_stream_buffer(self, *args: Any, **kwargs: Any) -> None:
-        return None

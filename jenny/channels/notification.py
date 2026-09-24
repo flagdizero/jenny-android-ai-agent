@@ -31,6 +31,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.bus.events import COORDINATION_FLAGS, NOTIFICATION_CHANNEL, OutboundMessage
+from jenny.channels.non_streaming import NonStreamingChannelMixin
 from jenny.runtime.native_input import NATIVE_THREAD_KEY
 from jenny.runtime.notifier import post_alert
 
@@ -63,7 +64,7 @@ def _thread_of(metadata: dict[str, Any]) -> str:
     return REPLY_THREAD_TAG
 
 
-class NotificationChannel:
+class NotificationChannel(NonStreamingChannelMixin):
     """Consegna la risposta come alert di sistema Android."""
 
     name = NOTIFICATION_CHANNEL
@@ -132,21 +133,3 @@ class NotificationChannel:
             logger.info("Notification channel: alert not posted (foreground or no bridge)")
         return []
 
-    # ------------------------------------------------------------------ #
-    # No-op per il contratto dispatcher (nessuno streaming nella tendina) #
-    # ------------------------------------------------------------------ #
-
-    async def send_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_end(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_file_edit_events(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    def discard_stream_buffer(self, *args: Any, **kwargs: Any) -> None:
-        return None

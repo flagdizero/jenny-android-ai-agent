@@ -30,6 +30,7 @@ from loguru import logger
 from jenny.bus.events import COORDINATION_FLAGS, InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnRunStatusChanged
+from jenny.channels.non_streaming import NonStreamingChannelMixin
 from jenny.channels.telegram_api import TelegramAPI, TelegramAPIError
 from jenny.channels.telegram_format import markdown_to_telegram_html, split_message
 from jenny.channels.telegram_media import (
@@ -233,7 +234,7 @@ class _TypingHeartbeat:
         logger.debug("Telegram: typing heartbeat expired on its own cap")
 
 
-class TelegramChannel:
+class TelegramChannel(NonStreamingChannelMixin):
     """Canale bot Telegram con pairing a codice singolo owner."""
 
     name = "telegram"
@@ -833,21 +834,3 @@ class TelegramChannel:
         except Exception:
             logger.exception("Telegram: service reply failed")
 
-    # ------------------------------------------------------------------ #
-    # No-op per il contratto dispatcher (nessuno streaming su Telegram)  #
-    # ------------------------------------------------------------------ #
-
-    async def send_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_delta(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_reasoning_end(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    async def send_file_edit_events(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    def discard_stream_buffer(self, *args: Any, **kwargs: Any) -> None:
-        return None
