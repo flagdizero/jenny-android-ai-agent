@@ -70,7 +70,7 @@ import assert from 'node:assert/strict';
 
 /* Cursore e chiavistello della paginazione stanno nel modulo condiviso: qui si
    importa quello vero, cosi' la guardia contro il cambio di conversazione si
-   misura sull'intera catena (`loadMoreHistory` -> pager -> `_beginHistoryPage`
+   misura sull'intera catena (pager -> `_beginHistoryPage`
    -> `loadThread`) invece che su un ritaglio di testo. */
 globalThis.document = {
   createElement() {
@@ -139,7 +139,6 @@ function makeChat() {
     },
     __INVALIDATE__,
     __LOAD_INITIAL__,
-    __LOAD_MORE__,
     __BEGIN_PAGE__,
     __SWITCH_CONVERSATION__,
   };
@@ -207,7 +206,6 @@ def _harness() -> str:
         .replace("__LOAD_THREAD__", _member(session, "loadThread"))
         .replace("__INVALIDATE__", _member(chat, "invalidateHistory"))
         .replace("__LOAD_INITIAL__", _member(chat, "loadInitialHistory"))
-        .replace("__LOAD_MORE__", _member(chat, "loadMoreHistory"))
         .replace("__BEGIN_PAGE__", _member(chat, "_beginHistoryPage"))
         .replace("__PAGER_URL__", PAGER_JS.as_uri())
         .replace("__SWITCH_CONVERSATION__", _member(chat, "_switchConversation"))
@@ -366,7 +364,8 @@ def test_a_page_of_old_history_is_not_pasted_onto_another_conversation() -> None
       chat.historyCursor = 'c-1';
       chat.rendered = ['recente'];
 
-      const more = chat.loadMoreHistory();
+      // Il percorso vero: lo scroll infinito chiama il pager (`bindInfiniteScroll`).
+      const more = chat._pager.loadMore();
       await tick();
       assert.deepEqual(inflight.map((f) => f.key), ['websocket:default']);
 

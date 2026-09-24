@@ -584,7 +584,7 @@ def test_moving_a_page_keeps_you_on_the_page_you_were_on() -> None:
     """Spostare le pagine non ti sposta: resti dove guardavi, ovunque sia finita."""
     _run(
         "pagine.vaiAId('p2');\n"
-        "await pagine.riordina(['p2', 'chat', 'p1', 'app', 'quaderni', 'impostazioni']);\n"
+        "await pagine.salva(pagine.schermate, ['p2', 'chat', 'p1', 'app', 'quaderni', 'impostazioni']);\n"
         "assert.equal(pagine.indice, 0);\n"
         "assert.equal(pagine.voce(pagine.indice).id, 'p2');",
         schermate=DUE,

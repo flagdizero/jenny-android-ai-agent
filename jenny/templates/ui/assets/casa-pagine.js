@@ -182,10 +182,6 @@ export class CasaPagine {
     return salvate;
   }
 
-  /** Sposta le pagine: l'ordine nuovo, intero. */
-  riordina(ordine) {
-    return this.salva(this.schermate, ordine);
-  }
 
   /** Va alla casella `i`, se esiste. */
   vaiA(i, { animato = true } = {}) {

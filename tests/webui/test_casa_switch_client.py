@@ -303,7 +303,6 @@ class App {
   __CREATE_NOTEBOOK__
   __OPEN_PAGES__
   __GO_BACK_ONE_ROOM__
-  __OPEN_TU__
   __APRI_IMPOSTAZIONI__
   __NOME_CHAT__
   __HA_COMPOSER__
@@ -364,7 +363,6 @@ def _harness() -> str:
         .replace("__NOTEBOOK_WORDS__", _const_block(src, "NOTEBOOK_WORDS"))
         .replace("__OPEN_PAGES__", _member(src, "openPages"))
         .replace("__GO_BACK_ONE_ROOM__", _member(src, "goBackOneRoom"))
-        .replace("__OPEN_TU__", _member(src, "openTu"))
         .replace("__APRI_IMPOSTAZIONI__", _member(src, "_apriImpostazioni"))
         .replace("__NOME_CHAT__", _member(src, "_nomeChat"))
         .replace("__HA_COMPOSER__", _member(src, "_haComposer"))
@@ -852,7 +850,7 @@ def test_settings_is_a_page_and_back_from_it_is_the_chat() -> None:
     _run_js("""
       const app = casa();
       await app.switchConversation(projectKey('orto'));
-      app.openTu();
+      app.pagine.vaiAId('impostazioni');
       assert.equal(app.view, 'chat', 'le impostazioni sono ancora una stanza');
       assert.equal(app.pagine.corrente, 'impostazioni');
       assert.ok(app.fatti.includes('tu aperta'), 'la pagina non e\u2019 stata caricata');
@@ -907,12 +905,12 @@ def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
     peso."""
     _run_js("""
       const app = casa();
-      app.openTu();
+      app.pagine.vaiAId('impostazioni');
       await app.accensione;
       await app.openJenny();
       app._setView('chat');
       app.pagine.vaiA(app.pagine.indiceChat);
-      app.openTu();
+      app.pagine.vaiAId('impostazioni');
       await app.accensione;
       assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
       assert.deepEqual(app.versioniDate, [{ current: '0.11.0' }, { current: '0.11.0' }]);
@@ -927,13 +925,13 @@ def test_a_settings_call_that_failed_is_tried_again() -> None:
     _run_js("""
       const app = casa();
       settingsPayload = null;
-      app.openTu();
+      app.pagine.vaiAId('impostazioni');
       await app.accensione;
       assert.deepEqual(app.flottanti, [null], 'senza risposta la finestra resta sconosciuta');
 
       settingsPayload = { version: { current: '0.12.0' }, floating: { available: true } };
       app.pagine.vaiA(app.pagine.indiceChat);
-      app.openTu();
+      app.pagine.vaiAId('impostazioni');
       await app.accensione;
       assert.equal(settingsCalls, 2, 'il guscio si e\u2019 ricordato del fallimento');
       /* Anche il giro andato male passa dalla stanza: le dice «non lo so», e

@@ -1,7 +1,7 @@
 """La pagina precedente in casa: quel che si vede nel filo, prima e dopo.
 
 La macchina a stati è quella condivisa con l'officina e ha i suoi test
-(`test_history_reach_client.py`, e i tre banchi che eseguono `loadMoreHistory`
+(`test_history_reach_client.py`, e i tre banchi che eseguono il pager
 per intero). Qui si misura la metà che la casa non condivide: **il disegno**.
 Un turno dell'officina porta pensieri, strumenti e modifiche ai file; in casa ne
 sopravvivono il testo e gli allegati, e una pagina di lavoro muto può non

@@ -904,10 +904,6 @@ export class ChatController {
     this.chatArea.querySelectorAll('.chat-history-error').forEach((el) => el.remove());
   }
 
-  async loadMoreHistory() {
-    await this._pager.loadMore();
-  }
-
   // Ricostruisce l'array di turni normalizzati dai messaggi persistiti.
   // Voce user: {user:true, text, origin}; turno assistant:
   // {turnId, toolEvents, reasoning, content, fileEdits, media, latencyMs?}.

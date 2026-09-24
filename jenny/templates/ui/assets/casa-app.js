@@ -582,13 +582,6 @@ class CasaApp {
     this._setHeadTitle(await this.reader.load(notebook, path, label));
   }
 
-  /** «Tu e Jenny», cioe' la pagina Impostazioni: ci si va. Cosa fa quando ci
-   *  arrivi lo dice `_apriImpostazioni`, che la pista chiama anche quando ci
-   *  arrivi col dito. */
-  openTu() {
-    this._setView('chat');
-    this.pagine.vaiAId('impostazioni');
-  }
 
   /** La pagina Impostazioni e' diventata quella che guardi: si ridisegna e si
    *  rilegge quel che sa il server. */
