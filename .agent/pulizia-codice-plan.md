@@ -66,7 +66,11 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
   - Il cron (`runtime/cron_dispatch.py`) non ha il difetto: verificarlo con lo
     stesso scenario, e il passo 2.1 unifica comunque i due percorsi.
 
-- [ ] **0.2 Banco di guardia sui frame WebSocket** (commit a sé, prima di 0.3)
+- [x] **0.2 Banco di guardia sui frame WebSocket** (commit a sé, prima di 0.3)
+  — fatto 24/09. Invece di un commit rosso, i due eventi da riparare sono
+  `xfail(strict=True)`: 0.3 li fa passare e lo strict obbliga a togliere il
+  segno. Scansione: `"event": "…"` e `_send_event(conn, "…")` in
+  `jenny/channels`, più `ACTIVITY_FRAME_EVENT`; 21 eventi, 19 con ascoltatore.
   - Nuovo `tests/webui/test_ws_events_have_listeners_contract.py`: ogni
     `"event": "<nome>"` emesso in `jenny/channels/*.py` deve comparire come
     stringa in `assets/*.js` o `assets/shared/*.js`.
