@@ -365,27 +365,27 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
 
 ## Fase 3 — WebUI
 
-- [ ] **3.1 Metodi usati solo dai test**: `casa-pagine.js:186` `riordina`,
+- [x] **3.1 Metodi usati solo dai test**: `casa-pagine.js:186` `riordina`,
   `casa-app.js:583` `openTu`, `mobile-chat.js:908` `loadMoreHistory`; i test
   passano al percorso vero (`salva(schermate, ordine)`; `_setView('chat')` +
   `pagine.vaiAId('impostazioni')`; `_pager.loadMore()`).
 
-- [ ] **3.2 `renderRichContent`** (`mobile-chat.js:152-154`, involucro di una
+- [x] **3.2 `renderRichContent`** (`mobile-chat.js:152-154`, involucro di una
   riga) → `renderRich` nelle 6 chiamate; aggiornare il fake in
   `test_message_bubble_client.py:108`.
 
-- [ ] **3.3 `renderMarkdown` condiviso**: `shared/markdown.js`, fallisce chiuso;
+- [x] **3.3 `renderMarkdown` condiviso**: `shared/markdown.js`, fallisce chiuso;
   copre `casa-chat.js:70-82` e `mobile-chat.js:118-135`. `initMarked()` (hljs +
   «Copia») resta all'officina. Il nome `renderMarkdown` resta nei due file
   (`test_rich_surfaces_contract.py:31-34`).
 
-- [ ] **3.4 `breaks: true` anche in casa** — commit a sé perché **cambia
+- [x] **3.4 `breaks: true` anche in casa** — commit a sé perché **cambia
   l'aspetto**: oggi la casa non chiama `initMarked` e gira con `breaks:false`,
   quindi una lista a righe singole si fonde in un paragrafo in casa ma non in
   officina né nella bolla flottante. Spostare `gfm/breaks` in `markdown.js`,
   riallineare `test_floating_markdown_contract.py:92`. Screenshot prima/dopo.
 
-- [ ] **3.5 La minichat eredita la macchina a stati** — `mobile-jenny.js:293-352`
+- [x] **3.5 La minichat eredita la macchina a stati** — `mobile-jenny.js:293-352`
   ricopia `shared/jenny-mascot.js:562-613`. Il genitore chiama in fondo un
   gancio `_afterChatFrame(msg)`; la minichat sovrascrive solo quello, con le
   sue differenze (`delta` accumula e mostra; `stream_end` mostra; `turn_end`
@@ -397,27 +397,27 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   in `_handleFrame`) → puntarlo al gancio. Test node nuovo: minichat chiusa,
   `turn_end` ⇒ `invalidateHistory`; `error` ⇒ testo e umore `sad`.
 
-- [ ] **3.6 L'aggancio dei chip**: `commands-chip.js:58-82` e
+- [x] **3.6 L'aggancio dei chip**: `commands-chip.js:58-82` e
   `scope-chip.js:82-106` → `armComposeMenu(chip, id)` in `shared/state.js`.
   `readonlyTurn` resta a scope-chip. Il banco di `test_scope_chip_init_client
   .py:183` deve definire l'helper.
 
-- [ ] **3.7 Il velo delle mini-app**: `apps-actions.js:199-213` e `:230-267` →
+- [x] **3.7 Il velo delle mini-app**: `apps-actions.js:199-213` e `:230-267` →
   `_montaVelo(slug, app, iframe, {external})`.
 
-- [ ] **3.8 I fogli del workspace**: `mobile-workspace.js:614-643` e
+- [x] **3.8 I fogli del workspace**: `mobile-workspace.js:614-643` e
   `:1057-1079` → `_apriFoglio(azioniHtml, onPick)`. Facoltativo: la grazia da
   400 ms (anche `apps-actions.js:429`, `casa-quaderno.js:92`) →
   `graziaBackdrop` in `shared/dialog.js`. Riallineare
   `test_keyboard_a11y_contract.py:218-229` (cerca `openedAt` nei due metodi).
 
-- [ ] **3.9 CSS — le righe**: `.marca-riga`, `.ssh-riga`, `.cron-riga`
+- [x] **3.9 CSS — le righe**: `.marca-riga`, `.ssh-riga`, `.cron-riga`
   (`mobile-style.css:4478,4547,4426`) in un gruppo con override di padding
   per `.cron-riga` (6px vs 4px). `test_officina_righe_contract.py:294,432,586`
   cercano `^\.X-riga \{` con `min-height`: o si lascia `min-height` in ogni
   regola, o si passa a un helper che trova il selettore dentro una lista.
 
-- [ ] **3.10 CSS — le pillole**: `.scope-chip`, `.write-switch`,
+- [x] **3.10 CSS — le pillole**: `.scope-chip`, `.write-switch`,
   `.commands-chip` (`:514,567,607`), `.scope-chip` primo nella lista
   (`test_scope_menu_contract.py:69` lo trova via `,\n`). `flex`/`min-width` e
   `flex-shrink` restano nelle regole singole (`test_write_switch_contract.py:
@@ -425,18 +425,47 @@ va o conservata o scelta consapevolmente, e scritta nel commit.
   manca `.commands-chip:active { transform: none; }` — va aggiunto.
   `.commands-chip` si allinea a `.16s` e `user-select: none`.
 
-- [ ] **3.11 CSS — il resto**: intestazioni pieghevoli (`:1697`, `:1811`,
+- [x] **3.11 CSS — il resto**: intestazioni pieghevoli (`:1697`, `:1811`,
   `:2649`; `.chat-tool-header` tiene il colore e non ha `font-weight`),
   `.file-preview-close`/`.session-info-close` (`:5144`, `:5295`), in casa
   `.casa-tab`/`.casa-seg-btn` e contenitori (`casa-style.css:1323`, `:2001`).
   Nessun test li cerca per regex.
 
-- [ ] **3.12 Fine fase**: rilanciare il rilevatore di cloni su
+- [x] **3.12 Fine fase**: rilanciare il rilevatore di cloni su
   `jenny/templates/ui/*.css` e `*.js` (è uno script usa-e-getta
   dell'audit, finestra di 8 righe normalizzate, fuori dal repo: si riscrive
   in dieci righe) per vedere che le coppie sono sparite e non ne sono nate di
   nuove; poi build, install, screenshot di casa, officina, cassetto,
   impostazioni.
+
+
+**Esito della fase 3 (25/09).** Undici commit (`e513a1c`…`3a0e03d`), ognuno
+con un test scritto e verde sul codice vecchio prima del cambio e una mutazione
+che lo fa diventare rosso. Deviazioni dal piano, tutte piccole:
+- 3.5: il gancio è `_beforeChatState(msg)` e non `_afterChatFrame`, e sta
+  **prima** dello stato: `_showReply` passa per `talking`, e lo stato del frame
+  deve venire per ultimo (il test `test_minichat_frames_client.py` lo prova:
+  col gancio in fondo tre casi diventano rossi). Il `message` vuoto ora porta a
+  `thinking` anche nella minichat, come deciso.
+- 3.6: `onOtherComposeMenu` non è più esportato (lo usa solo `armComposeMenu`).
+- 3.8: la grazia da 400 ms condivisa (`graziaBackdrop`) **non** fatta: i tre
+  siti chiudono in tre modi diversi e il piano la dava facoltativa.
+- 3.9–3.11: i selettori raggruppati stanno su una riga sola
+  (`.cron-riga, .marca-riga, .ssh-riga {`) così le regex `^\.X \{` dei contratti
+  trovano la regola della singola riga; le pillole invece sono una per riga con
+  `.scope-chip` primo, come voleva `test_scope_menu_contract`. Ogni passo CSS è
+  stato verificato confrontando in un browser vero gli stili calcolati del
+  foglio vecchio e di quello nuovo su tutti gli elementi toccati: zero
+  differenze, tranne le due volute in 3.10 (`.commands-chip` a `.16s` e
+  `user-select: none`).
+- 3.12: il rilevatore di cloni (finestra 8 righe normalizzate) passa da 6
+  gruppi a 1. Quello che resta è un «reset del pulsante» di 8 righe fra
+  `.skill-riga-testo` e `.settings-riepilogo`, fuori dal piano.
+Suite WebUI 2740 passati. Build release installata sul Titan 2 il 25/09 alle
+00:49: gateway senza errori; casa, officina (Console, Mani con le righe dei
+lavori), impostazioni della casa (taglie mascotte) e cassetto controllati;
+le tre tendine del composer provate dal vivo (una sola aperta, tocco fuori,
+Escape).
 
 ---
 
