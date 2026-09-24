@@ -13,14 +13,9 @@ bisogno di altro.
 
 | Posa (runtime)                      | Sorgente               |
 |-------------------------------------|------------------------|
-| idle                                | `idle.PNG`             |
-| think                               | `think.PNG`            |
+| idle (mini Jenny dell'onboarding)   | `idle.PNG`             |
 | side                                | `jenny-side.PNG`       |
 | side-talk                           | `jenny-side-talk.PNG`  |
-| talk1a (bocca aperta, mano alzata)  | `talk_1a.PNG`          |
-| talk1b (bocca aperta, braccia giù)  | `talk_1b.PNG`          |
-| talk2a (bocca chiusa, mano alzata)  | `talk_2a.PNG`          |
-| talk2b (bocca chiusa, braccia giù)  | `talk_2b.PNG`          |
 | hang (appesa)                       | `jenny-hang.PNG`       |
 | fall (caduta)                       | `jenny-fall.PNG`       |
 | ground (atterrata)                  | `jenny-ground.PNG`     |
@@ -29,8 +24,12 @@ bisogno di altro.
 | hello1                              | `hello1.PNG`           |
 | hello2                              | `hello2.PNG`           |
 
-Le pose qui sopra sono quelle "cotte", con la faccia disegnata dentro. L'arte
-**a due livelli** (`body_*.PNG` e `face_*.PNG`, corpi senza faccia + facce da
+Le pose qui sopra sono quelle "cotte", con la faccia disegnata dentro. La
+mascotte intera — riposo, pensa, parla, umori — non è più fra queste: è
+**a due livelli**. `think.PNG`, `talk_1a.PNG` e `talk_1b.PNG` restano in
+cartella solo come riferimento del test che ricompone i livelli
+(`tests/webui/test_mascot_layer_sources.py`): sostituirle non cambia niente
+sul telefono. L'arte **a due livelli** (`body_*.PNG` e `face_*.PNG`, corpi senza faccia + facce da
 sola) segue le stesse regole di export e si rigenera con lo stesso comando; la
 mappa dei nomi e quali sono in riserva stanno in
 [`README.md`](./README.md#due-livelli-corpo--faccia).
