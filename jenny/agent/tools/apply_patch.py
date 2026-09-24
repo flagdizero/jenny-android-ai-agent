@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import difflib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +15,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.utils.file_edit_events import line_diff_stats
 
 
 @dataclass(slots=True)
@@ -37,28 +37,6 @@ def _validate_patch_path(path: str) -> str:
     if "\0" in normalized:
         raise _PatchError(f"patch path contains a null byte: {path!r}")
     return normalized
-
-
-def _text_line_count(text: str) -> int:
-    if not text:
-        return 0
-    return len(text.splitlines())
-
-
-def _line_diff_stats(before: str, after: str) -> tuple[int, int]:
-    before_lines = before.replace("\r\n", "\n").splitlines()
-    after_lines = after.replace("\r\n", "\n").splitlines()
-    added = 0
-    deleted = 0
-    matcher = difflib.SequenceMatcher(a=before_lines, b=after_lines, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            continue
-        if tag in ("replace", "delete"):
-            deleted += i2 - i1
-        if tag in ("replace", "insert"):
-            added += j2 - j1
-    return added, deleted
 
 
 def _append_text(content: str, addition: str) -> str:
@@ -183,15 +161,16 @@ class ApplyPatchTool(_FsTool):
                         if uses_crlf:
                             new_norm = new_norm.replace("\n", "\r\n")
                         writes[source] = new_norm
-                        added, deleted = _line_diff_stats(content, new_norm)
+                        added, deleted = line_diff_stats(content, new_norm)
                         action_name = "update"
                     else:
                         new_norm = new_text.replace("\r\n", "\n")
                         if new_norm and not new_norm.endswith("\n"):
                             new_norm += "\n"
                         writes[source] = new_norm
-                        added = _text_line_count(new_norm)
-                        deleted = 0
+                        # Lo stesso conto della riga che la WebUI mostra durante la
+                        # modifica (``file_edit_events``): uno solo, non due.
+                        added, deleted = line_diff_stats("", new_norm)
                         action_name = "add"
 
                     summaries.append(
@@ -244,7 +223,7 @@ class ApplyPatchTool(_FsTool):
                         new_norm = new_norm.replace("\n", "\r\n")
 
                     writes[source] = new_norm
-                    added, deleted = _line_diff_stats(content, new_norm)
+                    added, deleted = line_diff_stats(content, new_norm)
                     summaries.append(
                         _PatchSummary(
                             action="update", path=path, added=added, deleted=deleted

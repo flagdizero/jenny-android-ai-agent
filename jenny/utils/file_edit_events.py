@@ -58,19 +58,7 @@ def resolve_file_edit_path(
     raw_path = params.get("path")
     if not isinstance(raw_path, str) or not raw_path.strip():
         return None
-    resolver = getattr(tool, "_resolve", None)
-    if callable(resolver):
-        try:
-            resolved = resolver(raw_path)
-            if isinstance(resolved, Path):
-                return resolved
-            if resolved:
-                return Path(resolved)
-        except Exception:
-            return None
-    if workspace is None:
-        return _safe_expanduser(raw_path).resolve()
-    return _safe_expanduser(workspace / raw_path).resolve()
+    return _resolve_raw_file_edit_path(tool, workspace, raw_path)
 
 
 def display_file_edit_path(path: Path, workspace: Path | None) -> str:
