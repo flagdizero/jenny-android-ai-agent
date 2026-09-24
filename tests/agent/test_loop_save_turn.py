@@ -1523,34 +1523,31 @@ def test_save_turn_keeps_placeholder_for_empty_tool_result_blocks() -> None:
     ]
 
 
-def test_save_turn_drops_orphaned_tool_results() -> None:
-    loop = _mk_loop()
-    session = Session(key="test:orphan-guard")
-    session.add_message("user", "hi")
-
-    loop._save_turn(
-        session,
-        [
+@pytest.mark.parametrize(
+    ("key", "tool_result"),
+    [
+        pytest.param(
+            "test:orphan-guard",
             {"role": "tool", "tool_call_id": "call_ghost", "name": "python_exec", "content": "boo"},
-            {"role": "assistant", "content": "done"},
-        ],
-        skip=0,
-    )
-
-    assert [m["role"] for m in session.messages] == ["user", "assistant"]
-
-
-def test_save_turn_drops_tool_results_without_tool_call_id() -> None:
+            id="orphaned_tool_results",
+        ),
+        pytest.param(
+            "test:missing-tool-call-id",
+            {"role": "tool", "name": "python_exec", "content": "missing id"},
+            id="tool_results_without_tool_call_id",
+        ),
+    ],
+)
+def test_save_turn_drops(key: str, tool_result: dict) -> None:
+    """Un risultato di tool senza la chiamata che lo dichiara — un id che
+    nessuno ha chiesto, o nessun id — non entra nella storia."""
     loop = _mk_loop()
-    session = Session(key="test:missing-tool-call-id")
+    session = Session(key=key)
     session.add_message("user", "hi")
 
     loop._save_turn(
         session,
-        [
-            {"role": "tool", "name": "python_exec", "content": "missing id"},
-            {"role": "assistant", "content": "done"},
-        ],
+        [tool_result, {"role": "assistant", "content": "done"}],
         skip=0,
     )
 

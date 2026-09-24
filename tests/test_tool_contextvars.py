@@ -13,11 +13,32 @@ from jenny.cron.service import CronService
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 
+async def _race(tool, first: RequestContext, second: RequestContext, run_first, run_second):
+    """Due task sullo stesso tool, ognuno col suo contesto, intrecciati apposta:
+    il primo imposta il suo e si ferma, il secondo imposta l'altro, poi il primo
+    esegue. Se il contesto non fosse locale al task, il primo userebbe quello
+    del secondo."""
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def task_one() -> str:
+        tool.set_context(first)
+        entered.set()
+        await release.wait()
+        return await run_first()
+
+    async def task_two() -> str:
+        await entered.wait()
+        tool.set_context(second)
+        release.set()
+        return await run_second()
+
+    return await asyncio.gather(task_one(), task_two())
+
+
 @pytest.mark.asyncio
 async def test_message_tool_keeps_task_local_context() -> None:
     seen: list[tuple[str, str, str]] = []
-    entered = asyncio.Event()
-    release = asyncio.Event()
 
     async def send_callback(msg):
         seen.append((msg.channel, msg.chat_id, msg.content))
@@ -25,19 +46,13 @@ async def test_message_tool_keeps_task_local_context() -> None:
 
     tool = MessageTool(send_callback=send_callback)
 
-    async def task_one() -> str:
-        tool.set_context(RequestContext(channel="test-channel", chat_id="chat-a"))
-        entered.set()
-        await release.wait()
-        return await tool.execute(content="one")
-
-    async def task_two() -> str:
-        await entered.wait()
-        tool.set_context(RequestContext(channel="other-channel", chat_id="chat-b"))
-        release.set()
-        return await tool.execute(content="two")
-
-    result_one, result_two = await asyncio.gather(task_one(), task_two())
+    result_one, result_two = await _race(
+        tool,
+        RequestContext(channel="test-channel", chat_id="chat-a"),
+        RequestContext(channel="other-channel", chat_id="chat-b"),
+        lambda: tool.execute(content="one"),
+        lambda: tool.execute(content="two"),
+    )
 
     assert result_one == "Message sent to test-channel:chat-a"
     assert result_two == "Message sent to other-channel:chat-b"
@@ -48,8 +63,6 @@ async def test_message_tool_keeps_task_local_context() -> None:
 @pytest.mark.asyncio
 async def test_spawn_tool_keeps_task_local_context() -> None:
     seen: list[tuple[str, str, str]] = []
-    entered = asyncio.Event()
-    release = asyncio.Event()
 
     class _Manager:
         max_concurrent_subagents = 1
@@ -76,19 +89,13 @@ async def test_spawn_tool_keeps_task_local_context() -> None:
 
     tool = SpawnTool(_Manager())
 
-    async def task_one() -> str:
-        tool.set_context(RequestContext(channel="test-channel", chat_id="chat-a"))
-        entered.set()
-        await release.wait()
-        return await tool.execute(task="one")
-
-    async def task_two() -> str:
-        await entered.wait()
-        tool.set_context(RequestContext(channel="other-channel", chat_id="chat-b"))
-        release.set()
-        return await tool.execute(task="two")
-
-    result_one, result_two = await asyncio.gather(task_one(), task_two())
+    result_one, result_two = await _race(
+        tool,
+        RequestContext(channel="test-channel", chat_id="chat-a"),
+        RequestContext(channel="other-channel", chat_id="chat-b"),
+        lambda: tool.execute(task="one"),
+        lambda: tool.execute(task="two"),
+    )
 
     assert result_one == "test-channel:chat-a:one"
     assert result_two == "other-channel:chat-b:two"
@@ -99,30 +106,16 @@ async def test_spawn_tool_keeps_task_local_context() -> None:
 @pytest.mark.asyncio
 async def test_cron_tool_keeps_task_local_context(tmp_path) -> None:
     tool = CronTool(CronService(tmp_path / "jobs.json"))
-    entered = asyncio.Event()
-    release = asyncio.Event()
 
-    async def task_one() -> str:
-        tool.set_context(
-            RequestContext(
-                channel="test-channel", chat_id="chat-a", session_key="test-channel:chat-a"
-            )
-        )
-        entered.set()
-        await release.wait()
-        return await tool.execute(action="add", message="first", every_seconds=60)
-
-    async def task_two() -> str:
-        await entered.wait()
-        tool.set_context(
-            RequestContext(
-                channel="other-channel", chat_id="chat-b", session_key="other-channel:chat-b"
-            )
-        )
-        release.set()
-        return await tool.execute(action="add", message="second", every_seconds=60)
-
-    result_one, result_two = await asyncio.gather(task_one(), task_two())
+    result_one, result_two = await _race(
+        tool,
+        RequestContext(channel="test-channel", chat_id="chat-a", session_key="test-channel:chat-a"),
+        RequestContext(
+            channel="other-channel", chat_id="chat-b", session_key="other-channel:chat-b"
+        ),
+        lambda: tool.execute(action="add", message="first", every_seconds=60),
+        lambda: tool.execute(action="add", message="second", every_seconds=60),
+    )
 
     assert result_one.startswith("Created job")
     assert result_two.startswith("Created job")
