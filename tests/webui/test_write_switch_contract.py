@@ -176,8 +176,12 @@ def test_reduced_motion_covers_the_switch_too() -> None:
     assert re.search(r"\.write-switch:active \{[^}]*transform:\s*none", covered), (
         "il tocco rimpicciolisce l'interruttore anche a movimento ridotto"
     )
-    # Il fratello nella stessa riga resta coperto: erano nello stesso blocco.
+    # I fratelli nella stessa riga restano coperti. Il chip dei comandi ne era
+    # rimasto fuori come l'interruttore prima di lui (pulizia 3.10).
     assert re.search(r"\.scope-chip:active \{[^}]*transform:\s*none", covered)
+    assert re.search(r"\.commands-chip:active \{[^}]*transform:\s*none", covered), (
+        "il tocco rimpicciolisce il chip dei comandi anche a movimento ridotto"
+    )
 
 
 def test_the_placeholder_shortens_a_long_project_name() -> None:

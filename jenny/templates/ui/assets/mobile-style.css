@@ -511,23 +511,17 @@ body {
   gap: 6px;
   margin-bottom: 8px;
 }
-.scope-chip {
+/* Le tre pillole della riga del composer — scope, interruttore, comandi: la
+   stessa forma perché rispondono alle domande che si fanno prima di premere
+   invio, e si leggono nella stessa occhiata. Qui la pillola; nelle regole di
+   ciascuna quel che cede e quel che no. */
+.scope-chip,
+.write-switch,
+.commands-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  /* Cede lui, non l'interruttore. Da quando la riga tiene due controlli,
-     `max-width: 100%` non basta: il 100% e' della riga *intera*, quindi con un
-     nome di progetto lungo il chip se la prendeva tutta e l'interruttore — che
-     e' `flex-shrink: 0` — usciva a destra. Un nome di progetto arriva a 64
-     caratteri (`is_valid_project_name`), quindi il caso non e' teorico.
-     `min-width: 0` e' la meta' che si dimentica: senza, il contenuto flex
-     rifiuta di scendere sotto la propria larghezza intrinseca e lo shrink non
-     morde. La troncatura vera resta sul crumb (`max-width: 15ch`); questo e'
-     il tetto che tiene la riga dentro lo schermo comunque. */
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  padding: 4px 10px 4px 9px;
+  gap: 5px;
+  padding: 4px 9px;
   background: var(--overlay);
   border: 0.5px solid var(--border);
   /* `--radius-pill` e non `--radius-seg`: quel token e' il raggio dei controlli
@@ -545,9 +539,28 @@ body {
   -webkit-tap-highlight-color: transparent;
   transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
-.scope-chip:hover { background: var(--overlay-strong); }
-.scope-chip:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-.scope-chip:active { transform: scale(0.98); }
+.scope-chip:hover, .write-switch:hover, .commands-chip:hover { background: var(--overlay-strong); }
+.scope-chip:focus-visible, .write-switch:focus-visible, .commands-chip:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.scope-chip:active, .write-switch:active, .commands-chip:active { transform: scale(0.98); }
+.scope-chip {
+  gap: 6px;
+  /* Cede lui, non l'interruttore. Da quando la riga tiene due controlli,
+     `max-width: 100%` non basta: il 100% e' della riga *intera*, quindi con un
+     nome di progetto lungo il chip se la prendeva tutta e l'interruttore — che
+     e' `flex-shrink: 0` — usciva a destra. Un nome di progetto arriva a 64
+     caratteri (`is_valid_project_name`), quindi il caso non e' teorico.
+     `min-width: 0` e' la meta' che si dimentica: senza, il contenuto flex
+     rifiuta di scendere sotto la propria larghezza intrinseca e lo shrink non
+     morde. La troncatura vera resta sul crumb (`max-width: 15ch`); questo e'
+     il tetto che tiene la riga dentro lo schermo comunque. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 10px 4px 9px;
+}
 /* Essere in un progetto è lo stato che deve farsi notare; la sessione
    personale è il default e resta quieta. */
 .scope-chip[data-scope="project"] {
@@ -564,27 +577,7 @@ body {
 /* Interruttore scrittura / sola lettura: stessa pillola del chip, perché
    risponde alla stessa domanda e si legge nella stessa occhiata. `--radius-pill`
    per la ragione scritta sopra, e non `--radius-seg`. */
-.write-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-  padding: 4px 9px;
-  background: var(--overlay);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .16s ease, border-color .16s ease, color .16s ease;
-}
-.write-switch:hover { background: var(--overlay-strong); }
-.write-switch:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-.write-switch:active { transform: scale(0.98); }
+.write-switch { flex-shrink: 0; }
 /* La sola lettura è lo stato da notare: scrivere è il default, e resta quieto.
    Stessa logica del chip, dove è "essere in un progetto" a farsi vedere. */
 .write-switch[data-mode="readonly"] {
@@ -604,26 +597,7 @@ body {
    sono due vicini della stessa riga, e due forme diverse la farebbero leggere
    come due cose di natura diversa. Cede lo scope chip, non questo: il suo testo
    ha gia' l'ellissi (`.scope-chip-crumb`), questo e' un'icona e una parola. */
-.commands-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-  padding: 4px 9px;
-  background: var(--overlay);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s;
-  -webkit-tap-highlight-color: transparent;
-}
-.commands-chip:hover { background: var(--overlay-strong); }
-.commands-chip:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-.commands-chip:active { transform: scale(0.98); }
+.commands-chip { flex-shrink: 0; }
 .commands-chip[aria-expanded="true"] {
   background: var(--overlay-strong);
   border-color: var(--border-strong);
@@ -849,6 +823,8 @@ body {
   .scope-chip:active { transform: none; }
   .write-switch { transition: none; }
   .write-switch:active { transform: none; }
+  .commands-chip { transition: none; }
+  .commands-chip:active { transform: none; }
   .scope-menu-item { transition: none; }
 }
 
