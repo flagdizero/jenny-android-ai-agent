@@ -5310,6 +5310,80 @@ body {
   color: var(--text-faint);
 }
 
+/* ── La riga di una skill (pannello di Mani) ──────────────────────────────
+   Nome e una riga sotto a sinistra, il comando a destra: la forma di
+   `.cron-riga`. Il testo e' un bottone perche' il tocco scioglie il
+   troncamento a due righe — l'unica cosa in piu' che la riga ha da dire. */
+.skill-riga {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-top: 0.5px solid var(--border);
+}
+.skill-riga:first-of-type { border-top: 0; }
+.skill-riga-testo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.skill-riga-nome {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.skill-riga-sotto {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.skill-riga-testo[aria-expanded="true"] .skill-riga-sotto {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+/* Non disponibile: il motivo in testo, il pallino per chi scorre. Il colore
+   da solo non basterebbe. */
+.skill-riga-guasto { color: var(--warning); }
+.skill-riga-punto {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--warning);
+  vertical-align: 1px;
+}
+.skill-riga-lucchetto { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+
+/* «Le tue», vuota: un invito, non una scusa. */
+.skill-vuota {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.skill-vuota > .ti { font-size: 20px; color: var(--flower); }
+.skill-vuota-titolo { font-size: 13px; color: var(--text); }
+.skill-vuota .settings-hint { margin: 0 0 6px; }
+
 /* ── La riga di riepilogo ─────────────────────────────────────────────────
    Nome a sinistra, la risposta breve a destra, una freccina. Il tocco apre il
    pannello col dettaglio.

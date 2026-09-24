@@ -1125,7 +1125,8 @@
       "quantoRicorda": "How much she remembers",
       "dream": "Dream — who fills those three files",
       "giardiniere": "Gardener — who fills the notebooks",
-      "file": "The real files"
+      "file": "The real files",
+      "skill": "Skills"
     },
     "rimando": {
       "dreamInMemoria": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
@@ -1133,5 +1134,24 @@
     "file": {
       "desc": "Her working folder, all of it: folders open right here. Service files are never listed."
     }
+  },
+  "skills": {
+    "riepilogoNome": "What she knows",
+    "riepilogo": "{integrate} built in, {tue} yours",
+    "riepilogoNessunaTua": "{integrate} built in, none yours",
+    "riepilogoErrore": "couldn't be read",
+    "comeInsegnare": "To teach her one, ask in chat.",
+    "pannello": "Skills",
+    "tue": "Yours",
+    "integrate": "Built in",
+    "servizio": "Plus {n} internal ones Jenny uses on her own.",
+    "vuotaTitolo": "You haven't taught her one yet",
+    "vuotaTesto": "Explain something you ask her often: she'll turn it into a skill.",
+    "chiedi": "Ask Jenny",
+    "chiediPrompt": "I want to teach you a new skill. Use the \"skill-creator\" skill and guide me step by step.",
+    "attiva": "Turn on the {name} skill",
+    "integrataBloccata": "Comes with the app: it can't be turned off here.",
+    "erroreLettura": "The skill list couldn't be read.",
+    "riprova": "Retry"
   }
 }

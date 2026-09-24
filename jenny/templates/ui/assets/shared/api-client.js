@@ -190,6 +190,23 @@ class ApiClient {
     return res.json();
   }
 
+  /** Le skill, tutte: anche le spente e le `internal`, che Mani conta. */
+  async listSkills() {
+    const res = await this._fetch('/api/webui/skills');
+    if (!res.ok) throw new Error(`Skills failed: ${res.status}`);
+    return res.json();
+  }
+
+  /** Accende o spegne una skill **tua**. Su una integrata il gateway risponde
+   *  403: l'avvio la ri-estrarrebbe, e la scelta sparirebbe al riavvio. */
+  async setSkillDisabled(name, disabled) {
+    const res = await this._fetch(
+      `/api/webui/skills/${encodeURIComponent(name)}/update?disabled=${disabled ? 1 : 0}`,
+    );
+    if (!res.ok) throw new Error(`Skill update failed: ${res.status}`);
+    return res.json();
+  }
+
   async deleteJennyApp(slug) {
     const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/delete`);
     if (!res.ok) throw new Error(`Jenny app delete failed: ${res.status}`);

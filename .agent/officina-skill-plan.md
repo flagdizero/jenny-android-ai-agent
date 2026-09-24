@@ -1,6 +1,6 @@
 # Le skill tornano in vista — in officina, cassetto Mani
 
-> Stato: **in corso** (24/09/2026) — passi 1–2 fatti. Mockup visto
+> Stato: **in corso** (24/09/2026) — passi 1–4 fatti. Mockup visto
 > e approvato in chat il 24/09 (tre schermate: Mani, pannello, «Le tue» vuota).
 > Si spunta qui, passo per passo, man mano che il lavoro atterra.
 
@@ -154,45 +154,47 @@ Commit: *Put the rule that splits skills into yours and built-in in one place*.
 
 ## Passo 3 — la riga in cassetto
 
-- [ ] `shared/api-client.js`
+- [x] `shared/api-client.js`
   - `listSkills()` → `GET /api/webui/skills`;
   - `setSkillDisabled(name, disabled)` →
     `GET /api/webui/skills/<name>/update?disabled=1|0` (è la forma della rotta
     esistente: `parse_flag`, v. `test_update_accepts_every_truthy_form_for_disabled`).
-- [ ] `mobile-settings.js`
-  - [ ] `CASSETTI.mani.sezioni`: `'skill'` **prima di** `'scheduling'`;
-  - [ ] in `render()` → `sezioni`: `skill: () => this._gruppo('skill',
+- [x] `mobile-settings.js`
+  - [x] `CASSETTI.mani.sezioni`: `'skill'` **prima di** `'scheduling'`;
+  - [x] in `render()` → `sezioni`: `skill: () => this._gruppo('skill',
         i18n.t('officina.gruppi.skill'), this._renderSkill())`;
-  - [ ] `_renderSkill()`: `this._riepilogo('skill', …riepilogoNome,
+  - [x] `_renderSkill()`: `this._riepilogo('skill', …riepilogoNome,
         settings.loading)` + la riga fioca `skills.comeInsegnare`;
-  - [ ] `_caricaRiepilogoSkill()`, forma di `_caricaRiepilogoStoria`: guardia
+  - [x] `_caricaRiepilogoSkill()`, forma di `_caricaRiepilogoStoria`: guardia
         `_gen`, `catch` che scrive `skills.riepilogoErrore` (mai un
         «Caricamento…» eterno), chiamato in `_wireSections` accanto a
         `_caricaRiepilogoTelegram`. Il pannello **non** riusa questa fetch:
         rilegge sempre all'apertura, perché una skill scritta da Jenny un
         minuto fa deve esserci.
-- [ ] `tests/webui/test_officina_cassetti_contract.py` passa da sé (la sezione
+- [x] `tests/webui/test_officina_cassetti_contract.py` passa da sé (la sezione
       ha un cassetto e uno solo). Aggiungere in `test_officina_righe_contract.py`:
-  - [ ] `_renderSkill` usa `_riepilogo(` e non contiene `toggle-switch`
+  - [x] `_renderSkill` usa `_riepilogo(` e non contiene `toggle-switch`
         (in cassetto si legge);
-  - [ ] `_caricaRiepilogoSkill` ha `catch` e `riepilogoErrore`.
+  - [x] `_caricaRiepilogoSkill` ha `catch` e `riepilogoErrore`.
 
-Commit: *Hands gets a Skills row again*.
+> **Fatto insieme al passo 4, in un commit solo.** Una riga con la freccina che
+> non apre niente è una porta finta, e la regola del giro è che l'app non resta
+> mai rotta a metà fra un commit e l'altro.
 
 ## Passo 4 — il pannello
 
-- [ ] `officina.html`: `drawer-skill` + `drawer-skill-body`, copiati dalla forma
+- [x] `officina.html`: `drawer-skill` + `drawer-skill-body`, copiati dalla forma
       di `drawer-storia` (maniglia, titolo `skills.pannello`, chiudi), accanto a
       lui, con il commento che dice perché sta lì.
-- [ ] `mobile-settings.js`
-  - [ ] `_APRI_PANNELLO.skill = this._apriSkill`;
-  - [ ] `_apriSkill()`: prende `#drawer-skill-body` da **`document`** (il
+- [x] `mobile-settings.js`
+  - [x] `_APRI_PANNELLO.skill = this._apriSkill`;
+  - [x] `_apriSkill()`: prende `#drawer-skill-body` da **`document`** (il
         pannello vive fuori da `contentEl`: è la trappola già caduta una volta,
         `test_il_corpo_del_pannello_si_disegna_all_apertura`), ci scrive uno
         stato di caricamento, chiama `api.listSkills()`, passa per
         `dividiSkill`, disegna. Guardia `_gen`. Errore → `skills.erroreLettura`
         + bottone `skills.riprova` che richiama `_apriSkill`.
-  - [ ] riga di una skill:
+  - [x] riga di una skill:
         ```
         <div class="skill-riga">
           <button class="skill-riga-testo" aria-expanded="false">
@@ -206,32 +208,32 @@ Commit: *Hands gets a Skills row again*.
         Il tocco sul testo scioglie il troncamento a due righe (`aria-expanded`
         si aggiorna). Niente foglio, niente dialogo: è l'unica cosa in più che la
         riga ha da dire.
-  - [ ] l'interruttore: ottimistico; `api.setSkillDisabled(name, !checked)`;
+  - [x] l'interruttore: ottimistico; `api.setSkillDisabled(name, !checked)`;
         in errore torna com'era e `showToast(i18n.t('settings.saveError'),
         'error')` — la stessa forma del rollback già a `mobile-settings.js:2500`.
         Durante la chiamata `disabled` sull'input, per non mandarne due.
-  - [ ] «Le tue» vuota: il blocco del mockup (glifo, titolo, testo, bottone).
+  - [x] «Le tue» vuota: il blocco del mockup (glifo, titolo, testo, bottone).
         Il bottone chiude il pannello (`window.mobileApp.drawer.close('skill')`)
         e scrive `skills.chiediPrompt` nel composer. Per farlo serve una porta
         pubblica: in `mobile-app.js` il `_mandaInChat` che già esiste diventa
         raggiungibile come `mandaInChat(testo)` (il privato resta per
         `appsActions`, o si rinomina ovunque — uno dei due, non tutte e due).
         **Non** si manda: si scrive, e l'utente completa.
-  - [ ] in fondo: `skills.servizio` se `servizio > 0`, fioca.
-- [ ] `mobile-style.css`: `.skill-riga` (flex, `border-top` 0.5px tranne la
+  - [x] in fondo: `skills.servizio` se `servizio > 0`, fioca.
+- [x] `mobile-style.css`: `.skill-riga` (flex, `border-top` 0.5px tranne la
       prima, come `.cron-riga`), `.skill-riga-nome` in `var(--font-mono)` —
       `test_il_monospazio_viene_dal_token_e_non_da_un_nome_di_carattere` —,
       `.skill-riga-sotto` con `-webkit-line-clamp: 2` che cade quando
       `[aria-expanded="true"]`, il pallino `var(--warning)`. L'interruttore è
       il `.toggle-switch` che c'è già: niente di nuovo.
-- [ ] i18n `it.json`/`en.json`: tutte le chiavi della tabella.
-- [ ] `test_officina_righe_contract.py`:
-  - [ ] `drawer-skill` e `drawer-skill-body` esistono in `officina.html`;
-  - [ ] `_apriSkill` cerca il corpo con `document.getElementById`;
-  - [ ] **la decisione del 21/09 come banco**: il corpo di `_apriSkill` non
+- [x] i18n `it.json`/`en.json`: tutte le chiavi della tabella.
+- [x] `test_officina_righe_contract.py`:
+  - [x] `drawer-skill` e `drawer-skill-body` esistono in `officina.html`;
+  - [x] `_apriSkill` cerca il corpo con `document.getElementById`;
+  - [x] **la decisione del 21/09 come banco**: il corpo di `_apriSkill` non
         contiene `deleteSkill`, `/delete`, `ti-trash`, `ti-edit` — se qualcuno
         rimette modifica o cancellazione, lo fa sapendolo;
-  - [ ] l'interruttore compare solo passando da `controllabile(`.
+  - [x] l'interruttore compare solo passando da `controllabile(`.
 
 Commit: *The Skills panel: read them all, switch yours on and off*.
 

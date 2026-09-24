@@ -599,3 +599,62 @@ def test_la_riga_del_lavoro_tiene_quel_che_cambia_il_significato() -> None:
         "«Next:» e «Last:» sono tornate: sono due etichette per due colonne che "
         "si spiegano da sole"
     )
+
+
+# ── Le skill in Mani ─────────────────────────────────────────────────────────
+#
+# Dal 21/09/2026 al 24/09/2026 non si vedevano da nessuna parte: la schermata
+# Apps che le ospitava era stata cancellata. Tornano in Mani con la forma di
+# tutte le altre righe (v. `.agent/officina-skill-plan.md`): in cassetto una
+# riga coi due conti, il resto dietro il tocco.
+
+
+def test_le_skill_in_cassetto_sono_una_riga() -> None:
+    corpo = _corpo("_renderSkill")
+    assert "_riepilogo(" in corpo, "le skill non sono più riassunte in una riga"
+    assert "toggle-switch" not in corpo, "un interruttore è tornato disteso nel cassetto"
+
+
+def test_il_riepilogo_delle_skill_non_resta_a_caricamento_per_sempre() -> None:
+    corpo = _corpo("_caricaRiepilogoSkill")
+    assert "catch" in corpo and "riepilogoErrore" in corpo
+    assert "riepilogoSkill(" in corpo, "la riga non legge la regola condivisa"
+
+
+def test_il_pannello_delle_skill_esiste_e_si_disegna_all_apertura() -> None:
+    assert 'id="drawer-skill"' in OFFICINA_HTML
+    assert 'id="drawer-skill-body"' in OFFICINA_HTML
+    assert "skill: this._apriSkill" in SETTINGS, "niente collega la riga al pannello"
+    corpo = _corpo("_apriSkill")
+    # Il pannello vive fuori da `contentEl`: cercarlo lì scrive nel vuoto.
+    assert "document.getElementById('drawer-skill-body')" in corpo
+    assert "contentEl" not in corpo
+    assert "dividiSkill(" in corpo, "il pannello divide l'elenco per conto suo"
+
+
+def test_l_interruttore_passa_dalla_regola_che_sa_chi_sopravvive_al_riavvio() -> None:
+    """Le integrate l'avvio le ri-estrae: un interruttore su di loro mente."""
+    corpo = _corpo("_rigaSkill")
+    assert "controllabile(sk)" in corpo
+    assert corpo.index("controllabile(sk)") < corpo.index("toggle-switch")
+    assert "ti-lock" in corpo, "senza interruttore la riga deve dire perché"
+
+
+def test_la_scelta_del_21_09_resta_una_scelta() -> None:
+    """Crearle, cambiarle e cancellarle non stanno nel pannello: si chiede a
+    Jenny. Chi le rimette lo fa sapendolo, non per inerzia."""
+    pannello = "".join(
+        _corpo(nome) for nome in ("_apriSkill", "_rigaSkill", "_skillVuota", "_cablaSkill")
+    )
+    for roba in ("deleteSkill", "/delete", "ti-trash", "ti-edit", "confirmDialog"):
+        assert roba not in pannello, f"«{roba}» è comparso nel pannello delle skill"
+
+
+def test_chiedi_a_jenny_scrive_e_non_manda() -> None:
+    corpo = _corpo("_cablaSkill")
+    assert "mandaInChat" in corpo and "skills.chiediPrompt" in corpo
+    assert "sendMessage" not in corpo
+    app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
+    assert re.search(r"\n  mandaInChat\(testo\) \{", app), (
+        "il guscio non espone più il modo di scrivere nel composer"
+    )

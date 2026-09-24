@@ -78,6 +78,23 @@
         <div class="drawer-body" id="drawer-storia-body"></div>
       </div>
 
+      <!-- DRAWER: Skill ─ l'elenco, in due blocchi: le tue e quelle integrate.
+           In cassetto (Mani) ne resta una riga coi due conti. Qui si leggono
+           tutte e si accendono e spengono le tue — solo le tue: le integrate
+           l'avvio le ri-estrae dall'APK, e una scelta su di loro sparirebbe al
+           riavvio. Crearle, cambiarle e cancellarle non stanno qui per scelta
+           (21/09/2026): si chiede a Jenny. -->
+      <div class="drawer" id="drawer-skill">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" data-i18n="skills.pannello">Skill</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body" id="drawer-skill-body"></div>
+      </div>
+
       <!-- DRAWER: Telegram ─ il pannello di accoppiamento.
            In cassetto ne resta una riga: «collegato a @nome», oppure spento.
            Il giro intero — interruttore, token, codice, disaccoppia — e' lo

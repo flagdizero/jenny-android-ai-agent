@@ -679,11 +679,15 @@ class MobileApp {
    *  chat: cambia vista e scrive nel composer. */
   appsActions() {
     return (this._appsActions ||= new AppsActions(this.appsSource(), {
-      sendChatPrompt: (testo) => this._mandaInChat(testo),
+      sendChatPrompt: (testo) => this.mandaInChat(testo),
     }));
   }
 
-  _mandaInChat(testo) {
+  /** Scrive una richiesta nel composer della Console, **senza mandarla**.
+   *  Pubblico perche' lo usa anche Mani («Chiedi a Jenny» fra le skill): un
+   *  secondo modo di scrivere in chat divergerebbe da questo alla prima
+   *  correzione. */
+  mandaInChat(testo) {
     this.switchMode('chat');
     const chat = this.controllers?.chat;
     if (!chat?.input) return;

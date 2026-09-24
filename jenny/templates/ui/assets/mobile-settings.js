@@ -12,6 +12,7 @@ import {
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
 import { whenText } from './shared/when.js';
+import { controllabile, dividiSkill, riassuntoSkill, riepilogoSkill } from './shared/skills-view.js';
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
@@ -91,7 +92,7 @@ export const CASSETTI = {
     sezioni: ['chiPensa', 'marche', 'parametri', 'battery', 'system'],
   },
   mani: {
-    sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'scheduling'],
+    sezioni: ['ricercaWeb', 'posizione', 'ssh', 'telegram', 'skill', 'scheduling'],
   },
   /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
      quando quella scheda contiene l'esploratore vero la sua altezza dipende da
@@ -285,6 +286,7 @@ export class SettingsController {
       posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d)),
       ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      skill: () => this._gruppo('skill', i18n.t('officina.gruppi.skill'), this._renderSkill()),
       scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
       quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
@@ -1837,6 +1839,7 @@ export class SettingsController {
     return {
       storia: this._apriStoria,
       telegram: this._apriTelegram,
+      skill: this._apriSkill,
       tetti: this._apriTetti,
     };
   }
@@ -2126,6 +2129,149 @@ export class SettingsController {
 
   // ── Wire Events ────────────────────────────────────────────────────
 
+  // ── Skill ──────────────────────────────────────────────────────────
+
+  /** Le skill, in cassetto, sono una riga: quante vengono con l'app e quante
+   *  sono tue. L'elenco e l'interruttore stanno nel pannello.
+   *
+   *  Stavano nella schermata Apps, cancellata il 21/09/2026, e da allora non si
+   *  vedevano da nessuna parte. Qui e non altrove perche' Mani risponde a
+   *  *cosa sa fare* Jenny, e una skill e' una procedura che sa eseguire (v.
+   *  `.agent/officina-skill-plan.md`). Crearle, cambiarle e cancellarle
+   *  restano fuori, per scelta: si chiede a lei, in chat.
+   */
+  _renderSkill() {
+    return this._riepilogo('skill', i18n.t('skills.riepilogoNome'), i18n.t('settings.loading'))
+      + `<p class="settings-rimando">${i18n.t('skills.comeInsegnare')}</p>`;
+  }
+
+  /** La riga in cassetto. Un errore lo dice invece di restare a caricare. */
+  async _caricaRiepilogoSkill() {
+    const gen = this._gen;
+    const scrivi = (testo) => {
+      const el = this.contentEl?.querySelector('#riepilogo-skill');
+      if (el) el.textContent = testo;
+    };
+    try {
+      const { skills } = await api.listSkills();
+      if (this._stale(gen)) return;
+      scrivi(riepilogoSkill(dividiSkill(skills), (k, v) => i18n.t(k, v)));
+    } catch {
+      if (this._stale(gen)) return;
+      scrivi(i18n.t('skills.riepilogoErrore'));
+    }
+  }
+
+  /** Il pannello. Rilegge **sempre** all'apertura, e non riusa la fetch della
+   *  riga: una skill che Jenny ha scritto un minuto fa deve esserci.
+   *
+   *  Il corpo si cerca in `document` e non in `contentEl`: il pannello vive
+   *  fuori dalla vista, ed e' la trappola in cui `_loadSnapshotList` e' gia'
+   *  caduta una volta. */
+  async _apriSkill() {
+    const corpo = document.getElementById('drawer-skill-body');
+    if (!corpo) return;
+    const gen = this._gen;
+    corpo.innerHTML = `<div class="settings-empty-state">${i18n.t('settings.loading')}</div>`;
+    let skills;
+    try {
+      ({ skills } = await api.listSkills());
+    } catch {
+      if (this._stale(gen)) return;
+      corpo.innerHTML = `
+        <div class="settings-empty-state">${i18n.t('skills.erroreLettura')}</div>
+        <button class="settings-btn-add" type="button" data-skill-riprova>${i18n.t('skills.riprova')}</button>`;
+      corpo.querySelector('[data-skill-riprova]')
+        ?.addEventListener('click', () => this._apriSkill());
+      return;
+    }
+    if (this._stale(gen)) return;
+    const { tue, integrate, servizio } = dividiSkill(skills);
+    corpo.innerHTML = `
+      <div class="settings-gruppo">
+        <div class="settings-gruppo-label">${i18n.t('skills.tue')}</div>
+        <section class="settings-card">${tue.length
+          ? tue.map((sk) => this._rigaSkill(sk)).join('')
+          : this._skillVuota()}</section>
+      </div>
+      ${integrate.length ? `
+      <div class="settings-gruppo">
+        <div class="settings-gruppo-label">${i18n.t('skills.integrate')}</div>
+        <section class="settings-card">${integrate.map((sk) => this._rigaSkill(sk)).join('')}</section>
+      </div>` : ''}
+      ${servizio ? `<p class="settings-rimando">${i18n.t('skills.servizio', { n: servizio })}</p>` : ''}`;
+    this._cablaSkill(corpo);
+  }
+
+  /** Una skill: nome, una riga sotto, e a destra o l'interruttore o il
+   *  lucchetto. L'interruttore c'e' solo dove la scelta sopravvive al riavvio
+   *  (`controllabile`): su una integrata l'avvio la cancellerebbe.
+   *
+   *  «Non disponibile» e «spenta» sono due cose: la prima e' un impedimento, e
+   *  prende la riga sotto col suo motivo — in testo, non solo in colore. */
+  _rigaSkill(sk) {
+    const nome = escapeHtml(sk.name);
+    const sotto = sk.available === false
+      ? `<span class="skill-riga-guasto"><span class="skill-riga-punto" aria-hidden="true"></span>${escapeHtml(sk.unavailable_reason || '')}</span>`
+      : escapeHtml(riassuntoSkill(sk, i18n.locale));
+    const comando = controllabile(sk)
+      ? `<label class="toggle-switch">
+          <input type="checkbox" data-skill-toggle="${nome}" ${sk.disabled ? '' : 'checked'}
+                 aria-label="${escapeHtml(i18n.t('skills.attiva', { name: sk.name }))}">
+          <span class="toggle-slider"></span>
+        </label>`
+      : `<i class="ti ti-lock skill-riga-lucchetto" role="img"
+            aria-label="${escapeHtml(i18n.t('skills.integrataBloccata'))}"
+            title="${escapeHtml(i18n.t('skills.integrataBloccata'))}"></i>`;
+    return `<div class="skill-riga">
+      <button class="skill-riga-testo" type="button" aria-expanded="false">
+        <span class="skill-riga-nome">${nome}</span>
+        ${sotto ? `<span class="skill-riga-sotto">${sotto}</span>` : ''}
+      </button>
+      ${comando}
+    </div>`;
+  }
+
+  /** «Le tue», vuota: un invito, non una scusa. Il bottone scrive nel composer
+   *  e **non manda**: la frase la finisce l'utente. */
+  _skillVuota() {
+    return `<div class="skill-vuota">
+      <i class="ti ti-sparkles" aria-hidden="true"></i>
+      <div class="skill-vuota-titolo">${i18n.t('skills.vuotaTitolo')}</div>
+      <p class="settings-hint">${i18n.t('skills.vuotaTesto')}</p>
+      <button class="settings-btn-add" type="button" data-skill-chiedi>${i18n.t('skills.chiedi')}</button>
+    </div>`;
+  }
+
+  _cablaSkill(corpo) {
+    // Il tocco sul testo scioglie il troncamento a due righe: e' l'unica cosa
+    // in piu' che la riga ha da dire, e non vale un foglio.
+    corpo.querySelectorAll('.skill-riga-testo').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        btn.setAttribute('aria-expanded', String(btn.getAttribute('aria-expanded') !== 'true'));
+      });
+    });
+    corpo.querySelectorAll('[data-skill-toggle]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const acceso = input.checked;
+        input.disabled = true;  // una richiesta alla volta
+        try {
+          await api.setSkillDisabled(input.dataset.skillToggle, !acceso);
+        } catch {
+          input.checked = !acceso;  // rollback sull'errore
+          showToast(i18n.t('settings.saveError'), 'error');
+        } finally {
+          input.disabled = false;
+        }
+      });
+    });
+    corpo.querySelector('[data-skill-chiedi]')?.addEventListener('click', () => {
+      const app = window.mobileApp;
+      app?.drawer?.close('skill');
+      app?.mandaInChat?.(i18n.t('skills.chiediPrompt'));
+    });
+  }
+
   // ── Programmazione ─────────────────────────────────────────────────────
 
   /* Segnaposto: il blocco si popola da `_loadCron`, come SSH e gli snapshot.
@@ -2403,6 +2549,9 @@ export class SettingsController {
     // Telegram: in cassetto solo la riga. Il widget lo monta `_apriTelegram`
     // quando il pannello si apre — prima, il suo contenitore non esiste.
     this._caricaRiepilogoTelegram();
+
+    // Skill: stessa forma: la riga si riempie da sé, il pannello all'apertura.
+    this._caricaRiepilogoSkill();
 
     // Attività in background: stessa card condivisa con onboarding e Telegram.
     // Qui `grantedKey` è d'obbligo — è l'unica superficie che l'utente apre

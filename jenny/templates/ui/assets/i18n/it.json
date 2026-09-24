@@ -1128,7 +1128,8 @@
       "quantoRicorda": "Quanto ricorda",
       "dream": "Dream — chi riempie quei tre file",
       "giardiniere": "Giardiniere — chi riempie i quaderni",
-      "file": "I file veri"
+      "file": "I file veri",
+      "skill": "Skill"
     },
     "rimando": {
       "dreamInMemoria": "Chi riempie la memoria — Dream e il giardiniere — sta accanto a quel che riempie, in Memoria."
@@ -1136,5 +1137,24 @@
     "file": {
       "desc": "La sua cartella di lavoro, per intero: le cartelle si aprono qui. I file di servizio non si elencano."
     }
+  },
+  "skills": {
+    "riepilogoNome": "Cosa sa fare",
+    "riepilogo": "{integrate} integrate, {tue} tue",
+    "riepilogoNessunaTua": "{integrate} integrate, nessuna tua",
+    "riepilogoErrore": "non si è potuto leggere",
+    "comeInsegnare": "Per insegnargliene una, chiediglielo in chat.",
+    "pannello": "Skill",
+    "tue": "Le tue",
+    "integrate": "Integrate",
+    "servizio": "Più {n} di servizio, che Jenny usa da sé.",
+    "vuotaTitolo": "Non gliene hai ancora insegnata nessuna",
+    "vuotaTesto": "Spiegale una cosa che le chiedi spesso: la trasforma in una skill.",
+    "chiedi": "Chiedi a Jenny",
+    "chiediPrompt": "Voglio insegnarti una nuova skill. Usa la skill \"skill-creator\" e guidami passo passo.",
+    "attiva": "Attiva la skill {name}",
+    "integrataBloccata": "Viene con l'app: non si spegne da qui.",
+    "erroreLettura": "L'elenco delle skill non si è potuto leggere.",
+    "riprova": "Riprova"
   }
 }
