@@ -159,6 +159,13 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
   - Sul telefono: arriva un avviso, si apre la casa sulla chat → la notifica
     sparisce; su un'altra pagina resta.
 
+**Esito della fase 0 (24/09).** Suite verde su 3.14 (10.654) e 3.11 (10.644),
+release costruita e installata alle 21:05, la casa si apre e il gateway non
+logga errori. **Restano le due prove sul telefono** di 0.3 (un'app aperta,
+Jenny che ne cambia i dati) e 0.4 (un avviso vero a schermo spento, poi la
+casa sulla chat): tutte e due fanno suonare il telefono o scrivono nella
+conversazione personale, quindi si fanno con l'utente o col suo permesso.
+
 ---
 
 ## Fase 1 — Le decisioni tue
