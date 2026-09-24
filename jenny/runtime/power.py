@@ -372,11 +372,6 @@ async def is_battery_exempt() -> bool:
     return await _call("isBatteryExempt")
 
 
-async def is_device_idle() -> bool:
-    """``True`` se il device è in doze (idle mode)."""
-    return await _call("isDeviceIdleMode")
-
-
 async def can_schedule_exact_alarms() -> bool:
     """``True`` se l'app può programmare alarm esatti (permesso Android 12+)."""
     return await _call("canScheduleExactAlarms")

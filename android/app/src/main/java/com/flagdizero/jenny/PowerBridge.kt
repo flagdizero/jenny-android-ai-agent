@@ -476,17 +476,6 @@ class PowerBridge(context: Context) {
         }
     }
 
-    /** True se il dispositivo è in Doze profondo in questo istante. */
-    fun isDeviceIdleMode(): Boolean {
-        val manager = pm ?: return false
-        return try {
-            manager.isDeviceIdleMode
-        } catch (e: Exception) {
-            Log.w(TAG, "isDeviceIdleMode failed", e)
-            false
-        }
-    }
-
     /** Sveglia one-shot a `atMillisSinceEpoch` (epoch UTC, RTC_WAKEUP) che fa
      *  ripartire il gateway via `WakeReceiver`. Vedi il gemello statico. */
     fun scheduleWake(atMillisSinceEpoch: Long, requestCode: Int): Boolean =

@@ -58,9 +58,6 @@ class _FakeBridge:
     def isBatteryExempt(self) -> bool:  # noqa: N802
         return self._result()
 
-    def isDeviceIdleMode(self) -> bool:  # noqa: N802
-        return self._result()
-
     def scheduleWake(self, at_ms: int, request_code: int) -> bool:  # noqa: N802
         self.scheduled.append((at_ms, request_code))
         return self._result()
@@ -146,7 +143,6 @@ class TestWithoutAndroid:
     async def test_accessors_return_safe_defaults(self, monkeypatch):
         monkeypatch.setattr(power, "get_android_context", lambda: None)
         assert await power.is_battery_exempt() is False
-        assert await power.is_device_idle() is False
         assert await power.can_schedule_exact_alarms() is False
         assert await power.schedule_wake(1_700_000_000_000, 7) is False
         assert await power.cancel_wake(7) is False
@@ -471,7 +467,6 @@ class TestBridgeFailures:
             assert held is False  # acquire fallita: non fingiamo di tenerlo
 
         assert power._REFCOUNTS == {}
-        assert await power.is_device_idle() is False
         assert await power.schedule_wake(1, 2) is False
 
     async def test_refused_acquire_is_not_reported_as_held(self, monkeypatch):
@@ -490,7 +485,6 @@ class TestAccessorsWithBridge:
         bridge = _install_bridge(monkeypatch, _FakeBridge())
 
         assert await power.is_battery_exempt() is True
-        assert await power.is_device_idle() is True
         assert await power.can_schedule_exact_alarms() is True
         assert await power.schedule_wake(1_700_000_000_000, 7) is True
         assert await power.cancel_wake(7) is True
