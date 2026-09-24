@@ -30,6 +30,7 @@ from jenny.providers.base import (
     ToolCallRequest,
     describe_exc,
     parse_tool_arguments,
+    stream_timeout_response,
 )
 from jenny.providers.body_merge import deep_merge
 from jenny.providers.endpoint_budget import is_local_endpoint, request_timeout_s
@@ -561,17 +562,7 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
 
         except asyncio.TimeoutError:
             waited_s = idle_timeout_s if saw_output else first_output_timeout_s
-            return LLMResponse(
-                content=(
-                    f"Error calling LLM: stream stalled for more than "
-                    f"{waited_s:g} seconds"
-                    if saw_output
-                    else f"Error calling LLM: no output from the model within "
-                    f"{waited_s:g} seconds"
-                ),
-                finish_reason="error",
-                error_kind="timeout",
-            )
+            return stream_timeout_response(waited_s, saw_output)
         except httpx.HTTPStatusError as e:
             # Passa da _handle_error: status code, retry-after e error_type
             # arrivano così alla retry policy, che altrimenti vedrebbe solo

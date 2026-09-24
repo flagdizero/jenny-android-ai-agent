@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import ssl
 import time
 import uuid
@@ -25,6 +24,7 @@ from jenny.providers.base import (
     ProviderHTTPError,
     StreamTimeout,
     describe_exc,
+    stream_timeout_response,
     tool_arguments_json_for_replay,
 )
 from jenny.providers.openai_compat_helpers import (
@@ -56,6 +56,7 @@ from jenny.providers.openai_responses import (
     consume_sse_with_reasoning,
     convert_messages,
     convert_tools,
+    iter_sse,
     parse_response_output,
 )
 from jenny.providers.opencode import message_keys as opencode_message_keys
@@ -701,37 +702,14 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
     async def _iter_chat_completion_sse(
         response: httpx.Response,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Yield parsed Chat Completions SSE events as dicts."""
-        buffer: list[str] = []
+        """Yield parsed Chat Completions SSE events as dicts.
 
-        def _flush() -> dict[str, Any] | None:
-            data_lines = [line[5:].strip() for line in buffer if line.startswith("data:")]
-            buffer.clear()
-            if not data_lines:
-                return None
-            data = "\n".join(data_lines).strip()
-            if not data or data == "[DONE]":
-                return None
-            try:
-                return json.loads(data)
-            except Exception:
-                logger.warning(
-                    "Failed to parse chat completion SSE JSON: {}", data[:200]
-                )
-                return None
-
-        async for line in response.aiter_lines():
-            if line == "":
-                event = _flush()
-                if event is not None:
-                    yield event
-                continue
-            buffer.append(line)
-
-        if buffer:
-            event = _flush()
-            if event is not None:
-                yield event
+        Lo stesso parser della Responses API (``openai_responses.parsing.iter_sse``):
+        erano due copie che differivano solo nel testo del log. Il metodo resta
+        perché i test lo sostituiscono per simulare uno stream che si ferma.
+        """
+        async for event in iter_sse(response):
+            yield event
 
     async def _http_chat_stream(
         self,
@@ -979,17 +957,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
         except asyncio.TimeoutError as e:
             waited_s = e.waited_s if isinstance(e, StreamTimeout) else idle_timeout_s
             saw_output = e.saw_output if isinstance(e, StreamTimeout) else True
-            return LLMResponse(
-                content=(
-                    f"Error calling LLM: stream stalled for more than "
-                    f"{waited_s:g} seconds"
-                    if saw_output
-                    else f"Error calling LLM: no output from the model within "
-                    f"{waited_s:g} seconds"
-                ),
-                finish_reason="error",
-                error_kind="timeout",
-            )
+            return stream_timeout_response(waited_s, saw_output)
         except Exception as e:
             return self._handle_error(
                 e, partial_content=getattr(e, "partial_content", None),

@@ -213,6 +213,25 @@ class LLMResponse:
         return self.finish_reason in ("tool_calls", "function_call", "stop")
 
 
+def stream_timeout_response(waited_s: float, saw_output: bool) -> LLMResponse:
+    """L'errore di uno stream che si è fermato, uguale per ogni provider.
+
+    La frase dice se lo stream era già partito: «nessun output entro N secondi»
+    è il budget lungo del primo token (il modello sta ancora ragionando), «si è
+    fermato per più di N secondi» è il silenzio dopo che qualcosa era arrivato.
+    Era scritta in due copie, una per provider.
+    """
+    return LLMResponse(
+        content=(
+            f"Error calling LLM: stream stalled for more than {waited_s:g} seconds"
+            if saw_output
+            else f"Error calling LLM: no output from the model within {waited_s:g} seconds"
+        ),
+        finish_reason="error",
+        error_kind="timeout",
+    )
+
+
 @dataclass(frozen=True)
 class GenerationSettings:
     """Default generation settings."""
