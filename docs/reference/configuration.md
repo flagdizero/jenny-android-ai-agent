@@ -423,7 +423,6 @@ These live in `config.json` and not in the browser's storage on purpose: they ar
 |---|---|---|---|
 | `wiki.enabled` | bool | `true` | Off makes every wiki route answer `503`. |
 | `wiki.wikisDir` | string | `"wikis"` | Directory holding the wikis, relative to the workspace. |
-| `wiki.extensions` | string[] | `["fenced_code", "tables", "toc", "wikilinks", "mermaid"]` | Python-Markdown extensions used to render wiki pages. Mermaid renders here and only here — not in chat. |
 
 See [Wiki](../using/wiki.md).
 

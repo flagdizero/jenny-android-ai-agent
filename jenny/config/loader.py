@@ -250,6 +250,11 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     # richiesta stessa: l'umore si legge dagli emoji (``session/mascot_mood.py``).
     "agents.defaults.mascotMoodModelPreset",
     "agents.defaults.mascot_mood_model_preset",
+    # Le estensioni Markdown della wiki, ritirate il 24/09/2026: il renderer
+    # non le ha mai lette (``webui/wiki.py`` usa le sue), e la documentazione
+    # le dava per configurabili. Ogni file le porta, perche' il dump scriveva
+    # anche i default.
+    "wiki.extensions",
 })
 
 

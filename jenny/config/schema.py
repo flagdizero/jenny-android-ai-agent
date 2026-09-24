@@ -852,13 +852,6 @@ class WikiConfig(Base):
 
     enabled: bool = True
     wikis_dir: str = "wikis"  # Relativo a workspace
-    extensions: list[str] = Field(default_factory=lambda: [
-        "fenced_code",
-        "tables",
-        "toc",
-        "wikilinks",
-        "mermaid",
-    ])
 
 
 class WorkspaceConfig(Base):

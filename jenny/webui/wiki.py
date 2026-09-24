@@ -510,21 +510,24 @@ class _MermaidPreservePreprocessor(Preprocessor):
         return out
 
 
+# Le estensioni Python-Markdown delle pagine wiki. Fisse: erano esposte come
+# ``wiki.extensions`` nella config, ma nessuno passava quel valore fin qui, e
+# un'estensione scelta dall'utente sarebbe codice da validare (ritirata il
+# 24/09/2026).
+_WIKI_EXTENSIONS = ("fenced_code", "tables", "toc", "wikilinks", "mermaid")
+
+
 def create_renderer(
     wiki_root: Path,
     current_wiki: str | None = None,
     wikis_map: dict[str, Path] | None = None,
-    extensions: list[str] | None = None,
 ) -> Callable[[str], RenderedPage]:
     """Create a markdown renderer configured for wiki pages.
 
     wiki_root: the wiki root directory (parent of wiki/ and audit/).
     """
-    if extensions is None:
-        extensions = ["fenced_code", "tables", "toc", "wikilinks", "mermaid"]
-
     md_extensions: list[Extension | str] = []
-    for ext in extensions:
+    for ext in _WIKI_EXTENSIONS:
         if ext == "wikilinks":
             md_extensions.append(_WikilinksExtension(wiki_root, current_wiki, wikis_map))
         elif ext == "mermaid":

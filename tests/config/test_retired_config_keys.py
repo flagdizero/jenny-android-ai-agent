@@ -156,3 +156,30 @@ async def test_the_mood_model_preset_is_retired_for_real(tmp_path) -> None:
     assert defaults["mascotMood"] is False
     assert "mascotMoodModelPreset" not in defaults
     assert "mascot_mood_model_preset" not in defaults
+
+
+async def test_the_wiki_extensions_are_retired(tmp_path) -> None:
+    """``wiki.extensions`` non l'ha mai letto nessuno: il renderer usava le sue.
+
+    Il dump scriveva anche i default, quindi ogni ``config.json`` sul telefono
+    la porta. Si carica senza avvisi e cade alla prima scrittura.
+    """
+    from jenny.config.store import mutate
+
+    path = tmp_path / "config.json"
+    _write(path, {
+        "configVersion": CURRENT_CONFIG_VERSION,
+        "wiki": {"enabled": True, "wikisDir": "wikis",
+                 "extensions": ["fenced_code", "tables", "toc", "wikilinks", "mermaid"]},
+    })
+
+    assert _warnings_while(lambda: load_config_with_raw(path)) == []
+
+    def _spegni(config) -> None:
+        config.wiki.enabled = False
+
+    await mutate(_spegni, config_path=path)
+    wiki = json.loads(path.read_text(encoding="utf-8"))["wiki"]
+    assert wiki["enabled"] is False
+    assert "extensions" not in wiki
+
