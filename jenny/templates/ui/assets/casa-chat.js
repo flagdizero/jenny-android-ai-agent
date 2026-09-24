@@ -38,6 +38,7 @@ import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
 import { renderRich } from './shared/rich-content.js';
+import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
@@ -66,20 +67,6 @@ const STICK_PX = 24;
    cinque schermate. Quel che cala e' il numero di turni selezionati, e con loro
    i record grezzi che il gateway rigioca a ogni apertura sulla CPU del telefono. */
 const HISTORY_PAGE_SIZE = 50;
-
-function renderMarkdown(text) {
-  /* Fallisce chiuso, non aperto: se il sanificatore non e' stato caricato si
-     degrada a testo semplice invece di iniettare HTML non sanificato. */
-  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
-    return escapeHtml(text);
-  }
-  try {
-    return DOMPurify.sanitize(marked.parse(text));
-  } catch (e) {
-    console.error('Markdown parse error:', e);
-    return escapeHtml(text);
-  }
-}
 
 function mediaKind(entry) {
   if (entry.kind) return entry.kind;

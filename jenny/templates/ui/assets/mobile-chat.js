@@ -27,6 +27,7 @@ import { openImageLightbox } from './shared/image-lightbox.js';
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';
+import { renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
@@ -131,24 +132,14 @@ async function copyCodeFromButton(btn) {
   }, 2000);
 }
 
+// C1: il markdown del modello passa dal sanificatore prima di `innerHTML`, e
+// fallisce chiuso — v. `shared/markdown.js`, lo stesso della casa. Qui c'e' in
+// piu' solo la configurazione di marked (highlight.js, «Copia», a capo).
+// I default di DOMPurify tengono gia' le `class` di highlight.js, le tabelle
+// GFM, <a href> (http/https/relative), <img> e <pre class="mermaid">.
 function renderMarkdown(text) {
   initMarked();
-  if (typeof marked !== 'undefined') {
-    try {
-      // C1: sanitize model-generated HTML before it reaches innerHTML.
-      // DOMPurify defaults already preserve highlight.js `class`, GFM tables,
-      // <a href> (http/https/relative), <img>, and <pre class="mermaid">,
-      // so no ADD_TAGS/ADD_ATTR are required.
-      // Fail SAFE, not open: if the sanitizer vendor failed to load, degrade to
-      // escaped plain text rather than injecting unsanitized HTML.
-      if (typeof DOMPurify === 'undefined') return escapeHtml(text);
-      return DOMPurify.sanitize(marked.parse(text));
-    } catch (e) {
-      console.error('Markdown parse error:', e);
-      return escapeHtml(text);
-    }
-  }
-  return escapeHtml(text);
+  return renderSafeMarkdown(text);
 }
 
 export class ChatController {
