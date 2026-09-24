@@ -10,6 +10,22 @@ import { scopeChip } from './shared/scope-chip.js';
 import { writeSwitch } from './shared/write-switch.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
+/* Formule e diagrammi dentro una bolla appena disegnata.
+ *
+ *  Era `renderKaTeX`, e chiamava KaTeX per conto proprio. Il 21/09/2026 le
+ *  librerie sono state cancellate «perche' le usava solo la wiki» — falso:
+ *  questi quattro punti le usavano — e la funzione, che cominciava con «se la
+ *  libreria c'e'», ha smesso di fare qualcosa **senza dirlo**. Adesso il come
+ *  sta in un posto solo (`shared/rich-content.js`), condiviso col lettore delle
+ *  pagine e con la chat di casa: e' l'unica forma in cui una libreria non puo'
+ *  perdere meta' dei suoi lettori senza che nessuno se ne accorga.
+ *
+ *  **Niente `$...$` in riga, qui.** In chat si parla di prezzi, e «costa $5,
+ *  forse $10» diventerebbe un tentativo di matematica. Nelle pagine della wiki,
+ *  dove la skill impone `$f(x)$`, il lettore lo accende. Qui quindi ogni
+ *  chiamata è `renderRich(contenitore)`, senza opzioni: fino al 24/09/2026 lo
+ *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
+ */
 import { renderRich } from './shared/rich-content.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
@@ -133,24 +149,6 @@ function renderMarkdown(text) {
     }
   }
   return escapeHtml(text);
-}
-
-/** Formule e diagrammi dentro una bolla appena disegnata.
- *
- *  Era `renderKaTeX`, e chiamava KaTeX per conto proprio. Il 21/09/2026 le
- *  librerie sono state cancellate «perche' le usava solo la wiki» — falso:
- *  questi quattro punti le usavano — e la funzione, che cominciava con «se la
- *  libreria c'e'», ha smesso di fare qualcosa **senza dirlo**. Adesso il come
- *  sta in un posto solo (`shared/rich-content.js`), condiviso col lettore delle
- *  pagine e con la chat di casa: e' l'unica forma in cui una libreria non puo'
- *  perdere meta' dei suoi lettori senza che nessuno se ne accorga.
- *
- *  **Niente `$...$` in riga, qui.** In chat si parla di prezzi, e «costa $5,
- *  forse $10» diventerebbe un tentativo di matematica. Nelle pagine della wiki,
- *  dove la skill impone `$f(x)$`, il lettore lo accende.
- */
-function renderRichContent(container) {
-  renderRich(container);
 }
 
 export class ChatController {
@@ -1043,7 +1041,7 @@ export class ChatController {
       const content = node.querySelector('.chat-content');
       if (content) {
         content.innerHTML = renderMarkdown(turn.content.trim());
-        renderRichContent(content);
+        renderRich(content);
         this._makeFilePathsClickable(content);
       }
       this._setMessageSource(node, turn.content.trim());
@@ -1238,7 +1236,7 @@ export class ChatController {
       content.textContent = text;
     } else {
       content.innerHTML = renderMarkdown(String(text || ''));
-      renderRichContent(content);
+      renderRich(content);
       this._makeFilePathsClickable(content);
     }
     msg.appendChild(content);
@@ -1611,7 +1609,7 @@ export class ChatController {
     if (!msg || !text) return;
     const { thinking, header, body } = this._buildThinkingBlock(collapsed);
     body.innerHTML = renderMarkdown(text);
-    renderRichContent(body);
+    renderRich(body);
 
     header.addEventListener('click', () => {
       thinking.classList.toggle('collapsed');
@@ -1772,7 +1770,7 @@ export class ChatController {
        arriva, e li' una formula e' a meta'. Il ragionamento e' una piega che si
        apre per guardarci dentro — ed e' il posto dove una formula serve di
        piu', non di meno. */
-    if (this._currentThinking) renderRichContent(this._currentThinking);
+    if (this._currentThinking) renderRich(this._currentThinking);
     this._setThinkingLive(this._currentThinking, false);
     /* Il buffer NON si azzera. `reasoning_end` chiude un *segmento*, non il
        ragionamento del turno: il modello ne apre uno nuovo ogni volta che
@@ -1801,7 +1799,7 @@ export class ChatController {
     const finalText = fullText || this._deltaBuffer;
     if (this._currentContent && finalText) {
       this._currentContent.innerHTML = renderMarkdown(finalText);
-      renderRichContent(this._currentContent);
+      renderRich(this._currentContent);
       this._makeFilePathsClickable(this._currentContent);
       this._setMessageSource(this._currentMsg, finalText);
     }
@@ -1929,7 +1927,7 @@ export class ChatController {
       content.className = 'chat-content';
       this._currentMsg.appendChild(content);
       content.innerHTML = renderMarkdown(msg.text);
-      renderRichContent(content);
+      renderRich(content);
       this._makeFilePathsClickable(content);
       this._setMessageSource(this._currentMsg, msg.text);
       /* Una consegna proattiva può non avere un `turn_end` dietro: la riga di

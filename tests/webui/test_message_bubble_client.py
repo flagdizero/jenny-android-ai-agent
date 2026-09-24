@@ -105,7 +105,7 @@ const renderMarkdown = (text) => text;
    librerie sono state cancellate lasciando i chiamanti, qui dentro non e'
    cambiato niente. Che il chiamante e la libreria stiano insieme lo misura
    `test_vendor_contract.py`, e come disegnano `test_rich_content_client.py`. */
-const renderRichContent = () => {};
+const renderRich = () => {};
 
 function makeChat() {
   return {
