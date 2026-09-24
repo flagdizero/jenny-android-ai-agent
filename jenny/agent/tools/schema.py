@@ -80,42 +80,15 @@ class StringSchema(Schema):
         return d
 
 
-class IntegerSchema(Schema):
-    """Integer parameter: description and optional bounds (keyword-only)."""
+class _NumericSchema(Schema):
+    """Base dei due schemi numerici: stessi campi, cambia solo il tipo JSON.
 
-    def __init__(
-        self,
-        *,
-        description: str = "",
-        minimum: int | None = None,
-        maximum: int | None = None,
-        enum: tuple[int, ...] | list[int] | None = None,
-        nullable: bool = False,
-    ) -> None:
-        self._description = description
-        self._minimum = minimum
-        self._maximum = maximum
-        self._enum = tuple(enum) if enum is not None else None
-        self._nullable = nullable
+    ``IntegerSchema`` e ``NumberSchema`` erano due copie identiche a parte la
+    parola ``"integer"``/``"number"``. Argomenti solo keyword: un posizionale era
+    una descrizione che si perdeva (v. il commit che li ha resi tali).
+    """
 
-    def to_json_schema(self) -> dict[str, Any]:
-        t: Any = "integer"
-        if self._nullable:
-            t = ["integer", "null"]
-        d: dict[str, Any] = {"type": t}
-        if self._description:
-            d["description"] = self._description
-        if self._minimum is not None:
-            d["minimum"] = self._minimum
-        if self._maximum is not None:
-            d["maximum"] = self._maximum
-        if self._enum is not None:
-            d["enum"] = list(self._enum)
-        return d
-
-
-class NumberSchema(Schema):
-    """Numeric parameter (JSON number): description and optional bounds (keyword-only)."""
+    _JSON_TYPE = ""
 
     def __init__(
         self,
@@ -133,9 +106,9 @@ class NumberSchema(Schema):
         self._nullable = nullable
 
     def to_json_schema(self) -> dict[str, Any]:
-        t: Any = "number"
+        t: Any = self._JSON_TYPE
         if self._nullable:
-            t = ["number", "null"]
+            t = [self._JSON_TYPE, "null"]
         d: dict[str, Any] = {"type": t}
         if self._description:
             d["description"] = self._description
@@ -146,6 +119,18 @@ class NumberSchema(Schema):
         if self._enum is not None:
             d["enum"] = list(self._enum)
         return d
+
+
+class IntegerSchema(_NumericSchema):
+    """Integer parameter: description and optional bounds (keyword-only)."""
+
+    _JSON_TYPE = "integer"
+
+
+class NumberSchema(_NumericSchema):
+    """Numeric parameter (JSON number): description and optional bounds (keyword-only)."""
+
+    _JSON_TYPE = "number"
 
 
 class BooleanSchema(Schema):
