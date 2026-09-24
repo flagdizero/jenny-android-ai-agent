@@ -3,8 +3,8 @@
 Era scritta due volte (casa e officina), con la stessa regola di sicurezza:
 senza ``marked`` o senza ``DOMPurify`` il testo esce con l'HTML neutralizzato,
 mai iniettato così com'è; un errore di parse fa lo stesso. Dal 24/09/2026 la
-funzione è una sola (``shared/markdown.js``); il banco gira su ogni sorgente
-che la definisce o la usa.
+funzione è una sola (``shared/markdown.js``): il banco la importa come fanno le
+due chat. (Prima del refactor gli stessi quattro casi giravano sulle due copie.)
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -35,51 +36,47 @@ def _function(source: str, name: str) -> str:
     return m.group(0).removeprefix("export ")
 
 
-def _sources() -> dict[str, str]:
-    """Da dove prendere la funzione: il modulo condiviso se c'è, le copie se no."""
-    shared = ASSETS / "shared" / "markdown.js"
-    if shared.exists():
-        return {"shared": _function(shared.read_text(encoding="utf-8"), "renderMarkdown")}
-    return {
-        name: _function((ASSETS / name).read_text(encoding="utf-8"), "renderMarkdown")
-        for name in ("casa-chat.js", "mobile-chat.js")
-    }
+def _run(setup: str, text: str) -> str:
+    """``renderMarkdown`` importata dal modulo, come la usano le due chat."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "shared").mkdir()
+        shutil.copy(ASSETS / "shared" / "markdown.js", root / "shared" / "markdown.js")
+        (root / "shared" / "utils.js").write_text("export " + ESCAPE.strip() + "\n", encoding="utf-8")
+        entry = root / "prova.mjs"
+        entry.write_text(
+            setup + "\nconst { renderMarkdown } = await import('./shared/markdown.js');\n"
+            f"process.stdout.write(JSON.stringify(renderMarkdown({json.dumps(text)})));\n",
+            encoding="utf-8",
+        )
+        proc = subprocess.run([str(_NODE), str(entry)], capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)
 
 
-def _run(fn_src: str, setup: str, text: str) -> str:
-    script = (
-        ESCAPE + "function initMarked() {}\n" + setup + "\n" + fn_src
-        + f"\nprocess.stdout.write(JSON.stringify(renderMarkdown({json.dumps(text)})));"
-    )
-    proc = subprocess.run([str(_NODE), "-e", script], capture_output=True, text=True, timeout=60)
-    assert proc.returncode == 0, proc.stderr
-    return json.loads(proc.stdout)
-
-
-MARKED = "globalThis.marked = { parse: (t) => '<p>' + t + '</p><script>x</script>' };"
+MARKED = (
+    "globalThis.marked = { setOptions() {}, "
+    "parse: (t) => '<p>' + t + '</p><script>x</script>' };"
+)
 PURIFY = "globalThis.DOMPurify = { sanitize: (h) => h.replace(/<script>.*?<\\/script>/g, '') };"
 QUIET = "console.error = () => {};"
 
 
-@pytest.mark.parametrize("where", list(_sources()))
-def test_with_both_libraries_it_parses_and_sanitizes(where: str) -> None:
-    assert _run(_sources()[where], MARKED + PURIFY, "ciao") == "<p>ciao</p>"
+def test_with_both_libraries_it_parses_and_sanitizes() -> None:
+    assert _run(MARKED + PURIFY, "ciao") == "<p>ciao</p>"
 
 
-@pytest.mark.parametrize("where", list(_sources()))
-def test_without_the_sanitizer_it_never_injects_html(where: str) -> None:
-    assert _run(_sources()[where], MARKED, "<b>x</b>") == "&lt;b&gt;x&lt;/b&gt;"
+def test_without_the_sanitizer_it_never_injects_html() -> None:
+    assert _run(MARKED, "<b>x</b>") == "&lt;b&gt;x&lt;/b&gt;"
 
 
-@pytest.mark.parametrize("where", list(_sources()))
-def test_without_marked_it_is_escaped_text(where: str) -> None:
-    assert _run(_sources()[where], PURIFY, "<i>y</i>") == "&lt;i&gt;y&lt;/i&gt;"
+def test_without_marked_it_is_escaped_text() -> None:
+    assert _run(PURIFY, "<i>y</i>") == "&lt;i&gt;y&lt;/i&gt;"
 
 
-@pytest.mark.parametrize("where", list(_sources()))
-def test_a_parse_error_falls_back_to_escaped_text(where: str) -> None:
-    broken = "globalThis.marked = { parse: () => { throw new Error('boom'); } };"
-    assert _run(_sources()[where], broken + PURIFY + QUIET, "<u>z</u>") == "&lt;u&gt;z&lt;/u&gt;"
+def test_a_parse_error_falls_back_to_escaped_text() -> None:
+    broken = "globalThis.marked = { setOptions() {}, parse: () => { throw new Error('boom'); } };"
+    assert _run(broken + PURIFY + QUIET, "<u>z</u>") == "&lt;u&gt;z&lt;/u&gt;"
 
 
 def test_both_chats_use_the_shared_function() -> None:

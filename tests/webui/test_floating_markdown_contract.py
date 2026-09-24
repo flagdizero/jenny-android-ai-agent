@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER = ROOT / "android/app/src/main/java/com/flagdizero/jenny/FloatingOverlayController.kt"
 GRADLE = ROOT / "android/app/build.gradle.kts"
 CHAT_JS = ROOT / "jenny/templates/ui/assets/mobile-chat.js"
+MARKDOWN_JS = ROOT / "jenny/templates/ui/assets/shared/markdown.js"
 
 
 def _read() -> str:
@@ -87,8 +88,11 @@ class TestLeRigheSingole:
     def test_il_soft_break_segue_la_chat(self):
         """`breaks: true` in chat e `SoftBreakAddsNewLinePlugin` qui sono la
         stessa decisione. Senza, le sue liste scritte a righe singole si fondono
-        in un paragrafo: è la differenza più visibile fra le due viste."""
-        js = CHAT_JS.read_text(encoding="utf-8")
+        in un paragrafo: è la differenza più visibile fra le due viste.
+
+        Dal 24/09/2026 l'opzione sta in `shared/markdown.js`, per casa e
+        officina insieme."""
+        js = MARKDOWN_JS.read_text(encoding="utf-8")
         breaks = re.search(r"breaks:\s*true", js)
         source = _read()
         if breaks:

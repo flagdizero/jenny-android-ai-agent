@@ -27,7 +27,7 @@ import { openImageLightbox } from './shared/image-lightbox.js';
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';
-import { renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
+import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
@@ -103,11 +103,7 @@ function initMarked() {
     `</div>`;
   };
 
-  marked.setOptions({
-    renderer,
-    gfm: true,
-    breaks: true,
-  });
+  marked.setOptions({ renderer, ...MARKED_OPTIONS });
 
   window._markedReady = true;
 }
