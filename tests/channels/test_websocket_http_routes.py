@@ -198,6 +198,7 @@ async def test_webui_skills_route_requires_token_and_hides_paths(
             "available": True,
             "unavailable_reason": "",
             "disabled": False,
+            "bundled": False,
             "internal": False,
             "locked": False,
             "user_summary": None,
