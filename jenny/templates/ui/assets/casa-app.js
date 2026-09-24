@@ -8,13 +8,19 @@
  *
  *  Piano: `.agent/casa-plan.md`.
  *
- *  **Il contratto col guscio nativo e' di cinque metodi.** Android chiama
+ *  **Il contratto col guscio nativo e' di sei metodi.** Android chiama
  *  `window.mobileApp.onNativeReady()`, `.goHome()`, `.onPackageChanged()`,
- *  `.handleHardwareBack()` e `.openChat()`. Erano tre in questo commento, e il
- *  conto era sbagliato: le due che mancavano non si trovano cercando
- *  `window.mobileApp.<nome>` perche' il Kotlin le invoca su una variabile
- *  locale (`var app = window.mobileApp; … app.handleHardwareBack()`). Il ponte
- *  verso il JS si conta sulle **chiamate**, non sul nome dell'oggetto.
+ *  `.handleHardwareBack()`, `.openChat()` e `.isChatOnScreen()`. Erano tre in
+ *  questo commento, poi cinque, e il conto era sbagliato tutte e due le volte:
+ *  quelle che mancavano non si trovano cercando `window.mobileApp.<nome>`
+ *  perche' il Kotlin le invoca su una variabile locale (`var app =
+ *  window.mobileApp; … app.handleHardwareBack()`). Il ponte verso il JS si
+ *  conta sulle **chiamate**, non sul nome dell'oggetto. La sesta era scritta
+ *  per l'officina (`app.currentMode === 'chat'`), qui non c'era, e in casa gli
+ *  avvisi in coda non si cancellavano mai (trovato il 24/09/2026).
+ *
+ *  Nell'altro verso la casa chiama `JennyNative.chatOpened()` quando la chat
+ *  personale arriva a schermo (v. `_segnalaChatAschermo`).
  *
  *  Il nome globale resta `mobileApp` apposta: cosi' il guscio nativo non sa, e
  *  non deve sapere, quale delle due interfacce ha caricato.
@@ -750,6 +756,7 @@ class CasaApp {
     this._posaJenny();
     this.fila?.disegna();
     this._applyHead();
+    this._segnalaChatAschermo();
   }
 
   /** La pista ha ridisegnato le sue pagine: un nome in piu', uno in meno, un
@@ -951,6 +958,7 @@ class CasaApp {
     this._updatePagesCount(project);
     this.fila?.disegna();
     this.who?.render();
+    this._segnalaChatAschermo();
   }
 
   /* Il numero sulla pastiglia. Arriva quando arriva — il conteggio sta nello
@@ -1197,6 +1205,32 @@ class CasaApp {
     this.switchConversation(null);
     this.chat.scrollToBottom();
     return true;
+  }
+
+  /** La chat dove arrivano gli avvisi e' a schermo? Lo chiede il guscio nativo
+   *  al rientro in primo piano (`CHAT_ON_SCREEN_JS`), per cancellare gli avvisi
+   *  gia' letti — un launcher torna in primo piano a ogni pressione di Home, e
+   *  quel ritorno da solo non dice cosa stai guardando.
+   *
+   *  La pagina chat **con la conversazione personale**: e' li' che la copia
+   *  websocket di un avviso proattivo arriva sempre (v. `openChat`). Una pagina
+   *  quaderno, o la pagina chat su un quaderno scelto dai Quaderni, l'avviso
+   *  non lo mostra. Al boot `_voce` e' ancora nullo e la risposta e' no: nel
+   *  dubbio un avviso resta, che e' la direzione d'errore giusta.
+   */
+  isChatOnScreen() {
+    return this.view === 'chat'
+      && this._voce?.kind === 'chat'
+      && sessionManager.currentKey === sessionManager.personalKey;
+  }
+
+  /* Il secondo dei tre modi in cui la chat arriva a schermo (v.
+     `NotifierBridge.clearAlerts`): un cambio di pagina o di conversazione dentro
+     la WebView, che il guscio nativo non puo' vedere da se'. Si chiama su ogni
+     occasione e decide qui; l'officina lo fa da `ChatController.activate`. */
+  _segnalaChatAschermo() {
+    if (!this.isChatOnScreen()) return;
+    try { window.JennyNative?.chatOpened?.(); } catch { /* nessun guscio nativo */ }
   }
 
   /** Una app Android e' stata installata o rimossa.

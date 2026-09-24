@@ -125,7 +125,16 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
   - Sul telefono: un'app aperta, chiedere a Jenny di cambiarne i dati, l'app
     si aggiorna senza riaprirla.
 
-- [ ] **0.4 Nella casa gli avvisi si cancellano quando guardi la chat**
+- [x] **0.4 Nella casa gli avvisi si cancellano quando guardi la chat** —
+  fatto 24/09. Uno scarto dal piano: «chat a schermo» in casa è la pagina
+  chat **con la conversazione personale**, non solo la pagina chat — la pagina
+  chat può mostrare un quaderno scelto dai Quaderni, e l'avviso lì non c'è.
+  `_segnalaChatAschermo` si chiama da `onPaginaCambiata` e da
+  `_applyConversation` (che copre sia `_setView('chat')` sia il cambio di
+  conversazione), non da `_setView` direttamente. Il contratto documentato in
+  testa a `casa-app.js` passa da cinque a sei metodi. Mutazioni (conversazione
+  personale, vista, le due chiamate): tutte rosse. Da provare sul telefono a
+  fine fase.
   - `MainActivity.kt:139-144` (`CHAT_ON_SCREEN_JS`) legge
     `window.mobileApp.currentMode === 'chat'`; `casa-app.js:293` si registra
     come `window.mobileApp` ma `currentMode` non ce l'ha. `JennyNative

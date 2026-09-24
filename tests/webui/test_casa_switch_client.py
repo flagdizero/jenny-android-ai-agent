@@ -113,6 +113,10 @@ const document = {
   },
 };
 
+/* Il guscio nativo, finto: conta le volte che la casa gli dice «la chat e' a
+   schermo» — e' quel che cancella gli avvisi letti. */
+globalThis.window = { JennyNative: { aperte: 0, chatOpened() { this.aperte += 1; } } };
+
 /* `/api/settings`: un payload solo, che il guscio chiede una volta e divide
    fra le due stanze. Qui interessa **quante volte** viene chiesto, e cosa
    succede quando non arriva. */
@@ -313,6 +317,9 @@ class App {
   __APPLY_BACK_LABEL__
   __UPDATE_PAGES_COUNT__
   __SET_HEAD_TITLE__
+  __ON_PAGINA__
+  __IS_CHAT_ON_SCREEN__
+  __SEGNALA_CHAT__
 }
 
 function casa() {
@@ -325,6 +332,7 @@ function casa() {
   const app = new App();
   app._applyConversation();
   app.fatti.length = 0;
+  window.JennyNative.aperte = 0;
   return app;
 }
 """
@@ -370,6 +378,9 @@ def _harness() -> str:
         .replace("__APPLY_HEAD__", _member(src, "_applyHead"))
         .replace("__UPDATE_PAGES_COUNT__", _member(src, "_updatePagesCount"))
         .replace("__SET_HEAD_TITLE__", _member(src, "_setHeadTitle"))
+        .replace("__ON_PAGINA__", _member(src, "onPaginaCambiata"))
+        .replace("__IS_CHAT_ON_SCREEN__", _member(src, "isChatOnScreen"))
+        .replace("__SEGNALA_CHAT__", _member(src, "_segnalaChatAschermo"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
@@ -1084,4 +1095,72 @@ def test_the_row_asks_for_the_app_names_once_and_only_the_light_list() -> None:
       await new Promise((r) => setTimeout(r, 0));
       assert.deepEqual(chieste, ['jenny']);
       assert.equal(disegni, 1, 'la fila non si e ridisegnata coi nomi');
+    """)
+
+
+# ── Gli avvisi letti si cancellano ───────────────────────────────────────────
+#
+# Il guscio nativo chiede `isChatOnScreen()` al rientro in primo piano, e la
+# casa gli dice `chatOpened()` quando la chat arriva a schermo da dentro la
+# WebView. Fino al 24/09/2026 la casa non aveva ne' l'una ne' l'altra cosa, e
+# gli avvisi in coda non si cancellavano mai.
+
+CHAT = "{ id: 'chat', kind: 'chat', fissa: true }"
+CASSETTO = "{ id: 'app', kind: 'cassetto', fissa: true }"
+
+
+def test_boot_says_the_chat_is_not_on_screen_yet() -> None:
+    """Prima che la pista dica dove sei, la risposta e' no: nel dubbio un avviso
+    resta, che e' la direzione d'errore giusta."""
+    _run_js("""
+      const app = casa();
+      assert.equal(app.isChatOnScreen(), false);
+      assert.equal(window.JennyNative.aperte, 0);
+    """)
+
+
+def test_arriving_on_the_chat_page_clears_the_alerts() -> None:
+    _run_js(f"""
+      const app = casa();
+      app.onPaginaCambiata(1, {CHAT});
+      assert.equal(app.isChatOnScreen(), true);
+      assert.equal(window.JennyNative.aperte, 1);
+    """)
+
+
+def test_another_page_is_not_the_chat() -> None:
+    _run_js(f"""
+      const app = casa();
+      app.onPaginaCambiata(0, {CASSETTO});
+      assert.equal(app.isChatOnScreen(), false);
+      assert.equal(window.JennyNative.aperte, 0);
+    """)
+
+
+def test_the_chat_page_on_a_notebook_is_not_where_alerts_are() -> None:
+    """Gli avvisi proattivi arrivano nella conversazione personale: la pagina
+    chat su un quaderno non li mostra. Tornando alla personale, si'."""
+    _run_js(f"""
+      const app = casa();
+      app.onPaginaCambiata(1, {CHAT});
+      window.JennyNative.aperte = 0;
+      await app.mostraConversazione(projectKey('piante'));
+      assert.equal(app.isChatOnScreen(), false);
+      assert.equal(window.JennyNative.aperte, 0);
+      await app.mostraConversazione(null);
+      assert.equal(app.isChatOnScreen(), true);
+      assert.equal(window.JennyNative.aperte, 1);
+    """)
+
+
+def test_a_room_over_the_chat_hides_it_and_coming_back_clears() -> None:
+    _run_js(f"""
+      const app = casa();
+      app.onPaginaCambiata(1, {CHAT});
+      app._setView('jenny');
+      window.JennyNative.aperte = 0;
+      assert.equal(app.isChatOnScreen(), false);
+      app._setView('chat');
+      assert.equal(app.isChatOnScreen(), true);
+      assert.equal(window.JennyNative.aperte, 1);
     """)

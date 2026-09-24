@@ -135,11 +135,17 @@ class MainActivity : AppCompatActivity() {
          *
          * Senza SPA caricata il risultato è ``null``, che non è ``"true"``:
          * nessun alert viene cancellato, ed è la direzione d'errore giusta.
+         *
+         * Lo chiede a un metodo e non a un campo: leggeva ``app.currentMode``,
+         * che esiste solo nell'officina, e nella casa — il guscio di default —
+         * la risposta era sempre no e gli alert non si cancellavano mai
+         * (24/09/2026). Ogni guscio sa a modo suo cosa vuol dire "la chat è a
+         * schermo"; qui si chiede, come per ``openChat``.
          */
         private const val CHAT_ON_SCREEN_JS = """
             (function () {
               var app = window.mobileApp;
-              return !!(app && app.currentMode === 'chat');
+              return !!(app && typeof app.isChatOnScreen === 'function' && app.isChatOnScreen());
             })()
         """
 

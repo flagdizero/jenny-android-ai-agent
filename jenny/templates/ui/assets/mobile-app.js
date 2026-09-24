@@ -617,6 +617,14 @@ class MobileApp {
     this.replaceNav(this._navStateFor('chat', null, null));
   }
 
+  /* La chat è la vista a schermo? Lo chiede il guscio nativo al rientro in
+     primo piano (`CHAT_ON_SCREEN_JS`) per cancellare gli avvisi già letti. È
+     un metodo e non il campo `currentMode` letto da fuori perché la casa, che
+     `currentMode` non ce l'ha, risponde alla stessa domanda a modo suo. */
+  isChatOnScreen() {
+    return this.currentMode === 'chat';
+  }
+
   /* Tap sulla notifica di un messaggio proattivo (MainActivity). Non è "vai a
      casa e poi in chat": quella composizione lasciava la entry di radice a
      descrivere la *vista home* mentre a schermo c'era la chat, e con una vista

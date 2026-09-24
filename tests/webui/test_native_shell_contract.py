@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 ANDROID = ROOT / "android" / "app" / "src" / "main"
 JAVA = ANDROID / "java" / "com" / "flagdizero" / "jenny"
@@ -308,15 +310,33 @@ def test_the_resume_branch_asks_what_is_on_screen_before_clearing() -> None:
     assert '== "true"' in clear_line, clear_line
 
 
-def test_the_chat_visible_question_reads_the_spa_view_that_exists() -> None:
-    """``CHAT_ON_SCREEN_JS`` interroga ``mobileApp.currentMode``: se quel campo o il
-    nome della vista cambiassero, la domanda risponderebbe sempre no — e gli
-    alert resterebbero in coda per sempre, senza che niente fallisca."""
+def test_the_chat_visible_question_asks_a_method_every_shell_has() -> None:
+    """``CHAT_ON_SCREEN_JS`` chiede ``mobileApp.isChatOnScreen()``.
+
+    Leggeva ``mobileApp.currentMode``, un campo dell'officina: nella casa — il
+    guscio di default — non c'era, la domanda rispondeva sempre no, e gli alert
+    restavano in coda per sempre senza che niente fallisse. Questo stesso test
+    guardava solo ``mobile-app.js``, cioe' il guscio in cui la domanda aveva
+    senso, ed e' rimasto verde tutto il tempo (trovato il 24/09/2026)."""
     kotlin = _main_activity()
     question = re.search(r"CHAT_ON_SCREEN_JS = \"\"\"(.*?)\"\"\"", kotlin, re.S)
     assert question, "CHAT_ON_SCREEN_JS non trovato"
-    assert "currentMode === 'chat'" in question.group(1)
+    assert "app.isChatOnScreen()" in question.group(1)
+    assert "typeof app.isChatOnScreen === 'function'" in question.group(1)
+    assert "currentMode" not in question.group(1)
+
+
+@pytest.mark.parametrize("shell", ["mobile-app.js", "casa-app.js"])
+def test_both_shells_answer_the_chat_visible_question(shell: str) -> None:
+    """Il guscio nativo non sa quale delle due interfacce ha caricato: il
+    contratto vale per entrambe, o per una delle due non vale."""
+    source = (UI_ASSETS / shell).read_text(encoding="utf-8")
+    assert re.search(r"\n  isChatOnScreen\(\)\s*\{", source), f"{shell}: isChatOnScreen manca"
+
+
+def test_the_officina_answer_is_its_chat_mode() -> None:
     app_js = _app_js()
+    assert "return this.currentMode === 'chat';" in _method(app_js, "isChatOnScreen")
     assert "this.currentMode = mode" in app_js
     assert "switchMode('chat'" in app_js
 
