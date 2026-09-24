@@ -5,11 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.runner import make_spec
 
-from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse, ToolCallRequest
 
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 async def test_runner_does_not_abort_on_workspace_violation_anymore():
     """v2 behavior: workspace-bound rejections are *soft* tool errors.
@@ -20,7 +19,7 @@ async def test_runner_does_not_abort_on_workspace_violation_anymore():
     we now hand the error back to the LLM as a recoverable tool result and
     rely on ``repeated_workspace_violation_error`` to throttle bypass loops.
     """
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     provider.chat_with_retry = AsyncMock(side_effect=[
@@ -42,12 +41,10 @@ async def test_runner_does_not_abort_on_workspace_violation_anymore():
 
     runner = AgentRunner(provider)
 
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=3,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert provider.chat_with_retry.await_count == 2, (
@@ -88,7 +85,7 @@ def test_is_ssrf_violation_recognizes_private_url_blocks():
 @pytest.mark.asyncio
 async def test_runner_returns_non_retryable_hint_on_ssrf_violation():
     """SSRF stays blocked, but the runtime gives the LLM a final chance to recover."""
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     provider.chat_with_retry = AsyncMock(side_effect=[
@@ -112,12 +109,10 @@ async def test_runner_returns_non_retryable_hint_on_ssrf_violation():
     ))
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=3,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert provider.chat_with_retry.await_count == 2
@@ -141,7 +136,7 @@ async def test_runner_lets_llm_recover_from_shell_guard_path_outside():
     turn (silent hang on Telegram per #3605); now the LLM gets the soft
     error back and can finalize on the next iteration.
     """
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -167,12 +162,10 @@ async def test_runner_lets_llm_recover_from_shell_guard_path_outside():
     )
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=3,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert provider.chat_with_retry.await_count == 2, (
@@ -195,7 +188,7 @@ async def test_runner_throttles_repeated_workspace_bypass_attempts():
     the runner replaces the tool result with a hard "stop trying" message
     so the model finally gives up and surfaces the boundary to the user.
     """
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     bypass_attempts = [
         ToolCallRequest(
@@ -219,12 +212,10 @@ async def test_runner_throttles_repeated_workspace_bypass_attempts():
     )
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=10,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     # All 4 bypass attempts surface to the LLM (no fatal abort), and the

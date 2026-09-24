@@ -3,12 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.runner import make_spec
 
-from jenny.agent.runner import AgentRunner, AgentRunSpec
-from jenny.config.schema import AgentDefaults
+from jenny.agent.runner import AgentRunner
 from jenny.providers.base import LLMResponse, ToolCallRequest
-
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 @pytest.mark.asyncio
@@ -25,15 +23,13 @@ async def test_runner_can_disable_provider_progress_delta_streaming():
     progress_cb = AsyncMock()
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[
             {"role": "system", "content": "system"},
             {"role": "user", "content": "hi"},
         ],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         progress_callback=progress_cb,
         stream_progress_deltas=False,
     ))
@@ -62,15 +58,13 @@ async def test_runner_streams_provider_progress_deltas_by_default():
     progress_cb = AsyncMock()
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[
             {"role": "system", "content": "system"},
             {"role": "user", "content": "hi"},
         ],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         progress_callback=progress_cb,
     ))
 
@@ -133,12 +127,10 @@ async def test_runner_streams_live_write_file_activity_from_tool_argument_deltas
     provider.chat_with_retry = AsyncMock()
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "write a large file"}],
         tools=Tools(),
-        model="test-model",
         max_iterations=2,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         progress_callback=progress_cb,
         workspace=tmp_path,
     ))
@@ -223,12 +215,10 @@ async def test_runner_streams_live_edit_file_activity_from_tool_argument_deltas(
     provider.chat_with_retry = AsyncMock()
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "edit a file"}],
         tools=Tools(),
-        model="test-model",
         max_iterations=2,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         progress_callback=progress_cb,
         workspace=tmp_path,
     ))
@@ -279,12 +269,10 @@ async def test_runner_marks_unfinished_live_write_file_activity_failed(tmp_path)
     tools.get.return_value = None
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "write a large file"}],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         progress_callback=progress_cb,
         workspace=tmp_path,
     ))

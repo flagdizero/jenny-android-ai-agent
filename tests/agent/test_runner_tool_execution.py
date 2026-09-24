@@ -6,16 +6,14 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.runner import make_spec
 
-from jenny.agent.runner import AgentRunner, AgentRunSpec
+from jenny.agent.runner import AgentRunner
 from jenny.agent.tools.base import Tool
 from jenny.agent.tools.registry import ToolRegistry
-from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse, ToolCallRequest
 from jenny.providers.openai_compat_provider import OpenAICompatProvider
 from jenny.providers.openai_responses.parsing import parse_response_output
-
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 class _DelayTool(Tool):
@@ -81,12 +79,10 @@ async def _run_optional_tool_response(response: LLMResponse):
         shared_events=shared_events,
     ))
 
-    result = await AgentRunner(provider).run(AgentRunSpec(
+    result = await AgentRunner(provider).run(make_spec(
         initial_messages=[{"role": "user", "content": "try optional"}],
         tools=tools,
-        model="test-model",
         max_iterations=2,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
     return result, shared_events
 
@@ -111,12 +107,10 @@ async def test_runner_batches_read_only_tools_before_exclusive_work():
 
     runner = AgentRunner(MagicMock())
     await runner._execute_tools(
-        AgentRunSpec(
+        make_spec(
             initial_messages=[],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             concurrent_tools=True,
         ),
         [
@@ -154,12 +148,10 @@ async def test_runner_does_not_batch_exclusive_read_only_tools():
 
     runner = AgentRunner(MagicMock())
     await runner._execute_tools(
-        AgentRunSpec(
+        make_spec(
             initial_messages=[],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             concurrent_tools=True,
         ),
         [
@@ -211,12 +203,10 @@ async def test_runner_rejects_near_miss_tool_name_without_executing():
     ))
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "read notes"}],
         tools=tools,
-        model="test-model",
         max_iterations=2,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert result.final_content == "done"
@@ -342,12 +332,10 @@ async def test_runner_blocks_repeated_external_fetches():
     tools.execute = AsyncMock(return_value="page content")
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "research task"}],
         tools=tools,
-        model="test-model",
         max_iterations=4,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert result.final_content == "done"

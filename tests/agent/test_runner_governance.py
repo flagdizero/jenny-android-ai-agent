@@ -6,12 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from support.agent import make_loop
+from support.runner import make_spec
 
-from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse
 from jenny.session.keys import UNIFIED_SESSION_KEY
-
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 def _make_loop(tmp_path):
@@ -19,7 +17,7 @@ def _make_loop(tmp_path):
 
 
 async def test_runner_uses_raw_messages_when_context_governance_fails():
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -38,18 +36,16 @@ async def test_runner_uses_raw_messages_when_context_governance_fails():
 
     runner = AgentRunner(provider)
     runner._snip_history = MagicMock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=initial_messages,
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert result.final_content == "done"
     assert captured_messages == initial_messages
 def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch):
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -66,12 +62,10 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
         {"role": "tool", "tool_call_id": "call_1", "content": "tool output"},
         {"role": "assistant", "content": "after tool"},
     ]
-    spec = AgentRunSpec(
+    spec = make_spec(
         initial_messages=messages,
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         context_window_tokens=2000,
         context_block_limit=100,
     )
@@ -99,7 +93,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
 
 
 def test_snip_history_reserves_budget_for_tool_definitions(monkeypatch):
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -113,12 +107,10 @@ def test_snip_history_reserves_budget_for_tool_definitions(monkeypatch):
         {"role": "assistant", "content": "recent answer"},
         {"role": "user", "content": "recent two"},
     ]
-    spec = AgentRunSpec(
+    spec = make_spec(
         initial_messages=messages,
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         context_window_tokens=2000,
         context_block_limit=500,
     )
@@ -233,7 +225,7 @@ async def test_backfill_noop_when_complete():
 
 @pytest.mark.asyncio
 async def test_runner_drops_orphan_tool_results_before_model_request():
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -247,7 +239,7 @@ async def test_runner_drops_orphan_tool_results_before_model_request():
     tools.get_definitions.return_value = []
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[
             {"role": "system", "content": "system"},
             {"role": "user", "content": "old user"},
@@ -256,9 +248,7 @@ async def test_runner_drops_orphan_tool_results_before_model_request():
             {"role": "user", "content": "new prompt"},
         ],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     assert all(
@@ -358,7 +348,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
 @pytest.mark.asyncio
 async def test_runner_backfill_only_mutates_model_context_not_returned_messages():
     """Runner should repair orphaned tool calls for the model without rewriting result.messages."""
-    from jenny.agent.runner import _BACKFILL_CONTENT, AgentRunner, AgentRunSpec
+    from jenny.agent.runner import _BACKFILL_CONTENT, AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -390,12 +380,10 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
     ]
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=initial_messages,
         tools=tools,
-        model="test-model",
         max_iterations=3,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     ))
 
     synthetic = [
@@ -564,7 +552,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
     - _snip_history activates, keeping only recent assistant/tool pairs.
     - The injected user message is in the truncated prefix and gets lost.
     """
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -589,12 +577,10 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
         {"role": "tool", "tool_call_id": "tc_2", "content": "tool output 2"},
     ]
 
-    spec = AgentRunSpec(
+    spec = make_spec(
         initial_messages=messages,
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         context_window_tokens=2000,
         context_block_limit=100,
     )
@@ -628,7 +614,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
 def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     """Edge case: if non_system has zero user messages, _snip_history should
     still return a valid sequence (not crash or produce system→assistant)."""
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -643,12 +629,10 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
         {"role": "tool", "tool_call_id": "tc_2", "content": "result 2"},
     ]
 
-    spec = AgentRunSpec(
+    spec = make_spec(
         initial_messages=messages,
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         context_window_tokens=2000,
         context_block_limit=100,
     )

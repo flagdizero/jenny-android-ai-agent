@@ -13,6 +13,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from support.runner import make_spec
 
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMProvider, LLMResponse
@@ -277,7 +278,7 @@ async def test_raised_budget_survives_a_tool_phase():
     sullo stesso muro, sprecando un'altra chiamata per riscoprire una cosa già
     nota.
     """
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
     from jenny.providers.base import ToolCallRequest
 
     registry = MagicMock()
@@ -310,12 +311,10 @@ async def test_raised_budget_survives_a_tool_phase():
         )
 
     provider.chat_with_retry = chat_with_retry
-    spec = AgentRunSpec(
+    spec = make_spec(
         initial_messages=[{"role": "user", "content": "go"}],
         tools=registry,
-        model="test-model",
         max_iterations=6,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         max_tokens=8192,
         context_window_tokens=65536,
     )

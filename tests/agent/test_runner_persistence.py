@@ -6,10 +6,10 @@ import os
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from jenny.config.schema import AgentDefaults
+from support.runner import empty_tools, make_spec
+
 from jenny.providers.base import LLMResponse, ToolCallRequest
 
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     from jenny.agent.runner import AgentRunner, AgentRunSpec
@@ -170,7 +170,7 @@ async def test_read_file_result_is_not_offloaded(tmp_path):
 
 
 async def test_runner_keeps_going_when_tool_result_persistence_fails():
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -188,18 +188,14 @@ async def test_runner_keeps_going_when_tool_result_persistence_fails():
         return LLMResponse(content="done", tool_calls=[], usage={})
 
     provider.chat_with_retry = chat_with_retry
-    tools = MagicMock()
-    tools.get_definitions.return_value = []
-    tools.execute = AsyncMock(return_value="tool result")
+    tools = empty_tools()
 
     runner = AgentRunner(provider)
     with patch("jenny.agent.runner.maybe_persist_tool_result", side_effect=RuntimeError("disk full")):
-        result = await runner.run(AgentRunSpec(
+        result = await runner.run(make_spec(
             initial_messages=[{"role": "user", "content": "do task"}],
             tools=tools,
-            model="test-model",
             max_iterations=2,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         ))
 
     assert result.final_content == "done"

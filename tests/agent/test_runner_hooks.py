@@ -6,17 +6,15 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.runner import empty_tools, make_spec
 
-from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-
-_MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 @pytest.mark.asyncio
 async def test_runner_calls_hooks_in_order():
     from jenny.agent.hook import AgentHook, AgentHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     call_count = {"n": 0}
@@ -32,9 +30,7 @@ async def test_runner_calls_hooks_in_order():
         return LLMResponse(content="done", tool_calls=[], usage={})
 
     provider.chat_with_retry = chat_with_retry
-    tools = MagicMock()
-    tools.get_definitions.return_value = []
-    tools.execute = AsyncMock(return_value="tool result")
+    tools = empty_tools()
 
     class RecordingHook(AgentHook):
         async def before_iteration(self, context: AgentHookContext) -> None:
@@ -62,12 +58,10 @@ async def test_runner_calls_hooks_in_order():
             return content.upper() if content else content
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=3,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=RecordingHook(),
     ))
 
@@ -92,7 +86,7 @@ async def test_runner_calls_hooks_in_order():
 @pytest.mark.asyncio
 async def test_runner_streaming_hook_receives_deltas_and_end_signal():
     from jenny.agent.hook import AgentHook, AgentHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     streamed: list[str] = []
@@ -119,12 +113,10 @@ async def test_runner_streaming_hook_receives_deltas_and_end_signal():
             endings.append(resuming)
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=StreamingHook(),
     ))
 
@@ -138,7 +130,7 @@ async def test_runner_streaming_hook_receives_deltas_and_end_signal():
 async def test_runner_passes_cached_tokens_to_hook_context():
     """Hook context.usage should contain cached_tokens."""
     from jenny.agent.hook import AgentHook, AgentHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     captured_usage: list[dict] = []
@@ -159,12 +151,10 @@ async def test_runner_passes_cached_tokens_to_hook_context():
     tools.get_definitions.return_value = []
 
     runner = AgentRunner(provider)
-    await runner.run(AgentRunSpec(
+    await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=UsageHook(),
     ))
 
@@ -176,7 +166,7 @@ async def test_runner_passes_cached_tokens_to_hook_context():
 @pytest.mark.asyncio
 async def test_runner_estimates_usage_when_provider_omits_usage(monkeypatch):
     from jenny.agent.hook import AgentHook, AgentHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     captured_usage: list[dict] = []
@@ -202,12 +192,10 @@ async def test_runner_estimates_usage_when_provider_omits_usage(monkeypatch):
     )
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "hi"}],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=UsageHook(),
     ))
 
@@ -221,7 +209,7 @@ async def test_runner_estimates_usage_when_provider_omits_usage(monkeypatch):
 @pytest.mark.asyncio
 async def test_runner_calls_run_level_hooks_on_success():
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     events: list[tuple] = []
@@ -260,12 +248,10 @@ async def test_runner_calls_run_level_hooks_on_success():
             events.append(("on_finally", context.stop_reason, context.exception))
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "hi"}],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=RunHook(),
     ))
 
@@ -293,7 +279,7 @@ async def test_runner_calls_run_level_hooks_on_success():
 @pytest.mark.asyncio
 async def test_runner_run_level_context_is_detached_snapshot():
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     call_count = {"n": 0}
@@ -310,9 +296,7 @@ async def test_runner_run_level_context_is_detached_snapshot():
         return LLMResponse(content="done", tool_calls=[], usage={})
 
     provider.chat_with_retry = chat_with_retry
-    tools = MagicMock()
-    tools.get_definitions.return_value = []
-    tools.execute = AsyncMock(return_value="tool result")
+    tools = empty_tools()
 
     class MutatingRunHook(AgentHook):
         async def before_run(self, context: AgentRunHookContext) -> None:
@@ -327,12 +311,10 @@ async def test_runner_run_level_context_is_detached_snapshot():
             context.messages[0]["content"] = "mutated-finally"
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[{"role": "user", "content": "hi"}],
         tools=tools,
-        model="test-model",
         max_iterations=2,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=MutatingRunHook(),
     ))
 
@@ -347,7 +329,7 @@ async def test_runner_run_level_context_is_detached_snapshot():
 @pytest.mark.asyncio
 async def test_runner_calls_on_error_for_model_error_result():
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     events: list[tuple] = []
@@ -373,12 +355,10 @@ async def test_runner_calls_on_error_for_model_error_result():
             events.append(("on_finally", context.stop_reason, context.error))
 
     runner = AgentRunner(provider)
-    result = await runner.run(AgentRunSpec(
+    result = await runner.run(make_spec(
         initial_messages=[],
         tools=tools,
-        model="test-model",
         max_iterations=1,
-        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         hook=ErrorHook(),
     ))
 
@@ -395,7 +375,7 @@ async def test_runner_calls_on_error_for_model_error_result():
 @pytest.mark.asyncio
 async def test_runner_calls_on_error_and_finally_for_unhandled_exception():
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     events: list[tuple] = []
@@ -427,12 +407,10 @@ async def test_runner_calls_on_error_and_finally_for_unhandled_exception():
 
     runner = AgentRunner(provider)
     with pytest.raises(RuntimeError, match="provider exploded"):
-        await runner.run(AgentRunSpec(
+        await runner.run(make_spec(
             initial_messages=[{"role": "user", "content": "hi"}],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             hook=ExceptionHook(),
         ))
 
@@ -446,7 +424,7 @@ async def test_runner_calls_on_error_and_finally_for_unhandled_exception():
 @pytest.mark.asyncio
 async def test_runner_preserves_original_exception_when_finally_hook_fails():
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -463,12 +441,10 @@ async def test_runner_preserves_original_exception_when_finally_hook_fails():
 
     runner = AgentRunner(provider)
     with pytest.raises(RuntimeError, match="provider exploded"):
-        await runner.run(AgentRunSpec(
+        await runner.run(make_spec(
             initial_messages=[{"role": "user", "content": "hi"}],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             hook=BadFinallyHook(),
         ))
 
@@ -478,7 +454,7 @@ async def test_runner_does_not_report_cancellation_as_error():
     import asyncio
 
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     events: list[tuple] = []
@@ -510,12 +486,10 @@ async def test_runner_does_not_report_cancellation_as_error():
 
     runner = AgentRunner(provider)
     with pytest.raises(asyncio.CancelledError):
-        await runner.run(AgentRunSpec(
+        await runner.run(make_spec(
             initial_messages=[{"role": "user", "content": "hi"}],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             hook=CancellationHook(),
         ))
 
@@ -530,7 +504,7 @@ async def test_runner_preserves_cancellation_when_finally_hook_fails():
     import asyncio
 
     from jenny.agent.hook import AgentHook, AgentRunHookContext
-    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -547,11 +521,9 @@ async def test_runner_preserves_cancellation_when_finally_hook_fails():
 
     runner = AgentRunner(provider)
     with pytest.raises(asyncio.CancelledError):
-        await runner.run(AgentRunSpec(
+        await runner.run(make_spec(
             initial_messages=[{"role": "user", "content": "hi"}],
             tools=tools,
-            model="test-model",
             max_iterations=1,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             hook=BadFinallyHook(),
         ))
