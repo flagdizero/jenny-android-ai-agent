@@ -473,7 +473,7 @@ Escape).
 
 Il Kotlin non gira in CI: ogni passo è build + prova sul telefono.
 
-- [ ] **4.1 `WakeReceiver` passa da `GatewayStarter`**: `WakeReceiver.kt:196-217`
+- [x] **4.1 `WakeReceiver` passa da `GatewayStarter`**: `WakeReceiver.kt:196-217`
   è la copia di `GatewayStarter.ensureUp` (`:64-99`), il cui ramo `wakeTick`
   oggi è morto (l'unico chiamante passa `false`). Le chiamate a `:54`, `:57`,
   `:166` diventano `ensureUp(ctx, reason, wakeTick = …)` con
@@ -481,7 +481,7 @@ Il Kotlin non gira in CI: ogni passo è build + prova sul telefono.
   `GatewayStarter`): aggiornare le note che lo cercano. Prova: forzare una
   sveglia (v. memoria «Forzare un job di sistema») e leggere il log.
 
-- [ ] **4.2 Le altre `startForegroundService` dirette**:
+- [x] **4.2 Le altre `startForegroundService` dirette**:
   `BootReceiver.kt:98` → `ensureUp` (identico); `Watchdog.kt:161` →
   `ensureUp`, tenendo la sua diagnosi e il `finally { arm() }`;
   `MainActivity.kt:735` — oggi un'eccezione risale, con `GatewayStarter`
@@ -491,11 +491,11 @@ Il Kotlin non gira in CI: ogni passo è build + prova sul telefono.
   `postReplyFailure`). Correggere la KDoc di `GatewayStarter:8-22`, che oggi
   si dice l'unico ingresso.
 
-- [ ] **4.3 `FloatingOverlayController`**: `mascotWinParams` (`:981`) e
+- [x] **4.3 `FloatingOverlayController`**: `mascotWinParams` (`:981`) e
   `gripParams` (`:997`) → `parkedSquareParams(ctx)`, restando **due istanze**
   (`:859-867`); la KDoc della maniglia (`:971-979`) torna al suo posto.
 
-- [ ] **4.4 La WebView nascosta**: `HiddenWebView.create(appContext, tag)` con
+- [x] **4.4 La WebView nascosta**: `HiddenWebView.create(appContext, tag)` con
   le impostazioni comuni e un solo `USER_AGENT_MOBILE`
   (`AgenticSearchBridge.kt:35`, `JennyBrowserBridge.kt:57`). Fuori
   dall'helper: `sourceId` nel log console (solo AgenticSearch), il
@@ -503,7 +503,7 @@ Il Kotlin non gira in CI: ogni passo è build + prova sul telefono.
   `webViewClient` a ogni chiamata. `configureWebContentsDebugging` resta dov'è
   (`test_webview_debugging_is_gated.py`).
 
-- [ ] **4.5 Il salto bloccante sul main thread**: `MainHop.call(timeoutMs,
+- [x] **4.5 Il salto bloccante sul main thread**: `MainHop.call(timeoutMs,
   fallback, tag) { … }` (esegue sul posto se già sul main) per
   `FloatingBridge.onMain` (`:52`, 3 s, `false`), `JennyBrowserBridge.close`
   (`:293`, 10 s, timeout ignorato), `currentUrlAndTitle` (`:368`, 5 s),
@@ -511,6 +511,25 @@ Il Kotlin non gira in CI: ogni passo è build + prova sul telefono.
   `AgenticSearchBridge.evaluateOnPage` (`:194`), che si sbloccano in una
   callback. Cambio: col try/catch un'eccezione nel blocco non abbatte più il
   processo — scriverlo.
+
+
+**Esito della fase 4 (25/09).** Cinque commit (`2c6c1eb`…`a038ee4`), ognuno
+costruito, installato e provato sul Titan 2:
+- 4.1/4.2: sveglie di lavoro e di riavvio mandate con un broadcast da root al
+  receiver (`Wake tick delivered=true`); `MY_PACKAGE_REPLACED` all'install
+  (`reason=boot/…`), l'activity (`reason=activity`), e il watchdog col processo
+  ucciso (la sua diagnosi, `reason=watchdog`, il riarmo). Per l'activity
+  **accettato**: un avvio rifiutato ora finisce in `showError()` invece di far
+  chiudere l'app. `ReplyReceiver` resta l'eccezione, scritta nella KDoc.
+- 4.3: mascotte flottante accesa per la prova sopra l'Orologio — due finestre
+  400×400 distinte nello stesso posto, espansione al tocco — e rispenta.
+- 4.4/4.5: turni veri di Jenny (dichiarati come test nella chat): ricerca web,
+  `browser_open`/`browser_close` di un subagent con URL e titolo giusti, e la
+  mascotte flottante accesa e spenta attraverso `FloatingBridge`.
+- **Trovato durante le prove e corretto** (`f9602ca`, fuori piano): in casa
+  l'interruttore della mascotte flottante tornava allo stato letto la prima
+  volta a ogni riapertura delle Impostazioni (la cache di `/api/settings` non
+  veniva aggiornata dal tocco).
 
 ---
 
