@@ -652,6 +652,32 @@ produzione che fa diventare rosso un test migrato.
   contextvars ha avuto un aiutante invece di `parametrize` (asserzioni troppo
   diverse), e i nomi sono rimasti. Gli altri candidati non toccati.
 
+
+**Chiusura (25/09, notte).**
+- **Prove sul telefono rimaste aperte dalla fase 0, fatte:**
+  - 0.3: una voce del TODO aggiunta e poi tolta da Jenny in chat è comparsa e
+    sparita nella pagina aperta, senza riaprirla.
+  - Un turno vero con Wi‑Fi e dati spenti per circa 40 s: tre tentativi
+    (1/2/4 s), poi il testo d'errore in chat e il turno chiuso; rete
+    riaccesa subito.
+  - La minichat dal vivo: pensa → fumetto → riposo, flag chiusi.
+- **Test generale:** suite completa verde su 3.14 (10.867) e 3.11 (10.857);
+  `ruff` e il `pyright` bloccante puliti; build release da albero pulito
+  installata alle 01:51, gateway senza errori.
+- **Revisione finale** di tutta la pulizia (fasi 0–5), sei revisori in sola
+  lettura, ogni segnalazione verificata a mano: nessun difetto introdotto dalla
+  pulizia. Restano da decidere, non corretti:
+  - un `Location` malformato fa sfuggire `httpx.InvalidURL` da
+    `open_validated_stream` (preesistente);
+  - `JennyBrowserBridge.open` risponde «ok» se la creazione della WebView
+    fallisce (prima crashava l'app);
+  - le regex `^…$` delle Jenny App;
+  - `loadJennyApps` senza guardia fuori ordine;
+  - residui minori: quattro `I18N_DIR` inutilizzati nei test, un `now_ms` in
+    `cron_dispatch`, due commenti stantii, la KDoc di `MainHop`, il testo
+    d'aiuto del menu «Nuovo», la freccina del gruppo tool, il conteggio
+    «dopo 4 retries».
+
 ---
 
 ## Fuori dal piano, deciso
