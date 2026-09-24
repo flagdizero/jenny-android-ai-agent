@@ -161,10 +161,14 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
 
 **Esito della fase 0 (24/09).** Suite verde su 3.14 (10.654) e 3.11 (10.644),
 release costruita e installata alle 21:05, la casa si apre e il gateway non
-logga errori. **Restano le due prove sul telefono** di 0.3 (un'app aperta,
-Jenny che ne cambia i dati) e 0.4 (un avviso vero a schermo spento, poi la
-casa sulla chat): tutte e due fanno suonare il telefono o scrivono nella
-conversazione personale, quindi si fanno con l'utente o col suo permesso.
+logga errori. **0.4 provato sul telefono** il 24/09 alle 21:15, col permesso
+dell'utente: promemoria one-shot creato chiedendolo a Jenny via WS; lo schermo
+non si poteva spegnere (PIN), quindi Jenny è andata in background portando
+davanti le Impostazioni di sistema; l'avviso è stato pubblicato (21:15:03,
+`Notification(channel=jenny_alerts` = 1), Home ha riportato davanti la casa
+sulla chat personale, e alle 21:15:15 gli avvisi erano 0. **Resta la prova di
+0.3** (un'app aperta, Jenny che ne cambia i dati), che scrive nella
+conversazione personale e si fa con l'utente.
 
 ---
 
