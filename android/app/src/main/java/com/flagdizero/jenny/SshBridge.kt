@@ -19,7 +19,6 @@ import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.SocketTimeoutException
-import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.Security
 import javax.crypto.Cipher
@@ -187,52 +186,6 @@ object SshBridge {
             )
         }
         return out.toString()
-    }
-
-    /** Ed25519 via JCE, chiedendo esplicitamente il provider "BC". */
-    private fun probeJceEd25519(): String =
-        try {
-            // Nome MAIUSCOLO e provider esplicito: entrambi necessari.
-            val gen = KeyPairGenerator.getInstance("ED25519", "BC")
-            val pair = gen.generateKeyPair()
-            "ok (${pair.public.algorithm}, ${pair.public.format})"
-        } catch (e: Throwable) {
-            "ERROR: ${e.javaClass.simpleName}: ${e.message}"
-        }
-
-    /** Ed25519 via jsch: e il percorso che usa [generateKeyPair]. */
-    private fun probeJschEd25519(): String =
-        try {
-            val jsch = JSch()
-            val kp = KeyPair.genKeyPair(jsch, KeyPair.ED25519)
-            val pub = ByteArrayOutputStream()
-            kp.writePublicKey(pub, "jenny-selftest")
-            val fingerprint = kp.fingerPrint
-            kp.dispose()
-            "ok ($fingerprint, ${pub.size()} bytes public)"
-        } catch (e: Throwable) {
-            "ERROR: ${e.javaClass.simpleName}: ${e.message}"
-        }
-
-    /**
-     * Diagnostica on-device: stato del provider, versione di jsch, Ed25519 via
-     * JCE e via jsch. Non solleva mai — ogni passo fallito diventa una stringa
-     * nel JSON, perche un'eccezione che sale nasconderebbe i passi successivi.
-     *
-     * Serve alla verifica manuale (`adb logcat -s SshBridge:I`) delle cose che
-     * nessun test sul Mac puo rispondere: R8 non si vede finche non si installa
-     * un APK release, perche jsch istanzia gli algoritmi per nome di classe.
-     */
-    @JvmStatic
-    fun selfTest(): String {
-        val out = JSONObject()
-        out.put("provider", JSONObject(installProvider()))
-        out.put("jschVersion", try { JSch.VERSION } catch (e: Throwable) { "unknown" })
-        out.put("jceEd25519", probeJceEd25519())
-        out.put("jschEd25519", probeJschEd25519())
-        val text = out.toString()
-        Log.i(TAG, "selfTest: $text")
-        return text
     }
 
     // ---- traduzione degli errori ------------------------------------------

@@ -12,7 +12,6 @@
 # provider BouncyCastle, che si registra e si risolve per reflection.
 -keep class com.jcraft.jsch.** { *; }
 -keep class org.bouncycastle.** { *; }
--keep class org.bouncycastle.jcajce.provider.** { *; }
 -dontwarn org.bouncycastle.**
 -dontwarn javax.naming.**
 
