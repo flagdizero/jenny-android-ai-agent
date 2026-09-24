@@ -414,10 +414,12 @@ _STEP = ObjectSchema(
     key=StringSchema("Key name, default Enter (action=press)"),
     direction=StringSchema("up | down (action=scroll)"),
     amount=IntegerSchema(
-        "How many screenfuls to scroll — 1 is one screen, capped at 10. "
-        "Not pixels (action=scroll)"
+        description=(
+            "How many screenfuls to scroll — 1 is one screen, capped at 10. "
+            "Not pixels (action=scroll)"
+        ),
     ),
-    ms=IntegerSchema("Milliseconds to wait (action=wait)"),
+    ms=IntegerSchema(description="Milliseconds to wait (action=wait)"),
     confirm=BooleanSchema(
         description=(
             "Set true only after the user agreed, to allow a click that costs money, "

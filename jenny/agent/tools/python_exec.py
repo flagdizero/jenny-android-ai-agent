@@ -3139,13 +3139,11 @@ async def run_python_async(
             nullable=True,
         ),
         timeout=IntegerSchema(
-            60,
             description="Timeout in seconds (default 60, max 600).",
             minimum=1,
             maximum=600,
         ),
         max_output_chars=IntegerSchema(
-            10000,
             description="Maximum output characters to return (default 10000, max 50000).",
             minimum=1000,
             maximum=MAX_OUTPUT_CHARS,

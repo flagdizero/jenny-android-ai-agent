@@ -595,12 +595,10 @@ def _parse_page_range(pages: str, total: int) -> tuple[int, int]:
     tool_parameters_schema(
         path=StringSchema("The file path to read"),
         offset=IntegerSchema(
-            1,
             description="Line number to start reading from (1-indexed, default 1)",
             minimum=1,
         ),
         limit=IntegerSchema(
-            2000,
             description="Maximum number of lines to read (default 2000)",
             minimum=1,
         ),
@@ -880,19 +878,16 @@ class WriteFileTool(_FsTool):
         new_text=StringSchema("The text to replace with"),
         replace_all=BooleanSchema(description="Replace all occurrences (default false)"),
         occurrence=IntegerSchema(
-            1,
             description="Optional 1-based occurrence to replace when old_text appears multiple times.",
             minimum=1,
             nullable=True,
         ),
         line_hint=IntegerSchema(
-            1,
             description="Optional 1-based line hint used to choose the nearest match.",
             minimum=1,
             nullable=True,
         ),
         expected_replacements=IntegerSchema(
-            1,
             description="Optional guard for the number of replacements that must be made.",
             minimum=1,
             nullable=True,
@@ -1144,7 +1139,6 @@ class EditFileTool(_FsTool):
         path=StringSchema("The directory path to list"),
         recursive=BooleanSchema(description="Recursively list all files (default false)"),
         max_entries=IntegerSchema(
-            200,
             description="Maximum entries to return (default 200)",
             minimum=1,
         ),

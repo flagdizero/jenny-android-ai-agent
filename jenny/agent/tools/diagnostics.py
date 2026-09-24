@@ -46,7 +46,6 @@ def install_log_buffer() -> None:
             "e.g. 'android_web'"
         ),
         count=IntegerSchema(
-            _DEFAULT_COUNT,
             description=f"Max lines to return (1-{_MAX_COUNT})",
             minimum=1,
             maximum=_MAX_COUNT,
