@@ -1670,7 +1670,10 @@ body {
   display: contents;
 }
 
-.chat-thinking-header {
+/* Le intestazioni che si toccano per aprire un pezzo del turno — il
+   ragionamento, un tool, il gruppo dei tool: la stessa etichetta squadrata.
+   Quella del singolo tool si scrive nel colore del testo e senza grassetto. */
+.chat-thinking-header, .chat-tool-header, .tool-events-header {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1679,14 +1682,16 @@ body {
   border: 0.5px solid var(--border);
   border-radius: var(--radius-seg);
   font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+.chat-thinking-header, .tool-events-header {
+  font-weight: 500;
+  color: var(--text-muted);
+}
 
-.chat-thinking-header i {
+.chat-thinking-header i, .tool-events-header i {
   font-size: 12px;
   color: var(--accent);
 }
@@ -1784,20 +1789,7 @@ body {
   display: contents;
 }
 
-.chat-tool-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  background: var(--overlay);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-seg);
-  font-size: 10px;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
+.chat-tool-header { color: var(--text); }
 
 .chat-tool-icon {
   font-size: 11px;
@@ -2621,25 +2613,6 @@ body {
 /* ── Tool events (file edits) pill ── */
 .tool-events-container {
   display: contents;
-}
-.tool-events-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  background: var(--overlay);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-seg);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.tool-events-header i {
-  font-size: 12px;
-  color: var(--accent);
 }
 .tool-events-badge {
   display: inline-flex;
@@ -5088,7 +5061,9 @@ body {
   white-space: nowrap;
 }
 
-.file-preview-close {
+/* La crocetta dei due pannelli sopra la chat, l'anteprima di un file e le
+   informazioni della sessione: stessa taglia, stessa molla al tocco. */
+.file-preview-close, .session-info-close {
   width: 22px;
   height: 22px;
   border-radius: var(--radius-sm);
@@ -5100,15 +5075,14 @@ body {
   align-items: center;
   justify-content: center;
   transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
-  flex-shrink: 0;
 }
-
-.file-preview-close:hover {
+.file-preview-close:hover, .session-info-close:hover {
   color: var(--text);
   border-color: var(--border-strong);
   transform: scale(1.1);
 }
-.file-preview-close:active { transform: scale(0.9); }
+.file-preview-close:active, .session-info-close:active { transform: scale(0.9); }
+.file-preview-close { flex-shrink: 0; }
 
 .file-preview-close i {
   font-size: 12px;
@@ -5238,27 +5212,6 @@ body {
   font-size: 13px;
   margin-right: 4px;
 }
-
-.session-info-close {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  border: 0.5px solid var(--border-strong);
-  background: var(--overlay);
-  color: var(--text-faint);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
-}
-
-.session-info-close:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  transform: scale(1.1);
-}
-.session-info-close:active { transform: scale(0.9); }
 
 .session-info-close i {
   font-size: 13px;

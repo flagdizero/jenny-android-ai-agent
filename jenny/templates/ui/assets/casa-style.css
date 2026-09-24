@@ -1310,17 +1310,22 @@ body.casa {
 
 /* ── Le pagine di un quaderno ── */
 
-.casa-tabs {
-  flex: none;
+/* Le linguette delle pagine e le taglie della mascotte: la stessa fila di
+   pulsanti, perché è il modo in cui la casa dice «una fra queste». */
+.casa-tabs, .casa-seg {
   display: flex;
   gap: 3px;
-  margin: 2px 18px 8px;
   padding: 3px;
   border-radius: 10px;
   background: var(--overlay);
 }
 
-.casa-tab {
+.casa-tabs {
+  flex: none;
+  margin: 2px 18px 8px;
+}
+
+.casa-tab, .casa-seg-btn {
   flex: 1;
   height: 30px;
   border: none;
@@ -1332,7 +1337,7 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-tab.is-on {
+.casa-tab.is-on, .casa-seg-btn.is-on {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
@@ -1987,34 +1992,6 @@ body.casa {
 
 .casa-switch.is-on { background: var(--accent); border-color: transparent; }
 .casa-switch.is-on .casa-switch-knob { left: 20px; background: var(--on-accent); }
-
-/* Le taglie: la stessa forma delle linguette delle pagine, che e' gia' il
-   modo in cui la casa dice «una fra queste». */
-.casa-seg {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--overlay);
-}
-
-.casa-seg-btn {
-  flex: 1;
-  height: 30px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.casa-seg-btn.is-on {
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 600;
-}
 
 /* La nota sotto una scheda. `is-warn` e' quando Android ha detto di no: il
    colore c'e' perche' quella frase e' una cosa da fare, non una descrizione. */
