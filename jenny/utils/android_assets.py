@@ -463,6 +463,23 @@ def _get_manifest(package: str) -> list[str] | None:
     return None
 
 
+def bundled_skill_names() -> frozenset[str]:
+    """I nomi delle skill che vengono con l'app.
+
+    Sono le cartelle di ``_SKILLS_MANIFEST`` che hanno un ``SKILL.md``: lo stesso
+    elenco che ``sync_workspace_templates`` ri-estrae in ``workspace/skills/`` a
+    ogni avvio, **sovrascrivendole**. Per questo chi deve sapere se una modifica
+    a una skill sopravvive al riavvio chiede qui, e non a ``source`` — che per
+    le skill estratte e per quelle scritte dall'utente vale ``"workspace"`` in
+    entrambi i casi.
+    """
+    return frozenset(
+        entry.split("/", 1)[0]
+        for entry in _SKILLS_MANIFEST
+        if entry.count("/") == 1 and entry.endswith("/SKILL.md")
+    )
+
+
 def _write_bytes_force(target: Path, data: bytes) -> None:
     """Scrive *data* su *target*, sopravvivendo a un file mirror read-only.
 

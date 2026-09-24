@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jenny.utils.android_assets import _SKILLS_MANIFEST, _TEMPLATES_MANIFEST
+from jenny.utils.android_assets import (
+    _SKILLS_MANIFEST,
+    _TEMPLATES_MANIFEST,
+    bundled_skill_names,
+)
 
 _JENNY_DIR = Path(__file__).resolve().parents[2] / "jenny"
 TEMPLATES_DIR = _JENNY_DIR / "templates"
@@ -64,6 +68,13 @@ def test_skills_on_disk_are_in_manifest() -> None:
         f"file skill su disco assenti da _SKILLS_MANIFEST "
         f"(non arriverebbero mai sul device): {unlisted}"
     )
+
+
+def test_bundled_skill_names_are_the_skill_folders_that_ship() -> None:
+    """Chi decide se una skill si puo' spegnere chiede qui: una cartella in piu'
+    o in meno e' un interruttore che mente, in un verso o nell'altro."""
+    on_disk = {p.parent.name for p in SKILLS_DIR.glob("*/SKILL.md")}
+    assert bundled_skill_names() == on_disk
 
 
 def test_manifests_have_no_duplicates() -> None:

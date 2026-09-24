@@ -312,3 +312,14 @@ def test_delete_unexpected_error_maps_to_500(env, monkeypatch) -> None:
     monkeypatch.setattr("jenny.webui.skills_routes.delete_workspace_skill", boom)
     response = _dispatch(env.handler, "/api/webui/skills/foo/delete")
     assert response.status_code == 500
+
+
+def test_update_of_a_bundled_skill_maps_to_403(env) -> None:
+    """Spegnere una integrata varrebbe fino al riavvio: la rotta lo rifiuta."""
+    skill_file = _write_skill(env.skills_dir, "cron")
+    before = skill_file.read_bytes()
+
+    response = _dispatch(env.handler, _update_path("cron", disabled="1"))
+
+    assert response.status_code == 403
+    assert skill_file.read_bytes() == before

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.agent.skills import SkillsLoader
+from jenny.utils.android_assets import bundled_skill_names
 
 
 def webui_skills_payload(
@@ -31,6 +32,7 @@ def update_workspace_skill(
     disabled: bool | None = None,
 ) -> dict[str, Any]:
     """Update a workspace skill and return its payload."""
+    _refuse_bundled(name)
     loader = SkillsLoader(workspace_path)
     loader.update_skill(name, description=description, content=content, disabled=disabled)
     return _skill_payload_for(loader, name, source="workspace")
@@ -38,8 +40,21 @@ def update_workspace_skill(
 
 def delete_workspace_skill(workspace_path: Path, name: str) -> None:
     """Delete a workspace skill."""
+    _refuse_bundled(name)
     loader = SkillsLoader(workspace_path)
     loader.delete_skill(name)
+
+
+def _refuse_bundled(name: str) -> None:
+    """Una skill che viene con l'app non si modifica né si cancella da qui.
+
+    ``sync_workspace_templates`` la ri-estrae a ogni avvio sovrascrivendola:
+    un ``disabled: true`` nel suo frontmatter varrebbe fino al riavvio e poi
+    sparirebbe senza dirlo, e una cancellata tornerebbe. Meglio un rifiuto che
+    un'impostazione che mente.
+    """
+    if name in bundled_skill_names():
+        raise PermissionError("bundled skill: re-extracted at startup")
 
 
 def _skill_payload_for(loader: SkillsLoader, name: str, *, source: str = "workspace") -> dict[str, Any]:
@@ -53,6 +68,7 @@ def _skill_payload_for(loader: SkillsLoader, name: str, *, source: str = "worksp
         "available": available,
         "unavailable_reason": unavailable_reason,
         "disabled": bool(metadata and metadata.get("disabled")),
+        "bundled": name in bundled_skill_names(),
         **_visibility_fields(metadata),
     }
 
@@ -68,6 +84,7 @@ def _skill_payload(loader: SkillsLoader, entry: dict[str, str]) -> dict[str, Any
         "available": available,
         "unavailable_reason": unavailable_reason,
         "disabled": bool(metadata and metadata.get("disabled")),
+        "bundled": name in bundled_skill_names(),
         **_visibility_fields(metadata),
     }
 
