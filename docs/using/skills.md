@@ -46,7 +46,7 @@ Built-in skills are core parts of how Jenny works (scheduling, building apps and
 
 ## Why built-in skills have a lock
 
-**The skills that ship with Jenny are re-extracted from the APK every time the app starts**, overwriting whatever is in their folder under `workspace/skills/`. A switch on one of them would work only until the next restart, then be silently undone. So there is no switch, and the gateway refuses to change or delete a built-in skill (it answers `403`).
+**The skills that ship with Jenny are re-extracted from the APK every time the app starts**, overwriting whatever is in their folder under `workspace/skills/`. A switch on one of them would work only until the next restart, then be silently undone. So there is no switch, and the gateway refuses to change a built-in skill (it answers `403`).
 
 Your own skills live in the same folder but are never touched by the start-up extraction, so turning one off, or asking Jenny to change or delete it, sticks.
 

@@ -12,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from jenny.webui.skills_api import (
-    delete_workspace_skill,
     update_workspace_skill,
     webui_skills_payload,
 )
@@ -220,23 +219,6 @@ def test_update_workspace_skill_missing_skill_raises_permission_error(tmp_path: 
         update_workspace_skill(tmp_path, "does-not-exist", description="x")
 
 
-# -- delete_workspace_skill -----------------------------------------------------
-
-
-def test_delete_workspace_skill_removes_directory(tmp_path: Path, skills_dir: Path) -> None:
-    _write_skill(skills_dir, "to-delete")
-    assert (skills_dir / "to-delete").is_dir()
-
-    delete_workspace_skill(tmp_path, "to-delete")
-
-    assert not (skills_dir / "to-delete").exists()
-
-
-def test_delete_workspace_skill_missing_skill_raises_permission_error(tmp_path: Path) -> None:
-    with pytest.raises(PermissionError):
-        delete_workspace_skill(tmp_path, "does-not-exist")
-
-
 # -- le skill che vengono con l'app ---------------------------------------------
 #
 # Le integrate vivono in ``workspace/skills/`` come quelle dell'utente, e
@@ -275,11 +257,3 @@ def test_update_refuses_a_bundled_skill_without_touching_it(
 
     assert skill_file.read_bytes() == before
 
-
-def test_delete_refuses_a_bundled_skill(tmp_path: Path, skills_dir: Path) -> None:
-    _write_skill(skills_dir, "cron")
-
-    with pytest.raises(PermissionError):
-        delete_workspace_skill(tmp_path, "cron")
-
-    assert (skills_dir / "cron" / "SKILL.md").is_file()

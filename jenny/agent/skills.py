@@ -3,7 +3,6 @@
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 
 from jenny.utils.path import atomic_write
@@ -269,20 +268,6 @@ class SkillsLoader:
         # lascerebbe un SKILL.md troncato — frontmatter a metà, quindi una skill
         # che non si carica più. Da qui l'helper unico invece di write_text.
         atomic_write(skill_path, f"---\n{frontmatter}---\n{body}")
-
-    def delete_skill(self, name: str) -> None:
-        """Delete a workspace skill directory.
-
-        Raises:
-            PermissionError: if the skill is builtin.
-            FileNotFoundError: if the skill doesn't exist.
-        """
-        if not self.is_workspace_skill(name):
-            raise PermissionError("cannot delete builtin skill")
-        skill_dir = self.workspace_skills / name
-        if not skill_dir.exists():
-            raise FileNotFoundError(f"skill '{name}' not found")
-        shutil.rmtree(skill_dir)
 
     # ── Metadata parsing ──
 

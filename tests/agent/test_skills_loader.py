@@ -87,13 +87,6 @@ def test_list_skills_filter_unavailable_excludes_unmet_bin_requirement(
         "needs_bin",
         metadata_json={"requires": {"bins": ["jenny_test_fake_binary"]}},
     )
-    def fake_which(cmd: str) -> str | None:
-        if cmd == "jenny_test_fake_binary":
-            return None
-        return "/usr/bin/true"
-
-    monkeypatch.setattr("jenny.agent.skills.shutil.which", fake_which)
-
     loader = SkillsLoader(workspace)
     assert loader.list_skills(filter_unavailable=True) == []
 
@@ -135,15 +128,6 @@ def test_android_skill_availability_excludes_desktop_bins(
         metadata_json={"requires": {"bins": ["python3"]}},
     )
 
-    def fake_which(cmd: str) -> str | None:
-        if cmd in {"docker", "npx", "uvx", "node"}:
-            return None
-        if cmd in {"python", "python3"}:
-            return f"/usr/bin/{cmd}"
-        return "/usr/bin/true"
-
-    monkeypatch.setattr("jenny.agent.skills.shutil.which", fake_which)
-
     loader = SkillsLoader(workspace)
     entries = loader.list_skills(filter_unavailable=True)
     names = {entry["name"] for entry in entries}
@@ -165,7 +149,6 @@ def test_list_skills_filter_unavailable_false_keeps_unmet_requirements(
         "blocked",
         metadata_json={"requires": {"bins": ["jenny_test_fake_binary"]}},
     )
-    monkeypatch.setattr("jenny.agent.skills.shutil.which", lambda _cmd: None)
 
     loader = SkillsLoader(workspace)
     entries = loader.list_skills(filter_unavailable=False)

@@ -19,7 +19,6 @@ from websockets.http11 import Response
 
 from jenny.channels.http_utils import parse_flag
 from jenny.webui.skills_api import (
-    delete_workspace_skill,
     update_workspace_skill,
     webui_skills_payload,
 )
@@ -57,9 +56,6 @@ class SkillsRoutes:
         m = re.match(r"^/api/webui/skills/([^/]+)/update$", path)
         if m:
             return self._update(request, m.group(1))
-        m = re.match(r"^/api/webui/skills/([^/]+)/delete$", path)
-        if m:
-            return self._delete(request, m.group(1))
         return None
 
     def _list(self, request: WsRequest) -> Response:
@@ -105,20 +101,3 @@ class SkillsRoutes:
         except Exception:
             self._log.exception("Skill update failed")
             return self._error(500, "skill update failed")
-
-    def _delete(self, request: WsRequest, raw_name: str) -> Response:
-        if not self._check_api_token(request):
-            return self._error(401, "Unauthorized")
-        name = unquote(raw_name)
-        if not name or "/" in name or "\\" in name:
-            return self._error(400, "invalid skill name")
-        try:
-            delete_workspace_skill(self._skills_workspace_path, name)
-            return self._json({"deleted": True})
-        except PermissionError as e:
-            return self._error(403, str(e))
-        except FileNotFoundError as e:
-            return self._error(404, str(e))
-        except Exception:
-            self._log.exception("Skill delete failed")
-            return self._error(500, "skill delete failed")

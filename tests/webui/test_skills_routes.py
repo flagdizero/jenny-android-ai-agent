@@ -120,12 +120,19 @@ def test_dispatch_returns_none_for_partial_prefix_match(env) -> None:
     assert response is None
 
 
-def test_dispatch_recognizes_update_and_delete_paths(env) -> None:
+def test_dispatch_recognizes_the_update_path(env) -> None:
     _write_skill(env.skills_dir, "foo")
     update = _dispatch(env.handler, _update_path("foo", description="x"))
     assert update is not None and update.status_code == 200
-    delete = _dispatch(env.handler, "/api/webui/skills/foo/delete")
-    assert delete is not None and delete.status_code == 200
+
+
+def test_there_is_no_delete_route(env) -> None:
+    """Cancellare una skill non passa dall'HTTP: la UI non lo offre (decisione
+    del 21/09/2026, «si passa dalla chat»), e una capacità senza client
+    è una superficie da difendere per niente. Tolta il 24/09/2026."""
+    _write_skill(env.skills_dir, "foo")
+    assert _dispatch(env.handler, "/api/webui/skills/foo/delete") is None
+    assert (env.skills_dir / "foo").is_dir()
 
 
 # -- autenticazione -----------------------------------------------------------
@@ -139,12 +146,6 @@ def test_list_requires_token(env) -> None:
 def test_update_requires_token(env) -> None:
     _write_skill(env.skills_dir, "foo")
     response = _dispatch(env.handler, _update_path("foo", description="x"), token=None)
-    assert response.status_code == 401
-
-
-def test_delete_requires_token(env) -> None:
-    _write_skill(env.skills_dir, "foo")
-    response = _dispatch(env.handler, "/api/webui/skills/foo/delete", token=None)
     assert response.status_code == 401
 
 
@@ -280,38 +281,6 @@ def test_update_unexpected_error_maps_to_500_generic(env, monkeypatch) -> None:
     response = _dispatch(env.handler, _update_path("foo", description="x"))
     assert response.status_code == 500
     assert b"guasto interno inatteso" not in response.body
-
-
-# -- delete -----------------------------------------------------------------
-
-
-def test_delete_happy_path(env) -> None:
-    _write_skill(env.skills_dir, "foo")
-    response = _dispatch(env.handler, "/api/webui/skills/foo/delete")
-    assert response.status_code == 200
-    assert _json(response) == {"deleted": True}
-    assert not (env.skills_dir / "foo").exists()
-
-
-def test_delete_rejects_invalid_name(env) -> None:
-    response = _dispatch(env.handler, "/api/webui/skills/a%2Fb/delete")
-    assert response.status_code == 400
-
-
-def test_delete_missing_skill_maps_to_403(env) -> None:
-    response = _dispatch(env.handler, "/api/webui/skills/never-created/delete")
-    assert response.status_code == 403
-
-
-def test_delete_unexpected_error_maps_to_500(env, monkeypatch) -> None:
-    _write_skill(env.skills_dir, "foo")
-
-    def boom(*_args, **_kwargs):
-        raise RuntimeError("guasto")
-
-    monkeypatch.setattr("jenny.webui.skills_routes.delete_workspace_skill", boom)
-    response = _dispatch(env.handler, "/api/webui/skills/foo/delete")
-    assert response.status_code == 500
 
 
 def test_update_of_a_bundled_skill_maps_to_403(env) -> None:

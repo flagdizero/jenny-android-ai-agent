@@ -38,19 +38,12 @@ def update_workspace_skill(
     return _skill_payload_for(loader, name, source="workspace")
 
 
-def delete_workspace_skill(workspace_path: Path, name: str) -> None:
-    """Delete a workspace skill."""
-    _refuse_bundled(name)
-    loader = SkillsLoader(workspace_path)
-    loader.delete_skill(name)
-
-
 def _refuse_bundled(name: str) -> None:
-    """Una skill che viene con l'app non si modifica né si cancella da qui.
+    """Una skill che viene con l'app non si modifica da qui.
 
     ``sync_workspace_templates`` la ri-estrae a ogni avvio sovrascrivendola:
     un ``disabled: true`` nel suo frontmatter varrebbe fino al riavvio e poi
-    sparirebbe senza dirlo, e una cancellata tornerebbe. Meglio un rifiuto che
+    sparirebbe senza dirlo. Meglio un rifiuto che
     un'impostazione che mente.
     """
     if name in bundled_skill_names():
