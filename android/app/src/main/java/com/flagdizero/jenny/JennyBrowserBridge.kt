@@ -33,7 +33,8 @@ import java.util.concurrent.atomic.AtomicReference
  * 29/08, interamente restituiti alla chiusura), e la seconda esiste solo finché
  * una sessione è aperta.
  *
- * **Invariante che regge tutto: ogni tocco della WebView passa da [handler].**
+ * **Invariante che regge tutto: ogni tocco della WebView passa dal main thread**
+ * ([handler], o [MainHop] per i salti che aspettano l'esito).
  * Creazione, `loadUrl`, letture di `url`/`title`, `evaluateJavascript`,
  * `destroy`. Non è pignoleria: la WebView pretende il main thread e lo verifica
  * lei stessa (`checkThread`), quindi un accessore che legge lo stato dal thread
@@ -266,14 +267,13 @@ class JennyBrowserBridge(context: Context) {
 
     /** Distrugge la sessione e butta il profilo (cookie inclusi). */
     fun close(): String {
-        val done = CountDownLatch(1)
-        handler.post {
+        // Il tetto scaduto non ferma la chiusura: il resto (verdetti, recinto,
+        // profilo) si butta comunque.
+        MainHop.call(10_000L, Unit, TAG) {
             webView?.stopLoading()
             webView?.destroy()
             webView = null
-            done.countDown()
         }
-        done.await(10, TimeUnit.SECONDS)
         hostVerdicts.clear()
         scopeDomain.set(null)
         lastBlocked.set(null)
@@ -342,16 +342,10 @@ class JennyBrowserBridge(context: Context) {
     private fun runAgent(argsJson: String, timeoutSeconds: Long): String =
         evaluate(agentJs.replace("__ARGS__", argsJson), timeoutSeconds)
 
-    private fun currentUrlAndTitle(): Pair<String, String> {
-        val out = AtomicReference(Pair("", ""))
-        val done = CountDownLatch(1)
-        handler.post {
-            out.set(Pair(webView?.url ?: "", webView?.title ?: ""))
-            done.countDown()
+    private fun currentUrlAndTitle(): Pair<String, String> =
+        MainHop.call(5_000L, Pair("", ""), TAG) {
+            Pair(webView?.url ?: "", webView?.title ?: "")
         }
-        done.await(5, TimeUnit.SECONDS)
-        return out.get()
-    }
 
     // ------------------------------------------------------------------ API
 
@@ -359,20 +353,17 @@ class JennyBrowserBridge(context: Context) {
     fun open(url: String, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
         val uri = Uri.parse(url)
         if (isBlockedLiteral(uri)) return """{"error":"indirizzo non consentito"}"""
-        val started = CountDownLatch(1)
         lastBlocked.set(null)
         // Un browser_open e' un atto esplicito: il perimetro si rifa' **dopo**,
         // sull'indirizzo dove la pagina si e' posata davvero.
         openInFlight.set(true)
         scopeDomain.set(null)
-        handler.post {
+        MainHop.call(10_000L, Unit, TAG) {
             ensureWebViewOnMain()
             loading.set(true)
             lastError.set(null)
             webView?.loadUrl(url)
-            started.countDown()
         }
-        started.await(10, TimeUnit.SECONDS)
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
         lastBlocked.getAndSet(null)?.let {

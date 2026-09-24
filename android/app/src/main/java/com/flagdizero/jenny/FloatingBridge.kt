@@ -1,12 +1,6 @@
 package com.flagdizero.jenny
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Bridge per la mascotte flottante, esposto a Python via Chaquopy
@@ -42,33 +36,10 @@ class FloatingBridge(context: Context) {
         /** Attesa massima per il giro sul main thread. */
         private const val MAIN_HOP_TIMEOUT_MS = 3_000L
 
-        /** Esegue *block* sul main thread e ne ritorna l'esito.
-         *
-         *  Se siamo già sul main lo esegue sul posto: un `post` seguito da un
-         *  `await` sarebbe un blocco su sé stessi. Non dovrebbe capitare —
-         *  Python chiama sempre da un thread di lavoro — ma un deadlock è un
-         *  guasto troppo silenzioso per lasciarlo dipendere da quel dovrebbe.
-         */
-        private fun onMain(block: () -> Boolean): Boolean {
-            if (Looper.myLooper() == Looper.getMainLooper()) return block()
-            val result = AtomicBoolean(false)
-            val done = CountDownLatch(1)
-            Handler(Looper.getMainLooper()).post {
-                try {
-                    result.set(block())
-                } catch (e: Exception) {
-                    Log.e(TAG, "Floating bridge call failed", e)
-                } finally {
-                    done.countDown()
-                }
-            }
-            return if (done.await(MAIN_HOP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                result.get()
-            } else {
-                Log.i(TAG, "Floating bridge call timed out on the main thread")
-                false
-            }
-        }
+        /** Esegue *block* sul main thread (v. [MainHop]); `false` se non ci
+         *  riesce in tempo. */
+        private fun onMain(block: () -> Boolean): Boolean =
+            MainHop.call(MAIN_HOP_TIMEOUT_MS, false, TAG, block)
     }
 
     private val appContext = context.applicationContext
