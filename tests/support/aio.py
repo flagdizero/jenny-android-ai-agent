@@ -34,6 +34,34 @@ async def wait_until(
         await asyncio.sleep(interval)
 
 
+async def settle_tasks(
+    get_tasks: Callable[[], Any],
+    *,
+    timeout: float = 5.0,
+) -> None:
+    """Aspetta che i task di *get_tasks()* siano finiti, **rileggendoli a ogni
+    giro**: un task che ne lancia un altro (una compattazione che ne accoda
+    una seconda) non sfugge come con un ``gather`` su una lista presa una
+    volta. Le eccezioni dei task non si rilanciano: le guarda il test.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        tasks = list(get_tasks())
+        pending = [t for t in tasks if not t.done()]
+        if not pending:
+            # Come faceva ``gather(return_exceptions=True)``: l'eccezione di un
+            # task finito si ritira, o asyncio la lamenta alla raccolta.
+            for t in tasks:
+                if not t.cancelled():
+                    t.exception()
+            return
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise AssertionError(f"task ancora in volo dopo {timeout}s: {pending}")
+        await asyncio.wait(pending, timeout=remaining)
+
+
 def queue_idle(queue: asyncio.Queue) -> bool:
     """La coda è vuota **e** chi la consuma è di nuovo fermo ad aspettare.
 

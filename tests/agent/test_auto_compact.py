@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import settle_tasks
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
@@ -143,9 +144,7 @@ def _make_fake_compact(
 
 
 async def _drain_background_tasks(loop: AgentLoop) -> None:
-    tasks = list(loop._background_tasks)
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+    await settle_tasks(lambda: loop._background_tasks)
     await asyncio.sleep(0)
 
 
