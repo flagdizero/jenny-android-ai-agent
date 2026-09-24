@@ -106,7 +106,6 @@ class ToolContext:
     # ``file_state.current_file_states``.
     file_states: FileStates | None = field(default=None)
     timezone: str = "UTC"
-    workspace_sandbox: Any | None = None
     runtime_events: Any | None = None
     android_context: Any | None = None
     ui_query_service: Any | None = None

@@ -23,7 +23,6 @@ from jenny.agent.memory_archive import archive_dir
 from jenny.session.keys import (
     DREAM_SESSION_PREFIX,
     internal_session_kind,
-    is_internal_session_key,
     is_personal_session_key,
     is_project_session_key,
     session_kind,
@@ -727,23 +726,10 @@ class MemoryStore:
         return [e for e, c in self._iter_valid_entries() if c > since_cursor]
 
     @classmethod
-    def _is_internal_history_session(cls, session_key: str | None) -> bool:
-        """True se la voce di history viene da lavoro interno, non dall'utente.
-
-        Il vocabolario e' quello unico di :mod:`jenny.session.keys`: qui resta
-        solo la guardia su ``None``/stringa vuota, che il predicato canonico non
-        ha perche' lavora su chiavi di sessione sempre presenti, mentre il
-        ``session_key`` di una voce di history e' opzionale.
-        """
-        if not session_key:
-            return False
-        return is_internal_session_key(session_key)
-
-    @classmethod
     def _is_personal_history_session(cls, session_key: str | None) -> bool:
         """True se la voce di history appartiene alla conversazione personale.
 
-        Whitelist, e non la negazione di :meth:`_is_internal_history_session`,
+        Whitelist, e non la negazione di :func:`jenny.session.keys.is_internal_session_key`,
         per la ragione spiegata in :func:`jenny.session.keys.is_personal_session_key`:
         chi la usa decide cosa entra nella memoria di lungo periodo, e per quella
         decisione l'elenco giusto è quello di chi *può*, non quello di chi non può.

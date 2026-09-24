@@ -173,15 +173,6 @@ def parse_flag(raw: str | None) -> bool:
     return (raw or "").strip().lower() in TRUTHY_VALUES
 
 
-def query_flag(query: QueryParams, *keys: str) -> bool:
-    """``parse_flag`` sul primo *keys* presente nella query."""
-    for key in keys:
-        value = query_first(query, key)
-        if value is not None:
-            return parse_flag(value)
-    return False
-
-
 def is_localhost(connection: Any) -> bool:
     """Return True when the peer address is loopback.
 

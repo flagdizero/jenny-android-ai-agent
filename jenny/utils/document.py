@@ -121,27 +121,6 @@ def is_image_file(path: str) -> bool:
     return bool(mime and mime.startswith("image/"))
 
 
-def reference_non_image_attachments(
-    content: str, media: list[str],
-) -> tuple[str, list[str]]:
-    """Separate images from non-image attachments without reading file content.
-
-    Image paths are preserved for downstream vision-block construction.
-    Non-image paths are appended as ``[Attachment: path]`` references.
-    """
-    image_paths: list[str] = []
-    attachment_refs: list[str] = []
-    for path in media:
-        if is_image_file(path):
-            image_paths.append(path)
-        else:
-            attachment_refs.append(f"[Attachment: {path}]")
-    if attachment_refs:
-        suffix = "\n".join(attachment_refs)
-        content = f"{content}\n\n{suffix}" if content else suffix
-    return content, image_paths
-
-
 # Soglia oltre la quale un documento NON viene estratto inline ma solo
 # referenziato per path (letto on-demand dagli strumenti dell'agente). Tiene il
 # costo di contesto sotto controllo: i file testuali/PDF piccoli entrano nel

@@ -401,10 +401,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # When a session has an active task, new messages for that session
         # are routed here instead of creating a new task.
         self._pending_queues: dict[str, asyncio.Queue] = {}
-        # Per-session monotonic timestamp dell'ultima attività del turno
-        # (progress/stream/reasoning/retry). Alimenta il watchdog di inattività
-        # in ``_dispatch`` che sblocca i turni bloccati (UI ferma su "running").
-        self._turn_activity: dict[str, float] = {}
         self._cron_turns = CronTurnCoordinator(
             publish_inbound=self.bus.publish_inbound,
             dispatch=self._dispatch,
@@ -526,7 +522,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             cron_service=self.cron_service,
             sessions=self.sessions,
             timezone=self.context.timezone or "UTC",
-            workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_events=self.runtime_events,
             android_context=get_android_context(),
             ui_query_service=self._ui_query,

@@ -1,5 +1,4 @@
 import asyncio
-import base64
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,7 +8,6 @@ from jenny.agent.loop import AgentLoop, TurnContext, TurnState
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
-from jenny.utils.document import reference_non_image_attachments
 
 
 def _make_loop(tmp_path: Path, extract_document_text: bool = True) -> AgentLoop:
@@ -162,25 +160,6 @@ async def test_pending_followup_extracts_documents(
     ][-1]
     assert "check this" in injected_user_content
     assert "Do not inject this file body" in injected_user_content
-
-
-def test_reference_non_image_attachments_preserves_images(tmp_path: Path) -> None:
-    image_path = tmp_path / "chart.png"
-    image_path.write_bytes(
-        base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+yF9kAAAAASUVORK5CYII="
-        )
-    )
-    doc_path = tmp_path / "report.txt"
-    doc_path.write_text("manual extraction target", encoding="utf-8")
-
-    content, media = reference_non_image_attachments(
-        "review these",
-        [str(image_path), str(doc_path)],
-    )
-
-    assert media == [str(image_path)]
-    assert f"[Attachment: {doc_path}]" in content
 
 
 def test_extract_documents_references_non_extractable_binary(tmp_path: Path) -> None:

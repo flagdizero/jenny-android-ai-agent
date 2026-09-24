@@ -86,11 +86,6 @@ async def persist_schema_migrations(*, config_path: Path | None = None) -> bool:
     return True
 
 
-def locked() -> bool:
-    """True se una mutazione è in corso (usato dai test)."""
-    return _LOCK.locked()
-
-
 def reset_config_store_state() -> None:
     """Rimpiazza il lock delle scritture prima di un nuovo event loop.
 

@@ -45,16 +45,6 @@ def set_workspace_dir(path: str | Path) -> None:
     forget_templates_root()
 
 
-def get_config_path() -> Path:
-    """Get the configuration file path (lazy import to break circular dependency).
-
-    Delegates to ``jenny.config.loader.get_config_path`` at call time so
-    that importing this module never triggers a circular import during startup.
-    """
-    from jenny.config.loader import get_config_path as _loader_get_config_path
-    return _loader_get_config_path()
-
-
 def get_data_dir() -> Path:
     """Return the instance-level runtime data directory (inside workspace)."""
     workspace = get_workspace_path()

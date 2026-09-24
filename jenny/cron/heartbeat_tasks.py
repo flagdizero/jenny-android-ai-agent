@@ -187,8 +187,7 @@ def _uncommented_lines(content: str, source: str | None = None) -> Iterator[tupl
     righe — vive qui e in nessun altro posto. I lettori di questo formato sono
     due (i task, e il testo che va nel prompt) e devono restare d'accordo: se
     divergessero, al modello finirebbe sotto gli occhi un task che il parser non
-    conta, o viceversa. È lo stesso motivo per cui ``heartbeat_has_active_tasks``
-    non ha una scansione propria.
+    conta, o viceversa.
 
     Le righe di intestazione escono da qui come tutte le altre — è chi chiama a
     decidere se sono contenuto o solo struttura — e lo stato si aggiorna **prima**
@@ -261,10 +260,8 @@ def _uncommented_lines(content: str, source: str | None = None) -> Iterator[tupl
 def _active_task_lines(content: str) -> Iterator[str]:
     """Righe della sezione "Active Tasks", righe vuote comprese.
 
-    Stessa scansione che ``heartbeat_has_active_tasks`` faceva per rispondere
-    sì/no — intestazioni e commenti HTML fuori — con l'unica differenza che le
-    righe vuote della sezione vengono restituite: servono a separare un task
-    dall'altro.
+    Intestazioni e commenti HTML fuori; le righe vuote della sezione invece
+    vengono restituite: servono a separare un task dall'altro.
     """
     for line, in_active_section in _uncommented_lines(content):
         if not in_active_section:

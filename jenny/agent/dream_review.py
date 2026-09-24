@@ -139,12 +139,6 @@ async def _silent(*_args: Any, **_kwargs: Any) -> None:
     """``on_progress`` no-op: un run interno non ha nessuno a cui riferire."""
 
 
-def _timezone_of(agent: Any) -> str | None:
-    """Fuso dell'agente, per datare la riga di consumo token. Come nel giardiniere."""
-    context = getattr(agent, "context", None)
-    return getattr(context, "timezone", None)
-
-
 def _measure(report: Sequence[FileBudget]) -> dict[str, int]:
     """Rimisura i file del report, ``label -> caratteri``.
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from jenny.channels.http_utils import parse_flag, query_flag
+from jenny.channels.http_utils import parse_flag
 from jenny.webui import settings_api, ssh_api, worker_settings
 
 # Le forme che un client manda davvero: un checkbox HTML spedisce ``on``, il JS
@@ -33,15 +33,6 @@ def test_false_forms_are_false(raw: str) -> None:
 
 def test_missing_value_is_false() -> None:
     assert parse_flag(None) is False
-    assert query_flag({}, "enabled") is False
-
-
-def test_query_flag_takes_the_first_key_present() -> None:
-    query = {"camelCase": ["on"]}
-    assert query_flag(query, "snake_case", "camelCase") is True
-    # Una chiave presente ma falsa vince su un alias assente: il valore letto è
-    # quello che il client ha davvero mandato.
-    assert query_flag({"snake_case": ["off"], "camelCase": ["on"]}, "snake_case", "camelCase") is False
 
 
 @pytest.mark.parametrize("raw", TRUE_FORMS)

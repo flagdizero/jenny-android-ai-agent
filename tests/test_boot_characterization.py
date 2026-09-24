@@ -47,5 +47,5 @@ def test_gateway_container_is_the_composition_root() -> None:
     assert _module_present("jenny.runtime.container")
     from jenny.runtime.container import GatewayContainer
 
-    for attr in ("build", "run", "set_agent", "set_message_tool"):
+    for attr in ("build", "run", "set_agent"):
         assert hasattr(GatewayContainer, attr), attr

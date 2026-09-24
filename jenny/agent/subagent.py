@@ -65,7 +65,6 @@ from jenny.security.workspace_access import (
     WorkspaceScope,
     current_workspace_scope,
     enter_workspace_scope,
-    workspace_sandbox_status,
 )
 from jenny.session.turn_visibility import resolve_turn_visibility
 from jenny.utils.helpers import truncate_text
@@ -949,10 +948,6 @@ class SubagentManager:
             config=cfg,
             workspace=str(root.resolve()),
             file_states=FileStates(),
-            workspace_sandbox=workspace_sandbox_status(
-                restrict_to_workspace=cfg.restrict_to_workspace,
-                workspace=root,
-            ),
             android_context=get_android_context(),
         )
 

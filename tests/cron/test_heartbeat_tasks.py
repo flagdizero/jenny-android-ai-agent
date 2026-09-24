@@ -36,7 +36,6 @@ from jenny.cron.heartbeat_tasks import (
     tasks_due_for_escalation,
 )
 from jenny.cron.types import CronJobState, CronTaskCheckState
-from jenny.runtime.cron_dispatch import heartbeat_has_active_tasks
 
 _WATERBOT = (
     "- Ogni ciclo, controlla l'umidità delle piante e avvisami solo sotto il 15%. "
@@ -88,19 +87,6 @@ class TestReadingTheFile:
 
     def test_a_file_with_only_headers_has_no_tasks(self) -> None:
         assert parse_heartbeat_tasks("# Heartbeat Tasks\n\n## Active Tasks\n\n") == []
-
-    def test_the_two_readers_of_this_file_agree(self) -> None:
-        """``heartbeat_has_active_tasks`` decide se il turno parte; questo modulo
-        decide cosa contiene. Se divergessero, il turno girerebbe su un file che
-        qui risulta vuoto — o non girerebbe su uno che qui ha dei task."""
-        for content in (
-            _file(_WATERBOT),
-            _file(_WATERBOT, _VITAMINE),
-            "# Heartbeat Tasks\n\n## Active Tasks\n\n",
-            "# Heartbeat\n\nnothing here\n",
-            "## Active Tasks\n\n<!-- solo un commento -->\n",
-        ):
-            assert heartbeat_has_active_tasks(content) is bool(parse_heartbeat_tasks(content))
 
 
 class TestTaskIdentity:

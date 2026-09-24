@@ -103,7 +103,6 @@ class _PythonSession:
         self._error: str | None = None
         self._timed_out = False
         self._terminated = False
-        self._result: Any = None
         self._exit_code: int | None = None
         self._stop_event = threading.Event()
 

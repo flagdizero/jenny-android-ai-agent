@@ -180,17 +180,6 @@ _HEARTBEAT_PREAMBLE = (
 )
 
 
-def heartbeat_has_active_tasks(content: str) -> bool:
-    """True if HEARTBEAT.md has task lines, ignoring headers, blanks and comments.
-
-    La scansione vera sta in ``jenny.cron.heartbeat_tasks``, che dello stesso
-    file estrae i singoli task: due lettori dello stesso formato che
-    divergessero sarebbero un modo eccellente di eseguire un file che qui
-    risulta vuoto, o di non contare un task che qui risulta esserci.
-    """
-    return bool(parse_heartbeat_tasks(content))
-
-
 # Sessione del controllo aggiornamenti. Il prefisso ``cron:`` non è estetico:
 # rende la sessione interna per ``is_internal_session_key`` (quindi invisibile
 # negli elenchi user-facing) e attribuisce i token del turno alla voce "cron"

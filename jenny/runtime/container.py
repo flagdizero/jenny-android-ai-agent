@@ -38,10 +38,9 @@ class GatewayContainer:
         self.config = config
         self.port = config.gateway.port
 
-        # Stato di runtime (ex-nonlocal). `agent`/`message_tool` sono riassegnati
-        # dall'onboarding tramite set_agent/set_message_tool.
+        # Stato di runtime (ex-nonlocal). `agent` è riassegnato dall'onboarding
+        # tramite set_agent.
         self._agent: Any = None
-        self._message_tool: Any = None
         self.onboarding_event = asyncio.Event()
         # Ultimo errore della sync dei template, se c'è stato (vedi _sync_templates).
         self.template_sync_error: Exception | None = None
@@ -66,9 +65,6 @@ class GatewayContainer:
 
     def set_agent(self, new_agent: Any) -> None:
         self._agent = new_agent
-
-    def set_message_tool(self, mt: Any) -> None:
-        self._message_tool = mt
 
     def _webui_runtime_model_name(self) -> str | None:
         if not self._agent:
@@ -557,7 +553,6 @@ class GatewayContainer:
         message_tool = agent.tools.get("message")
         if isinstance(message_tool, MessageTool):
             message_tool.set_send_callback(self._deliver_to_channel)
-            self.set_message_tool(message_tool)
         # Lo stesso callback passato al ``CronDispatcher``, non un secondo: i due
         # percorsi di Dream — il job periodico e lo slash command ``/dream`` —
         # devono checkpointare la stessa cosa. Il cablaggio sta qui e non accanto

@@ -288,22 +288,6 @@ def record_token_usage(
         return write_token_usage_state(state)
 
 
-def record_response_token_usage(
-    response: Any,
-    *,
-    source: str,
-    timezone_name: str | None = None,
-) -> None:
-    try:
-        record_token_usage(
-            getattr(response, "usage", None),
-            source=source,
-            timezone_name=timezone_name,
-        )
-    except Exception:
-        logger.exception("failed to record {} token usage", source)
-
-
 def token_usage_payload(
     *,
     timezone_name: str | None = None,

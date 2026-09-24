@@ -32,7 +32,6 @@ from jenny.cron.session_turns import (
     CRON_MONITOR_META,
     CRON_TRIGGER_META,
     is_bound_cron_job,
-    is_monitor_cron_turn,
     monitor_session_key,
 )
 from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload
@@ -223,18 +222,6 @@ class TestAReminderRunsInTheConversation:
 
 class TestMonitorMetadataHelpers:
     """Predicati di ``session_turns`` usati dalla FSM e dal runner."""
-
-    def test_a_monitor_turn_needs_both_the_cron_trigger_and_the_monitor_flag(self) -> None:
-        assert is_monitor_cron_turn({CRON_TRIGGER_META: {}, CRON_MONITOR_META: True}) is True
-
-    def test_the_monitor_flag_alone_is_not_a_cron_turn(self) -> None:
-        assert is_monitor_cron_turn({CRON_MONITOR_META: True}) is False
-
-    def test_a_cron_turn_without_the_flag_is_a_plain_reminder(self) -> None:
-        assert is_monitor_cron_turn({CRON_TRIGGER_META: {}}) is False
-
-    def test_absent_metadata_is_not_a_monitor_turn(self) -> None:
-        assert is_monitor_cron_turn(None) is False
 
     def test_each_monitor_gets_its_own_session_namespaced_by_job_id(self) -> None:
         assert monitor_session_key("job-m") == "cron:job-m"

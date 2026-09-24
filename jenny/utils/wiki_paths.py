@@ -635,8 +635,3 @@ def _frontmatter_scalar(text: str, *keys: str) -> str | None:
             if v and not _is_placeholder(v):
                 return v
     return None
-
-
-def has_wikis(wikis_dir: Path) -> bool:
-    """True se esiste almeno una wiki scansionabile."""
-    return bool(discover_wikis(wikis_dir))

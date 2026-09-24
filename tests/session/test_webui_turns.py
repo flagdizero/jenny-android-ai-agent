@@ -243,7 +243,7 @@ async def test_no_token_usage_is_recorded(tmp_path, monkeypatch):
     """La fonte ``mascot`` resta per lo storico, ma nessuno ci scrive piu'."""
     recorded: list = []
     monkeypatch.setattr(
-        "jenny.agent.token_usage.record_response_token_usage",
+        "jenny.agent.token_usage.record_token_usage",
         lambda *a, **kw: recorded.append(kw),
     )
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
