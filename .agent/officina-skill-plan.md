@@ -1,6 +1,6 @@
 # Le skill tornano in vista — in officina, cassetto Mani
 
-> Stato: **in corso** (24/09/2026) — passi 1–4 fatti. Mockup visto
+> Stato: **in corso** (24/09/2026) — passi 1–5 fatti. Mockup visto
 > e approvato in chat il 24/09 (tre schermate: Mani, pannello, «Le tue» vuota).
 > Si spunta qui, passo per passo, man mano che il lavoro atterra.
 
@@ -239,25 +239,28 @@ Commit: *The Skills panel: read them all, switch yours on and off*.
 
 ## Passo 5 — pulizia e documenti
 
-- [ ] i18n: cancellare le chiavi morte `apps.newSkill`, `deleteSkillConfirm`,
+- [x] i18n: cancellare le chiavi morte `apps.newSkill`, `deleteSkillConfirm`,
       `createSkillPrompt`, `deleteSkillFailed`, `roomSkills`, `searchSkills`,
       `yourSkills`, `builtInSkills`, `builtInLocked`, `toggleSkill` (riverificare
       zero riferimenti con `grep -rna` al momento, v. la memoria su
       `mobile-chat.js` che fa il binario).
-- [ ] `aria-label="Cerca app, skill…"` statico in `index.html:112` e
+- [x] `aria-label="Cerca app, skill…"` statico in `index.html:112` e
       `officina.html:361` → «Cerca un'app…», come il placeholder.
-- [ ] `docs/using/skills.md` — riscrivere «Managing skills from the Apps tab»
-      in «Managing skills from Hands» e la tabella dei tre livelli (non c'è più
+- [x] `docs/using/skills.md` — riscrivere «Managing skills from the Apps tab»
+      in «Seeing and switching skills in Hands» e la tabella dei tre livelli (non c'è più
       Developer mode: `internal` sono contate, non mostrate). L'«Honesty note»
       diventa una frase sola al passato: ora l'interruttore sulle integrate non
       c'è, e il backend rifiuta. **Stesso percorso, stesso H1**: il sito
       (`jenny-site`) ne deriva URL e titolo.
-- [ ] `docs/using/app-launcher.md:12` — «they live in the Apps tab's own Skills
-      room» → Mani. (Il resto del file parla ancora di skill nel cassetto e della
-      scheda Apps: è stantio dal 31/08 e dal 21/09, ma è un altro giro.)
-- [ ] `docs/README.md:37` — la riga del launcher dice che il cassetto apre le
-      skill: correggere la metà che riguarda le skill.
-- [ ] `officina-tavole-plan.md` e `officina-allineamento-tavola.md`: la porta
+- [x] `docs/using/app-launcher.md:12` — «they live in the Apps tab's own Skills
+      room» → Mani. Il resto del file (skill nel cassetto, scheda Apps, Hide)
+      l'ha riscritto un'altra sessione in `d9ebb0b`, lasciando apposta questa
+      frase a questo passo.
+- [x] `docs/README.md` — la riga 37 del launcher l'ha già corretta `d9ebb0b`;
+      qui è cambiata la riga 31, quella di Skills, che prometteva di spiegare
+      «perché le modifiche alle integrate non sopravvivono al riavvio»: ora
+      non si possono più fare, e la pagina spiega il lucchetto.
+- [x] `officina-tavole-plan.md` e `officina-allineamento-tavola.md`: la porta
       delle skill in Mani è fatta, con la data e un rimando a questo file.
 
 Commit: *Drop the skill strings nobody reads, and tell the docs where skills went*.

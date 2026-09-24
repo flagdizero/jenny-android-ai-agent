@@ -28,7 +28,7 @@ Start here if you just want to install and use the app.
 | [The gardener](using/gardener.md) | The background pass that turns a project's journal lines into pages and keeps its map true: when it runs, what it refuses to touch, and how to turn it off. |
 | [Scheduling and proactivity](using/scheduling.md) | Reminders (one-shot, recurring, cron), the heartbeat loop, goals/long tasks, and subagents — and what silently breaks when the app is killed. |
 | [Mini-apps (Jenny Apps)](using/mini-apps.md) | Chat-authored mini web apps backed by native tools, how they differ from skills, and their sandboxing limits. |
-| [Skills](using/skills.md) | Markdown-based skill folders that extend agent behavior in chat, and why built-in skill edits don't survive a restart. |
+| [Skills](using/skills.md) | Markdown-based skill folders that extend agent behavior in chat, where to see and switch them, and why built-in ones can't be switched off. |
 | [Themes and mascot](using/themes-mascot.md) | The 7 UI themes, the mascot's interactions and preferences, and UI language vs. agent language. |
 | [SSH access](using/ssh.md) | Registering your own remote machines, generating the on-device key, pinning host fingerprints, short commands vs detached jobs — and why a restore doesn't bring SSH access back. |
 | [Telegram bridge](using/telegram.md) | Pairing and using the optional Telegram bridge alongside the WebUI, and what does and doesn't work over it. |

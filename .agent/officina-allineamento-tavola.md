@@ -149,7 +149,9 @@ Quelle destinazioni ci sono lo stesso, ma **dentro il gruppo a cui
 appartengono**, come riga di riepilogo con una freccina:
 
 - «Jenny Apps · 4, una nascosta» sta dentro *canali e abilità*;
-- «Skill · 3 tue, 4 integrate» pure;
+- «Skill · 3 tue, 4 integrate» pure; *(fatto il 24/09/2026 come gruppo a sé,
+  «Cosa sa fare · 5 integrate, N tue», prima di `scheduling`: v.
+  `officina-skill-plan.md`)*;
 - i file del workspace sono il gruppo *i file veri*, che è l'elenco delle
   cartelle, non un rimando.
 

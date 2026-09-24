@@ -9,7 +9,7 @@ Tap the **grid icon in the middle of the dock** and a sheet slides up over the c
 - your installed **Android apps**,
 - your **Jenny Apps** (see [Mini-apps](mini-apps.md)).
 
-Skills are not in the drawer. They are not launchable — you don't open a skill, Jenny uses one — so they live in the Apps tab's own Skills room instead (see [Skills](skills.md)).
+Skills are not in the drawer. They are not launchable — you don't open a skill, Jenny uses one — so they live in the workshop's Hands drawer instead (see [Skills](skills.md)).
 
 Each row shows a name and, under it, a second line: the description for a Jenny App, the package name for an Android app. If a Jenny App is broken — an invalid manifest, for instance — the problem takes the second line instead, in red, so you can see what's wrong without opening anything.
 

@@ -12,43 +12,45 @@ Each skill is a folder at `workspace/skills/<name>/SKILL.md` — a markdown file
 
 To see what's currently enabled, type `/skill` in chat. It lists every enabled skill with its description — this is the fastest way to check whether a given capability is actually turned on.
 
-## Managing skills from the Apps tab
+## Seeing and switching skills in Hands
 
-Skills are **rows in their own Skills room** in the Apps tab, reached by the segmented strip at the top — not cards mixed in with Jenny Apps and Android apps. They are not in the launcher drawer either: a skill isn't something you launch, so it isn't offered as one.
+Skills live in the workshop's **Hands** drawer — the one that answers *what can she do* — in their own group, just before the jobs that start by themselves. They are not in the launcher drawer: a skill isn't something you launch, so it isn't offered as one.
 
-There is no status badge. There used to be one saying *active / idle / disabled*, and it was removed on purpose, because it mixed two different things into one word:
+In the drawer a skill group is a single summary row, **What she knows · 5 built in, 2 yours**. Tapping it opens a panel with two blocks:
 
-- **`disabled` is a decision** — yours, reversible on the spot. It shows as a **toggle switch** on the row, and flipping it writes `disabled: true` into the skill's frontmatter; Jenny stops seeing that skill in her context until you flip it back.
-- **Unavailable is an impediment** — the skill *cannot* run, because it is missing a tool, a key or a file. The toggle has nothing to do with it: switching it on would not make the skill work. It shows as a separate warning-coloured line carrying the actual reason, which is the only information you can act on.
+- **Yours** — skills you (or Jenny, on your behalf) created. Each row shows the name, one line of description, and a **toggle switch**. Turning it off writes `disabled: true` into the skill's frontmatter; from the next turn Jenny no longer sees that skill in her context, until you turn it back on. The choice survives a restart.
+- **Built in** — the skills that ship with the app. They carry a **lock** instead of a switch, and a short description written for you rather than for the model.
 
-The two can coexist: a skill that is both switched off and unavailable shows both. Built-in skills carry a **lock icon** instead of a toggle — they cannot be disabled from here.
+Tapping a row's text shows the rest of its description when it's longer than two lines. The panel reads the list again every time it opens, so a skill Jenny wrote a minute ago is already there.
 
-- **Tap** a row to open the skill's file if it is one you can edit, or a read-only card if it isn't.
-- **Long-press** a row for its informational sheet.
-- Enabling and disabling is the inline toggle; there is no context menu for it.
-- **Delete** confirms with `Delete skill "{name}"?` before removing it.
+Switched off and unavailable are two different things, and the panel shows them separately:
 
-To create a new one, tap **New Skill**. It opens the chat with the prompt `Hi, I want to create a new skill. Can you help me?`, and Jenny walks you through the same kind of guided conversation used for apps, using the built-in `skill-creator` skill.
+- **Switched off is a decision** — yours, reversible on the spot, and it's the switch.
+- **Unavailable is an impediment** — the skill *cannot* run, because it is missing a tool, a key or a file. It takes the line under the name, in a warning colour and with the actual reason in words, because the reason is the only thing you can act on. Switching the skill on would not make it work.
 
-## Three visibility tiers
+A skill can be both at once, and then it shows both.
 
-Not every skill is meant to be poked at by hand. A skill's frontmatter puts it in one of three tiers:
+There is deliberately **no editing, deleting or creating** in the panel. To teach Jenny something new, or to change a skill, ask her in chat. If you have no skills of your own yet, the panel offers **Ask Jenny**, which writes `I want to teach you a new skill. Use the "skill-creator" skill and guide me step by step.` into the message box, without sending it, so you can finish the sentence.
 
-| Tier | What you see | Examples |
+## Three kinds of skill
+
+A skill's frontmatter and origin put it in one of three groups:
+
+| Kind | Where it shows | Examples |
 |---|---|---|
-| **Normal** | Full card, fully manageable (edit/enable/disable/delete) | Skills you or Jenny create yourself |
-| **Locked** | Visible in the grid, but tapping it shows only a short descriptive card instead of an editor — no edit/disable/delete outside Developer mode | `cron`, `app-creator`, `skill-creator`, `llm-wiki`, `ssh` |
-| **Internal** | Hidden from the grid entirely unless **Developer mode** is on | `memory`, `my`, `http-client`, `data-processing`, `long-goal` |
+| **Yours** | Listed under *Yours*, with a switch | Skills you or Jenny create |
+| **Built in** | Listed under *Built in*, with a lock | `cron`, `app-creator`, `skill-creator`, `llm-wiki`, `ssh` |
+| **Internal** | Not listed, only counted: *"Plus 5 internal ones Jenny uses on her own."* | `memory`, `my`, `http-client`, `data-processing`, `long-goal` |
 
-Locked skills are core parts of how Jenny works (scheduling, building apps and skills, the wiki, remote machines over SSH); internal skills are plumbing you're unlikely to ever need to touch directly (self-awareness bookkeeping, low-level HTTP/data helpers). Turning on **Developer mode** in Settings → System reveals both the internal skills and the management actions on locked ones. Its hint text is explicit about the intent: *"Also shows what Jenny uses to work: system skills and internal files (memory, configuration) appear in the lists. Only useful for looking under the hood."*
+Built-in skills are core parts of how Jenny works (scheduling, building apps and skills, the wiki, remote machines over SSH). Internal skills are plumbing you're unlikely to ever need to touch directly (self-awareness bookkeeping, low-level HTTP/data helpers). A skill of your own whose frontmatter says `locked: true` is listed under *Yours*, but with a lock instead of a switch.
 
-## Honesty note: builtin skills don't survive a restart
+## Why built-in skills have a lock
 
-This is worth stating plainly rather than discovering the hard way: **the skills that ship with Jenny (all the locked and internal ones, plus any others bundled with the app) are re-extracted from the APK every time the app starts**, overwriting whatever is in their folder. If you disable a builtin skill, or edit its `SKILL.md` — even in Developer mode — that change is silently undone the next time Jenny restarts. The toggle in the UI doesn't warn you about this.
+**The skills that ship with Jenny are re-extracted from the APK every time the app starts**, overwriting whatever is in their folder under `workspace/skills/`. A switch on one of them would work only until the next restart, then be silently undone. So there is no switch, and the gateway refuses to change or delete a built-in skill (it answers `403`).
 
-Persistence only works for **skills you (or Jenny, on your behalf) create yourself** — those live in the same `workspace/skills/` folder but are never touched by the startup extraction, so edits, disables, and deletions on them stick.
+Your own skills live in the same folder but are never touched by the start-up extraction, so turning one off, or asking Jenny to change or delete it, sticks.
 
-In short: treat disabling or editing a builtin skill as a "for this session" change, not a permanent setting. If you genuinely don't want a builtin capability available, the durable option is to ask Jenny not to use it, rather than relying on the disable toggle surviving a restart.
+If you genuinely don't want a built-in capability used, ask Jenny not to use it.
 
 ## See also
 

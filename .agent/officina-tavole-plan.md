@@ -88,6 +88,9 @@ esiste già (`_showAddProviderDialog`).
 
 **Mani** — `settings→tools` + `ssh` + `telegram`, interi; la porta per app e
 skill; e l'elenco cron filtrato su `kind: user` più `heartbeat`.
+*La porta delle skill c'è dal 24/09/2026:* il gruppo `skill`, una riga di
+riepilogo e il pannello `drawer-skill` — v. `officina-skill-plan.md`. Quella
+delle app è il cassetto accanto alla graffetta del composer.
 
 **Memoria** — `settings→memory` + `workers`, interi (Dream, i tetti, il
 giardiniere, l'archiviazione); la vista `view-workspace`; gli snapshot da
