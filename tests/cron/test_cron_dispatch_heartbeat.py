@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from loguru import logger as loguru_logger
+from support.sessions import FakeSessions
 
 from jenny.agent.turn_types import TurnOutcome
 from jenny.cron.heartbeat_tasks import active_section_text, parse_heartbeat_tasks
@@ -45,33 +46,9 @@ _HEARTBEAT_MD = """# Heartbeat
 """
 
 
-class _FakeSession:
-    def __init__(self) -> None:
-        self.retained: list[int] = []
-        # Il ramo heartbeat legge la sessione unificata per sapere se l'utente
-        # si è fatto vivo dopo un avviso (v. ``last_user_message_ms``): vuota,
-        # qui, che è il caso di ogni test di questo file.
-        self.messages: list[dict] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        self.retained.append(keep)
-
-
-class _FakeSessions:
-    def __init__(self) -> None:
-        self.session = _FakeSession()
-        self.saved = 0
-
-    def get_or_create(self, _key: str) -> _FakeSession:
-        return self.session
-
-    def save(self, _session: _FakeSession) -> None:
-        self.saved += 1
-
-
 class _FakeAgent:
     def __init__(self) -> None:
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions(shared=True)
         self.calls: list[dict] = []
 
     async def process_direct_outcome(self, prompt: str, **kwargs) -> TurnOutcome:
@@ -140,7 +117,7 @@ class TestTheHeartbeatTurnIsSilent:
         await disp.dispatch(_heartbeat_job())
 
         assert agent.sessions.session.retained == [8]
-        assert agent.sessions.saved == 1
+        assert agent.sessions.save_count == 1
 
     async def test_a_file_without_active_tasks_runs_no_turn(self, tmp_path: Path) -> None:
         (tmp_path / "HEARTBEAT.md").write_text("# Heartbeat\n\nnothing here\n", "utf-8")

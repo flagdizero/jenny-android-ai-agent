@@ -28,6 +28,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.agent.turn_types import TurnOutcome
 from jenny.cron.could_not_check import ESCALATE_AFTER_FAILURES
@@ -99,26 +100,6 @@ def _escalated_numbers(prompt: str) -> list[int]:
     return numbers
 
 
-class _FakeSession:
-    def __init__(self) -> None:
-        # Il ramo heartbeat legge la sessione unificata per sapere se l'utente
-        # si è fatto vivo dopo un avviso (v. ``last_user_message_ms``). In
-        # questo file non parla mai nessuno: il riarmo non c'entra, e una lista
-        # vuota è la risposta giusta.
-        self.messages: list[dict] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        pass
-
-
-class _FakeSessions:
-    def get_or_create(self, _key: str) -> _FakeSession:
-        return _FakeSession()
-
-    def save(self, _session: _FakeSession) -> None:
-        pass
-
-
 class _FakeHeartbeatAgent:
     """Agente che *segue il prompt* invece di eseguire un copione.
 
@@ -132,7 +113,7 @@ class _FakeHeartbeatAgent:
     """
 
     def __init__(self) -> None:
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions()
         self.prompts: list[str] = []
         self.messages: list[str] = []
         self.broken: dict[int, str] = {}

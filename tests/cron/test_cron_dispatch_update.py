@@ -16,6 +16,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.config.loader import get_config_path, save_config
 from jenny.config.schema import Config
@@ -39,29 +40,9 @@ _INFO = UpdateInfo(
 )
 
 
-class _FakeSession:
-    def __init__(self) -> None:
-        self.retained: list[int] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        self.retained.append(keep)
-
-
-class _FakeSessions:
-    def __init__(self) -> None:
-        self.session = _FakeSession()
-        self.saved = 0
-
-    def get_or_create(self, _key: str) -> _FakeSession:
-        return self.session
-
-    def save(self, _session: _FakeSession) -> None:
-        self.saved += 1
-
-
 class _FakeAgent:
     def __init__(self) -> None:
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions(shared=True)
         self.calls: list[dict] = []
 
     async def process_direct(self, prompt: str, **kwargs: Any):
@@ -201,7 +182,7 @@ class TestTheAnnouncement:
         await dispatcher.dispatch(_UPDATE_JOB)
 
         assert agent.sessions.session.retained == [cron_dispatch._UPDATE_HISTORY_KEEP]
-        assert agent.sessions.saved == 1
+        assert agent.sessions.save_count == 1
 
 
 class TestItSaysItOnlyOnce:

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.turn_types import TurnOutcome
@@ -70,25 +71,6 @@ def _base_prompt(message: str = _MESSAGE) -> str:
     return render_template("agent/cron_monitor.md", strip=True, message=message)
 
 
-class _FakeSession:
-    def __init__(self, key: str) -> None:
-        self.key = key
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        pass
-
-
-class _FakeSessions:
-    def __init__(self) -> None:
-        self._sessions: dict[str, _FakeSession] = {}
-
-    def get_or_create(self, key: str) -> _FakeSession:
-        return self._sessions.setdefault(key, _FakeSession(key))
-
-    def save(self, session: _FakeSession) -> None:
-        pass
-
-
 class _FakeMonitorAgent:
     """Agente che *segue il prompt* invece di eseguire un copione.
 
@@ -105,7 +87,7 @@ class _FakeMonitorAgent:
 
     def __init__(self) -> None:
         self.tools = ToolRegistry()
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions()
         self.healthy = False
         self.messages: list[str] = []
         self.prompts: list[str] = []

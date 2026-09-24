@@ -30,6 +30,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
@@ -50,30 +51,11 @@ _T0_MS = 1_755_000_000_000
 _CYCLE_MS = 1_800_000
 
 
-class _FakeSession:
-    def __init__(self) -> None:
-        self.messages: list[dict] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        pass
-
-
-class _FakeSessions:
-    def __init__(self) -> None:
-        self.by_key: dict[str, _FakeSession] = {}
-
-    def get_or_create(self, key: str) -> _FakeSession:
-        return self.by_key.setdefault(key, _FakeSession())
-
-    def save(self, _session: _FakeSession) -> None:
-        pass
-
-
 class _DelegatingAgent:
     """T0: delega entrambi i task e lo dichiara, come chiede il contratto."""
 
     def __init__(self) -> None:
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions()
         self.delegated: dict[int, str] = {}
 
     async def process_direct_outcome(self, prompt: str, **_kwargs: Any) -> TurnOutcome:

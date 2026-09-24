@@ -30,6 +30,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.message import MessageTool
@@ -76,35 +77,6 @@ def _escalated_labels(prompt: str) -> list[str]:
     return labels
 
 
-class _FakeSession:
-    def __init__(self) -> None:
-        # La sessione unificata è dove si legge se l'utente si è fatto vivo dopo
-        # un avviso (``last_user_message_ms``): serve una lista vera, perché uno
-        # dei casi qui sotto ce lo scrive dentro.
-        self.messages: list[dict] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:
-        pass
-
-
-class _FakeSessions:
-    """Una sessione per chiave, e la stessa a ogni richiesta.
-
-    Restituirne una nuova ogni volta rendeva invisibile tutto ciò che sta nella
-    conversazione dell'utente: chi scrive in ``unified:default`` non lo
-    ritrovava più.
-    """
-
-    def __init__(self) -> None:
-        self.by_key: dict[str, _FakeSession] = {}
-
-    def get_or_create(self, key: str) -> _FakeSession:
-        return self.by_key.setdefault(key, _FakeSession())
-
-    def save(self, _session: _FakeSession) -> None:
-        pass
-
-
 class _DelegatingHeartbeatAgent:
     """T0: l'orchestratore. Delega, e per contratto lo dichiara.
 
@@ -114,7 +86,7 @@ class _DelegatingHeartbeatAgent:
     """
 
     def __init__(self) -> None:
-        self.sessions = _FakeSessions()
+        self.sessions = FakeSessions()
         self.prompts: list[str] = []
         self.messages: list[str] = []
         self.delegated: dict[int, str] = {}
