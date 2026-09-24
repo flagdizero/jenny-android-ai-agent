@@ -91,15 +91,16 @@ def test_the_rooms_arrive_on_the_phone() -> None:
 
 
 def test_the_room_of_her_is_not_the_sprite_of_her() -> None:
-    """`.casa-jenny` e' lo sprite che cammina sul bordo, e vive nel guscio da
-    prima di questa stanza. Se la stanza avesse preso quel nome, la regola
+    """Lo sprite che cammina sul bordo (`.jenny-duo`, fino al 24/09/2026
+    `.casa-jenny`) vive nel guscio da prima di questa stanza. Se la stanza
+    avesse preso quel nome, la regola
     della vista avrebbe acceso e spento **lei** invece della pagina — e
     `data-view` avrebbe smesso di parlare solo di stanze."""
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     assert '<section class="casa-jenny-room" id="casa-jenny-room">' in html
     assert ".casa-shell[data-view='jenny'] .casa-jenny-room" in css
-    assert not re.search(r"\[data-view='jenny'\] \.casa-jenny\b(?!-room)", css), (
+    assert not re.search(r"\[data-view='jenny'\] \.(?:casa-jenny\b(?!-room)|jenny-duo)", css), (
         "la regola della stanza morde lo sprite di lei"
     )
 
@@ -297,9 +298,12 @@ def test_she_is_on_top_of_everything_in_the_house() -> None:
         nomi = [s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()]
         livelli.append((int(m.group(1)), nomi))
 
-    suoi = [z for z, nomi in livelli if ".casa-jenny" in nomi]
+    # Lo sprite e' `.jenny-duo`, lo stesso dell'officina (shared/jenny-mascot.js):
+    # in casa ha una regola sola, quella del pavimento, e il livello sta li'.
+    sprite = ".casa-shell .jenny-duo"
+    suoi = [z for z, nomi in livelli if sprite in nomi]
     assert len(suoi) == 1, f"lo sprite non ha piu' esattamente un livello suo: {suoi}"
-    altri = [(z, nomi) for z, nomi in livelli if ".casa-jenny" not in nomi]
+    altri = [(z, nomi) for z, nomi in livelli if sprite not in nomi]
     assert not altri, (
         f"qualcun altro dichiara un livello: {altri}. Se serve davvero, deve "
         f"stare **sotto** il suo ({suoi[0]}) — e va scritto perche'"

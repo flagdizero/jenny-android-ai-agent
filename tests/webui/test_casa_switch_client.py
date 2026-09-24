@@ -244,8 +244,6 @@ class App {
     this.activity = { stop: () => this.fatti.push('riga ferma') };
     this.jenny = {
       el: { classList: { contains: () => this._jennyOut } },
-      noteTurnRunning: (v) => this.fatti.push('turno:' + v),
-      idle: () => this.fatti.push('quiete'),
       setOut: (v) => { this._jennyOut = v; this.fatti.push('fuori:' + v); },
     };
     this._jennyOut = true;
@@ -492,13 +490,16 @@ def test_the_chat_page_keeps_its_own_name_while_it_is_lent_to_a_notebook_page() 
 
 def test_leaving_closes_the_turn_that_was_running() -> None:
     """Il `turn_end` del turno in volo arriverà a una conversazione che non
-    guardiamo più e verrà scartato: la faccia di Jenny resterebbe in pensiero
-    per sempre, la riga di lavoro a girare, e il bottone a dire «ferma» senza
-    niente da fermare."""
+    guardiamo più e verrà scartato: la riga di lavoro resterebbe a girare, e il
+    bottone a dire «ferma» senza niente da fermare.
+
+    Jenny non e' in questo elenco perche' il turno lo lascia da se': ascolta lo
+    stesso `chat:switch` (`_releaseTrackedTurn` in `shared/jenny-mascot.js`,
+    provato in `test_chat_scope_client.py`)."""
     _run_js("""
       const app = casa();
       app._releaseTurn();
-      assert.deepEqual(app.fatti, ['riga ferma', 'turno:false', 'quiete', 'ferma:false']);
+      assert.deepEqual(app.fatti, ['riga ferma', 'ferma:false']);
     """)
 
 

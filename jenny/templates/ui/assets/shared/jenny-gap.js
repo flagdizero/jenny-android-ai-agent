@@ -96,7 +96,7 @@ export class JennyGap {
 
   /** Ricalcola adesso. Da chiamare all'arrivo di un messaggio. */
   aggiorna() {
-    if (!this.thread || !this.mascotte || this.mascotte.hidden) {
+    if (!this.thread || !this.mascotte || this.mascotte.classList?.contains('hidden-mode')) {
       this._pulisci();
       return;
     }

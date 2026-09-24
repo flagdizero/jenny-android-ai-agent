@@ -35,7 +35,8 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
-JENNY_JS = ASSETS / "mobile-jenny.js"
+JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
+COMPANION_JS = ASSETS / "mobile-jenny.js"
 SESSION_JS = ASSETS / "shared" / "session-manager.js"
 WS_JS = ASSETS / "shared" / "ws-manager.js"
 
@@ -296,14 +297,24 @@ def test_discarding_the_view_closes_the_turn_in_flight() -> None:
 def test_the_mascot_releases_its_turn_on_a_switch() -> None:
     """La mascotte anima un turno alla volta e resta sul proprio: al cambio di
     chat il ``turn_end`` di quel turno non arriverà mai, e senza questo resta a
-    pensare per sempre."""
+    pensare per sempre.
+
+    Vale per tutti e due i gusci: l'ascolto e il rilascio stanno nella mascotte
+    condivisa, e l'officina ci aggiunge solo la minichat in volo."""
     jenny = _read(JENNY_JS)
     assert "sessionManager.addEventListener('chat:switch'" in jenny
     assert "_releaseTrackedTurn()" in jenny
     body = re.search(r"\n  _releaseTrackedTurn\(\) \{(.*?)\n  \}", jenny, re.S)
     assert body, "_releaseTrackedTurn non trovato"
     head = body.group(1)
-    for field in ("_turnActive = false", "_pendingTurn = false", "_streamTurnId = null",
-                  "awaiting = false"):
+    for field in ("_turnActive = false", "_pendingTurn = false", "_streamTurnId = null"):
         assert field in head, f"_releaseTrackedTurn non azzera {field}"
+
+    companion = _read(COMPANION_JS)
+    body = re.search(r"\n  _releaseTrackedTurn\(\) \{(.*?)\n  \}", companion, re.S)
+    assert body, "l'officina non dimentica piu' la minichat al cambio di chat"
+    assert "awaiting = false" in body.group(1)
+    assert "super._releaseTrackedTurn()" in body.group(1), (
+        "l'officina ha riscritto il rilascio invece di aggiungerci la minichat"
+    )
     assert "chat:switch" in _read(SESSION_JS), "switchTo non annuncia il cambio"

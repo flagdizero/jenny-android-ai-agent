@@ -70,12 +70,34 @@ def _definiti(src: str) -> set[str]:
     return metodi | campi
 
 
+def _ereditati(sorgente: Path, src: str) -> set[str]:
+    """Quel che arriva da una classe madre importata (`class A extends B`).
+
+    Dal 24/09/2026 la companion dell'officina estende la mascotte condivisa
+    (`shared/jenny-mascot.js`): i metodi che chiama sono definiti la'. Si segue
+    l'`import` fino al file vero invece di dichiarare i nomi uno per uno — una
+    lista di concessioni lunga quanto la classe madre non proverebbe niente, e
+    un metodo tolto dalla madre deve far diventare rosso anche il figlio.
+    """
+    trovati: set[str] = set()
+    for madre in re.findall(r"\bclass\s+\w+\s+extends\s+(\w+)", src):
+        m = re.search(
+            rf"import\s*\{{[^}}]*\b{madre}\b[^}}]*\}}\s*from\s*'(\.[^']+)'", src
+        )
+        if not m:
+            continue
+        percorso = (sorgente.parent / m.group(1)).resolve()
+        testo = percorso.read_text(encoding="utf-8")
+        trovati |= _definiti(testo) | _ereditati(percorso, testo)
+    return trovati
+
+
 @pytest.mark.parametrize("sorgente", SORGENTI, ids=lambda p: p.name)
 def test_every_method_it_calls_exists(sorgente: Path) -> None:
     src = sorgente.read_text(encoding="utf-8")
     if "class " not in src:
         pytest.skip("nessuna classe qui dentro")
-    fantasmi = sorted(_chiamate(src) - _definiti(src) - CONCESSI)
+    fantasmi = sorted(_chiamate(src) - _definiti(src) - _ereditati(sorgente, src) - CONCESSI)
     assert not fantasmi, (
         f"{sorgente.name} chiama metodi che non esistono: {fantasmi}. "
         f"Il file resta valido e la suite verde: il difetto si vede solo sul "

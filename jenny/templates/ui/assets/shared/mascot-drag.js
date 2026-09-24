@@ -17,6 +17,8 @@
  *  per nasconderla anche in casa, con lo stesso gesto e gli stessi ancoraggi
  *  (v. `DOCK_RATIO`/`OUT_RATIO` in `mascot.js`). L'interruttore `hasOut` e'
  *  sparito con la sua eccezione: chi usa questo modulo ha lo stato, punto.
+ *  Dal 24/09/2026 chi lo usa e' uno solo, `shared/jenny-mascot.js`, perche'
+ *  la Jenny della casa e quella dell'officina sono la stessa.
  */
 
 import { mascotSide, OUT_SHIFT_RATIO } from './mascot.js';

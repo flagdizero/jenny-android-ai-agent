@@ -36,7 +36,7 @@ FOGLI = {
 _NODE = shutil.which("node")
 
 ANCORAGGIO = re.compile(r"(?:left|right):\s*calc\([^;]*--jenny-size[^;]*\);")
-SPRITE = (r"\.jenny-duo", r"\.casa-jenny")
+SPRITE = (r"\.jenny-duo",)
 
 
 def _anchors(css: str) -> list[str]:
@@ -111,21 +111,28 @@ assert.deepEqual(
 
 
 def test_no_stylesheet_spells_the_ratio_out_again() -> None:
-    """Ogni ancoraggio della mascotte, in tutti e due i gusci, nomina la
-    variabile. Un `-0.469` riapparso qui e' la copia numero due."""
-    for guscio, foglio in FOGLI.items():
-        ancoraggi = _anchors(foglio.read_text(encoding="utf-8"))
-        assert len(ancoraggi) >= 4, (
-            f"{guscio}: mi aspetto i due ancoraggi per ciascun bordo, ne trovo {len(ancoraggi)}"
+    """Ogni ancoraggio della mascotte nomina la variabile. Un `-0.469`
+    riapparso qui e' la copia numero due.
+
+    Dal 24/09/2026 lo sprite e' uno solo (`.jenny-duo`, `shared/jenny-mascot.js`)
+    e i suoi ancoraggi stanno in un foglio solo, quello dell'officina, che la
+    casa carica. La casa non ne dichiara nessuno: se ne ricomparisse uno li',
+    sarebbe un secondo posto dove Jenny si ancora — cioe' di nuovo due Jenny."""
+    ancoraggi = _anchors(FOGLI["officina"].read_text(encoding="utf-8"))
+    assert len(ancoraggi) >= 4, (
+        f"mi aspetto i due ancoraggi per ciascun bordo, ne trovo {len(ancoraggi)}"
+    )
+    for decl in ancoraggi:
+        assert "--jenny-dock" in decl or "--jenny-out" in decl, (
+            f"ancoraggio con un numero suo invece della variabile: {decl}"
         )
-        for decl in ancoraggi:
-            assert "--jenny-dock" in decl or "--jenny-out" in decl, (
-                f"{guscio}: ancoraggio con un numero suo invece della variabile: {decl}"
-            )
-        usate = {v for v in ("--jenny-dock", "--jenny-out") if any(v in d for d in ancoraggi)}
-        assert usate == {"--jenny-dock", "--jenny-out"}, (
-            f"{guscio}: usa solo {usate or 'nessuno'} — uno dei due stati non e' piu' ancorato"
-        )
+    usate = {v for v in ("--jenny-dock", "--jenny-out") if any(v in d for d in ancoraggi)}
+    assert usate == {"--jenny-dock", "--jenny-out"}, (
+        f"usa solo {usate or 'nessuno'} — uno dei due stati non e' piu' ancorato"
+    )
+    assert not _anchors(FOGLI["casa"].read_text(encoding="utf-8")), (
+        "la casa ancora Jenny per conto suo: fra i due gusci deve cambiare solo il pavimento"
+    )
 
 
 def test_the_walk_home_uses_the_same_number_as_the_css() -> None:
@@ -151,7 +158,7 @@ def test_neither_shell_is_the_exception_any_more() -> None:
     """`hasOut` esisteva per dire «in casa lo stato non c'e'». Adesso c'e' in
     tutti e due, e un interruttore con un valore solo e' un ramo morto che il
     prossimo lettore prende per una possibilita' vera."""
-    for f in (DRAG_JS, ASSETS / "mobile-jenny.js", ASSETS / "casa-mascot.js"):
+    for f in (DRAG_JS, ASSETS / "mobile-jenny.js", ASSETS / "shared" / "jenny-mascot.js"):
         corpo = "\n".join(
             riga for riga in f.read_text(encoding="utf-8").splitlines()
             if "hasOut" in riga and not riga.lstrip().startswith((" *", "*", "//", "/*"))
@@ -161,12 +168,20 @@ def test_neither_shell_is_the_exception_any_more() -> None:
 
 def test_both_shells_answer_the_tap() -> None:
     """Il tocco secco e' l'unico modo *scopribile* di metterla via — lo swipe
-    lo trova chi lo cerca. Se un guscio smette di passare `onTap`, il modulo
-    condiviso ha un default che non fa niente: si perde in silenzio."""
-    for f in (ASSETS / "mobile-jenny.js", ASSETS / "casa-mascot.js"):
-        src = f.read_text(encoding="utf-8")
-        assert re.search(r"onTap:.*'out'", src), f"{f.name} non gira piu' lo stato al tocco"
-        assert "isOut:" in src and "setOut:" in src, f"{f.name} non dichiara piu' lo stato"
+    lo trova chi lo cerca. Se la mascotte smette di passare `onTap`, il modulo
+    condiviso ha un default che non fa niente: si perde in silenzio.
+
+    La risposta al tocco sta nella mascotte condivisa, e i due gusci l'hanno
+    perche' usano quella: l'officina la estende, la casa la crea."""
+    src = (ASSETS / "shared" / "jenny-mascot.js").read_text(encoding="utf-8")
+    assert re.search(r"onTap:.*'out'", src), "la mascotte non gira piu' lo stato al tocco"
+    assert "isOut:" in src and "setOut:" in src, "la mascotte non dichiara piu' lo stato"
+    officina = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
+    assert "class JennyCompanion extends JennyMascot" in officina
+    assert "bindMascotDrag" not in officina, "l'officina lega di nuovo la fisica per conto suo"
+    casa = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    assert "new JennyMascot(" in casa
+    assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
 
 
 def test_the_room_that_leaves_her_space_uses_her_height_and_not_her_width() -> None:

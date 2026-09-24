@@ -32,7 +32,7 @@ import pytest
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
-JENNY_JS = ASSETS / "mobile-jenny.js"
+JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
 
 _NODE = shutil.which("node")
 

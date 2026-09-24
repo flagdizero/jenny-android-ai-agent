@@ -41,7 +41,7 @@ from jenny.session.mascot_mood import MOODS, NEUTRAL_MOOD
 from jenny.utils.android_assets import _UI_MANIFEST
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-JENNY_JS = ASSETS / "mobile-jenny.js"
+JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
 
 _NODE = shutil.which("node")
 node = pytest.mark.skipif(_NODE is None, reason="node non disponibile")

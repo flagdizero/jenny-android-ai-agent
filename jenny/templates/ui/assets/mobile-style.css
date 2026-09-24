@@ -6702,8 +6702,11 @@ body {
      taglia, quindi cambiarne una non richiede di ritoccare gli offset.
      --jenny-dock e --jenny-out sono i due ancoraggi (al bordo / venuta fuori)
      e arrivano dallo stesso modulo: sono gli stessi numeri che la fisica usa
-     per far arrivare la camminata di rientro sul punto giusto, e la casa usa
-     per ancorare la sua. Scriverli qui a mano li farebbe diventare tre. */
+     per far arrivare la camminata di rientro sul punto giusto. Scriverli qui a
+     mano li farebbe diventare due.
+     **Questa e' anche la Jenny della casa** (shared/jenny-mascot.js, lo stesso
+     sprite), che carica questo foglio: la' si cambia solo il pavimento — il
+     `bottom` qui sotto — in `.casa-shell .jenny-duo` di casa-style.css. */
   right: calc(var(--jenny-size) * var(--jenny-dock) * -1);
   /* Fissa per tutti gli stati: appena sopra la barra di input (dock +
      altezza #input-bar, riga dello scope inclusa). Non deve mai cambiare in Y. */
@@ -6713,10 +6716,13 @@ body {
   background: none;
   border: none;
   padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
   cursor: grab;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transform: translateZ(0);
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
 }
@@ -6736,7 +6742,12 @@ body {
   transform-origin: 50% 100%;
 }
 .jenny-duo.dragging img { animation: none; }
-.jenny-duo.thinking img {
+/* Il dondolio del pensa e' della Jenny venuta fuori: messa via mentre pensa,
+   mezza Jenny che oscilla contro il bordo somiglia a un guasto della pagina.
+   La classe `thinking` puo' restarle addosso (il tocco la manda al bordo senza
+   cambiare stato), quindi e' qui che si decide, non in JS. Solo sull'arte di
+   riposo: le pose del volo non ereditano gli stati (v. `.jenny-fly img`). */
+.jenny-duo.out.thinking .jenny-art-stack img {
   animation: jenny-wobble 1.1s ease-in-out infinite;
   transform-origin: 50% 90%;
 }

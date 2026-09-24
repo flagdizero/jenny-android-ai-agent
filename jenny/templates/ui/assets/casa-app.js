@@ -22,7 +22,6 @@
 
 import { ActivityLine } from './casa-activity.js';
 import { CasaChat } from './casa-chat.js';
-import { CasaMascot } from './casa-mascot.js';
 import { CasaPages } from './casa-pages.js';
 import { CasaReader } from './casa-reader.js';
 import { CasaAudit, messaggioSegnalazione } from './casa-audit.js';
@@ -37,6 +36,7 @@ import { WhoPanel, dotColor } from './casa-who.js';
    qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
    che li ospitava e' stata cancellata. */
 import { JennyGap } from './shared/jenny-gap.js';
+import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { CasaPagine } from './casa-pagine.js';
 import { CasaFila } from './casa-fila.js';
@@ -117,7 +117,7 @@ class CasaApp {
   constructor() {
     this.thread = document.getElementById('casa-thread');
     this.chat = new CasaChat(this.thread);
-    this.jenny = new CasaMascot(document.querySelector('.casa-shell'));
+    this.jenny = new JennyMascot(document.querySelector('.casa-shell'));
     /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
        la banda da scansare si misura su di lei, non su dei numeri copiati —
@@ -956,8 +956,6 @@ class CasaApp {
      mano tutto cio' che lo stava aspettando. */
   _releaseTurn() {
     this.activity.stop();
-    this.jenny.noteTurnRunning(false);
-    this.jenny.idle();
     this._setRunning(false);
   }
 
@@ -1342,46 +1340,31 @@ class CasaApp {
 
   /* Gli stessi frame che la chat butta via, qui diventano una parola sola.
      Nessuno di questi arriva per la riga: arrivano perche' il canale websocket
-     li manda comunque, e in officina disegnano pannelli. */
+     li manda comunque, e in officina disegnano pannelli.
+
+     Jenny no: legge i frame da se' (`shared/jenny-mascot.js`), con le stesse
+     regole dell'officina, e qui non la si pilota piu' a mano. */
   _readActivity(msg) {
     if (!msg) return;
     if (msg.turn_id) this.activity.turnId = msg.turn_id;
     switch (msg.event) {
       case 'goal_status':
-        this.jenny.noteTurnRunning(msg.status === 'running');
-        if (msg.status === 'running') {
-          this.activity.start(msg.turn_id);
-          this.jenny.thinking();
-        } else {
-          this.activity.stop();
-          this.jenny.idle();
-        }
+        if (msg.status === 'running') this.activity.start(msg.turn_id);
+        else this.activity.stop();
         break;
       case 'reasoning_delta':
         this.activity.reasoning();
-        this.jenny.thinking();
-        break;
-      case 'stream_end':
-        // Il testo e' finito: torna in quiete senza aspettare il silenzio.
-        this.jenny.idle();
-        break;
-      case 'mascot_mood':
-        this.jenny.setMood(msg.mood, msg.turn_id || null);
         break;
       case 'message':
         // Un `tool_hint` porta i nomi degli strumenti che stanno partendo.
         if (msg.tool_events) this.activity.tools(msg.tool_events);
         break;
       case 'delta':
-        // La risposta sta arrivando: la riga si toglie di mezzo e la bocca si
-        // muove.
+        // La risposta sta arrivando: la riga si toglie di mezzo.
         this.activity.answering();
-        this.jenny.talking();
         break;
       case 'turn_end':
         this.activity.stop();
-        this.jenny.noteTurnClosed(msg.turn_id || null);
-        this.jenny.idle();
         break;
       default:
         break;

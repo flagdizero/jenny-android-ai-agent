@@ -738,3 +738,63 @@ Banchi: 3 nuovi in `test_jenny_gap_client.py`, di cui due eseguono `aggiorna()`
 su un DOM finto (il difetto stava nell'aggancio, non nella geometria pura).
 Quattro mutazioni, tutte rosse. Misurato sul Titan 2: la bolla si sposta di
 145 px device e si ferma 52 px prima di lei, dove prima le finiva sotto.
+
+## Ritocco — una Jenny sola (24/09/2026)
+
+«Possibile che non funziona più l'animazione di Jenny? C'era un frame con la
+mano alzata.» In casa **non c'era mai stata**: `casa-mascot.js` aveva il frame
+nella tabella (`BODY.hand`) e nessuna riga che lo usasse. Era il sintomo, non il
+difetto. Il difetto era che le mascotte erano **due**: fisica e ancoraggi in
+comune (`shared/`), ma il cervello — stati, parlato, umore, lettura dei frame —
+scritto una volta in `mobile-jenny.js` e un'altra, «più leggera», in
+`casa-mascot.js` più uno `switch` in `casa-app.js`. Il test sulla copia
+(`test_casa_mascot_contract.py`) confrontava i nomi dei file e basta.
+
+Confrontate riga per riga, la casa divergeva in otto punti, nessuno scritto
+come scelta: niente mano nel parlato; **un umore vivo sostituiva la bocca** per
+12 s, quindi riscrivendole subito rispondeva con la faccia felice ferma; al
+silenzio fra due delta si fermava invece di tornare a pensare; l'errore non
+aveva la faccia triste; all'invio non pensava finché il server non parlava; un
+avviso proattivo in mezzo a una risposta la chiudeva (niente tracciamento del
+turno); i frame di un'altra conversazione non erano filtrati; «riduci
+animazioni» ignorato.
+
+**Decisione dell'utente: codice unico, base l'officina, cambia solo il
+pavimento.**
+
+- `shared/jenny-mascot.js` (`JennyMascot`) è Jenny nella chat vera: arte,
+  stati, parlato con la mano, umore, filtro della conversazione, tracciamento
+  del turno, tocco/volo, lato, visibilità. È il cervello dell'officina spostato
+  com'era, commenti compresi.
+- `mobile-jenny.js`: `JennyCompanion extends JennyMascot` — solo le viste che
+  non sono la chat e la minichat (`setMode`, `_handleFrame`, `_onOutChange`,
+  `_onDragCommit`, `handleBack`, `_send`…).
+- `casa-app.js` crea `new JennyMascot(.casa-shell)` e **non la pilota più**:
+  `_readActivity` guida solo la riga di lavoro. `casa-mascot.js` è cancellato.
+- CSS: lo sprite è `.jenny-duo` in tutti e due i gusci, con lo stile di
+  `mobile-style.css` (che la casa carica). In `casa-style.css` resta una regola
+  sola, `.casa-shell .jenny-duo { bottom; z-index }`: il pavimento sul composer
+  e l'unico livello del foglio.
+- Due miglioramenti della casa sono passati all'officina invece di perdersi:
+  il dondolio del pensa solo a Jenny **fuori** (`.out.thinking`, e solo
+  sull'arte di riposo, non sulle pose del volo), e `appearance`/`touch-callout`
+  azzerati sul bottone.
+- Cosa cambia a vista in casa, oltre ai difetti: il **respiro** (`jenny-bob`,
+  4 px su e giù a Jenny fuori) prima era tolto apposta — «una che galleggia non
+  sta appoggiata a niente». Adesso c'è, perché è dell'officina. Se non piace,
+  è una regola sola da togliere per entrambe.
+
+Banchi: `test_one_mascot_contract.py` (nuovo) tiene la frase «una sola»: l'arte
+nominata in un file solo, il parlato con la mano, la casa che non la pilota, il
+foglio della casa che dice solo `bottom` e `z-index`, niente dondolio dal
+bordo. `test_mascot_mood_client.py` e `test_live_turn_boundary_client.py`
+girano sul modulo condiviso, quindi adesso provano anche la casa.
+`test_casa_dock_client.py` e il vecchio contratto della copia sono cancellati:
+provavano la seconda Jenny. `test_no_ghost_methods_contract.py` segue
+`extends` fino al file della madre (un metodo tolto da lì lo fa diventare
+rosso — provato).
+
+Banco nel pannello (modulo vero, i due fogli veri, frame iniettati): mano alzata
+al cambio di gesto, faccia felice dopo `turn_end`, cancellata dal turno nuovo
+con la bocca che riparte, triste sull'errore, posa di profilo messa via. Piedi
+sul composer: bordo basso a 516,7 px = 566 − 64 + 0,1224 × 120.

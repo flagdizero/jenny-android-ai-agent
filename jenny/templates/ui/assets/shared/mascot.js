@@ -105,7 +105,8 @@ export function applyMascotSize() {
    dallo schermo in ciascuno. Non sono una preferenza — si toccano e cambiano,
    non si scelgono dalle impostazioni — ma stanno qui perché qui vive tutto il
    resto della sua geometria, e perché il numero deve esistere una volta sola:
-   lo leggono i due fogli di stile per ancorarla e `mascot-drag.js` per sapere
+   lo legge il foglio di stile per ancorarla (uno solo per i due gusci, da quando
+   la Jenny e' una) e `mascot-drag.js` per sapere
    dove farla arrivare a piedi dopo un lancio. Cinque dichiarazioni CSS e una
    moltiplicazione, un numero solo.
 

@@ -33,6 +33,7 @@ from pathlib import Path
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 JENNY_JS = ASSETS / "mobile-jenny.js"
+MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 
 
 def _method(source: str, name: str) -> str:
@@ -95,8 +96,10 @@ def test_the_pending_turn_flag_is_independent_of_the_minichat_ui() -> None:
 
 
 def test_turn_end_reaches_the_history_invalidation_with_the_minichat_closed() -> None:
+    # La guardia della minichat e' dell'officina: `_handleWsMessage` (condiviso)
+    # filtra la conversazione e l'umore, poi passa qui.
     source = JENNY_JS.read_text(encoding="utf-8")
-    body = _method(source, "_handleWsMessage")
+    body = _method(source, "_handleFrame")
 
     guard = body.split("switch (msg.event)", 1)[0]
     assert "const closing = msg.event === 'turn_end' || msg.event === 'error';" in guard
@@ -127,5 +130,5 @@ def test_the_flag_is_also_closed_from_the_main_chat_stream() -> None:
     """Un turno partito dalla minichat può concludersi dopo che l'utente è
     passato nella sezione chat: lì gli eventi vengono instradati altrove, e
     senza chiusura il flag resterebbe alzato a tempo indeterminato."""
-    body = _method(JENNY_JS.read_text(encoding="utf-8"), "_handleChatStream")
+    body = _method(MASCOT_JS.read_text(encoding="utf-8"), "_handleChatStream")
     assert "this._pendingTurn = false;" in body
