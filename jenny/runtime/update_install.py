@@ -48,6 +48,7 @@ from jenny.runtime import update_check
 from jenny.runtime.context import get_android_context
 from jenny.runtime.power import keep_awake
 from jenny.runtime.update_check import UpdateInfo
+from jenny.security.fetch import open_validated_stream
 from jenny.security.network import validate_url_target
 
 # Prefisso con cui il bridge Kotlin segnala un fallimento invece di lanciare.
@@ -77,7 +78,6 @@ _JAVA_CLASS = "com.flagdizero.jenny.UpdateBridge"
 # sugli hop è lo stesso di ``update_check`` e dello stesso ordine di quello del
 # bridge: una catena più lunga non è più un CDN, è un giro strano.
 _RESOLVE_TIMEOUT_S = 20.0
-_MAX_REDIRECTS = 5
 
 # Il download può durare parecchio (decine di MB su dati mobili) e il commit ha
 # una finestra di 120s tutta sua: 30 minuti sono il tetto oltre il quale un
@@ -277,32 +277,18 @@ async def _resolve_apk_url(url: str, *, client: httpx.AsyncClient | None = None)
         timeout=_RESOLVE_TIMEOUT_S, follow_redirects=False
     )
     try:
-        current = url
-        for _ in range(_MAX_REDIRECTS + 1):
-            # ``validate_url_target`` accetta anche http: qui no, e non solo per
-            # coerenza col bridge — un downgrade a metà catena toglierebbe
-            # l'unica difesa contro un APK sostituito in transito che non sia
-            # l'hash (che però nel manifest ce lo scrive la stessa fonte).
-            if not current.lower().startswith("https://"):
-                raise ValueError("the download URL must be https")
-            ok, error = validate_url_target(current)
-            if not ok:
-                raise ValueError(f"URL blocked: {error}")
-            async with client.stream("GET", current) as response:
-                if response.is_redirect:
-                    location = response.headers.get("location")
-                    if not location:
-                        raise ValueError("redirect without a Location header")
-                    current = str(httpx.URL(current).join(location))
-                    continue
-                if response.status_code != 200:
-                    raise ValueError(f"HTTP {response.status_code}")
-                # Si esce dal ``with`` senza leggere il corpo: la connessione
-                # viene chiusa e il download vero — decine di MB — resta tutto
-                # al bridge, che lo scrive su disco calcolando l'hash in
-                # streaming. Qui viaggiano solo gli header.
-                return current
-        raise ValueError("too many redirects")
+        # ``validate_url_target`` accetta anche http: qui no, e non solo per
+        # coerenza col bridge — un downgrade a metà catena toglierebbe l'unica
+        # difesa contro un APK sostituito in transito che non sia l'hash (che
+        # però nel manifest ce lo scrive la stessa fonte).
+        async with open_validated_stream(
+            client, url, validate=validate_url_target, https_only=True,
+        ) as (_response, final_url):
+            # Si esce dal ``with`` senza leggere il corpo: la connessione viene
+            # chiusa e il download vero — decine di MB — resta tutto al bridge,
+            # che lo scrive su disco calcolando l'hash in streaming. Qui
+            # viaggiano solo gli header.
+            return final_url
     finally:
         if owns_client:
             await client.aclose()

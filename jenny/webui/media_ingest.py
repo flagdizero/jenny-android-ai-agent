@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+from jenny.security.fetch import BROWSER_USER_AGENT, open_validated_stream, read_capped
 from jenny.security.network import validate_url_target
 from jenny.utils.helpers import detect_image_mime, ensure_dir
 from jenny.utils.path import atomic_write
@@ -29,7 +30,6 @@ MediaDirProvider = Callable[[str | None], Path]
 # Limiti operativi.
 TIMEOUT_S = 15.0
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # allineato a media_decode.DEFAULT_MAX_BYTES
-MAX_REDIRECTS = 5
 REMOTE_MEDIA_BUDGET_BYTES = 200 * 1024 * 1024  # cap LRU del sottodir remote/
 _INGEST_CHANNEL = "remote"
 
@@ -43,10 +43,7 @@ _MIME_EXT: dict[str, str] = {
 }
 
 _BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Android 14; Mobile) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    ),
+    "User-Agent": BROWSER_USER_AGENT,
     "Accept": "image/avif,image/webp,image/png,image/*;q=0.8,*/*;q=0.5",
 }
 
@@ -70,36 +67,23 @@ def _find_existing(remote_dir: Path, stem: str) -> Path | None:
 async def _fetch_with_redirects(
     client: httpx.AsyncClient, url: str, *, logger: Any
 ) -> bytes | None:
-    """Scarica ``url`` seguendo i redirect a mano, validando ogni hop (SSRF)."""
-    current = url
-    for _ in range(MAX_REDIRECTS + 1):
-        ok, error = validate_url_target(current)
-        if not ok:
-            logger.warning("media ingest: SSRF blocked {}: {}", current, error)
-            return None
-        async with client.stream("GET", current, headers=_BROWSER_HEADERS) as resp:
-            if resp.is_redirect:
-                location = resp.headers.get("location")
-                if not location:
-                    logger.warning("media ingest: redirect without Location for {}", current)
-                    return None
-                # Risolvi relativo→assoluto; il prossimo giro rivalida SSRF.
-                current = str(httpx.URL(current).join(location))
-                continue
-            if resp.status_code != 200:
-                logger.warning("media ingest: HTTP {} for {}", resp.status_code, current)
-                return None
-            data = bytearray()
-            async for chunk in resp.aiter_bytes():
-                data.extend(chunk)
-                if len(data) > MAX_IMAGE_BYTES:
-                    logger.warning(
-                        "media ingest: {} exceeds {} bytes", current, MAX_IMAGE_BYTES
-                    )
-                    return None
-            return bytes(data)
-    logger.warning("media ingest: too many redirects for {}", url)
-    return None
+    """Scarica ``url`` seguendo i redirect a mano, validando ogni hop (SSRF).
+
+    Qualunque rifiuto — hop bloccato, redirect senza ``Location``, stato
+    diverso da 200, troppi salti, immagine troppo grande — diventa una riga di
+    log e ``None``: un'immagine remota che non arriva non è un errore da
+    mostrare. I guasti di rete di httpx risalgono al chiamante, come prima.
+    """
+    try:
+        async with open_validated_stream(
+            client, url, validate=validate_url_target, headers=_BROWSER_HEADERS,
+        ) as (resp, final_url):
+            return await read_capped(
+                resp, MAX_IMAGE_BYTES, f"{final_url} exceeds {MAX_IMAGE_BYTES} bytes",
+            )
+    except ValueError as exc:
+        logger.warning("media ingest: {} not fetched: {}", url, exc)
+        return None
 
 
 def _enforce_remote_budget(remote_dir: Path, *, logger: Any) -> None:

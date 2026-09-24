@@ -34,6 +34,7 @@ from loguru import logger
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.security.fetch import BROWSER_USER_AGENT, open_validated_stream, read_capped
 from jenny.security.network import validate_url_target
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
@@ -47,16 +48,9 @@ from jenny.utils.path import atomic_write
 # Limiti operativi.
 TIMEOUT_S = 60.0
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
-MAX_REDIRECTS = 5
 DOWNLOADS_SUBDIR = "downloads"
 
-_BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Android 14; Mobile) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    ),
-    "Accept": "*/*",
-}
+_BROWSER_HEADERS = {"User-Agent": BROWSER_USER_AGENT, "Accept": "*/*"}
 
 # filename= o filename*=UTF-8''… nel Content-Disposition (basta il caso comune).
 _CONTENT_DISPOSITION_NAME_RE = re.compile(
@@ -104,29 +98,14 @@ async def _fetch_streaming(
     Ritorna ``(data, final_url, content_disposition)``. Solleva ``ValueError``
     con un messaggio leggibile per ogni condizione di errore.
     """
-    current = url
-    for _ in range(MAX_REDIRECTS + 1):
-        ok, error = validate_url_target(current)
-        if not ok:
-            raise ValueError(f"URL blocked: {error}")
-        async with client.stream("GET", current, headers=_BROWSER_HEADERS) as resp:
-            if resp.is_redirect:
-                location = resp.headers.get("location")
-                if not location:
-                    raise ValueError("redirect without Location header")
-                current = str(httpx.URL(current).join(location))
-                continue
-            if resp.status_code != 200:
-                raise ValueError(f"HTTP {resp.status_code}")
-            data = bytearray()
-            async for chunk in resp.aiter_bytes():
-                data.extend(chunk)
-                if len(data) > MAX_DOWNLOAD_BYTES:
-                    raise ValueError(
-                        f"file exceeds the {MAX_DOWNLOAD_BYTES // (1024 * 1024)} MB limit"
-                    )
-            return bytes(data), current, resp.headers.get("content-disposition")
-    raise ValueError("too many redirects")
+    async with open_validated_stream(
+        client, url, validate=validate_url_target, headers=_BROWSER_HEADERS,
+    ) as (resp, final_url):
+        data = await read_capped(
+            resp, MAX_DOWNLOAD_BYTES,
+            f"file exceeds the {MAX_DOWNLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
+        return data, final_url, resp.headers.get("content-disposition")
 
 
 @tool_parameters(

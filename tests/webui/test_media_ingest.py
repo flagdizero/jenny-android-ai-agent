@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from jenny.security import fetch
 from jenny.webui import media_ingest
 from jenny.webui.media_ingest import ingest_remote_image
 
@@ -183,7 +184,7 @@ class TestIngestRemoteImage:
     async def test_too_many_redirects_rejected(self, media_root, allow_ssrf):
         responses = [
             _FakeResp(status=302, chunks=[b""], location=f"https://host.test/{i}")
-            for i in range(media_ingest.MAX_REDIRECTS + 2)
+            for i in range(fetch.MAX_REDIRECTS + 2)
         ]
         client = _FakeClient(responses)
         path = await ingest_remote_image(

@@ -263,6 +263,32 @@ class TestWithoutNetwork:
     async def test_a_non_https_manifest_url_is_refused(self) -> None:
         assert await update_check._fetch_manifest("http://example.com/latest.json") is None
 
+    async def test_a_redirect_down_to_http_is_refused(self, monkeypatch) -> None:
+        """Https a ogni salto, non solo al primo (24/09/2026).
+
+        Il controllo stava solo sull'URL di partenza: un redirect verso http
+        passava, e il manifest — che dice quale APK installare e con che hash —
+        arrivava in chiaro. Come per il download dell'APK in
+        ``update_install``, il downgrade a meta' catena e' un rifiuto.
+        """
+        served: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            served.append(str(request.url))
+            if request.url.scheme == "https":
+                return httpx.Response(302, headers={"location": "http://cdn.example/latest.json"})
+            return httpx.Response(200, content=json.dumps(_MANIFEST))
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        monkeypatch.setattr(update_check, "validate_url_target", lambda _url: (True, ""))
+        try:
+            assert await update_check._fetch_manifest(
+                "https://example.invalid/latest.json", client=client
+            ) is None
+        finally:
+            await client.aclose()
+        assert served == ["https://example.invalid/latest.json"], "l'hop in chiaro non va chiesto"
+
     async def test_an_oversized_manifest_is_refused(self, monkeypatch) -> None:
         client = _serve("x" * (update_check._MAX_MANIFEST_BYTES + 1))
         monkeypatch.setattr(update_check, "validate_url_target", lambda _url: (True, ""))

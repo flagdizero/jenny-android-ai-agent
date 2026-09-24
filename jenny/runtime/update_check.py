@@ -37,6 +37,7 @@ from loguru import logger
 
 from jenny.runtime.context import get_android_context
 from jenny.runtime.update_manifest import DEFAULT_MANIFEST_URL
+from jenny.security.fetch import open_validated_stream, read_capped
 from jenny.security.network import validate_url_target
 from jenny.utils.path import atomic_write
 
@@ -56,7 +57,6 @@ STATE_SCHEMA = 1
 STATE_FILENAME = "update_state.json"
 
 _TIMEOUT_S = 20.0
-_MAX_REDIRECTS = 5
 # Il manifest è una manciata di campi: oltre questa soglia non è più il nostro
 # manifest, e leggerlo tutto per scoprirlo sarebbe il vero costo.
 _MAX_MANIFEST_BYTES = 64 * 1024
@@ -419,33 +419,19 @@ def _rollout_allows(
 async def _read_manifest_bytes(client: httpx.AsyncClient, url: str) -> bytes:
     """GET con redirect seguiti a mano, validando ogni hop (SSRF) e il volume.
 
-    Stesso pattern di ``agent/tools/download.py``: i redirect non si delegano a
+    Il ciclo è :func:`jenny.security.fetch.open_validated_stream`, lo stesso
+    del download dell'APK e di ``download_file``: i redirect non si delegano a
     httpx perché ogni hop va rivalidato — ``/releases/latest/download/`` di
-    GitHub è per definizione un redirect verso un altro host.
+    GitHub è per definizione un redirect verso un altro host. Https a **ogni**
+    salto, dal 24/09/2026: prima solo l'URL di partenza, e un redirect verso
+    http consegnava in chiaro il manifest che dice quale APK installare.
     """
-    current = url
-    for _ in range(_MAX_REDIRECTS + 1):
-        ok, error = validate_url_target(current)
-        if not ok:
-            raise ValueError(f"URL blocked: {error}")
-        async with client.stream("GET", current) as response:
-            if response.is_redirect:
-                location = response.headers.get("location")
-                if not location:
-                    raise ValueError("redirect without a Location header")
-                current = str(httpx.URL(current).join(location))
-                continue
-            if response.status_code != 200:
-                raise ValueError(f"HTTP {response.status_code}")
-            payload = bytearray()
-            async for chunk in response.aiter_bytes():
-                payload.extend(chunk)
-                if len(payload) > _MAX_MANIFEST_BYTES:
-                    raise ValueError(
-                        f"manifest exceeds {_MAX_MANIFEST_BYTES} bytes"
-                    )
-            return bytes(payload)
-    raise ValueError("too many redirects")
+    async with open_validated_stream(
+        client, url, validate=validate_url_target, https_only=True,
+    ) as (response, _final_url):
+        return await read_capped(
+            response, _MAX_MANIFEST_BYTES, f"manifest exceeds {_MAX_MANIFEST_BYTES} bytes",
+        )
 
 
 async def _fetch_manifest(
