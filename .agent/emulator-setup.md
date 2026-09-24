@@ -184,7 +184,7 @@ Avvio e log:
 
 ```bash
 adb shell monkey -p com.flagdizero.jenny -c android.intent.category.LAUNCHER 1
-adb logcat -d -s Jenny:V python.stderr:V AndroidRuntime:E
+adb logcat -d -s Jenny:V GatewayStarter:V python.stderr:V AndroidRuntime:E
 ```
 
 L'immagine è `arm64-v8a` e l'APK debug contiene quell'ABI: Chaquopy parte
