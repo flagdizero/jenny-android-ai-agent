@@ -176,7 +176,7 @@ def test_every_completion_of_the_onboarding_releases_the_lock() -> None:
 def test_the_wizard_is_only_the_first_run() -> None:
     """«Riesegui la configurazione» non c'e' piu', ed e' una decisione.
 
-    `save_onboarding` fa `config.providers.providers = [una]`: **sostituisce**
+    `save_onboarding` fa `config.providers.providers = [one]`: **sostituisce**
     l'elenco invece di aggiungere. In una schermata da operatore quel bottone
     puo' solo toglierti marche che hai configurato — e tutto cio' che il wizard
     imposta si fa meglio altrove: la marca col suo «Aggiungi», il modello dalla
@@ -297,12 +297,12 @@ def test_the_strings_of_the_button_went_with_the_button() -> None:
     la riusa si porta dietro un copy scritto per un'altra schermata. Toglierle
     insieme al bottone e' la meta' del lavoro che si dimentica sempre.
     """
-    orfane = ["rerunOnboarding", "rerunOnboardingHint",
+    orphans = ["rerunOnboarding", "rerunOnboardingHint",
               "rerunOnboardingAction", "rerunOnboardingConfirm"]
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        rimaste = [k for k in orfane if k in data["settings"]]
-        assert not rimaste, (
+        remaining = [k for k in orphans if k in data["settings"]]
+        assert not remaining, (
             f"{locale}.json tiene ancora le stringhe di un bottone che non "
-            f"c'e' piu': {rimaste}"
+            f"c'e' piu': {remaining}"
         )

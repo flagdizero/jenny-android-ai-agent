@@ -48,8 +48,8 @@ def project_root(install_root: Path) -> Path:
     return root
 
 
-class TestDentroUnProgetto:
-    def test_jenny_e_ancora_se_stessa(self, install_root, project_root):
+class TestInsideAProject:
+    def test_jenny_is_still_herself(self, install_root, project_root):
         """Il test che fallisce sul codice di prima: senza questo, il prompt di
         un turno legato non conteneva nessuna delle due righe."""
         builder = ContextBuilder(install_root)
@@ -59,7 +59,7 @@ class TestDentroUnProgetto:
         assert "parlo come parlo io" in prompt
         assert "Vive a Bologna" in prompt
 
-    def test_le_istruzioni_sono_quelle_del_progetto(self, install_root, project_root):
+    def test_the_instructions_are_the_project_ones(self, install_root, project_root):
         builder = ContextBuilder(install_root)
 
         prompt = builder.build_system_prompt(workspace=project_root)
@@ -67,7 +67,7 @@ class TestDentroUnProgetto:
         assert "si scrive una wiki su Patreon" in prompt
         assert "istruzioni della radice" not in prompt
 
-    def test_un_progetto_senza_istruzioni_proprie_non_eredita_quelle_di_casa(
+    def test_a_project_without_own_instructions_does_not_inherit_the_home_ones(
         self, install_root, project_root
     ):
         """Meglio nessuna istruzione che quelle di un altro posto.
@@ -84,7 +84,7 @@ class TestDentroUnProgetto:
         # …ma l'identità c'è comunque.
         assert "parlo come parlo io" in prompt
 
-    def test_la_memoria_lunga_resta_quella_dell_installazione(
+    def test_long_term_memory_stays_the_installation_one(
         self, install_root, project_root
     ):
         """Non passa dai file di bootstrap ma da `MemoryStore`, costruito una
@@ -98,7 +98,7 @@ class TestDentroUnProgetto:
 
         assert "Titan 2" in prompt
 
-    def test_la_cartella_di_lavoro_annunciata_e_quella_del_progetto(
+    def test_the_announced_working_folder_is_the_project_one(
         self, install_root, project_root
     ):
         """L'identità non segue lo scope, il posto di lavoro sì: sono due cose
@@ -110,8 +110,8 @@ class TestDentroUnProgetto:
         assert str(project_root) in prompt
 
 
-class TestFuoriDaUnProgetto:
-    def test_senza_scope_non_cambia_niente(self, install_root):
+class TestOutsideAProject:
+    def test_without_scope_changes_nothing(self, install_root):
         """Le due radici coincidono: stesso prompt di prima, byte per byte."""
         builder = ContextBuilder(install_root)
 

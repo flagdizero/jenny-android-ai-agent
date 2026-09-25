@@ -30,8 +30,8 @@ CHAT_JS = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
 SELECTION_JS = (ASSETS / "shared" / "selection.js").read_text(encoding="utf-8")
 # Il riconoscimento del gesto e' uscito da mobile-app.js il 22/09/2026: la
 # soglia e la dominanza vivono nel modulo condiviso, che li tiene per tutti e
-# due i gusci (v. test_gesto_orizzontale_contract.py).
-GESTO_JS = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
+# due i gusci (v. test_horizontal_swipe_contract.py).
+SWIPE_JS = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
 WORKSHOP_HTML = (UI / "workshop.html").read_text(encoding="utf-8")
 ANDROID_ASSETS = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
 
@@ -115,18 +115,18 @@ def test_swipe_nav_stands_down_when_something_is_selected() -> None:
     della selezione farebbe scivolare la vista sotto le dita.
     """
     nav = _method(APP_JS, "setupSwipeNav")
-    puo_iniziare = nav.split("canStart:", 1)[1].split("onHorizontal:", 1)[0]
-    assert "if (hasSelection()) return false;" in puo_iniziare
+    can_start = nav.split("canStart:", 1)[1].split("onHorizontal:", 1)[0]
+    assert "if (hasSelection()) return false;" in can_start
 
 
 def test_horizontal_slop_clears_the_android_touch_slop() -> None:
-    slop = re.search(r"const AXIS_THRESHOLD = (\d+);", GESTO_JS)
+    slop = re.search(r"const AXIS_THRESHOLD = (\d+);", SWIPE_JS)
     assert slop, "AXIS_THRESHOLD non trovata"
     assert int(slop.group(1)) >= 20, "sotto il touch slop di sistema il long-press muore"
 
 
 def test_a_diagonal_drag_no_longer_arms_the_swipe() -> None:
-    assert "Math.abs(dx) <= Math.abs(dy) * 1.5" in GESTO_JS
+    assert "Math.abs(dx) <= Math.abs(dy) * 1.5" in SWIPE_JS
 
 
 # ── Passo 3: non si scrive sotto le dita ─────────────────────────────────────
@@ -172,9 +172,9 @@ def test_the_message_sheet_is_gone_with_its_button() -> None:
     Resta un Copia solo, e copia il **sorgente** — che era la voce «Copia come
     Markdown», cioè quella per cui il foglio era stato scritto.
     """
-    for sparito in ("chat-msg-more", "_showMessageSheet", "_messagePlain",
+    for gone in ("chat-msg-more", "_showMessageSheet", "_messagePlain",
                     "chat-msg-sheet", "ti-dots"):
-        assert sparito not in CHAT_JS, f"{sparito} è ancora in mobile-chat.js"
+        assert gone not in CHAT_JS, f"{gone} è ancora in mobile-chat.js"
     assert "chat-msg-sheet" not in WORKSHOP_HTML
     body = _method(CHAT_JS, "_copyMessage")
     assert "markdown" not in body, "_copyMessage ha ancora la scelta che il foglio le dava"
@@ -188,10 +188,10 @@ def test_no_inline_handlers_were_added() -> None:
 def test_the_sheet_strings_left_with_the_sheet() -> None:
     """Tre chiavi che nessuno legge più sono tre traduzioni da mantenere per
     niente — e il posto in cui una stringa morta torna a schermo."""
-    morte = ("messageActions", "copyPlain", "copyMarkdown")
+    dead = ("messageActions", "copyPlain", "copyMarkdown")
     for lang in ("it", "en"):
         chat = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))["chat"]
-        for key in morte:
+        for key in dead:
             assert key not in chat, f"{lang}.chat.{key} è rimasta orfana"
         # E quella che resta c'è ancora, in tutte e due.
         for key in ("copy", "copied", "copyFailed"):

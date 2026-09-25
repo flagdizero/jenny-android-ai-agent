@@ -69,7 +69,7 @@ from jenny.utils.wiki_paths import (
 # non puo' importare ``jenny`` (stessa ragione della regola di slug copiata in
 # ``lint_wiki.py``). A tenerle allineate non c'e' la buona volontà: c'e'
 # ``tests/skills/llm_wiki/test_scaffold_topup.py::
-# test_i_due_scaffolder_non_possono_divergere``, che importa questa tupla e la
+# test_the_two_scaffolders_cannot_diverge``, che importa questa tupla e la
 # confronta — la prossima divergenza è un test rosso, non un difetto silenzioso
 # scoperto sul telefono (era: i due scaffolder disaccordavano sul diario, cioè
 # sull'unica cartella che il ramo chiama universale).

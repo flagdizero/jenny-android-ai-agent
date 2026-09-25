@@ -110,11 +110,11 @@ def test_the_id_survives_a_frontmatter_that_yaml_cannot_parse(wikis: Path) -> No
     """
     import yaml
 
-    rotta = "---\nid: 3f9a2c1b7e04\nsummary: Prova del passo 7: la chat segue\n---\n\n# P\n"
+    broken = "---\nid: 3f9a2c1b7e04\nsummary: Prova del passo 7: la chat segue\n---\n\n# P\n"
     with pytest.raises(yaml.YAMLError):
-        yaml.safe_load(rotta.split("---")[1])
+        yaml.safe_load(broken.split("---")[1])
 
-    project = _wiki(wikis, "storta", "AGENTS.md", rotta)
+    project = _wiki(wikis, "storta", "AGENTS.md", broken)
     assert wiki_id(project) == "3f9a2c1b7e04"
 
 
@@ -364,7 +364,7 @@ def test_the_journal_is_created_once(wikis: Path) -> None:
 
 # ── Chi scrive l'id lo rilegge come lo legge chi lo usa ──────────────────
 
-_ROTTA = "---\nsummary: Prova del passo 7: la chat segue\n---\n\n# P\n"
+_BROKEN = "---\nsummary: Prova del passo 7: la chat segue\n---\n\n# P\n"
 
 
 def _id_lines(text: str) -> list[str]:
@@ -385,9 +385,9 @@ def test_four_boots_over_an_unparsable_frontmatter_write_one_id(wikis: Path) -> 
     import yaml
 
     with pytest.raises(yaml.YAMLError):
-        yaml.safe_load(_ROTTA.split("---")[1])
+        yaml.safe_load(_BROKEN.split("---")[1])
 
-    project = _wiki(wikis, "storta", "AGENTS.md", _ROTTA)
+    project = _wiki(wikis, "storta", "AGENTS.md", _BROKEN)
 
     seen = []
     identified = []
@@ -464,8 +464,8 @@ def test_a_file_with_no_frontmatter_at_all_gets_one_id_and_keeps_its_body(wikis:
 def test_a_broken_wiki_does_not_stop_the_others(wikis: Path) -> None:
     """Un avvio che muore su una cartella storta non migra nemmeno le altre."""
     _wiki(wikis, "sana")
-    rotta = _wiki(wikis, "rotta")
-    (rotta / "AGENTS.md").mkdir()  # una directory dove ci vuole un file
+    broken = _wiki(wikis, "rotta")
+    (broken / "AGENTS.md").mkdir()  # una directory dove ci vuole un file
 
     result = migrate_wikis(wikis)
 

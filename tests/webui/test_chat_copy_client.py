@@ -86,12 +86,12 @@ function el(tag) {
        ospita ora la `.chat-meta`, quindi cercarla solo fra i figli diretti
        della bolla non la troverebbe piu'. */
     querySelectorAll(sel) {
-      const diretti = sel.startsWith(':scope > ');
+      const direct = sel.startsWith(':scope > ');
       const want = sel.replace(':scope > ', '').replace('.', '');
       const out = [];
       for (const c of this.children) {
         if (c.className.split(' ').includes(want)) out.push(c);
-        if (!diretti) out.push(...c.querySelectorAll(sel));
+        if (!direct) out.push(...c.querySelectorAll(sel));
       }
       return out;
     },
@@ -214,8 +214,8 @@ def test_the_seconds_share_the_row_with_copy() -> None:
       c._appendMsgActions(msg);
       c._appendLatency(msg, 4000);
       assert.deepEqual(actions(msg), ['chat-msg-copy', '4.0s']);
-      const fuori = msg.children.filter((x) => x.className === 'chat-meta');
-      assert.equal(fuori.length, 0, 'i secondi sono ancora un nodo a sé');
+      const outside = msg.children.filter((x) => x.className === 'chat-meta');
+      assert.equal(outside.length, 0, 'i secondi sono ancora un nodo a sé');
     """)
 
 

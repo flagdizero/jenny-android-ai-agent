@@ -17,12 +17,12 @@ from jenny.webui.wiki_routes import WikiRoutes
 def test_the_wiki_routes_docstring_names_the_routes_it_serves() -> None:
     import inspect
 
-    sorgente = inspect.getsource(WikiRoutes.dispatch)
-    servite = set(re.findall(r'path == "(/api/[^"]+)"', sorgente))
+    source = inspect.getsource(WikiRoutes.dispatch)
+    servite = set(re.findall(r'path == "(/api/[^"]+)"', source))
     doc = WikiRoutes.__doc__ or ""
-    for rotta in servite:
-        parts = rotta.removeprefix("/api/")
-        assert parts in doc, f"{rotta} manca dalla docstring di WikiRoutes"
+    for broken in servite:
+        parts = broken.removeprefix("/api/")
+        assert parts in doc, f"{broken} manca dalla docstring di WikiRoutes"
     assert "config" not in doc and "tree" not in doc
 
 

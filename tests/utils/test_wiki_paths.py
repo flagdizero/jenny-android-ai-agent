@@ -100,7 +100,7 @@ class TestScope:
         assert read_wiki_scope(root) == "(no AGENTS.md)"
 
 
-class TestQualeFileDiIstruzioni:
+class TestWhichInstructionsFile:
     """Passo 7.5: ``AGENTS.md``, e **solo** quello.
 
     Fino al 22/08 i lettori accettavano tutt'e due i nomi: era il ripiego che il
@@ -115,7 +115,7 @@ class TestQualeFileDiIstruzioni:
     la propria chat proprio nella finestra in cui e' piu' fragile.
     """
 
-    def test_agents_e_il_file_di_istruzioni(self, tmp_path):
+    def test_agents_is_the_instructions_file(self, tmp_path):
         root = _make_wiki(tmp_path / "wikis", "main")
         (root / "AGENTS.md").write_text("---\nsummary: il nuovo\n---\n", encoding="utf-8")
         (root / "CLAUDE.md").write_text("---\nsummary: il vecchio\n---\n", encoding="utf-8")
@@ -123,7 +123,7 @@ class TestQualeFileDiIstruzioni:
         assert wiki_schema_file(root).name == "AGENTS.md"
         assert read_wiki_scope(root) == "il nuovo"
 
-    def test_claude_da_solo_non_e_piu_un_file_di_istruzioni(self, tmp_path):
+    def test_claude_alone_is_no_longer_an_instructions_file(self, tmp_path):
         """La migrazione lo rinomina al prossimo avvio; fino a la' non si legge.
 
         E' il prezzo dichiarato del 7.5: una finestra piccola, che si chiude da
@@ -135,7 +135,7 @@ class TestQualeFileDiIstruzioni:
 
         assert wiki_schema_file(root) is None
 
-    def test_ma_l_id_di_una_wiki_non_migrata_si_legge_ancora(self, tmp_path):
+    def test_but_the_id_of_an_unmigrated_wiki_still_reads(self, tmp_path):
         """Altrimenti un rinomino la perderebbe proprio prima della migrazione."""
         from jenny.utils.wiki_paths import wiki_id
 
@@ -145,13 +145,13 @@ class TestQualeFileDiIstruzioni:
 
         assert wiki_id(root) == "3f9a2c1b7e04"
 
-    def test_senza_nessuno_dei_due_e_none(self, tmp_path):
+    def test_without_either_is_none(self, tmp_path):
         root = _make_wiki(tmp_path / "wikis", "main")
         (root / "AGENTS.md").unlink()
 
         assert wiki_schema_file(root) is None
 
-class TestElencoPagineSenzaTitolo:
+class TestListPagesWithoutTitle:
     """``iter_wiki_pages(titles=False)``: gli stessi percorsi, nessuna lettura. T3.11.
 
     Il titolo costa un ``read_text()`` **per pagina**, e chi lo usa è una
@@ -175,7 +175,7 @@ class TestElencoPagineSenzaTitolo:
             },
         )
 
-    def test_gli_stessi_percorsi_nello_stesso_ordine(self, tmp_path):
+    def test_the_same_paths_in_the_same_order(self, tmp_path):
         """La firma nuova non è un secondo insieme di pagine: è lo stesso elenco
         senza la colonna che costa. Se divergessero, il conteggio che il blocco
         dichiara e le pagine che inietta verrebbero da due camminate diverse.
@@ -193,7 +193,7 @@ class TestElencoPagineSenzaTitolo:
             "senza-titolo.md",
         ]
 
-    def test_senza_titoli_non_apre_nessun_file(self, tmp_path):
+    def test_without_titles_opens_no_file(self, tmp_path):
         """Il punto del passo, provato dove sta: nessuna pagina viene aperta. La
         prova è per sabotaggio — ``read_text`` alza — perché un test sui
         millisecondi misurerebbe il disco, e un test sul risultato non vedrebbe
@@ -211,7 +211,7 @@ class TestElencoPagineSenzaTitolo:
         finally:
             Path.read_text = real
 
-    def test_il_titolo_arriva_ancora_a_chi_lo_usa(self, tmp_path):
+    def test_the_title_still_reaches_those_who_use_it(self, tmp_path):
         """Il default non è cambiato, ed è quel che vedono i due inventari:
         ``title:`` del frontmatter, altrimenti il primo H1, altrimenti il nome
         del file.
@@ -224,7 +224,7 @@ class TestElencoPagineSenzaTitolo:
             "senza-titolo.md": "senza-titolo",
         }
 
-    def test_una_pagina_illeggibile_non_e_un_errore(self, tmp_path):
+    def test_an_unreadable_page_is_not_an_error(self, tmp_path):
         """Il ripiego di prima, che il rifattore non deve aver perso: un file
         illegibile prende il nome del file come titolo, non alza.
         """
@@ -233,12 +233,12 @@ class TestElencoPagineSenzaTitolo:
 
         assert dict(iter_wiki_pages(root / "wiki"))["binaria.md"] == "binaria"
 
-    def test_una_cartella_che_non_esiste_torna_vuoto_in_tutt_e_due_le_forme(self, tmp_path):
+    def test_a_missing_folder_returns_empty_in_both_forms(self, tmp_path):
         assert iter_wiki_pages(tmp_path / "nope") == []
         assert iter_wiki_pages(tmp_path / "nope", titles=False) == []
 
 
-class TestCheCosaEUnaPagina:
+class TestWhatIsAPage:
     """T9.5. Quattro funzioni rispondevano a «questo file è una pagina?» e non
     dicevano la stessa cosa. Il difetto non era l'estetica della duplicazione:
 
@@ -293,12 +293,12 @@ class TestCheCosaEUnaPagina:
         "summaries.md",
     )
 
-    def test_le_pagine_sono_queste_e_non_altre(self, tmp_path):
+    def test_the_pages_are_these_and_no_others(self, tmp_path):
         pages = self._wiki(tmp_path) / "wiki"
 
         assert tuple(iter_wiki_pages(pages, titles=False)) == self._PAGES
 
-    def test_una_cartella_nascosta_non_e_un_posto_dove_stanno_le_pagine(self, tmp_path):
+    def test_a_hidden_folder_is_not_a_place_where_pages_live(self, tmp_path):
         """Il caso che nessuna delle quattro implementazioni trattava allo stesso
         modo, e l'unico che cambia comportamento per l'utente: una
         ``wiki/.qualcosa/`` — una ``.git``, un ``.obsidian``, una cartella di
@@ -314,7 +314,7 @@ class TestCheCosaEUnaPagina:
         # non sul fatto di stare in una sottocartella.
         assert is_wiki_page_rel(Path("concepts/loop.md"))
 
-    def test_index_maiuscolo_e_una_pagina_e_non_e_un_caso(self, tmp_path):
+    def test_uppercase_index_is_a_page_and_not_by_accident(self, tmp_path):
         """**Il confronto sull'indice resta sensibile alle maiuscole.**
 
         Su Android — l'unico runtime che esiste, e un filesystem che le
@@ -332,7 +332,7 @@ class TestCheCosaEUnaPagina:
 
         assert iter_wiki_pages(root / "wiki", titles=False) == ["INDEX.md"]
 
-    def test_il_grafo_vede_le_stesse_pagine_piu_la_mappa(self, tmp_path):
+    def test_the_graph_sees_the_same_pages_plus_the_map(self, tmp_path):
         """Consumatore 2: ``webui/wiki.py::iter_page_files`` (grafo e ricerca).
 
         L'unica differenza legittima è l'indice, e va nel verso giusto: per il
@@ -433,14 +433,14 @@ class TestTheIndexFilenameHasOneDefinition:
         assert (root / "wiki" / "index.md").is_file()
 
         self._move_the_name(monkeypatch, "mappa.md")
-        altro = tmp_path / "wikis" / "campo"
-        altro.mkdir(parents=True)
+        other = tmp_path / "wikis" / "campo"
+        other.mkdir(parents=True)
 
-        created = scaffold_project(altro, title="Campo", seed="il campo", quoted_seed="il campo")
+        created = scaffold_project(other, title="Campo", seed="il campo", quoted_seed="il campo")
 
         assert "wiki/mappa.md" in created
-        assert (altro / "wiki" / "mappa.md").is_file()
-        assert not (altro / "wiki" / "index.md").exists()
+        assert (other / "wiki" / "mappa.md").is_file()
+        assert not (other / "wiki" / "index.md").exists()
 
     def test_the_page_route_falls_back_on_the_map_the_constant_names(self, monkeypatch):
         """``/api/page`` senza ``page=``: il default è la mappa, e la mappa è

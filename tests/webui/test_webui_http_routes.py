@@ -143,8 +143,8 @@ class TestAuditCreateTraversal:
         # e il disco e' comunque la misura piu' forte delle due — e' quel che
         # Jenny legge, non quel che una risposta racconta.
         audit_dir = workspace / "wikis" / "main" / "audit"
-        scritti = list(audit_dir.glob("**/*.md")) if audit_dir.exists() else []
-        assert scritti == []
+        written = list(audit_dir.glob("**/*.md")) if audit_dir.exists() else []
+        assert written == []
         # E il segreto non deve essere finito da nessuna parte dentro la wiki.
         for f in (workspace / "wikis").rglob("*"):
             if f.is_file():

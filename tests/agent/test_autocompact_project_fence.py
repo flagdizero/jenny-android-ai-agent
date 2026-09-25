@@ -214,9 +214,9 @@ def test_length_based_compaction_runs_for_every_session_including_projects() -> 
     # Nessun ramo sulla chiave fra le due: la finestra è corta apposta, ed è dove
     # un filtro verrebbe aggiunto.
     window = src[start:call]
-    for sospetto in ("is_project_session_key", "project:", "session_kind"):
-        assert sospetto not in window, (
-            f"la compattazione per lunghezza è diventata condizionale ({sospetto}): "
+    for suspect in ("is_project_session_key", "project:", "session_kind"):
+        assert suspect not in window, (
+            f"la compattazione per lunghezza è diventata condizionale ({suspect}): "
             "i progetti non hanno più niente che li contenga"
         )
 

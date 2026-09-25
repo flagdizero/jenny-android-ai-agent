@@ -12,7 +12,7 @@ dell'officina, costruite dal JS condiviso — le passavano davanti.
   voce anche quando la regola ne raggruppa piu' d'uno.
 - :func:`key_names`: classi e id dell'ultimo composto di un selettore, cioe'
   quelli che l'elemento colpito deve portare addosso.
-- :func:`casa_vocabulary`: ogni parola che puo' finire nel DOM della casa —
+- :func:`home_vocabulary`: ogni parola che puo' finire nel DOM della casa —
   `index.html` piu' i moduli che `home-app.js` importa, per chiusura. E' una
   stima **per eccesso** (conta anche le parole che non sono classi), che e' il
   lato sicuro: una regola in piu' da controllare, mai una in meno.
@@ -63,13 +63,13 @@ def rules(css: str) -> list[tuple[str, str, tuple[str, ...]]]:
 def levels(css: str) -> list[tuple[str, int]]:
     """(selettore, z-index) per ogni selettore di ogni regola che ne dichiara uno."""
     out = []
-    for selettori, body, contesto in rules(css):
-        if any(at.startswith("@keyframes") for at in contesto):
+    for selectors, body, context in rules(css):
+        if any(at.startswith("@keyframes") for at in context):
             continue
         m = re.search(r"(?:^|;)\s*z-index:\s*(-?\d+)", body)
         if not m:
             continue
-        for s in selettori.split(","):
+        for s in selectors.split(","):
             out.append((" ".join(s.split()), int(m.group(1))))
     return out
 
@@ -95,10 +95,10 @@ def _closure(entry: Path) -> set[Path]:
     return seen
 
 
-def casa_vocabulary() -> set[str]:
+def home_vocabulary() -> set[str]:
     """Le parole che il DOM della casa puo' contenere (stima per eccesso)."""
-    moduli = _closure(ASSETS / "home-app.js")
-    assert len(moduli) > 20, f"la chiusura degli import della casa non morde piu' ({len(moduli)})"
+    modules = _closure(ASSETS / "home-app.js")
+    assert len(modules) > 20, f"la chiusura degli import della casa non morde piu' ({len(modules)})"
     text = (UI / "index.html").read_text(encoding="utf-8")
-    text += "".join(p.read_text(encoding="utf-8") for p in moduli)
+    text += "".join(p.read_text(encoding="utf-8") for p in modules)
     return set(re.findall(r"[A-Za-z][\w-]*", text))

@@ -36,7 +36,7 @@ pytestmark = requires_node
 # Un `localStorage` finto (con `removeItem`, che la migrazione usa) e un ponte
 # nativo finto che si puo' rompere a comando — i due guasti che contano sono
 # «il ponte solleva» e «il ponte accetta e poi non rilegge».
-_FINTI = """
+_FAKES = """
 function fakeLocal(initial) {
   const data = new Map(Object.entries(initial || {}));
   return {
@@ -66,7 +66,7 @@ def _run_js(script: str, *, with_rank: bool = False) -> str:
     source = STORE_JS.read_text(encoding="utf-8")
     if with_rank:
         source += "\n" + RANK_JS.read_text(encoding="utf-8")
-    source += "\nimport assert from 'node:assert/strict';\n" + _FINTI + script
+    source += "\nimport assert from 'node:assert/strict';\n" + _FAKES + script
     return run_js(source)
 
 
@@ -94,9 +94,9 @@ def test_a_bridge_too_old_to_write_is_not_used_at_all() -> None:
     """
     out = _run_js("""
 const local = fakeLocal({ 'launcher-usage': '{"android:a":[3,10]}' });
-const mezzo = { getLauncherUsage: () => '' };   // manca il setter
-assert.equal(nativeUsable(mezzo), false);
-assert.equal(usageStore({ native: mezzo, local }), local);
+const middle = { getLauncherUsage: () => '' };   // manca il setter
+assert.equal(nativeUsable(middle), false);
+assert.equal(usageStore({ native: middle, local }), local);
 console.log('ok');
 """)
     assert "ok" in out
@@ -223,10 +223,10 @@ usage.record('android:com.example.a', 2000);
 usage.record('jenny:note', 1500);
 
 // Un nuovo processo: stesso ponte, istanza nuova.
-const rinato = new UsageRanking(nativeStore(native));
-assert.equal(rinato.get('android:com.example.a').count, 2);
-assert.equal(rinato.get('android:com.example.a').last, 2000);
-assert.equal(rinato.get('jenny:note').count, 1);
+const reborn = new UsageRanking(nativeStore(native));
+assert.equal(reborn.get('android:com.example.a').count, 2);
+assert.equal(reborn.get('android:com.example.a').last, 2000);
+assert.equal(reborn.get('jenny:note').count, 1);
 console.log('ok');
 """, with_rank=True)
     assert "ok" in out

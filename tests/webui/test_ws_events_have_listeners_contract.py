@@ -33,7 +33,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 # Eventi che il client non deve ascoltare, ognuno con il suo perché. Chi ne
 # aggiunge uno qui lo fa sapendolo; un evento nuovo senza ascoltatore fa rosso.
-SENZA_ASCOLTATORE = {
+WITHOUT_LISTENER = {
     # Conferme di protocollo: la connessione è registrata (``ready``) e la
     # sottoscrizione a una chat è attiva (``attached``). Documentate come API in
     # docs/reference/websocket.md e usate dai test d'integrazione; la WebUI non
@@ -70,18 +70,18 @@ def test_the_scan_still_finds_the_events() -> None:
 
 def test_the_exceptions_are_still_emitted() -> None:
     """Un'eccezione per un evento che non esiste più è una riga morta."""
-    assert set(SENZA_ASCOLTATORE) <= EMITTED
+    assert set(WITHOUT_LISTENER) <= EMITTED
 
 
-def _ascolto(event: str) -> re.Pattern[str]:
+def _listener(event: str) -> re.Pattern[str]:
     """``case 'x':`` o ``…event === 'x'`` / ``!== 'x'``: dove un frame si smista."""
     q = r"""['"`]"""
     return re.compile(rf"(?:\bcase\s+|\bevent\s*[!=]==\s*){q}{re.escape(event)}{q}")
 
 
-@pytest.mark.parametrize("event", sorted(EMITTED - set(SENZA_ASCOLTATORE)))
+@pytest.mark.parametrize("event", sorted(EMITTED - set(WITHOUT_LISTENER)))
 def test_every_emitted_event_has_a_listener(event: str) -> None:
-    assert _ascolto(event).search(UI_JS), (
+    assert _listener(event).search(UI_JS), (
         f"il gateway manda `{event}` ma nessun JS della WebUI lo nomina: "
         "o manca il gestore, o l'evento va tolto dal server"
     )
@@ -89,10 +89,10 @@ def test_every_emitted_event_has_a_listener(event: str) -> None:
 
 def test_a_bare_mention_is_not_a_listener() -> None:
     """La forma che il banco vecchio accettava, e che non smista niente."""
-    finto = "if (role === 'user') x(); showToast(msg, 'error'); const L = ['delta'];"
-    assert not _ascolto("user").search(finto)
-    assert not _ascolto("error").search(finto)
-    assert not _ascolto("delta").search(finto)
-    assert _ascolto("user").search("switch (msg.event) { case 'user': f(); }")
-    assert _ascolto("error").search("if (msg?.event === 'error') g();")
-    assert _ascolto("goal_status").search("if (msg.event !== \"goal_status\") return;")
+    fake = "if (role === 'user') x(); showToast(msg, 'error'); const L = ['delta'];"
+    assert not _listener("user").search(fake)
+    assert not _listener("error").search(fake)
+    assert not _listener("delta").search(fake)
+    assert _listener("user").search("switch (msg.event) { case 'user': f(); }")
+    assert _listener("error").search("if (msg?.event === 'error') g();")
+    assert _listener("goal_status").search("if (msg.event !== \"goal_status\") return;")

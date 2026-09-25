@@ -173,21 +173,21 @@ def test_reduced_motion_covers_the_switch_too() -> None:
     # Dal 25/09/2026 il rimpicciolimento lo spegne per tutti un blocco solo, in
     # fondo al foglio, che raggruppa i selettori: si leggono le regole intere
     # (v. anche `test_reduced_motion_contract.py`).
-    spenti = {
+    off = {
         " ".join(s.split())
-        for selettori, body, ctx in css_levels.rules(css)
+        for selectors, body, ctx in css_levels.rules(css)
         if any("prefers-reduced-motion: reduce" in at for at in ctx)
         and "transform: none" in body
-        for s in selettori.split(",")
+        for s in selectors.split(",")
     }
-    assert spenti, "blocco prefers-reduced-motion non trovato"
-    assert ".write-switch:active" in spenti, (
+    assert off, "blocco prefers-reduced-motion non trovato"
+    assert ".write-switch:active" in off, (
         "il tocco rimpicciolisce l'interruttore anche a movimento ridotto"
     )
     # I fratelli nella stessa riga restano coperti. Il chip dei comandi ne era
     # rimasto fuori come l'interruttore prima di lui (pulizia 3.10).
-    assert ".scope-chip:active" in spenti
-    assert ".commands-chip:active" in spenti, (
+    assert ".scope-chip:active" in off
+    assert ".commands-chip:active" in off, (
         "il tocco rimpicciolisce il chip dei comandi anche a movimento ridotto"
     )
 

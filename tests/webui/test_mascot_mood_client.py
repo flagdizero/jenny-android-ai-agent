@@ -223,7 +223,7 @@ def test_a_mood_only_changes_the_face_never_the_body() -> None:
       const m = makeMascot('out');
       m._applyMood('sad');
       m._syncArt();
-      assert.equal(m.img.src, BODY.idle, 'il corpo non è affare dell\\'umore');
+      assert.equal(m.img.src, BODY.idle, 'il corpo non è affare dell\\'mood');
       assert.equal(m.face.src, FACE.sad);
       m._clearMood();
     """)
@@ -272,7 +272,7 @@ def test_talking_from_the_edge_stays_on_the_baked_pair() -> None:
       m.face.classList.remove('off');
       m._talk.lastTextAt = performance.now();
       m._talkTick();
-      assert.equal(m.face.off, true, 'una faccia accesa al bordo la spegne l\\'animatore');
+      assert.equal(m.face.off, true, 'una faccia accesa al bordo la spegne l\\'animator');
     """)
 
 
@@ -291,7 +291,7 @@ def test_every_talking_signal_keeps_the_mouth_alive() -> None:
       const m = makeMascot('out');
       m._setAgentState('talking');
       const first = m._talk.lastTextAt;
-      assert.ok(m._talk.timer, 'l\\'animatore non è started');
+      assert.ok(m._talk.timer, 'l\\'animator non è started');
       const spin = performance.now() + 5;
       while (performance.now() < spin) { /* fa passare il tempo */ }
       m._setAgentState('talking');   // stesso stato, nuovo testo
@@ -431,7 +431,7 @@ def test_clearing_redraws_once_and_is_idempotent() -> None:
       assert.equal(m._mood, null);
       assert.equal(m.syncs, before + 1);
       m._clearMood();
-      assert.equal(m.syncs, before + 1, 'senza umore non c\\'è niente fromIndex ridisegnare');
+      assert.equal(m.syncs, before + 1, 'senza umore non c\\'è nothing fromIndex redraw');
     """)
 
 

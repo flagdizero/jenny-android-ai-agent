@@ -126,72 +126,72 @@ def _tool(cls, **over):
 
 
 class TestDecode:
-    def test_doppia_codifica_del_motore(self):
+    def test_double_encoding_from_the_engine(self):
         raw = json.dumps(json.dumps({"a": 1}))
         assert _decode(raw) == {"a": 1}
 
-    def test_codifica_singola_di_kotlin(self):
+    def test_single_encoding_from_kotlin(self):
         assert _decode(json.dumps({"ok": True})) == {"ok": True}
 
-    def test_spazzatura_diventa_errore_non_eccezione(self):
+    def test_garbage_becomes_error_not_exception(self):
         out = _decode("<html>oops</html>")
         assert "error" in out
 
-    def test_niente_dal_bridge(self):
+    def test_nothing_from_the_bridge(self):
         assert "error" in _decode(None)
 
 
 class TestOpen:
-    async def test_url_non_valido_non_tocca_il_bridge(self, monkeypatch):
+    async def test_invalid_url_does_not_touch_the_bridge(self, monkeypatch):
         holder = _install(monkeypatch)
         out = await _tool(BrowserOpenTool).execute(url="http://127.0.0.1:8080/")
         assert out.startswith("Error:")
         assert "bridge" not in holder
 
-    async def test_schema_non_http_rifiutato(self, monkeypatch):
+    async def test_non_http_scheme_rejected(self, monkeypatch):
         _install(monkeypatch)
         out = await _tool(BrowserOpenTool).execute(url="file:///etc/passwd")
         assert out.startswith("Error:")
 
-    async def test_apre_e_restituisce_gia_lo_snapshot(self, monkeypatch):
+    async def test_opens_and_already_returns_the_snapshot(self, monkeypatch):
         _allow_url(monkeypatch)
         holder = _install(monkeypatch)
         out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
         assert "ref=1:e0" in out
         assert "treat as data" in out          # banner di contenuto non fidato
-        metodi = [c[0] for c in holder["bridge"].calls]
-        assert metodi == ["open", "snapshot", "isIsolated"]  # un turno solo, non due
+        methods = [c[0] for c in holder["bridge"].calls]
+        assert methods == ["open", "snapshot", "isIsolated"]  # un turno solo, non due
         assert "web_fetch" not in out           # isolata: niente avviso
 
-    async def test_una_sessione_senza_profilo_suo_lo_dice(self, monkeypatch):
+    async def test_a_session_without_its_own_profile_says_so(self, monkeypatch):
         """Senza MULTI_PROFILE i cookie sono quelli di web_fetch e
         browser_close non li butta: il modello lo deve sapere."""
         _allow_url(monkeypatch)
 
-        class Condivisa(FakeBridge):
+        class Shared(FakeBridge):
             def __init__(self, context=None):
                 super().__init__(context)
                 self.isolated = False
 
-        _install(monkeypatch, Condivisa)
+        _install(monkeypatch, Shared)
         out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
         assert "ref=1:e0" in out
         assert "shares cookies and logins with web_fetch" in out
 
-    async def test_un_bridge_che_non_sa_rispondere_non_avvisa(self, monkeypatch):
+    async def test_a_bridge_that_cannot_answer_does_not_warn(self, monkeypatch):
         """Nel dubbio non si avvisa di un difetto che forse non c'e'."""
         _allow_url(monkeypatch)
 
-        class Muto(FakeBridge):
+        class Mute(FakeBridge):
             def isIsolated(self):  # noqa: N802
                 raise RuntimeError("metodo assente in un APK vecchio")
 
-        _install(monkeypatch, Muto)
+        _install(monkeypatch, Mute)
         out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
         assert "ref=1:e0" in out
         assert "web_fetch" not in out
 
-    async def test_l_isolamento_si_chiede_una_volta_per_sessione(self, monkeypatch):
+    async def test_isolation_is_requested_once_per_session(self, monkeypatch):
         """L'aggancio del profilo si decide quando nasce la WebView: dentro una
         sessione non cambia, e non vale il lucchetto globale a ogni apertura."""
         _allow_url(monkeypatch)
@@ -207,59 +207,59 @@ class TestOpen:
         assert holder["bridge"] is not first
         assert [c[0] for c in holder["bridge"].calls].count("isIsolated") == 1
 
-    async def test_un_bridge_senza_il_metodo_non_si_richiede(self, monkeypatch):
+    async def test_a_bridge_without_the_method_is_not_required(self, monkeypatch):
         _allow_url(monkeypatch)
-        tentativi = []
+        attempts = []
 
-        class Muto(FakeBridge):
+        class Mute(FakeBridge):
             def isIsolated(self):  # noqa: N802
-                tentativi.append(1)
+                attempts.append(1)
                 raise RuntimeError("metodo assente in un APK vecchio")
 
-        _install(monkeypatch, Muto)
+        _install(monkeypatch, Mute)
         tool = _tool(BrowserOpenTool)
         for _ in range(3):
             out = await tool.execute(url="https://esempio.test/")
             assert "web_fetch" not in out
-        assert len(tentativi) == 1
+        assert len(attempts) == 1
 
-    async def test_errore_di_apertura_non_chiede_lo_snapshot(self, monkeypatch):
+    async def test_open_error_does_not_ask_for_the_snapshot(self, monkeypatch):
         _allow_url(monkeypatch)
-        class Rotto(FakeBridge):
+        class Broken(FakeBridge):
             def open(self, url, timeout):
                 return json.dumps({"error": "WebView error: net::ERR_NAME_NOT_RESOLVED"})
 
-        holder = _install(monkeypatch, Rotto)
+        holder = _install(monkeypatch, Broken)
         out = await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
         assert out.startswith("Error:")
         assert [c[0] for c in holder["bridge"].calls] == []
 
 
 class TestSnapshot:
-    async def test_default_e_la_differenza(self, monkeypatch):
+    async def test_default_is_the_diff(self, monkeypatch):
         holder = _install(monkeypatch)
         await _tool(BrowserSnapshotTool).execute()
         assert holder["bridge"].calls[0][1] == "diff"
 
-    async def test_modo_sconosciuto_ricade_su_differenza(self, monkeypatch):
+    async def test_unknown_mode_falls_back_to_diff(self, monkeypatch):
         holder = _install(monkeypatch)
         await _tool(BrowserSnapshotTool).execute(mode="pieno")
         assert holder["bridge"].calls[0][1] == "diff"
 
-    async def test_il_tetto_arriva_dalla_config(self, monkeypatch):
+    async def test_the_cap_comes_from_the_config(self, monkeypatch):
         holder = _install(monkeypatch)
         await _tool(BrowserSnapshotTool, max_snapshot_chars=777).execute()
         assert holder["bridge"].calls[0][3] == 777
 
 
 class TestDo:
-    async def test_senza_passi_non_tocca_il_bridge(self, monkeypatch):
+    async def test_without_steps_does_not_touch_the_bridge(self, monkeypatch):
         holder = _install(monkeypatch)
         out = await BrowserDoTool(object(), AndroidWebBrowserConfig()).execute(steps=[])
         assert out.startswith("Error:")
         assert "bridge" not in holder
 
-    async def test_passi_inoltrati_come_json_e_poi_una_differenza(self, monkeypatch):
+    async def test_steps_forwarded_as_json_then_a_diff(self, monkeypatch):
         holder = _install(monkeypatch)
         steps = [{"action": "type", "ref": "1:e0", "text": "meteo"}, {"action": "click", "ref": "1:e1"}]
         out = await _tool(BrowserDoTool).execute(steps=steps)
@@ -269,8 +269,8 @@ class TestDo:
         assert calls[2][1] == "diff"
         assert "0. click: ok" in out
 
-    async def test_un_passo_fallito_si_vede(self, monkeypatch):
-        class ConErrore(FakeBridge):
+    async def test_a_failed_step_is_visible(self, monkeypatch):
+        class WithError(FakeBridge):
             def __init__(self, context=None):
                 super().__init__(context)
                 self.act_payload = {
@@ -279,36 +279,36 @@ class TestDo:
                     "failed": True,
                 }
 
-        _install(monkeypatch, ConErrore)
+        _install(monkeypatch, WithError)
         out = await _tool(BrowserDoTool).execute(steps=[{"action": "click", "ref": "1:e3"}])
         assert "FALLITO" in out
         assert "versione" in out
 
 
-class TestCicloDiVita:
-    async def test_timeout_butta_la_sessione(self, monkeypatch):
-        class Lenta(FakeBridge):
+class TestLifecycle:
+    async def test_timeout_drops_the_session(self, monkeypatch):
+        class Slow(FakeBridge):
             def snapshot(self, mode, filt, max_chars, timeout):
                 import time
                 time.sleep(0.4)
                 return "{}"
 
-        _install(monkeypatch, Lenta)
+        _install(monkeypatch, Slow)
         out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=-9.9)
         assert "error" in out
         assert browser._BROWSER_INSTANCE is None   # sessione buttata, non lasciata appesa
 
-    async def test_eccezione_butta_la_sessione(self, monkeypatch):
-        class Esplode(FakeBridge):
+    async def test_exception_drops_the_session(self, monkeypatch):
+        class Explodes(FakeBridge):
             def snapshot(self, *a):
                 raise RuntimeError("renderer morto")
 
-        _install(monkeypatch, Esplode)
+        _install(monkeypatch, Explodes)
         out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=1)
         assert "error" in out
         assert browser._BROWSER_INSTANCE is None
 
-    async def test_close_chiude_e_dimentica(self, monkeypatch):
+    async def test_close_closes_and_forgets(self, monkeypatch):
         _allow_url(monkeypatch)
         holder = _install(monkeypatch)
         await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
@@ -317,7 +317,7 @@ class TestCicloDiVita:
         assert b.closed == 1
         assert browser._BROWSER_INSTANCE is None
 
-    async def test_la_sessione_si_riusa_fra_chiamate(self, monkeypatch):
+    async def test_the_session_is_reused_across_calls(self, monkeypatch):
         _allow_url(monkeypatch)
         holder = _install(monkeypatch)
         await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
@@ -325,20 +325,20 @@ class TestCicloDiVita:
         await _tool(BrowserSnapshotTool).execute()
         assert holder["bridge"] is first
 
-    def test_reset_ricrea_il_lucchetto(self):
+    def test_reset_recreates_the_lock(self):
         old = browser._BROWSER_LOCK
         browser.reset_browser_state()
         assert browser._BROWSER_LOCK is not old
 
 
-class TestChiusuraFuoriDalLoop:
+class TestClosingOutsideTheLoop:
     """``close`` in Kotlin aspetta il main thread fino a 10 s: mai sul loop.
 
     Chiamata sul thread del loop, fermava il gateway intero (chat, cron) proprio
     nei casi — fermo scaduto, turno annullato — in cui Android e' gia' lento.
     """
 
-    class _Registra(FakeBridge):
+    class _Register(FakeBridge):
         def close(self):
             self.close_thread = threading.get_ident()
             return super().close()
@@ -350,41 +350,41 @@ class TestChiusuraFuoriDalLoop:
         assert browser._BROWSER_INSTANCE is None
 
     async def test_browser_close(self, monkeypatch):
-        holder = _install(monkeypatch, self._Registra)
+        holder = _install(monkeypatch, self._Register)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
         await _tool(BrowserCloseTool).execute()
         await self._assert_off_loop(holder)
 
-    async def test_dopo_un_fermo_scaduto(self, monkeypatch):
-        class Lenta(self._Registra):
+    async def test_after_an_expired_stall(self, monkeypatch):
+        class Slow(self._Register):
             def snapshot(self, *a):
                 time.sleep(0.4)
                 return "{}"
 
-        holder = _install(monkeypatch, Lenta)
+        holder = _install(monkeypatch, Slow)
         out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=-9.9)
         assert "error" in out
         await self._assert_off_loop(holder)
 
-    async def test_dopo_un_eccezione(self, monkeypatch):
-        class Esplode(self._Registra):
+    async def test_after_an_exception(self, monkeypatch):
+        class Explodes(self._Register):
             def snapshot(self, *a):
                 raise RuntimeError("renderer morto")
 
-        holder = _install(monkeypatch, Esplode)
+        holder = _install(monkeypatch, Explodes)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=1)
         await self._assert_off_loop(holder)
 
-    async def test_dopo_un_annullamento(self, monkeypatch):
+    async def test_after_a_cancellation(self, monkeypatch):
         entered = threading.Event()
 
-        class Appesa(self._Registra):
+        class Hanging(self._Register):
             def snapshot(self, *a):
                 entered.set()
                 time.sleep(0.3)
                 return "{}"
 
-        holder = _install(monkeypatch, Appesa)
+        holder = _install(monkeypatch, Hanging)
         task = asyncio.create_task(
             browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
         )
@@ -394,35 +394,35 @@ class TestChiusuraFuoriDalLoop:
             await task
         await self._assert_off_loop(holder)
 
-    async def test_per_inattivita(self, monkeypatch):
+    async def test_on_inactivity(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
-        holder = _install(monkeypatch, self._Registra)
+        holder = _install(monkeypatch, self._Register)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0.1)
         await asyncio.sleep(0.35)
         await self._assert_off_loop(holder)
 
-    async def test_il_loop_resta_libero_mentre_si_chiude(self, monkeypatch):
-        class ChiusuraLenta(FakeBridge):
+    async def test_the_loop_stays_free_while_closing(self, monkeypatch):
+        class SlowClose(FakeBridge):
             def close(self):
                 time.sleep(0.3)
                 return super().close()
 
-        _install(monkeypatch, ChiusuraLenta)
+        _install(monkeypatch, SlowClose)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
         ticks = 0
 
-        async def orologio():
+        async def clock():
             nonlocal ticks
             while True:
                 await asyncio.sleep(0.01)
                 ticks += 1
 
-        clock = asyncio.create_task(orologio())
+        clock = asyncio.create_task(clock())
         await _tool(BrowserCloseTool).execute()
         clock.cancel()
         assert ticks >= 5, "il loop e' rimasto fermo durante la chiusura"
 
-    async def test_browser_close_aspetta_la_chiamata_in_volo(self, monkeypatch):
+    async def test_browser_close_waits_for_the_call_in_flight(self, monkeypatch):
         """Senza lucchetto la chiusura strappava la WebView a una chiamata in corso."""
         holder = _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
@@ -435,11 +435,11 @@ class TestChiusuraFuoriDalLoop:
         assert holder["bridge"].closed == 1
 
 
-class TestConcorrenza:
+class TestConcurrency:
     @pytest.mark.parametrize(
         "cls", [BrowserOpenTool, BrowserSnapshotTool, BrowserDoTool, BrowserReadTool, BrowserCloseTool]
     )
-    def test_nessuno_e_parallelizzabile(self, cls):
+    def test_none_is_parallelizable(self, cls):
         """`read_only` da solo non basta: e' `exclusive` che li tiene in fila.
 
         La sessione e' una pagina condivisa e mutabile — due chiamate nello stesso
@@ -450,27 +450,27 @@ class TestConcorrenza:
         assert t.concurrency_safe is False
 
 
-class TestRegistrazione:
-    def test_il_modulo_e_nella_lista_fissa(self):
+class TestRegistration:
+    def test_the_module_is_in_the_fixed_list(self):
         from jenny.agent.tools.loader import _HARDCODED_TOOL_MODULES
 
         assert "browser" in _HARDCODED_TOOL_MODULES
 
-    def test_i_cinque_nomi(self):
+    def test_the_five_names(self):
         assert [c.name for c in browser.TOOLS] == [
             "browser_open", "browser_snapshot", "browser_do", "browser_read", "browser_close",
         ]
 
-    def test_spenti_senza_android(self):
+    def test_disabled_without_android(self):
         ctx = SimpleNamespace(android_context=None, config=SimpleNamespace(android_web=None))
         assert BrowserOpenTool.enabled(ctx) is False
         assert BrowserOpenTool.disabled_reason(ctx) is None
 
 
-class TestChiusuraPerInattivita:
+class TestClosingOnInactivity:
     """La sessione viva tiene ~100 MB: se nessuno la chiude, la chiude il guardiano."""
 
-    async def test_una_sessione_dimenticata_si_chiude(self, monkeypatch):
+    async def test_a_forgotten_session_gets_closed(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         holder = _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0.1)
@@ -480,7 +480,7 @@ class TestChiusuraPerInattivita:
         assert browser._BROWSER_INSTANCE is None
         assert b.closed == 1
 
-    async def test_l_attivita_rimanda_la_chiusura(self, monkeypatch):
+    async def test_activity_postpones_the_close(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         _install(monkeypatch)
         for _ in range(6):
@@ -488,7 +488,7 @@ class TestChiusuraPerInattivita:
             await asyncio.sleep(0.05)
         assert browser._BROWSER_INSTANCE is not None
 
-    async def test_un_solo_guardiano_per_sessione(self, monkeypatch):
+    async def test_a_single_guardian_per_session(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
@@ -496,7 +496,7 @@ class TestChiusuraPerInattivita:
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
         assert browser._IDLE_TASK is first
 
-    async def test_il_reset_lo_ferma(self, monkeypatch):
+    async def test_the_reset_stops_it(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
@@ -506,13 +506,13 @@ class TestChiusuraPerInattivita:
         assert task.cancelled() or task.done()
         assert browser._IDLE_TASK is None
 
-    async def test_niente_guardiano_se_spento(self, monkeypatch):
+    async def test_no_idle_guardian_when_disabled(self, monkeypatch):
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0)
         assert browser._IDLE_TASK is None
 
 
-class TestMotoreNellaPagina:
+class TestEngineInThePage:
     """Il motore vive in un file JS che nessun test Python puo' eseguire.
 
     Due cose si possono comunque tenere ferme da qui, ed entrambe rompono la
@@ -527,13 +527,13 @@ class TestMotoreNellaPagina:
     def test_il_file_c_e(self):
         assert self.JS.is_file(), f"motore non trovato in {self.JS}"
 
-    def test_un_solo_segnaposto(self):
+    def test_a_single_placeholder(self):
         # JennyBrowserBridge.runAgent fa `agentJs.replace("__ARGS__", args)`:
         # zero segnaposti significa argomenti ignorati, due significa JSON
         # incollato dove non deve stare.
         assert self.JS.read_text().count("__ARGS__") == 1
 
-    def test_sintassi(self):
+    def test_syntax(self):
         node = shutil.which("node")
         if node is None:
             pytest.skip("node non disponibile")
@@ -554,7 +554,7 @@ def _index(monkeypatch, mapping):
     browser._LAST_INDEX.update(mapping)
 
 
-class TestVerbiSensibili:
+class TestSensitiveVerbs:
     """Un click che costa non parte da solo.
 
     Non e' il modello a giudicare: una pagina ostile convince un giudizio e non
@@ -562,7 +562,7 @@ class TestVerbiSensibili:
     """
 
     @pytest.mark.parametrize(
-        "nome",
+        "name",
         [
             "Paga ora", "Procedi al pagamento", "Acquista", "Compra subito",
             "Conferma ordine", "Abbonati", "Pay now", "Buy it now", "Checkout",
@@ -571,11 +571,11 @@ class TestVerbiSensibili:
             "Invia denaro", "Transfer funds", "Accedi", "Sign in", "Log in",
         ],
     )
-    def test_li_riconosce(self, nome):
-        assert browser._is_sensitive(nome) is True
+    def test_recognizes_them(self, name):
+        assert browser._is_sensitive(name) is True
 
     @pytest.mark.parametrize(
-        "nome",
+        "name",
         [
             # "conferma" da sola no: sarebbe ogni banner dei cookie.
             "Conferma le preferenze", "Accetta tutti", "Gestisci i cookie",
@@ -585,11 +585,11 @@ class TestVerbiSensibili:
             "Paginazione", "Pagina successiva",
         ],
     )
-    def test_non_scatta_a_vuoto(self, nome):
-        assert browser._is_sensitive(nome) is False
+    def test_does_not_fire_needlessly(self, name):
+        assert browser._is_sensitive(name) is False
 
-    @pytest.mark.parametrize("nome", ["Login page explained", "Accedi alla guida"])
-    def test_scatta_anche_dove_non_servirebbe(self, nome):
+    @pytest.mark.parametrize("name", ["Login page explained", "Accedi alla guida"])
+    def test_fires_even_where_it_would_not_be_needed(self, name):
         """Falsi positivi noti, e accettati.
 
         Il lessico non distingue il verbo dal sostantivo: un link intitolato
@@ -598,9 +598,9 @@ class TestVerbiSensibili:
         e' un acquisto o una cancellazione fatti da soli. Si tara con i compiti
         veri della Fase 4, non a tavolino.
         """
-        assert browser._is_sensitive(nome) is True
+        assert browser._is_sensitive(name) is True
 
-    async def test_un_click_sensibile_si_ferma_prima_di_toccare_la_pagina(self, monkeypatch):
+    async def test_a_sensitive_click_stops_before_touching_the_page(self, monkeypatch):
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e4": ("button", "Paga ora")})
         out = await _tool(BrowserDoTool).execute(steps=[{"action": "click", "ref": "1:e4"}])
@@ -608,7 +608,7 @@ class TestVerbiSensibili:
         assert "confirm" in out
         assert "bridge" not in holder      # la pagina non e' stata toccata
 
-    async def test_con_il_consenso_passa(self, monkeypatch):
+    async def test_with_consent_it_passes(self, monkeypatch):
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e4": ("button", "Paga ora")})
         await _tool(BrowserDoTool).execute(
@@ -616,7 +616,7 @@ class TestVerbiSensibili:
         )
         assert [c[0] for c in holder["bridge"].calls][0] == "act"
 
-    async def test_rifiuta_tutto_il_blocco_non_meta(self, monkeypatch):
+    async def test_rejects_the_whole_block_not_half(self, monkeypatch):
         """Fermarsi a meta' lascerebbe la pagina in uno stato che nessuno descrive."""
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e0": ("textbox", "Cerca"), "1:e9": ("button", "Elimina")})
@@ -628,7 +628,7 @@ class TestVerbiSensibili:
         assert "passo 1" in out
         assert "bridge" not in holder
 
-    async def test_un_nome_che_non_conosciamo_non_blocca(self, monkeypatch):
+    async def test_a_name_we_do_not_know_does_not_block(self, monkeypatch):
         holder = _install(monkeypatch)
         _index(monkeypatch, {})
         await _tool(BrowserDoTool).execute(steps=[{"action": "click", "ref": "1:e4"}])
@@ -636,7 +636,7 @@ class TestVerbiSensibili:
 
 
 class TestPassword:
-    async def test_non_ci_si_scrive(self, monkeypatch):
+    async def test_cannot_be_typed_into(self, monkeypatch):
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e7": ("password", "")})
         out = await _tool(BrowserDoTool).execute(
@@ -645,7 +645,7 @@ class TestPassword:
         assert out.startswith("Error:")
         assert "bridge" not in holder
 
-    async def test_il_consenso_non_la_sblocca(self, monkeypatch):
+    async def test_consent_does_not_unlock_it(self, monkeypatch):
         """`confirm` vale per i verbi, non per le credenziali: quelle non passano."""
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e7": ("password", "")})
@@ -655,7 +655,7 @@ class TestPassword:
         assert out.startswith("Error:")
         assert "bridge" not in holder
 
-    async def test_non_si_legge(self, monkeypatch):
+    async def test_cannot_be_read(self, monkeypatch):
         holder = _install(monkeypatch)
         _index(monkeypatch, {"1:e7": ("password", "")})
         out = await _tool(BrowserReadTool).execute(ref="1:e7")
@@ -663,8 +663,8 @@ class TestPassword:
         assert "bridge" not in holder
 
 
-class TestIndiceDeiRef:
-    def test_lo_snapshot_lo_aggiorna(self):
+class TestRefIndex:
+    def test_the_snapshot_updates_it(self):
         browser._LAST_INDEX.clear()
         browser._render_snapshot({
             "url": "https://x.test/", "version": 3, "refs": 1, "total": 1,
@@ -672,7 +672,7 @@ class TestIndiceDeiRef:
         })
         assert browser._LAST_INDEX == {"3:e0": ("button", "Paga ora")}
 
-    def test_i_ref_si_accumulano_nello_stesso_documento(self):
+    def test_refs_accumulate_in_the_same_document(self):
         """Guardare due volte non deve uccidere i ref della prima occhiata."""
         browser._LAST_INDEX.clear()
         browser._INDEX_VERSION = ""
@@ -682,7 +682,7 @@ class TestIndiceDeiRef:
                                   "text": ""})
         assert set(browser._LAST_INDEX) == {"2:e0", "2:e1"}
 
-    def test_un_documento_nuovo_lo_svuota(self):
+    def test_a_new_document_empties_it(self):
         browser._LAST_INDEX.clear()
         browser._INDEX_VERSION = ""
         browser._render_snapshot({"url": "u", "version": 2, "index": {"2:e0": ["button", "A"]},
@@ -691,32 +691,32 @@ class TestIndiceDeiRef:
                                   "text": ""})
         assert set(browser._LAST_INDEX) == {"3:e0"}
 
-    def test_uno_snapshot_senza_indice_non_lo_cancella(self):
+    def test_a_snapshot_without_index_does_not_clear_it(self):
         """Un bridge vecchio non deve disarmare la politica in silenzio."""
         browser._LAST_INDEX.clear()
         browser._LAST_INDEX["1:e0"] = ("button", "Paga")
         browser._render_snapshot({"url": "https://x.test/", "text": "..."})
         assert browser._LAST_INDEX == {"1:e0": ("button", "Paga")}
 
-    def test_la_chiusura_lo_svuota(self, monkeypatch):
+    def test_closing_empties_it(self, monkeypatch):
         _install(monkeypatch)
         browser._LAST_INDEX["1:e0"] = ("button", "Paga")
         browser.destroy_browser()
         assert browser._LAST_INDEX == {}
 
 
-class TestLaGuardiaSiFaSentire:
-    async def test_un_blocco_durante_la_navigazione_arriva_al_modello(self, monkeypatch):
+class TestTheGuardMakesItselfHeard:
+    async def test_a_block_during_navigation_reaches_the_model(self, monkeypatch):
         """La guardia lavora *durante* la navigazione, quindi non sta nei passi.
 
         Senza il ritiro esplicito, un click fermato lascia il modello davanti a
         una pagina che semplicemente non e' cambiata.
         """
-        class ConBlocco(FakeBridge):
+        class WithBlock(FakeBridge):
             def __init__(self, context=None):
                 super().__init__(context)
                 self.notice = "navigazione fermata: la sessione e' aperta su esempio.test"
 
-        _install(monkeypatch, ConBlocco)
+        _install(monkeypatch, WithBlock)
         out = await _tool(BrowserDoTool).execute(steps=[{"action": "click", "ref": "1:e1"}])
         assert "navigazione fermata" in out

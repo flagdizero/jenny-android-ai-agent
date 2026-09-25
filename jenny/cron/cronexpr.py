@@ -210,7 +210,7 @@ def _bad(field: int, what: str) -> ValueError:
 
 def _expand(parts: list[str], field: int):
     """Un campo come lo espande croniter: la lista dei valori, o ``["*"]``;
-    più ``nW`` (giorno del mese) e ``{giorno: {n}}`` (giorno della settimana)."""
+    più ``nW`` (giorno del mese) e ``{day: {n}}`` (giorno della settimana)."""
     n_fields = len(parts)
     text = parts[field]
     lo, hi = _RANGES[field]

@@ -156,8 +156,8 @@ def _run_js(script: str) -> None:
     run_js(_harness() + script)
 
 
-AVVISO = "ciao papi, sono le 20:00 — ora di mollare tutto"
-SERVIZIO = "L'ho chiamato. Ora aspetto la sua risposta"
+NOTICE = "ciao papi, sono le 20:00 — ora di mollare tutto"
+SERVICE = "L'ho chiamato. Ora aspetto la sua risposta"
 
 
 def test_the_real_2000_sequence_keeps_the_alert() -> None:
@@ -167,20 +167,20 @@ def test_the_real_2000_sequence_keeps_the_alert() -> None:
       // seq 3: l'iterazione di soli tool chiude il proprio segmento a vuoto.
       chat._handleStreamEnd();
       // seq 4: la consegna del tool `message`.
-      chat._handleMessage({{ text: {AVVISO!r} }});
+      chat._handleMessage({{ text: {NOTICE!r} }});
       // seq 5: i chip del tool, senza testo.
       chat._handleMessage({{ text: '', tool_events: [{{ phase: 'end', call_id: 'c1' }}], kind: 'progress' }});
       // seq 6-28: la narrazione del modello, nello stesso turno.
-      stream(chat, {SERVIZIO!r});
+      stream(chat, {SERVICE!r});
       // seq 29: chiusura del segmento.
       chat._handleStreamEnd();
 
       const painted = blocks(chat);
       assert.ok(
-        painted.includes({AVVISO!r}),
+        painted.includes({NOTICE!r}),
         "l'avviso consegnato è stato sovrascritto: " + JSON.stringify(painted),
       );
-      assert.deepEqual(painted, [{AVVISO!r}, {SERVIZIO!r}]);
+      assert.deepEqual(painted, [{NOTICE!r}, {SERVICE!r}]);
     """)
 
 
@@ -220,6 +220,6 @@ def test_a_message_does_not_lose_the_tail_of_an_open_stream() -> None:
     _run_js(f"""
       const chat = makeChat();
       chat._handleDelta('testo in volo');  // nessun frame eseguito: buffer sporco
-      chat._handleMessage({{ text: {AVVISO!r} }});
-      assert.deepEqual(blocks(chat), ['testo in volo', {AVVISO!r}]);
+      chat._handleMessage({{ text: {NOTICE!r} }});
+      assert.deepEqual(blocks(chat), ['testo in volo', {NOTICE!r}]);
     """)

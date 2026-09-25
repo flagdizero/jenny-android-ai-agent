@@ -28,14 +28,14 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 # Le superfici, e come si riconosce in ognuna «ho appena scritto del contenuto».
-SUPERFICI = {
+SURFACES = {
     "mobile-chat.js": r"\.innerHTML = renderMarkdown\(",
     "home-chat.js": r"\.innerHTML = renderMarkdown\(",
     "home-reader.js": r"\.innerHTML = this\._safeHtml\(",
 }
 
 # La chiamata che disegna il resto, comunque si chiami localmente.
-RICCO = re.compile(r"\brenderRich\w*\(")
+RICH = re.compile(r"\brenderRich\w*\(")
 
 # Le esenzioni, e portano il loro perche' addosso: **il testo che sta ancora
 # arrivando**. Una formula a meta' non e' una formula, e un diagramma a meta' e'
@@ -46,7 +46,7 @@ RICCO = re.compile(r"\brenderRich\w*\(")
 # Sono due perche' le due chat coalizzano in modo diverso: casa riscrive a ogni
 # delta, l'officina una volta per frame dentro un rAF condiviso. Stessa cosa,
 # due nomi.
-ESENTI = {
+EXEMPT = {
     ("home-chat.js", "_delta"),
     ("mobile-chat.js", "_flushRender"),
     # Il ragionamento visibile passa di qui a ogni frame mentre arriva. Il suo
@@ -55,7 +55,7 @@ ESENTI = {
 }
 
 
-def _funzione_attorno(rows: list[str], i: int) -> str:
+def _enclosing_function(rows: list[str], i: int) -> str:
     """Il nome del metodo che contiene la riga *i*, guardando all'indietro."""
     for j in range(i, max(-1, i - 40), -1):
         m = re.match(r"\s{2,6}(?:async )?(_?\w+)\([^)]*\)\s*\{\s*$", rows[j])
@@ -65,20 +65,20 @@ def _funzione_attorno(rows: list[str], i: int) -> str:
 
 
 def test_every_surface_that_draws_markdown_draws_the_rest_too() -> None:
-    for name, mark in SUPERFICI.items():
+    for name, mark in SURFACES.items():
         rows = (ASSETS / name).read_text(encoding="utf-8").splitlines()
-        siti = [i for i, r in enumerate(rows) if re.search(mark, r)]
-        assert siti, f"{name}: nessun punto che disegna markdown — il segno e' cambiato"
-        for i in siti:
+        sites = [i for i, r in enumerate(rows) if re.search(mark, r)]
+        assert sites, f"{name}: nessun punto che disegna markdown — il segno e' cambiato"
+        for i in sites:
             # Quindici righe e non quattro: fra la scrittura e il disegno ci
             # sta il commento che spiega la scelta (il dollaro in riga nel
             # lettore, per dirne uno), e un banco che punisce la spiegazione
             # insegna a non scriverla.
-            vicino = "\n".join(rows[i : i + 15])
-            if RICCO.search(vicino):
+            near = "\n".join(rows[i : i + 15])
+            if RICH.search(near):
                 continue
-            fn = _funzione_attorno(rows, i)
-            assert (name, fn) in ESENTI, (
+            fn = _enclosing_function(rows, i)
+            assert (name, fn) in EXEMPT, (
                 f"{name}:{i + 1} (in `{fn}`) scrive markdown e non disegna formule "
                 f"e diagrammi. Se e' voluto, l'esenzione va dichiarata nel banco "
                 f"col suo motivo — non lasciata implicita, che e' come la chat di "
@@ -90,12 +90,12 @@ def test_no_surface_talks_to_the_libraries_by_itself() -> None:
     """Il *come* in un posto solo. Due copie e' come e' cominciato il guaio: chat
     e lettore ne avevano una ciascuno, ne e' morta una, e la cancellazione delle
     librerie ha guardato solo quella."""
-    for name in SUPERFICI:
+    for name in SURFACES:
         src = (ASSETS / name).read_text(encoding="utf-8")
-        codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S))
-        for diretto in ("renderMathInElement", "mermaid.render", "mermaid.initialize"):
-            assert diretto not in codice, (
-                f"{name} chiama {diretto} per conto suo: il come sta in "
+        code = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S))
+        for direct in ("renderMathInElement", "mermaid.render", "mermaid.initialize"):
+            assert direct not in code, (
+                f"{name} chiama {direct} per conto suo: il come sta in "
                 f"shared/rich-content.js, o le copie divergono"
             )
         assert "rich-content.js" in src, f"{name} non importa il modulo condiviso"
@@ -106,8 +106,8 @@ def test_the_inline_dollar_is_on_only_where_the_skill_mandates_it() -> None:
     scrive conosce la regola della casa; spento nelle due chat, dove «costa $5,
     forse $10» diventerebbe un tentativo di scrivere «5, forse » in matematica.
     """
-    lettore = (ASSETS / "home-reader.js").read_text(encoding="utf-8")
-    assert "inlineDollar: true" in lettore, (
+    reader = (ASSETS / "home-reader.js").read_text(encoding="utf-8")
+    assert "inlineDollar: true" in reader, (
         "il lettore non accende il dollaro in riga: le formule che la skill "
         "impone a Jenny resterebbero `$f(x)$` in chiaro"
     )

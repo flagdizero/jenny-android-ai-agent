@@ -746,7 +746,7 @@ def test_normalising_the_target_does_not_mean_matching_anything(lint_wiki, tmp_p
 _BODY = "\n# Semine\n\nPomodori a fine aprile. Vedi [[terreno]].\n"
 
 
-def _semine(root: Path, text: str) -> Path:
+def _seed(root: Path, text: str) -> Path:
     """Sostituisce `wiki/semine.md` di un taccuino sano col testo dato."""
     (root / "wiki" / "semine.md").write_text(text, encoding="utf-8")
     _journal(root, "un fatto")
@@ -770,7 +770,7 @@ def test_a_frontmatter_a_person_would_write_declares_its_state(
     lint leggeva come «nessuno stato»: `FRONTMATTER_RE` era ancorata a `^---\\n`,
     il valore arrivava col commento attaccato, e il vocabolario era sensibile
     alle maiuscole a tre righe da un confronto sui nomi che non lo è."""
-    root = _semine(_notebook(tmp_path), page_text)
+    root = _seed(_notebook(tmp_path), page_text)
 
     out = _run(lint_wiki, root, capsys)
 
@@ -804,7 +804,7 @@ def test_a_page_that_really_has_no_state_is_still_reported(
     """Il controllo di tenuta dei cinque casi sopra: tollerare la forma non è
     tollerare l'assenza. Il valore riportato resta quello scritto sul file — chi
     legge deve poterlo cercare così com'è."""
-    root = _semine(_notebook(tmp_path), page_text)
+    root = _seed(_notebook(tmp_path), page_text)
 
     out = _run(lint_wiki, root, capsys)
 
@@ -1894,16 +1894,16 @@ def test_the_lint_and_the_injector_agree_on_what_a_page_is(lint_wiki, tmp_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("# x\n", encoding="utf-8")
 
-    dal_lint = {
+    from_lint = {
         p.relative_to(pages_dir).as_posix()
         for p in pages_dir.rglob("*.md")
         if lint_wiki.is_injected_page(p.relative_to(pages_dir))
     }
 
-    assert dal_lint == set(iter_wiki_pages(pages_dir, titles=False))
+    assert from_lint == set(iter_wiki_pages(pages_dir, titles=False))
     # E non è vuoto per caso: se lo fosse, il confronto sarebbe verde per il
     # motivo sbagliato.
-    assert "concepts/Topic/index.md" in dal_lint
+    assert "concepts/Topic/index.md" in from_lint
 
 
 def test_a_page_in_a_hidden_folder_is_not_reported_as_too_long(

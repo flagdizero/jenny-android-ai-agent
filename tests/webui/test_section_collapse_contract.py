@@ -20,7 +20,7 @@ la forma di difetto che tutto il lavoro sulla navigazione esiste per togliere:
 Gli ultimi due punti **non hanno più un banco qui** dal 21/09/2026: guardavano
 ``mobile-wiki.js``, e la wiki è uscita dall'officina. Le due regole non sono
 cadute, hanno cambiato casa insieme alla vista: il lettore della casa le fa
-girare in node su un DOM finto (``test_casa_reader_client.py`` — un link
+girare in node su un DOM finto (``test_home_reader_client.py`` — un link
 relativo si risolve contro la pagina che lo contiene, un'ancora resta sulla
 pagina). Restano qui i primi due punti, che sono del guscio.
 

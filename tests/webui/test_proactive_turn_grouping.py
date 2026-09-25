@@ -26,7 +26,7 @@ import pytest
 from jenny.webui.transcript import append_transcript_object, build_webui_thread_response
 
 KEY = "websocket:default"
-AVVISI = (
+NOTICES = (
     "Ciao papi, il monitoraggio delle piante non sta girando",
     "papi, ti segnalo che il controllo WaterBot non sta girando",
     "ehi papi, ti dico che il check non sta girando da un po'",
@@ -65,7 +65,7 @@ def _proactive_alerts(*, with_turn_ids: bool, closed: bool = False) -> None:
     prima di quella fix — un turno aperto e mai chiuso — che va comunque
     ricostruita bene.
     """
-    for i, text in enumerate(AVVISI):
+    for i, text in enumerate(NOTICES):
         rec: dict = {"event": "message", "chat_id": "default", "text": text}
         if with_turn_ids:
             rec |= {"turn_id": f"proactive:{i}", "turn_phase": "answer", "turn_seq": 1}
@@ -90,9 +90,9 @@ def test_each_proactive_alert_is_its_own_message(data_dir) -> None:
     _proactive_alerts(with_turn_ids=True)
     payload = build_webui_thread_response(KEY)
     assert payload is not None
-    testi = _assistant_texts(payload["messages"])
-    for avviso in AVVISI:
-        assert avviso in testi, f"avviso perso o accorpato: {avviso!r}"
+    texts = _assistant_texts(payload["messages"])
+    for notice in NOTICES:
+        assert notice in texts, f"avviso perso o accorpato: {notice!r}"
 
 
 def test_each_proactive_alert_carries_a_distinct_turn_id(data_dir) -> None:
@@ -104,11 +104,11 @@ def test_each_proactive_alert_carries_a_distinct_turn_id(data_dir) -> None:
     ids = [
         m.get("turnId")
         for m in payload["messages"]
-        if str(m.get("content") or "") in AVVISI
+        if str(m.get("content") or "") in NOTICES
     ]
-    assert len(ids) == len(AVVISI)
+    assert len(ids) == len(NOTICES)
     assert all(isinstance(i, str) and i for i in ids), f"turnId assente: {ids}"
-    assert len(set(ids)) == len(AVVISI), f"turnId condivisi fra avvisi: {ids}"
+    assert len(set(ids)) == len(NOTICES), f"turnId condivisi fra avvisi: {ids}"
 
 
 def test_alerts_are_not_folded_into_the_previous_user_turn(data_dir) -> None:
@@ -119,7 +119,7 @@ def test_alerts_are_not_folded_into_the_previous_user_turn(data_dir) -> None:
     payload = build_webui_thread_response(KEY)
     assert payload is not None
     for m in payload["messages"]:
-        if str(m.get("content") or "") in AVVISI:
+        if str(m.get("content") or "") in NOTICES:
             assert m.get("turnId") != "u1"
 
 
@@ -135,15 +135,15 @@ def test_closed_proactive_turns_stay_four_distinct_messages(data_dir) -> None:
     _proactive_alerts(with_turn_ids=True, closed=True)
     payload = build_webui_thread_response(KEY)
     assert payload is not None
-    testi = _assistant_texts(payload["messages"])
-    for avviso in AVVISI:
-        assert avviso in testi, f"avviso perso o accorpato: {avviso!r}"
+    texts = _assistant_texts(payload["messages"])
+    for notice in NOTICES:
+        assert notice in texts, f"avviso perso o accorpato: {notice!r}"
     ids = [
         m.get("turnId")
         for m in payload["messages"]
-        if str(m.get("content") or "") in AVVISI
+        if str(m.get("content") or "") in NOTICES
     ]
-    assert len(set(ids)) == len(AVVISI), f"turnId condivisi fra avvisi: {ids}"
+    assert len(set(ids)) == len(NOTICES), f"turnId condivisi fra avvisi: {ids}"
 
 
 def test_legacy_alerts_without_turn_id_still_arrive_as_separate_messages(data_dir) -> None:
@@ -155,10 +155,10 @@ def test_legacy_alerts_without_turn_id_still_arrive_as_separate_messages(data_di
     _proactive_alerts(with_turn_ids=False)
     payload = build_webui_thread_response(KEY)
     assert payload is not None
-    testi = _assistant_texts(payload["messages"])
-    for avviso in AVVISI:
-        assert avviso in testi
+    texts = _assistant_texts(payload["messages"])
+    for notice in NOTICES:
+        assert notice in texts
     # Nessun accorpamento lato server: gli avvisi non finiscono in un unico testo.
     assert not any(
-        sum(1 for a in AVVISI if a in t) > 1 for t in testi
+        sum(1 for a in NOTICES if a in t) > 1 for t in texts
     ), "due o più avvisi concatenati nello stesso messaggio"

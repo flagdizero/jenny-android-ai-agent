@@ -45,7 +45,7 @@ _WATERBOT = (
     "- Ogni ciclo, controlla l'umidità delle piante e avvisami solo se una è sotto il 15%. "
     "Se hps è irraggiungibile salta il ciclo in silenzio."
 )
-_VITAMINE = "- Alle 9 ricordami le vitamine."
+_VITAMINS = "- Alle 9 ricordami le vitamine."
 
 _ESCALATION_HEAD = "These recurring tasks have now failed to run"
 
@@ -188,7 +188,7 @@ class _Harness:
 
 @pytest.fixture
 def two_tasks(tmp_path: Path) -> _Harness:
-    return _Harness(tmp_path, _heartbeat_md(_WATERBOT, _VITAMINE))
+    return _Harness(tmp_path, _heartbeat_md(_WATERBOT, _VITAMINS))
 
 
 class TestSilenceStaysFree:
@@ -393,7 +393,7 @@ class TestTheFileKeepsChanging:
         await two_tasks.cycles(1)
         assert len(two_tasks.state.task_checks) == 2
 
-        two_tasks.rewrite(_heartbeat_md(_VITAMINE))
+        two_tasks.rewrite(_heartbeat_md(_VITAMINS))
         two_tasks.agent.broken = {1: "sveglia non impostata"}
         await two_tasks.cycles(1)
 
@@ -405,7 +405,7 @@ class TestTheFileKeepsChanging:
         two_tasks.agent.broken = {1: "hps non raggiungibile"}
         await two_tasks.cycles(ESCALATE_AFTER_FAILURES - 1)
 
-        two_tasks.rewrite(_heartbeat_md(_VITAMINE, _WATERBOT))
+        two_tasks.rewrite(_heartbeat_md(_VITAMINS, _WATERBOT))
         two_tasks.agent.broken = {2: "hps non raggiungibile"}
         await two_tasks.cycles(1)
 

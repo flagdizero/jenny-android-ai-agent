@@ -23,7 +23,7 @@ SHARED = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared"
 
 pytestmark = requires_node
 
-_VICINI = {
+_NEIGHBORS = {
     "api-client.js": "export const api = { describeProject: async () => ({}) };\n",
     "i18n.js": "export const i18n = { t: (k, p) => k + ':' + (p && p.name) };\n",
     "utils.js": "export const toasts = []; export function showToast(t, kind) { toasts.push([t, kind]); }\n",
@@ -32,12 +32,12 @@ _VICINI = {
 
 
 def _run(code: str | None, words: str) -> None:
-    rifiuto = "null" if code is None else json.dumps(code)
+    refusal = "null" if code is None else json.dumps(code)
     script = f"""
 import assert from 'node:assert/strict';
 const {{ deleteProjectFlow, PROJECT_DELETE_WORDS }} = await import('./project-delete.js');
 const {{ toasts }} = await import('./utils.js');
-globalThis.__rifiuto = {rifiuto};
+globalThis.__refusal = {refusal};
 const words = {words};
 const outcome = await deleteProjectFlow('viaggio', words);
 globalThis.__outcome = {{ outcome, toasts }};
@@ -46,21 +46,21 @@ console.log(JSON.stringify(globalThis.__outcome));
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         shutil.copy(SHARED / "project-delete.js", root / "project-delete.js")
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / name).write_text(text, encoding="utf-8")
         (root / "rpc-client.js").write_text(
             "export const rpc = { async deleteProject() {"
-            " const c = globalThis.__rifiuto; if (c === null) return {};"
+            " const c = globalThis.__refusal; if (c === null) return {};"
             " const e = new Error('refused'); if (c) e.code = c; throw e; } };\n",
             encoding="utf-8",
         )
-        (root / "prova.mjs").write_text(script + _ATTESE[(code, words)], encoding="utf-8")
+        (root / "prova.mjs").write_text(script + _EXPECTED[(code, words)], encoding="utf-8")
         run_module(root / "prova.mjs")
 
 
 _NB = "{ confirm: 'c', confirmWithChat: 'cc', failed: 'nb.failed', busy: 'nb.busy' }"
-_SENZA_BUSY = "{ confirm: 'c', confirmWithChat: 'cc', failed: 'nb.failed' }"
-_ATTESE = {
+_WITHOUT_BUSY = "{ confirm: 'c', confirmWithChat: 'cc', failed: 'nb.failed' }"
+_EXPECTED = {
     ("conflict", "PROJECT_DELETE_WORDS"):
         "assert.equal(outcome, false);\n"
         "assert.deepEqual(toasts, [['workspace.deleteProjectBusy:viaggio', 'error']]);\n",
@@ -68,14 +68,14 @@ _ATTESE = {
         "assert.deepEqual(toasts, [['nb.busy:viaggio', 'error']]);\n",
     ("bad_request", _NB):
         "assert.deepEqual(toasts, [['nb.failed:viaggio', 'error']]);\n",
-    ("conflict", _SENZA_BUSY):
+    ("conflict", _WITHOUT_BUSY):
         "assert.deepEqual(toasts, [['nb.failed:viaggio', 'error']]);\n",
     (None, _NB):
         "assert.equal(outcome, true);\nassert.deepEqual(toasts, []);\n",
 }
 
 
-@pytest.mark.parametrize(("code", "words"), list(_ATTESE), ids=[
+@pytest.mark.parametrize(("code", "words"), list(_EXPECTED), ids=[
     "officina-conflict", "casa-conflict", "casa-altro-errore", "senza-frase-busy", "riuscita",
 ])
 def test_the_refusal_says_what_happened(code, words) -> None:

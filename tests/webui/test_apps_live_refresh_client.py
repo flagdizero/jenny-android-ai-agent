@@ -10,7 +10,7 @@ la cosa giusta.
 
 In node, coi moduli veri (`shared/apps-source.js`, `shared/apps-actions.js`) e
 i vicini finti; il WebSocket e' un ``EventTarget`` che il banco fa parlare.
-La pagina app della casa ha il suo caso in ``test_casa_pista_client.py``.
+La pagina app della casa ha il suo caso in ``test_home_track_client.py``.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 pytestmark = requires_node
 
-_VICINI = {
+_NEIGHBORS = {
     # Ogni lettura delle Jenny App si conta: e' la domanda di quasi ogni caso.
     "api-client.js": """
 export const api = {
-  letture: 0,
-  async getJennyApps() { this.letture += 1; return { apps: [{ slug: 'orto', name: 'Orto' }] }; },
+  reads: 0,
+  async getJennyApps() { this.reads += 1; return { apps: [{ slug: 'orto', name: 'Orto' }] }; },
   async getAndroidApps() { return { apps: [] }; },
   getSecret() { return 'ok'; },
 };
@@ -50,7 +50,7 @@ export function themeTokens() { return ''; }
 """,
 }
 
-_PRELUDIO = """
+_PRELUDE = """
 import assert from 'node:assert/strict';
 globalThis.window = { addEventListener() {} };
 globalThis.document = { documentElement: { lang: 'it' } };
@@ -65,13 +65,13 @@ const { wsManager } = await import('./shared/ws-manager.js');
 function frame(msg) {
   wsManager.dispatchEvent(new CustomEvent('chat:message', { detail: msg }));
 }
-const giro = () => new Promise((r) => setTimeout(r, 0));
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
 /* Una mini-app aperta sopra tutto, con la finestra che ricorda la posta. */
 function open(actions, slug) {
-  const posta = [];
-  actions._openApp = { slug, iframe: { contentWindow: { postMessage: (m) => posta.push(m) } } };
-  return posta;
+  const mailbox = [];
+  actions._openApp = { slug, iframe: { contentWindow: { postMessage: (m) => mailbox.push(m) } } };
+  return mailbox;
 }
 """
 
@@ -82,10 +82,10 @@ def _run(body: str) -> None:
         (root / "shared").mkdir()
         for name in ("apps-source.js", "apps-actions.js"):
             shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
+        entry.write_text(_PRELUDE + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
@@ -94,17 +94,17 @@ def test_a_list_already_read_is_read_again() -> None:
         """
         const source = new AppsSource();
         await source.loadJennyApps();
-        assert.equal(api.letture, 1);
-        let avvisi = 0;
-        source.addChangeListener(() => { avvisi += 1; });
+        assert.equal(api.reads, 1);
+        let notices = 0;
+        source.addChangeListener(() => { notices += 1; });
         frame({ event: 'apps_list_changed' });
         // La rilettura non torna «in caricamento»: il cassetto aperto non
         // deve riaccendere lo scheletro per una risposta che arriva subito.
         assert.equal(source.isLoadingLists(), true, 'le Android non sono lette: resta vero');
         assert.equal(source._jennyLoaded, true);
-        await giro();
-        assert.equal(api.letture, 2);
-        assert.equal(avvisi, 1, 'chi guarda il cassetto deve saperlo');
+        await tick();
+        assert.equal(api.reads, 2);
+        assert.equal(notices, 1, 'chi guarda il cassetto deve saperlo');
         """
     )
 
@@ -116,8 +116,8 @@ def test_a_list_nobody_asked_for_is_not_read() -> None:
         """
         new AppsSource();
         frame({ event: 'apps_list_changed' });
-        await giro();
-        assert.equal(api.letture, 0);
+        await tick();
+        assert.equal(api.reads, 0);
         """
     )
 
@@ -127,9 +127,9 @@ def test_the_open_app_hears_that_its_data_changed() -> None:
         """
         const source = new AppsSource();
         const actions = new AppsActions(source, { sendChatPrompt() {} });
-        const posta = open(actions, 'orto');
+        const mailbox = open(actions, 'orto');
         frame({ event: 'app_data_changed', slug: 'orto' });
-        assert.deepEqual(posta, [{ type: 'jenny:data-changed', slug: 'orto' }]);
+        assert.deepEqual(mailbox, [{ type: 'jenny:data-changed', slug: 'orto' }]);
         """
     )
 
@@ -139,10 +139,10 @@ def test_another_app_data_change_is_not_forwarded() -> None:
         """
         const source = new AppsSource();
         const actions = new AppsActions(source, { sendChatPrompt() {} });
-        const posta = open(actions, 'orto');
+        const mailbox = open(actions, 'orto');
         frame({ event: 'app_data_changed', slug: 'lampo' });
         frame({ event: 'app_data_changed' });
-        assert.deepEqual(posta, []);
+        assert.deepEqual(mailbox, []);
         // E senza app aperta non si rompe niente.
         actions._openApp = null;
         frame({ event: 'app_data_changed', slug: 'orto' });
@@ -155,12 +155,12 @@ def test_a_listener_that_throws_does_not_silence_the_others() -> None:
         """
         const source = new AppsSource();
         const seen = [];
-        const errore = console.error;
+        const error = console.error;
         console.error = () => {};
         source.onAppDataChanged(() => { throw new Error('boom'); });
         source.onAppDataChanged((slug) => seen.push(slug));
         frame({ event: 'app_data_changed', slug: 'orto' });
-        console.error = errore;
+        console.error = error;
         assert.deepEqual(seen, ['orto']);
         """
     )
@@ -176,8 +176,8 @@ def test_unrelated_frames_do_nothing() -> None:
         for (const event of ['delta', 'turn_end', 'message', 'runtime_model_updated']) {
           frame({ event, slug: 'orto' });
         }
-        await giro();
-        assert.equal(api.letture, 1);
+        await tick();
+        assert.equal(api.reads, 1);
         assert.deepEqual(seen, []);
         """
     )
@@ -190,13 +190,13 @@ def test_an_older_answer_does_not_overwrite_a_newer_one() -> None:
     _run(
         """
         const source = new AppsSource();
-        const attese = [];
-        api.getJennyApps = () => new Promise((r) => attese.push(r));
+        const expected = [];
+        api.getJennyApps = () => new Promise((r) => expected.push(r));
         const before = source.loadJennyApps();
-        const seconda = source.loadJennyApps();
-        attese[1]({ apps: [{ slug: 'nuova', name: 'Nuova' }] });
-        await seconda;
-        attese[0]({ apps: [{ slug: 'vecchia', name: 'Vecchia' }] });
+        const second = source.loadJennyApps();
+        expected[1]({ apps: [{ slug: 'nuova', name: 'Nuova' }] });
+        await second;
+        expected[0]({ apps: [{ slug: 'vecchia', name: 'Vecchia' }] });
         await before;
         assert.deepEqual(source.jennyApps.map((a) => a.slug), ['nuova']);
         """
@@ -212,7 +212,7 @@ def test_a_failed_refresh_keeps_the_list_that_was_fine() -> None:
         await source.loadJennyApps();
         api.getJennyApps = async () => { throw new Error('giù'); };
         frame({ event: 'apps_list_changed' });
-        await giro();
+        await tick();
         assert.deepEqual(source.jennyApps.map((a) => a.slug), ['orto']);
         assert.equal(source.jennyListFailed(), false);
         """

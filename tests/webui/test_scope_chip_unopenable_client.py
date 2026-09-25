@@ -437,7 +437,7 @@ def test_a_rename_moves_the_folder_to_the_openable_list() -> None:
       await chip._loadProjects();
       chip._renderMenu();
       assert.equal(byClass(chip.menu, 'is-unopenable').length, 1);
-      assert.equal(listeners(chip.menu), 2, 'personale + nuovo progetto, e nient\\'altro');
+      assert.equal(listeners(chip.menu), 2, 'personale + nuovo progetto, e nient\\'other');
 
       // L'agente la rinomina, e la lettura dopo la trova dall'altro lato.
       nextPayload = { dir: 'wikis', projects: [{ name: 'ricerca-etf', modified: 200 }],
@@ -538,9 +538,9 @@ def test_the_name_rule_is_not_copied_a_fourth_time() -> None:
         name: (assets / name).read_text(encoding="utf-8")
         for name in ("conversation-list.js", "scope-chip.js", "project-create.js")
     }
-    citazioni = sum(src.count("'scope.invalidName'") for src in trio.values())
-    assert citazioni == 2, (
-        f"la regola si cita per key, e i punti che la citano sono due (trovati {citazioni})"
+    quotes = sum(src.count("'scope.invalidName'") for src in trio.values())
+    assert quotes == 2, (
+        f"la regola si cita per key, e i punti che la citano sono due (trovati {quotes})"
     )
     for name, src in trio.items():
         assert "underscore" not in src.lower(), (

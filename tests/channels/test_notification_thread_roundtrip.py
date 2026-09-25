@@ -69,7 +69,7 @@ def _from_the_shade(thread: str | None) -> InboundMessage:
     )
 
 
-async def test_il_tag_sopravvive_al_turno_e_torna_sulla_stessa_scheda(
+async def test_the_tag_survives_the_turn_and_returns_to_the_same_card(
     tmp_path, alerts: _Alerts
 ) -> None:
     loop = _loop(tmp_path)
@@ -87,7 +87,7 @@ async def test_il_tag_sopravvive_al_turno_e_torna_sulla_stessa_scheda(
     assert alerts.threads == ["cron:spesa"]
 
 
-async def test_senza_tag_il_giro_finisce_sul_ripiego(tmp_path, alerts: _Alerts) -> None:
+async def test_without_tag_the_roundtrip_ends_on_the_fallback(tmp_path, alerts: _Alerts) -> None:
     loop = _loop(tmp_path)
     outbound = loop._assemble_outbound(
         _from_the_shade(None), "eccomi", [], "stop", False, None
@@ -100,7 +100,7 @@ async def test_senza_tag_il_giro_finisce_sul_ripiego(tmp_path, alerts: _Alerts) 
     assert alerts.threads == [REPLY_THREAD_TAG]
 
 
-def test_la_domanda_e_la_risposta_stanno_nella_stessa_conversazione(tmp_path) -> None:
+def test_question_and_answer_are_in_the_same_conversation(tmp_path) -> None:
     """Il tag sceglie la *scheda*, non la sessione: quella resta una sola."""
     loop = _loop(tmp_path)
     inbound = _from_the_shade("cron:spesa")

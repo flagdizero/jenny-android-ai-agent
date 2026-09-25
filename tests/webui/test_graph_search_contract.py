@@ -1,7 +1,7 @@
 """La ricerca di un quaderno, guidata davvero: indice Python → ``wiki-search.js`` → righe.
 
 ``test_wiki_search_client.py`` verifica il motore di ricerca in isolamento
-(query → maschera) e ``test_casa_pages_client.py`` l'elenco della casa con un
+(query → maschera) e ``test_home_notebook_pages_client.py`` l'elenco della casa con un
 indice finto. Qui i tre pezzi veri girano insieme: la risposta di
 ``/api/graph`` la costruisce :class:`WikiSearchService` come fa la rotta, la
 smonta ``assets/shared/wiki-search.js`` e la legge ``assets/home-notebook-pages.js``,

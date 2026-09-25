@@ -48,14 +48,14 @@ def install(tmp_path: pathlib.Path) -> pathlib.Path:
     dopo (già successo il 22/08, con un test caduto a tre cartelle di
     distanza).
     """
-    for nome, segreto in (("patreon", "PAROLA-PATREON"), ("etf", "PAROLA-ETF")):
-        project = tmp_path / "wikis" / nome
+    for name, secret in (("patreon", "PAROLA-PATREON"), ("etf", "PAROLA-ETF")):
+        project = tmp_path / "wikis" / name
         (project / "wiki").mkdir(parents=True)
         (project / "AGENTS.md").write_text(
             # Lo scope di ``etf`` porta il marcatore dell'elenco: e' quel che il
             # blocco ``## Wikis`` mostra alla chat personale e a nessun progetto.
-            f"---\nsummary: {nome}{' PAROLA-RUBRICA' if nome == 'etf' else ''}\n---\n\n"
-            f"# {nome}\n\n{segreto}\n", encoding="utf-8"
+            f"---\nsummary: {name}{' PAROLA-RUBRICA' if name == 'etf' else ''}\n---\n\n"
+            f"# {name}\n\n{secret}\n", encoding="utf-8"
         )
     (tmp_path / "SOUL.md").write_text("Sono Jenny. PAROLA-ANIMA\n", encoding="utf-8")
     (tmp_path / "USER.md").write_text("Si chiama Marta. PAROLA-UTENTE\n", encoding="utf-8")

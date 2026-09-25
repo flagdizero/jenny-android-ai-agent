@@ -135,7 +135,7 @@ def test_the_telegram_poller_cannot_outlive_its_widget() -> None:
 
     refresh = _method(tg, "refresh")
     assert refresh.index("await api.getTelegramStatus()") < refresh.index("if (this._destroyed) return;"), (
-        "il flag va controllato after l'await: prima dell'await non è again changed niente"
+        "il flag va controllato after l'await: prima dell'await non è again changed nothing"
     )
     assert "if (this._destroyed) return;" in _method(tg, "render")
     polling = _method(tg, "_startPolling")

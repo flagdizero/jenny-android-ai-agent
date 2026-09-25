@@ -153,8 +153,8 @@ def test_the_home_view_preference_is_gone_from_the_product() -> None:
     """
     from jenny.utils.android_assets import _UI_MANIFEST
 
-    modulo = ASSETS / "shared" / "home-view.js"
-    assert not modulo.exists(), "il modulo della vista home e' tornato"
+    module = ASSETS / "shared" / "home-view.js"
+    assert not module.exists(), "il modulo della vista home e' tornato"
     assert "assets/shared/home-view.js" not in _UI_MANIFEST, (
         "il manifesto elenca ancora un file che non esiste"
     )
@@ -207,7 +207,7 @@ def test_the_root_entry_is_marked_before_the_boot_awaits() -> None:
     # nomi delle chiamate — rinominarli *è* un cambio di contratto.
     for await_call in (r"await api\.getSettings\(\)", r"await this\._initSessions\(\)"):
         found = re.search(await_call, body)
-        assert found, f"await sparito dal boot: {await_call}"
+        assert found, f"await gone dal boot: {await_call}"
         assert mark < found.start(), (
             "la radice va marcata prima degli await, altrimenti un tap sul dock la scavalca"
         )
@@ -343,7 +343,7 @@ def test_the_settings_scroll_restore_does_not_destroy_what_it_restores() -> None
         )
 
 
-def test_the_model_catalog_moved_to_the_casa_with_its_promise() -> None:
+def test_the_model_catalog_moved_to_the_home_with_its_promise() -> None:
     """Il catalogo modelli non e' piu' in officina: e' in casa, da «Chi
     risponde», dal 20/09/2026 (`.agent/officina-tavole-plan.md`, passo 3).
 
@@ -352,16 +352,16 @@ def test_the_model_catalog_moved_to_the_casa_with_its_promise() -> None:
     salvataggio ridisegna. In casa quel problema non si pone nella stessa
     forma — i cataloghi gia' chiesti vivono nel controller e non nel DOM — ma
     la promessa va tenuta da qualche parte, ed e' qui che si dice dov'e'
-    andata: `test_casa_model_client.py`, «il catalogo si chiede una volta per
+    andata: `test_home_model_client.py`, «il catalogo si chiede una volta per
     provider» e «un catalogo in ritardo non dipinge sopra quello che stai
     leggendo».
 
     Quel che si misura adesso e' il confine: l'officina non deve riprenderselo.
     """
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
-        assert pezzo not in settings, (
-            f"«{pezzo}» e' tornato in officina: la scelta del modello e' in casa"
+    for piece in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
+        assert piece not in settings, (
+            f"«{piece}» e' tornato in officina: la scelta del modello e' in casa"
         )
     home = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
     assert "getProviderModels" in home and "default_provider" in home, (

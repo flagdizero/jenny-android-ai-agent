@@ -120,8 +120,8 @@ def test_the_lock_says_why_in_two_different_ways() -> None:
         assert.equal(blockReason({ bundled: false, locked: true }), 'skills.tuaBloccata');
         """
     )
-    for lingua in ("it", "en"):
-        entries = locale(lingua)["skills"]
+    for language in ("it", "en"):
+        entries = locale(language)["skills"]
         assert entries["tuaBloccata"] and entries["tuaBloccata"] != entries["integrataBloccata"]
     settings = (VIEW_JS.parents[1] / "mobile-settings.js").read_text(encoding="utf-8")
     assert "i18n.t('skills.integrataBloccata')" not in settings, (

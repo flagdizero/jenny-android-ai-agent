@@ -616,7 +616,7 @@ def test_the_trace_list_covers_the_three_that_move(loop: AgentLoop) -> None:
 # funzionava ancora.
 
 
-_NOMI_IMPOSSIBILI = [
+_IMPOSSIBLE_NAMES = [
     ("Ricerca ETF", "spazio"),
     ("università", "accento"),
     (".nascosto", "punto-iniziale"),
@@ -625,7 +625,7 @@ _NOMI_IMPOSSIBILI = [
 
 
 @pytest.mark.parametrize(
-    ("folder", "_why"), _NOMI_IMPOSSIBILI, ids=[w for _f, w in _NOMI_IMPOSSIBILI]
+    ("folder", "_why"), _IMPOSSIBLE_NAMES, ids=[w for _f, w in _IMPOSSIBLE_NAMES]
 )
 async def test_a_rename_into_an_impossible_name_is_not_followed(
     loop: AgentLoop, published: list[str], tmp_path: Path, folder: str, _why: str

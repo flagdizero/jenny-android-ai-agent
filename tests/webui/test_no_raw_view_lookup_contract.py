@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SETTINGS = ASSETS / "mobile-settings.js"
 
-SORGENTI = sorted(
+SOURCES = sorted(
     [p for p in ASSETS.glob("*.js")] + [p for p in (ASSETS / "shared").glob("*.js")]
 )
 
@@ -52,24 +52,24 @@ SORGENTI = sorted(
 # bugia. Fino al 25/09/2026 la regex vedeva solo la prima forma, e
 # `mobile-ui-query.js` con `getElementById('view-' + view)` le passava sotto:
 # lo strumento `ui_view` mandava a Jenny un HTML vuoto per i tre cassetti.
-CRUDO = re.compile(
+RAW = re.compile(
     r"""(?:getElementById\(\s*|querySelector(?:All)?\(\s*)"""
     r"""(?:`#?(?:view|title)-\$\{|(['"])#?(?:view|title)-\1\s*\+)"""
 )
 
 # Le uniche due che possono farlo: sono loro la traduzione.
-DEFINIZIONI = {"viewElement": "view", "titleElement": "title"}
+DEFINITIONS = {"viewElement": "view", "titleElement": "title"}
 
 
-def _righe_crude(src: str) -> list[tuple[int, str]]:
+def _raw_rows(src: str) -> list[tuple[int, str]]:
     return [
         (i, row.strip())
         for i, row in enumerate(src.splitlines(), 1)
-        if CRUDO.search(row)
+        if RAW.search(row)
     ]
 
 
-def _dentro_una_definizione(src: str, numero_riga: int) -> bool:
+def _inside_a_definition(src: str, row_number: int) -> bool:
     """La riga sta nel corpo di `viewElement`/`titleElement`?
 
     Si guardano le tre righe sopra: le due funzioni sono di una riga sola, quindi
@@ -77,21 +77,21 @@ def _dentro_una_definizione(src: str, numero_riga: int) -> bool:
     altra roba, il banco torna a chiedere spiegazioni.
     """
     rows = src.splitlines()
-    sopra = "\n".join(rows[max(0, numero_riga - 4) : numero_riga - 1])
-    return any(f"function {name}(" in sopra for name in DEFINIZIONI)
+    above = "\n".join(rows[max(0, row_number - 4) : row_number - 1])
+    return any(f"function {name}(" in above for name in DEFINITIONS)
 
 
-@pytest.mark.parametrize("sorgente", SORGENTI, ids=lambda p: p.name)
-def test_no_id_built_from_a_mode(sorgente: Path) -> None:
-    src = sorgente.read_text(encoding="utf-8")
-    colpevoli = [
+@pytest.mark.parametrize("source", SOURCES, ids=lambda p: p.name)
+def test_no_id_built_from_a_mode(source: Path) -> None:
+    src = source.read_text(encoding="utf-8")
+    culprits = [
         (n, row)
-        for n, row in _righe_crude(src)
-        if not (sorgente == SETTINGS and _dentro_una_definizione(src, n))
+        for n, row in _raw_rows(src)
+        if not (source == SETTINGS and _inside_a_definition(src, n))
     ]
-    assert not colpevoli, (
-        f"{sorgente.name} costruisce l'id di una vista da un modo invece di "
-        f"chiederlo a viewElement()/titleElement(): {colpevoli}. "
+    assert not culprits, (
+        f"{source.name} costruisce l'id di una vista da un modo invece di "
+        f"chiederlo a viewElement()/titleElement(): {culprits}. "
         f"Per cervello/mani/memoria quell'id non esiste, la ricerca torna null "
         f"e la funzione esce in silenzio: file valido, suite verde, e il difetto "
         f"si vede solo col dito sul telefono."
@@ -105,9 +105,9 @@ def test_the_two_helpers_exist_and_are_the_only_ones_translating() -> None:
     il test di sopra — e la vista non si troverebbe piu' affatto.
     """
     src = SETTINGS.read_text(encoding="utf-8")
-    for name in DEFINIZIONI:
+    for name in DEFINITIONS:
         assert f"export function {name}(" in src, f"manca {name} in mobile-settings.js"
-    crude = _righe_crude(src)
+    crude = _raw_rows(src)
     assert len(crude) == 2, (
         f"mobile-settings.js dovrebbe tradurre in due punti soli (le due "
         f"funzioni), invece: {crude}"
@@ -134,21 +134,21 @@ def test_it_would_have_caught_all_three() -> None:
     Si ricostruiscono i tre siti veri e si chiede al controllo di vederli. Un
     banco scritto *dopo* il fatto vale solo se fallisce sul fatto.
     """
-    finto = """
+    fake = """
       view = document.getElementById(`view-${this.currentMode}`);
       this._animateSlideIn(document.getElementById(`view-${target}`), goingPrev);
       return document.getElementById(`title-${mode}`);
       const ok = document.getElementById('view-settings');
     """
-    trovate = _righe_crude(finto)
-    assert len(trovate) == 3, trovate
-    assert all("view-settings" not in row for _, row in trovate)
+    found = _raw_rows(fake)
+    assert len(found) == 3, found
+    assert all("view-settings" not in row for _, row in found)
 
 
 def test_it_catches_the_concatenated_and_selector_forms() -> None:
     """Le forme che la prima regex non vedeva, fra cui quella di
     `mobile-ui-query.js` che mandava a Jenny un HTML vuoto (H6)."""
-    finto = """
+    fake = """
       const container = document.getElementById('view-' + view);
       const t = document.getElementById("title-" + mode);
       const a = document.querySelector('#view-' + mode);
@@ -157,6 +157,6 @@ def test_it_catches_the_concatenated_and_selector_forms() -> None:
       const ok1 = document.querySelector('#view-settings');
       const ok2 = document.getElementById('view-chat');
     """
-    trovate = _righe_crude(finto)
-    assert len(trovate) == 5, trovate
-    assert all("ok" not in row for _, row in trovate)
+    found = _raw_rows(fake)
+    assert len(found) == 5, found
+    assert all("ok" not in row for _, row in found)

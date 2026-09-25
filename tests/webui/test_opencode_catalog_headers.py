@@ -53,35 +53,35 @@ def _probe(config_path: Path, *, api_base: str, fmt: str = "openai_compat") -> d
     return get.call_args.kwargs["headers"]
 
 
-class TestVersoOpenCode:
+class TestTowardOpenCode:
 
-    def test_la_sonda_si_identifica(self, config_path: Path) -> None:
+    def test_the_probe_identifies_itself(self, config_path: Path) -> None:
         headers = _probe(config_path, api_base=GO_BASE)
         assert headers["User-Agent"].startswith("jenny/")
 
-    def test_non_si_inventa_una_sessione(self, config_path: Path) -> None:
+    def test_does_not_invent_a_session(self, config_path: Path) -> None:
         headers = _probe(config_path, api_base=GO_BASE)
         assert SESSION_HEADER not in headers
 
-    def test_vale_anche_per_il_formato_messages(self, config_path: Path) -> None:
+    def test_also_applies_to_the_messages_format(self, config_path: Path) -> None:
         # Su Go la stessa base serve anche i modelli in formato Anthropic.
         headers = _probe(config_path, api_base=GO_BASE, fmt="anthropic")
         assert headers["User-Agent"].startswith("jenny/")
         assert headers["x-api-key"] == "k"
 
-    def test_gli_header_di_sempre_restano(self, config_path: Path) -> None:
+    def test_the_usual_headers_remain(self, config_path: Path) -> None:
         headers = _probe(config_path, api_base=GO_BASE)
         assert headers["Accept"] == "application/json"
         assert headers["Authorization"] == "Bearer k"
 
 
-class TestVersoGliAltri:
+class TestTowardTheOthers:
 
-    def test_openai_riceve_gli_header_di_prima(self, config_path: Path) -> None:
+    def test_openai_receives_the_previous_headers(self, config_path: Path) -> None:
         headers = _probe(config_path, api_base="https://api.openai.com/v1")
         assert headers == {"Accept": "application/json", "Authorization": "Bearer k"}
 
-    def test_anthropic_riceve_gli_header_di_prima(self, config_path: Path) -> None:
+    def test_anthropic_receives_the_previous_headers(self, config_path: Path) -> None:
         headers = _probe(
             config_path, api_base="https://api.anthropic.com", fmt="anthropic",
         )
@@ -91,6 +91,6 @@ class TestVersoGliAltri:
             "anthropic-version": "2023-06-01",
         }
 
-    def test_openrouter_riceve_gli_header_di_prima(self, config_path: Path) -> None:
+    def test_openrouter_receives_the_previous_headers(self, config_path: Path) -> None:
         headers = _probe(config_path, api_base="https://openrouter.ai/api/v1")
         assert "User-Agent" not in headers

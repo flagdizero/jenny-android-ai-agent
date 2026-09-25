@@ -182,7 +182,7 @@ def test_a_failed_read_does_not_erase_a_list_that_was_good() -> None:
       nextProjects = 'fail';
       await chip._loadProjects();
       assert.deepEqual(chip._projects.map((p) => p.name), ['bordi', 'patreon'],
-                       'un 401 ha cancellato i progetti dell\\'utente');
+                       'un 401 ha cancellato i progetti dell\\'user');
       assert.equal(chip._loadFailed, true);
       assert.equal(chip._dir, 'wikis',
                    'il nome della cartella letto dal backend è stato riportato al default');
@@ -224,7 +224,7 @@ def test_the_menu_says_load_failed_and_never_no_projects() -> None:
       assert.equal(written.includes('i18n:scope.loadFailed'), true,
                    'la tendina non dice che la lettura è fallita');
       assert.equal(written.includes('i18n:scope.noProjects'), false,
-                   'la tendina afferma che l\\'utente non ha progetti');
+                   'la tendina afferma che l\\'user non ha projects');
       assert.equal(written.includes('i18n:scope.loading'), false,
                    'un caricamento finito male resta "Caricamento..."');
       // Il guasto si distingue a occhio da uno stato vuoto.

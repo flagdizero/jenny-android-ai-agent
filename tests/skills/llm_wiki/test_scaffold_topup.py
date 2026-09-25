@@ -72,7 +72,7 @@ def drifted_wiki(tmp_path: Path) -> Path:
 # ── il top-up ────────────────────────────────────────────────────────────────
 
 
-def test_topup_crea_i_buchi_e_lascia_intatto_il_resto(scaffold, drifted_wiki, capsys):
+def test_topup_creates_the_gaps_and_leaves_the_rest_intact(scaffold, drifted_wiki, capsys):
     before = _digests(drifted_wiki)
 
     created = scaffold.scaffold(str(drifted_wiki), "Patreon Creator")
@@ -90,7 +90,7 @@ def test_topup_crea_i_buchi_e_lascia_intatto_il_resto(scaffold, drifted_wiki, ca
     assert {k: after[k] for k in before} == before
 
 
-def test_topup_non_appende_al_log_di_oggi(scaffold, drifted_wiki, capsys):
+def test_topup_does_not_append_to_todays_log(scaffold, drifted_wiki, capsys):
     log = drifted_wiki / "log" / _today_log_name()
     before = log.read_text(encoding="utf-8")
 
@@ -103,7 +103,7 @@ def test_topup_non_appende_al_log_di_oggi(scaffold, drifted_wiki, capsys):
     assert log.read_text(encoding="utf-8") == before
 
 
-def test_topup_scrive_il_log_di_oggi_se_manca_ed_elenca_quel_che_ha_aggiunto(
+def test_topup_writes_todays_log_if_missing_and_lists_what_it_added(
     scaffold, drifted_wiki, capsys
 ):
     (drifted_wiki / "log" / _today_log_name()).unlink()
@@ -119,7 +119,7 @@ def test_topup_scrive_il_log_di_oggi_se_manca_ed_elenca_quel_che_ha_aggiunto(
     assert "wiki/index.md" not in log
 
 
-def test_un_secondo_run_non_crea_nulla(scaffold, drifted_wiki, capsys):
+def test_a_second_run_creates_nothing(scaffold, drifted_wiki, capsys):
     scaffold.scaffold(str(drifted_wiki), "Patreon Creator")
     snapshot = _digests(drifted_wiki)
 
@@ -131,7 +131,7 @@ def test_un_secondo_run_non_crea_nulla(scaffold, drifted_wiki, capsys):
     assert "Nothing to add" in out
 
 
-def test_write_non_sovrascrive_un_file_esistente(scaffold, tmp_path: Path):
+def test_write_does_not_overwrite_an_existing_file(scaffold, tmp_path: Path):
     """Il confine sta in `_write`, in un punto solo: pin diretto."""
     (tmp_path / "già.md").write_text("mio", encoding="utf-8")
 
@@ -145,7 +145,7 @@ def test_write_non_sovrascrive_un_file_esistente(scaffold, tmp_path: Path):
 # ── la wiki nuova, che deve restare quella di prima ──────────────────────────
 
 
-def test_una_wiki_nuova_nasce_completa(scaffold, tmp_path: Path, capsys):
+def test_a_new_wiki_is_born_complete(scaffold, tmp_path: Path, capsys):
     root = tmp_path / "wikis" / "nuova"
 
     created = scaffold.scaffold(str(root), "Nuova")
@@ -165,7 +165,7 @@ def test_una_wiki_nuova_nasce_completa(scaffold, tmp_path: Path, capsys):
     assert "AGENTS.md" in created
 
 
-def test_la_voce_di_log_di_una_wiki_nuova_e_quella_di_prima(scaffold, tmp_path: Path, capsys):
+def test_the_log_entry_of_a_new_wiki_is_the_previous_one(scaffold, tmp_path: Path, capsys):
     """La forma del log fresco non cambia: `lint_wiki` ne verifica l'H1 e la
     skill dice di ricopiarla a mano quando appende."""
     root = tmp_path / "wikis" / "nuova"
@@ -187,7 +187,7 @@ def test_la_voce_di_log_di_una_wiki_nuova_e_quella_di_prima(scaffold, tmp_path: 
 
 
 @pytest.fixture
-def wiki_col_nome_vecchio(tmp_path: Path) -> Path:
+def wiki_with_old_name(tmp_path: Path) -> Path:
     """Una delle sette di prima: il file di istruzioni si chiama `CLAUDE.md`.
 
     Incompleta come le altre — le manca `audit/` — cosi' il top-up ha una ragione
@@ -204,8 +204,8 @@ def wiki_col_nome_vecchio(tmp_path: Path) -> Path:
     return root
 
 
-def test_il_topup_non_affianca_agents_a_un_claude_esistente(
-    scaffold, wiki_col_nome_vecchio: Path, capsys
+def test_the_topup_does_not_put_agents_beside_an_existing_claude(
+    scaffold, wiki_with_old_name: Path, capsys
 ):
     """Due file di istruzioni alla radice e' uno stato che non sceglie nessuno.
 
@@ -214,16 +214,16 @@ def test_il_topup_non_affianca_agents_a_un_claude_esistente(
     top-up vorrebbe dire produrlo di proposito sulle sette wiki vere. Il rinomino
     e' il passo 7, e passa da li'.
     """
-    before = (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes()
+    before = (wiki_with_old_name / "CLAUDE.md").read_bytes()
 
-    created = scaffold.scaffold(str(wiki_col_nome_vecchio), "Android ROM")
+    created = scaffold.scaffold(str(wiki_with_old_name), "Android ROM")
     capsys.readouterr()
 
-    assert not (wiki_col_nome_vecchio / "AGENTS.md").exists(), (
+    assert not (wiki_with_old_name / "AGENTS.md").exists(), (
         "il top-up ha affiancato un secondo file di istruzioni a quello che c'era"
     )
     assert "AGENTS.md" not in created
-    assert (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes() == before, (
+    assert (wiki_with_old_name / "CLAUDE.md").read_bytes() == before, (
         "il file di chi l'ha scritto a mano non si tocca: il rinomino e' il passo 7"
     )
     # Il resto del top-up deve comunque aver lavorato, sennò il test passerebbe
@@ -231,14 +231,14 @@ def test_il_topup_non_affianca_agents_a_un_claude_esistente(
     assert "audit/" in created
 
 
-def test_la_voce_di_log_nomina_il_file_che_ha_creato_davvero(
-    scaffold, wiki_col_nome_vecchio: Path, capsys
+def test_the_log_entry_names_the_file_it_really_created(
+    scaffold, wiki_with_old_name: Path, capsys
 ):
     """Un log che dice «Created AGENTS.md» dove non c'e' manda a cercare un fantasma."""
-    scaffold.scaffold(str(wiki_col_nome_vecchio), "Android ROM")
+    scaffold.scaffold(str(wiki_with_old_name), "Android ROM")
     capsys.readouterr()
 
-    log = (wiki_col_nome_vecchio / "log" / _today_log_name()).read_text(encoding="utf-8")
+    log = (wiki_with_old_name / "log" / _today_log_name()).read_text(encoding="utf-8")
     assert "AGENTS.md" not in log
 
 
@@ -252,7 +252,7 @@ def test_la_voce_di_log_nomina_il_file_che_ha_creato_davvero(
 
 
 @pytest.fixture
-def taccuino(tmp_path: Path) -> Path:
+def notebook(tmp_path: Path) -> Path:
     """Un progetto come lo crea il picker della UI: pagine piatte, un diario."""
     root = tmp_path / "wikis" / "orto"
     (root / "wiki").mkdir(parents=True)
@@ -267,21 +267,21 @@ def taccuino(tmp_path: Path) -> Path:
     return root
 
 
-def test_il_topup_su_un_taccuino_non_aggiunge_la_tassonomia(scaffold, taccuino, capsys):
-    created = scaffold.scaffold(str(taccuino), "Orto")
+def test_the_topup_on_a_notebook_does_not_add_the_taxonomy(scaffold, notebook, capsys):
+    created = scaffold.scaffold(str(notebook), "Orto")
     out = capsys.readouterr().out
 
     for rel in ("wiki/concepts", "wiki/entities", "wiki/summaries", "raw/articles",
                 "raw/papers", "raw/refs", "outputs/queries"):
-        assert not (taccuino / rel).exists(), rel
+        assert not (notebook / rel).exists(), rel
     # E il resto del top-up ha comunque lavorato, nella forma del progetto.
-    assert (taccuino / "raw" / "research").is_dir()
-    assert (taccuino / "audit" / "resolved").is_dir()
+    assert (notebook / "raw" / "research").is_dir()
+    assert (notebook / "audit" / "resolved").is_dir()
     assert "raw/research/" in created and "audit/" in created
     assert "already a notebook project" in out
 
 
-def test_il_topup_su_un_taccuino_non_cambia_il_modo_del_lint(scaffold, taccuino, capsys):
+def test_the_topup_on_a_notebook_does_not_change_the_lint_mode(scaffold, notebook, capsys):
     """(d) del passo: il modo prima e dopo è lo stesso. La regola è quella del
     lint e arriva da lui — lo scaffolder e il controllore non devono poter
     dissentire sul formato, perché è il dissenso che ha prodotto il difetto.
@@ -291,29 +291,29 @@ def test_il_topup_su_un_taccuino_non_cambia_il_modo_del_lint(scaffold, taccuino,
     Serve riportare **entrambi** i difetti perché questo test cada — verificato
     per mutazione."""
     lint_wiki = scaffold.lint_wiki
-    assert lint_wiki.is_research_layout(taccuino / "wiki") is False
+    assert lint_wiki.is_research_layout(notebook / "wiki") is False
 
-    scaffold.scaffold(str(taccuino), "Orto")
+    scaffold.scaffold(str(notebook), "Orto")
     capsys.readouterr()
 
-    assert lint_wiki.is_research_layout(taccuino / "wiki") is False
+    assert lint_wiki.is_research_layout(notebook / "wiki") is False
 
 
-def test_un_taccuino_senza_mappa_prende_la_mappa_piatta(scaffold, taccuino, capsys):
+def test_a_notebook_without_map_gets_the_flat_map(scaffold, notebook, capsys):
     """Un albero rimasto a metà è proprio quel che si viene a riparare, e la
     mappa è il primo file che l'agente legge: tre sezioni di tassonomia lì sono
     tre inviti a un formato che questo progetto non usa."""
-    (taccuino / "wiki" / "index.md").unlink()
+    (notebook / "wiki" / "index.md").unlink()
 
-    scaffold.scaffold(str(taccuino), "Orto")
+    scaffold.scaffold(str(notebook), "Orto")
     capsys.readouterr()
 
-    mappa = (taccuino / "wiki" / "index.md").read_text(encoding="utf-8")
-    assert "## Pages" in mappa and "raw/journal/" in mappa
-    assert "Concepts" not in mappa and "Entities" not in mappa
+    map = (notebook / "wiki" / "index.md").read_text(encoding="utf-8")
+    assert "## Pages" in map and "raw/journal/" in map
+    assert "Concepts" not in map and "Entities" not in map
 
 
-def test_una_biblioteca_con_la_tassonomia_vuota_prende_l_albero_intero(
+def test_a_library_with_an_empty_taxonomy_gets_the_whole_tree(
     scaffold, drifted_wiki, capsys
 ):
     """Il verso in cui sbagliare costa di più. `patreon-creator` misurata ha le
@@ -332,7 +332,7 @@ def test_una_biblioteca_con_la_tassonomia_vuota_prende_l_albero_intero(
     assert "already a notebook project" not in out
 
 
-def test_una_wiki_nuova_non_e_un_taccuino(scaffold, tmp_path: Path, capsys):
+def test_a_new_wiki_is_not_a_notebook(scaffold, tmp_path: Path, capsys):
     """La cartella che nasce adesso non ha pagine, e senza pagine non c'è niente
     da leggere: prende l'albero di ricerca intero, che è il motivo per cui questo
     script viene chiamato."""
@@ -359,7 +359,7 @@ def test_una_wiki_nuova_non_e_un_taccuino(scaffold, tmp_path: Path, capsys):
 # test che cade.
 
 
-def test_una_cartella_dove_va_un_file_non_e_un_successo(scaffold, tmp_path: Path, capsys):
+def test_a_folder_where_a_file_goes_is_not_a_success(scaffold, tmp_path: Path, capsys):
     root = tmp_path / "wikis" / "storta"
     (root / "wiki").mkdir(parents=True)
     (root / "AGENTS.md").mkdir()
@@ -377,7 +377,7 @@ def test_una_cartella_dove_va_un_file_non_e_un_successo(scaffold, tmp_path: Path
     assert (root / "AGENTS.md").is_dir()
 
 
-def test_una_cartella_al_posto_della_mappa_e_una_collisione(scaffold, tmp_path: Path, capsys):
+def test_a_folder_in_place_of_the_map_is_a_collision(scaffold, tmp_path: Path, capsys):
     root = tmp_path / "wikis" / "storta"
     (root / "wiki" / "index.md").mkdir(parents=True)
 
@@ -388,7 +388,7 @@ def test_una_cartella_al_posto_della_mappa_e_una_collisione(scaffold, tmp_path: 
     assert "wiki/index.md already there — left as it is" not in out
 
 
-def test_un_file_dove_va_una_cartella_non_fa_esplodere_il_run(
+def test_a_file_where_a_folder_goes_does_not_blow_up_the_run(
     scaffold, tmp_path: Path, capsys
 ):
     """`makedirs` moriva con un `FileExistsError` a metà scaffold, lasciando la
@@ -405,7 +405,7 @@ def test_un_file_dove_va_una_cartella_non_fa_esplodere_il_run(
     assert (root / "wiki").is_dir(), "il resto dell'albero deve essere stato creato"
 
 
-def test_write_distingue_un_file_da_una_cartella(scaffold, tmp_path: Path):
+def test_write_tells_a_file_from_a_folder(scaffold, tmp_path: Path):
     """Pin diretto sul confine, che sta in un punto solo."""
     (tmp_path / "cartella.md").mkdir()
     collisions: list[str] = []
@@ -415,7 +415,7 @@ def test_write_distingue_un_file_da_una_cartella(scaffold, tmp_path: Path):
     assert (tmp_path / "cartella.md").is_dir()
 
 
-def test_anche_l_albero_di_ricerca_ha_il_diario(scaffold, tmp_path: Path, capsys):
+def test_the_research_tree_has_the_journal_too(scaffold, tmp_path: Path, capsys):
     """Il diario è universale: lo controlla il lint in ogni layout, ci scrive la
     cattura in ogni layout, e SKILL.md lo dice. Una wiki di ricerca nata da qui
     non aveva il posto dove quella scrittura va."""
@@ -428,7 +428,7 @@ def test_anche_l_albero_di_ricerca_ha_il_diario(scaffold, tmp_path: Path, capsys
     assert "raw/journal/" in created
 
 
-def test_i_due_scaffolder_non_possono_divergere(scaffold):
+def test_the_two_scaffolders_cannot_diverge(scaffold):
     """La definizione unica di com'e' fatto un progetto vive nel package —
     ``jenny/webui/project_scaffold.py::PROJECT_DIRS`` — e questa e' la copia che
     il checkout della skill non puo' importare. Il confronto sta qui perche' due
@@ -441,7 +441,7 @@ def test_i_due_scaffolder_non_possono_divergere(scaffold):
     assert set(scaffold._COMMON_DIRS) <= set(PROJECT_DIRS)
 
 
-def test_un_secondo_topup_su_una_biblioteca_non_la_legge_come_taccuino(
+def test_a_second_topup_on_a_library_does_not_read_it_as_a_notebook(
     scaffold, drifted_wiki, capsys
 ):
     """Il corollario di H16, e il difetto che avrebbe reintrodotto: da quando
@@ -458,12 +458,12 @@ def test_un_secondo_topup_su_una_biblioteca_non_la_legge_come_taccuino(
     assert scaffold._is_existing_notebook(str(drifted_wiki)) is False
 
 
-def test_un_taccuino_resta_un_taccuino_anche_col_diario(scaffold, taccuino, capsys):
+def test_a_notebook_stays_a_notebook_even_with_the_journal(scaffold, notebook, capsys):
     """Il verso opposto del test sopra: la nuova condizione non deve trasformare
     un progetto in una biblioteca."""
-    scaffold.scaffold(str(taccuino), "Orto")
+    scaffold.scaffold(str(notebook), "Orto")
     capsys.readouterr()
 
-    assert scaffold._is_existing_notebook(str(taccuino)) is True
-    scaffold.scaffold(str(taccuino), "Orto")
+    assert scaffold._is_existing_notebook(str(notebook)) is True
+    scaffold.scaffold(str(notebook), "Orto")
     assert "already a notebook project" in capsys.readouterr().out

@@ -67,7 +67,7 @@ class GatewayService : Service() {
          *  tendina, il fumetto per la mascotte. Una stringa che diverge non
          *  rompe la compilazione: fa rifiutare ogni messaggio di quella
          *  superficie, in silenzio. È il legame che
-         *  `tests/runtime/test_native_input.py::TestConfineConKotlin` controlla
+         *  `tests/runtime/test_native_input.py::TestBoundaryWithKotlin` controlla
          *  leggendo questo file. */
         const val NATIVE_SOURCE_NOTIFICATION = "notification"
         const val NATIVE_SOURCE_FLOATING = "floating"

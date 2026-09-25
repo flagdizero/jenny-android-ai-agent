@@ -67,7 +67,7 @@ def _from_the_mascot(text: str = "che ore sono a Tokyo?") -> InboundMessage:
     )
 
 
-async def test_la_risposta_torna_alla_mascotte(tmp_path, bubbles: _Bubbles) -> None:
+async def test_the_answer_returns_to_the_mascot(tmp_path, bubbles: _Bubbles) -> None:
     loop = _loop(tmp_path)
     outbound = loop._assemble_outbound(
         _from_the_mascot(), "le 21:40", [], "stop", False, None
@@ -80,7 +80,7 @@ async def test_la_risposta_torna_alla_mascotte(tmp_path, bubbles: _Bubbles) -> N
     assert bubbles.shown == ["le 21:40"]
 
 
-def test_la_domanda_entra_nella_conversazione_personale(tmp_path) -> None:
+def test_the_question_enters_the_personal_conversation(tmp_path) -> None:
     """La riga che l'utente ha scritto: «la chat è identica a come sarebbe
     dentro l'app». Il ``chat_id`` della superficie non apre una sessione sua —
     ``session_key_for_channel`` manda ogni canale utente su ``unified:default``,
@@ -94,7 +94,7 @@ def test_la_domanda_entra_nella_conversazione_personale(tmp_path) -> None:
     assert outbound.chat_id == inbound.chat_id
 
 
-def test_la_sorgente_sopravvive_al_turno(tmp_path) -> None:
+def test_the_source_survives_the_turn(tmp_path) -> None:
     """Non serve a instradare — quello lo fa il canale — ma dice *da dove* è
     entrata la domanda, e il trasporto è la stessa riga che porta il tag della
     tendina (``meta = dict(msg.metadata or {})``)."""
@@ -106,7 +106,7 @@ def test_la_sorgente_sopravvive_al_turno(tmp_path) -> None:
     assert outbound.metadata[NATIVE_SOURCE_KEY] == SOURCE_FLOATING
 
 
-def test_la_mascotte_e_la_tendina_non_si_scambiano_le_risposte(tmp_path) -> None:
+def test_the_mascot_and_the_dropdown_do_not_swap_answers(tmp_path) -> None:
     """Il motivo per cui sono due canali e non uno.
 
     Due superfici native, due posti diversi in cui la risposta torna: se

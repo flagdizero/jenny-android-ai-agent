@@ -162,19 +162,19 @@ def test_backdrop_filter_only_on_the_drawer_scrim():
     """
     css = (UI_DIR / "assets/mobile-style.css").read_text()
     # I selettori a cui e\' concesso. Si dichiarano uno per uno.
-    concessi = {".launcher-scrim"}
+    allowed = {".launcher-scrim"}
 
-    colpevoli = []
+    culprits = []
     for block in css.split("}"):
         if not re.search(r"backdrop-filter\s*:", block):
             continue
         head = block.split("{")[0].strip()
         names = {s.strip().splitlines()[-1].strip() for s in head.split(",") if s.strip()}
-        if not (names & concessi):
-            colpevoli.append(head.splitlines()[-1].strip() if head else "?")
+        if not (names & allowed):
+            culprits.append(head.splitlines()[-1].strip() if head else "?")
 
-    assert not colpevoli, (
-        f"backdrop-filter su selettori non concessi: {colpevoli}. "
+    assert not culprits, (
+        f"backdrop-filter su selettori non concessi: {culprits}. "
         f"E\' vietato per le prestazioni del WebView Android (usa superfici "
         f"opache); le eccezioni si dichiarano in `concessi` con il motivo."
     )

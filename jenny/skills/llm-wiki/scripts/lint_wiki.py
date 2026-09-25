@@ -775,7 +775,7 @@ def load_pages(wiki_dir: Path) -> dict[str, Path]:
             if not key:
                 continue
             # Due pagine con lo stesso nome in cartelle diverse (`a/nota.md`,
-            # `b/nota.md`) si contendono la chiave `nota`, e qui vinceva l'ultima
+            # `b/nota.md`) si contendono la chiave `note`, e qui vinceva l'ultima
             # letta — l'ordine della directory. La regola è quella dell'app
             # (`suffix_rank`): vince la più vicina alla radice.
             previous = pages.get(key)

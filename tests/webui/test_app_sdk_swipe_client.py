@@ -22,13 +22,13 @@ SDK = (ASSETS / "apps" / "jenny-sdk.js").read_text(encoding="utf-8")
 ACTIONS = (ASSETS / "shared" / "apps-actions.js").read_text(encoding="utf-8")
 
 
-def _kit_cerca_il_gesto(query: str) -> bool:
+def _kit_finds_the_swipe(query: str) -> bool:
     out = run_js(
         f"""
-const cercati = [];
-const VeroURL = URL;
-globalThis.URL = class extends VeroURL {{
-  constructor(u, base) {{ super(u, base); cercati.push(String(u)); }}
+const sought = [];
+const RealURL = URL;
+globalThis.URL = class extends RealURL {{
+  constructor(u, base) {{ super(u, base); sought.push(String(u)); }}
 }};
 globalThis.location = {{
   search: {json.dumps(query)}, pathname: '/apps/spesa/index.html',
@@ -46,18 +46,18 @@ globalThis.addEventListener = () => {{}};
 globalThis.parent = {{ postMessage() {{}} }};
 {SDK}
 await new Promise((r) => setTimeout(r, 0));
-console.log(JSON.stringify(cercati.some((u) => u.endsWith('horizontal-swipe.js'))));
+console.log(JSON.stringify(sought.some((u) => u.endsWith('horizontal-swipe.js'))));
 """
     )
     return json.loads(out.strip().splitlines()[-1])
 
 
-def test_a_casa_page_arms_the_swipe() -> None:
-    assert _kit_cerca_il_gesto("?token=t&theme=dark") is True
+def test_a_home_page_arms_the_swipe() -> None:
+    assert _kit_finds_the_swipe("?token=t&theme=dark") is True
 
 
 def test_the_full_screen_overlay_does_not() -> None:
-    assert _kit_cerca_il_gesto("?token=t&theme=dark&overlay=1") is False
+    assert _kit_finds_the_swipe("?token=t&theme=dark&overlay=1") is False
 
 
 def test_only_the_overlay_frame_says_so() -> None:

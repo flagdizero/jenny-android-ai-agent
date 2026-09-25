@@ -84,7 +84,7 @@ globalThis.localStorage = {{
 }};
 const mod = await import({json.dumps(MASCOT_JS.as_uri())});
 for (const gone of ['poseUrl', 'mascotColor', 'setMascotColor']) {{
-  assert.ok(!(gone in mod), `{{gone}} è again esportato`.replace('{{gone}}', gone));
+  assert.ok(!(gone in mod), `{{gone}} è again exported`.replace('{{gone}}', gone));
 }}
 // Quello che resta, resta.
 for (const kept of ['mascotVisible', 'mascotSize', 'applyMascotSize']) {{
@@ -138,7 +138,7 @@ def test_every_retired_preference_is_cleaned_up_and_nothing_reads_it() -> None:
     di Home, lingua scelta a mano) si cancellano al caricamento come il B/N —
     e nessun sorgente della WebUI le legge più, o la pulizia cancellerebbe
     una preferenza viva."""
-    ritirate = [
+    retired = [
         "jenny-mascotte-dock-side", "jenny-mascotte-side", "jenny-advanced-mode",
         "jenny-home-view", "locale",
     ]
@@ -146,13 +146,13 @@ def test_every_retired_preference_is_cleaned_up_and_nothing_reads_it() -> None:
         if "vendor" in path.parts or path == MASCOT_JS:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        for key in ritirate:
+        for key in retired:
             assert f"Item('{key}'" not in text and f'Item("{key}"' not in text, (
                 f"{path.name} usa ancora {key}"
             )
     _run(f"""
 import assert from 'node:assert/strict';
-const store = new Map({json.dumps([[k, "x"] for k in ritirate] + [["tc-theme", "kyoto"]])});
+const store = new Map({json.dumps([[k, "x"] for k in retired] + [["tc-theme", "kyoto"]])});
 globalThis.localStorage = {{
   getItem(k) {{ return store.has(k) ? store.get(k) : null; }},
   setItem(k, v) {{ store.set(k, String(v)); }},

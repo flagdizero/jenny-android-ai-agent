@@ -117,8 +117,8 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
     assert ":root:has(.image-lightbox) .jenny-duo { pointer-events: none; }" in css, (
         "sopra una lightbox lei aprirebbe la minichat: due livelli insieme, fuori ordine"
     )
-    scrim_aperto = re.search(r"\n\.jenny-scrim\.open \{([^}]*)\}", css)
-    assert scrim_aperto and "pointer-events: auto" in scrim_aperto.group(1), (
+    scrim_open = re.search(r"\n\.jenny-scrim\.open \{([^}]*)\}", css)
+    assert scrim_open and "pointer-events: auto" in scrim_open.group(1), (
         "con la minichat aperta un'immagine della chat si aprirebbe da sotto lo scrim"
     )
 
@@ -499,10 +499,10 @@ def test_the_editor_has_one_origin_and_does_not_remember_it_as_state() -> None:
     forma — una destinazione letta da uno stato invece che scritta dove serve.
     """
     workspace = (ASSETS / "mobile-workspace.js").read_text(encoding="utf-8")
-    codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", workspace, flags=re.S))
-    assert "_returnMode" not in codice, "la destinazione è tornata a essere uno stato"
+    code = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", workspace, flags=re.S))
+    assert "_returnMode" not in code, "la destinazione è tornata a essere uno stato"
     # E l'origine unica va *scritta*, o `_closeEditor` non sa dove riportare.
-    assert "navigateBack('memory')" in codice, "l'uscita dal file non nomina la sua origine"
+    assert "navigateBack('memory')" in code, "l'uscita dal file non nomina la sua origine"
     open = _method(workspace, "_enterEditorView")
     assert "switchMode('workspace')" in open, (
         "aprire un file deve impilare la propria schermata: senza, il file si "
@@ -548,17 +548,17 @@ def test_the_drawers_only_sub_screen_is_the_folder_you_are_in() -> None:
     """
     settings = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
     back = _method(settings, "handleBack")
-    codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", back, flags=re.S)).strip()
-    ritorni = re.findall(r"return\b[^;]*;", codice)
-    assert sum("handleCardBack" in r for r in ritorni) == 1
-    assert all(r == "return false;" or "handleCardBack" in r for r in ritorni), (
+    code = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", back, flags=re.S)).strip()
+    returns = re.findall(r"return\b[^;]*;", code)
+    assert sum("handleCardBack" in r for r in returns) == 1
+    assert all(r == "return false;" or "handleCardBack" in r for r in returns), (
         "il cassetto decide da se' invece di girare la domanda: l'unico altro "
         "ritorno ammesso e' il `false` dei cassetti senza gestore file"
     )
-    assert "?? false" in codice, (
+    assert "?? false" in code, (
         "senza gestore file agganciato la pressione deve proseguire la catena"
     )
-    assert "handleCardBack" in codice, "l'unico sotto-livello e' la cartella del gestore file"
+    assert "handleCardBack" in code, "l'unico sotto-livello e' la cartella del gestore file"
     assert "return true" not in back, (
         "handleBack si tiene una pressione per un livello che non esiste piu'"
     )

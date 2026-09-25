@@ -23,8 +23,8 @@ from jenny.session.project_rename import pending_project_renames
 from jenny.session.project_traces import describe_project_traces, project_trace_paths
 from jenny.webui.project_rename import ProjectRenameError, rename_project
 
-VECCHIO = "viaggio"
-NUOVO = "viaggi"
+OLD = "viaggio"
+NEW = "viaggi"
 
 
 def _ensure(path: Path) -> Path:
@@ -44,43 +44,43 @@ def _notebook(workspace: Path, name: str, *, con_chat: bool = True) -> None:
     _ensure(workspace / "wikis" / name / "wiki")
     (workspace / "wikis" / name / "wiki" / "index.md").write_text("# indice\n", encoding="utf-8")
     if con_chat:
-        for traccia in project_trace_paths(workspace, f"project:{name}"):
-            _ensure(traccia.parent)
-            if traccia.suffix:
-                traccia.write_text("{}\n", encoding="utf-8")
+        for trace in project_trace_paths(workspace, f"project:{name}"):
+            _ensure(trace.parent)
+            if trace.suffix:
+                trace.write_text("{}\n", encoding="utf-8")
             else:
-                _ensure(traccia)
+                _ensure(trace)
 
 
-def _rename(workspace: Path, name: str = VECCHIO, fresh: str = NUOVO, **kw):
-    svuotate: list[str] = []
+def _rename(workspace: Path, name: str = OLD, fresh: str = NEW, **kw):
+    emptied: list[str] = []
     outcome = rename_project(
         wikis_dir=workspace / "wikis",
         scripts_dir=workspace / "skills" / "llm-wiki" / "scripts",
         workspace=workspace,
         name=name,
         new_name=fresh,
-        invalidate_session=svuotate.append,
+        invalidate_session=emptied.append,
         **kw,
     )
-    return outcome, svuotate
+    return outcome, emptied
 
 
 # ── Cosa si sposta ──────────────────────────────────────────────────────────
 
 
 def test_after_a_rename_no_trace_carries_the_old_name(workspace) -> None:
-    _notebook(workspace, VECCHIO)
+    _notebook(workspace, OLD)
     outcome, _ = _rename(workspace)
 
     assert outcome["chat_moved"] is True
-    assert not (workspace / "wikis" / VECCHIO).exists()
-    assert (workspace / "wikis" / NUOVO / "wiki" / "index.md").exists()
-    assert not describe_project_traces(workspace, f"project:{VECCHIO}").exists, (
+    assert not (workspace / "wikis" / OLD).exists()
+    assert (workspace / "wikis" / NEW / "wiki" / "index.md").exists()
+    assert not describe_project_traces(workspace, f"project:{OLD}").exists, (
         "una traccia porta ancora il nome vecchio: la chat e' rimasta indietro"
     )
-    for traccia in project_trace_paths(workspace, f"project:{NUOVO}"):
-        assert traccia.exists(), f"{traccia.name} non e' arrivata sotto il nome nuovo"
+    for trace in project_trace_paths(workspace, f"project:{NEW}"):
+        assert trace.exists(), f"{trace.name} non e' arrivata sotto il nome nuovo"
     assert pending_project_renames(workspace) == [], "il giornale e' rimasto aperto"
 
 
@@ -91,42 +91,42 @@ def test_the_rename_logs_in_english(workspace) -> None:
     rows: list[str] = []
     sink = logger.add(lambda m: rows.append(m.record["message"]), level="DEBUG")
     try:
-        _notebook(workspace, VECCHIO)
+        _notebook(workspace, OLD)
         _rename(workspace)
     finally:
         logger.remove(sink)
-    assert f"Notebook renamed: {VECCHIO} -> {NUOVO} (chat moved: True)" in rows
+    assert f"Notebook renamed: {OLD} -> {NEW} (chat moved: True)" in rows
 
 
 def test_a_notebook_without_a_conversation_just_moves_its_folder(workspace) -> None:
     """Un quaderno appena creato non ha ancora chat: non c'e' niente da seguire,
     e questo non e' un rifiuto (`follow_renamed_project` lo sarebbe)."""
-    _notebook(workspace, VECCHIO, con_chat=False)
+    _notebook(workspace, OLD, con_chat=False)
     outcome, _ = _rename(workspace)
     assert outcome["chat_moved"] is False
-    assert (workspace / "wikis" / NUOVO / "wiki").is_dir()
+    assert (workspace / "wikis" / NEW / "wiki").is_dir()
 
 
 def test_both_sessions_are_cleared_from_memory_first(workspace) -> None:
     """Una sessione viva in cache riscriverebbe il suo file sotto il nome
     vecchio appena qualcuno la salva."""
-    _notebook(workspace, VECCHIO)
-    _, svuotate = _rename(workspace)
-    assert svuotate == [f"project:{VECCHIO}", f"project:{NUOVO}"]
+    _notebook(workspace, OLD)
+    _, emptied = _rename(workspace)
+    assert emptied == [f"project:{OLD}", f"project:{NEW}"]
 
 
 # ── Cosa si rifiuta, prima di toccare niente ────────────────────────────────
 
 
-@pytest.mark.parametrize("cattivo", ["Ricerca ETF", "a..b", "", "../fuori"])
-def test_a_name_that_would_not_open_is_refused(workspace, cattivo) -> None:
+@pytest.mark.parametrize("bad", ["Ricerca ETF", "a..b", "", "../fuori"])
+def test_a_name_that_would_not_open_is_refused(workspace, bad) -> None:
     """La stessa regola del canale: una chat spostata su un nome che nessuno
     riapre e' una chat perduta con l'apparenza di un successo."""
-    _notebook(workspace, VECCHIO)
+    _notebook(workspace, OLD)
     with pytest.raises(ProjectRenameError):
-        _rename(workspace, fresh=cattivo)
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
-    assert describe_project_traces(workspace, f"project:{VECCHIO}").exists
+        _rename(workspace, fresh=bad)
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
+    assert describe_project_traces(workspace, f"project:{OLD}").exists
 
 
 def test_a_notebook_without_a_chat_gets_no_second_guard(workspace) -> None:
@@ -138,10 +138,10 @@ def test_a_notebook_without_a_chat_gets_no_second_guard(workspace) -> None:
     `wikis/`** e risponderebbe «fatto». La mutazione che toglieva il controllo
     sopravviveva a tutti i casi con la chat (23/09/2026).
     """
-    _notebook(workspace, VECCHIO, con_chat=False)
+    _notebook(workspace, OLD, con_chat=False)
     with pytest.raises(ProjectRenameError):
         _rename(workspace, fresh="../fuori")
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
     assert not (workspace / "fuori").exists(), "la cartella e' uscita da wikis/"
 
 
@@ -151,46 +151,46 @@ def test_a_notebook_without_a_chat_does_not_adopt_someone_elses(workspace) -> No
     chat non ne ha: senza il controllo la cartella arriva, e si trova addosso
     la conversazione di un altro. Con la chat lo fermerebbe il seguito; senza,
     solo questo."""
-    _notebook(workspace, VECCHIO, con_chat=False)
-    orfana = project_trace_paths(workspace, f"project:{NUOVO}")[0]
-    _ensure(orfana.parent)
-    orfana.write_text("{}\n", encoding="utf-8")
+    _notebook(workspace, OLD, con_chat=False)
+    orphan = project_trace_paths(workspace, f"project:{NEW}")[0]
+    _ensure(orphan.parent)
+    orphan.write_text("{}\n", encoding="utf-8")
     with pytest.raises(ProjectRenameError, match="conversation"):
         _rename(workspace)
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
-    assert not (workspace / "wikis" / NUOVO).exists(), "ha adottato la chat di un altro"
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
+    assert not (workspace / "wikis" / NEW).exists(), "ha adottato la chat di un altro"
 
 
 def test_a_taken_folder_is_refused(workspace) -> None:
-    _notebook(workspace, VECCHIO)
-    _notebook(workspace, NUOVO, con_chat=False)
+    _notebook(workspace, OLD)
+    _notebook(workspace, NEW, con_chat=False)
     with pytest.raises(ProjectRenameError, match="already exists"):
         _rename(workspace)
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
 
 
 def test_a_conversation_already_under_the_new_name_is_refused(workspace) -> None:
     """Lo scambio di due nomi: non si sceglie, si dice. E non si tocca niente."""
-    _notebook(workspace, VECCHIO)
-    orfana = project_trace_paths(workspace, f"project:{NUOVO}")[0]
-    _ensure(orfana.parent)
-    orfana.write_text("{}\n", encoding="utf-8")
+    _notebook(workspace, OLD)
+    orphan = project_trace_paths(workspace, f"project:{NEW}")[0]
+    _ensure(orphan.parent)
+    orphan.write_text("{}\n", encoding="utf-8")
     with pytest.raises(ProjectRenameError, match="conversation"):
         _rename(workspace)
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
-    assert describe_project_traces(workspace, f"project:{VECCHIO}").exists
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
+    assert describe_project_traces(workspace, f"project:{OLD}").exists
 
 
 def test_something_that_is_not_a_notebook_is_refused(workspace) -> None:
-    _ensure(workspace / "wikis" / VECCHIO)          # niente `wiki/` dentro
+    _ensure(workspace / "wikis" / OLD)          # niente `wiki/` dentro
     with pytest.raises(ProjectRenameError, match="no notebook"):
         _rename(workspace)
 
 
 def test_the_same_name_is_refused(workspace) -> None:
-    _notebook(workspace, VECCHIO)
+    _notebook(workspace, OLD)
     with pytest.raises(ProjectRenameError):
-        _rename(workspace, fresh=VECCHIO)
+        _rename(workspace, fresh=OLD)
 
 
 # ── Quando la chat non puo' seguire ─────────────────────────────────────────
@@ -199,35 +199,35 @@ def test_the_same_name_is_refused(workspace) -> None:
 def test_a_clean_refusal_to_follow_puts_the_folder_back(workspace, monkeypatch) -> None:
     """Meglio un rinomino non fatto che due meta': la cartella torna al suo
     nome, e la chat — che non si e' mossa — resta con lei."""
-    from jenny.webui import project_rename as modulo
+    from jenny.webui import project_rename as module
 
-    _notebook(workspace, VECCHIO)
+    _notebook(workspace, OLD)
     monkeypatch.setattr(
-        modulo, "follow_renamed_project", lambda *a: (False, "moving failed, so nothing was moved")
+        module, "follow_renamed_project", lambda *a: (False, "moving failed, so nothing was moved")
     )
     with pytest.raises(ProjectRenameError, match="could not follow"):
         _rename(workspace)
-    assert (workspace / "wikis" / VECCHIO / "wiki").is_dir(), "la cartella non e' tornata"
-    assert not (workspace / "wikis" / NUOVO).exists()
+    assert (workspace / "wikis" / OLD / "wiki").is_dir(), "la cartella non e' tornata"
+    assert not (workspace / "wikis" / NEW).exists()
 
 
 def test_halfway_is_left_to_the_journal_not_undone(workspace, monkeypatch) -> None:
     """A meta' strada qualcosa si e' gia' mosso, ed e' scritto nel giornale: il
     prossimo avvio finisce il lavoro. Disfare la cartella adesso vorrebbe dire
     tracce da una parte e cartella dall'altra — proprio il male da evitare."""
-    from jenny.session import project_rename as seguito
-    from jenny.webui import project_rename as modulo
+    from jenny.session import project_rename as follow_up
+    from jenny.webui import project_rename as module
 
-    _notebook(workspace, VECCHIO)
+    _notebook(workspace, OLD)
 
-    def _a_meta(ws, old, fresh):
-        seguito._write_journal(ws, [(old, fresh)])
+    def _halfway(ws, old, fresh):
+        follow_up._write_journal(ws, [(old, fresh)])
         return False, "moving the conversation's files stopped halfway"
 
-    monkeypatch.setattr(modulo, "follow_renamed_project", _a_meta)
+    monkeypatch.setattr(module, "follow_renamed_project", _halfway)
     outcome, _ = _rename(workspace)
     assert outcome["chat_moved"] is False
-    assert (workspace / "wikis" / NUOVO / "wiki").is_dir(), "la cartella e' tornata indietro"
+    assert (workspace / "wikis" / NEW / "wiki").is_dir(), "la cartella e' tornata indietro"
 
 
 # ── Il comando: le pagine in casa seguono il nome ───────────────────────────
@@ -239,64 +239,64 @@ def config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from jenny.config.schema import Config
     from jenny.runtime.context import get_runtime_context
 
-    percorso = tmp_path / "config.json"
+    path = tmp_path / "config.json"
     c = Config()
-    save_config(c, percorso)
-    monkeypatch.setattr(get_runtime_context(), "config_path", percorso)
-    return percorso
+    save_config(c, path)
+    monkeypatch.setattr(get_runtime_context(), "config_path", path)
+    return path
 
 
 def _pages(config: Path) -> list[dict]:
     return json.loads(config.read_text(encoding="utf-8"))["home"]["pages"]
 
 
-async def _con_pagine(pages: list[dict]) -> None:
+async def _with_pages(pages: list[dict]) -> None:
     from jenny.config import store
     from jenny.config.schema import HomePageConfig
 
-    def _metti(c):
+    def _put(c):
         c.home.pages = [HomePageConfig(**p) for p in pages]
         return True
 
-    await store.mutate(_metti)
+    await store.mutate(_put)
 
 
 async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, monkeypatch) -> None:
     from jenny.webui import commands
-    from jenny.webui import project_rename as modulo
+    from jenny.webui import project_rename as module
 
-    monkeypatch.setattr(modulo, "rename_project", lambda **kw: {"new_name": kw["new_name"]})
-    await _con_pagine([
-        {"id": "q1", "kind": "conversation", "ref": f"project:{VECCHIO}"},
-        {"id": "a1", "kind": "app", "ref": VECCHIO},
+    monkeypatch.setattr(module, "rename_project", lambda **kw: {"new_name": kw["new_name"]})
+    await _with_pages([
+        {"id": "q1", "kind": "conversation", "ref": f"project:{OLD}"},
+        {"id": "a1", "kind": "app", "ref": OLD},
         {"id": "q2", "kind": "conversation", "ref": "project:altro"},
     ])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
-    await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+    await commands.project_rename(ctx, {"name": OLD, "new_name": NEW})
 
     assert [(p["id"], p["ref"]) for p in _pages(config)] == [
-        ("q1", f"project:{NUOVO}"),
-        ("a1", VECCHIO),                     # la specie dice di chi e' una pagina
+        ("q1", f"project:{NEW}"),
+        ("a1", OLD),                     # la specie dice di chi e' una pagina
         ("q2", "project:altro"),
     ]
 
 
 async def test_a_refused_rename_leaves_the_pages_alone(workspace, config, monkeypatch) -> None:
     from jenny.webui import commands
-    from jenny.webui import project_rename as modulo
+    from jenny.webui import project_rename as module
     from jenny.webui.commands import CommandError
 
-    def _rifiuta(**kw):
-        raise modulo.ProjectRenameError("a folder named viaggi already exists")
+    def _refuses(**kw):
+        raise module.ProjectRenameError("a folder named viaggi already exists")
 
-    monkeypatch.setattr(modulo, "rename_project", _rifiuta)
-    await _con_pagine([{"id": "q1", "kind": "conversation", "ref": f"project:{VECCHIO}"}])
+    monkeypatch.setattr(module, "rename_project", _refuses)
+    await _with_pages([{"id": "q1", "kind": "conversation", "ref": f"project:{OLD}"}])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
     with pytest.raises(CommandError):
-        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
-    assert _pages(config)[0]["ref"] == f"project:{VECCHIO}"
+        await commands.project_rename(ctx, {"name": OLD, "new_name": NEW})
+    assert _pages(config)[0]["ref"] == f"project:{OLD}"
 
 
 async def test_the_command_refuses_a_bad_name_before_any_thread(workspace, config) -> None:
@@ -306,56 +306,56 @@ async def test_the_command_refuses_a_bad_name_before_any_thread(workspace, confi
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
     with pytest.raises(CommandError, match="invalid new name"):
-        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": "Ricerca ETF"})
+        await commands.project_rename(ctx, {"name": OLD, "new_name": "Ricerca ETF"})
 
 
-@pytest.mark.parametrize("in_volo", [f"project:{VECCHIO}", f"project:{NUOVO}"])
+@pytest.mark.parametrize("in_flight", [f"project:{OLD}", f"project:{NEW}"])
 async def test_the_command_refuses_while_a_turn_is_running_there(
-    workspace, config, monkeypatch, in_volo
+    workspace, config, monkeypatch, in_flight
 ) -> None:
     """Un turno in volo ha la sessione in mano: sgomberare la cache non lo ferma,
     e a fine turno la salverebbe sotto il nome vecchio — una chat senza cartella
     accanto a quella spostata. Si rifiuta **prima** di toccare qualunque cosa."""
     from jenny.webui import commands
-    from jenny.webui import project_rename as modulo
+    from jenny.webui import project_rename as module
     from jenny.webui.commands import CommandError
 
-    toccato: list[str] = []
-    monkeypatch.setattr(modulo, "rename_project", lambda **kw: toccato.append("rename"))
+    touched: list[str] = []
+    monkeypatch.setattr(module, "rename_project", lambda **kw: touched.append("rename"))
     ctx = SimpleNamespace(
         get_workspace_root=lambda: workspace,
-        invalidate_session=lambda k: toccato.append(k),
-        busy_session_keys=lambda: (in_volo, "unified:default"),
+        invalidate_session=lambda k: touched.append(k),
+        busy_session_keys=lambda: (in_flight, "unified:default"),
     )
     with pytest.raises(CommandError) as err:
-        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+        await commands.project_rename(ctx, {"name": OLD, "new_name": NEW})
     assert err.value.code == "conflict"
-    assert toccato == []
+    assert touched == []
 
 
 @pytest.mark.parametrize(
-    ("prepara", "codice"),
+    ("prepare", "code"),
     [
-        ((VECCHIO, NUOVO), "name_taken"),     # una cartella ha gia' il nome nuovo
-        ((NUOVO,), "not_found"),              # il vecchio non e' un quaderno
+        ((OLD, NEW), "name_taken"),     # una cartella ha gia' il nome nuovo
+        ((NEW,), "not_found"),              # il vecchio non e' un quaderno
     ],
     ids=["taken", "missing"],
 )
 async def test_the_expected_refusals_carry_their_own_code(
-    workspace, config, prepara, codice
+    workspace, config, prepare, code
 ) -> None:
     """Q4: il client dice questi rifiuti nella sua lingua, e per farlo gli serve
     il codice, non il testo inglese del server."""
     from jenny.webui import commands
     from jenny.webui.commands import CommandError
 
-    for name in prepara:
+    for name in prepare:
         _notebook(workspace, name)
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
     with pytest.raises(CommandError) as err:
-        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
-    assert err.value.code == codice
+        await commands.project_rename(ctx, {"name": OLD, "new_name": NEW})
+    assert err.value.code == code
 
 
 def test_the_command_is_registered() -> None:

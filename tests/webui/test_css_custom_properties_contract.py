@@ -1,6 +1,6 @@
 """Ogni variabile CSS che i fogli leggono esiste da qualche parte.
 
-`var(--x, ripiego)` con una `--x` che nessuno definisce non e' un errore: vale
+`var(--x, fallback)` con una `--x` che nessuno definisce non e' un errore: vale
 il ripiego, in silenzio e per sempre. Cosi' `--danger`, `--danger-bg` e
 `--code-bg` hanno dato per mesi lo stesso rosso e lo stesso grigio in tutti e
 sette i temi (revisione del 25/09/2026), mentre chi leggeva il foglio credeva
@@ -21,28 +21,28 @@ ASSETS = UI / "assets"
 SHEETS = ("mobile-style.css", "home-style.css")
 
 
-def _senza_commenti(text: str) -> str:
+def _without_comments(text: str) -> str:
     return re.sub(r"/\*.*?\*/", "", text, flags=re.S)
 
 
 def test_every_custom_property_read_by_the_sheets_is_defined() -> None:
-    css = "".join(_senza_commenti((ASSETS / f).read_text(encoding="utf-8")) for f in SHEETS)
-    lette = set(re.findall(r"var\(\s*(--[\w-]+)", css))
-    assert len(lette) > 30, f"la grep sulle variabili non morde piu' ({len(lette)})"
-    dichiarate = set(re.findall(r"(--[\w-]+)\s*:", css))
+    css = "".join(_without_comments((ASSETS / f).read_text(encoding="utf-8")) for f in SHEETS)
+    used = set(re.findall(r"var\(\s*(--[\w-]+)", css))
+    assert len(used) > 30, f"la grep sulle variabili non morde piu' ({len(used)})"
+    declared = set(re.findall(r"(--[\w-]+)\s*:", css))
 
-    sorgenti = [
+    sources = [
         f.read_text(encoding="utf-8")
         for f in ASSETS.rglob("*.js")
         if "vendor" not in f.relative_to(ASSETS).parts
     ]
-    sorgenti += [f.read_text(encoding="utf-8") for f in UI.glob("*.html")]
-    text = "".join(sorgenti)
-    scritte = set(re.findall(r"""['"`](--[\w-]+)['"`]""", text))
-    scritte |= set(re.findall(r"(--[\w-]+)\s*:", text))
+    sources += [f.read_text(encoding="utf-8") for f in UI.glob("*.html")]
+    text = "".join(sources)
+    written = set(re.findall(r"""['"`](--[\w-]+)['"`]""", text))
+    written |= set(re.findall(r"(--[\w-]+)\s*:", text))
 
-    mai = sorted(lette - dichiarate - scritte)
-    assert not mai, (
-        f"variabili lette e mai definite: {mai}. Vale sempre il ripiego: usa un "
+    never = sorted(used - declared - written)
+    assert not never, (
+        f"variabili lette e mai definite: {never}. Vale sempre il ripiego: usa un "
         f"token del tema (--error, --overlay-strong, ...) o definiscila per tema"
     )

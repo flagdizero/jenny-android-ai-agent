@@ -14,25 +14,25 @@ from types import SimpleNamespace
 import pytest
 
 from jenny.webui import commands
-from jenny.webui import project_delete as modulo
+from jenny.webui import project_delete as module
 from jenny.webui.commands import CommandError
 
 
 async def test_the_command_refuses_while_someone_writes_there(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    toccato: list[str] = []
-    monkeypatch.setattr(modulo, "delete_project", lambda **kw: toccato.append("delete"))
+    touched: list[str] = []
+    monkeypatch.setattr(module, "delete_project", lambda **kw: touched.append("delete"))
     monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
     ctx = SimpleNamespace(
         get_workspace_root=lambda: tmp_path,
-        invalidate_session=lambda k: toccato.append(k),
+        invalidate_session=lambda k: touched.append(k),
         busy_session_keys=lambda: ("project:piante", "unified:default"),
     )
     with pytest.raises(CommandError) as err:
         await commands.project_delete(ctx, {"name": "piante"})
     assert err.value.code == "conflict"
-    assert toccato == []
+    assert touched == []
 
 
 async def test_another_notebook_busy_does_not_stop_the_delete(
@@ -40,12 +40,12 @@ async def test_another_notebook_busy_does_not_stop_the_delete(
 ) -> None:
     from jenny.webui import home_pages
 
-    async def _nessuna_pagina(kind, ref):
+    async def _no_page(kind, ref):
         return 0
 
-    monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
+    monkeypatch.setattr(module, "delete_project", lambda **kw: {"name": kw["name"]})
     monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
-    monkeypatch.setattr(home_pages, "detach_pages_of", _nessuna_pagina)
+    monkeypatch.setattr(home_pages, "detach_pages_of", _no_page)
     ctx = SimpleNamespace(
         get_workspace_root=lambda: tmp_path,
         invalidate_session=lambda k: None,
@@ -61,12 +61,12 @@ async def test_a_page_that_cannot_be_taken_does_not_undo_the_notebook_delete(
     (``home_pages.detach_pages_quietly``): il quaderno e' gia' cancellato."""
     from jenny.webui import home_pages
 
-    async def _rotto(kind, ref):
+    async def _broken(kind, ref):
         raise RuntimeError("disco pieno")
 
-    monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
+    monkeypatch.setattr(module, "delete_project", lambda **kw: {"name": kw["name"]})
     monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
-    monkeypatch.setattr(home_pages, "detach_pages_of", _rotto)
+    monkeypatch.setattr(home_pages, "detach_pages_of", _broken)
     ctx = SimpleNamespace(
         get_workspace_root=lambda: tmp_path,
         invalidate_session=lambda k: None,

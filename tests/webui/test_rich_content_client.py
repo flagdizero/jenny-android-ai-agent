@@ -29,19 +29,19 @@ _HARNESS = """
 import assert from 'node:assert/strict';
 
 /* Chi e' stato chiesto, e in che ordine. E' la misura di «pigro». */
-const caricati = [];
-let caricamentoFallisce = false;
+const loaded = [];
+let loadFails = false;
 /* Quando c'e', ogni script resta in attesa finche' il banco non lo risolve a
    mano: e' cosi' che si vede *quando* parte una richiesta, non solo che parte. */
-let sospesi = null;
+let suspended = null;
 function ensureVendor(src) {
-  caricati.push(src);
-  if (sospesi) return new Promise((ok) => sospesi.set(src, ok));
-  return caricamentoFallisce ? Promise.reject(new Error('giu')) : Promise.resolve();
+  loaded.push(src);
+  if (suspended) return new Promise((ok) => suspended.set(src, ok));
+  return loadFails ? Promise.reject(new Error('giu')) : Promise.resolve();
 }
 function ensureVendorStyle(href) {
-  caricati.push(href);
-  return caricamentoFallisce ? Promise.reject(new Error('giu')) : Promise.resolve();
+  loaded.push(href);
+  return loadFails ? Promise.reject(new Error('giu')) : Promise.resolve();
 }
 
 /* Un DOM finto con quel poco che il modulo tocca: camminata sui figli,
@@ -57,9 +57,9 @@ function el(tag, children = [], className = '') {
     isConnected: true, parentNode: null,
     get textContent() {
       let t = '';
-      const giu = (x) => x.childNodes.forEach((f) =>
-        f.nodeType === 3 ? (t += f.nodeValue) : giu(f));
-      giu(n);
+      const down = (x) => x.childNodes.forEach((f) =>
+        f.nodeType === 3 ? (t += f.nodeValue) : down(f));
+      down(n);
       return t;
     },
     set innerHTML(v) { n._html = v; n.childNodes = []; },
@@ -67,12 +67,12 @@ function el(tag, children = [], className = '') {
     appendChild(f) { f.parentNode = n; n.childNodes.push(f); return f; },
     querySelectorAll(sel) {
       const out = [];
-      const giu = (x) => x.childNodes.forEach((f) => {
+      const down = (x) => x.childNodes.forEach((f) => {
         if (f.nodeType !== 1) return;
         if (_match(f, sel)) out.push(f);
-        giu(f);
+        down(f);
       });
-      giu(n);
+      down(n);
       return out;
     },
     closest(sel) {
@@ -101,45 +101,45 @@ let schema = 'dark';
 globalThis.getComputedStyle = () => ({ colorScheme: schema });
 
 /* Le librerie, quando arrivano. */
-const reseFormule = [];
+const renderedFormulas = [];
 globalThis.renderMathInElement = (container, opts) => {
-  reseFormule.push({ container, delimitatori: opts.delimiters.map((d) => d.left), opts });
+  renderedFormulas.push({ container, delimiters: opts.delimiters.map((d) => d.left), opts });
 };
-const reseDiagrammi = [];
+const renderedDiagrams = [];
 globalThis.mermaid = {
   _config: null,
   initialize(c) { globalThis.mermaid._config = c; },
-  render(id, codice) {
-    reseDiagrammi.push(codice);
-    return Promise.resolve({ svg: `<svg data-da="${codice.trim()}"></svg>` });
+  render(id, code) {
+    renderedDiagrams.push(code);
+    return Promise.resolve({ svg: `<svg data-da="${code.trim()}"></svg>` });
   },
 };
 
-__MODULO__
+__MODULE__
 
 /* Le due forme che un diagramma puo' avere a schermo. */
-function bloccoServer(codice) {
-  return el('pre', [el('code', [txt(codice)], 'language-mermaid')], 'mermaid-block');
+function serverBlock(code) {
+  return el('pre', [el('code', [txt(code)], 'language-mermaid')], 'mermaid-block');
 }
-function bloccoChat(codice) {
+function chatBlock(code) {
   return el('div', [
     el('div', [txt('mermaid')], 'chat-code-header'),
-    el('pre', [el('code', [txt(codice)], 'hljs language-mermaid')]),
+    el('pre', [el('code', [txt(code)], 'hljs language-mermaid')]),
   ], 'chat-code-block');
 }
 function body(children) { return el('div', children); }
 function reset() {
-  caricati.length = 0; reseFormule.length = 0; reseDiagrammi.length = 0;
-  caricamentoFallisce = false; schema = 'dark'; sospesi = null;
+  loaded.length = 0; renderedFormulas.length = 0; renderedDiagrams.length = 0;
+  loadFails = false; schema = 'dark'; suspended = null;
 }
 """
 
 
 def _run(script: str) -> None:
-    modulo = RICH.read_text(encoding="utf-8").replace(_IMPORT, "")
-    assert _IMPORT not in modulo, "l'import di rich-content e' cambiato: il banco non lo stubba piu'"
-    sorgente = _HARNESS.replace("__MODULO__", modulo) + "\n" + script
-    run_js(sorgente)
+    module = RICH.read_text(encoding="utf-8").replace(_IMPORT, "")
+    assert _IMPORT not in module, "l'import di rich-content e' cambiato: il banco non lo stubba piu'"
+    source = _HARNESS.replace("__MODULE__", module) + "\n" + script
+    run_js(source)
 
 
 def test_plain_text_loads_nothing_at_all() -> None:
@@ -149,7 +149,7 @@ def test_plain_text_loads_nothing_at_all() -> None:
     _run("""
 reset();
 await renderRich(body([txt('ciao, come va? tutto bene')]));
-assert.deepEqual(caricati, [], 'ha caricato qualcosa per del testo semplice');
+assert.deepEqual(loaded, [], 'ha caricato qualcosa per del testo semplice');
 """)
 
 
@@ -165,7 +165,7 @@ const msg = body([
   el('pre', [el('code', [txt('export $EDITOR=vim && echo $PATH')])]),
 ]);
 await renderRich(msg, { inlineDollar: true });
-assert.deepEqual(caricati, [], 'un prompt di shell ha tirato giu KaTeX');
+assert.deepEqual(loaded, [], 'un prompt di shell ha tirato giu KaTeX');
 """)
 
 
@@ -177,18 +177,18 @@ def test_money_is_not_maths_in_chat_but_inline_is_in_a_page() -> None:
     _run("""
 reset();
 await renderRich(body([txt('costa $5, forse $10')]));
-assert.deepEqual(caricati, [], 'in chat due prezzi hanno acceso la matematica');
+assert.deepEqual(loaded, [], 'in chat due prezzi hanno acceso la matematica');
 
 reset();
 await renderRich(body([txt('la somma $f(x) = w_i x_i$ pesa')]), { inlineDollar: true });
-assert.ok(caricati.length, 'in una pagina il dollaro in riga non ha acceso niente');
-assert.ok(reseFormule[0].delimitatori.includes('$'), 'manca il delimitatore in riga');
+assert.ok(loaded.length, 'in una pagina il dollaro in riga non ha acceso niente');
+assert.ok(renderedFormulas[0].delimiters.includes('$'), 'manca il delimitatore in riga');
 
 // E in chat una formula vera si scrive lo stesso, coi delimitatori non ambigui.
 reset();
 await renderRich(body([txt('vale $$E = mc^2$$ sempre')]));
-assert.ok(reseFormule.length === 1, 'in chat $$ non ha disegnato');
-assert.ok(!reseFormule[0].delimitatori.includes('$'),
+assert.ok(renderedFormulas.length === 1, 'in chat $$ non ha disegnato');
+assert.ok(!renderedFormulas[0].delimiters.includes('$'),
   'la chat ha acceso anche il dollaro in riga');
 """)
 
@@ -200,9 +200,9 @@ def test_the_stylesheet_comes_with_the_code() -> None:
     _run("""
 reset();
 await renderRich(body([txt('vale $$E = mc^2$$')]));
-assert.ok(caricati.some((s) => s.endsWith('katex.min.css')), 'manca il foglio di stile');
-assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'manca il codice');
-assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'manca auto-render');
+assert.ok(loaded.some((s) => s.endsWith('katex.min.css')), 'manca il foglio di stile');
+assert.ok(loaded.some((s) => s.endsWith('katex.min.js')), 'manca il codice');
+assert.ok(loaded.some((s) => s.endsWith('auto-render.min.js')), 'manca auto-render');
 """)
 
 
@@ -213,20 +213,20 @@ def test_auto_render_is_asked_for_only_after_katex_has_arrived() -> None:
     non deve essere stato nemmeno chiesto."""
     _run("""
 reset();
-sospesi = new Map();
-const giro = () => new Promise((r) => setTimeout(r, 0));
-const resolve = (fine) => [...sospesi].find(([src]) => src.endsWith(fine))[1]();
+suspended = new Map();
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const resolve = (fine) => [...suspended].find(([src]) => src.endsWith(fine))[1]();
 const done = renderRich(body([txt('vale $$E = mc^2$$')]));
-await giro();
-assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'KaTeX non chiesto');
-assert.ok(!caricati.some((s) => s.endsWith('auto-render.min.js')),
+await tick();
+assert.ok(loaded.some((s) => s.endsWith('katex.min.js')), 'KaTeX non chiesto');
+assert.ok(!loaded.some((s) => s.endsWith('auto-render.min.js')),
   'auto-render chiesto prima che KaTeX fosse arrivato');
 resolve('katex.min.js');
-await giro();
-assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'auto-render mai chiesto');
+await tick();
+assert.ok(loaded.some((s) => s.endsWith('auto-render.min.js')), 'auto-render mai chiesto');
 resolve('auto-render.min.js');
 await done;
-assert.equal(reseFormule.length, 1);
+assert.equal(renderedFormulas.length, 1);
 """)
 
 
@@ -238,8 +238,8 @@ def test_code_blocks_stay_code() -> None:
     _run("""
 reset();
 await renderRich(body([txt('vale $$x$$')]));
-const ignorati = reseFormule[0].opts.ignoredTags.map((t) => t.toLowerCase());
-assert.ok(ignorati.includes('code') && ignorati.includes('pre'),
+const ignored = renderedFormulas[0].opts.ignoredTags.map((t) => t.toLowerCase());
+assert.ok(ignored.includes('code') && ignored.includes('pre'),
   'KaTeX entrerebbe nei blocchi di codice');
 """)
 
@@ -250,14 +250,14 @@ def test_a_diagram_is_recognised_in_both_shapes() -> None:
     e' il motivo per cui in chat un diagramma non ha mai disegnato niente."""
     _run("""
 reset();
-const page = body([bloccoServer('flowchart LR\\n A --> B')]);
+const page = body([serverBlock('flowchart LR\\n A --> B')]);
 await renderDiagrams(page);
-assert.deepEqual(reseDiagrammi.map((c) => c.trim()), ['flowchart LR\\n A --> B']);
+assert.deepEqual(renderedDiagrams.map((c) => c.trim()), ['flowchart LR\\n A --> B']);
 
 reset();
-const chat = body([bloccoChat('graph TD\\n X --> Y')]);
+const chat = body([chatBlock('graph TD\\n X --> Y')]);
 await renderDiagrams(chat);
-assert.deepEqual(reseDiagrammi.map((c) => c.trim()), ['graph TD\\n X --> Y'],
+assert.deepEqual(renderedDiagrams.map((c) => c.trim()), ['graph TD\\n X --> Y'],
   'in chat il diagramma resta codice colorato');
 """)
 
@@ -268,7 +268,7 @@ def test_the_whole_code_block_is_replaced_not_just_the_code() -> None:
     sembrare che il disegno sia dentro un blocco di codice."""
     _run("""
 reset();
-const chat = body([bloccoChat('graph TD\\n X --> Y')]);
+const chat = body([chatBlock('graph TD\\n X --> Y')]);
 await renderDiagrams(chat);
 assert.equal(chat.childNodes.length, 1);
 assert.equal(chat.childNodes[0].className, 'diagram',
@@ -281,7 +281,7 @@ def test_nothing_is_loaded_for_a_page_without_diagrams() -> None:
     _run("""
 reset();
 await renderDiagrams(body([el('pre', [el('code', [txt('print(1)')], 'language-python')])]));
-assert.deepEqual(caricati, [], 'ha caricato mermaid per del python');
+assert.deepEqual(loaded, [], 'ha caricato mermaid per del python');
 """)
 
 
@@ -292,13 +292,13 @@ def test_the_dark_theme_reaches_mermaid() -> None:
     a contenuto aperto viene raccolto."""
     _run("""
 reset();
-await renderDiagrams(body([bloccoServer('graph TD\\n A --> B')]));
+await renderDiagrams(body([serverBlock('graph TD\\n A --> B')]));
 assert.equal(mermaid._config.theme, 'dark');
 assert.equal(mermaid._config.securityLevel, 'strict',
   "i diagrammi arrivano dal modello: l'HTML sta fuori dalle etichette");
 
 reset(); schema = 'light';
-await renderDiagrams(body([bloccoServer('graph TD\\n A --> B')]));
+await renderDiagrams(body([serverBlock('graph TD\\n A --> B')]));
 assert.equal(mermaid._config.theme, 'default');
 """)
 
@@ -308,18 +308,18 @@ def test_a_library_that_will_not_load_leaves_the_content_readable() -> None:
     e deve restarci. Una pagina rotta perche' un diagramma non si e' scaricato
     sarebbe peggio del diagramma non disegnato."""
     _run("""
-reset(); caricamentoFallisce = true;
-const avvisi = [];
-const warnVero = console.warn;
-console.warn = (msg) => avvisi.push(String(msg));
-const page = body([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
+reset(); loadFails = true;
+const notices = [];
+const realWarn = console.warn;
+console.warn = (msg) => notices.push(String(msg));
+const page = body([txt('vale $$E$$'), serverBlock('graph TD\\n A --> B')]);
 await renderRich(page, { inlineDollar: true });
-console.warn = warnVero;
-assert.deepEqual(reseFormule, []);
-assert.deepEqual(reseDiagrammi, []);
+console.warn = realWarn;
+assert.deepEqual(renderedFormulas, []);
+assert.deepEqual(renderedDiagrams, []);
 assert.equal(page.childNodes.length, 2, 'il contenuto e stato smontato');
 // Il fallimento si dice nel log, e i log sono in inglese (AGENTS.md).
-assert.deepEqual(avvisi.sort(), [
+assert.deepEqual(notices.sort(), [
   'rich-content: KaTeX failed to load', 'rich-content: Mermaid failed to load',
 ]);
 """)

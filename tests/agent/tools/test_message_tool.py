@@ -672,7 +672,7 @@ async def test_a_bare_token_is_not_an_alert(junk: str) -> None:
 @pytest.mark.parametrize("text", ["primo", "Innaffia", "acqua!", "Acerello 9%"])
 async def test_a_short_alert_is_still_an_alert(text: str) -> None:
     """Il filtro della parola nuda è una lista chiusa, non una regola di forma.
-    Il primo tentativo ("una parola e nessuna cifra") rifiutava ``"primo"``: una
+    Il primo tentativo ("una parola e nessuna cifra") rifiutava ``"first"``: una
     parola nuda che passa è rumore, un avviso vero rifiutato è l'heartbeat che
     tace quando aveva qualcosa da dire — e i due errori non si pagano allo
     stesso prezzo."""

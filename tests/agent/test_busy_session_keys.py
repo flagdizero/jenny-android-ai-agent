@@ -38,9 +38,9 @@ def _subagents(sessions: dict[str, dict[str, bool]]) -> SubagentManager:
     manager = SubagentManager.__new__(SubagentManager)
     manager._session_tasks = {key: set(tasks) for key, tasks in sessions.items()}
     manager._running_tasks = {
-        tid: SimpleNamespace(done=lambda finito=finito: finito)
+        tid: SimpleNamespace(done=lambda finished=finished: finished)
         for tasks in sessions.values()
-        for tid, finito in tasks.items()
+        for tid, finished in tasks.items()
     }
     return manager
 

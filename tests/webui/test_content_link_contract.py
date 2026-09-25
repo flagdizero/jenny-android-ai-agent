@@ -26,7 +26,7 @@ WebUI non ha un runner JS con DOM.
 **La meta' della wiki e' uscita di qui il 21/09/2026.** Tre banchi guardavano
 ``_wireWikiLinks`` in ``mobile-wiki.js``: quella vista non e' piu' in officina.
 La stessa regola vale ora per il lettore della casa, e la' e' **misurata** e non
-grepata — ``test_casa_reader_client.py`` la fa girare in node su un DOM finto:
+grepata — ``test_home_reader_client.py`` la fa girare in node su un DOM finto:
 relativo, wikilink dello stesso quaderno, wikilink di un altro, web, ancora,
 link morto. Quel che resta qui e' la meta' della chat, che non ha un gemello.
 """

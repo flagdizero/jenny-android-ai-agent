@@ -1939,7 +1939,7 @@ export class SettingsController {
    * numero di versione, che e' un dato e non un giro.
    *
    * **E nemmeno «riesegui la configurazione»**: `save_onboarding` fa
-   * `config.providers.providers = [una]` — **sostituisce** l'elenco invece di
+   * `config.providers.providers = [one]` — **sostituisce** l'elenco invece di
    * aggiungere. In una schermata da operatore quel bottone puo' solo toglierti
    * marche che hai configurato, e tutto cio' che il wizard imposta si fa
    * meglio di qua (la marca col suo `+`, il modello dalla casa). Resta vivo

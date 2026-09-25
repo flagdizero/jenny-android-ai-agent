@@ -43,10 +43,10 @@ def _fun(source: str, signature: str) -> str:
     return m.group(1)
 
 
-class TestLaPillola:
+class TestThePill:
     """Corta, centrata, mai a tutto schermo."""
 
-    def test_e_larga_una_frazione_dello_schermo(self):
+    def test_is_a_fraction_of_the_screen_wide(self):
         source = _read()
         ratio = float(_const(source, "PILL_WIDTH_RATIO").rstrip("f"))
         # Sotto il 50% è troppo stretta per scriverci; sopra il 75% torna una
@@ -57,7 +57,7 @@ class TestLaPillola:
             source,
         ), "pillWidth non deriva più dallo schermo e dalla frazione"
 
-    def test_il_row_la_centra(self):
+    def test_the_row_centers_it(self):
         """La pillola non è più `MATCH_PARENT`: ha la larghezza di `pillWidth`
         e il row la centra. Se torna MATCH_PARENT è di nuovo edge-to-edge."""
         source = _read()
@@ -67,14 +67,14 @@ class TestLaPillola:
             "la barra è tornata MATCH_PARENT nel row: edge-to-edge"
         )
 
-    def test_niente_beccuccio(self):
+    def test_no_bubble_tail(self):
         source = _read()
         assert "TAIL_W_DP" not in source and "barBubble" not in source, (
             "il beccuccio è tornato: era un glitch alla scala della pillola, "
             "e il legame con lei ora è la posizione"
         )
 
-    def test_ha_un_ombra(self):
+    def test_has_a_shadow(self):
         """Fondo e bordo vengono dallo stesso tema: senza ombra sono due colori
         vicini su un terzo, e la forma sembra incollata al wallpaper."""
         source = _read()
@@ -82,7 +82,7 @@ class TestLaPillola:
         assert "elevation = dp(ctx, PILL_ELEVATION_DP)" in body
         assert "clipToPadding = false" in body, "il row taglierebbe l'ombra"
 
-    def test_si_apre_gia_da_pillola(self):
+    def test_already_opens_from_pill(self):
         """`applyPill` va chiamata **prima** di `visibility = VISIBLE`, o
         l'utente vede per un frame la geometria vecchia."""
         source = _read()
@@ -93,10 +93,10 @@ class TestLaPillola:
         assert "applyPill(ctx)" in m.group(1)
 
 
-class TestLeiCiStaSopra:
+class TestSheStandsOnTop:
     """Il legame è la posizione: in piedi sul cap del suo lato."""
 
-    def test_park_x_punta_al_cap_a_chat_aperta(self):
+    def test_park_x_points_at_the_cap_with_chat_open(self):
         source = _read()
         body = _fun(source, "private fun parkX(ctx: Context, out: Boolean = false): Int")
         assert "out && expanded" in body, (
@@ -107,7 +107,7 @@ class TestLeiCiStaSopra:
         # Il cap è la pallina: padding più mezza pallina.
         assert "dp(ctx, BAR_PAD_DP) + dp(ctx, SEND_DP) / 2" in body
 
-    def test_park_top_segue_la_pillola_misurata(self):
+    def test_park_top_follows_the_measured_pill(self):
         """Quando il testo va a capo la pillola cresce: lei deve salire con la
         pillola, non finirci dietro. Quindi `parkTop` legge l'altezza misurata,
         e la tastiera, ma solo a chat aperta — parcheggiata la riga è quella a
@@ -118,14 +118,14 @@ class TestLeiCiStaSopra:
         assert "chatBottomInsetPx" in body
         assert "FEET_RATIO" in body and "FEET_GAP_DP" in body
 
-    def test_la_pillola_che_cresce_la_fa_salire(self):
+    def test_the_growing_pill_pushes_it_up(self):
         source = _read()
         body = _fun(source, "private fun buildInputRow(ctx: Context): View")
         assert "addOnLayoutChangeListener" in body
         assert "pillHeightPx = h" in body
         assert "slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))" in body
 
-    def test_le_frazioni_dello_sprite_sono_quelle_misurate(self):
+    def test_the_sprite_fractions_are_the_measured_ones(self):
         """0,87 e 0,52 vengono dai pixel opachi di `jenny-body-front-idle`:
         piedi alla riga 668/768, corpo fra le colonne 229–572. Cambiare lo
         sprite senza rimisurarle la mette a galleggiare o a sprofondare."""
@@ -134,12 +134,12 @@ class TestLeiCiStaSopra:
         assert _const(source, "AXIS_RATIO") == "0.52f"
 
 
-class TestGliInsetsNonCancellanoLaPillola:
+class TestTheInsetsDoNotEraseThePill:
     """Il listener degli insets IME scatta nell'istante in cui la finestra
     prende il fuoco, cioè subito dopo `applyPill`: se riscrive tutti e quattro
     i padding cancella la geometria un frame dopo che è stata calcolata."""
 
-    def test_il_listener_ime_tocca_solo_il_fondo(self):
+    def test_the_ime_listener_touches_only_the_bottom(self):
         source = _read()
         m = re.search(
             r"setOnApplyWindowInsetsListener \{(.*?)\n            \}", source, re.S
@@ -148,7 +148,7 @@ class TestGliInsetsNonCancellanoLaPillola:
         body = m.group(1)
         assert "it.paddingLeft" in body and "it.paddingRight" in body
 
-    def test_la_tastiera_la_fa_salire(self):
+    def test_the_keyboard_pushes_it_up(self):
         source = _read()
         m = re.search(
             r"setOnApplyWindowInsetsListener \{(.*?)\n            \}", source, re.S
@@ -158,10 +158,10 @@ class TestGliInsetsNonCancellanoLaPillola:
         assert "slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))" in m.group(1)
 
 
-class TestLaPallina:
+class TestTheBall:
     """Più piccola del cap, sempre visibile, freccia disegnata."""
 
-    def test_non_e_concentrica_al_cap(self):
+    def test_is_not_concentric_with_the_cap(self):
         """A 38 in 46 erano due cerchi a 4 dp: si leggeva come il pomello di
         un interruttore. Il disco deve lasciare almeno 6 dp d'aria."""
         source = _read()
@@ -169,13 +169,13 @@ class TestLaPallina:
         assert pad >= 6, f"BAR_PAD_DP={pad}: la pallina torna concentrica al cap"
         assert _const(source, "PILL_DP") == "SEND_DP + 2 * BAR_PAD_DP"
 
-    def test_ha_sempre_un_fondo(self):
+    def test_always_has_a_background(self):
         source = _read()
         body = _fun(source, "private fun syncSend(bloom: Boolean = true)")
         assert "background = null" not in body
         assert "palette.border" in body and "palette.accent" in body
 
-    def test_la_freccia_e_disegnata(self):
+    def test_the_arrow_is_drawn(self):
         """Il glifo `↑` è sottile, con la punta da carattere, e siede sulla
         linea di base invece che al centro del disco."""
         source = _read()
@@ -185,7 +185,7 @@ class TestLaPallina:
         assert "private fun arrowIcon(ctx: Context): Drawable" in source
         assert "strokeCap = Paint.Cap.ROUND" in source
 
-    def test_il_bordo_si_accende_col_testo(self):
+    def test_the_border_lights_up_with_the_text(self):
         source = _read()
         body = _fun(source, "private fun syncSend(bloom: Boolean = true)")
         assert "strokeColor()" in body

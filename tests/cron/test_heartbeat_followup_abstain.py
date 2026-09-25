@@ -45,7 +45,7 @@ from jenny.runtime.cron_dispatch import CronDispatcher
 from jenny.session.keys import HEARTBEAT_SESSION_KEY
 
 _WATERBOT = "- Ogni ciclo controlla l'umidità delle piante e avvisami sotto il 15%."
-_VITAMINE = "- Alle 9 ricordami le vitamine."
+_VITAMINS = "- Alle 9 ricordami le vitamine."
 
 _T0_MS = 1_755_000_000_000
 _CYCLE_MS = 1_800_000
@@ -152,14 +152,14 @@ class _Harness:
 
 @pytest.fixture
 def one_delegated(tmp_path: Path) -> _Harness:
-    harness = _Harness(tmp_path, _WATERBOT, _VITAMINE)
+    harness = _Harness(tmp_path, _WATERBOT, _VITAMINS)
     harness.agent.delegated = {1: "leggi l'umidità"}
     return harness
 
 
 @pytest.fixture
 def two_delegated(tmp_path: Path) -> _Harness:
-    harness = _Harness(tmp_path, _WATERBOT, _VITAMINE)
+    harness = _Harness(tmp_path, _WATERBOT, _VITAMINS)
     harness.agent.delegated = {1: "leggi l'umidità", 2: "controlla le vitamine"}
     return harness
 
@@ -185,7 +185,7 @@ class TestABareAbstentionDeclaresNothing:
         await one_delegated.cycle()
         with_tool = one_delegated.entry_for(0)
 
-        silent = _Harness(tmp_path / "b", _WATERBOT, _VITAMINE)
+        silent = _Harness(tmp_path / "b", _WATERBOT, _VITAMINS)
         silent.agent.delegated = {1: "leggi l'umidità"}
         silent.abstains = False
         await silent.cycle()

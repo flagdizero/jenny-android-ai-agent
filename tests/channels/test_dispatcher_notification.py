@@ -74,7 +74,7 @@ async def _pump(d: WebSocketDispatcher, until, timeout: float = 1.0) -> None:
             await task
 
 
-async def test_la_risposta_squilla_una_volta_e_finisce_in_chat(alerts: _Alerts) -> None:
+async def test_the_answer_rings_once_and_ends_up_in_chat(alerts: _Alerts) -> None:
     d, ws = _wired()
     await d.bus.publish_outbound(
         OutboundMessage(channel=NOTIFICATION_CHANNEL, chat_id="shade", content="fatto")
@@ -94,7 +94,7 @@ async def test_la_risposta_squilla_una_volta_e_finisce_in_chat(alerts: _Alerts) 
     assert mirror.metadata["origin_channel"] == NOTIFICATION_CHANNEL
 
 
-async def test_un_progress_non_arriva_alla_tendina(alerts: _Alerts) -> None:
+async def test_a_progress_does_not_reach_the_dropdown(alerts: _Alerts) -> None:
     """Gating per-canale: ``send_progress = False``, quindi il dispatcher
     scarta prima di instradare."""
     d, _ws = _wired()
@@ -108,7 +108,7 @@ async def test_un_progress_non_arriva_alla_tendina(alerts: _Alerts) -> None:
     assert alerts.posted == []
 
 
-async def test_il_turn_end_non_squilla_e_non_si_proietta(alerts: _Alerts) -> None:
+async def test_the_turn_end_neither_rings_nor_is_projected(alerts: _Alerts) -> None:
     d, ws = _wired()
     await d.bus.publish_outbound(
         OutboundMessage(
@@ -121,7 +121,7 @@ async def test_il_turn_end_non_squilla_e_non_si_proietta(alerts: _Alerts) -> Non
     assert ws.sent == []
 
 
-async def test_senza_canale_registrato_il_finale_non_va_da_nessuna_parte(
+async def test_without_registered_channel_the_final_goes_nowhere(
     alerts: _Alerts,
 ) -> None:
     """Fuori da Android il canale non esiste — e là nessuno può produrre
@@ -140,19 +140,19 @@ async def test_senza_canale_registrato_il_finale_non_va_da_nessuna_parte(
     assert ws.sent == []
 
 
-async def test_il_canale_non_nasce_senza_contesto_android() -> None:
+async def test_the_channel_is_not_born_without_an_android_context() -> None:
     """La registrazione è gated sul contesto: in CI e su desktop non c'è."""
     d = WebSocketDispatcher(Config(), MessageBus())
     assert NOTIFICATION_CHANNEL not in d.channels
 
 
-async def test_il_canale_nasce_con_un_contesto_android(monkeypatch) -> None:
+async def test_the_channel_is_born_with_an_android_context(monkeypatch) -> None:
     monkeypatch.setattr("jenny.runtime.context.get_android_context", lambda: object())
     d = WebSocketDispatcher(Config(), MessageBus())
     assert isinstance(d.channels.get(NOTIFICATION_CHANNEL), NotificationChannel)
 
 
-def test_il_canale_non_e_un_bersaglio_del_fanout_proattivo() -> None:
+def test_the_channel_is_not_a_target_of_the_proactive_fanout() -> None:
     """Test negativo, e serve.
 
     Gli ``extra_targets`` sono i destinatari del fan-out **proattivo**: mettere

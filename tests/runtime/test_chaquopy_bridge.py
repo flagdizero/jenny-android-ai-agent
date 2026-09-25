@@ -117,7 +117,7 @@ async def test_a_construction_failure_names_the_bridge() -> None:
 async def test_the_module_seam_still_drives_the_shared_cache(
     module_name: str, bridge: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sostituire ``modulo._resolve_bridge_class`` deve ancora bastare.
+    """Sostituire ``module._resolve_bridge_class`` deve ancora bastare.
 
     È l'unico punto in cui questi moduli entrano in Chaquopy, quindi è il seam su
     cui 35 test montano il finto bridge. ``BridgeCache.get`` riceve ``resolve``

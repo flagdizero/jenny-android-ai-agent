@@ -37,7 +37,7 @@ def _run_js(script: str) -> str:
     """`jenny-gap.js` importa da `mascot.js`, che al caricamento tocca
     `localStorage`: sotto node non esiste. Si stura con un finto prima
     dell'import, che e' meno invasivo che spezzare il modulo in due."""
-    sorgente = (
+    source = (
         "globalThis.localStorage = { getItem: () => null, setItem: () => {} };\n"
         "globalThis.document = { documentElement: { style: { setProperty: () => {} } } };\n"
         + GAP_JS.read_text(encoding="utf-8").replace(
@@ -47,7 +47,7 @@ def _run_js(script: str) -> str:
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )
-    return run_js(sorgente)
+    return run_js(source)
 
 
 def test_the_ratios_still_say_what_this_module_assumes() -> None:
@@ -101,7 +101,7 @@ def test_only_the_messages_in_her_corner_are_marked() -> None:
     """
     out = _run_js("""
 const figure = { left: 517.4, top: 132.4 };
-const casi = [
+const cases = [
   // [right, bottom, atteso, perche]
   [556, 220, true,  "in basso e a destra: e il suo angolo"],
   [556, 120, false, "largo ma sopra di lei"],
@@ -109,9 +109,9 @@ const casi = [
   [500, 120, false, "nessuno dei due assi"],
   [517.4, 220, false, "tocca il bordo esatto: non si sovrappone"],
 ];
-for (const [right, bottom, atteso, why] of casi) {
-  const avuto = needsDodge({ right, bottom }, figure);
-  assert.equal(avuto, atteso, `${why}: atteso ${atteso}, avuto ${avuto}`);
+for (const [right, bottom, expected, why] of cases) {
+  const actual = needsDodge({ right, bottom }, figure);
+  assert.equal(actual, expected, `${why}: atteso ${expected}, avuto ${actual}`);
 }
 console.log('ok');
 """)
@@ -185,9 +185,9 @@ const mascot = {
   getBoundingClientRect: () => (
     { left: 484.4, right: 604.4, top: 100, bottom: 220, width: 120 }),
 };
-function filoCon(nodi) {
+function threadWith(nodi) {
   return {
-    style: { setProperty: (k, v) => { filoCon.written = [k, v]; } },
+    style: { setProperty: (k, v) => { threadWith.written = [k, v]; } },
     getBoundingClientRect: () => ({ right: 574.4 }),
     querySelectorAll: (sel) => nodi.filter((n) => sel
       .split(',').map((s) => s.trim())
@@ -210,14 +210,14 @@ def test_a_bubble_of_ours_in_her_corner_dodges_too() -> None:
     """
     out = _con_dom("""
 const reply = node('home-msg home-msg-jenny', { right: 540, bottom: 200 });
-const mia      = node('home-msg home-msg-user',  { right: 556.4, bottom: 300 });
+const mine      = node('home-msg home-msg-user',  { right: 556.4, bottom: 300 });
 const old  = node('home-msg home-msg-user',  { right: 556.4, bottom: 90 });
-const thread = filoCon([old, reply, mia]);
+const thread = threadWith([old, reply, mine]);
 new JennyGap(thread, mascot).refresh();
-assert.ok(mia.classes.has(CLASS), 'la bolla nel suo angolo non si e scansata');
+assert.ok(mine.classes.has(CLASS), 'la bolla nel suo angolo non si e scansata');
 assert.ok(reply.classes.has(CLASS), 'la risposta nel suo angolo non si e scansata');
 assert.ok(!old.classes.has(CLASS), 'una bolla sopra di lei non deve scansarsi');
-assert.deepEqual(filoCon.written, ['--jenny-gap', '39px']);
+assert.deepEqual(threadWith.written, ['--jenny-gap', '39px']);
 console.log('ok');
 """)
     assert "ok" in out
@@ -231,9 +231,9 @@ def test_a_bubble_that_stops_dodging_gets_cleaned_up() -> None:
     c'e' nessuno da scansare.
     """
     out = _con_dom("""
-const mia = node('home-msg home-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
-new JennyGap(filoCon([mia]), mascot).refresh();
-assert.ok(!mia.classes.has(CLASS), 'il margine e rimasto attaccato');
+const mine = node('home-msg home-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
+new JennyGap(threadWith([mine]), mascot).refresh();
+assert.ok(!mine.classes.has(CLASS), 'il margine e rimasto attaccato');
 console.log('ok');
 """)
     assert "ok" in out

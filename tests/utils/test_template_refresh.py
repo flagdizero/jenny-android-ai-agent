@@ -590,19 +590,19 @@ def test_a_second_identical_pass_writes_nothing(tmp_path: Path) -> None:
     funzione *dice*, l'``mtime`` è quel che ha *fatto*.
     """
     dest = tmp_path / "ws"
-    primo = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    assert primo > 0, "la prima passata deve estrarre davvero"
+    first = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert first > 0, "la prima passata deve estrarre davvero"
 
-    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
-    before = campione.stat().st_mtime_ns
+    sample = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    before = sample.stat().st_mtime_ns
     # Un mtime a grana grossa renderebbe il confronto cieco: si sposta indietro
     # di un secondo, così un'eventuale riscrittura si vede comunque.
-    os.utime(campione, ns=(before - 1_000_000_000, before - 1_000_000_000))
-    marked = campione.stat().st_mtime_ns
+    os.utime(sample, ns=(before - 1_000_000_000, before - 1_000_000_000))
+    marked = sample.stat().st_mtime_ns
 
-    secondo = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    assert secondo == 0, f"la seconda passata ha riscritto {secondo} file identici"
-    assert campione.stat().st_mtime_ns == marked, "il file è stato riscritto uguale"
+    second = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert second == 0, f"la seconda passata ha riscritto {second} file identici"
+    assert sample.stat().st_mtime_ns == marked, "il file è stato riscritto uguale"
 
 
 def test_a_changed_file_still_lands(tmp_path: Path) -> None:
@@ -616,29 +616,29 @@ def test_a_changed_file_still_lands(tmp_path: Path) -> None:
     """
     dest = tmp_path / "ws"
     extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
-    buono = campione.read_bytes()
+    sample = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    good = sample.read_bytes()
 
     # Stessa lunghezza, un byte diverso: il caso che una `stat` non vede.
-    guasto = bytearray(buono)
-    guasto[0] = (guasto[0] + 1) % 256
-    campione.write_bytes(bytes(guasto))
+    broken = bytearray(good)
+    broken[0] = (broken[0] + 1) % 256
+    sample.write_bytes(bytes(broken))
 
-    scritti = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    assert scritti == 1, f"il file corrotto doveva essere riscritto, scritti={scritti}"
-    assert campione.read_bytes() == buono, "il contenuto del pacchetto deve aver vinto"
+    written = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+    assert written == 1, f"il file corrotto doveva essere riscritto, scritti={written}"
+    assert sample.read_bytes() == good, "il contenuto del pacchetto deve aver vinto"
 
 
 def test_a_truncated_file_is_rewritten(tmp_path: Path) -> None:
     """Il caso che la taglia prende da sola, e che deve restare preso."""
     dest = tmp_path / "ws"
     extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
-    buono = campione.read_bytes()
-    campione.write_bytes(buono[: len(buono) // 2])
+    sample = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    good = sample.read_bytes()
+    sample.write_bytes(good[: len(good) // 2])
 
     assert extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES) == 1
-    assert campione.read_bytes() == buono
+    assert sample.read_bytes() == good
 
 
 def test_an_unreadable_file_is_rewritten_not_skipped(tmp_path: Path) -> None:
@@ -650,17 +650,17 @@ def test_an_unreadable_file_is_rewritten_not_skipped(tmp_path: Path) -> None:
     """
     dest = tmp_path / "ws"
     extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
-    campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
-    buono = campione.read_bytes()
-    campione.write_bytes(b"rotto")
-    campione.chmod(0o000)
+    sample = dest / _SYSTEM_PROMPT_TEMPLATES[0]
+    good = sample.read_bytes()
+    sample.write_bytes(b"rotto")
+    sample.chmod(0o000)
     try:
-        scritti = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
+        written = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
     finally:
         with suppress(OSError):
-            campione.chmod(0o644)
-    assert scritti == 1, "un file illeggibile va riscritto, non saltato"
-    assert campione.read_bytes() == buono
+            sample.chmod(0o644)
+    assert written == 1, "un file illeggibile va riscritto, non saltato"
+    assert sample.read_bytes() == good
 
 
 def test_both_startup_paths_name_the_workspace_the_same_way() -> None:

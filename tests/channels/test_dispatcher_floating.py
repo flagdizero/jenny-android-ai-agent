@@ -75,7 +75,7 @@ async def _pump(d: WebSocketDispatcher, until, timeout: float = 1.0) -> None:
             await task
 
 
-async def test_la_risposta_si_disegna_una_volta_e_finisce_in_chat(bubbles: _Bubbles) -> None:
+async def test_the_answer_is_drawn_once_and_ends_up_in_chat(bubbles: _Bubbles) -> None:
     d, ws = _wired()
     await d.bus.publish_outbound(
         OutboundMessage(channel=FLOATING_CHANNEL, chat_id="shade", content="fatto")
@@ -96,7 +96,7 @@ async def test_la_risposta_si_disegna_una_volta_e_finisce_in_chat(bubbles: _Bubb
     assert mirror.metadata["origin_channel"] == FLOATING_CHANNEL
 
 
-async def test_un_progress_non_arriva_al_fumetto(bubbles: _Bubbles) -> None:
+async def test_a_progress_does_not_reach_the_speech_bubble(bubbles: _Bubbles) -> None:
     """Gating per-canale: ``send_progress = False``, quindi il dispatcher
     scarta prima di instradare. Mentre aspetta, lo stato lo dice la faccia."""
     d, _ws = _wired()
@@ -110,7 +110,7 @@ async def test_un_progress_non_arriva_al_fumetto(bubbles: _Bubbles) -> None:
     assert bubbles.shown == []
 
 
-async def test_il_turn_end_non_disegna_e_non_si_proietta(bubbles: _Bubbles) -> None:
+async def test_the_turn_end_neither_draws_nor_is_projected(bubbles: _Bubbles) -> None:
     d, ws = _wired()
     await d.bus.publish_outbound(
         OutboundMessage(
@@ -123,7 +123,7 @@ async def test_il_turn_end_non_disegna_e_non_si_proietta(bubbles: _Bubbles) -> N
     assert ws.sent == []
 
 
-async def test_senza_canale_registrato_il_finale_non_va_da_nessuna_parte(
+async def test_without_registered_channel_the_final_goes_nowhere(
     bubbles: _Bubbles,
 ) -> None:
     """Fuori da Android il canale non esiste — e là nessuno può produrre
@@ -142,19 +142,19 @@ async def test_senza_canale_registrato_il_finale_non_va_da_nessuna_parte(
     assert ws.sent == []
 
 
-async def test_il_canale_non_nasce_senza_contesto_android() -> None:
+async def test_the_channel_is_not_born_without_an_android_context() -> None:
     """La registrazione è gated sul contesto: in CI e su desktop non c'è."""
     d = WebSocketDispatcher(Config(), MessageBus())
     assert FLOATING_CHANNEL not in d.channels
 
 
-async def test_il_canale_nasce_con_un_contesto_android(monkeypatch) -> None:
+async def test_the_channel_is_born_with_an_android_context(monkeypatch) -> None:
     monkeypatch.setattr("jenny.runtime.context.get_android_context", lambda: object())
     d = WebSocketDispatcher(Config(), MessageBus())
     assert isinstance(d.channels.get(FLOATING_CHANNEL), FloatingChannel)
 
 
-async def test_il_canale_nasce_anche_a_mascotte_spenta(monkeypatch) -> None:
+async def test_the_channel_is_born_even_with_the_mascot_off(monkeypatch) -> None:
     """La registrazione **non** guarda ``floating.enabled``, ed è deliberato.
 
     Quel flag decide se esiste la *finestra*, e la risposta ce l'ha Kotlin.
@@ -169,7 +169,7 @@ async def test_il_canale_nasce_anche_a_mascotte_spenta(monkeypatch) -> None:
     assert isinstance(d.channels.get(FLOATING_CHANNEL), FloatingChannel)
 
 
-def test_il_canale_non_e_un_bersaglio_del_fanout_proattivo() -> None:
+def test_the_channel_is_not_a_target_of_the_proactive_fanout() -> None:
     """Test negativo, e serve.
 
     Gli ``extra_targets`` sono i destinatari del fan-out **proattivo**: mettere

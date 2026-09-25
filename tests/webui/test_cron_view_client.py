@@ -431,7 +431,7 @@ def test_a_drawer_shows_only_its_own_jobs() -> None:
     il filtro e' quel che rende la divisione un parametro invece di un giro di
     codice nuovo."""
     out = _run_js(f"""
-      const tutto = buildCronView({_payload(jobs=', '.join([
+      const all = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
           _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))}, {{ tr }});
       const hands = buildCronView({_payload(jobs=', '.join([
@@ -439,12 +439,12 @@ def test_a_drawer_shows_only_its_own_jobs() -> None:
           _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))},
         {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
-        tutto: tutto.rows.map((r) => r.id),
+        all: all.rows.map((r) => r.id),
         hands: hands.rows.map((r) => r.id),
       }}));
     """)
     visto = json.loads(out)
-    assert sorted(visto["tutto"]) == ["acqua-basilico", "dream", "gardener", "heartbeat"]
+    assert sorted(visto["all"]) == ["acqua-basilico", "dream", "gardener", "heartbeat"]
     assert sorted(visto["hands"]) == ["acqua-basilico", "heartbeat"], (
         "il cassetto Mani mostra lavori che appartengono a un altro cassetto"
     )
@@ -454,23 +454,23 @@ def test_the_banner_talks_about_the_jobs_you_can_see() -> None:
     """Il banner nomina i lavori spenti. Calcolato sul payload intero e mostrato
     accanto a un elenco filtrato, direbbe di lavori che li' non ci sono — e chi
     legge cerca una riga che non esiste."""
-    spenti = ', '.join([
+    off = ', '.join([
         _job('dream', 'system', effective='inert', next_ms='null'),
         _job('gardener', 'system', effective='inert', next_ms='null'),
         _job('heartbeat', 'system'),
         _job('acqua-basilico', 'user'),
     ])
     out = _run_js(f"""
-      const tutto = buildCronView({_payload(jobs=spenti)}, {{ tr }});
-      const hands = buildCronView({_payload(jobs=spenti)},
+      const all = buildCronView({_payload(jobs=off)}, {{ tr }});
+      const hands = buildCronView({_payload(jobs=off)},
         {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
-        tutto: tutto.banner, hands: hands.banner,
+        all: all.banner, hands: hands.banner,
       }}));
     """)
     visto = json.loads(out)
-    assert visto["tutto"] and visto["tutto"]["kind"] == "inert", visto["tutto"]
-    assert "dream" in visto["tutto"]["jobs"], visto["tutto"]
+    assert visto["all"] and visto["all"]["kind"] == "inert", visto["all"]
+    assert "dream" in visto["all"]["jobs"], visto["all"]
     assert not visto["hands"] or "dream" not in (visto["hands"].get("jobs") or []), (
         f"il banner di Mani nomina un lavoro che Mani non mostra: {visto['hands']}"
     )
@@ -484,13 +484,13 @@ def test_the_count_describes_what_is_on_screen() -> None:
         _job('heartbeat', 'system'), _job('acqua-basilico', 'user'),
     ])
     out = _run_js(f"""
-      const tutto = buildCronView({_payload(jobs=jobs)}, {{ tr }});
+      const all = buildCronView({_payload(jobs=jobs)}, {{ tr }});
       const hands = buildCronView({_payload(jobs=jobs)},
         {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
-      console.log(JSON.stringify({{ tutto: tutto.counts, hands: hands.counts }}));
+      console.log(JSON.stringify({{ all: all.counts, hands: hands.counts }}));
     """)
     visto = json.loads(out)
-    assert visto["tutto"] == {"system": 4, "user": 2}, "senza filtro i conti restano quelli del server"
+    assert visto["all"] == {"system": 4, "user": 2}, "senza filtro i conti restano quelli del server"
     assert visto["hands"] == {"system": 1, "user": 1}, visto["hands"]
 
 
@@ -502,14 +502,14 @@ def test_without_a_filter_nothing_changes() -> None:
       const a = buildCronView({_payload(jobs=jobs)}, {{ tr }});
       const b = buildCronView({_payload(jobs=jobs)}, {{ tr, keep: undefined }});
       console.log(JSON.stringify({{ a: a.rows.map((r) => r.id), b: b.rows.map((r) => r.id),
-                                    conti: a.counts }}));
+                                    tallies: a.counts }}));
     """)
     visto = json.loads(out)
     assert visto["a"] == visto["b"]
-    assert visto["conti"] == {"system": 4, "user": 2}
+    assert visto["tallies"] == {"system": 4, "user": 2}
 
 
-def _predicato_di_mani() -> str:
+def _predicate_of_hands() -> str:
     """`HANDS_JOBS` preso dal sorgente, non riscritto qui.
 
     Ricopiarlo vorrebbe dire misurare la copia: il difetto che conta e' che
@@ -536,15 +536,15 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
     giro e' in casa.
     """
     out = _run_js(f"""
-      const keep = {_predicato_di_mani()};
-      const lavori = [
+      const keep = {_predicate_of_hands()};
+      const jobs = [
         {{ id: 'dream', kind: 'system' }},
         {{ id: 'gardener', kind: 'system' }},
         {{ id: 'update_check', kind: 'system' }},
         {{ id: 'heartbeat', kind: 'system' }},
         {{ id: 'acqua-basilico', kind: 'user' }},
       ];
-      console.log(JSON.stringify(lavori.filter(keep).map((j) => j.id)));
+      console.log(JSON.stringify(jobs.filter(keep).map((j) => j.id)));
     """)
     assert sorted(json.loads(out)) == ["acqua-basilico", "heartbeat"], json.loads(out)
 
@@ -567,14 +567,14 @@ def test_counting_survives_a_payload_without_jobs() -> None:
     no, e la distanza fra le due era di tre righe.
     """
     out = _run_js("""
-      const vista = buildCronView(
+      const view = buildCronView(
         { service_running: true },
         { nowMs: NOW, tr, locale: 'it', keep: (j) => j.kind !== 'system' },
       );
-      console.log(JSON.stringify({ disponibile: vista.available, conteggi: vista.counts }));
+      console.log(JSON.stringify({ available: view.available, counts: view.counts }));
     """)
     data = json.loads(out)
 
-    assert data["conteggi"] == {"system": 0, "user": 0}, (
+    assert data["counts"] == {"system": 0, "user": 0}, (
         "senza lavori i conteggi sono zero, non un'eccezione"
     )

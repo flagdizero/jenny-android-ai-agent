@@ -1,7 +1,7 @@
 """Un progetto che non si può aprire viene rifiutato, non silenziosamente dirottato.
 
 Il difetto: una cartella sotto `wikis/` il cui nome non passa
-`is_valid_project_name` (`Ricerca ETF`, `università`, `progetto (2026)`) veniva
+`is_valid_project_name` (`Ricerca ETF`, `università`, `project (2026)`) veniva
 elencata da `/api/projects` e mostrata dal chip, ma
 `WebSocketChannel._envelope_chat_id` ne riscriveva il `chat_id` sulla chat
 personale. Tre guasti in un colpo, tutti muti:
@@ -68,9 +68,9 @@ def _events(conn: AsyncMock) -> list[dict]:
     return out
 
 
-class TestUnProgettoImpossibileVieneRifiutato:
+class TestAnImpossibleProjectIsRejected:
     @pytest.mark.parametrize("chat_id", _UNOPENABLE)
-    async def test_un_messaggio_non_diventa_un_turno_personale(self, chat_id):
+    async def test_a_message_does_not_become_a_personal_turn(self, chat_id):
         """L'asserzione che conta: **nessun turno**. Prima ne partiva uno, e
         partiva nella chat personale."""
         channel = _make_channel()
@@ -92,7 +92,7 @@ class TestUnProgettoImpossibileVieneRifiutato:
         assert chat_id.removeprefix("project:") not in errors[0]["detail"]
 
     @pytest.mark.parametrize("chat_id", _UNOPENABLE)
-    async def test_un_attach_non_aggancia_niente(self, chat_id):
+    async def test_an_attach_attaches_nothing(self, chat_id):
         """Agganciare la connessione a una chiave che nessun turno userà mai la
         iscriverebbe a un canale morto: il client resterebbe in attesa."""
         channel = _make_channel()
@@ -105,7 +105,7 @@ class TestUnProgettoImpossibileVieneRifiutato:
         events = _events(conn)
         assert [e.get("event") for e in events] == ["error"]
 
-    async def test_i_media_non_vengono_nemmeno_decodificati(self, tmp_path):
+    async def test_media_are_not_even_decoded(self, tmp_path):
         """Il rifiuto arriva **prima** della scrittura su disco: un frame
         rifiutato non deve lasciare file."""
         channel = _make_channel()
@@ -129,11 +129,11 @@ class TestUnProgettoImpossibileVieneRifiutato:
         assert errors[0]["reason"] == "invalid_project_name"
 
 
-class TestQuelCheNonDeveCambiare:
+class TestWhatMustNotChange:
     """Il fallback silenzioso è la risposta **giusta** per la spazzatura, e resta."""
 
     @pytest.mark.parametrize("chat_id", ["default", "qualsiasi-cosa", "projectx", 12, None])
-    async def test_una_forma_non_riconosciuta_resta_la_chat_personale(self, chat_id):
+    async def test_an_unrecognized_form_stays_the_personal_chat(self, chat_id):
         channel = _make_channel()
         conn = AsyncMock()
         envelope: dict = {"type": "message", "content": "ciao"}
@@ -145,7 +145,7 @@ class TestQuelCheNonDeveCambiare:
         channel._handle_message.assert_awaited_once()
         assert channel._handle_message.call_args.kwargs["chat_id"] == "default"
 
-    async def test_un_progetto_valido_apre_la_sua_conversazione(self):
+    async def test_a_valid_project_opens_its_conversation(self):
         channel = _make_channel()
         conn = AsyncMock()
 
@@ -159,7 +159,7 @@ class TestQuelCheNonDeveCambiare:
         assert channel._handle_message.call_args.kwargs["chat_id"] == "project:ricerca-etf"
         assert not [e for e in _events(conn) if e.get("event") == "error"]
 
-    async def test_un_attach_a_un_progetto_valido_aggancia_e_risponde(self):
+    async def test_an_attach_to_a_valid_project_attaches_and_answers(self):
         channel = _make_channel()
         conn = AsyncMock()
 

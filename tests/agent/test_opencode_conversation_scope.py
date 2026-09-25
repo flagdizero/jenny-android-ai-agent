@@ -52,7 +52,7 @@ def _spying_provider() -> tuple[MagicMock, list[str]]:
 # --- il turno -----------------------------------------------------------------------
 
 
-class TestIlTurno:
+class TestTheTurn:
 
     async def _run(self, session_key: str | None) -> list[str]:
         from jenny.agent.runner import AgentRunner, AgentRunSpec
@@ -70,28 +70,28 @@ class TestIlTurno:
         ))
         return seen
 
-    async def test_il_turno_dichiara_la_sua_sessione(self) -> None:
+    async def test_the_turn_declares_its_session(self) -> None:
         seen = await self._run("unified:default")
         assert seen and seen[0] != "NESSUNO-SCOPE"
 
-    async def test_conversazioni_diverse_danno_id_diversi(self) -> None:
+    async def test_different_conversations_give_different_ids(self) -> None:
         # È il caso vero: cron, Dream e heartbeat arrivano qui con il loro
         # ``session_key_override`` e devono restare conversazioni distinte.
-        utente = await self._run("unified:default")
+        user = await self._run("unified:default")
         dream = await self._run("internal:dream")
         heartbeat = await self._run("internal:heartbeat")
-        assert len({utente[0], dream[0], heartbeat[0]}) == 3
+        assert len({user[0], dream[0], heartbeat[0]}) == 3
 
-    async def test_la_stessa_sessione_da_lo_stesso_id_fra_turni(self) -> None:
-        primo = await self._run("unified:default")
-        secondo = await self._run("unified:default")
-        assert primo[0] == secondo[0]
+    async def test_the_same_session_gives_the_same_id_across_turns(self) -> None:
+        first = await self._run("unified:default")
+        second = await self._run("unified:default")
+        assert first[0] == second[0]
 
-    async def test_lo_scope_si_richiude_a_fine_turno(self) -> None:
+    async def test_the_scope_closes_again_at_turn_end(self) -> None:
         await self._run("unified:default")
         assert _observed_id() == "NESSUNO-SCOPE"
 
-    async def test_un_turno_senza_sessione_non_rompe(self) -> None:
+    async def test_a_turn_without_session_does_not_break(self) -> None:
         seen = await self._run(None)
         assert seen == ["NESSUNO-SCOPE"]
 
@@ -99,7 +99,7 @@ class TestIlTurno:
 # --- la compattazione ---------------------------------------------------------------
 
 
-class TestLaCompattazione:
+class TestTheCompaction:
 
     @pytest.fixture
     def _consolidator(self, tmp_path):
@@ -116,7 +116,7 @@ class TestLaCompattazione:
         )
         return consolidator, seen
 
-    async def test_archive_dichiara_la_sessione_che_sta_riassumendo(
+    async def test_archive_declares_the_session_it_is_summarizing(
         self, _consolidator,
     ) -> None:
         consolidator, seen = _consolidator
@@ -125,7 +125,7 @@ class TestLaCompattazione:
         )
         assert seen and seen[0] != "NESSUNO-SCOPE"
 
-    async def test_e_la_stessa_conversazione_del_turno(self, _consolidator) -> None:
+    async def test_is_the_same_conversation_as_the_turn(self, _consolidator) -> None:
         # Compattare non è un'altra conversazione: è la stessa, riassunta. Se
         # l'ID divergesse, il gateway le vedrebbe come due.
         consolidator, seen = _consolidator
@@ -135,10 +135,10 @@ class TestLaCompattazione:
         from jenny.providers.opencode import conversation_scope
 
         with conversation_scope("unified:default"):
-            atteso = _observed_id()
-        assert seen[0] == atteso
+            expected = _observed_id()
+        assert seen[0] == expected
 
-    async def test_senza_chiave_non_rompe(self, _consolidator) -> None:
+    async def test_without_key_does_not_break(self, _consolidator) -> None:
         consolidator, seen = _consolidator
         await consolidator.archive([{"role": "user", "content": "ciao"}])
         assert seen == ["NESSUNO-SCOPE"]

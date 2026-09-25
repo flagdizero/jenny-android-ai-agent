@@ -1,6 +1,6 @@
 {# Due condizioni, e servono entrambe.
 
-   ``has('nome')`` dice che il tool esiste nel registry di *questo turno* (la
+   ``has('name')`` dice che il tool esiste nel registry di *questo turno* (la
    passa ``ContextBuilder.build_system_prompt``); ``doer`` dice che fare il lavoro
    è mestiere di questo turno, invece di delegarlo. Le sezioni che erano chiuse
    sul solo modo restano tali e guadagnano il gate sul tool, in congiunzione.

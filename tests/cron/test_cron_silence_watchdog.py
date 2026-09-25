@@ -70,7 +70,7 @@ class TestTheThresholdIsAboveTheModelsOwn:
         assert silently_broken_checks(state, now_ms=_NOW) == [("", WATCHDOG_AFTER_FAILURES)]
 
 
-class TestATimbroDoesNotBuySilenceForever:
+class TestAStampDoesNotBuySilenceForever:
     """``escalated`` dice che l'avviso è uscito una volta, non che sia bastato."""
 
     def _entry(self, *, escalated_at_ms: int | None) -> CronJobState:

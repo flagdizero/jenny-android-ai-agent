@@ -13,7 +13,7 @@ misura del task, sulle otto wiki vere del dispositivo (274 pagine, 24/08): 25
 sono **gia'** oltre il tetto e 78 oltre i 4.000. Un avviso sullo stato darebbe
 venticinque richiami alla prima passata su quel corpo. Da cui il test che vale
 piu' di tutti gli altri:
-:meth:`TestLaTransizione.test_una_pagina_gia_oltre_non_dice_niente`.
+:meth:`TestTheTransition.test_a_page_already_over_says_nothing`.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     Il tetto si sposta **sulla costante dell'iniettore**, non su una del tool: e'
     la sola forma in cui questi test provano che il numero e' condiviso invece di
-    dichiararlo (v. :class:`TestIlNumeroEQuelloDellIniettore`).
+    dichiararlo (v. :class:`TestTheNumberIsTheInjectors`).
     """
     monkeypatch.setattr(context_module, "_PROJECT_PAGES_MAX_CHARS", CEILING)
     root = tmp_path / "workspace"
@@ -84,10 +84,10 @@ async def _append_with_patch(root: Path, path: Path, added: str) -> str:
     )
 
 
-class TestLaTransizione:
+class TestTheTransition:
     """Scatta al passaggio, una volta, e mai sullo stato."""
 
-    async def test_l_append_che_attraversa_il_tetto_lo_dice(self, ws) -> None:
+    async def test_the_append_that_crosses_the_cap_says_it(self, ws) -> None:
         root, project = ws
         page = _page(project, "furgone.md", "# Furgone\n\nCODA")
 
@@ -100,7 +100,7 @@ class TestLaTransizione:
         chars = len(page.read_text(encoding="utf-8").strip())
         assert _page_over_ceiling_note("furgone.md", chars, CEILING) in result
 
-    async def test_una_pagina_gia_oltre_non_dice_niente(self, ws) -> None:
+    async def test_a_page_already_over_says_nothing(self, ws) -> None:
         """**Il test che decide la forma del fix.** 25 pagine vere su 274 sono
         gia' oltre: un avviso sullo stato le nominerebbe tutte alla prima passata
         e la trasformerebbe da cattura in potatura."""
@@ -108,27 +108,27 @@ class TestLaTransizione:
         page = _page(project, "grossa.md", "# Grossa\n\n" + "y" * 500 + "CODA")
         assert len(page.read_text(encoding="utf-8").strip()) > CEILING
 
-        primo = await _append_with_edit(root, page, "CODA", "z" * 100)
-        secondo = await _append_with_patch(root, page, "ancora\n")
+        first = await _append_with_edit(root, page, "CODA", "z" * 100)
+        second = await _append_with_patch(root, page, "ancora\n")
         terzo = await _write_tool(root).execute(path=str(page), content="w" * 800)
 
-        assert FIRED not in primo
-        assert FIRED not in secondo
+        assert FIRED not in first
+        assert FIRED not in second
         assert FIRED not in terzo
 
-    async def test_scatta_una_volta_sola(self, ws) -> None:
+    async def test_fires_only_once(self, ws) -> None:
         root, project = ws
         page = _page(project, "treno.md", "# Treno\n\nCODA")
 
-        primo = await _append_with_edit(root, page, "CODA", "x" * 400)
-        secondo = await _append_with_edit(root, page, "CODA", "x" * 400)
+        first = await _append_with_edit(root, page, "CODA", "x" * 400)
+        second = await _append_with_edit(root, page, "CODA", "x" * 400)
         terzo = await _append_with_patch(root, page, "una riga in piu'\n")
 
-        assert FIRED in primo
-        assert FIRED not in secondo
+        assert FIRED in first
+        assert FIRED not in second
         assert FIRED not in terzo
 
-    async def test_una_scrittura_che_resta_sotto_tace(self, ws) -> None:
+    async def test_a_write_that_stays_under_is_silent(self, ws) -> None:
         root, project = ws
         page = _page(project, "corta.md", "# Corta\n\nCODA")
 
@@ -137,7 +137,7 @@ class TestLaTransizione:
         assert "Successfully edited" in result
         assert FIRED not in result
 
-    async def test_una_pagina_nuova_gia_oltre_lo_dice(self, ws) -> None:
+    async def test_a_new_page_already_over_says_so(self, ws) -> None:
         """Non c'era niente da rendere non iniettabile, ma non iniettabile lo e':
         e' una transizione, e sulla popolazione esistente non produce nessun
         richiamo (quelle pagine ci sono gia')."""
@@ -151,7 +151,7 @@ class TestLaTransizione:
         assert FIRED in result
 
 
-    async def test_anche_la_creazione_con_edit_file_lo_dice(self, ws) -> None:
+    async def test_creation_with_edit_file_says_it_too(self, ws) -> None:
         """``edit_file`` con ``old_text=""`` crea, e ha un suo punto di ritorno
         (``Successfully created``): i punti di uscita di quel tool sono **tre**,
         non due, e un avviso che ne copre due su tre e' un avviso che tace a
@@ -165,7 +165,7 @@ class TestLaTransizione:
         assert "Successfully created" in result
         assert FIRED in result
 
-    async def test_anche_riempire_una_pagina_vuota_lo_dice(self, ws) -> None:
+    async def test_filling_an_empty_page_says_it_too(self, ws) -> None:
         """Il terzo punto di uscita: il file c'e' ma e' vuoto, e ``old_text=""``
         lo riempie. Una pagina appena creata dallo scaffolder sta esattamente
         cosi'."""
@@ -180,10 +180,10 @@ class TestLaTransizione:
         assert FIRED in result
 
 
-class TestDoveNonDeveScattare:
+class TestWhereItMustNotFire:
     """La soglia e' delle pagine di un progetto, e di nient'altro."""
 
-    async def test_sotto_memory_non_scatta(self, ws) -> None:
+    async def test_under_memory_does_not_fire(self, ws) -> None:
         """``memory/`` ha un budget suo e un guard suo
         (``memory_budget.make_write_size_guard``): un avviso sul tetto delle
         pagine, la', sarebbe sbagliato due volte."""
@@ -196,7 +196,7 @@ class TestDoveNonDeveScattare:
         assert "Successfully wrote" in result
         assert FIRED not in result
 
-    async def test_la_mappa_non_e_una_pagina(self, ws) -> None:
+    async def test_the_map_is_not_a_page(self, ws) -> None:
         """``wiki/index.md`` ha un tetto diverso (``_PROJECT_MAP_MAX_CHARS``) e un
         rimedio diverso — si pota, non si taglia in pagine."""
         root, project = ws
@@ -208,7 +208,7 @@ class TestDoveNonDeveScattare:
         assert "Successfully wrote" in result
         assert FIRED not in result
 
-    async def test_fuori_da_wiki_non_scatta(self, ws) -> None:
+    async def test_outside_wiki_does_not_fire(self, ws) -> None:
         """Il diario sta in ``raw/journal/``, che non e' sotto ``wiki/``: nessuna
         di quelle righe viene iniettata come pagina."""
         root, project = ws
@@ -222,7 +222,7 @@ class TestDoveNonDeveScattare:
         assert "Successfully wrote" in result
         assert FIRED not in result
 
-    async def test_una_pagina_scritta_insieme_alla_sua_wiki_non_scatta(self, ws) -> None:
+    async def test_a_page_written_together_with_its_wiki_does_not_fire(self, ws) -> None:
         """**Il buco, misurato e messo per iscritto.** «Pagina di un progetto» e'
         la definizione che ha il resto del codice (``is_wiki_root``: la cartella
         sopra contiene una ``wiki/``), e l'avviso si calcola **prima** della
@@ -240,7 +240,7 @@ class TestDoveNonDeveScattare:
         assert "Successfully wrote" in result
         assert FIRED not in result
 
-    async def test_un_dry_run_non_ha_reso_niente_non_iniettabile(self, ws) -> None:
+    async def test_a_dry_run_has_rendered_nothing_non_injectable(self, ws) -> None:
         """Il ``dry_run`` di ``apply_patch`` non scrive, quindi non c'e' nessuna
         transizione da annunciare: l'avviso parla di quel che il file **e'
         diventato**, e qui non e' diventato niente."""
@@ -256,7 +256,7 @@ class TestDoveNonDeveScattare:
         assert FIRED not in result
         assert page.read_text(encoding="utf-8") == "# Prova\n\nCODA"
 
-    async def test_un_file_che_non_e_markdown_non_e_una_pagina(self, ws) -> None:
+    async def test_a_file_that_is_not_markdown_is_not_a_page(self, ws) -> None:
         """L'iniettore cammina ``rglob("*.md")``: un ``.json`` sotto ``wiki/`` non
         entra in nessun turno, quindi non ha questo tetto."""
         root, project = ws
@@ -268,7 +268,7 @@ class TestDoveNonDeveScattare:
         assert "Successfully wrote" in result
         assert FIRED not in result
 
-    async def test_un_riassunto_non_e_una_pagina(self, ws) -> None:
+    async def test_a_summary_is_not_a_page(self, ws) -> None:
         """``summaries/`` sta dentro ``wiki/`` ma fuori dalle pagine iniettate
         (``is_wiki_page_rel``), quindi non ha questo tetto."""
         root, project = ws
@@ -281,10 +281,10 @@ class TestDoveNonDeveScattare:
         assert FIRED not in result
 
 
-class TestIlNumeroEQuelloDellIniettore:
+class TestTheNumberIsTheInjectors:
     """Non una terza copia del 6.000: la costante dell'iniettore, letta."""
 
-    async def test_alzare_il_tetto_dell_iniettore_zittisce_il_tool(
+    async def test_raising_the_injector_cap_silences_the_tool(
         self, ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         root, project = ws
@@ -295,7 +295,7 @@ class TestIlNumeroEQuelloDellIniettore:
 
         assert FIRED not in result
 
-    async def test_col_tetto_vero_scatta_a_seimila(self, tmp_path: Path) -> None:
+    async def test_with_the_real_cap_it_fires_at_six_thousand(self, tmp_path: Path) -> None:
         """Senza monkeypatch: la soglia vera e' quella, e il conto e' in
         caratteri del testo *spogliato*."""
         root = tmp_path / "workspace"
@@ -304,22 +304,22 @@ class TestIlNumeroEQuelloDellIniettore:
         page = _page(project, "lunga.md", "# Lunga\n\n" + "x" * 5_900 + "CODA")
 
         under = await _append_with_edit(root, page, "CODA", "y" * 50)
-        sopra = await _append_with_edit(root, page, "CODA", "y" * 200)
+        above = await _append_with_edit(root, page, "CODA", "y" * 200)
 
         assert FIRED not in under
-        assert FIRED in sopra
-        assert f"{len(page.read_text(encoding='utf-8').strip()):,}" in sopra
+        assert FIRED in above
+        assert f"{len(page.read_text(encoding='utf-8').strip()):,}" in above
 
 
-class TestTuttiDiconoLaStessaCosa:
+class TestAllSayTheSameThing:
     """I tre scrittori, l'iniettore e l'inventario della passata: un solo verdetto."""
 
-    async def test_edit_file_e_apply_patch_dicono_la_stessa_frase(self, ws) -> None:
+    async def test_edit_file_and_apply_patch_say_the_same_sentence(self, ws) -> None:
         root, project = ws
-        uno = _page(project, "uno.md", "# Uno\n\nCODA")
+        one = _page(project, "uno.md", "# Uno\n\nCODA")
         due = _page(project, "due.md", "# Due\n\nCODA")
 
-        con_edit = await _append_with_edit(root, uno, "CODA", "x" * 400)
+        con_edit = await _append_with_edit(root, one, "CODA", "x" * 400)
         con_patch = await _append_with_patch(root, due, "x" * 400)
 
         # La stessa frase, ognuna col conto del file che quel tool ha scritto
@@ -327,58 +327,58 @@ class TestTuttiDiconoLaStessaCosa:
         # stesso file — ``apply_patch`` interpone un ``\n`` fra la coda e la roba
         # nuova (``_append_text``), quindi la sua pagina misura un carattere in
         # piu'. Cioe' ognuno misura il proprio esito, che e' il punto.
-        for result, rel, page in ((con_edit, "uno.md", uno), (con_patch, "due.md", due)):
+        for result, rel, page in ((con_edit, "uno.md", one), (con_patch, "due.md", due)):
             chars = len(page.read_text(encoding="utf-8").strip())
             assert _page_over_ceiling_note(rel, chars, CEILING) in result
 
-    async def test_la_pagina_avvisata_e_quella_che_l_iniettore_salta(self, ws) -> None:
+    async def test_the_warned_page_is_the_one_the_injector_skips(self, ws) -> None:
         """La prova che l'avviso parla del guasto vero: la pagina di cui ha
         parlato **non arriva piu'** nel blocco di progetto, e quella di cui ha
         taciuto ci arriva."""
         root, project = ws
-        cresciuta = _page(project, "cresciuta.md", "# Cresciuta\n\nCODA")
-        rimasta = _page(project, "rimasta.md", "# Rimasta\n\nbreve")
+        grown = _page(project, "cresciuta.md", "# Cresciuta\n\nCODA")
+        remaining = _page(project, "rimasta.md", "# Rimasta\n\nbreve")
 
-        avviso = await _append_with_edit(root, cresciuta, "CODA", "x" * 400)
-        iniettate = ContextBuilder(root)._read_project_pages(project).text
+        notice = await _append_with_edit(root, grown, "CODA", "x" * 400)
+        injected = ContextBuilder(root)._read_project_pages(project).text
 
-        assert FIRED in avviso
-        assert "`cresciuta.md`" not in iniettate
-        assert "xxxx" not in iniettate  # ne' intera ne' troncata
-        assert "`rimasta.md`" in iniettate
-        assert rimasta.read_text(encoding="utf-8").strip() in iniettate
+        assert FIRED in notice
+        assert "`cresciuta.md`" not in injected
+        assert "xxxx" not in injected  # ne' intera ne' troncata
+        assert "`rimasta.md`" in injected
+        assert remaining.read_text(encoding="utf-8").strip() in injected
 
-    async def test_l_inventario_del_giardiniere_dice_lo_stesso_numero(self, ws) -> None:
+    async def test_the_gardener_inventory_says_the_same_number(self, ws) -> None:
         """L'avviso in scrittura e l'annotazione della passata dopo (T3.14)
         contano con **la stessa regola** (``wiki_paths.page_chars``): se
         divergessero, uno dei due parlerebbe di pagine che entrano."""
         root, project = ws
         page = _page(project, "misura.md", "# Misura\n\nCODA")
 
-        avviso = await _append_with_edit(root, page, "CODA", "x" * 400)
-        inventario = GardenerStore(project, root).build_inventory()
+        notice = await _append_with_edit(root, page, "CODA", "x" * 400)
+        inventory = GardenerStore(project, root).build_inventory()
 
         chars = len(page.read_text(encoding="utf-8").strip())
-        assert f"{chars:,}" in avviso
-        assert f"over the ceiling: {chars} characters" in inventario
+        assert f"{chars:,}" in notice
+        assert f"over the ceiling: {chars} characters" in inventory
 
-    async def test_le_righe_vuote_in_fondo_non_contano(self, ws) -> None:
+    async def test_trailing_empty_lines_do_not_count(self, ws) -> None:
         """Il tetto guarda il testo **spogliato** ai bordi, come l'iniettore e
         come il lint: 200 caratteri e centocinquanta righe vuote sono una pagina
         da 200, e l'iniettore la inietta."""
         root, project = ws
-        coda_vuota = "x" * 200 + "\n" * 150
-        assert len(coda_vuota) > CEILING >= len(coda_vuota.strip())
+        blank_tail = "x" * 200 + "\n" * 150
+        assert len(blank_tail) > CEILING >= len(blank_tail.strip())
 
         result = await _write_tool(root).execute(
-            path=str(project / "wiki" / "vuota.md"), content=coda_vuota
+            path=str(project / "wiki" / "vuota.md"), content=blank_tail
         )
-        iniettate = ContextBuilder(root)._read_project_pages(project).text
+        injected = ContextBuilder(root)._read_project_pages(project).text
 
         assert FIRED not in result
-        assert "`vuota.md`" in iniettate
+        assert "`vuota.md`" in injected
 
-    async def test_un_file_crlf_si_misura_come_lo_legge_l_iniettore(self, ws) -> None:
+    async def test_a_crlf_file_is_measured_as_the_injector_reads_it(self, ws) -> None:
         """**La misura e' quella di ``read_text``**, che traduce ``\\r\\n`` in
         ``\\n`` e quindi accorcia. Questa pagina pesa 330 byte e 219 caratteri:
         contarla coi ``\\r`` dentro la direbbe non iniettabile mentre l'iniettore
@@ -390,7 +390,7 @@ class TestTuttiDiconoLaStessaCosa:
         result = await _write_tool(root).execute(
             path=str(project / "wiki" / "crlf.md"), content=crlf
         )
-        iniettate = ContextBuilder(root)._read_project_pages(project).text
+        injected = ContextBuilder(root)._read_project_pages(project).text
 
         assert FIRED not in result
-        assert "`crlf.md`" in iniettate
+        assert "`crlf.md`" in injected

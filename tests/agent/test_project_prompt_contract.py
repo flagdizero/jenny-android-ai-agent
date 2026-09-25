@@ -428,13 +428,13 @@ def test_the_subagent_gets_the_layout_but_not_the_capture_rule() -> None:
 
     args = {"project_path": "/w/wikis/x"}
     con = render_template("agent/project.md", capture=True, **args)
-    senza = render_template("agent/project.md", capture=False, **args)
+    without = render_template("agent/project.md", capture=False, **args)
 
-    assert PROJECT_BLOCK in senza and JOURNAL_PATH in senza
-    assert CAPTURE_TIMING not in senza
-    assert NO_PERMISSION_NEEDED not in senza
+    assert PROJECT_BLOCK in without and JOURNAL_PATH in without
+    assert CAPTURE_TIMING not in without
+    assert NO_PERMISSION_NEEDED not in without
     assert CAPTURE_TIMING in con
-    assert len(senza) < len(con)
+    assert len(without) < len(con)
 
 
 def test_the_two_callers_pass_the_flag_explicitly() -> None:
@@ -1263,10 +1263,10 @@ def test_a_first_page_over_the_cap_is_skipped_not_swallowed(tmp_path) -> None:
     continua invece di fermarsi."""
     from jenny.agent.context import _PROJECT_PAGES_MAX_CHARS
 
-    enorme = "# Grande\n\n" + ("parola " * 3000)
-    assert len(enorme) > _PROJECT_PAGES_MAX_CHARS
+    huge = "# Grande\n\n" + ("parola " * 3000)
+    assert len(huge) > _PROJECT_PAGES_MAX_CHARS
     prompt = _pages_prompt(tmp_path, {
-        "aaa-enorme.md": enorme,
+        "aaa-enorme.md": huge,
         "bbb.md": "# Bbb\n\ncorta ma presente",
         "ccc.md": "# Ccc\n\nanche questa",
     })

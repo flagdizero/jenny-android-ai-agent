@@ -26,13 +26,13 @@ from support.js_harness import requires_node, run_js
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 DRAG_JS = ASSETS / "shared" / "mascot-drag.js"
-FOGLI = {
+SHEETS = {
     "workshop": ASSETS / "mobile-style.css",
     "home": ASSETS / "home-style.css",
 }
 
 
-ANCORAGGIO = re.compile(r"(?:left|right):\s*calc\([^;]*--jenny-size[^;]*\);")
+ANCHOR = re.compile(r"(?:left|right):\s*calc\([^;]*--jenny-size[^;]*\);")
 SPRITE = (r"\.jenny-duo",)
 
 
@@ -44,13 +44,13 @@ def _anchors(css: str) -> list[str]:
     si posiziona sulla sua taglia, e quello non e' un ancoraggio da tenere
     allineato — e' un margine.
     """
-    trovate = []
+    found = []
     for block in css.split("}"):
-        selettore, _, body = block.rpartition("{")
-        if not body or not any(re.search(s, selettore) for s in SPRITE):
+        selector, _, body = block.rpartition("{")
+        if not body or not any(re.search(s, selector) for s in SPRITE):
             continue
-        trovate += ANCORAGGIO.findall(body)
-    return trovate
+        found += ANCHOR.findall(body)
+    return found
 
 
 def _ratio(name: str) -> float:
@@ -83,22 +83,22 @@ def test_the_anchors_reach_the_css_before_any_sprite_exists() -> None:
     Il modulo si importa davvero e non si chiama niente: e' l'unico modo di
     provare *quando* succede, oltre che cosa.
     """
-    sorgente = """
-const scritte = new Map();
+    source = """
+const written = new Map();
 globalThis.document = {
-  documentElement: { style: { setProperty(k, v) { scritte.set(k, v); } } },
+  documentElement: { style: { setProperty(k, v) { written.set(k, v); } } },
 };
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 import assert from 'node:assert/strict';
 const mod = await import(__URL__);
 assert.deepEqual(
-  [scritte.get('--jenny-dock'), scritte.get('--jenny-out'), scritte.get('--jenny-art-h')],
+  [written.get('--jenny-dock'), written.get('--jenny-out'), written.get('--jenny-art-h')],
   [String(mod.DOCK_RATIO), String(mod.OUT_RATIO), String(mod.ART_HEIGHT_RATIO)],
   'i rapporti non sono arrivati al documento importando il modulo: ' +
-    JSON.stringify([...scritte]),
+    JSON.stringify([...written]),
 );
 """.replace("__URL__", json.dumps(MASCOT_JS.as_uri()))
-    run_js(sorgente, timeout=30)
+    run_js(source, timeout=30)
 
 
 def test_no_stylesheet_spells_the_ratio_out_again() -> None:
@@ -109,21 +109,21 @@ def test_no_stylesheet_spells_the_ratio_out_again() -> None:
     e i suoi ancoraggi stanno in un foglio solo, quello dell'officina, che la
     casa carica. La casa non ne dichiara nessuno: se ne ricomparisse uno li',
     sarebbe un secondo posto dove Jenny si ancora — cioe' di nuovo due Jenny."""
-    ancoraggi = _anchors(FOGLI["workshop"].read_text(encoding="utf-8"))
+    anchors = _anchors(SHEETS["workshop"].read_text(encoding="utf-8"))
     # Un bordo solo dal 24/09/2026 (Jenny sta sempre a destra): due ancoraggi,
     # al dock e fuori.
-    assert len(ancoraggi) >= 2, (
-        f"mi aspetto i due ancoraggi del bordo destro, ne trovo {len(ancoraggi)}"
+    assert len(anchors) >= 2, (
+        f"mi aspetto i due ancoraggi del bordo destro, ne trovo {len(anchors)}"
     )
-    for decl in ancoraggi:
+    for decl in anchors:
         assert "--jenny-dock" in decl or "--jenny-out" in decl, (
             f"ancoraggio con un numero suo invece della variabile: {decl}"
         )
-    usate = {v for v in ("--jenny-dock", "--jenny-out") if any(v in d for d in ancoraggi)}
-    assert usate == {"--jenny-dock", "--jenny-out"}, (
-        f"usa solo {usate or 'nessuno'} — uno dei due stati non e' piu' ancorato"
+    used = {v for v in ("--jenny-dock", "--jenny-out") if any(v in d for d in anchors)}
+    assert used == {"--jenny-dock", "--jenny-out"}, (
+        f"usa solo {used or 'nessuno'} — uno dei due stati non e' piu' ancorato"
     )
-    assert not _anchors(FOGLI["home"].read_text(encoding="utf-8")), (
+    assert not _anchors(SHEETS["home"].read_text(encoding="utf-8")), (
         "la casa ancora Jenny per conto suo: fra i due gusci deve cambiare solo il pavimento"
     )
 
@@ -137,11 +137,11 @@ def test_the_walk_home_uses_the_same_number_as_the_css() -> None:
     # Importarla non basta: la riga che calcola lo scarto deve *nominarla*.
     # Una costante importata e poi non usata e' esattamente cio' che resta
     # quando qualcuno rimette il numero a mano una riga piu' giu'.
-    usi = [
+    uses = [
         row for row in src.splitlines()
         if "OUT_SHIFT_RATIO" in row and "import" not in row
     ]
-    assert usi, "OUT_SHIFT_RATIO e' importata ma non la usa nessuno"
+    assert uses, "OUT_SHIFT_RATIO e' importata ma non la usa nessuno"
     assert not re.search(r"0\.469|0\.25\b|0\.219", src), (
         "la fisica si e' riscritta in casa i numeri degli ancoraggi"
     )

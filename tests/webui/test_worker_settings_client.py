@@ -423,13 +423,13 @@ import { Screen, makeEl } from './harness.mjs';
 const screen0 = new Screen({});
 const html = screen0._measureCap(screen0.data.memory, 'MEMORY.md', 'memory_budget_chars');
 const cella = (attr) => html.match(new RegExp(attr + '="MEMORY.md"[^>]*>([^<]*)<'))[1];
-const primaValore = cella('data-measure-value');
-const primaResto = cella('data-measure');
-assert.match(primaValore, /ofBudget/);
-assert.match(primaResto, /headroom/);
+const valueBefore = cella('data-measure-value');
+const restBefore = cella('data-measure');
+assert.match(valueBefore, /ofBudget/);
+assert.match(restBefore, /headroom/);
 
-const value = makeEl({ textContent: primaValore });
-const rest = makeEl({ textContent: primaResto });
+const value = makeEl({ textContent: valueBefore });
+const rest = makeEl({ textContent: restBefore });
 const fill = { style: {} };
 const meter = makeEl({
   classList: { toggle() {} },
@@ -441,8 +441,8 @@ const screen = new Screen({
   '[data-meter="MEMORY.md"]': meter,
 });
 await screen._saveWorkerParams('memory', { memory_budget_chars: '3000' });
-assert.equal(value.textContent, primaValore, 'la misura non e\\' piu\\' al suo posto');
-assert.equal(rest.textContent, primaResto, '«quanto resta» e\\' state sostituito');
+assert.equal(value.textContent, valueBefore, 'la misura non e\\' more\\' al suo posto');
+assert.equal(rest.textContent, restBefore, '«quanto resta» e\\' state replaced');
 assert.notEqual(rest.textContent, value.textContent, 'la misura compare due volte');
 console.log('ok');
 """,

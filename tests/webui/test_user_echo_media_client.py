@@ -66,7 +66,7 @@ def test_attachments_reach_the_bubble() -> None:
       assert.equal(call.text, 'guarda qui');
       assert.equal(call.role, 'user');
       assert.equal(call.origin, 'telegram');
-      assert.deepEqual(call.media, media, 'la foto non e\\' arrivata al renderer');
+      assert.deepEqual(call.media, media, 'la foto non e\\' arrived al renderer');
     """)
 
 
@@ -89,5 +89,5 @@ def test_an_empty_echo_is_still_ignored() -> None:
       chat._handleExternalUser({ event: 'user', text: '   ', origin: 'telegram' });
       chat._handleExternalUser({ event: 'user', origin: 'telegram', media_urls: [] });
       assert.equal(chat.calls.length, 0);
-      assert.equal(chat.resets, 0, 'uno stream e\\' state azzerato per niente');
+      assert.equal(chat.resets, 0, 'uno stream e\\' state reset per nothing');
     """)

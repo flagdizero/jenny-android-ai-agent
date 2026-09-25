@@ -175,7 +175,7 @@ def test_an_in_flight_provider_save_cannot_be_dismissed() -> None:
     methods = _methods(source)
     save = methods["_saveProvider"]
 
-    assert "async _saveProvider(" in source, "senza await non exists nemmeno la win fromIndex proteggere"
+    assert "async _saveProvider(" in source, "without await non exists nemmeno la win fromIndex proteggere"
     assert "dialog.dataset.busy = '1';" in save
     assert "b.disabled = true;" in save, "i bottoni restano premibili durante la richiesta"
     assert "} finally {" in save and "delete dialog.dataset.busy;" in save, (
@@ -203,12 +203,12 @@ def test_the_workspace_never_lists_service_files() -> None:
     distinzione — quindi il banco guarda che il filtro ci sia e che non abbia
     niente davanti, non che il concetto sia stato buttato.
     """
-    sorgente = WORKSPACE_JS.read_text(encoding="utf-8")
-    body = _methods(sorgente)["renderGrid"]
+    source = WORKSPACE_JS.read_text(encoding="utf-8")
+    body = _methods(source)["renderGrid"]
     assert "items.filter(i => !i.internal)" in body, "i file di servizio si elencano di nuovo"
     assert "advancedMode" not in body, "il filtro ha di nuovo una condizione davanti"
 
-    assert "advancedmodechange" not in sorgente, (
+    assert "advancedmodechange" not in source, (
         "il listener che smontava l'editor senza guardare il buffer e' tornato"
     )
     assert not (ASSETS / "shared" / "advanced-mode.js").exists(), (

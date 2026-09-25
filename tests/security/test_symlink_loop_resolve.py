@@ -28,7 +28,7 @@ from jenny.webui.apps_routes import AppsRoutes
 from jenny.webui.wiki import create_audit
 from jenny.webui.wiki_routes import WikiRoutes
 
-_resolve_vero = pathlib.Path.resolve
+_resolve_real = pathlib.Path.resolve
 
 
 @pytest.fixture(autouse=True)
@@ -36,12 +36,12 @@ def loop_di_symlink(monkeypatch: pytest.MonkeyPatch) -> None:
     def _resolve(self, strict: bool = False):
         if self.name.startswith("ciclo"):
             raise RuntimeError(f"Symlink loop from {str(self)!r}")
-        return _resolve_vero(self, strict=strict)
+        return _resolve_real(self, strict=strict)
 
     monkeypatch.setattr(pathlib.Path, "resolve", _resolve)
 
 
-def _progetto(tmp_path: Path) -> tuple[Path, Path]:
+def _project(tmp_path: Path) -> tuple[Path, Path]:
     root = (tmp_path / "wikis" / "progetto").resolve()
     pages = root / "wiki"
     pages.mkdir(parents=True)
@@ -49,32 +49,32 @@ def _progetto(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def test_a_journal_source_through_a_loop_is_unresolved(tmp_path: Path) -> None:
-    root, _ = _progetto(tmp_path)
+    root, _ = _project(tmp_path)
     outcome = wiki_provenance._journal_line_provenance(root, "raw/ciclo.md#13:55")
     assert outcome == wiki_provenance._UNRESOLVED
 
 
 def test_a_document_source_through_a_loop_is_not_a_document(tmp_path: Path) -> None:
-    root, _ = _progetto(tmp_path)
+    root, _ = _project(tmp_path)
     assert wiki_provenance._names_a_document(root, "raw/ciclo.md") is False
 
 
 def test_the_provenance_guards_let_a_loop_through_to_the_write(tmp_path: Path) -> None:
     """I ganci non decidono niente su un percorso che non si risolve: la
     scrittura prosegue e il filesystem dira' il suo."""
-    root, pages = _progetto(tmp_path)
+    root, pages = _project(tmp_path)
     assert wiki_provenance._provenance_guard(root, pages)(pages / "ciclo.md", "x") is None
     assert wiki_provenance.wiki_page_provenance_guard()(pages / "ciclo.md", "x") is None
 
 
 def test_an_audit_on_a_loop_is_not_found(tmp_path: Path) -> None:
-    root, _ = _progetto(tmp_path)
+    root, _ = _project(tmp_path)
     with pytest.raises(FileNotFoundError):
         create_audit(root, "ciclo.md", "", 0, 0, "nota", "u")
 
 
 async def test_the_audit_route_answers_403_to_a_loop(tmp_path: Path) -> None:
-    root, pages = _progetto(tmp_path)
+    root, pages = _project(tmp_path)
     (pages / "index.md").write_text("# indice\n", encoding="utf-8")
     routes = WikiRoutes(
         check_api_token=lambda r: True,
@@ -118,20 +118,20 @@ def _b64(data: bytes) -> str:
 
 
 def test_signed_media_through_a_loop_is_404_and_is_not_signed(tmp_path: Path) -> None:
-    segreto = b"segreto"
-    cartella = tmp_path / "media"
-    cartella.mkdir()
+    secret = b"segreto"
+    folder = tmp_path / "media"
+    folder.mkdir()
     payload = _b64(b"ciclo.bin")
-    mac = hmac.new(segreto, payload.encode("ascii"), hashlib.sha256).digest()[:16]
+    mac = hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest()[:16]
 
     reply = media_api.serve_signed_media(
-        _b64(mac), payload, secret=segreto, media_dir=lambda _c: cartella
+        _b64(mac), payload, secret=secret, media_dir=lambda _c: folder
     )
     assert reply.status_code == 404
-    firmato = media_api.sign_media_path(
-        cartella / "ciclo.bin", secret=segreto, media_dir=lambda _c: cartella
+    signed = media_api.sign_media_path(
+        folder / "ciclo.bin", secret=secret, media_dir=lambda _c: folder
     )
-    assert firmato is None
+    assert signed is None
 
 
 def test_an_app_static_file_through_a_loop_is_403(tmp_path: Path) -> None:

@@ -73,7 +73,7 @@ def _spa_root_tokens() -> set[str]:
     return set(re.findall(r"^\s*(--[\w-]+):", block.group(1), re.M))
 
 
-def test_ogni_token_del_kit_segue_il_tema_o_e_escluso_per_iscritto():
+def test_every_kit_token_follows_the_theme_or_is_excluded_in_writing():
     """Il test che avrebbe preso il bug: nessun token può restare indietro in silenzio.
 
     Un token nuovo aggiunto al kit e a nessun altro posto resta al valore di
@@ -87,13 +87,13 @@ def test_ogni_token_del_kit_segue_il_tema_o_e_escluso_per_iscritto():
     )
 
 
-def test_la_mappa_punta_a_token_che_la_spa_ha_davvero():
+def test_the_map_points_to_tokens_the_spa_really_has():
     """Un token SPA rinominato deve rompere qui, non sbiadire dentro le app."""
     unknown = {spa for spa in _token_map().values() if spa not in _spa_root_tokens()}
     assert not unknown, f"APP_TOKEN_MAP punta a token assenti da mobile-style.css: {sorted(unknown)}"
 
 
-def test_sdk_e_spa_sono_daccordo_su_quali_token_attraversano():
+def test_sdk_and_spa_agree_on_which_tokens_cross():
     """Il whitelist dell'SDK e la mappa della SPA sono la stessa lista.
 
     Sono per forza due copie — l'SDK è uno script classico servito nell'iframe e
@@ -109,7 +109,7 @@ def test_sdk_e_spa_sono_daccordo_su_quali_token_attraversano():
     )
 
 
-def test_la_palette_viaggia_su_entrambi_i_canali():
+def test_the_palette_travels_on_both_channels():
     """Il postMessage da solo non basta: l'iframe dipinge prima che arrivi."""
     apps = _read(APPS_JS)
     assert "themeTokens()" in apps, "apps-actions.js non legge mai la palette del tema"
@@ -125,7 +125,7 @@ def test_la_palette_viaggia_su_entrambi_i_canali():
     )
 
 
-def test_i_valori_dal_parent_sono_ripassati_prima_di_finire_in_uno_stile():
+def test_values_from_the_parent_are_rechecked_before_ending_up_in_a_style():
     """Chi scrive nel frame non è verificabile da dentro: nomi e valori si validano.
 
     Il rischio concreto non è un colore brutto, è `url(...)`: una richiesta di
@@ -143,7 +143,7 @@ def test_i_valori_dal_parent_sono_ripassati_prima_di_finire_in_uno_stile():
         assert hostile not in pattern, f"il formato dei valori ammette {hostile}"
 
 
-def test_niente_indaco_rimasto_nel_kit():
+def test_no_indigo_left_in_the_kit():
     """La riserva è chanel/pietra, i due temi di default — non un colore inventato."""
     for path in (KIT_CSS, ASSETS / "apps" / "jenny-charts.js"):
         source = _read(path).lower().replace(" ", "")
@@ -151,7 +151,7 @@ def test_niente_indaco_rimasto_nel_kit():
         assert not leftovers, f"{path.name} contiene ancora l'indaco di riserva: {leftovers}"
 
 
-def test_il_velo_di_sfondo_e_il_pressed_seguono_laccent():
+def test_the_background_veil_and_pressed_follow_the_accent():
     """I due punti che l'utente vedeva blu, presi uno per uno."""
     sdk = _read(SDK_JS)
     accent = re.search(r"function applyAccent\(accent, onAccent\) \{(.*?)\n  \}", sdk, re.S)

@@ -49,7 +49,7 @@ _WATERBOT = (
     "- Ogni ciclo, controlla l'umidità delle piante e avvisami solo se una è sotto il 15%. "
     "Se hps è irraggiungibile salta il ciclo in silenzio."
 )
-_VITAMINE = "- Alle 9 ricordami le vitamine."
+_VITAMINS = "- Alle 9 ricordami le vitamine."
 
 _ESCALATION_HEAD = "These recurring tasks have now failed to run"
 _FOLLOWUP_HEAD = "This subagent was doing the work of a scheduled check"
@@ -260,7 +260,7 @@ class _Harness:
 
 @pytest.fixture
 def two_tasks(tmp_path: Path) -> _Harness:
-    harness = _Harness(tmp_path, _heartbeat_md(_WATERBOT, _VITAMINE))
+    harness = _Harness(tmp_path, _heartbeat_md(_WATERBOT, _VITAMINS))
     harness.agent.delegated = {1: "leggi l'umidità da hps"}
     return harness
 
@@ -668,7 +668,7 @@ class TestTheBlockOnlyAppearsWhereItBelongs:
         await two_tasks.cycles(1)
         assert two_tasks.state.task_checks != {}
 
-        two_tasks.rewrite(_heartbeat_md(_VITAMINE))
+        two_tasks.rewrite(_heartbeat_md(_VITAMINS))
         two_tasks.agent.delegated = {}
         await two_tasks.service.run_job("heartbeat")
 

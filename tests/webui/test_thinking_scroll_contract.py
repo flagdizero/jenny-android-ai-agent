@@ -103,7 +103,7 @@ def test_a_new_reasoning_segment_does_not_wipe_the_previous_one() -> None:
 
     delta = _method("_handleReasoningDelta")
     assert "_reasoningBuffer += '\\n\\n'" in delta, (
-        "senza lo stacco i due segmenti si incollano ('...right.Alright, let me...')"
+        "without lo stacco i due segmenti si incollano ('...right.Alright, let me...')"
     )
 
 

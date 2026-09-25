@@ -78,7 +78,7 @@ async def _call(handler, route: str, **params: str):
 
 
 @pytest.fixture
-def due_progetti(handler) -> Path:
+def two_projects(handler) -> Path:
     workspace = handler._get_workspace_root()
     _wiki(workspace, "patreon", {"index.md": "# Patreon\n"})
     _wiki(workspace, "etf", {"index.md": "# ETF\n", "note/segreto.md": "# Segreto\n"})
@@ -108,7 +108,7 @@ def due_progetti(handler) -> Path:
     ],
 )
 async def test_a_wiki_name_must_be_a_wiki_that_exists_under_wikis(
-    handler, due_progetti, route: str, name: str
+    handler, two_projects, route: str, name: str
 ) -> None:
     """Il nome arriva da un client: solo i nomi che ``discover_wikis`` conosce.
 
@@ -127,7 +127,7 @@ async def test_a_wiki_name_must_be_a_wiki_that_exists_under_wikis(
     ["../raw/appunti.md", "../../patreon/wiki/index.md", "/etc/passwd", "note/../../raw/appunti.md"],
 )
 async def test_a_page_path_that_climbs_is_refused_before_any_read(
-    handler, due_progetti, page: str
+    handler, two_projects, page: str
 ) -> None:
     """Il primo dei due cancelli: ``safe_wiki_page_path``, che guarda la *stringa*.
 
@@ -144,7 +144,7 @@ async def test_a_page_path_that_climbs_is_refused_before_any_read(
 
 
 async def test_a_symlink_out_of_the_pages_dir_is_refused_by_containment(
-    handler, due_progetti
+    handler, two_projects
 ) -> None:
     """Il secondo cancello, e l'input che solo lui vede.
 
@@ -153,8 +153,8 @@ async def test_a_symlink_out_of_the_pages_dir_is_refused_by_containment(
     fuori. È il controllo ``full.resolve().relative_to(containment_root)`` a
     fermarlo, e questo è il solo input che lo distingue dal primo cancello.
     """
-    pages = due_progetti / "wikis" / "etf" / "wiki"
-    (pages / "scorciatoia.md").symlink_to(due_progetti / "wikis" / "etf" / "raw" / "appunti.md")
+    pages = two_projects / "wikis" / "etf" / "wiki"
+    (pages / "scorciatoia.md").symlink_to(two_projects / "wikis" / "etf" / "raw" / "appunti.md")
 
     response = await _call(handler, "/api/page", wiki="etf", page="scorciatoia.md")
 
@@ -163,7 +163,7 @@ async def test_a_symlink_out_of_the_pages_dir_is_refused_by_containment(
 
 
 async def test_containment_answers_the_same_whether_the_file_exists_or_not(
-    handler, due_progetti
+    handler, two_projects
 ) -> None:
     """Un link fuori dalla ``wiki/`` e' un 403 **anche** se punta al nulla.
 
@@ -171,15 +171,15 @@ async def test_containment_answers_the_same_whether_the_file_exists_or_not(
     404 e uno presente 403: la risposta diceva a chi chiede se un file fuori
     dalla wiki c'e'.
     """
-    pages = due_progetti / "wikis" / "etf" / "wiki"
-    fuori = due_progetti / "wikis" / "etf" / "raw"
-    (pages / "c-e.md").symlink_to(fuori / "appunti.md")
-    (pages / "non-c-e.md").symlink_to(fuori / "mai-scritto.md")
+    pages = two_projects / "wikis" / "etf" / "wiki"
+    outside = two_projects / "wikis" / "etf" / "raw"
+    (pages / "c-e.md").symlink_to(outside / "appunti.md")
+    (pages / "non-c-e.md").symlink_to(outside / "mai-scritto.md")
 
-    presente = await _call(handler, "/api/page", wiki="etf", page="c-e.md")
-    assente = await _call(handler, "/api/page", wiki="etf", page="non-c-e.md")
+    present = await _call(handler, "/api/page", wiki="etf", page="c-e.md")
+    absent = await _call(handler, "/api/page", wiki="etf", page="non-c-e.md")
 
-    assert (presente.status_code, assente.status_code) == (403, 403)
+    assert (present.status_code, absent.status_code) == (403, 403)
 
 
 # ── l'asimmetria, messa a verbale ─────────────────────────────────────────
@@ -187,7 +187,7 @@ async def test_containment_answers_the_same_whether_the_file_exists_or_not(
 
 @pytest.mark.parametrize("route", ["/api/graph"])
 async def test_the_server_serves_any_of_the_users_own_wikis_by_design(
-    handler, due_progetti, route: str
+    handler, two_projects, route: str
 ) -> None:
     """**L'asimmetria del passo 5, a verbale.** Il server non conosce l'aggancio.
 
@@ -202,7 +202,7 @@ async def test_the_server_serves_any_of_the_users_own_wikis_by_design(
     assert payload
 
 
-async def test_a_wiki_outside_wikis_is_not_reachable_by_name(handler, due_progetti) -> None:
+async def test_a_wiki_outside_wikis_is_not_reachable_by_name(handler, two_projects) -> None:
     """Quel che misurava la prova della Home, ora che la Home non c'e' piu'.
 
     Qui c'era ``/api/tree`` senza nome: elencava le wiki di ``wikis/`` e doveva
@@ -225,7 +225,7 @@ async def test_a_wiki_outside_wikis_is_not_reachable_by_name(handler, due_proget
 # ── il tetto di lettura ───────────────────────────────────────────────────
 
 
-class TestUnaPaginaEnormeNonEUnaRisposta:
+class TestAHugePageIsNotAReply:
     """T9.4/G9. ``/api/page`` leggeva il file **senza tetto**, e lo fa sul loop
     dell'evento: la risposta porta il markdown grezzo *più* l'HTML reso, quindi
     un file finito lì per sbaglio — un dump, un log, un allegato — costava più
@@ -243,11 +243,11 @@ class TestUnaPaginaEnormeNonEUnaRisposta:
     provato: il confine sì.
     """
 
-    async def test_oltre_il_tetto_e_un_413_e_non_una_risposta_a_meta(
-        self, handler, due_progetti, monkeypatch
+    async def test_beyond_the_cap_is_a_413_not_a_half_reply(
+        self, handler, two_projects, monkeypatch
     ) -> None:
         monkeypatch.setattr("jenny.webui.wiki_routes._PAGE_MAX_BYTES", 64)
-        pages = due_progetti / "wikis" / "etf" / "wiki"
+        pages = two_projects / "wikis" / "etf" / "wiki"
         (pages / "enorme.md").write_text("# Grossa\n" + "x" * 200, encoding="utf-8")
 
         response = await _call(handler, "/api/page", wiki="etf", page="enorme.md")
@@ -255,8 +255,8 @@ class TestUnaPaginaEnormeNonEUnaRisposta:
         assert response is not None
         assert response.status_code == 413, response.status_code
 
-    async def test_sotto_il_tetto_la_pagina_arriva_intera(
-        self, handler, due_progetti, monkeypatch
+    async def test_under_the_cap_the_page_arrives_whole(
+        self, handler, two_projects, monkeypatch
     ) -> None:
         """Il verso opposto, che è quel che rende il tetto un tetto e non un
         rifiuto: al confine esatto la pagina si serve, e il ``raw`` è tutto il
@@ -265,7 +265,7 @@ class TestUnaPaginaEnormeNonEUnaRisposta:
         monkeypatch.setattr("jenny.webui.wiki_routes._PAGE_MAX_BYTES", 64)
         body = "# Piccola\n" + "y" * 54
         assert len(body.encode("utf-8")) == 64
-        pages = due_progetti / "wikis" / "etf" / "wiki"
+        pages = two_projects / "wikis" / "etf" / "wiki"
         (pages / "piccola.md").write_text(body, encoding="utf-8")
 
         response = await _call(handler, "/api/page", wiki="etf", page="piccola.md")

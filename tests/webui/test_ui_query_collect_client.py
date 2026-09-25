@@ -21,13 +21,13 @@ SETTINGS_SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
 
 def _script(body: str) -> str:
-    vista_di = next(
+    view_of = next(
         line for line in SETTINGS_SRC.splitlines() if line.startswith("export const VIEW_OF")
     ).replace("export ", "")
     return f"""
 import assert from 'node:assert/strict';
 
-{vista_di}
+{view_of}
 const views = {{
   'view-settings': {{ outerHTML: '<div id="view-settings">cassetto</div>' }},
   'view-chat': {{ outerHTML: '<div id="view-chat">chat</div>' }},

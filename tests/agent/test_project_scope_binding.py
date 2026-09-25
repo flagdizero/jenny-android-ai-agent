@@ -58,22 +58,22 @@ def _turn(resolver: WorkspaceScopeResolver, key: str | None, channel: str = "web
 # ── dalla chiave alla cartella ───────────────────────────────────────────────
 
 
-class TestLaCartellaVieneDallaChiave:
-    def test_un_progetto_lavora_nella_sua_wiki(self, resolver, workspace):
+class TestTheFolderComesFromTheKey:
+    def test_a_project_works_in_its_own_wiki(self, resolver, workspace):
         scope = _turn(resolver, project_session_key("patreon"))
 
         assert scope.project_path == (workspace / "wikis" / "patreon").resolve()
         assert scope.access_mode == "restricted"
 
-    def test_due_progetti_non_si_toccano(self, resolver, workspace):
+    def test_two_projects_do_not_touch(self, resolver, workspace):
         assert _turn(resolver, project_session_key("patreon")).project_path != _turn(
             resolver, project_session_key("etf")
         ).project_path
 
-    def test_la_conversazione_personale_resta_sulla_radice(self, resolver, workspace):
+    def test_the_personal_conversation_stays_on_the_root(self, resolver, workspace):
         assert _turn(resolver, PERSONAL).project_path == workspace.resolve()
 
-    def test_rispetta_la_cartella_configurata(self, tmp_path: Path):
+    def test_respects_the_configured_folder(self, tmp_path: Path):
         """Deve essere la stessa che il picker elenca (`config.wiki.wikis_dir`).
 
         Se le due divergessero, il chip mostrerebbe progetti che lo scope non
@@ -92,8 +92,8 @@ class TestLaCartellaVieneDallaChiave:
         assert scope.project_path == (ws / "kb" / "patreon").resolve()
 
 
-class TestQuandoQualcosaNonTorna:
-    def test_una_cartella_sparita_non_ricade_sulla_radice_personale(
+class TestWhenSomethingDoesNotAddUp:
+    def test_a_vanished_folder_does_not_fall_back_to_the_personal_root(
         self, resolver, workspace, caplog
     ):
         """Meglio un progetto che non riesce a scrivere che uno che scrive a casa.
@@ -108,7 +108,7 @@ class TestQuandoQualcosaNonTorna:
         assert scope.project_path == (workspace / "wikis" / "mai-esistita").resolve()
         assert scope.project_path != workspace.resolve()
 
-    def test_una_risalita_nel_nome_non_esce_dalla_cartella_dei_progetti(
+    def test_a_climb_in_the_name_does_not_leave_the_projects_folder(
         self, resolver, workspace
     ):
         """Difesa in profondità: `session_key_for_channel` non lascerebbe mai
@@ -117,14 +117,14 @@ class TestQuandoQualcosaNonTorna:
 
         assert scope.project_path == workspace.resolve()
 
-    def test_un_canale_diverso_dalla_webui_non_ha_progetti(self, resolver, workspace):
+    def test_a_channel_other_than_the_webui_has_no_projects(self, resolver, workspace):
         """Un progetto è una sessione di lavoro alla tastiera: la vita fuori di
         Jenny — Telegram, cron, avvisi — non ci entra."""
         scope = _turn(resolver, project_session_key("patreon"), channel="telegram")
 
         assert scope.project_path == workspace.resolve()
 
-    def test_un_progetto_e_restricted_anche_a_restrizione_spenta(self, workspace):
+    def test_a_project_is_restricted_even_with_restriction_off(self, workspace):
         """La docstring di ``for_project`` dice «sempre ``restricted``, non c'è modo
         di chiedere il contrario» — e fino a T4.12 **nessun test lo provava**.
 
@@ -156,7 +156,7 @@ class TestQuandoQualcosaNonTorna:
 # ── dal `chat_id` alla chiave ────────────────────────────────────────────────
 
 
-class TestDalChatIdAllaChiave:
+class TestFromTheChatIdToTheKey:
     @pytest.mark.parametrize(
         ("chat_id", "expected"),
         [
@@ -173,10 +173,10 @@ class TestDalChatIdAllaChiave:
             ("", PERSONAL),
         ],
     )
-    def test_solo_le_forme_riconosciute_aprono_una_sessione(self, chat_id, expected):
+    def test_only_recognized_forms_open_a_session(self, chat_id, expected):
         assert session_key_for_channel("websocket", chat_id) == expected
 
-    def test_telegram_non_apre_progetti(self):
+    def test_telegram_does_not_open_projects(self):
         assert session_key_for_channel("telegram", "project:patreon") == PERSONAL
 
     @pytest.mark.parametrize(
@@ -193,7 +193,7 @@ class TestDalChatIdAllaChiave:
             ("a" * 65, False),
         ],
     )
-    def test_la_forma_di_un_nome_e_una_sola(self, name, ok):
+    def test_a_name_has_only_one_form(self, name, ok):
         """La stessa funzione decide cosa si può creare e cosa si può aprire: un
         nome accettato alla creazione e rifiutato all'apertura darebbe un
         progetto che esiste e non si apre."""
@@ -203,14 +203,14 @@ class TestDalChatIdAllaChiave:
 # ── la catena intera ─────────────────────────────────────────────────────────
 
 
-class TestLaCatenaEDavveroCollegata:
+class TestTheChainIsReallyConnected:
     """I singoli anelli hanno i loro test; questo prova che si toccano.
 
     `chat_id` -> chiave di sessione -> scope del turno -> prompt. È il giro che
     un difetto di cablaggio romperebbe lasciando verdi tutti gli altri test.
     """
 
-    def test_dal_chat_id_al_prompt(self, resolver, workspace, monkeypatch):
+    def test_from_chat_id_to_prompt(self, resolver, workspace, monkeypatch):
         from jenny.agent.context import ContextBuilder
         from jenny.bus.events import InboundMessage
 
@@ -239,7 +239,7 @@ class TestLaCatenaEDavveroCollegata:
         # ...e la coda del diario personale no (il confine del 21/08).
         assert "# Recent History" not in prompt
 
-    def test_lo_stesso_giro_per_la_conversazione_personale_non_cambia(
+    def test_the_same_round_for_the_personal_conversation_does_not_change(
         self, resolver, workspace
     ):
         from jenny.bus.events import InboundMessage
@@ -254,7 +254,7 @@ class TestLaCatenaEDavveroCollegata:
         )
 
 
-class TestIlLoopUsaLaChiaveDelMessaggio:
+class TestTheLoopUsesTheMessageKey:
     """L'anello che mancava, e che solo il telefono ha mostrato.
 
     `AgentLoop._effective_session_key` aveva `UNIFIED_SESSION_KEY` cablato. Il
@@ -265,7 +265,7 @@ class TestIlLoopUsaLaChiaveDelMessaggio:
     anelli restavano verdi, perché nessuno provava la catena.
     """
 
-    def test_un_messaggio_di_progetto_non_viene_dirottato(self):
+    def test_a_project_message_is_not_hijacked(self):
         from jenny.agent.loop import AgentLoop
         from jenny.bus.events import InboundMessage
 
@@ -278,7 +278,7 @@ class TestIlLoopUsaLaChiaveDelMessaggio:
 
         assert AgentLoop._effective_session_key(None, msg) == "project:patreon"
 
-    def test_la_conversazione_personale_resta_dov_era(self):
+    def test_the_personal_conversation_stays_where_it_was(self):
         from jenny.agent.loop import AgentLoop
         from jenny.bus.events import InboundMessage
 
@@ -288,7 +288,7 @@ class TestIlLoopUsaLaChiaveDelMessaggio:
 
         assert AgentLoop._effective_session_key(None, msg) == PERSONAL
 
-    def test_un_override_esplicito_vince_ancora(self):
+    def test_an_explicit_override_still_wins(self):
         """È così che cron e Dream si portano la propria sessione."""
         from jenny.agent.loop import AgentLoop
         from jenny.bus.events import InboundMessage
@@ -304,7 +304,7 @@ class TestIlLoopUsaLaChiaveDelMessaggio:
         assert AgentLoop._effective_session_key(None, msg) == "cron:job-1"
 
 
-class TestIlCanaleLeggeIlChatIdDelFrame:
+class TestTheChannelReadsTheChatIdFromTheFrame:
     """Il secondo anello mancante, trovato dallo stesso test sul telefono.
 
     `WebSocketChannel._dispatch_envelope` sostituiva il `chat_id` del frame con
@@ -339,7 +339,7 @@ class TestIlCanaleLeggeIlChatIdDelFrame:
             (f"project:{'x' * 65}", None),
         ],
     )
-    def test_solo_un_progetto_valido_cambia_conversazione(self, frame_chat_id, expected):
+    def test_only_a_valid_project_changes_conversation(self, frame_chat_id, expected):
         from jenny.channels.websocket import WebSocketChannel
 
         envelope = {"type": "message", "content": "ciao"}

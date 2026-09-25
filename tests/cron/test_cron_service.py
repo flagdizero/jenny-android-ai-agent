@@ -66,18 +66,18 @@ def test_validation_and_scheduling_read_the_same_timezone(monkeypatch) -> None:
 
     from jenny.cron import service as service_mod
 
-    chieste: list[str | None] = []
+    requested: list[str | None] = []
 
-    def _spia(schedule):
-        chieste.append(schedule.tz)
+    def _spy(schedule):
+        requested.append(schedule.tz)
         return ZoneInfo("Pacific/Kiritimati")
 
-    monkeypatch.setattr(service_mod, "_schedule_tzinfo", _spia)
+    monkeypatch.setattr(service_mod, "_schedule_tzinfo", _spy)
     schedule = CronSchedule(kind="cron", expr="0 9 * * *", tz="Europe/Rome")
     service_mod._validate_cron_expr(schedule)
     next = service_mod._compute_next_run(schedule, 1_790_000_000_000)
 
-    assert chieste == ["Europe/Rome", "Europe/Rome"]
+    assert requested == ["Europe/Rome", "Europe/Rome"]
     ora = datetime.fromtimestamp(next / 1000, ZoneInfo("Pacific/Kiritimati"))
     assert (ora.hour, ora.minute) == (9, 0)
 

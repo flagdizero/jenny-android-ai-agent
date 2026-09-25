@@ -92,7 +92,7 @@ def test_frame_src_does_not_open_the_whole_web(tmp_path):
         )
 
 
-def test_officina_html_carries_the_same_csp(tmp_path):
+def test_workshop_html_carries_the_same_csp(tmp_path):
     """L'officina e' l'altro guscio, e vale la stessa policy.
 
     Dopo lo scambio dei nomi ``index.html`` e' la casa e l'officina ha il

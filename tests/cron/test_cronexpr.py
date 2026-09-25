@@ -310,9 +310,9 @@ def test_a_two_hour_shift_keeps_the_rhythm_too() -> None:
     runs = [base, *_chain("*/10 * * * *", base, 20)]
     assert set(_gaps_in_minutes(runs)) == {10}
     last = datetime(2026, 10, 25, 2, 59, 59, tzinfo=troll)
-    seguente = next_after("*/30 * * * *", last)
-    assert seguente.astimezone(timezone.utc) == datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)
-    assert (seguente.hour, seguente.minute, seguente.fold) == (1, 0, 1)
+    following = next_after("*/30 * * * *", last)
+    assert following.astimezone(timezone.utc) == datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)
+    assert (following.hour, following.minute, following.fold) == (1, 0, 1)
 
 
 @pytest.mark.parametrize(

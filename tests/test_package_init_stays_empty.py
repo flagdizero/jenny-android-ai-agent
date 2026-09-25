@@ -51,7 +51,7 @@ def test_a_leaf_import_does_not_drag_in_the_agent(leaf: str) -> None:
     loaded = _modules_loaded_by(leaf)
     dragged = sorted(m for m in loaded if m.startswith(FORBIDDEN_PREFIXES))
     assert not dragged, (
-        f"`import {leaf}` carica {len(dragged)} moduli di agent/providers "
+        f"`import {leaf}` carica {len(dragged)} modules di agent/providers "
         f"(es. {dragged[:3]}). Di solito è un re-export rimesso in un "
         "``__init__.py`` per comodità: quella riga la esegue ogni import del "
         "package, foglie comprese. Importa dal sottomodulo."

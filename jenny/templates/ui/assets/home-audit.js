@@ -74,7 +74,7 @@ export function offsetsIn(raw, selected) {
  *      fra parentesi.
  *
  *  I segnaposto li riempie `i18n.t`, che sostituisce con una funzione: un
- *  `.replace(stringa, text)` interpreta `$$`, `$&` e `$'` dentro il testo, e
+ *  `.replace(string, text)` interpreta `$$`, `$&` e `$'` dentro il testo, e
  *  una formula citata (`$$E = mc^2$$`) arrivava a Jenny storpiata. Una passata
  *  sola, anche: un titolo che contiene «{quote}» resta com'e'.
  */

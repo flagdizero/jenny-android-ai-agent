@@ -5,7 +5,7 @@ stesso ordine della scheda di un quaderno: **una cosa si appende dal posto dove
 vive** (`.agent/pagine-dal-posto-plan.md`). La stessa scheda la disegna
 l'officina, che le pagine non le ha: li' deve restare **identica a prima**.
 
-In node sui file veri, come `test_casa_pista_client.py`: il modulo si importa
+In node sui file veri, come `test_home_track_client.py`: il modulo si importa
 davvero, i suoi vicini sono finti. Il DOM finto non analizza l'HTML — la scheda
 lo scrive come testo — quindi si legge quel testo: quali righe, in che ordine,
 quali spente e perche'.
@@ -28,7 +28,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 pytestmark = requires_node
 
 
-_VICINI = {
+_NEIGHBORS = {
     "api-client.js": """
 export const api = {
   cancellate: [],
@@ -37,9 +37,9 @@ export const api = {
 };
 """,
     "utils.js": """
-export const avvisi = [];
+export const notices = [];
 export function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
-export function showToast(text, type) { avvisi.push([text, type]); }
+export function showToast(text, type) { notices.push([text, type]); }
 """,
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k };\n",
@@ -50,9 +50,9 @@ export function themeTokens() { return ''; }
 """,
 }
 
-_FINTO_DOM = """
-const elementi = new Map();
-function creaEl(id) {
+_FAKE_DOM = """
+const elements = new Map();
+function createEl(id) {
   const el = {
     id, innerHTML: '', open: false, onclick: null,
     showModal() { this.open = true; },
@@ -61,23 +61,23 @@ function creaEl(id) {
     querySelector() { return null; },
     addEventListener() {},
   };
-  if (id) elementi.set(id, el);
+  if (id) elements.set(id, el);
   return el;
 }
 for (const id of ['jenny-app-sheet', 'jenny-app-sheet-title',
-                  'jenny-app-sheet-actions', 'jenny-app-sheet-cancel']) creaEl(id);
+                  'jenny-app-sheet-actions', 'jenny-app-sheet-cancel']) createEl(id);
 globalThis.document = {
-  getElementById: (id) => elementi.get(id) || null,
-  createElement: () => creaEl(null),
+  getElementById: (id) => elements.get(id) || null,
+  createElement: () => createEl(null),
   documentElement: { lang: 'it' },
-  body: creaEl('body'),
+  body: createEl('body'),
 };
 globalThis.window = { addEventListener() {} };
 globalThis.MutationObserver = class { observe() {} };
 
 /* Le righe della scheda, lette dal testo che scrive: azione, spenta, perche'. */
 function rows() {
-  const html = elementi.get('jenny-app-sheet-actions').innerHTML;
+  const html = elements.get('jenny-app-sheet-actions').innerHTML;
   return [...html.matchAll(/<button[^>]*data-action="([^"]+)"([^>]*)>([\\s\\S]*?)<\\/button>/g)]
     .map(([, action, attr, inside]) => ({
       action,
@@ -90,25 +90,25 @@ function rows() {
 
 def _run(body: str, *, app: dict, pages: str | None) -> None:
     """*pagine*: il JS della porta che il guscio passa, o `None` per l'officina."""
-    porta = "null" if pages is None else pages
+    door = "null" if pages is None else pages
     script = (
         "import assert from 'node:assert/strict';\n"
-        + _FINTO_DOM
+        + _FAKE_DOM
         + textwrap.dedent(
             f"""
             const {{ AppsActions }} = await import('./shared/apps-actions.js');
             const {{ api }} = await import('./shared/api-client.js');
-            const {{ avvisi }} = await import('./shared/utils.js');
-            const chiamate = [];
+            const {{ notices }} = await import('./shared/utils.js');
+            const calls = [];
             const APP = {json.dumps(app)};
             const source = {{
               jennyApps: [APP],
-              async loadJennyApps() {{ chiamate.push(['rilette']); }},
+              async loadJennyApps() {{ calls.push(['rilette']); }},
               onAppDataChanged() {{ return () => {{}}; }},
             }};
-            const PORTA = {porta};
+            const DOOR = {door};
             const shell = {{ sendChatPrompt() {{}} }};
-            if (PORTA) shell.homePages = () => PORTA;
+            if (DOOR) shell.homePages = () => DOOR;
             const actions = new AppsActions(source, shell);
             actions.showJennyAppSheet(APP.slug);
             """
@@ -119,22 +119,22 @@ def _run(body: str, *, app: dict, pages: str | None) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)
 
 
-ORTO = {"slug": "orto", "name": "Orto"}
+GARDEN = {"slug": "orto", "name": "Orto"}
 
 
-def _porta(state: str) -> str:
+def _door(state: str) -> str:
     return (
-        "{ state: (k, r) => { chiamate.push(['stato', k, r]); return '" + state + "'; },"
-        "  append: async (k, r) => { chiamate.push(['appendi', k, r]); return true; },"
-        "  detach: async (k, r) => { chiamate.push(['stacca', k, r]); return true; },"
-        "  reload: async () => { chiamate.push(['ricarica']); } }"
+        "{ state: (k, r) => { calls.push(['stato', k, r]); return '" + state + "'; },"
+        "  append: async (k, r) => { calls.push(['appendi', k, r]); return true; },"
+        "  detach: async (k, r) => { calls.push(['stacca', k, r]); return true; },"
+        "  reload: async () => { calls.push(['ricarica']); } }"
     )
 
 
@@ -145,9 +145,9 @@ def test_in_the_home_the_sheet_has_four_rows_in_order() -> None:
     """Apri · Metti come pagina · Modifica · Elimina — come la scheda di un quaderno."""
     _run(
         "assert.deepEqual(rows().map((r) => r.action), ['open', 'pin', 'edit', 'delete']);\n"
-        "assert.deepEqual(chiamate[0], ['stato', 'app', 'orto']);\n",
-        app=ORTO,
-        pages=_porta("free"),
+        "assert.deepEqual(calls[0], ['stato', 'app', 'orto']);\n",
+        app=GARDEN,
+        pages=_door("free"),
     )
 
 
@@ -163,7 +163,7 @@ def test_in_the_workshop_the_sheet_is_exactly_as_before() -> None:
         "const html = document.getElementById('jenny-app-sheet-actions').innerHTML;\n"
         "assert.ok(!html.includes('oc-sheet-label'), 'le righe dell officina hanno cambiato forma');\n"
         "assert.ok(!html.includes('disabled'));\n",
-        app=ORTO,
+        app=GARDEN,
         pages=None,
     )
 
@@ -171,8 +171,8 @@ def test_in_the_workshop_the_sheet_is_exactly_as_before() -> None:
 def test_a_pinned_app_offers_to_unpin_it() -> None:
     _run(
         "assert.deepEqual(rows().map((r) => r.action), ['open', 'unpin', 'edit', 'delete']);\n",
-        app=ORTO,
-        pages=_porta("pending"),
+        app=GARDEN,
+        pages=_door("pending"),
     )
 
 
@@ -181,7 +181,7 @@ def test_a_pinned_app_offers_to_unpin_it() -> None:
     [
         ({"slug": "waterbot", "name": "WaterBot", "view_kind": "external"}, "free", "apps.pageExternal"),
         ({"slug": "rotta", "name": "Rotta", "broken": True}, "free", "apps.pageBroken"),
-        (ORTO, "piena", "apps.pageFull"),
+        (GARDEN, "piena", "apps.pageFull"),
     ],
     ids=["external", "broken", "full"],
 )
@@ -194,7 +194,7 @@ def test_a_row_that_cannot_be_used_is_shown_off_with_its_reason(app, state, why)
         "assert.equal(r.off, true, 'la riga si puo toccare');\n"
         f"assert.equal(r.why, {json.dumps(why)});\n",
         app=app,
-        pages=_porta(state),
+        pages=_door(state),
     )
 
 
@@ -203,8 +203,8 @@ def test_a_row_that_can_be_used_is_not_off() -> None:
         "const r = rows()[1];\n"
         "assert.equal(r.off, false);\n"
         "assert.equal(r.why, null);\n",
-        app=ORTO,
-        pages=_porta("free"),
+        app=GARDEN,
+        pages=_door("free"),
     )
 
 
@@ -214,19 +214,19 @@ def test_a_row_that_can_be_used_is_not_off() -> None:
 def test_pin_asks_the_pages_for_this_app() -> None:
     _run(
         "await actions._handleJennySheetAction('pin', APP);\n"
-        "assert.deepEqual(chiamate.at(-1), ['appendi', 'app', 'orto']);\n",
-        app=ORTO,
-        pages=_porta("free"),
+        "assert.deepEqual(calls.at(-1), ['appendi', 'app', 'orto']);\n",
+        app=GARDEN,
+        pages=_door("free"),
     )
 
 
 def test_unpin_takes_it_off_and_says_so() -> None:
     _run(
         "await actions._handleJennySheetAction('unpin', APP);\n"
-        "assert.deepEqual(chiamate.at(-1), ['stacca', 'app', 'orto']);\n"
-        "assert.deepEqual(avvisi.at(-1), ['apps.unpinned', 'success']);\n",
-        app=ORTO,
-        pages=_porta("pending"),
+        "assert.deepEqual(calls.at(-1), ['stacca', 'app', 'orto']);\n"
+        "assert.deepEqual(notices.at(-1), ['apps.unpinned', 'success']);\n",
+        app=GARDEN,
+        pages=_door("pending"),
     )
 
 
@@ -236,9 +236,9 @@ def test_deleting_an_app_rereads_the_pages() -> None:
     _run(
         "await actions._handleJennySheetAction('delete', APP);\n"
         "assert.deepEqual(api.cancellate, ['orto']);\n"
-        "assert.ok(chiamate.some((c) => c[0] === 'ricarica'), 'le pagine non sono state rilette');\n",
-        app=ORTO,
-        pages=_porta("pending"),
+        "assert.ok(calls.some((c) => c[0] === 'ricarica'), 'le pagine non sono state rilette');\n",
+        app=GARDEN,
+        pages=_door("pending"),
     )
 
 
@@ -247,8 +247,8 @@ def test_deleting_from_the_workshop_needs_no_pages() -> None:
     _run(
         "await actions._handleJennySheetAction('delete', APP);\n"
         "assert.deepEqual(api.cancellate, ['orto']);\n"
-        "assert.deepEqual(avvisi.at(-1), ['apps.appDeleted', 'success']);\n",
-        app=ORTO,
+        "assert.deepEqual(notices.at(-1), ['apps.appDeleted', 'success']);\n",
+        app=GARDEN,
         pages=None,
     )
 
@@ -266,6 +266,6 @@ def test_back_on_an_app_opened_from_the_home_closes_it() -> None:
         "assert.equal(actions.handleBack(), true);\n"
         "assert.equal(actions._openApp, null, 'l app e rimasta aperta');\n"
         "assert.equal(actions.handleBack(), false, 'con niente aperto Indietro non e suo');\n",
-        app=ORTO,
-        pages=_porta("free"),
+        app=GARDEN,
+        pages=_door("free"),
     )

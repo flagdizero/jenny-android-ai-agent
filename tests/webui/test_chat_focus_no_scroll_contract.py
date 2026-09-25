@@ -43,15 +43,15 @@ def _activate(src: str) -> str:
     m = re.search(r"\n  activate\(\)\s*\{", src)
     assert m, "activate() non trovato in mobile-chat.js"
     i = src.index("{", m.end() - 1)
-    prof, j, stringa = 0, i, None
+    prof, j, string = 0, i, None
     while j < len(src):
         c, due = src[j], src[j : j + 2]
-        if stringa:
+        if string:
             if c == "\\":
                 j += 2
                 continue
-            if c == stringa:
-                stringa = None
+            if c == string:
+                string = None
         elif due == "//":
             j = src.index("\n", j)
             continue
@@ -59,7 +59,7 @@ def _activate(src: str) -> str:
             j = src.index("*/", j) + 2
             continue
         elif c in "\"'`":
-            stringa = c
+            string = c
         elif c == "{":
             prof += 1
         elif c == "}":
@@ -72,9 +72,9 @@ def _activate(src: str) -> str:
 
 def test_entering_the_chat_focuses_without_scrolling() -> None:
     body = _activate(CHAT_JS.read_text(encoding="utf-8"))
-    fuochi = re.findall(r"\.focus\(([^)]*)\)", body)
-    assert fuochi, "activate() non mette piu' a fuoco il campo"
-    for arg in fuochi:
+    focuses = re.findall(r"\.focus\(([^)]*)\)", body)
+    assert focuses, "activate() non mette piu' a fuoco il campo"
+    for arg in focuses:
         # `preventScroll: true`, non la parola: `{ preventScroll: false }` la
         # contiene e scorre di lato lo stesso.
         assert re.search(r"\bpreventScroll\s*:\s*true\b", arg), (

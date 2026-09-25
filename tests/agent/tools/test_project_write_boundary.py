@@ -22,7 +22,7 @@ non passa dai builtin).
 `os` validavano contro la radice con cui il tool era stato costruito. Con uno
 scope su `wikis/patreon`, `open('<ws>/SOUL.md', 'w')` veniva rifiutata e
 `os.remove('<ws>/SOUL.md')` cancellava. Le prove stanno in
-`TestSuperficieOsAsincrona`, che passa dal tool VERO — vedi lì perché non basta
+`TestAsyncOsSurface`, che passa dal tool VERO — vedi lì perché non basta
 chiamare il namespace.
 """
 
@@ -109,20 +109,20 @@ def _namespace(workspace: Path) -> PythonNamespace:
 
 
 class TestToolFile:
-    async def test_legge_la_propria_skill(self, scoped):
+    async def test_reads_its_own_skill(self, scoped):
         """La regressione concreta per cui la regola esiste."""
         ws, _project, _other, skill = scoped
         tool = ReadFileTool(workspace=ws, allowed_dir=ws, restrict_to_workspace=True)
 
         assert "come si tiene una wiki" in await tool.execute(path=str(skill / "SKILL.md"))
 
-    async def test_legge_unaltra_wiki_se_gliela_si_chiede(self, scoped):
+    async def test_reads_another_wiki_if_asked(self, scoped):
         ws, _project, other, _skill = scoped
         tool = ReadFileTool(workspace=ws, allowed_dir=ws, restrict_to_workspace=True)
 
         assert "l'altra wiki" in await tool.execute(path=str(other / "CLAUDE.md"))
 
-    async def test_scrive_nella_propria_cartella(self, scoped):
+    async def test_writes_into_its_own_folder(self, scoped):
         ws, project, _other, _skill = scoped
         tool = WriteFileTool(workspace=ws, allowed_dir=ws, restrict_to_workspace=True)
 
@@ -131,14 +131,14 @@ class TestToolFile:
         assert "Successfully wrote" in result
         assert (project / "wiki" / "nota.md").read_text(encoding="utf-8") == "ok"
 
-    async def test_non_scrive_nella_wiki_di_un_altro_progetto(self, scoped):
+    async def test_does_not_write_into_another_projects_wiki(self, scoped):
         ws, _project, other, _skill = scoped
         tool = WriteFileTool(workspace=ws, allowed_dir=ws, restrict_to_workspace=True)
 
         assert _REFUSED in await tool.execute(path=str(other / "rubato.md"), content="no")
         assert not (other / "rubato.md").exists()
 
-    async def test_non_riscrive_chi_e_jenny(self, scoped):
+    async def test_does_not_rewrite_who_jenny_is(self, scoped):
         """`SOUL.md` e `USER.md` stanno fuori dalla cartella legata, ed è quello
         che li protegge: nessuna allowlist da mantenere."""
         ws, _project, _other, _skill = scoped
@@ -152,12 +152,12 @@ class TestToolFile:
 
 
 class TestBuiltinPythonExec:
-    def test_read_file_arriva_alla_skill(self, scoped):
+    def test_read_file_reaches_the_skill(self, scoped):
         ws, _project, _other, skill = scoped
 
         assert "come si tiene una wiki" in _builtins(ws)["read_file"](str(skill / "SKILL.md"))
 
-    def test_write_file_resta_nella_cartella_del_progetto(self, scoped):
+    def test_write_file_stays_in_the_project_folder(self, scoped):
         ws, project, _other, _skill = scoped
 
         _builtins(ws)["write_file"](str(project / "dentro.txt"), "ok")
@@ -165,14 +165,14 @@ class TestBuiltinPythonExec:
         assert (project / "dentro.txt").read_text(encoding="utf-8") == "ok"
 
     @pytest.mark.parametrize("fn", ["write_file", "append_file"])
-    def test_write_file_fuori_viene_rifiutato(self, scoped, fn):
+    def test_write_file_outside_is_rejected(self, scoped, fn):
         ws, _project, other, _skill = scoped
 
         with pytest.raises(Exception, match=_REFUSED):
             _builtins(ws)[fn](str(other / "rubato.txt"), "no")
         assert not (other / "rubato.txt").exists()
 
-    def test_write_json_fuori_viene_rifiutato(self, scoped):
+    def test_write_json_outside_is_rejected(self, scoped):
         ws, _project, other, _skill = scoped
 
         with pytest.raises(Exception, match=_REFUSED):
@@ -182,14 +182,14 @@ class TestBuiltinPythonExec:
 # ── `open()` grezza dentro il sandbox ───────────────────────────────────────
 
 
-class TestOpenGrezza:
+class TestRawOpen:
     """La terza superficie: uno script che non usa i builtin.
 
     Se `open(..., 'w')` non fosse confinata, il confine sarebbe teatro — basta
     una riga di Python per aggirarlo.
     """
 
-    def test_apre_in_lettura_fuori_dal_progetto(self, scoped):
+    def test_opens_for_reading_outside_the_project(self, scoped):
         ws, _project, _other, skill = scoped
 
         stdout, stderr, _ = _namespace(ws).execute(
@@ -199,7 +199,7 @@ class TestOpenGrezza:
         assert stderr == ""
         assert "come si tiene una wiki" in stdout
 
-    def test_non_apre_in_scrittura_fuori_dal_progetto(self, scoped):
+    def test_does_not_open_for_writing_outside_the_project(self, scoped):
         ws, _project, other, _skill = scoped
         target = other / "rubato.txt"
 
@@ -210,7 +210,7 @@ class TestOpenGrezza:
         assert _REFUSED in stderr
         assert not target.exists()
 
-    def test_apre_in_scrittura_dentro_il_progetto(self, scoped):
+    def test_opens_for_writing_inside_the_project(self, scoped):
         ws, project, _other, _skill = scoped
         target = project / "dentro.txt"
 
@@ -225,8 +225,8 @@ class TestOpenGrezza:
 # ── senza scope non cambia niente ───────────────────────────────────────────
 
 
-class TestSenzaProgetto:
-    async def test_la_sessione_personale_scrive_in_tutto_il_workspace(self, tmp_path: Path):
+class TestWithoutProject:
+    async def test_the_personal_session_writes_across_the_whole_workspace(self, tmp_path: Path):
         ws = tmp_path / "workspace"
         (ws / "wikis" / "patreon").mkdir(parents=True)
         tool = WriteFileTool(workspace=ws, allowed_dir=ws, restrict_to_workspace=True)
@@ -260,7 +260,7 @@ _BOUNDARY_ERROR = "WorkspaceBoundaryError"
 
 # (id, codice, che tipo di bersaglio serve). `{p}` è il percorso da colpire,
 # `{d}` una destinazione accanto a lui.
-_MUTAZIONI: tuple[tuple[str, str, str], ...] = (
+_MUTATIONS: tuple[tuple[str, str, str], ...] = (
     ("os.remove", "import os; os.remove({p!r})", "file"),
     ("os.rename", "import os; os.rename({p!r}, {d!r})", "file"),
     (
@@ -273,7 +273,7 @@ _MUTAZIONI: tuple[tuple[str, str, str], ...] = (
     ("pathlib-unlink", "from pathlib import Path; Path({p!r}).unlink()", "file"),
     ("pathlib-rename", "from pathlib import Path; Path({p!r}).rename({d!r})", "file"),
 )
-_MUTAZIONI_IDS = [nome for nome, _code, _kind in _MUTAZIONI]
+_MUTATION_IDS = [name for name, _code, _kind in _MUTATIONS]
 
 
 def _tool(workspace: Path) -> PythonExecTool:
@@ -300,9 +300,9 @@ def _tool(workspace: Path) -> PythonExecTool:
     return tool
 
 
-class TestSuperficieOsAsincrona:
-    @pytest.mark.parametrize(("_id", "code", "kind"), _MUTAZIONI, ids=_MUTAZIONI_IDS)
-    async def test_fuori_dal_progetto_e_rifiutata(self, scoped, _id, code, kind):
+class TestAsyncOsSurface:
+    @pytest.mark.parametrize(("_id", "code", "kind"), _MUTATIONS, ids=_MUTATION_IDS)
+    async def test_outside_the_project_is_refused(self, scoped, _id, code, kind):
         ws, _project, other, _skill = scoped
         if kind == "dir":
             target = other  # la wiki di un ALTRO progetto
@@ -320,8 +320,8 @@ class TestSuperficieOsAsincrona:
             assert target.read_text(encoding="utf-8") == "chi sono"
             assert not Path(str(target) + ".spostato").exists()
 
-    @pytest.mark.parametrize(("_id", "code", "kind"), _MUTAZIONI, ids=_MUTAZIONI_IDS)
-    async def test_dentro_il_progetto_passa(self, scoped, _id, code, kind):
+    @pytest.mark.parametrize(("_id", "code", "kind"), _MUTATIONS, ids=_MUTATION_IDS)
+    async def test_inside_the_project_passes(self, scoped, _id, code, kind):
         """La controprova: il cancello è lo SCOPE, non un divieto generale."""
         ws, project, _other, _skill = scoped
         if kind == "dir":
@@ -340,12 +340,12 @@ class TestSuperficieOsAsincrona:
         assert "Traceback" not in out, f"caduta per altro: {code!r} -> {out!r}"
         # L'effetto è avvenuto davvero: il bersaglio è sparito (rimosso,
         # rinominato, spostato) oppure è stato troncato sul posto.
-        spostato = Path(str(target) + ".spostato")
-        assert not target.exists() or spostato.exists() or (
+        moved = Path(str(target) + ".spostato")
+        assert not target.exists() or moved.exists() or (
             kind == "file" and target.read_text(encoding="utf-8") == ""
         ), f"nessun effetto da {code!r}: {out!r}"
 
-    async def test_la_lettura_fuori_dal_progetto_resta_aperta(self, scoped):
+    async def test_reading_outside_the_project_stays_open(self, scoped):
         """La metà che conta: il confine è asimmetrico e deve restarlo."""
         ws, _project, _other, skill = scoped
 
@@ -357,7 +357,7 @@ class TestSuperficieOsAsincrona:
         assert out.strip().isdigit(), out
 
 
-class TestIlContestoDelTurnoArrivaAlWorker:
+class TestTheTurnContextReachesTheWorker:
     """Il test che muore se il cancello torna a essere solo sincrono.
 
     Non prova un rifiuto: prova il *meccanismo*. Se qualcuno toglie la copia del
@@ -366,7 +366,7 @@ class TestIlContestoDelTurnoArrivaAlWorker:
     chiama il namespace dal proprio thread continuerebbe a passare.
     """
 
-    async def test_lo_scope_del_progetto_e_visibile_sul_thread_di_esecuzione(
+    async def test_the_project_scope_is_visible_on_the_execution_thread(
         self, scoped
     ):
         ws, project, _other, _skill = scoped

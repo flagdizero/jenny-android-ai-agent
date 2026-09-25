@@ -38,19 +38,19 @@ pytestmark = requires_node
 _PARSER = """
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const guasti = [];
+const broken = [];
 for (const f of process.argv.slice(1)) {
   try {
     new vm.SourceTextModule(readFileSync(f, 'utf8'), { identifier: f });
   } catch (e) {
-    guasti.push(f + ': ' + e.constructor.name + ': ' + e.message);
+    broken.push(f + ': ' + e.constructor.name + ': ' + e.message);
   }
 }
-if (guasti.length) { console.log(guasti.join('\\n')); process.exit(1); }
+if (broken.length) { console.log(broken.join('\\n')); process.exit(1); }
 """
 
 
-def _sorgenti() -> list[Path]:
+def _sources() -> list[Path]:
     """I moduli di prima parte. `vendor/` no: e' roba di altri, spesso minificata
     e a volte in un dialetto che non e' un modulo."""
     return sorted(
@@ -60,12 +60,12 @@ def _sorgenti() -> list[Path]:
 
 
 def test_every_ui_module_parses_as_an_es_module() -> None:
-    sorgenti = _sorgenti()
-    assert len(sorgenti) > 30, f"trovati solo {len(sorgenti)} moduli: il banco guarda male"
+    sources = _sources()
+    assert len(sources) > 30, f"trovati solo {len(sources)} moduli: il banco guarda male"
 
     proc = subprocess.run(
         [str(NODE), "--experimental-vm-modules", "--input-type=module",
-         "--eval", _PARSER, "--", *[str(p) for p in sorgenti]],
+         "--eval", _PARSER, "--", *[str(p) for p in sources]],
         capture_output=True, text=True, timeout=120,
     )
     assert proc.returncode == 0, (
@@ -82,8 +82,8 @@ def test_the_check_catches_the_one_that_shipped() -> None:
     controllo di vederla. Un banco scritto dopo il fatto e' credibile solo se
     fallisce sul fatto.
     """
-    rotto = """
-export class Prova {
+    broken = """
+export class Try {
   open() {
     document.body.appendChild(overlay);
   }
@@ -93,18 +93,18 @@ export class Prova {
   }
 }
 """
-    finto = Path("/tmp/jenny-parse-rotto.js")
-    finto.write_text(rotto, encoding="utf-8")
+    fake = Path("/tmp/jenny-parse-rotto.js")
+    fake.write_text(broken, encoding="utf-8")
     try:
         proc = subprocess.run(
             [str(NODE), "--experimental-vm-modules", "--input-type=module",
-             "--eval", _PARSER, "--", str(finto)],
+             "--eval", _PARSER, "--", str(fake)],
             capture_output=True, text=True, timeout=60,
         )
         assert proc.returncode == 1, "il controllo non ha visto il file rotto"
         assert "SyntaxError" in proc.stdout
     finally:
-        finto.unlink(missing_ok=True)
+        fake.unlink(missing_ok=True)
 
 
 def test_node_check_would_not_have_caught_it() -> None:
@@ -116,19 +116,19 @@ def test_node_check_would_not_have_caught_it() -> None:
     vederlo, questo banco fallisce — ed e' il momento giusto per semplificare
     il controllo qui sopra.
     """
-    finto = Path("/tmp/jenny-parse-rotto2.js")
-    finto.write_text(
+    fake = Path("/tmp/jenny-parse-rotto2.js")
+    fake.write_text(
         "export class P {\n  a() {\n    document.body.x();\n  }\n\n"
         "    document.body.x();\n  }\n}\n",
         encoding="utf-8",
     )
     try:
         proc = subprocess.run(
-            [str(NODE), "--check", str(finto)], capture_output=True, text=True, timeout=60,
+            [str(NODE), "--check", str(fake)], capture_output=True, text=True, timeout=60,
         )
         assert proc.returncode == 0, (
             "node --check adesso lo vede: il parser di questo banco si puo' "
             "sostituire con `node --check`, che e' piu' semplice"
         )
     finally:
-        finto.unlink(missing_ok=True)
+        fake.unlink(missing_ok=True)

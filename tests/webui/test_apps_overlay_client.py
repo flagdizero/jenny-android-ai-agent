@@ -25,7 +25,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 pytestmark = requires_node
 
-_VICINI = {
+_NEIGHBORS = {
     "api-client.js": "export const api = { getSecret() { return 'segreto'; } };\n",
     "utils.js": """
 export function escapeHtml(s) {
@@ -41,7 +41,7 @@ export function themeTokens() { return ''; }
 """,
 }
 
-_PRELUDIO = """
+_PRELUDE = """
 import assert from 'node:assert/strict';
 globalThis.toasts = [];
 globalThis.fetches = [];
@@ -89,8 +89,8 @@ const source = { onAppDataChanged() {}, jennyApps: [
   { slug: 'meteo', name: 'Meteo', view_kind: 'external' },
 ] };
 const actions = new AppsActions(source, { sendChatPrompt() {} });
-const veli = () => document.body.children;
-const aspetta = (ms) => new Promise((r) => setTimeout(r, ms));
+const veils = () => document.body.children;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 """
 
 
@@ -99,10 +99,10 @@ def _run(body: str) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
+        entry.write_text(_PRELUDE + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
@@ -110,19 +110,19 @@ def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
     _run(
         """
         await actions.openApp('orto');
-        assert.equal(veli().length, 1);
-        const velo = veli()[0];
-        assert.equal(velo.className, 'app-frame-overlay');
-        assert.ok(velo.classList.contains('visible'));
-        assert.ok(velo.innerHTML.includes('Orto &lt;b&gt;'), 'il nome passa da escapeHtml');
-        assert.ok(velo.innerHTML.includes('apps.close'));
-        const frame = velo.children[0];
+        assert.equal(veils().length, 1);
+        const veil = veils()[0];
+        assert.equal(veil.className, 'app-frame-overlay');
+        assert.ok(veil.classList.contains('visible'));
+        assert.ok(veil.innerHTML.includes('Orto &lt;b&gt;'), 'il nome passa da escapeHtml');
+        assert.ok(veil.innerHTML.includes('apps.close'));
+        const frame = veil.children[0];
         assert.equal(frame.tag, 'iframe');
         assert.equal(frame.attrs.sandbox, 'allow-scripts');
         assert.ok(frame.src.startsWith('/apps/orto/index.html?token=segreto'));
         assert.deepEqual(Object.keys(actions._openApp).sort(), ['depth', 'iframe', 'overlay', 'slug']);
         assert.equal(actions._openApp.slug, 'orto');
-        assert.equal(actions._openApp.overlay, velo);
+        assert.equal(actions._openApp.overlay, veil);
         assert.equal(actions._openApp.iframe, frame);
         assert.equal(actions._openApp.depth, 1);
         """
@@ -133,13 +133,13 @@ def test_the_close_button_closes_the_veil() -> None:
     _run(
         """
         await actions.openApp('orto');
-        const velo = veli()[0];
-        velo.close.on.click[0]();
+        const veil = veils()[0];
+        veil.close.on.click[0]();
         assert.equal(actions._openApp, null);
-        assert.equal(velo.classList.contains('visible'), false);
-        await aspetta(250);
-        assert.equal(velo.removed, true);
-        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy fromIndex chiudere');
+        assert.equal(veil.classList.contains('visible'), false);
+        await sleep(250);
+        assert.equal(veil.removed, true);
+        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy fromIndex close');
         """
     )
 
@@ -149,16 +149,16 @@ def test_an_external_view_gets_the_wider_sandbox_and_its_proxy_closed() -> None:
         """
         await actions.openApp('meteo');
         assert.deepEqual(fetches, ['/api/webui/apps/meteo/view']);
-        const velo = veli()[0];
-        assert.equal(velo.className, 'app-frame-overlay');
-        assert.ok(velo.innerHTML.includes('Meteo'));
-        const frame = velo.children[0];
+        const veil = veils()[0];
+        assert.equal(veil.className, 'app-frame-overlay');
+        assert.ok(veil.innerHTML.includes('Meteo'));
+        const frame = veil.children[0];
         assert.equal(frame.src, 'http://127.0.0.1:4555/');
         assert.equal(frame.attrs.sandbox,
                      'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
         assert.equal(actions._openApp.external, true);
         assert.equal(actions._openApp.depth, 1);
-        velo.close.on.click[0]();
+        veil.close.on.click[0]();
         assert.deepEqual(fetches, ['/api/webui/apps/meteo/view', '/api/webui/apps/meteo/view/close']);
         """
     )
@@ -168,15 +168,15 @@ def test_opening_another_app_closes_the_first() -> None:
     _run(
         """
         await actions.openApp('meteo');
-        const primo = veli()[0];
+        const first = veils()[0];
         await actions.openApp('orto');
-        assert.equal(primo.classList.contains('visible'), false);
+        assert.equal(first.classList.contains('visible'), false);
         assert.ok(fetches.includes('/api/webui/apps/meteo/view/close'),
                   'il proxy della vista chiusa va chiuso');
         assert.equal(actions._openApp.slug, 'orto');
-        assert.equal(veli().length, 2, 'il primo esce dopo la dissolvenza');
-        await aspetta(250);
-        assert.equal(primo.removed, true);
+        assert.equal(veils().length, 2, 'il primo esce dopo la dissolvenza');
+        await sleep(250);
+        assert.equal(first.removed, true);
         """
     )
 
@@ -192,6 +192,6 @@ def test_a_failed_external_view_leaves_the_open_app_alone() -> None:
         await actions.openApp('meteo');
         assert.equal(actions._openApp, open);
         assert.deepEqual(toasts, [['apps.viewProxyFailed', 'error']]);
-        assert.equal(veli().length, 1);
+        assert.equal(veils().length, 1);
         """
     )

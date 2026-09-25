@@ -36,7 +36,7 @@ def _tool(call_id: str, content: str = "result", name: str | None = None) -> dic
 class TestDropOrphanToolResults:
     """Drop dei tool result senza tool_call corrispondente prima."""
 
-    def test_sane_history_is_noop_and_returns_same_object(self):
+    def test_healthy_history_is_noop_and_returns_same_object(self):
         messages = [
             {"role": "user", "content": "hi"},
             _assistant("1"),

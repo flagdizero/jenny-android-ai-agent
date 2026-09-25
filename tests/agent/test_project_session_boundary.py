@@ -73,7 +73,7 @@ def _inject_raw(store: MemoryStore, content: str, session_key: str) -> None:
 # ── la classificazione ───────────────────────────────────────────────────────
 
 
-class TestLaClassificazioneETernaria:
+class TestTheClassificationIsTernary:
     @pytest.mark.parametrize(
         ("key", "kind"),
         [
@@ -89,7 +89,7 @@ class TestLaClassificazioneETernaria:
             ("heartbeat", "internal"),
         ],
     )
-    def test_ogni_chiave_cade_in_una_categoria_sola(self, key, kind):
+    def test_every_key_falls_in_exactly_one_category(self, key, kind):
         assert session_kind(key) == kind
         # E i tre predicati sono d'accordo con lei: sono la stessa funzione.
         assert is_personal_session_key(key) is (kind == "personal")
@@ -100,7 +100,7 @@ class TestLaClassificazioneETernaria:
         "key",
         ["api:vision", "system", "review:20260823", "qualcosa-di-nuovo", "websocketx:y"],
     )
-    def test_un_prefisso_non_registrato_non_e_personale(self, key):
+    def test_an_unregistered_prefix_is_not_personal(self, key):
         """**T4.10.** Il residuo cade nel bucket prudente, non nel diario.
 
         Prima di oggi ``session_kind`` era: interna se il prefisso e' registrato,
@@ -119,7 +119,7 @@ class TestLaClassificazioneETernaria:
         assert not is_personal_session_key(key)
         assert session_kind(key) == "internal"
 
-    def test_la_whitelist_personale_e_la_conversazione_e_le_chiavi_di_prima(self):
+    def test_the_personal_whitelist_is_the_previous_conversation_and_keys(self):
         """Chi *puo'* alimentare ``MEMORY.md``: la sessione unica e le legacy.
 
         Le ``<canale>:<chat_id>`` non sono piu' sessioni, ma stanno scritte nelle
@@ -131,7 +131,7 @@ class TestLaClassificazioneETernaria:
         assert is_personal_session_key("websocket:qualunque")
         assert is_personal_session_key("telegram:12345")
 
-    def test_una_chiave_non_classificata_lo_dice(self):
+    def test_an_unclassified_key_says_so(self):
         """Fail-closed **e** ad alta voce: il silenzio era metà del difetto.
 
         Il rifiuto non e' un'eccezione di proposito: ``session_kind`` gira anche
@@ -150,7 +150,7 @@ class TestLaClassificazioneETernaria:
             logger.remove(sink)
         assert any("zzsconosciuto:1" in m for m in messages), messages
 
-    def test_un_progetto_non_e_ne_interno_ne_personale(self):
+    def test_a_project_is_neither_internal_nor_personal(self):
         """Il difetto che questa categoria esiste per chiudere.
 
         Prima, ``is_personal_session_key`` era ``not is_internal_session_key``, e
@@ -160,11 +160,11 @@ class TestLaClassificazioneETernaria:
         assert not is_internal_session_key(PROJECT)
         assert not is_personal_session_key(PROJECT)
 
-    def test_la_chiave_si_compone_da_un_punto_solo(self):
+    def test_the_key_is_composed_in_a_single_place(self):
         assert project_session_key("patreon") == PROJECT
         assert is_project_session_key(project_session_key("qualunque-cosa"))
 
-    def test_la_migrazione_delle_chiavi_legacy_non_tocca_un_progetto(self):
+    def test_the_legacy_key_migration_does_not_touch_a_project(self):
         """``<canale>:<chat_id>`` collassa sulla conversazione unica, un progetto no.
 
         E' il motivo per cui quell'elenco e' chiuso e non un pattern: collassare
@@ -178,7 +178,7 @@ class TestLaClassificazioneETernaria:
 # ── la scrittura ─────────────────────────────────────────────────────────────
 
 
-class TestLaScritturaPassaConLaSuaChiave:
+class TestTheWritePassesWithItsKey:
     """**Cambiato l'08/09/2026.** Fino a quel giorno questa classe si chiamava
     ``TestLaScritturaEChiusa`` e provava il contrario: un progetto non scriveva
     affatto in questa coda, e l'isolamento era un'*assenza*.
@@ -194,11 +194,11 @@ class TestLaScritturaPassaConLaSuaChiave:
     L'isolamento adesso e' **una chiave piu' una destinazione**, ed e' piu'
     stretto e non piu' largo: la chiave tiene la voce fuori da ogni prompt (la
     classe qui sotto), la destinazione riduce la cassetta di Dream a ``USER.md``
-    (``TestLaCassettaDiUnRunDiProgetto``). Chi togliesse una delle due deve
+    (``TestTheToolboxOfAProjectRun``). Chi togliesse una delle due deve
     rimettere il cancello.
     """
 
-    def test_un_progetto_scrive_con_la_propria_chiave(self, store):
+    def test_a_project_writes_with_its_own_key(self, store):
         cursor = store.append_history("cosa detta dentro il progetto", session_key=PROJECT)
 
         assert cursor > 0
@@ -209,7 +209,7 @@ class TestLaScritturaPassaConLaSuaChiave:
         # ogni prompt e Dream la estrarrebbe con le regole sbagliate.
         assert record["session_key"] == PROJECT
 
-    def test_il_cursore_e_uno_solo_e_avanza_per_tutti(self, store):
+    def test_there_is_one_cursor_and_it_advances_for_all(self, store):
         """Una filigrana sola, e non una per tipo.
 
         Il batch resta omogeneo scegliendo *quali* voci prendere
@@ -223,7 +223,7 @@ class TestLaScritturaPassaConLaSuaChiave:
 
         assert project_cursor == personal_cursor + 1
 
-    def test_anche_il_dump_grezzo_passa(self, store):
+    def test_the_raw_dump_passes_too(self, store):
         """``raw_archive`` e' il ramo di fallback quando la chiamata LLM fallisce.
 
         Passa dallo stesso imbuto, ed e' la ragione per cui la decisione sta in
@@ -240,7 +240,7 @@ class TestLaScritturaPassaConLaSuaChiave:
         record = json.loads(store.history_file.read_text(encoding="utf-8").splitlines()[-1])
         assert record["session_key"] == PROJECT
 
-    def test_una_sessione_interna_scrive_ancora(self, store):
+    def test_an_internal_session_still_writes(self, store):
         """L'asimmetria, fissata: non e' una dimenticanza da "sistemare".
 
         Un job cron rilegge le proprie voci in questa coda — e' cosi che si
@@ -252,7 +252,7 @@ class TestLaScritturaPassaConLaSuaChiave:
         assert cursor > 0
         assert "il job ha girato" in store.history_file.read_text(encoding="utf-8")
 
-    def test_una_voce_senza_chiave_scrive_ancora(self, store):
+    def test_an_entry_without_key_still_writes(self, store):
         """Il campo e' opzionale: il gate non deve trasformare l'assenza in un rifiuto."""
         assert store.append_history("voce senza attribuzione") > 0
 
@@ -260,14 +260,14 @@ class TestLaScritturaPassaConLaSuaChiave:
 # ── la lettura ───────────────────────────────────────────────────────────────
 
 
-class TestLaLetturaEUnAssenza:
-    def test_un_progetto_non_legge_la_coda(self, store):
+class TestTheReadIsAnAbsence:
+    def test_a_project_does_not_read_the_tail(self, store):
         store.append_history("fatto personale", session_key=PERSONAL)
         store.append_history("voce di un job", session_key=CRON)
 
         assert store.read_recent_history_for_prompt(0, session_key=PROJECT) == []
 
-    def test_nemmeno_le_proprie_voci(self, store):
+    def test_not_even_its_own_entries(self, store):
         """Non "niente di altrui": proprio niente.
 
         Un progetto non condivide la finestra — il cursore di Dream — quindi non
@@ -279,7 +279,7 @@ class TestLaLetturaEUnAssenza:
 
         assert store.read_recent_history_for_prompt(0, session_key=PROJECT) == []
 
-    def test_una_sessione_personale_non_vede_una_voce_di_progetto(self, store):
+    def test_a_personal_session_does_not_see_a_project_entry(self, store):
         """Il secondo giro di chiave: la whitelist, non la negazione.
 
         Con la vecchia condizione (``not e' interna``) una voce di progetto
@@ -295,7 +295,7 @@ class TestLaLetturaEUnAssenza:
         assert "fatto personale" in contents
         assert "roba del progetto" not in contents
 
-    def test_una_sessione_interna_non_vede_una_voce_di_progetto(self, store):
+    def test_an_internal_session_does_not_see_a_project_entry(self, store):
         store.append_history("voce mia", session_key=CRON)
         _inject_raw(store, "roba del progetto", PROJECT)
 
@@ -305,7 +305,7 @@ class TestLaLetturaEUnAssenza:
         assert "voce mia" in contents
         assert "roba del progetto" not in contents
 
-    def test_nemmeno_una_passata_del_giardiniere_vede_un_progetto(self, store):
+    def test_not_even_a_gardener_pass_sees_a_project(self, store):
         """Il quarto ramo, ed e' quello a cui una voce di progetto somiglia di piu'.
 
         Una passata gira **su** un progetto, quindi e' l'unico lettore per cui
@@ -325,7 +325,7 @@ class TestLaLetturaEUnAssenza:
         ]
         assert contents == ["la mia passata"]
 
-    def test_la_regola_ternaria_di_una_sessione_interna_resta(self, store):
+    def test_the_ternary_rule_of_an_internal_session_remains(self, store):
         """Le proprie voci *piu* la conversazione personale, e non quelle di un altro job."""
         store.append_history("conversazione personale", session_key=PERSONAL)
         store.append_history("voce mia", session_key=CRON)
@@ -338,7 +338,7 @@ class TestLaLetturaEUnAssenza:
         assert "voce mia" in contents
         assert "voce di un altro job" not in contents
 
-    def test_senza_chiave_si_legge_tutto(self, store):
+    def test_without_key_everything_is_read(self, store):
         """``session_key=None`` e' l'accesso non filtrato di chi non e' un turno."""
         store.append_history("personale", session_key=PERSONAL)
         store.append_history("interna", session_key=CRON)
@@ -349,8 +349,8 @@ class TestLaLetturaEUnAssenza:
 # ── Dream ────────────────────────────────────────────────────────────────────
 
 
-class TestDreamNonVedeUnProgetto:
-    def test_un_batch_non_mescola_i_due_tipi(self, store):
+class TestDreamDoesNotSeeAProject:
+    def test_a_batch_does_not_mix_the_two_kinds(self, store):
         """Un batch, un tipo solo — e il primo arrivato decide quale.
 
         Non e' ordine estetico: i due tipi hanno prompt diversi, cassette diverse
@@ -376,7 +376,7 @@ class TestDreamNonVedeUnProgetto:
         assert second.scope == "project"
         assert "detto in un progetto" in MemoryStore.dream_prompt_history(second.prompt)
 
-    def test_una_coda_di_sole_voci_di_progetto_fa_partire_un_run_di_progetto(self, store):
+    def test_a_tail_of_only_project_entries_starts_a_project_run(self, store):
         """Il rovescio del vecchio ``...non_fa_partire_dream``.
 
         Prima una coda di sole voci di progetto lasciava Dream senza input; ora
@@ -398,10 +398,10 @@ class TestDreamNonVedeUnProgetto:
 # ── il prompt di un turno ────────────────────────────────────────────────────
 
 
-class TestIlPromptDiUnProgetto:
+class TestTheProjectPrompt:
     pytestmark = pytest.mark.usefixtures("_configure_jenny_workspace")
 
-    def test_non_ha_nessun_blocco_recent_history(self, tmp_path):
+    def test_has_no_recent_history_block(self, tmp_path):
         """Non un blocco filtrato: nessun blocco.
 
         E' la forma che il piano chiede, e la ragione e' che un'assenza non si
@@ -419,7 +419,7 @@ class TestIlPromptDiUnProgetto:
         assert "storia personale" not in prompt
         assert "storia di un job" not in prompt
 
-    def test_la_conversazione_personale_ce_l_ha_ancora(self, tmp_path):
+    def test_the_personal_conversation_still_has_it(self, tmp_path):
         """Controllo: il blocco non e' scomparso per tutti."""
         workspace = tmp_path / "workspace"
         workspace.mkdir(parents=True)
@@ -453,7 +453,7 @@ def consolidator(store):
     )
 
 
-class TestLaCompattazioneDiUnProgettoFunziona:
+class TestProjectCompactionWorks:
     """La meta che si rompe se si chiude la cosa sbagliata.
 
     Un progetto **si compatta** — e' il modello di Claude Code, una
@@ -464,7 +464,7 @@ class TestLaCompattazioneDiUnProgettoFunziona:
     dei messaggi in meno.
     """
 
-    async def test_il_riassunto_viene_prodotto_e_la_coda_lo_riceve_con_la_chiave(
+    async def test_the_summary_is_produced_and_the_queue_receives_it_with_the_key(
         self, consolidator, store
     ):
         """Il rovescio del vecchio ``...ma_la_coda_non_lo_riceve``.
@@ -483,7 +483,7 @@ class TestLaCompattazioneDiUnProgettoFunziona:
         assert record["content"] == "riassunto della conversazione"
         assert record["session_key"] == PROJECT
 
-    async def test_il_riassunto_finisce_nei_metadati_della_sessione(
+    async def test_the_summary_ends_up_in_the_session_metadata(
         self, consolidator, store
     ):
         """E' da lì che il turno dopo lo rilegge, non dalla coda.
@@ -500,7 +500,7 @@ class TestLaCompattazioneDiUnProgettoFunziona:
 
         assert session.metadata["_last_summary"]["text"] == "riassunto della conversazione"
 
-    async def test_per_la_conversazione_personale_la_coda_lo_riceve(
+    async def test_for_the_personal_conversation_the_tail_receives_it(
         self, consolidator, store
     ):
         """Controllo: il consolidamento non ha smesso di scrivere per tutti."""
@@ -514,7 +514,7 @@ class TestLaCompattazioneDiUnProgettoFunziona:
 # ── la cassetta di un run di progetto ────────────────────────────────────────
 
 
-class TestLaCassettaDiUnRunDiProgetto:
+class TestTheToolboxOfAProjectRun:
     """**L'altra meta' del confine, e quella che non si puo' pregare.**
 
     Aperta la scrittura nella coda, la regola «da un progetto puo' uscire
@@ -523,14 +523,14 @@ class TestLaCassettaDiUnRunDiProgetto:
     una richiesta a un modello. Queste asserzioni sono la garanzia.
     """
 
-    def test_scrive_solo_su_user_md(self, store):
+    def test_writes_only_to_user_md(self, store):
         tools = store.build_dream_tools(scope="project")
 
         memory_tool = tools.get("memory")
         assert memory_tool is not None
         assert memory_tool.parameters["properties"]["file"]["enum"] == ["user"]
 
-    def test_non_ha_nessuno_scrittore_di_file_interi(self, store):
+    def test_has_no_whole_file_writer(self, store):
         """I tre tool che riscrivono un file per intero non ci sono.
 
         Ridurre soltanto la loro allowlist a ``USER.md`` lascerebbe comunque tre
@@ -546,7 +546,7 @@ class TestLaCassettaDiUnRunDiProgetto:
             "memory", "read_file", "edit_file", "apply_patch", "write_file",
         }
 
-    async def test_una_scrittura_su_memory_md_viene_rifiutata(self, store):
+    async def test_a_write_to_memory_md_is_rejected(self, store):
         """Rifiutata, non ignorata — e con un messaggio che non suggerisce vie.
 
         Un rifiuto che dicesse "prova con un altro tool" e' un vicolo con
@@ -560,7 +560,7 @@ class TestLaCassettaDiUnRunDiProgetto:
         assert "Cannot write memory/MEMORY.md in this run" in out
         assert not (store.workspace / "memory" / "MEMORY.md").exists()
 
-    async def test_una_scrittura_su_user_md_passa(self, store):
+    async def test_a_write_to_user_md_passes(self, store):
         """Il controllo positivo: il rifiuto deve essere selettivo, non totale.
 
         Senza, un tool che rifiuta *tutto* passerebbe il test qui sopra e
@@ -573,7 +573,7 @@ class TestLaCassettaDiUnRunDiProgetto:
         assert "1 added" in out
         assert "un fatto sulla persona" in (store.workspace / "USER.md").read_text()
 
-    async def test_il_ramo_personale_scrive_ancora_su_memory_md(self, store):
+    async def test_the_personal_branch_still_writes_to_memory_md(self, store):
         tool = store.build_dream_tools().get("memory")
 
         out = await tool.execute(action="add", file="memory", text="- inventario")
@@ -584,7 +584,7 @@ class TestLaCassettaDiUnRunDiProgetto:
 # ── la finestra di replay ────────────────────────────────────────────────────
 
 
-class TestLaFinestraDiReplay:
+class TestTheReplayWindow:
     """Perche' un run di progetto rilegge quel che ha gia' letto.
 
     Misurato l'08/09/2026: su materiale ambiguo — quello in cui ogni fatto e'
@@ -596,7 +596,7 @@ class TestLaFinestraDiReplay:
 
     pytestmark = pytest.mark.usefixtures("_configure_jenny_workspace")
 
-    def test_le_voci_gia_consumate_tornano_nel_prompt(self, store):
+    def test_already_consumed_entries_return_to_the_prompt(self, store):
         first = store.append_history("prima cosa di progetto", session_key=PROJECT)
         store.set_last_dream_cursor(first)
         store.append_history("seconda cosa di progetto", session_key=PROJECT)
@@ -609,7 +609,7 @@ class TestLaFinestraDiReplay:
         assert "prima cosa di progetto" in history, "la finestra non ha rimostrato niente"
         assert "Already processed, shown again" in history
 
-    def test_il_cursore_avanza_lo_stesso(self, store):
+    def test_the_cursor_advances_anyway(self, store):
         """La differenza fra questo e un cursore che arretra.
 
         Arretrare di N su un batch di N o meno vuol dire non avanzare mai —
@@ -625,7 +625,7 @@ class TestLaFinestraDiReplay:
         assert result is not None
         assert result.cursor == second
 
-    def test_una_coda_di_sole_voci_gia_lette_non_fa_partire_niente(self, store):
+    def test_a_tail_of_only_already_read_entries_starts_nothing(self, store):
         """La finestra accompagna un batch nuovo, non ne inventa uno.
 
         Senza questo, ogni giro di Dream troverebbe "qualcosa da fare" fintanto
@@ -636,7 +636,7 @@ class TestLaFinestraDiReplay:
 
         assert store.build_dream_prompt() is None
 
-    def test_la_finestra_non_tocca_un_batch_personale(self, store):
+    def test_the_window_does_not_touch_a_personal_batch(self, store):
         cursor = store.append_history("vecchia personale", session_key=PERSONAL)
         store.set_last_dream_cursor(cursor)
         store.append_history("nuova personale", session_key=PERSONAL)

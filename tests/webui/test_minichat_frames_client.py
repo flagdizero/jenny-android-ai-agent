@@ -27,7 +27,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 pytestmark = requires_node
 
-_VICINI = {
+_NEIGHBORS = {
     "state.js": "export const AppState = { currentMode: 'home', on() {} };\n",
     "ws-manager.js": "export const wsManager = new EventTarget();\n",
     "session-manager.js": "export const sessionManager = { currentKey: 'websocket:default' };\n",
@@ -43,37 +43,37 @@ export function buildFlyLayer() {}
 """,
 }
 
-_PRELUDIO = """
+_PRELUDE = """
 import assert from 'node:assert/strict';
 globalThis.window = { matchMedia: () => ({ matches: false }) };
 const { JennyCompanion } = await import('./mobile-jenny.js');
 
-function classes(...iniziali) {
-  const s = new Set(iniziali);
+function classes(...initial) {
+  const s = new Set(initial);
   return { add: (c) => s.add(c), remove: (c) => s.delete(c), contains: (c) => s.has(c) };
 }
 
 /* Una minichat aperta, con la domanda in volo: `awaiting` e il flag del turno
    alzati come li alza `_send`. */
-function minichat({ open = true, attesa = true, inTurno = true } = {}) {
+function minichat({ open = true, expected = true, inTurn = true } = {}) {
   const j = Object.create(JennyCompanion.prototype);
   Object.assign(j, {
-    mode: 'home', awaiting: attesa, _replyShown: false, _replyTimer: null,
-    _deltaBuffer: '', _turnActive: false, _pendingTurn: inTurno,
+    mode: 'home', awaiting: expected, _replyShown: false, _replyTimer: null,
+    _deltaBuffer: '', _turnActive: false, _pendingTurn: inTurn,
     _streamTurnId: null, _lastClosedTurnId: null,
     el: { classList: classes() },
     mc: { classList: open ? classes('open') : classes(), dataset: {} },
     bubble: { textContent: '' },
   });
-  j.stati = [];
-  j.umori = [];
-  j._setAgentState = (s) => { j.stati.push(s); j._agentState = s; };
-  j._applyMood = (m) => j.umori.push(m);
-  j.invalidazioni = 0;
-  window.mobileApp = { controllers: { chat: { invalidateHistory: () => { j.invalidazioni += 1; } } } };
+  j.states = [];
+  j.moods = [];
+  j._setAgentState = (s) => { j.states.push(s); j._agentState = s; };
+  j._applyMood = (m) => j.moods.push(m);
+  j.invalidations = 0;
+  window.mobileApp = { controllers: { chat: { invalidateHistory: () => { j.invalidations += 1; } } } };
   return j;
 }
-const last = (j) => j.stati[j.stati.length - 1];
+const last = (j) => j.states[j.states.length - 1];
 """
 
 
@@ -83,10 +83,10 @@ def _run(body: str) -> None:
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "mobile-jenny.js", root / "mobile-jenny.js")
         shutil.copy(ASSETS / "shared" / "jenny-mascot.js", root / "shared" / "jenny-mascot.js")
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
+        entry.write_text(_PRELUDE + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
@@ -144,8 +144,8 @@ def test_turn_end_without_a_reply_shows_the_flower_and_invalidates_history() -> 
     _run(
         """
         const j = minichat();
-        let scattato = false;
-        j._replyTimer = setTimeout(() => { scattato = true; }, 5);
+        let fired = false;
+        j._replyTimer = setTimeout(() => { fired = true; }, 5);
         j._handleFrame({ event: 'turn_end', turn_id: 't1' });
         assert.equal(j.bubble.textContent, '✿');
         assert.equal(last(j), 'idle', 'il fiore non lascia Jenny a parlare');
@@ -153,9 +153,9 @@ def test_turn_end_without_a_reply_shows_the_flower_and_invalidates_history() -> 
         assert.equal(j._pendingTurn, false);
         assert.equal(j._replyTimer, null);
         assert.equal(j._lastClosedTurnId, 't1');
-        assert.equal(j.invalidazioni, 1);
+        assert.equal(j.invalidations, 1);
         await new Promise((r) => setTimeout(r, 20));
-        assert.equal(scattato, false, 'il timer della risposta lenta va spento');
+        assert.equal(fired, false, 'il timer della risposta lenta va spento');
         """
     )
 
@@ -180,7 +180,7 @@ def test_error_shows_its_text_and_the_sad_face() -> None:
         j._handleFrame({ event: 'error', detail: 'Il provider **non** risponde' });
         assert.equal(j.bubble.textContent, 'Il provider non risponde');
         assert.equal(last(j), 'idle');
-        assert.deepEqual(j.umori, ['sad']);
+        assert.deepEqual(j.moods, ['sad']);
         assert.equal(j.awaiting, false);
         assert.equal(j._pendingTurn, false);
 
@@ -202,8 +202,8 @@ def test_the_closing_frame_of_a_foreign_turn_is_ignored() -> None:
         assert.equal(j.awaiting, true);
         assert.equal(j._pendingTurn, true);
         assert.equal(j.bubble.textContent, 'sto');
-        assert.equal(j.invalidazioni, 0);
-        assert.deepEqual(j.umori, []);
+        assert.equal(j.invalidations, 0);
+        assert.deepEqual(j.moods, []);
         """
     )
 
@@ -213,19 +213,19 @@ def test_with_nothing_on_screen_only_the_pending_closing_passes() -> None:
     è l'unico punto che invalida lo storico della chat."""
     _run(
         """
-        const j = minichat({ open: false, attesa: false });
+        const j = minichat({ open: false, expected: false });
         j._handleFrame({ event: 'delta', text: 'invisibile', turn_id: 't1' });
-        assert.deepEqual(j.stati, []);
+        assert.deepEqual(j.states, []);
         assert.equal(j._deltaBuffer, '');
         assert.equal(j._streamTurnId, null, 'un frame scartato non apre il tracciamento');
         j._handleFrame({ event: 'turn_end', turn_id: 't1' });
-        assert.equal(j.invalidazioni, 1);
+        assert.equal(j.invalidations, 1);
         assert.equal(j._pendingTurn, false);
         assert.equal(j.bubble.textContent, '', 'a minichat chiusa il fumetto non si scrive');
 
-        const k = minichat({ open: false, attesa: false, inTurno: false });
+        const k = minichat({ open: false, expected: false, inTurn: false });
         k._handleFrame({ event: 'turn_end', turn_id: 't1' });
-        assert.equal(k.invalidazioni, 0, 'senza turno in volo non è roba nostra');
+        assert.equal(k.invalidations, 0, 'senza turno in volo non è roba nostra');
         """
     )
 
@@ -251,7 +251,7 @@ def test_in_the_chat_view_the_bubble_is_not_touched() -> None:
     """In chat la minichat non c'è: il frame va alla macchina della madre."""
     _run(
         """
-        const j = minichat({ attesa: false, inTurno: false });
+        const j = minichat({ expected: false, inTurn: false });
         j.mode = 'chat';
         j._handleFrame({ event: 'delta', text: 'in chat', turn_id: 'c1' });
         assert.equal(j.bubble.textContent, '');
@@ -259,7 +259,7 @@ def test_in_the_chat_view_the_bubble_is_not_touched() -> None:
         assert.equal(last(j), 'talking');
         j._handleFrame({ event: 'turn_end', turn_id: 'c1' });
         assert.equal(j.bubble.textContent, '');
-        assert.equal(j.invalidazioni, 0);
+        assert.equal(j.invalidations, 0);
         assert.equal(last(j), 'idle');
         """
     )
@@ -273,7 +273,7 @@ def test_an_empty_message_means_thinking_as_in_the_mother() -> None:
         """
         const j = minichat();
         j._handleFrame({ event: 'message' });
-        assert.deepEqual(j.stati, ['thinking']);
+        assert.deepEqual(j.states, ['thinking']);
         assert.equal(j.bubble.textContent, '');
         """
     )

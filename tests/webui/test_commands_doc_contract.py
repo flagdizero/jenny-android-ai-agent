@@ -20,16 +20,16 @@ DOC = (ROOT / "docs" / "reference" / "websocket.md").read_text(encoding="utf-8")
 
 
 def _codes_raised() -> set[str]:
-    sorgenti = [
+    sources = [
         ROOT / "jenny" / "webui" / "commands.py",
         ROOT / "jenny" / "webui" / "project_rename.py",
     ]
-    trovati: set[str] = set()
-    for path in sorgenti:
+    found: set[str] = set()
+    for path in sources:
         text = path.read_text(encoding="utf-8")
-        trovati |= set(re.findall(r'CommandError\(\s*"([a-z_]+)"', text))
-        trovati |= set(re.findall(r'code="([a-z_]+)"', text))
-    return trovati
+        found |= set(re.findall(r'CommandError\(\s*"([a-z_]+)"', text))
+        found |= set(re.findall(r'code="([a-z_]+)"', text))
+    return found
 
 
 def _doc_codes() -> set[str]:
@@ -48,8 +48,8 @@ def test_every_code_the_gateway_sends_is_documented() -> None:
 
 def test_every_documented_code_is_in_the_closed_set_of_the_docstring() -> None:
     doc = commands.CommandError.__doc__ or ""
-    for codice in _doc_codes():
-        assert f"``{codice}``" in doc, codice
+    for code in _doc_codes():
+        assert f"``{code}``" in doc, code
 
 
 def test_every_command_has_a_row() -> None:
@@ -58,8 +58,8 @@ def test_every_command_has_a_row() -> None:
 
 
 def test_conflict_is_defined_for_both_of_its_meanings() -> None:
-    definizione = next(r for r in DOC.splitlines() if r.startswith("`conflict` is"))
-    assert "page.write" in definizione
-    assert "project.rename" in definizione and "project.delete" in definizione
+    definition = next(r for r in DOC.splitlines() if r.startswith("`conflict` is"))
+    assert "page.write" in definition
+    assert "project.rename" in definition and "project.delete" in definition
     assert "`conflict`" in _row("project.rename")
     assert "`conflict`" in _row("project.delete")

@@ -101,8 +101,8 @@ def rename_project(
         # A meta' strada si riconosce dal **giornale**, non dalla frase del
         # motivo: la voce resta aperta solo quando qualcosa si e' gia' mosso, ed
         # e' quella che il prossimo avvio porta a termine.
-        a_meta = (old_key, new_key) in pending_project_renames(workspace)
-        if not chat_moved and not a_meta:
+        halfway = (old_key, new_key) in pending_project_renames(workspace)
+        if not chat_moved and not halfway:
             # Un rifiuto pulito: niente si e' mosso nella chat, e la cartella
             # torna al suo nome. Lasciarla rinominata vorrebbe dire una chat
             # orfana che il prossimo turno proverebbe a inseguire per id.
@@ -117,7 +117,7 @@ def rename_project(
                     f"stayed as {new_name}"
                 ) from exc
             raise ProjectRenameError(f"the conversation could not follow: {why}")
-        if a_meta:
+        if halfway:
             # A meta' strada e scritto nel giornale: il prossimo avvio finisce il
             # lavoro. La cartella resta col nome nuovo, che e' la direzione giusta.
             logger.warning(

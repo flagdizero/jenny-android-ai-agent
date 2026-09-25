@@ -26,7 +26,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 pytestmark = requires_node
 
-_VICINI = {
+_NEIGHBORS = {
     "i18n.js": "export const i18n = { t: (k) => k };\n",
     "launcher-usage-store.js": """
 export function usageStore() {
@@ -37,29 +37,29 @@ export function usageStore() {
     "longpress.js": "export function setupLongPress() {}\n",
 }
 
-_FINTO_DOM = """
-function creaEl(id) {
+_FAKE_DOM = """
+function createEl(id) {
   const el = {
-    id, className: '', value: '', dataset: {}, style: {}, attrs: {}, children: [], ascolto: {},
+    id, className: '', value: '', dataset: {}, style: {}, attrs: {}, children: [], listeners: {},
     hidden: false, tagName: 'DIV',
     get classList() {
       const e = this;
-      const parole = () => (e.className || '').split(' ').filter(Boolean);
+      const words = () => (e.className || '').split(' ').filter(Boolean);
       return {
-        add(c) { if (!parole().includes(c)) e.className = [...parole(), c].join(' '); },
-        remove(c) { e.className = parole().filter((x) => x !== c).join(' '); },
+        add(c) { if (!words().includes(c)) e.className = [...words(), c].join(' '); },
+        remove(c) { e.className = words().filter((x) => x !== c).join(' '); },
         toggle(c, on) { if (on) this.add(c); else this.remove(c); },
-        contains(c) { return parole().includes(c); },
+        contains(c) { return words().includes(c); },
       };
     },
     setAttribute(k, v) { this.attrs[k] = v; },
     removeAttribute(k) { delete this.attrs[k]; },
-    addEventListener(t, fn) { (this.ascolto[t] = this.ascolto[t] || []).push(fn); },
+    addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); },
     appendChild(c) { this.children.push(c); c.parent = this; return c; },
     replaceChildren(...cs) { this.children = cs; },
     querySelector(sel) { return sel === '.launcher-head' ? head : null; },
     contains(n) { let x = n; while (x) { if (x === this) return true; x = x.parent; } return false; },
-    focus() { document.activeElement = this; this.focalizzato = (this.focalizzato || 0) + 1; },
+    focus() { document.activeElement = this; this.focused = (this.focused || 0) + 1; },
     blur() { if (document.activeElement === this) document.activeElement = document.body; },
     scrollIntoView() {},
   };
@@ -68,37 +68,37 @@ function creaEl(id) {
 const perId = new Map();
 for (const id of ['launcher-sheet', 'launcher-list', 'launcher-search', 'launcher-title',
                   'launcher-search-clear', 'launcher-status', 'launcher-status-retry']) {
-  perId.set(id, creaEl(id));
+  perId.set(id, createEl(id));
 }
-if (globalThis.CON_FOGLIO) {
-  for (const id of ['launcher-scrim', 'launcher-close', 'launcher-handle-row']) perId.set(id, creaEl(id));
+if (globalThis.WITH_SHEET) {
+  for (const id of ['launcher-scrim', 'launcher-close', 'launcher-handle-row']) perId.set(id, createEl(id));
 }
 const sheet = perId.get('launcher-sheet');
-const cerca = perId.get('launcher-search');
-cerca.tagName = 'INPUT';
-cerca.parent = sheet;
-const head = creaEl('head');
-const shell = creaEl('shell');
-const html = creaEl('html');
-const docAscolto = {};
+const find = perId.get('launcher-search');
+find.tagName = 'INPUT';
+find.parent = sheet;
+const head = createEl('head');
+const shell = createEl('shell');
+const html = createEl('html');
+const docListeners = {};
 globalThis.document = {
-  body: creaEl('body'),
+  body: createEl('body'),
   activeElement: null,
   documentElement: Object.assign(html, { style: { setProperty() {} } }),
   getElementById: (id) => perId.get(id) || null,
   querySelector: (sel) => (sel === '.home-shell' ? shell : null),
-  createElement: () => creaEl(null),
-  addEventListener(t, fn) { (docAscolto[t] = docAscolto[t] || []).push(fn); },
+  createElement: () => createEl(null),
+  addEventListener(t, fn) { (docListeners[t] = docListeners[t] || []).push(fn); },
 };
 document.activeElement = document.body;
-const finAscolto = {};
+const windowListeners = {};
 globalThis.window = {
   innerHeight: 566, innerWidth: 590,
-  addEventListener(t, fn) { (finAscolto[t] = finAscolto[t] || []).push(fn); },
+  addEventListener(t, fn) { (windowListeners[t] = windowListeners[t] || []).push(fn); },
 };
-function tasto(key) {
+function key(key) {
   const e = { key, preventDefault() {}, metaKey: false, ctrlKey: false, altKey: false };
-  for (const fn of docAscolto.keydown || []) fn(e);
+  for (const fn of docListeners.keydown || []) fn(e);
 }
 const source = {
   addChangeListener() {}, ensureLoaded() {}, launcherEntries: () => [], listsFailed: () => false,
@@ -108,11 +108,11 @@ const app = { appsSource: () => source, appsActions: () => null };
 """
 
 
-def _run(body: str, *, con_foglio: bool = False) -> None:
+def _run(body: str, *, with_sheet: bool = False) -> None:
     script = (
         "import assert from 'node:assert/strict';\n"
-        + f"globalThis.CON_FOGLIO = {'true' if con_foglio else 'false'};\n"
-        + _FINTO_DOM
+        + f"globalThis.WITH_SHEET = {'true' if with_sheet else 'false'};\n"
+        + _FAKE_DOM
         + "const { LauncherController } = await import('./mobile-launcher.js');\n"
         + textwrap.dedent(body)
     )
@@ -122,7 +122,7 @@ def _run(body: str, *, con_foglio: bool = False) -> None:
         shutil.copy(ASSETS / "mobile-launcher.js", root / "mobile-launcher.js")
         for name in ("launcher-rank.js", "type-ahead.js"):
             shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
-        for name, text in _VICINI.items():
+        for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
@@ -145,15 +145,15 @@ def test_the_keys_are_its_own_only_while_you_look_at_it() -> None:
     non sono suoi: finirebbero in una ricerca che non si vede."""
     _run("""
       const c = new LauncherController(app, { builtin: true });
-      tasto('t');
-      assert.equal(cerca.focalizzato, undefined, 'prima di arrivarci ha preso un tasto');
+      key('t');
+      assert.equal(find.focused, undefined, 'prima di arrivarci ha preso un tasto');
       c.open();
-      tasto('t');
-      assert.equal(cerca.focalizzato, 1, 'sulla pagina App scrivere non cerca');
+      key('t');
+      assert.equal(find.focused, 1, 'sulla pagina App scrivere non cerca');
       c.close();
-      assert.notEqual(document.activeElement, cerca, 'lasciando la pagina il fuoco e restato nella ricerca');
-      tasto('x');
-      assert.equal(cerca.focalizzato, 1, 'dopo averla lasciata ha preso un tasto');
+      assert.notEqual(document.activeElement, find, 'lasciando la pagina il fuoco e restato nella ricerca');
+      key('x');
+      assert.equal(find.focused, 1, 'dopo averla lasciata ha preso un tasto');
     """)
 
 
@@ -163,8 +163,8 @@ def test_a_sheet_above_takes_the_keys_back() -> None:
       app.hasOverlayAbove = () => true;
       const c = new LauncherController(app, { builtin: true });
       c.open();
-      tasto('t');
-      assert.equal(cerca.focalizzato, undefined);
+      key('t');
+      assert.equal(find.focused, undefined);
     """)
 
 
@@ -176,7 +176,7 @@ def test_a_page_leaves_the_rest_of_the_home_alone() -> None:
       const c = new LauncherController(app, { builtin: true });
       c.open();
       assert.notEqual(shell.inert, true, 'la casa e diventata inerte sotto una pagina');
-      assert.equal(sheet.focalizzato, undefined, 'il fuoco e saltato sulla pagina');
+      assert.equal(sheet.focused, undefined, 'il fuoco e saltato sulla pagina');
     """)
 
 
@@ -185,8 +185,8 @@ def test_a_page_does_not_drag_or_follow_the_keyboard() -> None:
     foglio: una pagina ha l'altezza della pagina."""
     _run("""
       new LauncherController(app, { builtin: true });
-      assert.equal((head.ascolto.pointerdown || []).length, 0, 'la testa della pagina si trascina');
-      assert.equal((finAscolto.resize || []).length, 0, 'la pagina segue la tastiera');
+      assert.equal((head.listeners.pointerdown || []).length, 0, 'la testa della pagina si trascina');
+      assert.equal((windowListeners.resize || []).length, 0, 'la pagina segue la tastiera');
     """)
 
 
@@ -194,10 +194,10 @@ def test_every_visit_starts_from_an_empty_search() -> None:
     _run("""
       const c = new LauncherController(app, { builtin: true });
       c.open();
-      cerca.value = 'tel';
+      find.value = 'tel';
       c.close();
       c.open();
-      assert.equal(cerca.value, '');
+      assert.equal(find.value, '');
     """)
 
 
@@ -209,8 +209,8 @@ def test_the_workshop_sheet_is_still_a_sheet() -> None:
       c.open();
       assert.equal(c.isOpen(), true);
       assert.equal(shell.inert, true);
-      assert.ok((head.ascolto.pointerdown || []).length > 0, 'il foglio non si trascina piu');
+      assert.ok((head.listeners.pointerdown || []).length > 0, 'il foglio non si trascina piu');
       c.close();
       assert.equal(c.isOpen(), false);
       assert.equal(shell.inert, false);
-    """, con_foglio=True)
+    """, with_sheet=True)

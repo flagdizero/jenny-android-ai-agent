@@ -397,14 +397,14 @@ def test_a_project_that_keeps_failing_does_not_starve_the_others(tmp_path):
     fermo da tre giorni non arriva mai in cima. Con due progetti basta uno rotto
     per non giardinare più l'altro.
     """
-    rotto = _project(tmp_path, "rotto")
-    write_state(rotto, GardenerState(
+    broken = _project(tmp_path, "rotto")
+    write_state(broken, GardenerState(
         last_attempt_at=(_NOW - timedelta(hours=7)).isoformat(timespec="seconds"),
         failures=9,
     ))
-    sano = _project(tmp_path, "sano")
+    healthy = _project(tmp_path, "sano")
     stamp = (_NOW - timedelta(days=3)).isoformat(timespec="seconds")
-    write_state(sano, GardenerState(last_run_at=stamp, last_attempt_at=stamp))
+    write_state(healthy, GardenerState(last_run_at=stamp, last_attempt_at=stamp))
 
     pick = _pick(tmp_path)
 

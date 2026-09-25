@@ -25,7 +25,7 @@ MARKED = ASSETS / "vendor" / "marked@15.0.7" / "marked.min.js"
 pytestmark = requires_node
 
 
-def _casa_render(text: str) -> str:
+def _home_render(text: str) -> str:
     """``renderMarkdown`` come la chiama la casa: import dal modulo, nessuna
     configurazione a mano prima."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -48,18 +48,18 @@ def _casa_render(text: str) -> str:
         return json.loads(run_module(entry))
 
 
-def test_a_single_newline_is_a_line_break_in_the_casa() -> None:
-    html = _casa_render("latte\npane\nuova")
+def test_a_single_newline_is_a_line_break_in_the_home() -> None:
+    html = _home_render("latte\npane\nuova")
     assert html.count("<br>") == 2, html
 
 
 def test_a_blank_line_is_still_a_new_paragraph() -> None:
-    html = _casa_render("uno\n\ndue")
+    html = _home_render("uno\n\ndue")
     assert html.count("<p>") == 2, html
 
 
 def test_gfm_tables_still_render() -> None:
-    html = _casa_render("| a | b |\n|---|---|\n| 1 | 2 |")
+    html = _home_render("| a | b |\n|---|---|\n| 1 | 2 |")
     assert "<table>" in html, html
 
 

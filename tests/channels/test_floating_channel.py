@@ -45,27 +45,27 @@ def _msg(content: str = "ecco fatto", **meta: Any) -> OutboundMessage:
     )
 
 
-class TestContratto:
-    def test_il_canale_si_chiama_come_la_costante_condivisa(self):
+class TestContract:
+    def test_the_channel_is_named_like_the_shared_constant(self):
         assert FloatingChannel.name == FLOATING_CHANNEL
 
-    def test_niente_progress_ne_reasoning(self):
+    def test_neither_progress_nor_reasoning(self):
         """Il dispatcher legge questi tre attributi prima di instradare."""
         assert FloatingChannel.send_progress is False
         assert FloatingChannel.send_tool_hints is False
         assert FloatingChannel.show_reasoning is False
 
-    def test_un_solo_tentativo(self):
+    def test_a_single_attempt(self):
         """``show_reply`` non solleva: un retry ridisegnerebbe lo stesso fumetto."""
         assert FloatingChannel.send_max_retries == 1
 
-    async def test_start_e_stop_non_fanno_niente(self):
+    async def test_start_and_stop_do_nothing(self):
         """La finestra la monta e la smonta il service, non il canale."""
         ch = FloatingChannel()
         assert await ch.start() is None
         assert await ch.stop() is None
 
-    async def test_i_send_di_streaming_ritornano_lista_vuota(self):
+    async def test_streaming_sends_return_an_empty_list(self):
         ch = FloatingChannel()
         assert await ch.send_delta("x") == []
         assert await ch.send_reasoning_delta("x") == []
@@ -75,23 +75,23 @@ class TestContratto:
 
 
 class TestSend:
-    async def test_disegna_il_messaggio_finale(self, spy: _Spy):
+    async def test_draws_the_final_message(self, spy: _Spy):
         ch = FloatingChannel()
         assert await ch.send(_msg("ecco fatto")) == []
         assert spy.calls == ["ecco fatto"]
 
-    async def test_il_contenuto_viene_ripulito(self, spy: _Spy):
+    async def test_the_content_is_cleaned(self, spy: _Spy):
         ch = FloatingChannel()
         await ch.send(_msg("  con spazi  "))
         assert spy.calls == ["con spazi"]
 
     @pytest.mark.parametrize("content", ["", "   "])
-    async def test_un_messaggio_vuoto_non_apre_il_fumetto(self, spy: _Spy, content: str):
+    async def test_an_empty_message_does_not_open_the_speech_bubble(self, spy: _Spy, content: str):
         ch = FloatingChannel()
         assert await ch.send(_msg(content)) == []
         assert spy.calls == []
 
-    async def test_gli_eventi_di_coordinamento_non_aprono_il_fumetto(self, spy: _Spy):
+    async def test_coordination_events_do_not_open_the_speech_bubble(self, spy: _Spy):
         """Il caso vero è ``_turn_end``: non porta flag di streaming, quindi il
         dispatcher lo fa arrivare fin qui. Senza questo gate ogni fine turno
         stamperebbe un fumetto vuoto sopra l'app di qualcun altro."""
@@ -102,21 +102,21 @@ class TestSend:
         await ch.send(_msg("delta", _stream_delta=True))
         assert spy.calls == []
 
-    async def test_un_fumetto_non_mostrato_non_e_un_errore(self, monkeypatch):
+    async def test_an_unshown_speech_bubble_is_not_an_error(self, monkeypatch):
         """Mascotte spenta, permesso mancante o app in primo piano: ``show_reply``
         ritorna False e il canale tace. La risposta è comunque in chat."""
         monkeypatch.setattr(fc, "show_reply", _Spy(result=False))
         ch = FloatingChannel()
         assert await ch.send(_msg("ciao")) == []
 
-    async def test_i_media_non_bloccano_il_testo(self, spy: _Spy):
+    async def test_media_do_not_block_the_text(self, spy: _Spy):
         """Un fumetto è testo: gli allegati restano in chat, la frase si disegna."""
         msg = _msg("guarda qui")
         msg.media = ["/workspace/foto.png"]
         assert await FloatingChannel().send(msg) == []
         assert spy.calls == ["guarda qui"]
 
-    async def test_il_canale_non_accumula_niente(self, spy: _Spy):
+    async def test_the_channel_accumulates_nothing(self, spy: _Spy):
         """La conversazione della finestra la tiene Kotlin, e solo Kotlin.
 
         Dal 18/09/2026 la finestra mostra gli ultimi quattro scambi invece

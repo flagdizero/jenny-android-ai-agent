@@ -489,8 +489,8 @@ def test_the_digest_takes_the_whole_row_when_open() -> None:
     # in due posti — il gruppo delle testate del turno e la regola sua — quindi
     # si leggono tutte le regole che la nominano.
     head = "\n".join(
-        body for selettori, body, _ in css_levels.rules(css)
-        if ".sa-digest-head" in {x.strip() for x in selettori.split(",")}
+        body for selectors, body, _ in css_levels.rules(css)
+        if ".sa-digest-head" in {x.strip() for x in selectors.split(",")}
     )
     assert "display: inline-flex" in head
     assert "align-self: flex-start" in head, (

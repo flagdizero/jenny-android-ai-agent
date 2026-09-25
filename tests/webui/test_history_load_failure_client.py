@@ -260,7 +260,7 @@ def test_two_failures_do_not_stack_two_identical_rows() -> None:
       pending('project:bordi').reject(new Error('ancora giù'));
       await again;
 
-      assert.equal(errorRows().length, 1, 'le righe d\\'errore si impilano');
+      assert.equal(errorRows().length, 1, 'le righe d\\'error si stack');
     """)
 
 
@@ -290,7 +290,7 @@ def test_the_reconnect_resync_retries_a_load_that_never_landed() -> None:
 
       assert.deepEqual(chat.rendered, ['da bordi']);
       assert.equal(errorRows().length, 0,
-                   'la riga d\\'errore deve sparire when la history arrives');
+                   'la riga d\\'error must vanish when la history arrives');
       assert.equal(chat._initialHistoryLoaded, true);
       assert.equal(chat.historyCursor, 'b-1');
     """)
@@ -318,7 +318,7 @@ def test_a_successful_load_clears_a_row_left_by_a_previous_failure() -> None:
 
       assert.deepEqual(chat.rendered, ['ciao']);
       assert.equal(errorRows().length, 0,
-                   'la riga d\\'errore è rimasta sopra un thread che c\\'è');
+                   'la riga d\\'error è remaining above un thread which c\\'è');
     """)
 
 

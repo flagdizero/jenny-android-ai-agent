@@ -51,7 +51,7 @@ _LOOP_BOUND_FACTORIES = {
     "new_event_loop",
 }
 
-# ``modulo:nome`` -> funzione di reset che la rimette a nuovo. Ogni voce viene
+# ``module:name`` -> funzione di reset che la rimette a nuovo. Ogni voce viene
 # verificata due volte: che esista ancora, e che il reset sia davvero chiamato
 # da ``android_entry.run_gateway``.
 ALLOWED: dict[str, str] = {

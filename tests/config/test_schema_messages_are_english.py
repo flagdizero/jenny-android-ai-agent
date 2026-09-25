@@ -13,13 +13,13 @@ from jenny.config.schema import HomePageConfig
 
 
 @pytest.mark.parametrize(
-    ("row", "atteso"),
+    ("row", "expected"),
     [
         ({"id": "p1", "kind": "room", "ref": "x"}, "unknown page kind: 'room'"),
         ({"id": "p1", "kind": "conversation", "ref": "piante"}, "needs a notebook"),
         ({"id": "p1", "kind": "conversation", "ref": "project:a/b"}, "invalid notebook name"),
     ],
 )
-def test_a_refused_page_says_why_in_english(row, atteso) -> None:
-    with pytest.raises(ValueError, match=atteso):
+def test_a_refused_page_says_why_in_english(row, expected) -> None:
+    with pytest.raises(ValueError, match=expected):
         HomePageConfig(**row)

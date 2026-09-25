@@ -48,23 +48,23 @@ def _fun(source: str, signature: str) -> str:
     return rest[: ends[0]] if ends else rest
 
 
-class TestQuantoTiene:
+class TestHowMuchItHolds:
     """Quattro scambi, e la potatura cade dalla testa."""
 
-    def test_il_tetto_e_quattro_scambi(self):
+    def test_the_cap_is_four_exchanges(self):
         source = _read()
         m = re.search(r"const val HISTORY_MAX_TURNS\s*=\s*(\d+)", source)
         assert m, "HISTORY_MAX_TURNS non è più leggibile"
         assert m.group(1) == "4"
 
-    def test_la_potatura_conta_due_bolle_per_scambio(self):
+    def test_pruning_counts_two_bubbles_per_exchange(self):
         """Il modello è piatto (una riga per bolla), quindi il tetto va
         moltiplicato: contarlo in righe terrebbe due scambi invece di quattro."""
         body = _fun(_read(), "private fun appendLine(mine: Boolean, text: String)")
         assert "history.size > HISTORY_MAX_TURNS * 2" in body
         assert "removeAt(0)" in body, "la potatura non cade più dalla testa"
 
-    def test_dopo_un_messaggio_si_scende_in_fondo(self):
+    def test_after_a_message_it_scrolls_to_the_bottom(self):
         body = _fun(_read(), "private fun appendLine(mine: Boolean, text: String)")
         assert "fullScroll(View.FOCUS_DOWN)" in body
         assert "historyScroll?.post" in body, (
@@ -72,10 +72,10 @@ class TestQuantoTiene:
         )
 
 
-class TestNonSiRiapreDaSola:
+class TestDoesNotReopenByItself:
     """La regola che l'utente ha chiesto per prima."""
 
-    def test_show_reply_esce_a_finestra_chiusa(self):
+    def test_show_reply_exits_with_window_closed(self):
         source = _read()
         body = _fun(source, "fun showReply(text: String): Boolean")
         assert "if (!expanded" in body and "return false" in body
@@ -84,11 +84,11 @@ class TestNonSiRiapreDaSola:
             "cosa che una mascotte non deve fare sopra l'app di qualcun altro"
         )
 
-    def test_la_risposta_entra_nella_conversazione(self):
+    def test_the_answer_enters_the_conversation(self):
         body = _fun(_read(), "fun showReply(text: String): Boolean")
         assert "appendLine(mine = false" in body
 
-    def test_l_attesa_finisce_anche_se_non_si_disegna(self):
+    def test_the_wait_ends_even_if_nothing_is_drawn(self):
         """`waitingForReply` va spento **prima** del `return`.
 
         Un volo preso mentre aspettava annulla il timeout ma non lo stato
@@ -105,7 +105,7 @@ class TestNonSiRiapreDaSola:
             "e non c'è più nessun timer che possa spegnerlo"
         )
 
-    def test_a_finestra_chiusa_non_entra_niente(self):
+    def test_with_the_window_closed_nothing_gets_in(self):
         """I due percorsi d'errore arrivano da callback che nessuno annulla:
         senza guardia, una consegna fallita mentre la si lancia via scrive in
         una conversazione appena azzerata, e la riga ricompare alla prossima
@@ -114,20 +114,20 @@ class TestNonSiRiapreDaSola:
         assert "if (!expanded) return" in body
 
 
-class TestSiAzzeraSoloChiudendo:
-    def test_chiusura_e_volo_azzerano(self):
+class TestResetsOnlyOnClose:
+    def test_collapse_and_flight_reset(self):
         source = _read()
         assert "clearHistory()" in _fun(source, "private fun collapse()")
         assert "clearHistory()" in _fun(source, "private fun startFlight(ctx: Context)")
 
-    def test_nessun_altro_azzera(self):
+    def test_nobody_else_resets(self):
         """Tre occorrenze e non una di più: la definizione e i due gesti. Se ne
         spunta una quarta, qualcosa azzera la conversazione senza che l'utente
         l'abbia chiesto."""
         source = _read()
         assert source.count("clearHistory()") == 3
 
-    def test_il_timer_e_sospeso_finche_ci_sono_bolle(self):
+    def test_the_timer_is_paused_while_there_are_bubbles(self):
         body = _fun(_read(), "private fun armHold()")
         assert "if (history.isNotEmpty()) return" in body
         # ...ma resta armato sul composer vuoto: un tocco per sbaglio non
@@ -135,8 +135,8 @@ class TestSiAzzeraSoloChiudendo:
         assert "main.postDelayed(holdRunnable, replyHoldMs)" in body
 
 
-class TestIDueLati:
-    def test_il_tuo_messaggio_sta_dove_lei_non_sta(self):
+class TestTheTwoSides:
+    def test_your_message_sits_where_she_does_not(self):
         source = _read()
         # Lei sta sempre a destra (24/09/2026), quindi `mine` sta sempre a
         # sinistra: la regola è una riga, nelle due funzioni che la usano.
@@ -146,38 +146,38 @@ class TestIDueLati:
         body = _fun(source, "private fun renderHistory()")
         assert "if (atStart) Gravity.START else Gravity.END" in body
 
-    def test_l_angolo_stretto_sta_dal_lato_di_chi_parla(self):
+    def test_the_sharp_corner_is_on_the_speaker_side(self):
         body = _fun(_read(), "private fun bubbleView(ctx: Context, line: Line): TextView")
         assert "cornerRadii = corners" in body
         assert "BUBBLE_CORNER_DP" in _read()
 
 
-class TestIlPassaggioAllApp:
-    def test_il_chip_apre_la_chat(self):
+class TestTheHandoffToTheApp:
+    def test_the_chip_opens_the_chat(self):
         body = _fun(_read(), "private fun buildChip(ctx: Context): TextView")
         assert "openChat(ctx)" in body
 
-    def test_l_etichetta_cambia_con_lo_stato(self):
+    def test_the_label_changes_with_the_state(self):
         body = _fun(_read(), "private fun styleChip(ctx: Context, chip: TextView)")
         assert "R.string.floating_open_app" in body
         assert "R.string.floating_continue_app" in body
 
-    def test_le_stringhe_esistono_in_tutte_e_due_le_lingue(self):
+    def test_the_strings_exist_in_both_languages(self):
         for path in (STRINGS_EN, STRINGS_IT):
             text = path.read_text(encoding="utf-8")
             for name in ("floating_open_app", "floating_continue_app"):
                 assert f'name="{name}"' in text, f"{name} manca in {path.name}"
 
 
-class TestLaGeometria:
-    def test_lo_spazio_di_lei_viene_dallo_sprite(self):
+class TestTheGeometry:
+    def test_her_space_comes_from_the_sprite(self):
         """Non una costante: la sua parte visibile è fra i capelli e i piedi, e
         se cambia la taglia della mascotte questo si ricalcola da sé."""
         body = _fun(_read(), "private fun standHeight(ctx: Context): Int")
         assert "FEET_RATIO - HEAD_RATIO" in body
         assert "CHIP_GAP_DP" in body, "a conversazione vuota il chip non scende più"
 
-    def test_zero_e_un_tetto_valido_non_l_assenza_di_tetto(self):
+    def test_zero_is_a_valid_cap_not_the_absence_of_a_cap(self):
         """`maxHeight = 0` vuol dire «non c'è spazio», ed è proprio il caso in
         cui la lista non deve crescere. Con `0` come sentinella di «non
         calcolato» faceva l'opposto: niente tetto, e le bolle fuori dal bordo
@@ -186,7 +186,7 @@ class TestLaGeometria:
         assert "var maxHeight = -1" in source
         assert "if (maxHeight >= 0)" in source
 
-    def test_il_tetto_della_lista_e_lo_spazio_che_resta(self):
+    def test_the_list_cap_is_the_space_that_remains(self):
         """Non un numero: la lista arriva fin dove c'è posto, e il posto cambia
         quando la pillola cresce o la tastiera si alza. Un tetto fisso
         spingerebbe le bolle fuori dal bordo alto, dove la colonna cresce e non
@@ -197,7 +197,7 @@ class TestLaGeometria:
         assert "LIST_TOP_MARGIN_DP" in body
         assert "LIST_MAX_DP" not in source, "è tornato un tetto fisso in dp"
 
-    def test_le_bolle_stanno_piu_larghe_della_pillola(self):
+    def test_bubbles_are_wider_than_the_pill(self):
         """La conversazione vuole i bordi; la pillola resta al suo 62%."""
         source = _read()
         assert re.search(
@@ -209,7 +209,7 @@ class TestLaGeometria:
             "la bolla torna a misurarsi sulla pillola, che è molto più stretta"
         )
 
-    def test_la_sfumatura_in_cima_va_a_nero(self):
+    def test_the_top_fade_goes_to_black(self):
         """E sta **sopra** le bolle, non dietro e non come maschera.
 
         Il `fadingEdge` di Android rende trasparenti i pixel della bolla, e
@@ -230,14 +230,14 @@ class TestLaGeometria:
         veil = _fun(source, "private fun syncVeil(scrollY: Int)")
         assert "coerceIn(0f, 1f)" in veil, "l'opacità del velo non segue più lo scorrimento"
 
-    def test_la_colonna_e_verticale(self):
+    def test_the_column_is_vertical(self):
         """Lista, lo spazio di lei, pillola — e ancorata in basso, così la
         pillola non si muove di un pixel quando arriva un messaggio."""
         body = _fun(_read(), "private fun buildInputRow(ctx: Context): View")
         assert "orientation = LinearLayout.VERTICAL" in body
         assert "Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM" in body
 
-    def test_il_fumetto_singolo_non_c_e_piu(self):
+    def test_the_single_speech_bubble_is_gone(self):
         source = _read()
         assert "private var bubble:" not in source
         assert "bubbleBackground" not in source

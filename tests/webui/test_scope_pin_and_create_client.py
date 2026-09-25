@@ -446,7 +446,7 @@ def test_no_server_english_reaches_the_toast() -> None:
         await chip._createProject();
         assert.deepEqual(toasts, [[expected, 'error']], 'codice ' + code);
         assert.equal(toasts[0][0].includes(message), false,
-                     'il testo inglese del server e\\' finito a schermo (' + code + ')');
+                     'il testo inglese del server e\\' finished a screen (' + code + ')');
         // E un rifiuto non porta dentro, qualunque sia il codice.
         assert.equal(chip.scope.kind, 'personal');
         assert.deepEqual(chip.switched, []);
@@ -661,14 +661,14 @@ def test_the_pin_is_gone_from_the_product() -> None:
     in cui torna e' che qualcuno ne abbia di nuovo bisogno e lo ripubblichi
     invece di chiedere al chip, che e' l'unico a saperlo.
     """
-    colpevoli = [
+    culprits = [
         path.name
         for path in sorted(ASSETS.rglob("*.js"))
         if "vendor" not in path.parts and "pinnedWiki" in _read(path)
     ]
     # `scope-chip.js` lo **nomina** nel commento di `select`, che racconta dove
     # era finito: il commento e' la ragione per cui questo file e' l'eccezione.
-    assert colpevoli == ["scope-chip.js"], colpevoli
+    assert culprits == ["scope-chip.js"], culprits
     src = _read(CHIP_JS)
     assert "_publishPin" not in _member(src, "select")
     assert "AppState.set('pinnedWiki'" not in src

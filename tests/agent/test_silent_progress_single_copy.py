@@ -18,10 +18,10 @@ from jenny.runtime import cron_dispatch
 from jenny.session.turn_visibility import silent_progress
 
 
-@pytest.mark.parametrize("modulo", [dream_cycle, dream_review, gardener, cron_dispatch])
-def test_internal_runs_share_one_silent_progress(modulo) -> None:
-    assert "async def _silent" not in inspect.getsource(modulo)
-    assert modulo.silent_progress is silent_progress
+@pytest.mark.parametrize("module", [dream_cycle, dream_review, gardener, cron_dispatch])
+def test_internal_runs_share_one_silent_progress(module) -> None:
+    assert "async def _silent" not in inspect.getsource(module)
+    assert module.silent_progress is silent_progress
 
 
 async def test_silent_progress_takes_anything_and_says_nothing() -> None:

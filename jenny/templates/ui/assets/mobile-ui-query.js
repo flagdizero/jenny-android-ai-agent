@@ -5,7 +5,7 @@
  * raccogliamo, descriviamo la vista attiva come HTML potato (e, se aperta, l'HTML
  * della Jenny app via SDK) e rispondiamo con un frame `ui_result`.
  *
- * L'HTML della vista nativa si legge direttamente dal DOM (`viewElement(modo)`:
+ * L'HTML della vista nativa si legge direttamente dal DOM (`viewElement(mode)`:
  * cervello, mani e memoria sono tutti e tre `#view-settings`).
  * L'HTML dell'app NO: l'iframe è sandboxato con origin opaca, illeggibile dal
  * parent — è l'app stessa a spedirlo fuori tramite l'SDK (jenny:ui-query).

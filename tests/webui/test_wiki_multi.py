@@ -299,9 +299,9 @@ class TestAudit:
         assert not result["path"].startswith("/")
         assert result["path"].startswith("audit/")
 
-        scritti = _audit_files(wiki_root)
-        assert len(scritti) == 1
-        text = scritti[0].read_text(encoding="utf-8")
+        written = _audit_files(wiki_root)
+        assert len(written) == 1
+        text = written[0].read_text(encoding="utf-8")
         # L'ancora e' il punto di tutto: senza, il commento parla della pagina e
         # non del punto, che e' quel che gli audit esistono per fare.
         assert "anchor_text: content" in text
@@ -433,7 +433,7 @@ class TestResolveWikilink:
         assert resolve_wikilink(wiki_root, "Transformers/nessuna") is None
 
     def test_two_pages_with_the_same_name_resolve_deterministically(self, wikis_dir: Path):
-        """Due `nota.md` in cartelle diverse esistono davvero. Vinceva quella che
+        """Due `note.md` in cartelle diverse esistono davvero. Vinceva quella che
         `rglob` restituiva per prima — l'ordine della directory — quindi lo stesso
         `[[nota]]` poteva aprire pagine diverse su due telefoni, e il lint non
         poteva concordare con nessuna delle due. Vince la più vicina alla radice.
@@ -464,7 +464,7 @@ class TestSplitWikilink:
 # ── La gravita', misurata assente ──────────────────────────────────────────
 
 
-class TestNessunaGravita:
+class TestNoSeverity:
     """Tolta dal formato il 22/09/2026, e va misurata **assente**.
 
     Erano quattro livelli che chi segnalava sceglieva prima di scrivere — un

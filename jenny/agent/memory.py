@@ -186,7 +186,7 @@ def _pack_entries(entries: list[str], budget_chars: int | None) -> tuple[list[st
 
 
 def iter_fact_lines(text: str) -> list[tuple[str, str]]:
-    """I fatti annotati dentro una voce di history, come ``(mark, fatto)``.
+    """I fatti annotati dentro una voce di history, come ``(mark, fact)``.
 
     Serve a due chiamanti con lo stesso bisogno da lati opposti: il blocco
     "già registrato" li legge per dire cosa è in attesa, e la misura della

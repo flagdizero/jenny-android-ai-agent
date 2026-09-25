@@ -138,7 +138,7 @@ def _schema_descriptions(node: Any, path: str = "") -> Iterator[tuple[str, str]]
 
 
 def _model_facing_corpus() -> Iterator[tuple[str, str]]:
-    """``(sorgente, text)`` per ogni pezzo di testo che il modello può leggere."""
+    """``(source, text)`` per ogni pezzo di testo che il modello può leggere."""
     for name in _SYSTEM_PROMPT_TEMPLATES:
         yield f"template {name}", load_bundled_template(name) or ""
 
@@ -240,7 +240,7 @@ _ALLOWED: dict[str, str] = {
 
 
 def _violations() -> list[tuple[str, str, str]]:
-    """``(sorgente, pattern, contesto)`` per ogni match fuori dalle due case."""
+    """``(source, pattern, context)`` per ogni match fuori dalle due case."""
     found: list[tuple[str, str, str]] = []
     for source, text in _model_facing_corpus():
         if source in _HOMES or source in _ALLOWED:

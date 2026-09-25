@@ -144,7 +144,7 @@ def test_both_shells_listen_to_the_refusal() -> None:
     assert "imageHandler.onReject = (reason) =>" in workshop, "l'officina non li ascolta"
 
 
-def test_the_officina_hook_comes_after_the_handler_exists() -> None:
+def test_the_workshop_hook_comes_after_the_handler_exists() -> None:
     """Un aggancio scritto prima del `new ImageHandler()` è un TypeError al
     caricamento: la chat non parte affatto, e `node --check` non lo vede."""
     workshop = (ROOT / "jenny" / "templates" / "ui" / "assets"

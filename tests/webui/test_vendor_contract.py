@@ -38,7 +38,7 @@ NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 # I segni sono quelli **d'uso**, non il nome della cartella: `katex` compare
 # anche nell'URL che la carica, e cercare quello farebbe passare per «chiamante»
 # il caricatore stesso — cioe' il banco si autoconferma.
-LIBRERIE = {
+LIBRARIES = {
     "katex": {
         "segni": (r"\brenderMathInElement\s*\(", r"\bkatex\.render\w*\s*\("),
         "spedito": "assets/vendor/katex@0.16.10/dist/katex.min.js",
@@ -62,7 +62,7 @@ LIBRERIE = {
 }
 
 
-def _sorgenti() -> dict[str, str]:
+def _sources() -> dict[str, str]:
     """Il JS del prodotto, senza i vendor: dentro una libreria minificata ci sono
     le sue stesse chiamate, e contarle vorrebbe dire che ogni libreria e' sempre
     usata da se' medesima."""
@@ -73,10 +73,10 @@ def _sorgenti() -> dict[str, str]:
     }
 
 
-def _chiamanti(segni: tuple[str, ...]) -> list[str]:
+def _callers(segni: tuple[str, ...]) -> list[str]:
     return sorted(
         name
-        for name, src in _sorgenti().items()
+        for name, src in _sources().items()
         # I commenti raccontano il prima: qui contano solo le chiamate vere.
         if any(re.search(s, re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S)))
                for s in segni)
@@ -92,17 +92,17 @@ def test_a_library_with_callers_is_actually_shipped() -> None:
     """
     from jenny.utils.android_assets import _UI_MANIFEST
 
-    for name, data in LIBRERIE.items():
-        chiamanti = _chiamanti(data["segni"])
-        if not chiamanti:
+    for name, data in LIBRARIES.items():
+        callers = _callers(data["segni"])
+        if not callers:
             continue
-        percorso = data["spedito"]
-        assert (ASSETS.parent / percorso).exists(), (
-            f"{name} la chiamano {chiamanti} e il file non c'e': quelle chiamate "
+        path = data["spedito"]
+        assert (ASSETS.parent / path).exists(), (
+            f"{name} la chiamano {callers} e il file non c'e': quelle chiamate "
             f"sono protette da un «se la libreria c'e'», quindi non falliscono — "
             f"si spengono in silenzio"
         )
-        assert percorso in _UI_MANIFEST, (
+        assert path in _UI_MANIFEST, (
             f"{name} e' su disco ma non nel manifesto: sul telefono non arriva, "
             f"e in locale il difetto non si vede"
         )
@@ -115,10 +115,10 @@ def test_a_shipped_library_has_someone_who_calls_it() -> None:
     """Il verso opposto: un bundle spedito e mai eseguito e' peso nell'APK e una
     licenza da tenere aggiornata per niente. E' la ragione per cui lo
     sfoltimento cercava questi file — la ragione era buona, la misura no."""
-    for name, data in LIBRERIE.items():
+    for name, data in LIBRARIES.items():
         if not (ASSETS.parent / data["spedito"]).exists():
             continue
-        assert _chiamanti(data["segni"]), (
+        assert _callers(data["segni"]), (
             f"{name} e' nel pacchetto e non lo chiama nessuno: e' peso morto"
         )
 
@@ -135,9 +135,9 @@ def test_the_heavy_ones_are_fetched_on_demand() -> None:
     """
     for shell in ("workshop.html", "index.html"):
         html = (ASSETS.parent / shell).read_text(encoding="utf-8")
-        for pesante in ("katex", "mermaid", "d3"):
-            assert f"vendor/{pesante}" not in html, (
-                f"{shell} carica {pesante} all'avvio invece che quando serve"
+        for heavy in ("katex", "mermaid", "d3"):
+            assert f"vendor/{heavy}" not in html, (
+                f"{shell} carica {heavy} all'avvio invece che quando serve"
             )
 
     # E chi le carica lo fa dal caricatore pigro condiviso, non con un <script>

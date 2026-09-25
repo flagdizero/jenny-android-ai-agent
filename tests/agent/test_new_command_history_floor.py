@@ -51,8 +51,8 @@ def _builder(tmp_path) -> ContextBuilder:
 # ── il pavimento ─────────────────────────────────────────────────────────────
 
 
-class TestIlPavimentoDelDiario:
-    def test_le_voci_sotto_il_pavimento_non_entrano_nel_prompt(self, tmp_path):
+class TestTheJournalFloor:
+    def test_entries_below_the_floor_do_not_enter_the_prompt(self, tmp_path):
         builder = _builder(tmp_path)
         builder.memory.append_history("prima del reset", session_key=PERSONAL)
         floor = builder.memory.current_history_cursor()
@@ -64,7 +64,7 @@ class TestIlPavimentoDelDiario:
         # sbagliare (stessa forma del confine di progetto).
         assert "# Recent History" not in prompt
 
-    def test_quel_che_viene_dopo_il_pavimento_si_vede(self, tmp_path):
+    def test_what_comes_after_the_floor_is_visible(self, tmp_path):
         """Controllo: il pavimento non spegne il blocco per sempre."""
         builder = _builder(tmp_path)
         builder.memory.append_history("prima del reset", session_key=PERSONAL)
@@ -76,7 +76,7 @@ class TestIlPavimentoDelDiario:
         assert "dopo il reset" in prompt
         assert "prima del reset" not in prompt
 
-    def test_senza_pavimento_niente_cambia(self, tmp_path):
+    def test_without_floor_nothing_changes(self, tmp_path):
         """Il default e' il comportamento di sempre, per ogni sessione mai azzerata."""
         builder = _builder(tmp_path)
         builder.memory.append_history("storia personale", session_key=PERSONAL)
@@ -85,7 +85,7 @@ class TestIlPavimentoDelDiario:
 
         assert "storia personale" in prompt
 
-    def test_un_pavimento_corrotto_vale_zero(self, tmp_path):
+    def test_a_corrupt_floor_counts_as_zero(self, tmp_path):
         """I metadata sono un file su disco: una chiave assurda non ferma il turno.
 
         Il ripiego e' *nessun pavimento*, cioe' il comportamento di sempre: il
@@ -105,7 +105,7 @@ class TestIlPavimentoDelDiario:
             )
             assert "storia personale" in messages[0]["content"], junk
 
-    def test_il_pavimento_arriva_dai_metadata_di_sessione(self, tmp_path):
+    def test_the_floor_comes_from_the_session_metadata(self, tmp_path):
         """La strada vera: `build_messages` lo legge da solo, il loop non lo passa."""
         builder = _builder(tmp_path)
         builder.memory.append_history("prima del reset", session_key=PERSONAL)
@@ -124,8 +124,8 @@ class TestIlPavimentoDelDiario:
 # ── la voce che l'archiviazione scrive dopo ──────────────────────────────────
 
 
-class TestLaVoceInvisibileAiPrompt:
-    def test_non_entra_nel_prompt(self, tmp_path):
+class TestTheEntryInvisibleToPrompts:
+    def test_does_not_enter_the_prompt(self, tmp_path):
         builder = _builder(tmp_path)
         builder.memory.append_history(
             "riassunto della conversazione buttata",
@@ -138,7 +138,7 @@ class TestLaVoceInvisibileAiPrompt:
         assert "riassunto della conversazione buttata" not in prompt
         assert "# Recent History" not in prompt
 
-    def test_ma_dream_la_vede_ancora(self, tmp_path):
+    def test_but_dream_still_sees_it(self, tmp_path):
         """Il punto di tutto: si toglie dal prompt, **non** dalla memoria.
 
         Se questa asserzione cade, `/new` ha smesso di essere un reset del
@@ -155,7 +155,7 @@ class TestLaVoceInvisibileAiPrompt:
 
         assert [e["content"] for e in entries] == ["riassunto della conversazione buttata"]
 
-    def test_una_voce_normale_resta_visibile(self, tmp_path):
+    def test_a_normal_entry_stays_visible(self, tmp_path):
         """Controllo: il flag e' un'eccezione dichiarata, non il nuovo default.
 
         L'auto-compattazione riassume una conversazione **che continua**, e quella
@@ -197,7 +197,7 @@ def _new_ctx(tmp_path, session: Session):
 
 
 class TestCmdNew:
-    async def test_scrive_il_pavimento_nei_metadata(self, tmp_path):
+    async def test_writes_the_floor_into_the_metadata(self, tmp_path):
         session = Session(key=PERSONAL)
         session.messages = [{"role": "user", "content": "leggi le mie note"}]
         ctx, loop, _ = _new_ctx(tmp_path, session)
@@ -210,7 +210,7 @@ class TestCmdNew:
         # Salvato, o al prossimo turno il pavimento non c'e' piu'.
         loop.sessions.save.assert_called_once_with(session)
 
-    async def test_archivia_senza_farla_vedere_ai_prompt(self, tmp_path):
+    async def test_archives_without_showing_it_to_the_prompts(self, tmp_path):
         session = Session(key=PERSONAL)
         session.messages = [{"role": "user", "content": "leggi le mie note"}]
         ctx, loop, scheduled = _new_ctx(tmp_path, session)
@@ -220,7 +220,7 @@ class TestCmdNew:
         assert loop.consolidator.archive.call_args.kwargs["prompt_visible"] is False
         assert len(scheduled) == 1
 
-    async def test_non_muove_il_cursore_di_dream(self, tmp_path):
+    async def test_does_not_move_the_dream_cursor(self, tmp_path):
         """L'unica cosa che rende questo un reset del contesto e non un oblio."""
         session = Session(key=PERSONAL)
         session.messages = [{"role": "user", "content": "leggi le mie note"}]

@@ -430,7 +430,7 @@ def _warn_if_unopenable(root: str) -> bool:
     Il nome di una cartella sotto ``wikis/`` e' anche il nome di una sessione
     (``project:<nome>``), e la sessione la puo' aprire solo un nome che passa la
     regex qui sopra: ``Ricerca ETF``, ``universita``-con-l'accento,
-    ``progetto (2026)`` no. Una wiki con un nome cosi' funziona come wiki —
+    ``project (2026)`` no. Una wiki con un nome cosi' funziona come wiki —
     ingest, lint, grafo — ma la sua chat non si apre: il chip non la offre, e un
     frame che la nomina viene rifiutato.
 

@@ -62,24 +62,24 @@ def _stems(key: str) -> dict[str, str]:
 # ── Nessuna collisione fra chiavi diverse ────────────────────────────────
 
 
-@pytest.mark.parametrize("traccia", ["sessione", "trascrizione", "subagent", "tool-results"])
-def test_no_two_valid_projects_share_a_file(traccia: str) -> None:
+@pytest.mark.parametrize("trace", ["sessione", "trascrizione", "subagent", "tool-results"])
+def test_no_two_valid_projects_share_a_file(trace: str) -> None:
     keys = [f"{PROJECT_SESSION_PREFIX}{n}" for n in _VALID]
     seen: dict[str, str] = {}
     for key in keys:
-        stem = _stems(key)[traccia]
-        assert stem not in seen, f"{traccia}: {key} e {seen[stem]} finiscono su {stem}"
+        stem = _stems(key)[trace]
+        assert stem not in seen, f"{trace}: {key} e {seen[stem]} finiscono su {stem}"
         seen[stem] = key
 
 
-@pytest.mark.parametrize("traccia", ["sessione", "trascrizione", "subagent", "tool-results"])
-def test_a_project_never_lands_on_the_personal_or_internal_files(traccia: str) -> None:
+@pytest.mark.parametrize("trace", ["sessione", "trascrizione", "subagent", "tool-results"])
+def test_a_project_never_lands_on_the_personal_or_internal_files(trace: str) -> None:
     """Il prefisso è ciò che tiene un progetto lontano dalla conversazione personale."""
     others = ["unified:default", "websocket:default", "cron:update_check", "dream:default"]
-    reserved = {_stems(k)[traccia] for k in others}
+    reserved = {_stems(k)[trace] for k in others}
     for name in _VALID:
-        stem = _stems(f"{PROJECT_SESSION_PREFIX}{name}")[traccia]
-        assert stem not in reserved, f"{traccia}: project:{name} finisce su un file riservato"
+        stem = _stems(f"{PROJECT_SESSION_PREFIX}{name}")[trace]
+        assert stem not in reserved, f"{trace}: project:{name} finisce su un file riservato"
 
 
 # ── L'invariante portante ────────────────────────────────────────────────
@@ -122,10 +122,10 @@ def test_the_longest_allowed_name_still_makes_a_usable_filename() -> None:
     """64 caratteri più il prefisso: sotto i 255 di ogni filesystem, con margine."""
     longest = "x" * 64
     assert is_valid_project_name(longest)
-    for traccia, stem in _stems(f"{PROJECT_SESSION_PREFIX}{longest}").items():
+    for trace, stem in _stems(f"{PROJECT_SESSION_PREFIX}{longest}").items():
         # ``.segments`` è il suffisso più lungo che si aggiunge a uno stem.
-        assert len(stem) + len(".segments") < 255, f"{traccia}: {len(stem)} caratteri"
-        assert "/" not in stem and "\\" not in stem, f"{traccia}: contiene un separatore"
+        assert len(stem) + len(".segments") < 255, f"{trace}: {len(stem)} caratteri"
+        assert "/" not in stem and "\\" not in stem, f"{trace}: contiene un separatore"
 
 
 def test_a_longer_name_is_refused_before_it_becomes_a_path() -> None:

@@ -334,7 +334,7 @@ def test_both_shells_answer_the_chat_visible_question(shell: str) -> None:
     assert re.search(r"\n  isChatOnScreen\(\)\s*\{", source), f"{shell}: isChatOnScreen manca"
 
 
-def test_the_officina_answer_is_its_chat_mode() -> None:
+def test_the_workshop_answer_is_its_chat_mode() -> None:
     app_js = _app_js()
     assert "return this.currentMode === 'chat';" in _method(app_js, "isChatOnScreen")
     assert "this.currentMode = mode" in app_js
@@ -391,17 +391,17 @@ def test_every_event_the_shell_dispatches_has_a_listener() -> None:
     kotlin = "\n".join(
         p.read_text(encoding="utf-8") for p in JAVA.rglob("*.kt")
     )
-    eventi = set(re.findall(r"new (?:Custom)?Event\('([\w-]+)'", kotlin))
-    assert eventi, "nessun evento nel guscio: la ricerca non guarda piu' dove deve"
+    events = set(re.findall(r"new (?:Custom)?Event\('([\w-]+)'", kotlin))
+    assert events, "nessun evento nel guscio: la ricerca non guarda piu' dove deve"
 
-    ascolti = "\n".join(
+    listeners = "\n".join(
         p.read_text(encoding="utf-8", errors="replace")
         for p in UI_ASSETS.rglob("*.js")
         if "vendor" not in p.relative_to(UI_ASSETS).parts
     )
-    sordi = sorted(e for e in eventi if f"addEventListener('{e}'" not in ascolti)
-    assert not sordi, (
-        f"il guscio manda questi eventi e in pagina non li ascolta nessuno: {sordi}. "
+    deaf = sorted(e for e in events if f"addEventListener('{e}'" not in listeners)
+    assert not deaf, (
+        f"il guscio manda questi eventi e in pagina non li ascolta nessuno: {deaf}. "
         f"Cadono nel vuoto in silenzio — nessun errore, e la cosa che dovevano "
         f"far succedere semplicemente non succede."
     )

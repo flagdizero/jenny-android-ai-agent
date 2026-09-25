@@ -442,8 +442,8 @@ def test_the_manage_row_is_gone_with_the_screen_it_led_to() -> None:
         html = (ROOT / "jenny" / "templates" / "ui" / doc).read_text(encoding="utf-8")
         assert "launcher-manage" not in html, doc
     launcher = _src("mobile-launcher.js")
-    assert "manageBtn" not in _senza_commenti_js(launcher)
-    assert "_openManager" not in _senza_commenti_js(launcher)
+    assert "manageBtn" not in _without_comments_js(launcher)
+    assert "_openManager" not in _without_comments_js(launcher)
 
 
 def test_the_three_empty_states_are_three_different_sentences() -> None:
@@ -603,11 +603,11 @@ def test_the_mascot_stays_on_top_of_the_sheet_and_lets_taps_through() -> None:
     css = _src("mobile-style.css")
     assert ".launcher-open .jenny-duo" not in css, "col cassetto aperto lei torna sotto lo scrim"
     # Il suo livello supera quello di foglio e scrim.
-    lei = re.search(r"\n\.jenny-duo \{[^}]*?z-index: (\d+);", css)
+    she = re.search(r"\n\.jenny-duo \{[^}]*?z-index: (\d+);", css)
     sheet = re.search(r"\.launcher-sheet\s*\{[^}]*?z-index: (\d+);", css)
     scrim = re.search(r"\.launcher-scrim\s*\{[^}]*?z-index: (\d+);", css)
-    assert lei and sheet and scrim
-    assert int(lei.group(1)) > max(int(sheet.group(1)), int(scrim.group(1)))
+    assert she and sheet and scrim
+    assert int(she.group(1)) > max(int(sheet.group(1)), int(scrim.group(1)))
 
 
 def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
@@ -684,7 +684,7 @@ def test_no_skills_in_the_drawer() -> None:
     assert "'skill'" not in _method(_src("mobile-launcher.js"), "_buildRow")
 
 
-# Copiato da `test_casa_tu_contract.py`: unisce i corpi di tutte le regole che
+# Copiato da `test_home_you_contract.py`: unisce i corpi di tutte le regole che
 # nominano il selettore, gruppi compresi — guardarne una sola dice «non c'e'».
 def _rule(css: str, selector: str) -> str:
     """Tutto cio' che il foglio dichiara per *selector*, gruppi compresi.
@@ -693,15 +693,15 @@ def _rule(css: str, selector: str) -> str:
     da due regole diverse — il gruppo che mette davanti le schede e la regola
     che veste quella singola — e guardarne una sola dice «non c'e'».
     """
-    corpi = []
-    for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        names = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+    bodies = []
+    for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        names = {s.strip().splitlines()[-1].strip() for s in selectors.split(",") if s.strip()}
         if selector in names:
-            corpi.append(body)
-    return "\n".join(corpi)
+            bodies.append(body)
+    return "\n".join(bodies)
 
 
-def _senza_commenti_html(src: str) -> str:
+def _without_comments_html(src: str) -> str:
     """Il testo senza i `<!-- -->`.
 
     Serve perche' i commenti di questi file *nominano* apposta il codice che
@@ -712,7 +712,7 @@ def _senza_commenti_html(src: str) -> str:
     return re.sub(r"<!--.*?-->", "", src, flags=re.S)
 
 
-def _senza_commenti_js(src: str) -> str:
+def _without_comments_js(src: str) -> str:
     """Idem per `/* */` e `//`. Grezzo — una stringa che contiene `//` ci va di
     mezzo — e va bene: si usa solo per cercare identificatori che *non* devono
     esistere, dove un falso negativo e' impossibile e un falso positivo si vede
@@ -760,7 +760,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     settings = _src("mobile-settings.js")
 
     # La porta se n'è andata, e non deve tornare in un altro gruppo a caso.
-    assert "'launcher'" not in _senza_commenti_js(settings), (
+    assert "'launcher'" not in _without_comments_js(settings), (
         "il cassetto delle app è tornato a essere una riga dentro un cassetto"
     )
 
@@ -799,8 +799,8 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     #    quello vero, incorporato. Nessun gesto dal bordo basso, di nuovo.
     home = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
     assert 'data-page="app"' in home, "la casa non ha piu' la pagina App"
-    pagina_app = home.split('data-page="app"', 1)[1].split('data-page="chat"', 1)[0]
-    assert 'id="launcher-list"' in pagina_app, "la pagina App non contiene il cassetto"
+    app_page = home.split('data-page="app"', 1)[1].split('data-page="chat"', 1)[0]
+    assert 'id="launcher-list"' in app_page, "la pagina App non contiene il cassetto"
     assert re.search(r"export const FIXED_PAGES = \['app',", _src("home-pages.js")), (
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
@@ -835,13 +835,13 @@ def test_the_dead_dock_branch_is_gone() -> None:
     """
     for doc in ("workshop.html", "index.html"):
         html = (ROOT / "jenny/templates/ui" / doc).read_text(encoding="utf-8")
-        assert "data-opens" not in _senza_commenti_html(html), doc
-    assert "dataset.opens" not in _senza_commenti_js(_src("mobile-app.js"))
+        assert "data-opens" not in _without_comments_html(html), doc
+    assert "dataset.opens" not in _without_comments_js(_src("mobile-app.js"))
 
 def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
     """`[hidden]` sta nel foglio del browser: una classe con `display` lo scavalca.
 
-    Il banco gemello in `test_casa_tu_contract.py` guarda gli elementi che
+    Il banco gemello in `test_home_you_contract.py` guarda gli elementi che
     nascono `hidden` **nel markup**. Questo guarda l'altra meta', che e' la
     piu' insidiosa: quelli che il JS nasconde **a runtime**. Li' il difetto non
     si vede leggendo l'HTML — l'attributo non c'e' finche' il codice non lo
@@ -860,34 +860,34 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
     css = _src("mobile-style.css")
 
     # I campi che il cassetto nasconde a runtime, risaliti al loro nodo.
-    campi = set(re.findall(r"this\.(\w+)\.hidden\s*=", js))
-    assert campi, "nessun `.hidden =` trovato: il banco guarda il posto sbagliato"
+    fields = set(re.findall(r"this\.(\w+)\.hidden\s*=", js))
+    assert fields, "nessun `.hidden =` trovato: il banco guarda il posto sbagliato"
 
-    guasti = []
-    for field in sorted(campi):
+    broken = []
+    for field in sorted(fields):
         m = re.search(rf"this\.{field}\s*=\s*document\.getElementById\('([^']+)'\)", js)
         assert m, f"non risalgo al nodo di this.{field}"
-        nodo_id = m.group(1)
+        node_id = m.group(1)
         for doc, name in ((workshop, "workshop.html"), (home, "index.html")):
-            tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(nodo_id)}"[^>]*>', doc)
+            tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(node_id)}"[^>]*>', doc)
             if not tag:
                 continue
             classes = re.search(r'class="([^"]+)"', tag.group(0))
             if not classes:
                 continue
-            for classe in classes.group(1).split():
-                body = _rule(css, f".{classe}")
+            for cls in classes.group(1).split():
+                body = _rule(css, f".{cls}")
                 if not re.search(r"display:\s*(?!none)", body):
                     continue
-                if f".{classe}[hidden]" not in css:
-                    guasti.append(f"{classe} ({name})")
+                if f".{cls}[hidden]" not in css:
+                    broken.append(f"{cls} ({name})")
 
-    assert not guasti, (
-        f"il JS li nasconde ma il CSS li riaccende: {sorted(set(guasti))} "
+    assert not broken, (
+        f"il JS li nasconde ma il CSS li riaccende: {sorted(set(broken))} "
         "— serve una regola `[hidden]` che batta il loro `display`"
     )
 
-def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
+def test_nothing_in_the_home_shows_a_hardcoded_string() -> None:
     """**La casa non ha una passata generica sui `data-i18n-*`.**
 
     L'officina sì (`MobileApp._applyStaticTranslations`, che spazza tutto il
@@ -909,7 +909,7 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
     # I moduli che possiedono dei nodi nel markup della casa. `apps-actions.js`
     # e' entrato nell'elenco il 21/09/2026 con i due fogli per-app, che sono
     # arrivati dall'officina portandosi dietro le sue parole.
-    scrittori = (
+    writers = (
         _src("mobile-launcher.js") + _src("home-app.js")
         + _src("shared/apps-actions.js")
     )
@@ -917,10 +917,10 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
     keys = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', home))
     assert keys, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"
 
-    orfane = [k for k in sorted(keys) if f"'{k}'" not in scrittori]
-    assert not orfane, (
+    orphans = [k for k in sorted(keys) if f"'{k}'" not in writers]
+    assert not orphans, (
         f"queste chiavi nessuno le scrive, quindi a schermo resta il segnaposto "
-        f"del markup: {orfane}"
+        f"del markup: {orphans}"
     )
 
 def test_the_static_strings_are_written_when_the_sheet_opens_not_at_boot() -> None:
@@ -948,8 +948,8 @@ def test_the_static_strings_are_written_when_the_sheet_opens_not_at_boot() -> No
     # di rientro: il corpo del costruttore, non una lambda che gira dopo). I
     # commenti si tolgono prima: il costruttore nomina il metodo per
     # spiegarsi, e la spiegazione non e' una chiamata.
-    costruttore = _senza_commenti_js(_method(js, "constructor"))
-    assert "\n    this._applyStaticTranslations();" not in costruttore, (
+    ctor = _without_comments_js(_method(js, "constructor"))
+    assert "\n    this._applyStaticTranslations();" not in ctor, (
         "nel costruttore i18n non ha ancora caricato: scriverebbe le chiavi grezze"
     )
 
@@ -979,22 +979,22 @@ def test_the_drawer_only_calls_methods_its_collaborators_have() -> None:
     """
     import re as _re
 
-    def metodi(percorso: str) -> set[str]:
-        src = _src(percorso)
+    def methods(path: str) -> set[str]:
+        src = _src(path)
         return set(_re.findall(r"^  (?:async )?([A-Za-z][A-Za-z0-9]*)\s*\(", src, _re.M))
 
-    offerti = metodi("shared/apps-source.js") | metodi("shared/apps-actions.js")
-    assert "launcherEntries" in offerti, "il banco sta leggendo i file sbagliati"
+    offered = methods("shared/apps-source.js") | methods("shared/apps-actions.js")
+    assert "launcherEntries" in offered, "il banco sta leggendo i file sbagliati"
 
     launcher = _src("mobile-launcher.js")
     # I tre modi in cui il foglio nomina i suoi due collaboratori.
-    chiamate = set(_re.findall(
+    calls = set(_re.findall(
         r"(?:this\._apps|this\._actions|\bapps)\??\.([A-Za-z][A-Za-z0-9]*)\(", launcher))
-    assert chiamate, "nessuna chiamata trovata: il banco guarda il posto sbagliato"
+    assert calls, "nessuna chiamata trovata: il banco guarda il posto sbagliato"
 
-    fantasmi = sorted(chiamate - offerti)
-    assert not fantasmi, (
+    ghosts = sorted(calls - offered)
+    assert not ghosts, (
         f"il cassetto chiama metodi che ne' AppsSource ne' AppsActions hanno: "
-        f"{fantasmi}. Il file resta valido, la suite verde, e il foglio si apre "
+        f"{ghosts}. Il file resta valido, la suite verde, e il foglio si apre "
         f"vuoto al primo disegno."
     )

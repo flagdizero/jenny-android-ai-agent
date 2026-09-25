@@ -48,16 +48,16 @@ def _body(src: str, start: int) -> str:
     stesura di questo banco, rossa su codice sano (22/09/2026).
     """
     i = src.index("{", start)
-    profondita, j, stringa = 0, i, None
+    depth, j, string = 0, i, None
     while j < len(src):
         c = src[j]
         due = src[j : j + 2]
-        if stringa:
+        if string:
             if c == "\\":
                 j += 2
                 continue
-            if c == stringa:
-                stringa = None
+            if c == string:
+                string = None
         elif due == "//":
             j = src.index("\n", j)
             continue
@@ -65,12 +65,12 @@ def _body(src: str, start: int) -> str:
             j = src.index("*/", j) + 2
             continue
         elif c in "\"'`":
-            stringa = c
+            string = c
         elif c == "{":
-            profondita += 1
+            depth += 1
         elif c == "}":
-            profondita -= 1
-            if profondita == 0:
+            depth -= 1
+            if depth == 0:
                 return src[i : j + 1]
         j += 1
     raise AssertionError("graffe sbilanciate")
@@ -82,17 +82,17 @@ def _switch_mode(src: str) -> str:
     return _body(src, m.end())
 
 
-def _position(body: str, pattern: str, cosa: str) -> int:
+def _position(body: str, pattern: str, what: str) -> int:
     m = re.search(pattern, body)
-    assert m, f"{cosa} non trovato in switchMode"
+    assert m, f"{what} non trovato in switchMode"
     return m.start()
 
 
 def test_the_mode_class_is_written_before_the_controller_wakes_up() -> None:
     body = _switch_mode(APP_JS.read_text(encoding="utf-8"))
-    classe = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
+    cls = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
     active = _position(body, r"\.activate\(\)", "activate()")
-    assert classe < active, (
+    assert cls < active, (
         "switchMode notifica il controller prima di scrivere `mode-<modo>` su "
         "<html>. Per la chat quella distanza e' un difetto: il suo scroller e' "
         "il documento, e il documento scorre solo sotto `:root.mode-chat` — "
@@ -111,11 +111,11 @@ def test_the_mode_class_is_written_next_to_the_display() -> None:
     """
     body = _switch_mode(APP_JS.read_text(encoding="utf-8"))
     display = _position(body, r"view\.style\.display = 'flex'", "il display della vista")
-    classe = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
-    righe_in_mezzo = body[display:classe].count("\n")
-    assert 0 < righe_in_mezzo <= 30, (
+    cls = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
+    rows_in_middle = body[display:cls].count("\n")
+    assert 0 < rows_in_middle <= 30, (
         f"fra il `display` della vista e la classe `mode-*` ci sono "
-        f"{righe_in_mezzo} righe: sono la stessa informazione e vanno tenute "
+        f"{rows_in_middle} righe: sono la stessa informazione e vanno tenute "
         f"vicine (il commento sul posto spiega perche')."
     )
 

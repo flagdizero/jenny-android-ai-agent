@@ -14,7 +14,7 @@
  *  Da petalo a petalo puo' cambiare solo l'oscillazione di lato. Le due
  *  eccezioni: `read` solleva un petalo alla volta e `write` li fa spuntare in
  *  fila — un gesto che si compie, non un'onda che gira. Il banco
- *  (`test_casa_fiore_client.py`) lo misura.
+ *  (`test_home_flower_client.py`) lo misura.
  *
  *  Il ciclo di animazione gira solo mentre la riga e' a schermo: `start()` e
  *  `stop()` li chiama la riga, e a riga nascosta il fiore non costa niente.

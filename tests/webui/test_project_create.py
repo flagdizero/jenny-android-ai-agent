@@ -71,8 +71,8 @@ def _frontmatter(text: str) -> dict:
     return parsed
 
 
-class TestUnProgettoNasceCompleto:
-    async def test_crea_lalbero_il_registro_e_la_riga_di_scope(self, ctx, workspace):
+class TestAProjectIsBornComplete:
+    async def test_creates_the_tree_the_registry_and_the_scope_line(self, ctx, workspace):
         result = await _create(ctx, name="patreon-creator", seed="Come si cresce su Patreon.")
 
         root = workspace / "wikis" / "patreon-creator"
@@ -99,7 +99,7 @@ class TestUnProgettoNasceCompleto:
         assert "Come si cresce su Patreon." in registry
         assert "[[patreon-creator/wiki/index|patreon-creator]]" in registry
 
-    async def test_non_crea_la_tassonomia_del_pattern_di_ricerca(self, ctx, workspace):
+    async def test_does_not_create_the_search_pattern_taxonomy(self, ctx, workspace):
         """T1: le cartelle che obbligavano a scegliere «concept o entity?» **mentre**
         si prende un appunto non esistono più. Il pattern document-first resta, ma
         vive nella skill e nelle sette wiki che ce l'hanno già."""
@@ -110,13 +110,13 @@ class TestUnProgettoNasceCompleto:
                     "outputs/queries", "raw/papers", "raw/articles", "raw/refs"):
             assert not (root / rel).exists(), rel
 
-    async def test_il_titolo_viene_dal_nome_della_cartella(self, ctx, workspace):
+    async def test_the_title_comes_from_the_folder_name(self, ctx, workspace):
         await _create(ctx, name="patreon-creator", seed="x")
 
         schema = (workspace / "wikis" / "patreon-creator" / "AGENTS.md").read_text("utf-8")
         assert "# Patreon Creator" in schema
 
-    async def test_e_vuoto_di_contenuto(self, ctx, workspace):
+    async def test_is_empty_of_content(self, ctx, workspace):
         """"Nuovo" costruisce lo scaffolding, non un primo articolo."""
         await _create(ctx, name="nuovo", seed="x")
 
@@ -128,7 +128,7 @@ class TestUnProgettoNasceCompleto:
         assert list((root / "raw" / "journal").iterdir()) == []
         assert list((root / "raw" / "research").iterdir()) == []
 
-    async def test_agents_md_nasce_senza_istruzioni_al_modello(self, ctx, workspace):
+    async def test_agents_md_is_born_without_instructions_to_the_model(self, ctx, workspace):
         """``## How we work here`` nasce **vuota**: c'è il posto, non il foglietto.
 
         Il segnaposto che ci stava fino al 24/08 era un'istruzione a chi compila il
@@ -155,21 +155,21 @@ class TestUnProgettoNasceCompleto:
             "e sotto non c'è niente: nessun segnaposto fra parentesi angolari"
         )
 
-    async def test_la_mappa_nasce_con_le_sue_sezioni(self, ctx, workspace):
+    async def test_the_map_is_born_with_its_sections(self, ctx, workspace):
         """Le sezioni nascono vuote ma nascono: il giardiniere (T4) aggiorna
         sezioni che esistono, invece di inventarsi una struttura ogni volta — che è
         il modo in cui due sessioni diverse producono due mappe diverse."""
         await _create(ctx, name="nuovo", seed="di cosa si tratta")
 
-        mappa = (workspace / "wikis" / "nuovo" / "wiki" / "index.md").read_text("utf-8")
+        map = (workspace / "wikis" / "nuovo" / "wiki" / "index.md").read_text("utf-8")
         for section in ("## Decided", "## Open", "## Pages"):
-            assert section in mappa, section
+            assert section in map, section
         # Il diario è citato come percorso, **non** come `[[link]]`: sta fuori da
         # `wiki/`, e un wikilink fuori dalle pagine è morto per `resolve_wikilink`.
-        assert "raw/journal" in mappa
-        assert "[[raw/journal" not in mappa
+        assert "raw/journal" in map
+        assert "[[raw/journal" not in map
 
-    async def test_rilanciarlo_non_riscrive_niente(self, ctx, workspace):
+    async def test_rerunning_it_rewrites_nothing(self, ctx, workspace):
         """Lo scaffolder scrive solo quel che manca: è la regola che rende sicuro
         ripassare su una cartella rimasta a metà."""
         from jenny.webui.project_scaffold import scaffold_project
@@ -181,7 +181,7 @@ class TestUnProgettoNasceCompleto:
         assert scaffold_project(root, "Nuovo", "x", '"x"') == []
         assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
 
-    async def test_una_wiki_esistente_non_viene_toccata(self, ctx, workspace):
+    async def test_an_existing_wiki_is_not_touched(self, ctx, workspace):
         """Il secondo progetto non deve poter riscrivere il primo."""
         await _create(ctx, name="primo", seed="il primo")
         before = (workspace / "wikis" / "primo" / "wiki" / "index.md").read_bytes()
@@ -194,7 +194,7 @@ class TestUnProgettoNasceCompleto:
 # ── un progetto rimasto a metà si può finire ─────────────────────────────────
 
 
-class TestUnProgettoAMetaSiPuoFinire:
+class TestAHalfDoneProjectCanBeFinished:
     """Il top-up dello scaffolder, raggiungibile dalla UI.
 
     Lo scaffolder è scritto per essere rilanciato (`_write_if_absent` su ogni
@@ -205,7 +205,7 @@ class TestUnProgettoAMetaSiPuoFinire:
     telefono l'utente non ci arriva a mano.
     """
 
-    async def test_una_cartella_con_la_sola_wiki_viene_completata(self, ctx, workspace):
+    async def test_a_folder_with_only_the_wiki_gets_completed(self, ctx, workspace):
         (workspace / "wikis" / "morta-a-meta" / "wiki").mkdir(parents=True)
 
         result = await _create(ctx, name="morta-a-meta", seed="di cosa si tratta")
@@ -219,7 +219,7 @@ class TestUnProgettoAMetaSiPuoFinire:
         schema = (root / "AGENTS.md").read_text("utf-8")
         assert _frontmatter(schema)["summary"] == "di cosa si tratta"
 
-    async def test_il_seme_entra_anche_se_lavvio_ha_gia_scritto_lagents_minimo(
+    async def test_the_seed_gets_in_even_if_startup_already_wrote_the_minimal_agents(
         self, ctx, workspace
     ):
         """Il caso vero, e quello che si perdeva in silenzio.
@@ -250,7 +250,7 @@ class TestUnProgettoAMetaSiPuoFinire:
         registry = (workspace / "wikis" / "_index.md").read_text("utf-8")
         assert "Come si cresce su Patreon." in registry
 
-    async def test_uno_scope_vero_non_viene_riscritto(self, ctx, workspace):
+    async def test_a_real_scope_is_not_rewritten(self, ctx, workspace):
         """Completare un progetto non è riscriverne lo scope: se la creazione era
         morta *fra* l'`AGENTS.md` e la mappa, la riga della prima volta è un dato
         dell'utente e vince su quella di stavolta."""
@@ -265,7 +265,7 @@ class TestUnProgettoAMetaSiPuoFinire:
         # La mappa invece nasce adesso, quindi porta la riga di stavolta.
         assert "la riga di stavolta" in (root / "wiki" / "index.md").read_text("utf-8")
 
-    async def test_una_cartella_che_non_e_un_progetto_e_un_rifiuto_diverso(self, ctx, workspace):
+    async def test_a_folder_that_is_not_a_project_is_a_different_refusal(self, ctx, workspace):
         """Due rifiuti distinguibili: "ce l'hai già" non è "c'è qualcosa di mezzo".
 
         Il client interpola il messaggio del server nel toast (`scope.createFailed`),
@@ -288,8 +288,8 @@ class TestUnProgettoAMetaSiPuoFinire:
 # ── quel che il comando deve rifiutare ───────────────────────────────────────
 
 
-class TestIlGateStaSulServer:
-    async def test_rifiuta_un_progetto_che_esiste(self, ctx):
+class TestTheGateIsOnTheServer:
+    async def test_rejects_a_project_that_exists(self, ctx):
         await _create(ctx, name="patreon", seed="uno")
 
         with pytest.raises(CommandError) as exc:
@@ -311,7 +311,7 @@ class TestIlGateStaSulServer:
             "a" * 65,             # oltre il tetto
         ],
     )
-    async def test_rifiuta_un_nome_non_valido(self, ctx, workspace, name):
+    async def test_rejects_an_invalid_name(self, ctx, workspace, name):
         with pytest.raises(CommandError) as exc:
             await _create(ctx, name=name, seed="x")
         assert exc.value.code == "bad_request"
@@ -319,7 +319,7 @@ class TestIlGateStaSulServer:
         assert not (workspace / "wikis").exists()
 
     @pytest.mark.parametrize("seed", ["", "   ", "\n\n"])
-    async def test_rifiuta_un_progetto_senza_riga_di_scope(self, ctx, workspace, seed):
+    async def test_rejects_a_project_without_a_scope_line(self, ctx, workspace, seed):
         """*"Devi scrivere tu qualcosa, sennò la chat è ferma"* — e' una regola,
         non un suggerimento del dialogo: vale anche per un client che non chiede."""
         with pytest.raises(CommandError) as exc:
@@ -327,12 +327,12 @@ class TestIlGateStaSulServer:
         assert exc.value.code == "bad_request"
         assert not (workspace / "wikis").exists()
 
-    async def test_rifiuta_una_riga_troppo_lunga(self, ctx):
+    async def test_rejects_a_line_too_long(self, ctx):
         with pytest.raises(CommandError) as exc:
             await _create(ctx, name="lungo", seed="x" * (MAX_PROJECT_SEED_CHARS + 1))
         assert exc.value.code == "too_large"
 
-    async def test_richiude_gli_a_capo_invece_di_fallire(self, ctx, workspace):
+    async def test_folds_newlines_instead_of_failing(self, ctx, workspace):
         """Il frontmatter e' YAML: una riga sola. Su una tastiera mobile un
         a-capo di troppo non deve costare un errore."""
         await _create(ctx, name="multi", seed="prima riga\nseconda   riga\n")
@@ -340,7 +340,7 @@ class TestIlGateStaSulServer:
         schema = (workspace / "wikis" / "multi" / "AGENTS.md").read_text("utf-8")
         assert _frontmatter(schema)["summary"] == "prima riga seconda riga"
 
-    async def test_un_workspace_senza_la_skill_crea_comunque_il_progetto(self, tmp_path: Path):
+    async def test_a_workspace_without_the_skill_still_creates_the_project(self, tmp_path: Path):
         """Fino al 22/08 questo era un errore: lo scaffolder stava nel checkout
         della skill, quindi un workspace senza `skills/` non poteva creare niente.
         Ora lo scaffolder e' nel package e dalla skill viene solo `reindex_wikis`,
@@ -384,8 +384,8 @@ async def _get_projects(handler) -> dict:
     return json.loads(response.body.decode("utf-8"))
 
 
-class TestElencoProgetti:
-    async def test_elenca_le_wiki_e_non_una_cartella_projects(self, handler, ctx, workspace):
+class TestListProjects:
+    async def test_lists_the_wikis_and_not_a_projects_folder(self, handler, ctx, workspace):
         await _create(ctx, name="alpha", seed="a")
         await _create(ctx, name="beta", seed="b")
         # Una cartella `projects/` accanto: non deve entrare nell'elenco.
@@ -397,7 +397,7 @@ class TestElencoProgetti:
         assert [p["name"] for p in payload["projects"]] == ["alpha", "beta"]
         assert all(isinstance(p["modified"], int) for p in payload["projects"])
 
-    async def test_una_cartella_senza_wiki_non_e_un_progetto(self, handler, ctx, workspace):
+    async def test_a_folder_without_wiki_is_not_a_project(self, handler, ctx, workspace):
         await _create(ctx, name="vera", seed="v")
         (workspace / "wikis" / "solo-una-cartella").mkdir()
 
@@ -405,11 +405,11 @@ class TestElencoProgetti:
 
         assert [p["name"] for p in payload["projects"]] == ["vera"]
 
-    async def test_nessun_progetto_non_e_un_errore(self, handler):
+    async def test_no_project_is_not_an_error(self, handler):
         payload = await _get_projects(handler)
         assert payload["projects"] == []
 
-    async def test_ogni_progetto_porta_il_numero_delle_sue_pagine(
+    async def test_every_project_carries_its_page_count(
         self, handler, ctx, workspace
     ):
         """La pastiglia «N pagine» dell'intestazione legge di qui.
@@ -452,7 +452,7 @@ class TestElencoProgetti:
         assert response is not None and response.status_code == 401
 
 
-class TestUnNomeElencatoEUnNomeApribile:
+class TestAListedNameIsAnOpenableName:
     """Il chip non può offrire una cartella che il canale poi rifiuta.
 
     `project.create` la regex la applica, quindi da lì una cartella così non
@@ -475,7 +475,7 @@ class TestUnNomeElencatoEUnNomeApribile:
         "name",
         ["Ricerca ETF", "università", "perché", "progetto (2026)", ".nascosto", "x" * 65],
     )
-    async def test_un_nome_che_non_puo_essere_una_sessione_non_e_apribile(
+    async def test_a_name_that_cannot_be_a_session_is_not_openable(
         self, handler, workspace, name
     ):
         self._wiki(workspace, name)
@@ -491,7 +491,7 @@ class TestUnNomeElencatoEUnNomeApribile:
         assert payload["unopenable"][0]["reason"] == "invalid_name"
         assert isinstance(payload["unopenable"][0]["modified"], int)
 
-    async def test_un_nome_valido_resta_apribile(self, handler, ctx, workspace):
+    async def test_a_valid_name_stays_openable(self, handler, ctx, workspace):
         await _create(ctx, name="alpha", seed="a")
         self._wiki(workspace, "b.eta_1-2")
 
@@ -500,7 +500,7 @@ class TestUnNomeElencatoEUnNomeApribile:
         assert [p["name"] for p in payload["projects"]] == ["alpha", "b.eta_1-2"]
         assert payload["unopenable"] == []
 
-    async def test_ogni_nome_elencato_e_accettato_dal_canale(self, handler, workspace):
+    async def test_every_listed_name_is_accepted_by_the_channel(self, handler, workspace):
         """Il contratto, dai due lati: quel che la route offre, il canale apre.
 
         Il difetto non era in nessuno dei due punti da solo — era che facevano
@@ -540,7 +540,7 @@ def _scaffold_module():
     return scaffold
 
 
-class TestLoScaffolderAvvisa:
+class TestTheScaffolderWarns:
     """`project.create` applica la regex; lo scaffolder della skill no.
 
     È la seconda porta per cui una cartella non apribile entra in `wikis/`, e
@@ -551,7 +551,7 @@ class TestLoScaffolderAvvisa:
     """
 
     @pytest.mark.parametrize("name", ["Ricerca ETF", "università", "progetto (2026)", ".x"])
-    def test_avvisa_su_un_nome_che_non_potra_essere_una_chat(self, tmp_path, name, capsys):
+    def test_warns_about_a_name_that_cannot_be_a_chat(self, tmp_path, name, capsys):
         scaffold = _scaffold_module()
 
         assert scaffold._warn_if_unopenable(str(tmp_path / "wikis" / name)) is True
@@ -559,13 +559,13 @@ class TestLoScaffolderAvvisa:
         assert name in err and "cannot be a project chat name" in err
 
     @pytest.mark.parametrize("name", ["ricerca-etf", "b.eta_1", "X2"])
-    def test_tace_su_un_nome_buono(self, tmp_path, name, capsys):
+    def test_is_silent_on_a_good_name(self, tmp_path, name, capsys):
         scaffold = _scaffold_module()
 
         assert scaffold._warn_if_unopenable(str(tmp_path / "wikis" / name)) is False
         assert "cannot be a project chat name" not in capsys.readouterr().err
 
-    def test_lo_scaffold_completo_avvisa_e_crea_comunque(self, tmp_path, capsys):
+    def test_the_full_scaffold_warns_and_creates_anyway(self, tmp_path, capsys):
         scaffold = _scaffold_module()
         root = tmp_path / "wikis" / "Ricerca ETF"
 
@@ -575,7 +575,7 @@ class TestLoScaffolderAvvisa:
         assert "cannot be a project chat name" in captured.err
         assert (root / "wiki" / "index.md").is_file()
 
-    def test_la_regex_copiata_non_e_divergere_da_quella_canonica(self):
+    def test_the_copied_regex_does_not_diverge_from_the_canonical_one(self):
         """La copia è deliberata (lo script non può importare `jenny`), quindi il
         test è il solo posto che tiene le due in pari."""
         from jenny.session.keys import is_valid_project_name
@@ -593,7 +593,7 @@ class TestLoScaffolderAvvisa:
 # ── il chip non deve tornare a leggere la cartella sbagliata ─────────────────
 
 
-def test_il_chip_non_legge_piu_una_cartella_projects():
+def test_the_chip_no_longer_reads_a_projects_folder():
     """Guardia contro il ritorno del difetto: il chip elencava
     `workspace/projects/` con `listWorkspace`, e quella cartella non esiste."""
     source = (
@@ -623,7 +623,7 @@ async def _get_thread(handler, key: str):
     return handler._handle_webui_thread_get(request, quoted)
 
 
-class TestIlThreadDiUnProgetto:
+class TestTheProjectThread:
     """La route che serve la conversazione disegnata.
 
     La sua guardia accettava solo chiavi `websocket:*`, quindi avrebbe risposto
@@ -631,14 +631,14 @@ class TestIlThreadDiUnProgetto:
     e il sintomo sarebbe stato una schermata vuota senza errori nel client.
     """
 
-    async def test_una_chiave_di_progetto_non_e_piu_404(self, handler, ctx, workspace):
+    async def test_a_project_key_is_no_longer_404(self, handler, ctx, workspace):
         await _create(ctx, name="patreon", seed="di cosa si occupa")
 
         response = await _get_thread(handler, "project:patreon")
 
         assert response.status_code != 404, response.body
 
-    async def test_il_payload_porta_la_cartella_del_progetto(self, handler, ctx, workspace):
+    async def test_the_payload_carries_the_project_folder(self, handler, ctx, workspace):
         """E la porta **prima del primo messaggio**.
 
         Il chip legge lo scope da qui: leggendolo dai metadati della sessione —
@@ -656,14 +656,14 @@ class TestIlThreadDiUnProgetto:
         assert scope["project_path"].endswith("wikis/patreon")
         assert scope["access_mode"] == "restricted"
 
-    async def test_una_sessione_interna_resta_illeggibile(self, handler):
+    async def test_an_internal_session_stays_unreadable(self, handler):
         """Il lato del confine che non doveva allargarsi."""
         for key in ("cron:job-1", "subagent:L1", "heartbeat", "dream:20260821"):
             response = await _get_thread(handler, key)
             assert response.status_code == 404, key
 
 
-class TestIlRegistroNonRubaLoStdoutDiNessuno:
+class TestTheLogDoesNotStealAnyonesStdout:
     """T9.4/G4. La rigenerazione del registro girava dentro un
     ``contextlib.redirect_stdout``, e ``create_project`` gira dentro un
     ``asyncio.to_thread``: ``redirect_stdout`` muta ``sys.stdout`` **di
@@ -705,7 +705,7 @@ class TestIlRegistroNonRubaLoStdoutDiNessuno:
             encoding="utf-8",
         )
 
-    async def test_un_print_di_un_altro_thread_non_finisce_nel_buffer(
+    async def test_a_print_from_another_thread_does_not_end_up_in_the_buffer(
         self, ctx, workspace, capsys
     ):
         self._fake_reindex(workspace)
@@ -715,7 +715,7 @@ class TestIlRegistroNonRubaLoStdoutDiNessuno:
         assert result["registry"].endswith("_index.md")
         assert "OUTPUT-DI-UN-ALTRO-THREAD" in capsys.readouterr().out
 
-    async def test_e_il_progetto_nasce_comunque_completo(self, ctx, workspace):
+    async def test_and_the_project_is_still_born_complete(self, ctx, workspace):
         """La guardia d'assenza: il fix è una riga *togliata*, e un test che
         guarda solo lo stdout resterebbe verde anche se la rigenerazione del
         registro fosse saltata del tutto.

@@ -77,11 +77,11 @@ def test_it_does_not_take_another_job_s_records(tmp_path: Path) -> None:
         **_bound_chat(),
     )
     _record(service, job.id, 1_000)
-    altrui = _record(service, "deadbeef", 1_000)
+    foreign = _record(service, "deadbeef", 1_000)
 
     service.remove_job(job.id)
 
-    assert _names(service) == {altrui.name}
+    assert _names(service) == {foreign.name}
 
 
 def test_an_id_that_is_a_prefix_of_another_keeps_its_neighbour_intact(
@@ -94,10 +94,10 @@ def test_an_id_that_is_a_prefix_of_another_keeps_its_neighbour_intact(
     """
     service = _service(tmp_path)
     _record(service, "ab", 1_000)
-    vicino = _record(service, "abcd", 1_000)
+    near = _record(service, "abcd", 1_000)
 
     assert service._remove_run_records("ab") == 1
-    assert _names(service) == {vicino.name}
+    assert _names(service) == {near.name}
 
 
 # ── La potatura ──────────────────────────────────────────────────────────
@@ -137,15 +137,15 @@ def test_a_name_it_does_not_understand_is_left_alone(tmp_path: Path) -> None:
     service = _service(tmp_path)
     for stamp in range(_RUN_RECORDS_KEEP + 5):
         _record(service, "job", 1_000 + stamp)
-    strano = service._run_records_dir / "senza-la-forma-giusta.json"
-    strano.write_text("{}", encoding="utf-8")
-    pure_strano = service._run_records_dir / "job_nonunnumero_x.json"
-    pure_strano.write_text("{}", encoding="utf-8")
+    odd = service._run_records_dir / "senza-la-forma-giusta.json"
+    odd.write_text("{}", encoding="utf-8")
+    pure_odd = service._run_records_dir / "job_nonunnumero_x.json"
+    pure_odd.write_text("{}", encoding="utf-8")
 
     service._prune_run_records()
 
-    assert strano.exists()
-    assert pure_strano.exists()
+    assert odd.exists()
+    assert pure_odd.exists()
 
 
 def test_a_missing_directory_is_not_an_error(tmp_path: Path) -> None:

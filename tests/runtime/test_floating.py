@@ -60,14 +60,14 @@ def bridge(monkeypatch) -> _FakeBridge:
     return instance
 
 
-class TestFuoriDalTelefono:
-    async def test_senza_contesto_android_non_succede_niente(self, monkeypatch):
+class TestOffThePhone:
+    async def test_without_android_context_nothing_happens(self, monkeypatch):
         """Desktop e CI: nessuna finestra, nessun errore, nessun log d'allarme."""
         monkeypatch.setattr(fl, "get_android_context", lambda: None)
         assert await fl.show_reply("ciao") is False
         assert await fl.apply_floating_config() is False
 
-    async def test_un_bridge_che_solleva_non_fa_cadere_il_turno(self, monkeypatch):
+    async def test_a_bridge_that_raises_does_not_drop_the_turn(self, monkeypatch):
         """È la ragione per cui il canale può restare a un solo tentativo: qui
         dentro non esce mai un'eccezione, quindi non c'è niente da ritentare."""
 
@@ -80,22 +80,22 @@ class TestFuoriDalTelefono:
 
 
 class TestShowReply:
-    async def test_il_testo_arriva_al_bridge(self, bridge: _FakeBridge):
+    async def test_the_text_reaches_the_bridge(self, bridge: _FakeBridge):
         assert await fl.show_reply("le 21:40") is True
         assert bridge.calls == [("showReply", ("le 21:40",))]
 
-    async def test_il_testo_viene_ripulito(self, bridge: _FakeBridge):
+    async def test_the_text_is_cleaned(self, bridge: _FakeBridge):
         await fl.show_reply("  con spazi \n")
         assert bridge.calls[0][1] == ("con spazi",)
 
     @pytest.mark.parametrize("text", ["", "   ", "\n\t "])
-    async def test_un_testo_vuoto_non_attraversa_il_confine(
+    async def test_an_empty_text_does_not_cross_the_boundary(
         self, bridge: _FakeBridge, text: str
     ):
         assert await fl.show_reply(text) is False
         assert bridge.calls == []
 
-    async def test_un_fumetto_non_mostrato_torna_falso(self, monkeypatch):
+    async def test_an_unshown_speech_bubble_returns_false(self, monkeypatch):
         instance = _FakeBridge(result=False)
         monkeypatch.setattr(fl, "_resolve_bridge_class", lambda: (lambda _ctx: instance))
         monkeypatch.setattr(fl, "get_android_context", lambda: object())
@@ -103,7 +103,7 @@ class TestShowReply:
 
 
 class TestApplyConfig:
-    async def test_spinge_config_e_tempo_di_permanenza(self, bridge: _FakeBridge, monkeypatch):
+    async def test_pushes_config_and_dwell_time(self, bridge: _FakeBridge, monkeypatch):
         from jenny.config.schema import Config
 
         config = Config()
@@ -114,7 +114,7 @@ class TestApplyConfig:
         assert await fl.apply_floating_config() is True
         assert bridge.calls == [("setEnabled", (True, 45))]
 
-    async def test_va_spinto_anche_da_spento(self, bridge: _FakeBridge, monkeypatch):
+    async def test_must_be_pushed_even_when_off(self, bridge: _FakeBridge, monkeypatch):
         """Non è ridondanza: la finestra vive nel processo del service e
         sopravvive a un riavvio del gateway. Un ``False`` esplicito è l'unica
         cosa che smonta una mascotte rimasta a schermo da un giro precedente."""
@@ -125,7 +125,7 @@ class TestApplyConfig:
         await fl.apply_floating_config()
         assert bridge.calls == [("setEnabled", (False, 20))]
 
-    async def test_una_config_illeggibile_lascia_stare_la_finestra(
+    async def test_an_unreadable_config_leaves_the_window_alone(
         self, bridge: _FakeBridge, monkeypatch
     ):
         """Meglio una mascotte com'era che una spenta per un file rotto."""
@@ -139,16 +139,16 @@ class TestApplyConfig:
 
 
 class TestIsActive:
-    async def test_chiede_alla_finestra(self, bridge: _FakeBridge):
+    async def test_asks_the_window(self, bridge: _FakeBridge):
         assert await fl.floating_active() is True
         assert bridge.calls == [("isActive", ())]
 
-    async def test_senza_contesto_android_e_falso(self, monkeypatch):
+    async def test_without_android_context_is_false(self, monkeypatch):
         monkeypatch.setattr(fl, "get_android_context", lambda: None)
         assert await fl.floating_active() is False
 
 
-class TestConfineConKotlin:
+class TestBoundaryWithKotlin:
     """Il punto in cui un rename rompe solo sul telefono.
 
     Python raggiunge il bridge per **nome** attraverso Chaquopy, e il
@@ -156,18 +156,18 @@ class TestConfineConKotlin:
     compilatore Kotlin né pyright vedono quei due legami.
     """
 
-    def test_il_nome_della_classe_kotlin_esiste(self):
+    def test_the_kotlin_class_name_exists(self):
         assert fl._BRIDGE.java_class == "com.flagdizero.jenny.FloatingBridge"
         assert BRIDGE_KT.is_file()
         assert "class FloatingBridge(" in BRIDGE_KT.read_text(encoding="utf-8")
 
     @pytest.mark.parametrize("method", ["setEnabled", "showReply", "isActive"])
-    def test_i_metodi_chiamati_esistono_in_kotlin(self, method: str):
+    def test_the_called_methods_exist_in_kotlin(self, method: str):
         source = BRIDGE_KT.read_text(encoding="utf-8")
         assert f"fun {method}(" in source
         assert f'"{method}"' in Path(fl.__file__).read_text(encoding="utf-8")
 
-    def test_gli_sprite_che_il_controller_cerca_esistono(self):
+    def test_the_sprites_the_controller_looks_for_exist(self):
         """Il controller li legge dalla copia estratta della WebUI
         (``workspace/ui/assets/``) invece di duplicarli in ``res/drawable``,
         così la mascotte flottante e quella in chat non possono divergere. Il
@@ -187,12 +187,12 @@ class TestConfineConKotlin:
         for name in sorted(names):
             assert (assets / f"{name}.webp").is_file(), f"sprite mancante: {name}.webp"
 
-    def test_il_controller_legge_dalla_copia_estratta_della_webui(self):
+    def test_the_controller_reads_from_the_extracted_webui_copy(self):
         source = CONTROLLER.read_text(encoding="utf-8")
         assert '"workspace/ui/assets/$name.webp"' in source
 
 
-class TestLaFisicaNonDiverge:
+class TestThePhysicsDoesNotDiverge:
     """Le costanti del volo vivono in due posti, e devono restare identiche.
 
     `FloatingFlight.kt` porta in Kotlin la macchina che il JS fa girare per la
@@ -242,7 +242,7 @@ class TestLaFisicaNonDiverge:
             out[name] = float(raw.replace("_", ""))
         return out
 
-    def test_ogni_costante_kotlin_ha_la_stessa_in_js(self):
+    def test_every_kotlin_constant_has_the_same_in_js(self):
         kt = self._kt_numbers(self.FLIGHT_KT.read_text(encoding="utf-8"))
         js = self._js_numbers(self.COMPANION_JS.read_text(encoding="utf-8"))
 
@@ -270,7 +270,7 @@ class TestLaFisicaNonDiverge:
             "sorgenti è da rivedere, e un test che non confronta niente passa sempre"
         )
 
-    def test_il_pivot_e_lo_stesso(self):
+    def test_the_pivot_is_the_same(self):
         """La punta della manica alzata di `jenny-hang`. Sbagliarlo non rompe
         niente: la fa solo ruotare attorno al punto sbagliato."""
         kt = self.FLIGHT_KT.read_text(encoding="utf-8")

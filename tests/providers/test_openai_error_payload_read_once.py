@@ -13,12 +13,12 @@ from jenny.providers.openai_compat_provider import OpenAICompatProvider
 class _BodyError(Exception):
     def __init__(self) -> None:
         super().__init__("boom")
-        self.letture = 0
+        self.reads = 0
         self.status_code = 429
 
     @property
     def body(self) -> dict:
-        self.letture += 1
+        self.reads += 1
         return {"error": {"type": "rate_limit_error", "code": "rate_limited"}}
 
 
@@ -26,7 +26,7 @@ def test_the_error_body_is_read_once_and_reaches_both_message_and_metadata() -> 
     err = _BodyError()
     reply = OpenAICompatProvider._handle_error(err)
 
-    assert err.letture == 1
+    assert err.reads == 1
     assert "rate_limit_error" in reply.content
     assert reply.error_type == "rate_limit_error"
     assert reply.error_code == "rate_limited"

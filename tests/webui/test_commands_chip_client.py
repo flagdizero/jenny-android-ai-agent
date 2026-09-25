@@ -245,7 +245,7 @@ def test_every_command_the_backend_serves_gets_a_row() -> None:
       const names = texts(chip.menu);
       const expected = {json.dumps(expected)};
       assert.equal(rows.length, expected.length,
-                   `righe: ${{rows.length}}, attese: ${{expected.length}}`);
+                   `righe: ${{rows.length}}, expected: ${{expected.length}}`);
       for (const command of expected) {{
         assert.ok(names.some((t) => t.startsWith(command)),
                   `manca la riga di ${{command}}`);

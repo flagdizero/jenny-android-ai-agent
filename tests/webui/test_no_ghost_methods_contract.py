@@ -32,7 +32,7 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 # I file che definiscono una classe con metodi privati: quelli in cui la
 # domanda ha senso. `shared/` entra pure lui — `update-flow.js` e'
 # esattamente il modulo da cui e' partito il guaio.
-SORGENTI = sorted(
+SOURCES = sorted(
     [p for p in ASSETS.glob("*.js")]
     + [p for p in (ASSETS / "shared").glob("*.js")]
 )
@@ -40,19 +40,19 @@ SORGENTI = sorted(
 # Nomi che esistono a runtime senza essere scritti qui: ereditati, o messi
 # dall'esterno. Si dichiarano uno per uno — allargare il filtro al posto di
 # nominarli rimetterebbe il difetto sotto il tappeto.
-CONCESSI = {
+ALLOWED = {
     # `AppState` e i controller condividono un paio di ganci che il guscio
     # chiama su di loro (v. mobile-app.js), non definiti nella classe.
     "_onPowerVisible",
 }
 
 
-def _chiamate(src: str) -> set[str]:
+def _calls(src: str) -> set[str]:
     """`this._x(` — solo le chiamate, non le letture di proprieta'."""
     return set(re.findall(r"this\.(_[A-Za-z][A-Za-z0-9]*)\(", src))
 
 
-def _definiti(src: str) -> set[str]:
+def _defined(src: str) -> set[str]:
     """Metodi della classe, piu' **qualunque** campo a cui si assegni qualcosa.
 
     Il secondo caso conta e va preso largo: `this._fetch = fetchProjects`,
@@ -65,12 +65,12 @@ def _definiti(src: str) -> set[str]:
     e' il difetto che questo banco insegue — quello e' il metodo **tolto da un
     refactor**, che non lascia ne' definizione ne' assegnazione.
     """
-    metodi = set(re.findall(r"^\s{2}(?:async |\*|get |set )?(_[A-Za-z][A-Za-z0-9]*)\s*\(", src, re.M))
-    campi = set(re.findall(r"this\.(_[A-Za-z][A-Za-z0-9]*)\s*(?:\?\?|\|\||&&)?=(?!=)", src))
-    return metodi | campi
+    methods = set(re.findall(r"^\s{2}(?:async |\*|get |set )?(_[A-Za-z][A-Za-z0-9]*)\s*\(", src, re.M))
+    fields = set(re.findall(r"this\.(_[A-Za-z][A-Za-z0-9]*)\s*(?:\?\?|\|\||&&)?=(?!=)", src))
+    return methods | fields
 
 
-def _ereditati(sorgente: Path, src: str) -> set[str]:
+def _inherited(source: Path, src: str) -> set[str]:
     """Quel che arriva da una classe madre importata (`class A extends B`).
 
     Dal 24/09/2026 la companion dell'officina estende la mascotte condivisa
@@ -79,27 +79,27 @@ def _ereditati(sorgente: Path, src: str) -> set[str]:
     lista di concessioni lunga quanto la classe madre non proverebbe niente, e
     un metodo tolto dalla madre deve far diventare rosso anche il figlio.
     """
-    trovati: set[str] = set()
-    for madre in re.findall(r"\bclass\s+\w+\s+extends\s+(\w+)", src):
+    found: set[str] = set()
+    for parent in re.findall(r"\bclass\s+\w+\s+extends\s+(\w+)", src):
         m = re.search(
-            rf"import\s*\{{[^}}]*\b{madre}\b[^}}]*\}}\s*from\s*'(\.[^']+)'", src
+            rf"import\s*\{{[^}}]*\b{parent}\b[^}}]*\}}\s*from\s*'(\.[^']+)'", src
         )
         if not m:
             continue
-        percorso = (sorgente.parent / m.group(1)).resolve()
-        text = percorso.read_text(encoding="utf-8")
-        trovati |= _definiti(text) | _ereditati(percorso, text)
-    return trovati
+        path = (source.parent / m.group(1)).resolve()
+        text = path.read_text(encoding="utf-8")
+        found |= _defined(text) | _inherited(path, text)
+    return found
 
 
-@pytest.mark.parametrize("sorgente", SORGENTI, ids=lambda p: p.name)
-def test_every_method_it_calls_exists(sorgente: Path) -> None:
-    src = sorgente.read_text(encoding="utf-8")
+@pytest.mark.parametrize("source", SOURCES, ids=lambda p: p.name)
+def test_every_method_it_calls_exists(source: Path) -> None:
+    src = source.read_text(encoding="utf-8")
     if "class " not in src:
         pytest.skip("nessuna classe qui dentro")
-    fantasmi = sorted(_chiamate(src) - _definiti(src) - _ereditati(sorgente, src) - CONCESSI)
-    assert not fantasmi, (
-        f"{sorgente.name} chiama metodi che non esistono: {fantasmi}. "
+    ghosts = sorted(_calls(src) - _defined(src) - _inherited(source, src) - ALLOWED)
+    assert not ghosts, (
+        f"{source.name} chiama metodi che non esistono: {ghosts}. "
         f"Il file resta valido e la suite verde: il difetto si vede solo sul "
         f"telefono, e solo sul ramo che li usa."
     )
@@ -112,8 +112,8 @@ def test_the_check_would_have_caught_the_one_that_shipped() -> None:
     definizioni — e si chiede al controllo di vederlo. Un banco di questo tipo
     scritto *dopo* il fatto e' credibile solo se fallisce sul fatto.
     """
-    finto = """
-class Prova {
+    fake = """
+class Try {
   constructor() {
     this.updates = new UpdateFlow({ onChange: () => this._paintUpdate() });
   }
@@ -122,5 +122,5 @@ class Prova {
   }
 }
 """
-    fantasmi = _chiamate(finto) - _definiti(finto) - CONCESSI
-    assert fantasmi == {"_paintUpdate", "_updateProgressHtml"}, fantasmi
+    ghosts = _calls(fake) - _defined(fake) - ALLOWED
+    assert ghosts == {"_paintUpdate", "_updateProgressHtml"}, ghosts

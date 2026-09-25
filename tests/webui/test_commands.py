@@ -307,8 +307,8 @@ async def test_page_write_refuses_a_stale_base_without_writing(
     l'utente vedrebbe un errore e crederebbe di non aver perso niente.
     """
     pages_dir = _workspace_with_page(workspace_root)
-    intanto = "# Orto\n\nRiscritto da Jenny mentre l'editor era aperto.\n"
-    (pages_dir / "index.md").write_text(intanto, encoding="utf-8")
+    meanwhile = "# Orto\n\nRiscritto da Jenny mentre l'editor era aperto.\n"
+    (pages_dir / "index.md").write_text(meanwhile, encoding="utf-8")
 
     with pytest.raises(CommandError) as exc:
         await dispatch_command(
@@ -318,7 +318,7 @@ async def test_page_write_refuses_a_stale_base_without_writing(
         )
 
     assert exc.value.code == "conflict"
-    assert (pages_dir / "index.md").read_text(encoding="utf-8") == intanto
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == meanwhile
 
 
 async def test_page_write_needs_the_base(
