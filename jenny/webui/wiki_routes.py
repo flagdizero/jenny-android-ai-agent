@@ -145,7 +145,7 @@ def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[
 
 
 class WikiRoutes:
-    """Route ``/api/{config,tree,graph,page}`` e ``/api/audit*``."""
+    """Route ``/api/{projects,project/describe,graph,page}`` e ``/api/audit/create``."""
 
     def __init__(
         self,

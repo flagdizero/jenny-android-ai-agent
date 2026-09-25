@@ -530,9 +530,10 @@ class MemoryEntryTool(Tool):
     """``memory add|replace|remove`` sui due file a voci."""
 
     _scopes = {"core"}
-    # Non scopribile come plugin: chi lo monta lo fa esplicitamente, perché a
-    # chi darlo è una decisione aperta (punto 1.12 del piano) e un tool che si
-    # auto-registra la prenderebbe per omissione.
+    # Fuori da ``TOOLS`` e da ``_HARDCODED_TOOL_MODULES``, di proposito: lo monta
+    # ``MemoryStore.build_dream_tools``, con due dipendenze che un
+    # ``ToolContext`` non porta (v. ``create``). A chi darlo oltre a Dream è la
+    # decisione aperta del punto 1.12 del piano.
 
     def __init__(
         self,
@@ -978,6 +979,8 @@ class MemoryEntryTool(Tool):
         )
 
 
-# Nessun ``TOOLS = [...]``: questo modulo non è ancora in
-# ``_HARDCODED_TOOL_MODULES``. È il passo 1.2 del piano, e dipende dal 1.12 —
-# se il tool serva anche l'agente principale o solo Dream.
+# Nessun ``TOOLS = [...]``, e il modulo non sta in ``_HARDCODED_TOOL_MODULES``
+# (il loader rifiuterebbe un modulo senza ``TOOLS``): ``MemoryEntryTool`` lo monta
+# ``MemoryStore.build_dream_tools``. Metterlo anche nel registry dell'agente
+# principale è il passo 1.2 del piano, e dipende dal 1.12 — se il tool serva
+# anche la conversazione o solo Dream.

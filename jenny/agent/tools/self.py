@@ -484,7 +484,10 @@ class MyTool(Tool, ContextAware):
         return f"unsupported type {type(value).__name__}"
 
 
-# Registrazione esplicita dei tool di questo modulo (Fase 5.3): il
-# ToolLoader legge questa lista invece della reflection dir(). Un nuovo
-# tool va aggiunto qui esplicitamente.
+# Vuota di proposito, e non per dimenticanza. ``MyTool`` ha bisogno di un
+# riferimento vivo all'``AgentLoop`` che gira (``runtime_state``), che il
+# ``ToolLoader`` non sa dare: lo registra a mano
+# ``AgentLoop._register_default_tools``, dopo il loader. Il modulo resta in
+# ``_HARDCODED_TOOL_MODULES`` con una lista vuota perche' il loader rifiuta un
+# modulo senza ``TOOLS``.
 TOOLS = []

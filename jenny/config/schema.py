@@ -414,8 +414,9 @@ class AgentDefaults(Base):
     # richiesta al modello. Letto al momento della chiamata, quindi un cambio
     # vale dal turno dopo senza riavvio.
     # ``mascotMoodModelPreset`` non c'e' piu' dal 24/09/2026, con la richiesta
-    # che serviva: un config che lo porta ancora non si rompe — ``store.mutate``
-    # conserva le chiavi che lo schema non conosce, e qui si ignorano.
+    # che serviva: un config che lo porta ancora non si rompe — qui si ignora, e
+    # sta in ``loader.RETIRED_KEY_PATHS``, quindi la prossima scrittura di
+    # ``store.mutate`` lo toglie dal file invece di conservarlo.
     mascot_mood: bool = Field(
         default=True,
         validation_alias=AliasChoices("mascotMood", "mascot_mood"),
