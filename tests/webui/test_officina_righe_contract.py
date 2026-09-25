@@ -500,12 +500,31 @@ def test_una_marca_e_una_riga_con_chi_risponde() -> None:
     assert m and re.search(r"min-height:\s*52px", m.group(1))
 
 
-def test_il_colore_della_marca_non_viene_da_una_tabella() -> None:
-    """Una tabella nome->colore lascerebbe grigie proprio le marche che
-    l'utente si è aggiunto da sé, che sono il motivo per cui questa schermata
-    esiste."""
-    corpo = _corpo("_coloreMarca")
-    assert "charCodeAt" in corpo and "hsl(" in corpo
+@requires_node
+def test_il_colore_della_marca_e_uno_solo_e_mai_grigio() -> None:
+    """Officina e casa colorano una marca con la stessa funzione: prima erano
+    due regole (una tinta dal nome qui, la tabella in casa), e la stessa marca
+    aveva due colori. E una tabella da sola lascerebbe grigie proprio le marche
+    che l'utente si è aggiunto da sé: per quelle c'è la tinta dal nome.
+    ``getProviderBrand`` vero, importato."""
+    assert "getProviderBrand(nome).color" in _corpo("_coloreMarca")
+    casa = (ASSETS / "casa-model.js").read_text(encoding="utf-8")
+    assert "getProviderBrand(p.name).color" in casa
+    brand = (ASSETS / "shared" / "provider-brand.js").as_uri()
+    out = run_js(
+        f"const {{ getProviderBrand }} = await import({json.dumps(brand)});\n"
+        """
+const colori = ['openai', 'anthropic', 'la-mia-marca', 'altra'].map((n) => getProviderBrand(n).color);
+console.log(JSON.stringify(colori));
+console.log(getProviderBrand('la-mia-marca').color === getProviderBrand('la-mia-marca').color);
+"""
+    )
+    colori, stabile = out.strip().splitlines()
+    colori = json.loads(colori)
+    assert colori[0] == "#10a37f", "una marca conosciuta ha perso il suo colore"
+    assert all(c != "#888" for c in colori), f"una marca aggiunta a mano è grigia: {colori}"
+    assert colori[2].startswith("hsl(") and colori[2] != colori[3]
+    assert stabile == "true"
 
 
 def test_tenere_sveglia_la_cpu_e_un_comando_a_segmenti() -> None:

@@ -5,6 +5,7 @@ import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
+import { getProviderBrand } from './shared/provider-brand.js';
 import {
   BatteryExemptionCard,
   batteryExemptionSupported,
@@ -869,22 +870,13 @@ export class SettingsController {
     }).join('');
   }
 
-  /** Il colore del pallino di una marca.
-   *
-   *  **Derivato dal nome, non da una tabella.** Una tabella nome→colore
-   *  andrebbe tenuta aggiornata a mano e lascerebbe grigie tutte le marche che
-   *  non conosce — cioe' proprio quelle che l'utente si e' aggiunto da se', che
-   *  sono il motivo per cui questa schermata esiste. La tinta si ricava dal
-   *  nome, saturazione e chiarezza fisse: distinguibile su fondo chiaro e su
-   *  fondo scuro, e stabile fra un'apertura e l'altra.
-   *
-   *  Non passa dai token del tema di proposito: identifica una marca, non un
-   *  ruolo nell'interfaccia, e deve restare la stessa su tutti e sette i temi.
-   */
+  /** Il colore del pallino di una marca: quello della casa, da
+   *  `getProviderBrand`. Qui c'era una seconda regola (una tinta dal nome per
+   *  tutte), e la stessa marca aveva un colore in officina e un altro in casa;
+   *  la tinta dal nome ora e' il ripiego di `getProviderBrand` per le marche
+   *  che la tabella non conosce. */
   _coloreMarca(nome) {
-    let h = 0;
-    for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) % 360;
-    return `hsl(${h}, 62%, 55%)`;
+    return getProviderBrand(nome).color;
   }
 
   /** Il pannello di una marca: modifica ed elimina. */
