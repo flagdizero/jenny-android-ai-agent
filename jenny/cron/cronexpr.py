@@ -95,8 +95,8 @@ _NEAREST_WEEKDAY = re.compile(r"^(?:(\d+)w|w(\d+))$")
 
 # Oltre non si cerca: un'espressione che non scatta mai (``0 0 31 2 *``) deve
 # dirlo, non girare per sempre. Come in croniter, cinquant'anni da dove si parte
-# (``mon#5`` di febbraio capita ogni ventotto); il 2099 vale solo per il campo
-# dell'anno.
+# (``mon#5`` di febbraio capita ogni ventotto). Con il campo dell'anno il limite
+# e' invece il suo ultimo anno, fino al 2099 (v. ``next_after``).
 _SEARCH_YEARS = 50
 
 
@@ -461,6 +461,15 @@ def next_after(expr: str | CronExpr, base: datetime) -> datetime:
     start = wall + timedelta(seconds=1)
     day = start.date()
     limit = date(start.year + _SEARCH_YEARS, 12, 31)
+    if spec.years is not None:
+        # Il campo dell'anno dice fin dove cercare: il suo ultimo anno (al massimo
+        # il 2099), non i cinquant'anni da oggi, che rifiutavano un ``2080``
+        # valido. E si parte dal primo anno elencato che non sia gia' passato,
+        # invece di scorrere a vuoto i giorni che lo precedono.
+        limit = date(max(spec.years), 12, 31)
+        ahead = [y for y in spec.years if y > start.year]
+        if start.year not in spec.years and ahead:
+            day = date(min(ahead), 1, 1)
     while day <= limit:
         if spec.matches_day(day):
             if spec.repeating and _changes_offset(day, tz):

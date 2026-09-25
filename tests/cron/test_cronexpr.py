@@ -26,7 +26,11 @@ Le tre differenze volute:
    dell'"oppure" fra giorno del mese e giorno della settimana non trovava mai
    niente (``16 * fri#2``, ``15W * 0``), qui vale l'altro ramo;
 3. nessun tetto al 2099 per le espressioni senza campo dell'anno (croniter
-   stessa lo trattava così: il 2099 è il limite del settimo campo).
+   stessa lo trattava così: il 2099 è il limite del settimo campo);
+4. con il campo dell'anno la ricerca arriva al suo ultimo anno, non a
+   cinquant'anni da oggi: ``0 9 1 1 * 0 2080`` scatta nel 2080, dove croniter
+   (e la prima stesura di questo modulo) si arrendeva (seconda revisione,
+   25/09/2026).
 """
 
 from __future__ import annotations
@@ -250,6 +254,17 @@ def test_a_rare_date_is_found_past_2099() -> None:
     got = _chain("41 10 * 2 mon#5", _rome(2072, 3, 1, 0, 0), 2)
     # 2100 non è bisestile (secolo): il primo dopo il 2072 è il 2112.
     assert [d.date().isoformat() for d in got] == ["2112-02-29", "2140-02-29"]
+
+
+def test_an_explicit_year_is_searched_where_it_is() -> None:
+    """Il settimo campo arriva al 2099: cercarlo solo per cinquant'anni rifiutava
+    come «mai» un'espressione valida."""
+    base = _rome(2026, 9, 25, 10, 0)
+    assert next_after("0 9 1 1 * 0 2080", base) == _rome(2080, 1, 1, 9, 0)
+    assert next_after("0 9 1 1 * 0 2026-2099", base) == _rome(2027, 1, 1, 9, 0)
+    # Anni tutti passati: e' davvero «mai».
+    with pytest.raises(ValueError, match="no run"):
+        next_after("0 9 1 1 * 0 2020,2021", base)
 
 
 # ── Il motivo per cui esiste ────────────────────────────────────────────────
