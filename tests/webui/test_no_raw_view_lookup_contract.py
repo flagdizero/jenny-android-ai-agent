@@ -45,10 +45,17 @@ SORGENTI = sorted(
     [p for p in ASSETS.glob("*.js")] + [p for p in (ASSETS / "shared").glob("*.js")]
 )
 
-# `getElementById(`view-${…}` / `title-${…}`: l'id costruito da un'espressione.
-# Un id **letterale** (`getElementById('view-settings')`) non e' il difetto: li'
-# non c'e' nessun modo da tradurre, e vietarlo direbbe una bugia.
-CRUDO = re.compile(r"getElementById\(\s*`(view|title)-\$\{")
+# L'id costruito da un'espressione, in tutte le forme in cui si scrive:
+# `getElementById(`view-${…}`)`, `getElementById('view-' + …)` e le stesse con
+# `querySelector('#view-…')`. Un id **letterale** (`getElementById('view-settings')`)
+# non e' il difetto: li' non c'e' nessun modo da tradurre, e vietarlo direbbe una
+# bugia. Fino al 25/09/2026 la regex vedeva solo la prima forma, e
+# `mobile-ui-query.js` con `getElementById('view-' + view)` le passava sotto:
+# lo strumento `ui_view` mandava a Jenny un HTML vuoto per i tre cassetti.
+CRUDO = re.compile(
+    r"""(?:getElementById\(\s*|querySelector(?:All)?\(\s*)"""
+    r"""(?:`#?(?:view|title)-\$\{|(['"])#?(?:view|title)-\1\s*\+)"""
+)
 
 # Le uniche due che possono farlo: sono loro la traduzione.
 DEFINIZIONI = {"elementoVista": "view", "elementoTitolo": "title"}
@@ -136,3 +143,20 @@ def test_it_would_have_caught_all_three() -> None:
     trovate = _righe_crude(finto)
     assert len(trovate) == 3, trovate
     assert all("view-settings" not in riga for _, riga in trovate)
+
+
+def test_it_catches_the_concatenated_and_selector_forms() -> None:
+    """Le forme che la prima regex non vedeva, fra cui quella di
+    `mobile-ui-query.js` che mandava a Jenny un HTML vuoto (H6)."""
+    finto = """
+      const container = document.getElementById('view-' + view);
+      const t = document.getElementById("title-" + mode);
+      const a = document.querySelector('#view-' + mode);
+      const b = document.querySelector(`#view-${mode}`);
+      const c = root.querySelectorAll('#title-' + m);
+      const ok1 = document.querySelector('#view-settings');
+      const ok2 = document.getElementById('view-chat');
+    """
+    trovate = _righe_crude(finto)
+    assert len(trovate) == 5, trovate
+    assert all("ok" not in riga for _, riga in trovate)

@@ -5,13 +5,15 @@
  * raccogliamo, descriviamo la vista attiva come HTML potato (e, se aperta, l'HTML
  * della Jenny app via SDK) e rispondiamo con un frame `ui_result`.
  *
- * L'HTML della vista nativa si legge direttamente dal DOM (`#view-<modo>`).
+ * L'HTML della vista nativa si legge direttamente dal DOM (`elementoVista(modo)`:
+ * cervello, mani e memoria sono tutti e tre `#view-settings`).
  * L'HTML dell'app NO: l'iframe è sandboxato con origin opaca, illeggibile dal
  * parent — è l'app stessa a spedirlo fuori tramite l'SDK (jenny:ui-query).
  */
 
 import { AppState } from './shared/state.js';
 import { wsManager } from './shared/ws-manager.js';
+import { elementoVista } from './mobile-settings.js';
 
 // Cap per blocco HTML (il backend rifiuta comunque payload oltre 256 KB).
 const HTML_CAP = 48 * 1024;
@@ -74,19 +76,25 @@ export class UiQueryResponder {
   async _collect() {
     const view = AppState.currentMode || 'unknown';
     const drawer = window.mobileApp?.drawer?.activeDrawer || null;
-    const container = document.getElementById('view-' + view);
+    /* Dalla tabella, non dall'id costruito: `view-cervello` non esiste, e
+       per i tre cassetti Jenny riceveva un HTML vuoto. */
+    const container = elementoVista(view);
     const html = this._pruneHtml(container ? container.outerHTML : '');
 
     const payload = { view, drawer, html };
 
     // Jenny app aperta: chiedile il suo DOM via SDK (il parent non può leggerlo).
-    const apps = window.mobileApp?.controllers?.apps;
-    const open = apps?._openApp;
-    if (view === 'apps' && open) {
-      const meta = apps.jennyApps?.find((a) => a.slug === open.slug);
+    /* La mini-app sta nel velo sopra qualunque vista, e il suo stato vive
+       nelle azioni delle app: qui si leggeva `controllers.apps` con
+       `view === 'apps'`, cioe' la scheda «App» che non esiste piu' — e l'app
+       aperta non arrivava mai a Jenny. */
+    const actions = window.mobileApp?._appsActions;
+    const open = actions?._openApp;
+    if (open) {
+      const meta = window.mobileApp?._appsSource?.jennyApps?.find((a) => a.slug === open.slug);
       let appHtml = null;
       try {
-        appHtml = await apps.requestAppHtml(2000);
+        appHtml = await actions.requestAppHtml(2000);
       } catch {
         appHtml = null;
       }
