@@ -42,7 +42,7 @@ const figli = (el) => Array.from(el?.children || []);
 const eFoto = (el) => Boolean(el?.classList?.contains('casa-foto'));
 
 /** La foto che sta in questo pannello, o `null`. */
-export function fotoIn(pannello) {
+function fotoIn(pannello) {
   return figli(pannello).find(eFoto) || null;
 }
 

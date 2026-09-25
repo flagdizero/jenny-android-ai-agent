@@ -868,7 +868,6 @@ class CasaApp {
 
   /** La pista ha cambiato casella: la fila dice dove sei. */
   onPaginaCambiata(indice, voce) {
-    this._pagina = indice;
     this._voce = voce;
     /* Su quale pagina si e' lo dice un attributo, come per le stanze: cosi' la
        geometria resta nel CSS e qui c'e' solo il nome. */
@@ -1134,7 +1133,7 @@ class CasaApp {
       this.pagesCount.textContent = i18n.t(
         count === 1 ? 'casa.pages.countOne' : 'casa.pages.countMany', { count },
       );
-    }).catch((err) => console.warn('casa.pages: conteggio non letto', err));
+    }).catch((err) => console.warn('casa.pages: page count not read', err));
   }
 
   /* Il turno che stava girando nella conversazione lasciata non si chiudera'

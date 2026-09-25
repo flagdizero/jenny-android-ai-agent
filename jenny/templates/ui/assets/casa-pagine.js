@@ -81,7 +81,6 @@ export class CasaPagine {
     this.ordine = ordineNormale([], [], this.fisse);
     this.indice = this.indiceChat;
     this._tetto = 8;
-    this._staccaGesto = null;
     /** Chi accende e spegne una pagina fissa: `{accendi, spegni}` per id. */
     this._ganci = {};
     /** La pagina fissa accesa adesso, per spegnerla quando la lasci. */
@@ -659,7 +658,9 @@ export class CasaPagine {
   _armaGesto() {
     const risposta = this._risposta();
 
-    this._staccaGesto = osservaGestoOrizzontale(this.pista, {
+    /* Il gesto vive quanto la pista, cioe' quanto la pagina: non c'e' niente
+       da staccare, e il valore che `osservaGestoOrizzontale` torna non serve. */
+    osservaGestoOrizzontale(this.pista, {
       puoIniziare: () => this._puoScorrere(),
       onOrizzontale: risposta.inizio,
       onTrascina: risposta.trascina,

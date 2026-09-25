@@ -223,7 +223,7 @@ export class CasaJenny {
       const payload = await api.updateFloating({ enabled });
       if (payload?.floating) this.floating = payload.floating;
     } catch (err) {
-      console.warn('casa.jenny: flottante non aggiornata', err);
+      console.warn('casa.jenny: floating window not updated', err);
       this.floating = { ...this.floating, enabled: !enabled };
     }
     this._mark();
@@ -247,7 +247,7 @@ export class CasaJenny {
          quel che c'e' su disco resta `null`, quindi «Salva» non compare e uno
          spazio battuto per sbaglio non puo' cancellare niente. */
       if (err?.status !== 404) {
-        console.warn('casa.jenny: regole non lette', err);
+        console.warn('casa.jenny: rules not read', err);
         return;
       }
     }
@@ -271,7 +271,7 @@ export class CasaJenny {
     try {
       await rpc.writeSoulRules(testo);
     } catch (err) {
-      console.warn('casa.jenny: regole non salvate', err);
+      console.warn('casa.jenny: rules not saved', err);
       showToast(i18n.t('casa.jenny.rulesFailed'), 'error');
       return;
     }

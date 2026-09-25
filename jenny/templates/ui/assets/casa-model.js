@@ -178,7 +178,7 @@ export class CasaModel {
       this._apply(payload);
       showToast(i18n.t('casa.model.saved'), 'success');
     } catch (err) {
-      console.warn('casa.model: modello non cambiato', err);
+      console.warn('casa.model: model not changed', err);
       showToast(i18n.t('casa.model.failed'), 'error');
     }
   }
@@ -209,7 +209,7 @@ export class CasaModel {
       this._loadModels(provider);
       showToast(i18n.t('casa.model.keySaved'), 'success');
     } catch (err) {
-      console.warn('casa.model: chiave non salvata', err);
+      console.warn('casa.model: key not saved', err);
       showToast(err?.message || i18n.t('casa.model.failed'), 'error');
     }
   }
@@ -246,7 +246,7 @@ export class CasaModel {
         message: res?.message || '',
       };
     } catch (err) {
-      console.warn('casa.model: elenco modelli non letto', err);
+      console.warn('casa.model: model list not read', err);
       esito = { status: 'error', models: [], message: '' };
     }
     this._cataloghi.set(provider, esito);

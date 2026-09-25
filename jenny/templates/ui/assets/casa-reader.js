@@ -291,7 +291,7 @@ export class CasaReader {
      l'agente ha scritto. Si mostra il markdown, scappato. */
   _safeHtml(html, raw) {
     if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(html || '');
-    console.warn('casa.reader: DOMPurify assente, ripiego sul markdown');
+    console.warn('casa.reader: DOMPurify missing, falling back to markdown');
     return `<pre class="casa-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
 
@@ -329,7 +329,7 @@ export class CasaReader {
       try {
         window.open(target.href, '_blank', 'noopener');
       } catch (err) {
-        console.warn('casa.reader: link esterno non aperto', err);
+        console.warn('casa.reader: external link not opened', err);
         showToast(i18n.t('common.linkNotOpenable'), 'error');
       }
       return;

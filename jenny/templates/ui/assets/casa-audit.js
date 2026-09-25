@@ -35,7 +35,7 @@ import { selectionInside, onSelectionChange } from './shared/selection.js';
  *  ammette 8192 byte in tutto. Un'emoji percent-encodata ne costa 12, quindi
  *  500 caratteri restano al sicuro anche nel caso peggiore. Oltre non e' piu'
  *  un riscontro ancorato a una frase, e' una pagina — e quella si scrive. */
-export const MAX_COMMENT = 500;
+const MAX_COMMENT = 500;
 
 /** Da un testo selezionato ai due offset nel **markdown sorgente**.
  *

@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Jenny</title>
 
-<!-- Il guscio della casa. Serve una conversazione e nient'altro: qui dentro non
-     entrano CodeMirror, KaTeX, Mermaid, D3 e highlight.js, che l'officina carica
-     perche' le servono davvero. La differenza non e' estetica — e' il tempo che
-     passa fra il tocco sull'icona e la prima riga leggibile.
+<!-- Il guscio della casa. Serve una conversazione e nient'altro: nel <head>
+     non entrano CodeMirror e highlight.js, che l'officina carica perche' le
+     servono davvero. KaTeX, Mermaid e D3 in casa ci sono, ma **a richiesta**:
+     i primi due li carica `shared/rich-content.js` quando un messaggio o una
+     pagina contengono davvero una formula o un diagramma, il terzo
+     `casa-map.js` al primo tocco sulla mappa. La differenza non e' estetica —
+     e' il tempo che passa fra il tocco sull'icona e la prima riga leggibile.
 
      Vale la stessa CSP dell'officina (`script-src 'self'`, v. _SHELL_DOCUMENTS
      in jenny/webui/ws_http.py): nessuno script inline, nemmeno per il tema. -->

@@ -328,7 +328,7 @@ export class CasaMap {
     try {
       await ensureVendor(D3_SRC);
     } catch (err) {
-      console.warn('casa.map: D3 non caricato', err);
+      console.warn('casa.map: D3 not loaded', err);
       if (gen === this._gen) this._say('casa.map.failed');
       return;
     }
