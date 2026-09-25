@@ -65,3 +65,19 @@ def test_the_guard_sees_what_it_is_for() -> None:
     assert [m for m in DEAD if re.search(m, fake)] == [
         DEAD[0], DEAD[1], DEAD[4],
     ]
+
+
+def test_the_stylesheet_styles_only_modes_that_exist() -> None:
+    """``:root.mode-x`` la mette ``switchMode`` per i modi di
+    ``controllerFactories``, e per nessun altro. Una regola per un modo che non
+    esiste piu' non fa errore: resta li' a descrivere una scheda che non c'e'
+    (fino al 26/09/2026 ``:root.mode-apps``, la scheda «App» uscita il 21/09)."""
+    app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
+    factories = re.search(r"this\.controllerFactories = \{(.*?)\n    \};", app, re.S)
+    assert factories, "controllerFactories non trovato"
+    modes = set(re.findall(r"^\s*(\w+):", factories.group(1), re.M))
+    assert {"chat", "brain", "hands", "memory"} <= modes, modes
+    css = re.sub(r"/\*.*?\*/", "", (ASSETS / "mobile-style.css").read_text(encoding="utf-8"), flags=re.S)
+    styled = set(re.findall(r":root\.mode-([\w-]+)", css))
+    assert styled, "la grep sulle regole dei modi non morde piu'"
+    assert styled <= modes, f"regole per modi che non esistono: {sorted(styled - modes)}"

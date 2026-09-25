@@ -5741,18 +5741,6 @@ body {
    Jenny companion — mascotte sul bordo di ogni vista
    ══════════════════════════════════════════════════ */
 
-/* Nella scheda Apps la mascotte non prende i tocchi.
-   È ancorata al bordo destro a un'altezza fissa (l'offset qui sotto deriva da
-   `#input-bar`, che in questa vista non esiste nemmeno) e la sua **sagoma** —
-   non il margine trasparente, che sporge quasi tutto fuori schermo — copre i
-   ~53 px più a destra. Lì ora ci sono gli interruttori delle skill: misurato
-   sul Titan 2, tre tocchi su tre aprivano la minichat invece di spostare
-   l'interruttore.
-   Resta visibile: è identità, non decorazione, e farla sparire a ogni visita
-   sarebbe più brusco del non poterla toccare da qui. Il prezzo, detto: da
-   questa scheda il tocco sulla mascotte non apre più la minichat. */
-:root.mode-apps .jenny-duo { pointer-events: none; }
-
 .jenny-duo {
   position: absolute;
   /* L'arte è il canvas QUADRATO 3000² intero (nessun crop): i margini sono
