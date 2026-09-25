@@ -92,10 +92,18 @@ def reset_browser_state() -> None:
     viene atteso la prima volta, quindi riusarne uno attraverso un loop nuovo
     (gateway ripartito nello stesso processo) esplode con "bound to a different
     event loop" al primo acquire.
+
+    La sessione rimasta viva dal giro precedente si **chiude**, non si
+    dimentica: staccarla e basta lascerebbe in piedi la WebView col suo
+    profilo, cookie compresi, che la prossima ``_get_browser`` non vedrebbe
+    ma che resterebbe aperta fino alla morte del processo. È la stessa cosa
+    che fa ``android_web.reset_android_web_state`` col suo bridge. Bloccante
+    (``close`` in Kotlin aspetta fino a 10 s), e qui va bene: si chiama da
+    ``android_entry`` prima che il loop parta. Un errore della chiusura lo
+    logga ``_close_bridge`` e non ferma l'avvio.
     """
-    global _BROWSER_INSTANCE, _BROWSER_LOCK, _IDLE_TASK, _LAST_USE, _ISOLATED_FOR
-    _LAST_INDEX.clear()
-    _ISOLATED_FOR = None
+    global _BROWSER_LOCK, _IDLE_TASK, _LAST_USE
+    _close_bridge(_detach_browser())
     if _IDLE_TASK is not None:
         # Il task puo' appartenere a un loop gia' chiuso (e' proprio il caso
         # per cui questa funzione esiste): li' ``cancel`` solleva invece di
@@ -106,7 +114,6 @@ def reset_browser_state() -> None:
             pass
     _IDLE_TASK = None
     _LAST_USE = 0.0
-    _BROWSER_INSTANCE = None
     _BROWSER_LOCK = asyncio.Lock()
 
 

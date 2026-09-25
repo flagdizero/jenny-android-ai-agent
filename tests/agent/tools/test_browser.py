@@ -330,6 +330,36 @@ class TestLifecycle:
         browser.reset_browser_state()
         assert browser._BROWSER_LOCK is not old
 
+    async def test_reset_closes_the_session_left_open(self, monkeypatch):
+        """Un gateway ripartito nello stesso processo non eredita la sessione
+        di prima: la WebView col profilo e i cookie si chiude, non si stacca
+        soltanto — staccata e basta resterebbe viva fino alla morte del
+        processo, e il giro dopo non la vedrebbe piu' per chiuderla."""
+        _allow_url(monkeypatch)
+        holder = _install(monkeypatch)
+        await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
+        old = holder["bridge"]
+        assert old.closed == 0
+
+        browser.reset_browser_state()
+        assert old.closed == 1, "la sessione del giro prima e' rimasta aperta"
+        assert browser._BROWSER_INSTANCE is None
+
+        await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
+        assert holder["bridge"] is not old
+
+    def test_reset_survives_a_close_that_fails(self):
+        """Si chiama all'avvio del gateway: una chiusura che esplode non deve
+        impedirgli di partire, e l'istanza va dimenticata comunque."""
+
+        class _Broken:
+            def close(self):
+                raise RuntimeError("main thread fermo")
+
+        browser._BROWSER_INSTANCE = _Broken()
+        browser.reset_browser_state()
+        assert browser._BROWSER_INSTANCE is None
+
 
 class TestClosingOutsideTheLoop:
     """``close`` in Kotlin aspetta il main thread fino a 10 s: mai sul loop.
