@@ -773,13 +773,25 @@ class CasaApp {
        geometria resta nel CSS e qui c'e' solo il nome. */
     this.shell?.setAttribute('data-pagina', voce?.id || '');
     /* La tastiera non resta aperta su un campo che e' uscito di scena: i tasti
-       dopo finirebbero nella chat che non guardi. */
-    if (!this._haComposer(voce)) this.input?.blur();
+       dopo finirebbero nella chat che non guardi. Ne' su quello coperto
+       dall'avviso di un quaderno cancellato (v. `onSparitaCambiata`). */
+    if (!this._haComposer(voce) || this.pagine?.sparitaQui?.()) this.input?.blur();
     else this.fuoco?.rimetti();
     this._posaJenny();
     this.fila?.disegna();
     this._applyHead();
     this._segnalaChatAschermo();
+  }
+
+  /** Una pagina ha scoperto che la sua cosa non c'e' piu', o che c'e' di
+   *  nuovo. Arriva **dopo** `onPaginaCambiata` — il controllo e' una lettura
+   *  di rete — e se la pagina e' quella a schermo il campo va tolto di mezzo:
+   *  con la tastiera fisica il fuoco era gia' stato rimesso, e i tasti
+   *  sarebbero andati a un quaderno cancellato. */
+  onSparitaCambiata(pannello) {
+    if (!this.pagine || this.pagine.pannelloDi(this.pagine.indice) !== pannello) return;
+    if (this.pagine.sparitaQui()) this.input?.blur();
+    else this.fuoco?.rimetti();
   }
 
   /** La pista ha ridisegnato le sue pagine: un nome in piu', uno in meno, un
@@ -847,6 +859,7 @@ class CasaApp {
      conferma — e l'immagine ingrandita, che non sono strati del cassetto. */
   _composerAttivo() {
     if (this.view !== 'chat' || !this._haComposer(this._voce)) return false;
+    if (this.pagine?.sparitaQui?.()) return false;
     if (this.hasOverlayAbove()) return false;
     return !document.querySelector('dialog[open], .image-lightbox');
   }
@@ -1403,6 +1416,9 @@ class CasaApp {
        stessa regola che il gateway applica all'eco di Telegram — col solo
        controllo sul testo, una foto muta non partirebbe. */
     if (!text && !this.files.count) return false;
+    /* La pagina di un quaderno cancellato: l'ultima guardia, se un Invio
+       arriva comunque al campo sotto l'avviso. */
+    if (this.pagine?.sparitaQui?.()) return false;
     /* Scritto a mano, `/stop` resta il comando che e' — in casa i comandi non
        ci sono, ma niente impedisce di digitarne uno, e disegnarne la bolla
        vorrebbe dire mostrare in chat una cosa che il transcript esclude

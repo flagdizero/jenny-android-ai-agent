@@ -479,6 +479,9 @@ export class CasaPagine {
     if (!pannello.dataset.pieno) return;
     pannello.textContent = '';
     pannello.dataset.pieno = '';
+    /* L'avviso se n'e' andato col resto: al prossimo ingresso lo rimette, se
+       serve, il controllo dell'app. */
+    delete pannello.dataset.sparita;
   }
 
   /* ── La pagina di una cosa che non c'e' piu' ─────────────────────────── */
@@ -523,8 +526,13 @@ export class CasaPagine {
 
   /** L'avviso, **sopra** quel che c'e' nel pannello e non al suo posto: in una
    *  pagina quaderno sotto c'e' la chat, portata dal trasloco, e toccarla da
-   *  qui vorrebbe dire rompere un meccanismo che ha le sue regole. Coprendola
-   *  si impedisce anche di scrivere a una conversazione che non c'e' piu'. */
+   *  qui vorrebbe dire rompere un meccanismo che ha le sue regole.
+   *
+   *  Coprirla ferma il dito, **non la tastiera**: sul Titan il campo sotto
+   *  l'avviso teneva il fuoco (glielo rimette ogni arrivo su una pagina con la
+   *  chat) e i tasti scrivevano a `project:<cancellato>`. Il pannello porta
+   *  quindi un segno che il guscio legge (`sparitaQui`) prima di dare o
+   *  lasciare il fuoco al campo, e gli si dice che la pagina e' cambiata. */
   _sparita(pannello, schermata) {
     this._togliSparita(pannello);
     const scheda = document.createElement('div');
@@ -541,12 +549,23 @@ export class CasaPagine {
     togli.addEventListener('click', () => this.stacca(schermata.kind, schermata.ref));
     scheda.append(testo, togli);
     pannello.appendChild(scheda);
+    pannello.dataset.sparita = '1';
+    this.app?.onSparitaCambiata?.(pannello);
   }
 
   _togliSparita(pannello) {
     for (const c of Array.from(pannello.children)) {
       if (c.className === 'casa-pagina-sparita') c.remove();
     }
+    if (!pannello.dataset.sparita) return;
+    delete pannello.dataset.sparita;
+    this.app?.onSparitaCambiata?.(pannello);
+  }
+
+  /** La pagina a schermo dice che la sua cosa non c'e' piu'? Il guscio lo
+   *  chiede prima di dare il fuoco al campo o di mandare un messaggio. */
+  sparitaQui() {
+    return Boolean(this.pannelloDi(this.indice)?.dataset?.sparita);
   }
 
   /** I pannelli delle pagine aggiunte, in ordine. Quelli fissi non ci sono:

@@ -123,6 +123,9 @@ const sessionManager = {
   },
 };
 
+/* Il filo: ricorda cosa gli si manda. */
+const wsManager = { inviati: [], sendToChat(...a) { this.inviati.push(a); return true; } };
+
 __DOT_COLOR__
 __FLOOR__
 __BACK_TO__
@@ -302,6 +305,9 @@ class App {
   __ON_PAGINA__
   __IS_CHAT_ON_SCREEN__
   __SEGNALA_CHAT__
+  __ON_SPARITA__
+  __COMPOSER_ATTIVO__
+  __SEND__
 }
 
 function casa() {
@@ -364,6 +370,9 @@ def _harness() -> str:
         .replace("__ON_PAGINA__", member(src, "onPaginaCambiata"))
         .replace("__IS_CHAT_ON_SCREEN__", member(src, "isChatOnScreen"))
         .replace("__SEGNALA_CHAT__", member(src, "_segnalaChatAschermo"))
+        .replace("__ON_SPARITA__", member(src, "onSparitaCambiata"))
+        .replace("__COMPOSER_ATTIVO__", member(src, "_composerAttivo"))
+        .replace("__SEND__", member(src, "_send"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
@@ -1225,4 +1234,65 @@ def test_a_room_over_the_chat_hides_it_and_coming_back_clears() -> None:
       app._setView('chat');
       assert.equal(app.isChatOnScreen(), true);
       assert.equal(window.JennyNative.aperte, 1);
+    """)
+
+
+# ── La pagina di un quaderno cancellato (M7, 25/09/2026) ─────────────────────
+
+_SPARITA = """
+      const app = casa();
+      const pannello = { dataset: {} };
+      let sparita = false;
+      app.pagine.pannelloDi = () => pannello;
+      app.pagine.sparitaQui = () => sparita;
+      const fuoco = [];
+      app.fuoco = { rimetti: () => { fuoco.push('rimesso'); return true; } };
+      app.input.blur = () => fuoco.push('tolto');
+      const QUADERNO = { id: 'q1', kind: 'conversazione', ref: 'project:piante' };
+"""
+
+
+def test_the_keyboard_leaves_the_field_under_a_gone_notebook() -> None:
+    """Il controllo del quaderno e' una lettura di rete: finisce **dopo**
+    l'arrivo sulla pagina, quando il fuoco e' gia' stato rimesso sul campo. Con
+    la tastiera fisica i tasti scrivevano al quaderno cancellato."""
+    _run_js(_SPARITA + """
+      app.onPaginaCambiata(1, QUADERNO);
+      assert.deepEqual(fuoco, ['rimesso']);
+      sparita = true;
+      app.onSparitaCambiata(pannello);
+      assert.equal(fuoco.at(-1), 'tolto', 'il campo sotto l\\u2019avviso ha tenuto il fuoco');
+      assert.equal(app._composerAttivo(), false, 'i tasti vanno ancora al campo coperto');
+      fuoco.length = 0;
+      app.onPaginaCambiata(1, QUADERNO);
+      assert.deepEqual(fuoco, ['tolto'], 'tornando sulla pagina il fuoco e\\u2019 tornato sul campo');
+      /* Il quaderno e' tornato: il campo si riprende. */
+      sparita = false;
+      app.onSparitaCambiata(pannello);
+      assert.equal(fuoco.at(-1), 'rimesso');
+    """)
+
+
+def test_another_page_going_gone_does_not_touch_the_field() -> None:
+    _run_js(_SPARITA + """
+      app.onPaginaCambiata(1, QUADERNO);
+      fuoco.length = 0;
+      sparita = true;
+      app.onSparitaCambiata({ dataset: {} });
+      assert.deepEqual(fuoco, []);
+    """)
+
+
+def test_enter_on_a_gone_notebook_sends_nothing() -> None:
+    """L'ultima guardia: un Invio che arriva comunque al campo non parte."""
+    _run_js(_SPARITA + """
+      app.files = { count: 0, getImages: () => [], getAttachmentEntries: () => [], clear() {} };
+      app.chat.appendOwn = () => {};
+      app.input.value = 'ciao';
+      sparita = true;
+      assert.equal(app._send(), false);
+      assert.deepEqual(wsManager.inviati, [], 'e\\u2019 partito un messaggio a un quaderno cancellato');
+      sparita = false;
+      assert.equal(app._send(), true);
+      assert.equal(wsManager.inviati.length, 1);
     """)

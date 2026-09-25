@@ -1497,6 +1497,32 @@ def test_a_notebook_that_is_there_is_left_alone() -> None:
     )
 
 
+def test_a_notebook_that_is_gone_tells_the_shell_to_take_the_keyboard_away() -> None:
+    """Coprire la chat ferma il dito, non la tastiera fisica: il guscio aveva
+    gia' rimesso il fuoco sul campo all'arrivo, e i tasti scrivevano al
+    quaderno cancellato. La pagina lo segna, e glielo dice — anche quando il
+    quaderno torna, perche' allora il campo si puo' riprendere."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "const avvisi = [];\n"
+        "app.onSparitaCambiata = (p) => avvisi.push([p, pagine.sparitaQui()]);\n"
+        "api._quaderni = ['altro'];\n"
+        "pagine.vaiAId('q1');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        + _sparita_in('q1')
+        + "assert.equal(pagine.sparitaQui(), true, 'la pagina sparita non lo dice');\n"
+        "assert.deepEqual(avvisi, [[pannello, true]], 'il guscio non sa che il campo e\\u2019 coperto');\n"
+        "pagine.vaiA(CHAT());\n"
+        "assert.equal(pagine.sparitaQui(), false, 'la pagina chat si e\\u2019 presa il segno');\n"
+        "api._quaderni = ['piante'];\n"
+        "pagine.vaiAId('q1');\n"
+        "await new Promise((r) => setTimeout(r, 20));\n"
+        "assert.equal(pagine.sparitaQui(), false, 'il quaderno tornato resta segnato');\n"
+        "assert.deepEqual(avvisi.at(-1), [pannello, false]);\n",
+        QUADERNO,
+    )
+
+
 def test_a_notebook_list_that_fails_marks_nothing() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
