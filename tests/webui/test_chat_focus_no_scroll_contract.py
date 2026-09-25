@@ -75,7 +75,9 @@ def test_entering_the_chat_focuses_without_scrolling() -> None:
     fuochi = re.findall(r"\.focus\(([^)]*)\)", corpo)
     assert fuochi, "activate() non mette piu' a fuoco il campo"
     for arg in fuochi:
-        assert "preventScroll" in arg, (
+        # `preventScroll: true`, non la parola: `{ preventScroll: false }` la
+        # contiene e scorre di lato lo stesso.
+        assert re.search(r"\bpreventScroll\s*:\s*true\b", arg), (
             "activate() mette a fuoco il campo senza `preventScroll: true`. "
             "Entrando da uno scorrimento la vista e' ancora fuori schermo, il "
             "documento e' largo il doppio, e il browser scorre di lato per "
