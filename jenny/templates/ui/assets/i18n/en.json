@@ -536,6 +536,7 @@
     "deleteProjectConfirm": "Delete the project “{name}”? The folder goes, and so does the conversation: they are two different things on disk, and this removes both.",
     "deleteProjectConfirmWithChat": "Delete the project “{name}”? The folder goes, and the conversation with it: {count} messages.",
     "deleteProjectFailed": "I could not delete the project “{name}”. Nothing was changed.",
+    "deleteProjectBusy": "I'm still working in the project “{name}”: delete it once I've finished.",
     "deletedProject": "Project “{name}” deleted, conversation included"
   },
   "launcher": {
@@ -1042,6 +1043,7 @@
       "deleteConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
       "deleteConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
       "deleteFailed": "I could not delete the notebook “{name}”. Nothing was changed.",
+      "deleteBusy": "I'm still working in “{name}”: delete it once I've finished.",
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
       "renameFailed": "I could not rename “{name}”. {error}",

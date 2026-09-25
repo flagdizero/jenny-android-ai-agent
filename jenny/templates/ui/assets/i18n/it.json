@@ -536,6 +536,7 @@
     "deleteProjectConfirm": "Eliminare il progetto “{name}”? Sparisce la cartella e sparisce anche la conversazione: sono due cose diverse su disco, e questa le toglie tutte e due.",
     "deleteProjectConfirmWithChat": "Eliminare il progetto “{name}”? Sparisce la cartella e con lei la conversazione: {count} messaggi.",
     "deleteProjectFailed": "Non ho potuto eliminare il progetto “{name}”. Non ho toccato niente.",
+    "deleteProjectBusy": "Sto ancora lavorando nel progetto “{name}”: eliminalo quando ho finito.",
     "deletedProject": "Progetto “{name}” eliminato, conversazione compresa"
   },
   "launcher": {
@@ -1045,6 +1046,7 @@
       "deleteConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
       "deleteConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
       "deleteFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente.",
+      "deleteBusy": "Sto ancora lavorando in «{name}»: eliminalo quando ho finito.",
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
       "renameFailed": "Non ho potuto rinominare «{name}». {error}",

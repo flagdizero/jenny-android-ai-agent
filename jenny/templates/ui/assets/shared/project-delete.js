@@ -31,6 +31,7 @@ export const PROJECT_DELETE_WORDS = {
   confirm: 'workspace.deleteProjectConfirm',
   confirmWithChat: 'workspace.deleteProjectConfirmWithChat',
   failed: 'workspace.deleteProjectFailed',
+  busy: 'workspace.deleteProjectBusy',
 };
 
 /** Chiede conferma e cancella *name*. Ritorna `true` solo se è sparito davvero.
@@ -63,7 +64,11 @@ export async function deleteProjectFlow(name, words = PROJECT_DELETE_WORDS) {
     await rpc.deleteProject(name);
   } catch (err) {
     console.warn('project.delete failed:', err?.code || '(no code)', err?.message);
-    showToast(i18n.t(words.failed, { name }), 'error');
+    // `conflict` e' il rifiuto per chi ci sta ancora scrivendo (un turno, un
+    // subagent, una passata): una condizione attesa, da dire com'e', non un
+    // fallimento generico. Chi non ha la frase ricade su quella di sempre.
+    const key = err?.code === 'conflict' && words.busy ? words.busy : words.failed;
+    showToast(i18n.t(key, { name }), 'error');
     return false;
   }
   return true;

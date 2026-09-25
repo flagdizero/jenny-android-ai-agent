@@ -131,6 +131,7 @@ const NOTEBOOK_DELETE_WORDS = {
   confirm: 'casa.quaderno.deleteConfirm',
   confirmWithChat: 'casa.quaderno.deleteConfirmWithChat',
   failed: 'casa.quaderno.deleteFailed',
+  busy: 'casa.quaderno.deleteBusy',
 };
 
 class CasaApp {
