@@ -1002,7 +1002,7 @@ export class SettingsController {
       ${this._measureCap(m, 'MEMORY.md', 'memory_budget_chars')}
       ${this._measureCap(m, 'USER.md', 'user_budget_chars')}
       ${this._measureCap(m, 'SOUL.md', 'soul_budget_chars')}
-      <button class="settings-btn-add" data-summary="tetti" type="button">
+      <button class="settings-btn-add" data-summary="caps" type="button">
         <i class="ti ti-adjustments"></i> ${i18n.t('settings.memory.changeBudgets')}
       </button>`;
   }
@@ -1897,7 +1897,7 @@ export class SettingsController {
   _summary(id, label, value) {
     return `<button class="settings-summary" data-summary="${id}" type="button">
       <span class="settings-summary-name">${label}</span>
-      <span class="settings-summary-value" id="riepilogo-${id}">${value}</span>
+      <span class="settings-summary-value" id="summary-${id}">${value}</span>
       <i class="ti ti-chevron-right" aria-hidden="true"></i>
     </button>`;
   }
@@ -2218,8 +2218,8 @@ export class SettingsController {
       if (this._stale(gen)) return;
       body.innerHTML = `
         <div class="settings-empty-state">${i18n.t('skills.readError')}</div>
-        <button class="settings-btn-add" type="button" data-skill-riprova>${i18n.t('skills.riprova')}</button>`;
-      body.querySelector('[data-skill-riprova]')
+        <button class="settings-btn-add" type="button" data-skill-retry>${i18n.t('skills.retry')}</button>`;
+      body.querySelector('[data-skill-retry]')
         ?.addEventListener('click', () => this._openSkill());
       return;
     }

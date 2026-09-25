@@ -1107,6 +1107,6 @@
     "integrataBloccata": "Viene con l'app: non si spegne da qui.",
     "tuaBloccata": "Bloccata dal suo file: non si spegne da qui.",
     "readError": "L'elenco delle skill non si è potuto leggere.",
-    "riprova": "Riprova"
+    "retry": "Riprova"
   }
 }

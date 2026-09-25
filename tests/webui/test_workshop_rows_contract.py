@@ -463,7 +463,7 @@ def test_the_caps_are_read_and_changed_elsewhere() -> None:
     body = _body("_renderHowMuchItRemembers")
     assert "_measureCap(" in body
     assert "_numberField(" not in body, "i campi modificabili sono tornati in cassetto"
-    assert 'data-summary="tetti"' in body, "manca il modo di cambiarli"
+    assert 'data-summary="caps"' in body, "manca il modo di cambiarli"
     panel = _body("_openCaps")
     assert panel.count("_numberField(") == 3, "i tre campi non sono nel pannello"
 

@@ -1104,6 +1104,6 @@
     "integrataBloccata": "Comes with the app: it can't be turned off here.",
     "tuaBloccata": "Locked by its own file: it can't be turned off here.",
     "readError": "The skill list couldn't be read.",
-    "riprova": "Retry"
+    "retry": "Retry"
   }
 }
