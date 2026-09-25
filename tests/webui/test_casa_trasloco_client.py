@@ -497,3 +497,43 @@ def test_the_out_of_place_mark_lasts_one_arrival_only() -> None:
         "assert.deepEqual(messaggiDi(fotoDi(p0)), ['A1', 'A2', 'A3 nuovo'],\n"
         "  'la pagina 0 ha smesso di aggiornare la sua foto');\n"
     )
+
+
+# I timer del tetto ancora armati, contati dal banco.
+_TIMER_VIVI = (
+    "const vivi = new Set();\n"
+    "const arma = globalThis.setTimeout, spegni = globalThis.clearTimeout;\n"
+    "globalThis.setTimeout = (fn, ms) => {\n"
+    "  const id = arma(() => { vivi.delete(id); fn(); }, ms);\n"
+    "  if (ms === TETTO_FOTO_MS) vivi.add(id);\n"
+    "  return id;\n"
+    "};\n"
+    "globalThis.clearTimeout = (id) => { vivi.delete(id); spegni(id); };\n"
+)
+
+
+def test_a_newer_arrival_expires_the_older_cover_timer() -> None:
+    """Un arrivo superato non ha piu' niente da togliere (`mio !== _arrivi`):
+    il suo tetto scade subito invece di restare armato fino in fondo."""
+    _run(
+        _TIMER_VIVI
+        + "t.arriva(p1, 'B');\n"
+        "t.arriva(p0, 'A');\n"
+        "assert.equal(vivi.size, 1, 'il tetto dell\\u2019arrivo superato e\\u2019 ancora armato');\n"
+        "t.riportaACasa(p0, p1);\n"
+        "assert.equal(vivi.size, 0, 'riportata a casa, il tetto dell\\u2019arrivo in volo resta');\n"
+    )
+
+
+def test_a_read_that_ends_first_switches_the_cover_timer_off() -> None:
+    """Il tetto della foto restava armato 600 ms anche quando la lettura aveva
+    gia' vinto: un timer per niente a ogni arrivo, e un processo che non
+    poteva finire prima (questo banco ci metteva undici secondi)."""
+    _run(
+        _TIMER_VIVI
+        + "const arrivo = t.arriva(p1, 'B');\n"
+        "assert.equal(vivi.size, 1, 'il tetto non e\\u2019 armato');\n"
+        "letture[0].finisci();\n"
+        "await arrivo;\n"
+        "assert.equal(vivi.size, 0, 'la lettura ha vinto e il tetto e\\u2019 rimasto armato');\n"
+    )

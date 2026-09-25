@@ -33,8 +33,6 @@ export const TETTO_FOTO_MS = 600;
  *  in fondo, e una copia del filo intero costerebbe per niente. */
 export const FOTO_MESSAGGI = 20;
 
-const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
-
 /** I figli di un elemento, come lista. `children` e' una HTMLCollection: si
  *  scorre, ma `find` non ce l'ha. */
 const figli = (el) => Array.from(el?.children || []);
@@ -78,6 +76,8 @@ export class Trasloco {
     /** Il pannello in cui la chat e' stata riportata **senza** cambiarle
      *  conversazione (v. `riportaACasa`), o `null`. */
     this._fuoriPosto = null;
+    /** Fa scadere subito il tetto dell'arrivo in corso, o `null`. */
+    this._scadiTetto = null;
   }
 
   /** La chat arriva in `pannello`, che mostra la conversazione `chiave`.
@@ -91,6 +91,7 @@ export class Trasloco {
     const cambia = this._chiaveAttuale?.() !== chiave;
     if (da === pannello && !cambia) return;
     const mio = ++this._arrivi;
+    this._scadiTetto?.();
 
     /* 1. La pagina che la chat lascia tiene la sua foto — scattata **prima**
           del cambio: dopo, sarebbe la foto della conversazione d'arrivo. */
@@ -135,8 +136,21 @@ export class Trasloco {
 
     /* 4. Via la foto quando la lettura e' finita, o al tetto. Solo se questo
           e' ancora l'ultimo arrivo: un dito veloce fa A → B → A, e il «finito»
-          di B non deve scoprire la chat sotto la foto di A. */
-    await Promise.race([lettura.catch(() => {}), attendi(TETTO_FOTO_MS)]);
+          di B non deve scoprire la chat sotto la foto di A.
+          Il timer del tetto si spegne appena la lettura vince, e scade subito
+          se arriva un arrivo nuovo (qui sopra, e in `riportaACasa`): restava
+          vivo 600 ms per niente a ogni arrivo, e teneva sveglio chi lo
+          aspettava. */
+    let tetto;
+    let scadi;
+    const scaduto = new Promise((r) => {
+      tetto = setTimeout(r, TETTO_FOTO_MS);
+      scadi = () => { clearTimeout(tetto); r(); };
+    });
+    this._scadiTetto = scadi;
+    await Promise.race([lettura.catch(() => {}), scaduto]);
+    clearTimeout(tetto);
+    if (this._scadiTetto === scadi) this._scadiTetto = null;
     if (mio !== this._arrivi) return;
     if (this.chat.parentElement === pannello) togliFoto(pannello);
     this._inFondo?.();
@@ -161,6 +175,7 @@ export class Trasloco {
   riportaACasa(vecchio, casa) {
     if (!this.chat || !casa || this.chat.parentElement !== vecchio) return;
     this._arrivi += 1;  // un arrivo in volo verso `vecchio` non tocca piu' niente
+    this._scadiTetto?.();
     casa.insertBefore(this.chat, fotoIn(casa));
     /* La chat e' a casa ma con la conversazione di prima, sotto la foto di
        casa: il prossimo arrivo lo deve sapere (v. il passo 1 di `arriva`). */
