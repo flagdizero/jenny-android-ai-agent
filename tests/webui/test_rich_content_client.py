@@ -309,9 +309,17 @@ def test_a_library_that_will_not_load_leaves_the_content_readable() -> None:
     sarebbe peggio del diagramma non disegnato."""
     _run("""
 reset(); caricamentoFallisce = true;
+const avvisi = [];
+const warnVero = console.warn;
+console.warn = (msg) => avvisi.push(String(msg));
 const pagina = corpo([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
 await renderRich(pagina, { inlineDollar: true });
+console.warn = warnVero;
 assert.deepEqual(reseFormule, []);
 assert.deepEqual(reseDiagrammi, []);
 assert.equal(pagina.childNodes.length, 2, 'il contenuto e stato smontato');
+// Il fallimento si dice nel log, e i log sono in inglese (AGENTS.md).
+assert.deepEqual(avvisi.sort(), [
+  'rich-content: KaTeX failed to load', 'rich-content: Mermaid failed to load',
+]);
 """)

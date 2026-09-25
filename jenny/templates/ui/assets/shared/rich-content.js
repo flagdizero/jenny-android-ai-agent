@@ -82,7 +82,7 @@ function contieneFormula(testo, dollaro) {
  *  motivo per cui la cosa e' passata inosservata — quindi qui il fallimento si
  *  **dice** nel log, invece di uscire in punta di piedi.
  */
-export async function renderMath(container, { inlineDollar = false } = {}) {
+async function renderMath(container, { inlineDollar = false } = {}) {
   if (!container) return;
   if (!contieneFormula(testoFuoriDalCodice(container), inlineDollar)) return;
   try {
@@ -91,11 +91,11 @@ export async function renderMath(container, { inlineDollar = false } = {}) {
       ensureVendor(KATEX_JS).then(() => ensureVendor(KATEX_AUTO)),
     ]);
   } catch (err) {
-    console.warn('rich-content: KaTeX non caricato', err);
+    console.warn('rich-content: KaTeX failed to load', err);
     return;
   }
   if (typeof renderMathInElement !== 'function') {
-    console.warn('rich-content: KaTeX caricato ma renderMathInElement assente');
+    console.warn('rich-content: KaTeX loaded but renderMathInElement is missing');
     return;
   }
   const delimiters = inlineDollar
@@ -132,7 +132,7 @@ export async function renderDiagrams(container) {
     // chiama deve poter dire che non e' piu' il suo turno (v. `stale`).
     await ensureVendor(MERMAID_JS);
   } catch (err) {
-    console.warn('rich-content: Mermaid non caricato', err);
+    console.warn('rich-content: Mermaid failed to load', err);
     return;
   }
   if (typeof mermaid === 'undefined') return;
