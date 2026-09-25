@@ -160,7 +160,7 @@ export class NotebookPages {
       data = await api.getGraph(notebook);
     } catch (err) {
       if (token !== this._token) return;
-      console.warn('casa.pages: graph failed', err);
+      console.warn('home.pages: graph failed', err);
       /* Le wiki spente sono un 503 e non un guasto: la frase esiste gia', ed e'
          quella che il giro di creazione usa per dire la stessa cosa. */
       const off = /\b503\b/.test(String(err?.message || ''));

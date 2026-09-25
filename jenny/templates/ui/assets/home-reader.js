@@ -212,7 +212,7 @@ export class HomeReader {
     try {
       await rpc.writePage(notebook, path, content, this.raw);
     } catch (err) {
-      console.warn('casa.reader: save failed', err?.code || '(no code)', err);
+      console.warn('home.reader: save failed', err?.code || '(no code)', err);
       if (err?.code === 'conflict') {
         await this._onConflict();
         return;
@@ -261,7 +261,7 @@ export class HomeReader {
       page = await api.getPage({ wiki: notebook, page: path });
     } catch (err) {
       if (token !== this._token) return this.title;
-      console.warn('casa.reader: page failed', err);
+      console.warn('home.reader: page failed', err);
       this._say('home.reader.failed');
       return this.title;
     }
@@ -291,7 +291,7 @@ export class HomeReader {
      l'agente ha scritto. Si mostra il markdown, scappato. */
   _safeHtml(html, raw) {
     if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(html || '');
-    console.warn('casa.reader: DOMPurify missing, falling back to markdown');
+    console.warn('home.reader: DOMPurify missing, falling back to markdown');
     return `<pre class="home-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
 
@@ -329,7 +329,7 @@ export class HomeReader {
       try {
         window.open(target.href, '_blank', 'noopener');
       } catch (err) {
-        console.warn('casa.reader: external link not opened', err);
+        console.warn('home.reader: external link not opened', err);
         showToast(i18n.t('common.linkNotOpenable'), 'error');
       }
       return;

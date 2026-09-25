@@ -178,7 +178,7 @@ export class HomeModel {
       this._apply(payload);
       showToast(i18n.t('home.model.saved'), 'success');
     } catch (err) {
-      console.warn('casa.model: model not changed', err);
+      console.warn('home.model: model not changed', err);
       showToast(i18n.t('home.model.failed'), 'error');
     }
   }
@@ -209,7 +209,7 @@ export class HomeModel {
       this._loadModels(provider);
       showToast(i18n.t('home.model.keySaved'), 'success');
     } catch (err) {
-      console.warn('casa.model: key not saved', err);
+      console.warn('home.model: key not saved', err);
       showToast(err?.message || i18n.t('home.model.failed'), 'error');
     }
   }
@@ -246,7 +246,7 @@ export class HomeModel {
         message: res?.message || '',
       };
     } catch (err) {
-      console.warn('casa.model: model list not read', err);
+      console.warn('home.model: model list not read', err);
       outcome = { status: 'error', models: [], message: '' };
     }
     this._catalogs.set(provider, outcome);

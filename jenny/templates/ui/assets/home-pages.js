@@ -183,7 +183,7 @@ export class HomePages {
     try {
       saved = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
     } catch (err) {
-      console.warn('casa.homePages: pages not saved', err);
+      console.warn('home.homePages: pages not saved', err);
       showToast(i18n.t('home.pages.saveFailed'), 'error');
       return false;
     }

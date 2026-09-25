@@ -153,7 +153,7 @@ export class HomeJenny {
     try {
       await api.updateSettings({ bot_name: name });
     } catch (err) {
-      console.warn('casa.jenny: name not saved', err);
+      console.warn('home.jenny: name not saved', err);
       showToast(i18n.t('home.jenny.nameFailed'), 'error');
       return;
     }
@@ -223,7 +223,7 @@ export class HomeJenny {
       const payload = await api.updateFloating({ enabled });
       if (payload?.floating) this.floating = payload.floating;
     } catch (err) {
-      console.warn('casa.jenny: floating window not updated', err);
+      console.warn('home.jenny: floating window not updated', err);
       this.floating = { ...this.floating, enabled: !enabled };
     }
     this._mark();
@@ -247,7 +247,7 @@ export class HomeJenny {
          quel che c'e' su disco resta `null`, quindi «Salva» non compare e uno
          spazio battuto per sbaglio non puo' cancellare niente. */
       if (err?.status !== 404) {
-        console.warn('casa.jenny: rules not read', err);
+        console.warn('home.jenny: rules not read', err);
         return;
       }
     }
@@ -271,7 +271,7 @@ export class HomeJenny {
     try {
       await rpc.writeSoulRules(text);
     } catch (err) {
-      console.warn('casa.jenny: rules not saved', err);
+      console.warn('home.jenny: rules not saved', err);
       showToast(i18n.t('home.jenny.rulesFailed'), 'error');
       return;
     }

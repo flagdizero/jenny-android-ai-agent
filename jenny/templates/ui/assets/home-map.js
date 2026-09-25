@@ -330,7 +330,7 @@ export class HomeMap {
     try {
       await ensureVendor(D3_SRC);
     } catch (err) {
-      console.warn('casa.map: D3 not loaded', err);
+      console.warn('home.map: D3 not loaded', err);
       if (gen === this._gen) this._say('home.map.failed');
       return;
     }
@@ -518,7 +518,7 @@ export class HomeMap {
         this._pins = {};
         return true;
       }
-      console.warn('casa.map: pin layout unreadable, left untouched', err);
+      console.warn('home.map: pin layout unreadable, left untouched', err);
       return false;
     }
     return true;
@@ -581,7 +581,7 @@ export class HomeMap {
         await api.createWorkspaceFolder('.jenny');
         await rpc.writeWorkspaceFile(PINS_FILE, text);
       } catch (err2) {
-        console.warn('casa.map: pin layout not saved', err2);
+        console.warn('home.map: pin layout not saved', err2);
       }
     }
   }

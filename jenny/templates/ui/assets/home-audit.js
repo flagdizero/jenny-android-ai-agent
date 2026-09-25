@@ -189,7 +189,7 @@ export class HomeAudit {
         comment,
       });
     } catch (err) {
-      console.warn('casa.audit: report not filed', err);
+      console.warn('home.audit: report not filed', err);
       showToast(i18n.t('home.audit.failed'), 'error');
       return;
     }

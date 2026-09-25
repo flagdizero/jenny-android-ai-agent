@@ -782,7 +782,7 @@ class HomeApp {
   _askSettings() {
     if (!this._settings) {
       this._settings = api.getSettings().catch((err) => {
-        console.warn('casa: settings not read', err);
+        console.warn('home: settings not read', err);
         this._settings = null;
         return null;
       });
@@ -1134,7 +1134,7 @@ class HomeApp {
       this.pagesCount.textContent = i18n.t(
         count === 1 ? 'home.notebookPages.countOne' : 'home.notebookPages.countMany', { count },
       );
-    }).catch((err) => console.warn('casa.pages: page count not read', err));
+    }).catch((err) => console.warn('home.pages: page count not read', err));
   }
 
   /* Il turno che stava girando nella conversazione lasciata non si chiudera'
