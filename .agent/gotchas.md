@@ -132,7 +132,7 @@ trailing line, which every reader already skips — and are not atomic-write can
 `jenny/agent/tools/android_web.py` implements `web_search`/`web_fetch` via Chaquopy calling the Kotlin `AgenticSearchBridge` (`android/app/src/main/java/com/flagdizero/jenny/AgenticSearchBridge.kt`), which drives a real hidden WebView to bypass bot detection.
 
 - **Threading**: the Kotlin bridge call is blocking (`CountDownLatch`), so `_bridge_search`/`_bridge_fetch` run it via `asyncio.to_thread` wrapped in `asyncio.wait_for(timeout + 10)`. The extra 10s is an asyncio-level backstop independent of the Kotlin-side timeout, so a stuck WebView can never block the gateway loop.
-- **Remote debugging**: `WebView.setWebContentsDebuggingEnabled(true)` is already enabled unconditionally in `AgenticSearchBridge`'s companion `init`. Connect the emulator/device via adb and open `chrome://inspect/#devices` in desktop Chrome to inspect the hidden WebView.
+- **Remote debugging**: `WebView.setWebContentsDebuggingEnabled(true)` is called by `AgenticSearchBridge.configureWebContentsDebugging()` from the bridge's `init`, and **only when the APK is debuggable** (`ApplicationInfo.FLAG_DEBUGGABLE`) — never on a release build (`tests/security/test_webview_debugging_is_gated.py` pins it). The setter is process-wide: once the bridge exists (the Python side builds it lazily, on the first `web_search`/`web_fetch`), every WebView of a debug build is inspectable — the hidden one and the main WebUI alike. Connect the emulator/device via adb and open `chrome://inspect/#devices` in desktop Chrome.
 - **Timeout config**: default is 30s, configurable via `workspace/config.json` under `androidWeb.search.timeout`. Note `AndroidWebFetchTool` reuses this same `search.timeout` — there is no separate fetch timeout.
 - **CAPTCHA/bot-block detection**: `_looks_like_captcha()` matches known Bing/Google/DuckDuckGo block-page markers and raises a clear error instead of returning garbage. The search engine is hardcoded to Bing (`search_engine != "bing"` raises `ValueError`); adding another engine requires new JS selectors in the Kotlin bridge.
 - **Debug commands**:
@@ -276,11 +276,15 @@ Conseguenze da rispettare:
   proprio riporta il difetto dentro di sé. `.chat-thinking-body`, i pannelli
   `.sa-*` e i `pre` con scroll orizzontale sono il confine dichiarato.
 
-## La WebView principale non è ispezionabile
+## La WebView principale si ispeziona solo in una build di debug
 
-`setWebContentsDebuggingEnabled` è solo sulla WebView della ricerca, e
-`console.log` non arriva a logcat perché `MainActivity` non implementa
-`onConsoleMessage`. Per misurare *dentro* la pagina sul telefono il canale è un
+`setWebContentsDebuggingEnabled` vale per tutto il processo e scatta solo se
+l'APK è debuggable (`FLAG_DEBUGGABLE`), la prima volta che il Python costruisce
+`AgenticSearchBridge` (v. «Remote debugging» sopra): da lì, in una build di
+debug, anche la WebView della WebUI compare in `chrome://inspect`. In una
+release non c'è mai, e `console.log` della WebUI non arriva a logcat perché
+`MainActivity` non implementa `onConsoleMessage` (lo fa solo `HiddenWebView`,
+per la WebView nascosta). Per misurare *dentro* la pagina su una release il canale è un
 overlay `position: fixed` scritto dal codice sotto misura (lo screenshot è il
 log), oppure il JS vero dell'APK nel browser del Mac via `adb forward` e
 `#bs=<token>` (v. la memoria di lavoro). Per un difetto del *motore* conviene
@@ -291,12 +295,14 @@ invece Chrome sul telefono con una pagina di prova: stessa
 
 `providers/opencode.py` tiene una ContextVar con la conversazione in corso, e il
 provider la legge per firmare la richiesta con `x-opencode-session` quando il
-base URL è OpenCode. Chi apre lo scope sono i **tre** percorsi che chiamano il
+base URL è OpenCode. Chi apre lo scope sono i **due** percorsi che chiamano il
 provider: `AgentRunner.run` (il turno, e con lui cron, Dream e heartbeat, che
-arrivano lì col loro `session_key_override`), `Consolidator.archive` e
-`classify_mood`.
+arrivano lì col loro `session_key_override`) e `Consolidator.archive`. Erano
+tre finché l'umore della mascotte lo chiedeva al modello (`classify_mood`):
+oggi si legge dagli emoji della risposta (`session/mascot_mood.py`), senza
+nessuna richiesta.
 
-Una quarta chiamata LLM aggiunta altrove deve aprire il suo
+Una terza chiamata LLM aggiunta altrove deve aprire il suo
 `conversation_scope(session_key)`, altrimenti cade sul ripiego per-istanza. Il
 sintomo non è un errore: è prompt caching mancato — cioè niente, finché qualcuno
 non guarda il conto. È lo stesso difetto su cui questa integrazione si è rotta
