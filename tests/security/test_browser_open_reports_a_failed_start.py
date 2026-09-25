@@ -39,10 +39,25 @@ def test_open_reads_whether_the_page_started() -> None:
     assert "MainHop.call(10_000L, false, TAG)" in body, (
         "il salto sul main thread deve dire se la pagina è partita (fallback false)"
     )
-    assert "if (!started)" in body
+    refusal = "if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED))"
+    assert refusal in body
     before_wait = body.split("awaitSettled(", 1)[0]
-    assert '"error"' in before_wait.split("if (!started)", 1)[1], (
+    assert '"error"' in before_wait.split(refusal, 1)[1], (
         "senza partenza si risponde con un errore prima di aspettare il caricamento"
+    )
+
+
+def test_a_timed_out_open_cannot_load_its_page_later() -> None:
+    """Un tetto scaduto non toglie il blocco dalla coda del main: gira dopo. Se
+    allora caricasse, la pagina partirebbe dopo il «non e' partita» e senza
+    recinto (``scopeDomain`` e' gia' ``null``). Il cancello si prende **prima**
+    di ``loadUrl``, e il «no» lo chiude prima di rispondere: uno dei due soltanto."""
+    body = _open_body()
+    block = body.split("MainHop.call(10_000L, false, TAG)", 1)[1].split("\n        }\n", 1)[0]
+    take = "if (!gate.compareAndSet(GATE_OPEN, GATE_LOADING)) return@call false"
+    assert take in block
+    assert block.index(take) < block.index("loadUrl(url)"), (
+        "il cancello va preso prima di far partire la pagina"
     )
 
 
