@@ -64,7 +64,7 @@ Run this before committing or opening a PR. It's exactly the lint + blocking-typ
 |---|---|
 | `dco` | Verifies every commit in the PR carries a matching `Signed-off-by:` line (`scripts/check_dco.sh`). See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the sign-off requirement — a PR with unsigned commits cannot merge. |
 | `lint` | `ruff check jenny/ tests/`, then the blocking pyright subset, then the non-blocking full-perimeter pyright pass (`\|\| true`). |
-| `test` | `pytest -q`, run twice as a matrix across Python 3.11 and 3.12. Also installs `cryptography`, `asyncssh`, node and jsdom — see below. |
+| `test` | `pytest -q`, run twice as a matrix across Python 3.11 and 3.12. Also installs `cryptography` and `asyncssh` (the encrypted-backup and SSH suites need them on the host, never on Android) and node (the WebUI suites that execute the real JS skip without it, and `tests/webui/test_node_is_available.py` fails instead of skipping when `CI` is set). |
 
 CI validates the Android code path on a plain host runner (installing `jenny` with `pip install -e .`) rather than inside an actual Android build — Android is the only supported runtime target for the shipped app, but the Python side of the codebase is what CI exercises directly.
 

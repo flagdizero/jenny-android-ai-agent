@@ -73,11 +73,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
-      # jsdom non e' una dipendenza del repo (non e' un progetto npm), quindi si
-      # installa qui e si rende risolvibile via NODE_PATH: e' il comando che la
-      # docstring di tests/webui/test_graph_search_contract.py indica. Senza,
-      # quel file — l'unico che copre la maschera di ricerca contro i nodi
-      # davvero disegnati — non gira mai, ne' qui ne' in locale.
+      # jsdom: oggi NESSUNA suite lo richiede. L'unica che lo usava,
+      # tests/webui/test_graph_search_contract.py, guidava `mobile-graph.js`,
+      # uscito con il grafo dell'officina; ora guida `casa-pages.js` su un DOM
+      # finto e le basta node. Queste due righe sono residue e si possono
+      # togliere insieme a questo commento (il guard che ne chiedeva la
+      # presenza in test_node_is_available.py e' gia' stato tolto).
       - run: npm install --no-save jsdom
       - run: echo "NODE_PATH=$PWD/node_modules" >> "$GITHUB_ENV"
       # CI validates the Android code path on a host runner; Android is the only supported runtime target.

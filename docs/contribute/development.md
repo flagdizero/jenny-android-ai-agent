@@ -33,10 +33,9 @@ That is what CI's `test` job installs. The last two are **dev-only and not optio
 - `cryptography` — the encrypted-backup tests. On Android backup crypto uses `javax.crypto` instead, so this must never end up in `requirements-android.txt` / `requirements-android.lock.txt`.
 - `asyncssh` — the desktop SSH backend raises an in-process server for the suite. Without it **eight SSH test modules fail at collection**, which looks like a broken checkout rather than a missing package. On Android the client is jsch through a native bridge, so the same rule applies: never in the Android requirements.
 
-Two more things the suite can want, both optional:
+One more thing the suite can want, optional:
 
-- **node** — about twenty WebUI suites execute the real JS. They *skip* without it, so the suite still goes green while ~200 behaviour tests quietly do not run.
-- **jsdom** — one suite needs a DOM as well (`tests/webui/test_graph_search_contract.py`). The repo is not an npm project, so make it resolvable rather than adding one: `npm install jsdom && NODE_PATH=$PWD/node_modules python -m pytest`.
+- **node** — about twenty WebUI suites execute the real JS. They *skip* without it, so the suite still goes green while ~200 behaviour tests quietly do not run. None of them needs jsdom: the ones that touch the DOM bring a minimal fake of their own.
 
 `android/image_source/gen_icons.py` and `gen_pose_webp.py` additionally need **Pillow**. They regenerate the shipped icon and mascot assets and are not part of a normal build, which is why Pillow is in none of the requirement files.
 
