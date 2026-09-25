@@ -11,8 +11,8 @@ canonici del package, mai dalla copia su disco.
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
+
+from support.gateway_http import make_handler
 
 from jenny.utils.android_assets import read_asset
 from jenny.webui.ws_http import GatewayHTTPHandler
@@ -21,20 +21,7 @@ _AUTH_SECRET = "test-secret"
 
 
 def _make_handler(tmp_path: Path) -> GatewayHTTPHandler:
-    handler = GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret=_AUTH_SECRET,
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=tmp_path / "skills",
-    )
+    handler = make_handler(tmp_path / "skills")
     # Punta la dir servita a un mirror di test scrivibile.
     ui_dir = (tmp_path / "ui").resolve()
     ui_dir.mkdir(parents=True, exist_ok=True)

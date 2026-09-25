@@ -43,20 +43,25 @@ def make_request(
 
 
 def make_handler(skills_workspace_path: Path, **extra: Any) -> GatewayHTTPHandler:
-    """L'handler con la ``config`` minima dei test e i collaboratori finti."""
+    """L'handler con la ``config`` minima dei test e i collaboratori finti.
+
+    *extra* aggiunge collaboratori o **sostituisce** quelli finti: chi vuole il
+    ``WebUIWorkspaceController`` vero passa ``workspaces=...``.
+    """
     config = SimpleNamespace(
         workspace=SimpleNamespace(enabled=True),
         wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
         token_issue_secret=AUTH_SECRET,
         verbose=False,
     )
-    return GatewayHTTPHandler(
-        config=config,
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=skills_workspace_path,
-        **extra,
-    )
+    kwargs: dict[str, Any] = {
+        "config": config,
+        "session_manager": None,
+        "runtime_model_name": lambda: "test-model",
+        "bus": MagicMock(),
+        "media": MagicMock(),
+        "workspaces": MagicMock(),
+        "skills_workspace_path": skills_workspace_path,
+    }
+    kwargs.update(extra)
+    return GatewayHTTPHandler(**kwargs)

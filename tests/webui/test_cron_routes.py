@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from support.gateway_http import AUTH_SECRET, make_handler
-from websockets.http11 import Headers
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.webui.ws_http import GatewayHTTPHandler
@@ -30,10 +28,7 @@ def _make_handler(workspace: Path, *, get_cron_service=None) -> GatewayHTTPHandl
 
 
 def _request(path: str = _PATH, *, token: str | None = AUTH_SECRET) -> WsRequest:
-    if token is None:
-        return WsRequest(path=path, headers=Headers())
-    sep = "&" if "?" in path else "?"
-    return WsRequest(path=f"{path}{sep}token={urllib.parse.quote(token)}", headers=Headers())
+    return make_request(path, token, always_append=True)
 
 
 def _dispatch(handler: GatewayHTTPHandler, path: str = _PATH, *, token=AUTH_SECRET):

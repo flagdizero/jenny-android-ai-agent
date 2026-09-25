@@ -12,11 +12,10 @@ header HTTP): i suoi test sono in ``tests/webui/test_commands.py``.
 from __future__ import annotations
 
 import json
-import urllib.parse
 from pathlib import Path
 
 import pytest
-from websockets.http11 import Headers
+from support.gateway_http import make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret
@@ -29,10 +28,7 @@ _SECRET = "s3cr3t-workspace"
 
 
 def _request(path: str, token: str | None = _SECRET) -> WsRequest:
-    if token is not None and "token=" not in path:
-        sep = "&" if "?" in path else "?"
-        path = f"{path}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path, headers=Headers())
+    return make_request(path, token)
 
 
 @pytest.fixture()

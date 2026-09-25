@@ -18,13 +18,12 @@ import asyncio
 import json
 import sys
 import types
-import urllib.parse
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from websockets.http11 import Headers
+from support.gateway_http import make_request
 from websockets.http11 import Request as WsRequest
 
 from jenny import __version__
@@ -282,10 +281,7 @@ class TestTheLastSuccessfulCheck:
 
 
 def _request(path: str, token: str | None = _SECRET) -> WsRequest:
-    if token is not None and "token=" not in path:
-        sep = "&" if "?" in path else "?"
-        path = f"{path}{sep}token={urllib.parse.quote(token)}"
-    return WsRequest(path=path, headers=Headers())
+    return make_request(path, token)
 
 
 def _router(**overrides: Any) -> WebUISettingsRouter:

@@ -14,10 +14,9 @@ import json
 import struct
 import urllib.parse
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
+from support.gateway_http import make_handler
 from websockets.http11 import Headers
 from websockets.http11 import Request as WsRequest
 
@@ -405,26 +404,12 @@ _AUTH_SECRET = "test-secret"
 def handler(tmp_path: Path, monkeypatch):
     """GatewayHTTPHandler reale su un workspace di tmp_path (v. test_skills_routes)."""
     from jenny.config import paths as paths_mod
-    from jenny.webui.ws_http import GatewayHTTPHandler
 
     workspace = tmp_path / "data" / "workspace"
     workspace.mkdir(parents=True)
     monkeypatch.setattr(paths_mod, "get_workspace_path", lambda: workspace)
 
-    return GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret=_AUTH_SECRET,
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=workspace,
-    )
+    return make_handler(workspace)
 
 
 async def _graph_response(handler, wiki: str | None):

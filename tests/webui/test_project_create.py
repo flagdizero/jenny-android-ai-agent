@@ -19,10 +19,9 @@ import json
 import shutil
 import urllib.parse
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
+from support.gateway_http import make_handler
 from websockets.datastructures import Headers
 from websockets.http11 import Request as WsRequest
 
@@ -365,7 +364,6 @@ class TestIlGateStaSulServer:
 @pytest.fixture
 def handler(workspace: Path, monkeypatch):
     from jenny.config import paths as paths_mod
-    from jenny.webui.ws_http import GatewayHTTPHandler
 
     monkeypatch.setattr(paths_mod, "get_workspace_path", lambda: workspace)
     # Controller vero e non un mock: la route ci legge lo scope da mettere nel
@@ -375,20 +373,7 @@ def handler(workspace: Path, monkeypatch):
         default_workspace=workspace,
         default_restrict_to_workspace=True,
     )
-    return GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret=_AUTH_SECRET,
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=workspaces,
-        skills_workspace_path=workspace,
-    )
+    return make_handler(workspace, workspaces=workspaces)
 
 
 async def _get_projects(handler) -> dict:

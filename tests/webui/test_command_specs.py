@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.gateway_http import make_handler
+
 from jenny.command.specs import BUILTIN_COMMAND_SPECS, SCOPES
 
 _UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
@@ -108,29 +110,12 @@ def _commands_route_response(session_key: str | None):
     """La rotta vera, con le dipendenze minime che tocca."""
     import json
     import urllib.parse
-    from types import SimpleNamespace
-    from unittest.mock import MagicMock
 
     from websockets.http11 import Headers
     from websockets.http11 import Request as WsRequest
 
-    from jenny.webui.ws_http import GatewayHTTPHandler
-
     secret = "test-secret"
-    handler = GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret=secret,
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=Path("/tmp/skills-does-not-matter"),
-    )
+    handler = make_handler(Path("/tmp/skills-does-not-matter"))
     path = "/api/webui/commands"
     if session_key is not None:
         path = f"{path}?key={urllib.parse.quote(session_key)}"

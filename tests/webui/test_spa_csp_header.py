@@ -13,10 +13,9 @@ che cambia comportamento senza che niente lo dica.
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
+from support.gateway_http import make_handler
 
 from jenny.webui.ws_http import GatewayHTTPHandler
 
@@ -24,20 +23,7 @@ _AUTH_SECRET = "test-secret"
 
 
 def _make_handler(tmp_path: Path) -> GatewayHTTPHandler:
-    handler = GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret=_AUTH_SECRET,
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=tmp_path / "skills",
-    )
+    handler = make_handler(tmp_path / "skills")
     ui_dir = (tmp_path / "ui").resolve()
     ui_dir.mkdir(parents=True, exist_ok=True)
     handler.static_dist_path = ui_dir

@@ -10,10 +10,9 @@ pagine, una ``source:`` di provenienza che risale oltre il progetto.
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
+from support.gateway_http import make_handler
 
 from jenny.agent import wiki_provenance
 from jenny.webui.wiki import create_audit
@@ -21,20 +20,7 @@ from jenny.webui.ws_http import GatewayHTTPHandler
 
 
 def _static_handler(tmp_path: Path) -> GatewayHTTPHandler:
-    handler = GatewayHTTPHandler(
-        config=SimpleNamespace(
-            workspace=SimpleNamespace(enabled=True),
-            wiki=SimpleNamespace(enabled=True, wikis_dir="wikis"),
-            token_issue_secret="test-secret",
-            verbose=False,
-        ),
-        session_manager=None,
-        runtime_model_name=lambda: "test-model",
-        bus=MagicMock(),
-        media=MagicMock(),
-        workspaces=MagicMock(),
-        skills_workspace_path=tmp_path / "skills",
-    )
+    handler = make_handler(tmp_path / "skills")
     ui_dir = (tmp_path / "ui").resolve()
     (ui_dir / "assets").mkdir(parents=True, exist_ok=True)
     (ui_dir / "index.html").write_text("<!DOCTYPE html><html></html>", encoding="utf-8")
