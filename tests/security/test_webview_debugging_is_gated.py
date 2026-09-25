@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 import pytest
-from support.kotlin import strip_comments
+from support.kotlin_source import code_only
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ANDROID_SRC = REPO_ROOT / "android/app/src/main/java/com/flagdizero/jenny"
@@ -58,7 +58,7 @@ def test_every_enable_call_sits_behind_the_debuggable_gate() -> None:
     """
     unguarded = []
     for path in _kotlin_sources():
-        code = strip_comments(path.read_text("utf-8"))
+        code = code_only(path.read_text("utf-8"))
         for m in re.finditer(re.escape(ENABLE_CALL), code):
             if GATE not in _enclosing_function(code, m.start()):
                 unguarded.append(path.name)
@@ -76,7 +76,7 @@ def test_the_call_is_still_there_for_debug_builds() -> None:
     cioè misurando l'assenza della feature invece della sua protezione.
     """
     sources = _kotlin_sources()
-    enabling = [p.name for p in sources if ENABLE_CALL in strip_comments(p.read_text("utf-8"))]
+    enabling = [p.name for p in sources if ENABLE_CALL in code_only(p.read_text("utf-8"))]
 
     assert enabling, (
         f"nessun file abilita più {ENABLE_CALL}: se la rimozione è voluta, "

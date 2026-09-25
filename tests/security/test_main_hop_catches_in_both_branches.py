@@ -17,7 +17,16 @@ import re
 from pathlib import Path
 
 import pytest
-from support.kotlin import block_after, strip_comments
+from support.kotlin_source import block_at, code_only
+
+
+def _inner(code: str, start: int) -> str | None:
+    """Il contenuto del blocco che si apre alla prima graffa da *start*."""
+    try:
+        return block_at(code, start)[1:-1]
+    except (ValueError, AssertionError):
+        return None
+
 
 MAIN_HOP = (
     Path(__file__).resolve().parents[2]
@@ -33,10 +42,10 @@ _TRY_BLOCK_CATCH = re.compile(
 def _call_body() -> str:
     if not MAIN_HOP.is_file():
         pytest.skip("sorgente Android non presente in questo checkout")
-    code = strip_comments(MAIN_HOP.read_text(encoding="utf-8"))
+    code = code_only(MAIN_HOP.read_text(encoding="utf-8"))
     m = re.search(r"\bfun\s*<T>\s*call\(", code)
     assert m, "MainHop.call non trovato"
-    body = block_after(code, m.end())
+    body = _inner(code, m.end())
     assert body is not None, "corpo di MainHop.call non trovato"
     return body
 
@@ -45,7 +54,7 @@ def test_the_in_place_branch_catches_and_falls_back() -> None:
     body = _call_body()
     m = re.search(r"if\s*\(\s*Looper\.myLooper\(\)\s*==\s*Looper\.getMainLooper\(\)\s*\)", body)
     assert m, "il ramo sul posto non c'è più"
-    branch = block_after(body, m.end())
+    branch = _inner(body, m.end())
     assert branch is not None, "il ramo sul posto non è più un blocco"
     assert re.search(r"\breturn\s+try\b", branch), "il ramo sul posto non torna l'esito del try"
     caught = _TRY_BLOCK_CATCH.search(branch)
@@ -58,7 +67,7 @@ def test_the_posted_branch_catches_too() -> None:
     body = _call_body()
     m = re.search(r"\.post\s*(?=\{)", body)
     assert m, "il salto sul main Looper non c'è più"
-    posted = block_after(body, m.end())
+    posted = _inner(body, m.end())
     assert posted is not None
     caught = _TRY_BLOCK_CATCH.search(posted)
     assert caught, "il blocco postato esegue block() senza try/catch"
