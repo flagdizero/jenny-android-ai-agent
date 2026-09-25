@@ -88,6 +88,14 @@ export class HomeChat {
     this.buffer = '';
     this.turnId = null;
     this._empty = true;
+    /* Il fotogramma in cui il testo in arrivo verra' ridisegnato, o `null`.
+       Un delta non rende da se': mette in coda un disegno, e i delta dello
+       stesso fotogramma ne pagano uno solo (v. `_delta`). */
+    this._frame = null;
+    /* Vero mentre la storia entra a blocchi (`load`, `prependTurns`): il
+       margine attorno a Jenny si ricalcola una volta alla fine invece che a
+       ogni messaggio (v. `_append`). */
+    this._batching = false;
     /* Il markdown com'e' arrivato, per bolla. Si copia il sorgente e non il
        reso: le recinzioni dei blocchi di codice sono esattamente cio' che
        serve quando una risposta si incolla altrove. `WeakMap` perche' la
@@ -216,11 +224,13 @@ export class HomeChat {
     const { thread, stale } = await sessionManager.loadThread(key, HISTORY_PAGE_SIZE);
     if (stale) return 0;
     const messages = thread?.messages || [];
-    for (const turn of this._buildTurns(messages)) {
-      if (turn.boundary) this._appendBoundary();
-      else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
-      else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs);
-    }
+    this._inBatch(() => {
+      for (const turn of this._buildTurns(messages)) {
+        if (turn.boundary) this._appendBoundary();
+        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
+        else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs);
+      }
+    });
     this.pager.adopt(thread?.page);
     this.scrollToBottom();
     /* Dopo il disegno e dopo l'aggancio al fondo: `ensureReach` misura se il
@@ -237,10 +247,33 @@ export class HomeChat {
    *  sopravvive a `_buildTurns`, cioe' il testo e gli allegati.
    */
   prependTurns(messages) {
-    for (const turn of this._buildTurns(messages).reverse()) {
-      if (turn.boundary) this._appendBoundary(true);
-      else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
-      else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs);
+    this._inBatch(() => {
+      for (const turn of this._buildTurns(messages).reverse()) {
+        if (turn.boundary) this._appendBoundary(true);
+        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
+        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs);
+      }
+    });
+  }
+
+  /** Molti messaggi in fila, e il margine attorno a Jenny ricalcolato **una
+   *  volta**, alla fine.
+   *
+   *  `gap.refresh()` legge il rettangolo di ogni messaggio del filo: chiamato
+   *  a ogni `_append`, una pagina di N turni costava N letture di N
+   *  rettangoli — quadratico, e ogni lettura dopo una scrittura forza il
+   *  layout. Il risultato di una sola misura in fondo e' lo stesso, perche'
+   *  quel che conta e' dove stanno i messaggi quando la pagina e' finita. */
+  _inBatch(fill) {
+    const outer = !this._batching;
+    this._batching = true;
+    try {
+      fill();
+    } finally {
+      if (outer) {
+        this._batching = false;
+        this.gap?.refresh();
+      }
     }
   }
 
@@ -340,8 +373,9 @@ export class HomeChat {
     return true;
   }
 
-  /* Formule e diagrammi **non** si disegnano qui, ed e' l'unico dei quattro
-     punti in cui si scrive markdown a restarne fuori: qui il testo sta ancora
+  /* Formule e diagrammi **non** si disegnano qui (ne' in `_flushDelta`, che
+     scrive quel che qui si accumula), ed e' l'unico dei quattro punti in cui
+     si scrive markdown a restarne fuori: qui il testo sta ancora
      arrivando. Una formula a meta' (`$$E = mc`) non e' una formula, e un
      diagramma a meta' e' un errore di sintassi — mermaid pianterebbe a schermo
      il proprio messaggio in inglese, e lo rifarebbe a ogni pezzetto. Si disegna
@@ -349,13 +383,38 @@ export class HomeChat {
   _delta(text) {
     if (!text) return;
     this.buffer += text;
-    this._ensureBlock().innerHTML = renderMarkdown(this.buffer);
+    this._ensureBlock();
+    this._scheduleRender();
+  }
+
+  /* **Un disegno per fotogramma, non uno per delta.** Ogni resa riparsa il
+     markdown del buffer intero: farla a ogni pezzetto, che arriva ogni poche
+     decine di millisecondi, e' lavoro quadratico nella lunghezza della
+     risposta, sul thread che deve anche scorrere. Come l'officina
+     (`_scheduleFlush`): i delta si accumulano, e il fotogramma dopo li
+     disegna tutti insieme. La resa finale non aspetta — la fa `_streamEnd`. */
+  _scheduleRender() {
+    if (this._frame !== null) return;
+    this._frame = requestAnimationFrame(() => this._flushDelta());
+  }
+
+  _flushDelta() {
+    this._frame = null;
+    if (!this.blockNode || !this.buffer) return;
+    this.blockNode.innerHTML = renderMarkdown(this.buffer);
     this._follow();
+  }
+
+  _cancelRender() {
+    if (this._frame === null) return;
+    cancelAnimationFrame(this._frame);
+    this._frame = null;
   }
 
   /* Regola 1: il testo di `stream_end` e' opzionale, il buffer e' la riserva.
      Regola 3: il blocco si chiude qui, o il segmento dopo gli si incolla. */
   _streamEnd(fullText) {
+    this._cancelRender();
     const finalText = fullText || this.buffer;
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
@@ -481,6 +540,13 @@ export class HomeChat {
    *  un'altra restava senza — cioe' proprio il caso che si voleva separare.
    */
   _resetTurn() {
+    /* Un turno che si chiude senza `stream_end` (lo scavalca un turno nuovo)
+       non deve perdere i delta rimasti in coda per il fotogramma dopo: si
+       disegnano adesso, prima di chiudere la bolla. */
+    if (this._frame !== null) {
+      this._cancelRender();
+      this._flushDelta();
+    }
     if (this.turnNode) {
       const closed = this.turnNode;
       this._tailOf(closed, this._seconds);
@@ -718,8 +784,9 @@ export class HomeChat {
     }
     /* Chi le finisce nell'angolo si scansa. Qui e non nel `_follow()`: quello
        scorre, e il margine va deciso **dopo** che il nodo e' nel filo e prima
-       che l'occhio ci arrivi. */
-    this.gap?.refresh();
+       che l'occhio ci arrivi. Dentro un blocco di storia lo fa `_inBatch`,
+       una volta sola alla fine. */
+    if (!this._batching) this.gap?.refresh();
     return node;
   }
 

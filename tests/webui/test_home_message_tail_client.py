@@ -94,6 +94,7 @@ function makeChat() {
     blockNode: null,
     buffer: '',
     turnId: null,
+    _frame: null,
     syncEmpty() {},
     _follow() {},
     _appendMedia() {},

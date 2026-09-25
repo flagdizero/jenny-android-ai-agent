@@ -43,11 +43,10 @@ RICH = re.compile(r"\brenderRich\w*\(")
 # inglese, e lo rifarebbe a ogni pezzetto. Si disegna a testo finito, che in
 # entrambe le chat e' il punto subito dopo (`_streamEnd` / `_handleStreamEnd`).
 #
-# Sono due perche' le due chat coalizzano in modo diverso: casa riscrive a ogni
-# delta, l'officina una volta per frame dentro un rAF condiviso. Stessa cosa,
-# due nomi.
+# Dal 26/09/2026 tutte e due le chat coalizzano allo stesso modo, una volta per
+# frame dentro un rAF; il metodo che scrive ha solo un nome diverso.
 EXEMPT = {
-    ("home-chat.js", "_delta"),
+    ("home-chat.js", "_flushDelta"),
     ("mobile-chat.js", "_flushRender"),
     # Il ragionamento visibile passa di qui a ogni frame mentre arriva. Il suo
     # momento buono e' `_handleReasoningEnd`, che chiude il segmento e disegna.

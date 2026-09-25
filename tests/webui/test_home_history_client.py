@@ -82,6 +82,7 @@ function makeChat() {
     _stick: true,
     _source: new WeakMap(),
     _seconds: null,
+    _batching: false,
     _follow() {},
     syncEmpty() {},
     scrollToBottom() {},
@@ -96,6 +97,7 @@ function makeChat() {
     },
     __BUILD_TURNS__,
     __PREPEND__,
+    __IN_BATCH__,
     __APPEND_USER__,
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
@@ -126,6 +128,7 @@ def _harness() -> str:
     return (
         _HARNESS.replace("__BUILD_TURNS__", member(src, "_buildTurns"))
         .replace("__PREPEND__", member(src, "prependTurns"))
+        .replace("__IN_BATCH__", member(src, "_inBatch"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
