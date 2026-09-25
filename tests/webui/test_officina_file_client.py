@@ -399,14 +399,25 @@ def test_a_stale_answer_never_overwrites_a_newer_one() -> None:
     """Due tocchi in fretta su due cartelle: vince l'ultimo partito, non
     l'ultimo arrivato. Senza il gettone, una risposta lenta della cartella
     lasciata riempirebbe la griglia di quella aperta."""
+    # Le due risposte si risolvono a mano, **in ordine inverso**: prima quella
+    # della cartella aperta, poi quella della cartella lasciata. Nell'ordine di
+    # partenza il gettone non serviva — l'ultima arrivata era anche la giusta —
+    # e il test passava con la guardia tolta.
     _run_js("""
 const { c } = await apri([voce('a', 'directory'), voce('b', 'directory')]);
+const inAttesa = [];
+api.listWorkspace = (path) => new Promise((ok) => inAttesa.push({ path, ok }));
+c.tessere.length = 0;
 const vecchia = c.navigateTo('a');
-risposta = { items: [voce('dentro-b.md', 'file', 1)], path: 'b' };
 const nuova = c.navigateTo('b');
-await Promise.all([vecchia, nuova]);
-assert.deepEqual(c.tessere.slice(-1), ['file:dentro-b.md'],
+assert.deepEqual(inAttesa.map((r) => r.path), ['a', 'b']);
+inAttesa[1].ok({ items: [voce('dentro-b.md', 'file', 1)], path: 'b' });
+await nuova;
+inAttesa[0].ok({ items: [voce('dentro-a.md', 'file', 1)], path: 'a' });
+await vecchia;
+assert.deepEqual(c.tessere, ['file:dentro-b.md'],
   'la risposta della cartella lasciata ha riempito quella aperta');
+assert.equal(c.currentDir, 'b');
 """)
 
 
