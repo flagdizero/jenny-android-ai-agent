@@ -8,11 +8,14 @@ niente — la mini-app aperta smette solo di aggiornarsi da sola. Lo ha trovato
 un audit sul codice morto, non un test.
 
 Il banco legge i nomi dal lato Python (le forme in cui ``jenny/channels``
-scrive un evento) e chiede che ognuno compaia come stringa nel JS della WebUI,
-commenti esclusi — perché dopo `98a0230` i nomi sopravvivevano proprio nei
-commenti, a descrivere un ascolto che non c'era più. È un controllo largo: un
-nome citato in una stringa qualunque lo soddisfa. Non dimostra che il gestore
-funzioni; dimostra che esiste un posto dove guardare.
+scrive un evento) e chiede che ognuno compaia nel JS della WebUI, commenti
+esclusi — perché dopo `98a0230` i nomi sopravvivevano proprio nei commenti, a
+descrivere un ascolto che non c'era più — **in una forma d'ascolto**:
+``case 'x':`` o ``event === 'x'`` (``!==`` per chi esce presto). Fino al
+25/09/2026 bastava la stringa nuda, e per ``'user'`` ed ``'error'`` — parole
+che compaiono dappertutto, da ``role === 'user'`` a ``showToast(…, 'error')``
+— il gestore poteva sparire lasciando il test verde. Non dimostra che il
+gestore funzioni; dimostra che esiste un posto dove guardare.
 """
 
 from __future__ import annotations
@@ -70,9 +73,26 @@ def test_the_exceptions_are_still_emitted() -> None:
     assert set(SENZA_ASCOLTATORE) <= EMITTED
 
 
+def _ascolto(event: str) -> re.Pattern[str]:
+    """``case 'x':`` o ``…event === 'x'`` / ``!== 'x'``: dove un frame si smista."""
+    q = r"""['"`]"""
+    return re.compile(rf"(?:\bcase\s+|\bevent\s*[!=]==\s*){q}{re.escape(event)}{q}")
+
+
 @pytest.mark.parametrize("event", sorted(EMITTED - set(SENZA_ASCOLTATORE)))
 def test_every_emitted_event_has_a_listener(event: str) -> None:
-    assert re.search(rf"""['"`]{re.escape(event)}['"`]""", UI_JS), (
+    assert _ascolto(event).search(UI_JS), (
         f"il gateway manda `{event}` ma nessun JS della WebUI lo nomina: "
         "o manca il gestore, o l'evento va tolto dal server"
     )
+
+
+def test_a_bare_mention_is_not_a_listener() -> None:
+    """La forma che il banco vecchio accettava, e che non smista niente."""
+    finto = "if (role === 'user') x(); showToast(msg, 'error'); const L = ['delta'];"
+    assert not _ascolto("user").search(finto)
+    assert not _ascolto("error").search(finto)
+    assert not _ascolto("delta").search(finto)
+    assert _ascolto("user").search("switch (msg.event) { case 'user': f(); }")
+    assert _ascolto("error").search("if (msg?.event === 'error') g();")
+    assert _ascolto("goal_status").search("if (msg.event !== \"goal_status\") return;")
