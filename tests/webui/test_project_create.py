@@ -51,7 +51,7 @@ def workspace(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def ctx(workspace: Path) -> CommandContext:
-    return CommandContext(get_workspace_root=lambda: workspace, invalidate_session=lambda _key: None, busy_session_keys=lambda: (), get_cron_service=lambda: None)
+    return CommandContext(get_workspace_root=lambda: workspace, invalidate_session=lambda _key: None, busy_session_keys=lambda: ())
 
 
 async def _create(ctx: CommandContext, **params) -> dict:
@@ -350,7 +350,7 @@ class TestIlGateStaSulServer:
         non un fallimento della creazione."""
         empty = tmp_path / "vuoto"
         empty.mkdir()
-        ctx = CommandContext(get_workspace_root=lambda: empty, invalidate_session=lambda _key: None, busy_session_keys=lambda: (), get_cron_service=lambda: None)
+        ctx = CommandContext(get_workspace_root=lambda: empty, invalidate_session=lambda _key: None, busy_session_keys=lambda: ())
 
         result = await _create(ctx, name="x", seed="y")
 

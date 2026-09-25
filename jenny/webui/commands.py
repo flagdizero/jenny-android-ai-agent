@@ -84,12 +84,6 @@ class CommandContext:
     # chat senza cartella accanto a quella spostata. Obbligatorio per la stessa
     # ragione di ``invalidate_session``.
     busy_session_keys: Callable[[], Collection[str]]
-    # Il servizio cron, o ``None`` se non c'e' ancora (la WebUI e' servita prima
-    # che il container arrivi in fondo). I job creati dentro un quaderno portano
-    # la sua chiave: il rinomino li sposta, la cancellazione li spegne, o al primo
-    # scatto ricreerebbero una chat sotto il nome vecchio. Obbligatorio come i
-    # due sopra.
-    get_cron_service: Callable[[], Any | None]
 
 
 Command = Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -449,8 +443,6 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         await stacca_pagine_di("conversazione", project_session_key(name))
     except Exception:  # noqa: BLE001 — la cancellazione e' gia' riuscita
         logger.opt(exception=True).warning("Page of deleted notebook {} not removed", name)
-    # I suoi job cron si spengono (non si cancellano: il testo resta, col motivo).
-    _follow_cron(ctx, "disable_session_jobs", project_session_key(name))
     return esito
 
 
@@ -509,25 +501,7 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         )
     except Exception:  # noqa: BLE001 — il rinomino e' gia' riuscito
         logger.opt(exception=True).warning("Pages of renamed notebook {} not followed", name)
-    _follow_cron(ctx, "retarget_session", project_session_key(name), project_session_key(new_name))
     return esito
-
-
-def _follow_cron(ctx: CommandContext, method: str, *keys: str) -> None:
-    """Il seguito sui job cron di un quaderno appena rinominato o cancellato.
-
-    **Dopo** l'operazione e fuori dal thread, come le pagine di casa: se non
-    riesce l'operazione resta fatta, e lo dice il log. Senza servizio cron
-    (la WebUI e' servita prima che il container arrivi in fondo) non c'e' nessun
-    job da seguire.
-    """
-    cron = ctx.get_cron_service()
-    if cron is None:
-        return
-    try:
-        getattr(cron, method)(*keys)
-    except Exception:  # noqa: BLE001 — l'operazione sul quaderno e' gia' riuscita
-        logger.opt(exception=True).warning("Cron jobs of {} not updated ({})", keys[0], method)
 
 
 COMMANDS: dict[str, Command] = {

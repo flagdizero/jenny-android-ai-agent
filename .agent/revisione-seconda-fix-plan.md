@@ -194,17 +194,18 @@ quel che l'agente dice.
 - ~~**I job cron di un quaderno cancellato.** Cancellarli insieme al quaderno?
   Disabilitarli?~~ **Disabilitarli**, deciso dall'utente il 25/09/2026 (voce 10). Ma v.
   sotto: la domanda poggiava sul falso positivo della voce 2.
-- **Tenere o togliere `00ab172`?** Spostare e spegnere job che portano la chiave di un
-  quaderno protegge uno stato che dal 22/08/2026 non si può creare (v. voce 2). È codice
-  innocuo e provato, ma è superficie in più (un campo obbligatorio di `CommandContext`, due
-  metodi del servizio). Da decidere con l'utente.
+- ~~**Tenere o togliere `00ab172`?**~~ **Tolto**, deciso dall'utente il 25/09/2026 e
+  rifatto con un revert: spostare e spegnere job che portano la chiave di un quaderno
+  proteggeva uno stato che dal 22/08/2026 non si può creare (v. voce 2), al prezzo di un
+  campo obbligatorio di `CommandContext` e di due metodi del servizio. Se un giorno i
+  quaderni torneranno a poter programmare, il posto dove rimetterlo è quel commit.
 
 ## Esito, voce per voce
 
 | # | Commit | Esito |
 |---|--------|-------|
 | 1+9 | `92d79d5` | Fatto. `AgentLoop.busy_session_keys()` = turni ∪ origini dei subagent vivi ∪ passate del giardiniere; `GatewayContainer._busy_session_keys()` provato. |
-| 2+10 | `00ab172` | Fatto, ma **la voce 2 era un falso positivo**: v. sotto. |
+| 2+10 | `00ab172`, poi revertito | **Falso positivo** (v. sotto); il commit è stato tolto. |
 | 5 | `1789307` | Fatto, con la regola più stretta del previsto: valgono come `*` solo i valori *identici* a un `*/n`. |
 | 3+4 | `1c41a2e` | Fatto. |
 | 6 | `bd6addb` | Fatto. |

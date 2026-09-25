@@ -123,7 +123,6 @@ def build_gateway_services(
                 session_manager.invalidate(key) if session_manager is not None else None
             ),
             busy_session_keys=get_busy_session_keys or (lambda: ()),
-            get_cron_service=get_cron_service or (lambda: None),
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,
