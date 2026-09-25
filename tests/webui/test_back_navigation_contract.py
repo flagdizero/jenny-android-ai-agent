@@ -204,7 +204,7 @@ def test_the_layers_are_dismissed_through_public_entry_points() -> None:
     tastiera da abbassare). La shell parla solo con gli ingressi pubblici."""
     layers = _method(_app(), "_overlayLayers")
     assert "this.jenny?.handleBack()" in layers
-    assert "this.controllers.apps?.handleBack()" in layers
+    assert "this._appsActions?.handleBack()" in layers
     assert "this.drawer.closeAll()" in layers
     assert "_setOut(" not in _app(), "la shell non tocca lo stato interno della mascotte"
 
@@ -212,7 +212,7 @@ def test_the_layers_are_dismissed_through_public_entry_points() -> None:
 def test_the_two_dangerous_collaborators_of_the_chain_still_exist() -> None:
     """Gli anelli che il piano ha deciso di **non** ammutolire.
 
-    ``_overlayLayers`` chiama ``this.controllers.apps?.handleBack()`` e
+    ``_overlayLayers`` chiama ``this._appsActions?.handleBack()`` e
     ``this.jenny?.handleBack()``: l'optional chaining copre l'*oggetto* assente
     (controller non ancora istanziato, mascotte spenta), non il *metodo*. Se un
     domani uno dei due metodi sparisce o viene rinominato, la catena solleva un

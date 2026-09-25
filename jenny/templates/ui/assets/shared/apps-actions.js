@@ -301,22 +301,11 @@ export class AppsActions {
       open.iframe.contentWindow?.postMessage({ type: 'jenny:go-back' }, '*');
       return true;
     }
-    // Back out of the mini-app: reveal the Apps tab underneath. Do not push a
-    // forward history entry (we are going *back*); switchMode is only needed on
-    // the off chance the app was opened from another mode.
+    /* All'ultimo livello l'app si chiude, e sotto c'e' gia' da dove e' stata
+       aperta: il cassetto, una pagina della casa, la vista dell'officina.
+       Qui c'era un `switchMode('apps')` verso la scheda «App», che non esiste
+       piu' (21/09/2026): nell'officina era un «Unknown mode» a ogni Indietro. */
     this.closeApp();
-    /* Col cassetto aperto, l'app è stata lanciata da lì: la destinazione del
-       ritorno è il foglio, non la scheda. Senza questa uscita anticipata lo
-       `switchMode` qui sotto chiuderebbe il foglio (v. MobileApp.switchMode),
-       e una pressione di Indietro smonterebbe due livelli invece di uno —
-       proprio ciò che l'ordine `miniapp` → `launcher` promette di non fare. */
-    const guscio = window.mobileApp;
-    if (guscio?.launcher?.isOpen()) return true;
-    /* In casa le schede non ci sono: l'app si apre dalla pagina App o da una
-       pagina sua, e chiusa lei sotto c'e' gia' quella. `switchMode` e' solo
-       dell'officina, e chiamarlo qui era un TypeError a ogni Indietro. */
-    if (typeof guscio?.switchMode !== 'function') return true;
-    if (guscio.currentMode !== 'apps') guscio.switchMode('apps', false);
     return true;
   }
   _onSubframeError(event) {

@@ -476,8 +476,12 @@ class MobileApp {
         // false e la catena prosegue, che è meglio di una pressione ingoiata.
         name: 'miniapp',
         present: () => !!document.querySelector('.app-frame-overlay'),
-        dismiss: () => this.controllers.apps?.handleBack() ?? false,
-        close: () => { this.controllers.apps?.closeApp(); },
+        /* Le azioni delle app, non un controller: la scheda «App» non esiste
+           piu' e `this.controllers.apps` era sempre undefined, quindi
+           Indietro scavalcava la mini-app aperta. Senza `_appsActions` non si
+           e' mai aperta un'app, e il livello non puo' essere presente. */
+        dismiss: () => this._appsActions?.handleBack() ?? false,
+        close: () => { this._appsActions?.closeApp(); },
       },
       {
         // Il cassetto delle app. Sta *sotto* la mini-app — un'app aperta dal
@@ -657,10 +661,11 @@ class MobileApp {
 
   // Un'app di sistema è stata installata o disinstallata (kind: 'added' |
   // 'removed'). Chiamato da MainActivity, che ascolta i broadcast del
-  // PackageManager. Se né la scheda né il cassetto sono mai stati aperti non
-  // c'è niente da aggiornare: la lista verrà caricata fresca alla prima volta.
+  // PackageManager. Se il cassetto non e' mai stato aperto la sorgente non
+  // esiste e non c'e' niente da aggiornare: la lista verra' caricata fresca
+  // alla prima volta.
   onPackageChanged(kind, packageName) {
-    this.controllers.apps?.onPackageChanged(kind, packageName);
+    this._appsSource?.onPackageChanged(kind, packageName);
   }
 
   /** La sorgente dei dati del cassetto. Pigra: sono due fetch, e quella delle
