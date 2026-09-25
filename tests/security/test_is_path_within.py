@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from jenny.security.workspace_policy import is_path_within
 
 
@@ -55,10 +57,38 @@ def test_a_symlink_loop_is_outside_not_an_exception(tmp_path: Path) -> None:
     root.mkdir()
     (root / "a").symlink_to(root / "b")
     (root / "b").symlink_to(root / "a")
-    # Nessuna eccezione: nel dubbio si sta fuori, o si sta dentro senza
-    # uscire — mai un 500.
-    result = is_path_within(root / "a" / "x", root)
-    assert result in (True, False)
+    # Nessuna eccezione, mai un 500. Il *valore* qui dipende dalla versione:
+    # su 3.13+ ``resolve(strict=False)`` attraversa il loop senza sollevare e il
+    # percorso resta sotto la radice; su 3.11 solleva ``RuntimeError``, e che
+    # quello diventi un no lo fissa il test qui sotto, per ogni versione.
+    assert isinstance(is_path_within(root / "a" / "x", root), bool)
+
+
+@pytest.mark.parametrize("error", [OSError, RuntimeError])
+@pytest.mark.parametrize("which", ["path", "root"])
+def test_a_resolution_error_is_outside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: type[Exception], which: str
+) -> None:
+    """Qualunque errore di ``resolve()`` — del percorso o della radice — è un no.
+
+    ``RuntimeError`` è quello che 3.11 solleva su un loop di symlink,
+    ``OSError`` un permesso negato o un nome troppo lungo: la docstring
+    promette «nel dubbio si sta fuori», e il loop vero sopra non lo prova su
+    tutte le versioni.
+    """
+    root = tmp_path / "wiki"
+    root.mkdir()
+    target = root / "x.md"
+    boom = target if which == "path" else root
+    real_resolve = Path.resolve
+
+    def resolve(self: Path, strict: bool = False) -> Path:
+        if self == boom:
+            raise error("simulato")
+        return real_resolve(self, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    assert is_path_within(target, root) is False
 
 
 def test_garbage_is_outside(tmp_path: Path) -> None:
