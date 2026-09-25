@@ -496,7 +496,7 @@ class ProvidersConfig(Base):
 #:   uscite per decisione dell'utente — «mettere per esteso le impostazioni
 #:   non ha alcun senso» — portandosi via il pezzo piu' fragile della casa, il
 #:   prestito di un elemento del guscio a una pagina. Un ``config.json`` che ne
-#:   ha ancora una non si rompe: v. ``CasaConfig._stanze_uscite``.
+#:   ha ancora una non si rompe: v. ``CasaConfig._pagine_che_si_disegnano``.
 #:
 #: Stanno qui e non solo nel client perche' cosi' la regola vale anche per un
 #: `config.json` scritto a mano: una pagina che il prodotto non sa disegnare
@@ -526,7 +526,7 @@ def ordine_normale(ordine: Any, id_schermate: list[str]) -> list[str]:
     Un ordine vuoto e' l'ordine di chi non ha mai spostato niente.
 
     Tollerante di proposito: qui un errore costa l'intero file (v.
-    :meth:`CasaConfig._stanze_uscite`), e un ordine con un id orfano — una
+    :meth:`CasaConfig._pagine_che_si_disegnano`), e un ordine con un id orfano — una
     pagina appena staccata — e' uno stato normale, non un file rotto. La
     severita' sta nella rotta, che un ordine storto lo rifiuta con un 400.
     """
@@ -623,28 +623,56 @@ class CasaConfig(Base):
 
     @model_validator(mode="before")
     @classmethod
-    def _stanze_uscite(cls, data: Any) -> Any:
-        """Le pagine stanza del 22-23/09/2026 escono in silenzio, non con un errore.
+    def _pagine_che_si_disegnano(cls, data: Any) -> Any:
+        """Una pagina che non si puo' disegnare esce dal file, non se lo porta via.
 
-        **Qui un errore costa l'intero file.** Lo schema rifiuta una specie che
-        non conosce, e il loader davanti a un ``config.json`` che non valida
-        prova il ``.bak`` — che ha la stessa pagina — e poi **parte dai
-        default** (``loader.py::_load_with_recovery``): chi aveva una stanza
-        appesa si ritroverebbe senza provider e senza chiavi, per una pagina.
-        Quindi le stanze si tolgono **prima** della validazione, e solo loro:
-        una specie davvero sconosciuta continua a essere rifiutata, perche' li'
-        l'errore dice una cosa vera.
+        **Qui un errore costa l'intero file.** Il loader davanti a un
+        ``config.json`` che non valida prova il ``.bak`` — che ha la stessa
+        pagina — e poi **parte dai default** (``loader.py::_load_with_recovery``):
+        chi aveva una pagina storta si ritroverebbe senza provider e senza chiavi,
+        per una pagina. E una pagina storta non richiede un file scritto a mano:
+        basta un backup di una versione piu' nuova, con una specie che questa non
+        conosce, ripristinato su questa.
+
+        Quindi le righe si vagliano **prima** della validazione, una per una, con
+        le regole della rotta: esce una specie sconosciuta, un quaderno che non si
+        aprirebbe, una riga a cui manca un campo, un id doppio o riservato, e
+        quel che supera :data:`MAX_SCHERMATE`. La regola che conta resta vera —
+        in casa non entra una pagina che il prodotto non sa disegnare — ma costa
+        la pagina e non il resto. Le stanze del 22-23/09/2026 escono in silenzio
+        (erano pagine vere, e l'uscita e' decisa); tutto il resto con un avviso.
+
+        Chi *scrive* non passa di qui: la rotta valida ogni riga come
+        :class:`SchermataConfig` e rifiuta con un 400.
         """
-        if not isinstance(data, dict):
+        if not isinstance(data, dict) or "schermate" not in data:
             return data
-        schermate = data.get("schermate")
-        if not isinstance(schermate, list):
-            return data
-        rimaste = [
-            s for s in schermate
-            if not (isinstance(s, dict) and s.get("kind") == "stanza")
-        ]
-        if len(rimaste) == len(schermate):
+        grezze = data["schermate"]
+        if not isinstance(grezze, list):
+            logger.warning("casa.schermate non e' un elenco ({!r}): ignorato", grezze)
+            return {**data, "schermate": []}
+        rimaste: list[Any] = []
+        visti: set[str] = set()
+        for riga in grezze:
+            if isinstance(riga, dict) and riga.get("kind") == "stanza":
+                continue
+            try:
+                pagina = (
+                    riga if isinstance(riga, SchermataConfig)
+                    else SchermataConfig.model_validate(riga)
+                )
+            except Exception as exc:  # noqa: BLE001 — qualunque rifiuto costa solo la riga
+                logger.warning("Pagina di casa scartata ({}): {!r}", exc, riga)
+                continue
+            if pagina.id in visti or pagina.id in PAGINE_FISSE:
+                logger.warning("Pagina di casa scartata (id doppio o riservato): {!r}", riga)
+                continue
+            if len(rimaste) >= MAX_SCHERMATE:
+                logger.warning("Pagina di casa scartata (oltre {}): {!r}", MAX_SCHERMATE, riga)
+                continue
+            visti.add(pagina.id)
+            rimaste.append(riga)
+        if len(rimaste) == len(grezze):
             return data
         return {**data, "schermate": rimaste}
 
@@ -665,19 +693,10 @@ class CasaConfig(Base):
         return {**data, "ordine": pulito}
 
     @model_validator(mode="after")
-    def _entro_il_tetto(self) -> "CasaConfig":
-        if len(self.schermate) > MAX_SCHERMATE:
-            raise ValueError(
-                f"troppe pagine: {len(self.schermate)} (il tetto e' {MAX_SCHERMATE})"
-            )
-        visti = [s.id for s in self.schermate]
-        if len(set(visti)) != len(visti):
-            raise ValueError("due pagine con lo stesso id")
-        riservati = sorted(set(visti) & set(PAGINE_FISSE))
-        if riservati:
-            # Come l'id doppio: l'ordine non saprebbe piu' quale delle due e'.
-            raise ValueError(f"id di pagina riservato: {', '.join(riservati)}")
-        self.ordine = ordine_normale(self.ordine, visti)
+    def _ordine_coerente(self) -> "CasaConfig":
+        # Tetto, id doppi e riservati li ha gia' tolti ``_pagine_che_si_disegnano``:
+        # qui resta da mettere d'accordo l'ordine con le pagine rimaste.
+        self.ordine = ordine_normale(self.ordine, [s.id for s in self.schermate])
         return self
 
 

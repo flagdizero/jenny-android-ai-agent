@@ -2,11 +2,11 @@
 a quelle che non esistono piu'.
 
 Le stanze sono state pagine dal 22 al 23/09/2026 e poi sono uscite. Il rischio
-di quell'uscita non e' nel client: e' qui. Lo schema rifiuta una specie che non
-conosce, e il loader davanti a un file che non valida prova il `.bak` e poi
-**parte dai default** — cioe' chi aveva una stanza appesa avrebbe perso
-provider e chiavi per una pagina. Per questo il banco passa dal loader vero e
-non dal solo schema: e' li' che il danno si vedrebbe.
+di quell'uscita non e' nel client: e' qui. Il loader davanti a un file che non
+valida prova il `.bak` e poi **parte dai default** — cioe' chi aveva una pagina
+che lo schema rifiuta (una stanza, una specie di una versione piu' nuova)
+avrebbe perso provider e chiavi per una pagina. Per questo il banco passa dal
+loader vero e non dal solo schema: e' li' che il danno si vedrebbe.
 """
 
 from __future__ import annotations
@@ -72,15 +72,54 @@ def test_a_file_with_a_room_page_loads_whole_minus_that_page(tmp_path) -> None:
     ]
 
 
-def test_an_unknown_kind_is_still_refused() -> None:
-    """La migrazione toglie le stanze e **solo** loro.
+def test_an_unknown_kind_leaves_the_file_not_the_file_leaves() -> None:
+    """Una specie che questa versione non conosce non entra in casa — ma costa la
+    pagina, non il file.
 
-    Una specie che nessuna versione ha mai avuto e' un errore vero, e deve
-    restare un errore: e' quel che impedisce a un `config.json` scritto a mano
-    di mettere in casa una pagina che il prodotto non sa disegnare.
+    Fino al 25/09/2026 era un errore, e un errore qui vuol dire provider e chiavi
+    persi: bastava ripristinare il backup di una versione piu' nuova, con una
+    specie in piu'. La regola che conta — in casa non entra una pagina che il
+    prodotto non sa disegnare — resta vera.
     """
-    with pytest.raises(ValueError):
-        CasaConfig(schermate=[{"id": "p1", "kind": "cassetto", "ref": "x"}])
+    casa = CasaConfig(schermate=[
+        {"id": "p1", "kind": "cassetto", "ref": "x"},
+        {"id": "p2", "kind": "app", "ref": "orto"},
+    ])
+    assert [s.id for s in casa.schermate] == ["p2"]
+
+
+@pytest.mark.parametrize("storta", [
+    {"id": "p9", "kind": "widget", "ref": "meteo"},              # una specie di domani
+    {"id": "p9", "kind": "conversazione", "ref": "project:a b"},  # un quaderno che non si apre
+    {"id": "p9", "kind": "app"},                                   # manca un campo
+    "p9",                                                          # non e' nemmeno una riga
+])
+def test_a_page_that_cannot_be_drawn_does_not_cost_the_file(tmp_path, storta) -> None:
+    """Dal loader vero, perche' e' li' che il danno si vedrebbe."""
+    _reset_recovery_flags()
+    percorso = tmp_path / "config.json"
+    percorso.write_text(json.dumps({
+        "providers": {
+            "providers": [{"name": "deepseek", "format": "openai_compat", "apiKey": "sk-keep-me"}],
+            "default": "deepseek",
+        },
+        "casa": {"schermate": [{"id": "p1", "kind": "app", "ref": "orto"}, storta]},
+    }), encoding="utf-8")
+
+    config = load_config(percorso)
+
+    assert get_runtime_context().config_recovered_from is None
+    assert [p.api_key for p in config.providers.providers] == ["sk-keep-me"]
+    assert [s.id for s in config.casa.schermate] == ["p1"]
+
+
+def test_too_many_and_duplicate_pages_are_trimmed_not_refused() -> None:
+    """Il tetto e gli id restano regole, ma sul file si applicano togliendo."""
+    righe = [{"id": f"p{i}", "kind": "app", "ref": f"a{i}"} for i in range(12)]
+    righe.insert(1, {"id": "p0", "kind": "app", "ref": "doppione"})
+    casa = CasaConfig(schermate=righe)
+    assert [s.id for s in casa.schermate] == [f"p{i}" for i in range(8)]
+    assert casa.schermate[0].ref == "a0", "vince la prima delle due con lo stesso id"
 
 
 def test_a_room_can_no_longer_be_saved() -> None:
@@ -169,9 +208,10 @@ def test_junk_in_place_of_the_order_is_the_default() -> None:
 
 
 def test_a_page_cannot_take_a_fixed_page_id() -> None:
-    """L'ordine non saprebbe piu' quale delle due e' — come un id doppio."""
-    with pytest.raises(ValueError):
-        CasaConfig(schermate=[{"id": "chat", "kind": "app", "ref": "todo"}])
+    """L'ordine non saprebbe piu' quale delle due e' — come un id doppio: esce."""
+    casa = CasaConfig(schermate=[{"id": "chat", "kind": "app", "ref": "todo"}, TODO])
+    assert [s.id for s in casa.schermate] == ["p1"]
+    assert casa.ordine.count("chat") == 1
 
 
 def test_a_file_from_before_the_order_loads_with_its_pages_after_the_chat(tmp_path) -> None:
