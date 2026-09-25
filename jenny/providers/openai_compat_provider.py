@@ -647,23 +647,23 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
         *,
         partial_content: str | None = None,
     ) -> LLMResponse:
+        # Il corpo si legge **una volta**, con la lettura protetta della base, e
+        # lo stesso valore va ai metadati: prima qui c'era una seconda lettura a
+        # mano, in un altro ordine (``doc`` prima di ``body``).
+        payload = LLMProvider._error_payload(e)
         if isinstance(e, ProviderHTTPError):
             # Il suo messaggio nomina già status, URL e un estratto del corpo, che
             # è più di quanto direbbe il solo corpo: non va riscritto.
             msg = f"Error calling LLM: {describe_exc(e)}"
         else:
-            try:
-                body = (
-                    getattr(e, "doc", None)
-                    or getattr(e, "body", None)
-                    or getattr(getattr(e, "response", None), "text", None)
-                )
-            except Exception:
-                body = None
-            body_text = body if isinstance(body, str) else str(body) if body is not None else ""
+            body_text = (
+                payload if isinstance(payload, str)
+                else str(payload) if payload is not None
+                else ""
+            )
             msg = f"Error: {body_text.strip()[:500]}" if body_text.strip() else f"Error calling LLM: {describe_exc(e)}"
 
-        metadata = LLMProvider._error_metadata(e)
+        metadata = LLMProvider._error_metadata(e, payload=payload)
         retry_after = metadata["error_retry_after_s"]
         if retry_after is None:
             retry_after = LLMProvider._extract_retry_after(msg)
