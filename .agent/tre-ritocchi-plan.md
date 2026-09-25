@@ -11,8 +11,8 @@ app todo sul telefono, scelte dall'utente fra quelle veloci:
 
 Ordine di lavoro: **1 → 2 → 3**, un commit per voce, build e install sul Titan 2
 dopo ciascuna (v. memoria «installa senza chiedere»). **Attenzione: oggi al Mac
-sono attaccati due device** (`TITAN20000002704` e `R3CT60QXVYF`): ogni `adb` e
-l'install vanno col seriale (`ANDROID_SERIAL=TITAN20000002704`).
+sono attaccati due device** (il telefono di prova e un secondo dispositivo): ogni `adb` e
+l'install vanno col seriale (`ANDROID_SERIAL=<seriale del telefono di prova>`).
 
 ## Le decisioni
 

@@ -84,18 +84,18 @@ sotto, cambia conversazione, e quando ha finito di leggere la foto se ne va.
 
 ### La sequenza di un arrivo
 
-Sei sulla pagina 0 (personale), scorri verso la pagina 2 (quaderno «piante»).
+Sei sulla pagina 0 (personale), scorri verso la pagina 2 (quaderno «quaderno-b»).
 
-1. **Durante il trascinamento** entra la foto di «piante», esce la chat vera.
+1. **Durante il trascinamento** entra la foto di «quaderno-b», esce la chat vera.
    Due chat affiancate: l'effettino c'è già, e non costa niente.
 2. **Al rilascio confermato**, *subito* e non a fine animazione:
    a. si fotografa la chat vera (personale) e la foto va nella pagina 0;
-   b. la chat vera si sposta nella pagina 2, **sotto** la foto di «piante»
+   b. la chat vera si sposta nella pagina 2, **sotto** la foto di «quaderno-b»
       (che le resta sopra, in `position: absolute`);
-   c. `switchConversation('project:piante')` — la lettura di rete parte mentre
+   c. `switchConversation('project:quaderno-b')` — la lettura di rete parte mentre
       la pista sta ancora scorrendo (220 ms guadagnati).
 3. **Quando la lettura finisce** (o dopo un tetto, ~600 ms, se la rete tarda):
-   la foto di «piante» se ne va e sotto c'è la chat vera, già piena.
+   la foto di «quaderno-b» se ne va e sotto c'è la chat vera, già piena.
 4. **Tornando indietro** è lo stesso giro al contrario: la foto personale era
    già nella pagina 0 dal passo 2a.
 
@@ -153,7 +153,7 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
 - `nomeDi` (`:609`): il nome del quaderno, non la chiave (`projectNameOf`).
 - Banco: l'elenco viene dalla fonte finta *dopo un giro* (la lezione di «non
   hai Jenny App»); un `unopenable` non compare; uno già fissato non compare;
-  aggiungere scrive `{kind: 'conversazione', ref: 'project:piante'}`.
+  aggiungere scrive `{kind: 'conversazione', ref: 'project:quaderno-b'}`.
 
 ### C3 — La chat si sposta tutta intera
 
@@ -182,7 +182,7 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
     `ref`; tornare alla pagina 0 rimette `_conversazioneCasa`; attraversare
     un'app non cambia niente;
   - la foto si prende **prima** del cambio (mutazione: dopo → la foto della
-    pagina 0 mostrerebbe «piante»);
+    pagina 0 mostrerebbe «quaderno-b»);
   - la foto non ha id (mutazione: clonare senza pulire → `getElementById`
     restituisce la copia inerte);
   - la foto se ne va quando la lettura finisce, **e** dopo il tetto se la
@@ -285,7 +285,7 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
   - l'intestazione sulla pagina è quella di una chat (occhiello, nome, «31
     pages»), senza «Torna alla chat» e senza chevron;
   - **a metà trascinamento** dall'app verso il quaderno entra la foto di
-    «piante» coi suoi messaggi, mentre la chat vera era sulla pagina 0 con la
+    «quaderno-b» coi suoi messaggi, mentre la chat vera era sulla pagina 0 con la
     personale; all'arrivo foto e chat vera hanno gli stessi messaggi negli
     stessi punti — il passaggio non si vede;
   - Indietro e Home dalla pagina del quaderno → pagina 0, personale;
@@ -295,7 +295,7 @@ Ogni passo si chiude col suo banco, provato rosso mutando il codice che difende.
     salvato prima.
 
 **Trovato sul telefono, non nel piano:** in un quaderno con una parola che non
-va a capo (`entities/Pothos.md`) **tutte** le pagine si allargavano oltre lo
+va a capo (`entities/Pagina-di-prova.md`) **tutte** le pagine si allargavano oltre lo
 schermo, tasto d'invio compreso — anche aprendo il quaderno dal titolo della
 pagina 0, quindi non era il trasloco. La pista, elemento flessibile della
 vetrina, non aveva `min-width: 0`: la sua larghezza minima era quella del
@@ -318,8 +318,8 @@ difende.
 
 **Secondo giro sul telefono (23/09/2026, notte):**
 
-- **Un messaggio vero** dalla pagina di nomadismo, con permesso dell'utente
-  («prova»): è finito in nomadismo, Jenny ha risposto lì («ok»), niente nella
+- **Un messaggio vero** dalla pagina di quaderno-c, con permesso dell'utente
+  («prova»): è finito in quaderno-c, Jenny ha risposto lì («ok»), niente nella
   personale; scorrendo via a metà risposta e tornando la risposta c'era.
 - **La foto fuori posto** (`9bcea5c`): sulla pagina del quaderno si aggiunge una
   pagina, si torna indietro, e a metà trascinamento la pagina 0 entra con **la
@@ -329,7 +329,7 @@ difende.
   poi il foglio di Telecomando. Rifatti uno per uno non è più successo. Il
   difetto vero che ne è uscito — Indietro chiude il cassetto sotto e lascia il
   foglio dell'app sopra — è fuori da questo piano, e ha il suo compito a parte.
-- Non spiegato: all'inizio del giro la pagina 0 mostrava nomadismo con
+- Non spiegato: all'inizio del giro la pagina 0 mostrava quaderno-c con
   `conversazioneCasa` evidentemente personale. Il percorso più probabile
-  (nomadismo dal titolo della pagina 0 → pagina del quaderno → Indietro) si
+  (quaderno-c dal titolo della pagina 0 → pagina del quaderno → Indietro) si
   comporta come deve.

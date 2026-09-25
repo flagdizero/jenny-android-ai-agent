@@ -223,19 +223,20 @@ Contato nel workspace vero, col telefono attaccato:
 | | quanti |
 |---|---|
 | pagine con un diagramma mermaid | **22** |
-| pagine con una formula `$$` | **3** (tutte in `etf-finance`) |
+| pagine con una formula `$$` | **3** (tutte in `quaderno-a1`) |
 
 I 22 diagrammi chiudono la domanda: non era una funzione da valutare, era
 contenuto gia' scritto che si vedeva come sorgente.
 
 ## L'ironia che conferma la scelta del dollaro
 
-Le uniche formule stanno nel quaderno di **finanza** — cioe' l'unico posto dove
-`$` vuol dire anche dollari. Guardato dentro `risk-management.md`:
+Le uniche formule stanno in un quaderno che parla anche di prezzi — cioe'
+proprio dove `$` potrebbe voler dire dollari. Guardato dentro una sua pagina
+(qui con una formula di esempio, della stessa forma):
 
 ```
-$$S = \frac{R_p - R_f}{\sigma_p}$$
-Where $R_p$ = portfolio return, $R_f$ = risk-free rate, $\sigma_p$ = volatility.
+$$v = \frac{d}{t}$$
+Where $v$ = speed, $d$ = distance, $t$ = time.
 ```
 
 Formule a blocco, formule in riga col dollaro singolo, e **nessun prezzo scritto
@@ -245,10 +246,10 @@ veri, non solo sull'ipotesi.
 
 ## Cosa si e' visto a schermo
 
-- **Diagramma** (`etf-finance` → Asset Classes): flowchart disegnato, tema
+- **Diagramma** (`quaderno-a1` → una pagina con un flowchart): flowchart disegnato, tema
   scuro, ci sta in larghezza senza scorrere. Non serve toccare lo stile.
-- **Formula a blocco** (Risk Management): frazione vera, tipografia KaTeX.
-- **Formule in riga** nella stessa pagina: `R_p`, `R_f`, `σ_p` dentro la frase.
+- **Formula a blocco** (la pagina di prima): frazione vera, tipografia KaTeX.
+- **Formule in riga** nella stessa pagina: `v`, `d`, `t` dentro la frase.
 - **Le percentuali accanto** («50%», «100%») intatte: nessun falso positivo.
 
 ## E la mappa non e' rotta

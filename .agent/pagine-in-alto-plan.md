@@ -1,7 +1,7 @@
 # Le pagine in alto
 
 Piano del 23/09/2026. Segue `pagine-dal-posto-plan.md`. Mockup:
-https://claude.ai/artifact/GL3CdWwskXzi57gkRagPTb (pagina «Quattro pagine»).
+un mockup fuori dal repo (pagina «Quattro pagine»), descritto qui sotto.
 
 ## Checklist
 
@@ -31,7 +31,7 @@ Oggi la casa ha tre porte nascoste e un indicatore che non si capisce:
 - il bottone del cassetto nella barra dove scrivi;
 - i pallini in basso, che sul Titan 2 (590×566) si prendono 26 px di altezza su ogni pagina.
 
-L'utente ha scelto una sola struttura (mockup: https://claude.ai/artifact/GL3CdWwskXzi57gkRagPTb, pagina «Quattro pagine»):
+L'utente ha scelto una sola struttura (un mockup fuori dal repo, pagina «Quattro pagine»; quel che conta e' scritto qui):
 
 - **L'intestazione è la fila dei nomi delle pagine.** Quella dove sei è grande, in serif; le altre sono piccole, maiuscole e spaziate. Un tocco su un nome ti porta lì, e il gesto di lato resta.
 - **Quattro pagine di base: App · Jenny · Quaderni · Impostazioni.** App è il cassetto, Quaderni è la tendina, Impostazioni è «Tu e Jenny». Si parte da Jenny.
@@ -185,7 +185,7 @@ Da riusare: `shared/longpress.js`, `shared/gesto-orizzontale.js` (il gesto non c
   - Indietro della modalità ordina che non salva.
 - **Il giro sul Titan**, in un worktree pulito:
   - build: `keystore.properties` copiato, `ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:assembleRelease`, grep di `[jenny] WARNING`, `apksigner verify`;
-  - install: `ANDROID_SERIAL=TITAN20000002704 adb install -r`, poi confronto di `lastUpdateTime`; si installa senza chiedere;
+  - install: `ANDROID_SERIAL=<seriale del telefono di prova> adb install -r`, poi confronto di `lastUpdateTime`; si installa senza chiedere;
   - screenshot catturati sul telefono e poi `adb pull`.
 - **Cosa provare col dito** (`adb shell input`, pressione lunga con `swipe x y x y 800`):
   - si parte su Jenny, e la fila mostra `APP · Jenny · TODO · QUADERNI · IMPOSTAZIONI`, cioè la migrazione del `[todo]` reale;
@@ -219,7 +219,7 @@ nomi delle app nella fila.
   Indietro svuota la ricerca, poi riporta a Jenny. Pressione lunga su un'app →
   la scheda di sempre, con «Remove from pages» / «Add as a page». «Open» apre
   l'app a tutto schermo e **Indietro la chiude** — prima era un TypeError.
-- Pagina Quaderni: tocco su «piante» → Jenny col nome del quaderno e il suo
+- Pagina Quaderni: tocco su «quaderno-b» → Jenny col nome del quaderno e il suo
   pallino nella fila, e la pastiglia «31 pages» nella barra; le pagine wiki si
   aprono da li'; Indietro rifa' la strada una stanza per volta.
 - Pagina Impostazioni: una sottostanza (Updates) torna su Impostazioni, e da

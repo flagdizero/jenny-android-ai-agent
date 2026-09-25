@@ -167,7 +167,7 @@ erano stati proposti per 0.3 e 0.4 sono stati ritirati il 24/09).
 release costruita e installata alle 21:05, la casa si apre e il gateway non
 logga errori. **0.4 provato sul telefono** il 24/09 alle 21:15, col permesso
 dell'utente: promemoria one-shot creato chiedendolo a Jenny via WS; lo schermo
-non si poteva spegnere (PIN), quindi Jenny è andata in background portando
+non si poteva spegnere per la prova, quindi Jenny è andata in background portando
 davanti le Impostazioni di sistema; l'avviso è stato pubblicato (21:15:03,
 `Notification(channel=jenny_alerts` = 1), Home ha riportato davanti la casa
 sulla chat personale, e alle 21:15:15 gli avvisi erano 0. **Resta la prova di

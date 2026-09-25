@@ -295,17 +295,17 @@ Quattro commit, e la prova sul telefono.
 
 ### Il giro intero, misurato sul telefono
 
-Su `piante/entities/Pothos.md`, con la pagina rimasta **bit per bit quella di
+Su `quaderno-b/entities/Pagina-di-prova.md`, con la pagina rimasta **bit per bit quella di
 prima** (md5 identico prima e dopo) e la segnalazione di prova cancellata a
 fine giro:
 
 - il foglio non ha più il menù della gravità: citazione, commento, Annulla e
   Invia;
 - confermata, **si atterra nella chat del quaderno** con il messaggio già
-  partito — «In "Pothos", where it says "coltivato": … (report
+  partito — «In "Pagina di prova", where it says "esempio": … (report
   20260922-141128-37f6)»;
-- il file nasce in `wikis/piante/audit/` **senza `severity`**, con l'ancora
-  giusta (`anchor_text: coltivato`, riga 14);
+- il file nasce in `wikis/quaderno-b/audit/` **senza `severity`**, con l'ancora
+  giusta (`anchor_text: esempio`, riga 14);
 - il linter della skill lo accetta: «audit/ shape OK», «All open-audit targets
   exist»;
 - `audit_review.py` lo stampa senza la colonna della gravità;

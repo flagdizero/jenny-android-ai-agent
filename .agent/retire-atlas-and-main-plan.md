@@ -90,7 +90,7 @@ fuga che il confine dei progetti chiude (clash 3 in `roadmap/project-sessions.md
 Your wikis live under `wikis/`. Open `wikis/<name>/wiki/index.md` before answering
 about one of these subjects; to find out whether something is recorded anywhere,
 grep `wikis/`.
-- **erbario** — piante di casa e irrigazione → wikis/erbario/wiki/index.md
+- **quaderno-x** — un quaderno di prova → wikis/quaderno-x/wiki/index.md
 - **orto** — (no scope set) → wikis/orto/wiki/index.md
 ```
 
@@ -402,6 +402,6 @@ che chiede la memoria**.
   vanno in una sessione fresca, e questa installazione ha un provider solo.
 - **Il richiamo spontaneo** nei turni non guidati: non misurato, come previsto.
 - **I dati.** Mentre il codice finiva, l'utente ha gia' cominciato lo smontaggio
-  dal telefono: `nomadismo`, `piante`, `produttivita`, `travel-wiki` esistono con
-  il loro `summary:`, e `wikis/main` non c'e' piu'. Le quattro `(no scope set)`
-  (adhd, allergie, etf-finance, patreon-creator) sono ancora da riempire.
+  dal telefono: `quaderno-c`, `quaderno-b`, `quaderno-d`, `quaderno-e` esistono con
+  il loro `summary:`, e `wikis/main` non c'e' piu'. Le altre quattro, ancora `(no scope set)`,
+  sono da riempire.

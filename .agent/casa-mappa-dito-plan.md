@@ -65,7 +65,7 @@ davvero, non il repo — `_inquadrataDaTe` compare 4 volte in
 prima», e' «com'e' adesso».
 
 **La mappa si disegna.** Nessuna delle tre uscite anticipate: quaderno
-«etf-finance», 21 pagine, fili in abbondanza, nomi sui nodi piu' collegati.
+«quaderno-a1», 21 pagine, fili in abbondanza, nomi sui nodi piu' collegati.
 Quindi l'ipotesi `noLinks` cade, e il sospetto principale era quello giusto.
 
 Le tre meta' dell'invariante, ognuna con la sua misura:
@@ -220,7 +220,7 @@ aprono** — dieci.
 pulito su `9924828`, firmata (`CN=flagDiZero`), installata alle 20:36:30, e il JS
 nuovo confermato *sul telefono* (`clickDistance` due volte in
 `files/workspace/ui/assets/casa-map.js`, riestratto alle 20:36:31). Quaderno
-«travel-wiki», tre pagine tutte collegate — tre bersagli chiari.
+«quaderno-e», tre pagine tutte collegate — tre bersagli chiari.
 
 | prova | atteso | misurato |
 |---|---|---|
@@ -294,7 +294,7 @@ nuovo confermato sul telefono.
 | prova | misurato |
 |---|---|
 | il tetto morde ancora? | no: **15 nomi** dove prima erano 8 |
-| trascino un pallino → il file | `{"etf-finance":{"wiki/index.md":[166,301]}}`, 43 byte |
+| trascino un pallino → il file | `{"quaderno-a1":{"wiki/index.md":[166,301]}}`, 43 byte |
 | esco dal quaderno e rientro (rilettura del grafo, `_render` da capo) | il pallino è dove l'ho messo |
 | **`am force-stop` e riapro** | la mappa è **identica pixel per pixel** a prima del kill (differenza 0,0) |
 
@@ -346,6 +346,6 @@ il telefono in mano nello stesso quarto d'ora.
 
 **E per fare quella prova ho cancellato il suo file**, che è una cosa da
 copiare *prima*, non da rimpiangere dopo. Rimesso identico — 12 ancore di
-`etf-finance` più la Monstera di `piante` — con etichetta SELinux uguale a
+`quaderno-a1` più una di `quaderno-b` — con etichetta SELinux uguale a
 quella di `config.json`, e verificato che l'app lo rilegga e la mappa torni su
 disposta.

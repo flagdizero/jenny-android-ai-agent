@@ -14,7 +14,7 @@ base della selezione al tocco di un manico, senza passare da Jenny.
 ## Come si usa
 
 ```bash
-export ANDROID_SERIAL=TITAN20000002704
+export ANDROID_SERIAL="${ANDROID_SERIAL:?il seriale del telefono di prova, da adb devices -l}"
 python3 -m http.server 8099 --bind 127.0.0.1 --directory .agent/selection-rig &
 adb reverse tcp:8099 tcp:8099
 adb shell am start -a android.intent.action.VIEW -d http://localhost:8099/a-inner-scroller.html com.android.chrome

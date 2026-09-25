@@ -352,7 +352,7 @@ uscito.
 - [x] Manifesto `android_assets.py` e file su disco coincidono: 178 voci, zero
       sbilanci in entrambi i versi.
 - [x] Chiavi i18n: `it.json` e `en.json` pari, nessuna chiave nuova orfana.
-- [x] **La prova col pollice, fatta il 22/09** su `piante/entities/Pothos.md`,
+- [x] **La prova col pollice, fatta il 22/09** su `quaderno-b/entities/Pagina-di-prova.md`,
       con la pagina rimessa a posto alla fine (md5 identico, etichetta SELinux
       invariata) e l'audit di prova cancellato:
 
@@ -364,8 +364,8 @@ uscito.
         nell'editor;
       - esco con modifiche non salvate: chiede conferma (dall'Indietro del
         telefono), e un «no» tiene tutto;
-      - seleziono, segnalo: il file nasce in `wikis/piante/audit/` con l'ancora
-        giusta (`anchor_text: coltivato`, riga 14) e la gravita' scelta col
+      - seleziono, segnalo: il file nasce in `wikis/quaderno-b/audit/` con l'ancora
+        giusta (`anchor_text: esempio`, riga 14) e la gravita' scelta col
         chip. **Il linter della skill lo accetta**: «audit/ shape OK»,
         «All open-audit targets exist»;
       - seleziono un testo che compare due volte (`Epipremnum`): lo dice invece

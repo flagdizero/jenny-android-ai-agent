@@ -13,7 +13,7 @@ ruff check jenny/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime je
 Telefono (albero pulito, release firmata, come nel primo piano):
 
 ```bash
-export ANDROID_SERIAL=TITAN20000002704 ANDROID_HOME=$HOME/Library/Android/sdk
+export ANDROID_SERIAL="${ANDROID_SERIAL:?il seriale del telefono di prova, da adb devices -l}" ANDROID_HOME=$HOME/Library/Android/sdk
 (cd android && ./gradlew app:assembleRelease) && adb install -r android/app/build/outputs/apk/release/app-release.apk
 ```
 

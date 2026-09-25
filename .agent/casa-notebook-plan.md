@@ -18,8 +18,8 @@ Da dire prima del rilievo, perché decide il tono di tutto il resto. Una
 sessione `project:` non è la conversazione personale guardata attraverso un
 filtro:
 
-- la radice di lavoro è la cartella del quaderno — `project:piante` →
-  `<workspace>/wikis/piante` (`jenny/security/workspace_access.py:250`), non
+- la radice di lavoro è la cartella del quaderno — `project:quaderno-b` →
+  `<workspace>/wikis/quaderno-b` (`jenny/security/workspace_access.py:250`), non
   l'installazione intera;
 - il contesto che Jenny si costruisce è un altro (`jenny/agent/context.py:615`);
 - **non alimenta la memoria di lungo periodo.** È la ragione per cui esiste una
@@ -65,8 +65,8 @@ normale.
 **4. Il titolo è la fonte del nome personale.** Il pannello legge il nome dalla
 sua intestazione apposta, perché i due non possano dirne due diversi:
 `personalName: () => document.querySelector('.casa-who-name')?.textContent`
-(`casa-app.js:63`). Se il titolo diventa «piante», la riga personale del
-pannello dirà «piante». Il nome personale deve essere messo da parte al primo
+(`casa-app.js:63`). Se il titolo diventa «quaderno-b», la riga personale del
+pannello dirà «quaderno-b». Il nome personale deve essere messo da parte al primo
 avvio, prima che il titolo cominci a cambiare.
 
 **5. Il gateway sa già dire di no, e dice bene.** Un `chat_id` nella forma
@@ -102,7 +102,7 @@ L'intestazione della tavola `ChatQuaderno.dc.html`, ridotta a ciò che esiste:
 
 ```
  quaderno                                    ← occhiello (casa.kicker)
- ● piante  ⌄                                 ← pallino + nome + chevron
+ ● quaderno-b  ⌄                                 ← pallino + nome + chevron
 ```
 
 Il pallino è quello del pannello, stesso `dotColor(name)`: è l'unica cosa che
@@ -155,7 +155,7 @@ quaderno, l'invito del campo, il vuoto di un quaderno senza conversazione.
 ## Le trappole, scritte prima di caderci
 
 **La bozza che ti segue.** Scrivi mezza frase nella personale, apri il
-pannello, entri in «piante», premi invio: la frase va nel quaderno. È la stessa
+pannello, entri in «quaderno-b», premi invio: la frase va nel quaderno. È la stessa
 famiglia di guasto di cui parla il commento di `switchGeneration` — *«il fatto
 che l'utente enuncia finisce nel diario dell'altro progetto»* — solo un attimo
 prima. V. D2.
@@ -172,7 +172,7 @@ personale non si vede (rilievo 6). La notifica di sistema c'è, ma in casa non
 c'è nessun segno di non letto sul titolo. Per questo giro si accetta e si
 scrive; il pallino di non letto sul titolo è il naturale giro dopo.
 
-**La porta dell'officina.** Da «piante», il bottone in alto a destra apre
+**La porta dell'officina.** Da «quaderno-b», il bottone in alto a destra apre
 l'officina sulla conversazione **personale**, perché nessuno dei due gusci
 ricorda la chiave (rilievo 7). V. D3.
 
@@ -220,7 +220,7 @@ dire tenere aperti dei blob per conversazioni che non guardi.
 **D3 — La porta dell'officina da dentro un quaderno.** *Proposta: per questo
 giro resta com'è — apre l'officina sulla personale — e lo si scrive nel codice
 e nel checklist.* Farla bene vuol dire passare la chiave nel frammento
-(`#chat=project:piante`) e insegnare all'officina a leggerlo: è lavoro
+(`#chat=project:quaderno-b`) e insegnare all'officina a leggerlo: è lavoro
 nell'altro guscio, e l'officina non legge ancora nemmeno il `#turn=` che la
 casa le manda già. L'alternativa onesta, se si vuole chiudere il buco senza
 toccare l'officina, è spegnere la porta dentro un quaderno — ma un bottone

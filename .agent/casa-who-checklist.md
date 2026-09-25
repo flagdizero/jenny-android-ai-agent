@@ -88,7 +88,7 @@ Titan 2, 0.11.0, aggiornamento sul posto (APK delle 11:16, `lastUpdateTime`
 *NOTEBOOKS*.
 
 - Il titolo apre, e l'elenco è quello vero: `jenny` 19 h fa in cima, poi
-  `piante`, `nomadismo`, `produttivita`, `travel-wiki`, `stato-danimo` a 15
+  `quaderno-b`, `quaderno-c`, `quaderno-d`, `quaderno-e`, `quaderno-f` a 15
   giorni. Ordine per data, pallini distinti, la riga personale con la spunta.
 - **Cinque quaderni su sei dicono «15 days ago»**, ed è `modified` che fa quello
   che `_collect_projects` dichiara di fare: è l'mtime della cartella, non

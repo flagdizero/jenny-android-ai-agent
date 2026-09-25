@@ -4,7 +4,7 @@
 > quelli osservati davvero, il nome no. Il repo e' pubblico.*
 
 > **Difetto trovato sul telefono il 24/08/2026**, riprodotto dall'interfaccia.
-> Cancellando `wikis/erbario` dal file browser e ricreando un progetto con
+> Cancellando `wikis/quaderno-x` dal file browser e ricreando un progetto con
 > lo stesso nome, la conversazione vecchia riappare intera. L'md5 del file di
 > sessione e' identico prima e dopo: non e' stato ripristinato, non e' mai stato
 > toccato.
@@ -15,7 +15,7 @@
 > una cartella, non a un nome.**
 
 Il nome e' l'*indirizzo* — `project:<nome>`, deterministico, e resta cosi' per
-scelta (v. `session/project_rename.py`: i file si chiamano `project_patreon.jsonl`
+scelta (v. `session/project_rename.py`: i file si chiamano `project_esempio.jsonl`
 perche' e' con quelli che si guarda cosa e' successo davvero). Il legame vero e'
 l'**id della wiki**, che ogni sessione si annota al primo turno
 (`PROJECT_WIKI_ID_KEY`).
@@ -177,7 +177,7 @@ Sei proprieta', tutte dall'interfaccia, nessuna dedotta dal codice.
 | --- | --- |
 | il rilevatore scatta su uno stato **preesistente** (sessione legata a `6ac443f3f2c9`, cartella `00fc9eb19d20`) | turno rifiutato, due strade nominate |
 | la conferma dice il vero | *«the conversation with it: 10 messages»* — sul disco: 11 righe, 10 con `role` |
-| dopo la cancellazione non resta niente col quel nome | `find -name "*erbario*"` vuoto; `_index.md` a zero occorrenze |
+| dopo la cancellazione non resta niente col quel nome | `find -name "*quaderno-x*"` vuoto; `_index.md` a zero occorrenze |
 | il nome e' davvero libero | ricreato con la stessa sequenza che prima riportava 10 messaggi: **chat vuota** |
 | un nome con una conversazione **chiede** | dialogo a tre uscite, conto giusto (2 messaggi) |
 | «riprendila» adotta l'id | cartella `896cc03188f5` = id ricordato dalla sessione; turno successivo **non** rifiutato |

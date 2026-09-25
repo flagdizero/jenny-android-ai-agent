@@ -49,7 +49,7 @@ Piano: [`casa-notebook-plan.md`](./casa-notebook-plan.md). Giro precedente:
 ## Cosa ha detto la prova
 
 **Al banco finto** (i sei quaderni del rig, compreso un nome da 54 caratteri e
-due cartelle non apribili): il titolo passa a «QUADERNO / ● piante», il filo
+due cartelle non apribili): il titolo passa a «QUADERNO / ● quaderno-b», il filo
 diventa quello del quaderno, la spunta si sposta, Indietro riporta a casa con la
 bozza personale ancora nel campo, e rientrando nel quaderno torna la sua. Il
 nome lungo tronca con l'ellissi e non spinge fuori la porta dell'officina — era
@@ -91,11 +91,11 @@ del telefono in inglese.
 
 - Il titolo apre **TALKING TO / Jenny · personal ✓** e **NOTEBOOKS** con i
   quaderni veri (`jenny` 20 h fa in cima, poi cinque a 15 giorni).
-- Un tocco su `piante` **apre la sua conversazione**: occhiello `NOTEBOOK`,
+- Un tocco su `quaderno-b` **apre la sua conversazione**: occhiello `NOTEBOOK`,
   pallino verde oliva, il nome, e il filo vero del progetto — quello scritto
   dall'officina, ritrovato intero. Il campo dice «Write to Jenny, in the
   notebook».
-- Riaperta la tendina da lì dentro: **la spunta è su `piante`**, e la riga
+- Riaperta la tendina da lì dentro: **la spunta è su `quaderno-b`**, e la riga
   personale non ce l'ha più.
 - **Indietro** riporta alla conversazione personale, con la sua storia
   ridisegnata. Un secondo Indietro non fa niente e l'app resta viva (stesso

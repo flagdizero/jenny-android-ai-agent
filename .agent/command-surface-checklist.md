@@ -131,7 +131,7 @@ difetti trovati qui e per il buco che il rimedio lasciava.
 ### Un effetto collaterale, da mettere a verbale
 
 La prima passata della sonda WS mandava frame **senza `"type": "message"`**, e quel percorso
-ignora il `chat_id`: le righe finivano nella chat personale invece che in `project:adhd`.
+ignora il `chat_id`: le righe finivano nella chat personale invece che in `project:quaderno-g`.
 Cosi' `/dream` e `/atlas` sono partiti per davvero — una consolidazione (`MEMORY.md` da 2.132
 a 2.147 byte) e una ricompilazione della rubrica in 9,5s. Nessuna perdita (il checkpoint
 pre-Dream lo prende il container) e sono i due job che avrebbero girato da soli entro poche

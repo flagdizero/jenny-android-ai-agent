@@ -81,16 +81,16 @@ piano, scrivere fallisce forte**, ed e' tutta la differenza fra le due forme.
 La sonda e' [`memory-probes.md`](./memory-probes.md), Probe 5. Girata una volta,
 sull'unico modello che questa installazione ha configurato.
 
-Partenza: 9 wiki su disco, 8 righe in `memory/WIKI.md` — `erbario` elencato,
-`erbario2` presente e non elencato. Cancellato `erbario` dal file
+Partenza: 9 wiki su disco, 8 righe in `memory/WIKI.md` — `quaderno-x` elencato,
+`quaderno-x2` presente e non elencato. Cancellato `quaderno-x` dal file
 browser, poi `/atlas` senza `force` (la cancellazione cambia l'impronta, quindi
 la passata parte da sola: e' la strada vera). Atlas gira alle 16:51:59, `WIKI.md`
 riscritta alle 16:52.
 
 | | prima | dopo |
 | --- | --- | --- |
-| `erbario`, cancellato | elencato | **tolto** |
-| `erbario2`, presente e assente dall'elenco | assente | **aggiunto**, con la sua descrizione |
+| `quaderno-x`, cancellato | elencato | **tolto** |
+| `quaderno-x2`, presente e assente dall'elenco | assente | **aggiunto**, con la sua descrizione |
 | le altre sette righe | | invariate parola per parola |
 
 Le due direzioni della regola tengono entrambe, e tiene anche *«update by

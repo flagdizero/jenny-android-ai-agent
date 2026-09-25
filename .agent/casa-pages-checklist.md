@@ -75,8 +75,8 @@ ce l'ha. Il banco nuovo cerca la **famiglia** — ogni classe che il guscio
 nasconde con l'attributo deve avere la sua regola o un antenato che ce l'ha.
 
 **Le etichette della mappa erano una macchia.** Su un quaderno vero da 31
-pagine, con titoli che sono frasi («Coltivazione-Monstera-Roma — Sostegno,
-fertilizzazione, crescita»), scriverli tutti e interi non lascia leggere niente.
+pagine, con titoli che sono frasi («Un-Titolo-Lungo-Di-Prova — Prima parte,
+seconda parte, terza parte»), scriverli tutti e interi non lascia leggere niente.
 Adesso portano il nome **le dieci pagine più collegate**, tagliato a 22
 caratteri, e le altre restano pallini: è l'unica domanda a cui una mappa
 risponde meglio di un elenco — dove si annoda il quaderno — e l'elenco è nella

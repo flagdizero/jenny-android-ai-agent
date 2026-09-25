@@ -66,9 +66,9 @@ e **C e' indipendente da tutto** (si puo' fare per prima, e conviene).
 ## Verifica finale, sul telefono
 
 - [x] Prima passata reale su 9 progetti: **7 voci nuove** in `USER.md`, tutte della classe
-      giusta (cura in corso, colesterolo, allergie, il pattern sociale, le piante possedute) — e
-      l'ipotesi tiroidea registrata **con il suo stato** ("ancora da verificare"), non come
-      diagnosi. Il conto pieno sui 24 va rifatto dopo qualche notte
+      giusta (fatti stabili della persona, non conoscenza di un argomento) — e un'ipotesi
+      ancora aperta registrata **con il suo stato** ("ancora da verificare"), non come
+      fatto. Il conto pieno sui 24 va rifatto dopo qualche notte
 - [x] **Controllo negativo passato**: dal progetto di lavoro puro, zero voci. E nella prova
       controllata le due regole di wiki del messaggio non sono atterrate da nessuna parte,
       mentre il fatto sulla persona nello stesso messaggio si

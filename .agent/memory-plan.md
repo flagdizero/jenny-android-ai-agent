@@ -855,8 +855,8 @@ That is a different problem from this plan's, and it outlives it: see
    advisory.** Storage caps are the wrong lever once Phase 3 lands, so there is nothing left for
    the guard to protect there.
 2. ~~**Phase 2's cold tier home**: `memory/archive/` versus reusing Atlas's `wikis/` tier.~~
-   **Closed 2026-08-18: `memory/archive/`.** The wikis are topical knowledge bases (`adhd`,
-   `etf-finance`, `android-rom`, `cats`) — knowledge *about a subject*. A demoted entry is not
+   **Closed 2026-08-18: `memory/archive/`.** The wikis are topical knowledge bases (`ricette`,
+   `astronomia`, `bricolage`, `scacchi`) — knowledge *about a subject*. A demoted entry is not
    that; it is a piece of someone's history, and filing it beside Android partition layouts
    degrades both. The decisive difference is mechanical, though: Atlas compiles `wikis/` into
    `WIKI.md`, and `WIKI.md` **enters the prompt**. The archive must not — it is the cold tier, the
