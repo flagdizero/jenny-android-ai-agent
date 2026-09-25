@@ -25,6 +25,21 @@ def test_json_schema(schema, expected) -> None:
     assert schema.to_json_schema() == expected
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"minimum": 0.5}, {"maximum": 10.0}, {"enum": (1, 2.5)}, {"minimum": True}],
+)
+def test_an_integer_schema_refuses_non_integer_bounds(kwargs) -> None:
+    with pytest.raises(TypeError):
+        IntegerSchema(**kwargs)
+
+
+def test_a_number_schema_still_takes_floats_and_ints() -> None:
+    assert NumberSchema(minimum=0, maximum=2.5).to_json_schema()["maximum"] == 2.5
+    with pytest.raises(TypeError):
+        NumberSchema(minimum="0")  # type: ignore[arg-type]
+
+
 def test_a_positional_value_is_refused() -> None:
     """Dal 24/09/2026 solo keyword: un posizionale era una descrizione persa."""
     with pytest.raises(TypeError):

@@ -11,7 +11,7 @@ Note: Python does not allow subclassing ``bool``, so booleans use :class:`Boolea
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from jenny.agent.tools.base import Schema
@@ -89,6 +89,9 @@ class _NumericSchema(Schema):
     """
 
     _JSON_TYPE = ""
+    # I tipi Python ammessi per limiti ed enum. ``bool`` e' un ``int`` per Python
+    # ma non per JSON Schema, quindi si esclude a parte.
+    _VALUE_TYPES: tuple[type, ...] = (int, float)
 
     def __init__(
         self,
@@ -96,9 +99,13 @@ class _NumericSchema(Schema):
         description: str = "",
         minimum: float | None = None,
         maximum: float | None = None,
-        enum: tuple[float, ...] | list[float] | None = None,
+        enum: Sequence[float] | None = None,
         nullable: bool = False,
     ) -> None:
+        values = [v for v in (minimum, maximum) if v is not None] + list(enum or ())
+        for value in values:
+            if isinstance(value, bool) or not isinstance(value, self._VALUE_TYPES):
+                raise TypeError(f"{type(self).__name__} bound {value!r} is not a valid value")
         self._description = description
         self._minimum = minimum
         self._maximum = maximum
@@ -122,9 +129,32 @@ class _NumericSchema(Schema):
 
 
 class IntegerSchema(_NumericSchema):
-    """Integer parameter: description and optional bounds (keyword-only)."""
+    """Integer parameter: description and optional bounds (keyword-only).
+
+    Limiti ed enum sono interi, e un float si rifiuta: ``minimum=0.5`` su un
+    parametro intero annuncia al modello uno schema che nessun valore valido
+    rispetta nel modo in cui sembra.
+    """
 
     _JSON_TYPE = "integer"
+    _VALUE_TYPES = (int,)
+
+    def __init__(
+        self,
+        *,
+        description: str = "",
+        minimum: int | None = None,
+        maximum: int | None = None,
+        enum: Sequence[int] | None = None,
+        nullable: bool = False,
+    ) -> None:
+        super().__init__(
+            description=description,
+            minimum=minimum,
+            maximum=maximum,
+            enum=enum,
+            nullable=nullable,
+        )
 
 
 class NumberSchema(_NumericSchema):
