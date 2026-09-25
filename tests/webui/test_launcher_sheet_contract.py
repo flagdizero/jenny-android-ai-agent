@@ -839,7 +839,7 @@ def test_the_dead_dock_branch_is_gone() -> None:
     assert "dataset.opens" not in _senza_commenti_js(_src("mobile-app.js"))
 
 def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
-    """`[hidden]` e' a specificita' zero: una classe con `display` lo scavalca.
+    """`[hidden]` sta nel foglio del browser: una classe con `display` lo scavalca.
 
     Il banco gemello in `test_casa_tu_contract.py` guarda gli elementi che
     nascono `hidden` **nel markup**. Questo guarda l'altra meta', che e' la

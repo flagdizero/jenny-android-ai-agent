@@ -161,7 +161,7 @@ def test_reduced_motion_covers_the_switch_too() -> None:
     """L'interruttore è nato dopo il blocco `prefers-reduced-motion`, e c'era rimasto fuori.
 
     Ha la stessa transizione del chip e lo stesso ``scale(0.98)`` al tocco. La
-    transizione la spegne comunque la regola ``*`` in fondo al file
+    transizione la spegne comunque la regola ``*`` della sezione «Reduced Motion»
     (``transition-duration: 0.01ms !important``); il ``transform`` di uno stato
     ``:active`` **no** — non è né un'animazione né una durata — quindi il
     rimpicciolimento al tocco era l'unica cosa che restava, ed è la parte che

@@ -819,8 +819,9 @@ body {
 /* L'interruttore sta nella stessa riga del chip e ha la stessa transizione e lo
    stesso `scale(0.98)` al tocco: e' nato dopo questo blocco e ne era rimasto
    fuori. Il rimpicciolimento e' la parte che conta — le transizioni le azzera
-   comunque la regola `*` in fondo al file, il `transform` di uno stato `:active`
-   no, perche' non e' ne' un'animazione ne' una durata. */
+   comunque la regola `*` della sezione «Reduced Motion» (a meta' del foglio,
+   subito dopo l'input bar), il `transform` di uno stato `:active` no, perche'
+   non e' ne' un'animazione ne' una durata. */
 @media (prefers-reduced-motion: reduce) {
   .scope-chip { transition: none; }
   .scope-chip:active { transform: none; }
@@ -2949,8 +2950,8 @@ body {
   /* Il movimento ridotto vale anche per il trascinamento — cioè per il tratto
      che il CSS anima da solo dopo il rilascio, perché quello sotto il dito non
      è un'animazione ma una manipolazione diretta. Esplicito e non lasciato alla
-     regola generale in fondo al foglio: quella è una rete di sicurezza, non una
-     dichiarazione di intenti. */
+     regola generale `*` della sezione «Reduced Motion», più su in questo
+     foglio: quella è una rete di sicurezza, non una dichiarazione di intenti. */
   .launcher-sheet, .launcher-sheet.open, .launcher-scrim { transition: none; }
 }
 

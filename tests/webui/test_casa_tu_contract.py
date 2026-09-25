@@ -566,7 +566,7 @@ def test_the_key_field_never_carries_a_key() -> None:
 
 
 def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
-    """`[hidden]` e' a specificita' zero: una classe con `display` lo scavalca.
+    """`[hidden]` sta nel foglio del browser: una classe con `display` lo scavalca.
 
     La casa quel difetto l'ha gia' pagato due volte — `.casa-back` porta il
     suo `[hidden]` con un commento, e cosi' la riga della versione finche' c'e' stata —

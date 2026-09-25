@@ -338,7 +338,8 @@ def test_a_node_of_an_unforeseen_group_is_still_painted() -> None:
 
 
 def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> None:
-    """`[hidden]` e' una regola del browser a specificita' bassissima.
+    """`[hidden]` e' una regola del foglio del browser, e ogni regola
+    dell'autore la batte a qualunque specificita'.
 
     Un `display:` messo su una classe la scavalca, e l'elemento resta a schermo
     con `hidden` vero: nessun errore, nessun avviso, solo una riga che non se
