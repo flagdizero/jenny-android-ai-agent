@@ -63,9 +63,9 @@ def build_gateway_services(
     # Getter late-binding del ``CronService``, come quello sopra: il pannello
     # della programmazione lo risolve a ogni chiamata.
     get_cron_service: Callable[[], Any | None] | None = None,
-    # Le sessioni con un turno in volo, late-binding come i due sopra: l'agente
-    # puo' nascere dopo il gateway. Senza agente nessun turno e' in volo.
-    get_active_session_keys: Callable[[], Collection[str]] | None = None,
+    # Le sessioni sotto cui qualcosa scrive adesso, late-binding come i due sopra:
+    # l'agente puo' nascere dopo il gateway. Senza agente non scrive nessuno.
+    get_busy_session_keys: Callable[[], Collection[str]] | None = None,
     logger: Any = default_logger,
     onboarding_event: Any | None = None,
     on_settings_changed: Callable[[], None] | None = None,
@@ -122,7 +122,7 @@ def build_gateway_services(
             invalidate_session=lambda key: (
                 session_manager.invalidate(key) if session_manager is not None else None
             ),
-            active_session_keys=get_active_session_keys or (lambda: ()),
+            busy_session_keys=get_busy_session_keys or (lambda: ()),
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,

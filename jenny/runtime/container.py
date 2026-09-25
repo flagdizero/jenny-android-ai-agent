@@ -61,6 +61,17 @@ class GatewayContainer:
 
     # -- accessor late-binding (usati dai getter di CronDispatcher) ----------
 
+    def _busy_session_keys(self) -> tuple[str, ...]:
+        """Le sessioni sotto cui qualcosa scrive adesso (``AgentLoop.busy_session_keys``).
+
+        Un metodo e non un lambda nel costruttore del dispatcher perche' si possa
+        provare: l'agente nasce dopo il gateway (onboarding) e ``set_agent`` lo
+        sostituisce, e senza agente non scrive nessuno.
+        """
+        if self._agent is None:
+            return ()
+        return tuple(self._agent.busy_session_keys())
+
     def set_agent(self, new_agent: Any) -> None:
         self._agent = new_agent
 
@@ -406,11 +417,9 @@ class GatewayContainer:
             # e' servita anche prima che ``build`` arrivi in fondo, e ``self.cron``
             # nasce ``None``.
             get_cron_service=lambda: self.cron,
-            # I turni in volo, per i comandi della WebUI che non devono spostare
-            # una sessione sotto le mani di chi ci sta scrivendo (``project.rename``).
-            get_active_session_keys=lambda: (
-                self._agent.active_session_keys() if self._agent is not None else ()
-            ),
+            # Chi scrive adesso sotto quale sessione, per i comandi della WebUI che
+            # non devono spostarla sotto le sue mani (``project.rename``).
+            get_busy_session_keys=self._busy_session_keys,
             # Telegram ci legge lo stato del turno: e' l'unico segnale di
             # inizio/fine che arriva a un canale che non riceve ne' progress
             # ne' turn_end.

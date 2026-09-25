@@ -2354,6 +2354,18 @@ class SubagentManager:
         """Return the number of currently running subagents."""
         return len(self._running_tasks)
 
+    def active_origin_session_keys(self) -> tuple[str, ...]:
+        """Le sessioni d'origine con almeno un subagent vivo adesso.
+
+        Un subagent sopravvive al turno che l'ha lanciato, e quando finisce scrive
+        i suoi record e annuncia il risultato **sotto la chiave d'origine**: chi
+        vuole spostare quella sessione (il rinomino di un quaderno) deve saperlo.
+        """
+        return tuple(
+            key for key in self._session_tasks
+            if self.get_running_count_by_session(key) > 0
+        )
+
     def get_running_count_by_session(self, session_key: str) -> int:
         """Return the number of currently running subagents for a session."""
         tids = self._session_tasks.get(session_key, set())

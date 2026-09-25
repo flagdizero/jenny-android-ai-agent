@@ -49,11 +49,11 @@ def test_the_webui_commands_see_the_turns_in_flight():
     )
 
     wired = WebSocketDispatcher(
-        config, MessageBus(), get_active_session_keys=lambda: ("project:viaggio",)
+        config, MessageBus(), get_busy_session_keys=lambda: ("project:viaggio",)
     )
     bare = WebSocketDispatcher(config, MessageBus())
 
-    assert wired.channels["websocket"].gateway.commands.active_session_keys() == (
+    assert wired.channels["websocket"].gateway.commands.busy_session_keys() == (
         "project:viaggio",
     )
-    assert tuple(bare.channels["websocket"].gateway.commands.active_session_keys()) == ()
+    assert tuple(bare.channels["websocket"].gateway.commands.busy_session_keys()) == ()

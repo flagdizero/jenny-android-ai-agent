@@ -54,7 +54,7 @@ def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture()
 def ctx(workspace_root: Path) -> CommandContext:
-    return CommandContext(get_workspace_root=lambda: workspace_root, invalidate_session=lambda _key: None, active_session_keys=lambda: ())
+    return CommandContext(get_workspace_root=lambda: workspace_root, invalidate_session=lambda _key: None, busy_session_keys=lambda: ())
 
 
 def _set_workspace_config(config_path: Path, **overrides) -> None:

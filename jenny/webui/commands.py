@@ -77,12 +77,13 @@ class CommandContext:
     # sessione viva, e il primo salvataggio riscriverebbe il file appena tolto —
     # cioe' l'orfano, di nuovo. Meglio un TypeError all'avvio.
     invalidate_session: Callable[[str], None]
-    # Le sessioni con un turno in volo adesso (``AgentLoop.active_session_keys``).
-    # ``project.rename`` le rifiuta: sgomberare la cache non ferma un turno che la
-    # sessione ce l'ha gia' in mano, e a fine turno la salverebbe sotto il nome
-    # vecchio — una chat senza cartella accanto a quella spostata. Obbligatorio
-    # per la stessa ragione di ``invalidate_session``.
-    active_session_keys: Callable[[], Collection[str]]
+    # Le sessioni sotto cui qualcosa scrive adesso (``AgentLoop.busy_session_keys``):
+    # un turno, un subagent lanciato da li', una passata del giardiniere.
+    # ``project.rename`` le rifiuta: sgomberare la cache non ferma chi la sessione
+    # ce l'ha gia' in mano, e a fine lavoro scriverebbe sotto il nome vecchio — una
+    # chat senza cartella accanto a quella spostata. Obbligatorio per la stessa
+    # ragione di ``invalidate_session``.
+    busy_session_keys: Callable[[], Collection[str]]
 
 
 Command = Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -467,10 +468,10 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 
     _require_wiki_enabled()
 
-    # Qui, sul loop, e non nel thread: l'elenco dei turni in volo e' del loop.
-    # Resta una finestra fra questa domanda e il ``rename`` — millisecondi, contro
-    # i secondi o i minuti di un turno che scrive.
-    in_volo = set(ctx.active_session_keys())
+    # Qui, sul loop, e non nel thread: quel che e' in volo lo sa il loop. Resta
+    # una finestra fra questa domanda e il ``rename`` — millisecondi, contro i
+    # secondi o i minuti di un turno, di un subagent o di una passata.
+    in_volo = set(ctx.busy_session_keys())
     if project_session_key(name) in in_volo or project_session_key(new_name) in in_volo:
         raise CommandError(
             "conflict",

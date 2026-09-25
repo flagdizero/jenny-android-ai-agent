@@ -258,7 +258,7 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
         {"id": "q2", "kind": "conversazione", "ref": "project:altro"},
     ])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          active_session_keys=lambda: ())
+                          busy_session_keys=lambda: ())
     await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
 
     assert [(p["id"], p["ref"]) for p in _pagine(config)] == [
@@ -279,7 +279,7 @@ async def test_a_refused_rename_leaves_the_pages_alone(workspace, config, monkey
     monkeypatch.setattr(modulo, "rename_project", _rifiuta)
     await _con_pagine([{"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"}])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          active_session_keys=lambda: ())
+                          busy_session_keys=lambda: ())
     with pytest.raises(CommandError):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
     assert _pagine(config)[0]["ref"] == f"project:{VECCHIO}"
@@ -290,7 +290,7 @@ async def test_the_command_refuses_a_bad_name_before_any_thread(workspace, confi
     from jenny.webui.commands import CommandError
 
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          active_session_keys=lambda: ())
+                          busy_session_keys=lambda: ())
     with pytest.raises(CommandError, match="invalid new name"):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": "Ricerca ETF"})
 
@@ -311,7 +311,7 @@ async def test_the_command_refuses_while_a_turn_is_running_there(
     ctx = SimpleNamespace(
         get_workspace_root=lambda: workspace,
         invalidate_session=lambda k: toccato.append(k),
-        active_session_keys=lambda: (in_volo, "unified:default"),
+        busy_session_keys=lambda: (in_volo, "unified:default"),
     )
     with pytest.raises(CommandError) as err:
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})

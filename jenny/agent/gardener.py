@@ -1220,6 +1220,16 @@ async def _checkpoint(agent: Any) -> None:
 # stessa istruzione sincrona (nessun ``await`` in mezzo) e l'event loop è uno.
 _PASSES_IN_FLIGHT: set[str] = set()
 
+
+def passes_in_flight() -> frozenset[str]:
+    """I nomi dei progetti con una passata in corso adesso.
+
+    Una copia, non il set: chi chiede (il rinomino di un quaderno, che non deve
+    spostare la cartella sotto una passata che ci sta scrivendo) non deve poter
+    togliere o aggiungere voci alla presa.
+    """
+    return frozenset(_PASSES_IN_FLIGHT)
+
 # La frase che il modello legge quando l'utente è tornato. È un rifiuto di
 # scrittura perché è il solo punto che i tre tool condividono prima di toccare il
 # file: la passata si chiude dicendogli di fermarsi, e il codice — non lui —
