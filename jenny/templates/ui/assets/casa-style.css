@@ -516,13 +516,29 @@ body.casa {
 /* La pastiglia delle pagine del quaderno, a sinistra del composer: il posto
    che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
    questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
-   il campo, cosi' la riga resta allineata. */
+   il campo, cosi' la riga resta allineata.
+   Tutta qui. Stava a meta' con «Parlane» (`.casa-talk`), di quando le due
+   pastiglie abitavano la stessa barra in testa; scesa nel composer, altezza,
+   bordo e fondo di la' li riscriveva questa regola, e restavano solo da
+   leggere. */
 .casa-composer .casa-pages-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 40px;
+  padding: 0 12px;
   border: none;
+  border-radius: var(--radius-pill);
   background: var(--overlay);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
 }
 .casa-composer .casa-pages-open[hidden] { display: none; }
+.casa-composer .casa-pages-open:active { filter: brightness(0.94); }
 
 .casa-send {
   flex: none;
@@ -1241,11 +1257,8 @@ body.casa {
 
 .casa-actions [hidden] { display: none; }
 
-/* La porta delle pagine e la via del ritorno: due pastiglie, stessa altezza
-   della porta dell'officina. Quella chiara e' un posto dove andare, quella
-   piena e' il ritorno a dove stavi — la tavola le disegna cosi', ed e' giusto:
-   il ritorno non e' una scelta fra pari, e' l'uscita. */
-.casa-pages-open,
+/* La via del ritorno: una pastiglia piena, perche' il ritorno non e' una
+   scelta fra pari, e' l'uscita — la tavola la disegna cosi'. */
 .casa-talk {
   flex: none;
   display: inline-flex;
@@ -1253,33 +1266,24 @@ body.casa {
   gap: 6px;
   height: 36px;
   padding: 0 12px;
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
 }
 
-.casa-pages-open {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.casa-talk {
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.casa-pages-open:active,
 .casa-talk:active { filter: brightness(0.94); }
 
 /* «Modifica»: solo l'icona, e senza pastiglia. Accanto a «Parlane» — che e' la
    pastiglia piena, cioe' l'uscita — due pastiglie si contenderebbero l'occhio
-   e nessuna delle due direbbe piu' qual e' quella principale. Stessa misura e
-   stesso peso della porta di «Tu e Jenny», che e' l'altro comando-icona della
-   stessa barra. */
+   e nessuna delle due direbbe piu' qual e' quella principale. Alta quanto
+   «Parlane» (36 px), cosi' la barra resta allineata. (Qui si citava la porta
+   di «Tu e Jenny» come comando-icona gemello: dal 23/09/2026 «Tu e Jenny» e'
+   una pagina e quella porta non c'e' piu'.) */
 .casa-edit {
   flex: none;
   display: inline-flex;

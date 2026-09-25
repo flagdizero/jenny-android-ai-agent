@@ -1263,11 +1263,6 @@ body {
   transform: translateY(-1px);
 }
 .ws-item:active { transform: translateY(0) scale(0.96); }
-.ws-item.selected {
-  background: rgba(var(--accent-rgb), 0.12);
-  outline: 0.5px solid var(--accent);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.06), 0 4px 16px rgba(var(--accent-rgb), 0.10);
-}
 
 /* Item icon — Apple-style */
 .ws-item-icon {
@@ -4305,26 +4300,6 @@ body {
 }
 
 
-/* Il blocco "ultimo controllo riuscito" + il bottone che ne forza uno. Sta
-   sotto il riquadro dell'aggiornamento ma c'è anche quando quello non c'è: è
-   l'unico posto in cui si vede che il meccanismo è morto, e in quel caso vale
-   più del resto della pagina. La variante .warn prende il colore d'errore
-   perché "non controllo da mesi" e "sei aggiornato" non devono somigliarsi. */
-.update-check {
-  margin-top: 10px;
-}
-
-
-/* `.settings-btn-add` non ha uno stato disabilitato suo: qui serve, perché il
-   controllo dura quanto un giro di rete e un bottone che resta identico invita
-   a ripremerlo. Regola locale e non globale — gli altri bottoni della pagina
-   non si disabilitano mai, e cambiarli tutti per questo sarebbe di troppo. */
-.update-check .settings-btn-add:disabled {
-  opacity: 0.55;
-  cursor: default;
-  transform: none;
-}
-
 /* ── Gruppi di impostazioni ──────────────────────────────────────────────
    Una soprascritta fuori, una scheda aperta sotto. Erano fisarmoniche: testa
    cliccabile, chevron, corpo chiuso. La tavola non ne ha nessuna, e il motivo
@@ -4955,12 +4930,6 @@ body {
   text-align: center;
 }
 .settings-seg .settings-seg-btn:hover { transform: none; }
-
-/* Opzione visibile ma inerte: la usa il blocco mascotte a mascotte spenta, per
-   mostrare cosa si potrebbe regolare senza far credere che sia regolabile ora. */
-.settings-field[data-settings-off] { opacity: 0.45; }
-.settings-field[data-settings-off] .settings-seg-btn,
-.settings-field[data-settings-off] .toggle-switch { pointer-events: none; }
 
 .settings-seg-btn {
   display: flex;
@@ -5702,15 +5671,6 @@ body {
 }
 
 
-/* Model list (onboarding step 2 + settings) */
-.model-list {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin: 8px 0;
-}
-
 /* ── Sezione Modello: card "In uso" + catalogo unificato ── */
 .model-inuse {
   border: 0.5px solid rgba(var(--accent-rgb), 0.45);
@@ -6120,9 +6080,12 @@ body {
 .tg-bot-link { color: var(--accent); font-weight: 600; }
 
 
-.cron-card-broken { border-left-color: var(--warning); }
-.cron-card-inert { border-left-color: var(--warning); }
-.cron-card-off { border-left-color: var(--border); opacity: 0.62; }
+/* Un lavoro spento si legge spento: la riga intera sbiadisce. Il suffisso
+   `cron-card-<salute>` lo scrive `_renderCronJob` per tutti gli stati, ma gli altri
+   non hanno una regola — il colore del bordo sinistro che portavano era della
+   scheda di prima, e su `.cron-riga`, che di bordo ha solo quello in alto, non
+   si vedeva piu'. */
+.cron-card-off { opacity: 0.62; }
 
 
 .cron-badge {
