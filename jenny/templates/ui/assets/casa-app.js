@@ -1423,7 +1423,7 @@ class CasaApp {
      Jenny no: legge i frame da se' (`shared/jenny-mascot.js`), con le stesse
      regole dell'officina, e qui non la si pilota piu' a mano. */
   _readActivity(msg) {
-    if (!msg) return;
+    if (!msg || !this._frameIsHere(msg)) return;
     if (msg.turn_id) this.activity.turnId = msg.turn_id;
     switch (msg.event) {
       case 'goal_status':
@@ -1475,8 +1475,19 @@ class CasaApp {
   /* `goal_status` dice se un turno sta girando: e' quel che trasforma il
      bottone da "manda" a "ferma". */
   _readRunStatus(msg) {
-    if (msg?.event !== 'goal_status') return;
+    if (msg?.event !== 'goal_status' || !this._frameIsHere(msg)) return;
     this._setRunning(msg.status === 'running');
+  }
+
+  /* Il frame e' della conversazione a schermo? La stessa regola della chat
+     (`CasaChat._belongsHere`): un frame senza `chat_id` e' di tutti, uno con
+     un `chat_id` diverso e' di un'altra conversazione. Senza, un turno che
+     gira in un quaderno accendeva il bottone Ferma sulla chat personale ferma
+     — e Ferma avrebbe mandato `/stop` alla conversazione sbagliata — o lo
+     spegneva sul turno vivo di questa. */
+  _frameIsHere(msg) {
+    const chatId = msg?.chat_id;
+    return !chatId || chatId === sessionManager.currentChatId;
   }
 
   _setRunning(running) {
