@@ -155,3 +155,18 @@ suo registro e li usa attraverso un subagent. Non è in questo registro: da capi
 voluto.
 
 **Fase 2, D2 eseguita (25/09/2026)**, ramo `rename/english` da `48d2e18`: 11 commit per area; 2.331 nomi della mappa (2.269 identificatori più 61 chiavi i18n), 66 file rinominati (20 moduli della casa e `casa-style.css` → `home-*`, `officina.html` → `workshop.html`, `gesto-orizzontale.js` → `horizontal-swipe.js`, 2 moduli Python, 42 test); persistiti con migrazione (`casa` → `home` nel `config.json`, config v3; chiavi `jenny-mascotte-*`, temi `fumetto`/`pietra`, cassetti in `mobile-last-mode`) e rotta/RPC/`postMessage` in inglese. Residuo misurato col dizionario di `conventions/`: 0 identificatori italiani in JS, CSS, HTML e Kotlin (a `48d2e18` erano 383, 209 e 72, di cui 76, 136 e 53 già prima del ramo); in Python 3 su 5.112 (erano 23), apposta (i nomi della migrazione: `_migrate_casa_to_home`, `_CASA_KINDS`, `_CASA_FIXED_IDS`).
+Dopo l'unione, un dodicesimo commit (`9114bab`): 19 prefissi dei `console.warn` della casa
+(`'casa.pages:'`, `'casa:'`…) che il dizionario non vedeva perché sono testo di log.
+Su `feat/la-casa` a `9114bab`: 11.293 passati e 31 saltati con 3.14, 11.283 e 33 con 3.11,
+ruff pulito, pyright bloccante a 0 errori, Kotlin compila.
+
+**Fase 3 (25/09/2026), build `9114bab` installata alle 23:20.** La migrazione del file vero:
+prima `configVersion` 2 con `casa: {schermate: [un'app, todo], ordine: [app, chat, <id>,
+quaderni, impostazioni]}`; dopo il primo avvio `configVersion` 3, `home: {pages: [la stessa
+riga], order: [app, chat, <id>, notebooks, settings]}`, `casa` sparito, e nessun'altra chiave
+del file cambiata (confronto chiave per chiave). Nessun `config.corrupt-*`. Nel log le due righe
+attese: «Config migration v3» e «Config schema stamped at version 3». `GET /api/home/pages`
+risponde coi campi nuovi, `/api/casa/schermate` è 404. Sullo schermo: la fila in alto con le
+cinque pagine nell'ordine di prima, il tema scelto rimasto (Kyoto, che non cambiava nome),
+Impostazioni → Workshop apre `workshop.html` (la `MainActivity` lo lascia passare) e la pillola
+«Jenny» riporta alla casa. Nessun errore JS o Python nel log dopo l'installazione.
