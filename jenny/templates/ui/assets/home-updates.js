@@ -23,9 +23,9 @@ export function updatesValue(version) {
   const v = version || {};
   if (!v.current) return '';
   if (v.update_available && v.latest) {
-    return i18n.t('casa.updates.waiting', { version: v.current, latest: v.latest });
+    return i18n.t('home.updates.waiting', { version: v.current, latest: v.latest });
   }
-  return i18n.t('casa.updates.current', { version: v.current });
+  return i18n.t('home.updates.current', { version: v.current });
 }
 
 /** Di che colore sta il meccanismo: `ok`, `warn`, `new`.
@@ -43,20 +43,20 @@ export class HomeUpdates {
   /** @param onVersion  un controllo ha portato una versione fresca: la riga di
    *                    «Tu e Jenny» e la cache del guscio si riscrivono. */
   constructor({ onVersion } = {}) {
-    this.el = document.getElementById('casa-updates-room');
-    this.dot = document.getElementById('casa-update-dot');
-    this.headline = document.getElementById('casa-update-headline');
-    this.summary = document.getElementById('casa-update-summary');
-    this.notes = document.getElementById('casa-update-notes');
-    this.installBtn = document.getElementById('casa-update-install');
-    this.progress = document.getElementById('casa-update-progress');
-    this.note = document.getElementById('casa-update-note');
-    this.phase = document.getElementById('casa-update-phase');
-    this.detail = document.getElementById('casa-update-detail');
-    this.bar = document.getElementById('casa-update-bar');
-    this.track = document.getElementById('casa-update-track');
-    this.lines = document.getElementById('casa-update-lines');
-    this.checkBtn = document.getElementById('casa-update-check');
+    this.el = document.getElementById('home-updates-room');
+    this.dot = document.getElementById('home-update-dot');
+    this.headline = document.getElementById('home-update-headline');
+    this.summary = document.getElementById('home-update-summary');
+    this.notes = document.getElementById('home-update-notes');
+    this.installBtn = document.getElementById('home-update-install');
+    this.progress = document.getElementById('home-update-progress');
+    this.note = document.getElementById('home-update-note');
+    this.phase = document.getElementById('home-update-phase');
+    this.detail = document.getElementById('home-update-detail');
+    this.bar = document.getElementById('home-update-bar');
+    this.track = document.getElementById('home-update-track');
+    this.lines = document.getElementById('home-update-lines');
+    this.checkBtn = document.getElementById('home-update-check');
 
     this._onVersion = onVersion;
     this.version = null;
@@ -126,7 +126,7 @@ export class HomeUpdates {
   _paintState() {
     const v = this.version || {};
     const mood = updatesMood(v);
-    if (this.dot) this.dot.className = `casa-update-dot is-${mood}`;
+    if (this.dot) this.dot.className = `home-update-dot is-${mood}`;
     if (this.headline) {
       /* Senza un numero non si dice «sei alla ultima»: si legge «Sei alla ,
          ed e' l'ultima», che e' una frase con un buco — visto sul rig, ed e'
@@ -140,8 +140,8 @@ export class HomeUpdates {
         );
       } else {
         frase = v.current
-          ? i18n.t('casa.updates.upToDate', { version: v.current })
-          : i18n.t('casa.updates.unknown');
+          ? i18n.t('home.updates.upToDate', { version: v.current })
+          : i18n.t('home.updates.unknown');
       }
       this.headline.textContent = frase;
     }
@@ -201,7 +201,7 @@ export class HomeUpdates {
       this.lines.replaceChildren();
       for (const riga of checkLines(this.version)) {
         const el = document.createElement('div');
-        el.className = riga.warn ? 'casa-update-line is-warn' : 'casa-update-line';
+        el.className = riga.warn ? 'home-update-line is-warn' : 'home-update-line';
         el.textContent = i18n.t(riga.key, riga.params);
         this.lines.appendChild(el);
       }

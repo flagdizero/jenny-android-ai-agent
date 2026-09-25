@@ -470,10 +470,10 @@ export class AppsActions {
        quaderno: Apri · Metti come pagina · Modifica · Elimina. La seconda c'e'
        solo se il guscio ha le pagine — l'officina no, e la scheda non deve
        sapere in che guscio vive: lo dice la porta che le passano. */
-    const pagine = this.shell?.pagine?.() || null;
+    const homePages = this.shell?.homePages?.() || null;
     const actions = [
       { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
-      ...(pagine ? [rigaPagina(pagine.stato('app', slug), app)] : []),
+      ...(homePages ? [rigaPagina(homePages.stato('app', slug), app)] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
       { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
     ];
@@ -505,9 +505,9 @@ export class AppsActions {
     if (action === 'open') {
       this.openApp(slug);
     } else if (action === 'pin') {
-      await this.shell?.pagine?.()?.appendi('app', slug);
+      await this.shell?.homePages?.()?.appendi('app', slug);
     } else if (action === 'unpin') {
-      if (await this.shell?.pagine?.()?.stacca('app', slug)) {
+      if (await this.shell?.homePages?.()?.stacca('app', slug)) {
         showToast(i18n.t('apps.unpinned'), 'success');
       }
     } else if (action === 'edit') {
@@ -523,7 +523,7 @@ export class AppsActions {
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
            `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
            pagina verso un'app che non c'e' piu'. */
-        await this.shell?.pagine?.()?.ricarica();
+        await this.shell?.homePages?.()?.ricarica();
         showToast(i18n.t('apps.appDeleted'), 'success');
       } catch {
         showToast(i18n.t('apps.deleteFailed'), 'error');

@@ -175,14 +175,14 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
     acceso — la striscia sarebbe sette volte la stessa immagine.
     """
     _run_js("""
-      const tu = room();
-      tu.open();
-      assert.equal(tu.themesEl.children.length, THEMES.length);
+      const you = room();
+      you.open();
+      assert.equal(you.themesEl.children.length, THEMES.length);
       THEMES.forEach((tema, i) => {
-        const card = tu.themesEl.children[i];
+        const card = you.themesEl.children[i];
         assert.equal(card.dataset.theme, tema.id, 'ordine diverso da quello del registro');
-        const nome = card.children[card.children.length - 1];
-        assert.equal(nome.textContent, shortThemeName(tema.label));
+        const name = card.children[card.children.length - 1];
+        assert.equal(name.textContent, shortThemeName(tema.label));
         const quadrato = card.children[0];
         for (const c of tema.swatch) {
           assert.ok(quadrato.style.background.includes(c),
@@ -197,13 +197,13 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
 
 def test_the_ring_marks_exactly_the_one_that_is_on() -> None:
     _run_js("""
-      const tu = room();
+      const you = room();
       acceso = 'kyoto';
-      tu.open();
-      const accese = tu.themesEl.children.filter((c) => c.classList.contains('is-on'));
+      you.open();
+      const accese = you.themesEl.children.filter((c) => c.classList.contains('is-on'));
       assert.equal(accese.length, 1, 'anelli accesi: ' + accese.length);
       assert.equal(accese[0].dataset.theme, 'kyoto');
-      for (const card of tu.themesEl.children) {
+      for (const card of you.themesEl.children) {
         assert.equal(card.attrs['aria-checked'],
                      String(card.dataset.theme === 'kyoto'),
                      card.dataset.theme + ': quel che si legge e quel che si vede non coincidono');
@@ -215,25 +215,25 @@ def test_picking_a_theme_moves_the_ring_without_redrawing_the_strip() -> None:
     """Ridisegnare butterebbe via lo scorrimento di lato: chi ha appena scelto
     il settimo si ritroverebbe riportato al primo."""
     _run_js("""
-      const tu = room();
-      tu.open();
-      const prima = [...tu.themesEl.children];
-      tu.pickTheme('y2k');
+      const you = room();
+      you.open();
+      const prima = [...you.themesEl.children];
+      you.pickTheme('y2k');
       assert.deepEqual(applicati, ['y2k'], 'il tema non e\\u2019 stato applicato');
-      assert.equal(tu.themesEl.children.length, prima.length);
-      tu.themesEl.children.forEach((card, i) => {
+      assert.equal(you.themesEl.children.length, prima.length);
+      you.themesEl.children.forEach((card, i) => {
         assert.equal(card, prima[i], 'la striscia e\\u2019 stata ridisegnata');
       });
-      const accese = tu.themesEl.children.filter((c) => c.classList.contains('is-on'));
+      const accese = you.themesEl.children.filter((c) => c.classList.contains('is-on'));
       assert.equal(accese.length, 1);
       assert.equal(accese[0].dataset.theme, 'y2k', 'l\\u2019anello e\\u2019 rimasto sul tema di prima');
 
       /* E nemmeno riaprendo la stanza: da «Tu e Jenny» ci si torna a ogni
          giro, e senza la guardia le sette pastiglie diventano quattordici —
          un secondo elenco identico in coda al primo. */
-      tu.open();
-      assert.equal(tu.themesEl.children.length, THEMES.length, 'la striscia si accumula');
-      tu.themesEl.children.forEach((card, i) => {
+      you.open();
+      assert.equal(you.themesEl.children.length, THEMES.length, 'la striscia si accumula');
+      you.themesEl.children.forEach((card, i) => {
         assert.equal(card, prima[i], 'ridisegnata alla riapertura');
       });
     """)
@@ -243,15 +243,15 @@ def test_the_name_and_the_phrase_follow_the_theme_that_is_on() -> None:
     """Il nome non si traduce — «Jenny Kyoto» e' un nome — ma la frase che lo
     racconta si', ed e' quella dell'officina: gia' tradotta, e una sola."""
     _run_js("""
-      const tu = room();
-      tu.open();
-      assert.equal(tu.themeValue.textContent, THEMES.find((t) => t.id === 'chanel').label);
-      assert.equal(tu.themeDesc.textContent, i18n.t('themes.chanel.desc'));
-      assert.ok(!tu.themeDesc.textContent.startsWith('themes.'), 'la chiave grezza a schermo');
+      const you = room();
+      you.open();
+      assert.equal(you.themeValue.textContent, THEMES.find((t) => t.id === 'chanel').label);
+      assert.equal(you.themeDesc.textContent, i18n.t('themes.chanel.desc'));
+      assert.ok(!you.themeDesc.textContent.startsWith('themes.'), 'la chiave grezza a schermo');
 
-      tu.pickTheme('pietra');
-      assert.equal(tu.themeValue.textContent, THEMES.find((t) => t.id === 'pietra').label);
-      assert.equal(tu.themeDesc.textContent, i18n.t('themes.pietra.desc'));
+      you.pickTheme('pietra');
+      assert.equal(you.themeValue.textContent, THEMES.find((t) => t.id === 'pietra').label);
+      assert.equal(you.themeDesc.textContent, i18n.t('themes.pietra.desc'));
       assert.notEqual(i18n.t('themes.pietra.desc'), i18n.t('themes.chanel.desc'),
                       'due temi con la stessa frase: il banco non misura piu\\u2019 niente');
     """)
@@ -261,19 +261,19 @@ def test_the_words_come_back_when_the_language_changes() -> None:
     """Cambiata la lingua, la stanza si ridice: l'etichetta, la scheda
     dell'officina e la frase del tema."""
     _run_js("""
-      const tu = room();
-      tu.open();
-      tu.themeLabel.textContent = '';
-      tu.workshopName.textContent = '';
-      tu.workshopHint.textContent = '';
-      tu.themeDesc.textContent = '';
-      tu.jennyLabel.textContent = '';
-      tu.applyTranslations();
-      assert.equal(tu.themeLabel.textContent, i18n.t('settings.themeLabel'));
-      assert.equal(tu.workshopName.textContent, i18n.t('casa.workshop'));
-      assert.equal(tu.workshopHint.textContent, i18n.t('casa.tu.workshopHint'));
-      assert.equal(tu.jennyLabel.textContent, i18n.t('casa.jenny.title'));
-      assert.equal(tu.themeDesc.textContent, i18n.t('themes.chanel.desc'));
+      const you = room();
+      you.open();
+      you.themeLabel.textContent = '';
+      you.workshopName.textContent = '';
+      you.workshopHint.textContent = '';
+      you.themeDesc.textContent = '';
+      you.jennyLabel.textContent = '';
+      you.applyTranslations();
+      assert.equal(you.themeLabel.textContent, i18n.t('settings.themeLabel'));
+      assert.equal(you.workshopName.textContent, i18n.t('home.workshop'));
+      assert.equal(you.workshopHint.textContent, i18n.t('home.you.workshopHint'));
+      assert.equal(you.jennyLabel.textContent, i18n.t('home.jenny.title'));
+      assert.equal(you.themeDesc.textContent, i18n.t('themes.chanel.desc'));
     """)
 
 
@@ -292,9 +292,9 @@ def test_the_pill_keeps_the_word_that_tells_the_themes_apart() -> None:
       assert.equal(shortThemeName('Chanel'), 'Chanel', 'un nome senza «Jenny» resta intero');
       const corti = THEMES.map((t) => shortThemeName(t.label));
       assert.equal(new Set(corti).size, THEMES.length, 'due temi con lo stesso nome corto');
-      for (const nome of corti) {
-        assert.ok(nome.length <= 9, 'non ci sta nella pastiglia: ' + nome);
-        assert.ok(!nome.startsWith('Jenny'), 'e\u2019 rimasto il nome di lei: ' + nome);
+      for (const name of corti) {
+        assert.ok(name.length <= 9, 'non ci sta nella pastiglia: ' + name);
+        assert.ok(!name.startsWith('Jenny'), 'e\u2019 rimasto il nome di lei: ' + name);
       }
     """)
 
@@ -308,14 +308,14 @@ def test_the_version_rides_on_the_row_that_opens_the_updates() -> None:
     vuota, non «versione {version}» con la graffa dentro.
     """
     _run_js("""
-      const tu = room();
-      tu.sayUpdates('');
-      assert.equal(nodi['casa-updates-value'].textContent, '',
+      const you = room();
+      you.sayUpdates('');
+      assert.equal(nodi['home-updates-value'].textContent, '',
         'una versione che non si sa e\u2019 finita a schermo');
 
-      tu.sayUpdates('0.11.0 \u00b7 aggiornata');
-      assert.equal(nodi['casa-updates-value'].textContent, '0.11.0 \u00b7 aggiornata');
-      assert.ok(!nodi['casa-updates-value'].textContent.includes('{'),
+      you.sayUpdates('0.11.0 \u00b7 aggiornata');
+      assert.equal(nodi['home-updates-value'].textContent, '0.11.0 \u00b7 aggiornata');
+      assert.ok(!nodi['home-updates-value'].textContent.includes('{'),
         'il segnaposto e\u2019 rimasto dentro');
     """)
 
@@ -325,9 +325,9 @@ def test_the_row_that_leads_to_her_says_how_she_is_now() -> None:
     un'impostazione. Il valore lo compone la stanza di lei; qui si misura che
     arrivi a schermo, e che svuotarlo non lasci a mezz'aria quello di prima."""
     _run_js("""
-      const tu = room();
-      tu.sayJenny('piccola \u00b7 flottante');
-      assert.equal(tu.jennyValue.textContent, 'piccola \u00b7 flottante');
-      tu.sayJenny(undefined);
-      assert.equal(tu.jennyValue.textContent, '', 'il valore di prima e\u2019 rimasto');
+      const you = room();
+      you.sayJenny('piccola \u00b7 flottante');
+      assert.equal(you.jennyValue.textContent, 'piccola \u00b7 flottante');
+      you.sayJenny(undefined);
+      assert.equal(you.jennyValue.textContent, '', 'il valore di prima e\u2019 rimasto');
     """)

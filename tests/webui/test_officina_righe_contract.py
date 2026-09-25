@@ -13,7 +13,7 @@ passphrase dentro una finestra, anche in casa**. Allineare l'officina cambiando
 `.settings-field` avrebbe schiacciato una password in 92 px, in una schermata
 che con l'officina non c'entra niente.
 
-Per questo la riga a due colonne e' una **classe nuova**, `.settings-riga`, e i
+Per questo la riga a due colonne e' una **classe nuova**, `.settings-row`, e i
 banchi qui sotto chiedono che resti tale.
 """
 
@@ -34,15 +34,15 @@ CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 BACKUP = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
 
 
-def _corpo(nome: str) -> str:
+def _corpo(name: str) -> str:
     """Il corpo di un metodo di `SettingsController`, per nome.
 
     `async` è opzionale: senza, i tre metodi che aspettano la rete —
     proprio quelli che questi banchi devono leggere — risultavano "non
     trovati", che è un falso verde travestito da rosso.
     """
-    m = re.search(rf"\n  (?:async )?{nome}\((.*?)\n  \}}", SETTINGS, re.S)
-    assert m, f"{nome} non trovato"
+    m = re.search(rf"\n  (?:async )?{name}\((.*?)\n  \}}", SETTINGS, re.S)
+    assert m, f"{name} non trovato"
     return m.group(1)
 
 
@@ -53,16 +53,16 @@ def _corpo(nome: str) -> str:
 def test_i_tre_aiutanti_fanno_una_riga_non_una_pila(helper: str) -> None:
     """I tre che disegnano «etichetta + controllo» usano la riga, non la pila."""
     corpo = _corpo(helper)
-    assert 'class="settings-riga"' in corpo, (
+    assert 'class="settings-row"' in corpo, (
         f"{helper} disegna ancora una pila: l'etichetta finirebbe sopra il campo"
     )
     assert 'class="settings-field"' not in corpo
 
 
 def test_la_riga_ha_le_sue_regole() -> None:
-    """Senza queste, `.settings-riga` eredita il nulla e la riga non esiste."""
-    m = re.search(r"^\.settings-riga \{(.*?)\}", CSS, re.S | re.M)
-    assert m, ".settings-riga non ha una regola sua"
+    """Senza queste, `.settings-row` eredita il nulla e la riga non esiste."""
+    m = re.search(r"^\.settings-row \{(.*?)\}", CSS, re.S | re.M)
+    assert m, ".settings-row non ha una regola sua"
     regola = m.group(1)
     assert "flex-direction: row" in regola, "la riga non e' orizzontale"
     assert re.search(r"min-height:\s*44px", regola), (
@@ -74,8 +74,8 @@ def test_i_comandi_hanno_una_larghezza_fissa() -> None:
     """Un numero e un menu' a tutta larghezza sono la pila di prima con un altro
     nome: e' la larghezza fissa a fare le due colonne."""
     for selettore, largh in (
-        (r"\.settings-riga > \.settings-input", "92px"),
-        (r"\.settings-riga > \.settings-select", "150px"),
+        (r"\.settings-row > \.settings-input", "92px"),
+        (r"\.settings-row > \.settings-select", "150px"),
     ):
         m = re.search(rf"{selettore} \{{([^}}]*)\}}", CSS)
         assert m, f"{selettore} senza regola"
@@ -84,7 +84,7 @@ def test_i_comandi_hanno_una_larghezza_fissa() -> None:
 
 def test_i_numeri_sono_allineati_a_destra() -> None:
     """Incolonnati, tre numeri si confrontano con l'occhio."""
-    m = re.search(r"\.settings-riga > \.settings-input \{([^}]*)\}", CSS)
+    m = re.search(r"\.settings-row > \.settings-input \{([^}]*)\}", CSS)
     assert m and "text-align: right" in m.group(1)
 
 
@@ -160,7 +160,7 @@ WORKSHOP_HTML = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_tex
 def test_la_storia_in_cassetto_e_una_riga() -> None:
     """`_renderBackup` non disegna più l'elenco, il menù, né «crea adesso»."""
     corpo = _corpo("_renderBackup")
-    assert "_riepilogo(" in corpo, "la storia non è più riassunta in una riga"
+    assert "_summary(" in corpo, "la storia non è più riassunta in una riga"
     for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
         assert roba not in corpo, f"«{roba}» è tornato disteso nel cassetto"
 
@@ -170,8 +170,8 @@ def test_il_dettaglio_vive_nel_pannello() -> None:
     corpo = _corpo("_apriStoria")
     for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
         assert roba in corpo, f"«{roba}» non è nel pannello: allora è sparito davvero"
-    assert 'id="drawer-storia"' in WORKSHOP_HTML, "il pannello non esiste nel documento"
-    assert 'id="drawer-storia-body"' in WORKSHOP_HTML
+    assert 'id="drawer-history"' in WORKSHOP_HTML, "il pannello non esiste nel documento"
+    assert 'id="drawer-history-body"' in WORKSHOP_HTML
 
 
 def test_il_corpo_del_pannello_si_disegna_all_apertura() -> None:
@@ -254,7 +254,7 @@ def test_le_due_frasi_del_riepilogo_esistono(lingua: str) -> None:
 def test_le_righe_di_riepilogo_si_agganciano_con_una_regola_sola() -> None:
     """Ne arriveranno altre due (Telegram, SSH): un `if` per ognuna le farebbe
     divergere una per volta."""
-    assert "[data-riepilogo]" in SETTINGS, "il cablaggio non è generico"
+    assert "[data-summary]" in SETTINGS, "il cablaggio non è generico"
     assert "_APRI_PANNELLO" in SETTINGS, "manca la tabella pannello -> chi lo riempie"
 
 
@@ -265,7 +265,7 @@ def test_telegram_in_cassetto_e_una_riga() -> None:
     scriverle da fuori, adesso?».
     """
     corpo = _corpo("_renderTelegram")
-    assert "_riepilogo(" in corpo
+    assert "_summary(" in corpo
     assert "settings-telegram-widget" not in SETTINGS, (
         "il widget è ancora montato nel cassetto invece che nel pannello"
     )
@@ -355,9 +355,9 @@ def test_il_riassunto_telegram_copre_tutti_gli_stati() -> None:
 
 def test_un_host_e_una_riga() -> None:
     corpo = _corpo("_renderSshHost")
-    assert 'class="ssh-riga"' in corpo, "l'host è tornato una scheda"
+    assert 'class="ssh-row"' in corpo, "l'host è tornato una scheda"
     assert "provider-card" not in corpo
-    m = re.search(r"^\.ssh-riga \{(.*?)\}", CSS, re.S | re.M)
+    m = re.search(r"^\.ssh-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1)), (
         "la riga non ha l'altezza della tavola"
     )
@@ -374,8 +374,8 @@ def test_i_due_stati_restano_in_chiaro_nella_riga() -> None:
     assert "has_key" in corpo and "pinned" in corpo, (
         "la riga non guarda più credenziale e impronta"
     )
-    pannello = _corpo("_apriHostSsh")
-    assert "_segnoSsh" not in pannello, "i due stati sono migrati dietro il tocco"
+    panel = _corpo("_apriHostSsh")
+    assert "_segnoSsh" not in panel, "i due stati sono migrati dietro il tocco"
 
 
 def test_lo_stato_si_distingue_anche_senza_colore() -> None:
@@ -391,9 +391,9 @@ def test_lo_stato_si_distingue_anche_senza_colore() -> None:
 def test_i_comandi_dell_host_stanno_nel_pannello() -> None:
     """Genera, verifica, modifica, elimina, copia: sono cose che si fanno **a**
     un host, non informazioni su di lui."""
-    pannello = _corpo("_apriHostSsh")
+    panel = _corpo("_apriHostSsh")
     for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
-        assert cmd in pannello, f"«{cmd}» non è nel pannello"
+        assert cmd in panel, f"«{cmd}» non è nel pannello"
     riga = _corpo("_renderSshHost")
     for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
         assert cmd not in riga, f"«{cmd}» è rimasto nella riga"
@@ -428,7 +428,7 @@ def test_una_scheda_contiene_invece_di_mandare_altrove() -> None:
     Memoria non c'e' niente prima del primo gruppo.
 
     Poi ne resto' una sola — il gestore file, in fondo alla scheda «I file
-    veri» — e una mappa `gruppo -> porte` con tabelle di icone ed etichette era
+    veri» — e una mappa `group -> porte` con tabelle di icone ed etichette era
     piu' codice della cosa che reggeva.
 
     **E il 21/09/2026 e' finita anche quella**, perche' la scheda che la
@@ -450,7 +450,7 @@ def test_una_scheda_contiene_invece_di_mandare_altrove() -> None:
     assert "data-ws-grid" in corpo, "la scheda non ha piu' dove montare il gestore file"
     assert "listWorkspace" not in corpo, "la scheda si e' rifatta un elenco suo"
 
-    m = re.search(r"_gruppo\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    m = re.search(r"_group\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo ha cambiato forma"
     assert "${corpo}</section>" in m.group(1), (
         "il gruppo appende di nuovo qualcosa dopo il corpo: le porte fluttuavano "
@@ -463,9 +463,9 @@ def test_i_tetti_si_leggono_e_si_cambiano_altrove() -> None:
     corpo = _corpo("_renderQuantoRicorda")
     assert "_misuraTetto(" in corpo
     assert "_numberField(" not in corpo, "i campi modificabili sono tornati in cassetto"
-    assert 'data-riepilogo="tetti"' in corpo, "manca il modo di cambiarli"
-    pannello = _corpo("_apriTetti")
-    assert pannello.count("_numberField(") == 3, "i tre campi non sono nel pannello"
+    assert 'data-summary="tetti"' in corpo, "manca il modo di cambiarli"
+    panel = _corpo("_apriTetti")
+    assert panel.count("_numberField(") == 3, "i tre campi non sono nel pannello"
 
 
 def test_la_misura_dice_quanto_resta_non_solo_quanto_misura() -> None:
@@ -490,13 +490,13 @@ def test_una_marca_e_una_riga_con_chi_risponde() -> None:
     """La pastiglia «risponde» la scheda non ce l'aveva: da qui si amministrano
     le marche, e sapere quale sta rispondendo è il contesto di ogni decisione."""
     corpo = _corpo("_renderProviderListHtml")
-    assert 'class="marca-riga"' in corpo and "provider-card" not in corpo
-    assert "marca-risponde" in corpo and "settings.answersNow" in corpo
+    assert 'class="brand-row"' in corpo and "provider-card" not in corpo
+    assert "brand-answers" in corpo and "settings.answersNow" in corpo
     assert "provider-edit" not in corpo and "provider-delete" not in corpo, (
         "modifica ed elimina sono rimaste nella riga"
     )
     assert "provider-edit" in _corpo("_apriMarca")
-    m = re.search(r"^\.marca-riga \{(.*?)\}", CSS, re.S | re.M)
+    m = re.search(r"^\.brand-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1))
 
 
@@ -507,9 +507,9 @@ def test_il_colore_della_marca_e_uno_solo_e_mai_grigio() -> None:
     aveva due colori. E una tabella da sola lascerebbe grigie proprio le marche
     che l'utente si è aggiunto da sé: per quelle c'è la tinta dal nome.
     ``getProviderBrand`` vero, importato."""
-    assert "getProviderBrand(nome).color" in _corpo("_coloreMarca")
-    casa = (ASSETS / "home-model.js").read_text(encoding="utf-8")
-    assert "getProviderBrand(p.name).color" in casa
+    assert "getProviderBrand(name).color" in _corpo("_coloreMarca")
+    home = (ASSETS / "home-model.js").read_text(encoding="utf-8")
+    assert "getProviderBrand(p.name).color" in home
     brand = (ASSETS / "shared" / "provider-brand.js").as_uri()
     out = run_js(
         f"const {{ getProviderBrand }} = await import({json.dumps(brand)});\n"
@@ -539,11 +539,11 @@ def test_tenere_sveglia_la_cpu_e_un_comando_a_segmenti() -> None:
 
 def test_il_bottone_principale_e_pieno_e_uno_solo() -> None:
     """Sei bottoni pieni sulla stessa pagina non ne fanno risaltare nessuno."""
-    assert SETTINGS.count("settings-btn-pieno") == 1, (
+    assert SETTINGS.count("settings-btn-full") == 1, (
         "il modificatore è finito su più di un'azione"
     )
     assert "settings.addProviderHint" in SETTINGS, "manca la riga che spiega cosa comporta"
-    m = re.search(r"^\.settings-btn-pieno \{(.*?)\}", CSS, re.S | re.M)
+    m = re.search(r"^\.settings-btn-full \{(.*?)\}", CSS, re.S | re.M)
     assert m and "var(--on-accent)" in m.group(1), (
         "testo non su --on-accent: con un accento chiaro non si legge"
     )
@@ -627,8 +627,8 @@ def test_le_parole_della_pastiglia_non_restano_orfane() -> None:
     e' innocuo: la prossima persona che cerca «connessa» le trova e crede che
     la pastiglia esista ancora da qualche parte."""
     sorgenti = "".join(
-        (ASSETS / nome).read_text(encoding="utf-8")
-        for nome in ("mobile-header.js", "mobile-settings.js", "mobile-app.js")
+        (ASSETS / name).read_text(encoding="utf-8")
+        for name in ("mobile-header.js", "mobile-settings.js", "mobile-app.js")
     )
     assert "workshop.stato" not in sorgenti
     for lingua in ("it", "en"):
@@ -641,7 +641,7 @@ def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
     bottone che rifà quel che è appena successo insegna a premerlo per
     scaramanzia."""
     header = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
-    m = re.search(r"function cassetto\(nome\) \{(.*?)\n\}", header, re.S)
+    m = re.search(r"function cassetto\(name\) \{(.*?)\n\}", header, re.S)
     assert m, "cassetto() non trovata"
     assert "'refresh'" not in m.group(1), "l'icona «aggiorna» è tornata nei cassetti"
 
@@ -649,13 +649,13 @@ def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
 def test_il_cassetto_dice_dove_sta_quel_che_non_ci_sta() -> None:
     """Un cassetto che si chiama «Cervello» sembra il posto dove cercare Dream:
     è l'errore che il giro dei cassetti ha già fatto una volta."""
-    assert "workshop.rimando.dreamInMemoria" in SETTINGS
-    assert ".settings-rimando {" in CSS
+    assert "workshop.link.dreamInMemory" in SETTINGS
+    assert ".settings-link {" in CSS
     import json
 
     for lingua in ("it", "en"):
         d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
-        assert d["workshop"]["rimando"]["dreamInMemoria"].strip()
+        assert d["workshop"]["link"]["dreamInMemory"].strip()
 
 
 def test_un_lavoro_periodico_e_una_riga() -> None:
@@ -667,9 +667,9 @@ def test_un_lavoro_periodico_e_una_riga() -> None:
     Mani misurati sul telefono il 21/09/2026.
     """
     corpo = _corpo("_renderCronJob")
-    assert 'class="cron-riga' in corpo, "il lavoro è ancora una scheda"
+    assert 'class="cron-row' in corpo, "il lavoro è ancora una scheda"
     assert "cron-card-head" not in corpo and "cron-lines" not in corpo
-    m = re.search(r"^\.cron-riga \{(.*?)\}", CSS, re.S | re.M)
+    m = re.search(r"^\.cron-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1))
 
 
@@ -697,13 +697,13 @@ def test_la_riga_del_lavoro_tiene_quel_che_cambia_il_significato() -> None:
 
 def test_le_skill_in_cassetto_sono_una_riga() -> None:
     corpo = _corpo("_renderSkill")
-    assert "_riepilogo(" in corpo, "le skill non sono più riassunte in una riga"
+    assert "_summary(" in corpo, "le skill non sono più riassunte in una riga"
     assert "toggle-switch" not in corpo, "un interruttore è tornato disteso nel cassetto"
 
 
 def test_il_riepilogo_delle_skill_non_resta_a_caricamento_per_sempre() -> None:
     corpo = _corpo("_caricaRiepilogoSkill")
-    assert "catch" in corpo and "riepilogoErrore" in corpo
+    assert "catch" in corpo and "summaryError" in corpo
     assert "riepilogoSkill(" in corpo, "la riga non legge la regola condivisa"
 
 
@@ -729,16 +729,16 @@ def test_l_interruttore_passa_dalla_regola_che_sa_chi_sopravvive_al_riavvio() ->
 def test_la_scelta_del_21_09_resta_una_scelta() -> None:
     """Crearle, cambiarle e cancellarle non stanno nel pannello: si chiede a
     Jenny. Chi le rimette lo fa sapendolo, non per inerzia."""
-    pannello = "".join(
-        _corpo(nome) for nome in ("_apriSkill", "_rigaSkill", "_skillVuota", "_cablaSkill")
+    panel = "".join(
+        _corpo(name) for name in ("_apriSkill", "_rigaSkill", "_skillVuota", "_cablaSkill")
     )
     for roba in ("deleteSkill", "/delete", "ti-trash", "ti-edit", "confirmDialog"):
-        assert roba not in pannello, f"«{roba}» è comparso nel pannello delle skill"
+        assert roba not in panel, f"«{roba}» è comparso nel pannello delle skill"
 
 
 def test_chiedi_a_jenny_scrive_e_non_manda() -> None:
     corpo = _corpo("_cablaSkill")
-    assert "mandaInChat" in corpo and "skills.chiediPrompt" in corpo
+    assert "mandaInChat" in corpo and "skills.askPrompt" in corpo
     assert "sendMessage" not in corpo
     app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
     assert re.search(r"\n  mandaInChat\(testo\) \{", app), (

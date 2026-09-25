@@ -158,10 +158,10 @@ export async function renderDiagrams(container) {
       // Staccato mentre mermaid disegnava (cambio pagina, ridisegno): non si
       // riscrive un nodo che non e' piu' a schermo.
       if (!blocco.isConnected) return;
-      const casa = document.createElement('div');
-      casa.className = 'diagramma';
-      casa.innerHTML = svg;
-      blocco.replaceWith(casa);
+      const home = document.createElement('div');
+      home.className = 'diagram';
+      home.innerHTML = svg;
+      blocco.replaceWith(home);
     } catch (err) {
       // Un diagramma con un errore di sintassi resta il suo sorgente, che e'
       // leggibile: mermaid altrimenti pianta a schermo il proprio messaggio

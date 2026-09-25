@@ -66,7 +66,7 @@ export function tileNames(providers) {
 export function modelValue({ providers, active }) {
   const elenco = providers || [];
   const i = elenco.findIndex((p) => p.name === active);
-  if (i < 0) return i18n.t('casa.model.none');
+  if (i < 0) return i18n.t('home.model.none');
   return tileNames(elenco)[i];
 }
 
@@ -75,21 +75,21 @@ export class HomeModel {
    *                     stessa forma di `/api/settings`, quindi il guscio lo
    *                     ridistribuisce invece di richiederlo. */
   constructor({ onSettings } = {}) {
-    this.el = document.getElementById('casa-model-room');
-    this.brandsEl = document.getElementById('casa-providers');
-    this.brandsLabel = document.getElementById('casa-providers-label');
-    this.brandsValue = document.getElementById('casa-providers-value');
-    this.keyRow = document.getElementById('casa-key-row');
-    this.keyLabel = document.getElementById('casa-key-label');
-    this.keyHint = document.getElementById('casa-key-hint');
-    this.keyBtn = document.getElementById('casa-key-btn');
-    this.keyEdit = document.getElementById('casa-key-edit');
-    this.keyInput = document.getElementById('casa-key-input');
-    this.keySave = document.getElementById('casa-key-save');
-    this.modelsLabel = document.getElementById('casa-models-label');
-    this.modelsEl = document.getElementById('casa-models');
-    this.modelsNote = document.getElementById('casa-models-note');
-    this.restartNote = document.getElementById('casa-model-restart');
+    this.el = document.getElementById('home-model-room');
+    this.brandsEl = document.getElementById('home-providers');
+    this.brandsLabel = document.getElementById('home-providers-label');
+    this.brandsValue = document.getElementById('home-providers-value');
+    this.keyRow = document.getElementById('home-key-row');
+    this.keyLabel = document.getElementById('home-key-label');
+    this.keyHint = document.getElementById('home-key-hint');
+    this.keyBtn = document.getElementById('home-key-btn');
+    this.keyEdit = document.getElementById('home-key-edit');
+    this.keyInput = document.getElementById('home-key-input');
+    this.keySave = document.getElementById('home-key-save');
+    this.modelsLabel = document.getElementById('home-models-label');
+    this.modelsEl = document.getElementById('home-models');
+    this.modelsNote = document.getElementById('home-models-note');
+    this.restartNote = document.getElementById('home-model-restart');
 
     this._onSettings = onSettings;
     /** Quel che il server dice: `null` finche' non l'ha detto. */
@@ -154,10 +154,10 @@ export class HomeModel {
   }
 
   applyTranslations() {
-    if (this.brandsLabel) this.brandsLabel.textContent = i18n.t('casa.model.who');
-    if (this.keyLabel) this.keyLabel.textContent = i18n.t('casa.model.key');
-    if (this.keySave) this.keySave.textContent = i18n.t('casa.model.keySave');
-    if (this.keyInput) this.keyInput.placeholder = i18n.t('casa.model.keyPlaceholder');
+    if (this.brandsLabel) this.brandsLabel.textContent = i18n.t('home.model.who');
+    if (this.keyLabel) this.keyLabel.textContent = i18n.t('home.model.key');
+    if (this.keySave) this.keySave.textContent = i18n.t('home.model.keySave');
+    if (this.keyInput) this.keyInput.placeholder = i18n.t('home.model.keyPlaceholder');
     this._paint();
   }
 
@@ -176,10 +176,10 @@ export class HomeModel {
     try {
       const payload = await api.updateSettings({ model, default_provider: provider });
       this._apply(payload);
-      showToast(i18n.t('casa.model.saved'), 'success');
+      showToast(i18n.t('home.model.saved'), 'success');
     } catch (err) {
       console.warn('casa.model: model not changed', err);
-      showToast(i18n.t('casa.model.failed'), 'error');
+      showToast(i18n.t('home.model.failed'), 'error');
     }
   }
 
@@ -207,10 +207,10 @@ export class HomeModel {
          ragione per cui l'elenco era vuoto. */
       this._cataloghi.delete(provider);
       this._loadModels(provider);
-      showToast(i18n.t('casa.model.keySaved'), 'success');
+      showToast(i18n.t('home.model.keySaved'), 'success');
     } catch (err) {
       console.warn('casa.model: key not saved', err);
-      showToast(err?.message || i18n.t('casa.model.failed'), 'error');
+      showToast(err?.message || i18n.t('home.model.failed'), 'error');
     }
   }
 
@@ -273,7 +273,7 @@ export class HomeModel {
     for (const [i, p] of elenco.entries()) {
       const tile = document.createElement('button');
       tile.type = 'button';
-      tile.className = 'casa-brand';
+      tile.className = 'home-brand';
       tile.dataset.provider = p.name;
       tile.setAttribute('role', 'radio');
       const attivo = p.name === this.data?.default_provider;
@@ -284,14 +284,14 @@ export class HomeModel {
       tile.setAttribute('aria-checked', String(attivo));
 
       const dot = document.createElement('span');
-      dot.className = 'casa-brand-dot';
+      dot.className = 'home-brand-dot';
       dot.style.background = getProviderBrand(p.name).color;
       tile.appendChild(dot);
 
-      const nome = document.createElement('span');
-      nome.className = 'casa-brand-name';
-      nome.textContent = nomi[i];
-      tile.appendChild(nome);
+      const name = document.createElement('span');
+      name.className = 'home-brand-name';
+      name.textContent = nomi[i];
+      tile.appendChild(name);
 
       /* Chi risponde porta il segno, e non solo un anello d'accento: nei temi
          chiari `--overlay` e `--overlay-strong` sono quasi lo stesso bianco, e
@@ -316,12 +316,12 @@ export class HomeModel {
     this.keyRow.hidden = !p;
     if (!p) return;
     if (this.keyHint) {
-      this.keyHint.textContent = p.api_key_hint || i18n.t('casa.model.keyNone');
+      this.keyHint.textContent = p.api_key_hint || i18n.t('home.model.keyNone');
       this.keyHint.classList.toggle('is-faint', !p.api_key_hint);
     }
     if (this.keyBtn) {
       this.keyBtn.textContent = i18n.t(
-        p.api_key_hint ? 'casa.model.keyChange' : 'casa.model.keyAdd',
+        p.api_key_hint ? 'home.model.keyChange' : 'home.model.keyAdd',
       );
     }
   }
@@ -331,8 +331,8 @@ export class HomeModel {
     const p = this._provider(this.viewing);
     if (this.modelsLabel) {
       this.modelsLabel.textContent = p
-        ? i18n.t('casa.model.models', { provider: this.viewName() })
-        : i18n.t('casa.model.none');
+        ? i18n.t('home.model.models', { provider: this.viewName() })
+        : i18n.t('home.model.none');
     }
     const catalogo = this._cataloghi.get(this.viewing) || { status: 'loading', models: [] };
     const corrente = this.data?.agent?.model || '';
@@ -355,10 +355,10 @@ export class HomeModel {
       row.setAttribute('aria-checked', String(on));
       row.setAttribute('role', 'radio');
 
-      const nome = document.createElement('span');
-      nome.className = 'casa-model-id';
-      nome.textContent = id;
-      row.appendChild(nome);
+      const name = document.createElement('span');
+      name.className = 'home-model-id';
+      name.textContent = id;
+      row.appendChild(name);
 
       const segno = document.createElement('i');
       segno.className = on ? 'ti ti-check' : 'ti';
@@ -376,10 +376,10 @@ export class HomeModel {
   _sayModels(catalogo, quante) {
     if (!this.modelsNote) return;
     const chiavi = {
-      loading: 'casa.model.loading',
-      not_configured: 'casa.model.needsKey',
-      missing_api_base: 'casa.model.needsBase',
-      error: 'casa.model.listFailed',
+      loading: 'home.model.loading',
+      not_configured: 'home.model.needsKey',
+      missing_api_base: 'home.model.needsBase',
+      error: 'home.model.listFailed',
     };
     const chiave = chiavi[catalogo.status];
     const testo = chiave ? i18n.t(chiave) : (quante ? '' : catalogo.message || '');
@@ -390,6 +390,6 @@ export class HomeModel {
   _sayRestart(serve) {
     if (!this.restartNote) return;
     this.restartNote.hidden = !serve;
-    if (serve) this.restartNote.textContent = i18n.t('casa.model.restart');
+    if (serve) this.restartNote.textContent = i18n.t('home.model.restart');
   }
 }

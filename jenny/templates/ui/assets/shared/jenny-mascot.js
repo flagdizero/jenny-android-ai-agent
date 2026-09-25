@@ -11,7 +11,7 @@
  *  Adesso il cervello e' qui, ed e' quello dell'officina: il ramo che aveva gia'
  *  preso le correzioni misurate sul telefono. **Fra i due gusci cambia solo il
  *  pavimento** — dove appoggia i piedi, che e' una regola del foglio di stile
- *  di ciascuno (`.jenny-duo` in mobile-style.css, `.casa-shell .jenny-duo` in
+ *  di ciascuno (`.jenny-duo` in mobile-style.css, `.home-shell .jenny-duo` in
  *  home-style.css). L'officina ci aggiunge sopra la minichat
  *  (`mobile-jenny.js`, sottoclasse), perche' la' la chat puo' non essere a
  *  schermo; in casa la chat *e'* lo schermo.
@@ -81,7 +81,7 @@ const MOOD_HOLD_MS = 12000; // quanto dura una faccia prima di tornare a normale
 export class JennyMascot {
   /**
    * @param {HTMLElement} host  dove vive lo sprite (`#app` in officina,
-   *   `.casa-shell` in casa): e' il suo riferimento per `position: absolute`.
+   *   `.home-shell` in casa): e' il suo riferimento per `position: absolute`.
    * @param {{mode?: string}} [opts]  la vista di partenza. Conta solo per
    *   l'officina, che ne ha piu' d'una; qui e' sempre `chat`.
    */
@@ -139,10 +139,10 @@ export class JennyMascot {
 
     // Da qui in poi la visibilità è governata a runtime dalla classe
     // hidden-mode su nodi creati da JS: rimuovi il ponte anti-flash
-    // impostato al boot da bootstrap.js, altrimenti :root[data-mascotte-hidden]
+    // impostato al boot da bootstrap.js, altrimenti :root[data-mascot-hidden]
     // continuerebbe a forzare display:none anche dopo che l'utente riattiva
     // la mascotte dalle Impostazioni.
-    document.documentElement.removeAttribute('data-mascotte-hidden');
+    document.documentElement.removeAttribute('data-mascot-hidden');
 
     // Android: escludi l'area di Jenny dalle gesture di sistema (v. sotto).
     this._onResize = () => this._updateGestureExclusion();

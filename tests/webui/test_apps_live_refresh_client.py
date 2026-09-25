@@ -80,10 +80,10 @@ def _run(corpo: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         (radice / "shared").mkdir()
-        for nome in ("apps-source.js", "apps-actions.js"):
-            shutil.copy(ASSETS / "shared" / nome, radice / "shared" / nome)
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name in ("apps-source.js", "apps-actions.js"):
+            shutil.copy(ASSETS / "shared" / name, radice / "shared" / name)
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(_PRELUDIO + textwrap.dedent(corpo), encoding="utf-8")
         run_module(entry)

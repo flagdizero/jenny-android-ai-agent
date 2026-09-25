@@ -434,18 +434,18 @@ def test_a_drawer_shows_only_its_own_jobs() -> None:
       const tutto = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
           _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))}, {{ tr }});
-      const mani = buildCronView({_payload(jobs=', '.join([
+      const hands = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
           _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))},
         {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
         tutto: tutto.rows.map((r) => r.id),
-        mani: mani.rows.map((r) => r.id),
+        hands: hands.rows.map((r) => r.id),
       }}));
     """)
     visto = json.loads(out)
     assert sorted(visto["tutto"]) == ["acqua-basilico", "dream", "gardener", "heartbeat"]
-    assert sorted(visto["mani"]) == ["acqua-basilico", "heartbeat"], (
+    assert sorted(visto["hands"]) == ["acqua-basilico", "heartbeat"], (
         "il cassetto Mani mostra lavori che appartengono a un altro cassetto"
     )
 
@@ -462,17 +462,17 @@ def test_the_banner_talks_about_the_jobs_you_can_see() -> None:
     ])
     out = _run_js(f"""
       const tutto = buildCronView({_payload(jobs=spenti)}, {{ tr }});
-      const mani = buildCronView({_payload(jobs=spenti)},
+      const hands = buildCronView({_payload(jobs=spenti)},
         {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
-        tutto: tutto.banner, mani: mani.banner,
+        tutto: tutto.banner, hands: hands.banner,
       }}));
     """)
     visto = json.loads(out)
     assert visto["tutto"] and visto["tutto"]["kind"] == "inert", visto["tutto"]
     assert "dream" in visto["tutto"]["jobs"], visto["tutto"]
-    assert not visto["mani"] or "dream" not in (visto["mani"].get("jobs") or []), (
-        f"il banner di Mani nomina un lavoro che Mani non mostra: {visto['mani']}"
+    assert not visto["hands"] or "dream" not in (visto["hands"].get("jobs") or []), (
+        f"il banner di Mani nomina un lavoro che Mani non mostra: {visto['hands']}"
     )
 
 
@@ -485,13 +485,13 @@ def test_the_count_describes_what_is_on_screen() -> None:
     ])
     out = _run_js(f"""
       const tutto = buildCronView({_payload(jobs=jobs)}, {{ tr }});
-      const mani = buildCronView({_payload(jobs=jobs)},
+      const hands = buildCronView({_payload(jobs=jobs)},
         {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
-      console.log(JSON.stringify({{ tutto: tutto.counts, mani: mani.counts }}));
+      console.log(JSON.stringify({{ tutto: tutto.counts, hands: hands.counts }}));
     """)
     visto = json.loads(out)
     assert visto["tutto"] == {"system": 4, "user": 2}, "senza filtro i conti restano quelli del server"
-    assert visto["mani"] == {"system": 1, "user": 1}, visto["mani"]
+    assert visto["hands"] == {"system": 1, "user": 1}, visto["hands"]
 
 
 def test_without_a_filter_nothing_changes() -> None:

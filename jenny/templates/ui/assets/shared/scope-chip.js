@@ -7,7 +7,7 @@
  * solo guasto irrecuperabile del disegno delle sessioni-progetto.
  *
  * Scegliere uno scope cambia **davvero** conversazione: la chiave della
- * sessione diventa `project:<nome>`, e da quella il gateway ricava sia la
+ * sessione diventa `project:<name>`, e da quella il gateway ricava sia la
  * cartella su cui l'agente lavora sia il thread da disegnare. Il chip non manda
  * mai un percorso: manda un nome, e la cartella la deduce il server — così la
  * sessione e la sua cartella non possono divergere.

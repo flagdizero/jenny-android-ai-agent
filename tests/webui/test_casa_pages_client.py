@@ -138,11 +138,11 @@ __GROUPS_MEANINGFUL__
 class Pages {
   constructor() {
     this.el = document.getElementById('home-notebook-pages');
-    this.listEl = document.getElementById('casa-page-list');
-    this.noteEl = document.getElementById('casa-pages-note');
-    this.queryEl = document.getElementById('casa-pages-q');
-    this.tabListEl = document.getElementById('casa-tab-list');
-    this.tabMapEl = document.getElementById('casa-tab-map');
+    this.listEl = document.getElementById('home-notebook-page-list');
+    this.noteEl = document.getElementById('home-notebook-pages-note');
+    this.queryEl = document.getElementById('home-notebook-pages-q');
+    this.tabListEl = document.getElementById('home-tab-list');
+    this.tabMapEl = document.getElementById('home-tab-map');
     this.mapEl = document.getElementById('home-map');
     this.notebook = null;
     this.data = null;
@@ -164,7 +164,7 @@ class Pages {
   __APPLY_SEARCH__
 }
 
-function pagine() {
+function homePages() {
   for (const k of Object.keys(nodi)) delete nodi[k];
   risposta = null;
   errore = null;
@@ -258,7 +258,7 @@ def test_the_search_lights_the_row_the_server_meant() -> None:
     sbagliato.
     """
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       assert.deepEqual(p.listEl.children.map((r) => r.dataset.label),
@@ -276,7 +276,7 @@ def test_an_empty_query_shows_everything_again() -> None:
     """`query()` torna `null` quando non c'e' nessun vincolo: e' «tutto», non
     «niente»."""
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       maschera = new Uint8Array([0, 1, 0, 0]);
@@ -290,13 +290,13 @@ def test_an_empty_query_shows_everything_again() -> None:
 
 def test_a_query_that_matches_nothing_says_so() -> None:
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       maschera = new Uint8Array([0, 0, 0, 0]);
       p._applySearch();
       assert.equal(p.noteEl.hidden, false);
-      assert.equal(p.noteEl.textContent, i18n.t('casa.pages.noMatch'));
+      assert.equal(p.noteEl.textContent, i18n.t('home.notebookPages.noMatch'));
     """)
 
 
@@ -308,24 +308,24 @@ def test_a_flat_notebook_shows_no_group_at_all() -> None:
     non informa, occupa. Spariscono l'etichetta **e** il pallino."""
     _run("""
       assert.equal(groupsAreMeaningful(orderPages(PIATTO.nodes)), false);
-      const p = pagine();
+      const p = homePages();
       risposta = PIATTO;
       await p.load('diario');
       for (const row of p.listEl.children) {
         assert.equal(row.children.length, 1, 'una riga piatta ha piu\\u2019 di un pezzo');
-        assert.equal(row.children[0].className, 'casa-page-name');
+        assert.equal(row.children[0].className, 'home-notebook-page-name');
       }
     """)
 
 
 def test_a_notebook_with_groups_shows_the_dot_and_the_word() -> None:
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       const prima = p.listEl.children[0];
       assert.equal(prima.children.length, 3);
-      assert.ok(prima.children[0].className.includes('casa-group-entities'));
+      assert.ok(prima.children[0].className.includes('home-group-entities'));
       assert.equal(prima.children[2].textContent, i18n.t('graph.entities'));
       const ultima = p.listEl.children[3];
       assert.equal(ultima.children[2].textContent, i18n.t('graph.other'));
@@ -371,7 +371,7 @@ def test_only_the_last_load_draws() -> None:
     token di carico potrebbe sparire senza che nessuno se ne accorga.
     """
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       ritardo = 40;                 // il quaderno grosso, lento
       const primo = p.load('orto');
@@ -392,29 +392,29 @@ def test_wikis_switched_off_say_the_sentence_the_house_already_has() -> None:
     """503 non e' un guasto: e' un'impostazione. E la frase esiste gia' — la
     usa il giro di creazione per dire esattamente la stessa cosa."""
     _run("""
-      const p = pagine();
+      const p = homePages();
       errore = new Error('Graph failed: 503');
       await p.load('orto');
-      assert.equal(p.noteEl.textContent, i18n.t('casa.who.create.wikiOff'));
+      assert.equal(p.noteEl.textContent, i18n.t('home.who.create.wikiOff'));
     """)
 
 
 def test_a_real_failure_is_not_the_same_sentence() -> None:
     _run("""
-      const p = pagine();
+      const p = homePages();
       errore = new Error('Graph failed: 500');
       await p.load('orto');
-      assert.equal(p.noteEl.textContent, i18n.t('casa.pages.failed'));
+      assert.equal(p.noteEl.textContent, i18n.t('home.notebookPages.failed'));
     """)
 
 
 def test_a_notebook_with_no_pages_yet_says_so() -> None:
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = { nodes: [], edges: [], search: null };
       await p.load('nuovo');
       assert.equal(p.noteEl.hidden, false);
-      assert.equal(p.noteEl.textContent, i18n.t('casa.pages.none'));
+      assert.equal(p.noteEl.textContent, i18n.t('home.notebookPages.none'));
     """)
 
 
@@ -424,7 +424,7 @@ def test_a_notebook_with_no_pages_yet_says_so() -> None:
 def test_the_map_is_asked_for_only_when_you_tap_its_tab() -> None:
     """280 kB di D3: chi non apre la mappa non la paga."""
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       assert.equal(p.mappe, 0, 'la mappa e\\u2019 stata chiesta senza toccarla');
@@ -447,7 +447,7 @@ def test_a_new_notebook_comes_back_to_the_list() -> None:
     """Aprire un altro quaderno con la mappa accesa mostrerebbe la mappa di
     prima mentre l'elenco nuovo arriva."""
     _run("""
-      const p = pagine();
+      const p = homePages();
       risposta = CON_GRUPPI;
       await p.load('orto');
       p.showTab('map');

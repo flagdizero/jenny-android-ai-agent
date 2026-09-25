@@ -13,7 +13,7 @@
  * cornice fissa si paga caro, e si tiene al minimo.
  */
 
-body.casa {
+body.home {
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -28,7 +28,7 @@ body.casa {
   overscroll-behavior: none;
 }
 
-.casa-shell {
+.home-shell {
   display: flex;
   position: relative;
   flex-direction: column;
@@ -59,10 +59,10 @@ body.casa {
 
 /* La fila e' della conversazione e delle sue pagine di lato; le stanze hanno
    l'intestazione loro, con la via del ritorno. Mai tutte e due. */
-.casa-shell:not([data-view='chat']) .home-strip,
-.casa-shell[data-view='chat'] .casa-head { display: none; }
+.home-shell:not([data-view='chat']) .home-strip,
+.home-shell[data-view='chat'] .home-head { display: none; }
 
-.casa-fila-nomi {
+.home-strip-names {
   display: flex;
   align-items: baseline;
   gap: 20px;
@@ -70,25 +70,25 @@ body.casa {
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
-.casa-fila-nomi::-webkit-scrollbar { display: none; }
+.home-strip-names::-webkit-scrollbar { display: none; }
 
 /* Dal lato in cui qualcosa non ci sta, la fila sfuma: un nome tagliato di
    netto sul bordo sembra un difetto, uno che svanisce dice «di qua ce n'e'
    ancora». */
-.casa-fila-nomi.sfuma-dopo {
+.home-strip-names.fade-after {
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
   mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
 }
-.casa-fila-nomi.sfuma-prima {
+.home-strip-names.fade-before {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px);
   mask-image: linear-gradient(90deg, transparent, #000 40px);
 }
-.casa-fila-nomi.sfuma-prima.sfuma-dopo {
+.home-strip-names.fade-before.fade-after {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
   mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
 }
 
-.casa-fila-voce {
+.home-strip-entry {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -111,7 +111,7 @@ body.casa {
   -webkit-touch-callout: none;
 }
 
-.casa-fila-voce.is-on {
+.home-strip-entry.is-on {
   /* Il nome dove sei: tronca prima di spingere fuori le altre. Un quaderno
      arriva a 64 caratteri, e senza un tetto la fila mostrerebbe solo lui. */
   max-width: 62%;
@@ -123,24 +123,24 @@ body.casa {
   text-transform: none;
 }
 
-.casa-fila-nome {
+.home-strip-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.casa-fila-dot {
+.home-strip-dot {
   flex: none;
   width: 7px;
   height: 7px;
   border-radius: 999px;
 }
-.casa-fila-voce.is-on .casa-fila-dot {
+.home-strip-entry.is-on .home-strip-dot {
   width: 10px;
   height: 10px;
 }
 
-.casa-fila-voce:focus-visible {
+.home-strip-entry:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
@@ -151,7 +151,7 @@ body.casa {
    si trascinano, e la pagina sotto si spegne. Quello che conta qui e' dove va
    il dito, e la conversazione non deve contenderglielo. */
 
-.home-strip.is-ordina {
+.home-strip.is-sort {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -160,19 +160,19 @@ body.casa {
   background: var(--surface-2);
 }
 
-.casa-ordina-testa {
+.home-sort-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.casa-ordina-aiuto {
+.home-sort-help {
   color: var(--text-muted);
   font-size: 13px;
 }
 
-.casa-ordina-fatto {
+.home-sort-done {
   flex: none;
   height: 36px;
   padding: 0 16px;
@@ -186,13 +186,13 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-ordina-pastiglie {
+.home-sort-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.casa-ordina-pastiglia {
+.home-sort-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -210,26 +210,26 @@ body.casa {
   cursor: grab;
 }
 
-.casa-ordina-pastiglia .ti-grip-vertical {
+.home-sort-pill .ti-grip-vertical {
   color: var(--text-faint);
   font-size: 16px;
 }
 
 /* Sollevata. Sta sopra le altre **senza** `z-index` — questo foglio non ne
-   dichiara nessuno (v. `.casa-shell .jenny-duo`): un elemento trasformato si
+   dichiara nessuno (v. `.home-shell .jenny-duo`): un elemento trasformato si
    dipinge dopo i fratelli che non lo sono. */
-.casa-ordina-pastiglia.is-sollevata {
+.home-sort-pill.is-lifted {
   border-color: var(--accent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
   cursor: grabbing;
 }
 
-.casa-ordina-pastiglia:focus-visible {
+.home-sort-pill:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
 }
 
-.casa-ordina-togli {
+.home-sort-remove {
   flex: none;
   display: grid;
   place-items: center;
@@ -245,14 +245,14 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-shell[data-ordina] .casa-vetrina {
+.home-shell[data-sort] .home-showcase {
   opacity: 0.3;
   pointer-events: none;
 }
 
 /* ── L'intestazione delle stanze ── */
 
-.casa-head {
+.home-head {
   flex: none;
   display: flex;
   align-items: center;
@@ -263,11 +263,11 @@ body.casa {
 /* Il titolo cede, i comandi no. Un nome di quaderno arriva a 64 caratteri:
    senza `min-width: 0` una scatola flex non si stringe sotto il proprio
    contenuto, e quel nome spingerebbe «Parlane» fuori dallo schermo. */
-.casa-title {
+.home-title {
   min-width: 0;
 }
 
-.casa-title h1 {
+.home-title h1 {
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -282,7 +282,7 @@ body.casa {
 
 /* ── Il filo ── */
 
-.casa-thread {
+.home-thread {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -299,9 +299,9 @@ body.casa {
    `margin-top:auto` sul primo figlio e NON `justify-content:flex-end` sul
    contenitore: con flex-end, quando il contenuto supera l'altezza, in Chrome la
    parte che deborda in alto non si riesce piu' a raggiungere con lo scorrimento. */
-.casa-thread > *:first-child { margin-top: auto; }
+.home-thread > *:first-child { margin-top: auto; }
 
-.casa-empty {
+.home-empty {
   position: absolute;
   inset: 0;
   display: grid;
@@ -317,9 +317,9 @@ body.casa {
    il foglio dell'autore vince sempre su quello del browser. Senza questa riga
    lo stato vuoto resta a schermo *sopra* la conversazione, che e' come si e'
    presentato la prima volta. */
-.casa-empty[hidden] { display: none; }
+.home-empty[hidden] { display: none; }
 
-.casa-empty-text {
+.home-empty-text {
   color: var(--text-faint);
   font-size: 15px;
   line-height: 1.5;
@@ -354,43 +354,43 @@ body.casa {
 
 .home-activity[hidden] { display: none; }
 
-.casa-activity-fiore {
+.home-activity-flower {
   flex: none;
   width: 16px;
   height: 16px;
   overflow: visible;
   filter: drop-shadow(0 0 3px var(--glow));
 }
-.casa-fiore-petalo { fill: var(--flower); }
-.casa-fiore-vena { fill: color-mix(in oklab, var(--flower), var(--glint) 55%); opacity: 0.55; }
-.casa-fiore-cuore { fill: var(--bg); stroke: var(--flower); stroke-width: 3.2; }
-.casa-fiore-polline { fill: var(--glint); }
+.home-flower-petal { fill: var(--flower); }
+.home-flower-vein { fill: color-mix(in oklab, var(--flower), var(--glint) 55%); opacity: 0.55; }
+.home-flower-heart { fill: var(--bg); stroke: var(--flower); stroke-width: 3.2; }
+.home-flower-pollen { fill: var(--glint); }
 
 /* La parola che esce e quella che entra stanno nella stessa cella. */
-.casa-activity-parole { display: inline-grid; white-space: nowrap; }
-.casa-parola { grid-area: 1 / 1; display: inline-flex; align-items: baseline; }
-.casa-parola.esce { animation: casa-parola-esce 0.26s ease forwards; }
+.home-activity-words { display: inline-grid; white-space: nowrap; }
+.home-word { grid-area: 1 / 1; display: inline-flex; align-items: baseline; }
+.home-word.exits { animation: home-word-exits 0.26s ease forwards; }
 
-.casa-lettera {
+.home-letter {
   display: inline-block;
   color: var(--flower);
   animation:
-    casa-lettera-entra 0.46s cubic-bezier(0.2, 0.9, 0.25, 1.15) both,
-    casa-luccichio 2.6s linear infinite;
+    home-letter-enters 0.46s cubic-bezier(0.2, 0.9, 0.25, 1.15) both,
+    home-shimmer 2.6s linear infinite;
   animation-delay:
     calc(var(--i) * 26ms),
     calc(var(--i) * 55ms + 0.5s);
 }
 
-.casa-puntini { display: inline-flex; margin-left: 0.04em; }
-.casa-puntino {
+.home-ellipsis { display: inline-flex; margin-left: 0.04em; }
+.home-ellipsis-dot {
   display: inline-block;
-  animation: casa-puntino 1.15s ease-in-out infinite;
+  animation: home-ellipsis-dot 1.15s ease-in-out infinite;
   animation-delay: calc(var(--k) * 0.15s);
 }
 
 /* Per il lettore di schermo: la parola intera, fuori dalla vista. */
-.casa-activity-testo {
+.home-activity-text {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -399,26 +399,26 @@ body.casa {
   white-space: nowrap;
 }
 
-@keyframes casa-lettera-entra {
+@keyframes home-letter-enters {
   from { opacity: 0; transform: translateY(0.55em) rotate(8deg); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes casa-luccichio {
+@keyframes home-shimmer {
   0%, 58%, 100% { color: var(--flower); text-shadow: none; }
   68% { color: var(--glint); text-shadow: 0 0 0.6em var(--glow); }
 }
-@keyframes casa-parola-esce {
+@keyframes home-word-exits {
   to { opacity: 0; transform: translateY(-0.55em); }
 }
-@keyframes casa-puntino {
+@keyframes home-ellipsis-dot {
   0%, 55%, 100% { transform: translateY(0); opacity: 0.45; }
   25% { transform: translateY(-0.3em); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .casa-lettera,
-  .casa-puntino,
-  .casa-parola.esce { animation: none; }
+  .home-letter,
+  .home-ellipsis-dot,
+  .home-word.exits { animation: none; }
   .home-activity { transition: none; }
 }
 
@@ -427,7 +427,7 @@ body.casa {
 /* Compare solo quando c'e' qualcosa da dire, e quando compare non sposta la
    conversazione di uno scatto: si infila fra filo e composer, dove l'occhio sta
    gia' andando. */
-.casa-wire {
+.home-wire {
   flex: none;
   margin: 0 16px 6px;
   padding: 6px 12px;
@@ -438,11 +438,11 @@ body.casa {
   text-align: center;
 }
 
-.casa-wire[hidden] { display: none; }
+.home-wire[hidden] { display: none; }
 
 /* ── Il composer ── */
 
-.casa-composer {
+.home-composer {
   flex: none;
   display: flex;
   align-items: flex-end;
@@ -455,7 +455,7 @@ body.casa {
 /* Il campo e la graffetta stanno nella stessa pastiglia: allegare e' una cosa
    che si fa *al messaggio che stai scrivendo*, non un'azione a se'. Mandare sta
    fuori, perche' quella chiude il messaggio. */
-.casa-field {
+.home-field {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -477,9 +477,9 @@ body.casa {
   background: var(--surface);
 }
 
-.casa-field:focus-within { border-color: var(--border-strong); }
+.home-field:focus-within { border-color: var(--border-strong); }
 
-.casa-input {
+.home-input {
   flex: 1;
   min-width: 0;
   min-height: 40px;
@@ -500,9 +500,9 @@ body.casa {
      `#chat-input`. */
   scrollbar-width: none;
 }
-.casa-input::-webkit-scrollbar { display: none; }
+.home-input::-webkit-scrollbar { display: none; }
 
-.casa-attach {
+.home-attach {
   flex: none;
   width: 32px;
   height: 40px;
@@ -515,17 +515,17 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-input::placeholder { color: var(--text-faint); }
+.home-input::placeholder { color: var(--text-faint); }
 
 /* La pastiglia delle pagine del quaderno, a sinistra del composer: il posto
    che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
    questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
    il campo, cosi' la riga resta allineata.
-   Tutta qui. Stava a meta' con «Parlane» (`.casa-talk`), di quando le due
+   Tutta qui. Stava a meta' con «Parlane» (`.home-talk`), di quando le due
    pastiglie abitavano la stessa barra in testa; scesa nel composer, altezza,
    bordo e fondo di la' li riscriveva questa regola, e restavano solo da
    leggere. */
-.casa-composer .casa-pages-open {
+.home-composer .home-notebook-pages-open {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -541,10 +541,10 @@ body.casa {
   font-weight: 500;
   cursor: pointer;
 }
-.casa-composer .casa-pages-open[hidden] { display: none; }
-.casa-composer .casa-pages-open:active { filter: brightness(0.94); }
+.home-composer .home-notebook-pages-open[hidden] { display: none; }
+.home-composer .home-notebook-pages-open:active { filter: brightness(0.94); }
 
-.casa-send {
+.home-send {
   flex: none;
   width: 40px;
   height: 40px;
@@ -558,12 +558,12 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-send:active { background: var(--accent-hover); }
+.home-send:active { background: var(--accent-hover); }
 
 /* Mentre Jenny lavora il bottone e' lo stesso e cambia mestiere: manda diventa
    ferma. Un secondo bottone accanto vorrebbe dire due bersagli dove ne serve
    uno, e quello sbagliato sarebbe sempre a portata di pollice. */
-.casa-send.is-stop {
+.home-send.is-stop {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -577,13 +577,13 @@ body.casa {
    590 px una bolla per parte costerebbe due cornici e due margini a ogni
    scambio, e la risposta e' la parte lunga. */
 
-.casa-msg {
+.home-msg {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.casa-msg-user {
+.home-msg-user {
   align-self: flex-end;
   align-items: flex-end;
   max-width: 78%;
@@ -602,7 +602,7 @@ body.casa {
    oltre il filo, e il filo prendeva una barra di scorrimento orizzontale
    (Titan 2, testo al 110%: 538,8 px in 534, 25/09/2026). Col messaggio fermo
    alla colonna e' il `<pre>` a scorrere dentro di se', come nei quaderni. */
-.casa-msg-jenny {
+.home-msg-jenny {
   align-self: flex-start;
   max-width: 100%;
 }
@@ -611,7 +611,7 @@ body.casa {
    calcola il modulo dalla taglia vera della mascotte e dal suo ancoraggio, e lo
    mette sul filo come `--jenny-gap`. Il ripiego serve al primo disegno e a chi
    apre la pagina fuori dall'APK. */
-.casa-msg-jenny.is-under-jenny {
+.home-msg-jenny.is-under-jenny {
   padding-right: var(--jenny-gap, 39px);
 }
 
@@ -621,11 +621,11 @@ body.casa {
    siccome la bolla e' ancorata a destra (`flex-end`), toglierle margine da
    quel lato la porta via tutta intera. Il numero e' lo stesso e viene dallo
    stesso conto: chi scrive sta nella colonna di destra, che e' la sua. */
-.casa-msg-user.is-under-jenny {
+.home-msg-user.is-under-jenny {
   margin-right: var(--jenny-gap, 39px);
 }
 
-.casa-block {
+.home-block {
   font-size: 14.5px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -636,14 +636,14 @@ body.casa {
    la successiva: qui non ci sono bolle attorno al testo di Jenny, quindi due
    risposte di fila sono due gruppi di paragrafi e a occhio diventano un
    messaggio unico. Discreta apposta — separa, non si fa guardare. */
-.casa-coda {
+.home-tail {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: -2px;
 }
 
-.casa-copia {
+.home-copy {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -658,21 +658,21 @@ body.casa {
   -webkit-tap-highlight-color: transparent;
   transition: color .12s, background .12s;
 }
-.casa-copia i { font-size: 14px; }
-.casa-copia:hover,
-.casa-copia:focus-visible {
+.home-copy i { font-size: 14px; }
+.home-copy:hover,
+.home-copy:focus-visible {
   color: var(--text);
   background: var(--overlay);
 }
-.casa-copia:active { opacity: .7; }
+.home-copy:active { opacity: .7; }
 
-.casa-secondi {
+.home-seconds {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-faint);
 }
 
-.casa-msg-user .casa-block {
+.home-msg-user .home-block {
   padding: 9px 13px;
   border-radius: var(--radius-bubble);
   background: var(--bubble-user-bg);
@@ -683,35 +683,35 @@ body.casa {
   white-space: pre-wrap;
 }
 
-.casa-msg-jenny .casa-block { color: var(--text); }
+.home-msg-jenny .home-block { color: var(--text); }
 
-.casa-block > :first-child { margin-top: 0; }
-.casa-block > :last-child { margin-bottom: 0; }
-.casa-block p { margin: 0 0 8px; }
-.casa-block ul, .casa-block ol { margin: 0 0 8px; padding-left: 20px; }
-.casa-block li { margin: 2px 0; }
-.casa-block h1, .casa-block h2, .casa-block h3 {
+.home-block > :first-child { margin-top: 0; }
+.home-block > :last-child { margin-bottom: 0; }
+.home-block p { margin: 0 0 8px; }
+.home-block ul, .home-block ol { margin: 0 0 8px; padding-left: 20px; }
+.home-block li { margin: 2px 0; }
+.home-block h1, .home-block h2, .home-block h3 {
   margin: 12px 0 6px;
   font-size: 15.5px;
   font-weight: 600;
 }
-.casa-block a { color: var(--accent); }
-.casa-block code {
+.home-block a { color: var(--accent); }
+.home-block code {
   padding: 1px 5px;
   border-radius: var(--radius-sm);
   background: var(--overlay);
   font-family: var(--font-mono);
   font-size: 13px;
 }
-.casa-block pre {
+.home-block pre {
   margin: 0 0 8px;
   padding: 10px 12px;
   border-radius: var(--radius);
   background: var(--surface-2);
   overflow-x: auto;
 }
-.casa-block pre code { padding: 0; background: none; }
-.casa-block blockquote {
+.home-block pre code { padding: 0; background: none; }
+.home-block blockquote {
   margin: 0 0 8px;
   padding-left: 10px;
   border-left: 2px solid var(--border);
@@ -719,14 +719,14 @@ body.casa {
 }
 /* Una tabella non si stringe sotto il proprio contenuto: senza `display:block`
    deborda dal messaggio come faceva il `<pre>`, e scorre il filo invece di lei. */
-.casa-block table {
+.home-block table {
   display: block;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
   font-size: 13px;
 }
-.casa-block th, .casa-block td {
+.home-block th, .home-block td {
   padding: 4px 8px;
   border: 1px solid var(--border);
   text-align: left;
@@ -737,7 +737,7 @@ body.casa {
 /* Un messaggio scritto da Telegram, dalla tendina o dal fumetto. Piccolo e
    smorto: dice una cosa che quasi sempre non serve sapere, e che quando serve
    sapere non si deve cercare. */
-.casa-origin {
+.home-origin {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -745,25 +745,25 @@ body.casa {
   color: var(--text-faint);
 }
 
-.casa-origin i { font-size: 12px; }
+.home-origin i { font-size: 12px; }
 
 /* ── Allegati ── */
 
-.casa-media {
+.home-media {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.casa-media img,
-.casa-media video {
+.home-media img,
+.home-media video {
   max-width: 200px;
   max-height: 200px;
   border-radius: var(--radius);
   object-fit: cover;
 }
 
-.casa-file {
+.home-file {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
@@ -776,7 +776,7 @@ body.casa {
 
 /* Nessuna scritta. Dire "confine di sessione" e' officina; una riga sottile
    basta a spiegare perche' sopra e sotto non si parlano. */
-.casa-boundary {
+.home-boundary {
   align-self: stretch;
   height: 1px;
   margin: 4px 0;
@@ -806,7 +806,7 @@ body.casa {
 
 /* ── Allegati in attesa ── */
 
-.casa-pending {
+.home-pending {
   flex: none;
   display: flex;
   gap: 8px;
@@ -814,21 +814,21 @@ body.casa {
   overflow-x: auto;
 }
 
-.casa-pending[hidden] { display: none; }
+.home-pending[hidden] { display: none; }
 
-.casa-pending-item {
+.home-pending-item {
   position: relative;
   flex: none;
 }
 
-.casa-pending-item img {
+.home-pending-item img {
   width: 56px;
   height: 56px;
   border-radius: var(--radius);
   object-fit: cover;
 }
 
-.casa-pending-name {
+.home-pending-name {
   display: block;
   max-width: 140px;
   padding: 8px 10px;
@@ -843,7 +843,7 @@ body.casa {
 
 /* La X sta *sopra* la miniatura e non accanto: in una riga che scorre
    orizzontalmente, accanto vuol dire fuori dallo schermo al terzo allegato. */
-.casa-pending-x {
+.home-pending-x {
   position: absolute;
   top: -4px;
   right: -4px;
@@ -862,7 +862,7 @@ body.casa {
 }
 
 /* L'immagine in chat si tocca per ingrandirla. */
-.casa-media img { cursor: pointer; }
+.home-media img { cursor: pointer; }
 
 /* ── Jenny ── */
 
@@ -880,7 +880,7 @@ body.casa {
    210 — sotto il pixel, quindi mettendola via non saltella. Quindi il bordo
    basso del quadrato va messo *sotto* il pavimento di quella stessa quota, e i
    piedi ci finiscono sopra esatti.
-   `--casa-composer-h` e non il bordo del filo: il composer e' l'unica linea
+   `--home-composer-h` e non il bordo del filo: il composer e' l'unica linea
    che sta sempre li' — la riga di lavoro e la striscia degli allegati
    compaiono e spariscono, e Jenny non deve saltellare quando lo fanno.
 
@@ -892,8 +892,8 @@ body.casa {
    dichiara nessuno `z-index`, e il banco
    `test_she_is_on_top_of_everything_in_the_house` guarda anche le regole
    dell'altro foglio che toccano il DOM della casa. */
-.casa-shell .jenny-duo {
-  bottom: calc(var(--casa-composer-h, 64px) - var(--jenny-size) * 0.1224);
+.home-shell .jenny-duo {
+  bottom: calc(var(--home-composer-h, 64px) - var(--jenny-size) * 0.1224);
 }
 
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
@@ -901,7 +901,7 @@ body.casa {
    filo e non nella striscia dello stato perché la striscia racconta com'è il
    collegamento adesso e se ne va da sola, mentre questo è un fatto della
    conversazione — quel messaggio non è entrato — e resta dov'era la bolla. */
-.casa-note {
+.home-note {
   align-self: center;
   max-width: 88%;
   margin: 2px 0;
@@ -914,7 +914,7 @@ body.casa {
 /* ── «Con chi parli» ── */
 
 
-.casa-who-label {
+.home-who-label {
   padding: 4px 4px 2px;
   color: var(--text-muted);
   font-size: 10.5px;
@@ -923,15 +923,15 @@ body.casa {
   text-transform: uppercase;
 }
 
-.casa-who-label.is-divided {
+.home-who-label.is-divided {
   margin-top: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
 /* La pagina Quaderni: scorre tutta, e in fondo lascia il posto a Jenny come
-   le impostazioni (v. `.casa-tu-scroll`). */
-.casa-quaderni {
+   le impostazioni (v. `.home-you-scroll`). */
+.home-notebooks {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -947,7 +947,7 @@ body.casa {
    tasto che manda nella chat. Sta nel pannello e non nell'elenco, quindi non
    scorre. Niente `z-index`: e' posizionato e viene dopo l'elenco, quindi gli
    sta sopra da se', e questo foglio resta senza livelli. */
-.casa-quaderni-nuovo {
+.home-notebooks-new {
   position: absolute;
   right: 18px;
   bottom: 16px;
@@ -966,13 +966,13 @@ body.casa {
   -webkit-tap-highlight-color: transparent;
 }
 
-.casa-quaderni-nuovo:active { filter: brightness(0.92); }
+.home-notebooks-new:active { filter: brightness(0.92); }
 
 /* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
    vestito da bottone — il pannello e' una lista, non una pulsantiera — e tiene
    solo cio' che un comando deve avere: tutta la larghezza, il testo a sinistra,
    e qualcosa che risponde al dito. */
-.casa-who-row {
+.home-who-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -999,19 +999,19 @@ body.casa {
 /* Il solo segnale di pressione: senza, su un telefono un tocco su una riga
    sembra non essere stato registrato fino a quando la chat non si e' gia'
    ricaricata. */
-.casa-who-row:not(.is-blocked):active {
+.home-who-row:not(.is-blocked):active {
   background: var(--surface-2);
 }
 
-.casa-who-row + .casa-who-row {
+.home-who-row + .home-who-row {
   border-top: 1px solid var(--border);
 }
 
-.casa-who-row.is-personal {
+.home-who-row.is-personal {
   min-height: 44px;
 }
 
-.casa-who-row-name {
+.home-who-row-name {
   flex: 1;
   min-width: 0;
   font-size: 14.5px;
@@ -1022,19 +1022,19 @@ body.casa {
   white-space: nowrap;
 }
 
-.casa-who-row.is-personal .casa-who-row-name {
+.home-who-row.is-personal .home-who-row-name {
   font-size: 15px;
   font-weight: 500;
   color: var(--heading);
 }
 
-.casa-who-row-meta {
+.home-who-row-meta {
   flex: none;
   color: var(--text-muted);
   font-size: 11.5px;
 }
 
-.casa-who-check {
+.home-who-check {
   flex: none;
   font-size: 18px;
   color: var(--accent);
@@ -1043,7 +1043,7 @@ body.casa {
 /* Il fiore di Jenny, nello spazio in cui gli altri hanno il pallino. Non e' un
    colore assegnato a un nome: e' il segno che ha nel dock e nella riga
    d'identita' dell'officina, sulla stessa variabile di tema. */
-.casa-who-flower {
+.home-who-flower {
   flex: none;
   width: 10px;
   font-size: 13px;
@@ -1052,7 +1052,7 @@ body.casa {
   color: var(--flower);
 }
 
-.casa-who-dot {
+.home-who-dot {
   flex: none;
   width: 10px;
   height: 10px;
@@ -1065,19 +1065,19 @@ body.casa {
    pallino perde il colore, la riga si smorza, e resta un `<div>` — il gateway
    rifiuterebbe quella chiave, quindi un bottone qui sarebbe una promessa gia'
    smentita dall'altra parte. */
-.casa-who-row.is-blocked {
+.home-who-row.is-blocked {
   color: var(--text-muted);
   cursor: default;
 }
 
-.casa-who-note {
+.home-who-note {
   margin: 4px 4px 6px;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.casa-who-note.is-error {
+.home-who-note.is-error {
   color: var(--error);
 }
 
@@ -1085,7 +1085,7 @@ body.casa {
    La casa e' stata una schermata sola fino al 19/09/2026. Adesso sono sei —
    la conversazione, le pagine di un quaderno, una pagina, «Tu e Jenny», lei,
    e chi risponde — e quale sia a schermo
-   lo dice **un attributo solo** su `.casa-shell`. Il JS lo scrive, il resto lo
+   lo dice **un attributo solo** su `.home-shell`. Il JS lo scrive, il resto lo
    decide qui: cosi' la geometria sta in un posto, e chi legge il guscio non
    deve inseguire cinque `hidden` per sapere cosa occupa lo spazio.
 
@@ -1094,28 +1094,28 @@ body.casa {
 
 .home-notebook-pages,
 .home-reader,
-.casa-jenny-room,
-.casa-model-room,
-.casa-updates-room,
-.casa-backup-room {
+.home-jenny-room,
+.home-model-room,
+.home-updates-room,
+.home-backup-room {
   display: none;
   flex: 1;
   min-height: 0;
   flex-direction: column;
 }
 
-.casa-shell[data-view='pages'] .home-notebook-pages,
-.casa-shell[data-view='reader'] .home-reader,
-.casa-shell[data-view='jenny'] .casa-jenny-room,
-.casa-shell[data-view='model'] .casa-model-room,
-.casa-shell[data-view='updates'] .casa-updates-room,
-.casa-shell[data-view='backup'] .casa-backup-room { display: flex; }
+.home-shell[data-view='pages'] .home-notebook-pages,
+.home-shell[data-view='reader'] .home-reader,
+.home-shell[data-view='jenny'] .home-jenny-room,
+.home-shell[data-view='model'] .home-model-room,
+.home-shell[data-view='updates'] .home-updates-room,
+.home-shell[data-view='backup'] .home-backup-room { display: flex; }
 
 /* Sei righe diventate una: da quando la chat sta dentro un pannello della
    pista, sparire dalla vista di una stanza e' una cosa sola da nascondere e
    non sei. Se ne fosse dimenticata una, quella resterebbe a occupare spazio
    dentro «Tu e Jenny». */
-.casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }
+.home-shell:not([data-view='chat']) .home-showcase { display: none; }
 
 
 /* ── La pista delle pagine ───────────────────────────────────────────────
@@ -1139,7 +1139,7 @@ body.casa {
    montarla a scivolata finita.
    Il ritaglio **non** puo' salire al guscio: Jenny e' `position:absolute` con
    un `right` negativo — sporge apposta — e li' verrebbe tagliata. */
-.casa-vetrina {
+.home-showcase {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1152,7 +1152,7 @@ body.casa {
   overflow: clip;
 }
 
-.casa-pista {
+.home-track {
   flex: 1;
   min-height: 0;
   /* Si parte sulla chat, che nell'HTML e' la seconda pagina: questo e' il
@@ -1170,13 +1170,13 @@ body.casa {
   flex-direction: row;
 }
 
-.casa-pagina {
+.home-page {
   flex: 0 0 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* `relative` non e' decorazione: `.casa-empty` e' `position:absolute;
+  /* `relative` non e' decorazione: `.home-empty` e' `position:absolute;
      inset:0`, e senza un contenitore posizionato qui si ancorerebbe al
      guscio. Appena la pista prende un `transform` il contenitore cambierebbe
      comunque — un elemento trasformato ne crea uno — e lo stato vuoto
@@ -1186,7 +1186,7 @@ body.casa {
 
 /* La chat vera: un involucro solo, cosi' si sposta intera nella pagina di un
    quaderno (v. `home-move.js`). Prende il flusso che prima aveva il
-   pannello, e il `relative` che ancora `.casa-empty`. */
+   pannello, e il `relative` che ancora `.home-empty`. */
 .home-chat {
   flex: 1;
   min-height: 0;
@@ -1200,7 +1200,7 @@ body.casa {
    Niente `z-index` — questo foglio non ne dichiara: la foto e'
    sempre l'ultimo figlio posizionato del pannello, e dentro la chat non c'e'
    niente che ne porti uno, quindi si dipinge sopra da se'. */
-.home-chat.casa-foto {
+.home-chat.home-snapshot {
   position: absolute;
   inset: 0;
 }
@@ -1211,7 +1211,7 @@ body.casa {
    la chat — e lo copre tutto: scrivere a una conversazione sparita non deve
    essere possibile. Niente z-index: e' posizionata e viene dopo, quindi sta
    sopra da se'. */
-.casa-pagina-sparita {
+.home-page-gone {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1224,8 +1224,8 @@ body.casa {
   color: var(--text-muted);
   text-align: center;
 }
-.casa-pagina-sparita p { margin: 0; max-width: 32ch; }
-.casa-pagina-sparita-togli {
+.home-page-gone p { margin: 0; max-width: 32ch; }
+.home-page-gone-remove {
   padding: 10px 18px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -1238,7 +1238,7 @@ body.casa {
    Niente cornice e niente intestazione propria — quella e' dell'app quando si
    apre a tutto schermo dal cassetto; qui il nome sta gia' in cima alla casa
    (tavola `PaginaApp`), e ripeterlo vorrebbe dire due titoli uno sull'altro. */
-.casa-pagina-app {
+.home-page-app {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -1248,18 +1248,18 @@ body.casa {
 
 /* ── L'intestazione che cambia stanza ── */
 
-.casa-actions {
+.home-actions {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.casa-actions [hidden] { display: none; }
+.home-actions [hidden] { display: none; }
 
 /* La via del ritorno: una pastiglia piena, perche' il ritorno non e' una
    scelta fra pari, e' l'uscita — la tavola la disegna cosi'. */
-.casa-talk {
+.home-talk {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1276,7 +1276,7 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-talk:active { filter: brightness(0.94); }
+.home-talk:active { filter: brightness(0.94); }
 
 /* «Modifica»: solo l'icona, e senza pastiglia. Accanto a «Parlane» — che e' la
    pastiglia piena, cioe' l'uscita — due pastiglie si contenderebbero l'occhio
@@ -1284,7 +1284,7 @@ body.casa {
    «Parlane» (36 px), cosi' la barra resta allineata. (Qui si citava la porta
    di «Tu e Jenny» come comando-icona gemello: dal 23/09/2026 «Tu e Jenny» e'
    una pagina e quella porta non c'e' piu'.) */
-.casa-edit {
+.home-edit {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1299,11 +1299,11 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-edit:active { color: var(--text); }
+.home-edit:active { color: var(--text); }
 
 /* L'occhiello, quando e' un comando. Sta dove stava la parola, e ne ha il peso:
    e' una via d'uscita, non un bottone che si contende l'occhio col titolo. */
-.casa-back {
+.home-back {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -1324,20 +1324,20 @@ body.casa {
    dell'autore vince su quello del browser a qualunque specificita'. Senza
    questa riga «torna alla chat» resta a schermo **dentro la chat**, sotto
    l'occhiello — visto sul telefono al primo avvio. E' la stessa trappola di
-   `.casa-empty[hidden]`, che questo foglio documenta da settembre: i due
+   `.home-empty[hidden]`, che questo foglio documenta da settembre: i due
    bottoni dell'altra fila se ne salvano solo perche' li copre
-   `.casa-actions [hidden]`, regola dell'autore che di specificita' ne ha una
+   `.home-actions [hidden]`, regola dell'autore che di specificita' ne ha una
    in piu' della loro classe. */
-.casa-back[hidden] { display: none; }
+.home-back[hidden] { display: none; }
 
-.casa-back:active { color: var(--text); }
+.home-back:active { color: var(--text); }
 
 
 /* ── Le pagine di un quaderno ── */
 
 /* Le linguette delle pagine e le taglie della mascotte: la stessa fila di
    pulsanti, perché è il modo in cui la casa dice «una fra queste». */
-.casa-tabs, .casa-seg {
+.home-tabs, .home-seg {
   display: flex;
   gap: 3px;
   padding: 3px;
@@ -1345,12 +1345,12 @@ body.casa {
   background: var(--overlay);
 }
 
-.casa-tabs {
+.home-tabs {
   flex: none;
   margin: 2px 18px 8px;
 }
 
-.casa-tab, .casa-seg-btn {
+.home-tab, .home-seg-btn {
   flex: 1;
   height: 30px;
   border: none;
@@ -1362,13 +1362,13 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-tab.is-on, .casa-seg-btn.is-on {
+.home-tab.is-on, .home-seg-btn.is-on {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
 }
 
-.casa-search {
+.home-search {
   flex: none;
   display: flex;
   align-items: center;
@@ -1382,9 +1382,9 @@ body.casa {
   color: var(--text-muted);
 }
 
-.casa-search[hidden] { display: none; }
+.home-search[hidden] { display: none; }
 
-.casa-search-input {
+.home-search-input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -1395,9 +1395,9 @@ body.casa {
   outline: none;
 }
 
-.casa-search-input::placeholder { color: var(--text-faint); }
+.home-search-input::placeholder { color: var(--text-faint); }
 
-.casa-page-list {
+.home-notebook-page-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1405,11 +1405,11 @@ body.casa {
   padding: 0 18px 8px;
 }
 
-.casa-page-list[hidden] { display: none; }
+.home-notebook-page-list[hidden] { display: none; }
 
 /* Una riga e' un comando, come nel pannello: stesso azzeramento del vestito di
    serie, stesso bersaglio alto abbastanza per un pollice. */
-.casa-page {
+.home-notebook-page {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1425,17 +1425,17 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-page[hidden] { display: none; }
-.casa-page:active { background: var(--overlay); }
+.home-notebook-page[hidden] { display: none; }
+.home-notebook-page:active { background: var(--overlay); }
 
-.casa-page-dot {
+.home-notebook-page-dot {
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
 
-.casa-page-name {
+.home-notebook-page-name {
   flex: 1;
   min-width: 0;
   font-size: 14px;
@@ -1444,7 +1444,7 @@ body.casa {
   white-space: nowrap;
 }
 
-.casa-page-group {
+.home-notebook-page-group {
   flex: none;
   color: var(--text-muted);
   font-size: 11px;
@@ -1466,12 +1466,12 @@ body.casa {
    grafo dell'officina ha lo stesso scontro e non l'ho toccato — la' la legenda
    mette la pastiglia accanto alla parola, quindi si decodifica lo stesso, e
    cambiare i colori di un altro guscio non e' lavoro di questo giro. */
-.casa-group-concepts { background: var(--ok); }
-.casa-group-entities { background: var(--error); }
-.casa-group-other { background: var(--text-faint); }
+.home-group-concepts { background: var(--ok); }
+.home-group-entities { background: var(--error); }
+.home-group-other { background: var(--text-faint); }
 
-.casa-pages-note,
-.casa-map-note {
+.home-notebook-pages-note,
+.home-map-note {
   flex: none;
   padding: 10px 18px;
   color: var(--text-muted);
@@ -1480,8 +1480,8 @@ body.casa {
   text-align: center;
 }
 
-.casa-pages-note[hidden],
-.casa-map-note[hidden] { display: none; }
+.home-notebook-pages-note[hidden],
+.home-map-note[hidden] { display: none; }
 
 /* ── La mappa ── */
 
@@ -1495,14 +1495,14 @@ body.casa {
 
 .home-map[hidden] { display: none; }
 
-.casa-map-svg {
+.home-map-svg {
   flex: 1;
   min-height: 0;
   width: 100%;
   touch-action: none;
 }
 
-.casa-map-edges line {
+.home-map-edges line {
   stroke: var(--border-strong);
   stroke-width: 1;
 }
@@ -1514,13 +1514,13 @@ body.casa {
    `sanitizeGroup` dell'elenco), e una cartella che i tre colori non prevedono
    — `sources/`, per dire — restava col nero di default di SVG, invisibile nel
    tema scuro. Le tre regole sotto vincono per specificita'. */
-.casa-map-node { cursor: pointer; fill: var(--text-faint); }
+.home-map-node { cursor: pointer; fill: var(--text-faint); }
 
-.casa-map-nodes .casa-group-concepts { fill: var(--ok); }
-.casa-map-nodes .casa-group-entities { fill: var(--error); }
-.casa-map-nodes .casa-group-other { fill: var(--text-faint); }
+.home-map-nodes .home-group-concepts { fill: var(--ok); }
+.home-map-nodes .home-group-entities { fill: var(--error); }
+.home-map-nodes .home-group-other { fill: var(--text-faint); }
 
-.casa-map-labels text {
+.home-map-labels text {
   fill: var(--text-muted);
   font-family: var(--font-sans);
   font-size: 9px;
@@ -1532,7 +1532,7 @@ body.casa {
 
 /* ── Una pagina, letta ── */
 
-.casa-reader-body {
+.home-reader-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1545,7 +1545,7 @@ body.casa {
 /* L'editor prende esattamente il posto del testo reso: stesso `flex`, stesso
    riquadro. Cosi' entrando in modifica la pagina non salta ne' cambia misura —
    quel che leggevi resta dov'era, in sorgente. */
-.casa-reader-edit {
+.home-reader-edit {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -1563,14 +1563,14 @@ body.casa {
 
 /* `display: flex`/`inline-flex` su una classe batte il `[hidden]` del browser,
    che di specificita' ne ha quanto una classe ma sta nel foglio dell'agente
-   utente. Va ridetto qui — v. `.casa-back[hidden]`. */
-.casa-reader-edit[hidden] { display: none; }
+   utente. Va ridetto qui — v. `.home-back[hidden]`. */
+.home-reader-edit[hidden] { display: none; }
 
-.casa-reader-edit:focus { outline: none; }
+.home-reader-edit:focus { outline: none; }
 
 /* La barra dei comandi, in basso: sul Titan il pollice sta qui. Il bordo in
    alto e non un'ombra — la stanza non ha profondita' da nessun'altra parte. */
-.casa-reader-bar {
+.home-reader-bar {
   flex: none;
   display: flex;
   gap: 8px;
@@ -1579,10 +1579,10 @@ body.casa {
   background: var(--bg);
 }
 
-.casa-reader-bar[hidden] { display: none; }
+.home-reader-bar[hidden] { display: none; }
 
-.casa-reader-cancel,
-.casa-reader-save {
+.home-reader-cancel,
+.home-reader-save {
   flex: 1;
   height: 38px;
   border-radius: var(--radius-pill);
@@ -1592,29 +1592,29 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-reader-cancel {
+.home-reader-cancel {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
 }
 
-.casa-reader-save {
+.home-reader-save {
   border: 1px solid transparent;
   background: var(--accent);
   color: var(--on-accent);
 }
 
-.casa-reader-cancel:active,
-.casa-reader-save:active { filter: brightness(0.94); }
+.home-reader-cancel:active,
+.home-reader-save:active { filter: brightness(0.94); }
 
 /* ── «Segnala» ──
    La barra della selezione riusa la barra della modifica: stesso posto, stessa
    misura, e non ci sono mai tutte e due — o stai leggendo, o stai scrivendo. */
-.casa-sel-bar[hidden] { display: none; }
+.home-sel-bar[hidden] { display: none; }
 
 /* Il foglio. `.oc-sheet` lo veste (arriva da mobile-style.css, che anche la
    casa carica); qui c'e' solo quel che dentro ci sta. */
-.home-audit .casa-audit-inner {
+.home-audit .home-audit-inner {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1623,7 +1623,7 @@ body.casa {
   max-height: 92vh;
 }
 
-.casa-audit-title {
+.home-audit-title {
   margin: 0;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -1633,7 +1633,7 @@ body.casa {
 
 /* Il testo scelto. Tetto in altezza e scorrimento: una selezione lunga non deve
    spingere fuori schermo il campo del commento, che e' il motivo del foglio. */
-.casa-audit-quote {
+.home-audit-quote {
   margin: 0;
   padding: 8px 10px;
   max-height: 22vh;
@@ -1647,7 +1647,7 @@ body.casa {
   white-space: pre-wrap;
 }
 
-.casa-audit-comment {
+.home-audit-comment {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -1661,18 +1661,18 @@ body.casa {
   resize: none;
 }
 
-.casa-audit-comment:focus { outline: none; border-color: var(--accent); }
+.home-audit-comment:focus { outline: none; border-color: var(--accent); }
 
-.casa-reader-note {
+.home-reader-note {
   margin: 12px 0;
   color: var(--text-muted);
   font-size: 13px;
   text-align: center;
 }
 
-.casa-reader-body h1,
-.casa-reader-body h2,
-.casa-reader-body h3 {
+.home-reader-body h1,
+.home-reader-body h2,
+.home-reader-body h3 {
   margin: 18px 0 6px;
   font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
   font-weight: 500;
@@ -1680,43 +1680,43 @@ body.casa {
   color: var(--heading);
 }
 
-.casa-reader-body h1 { font-size: 21px; }
-.casa-reader-body h2 { font-size: 18px; }
-.casa-reader-body h3 { font-size: 16px; }
-.casa-reader-body p { margin: 8px 0; }
-.casa-reader-body ul,
-.casa-reader-body ol { margin: 8px 0; padding-left: 22px; }
-.casa-reader-body li { margin: 3px 0; }
-.casa-reader-body a { color: var(--accent); }
+.home-reader-body h1 { font-size: 21px; }
+.home-reader-body h2 { font-size: 18px; }
+.home-reader-body h3 { font-size: 16px; }
+.home-reader-body p { margin: 8px 0; }
+.home-reader-body ul,
+.home-reader-body ol { margin: 8px 0; padding-left: 22px; }
+.home-reader-body li { margin: 3px 0; }
+.home-reader-body a { color: var(--accent); }
 
-.casa-reader-body code {
+.home-reader-body code {
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--overlay);
   font-size: 0.9em;
 }
 
-.casa-reader-body pre {
+.home-reader-body pre {
   overflow-x: auto;
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--overlay);
 }
 
-.casa-reader-body pre code { padding: 0; background: none; }
+.home-reader-body pre code { padding: 0; background: none; }
 
-.casa-reader-body blockquote {
+.home-reader-body blockquote {
   margin: 8px 0;
   padding-left: 12px;
   border-left: 2px solid var(--border-strong);
   color: var(--text-muted);
 }
 
-.casa-reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
+.home-reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
 
-.casa-reader-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.casa-reader-body th,
-.casa-reader-body td {
+.home-reader-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.home-reader-body th,
+.home-reader-body td {
   padding: 5px 8px;
   border: 1px solid var(--border);
   text-align: left;
@@ -1724,7 +1724,7 @@ body.casa {
 
 /* Il ripiego senza DOMPurify: il markdown scappato, che si legge male ma non
    mente. */
-.casa-reader-raw {
+.home-reader-raw {
   white-space: pre-wrap;
   font-size: 12.5px;
   color: var(--text-muted);
@@ -1748,7 +1748,7 @@ body.casa {
    Il cassetto, senza le cose di un foglio: prende l'altezza della pagina, e
    in fondo lascia il posto a Jenny come le impostazioni. */
 
-.casa-cassetto {
+.home-drawer {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1756,11 +1756,11 @@ body.casa {
   outline: none;
 }
 
-.casa-cassetto .launcher-list {
+.home-drawer .launcher-list {
   padding-bottom: calc(20px + var(--jenny-size) * var(--jenny-art-h));
 }
 
-.casa-tu-scroll {
+.home-you-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1783,7 +1783,7 @@ body.casa {
 /* La scheda dell'officina. E' l'unica cosa scura della pagina, ed e' il punto:
    di la' si va per osservare e riparare, e la tavola la stacca dal resto
    invece di farne l'ottava riga di un elenco. */
-.casa-workshop {
+.home-workshop {
   flex: none;
   display: flex;
   align-items: center;
@@ -1811,14 +1811,14 @@ body.casa {
    tarato per il verso giusto — `--overlay` e' bianco nei temi scuri e nero nei
    temi chiari, che su una scheda invertita e' sempre il verso sbagliato. Un
    grigio si vede su entrambi, e non buca la scheda. */
-.casa-workshop:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.28); }
-.casa-workshop > .ti-tool { flex: none; color: var(--accent-on-text); font-size: 20px; }
+.home-workshop:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.28); }
+.home-workshop > .ti-tool { flex: none; color: var(--accent-on-text); font-size: 20px; }
 /* Il chevron e il sottotitolo sono `--text-muted` per tutte le altre righe,
    cioe' il colore del testo annacquato: qui il testo e' il **fondo**, e si
    annacqua quel che ci sta sopra. */
-.casa-workshop > .casa-row-go { color: var(--bg); opacity: 0.5; }
+.home-workshop > .home-row-go { color: var(--bg); opacity: 0.5; }
 
-.casa-workshop-text {
+.home-workshop-text {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1826,15 +1826,15 @@ body.casa {
   gap: 1px;
 }
 
-.casa-workshop-name { font-size: 14px; font-weight: 600; }
+.home-workshop-name { font-size: 14px; font-weight: 600; }
 
-.casa-workshop-hint {
+.home-workshop-hint {
   font-size: 11.5px;
   color: var(--bg);
   opacity: 0.62;
 }
 
-.casa-row-go { flex: none; color: var(--text-muted); font-size: 16px; }
+.home-row-go { flex: none; color: var(--text-muted); font-size: 16px; }
 
 
 /* ── Il tema ─────────────────────────────────────────────────────────────────
@@ -1843,8 +1843,8 @@ body.casa {
    cui uno schermo basso dice «ce n'e' altro» senza rubare altezza alla
    pagina. */
 
-/* `casa-card` e non `casa-block`: quel nome e' **gia' preso**, ed e' la bolla
-   di un messaggio (`home-chat.js`, `.casa-msg .casa-block`). Chiamando cosi'
+/* `home-card` e non `home-block`: quel nome e' **gia' preso**, ed e' la bolla
+   di un messaggio (`home-chat.js`, `.home-msg .home-block`). Chiamando cosi'
    le schede, le loro regole — sfondo, bordo, e lo `z-index` che allora
    avevano — sono atterrate su ogni riga della conversazione: i messaggi sono diventati
    schede e Jenny e' finita **dietro la chat**. Visto sul telefono, 19/09/2026.
@@ -1859,12 +1859,12 @@ body.casa {
 
    Quel che risolve il difetto originale resta, ed e' l'altra meta' del fix:
    il fondo delle stanze e' alto quanto lei (`--jenny-art-h` in
-   `.casa-tu-scroll`), quindi l'ultima riga si porta **sopra** di lei
+   `.home-you-scroll`), quindi l'ultima riga si porta **sopra** di lei
    scorrendo, invece di restarle sotto. E' esattamente come si comporta la
    chat, dove lei copre l'ultimo messaggio finche' non lo scorri — e dove
    nessuno l'ha mai letta come un difetto, perche' e' coerente. */
 
-.casa-card {
+.home-card {
   flex: none;
   padding: 8px 14px 10px;
   border: 1px solid var(--border);
@@ -1872,30 +1872,30 @@ body.casa {
   background: var(--surface);
 }
 
-.casa-card-head {
+.home-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 30px;
 }
 
-.casa-card-head > .ti { flex: none; color: var(--accent); font-size: 18px; }
-.casa-card-label { flex: 1; min-width: 0; font-size: 14px; }
+.home-card-head > .ti { flex: none; color: var(--accent); font-size: 18px; }
+.home-card-label { flex: 1; min-width: 0; font-size: 14px; }
 
-.casa-card-value {
+.home-card-value {
   flex: none;
   color: var(--text-muted);
   font-size: 13px;
 }
 
-.casa-card-note {
+.home-card-note {
   margin-top: 6px;
   color: var(--text-muted);
   font-size: 11.5px;
   line-height: 1.4;
 }
 
-.casa-themes {
+.home-themes {
   display: flex;
   gap: 12px;
   margin-top: 4px;
@@ -1905,9 +1905,9 @@ body.casa {
   scrollbar-width: none;
 }
 
-.casa-themes::-webkit-scrollbar { display: none; }
+.home-themes::-webkit-scrollbar { display: none; }
 
-.casa-theme {
+.home-theme {
   flex: none;
   display: flex;
   flex-direction: column;
@@ -1931,13 +1931,13 @@ body.casa {
 /* Il quadrato porta i tre colori del tema, non il suo accento soltanto: fra
    `chanel` e `pietra` l'accento e' quasi lo stesso, ed e' lo sfondo a dire di
    che tema si tratta. */
-.casa-theme-swatch {
+.home-theme-swatch {
   width: 40px;
   height: 40px;
   border-radius: 12px;
 }
 
-.casa-theme-name {
+.home-theme-name {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1946,18 +1946,18 @@ body.casa {
 
 /* L'anello della tavola: due ombre, la prima del colore del fondo, cosi' lo
    stacco si vede anche quando il tema e' scuro quanto la pagina. */
-.casa-theme.is-on .casa-theme-swatch {
+.home-theme.is-on .home-theme-swatch {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
-.casa-theme.is-on .casa-theme-name { color: var(--text); font-weight: 600; }
+.home-theme.is-on .home-theme-name { color: var(--text); font-weight: 600; }
 
 
 /* ── Le righe, gli interruttori, le taglie ───────────────────────────────────
    La tavola disegna una scheda sola con dentro righe basse: etichetta a
    sinistra, come sta adesso a destra. */
 
-.casa-rows {
+.home-rows {
   flex: none;
   padding: 0 14px;
   border: 1px solid var(--border);
@@ -1965,7 +1965,7 @@ body.casa {
   background: var(--surface);
 }
 
-.casa-row {
+.home-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1982,22 +1982,22 @@ body.casa {
 
 /* Il filo fra una riga e l'altra sta *fra*: sulla prima sarebbe il bordo
    della scheda disegnato due volte. */
-.casa-row + .casa-row { border-top: 1px solid var(--border); }
-.casa-row[hidden] { display: none; }
-.casa-row > .ti:first-child { flex: none; color: var(--accent); font-size: 18px; }
-.casa-row-label { flex: 1; min-width: 0; font-size: 14px; }
-.casa-row-value { flex: none; color: var(--text-muted); font-size: 13px; }
+.home-row + .home-row { border-top: 1px solid var(--border); }
+.home-row[hidden] { display: none; }
+.home-row > .ti:first-child { flex: none; color: var(--accent); font-size: 18px; }
+.home-row-label { flex: 1; min-width: 0; font-size: 14px; }
+.home-row-value { flex: none; color: var(--text-muted); font-size: 13px; }
 
 /* Tre bottoni non stanno accanto a un'etichetta su uno schermo largo 590:
    l'etichetta sale, i bottoni prendono la riga tutta. */
-.casa-row-stack {
+.home-row-stack {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
   padding: 8px 0;
 }
 
-.casa-switch {
+.home-switch {
   position: relative;
   flex: none;
   width: 40px;
@@ -2009,7 +2009,7 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-switch-knob {
+.home-switch-knob {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -2020,16 +2020,16 @@ body.casa {
   transition: left 0.15s ease, background 0.15s ease;
 }
 
-.casa-switch.is-on { background: var(--accent); border-color: transparent; }
-.casa-switch.is-on .casa-switch-knob { left: 20px; background: var(--on-accent); }
+.home-switch.is-on { background: var(--accent); border-color: transparent; }
+.home-switch.is-on .home-switch-knob { left: 20px; background: var(--on-accent); }
 
 /* La nota sotto una scheda. `is-warn` e' quando Android ha detto di no: il
    colore c'e' perche' quella frase e' una cosa da fare, non una descrizione. */
-.casa-card-note[hidden] { display: none; }
+.home-card-note[hidden] { display: none; }
 /* Dentro una scheda di righe la nota non ha bisogno del margine di suo: il
    fianco glielo da' gia' la scheda. */
-.casa-rows .casa-card-note { padding: 0 0 8px; }
-.casa-card-note.is-warn { color: var(--error); }
+.home-rows .home-card-note { padding: 0 0 8px; }
+.home-card-note.is-warn { color: var(--error); }
 
 
 /* ── Le regole che le hai dato tu ───────────────────────────────────────────
@@ -2037,7 +2037,7 @@ body.casa {
    salvare: un «Salva» sempre acceso su un campo che nessuno ha toccato invita
    a toccarlo per vedere cosa fa. */
 
-.casa-rules {
+.home-rules {
   width: 100%;
   margin-top: 6px;
   padding: 8px 10px;
@@ -2052,13 +2052,13 @@ body.casa {
   resize: none;
 }
 
-.casa-rules:focus { outline: none; border-color: var(--accent); }
+.home-rules:focus { outline: none; border-color: var(--accent); }
 
 /* Il nome: la stessa casella delle regole, su una riga sola. `resize` non
    esiste su un input, e l'altezza la decide il testo. */
-.casa-nome { line-height: 1.6; }
+.home-name { line-height: 1.6; }
 
-.casa-save {
+.home-save {
   flex: none;
   height: 28px;
   padding: 0 12px;
@@ -2072,11 +2072,11 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-save[hidden] { display: none; }
-.casa-save:active { filter: brightness(0.94); }
+.home-save[hidden] { display: none; }
+.home-save:active { filter: brightness(0.94); }
 /* Premuto e basta non si vede: un bottone disabilitato **durante**
    l'installazione deve dirlo, o si continua a premerlo. */
-.casa-save:disabled { opacity: 0.5; }
+.home-save:disabled { opacity: 0.5; }
 
 /* ── «Chi risponde» ──────────────────────────────────────────────────────
    Le marche configurate in una striscia che scorre di lato, come i temi: qui
@@ -2085,7 +2085,7 @@ body.casa {
    separati apposta: si guarda un elenco prima di sceglierlo, e un elenco che
    cambiasse anche chi risponde lo cambierebbe **prima** di scegliere. */
 
-.casa-brands {
+.home-brands {
   display: flex;
   gap: 8px;
   margin: 6px -14px 2px;
@@ -2094,9 +2094,9 @@ body.casa {
   scrollbar-width: none;
 }
 
-.casa-brands::-webkit-scrollbar { display: none; }
+.home-brands::-webkit-scrollbar { display: none; }
 
-.casa-brand {
+.home-brand {
   flex: none;
   display: flex;
   align-items: center;
@@ -2118,7 +2118,7 @@ body.casa {
    distingueva l'elenco che stavi leggendo (visto sul rig, tema Y2K). Il pieno
    invertito invece si vede per costruzione in tutti e sette, ed e' la stessa
    coppia della scheda dell'officina. */
-.casa-brand.is-viewing {
+.home-brand.is-viewing {
   border-color: var(--text);
   background: var(--text);
   color: var(--bg);
@@ -2127,10 +2127,10 @@ body.casa {
 /* Chi risponde adesso. L'anello d'accento **e** il segno di spunta, perche'
    l'anello da solo sparisce dove l'accento e' il testo — che e' il fondo
    della pastiglia piena. Il segno prende `currentColor` e regge entrambi. */
-.casa-brand.is-on { border-color: var(--accent); }
-.casa-brand > .ti-check { flex: none; font-size: 13px; }
+.home-brand.is-on { border-color: var(--accent); }
+.home-brand > .ti-check { flex: none; font-size: 13px; }
 
-.casa-brand-dot {
+.home-brand-dot {
   flex: none;
   width: 10px;
   height: 10px;
@@ -2145,7 +2145,7 @@ body.casa {
 
 /* ── La chiave ── */
 
-.casa-key {
+.home-key {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2156,12 +2156,12 @@ body.casa {
    browser e quindi perde contro qualunque regola dell'autore: senza questa
    riga la riga della chiave si vede anche quando non c'e' nessuna marca da
    guardare. La casa quella trappola l'ha gia' pagata due volte — v.
-   `.casa-back[hidden]` e `.casa-empty[hidden]`. */
-.casa-key[hidden] { display: none; }
+   `.home-back[hidden]` e `.home-empty[hidden]`. */
+.home-key[hidden] { display: none; }
 
-.casa-key-label { flex: none; font-size: 13px; }
+.home-key-label { flex: none; font-size: 13px; }
 
-.casa-key-hint {
+.home-key-hint {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -2172,9 +2172,9 @@ body.casa {
   font-size: 11.5px;
 }
 
-.casa-key-hint.is-faint { color: var(--text-faint); font-family: inherit; }
+.home-key-hint.is-faint { color: var(--text-faint); font-family: inherit; }
 
-.casa-key-btn {
+.home-key-btn {
   flex: none;
   padding: 4px 10px;
   border: 1px solid var(--border-strong);
@@ -2186,16 +2186,16 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-key-edit {
+.home-key-edit {
   display: flex;
   align-items: center;
   gap: 8px;
   padding-bottom: 4px;
 }
 
-.casa-key-edit[hidden] { display: none; }
+.home-key-edit[hidden] { display: none; }
 
-.casa-key-input {
+.home-key-input {
   flex: 1;
   min-width: 0;
   min-height: 34px;
@@ -2208,11 +2208,11 @@ body.casa {
   font-size: 12px;
 }
 
-.casa-key-input:focus { outline: none; border-color: var(--accent); }
+.home-key-input:focus { outline: none; border-color: var(--accent); }
 
 /* ── I modelli ── */
 
-.casa-models {
+.home-models {
   display: flex;
   flex-direction: column;
   margin: 0 -14px;
@@ -2236,7 +2236,7 @@ body.casa {
 .home-model.is-on { color: var(--text); }
 .home-model.is-on > .ti-check { color: var(--accent); }
 
-.casa-model-id {
+.home-model-id {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -2254,7 +2254,7 @@ body.casa {
    — la cosa che altrimenti non si vede mai, perche' a schermo somiglia in
    tutto e per tutto a «non c'e' niente da installare». */
 
-.casa-update-dot {
+.home-update-dot {
   flex: none;
   width: 9px;
   height: 9px;
@@ -2262,34 +2262,34 @@ body.casa {
   background: var(--ok);
 }
 
-.casa-update-dot.is-new { background: var(--accent); }
-.casa-update-dot.is-warn { background: var(--warning); }
+.home-update-dot.is-new { background: var(--accent); }
+.home-update-dot.is-warn { background: var(--warning); }
 
-.casa-update-notes {
+.home-update-notes {
   display: block;
   margin-top: 6px;
   color: var(--accent);
   font-size: 12px;
 }
 
-.casa-update-notes[hidden] { display: none; }
+.home-update-notes[hidden] { display: none; }
 
-.casa-update-progress { margin-top: 8px; }
-.casa-update-progress[hidden] { display: none; }
+.home-update-progress { margin-top: 8px; }
+.home-update-progress[hidden] { display: none; }
 
-.casa-update-phase {
+.home-update-phase {
   margin-top: 4px;
   font-size: 12.5px;
 }
 
-.casa-update-detail {
+.home-update-detail {
   margin-top: 2px;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
-.casa-update-track {
+.home-update-track {
   margin-top: 8px;
   height: 4px;
   border-radius: 999px;
@@ -2297,9 +2297,9 @@ body.casa {
   overflow: hidden;
 }
 
-.casa-update-track[hidden] { display: none; }
+.home-update-track[hidden] { display: none; }
 
-.casa-update-bar {
+.home-update-bar {
   display: block;
   height: 100%;
   border-radius: 999px;
@@ -2307,19 +2307,19 @@ body.casa {
   transition: width 0.3s ease;
 }
 
-.casa-update-line {
+.home-update-line {
   margin-bottom: 8px;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.casa-update-line.is-warn { color: var(--warning); }
+.home-update-line.is-warn { color: var(--warning); }
 
 /* Il bottone del controllo riempie la scheda: e' l'unica cosa da toccare li'
    dentro, e una pastiglia stretta in mezzo a due righe di testo sembrerebbe
    una nota. */
-#casa-update-check { width: 100%; min-height: 36px; }
+#home-update-check { width: 100%; min-height: 36px; }
 
 /* ── «Backup» ────────────────────────────────────────────────────────────
    Due bottoni larghi e tre frasi: esportare e importare sono le uniche due
@@ -2327,6 +2327,6 @@ body.casa {
    sembrerebbe una nota. «Mai fatto» si segnala — e' l'unica volta in cui
    quella riga va letta davvero. */
 
-#casa-backup-export, #casa-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
-.casa-card-label.is-warn { color: var(--warning); }
-#casa-backup-snapshots { padding: 0 4px; }
+#home-backup-export, #home-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
+.home-card-label.is-warn { color: var(--warning); }
+#home-backup-snapshots { padding: 0 4px; }

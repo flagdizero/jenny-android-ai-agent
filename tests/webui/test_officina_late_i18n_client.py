@@ -37,12 +37,12 @@ const i18n = {
 
 def test_the_header_actions_are_translated_after_load() -> None:
     funzioni = "\n".join(
-        function(HEADER, nome)
-        for nome in ("pillCasa", "cassetto", "consolle", "fileAperto", "settings")
+        function(HEADER, name)
+        for name in ("pillCasa", "cassetto", "consolle", "fileAperto", "settings")
     )
     out = run_js(
         _I18N
-        + "const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };\n"
+        + "const VISTA_DI = { brain: 'settings', hands: 'settings', memory: 'settings' };\n"
         + funzioni
         + "\nclass H {\n"
         + member(HEADER, "constructor")

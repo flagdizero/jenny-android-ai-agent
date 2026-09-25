@@ -69,7 +69,7 @@ const SOGLIA_TOCCO = 10;
  *
  *  Quindi nel workspace, che e' dove stanno i quaderni: sopravvive al kill,
  *  alla reinstallazione, e se lo porta dietro un backup. Un file solo per tutti
- *  i quaderni invece di uno dentro `wikis/<nome>/`, perche' quella cartella la
+ *  i quaderni invece di uno dentro `wikis/<name>/`, perche' quella cartella la
  *  decide la config (`wiki.wikis_dir`) e il client non la conosce — cercarla
  *  vorrebbe dire indovinarla. Sotto `.jenny/` perche' e' stato dell'interfaccia
  *  e non roba dell'utente: il gestore file lo nasconde da se' (i pattern
@@ -283,8 +283,8 @@ export function placeLabels(items) {
 export class HomeMap {
   constructor({ onOpenPage } = {}) {
     this.el = document.getElementById('home-map');
-    this.svgEl = document.getElementById('casa-map-svg');
-    this.noteEl = document.getElementById('casa-map-note');
+    this.svgEl = document.getElementById('home-map-svg');
+    this.noteEl = document.getElementById('home-map-note');
     this._onOpenPage = onOpenPage;
     this._sim = null;
     /* Contatore di generazione: chi esce dalla pagina mentre i 280 kB stanno
@@ -305,33 +305,33 @@ export class HomeMap {
        chiesto e non capisce. */
     this._presaInMano = false;
     /* Quale quaderno e' disegnato: e' la chiave degli spilli. */
-    this._quaderno = null;
+    this._notebook = null;
     /* Gli spilli letti da disco, per id. Null finche' non si e' letto. */
     this._spilli = null;
   }
 
   /** Disegna la mappa di *data*. La stessa risposta dell'elenco.
    *
-   *  `quaderno` e' il nome, e serve solo come chiave degli spilli: la mappa in
+   *  `notebook` e' il nome, e serve solo come chiave degli spilli: la mappa in
    *  se' non ha bisogno di sapere di chi e'.
    */
-  async draw(data, quaderno) {
+  async draw(data, notebook) {
     const gen = ++this._gen;
-    this._quaderno = quaderno || null;
+    this._notebook = notebook || null;
     /* Gia' disegnata per questa risposta: non si rifa' la simulazione a ogni
        ritorno sulla linguetta, o i nodi ripartono da capo ogni volta. */
     if (this._drawn === data) return;
     const { nodes, links } = toSimulation(data);
 
-    if (!nodes.length) return this._say('casa.pages.none');
-    if (!links.length) return this._say('casa.map.noLinks');
+    if (!nodes.length) return this._say('home.notebookPages.none');
+    if (!links.length) return this._say('home.map.noLinks');
 
     this._say(null);
     try {
       await ensureVendor(D3_SRC);
     } catch (err) {
       console.warn('casa.map: D3 not loaded', err);
-      if (gen === this._gen) this._say('casa.map.failed');
+      if (gen === this._gen) this._say('home.map.failed');
       return;
     }
     /* Gli spilli **prima** del disegno: applicarli dopo vorrebbe dire far
@@ -395,13 +395,13 @@ export class HomeMap {
     const svg = d3.select(this.svgEl);
     const root = svg.append('g');
 
-    const line = root.append('g').attr('class', 'casa-map-edges')
+    const line = root.append('g').attr('class', 'home-map-edges')
       .selectAll('line').data(links).join('line');
 
-    const dot = root.append('g').attr('class', 'casa-map-nodes')
+    const dot = root.append('g').attr('class', 'home-map-nodes')
       .selectAll('circle').data(nodes).join('circle')
       .attr('r', (d) => radiusOf(d.degree))
-      .attr('class', (d) => `casa-map-node casa-group-${d.group}`)
+      .attr('class', (d) => `home-map-node home-group-${d.group}`)
       .on('click', (_e, d) => this._onOpenPage?.(d.path, d.label));
 
     /* Il nome sotto il pallino, e solo per i nodi che ne portano uno. Niente
@@ -410,7 +410,7 @@ export class HomeMap {
        vero lo sceglie `placeLabels` a fisica ferma; questo e' il posto di
        preferenza, buono finche' i nodi si muovono. */
     const conNome = labelledNodes(nodes);
-    const name = root.append('g').attr('class', 'casa-map-labels')
+    const name = root.append('g').attr('class', 'home-map-labels')
       .selectAll('text').data(nodes.filter((d) => conNome.has(d.id))).join('text')
       .text((d) => shortLabel(d.label))
       .attr('dy', (d) => labelOffsets(radiusOf(d.degree))[0]);
@@ -532,9 +532,9 @@ export class HomeMap {
    *  fallita non fa piu' e' autorizzare una scrittura (v. `_caricaSpilli`).
    */
   async _leggiSpilli() {
-    if (!this._quaderno) return null;
+    if (!this._notebook) return null;
     if (!(await this._caricaSpilli())) return null;
-    return this._spilli[this._quaderno] || null;
+    return this._spilli[this._notebook] || null;
   }
 
   /** Scrive gli spilli di questo quaderno. Chiamata a fine trascinamento.
@@ -555,8 +555,8 @@ export class HomeMap {
    *  il file si rilegge solo al primo disegno.
    */
   async _salvaSpilli(nodes) {
-    const quaderno = this._quaderno;
-    if (!quaderno) return;
+    const notebook = this._notebook;
+    if (!notebook) return;
     if (!(await this._caricaSpilli())) return;
     const miei = {};
     for (const n of nodes) {
@@ -566,7 +566,7 @@ export class HomeMap {
          salvare la seconda farebbe scivolare la disposizione a ogni apertura. */
       miei[n.id] = [Math.round(n.ax), Math.round(n.ay)];
     }
-    const tutti = { ...this._spilli, [quaderno]: miei };
+    const tutti = { ...this._spilli, [notebook]: miei };
     this._spilli = tutti;
     const testo = JSON.stringify(tutti);
     try {

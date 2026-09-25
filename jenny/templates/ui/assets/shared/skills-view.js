@@ -34,15 +34,15 @@ export function motivoBlocco(skill) {
  *  c'è più) ma si **contano**: un totale che non torna con quel che si vede
  *  sembra un difetto. L'ordine è quello del backend, che già ordina per nome. */
 export function dividiSkill(skills) {
-  const tue = [];
+  const yours = [];
   const integrate = [];
-  let servizio = 0;
+  let service = 0;
   for (const s of skills || []) {
-    if (s.internal) servizio += 1;
+    if (s.internal) service += 1;
     else if (s.bundled) integrate.push(s);
-    else tue.push(s);
+    else yours.push(s);
   }
-  return { tue, integrate, servizio };
+  return { yours, integrate, service };
 }
 
 /** La riga sotto il nome. Il riassunto per l'utente nella sua lingua, poi
@@ -59,8 +59,8 @@ export function riassuntoSkill(skill, locale) {
 
 /** La risposta breve della riga in cassetto. `t` è `i18n.t`, passato da chi
  *  chiama perché il modulo resti eseguibile fuori dal browser. */
-export function riepilogoSkill({ tue, integrate }, t) {
-  return tue.length
-    ? t('skills.riepilogo', { integrate: integrate.length, tue: tue.length })
-    : t('skills.riepilogoNessunaTua', { integrate: integrate.length });
+export function riepilogoSkill({ yours, integrate }, t) {
+  return yours.length
+    ? t('skills.summary', { integrate: integrate.length, yours: yours.length })
+    : t('skills.summaryNoneYours', { integrate: integrate.length });
 }

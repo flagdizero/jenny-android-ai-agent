@@ -12,7 +12,7 @@
  *  `window.mobileApp.onNativeReady()`, `.goHome()`, `.onPackageChanged()`,
  *  `.handleHardwareBack()`, `.openChat()` e `.isChatOnScreen()`. Erano tre in
  *  questo commento, poi cinque, e il conto era sbagliato tutte e due le volte:
- *  quelle che mancavano non si trovano cercando `window.mobileApp.<nome>`
+ *  quelle che mancavano non si trovano cercando `window.mobileApp.<name>`
  *  perche' il Kotlin le invoca su una variabile locale (`var app =
  *  window.mobileApp; … app.handleHardwareBack()`). Il ponte verso il JS si
  *  conta sulle **chiamate**, non sul nome dell'oggetto. La sesta era scritta
@@ -103,8 +103,8 @@ const BACK_TO = {
    quello di «Segnala». Scritti una volta: li leggono sia chi chiede se c'e'
    qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
    due elenchi separati divergevano al primo foglio nuovo. */
-const FOGLI_PRESSIONE_LUNGA = ['casa-quaderno-sheet', 'jenny-app-sheet', 'android-app-sheet'];
-const FOGLIO_SEGNALA = 'casa-audit-dialog';
+const FOGLI_PRESSIONE_LUNGA = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet'];
+const FOGLIO_SEGNALA = 'home-audit-dialog';
 
 /* Le stesse domande dell'officina, dette come si dicono in casa.
  *
@@ -115,30 +115,30 @@ const FOGLIO_SEGNALA = 'casa-audit-dialog';
  */
 const NOTEBOOK_WORDS = {
   ...PROJECT_WORDS,
-  namePrompt: 'casa.who.create.name',
-  nameTaken: 'casa.who.create.taken',
-  seedRequired: 'casa.who.create.seedRequired',
-  created: 'casa.who.create.created',
-  wikiOff: 'casa.who.create.wikiOff',
-  rejected: 'casa.who.create.rejected',
-  leftoverBody: 'casa.who.create.leftover',
-  leftoverBodyNoCount: 'casa.who.create.leftoverNoCount',
+  namePrompt: 'home.who.create.name',
+  nameTaken: 'home.who.create.taken',
+  seedRequired: 'home.who.create.seedRequired',
+  created: 'home.who.create.created',
+  wikiOff: 'home.who.create.wikiOff',
+  rejected: 'home.who.create.rejected',
+  leftoverBody: 'home.who.create.leftover',
+  leftoverBodyNoCount: 'home.who.create.leftoverNoCount',
 };
 
 /* ...e quelle della cancellazione, per la stessa ragione: il giro e' uno
    (`shared/project-delete.js`), e in casa quel che si cancella e' un quaderno. */
 const NOTEBOOK_DELETE_WORDS = {
-  confirm: 'casa.quaderno.deleteConfirm',
-  confirmWithChat: 'casa.quaderno.deleteConfirmWithChat',
-  failed: 'casa.quaderno.deleteFailed',
-  busy: 'casa.quaderno.deleteBusy',
+  confirm: 'home.notebook.deleteConfirm',
+  confirmWithChat: 'home.notebook.deleteConfirmWithChat',
+  failed: 'home.notebook.deleteFailed',
+  busy: 'home.notebook.deleteBusy',
 };
 
 class HomeApp {
   constructor() {
-    this.thread = document.getElementById('casa-thread');
+    this.thread = document.getElementById('home-thread');
     this.chat = new HomeChat(this.thread);
-    this.jenny = new JennyMascot(document.querySelector('.casa-shell'));
+    this.jenny = new JennyMascot(document.querySelector('.home-shell'));
     /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
        la banda da scansare si misura su di lei, non su dei numeri copiati —
@@ -148,35 +148,35 @@ class HomeApp {
     this.activity = new ActivityLine(document.getElementById('home-activity'), {
       onOpenInWorkshop: (turnId) => this._openInWorkshop(turnId),
     });
-    this.empty = document.getElementById('casa-empty');
-    this.emptyText = document.getElementById('casa-empty-text');
-    this.wire = document.getElementById('casa-wire');
-    this.input = document.getElementById('casa-input');
-    this.send = document.getElementById('casa-send');
-    this.attach = document.getElementById('casa-attach');
-    this.pending = document.getElementById('casa-pending');
+    this.empty = document.getElementById('home-empty');
+    this.emptyText = document.getElementById('home-empty-text');
+    this.wire = document.getElementById('home-wire');
+    this.input = document.getElementById('home-input');
+    this.send = document.getElementById('home-send');
+    this.attach = document.getElementById('home-attach');
+    this.pending = document.getElementById('home-pending');
     /* Il composer vero, preso adesso per riferimento: piu' tardi il trasloco
        mette nelle pagine delle foto della chat, e un `querySelector` per
        classe puo' rispondere con il composer di una foto (v. `_bindComposer`). */
-    this.composer = this.input?.closest?.('.casa-composer') || null;
+    this.composer = this.input?.closest?.('.home-composer') || null;
     this.activityEl = document.getElementById('home-activity');
-    this.shell = document.querySelector('.casa-shell');
+    this.shell = document.querySelector('.home-shell');
 
     /* I comandi dell'intestazione che cambiano con la stanza — e la pastiglia
        delle pagine del quaderno, che dal 23/09/2026 sta nella barra dove
        scrivi, al posto che era del bottone del cassetto. */
-    this.pagesBtn = document.getElementById('casa-pages-open');
-    this.pagesCount = document.getElementById('casa-pages-count');
-    this.backBtn = document.getElementById('casa-back');
-    this.backLabel = document.getElementById('casa-back-label');
-    this.talkBtn = document.getElementById('casa-talk');
-    this.editBtn = document.getElementById('casa-edit');
-    this.talkLabel = document.getElementById('casa-talk-label');
+    this.pagesBtn = document.getElementById('home-notebook-pages-open');
+    this.pagesCount = document.getElementById('home-notebook-pages-count');
+    this.backBtn = document.getElementById('home-back');
+    this.backLabel = document.getElementById('home-back-label');
+    this.talkBtn = document.getElementById('home-talk');
+    this.editBtn = document.getElementById('home-edit');
+    this.talkLabel = document.getElementById('home-talk-label');
 
     /* «Tu e Jenny»: le impostazioni di chi la usa, cioe' la pagina
        Impostazioni. La porta dell'officina vive li' dentro, in fondo: la apre
        questo guscio, perche' e' lui a sapere come si apre. */
-    this.tu = new HomeYou({
+    this.you = new HomeYou({
       onWorkshop: () => this._openInWorkshop(null),
       onJenny: () => this.openJenny(),
       onModel: () => this.openModel(),
@@ -186,9 +186,9 @@ class HomeApp {
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
     this.jennyRoom = new HomeJenny({
-      onChange: () => this.tu.sayJenny(this.jennyRoom.value()),
+      onChange: () => this.you.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
-      onName: (nome) => this._keepName(nome),
+      onName: (name) => this._keepName(name),
     });
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
        `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
@@ -203,7 +203,7 @@ class HomeApp {
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
     this.backupRoom = new HomeBackup({
-      onExported: () => this.tu.sayBackup(this.backupRoom.value()),
+      onExported: () => this.you.sayBackup(this.backupRoom.value()),
     });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
@@ -211,7 +211,7 @@ class HomeApp {
        `import` statico la pagherebbe a ogni avvio della casa. */
     this.pages = new NotebookPages({
       onOpenPage: (path, label) => this.openPage(path, label),
-      onNeedMap: (data, _rows, quaderno) => this._drawMap(data, quaderno),
+      onNeedMap: (data, _rows, notebook) => this._drawMap(data, notebook),
     });
     this.reader = new HomeReader();
     this.reader.onTitle = (title) => this._readerTitle(title);
@@ -236,7 +236,7 @@ class HomeApp {
        dalla testa — porta il nome del quaderno o della pagina, e la riga
        personale dei Quaderni direbbe «piante» — ne' si scrive fisso: con un
        altro nome la fila e i Quaderni dicevano comunque «Jenny». */
-    this.nameEl = document.getElementById('casa-head-name');
+    this.nameEl = document.getElementById('home-head-name');
     this._personalName = DEFAULT_BOT_NAME;
 
     /* Le bozze, una per conversazione. Senza, mezza frase scritta in casa
@@ -249,7 +249,7 @@ class HomeApp {
     /* «Con chi parli», cioe' la pagina Quaderni. Il pannello non sa cosa sia
        una chiave di sessione — dice quale nome hai toccato, e la conversazione
        la apre questo guscio (e porta alla chat: `apriConversazione`). */
-    this.who = new WhoPanel(document.getElementById('casa-quaderni'), {
+    this.who = new WhoPanel(document.getElementById('home-notebooks'), {
       personalName: () => this._personalName,
       currentProject: () => projectNameOf(sessionManager.currentKey),
       onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
@@ -302,22 +302,22 @@ class HomeApp {
          fondo: arrivare altrove sarebbe il trucco che si vede. */
       inFondo: () => this.chat?.scrollToBottom(),
     });
-    this.pagine = new HomePages(this);
+    this.homePages = new HomePages(this);
     this._apps = null;
     /* La fila dei nomi in alto: legge le voci dalla pista, e tenendo premuto
        un nome le fa spostare. */
-    this.fila = new HomeStrip(document.getElementById('home-strip'), {
-      pagine: this.pagine,
+    this.strip = new HomeStrip(document.getElementById('home-strip'), {
+      homePages: this.homePages,
       nomeChat: () => this._nomeChat(),
       onCambia: (aperta) => this._onOrdina(aperta),
     });
     /* Le tre pagine fisse che non sono la chat: cosa fanno quando le guardi. */
-    this.pagine.registra('app', {
+    this.homePages.registra('app', {
       accendi: () => this.launcher.open(),
       spegni: () => this.launcher.close(),
     });
-    this.pagine.registra('notebooks', { accendi: () => this.who.mostra() });
-    this.pagine.registra('settings', { accendi: () => this._apriImpostazioni() });
+    this.homePages.registra('notebooks', { accendi: () => this.who.mostra() });
+    this.homePages.registra('settings', { accendi: () => this._apriImpostazioni() });
     /* La fila **non** si disegna qui: le traduzioni non ci sono ancora
        (arrivano in `init`, dopo il bootstrap) e i nomi delle pagine fisse
        uscivano come chiavi grezze — «casa.fila.app» — per il tempo di un giro.
@@ -335,7 +335,7 @@ class HomeApp {
       await api.bootstrap();
     } catch (err) {
       console.error('Bootstrap failed:', err);
-      api.clientLog('error', 'casa.bootstrap', String(err && err.stack || err));
+      api.clientLog('error', 'home.bootstrap', String(err && err.stack || err));
     }
 
     /* Le traduzioni prima della storia: la conversazione porta etichette
@@ -385,7 +385,7 @@ class HomeApp {
     };
     this.pagesBtn?.addEventListener('click', () => this.openPages());
     /* Il + tondo della pagina Quaderni: un quaderno nuovo, e ci si entra. */
-    this.nuovoQuaderno = document.getElementById('casa-quaderni-nuovo');
+    this.nuovoQuaderno = document.getElementById('home-notebooks-new');
     this.nuovoQuaderno?.addEventListener('click', () => this.createNotebook());
     /* Le due vie d'uscita della stessa stanza, e fanno la stessa cosa: si esce
        da dove stai guardando — in alto a sinistra se leggi l'intestazione, in
@@ -401,7 +401,7 @@ class HomeApp {
     /* Non `await`: le pagine aggiunte e l'ordine arrivano quando arrivano, e
        finche' non ci sono la casa e' quella di chi non ha spostato niente, su
        Jenny — che e' esattamente quel che deve essere. */
-    this.pagine.carica();
+    this.homePages.carica();
     /* Neanche il nome si aspetta: fino ad allora la fila dice quello di
        sempre. */
     this._leggiNome();
@@ -410,7 +410,7 @@ class HomeApp {
       await this.chat.load();
     } catch (err) {
       console.error('Thread load failed:', err);
-      api.clientLog('error', 'casa.thread', String(err && err.stack || err));
+      api.clientLog('error', 'home.thread', String(err && err.stack || err));
       this._showThreadError();
       return;
     }
@@ -425,7 +425,7 @@ class HomeApp {
        "non c'e' ancora niente qui" — cioe' esattamente la bugia che questo
        messaggio esiste per non dire. */
     this._threadFailed = true;
-    if (this.emptyText) this.emptyText.textContent = i18n.t('casa.threadError');
+    if (this.emptyText) this.emptyText.textContent = i18n.t('home.threadError');
     this._showEmpty(true);
   }
 
@@ -449,7 +449,7 @@ class HomeApp {
     /* **Dove** la si apre lo decidono le pagine: una pagina di un quaderno
        mostra solo il suo, quindi da li' un'altra conversazione si apre nella
        pagina chat (v. `HomePages.apriConversazione`). */
-    if (this.pagine) return this.pagine.apriConversazione(target);
+    if (this.homePages) return this.homePages.apriConversazione(target);
     return this.mostraConversazione(target);
   }
 
@@ -492,7 +492,7 @@ class HomeApp {
       }
     } catch (err) {
       console.error('Conversation switch failed:', err);
-      api.clientLog('error', 'casa.switch', String(err && err.stack || err));
+      api.clientLog('error', 'home.switch', String(err && err.stack || err));
       this._showThreadError();
     }
   }
@@ -522,10 +522,10 @@ class HomeApp {
   /** La scheda di un quaderno, nata al primo uso. */
   schedaQuaderno() {
     return (this._schedaQuaderno ||= new NotebookCard({
-      pagine: () => this.portaPagine(),
-      apri: (nome) => this.switchConversation(projectKey(nome)),
-      elimina: (nome) => this.deleteNotebook(nome),
-      rinomina: (nome) => this.renameNotebook(nome),
+      homePages: () => this.portaPagine(),
+      apri: (name) => this.switchConversation(projectKey(name)),
+      elimina: (name) => this.deleteNotebook(name),
+      rename: (name) => this.renameNotebook(name),
     }));
   }
 
@@ -538,18 +538,18 @@ class HomeApp {
    *  dentro ci resti, sotto il nome nuovo; i Quaderni, la fila e le pagine
    *  (che il gateway ha gia' rinominato) si rileggono.
    */
-  async renameNotebook(nome) {
-    const scritto = await promptDialog(i18n.t('casa.quaderno.renamePrompt', { name: nome }), {
-      initial: nome,
+  async renameNotebook(name) {
+    const scritto = await promptDialog(i18n.t('home.notebook.renamePrompt', { name: name }), {
+      initial: name,
     });
     const nuovo = (scritto || '').trim();
-    if (!nuovo || nuovo === nome) return false;
+    if (!nuovo || nuovo === name) return false;
     if (!isOpenableProjectName(nuovo)) {
       showToast(i18n.t('scope.invalidName'), 'error');
       return false;
     }
     try {
-      await rpc.renameProject(nome, nuovo);
+      await rpc.renameProject(name, nuovo);
     } catch (err) {
       /* I rifiuti attesi hanno un codice, e vanno detti nella lingua di chi
          legge: `conflict` (qualcuno ci sta scrivendo: un turno, un subagent,
@@ -558,18 +558,18 @@ class HomeApp {
          quaderno non c'e' piu'). Il testo inglese del server resta per i log;
          il motivo lo porta solo l'errore imprevisto. */
       const attesi = {
-        conflict: ['casa.quaderno.renameBusy', { name: nome }],
-        name_taken: ['casa.quaderno.renameTaken', { name: nuovo }],
-        not_found: ['casa.quaderno.renameMissing', { name: nome }],
+        conflict: ['home.notebook.renameBusy', { name: name }],
+        name_taken: ['home.notebook.renameTaken', { name: nuovo }],
+        not_found: ['home.notebook.renameMissing', { name: name }],
       };
-      const [chiave, parametri] = attesi[err?.code]
-        || ['casa.quaderno.renameFailed', { name: nome, error: err?.message || '' }];
-      showToast(i18n.t(chiave, parametri), 'error');
+      const [chiave, parameters] = attesi[err?.code]
+        || ['home.notebook.renameFailed', { name: name, error: err?.message || '' }];
+      showToast(i18n.t(chiave, parameters), 'error');
       return false;
     }
-    const vecchia = projectKey(nome);
+    const vecchia = projectKey(name);
     const nuova = projectKey(nuovo);
-    this.pagine.rinominaConversazione(vecchia, nuova);
+    this.homePages.rinominaConversazione(vecchia, nuova);
     this._rinominaBozza(vecchia, nuova);
     /* I Quaderni rileggono **prima** del cambio: la pastiglia delle pagine,
        ridisegnandosi, chiede alla loro cache quante pagine ha il quaderno — e
@@ -584,7 +584,7 @@ class HomeApp {
       this._drafts.delete(vecchia);
     }
     await this.portaPagine().ricarica();
-    showToast(i18n.t('casa.quaderno.renamed', { name: nuovo }), 'success');
+    showToast(i18n.t('home.notebook.renamed', { name: nuovo }), 'success');
     return true;
   }
 
@@ -610,24 +610,24 @@ class HomeApp {
    *  pagine si rileggono, perche' il gateway ha tolto anche la sua, se ne aveva
    *  una (v. `project_delete.py`).
    */
-  async deleteNotebook(nome) {
-    if (!(await deleteProjectFlow(nome, NOTEBOOK_DELETE_WORDS))) return false;
-    const chiave = projectKey(nome);
+  async deleteNotebook(name) {
+    if (!(await deleteProjectFlow(name, NOTEBOOK_DELETE_WORDS))) return false;
+    const chiave = projectKey(name);
     /* Come nel rinomino, **senza portarti alla chat**: si cancella dalla
        pagina Quaderni, e li' si resta. La pagina chat che mostrava il
        quaderno torna alla personale; la chat, se lo mostrava, torna a quel
        che mostra la pagina chat. La bozza se ne va col quaderno: era scritta
        per una conversazione che non c'e' piu'. */
-    if (this.pagine?.conversazioneCasa === chiave) {
-      this.pagine.conversazioneCasa = sessionManager.personalKey;
+    if (this.homePages?.conversazioneCasa === chiave) {
+      this.homePages.conversazioneCasa = sessionManager.personalKey;
     }
     if (sessionManager.currentKey === chiave) {
-      await this.mostraConversazione(this.pagine?.conversazioneCasa || null);
+      await this.mostraConversazione(this.homePages?.conversazioneCasa || null);
     }
     this._drafts.delete(chiave);
     await this.who.refresh();
     await this.portaPagine().ricarica();
-    showToast(i18n.t('casa.quaderno.eliminato', { name: nome }), 'success');
+    showToast(i18n.t('home.notebook.eliminato', { name: name }), 'success');
     return true;
   }
 
@@ -669,20 +669,20 @@ class HomeApp {
   /** La pagina Impostazioni e' diventata quella che guardi: si ridisegna e si
    *  rilegge quel che sa il server. */
   async _apriImpostazioni() {
-    this.tu.open();
-    this.tu.sayJenny(this.jennyRoom.value());
+    this.you.open();
+    this.you.sayJenny(this.jennyRoom.value());
     const data = await this._askSettings();
     this.jennyRoom.setFloating(data?.floating || null);
     /* Lettura fallita: `null`, cioe' «non lo so», non un nome vuoto. */
     this.jennyRoom.setName(data ? data.agent?.bot_name || '' : null);
     if (data) this._applyBotName(data.agent?.bot_name);
-    this.tu.sayJenny(this.jennyRoom.value());
+    this.you.sayJenny(this.jennyRoom.value());
     this.modelRoom.setSettings(data);
-    this.tu.sayModel(this.modelRoom.value());
+    this.you.sayModel(this.modelRoom.value());
     this.updatesRoom.setVersion(data?.version || null);
-    this.tu.sayUpdates(this.updatesRoom.value());
+    this.you.sayUpdates(this.updatesRoom.value());
     this.backupRoom.setBackup(data?.backup || null);
-    this.tu.sayBackup(this.backupRoom.value());
+    this.you.sayBackup(this.backupRoom.value());
   }
 
   /** La stanza di lei: com'e' fatta. Ci si arriva solo da «Tu e Jenny», che
@@ -720,7 +720,7 @@ class HomeApp {
     this._settings?.then?.((data) => {
       if (data) data.version = version;
     });
-    this.tu.sayUpdates(this.updatesRoom.value());
+    this.you.sayUpdates(this.updatesRoom.value());
   }
 
   /* La finestra flottante appena accesa o spenta: va nella cache, o alla
@@ -736,11 +736,11 @@ class HomeApp {
   /* Il nome appena salvato nella stanza di lei: va nella cache, o alla
      prossima apertura delle Impostazioni `setName` rimetterebbe il nome letto
      la prima volta; e va nella fila e nei Quaderni, che lo scrivono. */
-  _keepName(nome) {
+  _keepName(name) {
     this._settings?.then?.((data) => {
-      if (data && nome) (data.agent ||= {}).bot_name = nome;
+      if (data && name) (data.agent ||= {}).bot_name = name;
     });
-    this._applyBotName(nome);
+    this._applyBotName(name);
   }
 
   /* Il nome di lei, dalle impostazioni: la stessa lettura che la pagina
@@ -752,11 +752,11 @@ class HomeApp {
 
   /* Il nome della conversazione personale, dove lo si scrive: la fila e la
      riga personale dei Quaderni. Vuoto vuol dire il ripiego, come sul server. */
-  _applyBotName(nome) {
-    const nuovo = (typeof nome === 'string' && nome.trim()) || DEFAULT_BOT_NAME;
+  _applyBotName(name) {
+    const nuovo = (typeof name === 'string' && name.trim()) || DEFAULT_BOT_NAME;
     if (nuovo === this._personalName) return;
     this._personalName = nuovo;
-    this.fila?.disegna();
+    this.strip?.disegna();
     this.who?.render();
   }
 
@@ -767,7 +767,7 @@ class HomeApp {
   _keepSettings(data) {
     if (!data) return;
     this._settings = Promise.resolve(data);
-    this.tu.sayModel(this.modelRoom.value());
+    this.you.sayModel(this.modelRoom.value());
   }
 
   /* `/api/settings` **una volta**, per due stanze: la versione la scrive «Tu e
@@ -834,7 +834,7 @@ class HomeApp {
    *  risposta, e con un no non succede niente. */
   async _confirmLeaveReader(target, poi = null) {
     this.reader.blurEditor();
-    const ok = await confirmDialog(i18n.t('casa.reader.discardConfirm'));
+    const ok = await confirmDialog(i18n.t('home.reader.discardConfirm'));
     if (!ok) return;
     if (this.view !== 'reader') return;  // uscito da un'altra strada nel frattempo
     this.reader.cancelEdit();
@@ -852,15 +852,15 @@ class HomeApp {
    *  tornare a casa, non uscire dall'app. */
   goBackOneRoom() {
     if (this.view === 'chat') {
-      if (!this.pagine || this.pagine.indice === this.pagine.indiceChat) return false;
-      this.pagine.vaiA(this.pagine.indiceChat);
+      if (!this.homePages || this.homePages.indice === this.homePages.indiceChat) return false;
+      this.homePages.vaiA(this.homePages.indiceChat);
       return true;
     }
     const target = BACK_TO[this.view];
     if (!target) return false;
     if (target === 'settings') {
       this._setView('chat');
-      this.pagine.vaiAId('settings', { animato: false });
+      this.homePages.vaiAId('settings', { animato: false });
       return true;
     }
     this._setView(target);
@@ -872,14 +872,14 @@ class HomeApp {
     this._voce = voce;
     /* Su quale pagina si e' lo dice un attributo, come per le stanze: cosi' la
        geometria resta nel CSS e qui c'e' solo il nome. */
-    this.shell?.setAttribute('data-pagina', voce?.id || '');
+    this.shell?.setAttribute('data-page', voce?.id || '');
     /* La tastiera non resta aperta su un campo che e' uscito di scena: i tasti
        dopo finirebbero nella chat che non guardi. Ne' su quello coperto
        dall'avviso di un quaderno cancellato (v. `onSparitaCambiata`). */
-    if (!this._haComposer(voce) || this.pagine?.sparitaQui?.()) this.input?.blur();
+    if (!this._haComposer(voce) || this.homePages?.sparitaQui?.()) this.input?.blur();
     else this.fuoco?.rimetti();
     this._posaJenny();
-    this.fila?.disegna();
+    this.strip?.disegna();
     this._applyHead();
     this._segnalaChatAschermo();
   }
@@ -889,16 +889,16 @@ class HomeApp {
    *  di rete — e se la pagina e' quella a schermo il campo va tolto di mezzo:
    *  con la tastiera fisica il fuoco era gia' stato rimesso, e i tasti
    *  sarebbero andati a un quaderno cancellato. */
-  onSparitaCambiata(pannello) {
-    if (!this.pagine || this.pagine.pannelloDi(this.pagine.indice) !== pannello) return;
-    if (this.pagine.sparitaQui()) this.input?.blur();
+  onSparitaCambiata(panel) {
+    if (!this.homePages || this.homePages.pannelloDi(this.homePages.indice) !== panel) return;
+    if (this.homePages.sparitaQui()) this.input?.blur();
     else this.fuoco?.rimetti();
   }
 
   /** La pista ha ridisegnato le sue pagine: un nome in piu', uno in meno, un
    *  ordine nuovo. */
   onPagineCambiate() {
-    this.fila?.disegna();
+    this.strip?.disegna();
     this._chiediNomiApp();
   }
 
@@ -910,11 +910,11 @@ class HomeApp {
      legge quando lo apri. Una volta sola, e solo se c'e' un'app appesa. */
   _chiediNomiApp() {
     if (this._nomiAppChiesti) return;
-    if (!this.pagine?.pages?.some((s) => s.kind === 'app')) return;
+    if (!this.homePages?.pages?.some((s) => s.kind === 'app')) return;
     this._nomiAppChiesti = true;
     const fonte = this.appsSource();
     if (fonte.jennyApps?.length) return;
-    fonte.loadJennyApps?.().then(() => this.fila?.disegna()).catch(() => {});
+    fonte.loadJennyApps?.().then(() => this.strip?.disegna()).catch(() => {});
   }
 
   /* Le pagine su cui si scrive: la chat, e una pagina quaderno che la ospita. */
@@ -932,7 +932,7 @@ class HomeApp {
       this._measureFloor?.();
       return;
     }
-    document.documentElement.style.setProperty('--casa-composer-h', `${FLOOR_NO_COMPOSER}px`);
+    document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
   }
 
   /** Il nome della pagina chat nella fila: «Jenny», o il quaderno che mostra,
@@ -940,16 +940,16 @@ class HomeApp {
    *  schermo: su una pagina quaderno la chat e' in prestito, e il nome che la
    *  fila scrive sulla pagina chat resta quello a cui tornerai. */
   _nomeChat() {
-    const quaderno = projectNameOf(this.pagine?.conversazioneCasa || sessionManager.currentKey);
-    return quaderno
-      ? { nome: quaderno, colore: dotColor(quaderno) }
-      : { nome: this._personalName, colore: null };
+    const notebook = projectNameOf(this.homePages?.conversazioneCasa || sessionManager.currentKey);
+    return notebook
+      ? { name: notebook, colore: dotColor(notebook) }
+      : { name: this._personalName, colore: null };
   }
 
   /** La modalita' ordina si apre o si chiude: la pagina sotto si spegne, e la
    *  tastiera non resta aperta su un campo che non si puo' piu' toccare. */
   _onOrdina(aperta) {
-    this.shell?.toggleAttribute('data-ordina', aperta);
+    this.shell?.toggleAttribute('data-sort', aperta);
     if (aperta) this.input?.blur();
     else this.fuoco?.rimetti();
   }
@@ -960,7 +960,7 @@ class HomeApp {
      conferma — e l'immagine ingrandita, che non sono strati del cassetto. */
   _composerAttivo() {
     if (this.view !== 'chat' || !this._haComposer(this._voce)) return false;
-    if (this.pagine?.sparitaQui?.()) return false;
+    if (this.homePages?.sparitaQui?.()) return false;
     if (this.hasOverlayAbove()) return false;
     return !document.querySelector('dialog[open], .image-lightbox');
   }
@@ -972,10 +972,10 @@ class HomeApp {
     for (const id of [...FOGLI_PRESSIONE_LUNGA, FOGLIO_SEGNALA]) {
       if (document.getElementById(id)?.open) return true;
     }
-    return Boolean(this._azioniApp?.isAppOpen()) || Boolean(this.fila?.ordinando);
+    return Boolean(this._azioniApp?.isAppOpen()) || Boolean(this.strip?.ordinando);
   }
 
-  /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
+  /* La stanza a schermo la dice un attributo su `.home-shell`, e il resto lo
      fa il CSS: cosi' la geometria — cosa occupa lo spazio, cosa sparisce —
      resta in un posto solo, e qui c'e' solo quel che il CSS non sa fare.
 
@@ -1023,7 +1023,7 @@ class HomeApp {
       /* Niente composer, quindi il pavimento va dichiarato: senza, l'osservatore
          misurerebbe un elemento nascosto e lo troverebbe alto zero. */
       document.documentElement.style.setProperty(
-        '--casa-composer-h', `${FLOOR_NO_COMPOSER}px`,
+        '--home-composer-h', `${FLOOR_NO_COMPOSER}px`,
       );
       /* Fuori dalla chat Jenny sta al bordo: lo dice la tavola, che qui la
          disegna a `right:-56px` contro i `-30px` delle due della chat. */
@@ -1061,10 +1061,10 @@ class HomeApp {
     this.audit?.refresh();
     if (this.pagesBtn) this.pagesBtn.hidden = !notebook;
     if (this.view === 'pages') this._setHeadTitle(notebook);
-    if (this.view === 'jenny') this._setHeadTitle(i18n.t('casa.jenny.title'));
-    if (this.view === 'model') this._setHeadTitle(i18n.t('casa.model.title'));
-    if (this.view === 'updates') this._setHeadTitle(i18n.t('casa.updates.title'));
-    if (this.view === 'backup') this._setHeadTitle(i18n.t('casa.backup.title'));
+    if (this.view === 'jenny') this._setHeadTitle(i18n.t('home.jenny.title'));
+    if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
+    if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
+    if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
     this._applyBackLabel();
   }
 
@@ -1074,7 +1074,7 @@ class HomeApp {
      tabella che decide il salto, quindi le due non possono divergere. */
   _applyBackLabel() {
     if (!this.backLabel) return;
-    this.backLabel.textContent = i18n.t(`casa.back.${BACK_TO[this.view] || 'chat'}`);
+    this.backLabel.textContent = i18n.t(`home.back.${BACK_TO[this.view] || 'chat'}`);
   }
 
   /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
@@ -1086,7 +1086,7 @@ class HomeApp {
      vuota, e nascevano due `HomeMap` sullo stesso SVG — due simulazioni che
      si contendevano i nodi. Un import fallito si dimentica, cosi' il tocco
      dopo riprova. */
-  async _drawMap(data, quaderno) {
+  async _drawMap(data, notebook) {
     this._mappaPronta ||= import('./home-map.js').then(({ HomeMap }) => {
       this.map = new HomeMap({
         onOpenPage: (path, label) => this.openPage(path, label),
@@ -1100,7 +1100,7 @@ class HomeApp {
       this._mappaPronta = null;
       throw err;
     }
-    await map.draw(data, quaderno);
+    await map.draw(data, notebook);
   }
 
   /* La conversazione e' cambiata: la fila la dice col nome e il pallino — lo
@@ -1111,7 +1111,7 @@ class HomeApp {
     this._applyTranslations();
     this._applyHead();
     this._updatePagesCount(project);
-    this.fila?.disegna();
+    this.strip?.disegna();
     this.who?.render();
     this._segnalaChatAschermo();
   }
@@ -1132,7 +1132,7 @@ class HomeApp {
       if (projectNameOf(sessionManager.currentKey) !== notebook) return;
       if (count === null) return;
       this.pagesCount.textContent = i18n.t(
-        count === 1 ? 'casa.pages.countOne' : 'casa.pages.countMany', { count },
+        count === 1 ? 'home.notebookPages.countOne' : 'home.notebookPages.countMany', { count },
       );
     }).catch((err) => console.warn('casa.pages: page count not read', err));
   }
@@ -1181,7 +1181,7 @@ class HomeApp {
   appsActions() {
     return (this._azioniApp ||= new AppsActions(this.appsSource(), {
       sendChatPrompt: (testo) => this._mandaInChat(testo),
-      pagine: () => this.portaPagine(),
+      homePages: () => this.portaPagine(),
     }));
   }
 
@@ -1201,15 +1201,15 @@ class HomeApp {
   portaPagine() {
     return (this._portaPagine ||= {
       stato: (kind, ref) => {
-        if (this.pagine.appesa(kind, ref)) return 'appesa';
-        return this.pagine.pienoZeppo ? 'piena' : 'libera';
+        if (this.homePages.appesa(kind, ref)) return 'appesa';
+        return this.homePages.pienoZeppo ? 'piena' : 'libera';
       },
       appendi: async (kind, ref) => {
         this._closeAllOverlays();
-        return this.pagine.appendi(kind, ref);
+        return this.homePages.appendi(kind, ref);
       },
-      stacca: (kind, ref) => this.pagine.stacca(kind, ref),
-      ricarica: () => this.pagine.ricarica(),
+      stacca: (kind, ref) => this.homePages.stacca(kind, ref),
+      ricarica: () => this.homePages.ricarica(),
     });
   }
 
@@ -1228,7 +1228,7 @@ class HomeApp {
    *  codice. */
   openLauncher() {
     this._setView('chat');
-    this.pagine?.vaiAId('app');
+    this.homePages?.vaiAId('app');
   }
 
   /** Il nome che l'elenco delle app da' a uno slug, se l'elenco e' gia' stato
@@ -1312,8 +1312,8 @@ class HomeApp {
        app: una sua schermata interna torna indietro dentro di lei, prima. */
     if (this._azioniApp?.handleBack()) return true;
     /* La modalita' ordina: Indietro esce **senza salvare**. Salvare e' «Fatto». */
-    if (this.fila?.ordinando) {
-      this.fila.chiudiOrdina();
+    if (this.strip?.ordinando) {
+      this.strip.chiudiOrdina();
       return true;
     }
     /* Il cassetto non e' piu' uno strato, e' una pagina. Ma la ricerca scritta
@@ -1473,7 +1473,7 @@ class HomeApp {
          copie della chat col loro composer, e una che sta prima nel documento
          veniva misurata al posto di quello vero. */
       const h = this.composer?.offsetHeight || 64;
-      document.documentElement.style.setProperty('--casa-composer-h', `${h}px`);
+      document.documentElement.style.setProperty('--home-composer-h', `${h}px`);
     };
     /* Serve anche a chi rientra nella chat da un'altra stanza: li' il composer
        torna visibile e la sua altezza va rimisurata, o Jenny resta appoggiata
@@ -1518,7 +1518,7 @@ class HomeApp {
     this.pending.hidden = !entries.length;
     entries.forEach((entry, i) => {
       const item = document.createElement('div');
-      item.className = 'casa-pending-item';
+      item.className = 'home-pending-item';
       if (entry.kind === 'image') {
         const img = document.createElement('img');
         img.src = entry.url;
@@ -1526,15 +1526,15 @@ class HomeApp {
         item.appendChild(img);
       } else {
         const name = document.createElement('span');
-        name.className = 'casa-pending-name';
+        name.className = 'home-pending-name';
         name.textContent = entry.name || '';
         item.appendChild(name);
       }
       const x = document.createElement('button');
       x.type = 'button';
       x.dataset.remove = String(i);
-      x.className = 'casa-pending-x';
-      x.setAttribute('aria-label', i18n.t('casa.removeAttachment'));
+      x.className = 'home-pending-x';
+      x.setAttribute('aria-label', i18n.t('home.removeAttachment'));
       x.innerHTML = '<i class="ti ti-x"></i>';
       item.appendChild(x);
       this.pending.appendChild(item);
@@ -1551,7 +1551,7 @@ class HomeApp {
     if (!text && !this.files.count) return false;
     /* La pagina di un quaderno cancellato: l'ultima guardia, se un Invio
        arriva comunque al campo sotto l'avviso. */
-    if (this.pagine?.sparitaQui?.()) return false;
+    if (this.homePages?.sparitaQui?.()) return false;
     /* Scritto a mano, `/stop` resta il comando che e' — in casa i comandi non
        ci sono, ma niente impedisce di digitarne uno, e disegnarne la bolla
        vorrebbe dire mostrare in chat una cosa che il transcript esclude
@@ -1672,7 +1672,7 @@ class HomeApp {
     this.send.innerHTML = running
       ? '<i class="ti ti-player-stop-filled"></i>'
       : '<i class="ti ti-arrow-up"></i>';
-    this.send.setAttribute('aria-label', i18n.t(running ? 'casa.stop' : 'casa.send'));
+    this.send.setAttribute('aria-label', i18n.t(running ? 'home.stop' : 'home.send'));
   }
 
   /* ── Lo stato del filo ── */
@@ -1685,7 +1685,7 @@ class HomeApp {
       return;
     }
     this._wireTimer = setTimeout(() => {
-      this.wire.textContent = i18n.t('casa.wire.offline');
+      this.wire.textContent = i18n.t('home.wire.offline');
       this.wire.hidden = false;
     }, WIRE_GRACE_MS);
   }
@@ -1701,35 +1701,35 @@ class HomeApp {
        spiegarlo che questa e' un'altra stanza. */
     const inNotebook = !!projectNameOf(sessionManager.currentKey);
     if (this.emptyText) {
-      const empty = inNotebook ? 'casa.emptyNotebook' : 'casa.empty';
-      this.emptyText.textContent = i18n.t(this._threadFailed ? 'casa.threadError' : empty);
+      const empty = inNotebook ? 'home.emptyNotebook' : 'home.empty';
+      this.emptyText.textContent = i18n.t(this._threadFailed ? 'home.threadError' : empty);
     }
     if (this.input) {
-      this.input.placeholder = i18n.t(inNotebook ? 'casa.placeholderNotebook' : 'casa.placeholder');
+      this.input.placeholder = i18n.t(inNotebook ? 'home.placeholderNotebook' : 'home.placeholder');
     }
     if (this.send) {
-      this.send.setAttribute('aria-label', i18n.t(this._running ? 'casa.stop' : 'casa.send'));
+      this.send.setAttribute('aria-label', i18n.t(this._running ? 'home.stop' : 'home.send'));
     }
-    if (this.attach) this.attach.setAttribute('aria-label', i18n.t('casa.attach'));
+    if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
-    if (this.talkLabel) this.talkLabel.textContent = i18n.t('casa.pages.talk');
-    if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('casa.reader.edit'));
+    if (this.talkLabel) this.talkLabel.textContent = i18n.t('home.notebookPages.talk');
+    if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('home.reader.edit'));
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();
-    this.tu?.applyTranslations();
+    this.you?.applyTranslations();
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
     this.jennyRoom?.applyTranslations();
-    this.tu?.sayJenny(this.jennyRoom?.value());
-    if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('casa.pages.open'));
-    this.nuovoQuaderno?.setAttribute('aria-label', i18n.t('casa.who.newNotebook'));
+    this.you?.sayJenny(this.jennyRoom?.value());
+    if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('home.notebookPages.open'));
+    this.nuovoQuaderno?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));
     this.pages?.applyTranslations();
     // La pagina Quaderni ha le sue righe gia' disegnate: vanno riscritte.
     this.who?.render();
-    this.fila?.disegna();
+    this.strip?.disegna();
     if (this.files?.count) this._renderPending();
-    if (this.wire && !this.wire.hidden) this.wire.textContent = i18n.t('casa.wire.offline');
+    if (this.wire && !this.wire.hidden) this.wire.textContent = i18n.t('home.wire.offline');
   }
 
 }

@@ -179,7 +179,7 @@
   --radius-bubble: 14px;
 }
 
-[data-theme="fumetto"] {
+[data-theme="comic"] {
   color-scheme: light;
   --font-display:  'Bangers', var(--font-sans);
   --font-sans:     'Comic Neue', 'Inter', system-ui, sans-serif;
@@ -1162,19 +1162,19 @@ body {
    Un contenitore alto quanto vuole dentro una pagina che scorre da' due
    scorrimenti annidati, e sul telefono il dito ne trova sempre quello
    sbagliato: qui cresce, e a scorrere e' il cassetto. */
-.ws-esploratore {
+.ws-explorer {
   margin: 0 -14px -14px;   /* al vivo dei bordi della scheda */
 }
-.ws-barra {
+.ws-bar {
   display: flex;
   align-items: stretch;
 }
-.ws-barra > .ws-breadcrumb {
+.ws-bar > .ws-breadcrumb {
   flex: 1;
   min-width: 0;
   border-top: 0.5px solid var(--border);
 }
-.ws-nuovo {
+.ws-new {
   flex: 0 0 auto;
   width: 40px;
   border: none;
@@ -1185,7 +1185,7 @@ body {
   font-size: 18px;
   cursor: pointer;
 }
-.ws-nuovo:active { background: var(--overlay); }
+.ws-new:active { background: var(--overlay); }
 
 /* Breadcrumb bar */
 .ws-breadcrumb {
@@ -4300,7 +4300,7 @@ body {
    non e' estetico — un cassetto di teste chiuse si apre su quattro righe che
    non dicono niente, e ogni risposta costa un tocco e un'attesa. */
 
-.settings-gruppo {
+.settings-group {
   flex-shrink: 0;
   animation: cardEntrance 0.3s cubic-bezier(.25,.1,.25,1) both;
 }
@@ -4308,7 +4308,7 @@ body {
 /* La soprascritta sta **fuori** dalla scheda e non dentro una testa: cosi'
    non somiglia a un bottone, e non invita a toccarla per aprire qualcosa che
    e' gia' aperto. */
-.settings-gruppo-label {
+.settings-group-label {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: .1em;
@@ -4361,8 +4361,8 @@ body {
    largo quanto la lista, filetto sopra tranne la prima, e il tocco che la
    sbiadisce. Il `min-height` resta in ogni riga: è il bersaglio del dito, e i
    contratti di ciascuna lo cercano lì. La riga di riepilogo delle
-   impostazioni è lo stesso pulsante senza filetto (v. `.settings-riepilogo`). */
-.cron-riga, .marca-riga, .ssh-riga, .settings-riepilogo {
+   impostazioni è lo stesso pulsante senza filetto (v. `.settings-summary`). */
+.cron-row, .brand-row, .ssh-row, .settings-summary {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4377,13 +4377,13 @@ body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.cron-riga:first-of-type, .marca-riga:first-of-type, .ssh-riga:first-of-type { border-top: 0; }
-.cron-riga:active, .marca-riga:active, .ssh-riga:active,
-.settings-riepilogo:active { opacity: .6; }
+.cron-row:first-of-type, .brand-row:first-of-type, .ssh-row:first-of-type { border-top: 0; }
+.cron-row:active, .brand-row:active, .ssh-row:active,
+.settings-summary:active { opacity: .6; }
 /* Il lavoro periodico ha due righe di testo, e un filo d'aria in più. */
-.cron-riga { min-height: 52px; padding: 6px 0; }
-.cron-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.cron-riga-nome {
+.cron-row { min-height: 52px; padding: 6px 0; }
+.cron-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cron-row-name {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4392,7 +4392,7 @@ body {
   font-weight: 500;
   color: var(--text);
 }
-.cron-riga-sotto {
+.cron-row-under {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -4402,32 +4402,32 @@ body {
 }
 /* A destra e in monospazio: incolonnati, cinque «fra quanto» si confrontano a
    colpo d'occhio invece di leggerli uno per uno. */
-.cron-riga-quando {
+.cron-row-when {
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 11.5px;
   text-align: right;
   color: var(--text-muted);
 }
-.cron-riga-quando.is-tardi { color: var(--warning, var(--text-muted)); }
-.cron-riga-quando.is-muto { color: var(--text-faint); }
+.cron-row-when.is-late { color: var(--warning, var(--text-muted)); }
+.cron-row-when.is-mute { color: var(--text-faint); }
 
 
 /* ── La riga di una marca ─────────────────────────────────────────────────
    Pallino, nome, indirizzo, chiave mascherata, freccina — piu' la pastiglia
    «risponde» su quella che risponde adesso. Era una scheda alta il triplo. */
-.marca-riga { min-height: 52px; }
+.brand-row { min-height: 52px; }
 /* Il bordo tiene il pallino visibile anche quando la sua tinta e' vicina al
    fondo del tema di turno. */
-.marca-pallino {
+.brand-dot {
   flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 999px;
   box-shadow: 0 0 0 1px var(--border-strong);
 }
-.marca-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.marca-nome {
+.brand-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.brand-name {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -4435,7 +4435,7 @@ body {
   font-size: 13px;
   color: var(--text);
 }
-.marca-risponde {
+.brand-answers {
   padding: 1px 6px;
   border-radius: 5px;
   background: var(--overlay-strong);
@@ -4444,7 +4444,7 @@ body {
   font-size: 10px;
   color: var(--ok, var(--text-muted));
 }
-.marca-dove {
+.brand-where {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
@@ -4452,13 +4452,13 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.marca-chiave {
+.brand-key {
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--text-faint);
 }
-.marca-riga > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.brand-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── La riga di un host SSH ───────────────────────────────────────────────
    Alias e indirizzo a sinistra, i due stati a destra, la freccina. Era una
@@ -4468,10 +4468,10 @@ body {
    l'utente deve fare, e nasconderli dietro il tocco lascerebbe host mezzi
    configurati che falliscono solo al primo comando. Qui costano due parole
    invece di due targhette. */
-.ssh-riga { min-height: 52px; }
-.ssh-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ssh-riga-nome { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
-.ssh-riga-dove {
+.ssh-row { min-height: 52px; }
+.ssh-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ssh-row-name { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+.ssh-row-where {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
@@ -4479,10 +4479,10 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ssh-riga-stati { flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+.ssh-row-states { flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
 /* Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
    l'accento **e'** il colore del testo due pallini colorati si somigliano. */
-.ssh-segno {
+.ssh-mark {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -4490,14 +4490,14 @@ body {
   line-height: 1;
   color: var(--text-faint);
 }
-.ssh-segno i { font-size: 12px; }
-.ssh-segno.is-ok { color: var(--ok, var(--text-muted)); }
-.ssh-segno.is-manca { color: var(--warning, var(--text-faint)); }
-.ssh-riga > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.ssh-mark i { font-size: 12px; }
+.ssh-mark.is-ok { color: var(--ok, var(--text-muted)); }
+.ssh-mark.is-missing { color: var(--warning, var(--text-faint)); }
+.ssh-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* La riga che chiude un gruppo mandando altrove. Fuori dai comandi e in tono
    basso: non e' un'impostazione ne' un bottone, e' un'indicazione. */
-.settings-rimando {
+.settings-link {
   margin: 8px 2px 0;
   font-size: 11.5px;
   line-height: 1.45;
@@ -4506,9 +4506,9 @@ body {
 
 /* ── La riga di una skill (pannello di Mani) ──────────────────────────────
    Nome e una riga sotto a sinistra, il comando a destra: la forma di
-   `.cron-riga`. Il testo e' un bottone perche' il tocco scioglie il
+   `.cron-row`. Il testo e' un bottone perche' il tocco scioglie il
    troncamento a due righe — l'unica cosa in piu' che la riga ha da dire. */
-.skill-riga {
+.skill-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4516,8 +4516,8 @@ body {
   padding: 6px 0;
   border-top: 0.5px solid var(--border);
 }
-.skill-riga:first-of-type { border-top: 0; }
-.skill-riga-testo {
+.skill-row:first-of-type { border-top: 0; }
+.skill-row-text {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -4532,13 +4532,13 @@ body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.skill-riga-nome {
+.skill-row-name {
   font-family: var(--font-mono);
   font-size: 12.5px;
   color: var(--text);
   overflow-wrap: anywhere;
 }
-.skill-riga-sotto {
+.skill-row-under {
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--text-muted);
@@ -4547,14 +4547,14 @@ body {
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.skill-riga-testo[aria-expanded="true"] .skill-riga-sotto {
+.skill-row-text[aria-expanded="true"] .skill-row-under {
   display: block;
   -webkit-line-clamp: unset;
 }
 /* Non disponibile: il motivo in testo, il pallino per chi scorre. Il colore
    da solo non basterebbe. */
-.skill-riga-guasto { color: var(--warning); }
-.skill-riga-punto {
+.skill-row-broken { color: var(--warning); }
+.skill-row-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
@@ -4563,10 +4563,10 @@ body {
   background: var(--warning);
   vertical-align: 1px;
 }
-.skill-riga-lucchetto { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.skill-row-lock { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* «Le tue», vuota: un invito, non una scusa. */
-.skill-vuota {
+.skill-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4574,9 +4574,9 @@ body {
   padding: 12px 8px;
   text-align: center;
 }
-.skill-vuota > .ti { font-size: 20px; color: var(--flower); }
-.skill-vuota-titolo { font-size: 13px; color: var(--text); }
-.skill-vuota .settings-hint { margin: 0 0 6px; }
+.skill-empty > .ti { font-size: 20px; color: var(--flower); }
+.skill-empty-title { font-size: 13px; color: var(--text); }
+.skill-empty .settings-hint { margin: 0 0 6px; }
 
 /* ── La riga di riepilogo ─────────────────────────────────────────────────
    Nome a sinistra, la risposta breve a destra, una freccina. Il tocco apre il
@@ -4584,18 +4584,18 @@ body {
 
    E' `<button>` e non una riga cliccabile: da tastiera ci si arriva, e chi
    legge lo schermo sente che e' un comando invece di due frasi accostate.
-   Il pulsante e' quello di `.cron-riga` (stesso gruppo, e stesso tocco che
+   Il pulsante e' quello di `.cron-row` (stesso gruppo, e stesso tocco che
    sbiadisce); qui cio' che cambia: niente filetto, niente aria sopra e sotto,
    e il bersaglio del dito. */
-.settings-riepilogo {
+.settings-summary {
   min-height: 44px;
   padding: 0;
   border-top: 0;
 }
-.settings-riepilogo-nome { flex-shrink: 0; font-size: 13px; color: var(--text); }
+.settings-summary-name { flex-shrink: 0; font-size: 13px; color: var(--text); }
 /* La risposta si prende lo spazio che resta e si tronca: e' un riassunto, e un
    riassunto che va a capo due volte non e' piu' un riassunto. */
-.settings-riepilogo-valore {
+.settings-summary-value {
   flex: 1 1 auto;
   min-width: 0;
   text-align: right;
@@ -4606,7 +4606,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.settings-riepilogo i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.settings-summary i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── La riga a due colonne: nome a sinistra, comando a destra ─────────────
    La forma della tavola, e la forma che `.settings-toggle-row` ha sempre avuto:
@@ -4618,14 +4618,14 @@ body {
    `shared/telegram-pairing.js`, e backup-flow disegna i due campi della
    passphrase **dentro una finestra, anche in casa**. Una password schiacciata
    in 92 px sarebbe il prezzo di un allineamento che non la riguarda. */
-.settings-riga {
+.settings-row {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 10px;
   min-height: 44px;
 }
-.settings-riga > .settings-label {
+.settings-row > .settings-label {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 13px;
@@ -4633,8 +4633,8 @@ body {
 }
 /* Larghezze fisse, e il numero allineato a destra: incolonnati, tre numeri si
    confrontano con l'occhio invece che leggendoli uno per uno. */
-.settings-riga > .settings-input { width: 92px; flex-shrink: 0; text-align: right; }
-.settings-riga > .settings-select { width: 150px; flex-shrink: 0; }
+.settings-row > .settings-input { width: 92px; flex-shrink: 0; text-align: right; }
+.settings-row > .settings-select { width: 150px; flex-shrink: 0; }
 
 .settings-label {
   font-size: 11px;
@@ -4872,7 +4872,7 @@ body {
    secondarie, e sei bottoni pieni sulla stessa pagina non ne fanno risaltare
    nessuno. `--on-accent` e non il bianco: con un accento chiaro (Chanel) il
    bianco su bianco non si legge. */
-.settings-btn-pieno {
+.settings-btn-full {
   width: 100%;
   min-height: 38px;
   border-radius: 999px;
@@ -4886,7 +4886,7 @@ body {
   justify-content: center;
   gap: 6px;
 }
-.settings-btn-pieno:active { opacity: .85; }
+.settings-btn-full:active { opacity: .85; }
 
 
 .settings-btn-add {
@@ -5686,23 +5686,23 @@ body {
    Small scoped modules for the themes whose character goes beyond tokens. */
 
 /* — Fumetto: china e mezzitoni — */
-[data-theme="fumetto"] .main {
+[data-theme="comic"] .main {
   background-color: var(--bg);
   background-image: radial-gradient(rgba(27, 24, 32, 0.10) 1px, transparent 1.3px);
   background-size: 9px 9px;
 }
-[data-theme="fumetto"] .chat-msg-ai .chat-content:not(:empty) {
+[data-theme="comic"] .chat-msg-ai .chat-content:not(:empty) {
   background: var(--surface);
   border: 2px solid #1b1820;
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
   box-shadow: 3px 3px 0 rgba(27, 24, 32, 0.15);
 }
-[data-theme="fumetto"] .compose-pill {
+[data-theme="comic"] .compose-pill {
   border: 2px solid #1b1820;
 }
-[data-theme="fumetto"] .view-title-text,
-[data-theme="fumetto"] .chat-identity-name {
+[data-theme="comic"] .view-title-text,
+[data-theme="comic"] .chat-identity-name {
   letter-spacing: .02em;
 }
 
@@ -5772,7 +5772,7 @@ body {
      mano li farebbe diventare due.
      **Questa e' anche la Jenny della casa** (shared/jenny-mascot.js, lo stesso
      sprite), che carica questo foglio: la' si cambia solo il pavimento — il
-     `bottom` qui sotto — in `.casa-shell .jenny-duo` di home-style.css.
+     `bottom` qui sotto — in `.home-shell .jenny-duo` di home-style.css.
      **Il livello e' uno per le due interfacce** (D3, 25/09/2026: «Jenny sempre
      sopra»): 120 sta sopra la mini-app (110) e la lightbox (115), e sopra di
      lei ci sono solo la sua minichat (121) e il top layer (`<dialog>`, toast),
@@ -5838,9 +5838,9 @@ body {
 /* Anti-flash: attributo impostato in bootstrap.js prima del render, per
    evitare che la mascotte compaia un istante prima che mobile-jenny.js
    applichi la preferenza "non visibile" (fonte di verità a runtime). */
-:root[data-mascotte-hidden] .jenny-duo,
-:root[data-mascotte-hidden] .jenny-scrim,
-:root[data-mascotte-hidden] .jenny-mc { display: none; }
+:root[data-mascot-hidden] .jenny-duo,
+:root[data-mascot-hidden] .jenny-scrim,
+:root[data-mascot-hidden] .jenny-mc { display: none; }
 
 /* Arte a due livelli (v. .agent/mascot-faces-plan.md): a mascotte intera il
    corpo (senza faccia) e la faccia sono due img impilate sullo stesso quadrato.
@@ -6060,7 +6060,7 @@ body {
 /* Un lavoro spento si legge spento: la riga intera sbiadisce. Il suffisso
    `cron-card-<salute>` lo scrive `_renderCronJob` per tutti gli stati, ma gli altri
    non hanno una regola — il colore del bordo sinistro che portavano era della
-   scheda di prima, e su `.cron-riga`, che di bordo ha solo quello in alto, non
+   scheda di prima, e su `.cron-row`, che di bordo ha solo quello in alto, non
    si vedeva piu'. */
 .cron-card-off { opacity: 0.62; }
 
@@ -6192,12 +6192,12 @@ body {
    tutta larghezza ha etichette da quattro pixel — l'immagine di un diagramma,
    non un diagramma. Si legge scorrendo di lato, come una tabella larga.
    (Da guardare sul telefono: e' l'unico posto dove questa scelta si giudica.) */
-.diagramma {
+.diagram {
   margin: 10px 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.diagramma svg {
+.diagram svg {
   display: block;
   height: auto;
 }

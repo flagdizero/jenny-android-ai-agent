@@ -110,10 +110,10 @@ def test_every_async_action_writer_declares_which_mode_it_belongs_to() -> None:
     gestore file accende così la freccia Indietro. ``ownerMode`` è opzionale per
     i chiamanti sincroni, quindi la regola si misura sulla guardia."""
     header_src = _src(HEADER_JS)
-    for nome in ("showAction", "hideAction"):
-        corpo = _method(header_src, nome)
+    for name in ("showAction", "hideAction"):
+        corpo = _method(header_src, name)
         assert "if (ownerMode && ownerMode !== this.currentMode) return;" in corpo, (
-            f"{nome} ha perso la guardia sul proprietario della modalità"
+            f"{name} ha perso la guardia sul proprietario della modalità"
         )
 
 
@@ -187,7 +187,7 @@ def test_settings_dom_nodes_are_looked_up_after_the_await() -> None:
         "const blockEl = this.contentEl.querySelector('#ssh-block');"
     )
     # L'elenco delle istantanee non vive più dentro `contentEl`: sta nel pannello
-    # `drawer-storia`, che è fuori dalla vista (in cassetto resta la riga di
+    # `drawer-history`, che è fuori dalla vista (in cassetto resta la riga di
     # riepilogo). Cambia **dove** si cerca, non la regola: il nodo si prende
     # dopo l'await, mai prima — e qui in più il pannello può essersi chiuso nel
     # frattempo, quindi l'assenza del nodo è normale e va gestita, non evitata.

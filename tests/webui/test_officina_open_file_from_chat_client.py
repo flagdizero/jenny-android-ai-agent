@@ -122,7 +122,7 @@ shell.controllers = {{}};
 shell.controllerFactories = {{
   chat: () => new Chat(),
   workspace: () => new WorkspaceController(),
-  memoria: () => new Controller(),
+  memory: () => new Controller(),
 }};
 shell.currentMode = null;
 shell._navPos = 0;
@@ -206,10 +206,10 @@ def test_a_stale_root_workspace_entry_lands_on_memoria_consistently() -> None:
             """
 shell._onPop({ mode: 'workspace', pos: 0 });
 await settle();
-assert.equal(shell.currentMode, 'memoria');
-assert.equal(AppState.values.currentMode, 'memoria');
+assert.equal(shell.currentMode, 'memory');
+assert.equal(AppState.values.currentMode, 'memory');
 assert.equal(views['view-settings'].style.display, 'flex');
-assert.deepEqual(stack.map((s) => s.mode), ['memoria']);
+assert.deepEqual(stack.map((s) => s.mode), ['memory']);
 """
         )
     )

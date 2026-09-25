@@ -118,14 +118,14 @@ export class WhoPanel {
     const scorso = body.scrollTop;
     body.innerHTML = '';
 
-    body.appendChild(this._label(i18n.t('casa.who.title')));
+    body.appendChild(this._label(i18n.t('home.who.title')));
     body.appendChild(this._personalRow());
 
-    body.appendChild(this._label(i18n.t('casa.who.notebooks'), true));
+    body.appendChild(this._label(i18n.t('home.who.notebooks'), true));
     /* L'elenco dei quaderni ha un contenitore suo: e' la parte che cresce, e
        il banco lo trova per nome. */
     const list = document.createElement('div');
-    list.className = 'casa-who-list';
+    list.className = 'home-who-list';
     body.appendChild(list);
 
     /* I tre stati sono tre, e non due: *non lo so ancora*, *non ce n'e'*, e
@@ -134,13 +134,13 @@ export class WhoPanel {
        **sopra** le righe perche' quelle possono essere vecchie e questa e'
        l'unica cosa che lo dice. */
     if (this._list.loadFailed) {
-      list.appendChild(this._note(i18n.t('casa.who.loadFailed'), true));
+      list.appendChild(this._note(i18n.t('home.who.loadFailed'), true));
     }
     const projects = this._list.projects;
     if (projects === null) {
       if (!this._list.loadFailed) list.appendChild(this._note(i18n.t('scope.loading')));
     } else if (!projects.length) {
-      if (!this._list.loadFailed) list.appendChild(this._note(i18n.t('casa.who.none')));
+      if (!this._list.loadFailed) list.appendChild(this._note(i18n.t('home.who.none')));
     } else {
       for (const project of projects) list.appendChild(this._row(project));
     }
@@ -161,21 +161,21 @@ export class WhoPanel {
     }
 
     /* «Nuovo quaderno» non sta qui: e' il tasto + tondo della pagina, fermo
-       sopra l'elenco che scorre (index.html, `#casa-quaderni-nuovo`). Una riga
+       sopra l'elenco che scorre (index.html, `#home-notebooks-new`). Una riga
        in fondo all'elenco, con tanti quaderni, finiva sotto il bordo. */
     if (scorso) body.scrollTop = scorso;
   }
 
   _label(text, divided = false) {
     const el = document.createElement('div');
-    el.className = 'casa-who-label' + (divided ? ' is-divided' : '');
+    el.className = 'home-who-label' + (divided ? ' is-divided' : '');
     el.textContent = text;
     return el;
   }
 
   _note(text, error = false) {
     const el = document.createElement('p');
-    el.className = 'casa-who-note' + (error ? ' is-error' : '');
+    el.className = 'home-who-note' + (error ? ' is-error' : '');
     el.textContent = text;
     return el;
   }
@@ -189,19 +189,19 @@ export class WhoPanel {
     row.classList.add('is-personal');
 
     const flower = document.createElement('span');
-    flower.className = 'casa-who-flower';
+    flower.className = 'home-who-flower';
     flower.textContent = '✿';
     flower.setAttribute('aria-hidden', 'true');
     row.appendChild(flower);
 
     const name = document.createElement('span');
-    name.className = 'casa-who-row-name';
+    name.className = 'home-who-row-name';
     name.textContent = this._personalName();
     row.appendChild(name);
 
     const kind = document.createElement('span');
-    kind.className = 'casa-who-row-meta';
-    kind.textContent = i18n.t('casa.who.personal');
+    kind.className = 'home-who-row-meta';
+    kind.textContent = i18n.t('home.who.personal');
     row.appendChild(kind);
 
     this._maybeCheck(row);
@@ -215,24 +215,24 @@ export class WhoPanel {
     const row = blocked
       ? document.createElement('div')
       : this._command(item.name === this._currentProject(), () => this._pick(item.name));
-    if (blocked) row.className = 'casa-who-row is-blocked';
+    if (blocked) row.className = 'home-who-row is-blocked';
     /* La pressione lunga solo sui quaderni che si aprono: una cartella inerte
        non ha niente da offrire, e la riga personale non e' un quaderno — non
        si appende (ha gia' la sua pagina, la chat) e non si cancella. */
     if (!blocked && this._onHold) setupLongPress(row, () => this._onHold(item.name));
 
     const dot = document.createElement('span');
-    dot.className = 'casa-who-dot';
+    dot.className = 'home-who-dot';
     if (!blocked) dot.style.background = dotColor(item.name);
     row.appendChild(dot);
 
     const name = document.createElement('span');
-    name.className = 'casa-who-row-name';
+    name.className = 'home-who-row-name';
     name.textContent = item.name;
     row.appendChild(name);
 
     const when = document.createElement('span');
-    when.className = 'casa-who-row-meta';
+    when.className = 'home-who-row-meta';
     when.textContent = ago(item.modified, (key, vars) => i18n.t(key, vars));
     row.appendChild(when);
 
@@ -246,7 +246,7 @@ export class WhoPanel {
   _command(current, onPick) {
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'casa-who-row';
+    row.className = 'home-who-row';
     if (current) {
       row.classList.add('is-current');
       row.setAttribute('aria-current', 'true');
@@ -267,7 +267,7 @@ export class WhoPanel {
   _maybeCheck(row) {
     if (!row.classList.contains('is-current')) return;
     const check = document.createElement('i');
-    check.className = 'ti ti-check casa-who-check';
+    check.className = 'ti ti-check home-who-check';
     check.setAttribute('aria-hidden', 'true');
     row.appendChild(check);
   }

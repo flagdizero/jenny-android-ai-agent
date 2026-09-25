@@ -116,14 +116,14 @@ export class JennyGap {
     this.thread.style.setProperty('--jenny-gap', `${margine}px`);
 
     const vivi = new Set();
-    /* **Tutti** i messaggi, non solo le risposte. Qui c'era `.casa-msg-jenny`,
+    /* **Tutti** i messaggi, non solo le risposte. Qui c'era `.home-msg-jenny`,
        e le bolle di chi scrive restavano fuori: peccato che quelle siano
        `align-self: flex-end`, cioe' incollate al bordo destro — proprio la
        colonna dove sta lei. L'ultima cosa scritta e' anche quella piu' in
        basso, quindi era la piu' coperta di tutte. Il *come* scansare cambia
        fra le due (la risposta stringe il testo, la bolla si sposta), e quello
        lo dice il CSS; qui la regola e' una sola, ed e' geometrica. */
-    for (const msg of this.thread.querySelectorAll('.casa-msg')) {
+    for (const msg of this.thread.querySelectorAll('.home-msg')) {
       /* Il rettangolo va letto **senza** il margine che gli abbiamo messo noi,
          altrimenti un messaggio scansato si misura piu' stretto, esce dalla
          banda, e al giro dopo rientra: un'altalena a ogni ricalcolo. */

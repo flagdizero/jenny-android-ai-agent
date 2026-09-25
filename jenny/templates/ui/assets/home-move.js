@@ -37,15 +37,15 @@ export const FOTO_MESSAGGI = 20;
  *  scorre, ma `find` non ce l'ha. */
 const figli = (el) => Array.from(el?.children || []);
 
-const eFoto = (el) => Boolean(el?.classList?.contains('casa-foto'));
+const eFoto = (el) => Boolean(el?.classList?.contains('home-snapshot'));
 
 /** La foto che sta in questo pannello, o `null`. */
-function fotoIn(pannello) {
-  return figli(pannello).find(eFoto) || null;
+function fotoIn(panel) {
+  return figli(panel).find(eFoto) || null;
 }
 
-function togliFoto(pannello) {
-  for (const f of figli(pannello).filter(eFoto)) f.remove();
+function togliFoto(panel) {
+  for (const f of figli(panel).filter(eFoto)) f.remove();
 }
 
 export class ChatMove {
@@ -80,22 +80,22 @@ export class ChatMove {
     this._scadiTetto = null;
   }
 
-  /** La chat arriva in `pannello`, che mostra la conversazione `chiave`.
+  /** La chat arriva in `panel`, che mostra la conversazione `chiave`.
    *
    *  Si chiama **al rilascio** e non a fine animazione: la lettura di rete
    *  parte mentre la pista scorre ancora, e i suoi 220 ms sono guadagnati.
    */
-  async arriva(pannello, chiave) {
-    if (!this.chat || !pannello || !chiave) return;
+  async arriva(panel, chiave) {
+    if (!this.chat || !panel || !chiave) return;
     const da = this.chat.parentElement;
     const cambia = this._chiaveAttuale?.() !== chiave;
-    if (da === pannello && !cambia) return;
+    if (da === panel && !cambia) return;
     const mio = ++this._arrivi;
     this._scadiTetto?.();
 
     /* 1. La pagina che la chat lascia tiene la sua foto — scattata **prima**
           del cambio: dopo, sarebbe la foto della conversazione d'arrivo. */
-    if (da && da !== pannello) {
+    if (da && da !== panel) {
       const lasciata = this._chiaveAttuale?.();
       if (this._affidabile) this._negativi.set(lasciata, this._negativo());
       /* ...tranne quando la chat li' era **fuori posto**: riportata a casa da
@@ -109,13 +109,13 @@ export class ChatMove {
     /* 2. La chat entra **sotto** la foto della pagina d'arrivo. Se la pagina
           una foto non ce l'ha — appena disegnata — gliene si da' una adesso,
           o si vedrebbe la lettura. */
-    if (cambia && !fotoIn(pannello)) this._mettiFoto(pannello, chiave);
-    pannello.insertBefore(this.chat, fotoIn(pannello));
+    if (cambia && !fotoIn(panel)) this._mettiFoto(panel, chiave);
+    panel.insertBefore(this.chat, fotoIn(panel));
 
     /* Stessa conversazione in due pagine (la pagina chat e quella del quaderno):
        la chat e' gia' giusta, basta spostarla. */
     if (!cambia) {
-      togliFoto(pannello);
+      togliFoto(panel);
       this._inFondo?.();
       return;
     }
@@ -152,7 +152,7 @@ export class ChatMove {
     clearTimeout(tetto);
     if (this._scadiTetto === scadi) this._scadiTetto = null;
     if (mio !== this._arrivi) return;
-    if (this.chat.parentElement === pannello) togliFoto(pannello);
+    if (this.chat.parentElement === panel) togliFoto(panel);
     this._inFondo?.();
   }
 
@@ -162,31 +162,31 @@ export class ChatMove {
    *  conversazione di quella pagina, e viva e' meglio che in foto. Se una foto
    *  c'e' gia' non si ristampa: questo passa a ogni cambio di pagina.
    */
-  fotoSeServe(pannello, chiave) {
-    if (!pannello || !chiave) return;
-    if (this.chat && this.chat.parentElement === pannello) return;
-    if (fotoIn(pannello)) return;
-    this._mettiFoto(pannello, chiave);
+  fotoSeServe(panel, chiave) {
+    if (!panel || !chiave) return;
+    if (this.chat && this.chat.parentElement === panel) return;
+    if (fotoIn(panel)) return;
+    this._mettiFoto(panel, chiave);
   }
 
   /** Il pannello `vecchio` sta per essere buttato: se la chat e' li', torna
    *  nel pannello di casa **prima**. Senza, ridisegnare le pagine porterebbe
    *  via la chat intera — filo, composer, bozza — insieme al pannello. */
-  riportaACasa(vecchio, casa) {
-    if (!this.chat || !casa || this.chat.parentElement !== vecchio) return;
+  riportaACasa(vecchio, home) {
+    if (!this.chat || !home || this.chat.parentElement !== vecchio) return;
     this._arrivi += 1;  // un arrivo in volo verso `vecchio` non tocca piu' niente
     this._scadiTetto?.();
-    casa.insertBefore(this.chat, fotoIn(casa));
+    home.insertBefore(this.chat, fotoIn(home));
     /* La chat e' a casa ma con la conversazione di prima, sotto la foto di
        casa: il prossimo arrivo lo deve sapere (v. il passo 1 di `arriva`). */
-    this._fuoriPosto = casa;
+    this._fuoriPosto = home;
   }
 
   /* ── La foto ─────────────────────────────────────────────────────────── */
 
   /** Il negativo: la chat com'e' adesso, resa inerte.
    *
-   *  **Senza nessun id.** Un `cloneNode` porta con se' `#casa-thread` e gli
+   *  **Senza nessun id.** Un `cloneNode` porta con se' `#home-thread` e gli
    *  altri: se la copia sta nel DOM *prima* della chat vera, `getElementById`
    *  restituisce la copia, e un controller comincia a scrivere dentro una foto.
    */
@@ -198,16 +198,16 @@ export class ChatMove {
     /* Quel che e' *di un momento* non va in foto: la riga di lavoro di Jenny,
        lo stato della rete, gli allegati in partenza. Congelati, direbbero che
        Jenny sta ancora pensando in una conversazione che hai lasciato. */
-    for (const sel of ['.home-activity', '.casa-wire', '.casa-pending']) {
+    for (const sel of ['.home-activity', '.home-wire', '.home-pending']) {
       for (const el of copia.querySelectorAll(sel)) el.setAttribute('hidden', '');
     }
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei
        (`_drafts`): in una copia mostrerebbe testo che non e' di quella pagina.
        Un clone di `<textarea>` si porta dietro il valore, per specifica. */
     for (const campo of copia.querySelectorAll('textarea')) campo.value = '';
-    const messaggi = copia.querySelectorAll('.casa-msg');
+    const messaggi = copia.querySelectorAll('.home-msg');
     for (let i = 0; i < messaggi.length - FOTO_MESSAGGI; i += 1) messaggi[i].remove();
-    copia.classList.add('casa-foto');
+    copia.classList.add('home-snapshot');
     copia.setAttribute('inert', '');
     copia.setAttribute('aria-hidden', 'true');
     return copia;
@@ -218,19 +218,19 @@ export class ChatMove {
    *  falso: c'e', solo non l'abbiamo ancora letto. */
   _scheletro() {
     const copia = this._negativo();
-    for (const el of copia.querySelectorAll('.casa-msg, .casa-boundary')) el.remove();
-    for (const el of copia.querySelectorAll('.casa-empty')) el.setAttribute('hidden', '');
+    for (const el of copia.querySelectorAll('.home-msg, .home-boundary')) el.remove();
+    for (const el of copia.querySelectorAll('.home-empty')) el.setAttribute('hidden', '');
     return copia;
   }
 
-  _mettiFoto(pannello, chiave) {
-    togliFoto(pannello);
+  _mettiFoto(panel, chiave) {
+    togliFoto(panel);
     const negativo = this._negativi.get(chiave);
     const foto = negativo ? negativo.cloneNode(true) : this._scheletro();
-    pannello.appendChild(foto);
+    panel.appendChild(foto);
     /* Un clone parte dall'alto, e la chat sta in fondo: senza, la pagina
        entrerebbe coi messaggi di una settimana fa. */
-    const filo = foto.querySelector('.casa-thread');
+    const filo = foto.querySelector('.home-thread');
     if (filo) filo.scrollTop = filo.scrollHeight;
   }
 }

@@ -37,13 +37,13 @@ import { wsManager, richieste } from './ws-manager.js';
 let fetchate = 0;
 globalThis.fetch = async () => { fetchate += 1; throw new Error('niente HTTP'); };
 
-const pagine = [{ id: 'p1', kind: 'app', ref: 'orto' }];
+const homePages = [{ id: 'p1', kind: 'app', ref: 'orto' }];
 const order = ['p1', 'app', 'chat', 'notebooks', 'settings'];
 
 wsManager.esito = async (method, params) => ({ ok: true, ...params });
-const salvate = await api.savePages(pagine, order);
-assert.deepEqual(salvate, { ok: true, pages: pagine, order });
-assert.deepEqual(richieste, [['home.pages.set', { pages: pagine, order }]]);
+const salvate = await api.savePages(homePages, order);
+assert.deepEqual(salvate, { ok: true, pages: homePages, order });
+assert.deepEqual(richieste, [['home.pages.set', { pages: homePages, order }]]);
 assert.equal(fetchate, 0, 'la scrittura non passa piu da /api/');
 
 wsManager.esito = async () => {
@@ -51,14 +51,14 @@ wsManager.esito = async () => {
   err.code = 'bad_request';
   throw err;
 };
-await assert.rejects(api.savePages(pagine, order), (err) => err.code === 'bad_request');
+await assert.rejects(api.savePages(homePages, order), (err) => err.code === 'bad_request');
 console.log('ok');
 """
 
 
 def test_saving_the_pages_is_an_rpc_command(tmp_path: Path) -> None:
-    for nome in ("api-client.js", "rpc-client.js"):
-        shutil.copy(ASSETS / "shared" / nome, tmp_path / nome)
+    for name in ("api-client.js", "rpc-client.js"):
+        shutil.copy(ASSETS / "shared" / name, tmp_path / name)
     (tmp_path / "ws-manager.js").write_text(_WS_FINTO, encoding="utf-8")
     (tmp_path / "package.json").write_text('{"type": "module"}', encoding="utf-8")
     entry = tmp_path / "entry.js"

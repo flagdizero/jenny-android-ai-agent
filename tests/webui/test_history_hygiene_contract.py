@@ -98,7 +98,7 @@ def test_leaving_the_editor_returns_to_the_origin_without_stacking() -> None:
     workspace = WORKSPACE_JS.read_text(encoding="utf-8")
     # I commenti citano il prima: qui interessa solo il codice.
     close_editor = re.sub(r"//.*", "", _method(workspace, "_closeEditor"))
-    assert "window.mobileApp?.navigateBack('memoria');" in close_editor
+    assert "window.mobileApp?.navigateBack('memory');" in close_editor
     assert "switchMode(" not in close_editor, (
         "switchMode con push di default impila una entry in avanti mentre si va indietro"
     )
@@ -363,8 +363,8 @@ def test_the_model_catalog_moved_to_the_casa_with_its_promise() -> None:
         assert pezzo not in settings, (
             f"«{pezzo}» e' tornato in officina: la scelta del modello e' in casa"
         )
-    casa = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
-    assert "getProviderModels" in casa and "default_provider" in casa, (
+    home = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
+    assert "getProviderModels" in home and "default_provider" in home, (
         "la casa non ha piu' il catalogo: toglierlo dall'officina lo toglierebbe "
         "dall'app"
     )

@@ -106,8 +106,8 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
 
     css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     z = {
-        nome: int(re.search(rf"\n{re.escape(nome)} \{{[^}}]*?z-index: (\d+);", css).group(1))
-        for nome in (".image-lightbox", ".jenny-scrim", ".jenny-mc")
+        name: int(re.search(rf"\n{re.escape(name)} \{{[^}}]*?z-index: (\d+);", css).group(1))
+        for name in (".image-lightbox", ".jenny-scrim", ".jenny-mc")
     }
     frame = re.search(r"\.app-frame-overlay \{[^}]*?z-index: (\d+);", css)
     assert frame, "livello della mini-app non trovato"
@@ -502,7 +502,7 @@ def test_the_editor_has_one_origin_and_does_not_remember_it_as_state() -> None:
     codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", workspace, flags=re.S))
     assert "_returnMode" not in codice, "la destinazione è tornata a essere uno stato"
     # E l'origine unica va *scritta*, o `_closeEditor` non sa dove riportare.
-    assert "navigateBack('memoria')" in codice, "l'uscita dal file non nomina la sua origine"
+    assert "navigateBack('memory')" in codice, "l'uscita dal file non nomina la sua origine"
     apri = _method(workspace, "_enterEditorView")
     assert "switchMode('workspace')" in apri, (
         "aprire un file deve impilare la propria schermata: senza, il file si "

@@ -121,7 +121,7 @@ assert.deepEqual(shown(), ['Lavori ricorrenti'], 'maschera letta per posizione a
 type('inesistente ');
 assert.deepEqual(shown(), []);
 assert.equal(pages.noteEl.hidden, false);
-assert.equal(pages.noteEl.textContent, 'casa.pages.noMatch');
+assert.equal(pages.noteEl.textContent, 'home.notebookPages.noMatch');
 
 // 5. Query vuota: nessun vincolo, tutto di nuovo in vista.
 type('');

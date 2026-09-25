@@ -28,7 +28,7 @@ MASCOT_JS = ASSETS / "shared" / "mascot.js"
 DRAG_JS = ASSETS / "shared" / "mascot-drag.js"
 FOGLI = {
     "workshop": ASSETS / "mobile-style.css",
-    "casa": ASSETS / "home-style.css",
+    "home": ASSETS / "home-style.css",
 }
 
 
@@ -123,7 +123,7 @@ def test_no_stylesheet_spells_the_ratio_out_again() -> None:
     assert usate == {"--jenny-dock", "--jenny-out"}, (
         f"usa solo {usate or 'nessuno'} — uno dei due stati non e' piu' ancorato"
     )
-    assert not _anchors(FOGLI["casa"].read_text(encoding="utf-8")), (
+    assert not _anchors(FOGLI["home"].read_text(encoding="utf-8")), (
         "la casa ancora Jenny per conto suo: fra i due gusci deve cambiare solo il pavimento"
     )
 
@@ -172,8 +172,8 @@ def test_both_shells_answer_the_tap() -> None:
     workshop = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
     assert "class JennyCompanion extends JennyMascot" in workshop
     assert "bindMascotDrag" not in workshop, "l'officina lega di nuovo la fisica per conto suo"
-    casa = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "new JennyMascot(" in casa
+    home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
+    assert "new JennyMascot(" in home
     assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
 
 
@@ -188,7 +188,7 @@ def test_the_room_that_leaves_her_space_uses_her_height_and_not_her_width() -> N
     sua testa.
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    m = re.search(r"\.casa-tu-scroll \{[^}]*?padding: [^;]*;", css, re.S)
+    m = re.search(r"\.home-you-scroll \{[^}]*?padding: [^;]*;", css, re.S)
     assert m, "il fondo della stanza non c'e' piu'"
     assert "var(--jenny-art-h)" in m.group(0), (
         f"il fondo non nomina l'altezza dell'arte: {m.group(0)}"

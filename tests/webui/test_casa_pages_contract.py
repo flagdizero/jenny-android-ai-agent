@@ -38,15 +38,15 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     hanno piu' `hidden`, che quel ruolo lo copriva a meta'.
     """
     html = INDEX.read_text(encoding="utf-8")
-    # `data-pagina` si e' aggiunto accanto il 22 settembre 2026, per la stessa
+    # `data-page` si e' aggiunto accanto il 22 settembre 2026, per la stessa
     # ragione: su una pagina di lato la vista e' ancora `chat`, e le regole
     # scritte solo su `data-view` non la distinguono.
-    assert re.search(r'<main class="casa-shell" data-view="chat"', html), (
+    assert re.search(r'<main class="home-shell" data-view="chat"', html), (
         "il guscio non nasce piu' dichiarando la stanza attiva"
     )
     css = CSS.read_text(encoding="utf-8")
     for room in ("pages", "reader"):
-        assert f".casa-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
+        assert f".home-shell[data-view='{room}']" in css, f"la stanza {room} non ha la sua regola"
     # Dal 22 settembre 2026 la chat sta dentro un pannello della pista, e quel
     # che si nasconde e' la pista: una riga invece delle sei che nominavano
     # filo, stato vuoto, riga di lavoro, stato del filo, allegati e composer.
@@ -57,12 +57,12 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     # non ci sono piu', e la fila dei nomi ha la sua regola accanto a quella
     # dell'intestazione delle stanze.
     assert (
-        ".casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }"
+        ".home-shell:not([data-view='chat']) .home-showcase { display: none; }"
     ) in css, (
         "il composer resta a schermo fuori dalla conversazione"
     )
-    html_pista = html.split('class="casa-pista"', 1)[1]
-    assert "casa-composer" in html_pista.split("</main>", 1)[0], (
+    html_pista = html.split('class="home-track"', 1)[1]
+    assert "home-composer" in html_pista.split("</main>", 1)[0], (
         "il composer e' uscito dalla pista: la regola sopra non lo copre piu'"
     )
 
@@ -77,7 +77,7 @@ def test_the_rooms_after_the_chat_are_not_in_the_flow_by_default() -> None:
     css = CSS.read_text(encoding="utf-8")
     # `[data-view='chat']` non accende una stanza: e' la regola che nella
     # conversazione **spegne** l'intestazione delle stanze.
-    accese = set(re.findall(r"\.casa-shell\[data-view='(?!chat')\w+'\] (\.casa-[\w-]+)", css))
+    accese = set(re.findall(r"\.home-shell\[data-view='(?!chat')\w+'\] (\.home-[\w-]+)", css))
     assert accese, "nessuna stanza nel foglio: la grep non morde piu'"
     spente = set()
     for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
@@ -127,7 +127,7 @@ def test_the_two_ways_out_of_the_pages_do_the_same_thing() -> None:
     """La tavola disegna l'occhiello in alto a sinistra e la pastiglia in
     basso a destra, e fanno la stessa cosa: si esce da dove stai guardando."""
     html = INDEX.read_text(encoding="utf-8")
-    assert 'id="casa-back"' in html and 'id="casa-talk"' in html
+    assert 'id="home-back"' in html and 'id="home-talk"' in html
     app = APP_JS.read_text(encoding="utf-8")
     assert "this.backBtn?.addEventListener" in app
     assert "this.talkBtn?.addEventListener" in app
@@ -139,11 +139,11 @@ def test_the_rooms_have_a_head_and_the_conversation_has_the_row() -> None:
     porterebbe a cambiare pagina da dentro una stanza."""
     css = CSS.read_text(encoding="utf-8")
     assert (
-        ".casa-shell:not([data-view='chat']) .home-strip,\n"
-        ".casa-shell[data-view='chat'] .casa-head { display: none; }"
+        ".home-shell:not([data-view='chat']) .home-strip,\n"
+        ".home-shell[data-view='chat'] .home-head { display: none; }"
     ) in css
     html = INDEX.read_text(encoding="utf-8")
-    assert html.index('id="home-strip"') < html.index('class="casa-head"') < html.index('class="casa-vetrina"')
+    assert html.index('id="home-strip"') < html.index('class="home-head"') < html.index('class="home-showcase"')
 
 
 # ── Le parole ───────────────────────────────────────────────────────────────
@@ -153,12 +153,12 @@ def test_the_rooms_speak_both_languages() -> None:
     words = {}
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        section = data["casa"]["pages"]
+        section = data["home"]["notebookPages"]
         for key in ("open", "countOne", "countMany", "talk",
                     "tabList", "tabMap", "loading", "none", "noMatch", "failed"):
-            assert section.get(key, "").strip(), f"casa.pages.{key} manca in {locale}.json"
-        assert data["casa"]["map"]["noLinks"].strip()
-        assert data["casa"]["reader"]["failed"].strip()
+            assert section.get(key, "").strip(), f"home.notebookPages.{key} manca in {locale}.json"
+        assert data["home"]["map"]["noLinks"].strip()
+        assert data["home"]["reader"]["failed"].strip()
         assert "{count}" in section["countMany"], "il conteggio non interpola niente"
         assert "{count}" not in section["countOne"], (
             "«1 pagina» non ha bisogno del numero: scriverlo la fa leggere «1 1 pagina»"
@@ -283,26 +283,26 @@ def test_the_three_group_dots_are_telling_apart_in_every_theme() -> None:
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     usati = dict(
-        re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
+        re.findall(r"\.home-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
     )
     assert set(usati) == {"concepts", "entities", "other"}, usati
 
     temi = _themes()
     assert len(temi) >= 5, f"temi non letti dal foglio: {list(temi)}"
-    for nome, tokens in temi.items():
+    for name, tokens in temi.items():
         sfondo = _rgb(tokens.get("bg", "#000000")) or (0, 0, 0)
         colori = {}
-        for gruppo, token in usati.items():
+        for group, token in usati.items():
             valore = tokens.get(token)
-            assert valore, f"{nome}: il tema non definisce --{token}"
+            assert valore, f"{name}: il tema non definisce --{token}"
             rgb = _rgb(valore, sfondo)
-            assert rgb, f"{nome}: --{token} non si sa leggere ({valore})"
-            colori[gruppo] = rgb
+            assert rgb, f"{name}: --{token} non si sa leggere ({valore})"
+            colori[group] = rgb
         coppie = [("concepts", "entities"), ("concepts", "other"), ("entities", "other")]
         for a, b in coppie:
             dist = sum((x - y) ** 2 for x, y in zip(colori[a], colori[b], strict=True)) ** 0.5
             assert dist >= 60, (
-                f"tema {nome}: i pallini {a} e {b} distano {dist:.0f} — a occhio "
+                f"tema {name}: i pallini {a} e {b} distano {dist:.0f} — a occhio "
                 f"sono lo stesso colore, e il gruppo smette di dividere"
             )
 
@@ -312,10 +312,10 @@ def test_the_map_paints_its_nodes_with_the_same_three() -> None:
     deve voler dire la stessa cosa in tutte e due."""
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     elenco = dict(
-        re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
+        re.findall(r"\.home-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
     )
     mappa = dict(
-        re.findall(r"\.casa-map-nodes \.casa-group-(\w+) \{ fill: var\(--([a-z-]+)\); \}", css)
+        re.findall(r"\.home-map-nodes \.home-group-(\w+) \{ fill: var\(--([a-z-]+)\); \}", css)
     )
     assert elenco == mappa, f"elenco {elenco} contro mappa {mappa}"
 
@@ -324,13 +324,13 @@ def test_a_node_of_an_unforeseen_group_is_still_painted() -> None:
     """Un gruppo che i tre colori non prevedono prende il grigio di `other`.
 
     La mappa non passa da `sanitizeGroup` come l'elenco: il nodo porta
-    `casa-group-<quel che arriva>`, e senza un `fill` di ripiego SVG lo
+    `home-group-<quel che arriva>`, e senza un `fill` di ripiego SVG lo
     dipinge nero — invisibile nel tema scuro (revisione del 25/09/2026, M20).
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    ripiego = re.search(r"\n\.casa-map-node \{([^}]*)\}", css)
-    assert ripiego, "regola .casa-map-node non trovata"
-    altri = re.search(r"\.casa-map-nodes \.casa-group-other \{ fill: (var\(--[a-z-]+\)); \}", css)
+    ripiego = re.search(r"\n\.home-map-node \{([^}]*)\}", css)
+    assert ripiego, "regola .home-map-node non trovata"
+    altri = re.search(r"\.home-map-nodes \.home-group-other \{ fill: (var\(--[a-z-]+\)); \}", css)
     assert altri, "il colore di `other` non si trova piu'"
     assert f"fill: {altri.group(1)}" in ripiego.group(1), (
         "un nodo di un gruppo non previsto resta col nero di default di SVG"
@@ -344,20 +344,20 @@ def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> Non
     Un `display:` messo su una classe la scavalca, e l'elemento resta a schermo
     con `hidden` vero: nessun errore, nessun avviso, solo una riga che non se
     ne va. E' successo con «torna alla chat», che compariva **dentro la chat**,
-    e questo foglio documenta la stessa trappola per `.casa-empty` da
+    e questo foglio documenta la stessa trappola per `.home-empty` da
     settembre.
 
     Il banco la cerca da solo: ogni classe che il guscio nasconde con
-    l'attributo deve avere la sua regola — o stare dentro `.casa-actions`, che
+    l'attributo deve avere la sua regola — o stare dentro `.home-actions`, che
     ne ha una per i figli, con una specificita' in piu'.
     """
     app = APP_JS.read_text(encoding="utf-8")
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
 
-    assert ".casa-actions [hidden]" in css, "la fila dei comandi ha perso la sua regola"
-    fila = re.search(r'<div class="casa-actions">(.*?)</div>', html, re.S)
-    assert fila, "la fila dei comandi non esiste piu'"
+    assert ".home-actions [hidden]" in css, "la fila dei comandi ha perso la sua regola"
+    strip = re.search(r'<div class="home-actions">(.*?)</div>', html, re.S)
+    assert strip, "la fila dei comandi non esiste piu'"
 
     campi = dict(re.findall(r"this\.(\w+) = document\.getElementById\('([\w-]+)'\)", app))
     nascosti = {campi[c] for c in re.findall(r"this\.(\w+)\.hidden = ", app) if c in campi}
@@ -365,7 +365,7 @@ def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> Non
 
     mancanti = []
     for el_id in sorted(nascosti):
-        if f'id="{el_id}"' in fila.group(1):
+        if f'id="{el_id}"' in strip.group(1):
             continue  # coperto dalla regola della fila
         m = re.search(rf'<[^>]*id="{re.escape(el_id)}"[^>]*>', html)
         if not m:
@@ -395,8 +395,8 @@ def test_the_note_sits_above_the_list_and_not_under_it() -> None:
     la risposta alla ricerca appena fatta.
     """
     html = INDEX.read_text(encoding="utf-8")
-    nota = html.index('id="casa-pages-note"')
-    elenco = html.index('id="casa-page-list"')
+    nota = html.index('id="home-notebook-pages-note"')
+    elenco = html.index('id="home-notebook-page-list"')
     assert nota < elenco, "la nota e' tornata sotto l'elenco"
 
 

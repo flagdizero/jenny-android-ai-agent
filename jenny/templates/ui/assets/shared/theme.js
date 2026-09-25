@@ -31,7 +31,7 @@ export const THEMES = [
     swatch: ['#17131c', '#a78bfa', '#ffd23f'],
     desc: 'Ogni messaggio è un adesivo ritagliato: bordo bianco, ombra dura, rotazione imperfetta.',
     reply: 'La chat come il retro di un laptop.' },
-  { id: 'fumetto',   label: 'Jenny Fumetto', scheme: 'light',
+  { id: 'comic',   label: 'Jenny Fumetto', scheme: 'light',
     accent: '#1b1820', onAccent: '#faf6ef',
     swatch: ['#faf6ef', '#1b1820', '#7c5cff'],
     desc: 'China su carta, retini e nuvolette: ogni risposta è una vignetta.',
@@ -95,7 +95,7 @@ export const APP_TOKEN_MAP = {
   '--warning':      '--warning',
 };
 
-/** Palette del tema attivo per un'app, come `nome:valore;...` (senza `--`).
+/** Palette del tema attivo per un'app, come `name:valore;...` (senza `--`).
  *
  *  Legge i valori *calcolati* invece dei letterali del registro: è la stessa
  *  lettura che fa `syncNativeBars` per le barre di sistema, e vale anche per i

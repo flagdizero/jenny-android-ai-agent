@@ -54,8 +54,8 @@ function creaEl(id) {
   if (id) elementi.set(id, el);
   return el;
 }
-for (const id of ['casa-quaderno-sheet', 'casa-quaderno-sheet-title',
-                  'casa-quaderno-sheet-actions', 'casa-quaderno-sheet-cancel']) creaEl(id);
+for (const id of ['home-notebook-sheet', 'home-notebook-sheet-title',
+                  'home-notebook-sheet-actions', 'home-notebook-sheet-cancel']) creaEl(id);
 globalThis.document = {
   getElementById: (id) => elementi.get(id) || null,
   createElement: () => creaEl(null),
@@ -65,14 +65,14 @@ globalThis.window = { addEventListener() {} };
 globalThis.MutationObserver = class { observe() {} };
 
 function righe() {
-  const html = elementi.get('casa-quaderno-sheet-actions').innerHTML;
+  const html = elementi.get('home-notebook-sheet-actions').innerHTML;
   return [...html.matchAll(/<button[^>]*data-action="([^"]+)"([^>]*)>/g)]
     .map(([, azione, attr]) => ({ azione, spenta: /\\bdisabled\\b/.test(attr) }));
 }
 """
 
 
-def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) -> None:
+def _run(corpo: str, *, stato: str | None = "libera", rename: bool = False) -> None:
     porta = (
         "null"
         if stato is None
@@ -89,11 +89,11 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
             const chiamate = [];
             const PORTA = {porta};
             const guscio = {{
-              pagine: () => PORTA,
+              homePages: () => PORTA,
               apri: (n) => chiamate.push(['apri', n]),
               elimina: (n) => chiamate.push(['elimina', n]),
             }};
-            if ({json.dumps(rinomina)}) guscio.rinomina = (n) => chiamate.push(['rinomina', n]);
+            if ({json.dumps(rename)}) guscio.rename = (n) => chiamate.push(['rename', n]);
             const scheda = new NotebookCard(guscio);
             """
         )
@@ -104,8 +104,8 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
         (radice / "shared").mkdir()
         shutil.copy(ASSETS / "home-notebook.js", radice / "home-notebook.js")
         shutil.copy(ASSETS / "shared" / "apps-actions.js", radice / "shared" / "apps-actions.js")
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)
@@ -120,8 +120,8 @@ def test_the_rows_are_the_app_sheets_rows_in_the_same_order() -> None:
         "scheda.mostra('piante');\n"
         "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'rename', 'delete']);\n"
         "assert.deepEqual(chiamate[0], ['stato', 'conversation', 'project:piante']);\n"
-        "assert.equal(document.getElementById('casa-quaderno-sheet').open, true);\n",
-        rinomina=True,
+        "assert.equal(document.getElementById('home-notebook-sheet').open, true);\n",
+        rename=True,
     )
 
 
@@ -130,7 +130,7 @@ def test_without_a_way_to_rename_there_is_no_rename_row() -> None:
     _run(
         "scheda.mostra('piante');\n"
         "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'delete']);\n",
-        rinomina=False,
+        rename=False,
     )
 
 
@@ -155,7 +155,7 @@ def test_the_name_in_the_title_is_text_not_markup() -> None:
     """Il nome del quaderno viene dal disco: nel titolo e' testo."""
     _run(
         "scheda.mostra('<b>x');\n"
-        "const t = document.getElementById('casa-quaderno-sheet-title').innerHTML;\n"
+        "const t = document.getElementById('home-notebook-sheet-title').innerHTML;\n"
         "assert.ok(t.includes('&lt;b>x'), t);\n"
     )
 
@@ -169,7 +169,7 @@ def test_the_name_in_the_title_is_text_not_markup() -> None:
         ("open", ["apri", "piante"]),
         ("pin", ["appendi", "conversation", "project:piante"]),
         ("unpin", ["stacca", "conversation", "project:piante"]),
-        ("rename", ["rinomina", "piante"]),
+        ("rename", ["rename", "piante"]),
         ("delete", ["elimina", "piante"]),
     ],
 )
@@ -177,7 +177,7 @@ def test_each_row_asks_the_shell(azione, attesa) -> None:
     _run(
         f"await scheda.fai({json.dumps(azione)}, 'piante');\n"
         f"assert.deepEqual(chiamate.at(-1), {json.dumps(attesa)});\n",
-        rinomina=True,
+        rename=True,
     )
 
 
@@ -195,8 +195,8 @@ def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
         import assert from 'node:assert/strict';
         const storia = [];
         const NOTEBOOK_DELETE_WORDS = {{ confirm: 'c' }};
-        async function deleteProjectFlow(nome, parole) {{
-          storia.push(['chiede', nome, parole === NOTEBOOK_DELETE_WORDS]);
+        async function deleteProjectFlow(name, parole) {{
+          storia.push(['chiede', name, parole === NOTEBOOK_DELETE_WORDS]);
           return {json.dumps(confermato)};
         }}
         const projectNameOf = (k) => (k && k.startsWith('project:') ? k.slice(8) : null);
@@ -256,8 +256,8 @@ def test_deleting_another_notebook_leaves_you_where_you_are() -> None:
 
 def test_saying_no_changes_nothing() -> None:
     _run_seguito(
-        "const fatto = await g.deleteNotebook('piante');\n"
-        "assert.equal(fatto, false);\n"
+        "const done = await g.deleteNotebook('piante');\n"
+        "assert.equal(done, false);\n"
         "assert.deepEqual(storia.map((x) => x[0]), ['chiede']);\n",
         confermato=False,
         corrente="project:piante",
@@ -274,14 +274,14 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
     fogli = re.search(r"(?m)^const FOGLI_PRESSIONE_LUNGA = \[(.*)\];$", app_js)
-    assert fogli and "'casa-quaderno-sheet'" in fogli.group(1)
+    assert fogli and "'home-notebook-sheet'" in fogli.group(1)
     assert catena.index("FOGLI_PRESSIONE_LUNGA") < catena.index("handleBack()")
 
 
 def test_the_sheet_is_in_the_page_and_shipped() -> None:
     html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    for id_ in ("casa-quaderno-sheet", "casa-quaderno-sheet-title",
-                "casa-quaderno-sheet-actions", "casa-quaderno-sheet-cancel"):
+    for id_ in ("home-notebook-sheet", "home-notebook-sheet-title",
+                "home-notebook-sheet-actions", "home-notebook-sheet-cancel"):
         assert f'id="{id_}"' in html, id_
     manifest = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
     assert '"assets/home-notebook.js"' in manifest
@@ -332,7 +332,7 @@ def _run_rinomina(
         class Guscio {{
           constructor() {{
             this.who = {{ refresh: async () => storia.push(['tendina']) }};
-            this.pagine = {{ rinominaConversazione: (a, b) => storia.push(['pagina0', a, b]) }};
+            this.homePages = {{ rinominaConversazione: (a, b) => storia.push(['pagina0', a, b]) }};
             this._drafts = new Map();
             this.input = {{ value: '' }};
           }}
@@ -418,7 +418,7 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     inglese del server. Un altro errore resta quello di sempre, col motivo."""
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.deepEqual(storia.at(-1), ['avviso', 'casa.quaderno.renameBusy|viaggio', 'error']);\n",
+        "assert.deepEqual(storia.at(-1), ['avviso', 'home.notebook.renameBusy|viaggio', 'error']);\n",
         scritto="viaggi",
         corrente="project:viaggio",
         rifiuta="conflict",
@@ -426,7 +426,7 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     _run_rinomina(
         "await g.renameNotebook('viaggio');\n"
         "assert.deepEqual(storia.at(-1), ['avviso',\n"
-        "  'casa.quaderno.renameFailed:a folder named viaggi already exists', 'error']);\n",
+        "  'home.notebook.renameFailed:a folder named viaggi already exists', 'error']);\n",
         scritto="viaggi",
         corrente="project:viaggio",
         rifiuta=True,
@@ -436,8 +436,8 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
 @pytest.mark.parametrize(
     ("codice", "attesa"),
     [
-        ("name_taken", "casa.quaderno.renameTaken|viaggi"),
-        ("not_found", "casa.quaderno.renameMissing|viaggio"),
+        ("name_taken", "home.notebook.renameTaken|viaggi"),
+        ("not_found", "home.notebook.renameMissing|viaggio"),
     ],
 )
 def test_the_expected_refusals_are_said_in_the_readers_language(codice, attesa) -> None:
@@ -458,13 +458,13 @@ def test_the_refusal_keys_exist_in_both_languages() -> None:
     from support.js_harness import locale
 
     for lingua in ("it", "en"):
-        quaderno = locale(lingua)["casa"]["quaderno"]
+        notebook = locale(lingua)["home"]["notebook"]
         for chiave in ("renameBusy", "renameTaken", "renameMissing", "renameFailed"):
-            assert quaderno.get(chiave), f"{lingua}: casa.quaderno.{chiave}"
+            assert notebook.get(chiave), f"{lingua}: casa.notebook.{chiave}"
 
 
 def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:
     """La riga «Rinomina» c'e' solo se il guscio sa rinominare: adesso sa."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     scheda = app_js.split("schedaQuaderno() {", 1)[1].split("\n  }\n", 1)[0]
-    assert "rinomina: (nome) => this.renameNotebook(nome)" in scheda
+    assert "rename: (name) => this.renameNotebook(name)" in scheda

@@ -147,9 +147,9 @@ def test_the_row_is_first_drawn_once_the_words_have_arrived() -> None:
     in `init`, che nessun banco puo' eseguire interi."""
     src = APP_JS.read_text(encoding="utf-8")
     costruttore = member(src, "constructor", prefixes=())
-    assert not re.search(r"this\.fila\??\.disegna\(\)", costruttore), (
+    assert not re.search(r"this\.strip\??\.disegna\(\)", costruttore), (
         "la fila si disegna prima che le traduzioni siano arrivate"
     )
     init = member(src, "init", prefixes=("async ",))
     assert init.index("await i18n.load(") < init.index("this._applyTranslations()")
-    assert "this.fila?.disegna();" in member(src, "_applyTranslations")
+    assert "this.strip?.disegna();" in member(src, "_applyTranslations")

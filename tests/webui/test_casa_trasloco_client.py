@@ -114,25 +114,25 @@ globalThis.document = {
 };
 
 /* ── La scena: la pista con la pagina 0 e due pagine quaderno ── */
-const pista = crea('div', { cls: 'casa-pista' });
+const pista = crea('div', { cls: 'home-track' });
 radice.appendChild(pista);
-const p0 = crea('div', { cls: 'casa-pagina' });
-const p1 = crea('div', { cls: 'casa-pagina' });
-const p2 = crea('div', { cls: 'casa-pagina' });
+const p0 = crea('div', { cls: 'home-page' });
+const p1 = crea('div', { cls: 'home-page' });
+const p2 = crea('div', { cls: 'home-page' });
 pista.append = (...xs) => xs.forEach((x) => pista.appendChild(x));
 pista.append(p0, p1, p2);
 
 /* La chat vera, come in `index.html`. */
 const chat = crea('div', { id: 'home-chat', cls: 'home-chat' });
-const filo = crea('div', { id: 'casa-thread', cls: 'casa-thread' });
-const vuoto = crea('div', { id: 'casa-empty', cls: 'casa-empty' });
+const filo = crea('div', { id: 'home-thread', cls: 'home-thread' });
+const vuoto = crea('div', { id: 'home-empty', cls: 'home-empty' });
 const lavoro = crea('div', { id: 'home-activity', cls: 'home-activity' });
-const rete = crea('div', { id: 'casa-wire', cls: 'casa-wire' });
-const allegati = crea('div', { id: 'casa-pending', cls: 'casa-pending' });
-const composer = crea('div', { cls: 'casa-composer' });
-const campo = crea('textarea', { id: 'casa-input', cls: 'casa-input' });
-const etichetta = crea('label', { cls: 'casa-field' });
-etichetta.setAttribute('for', 'casa-input');
+const rete = crea('div', { id: 'home-wire', cls: 'home-wire' });
+const allegati = crea('div', { id: 'home-pending', cls: 'home-pending' });
+const composer = crea('div', { cls: 'home-composer' });
+const campo = crea('textarea', { id: 'home-input', cls: 'home-input' });
+const etichetta = crea('label', { cls: 'home-field' });
+etichetta.setAttribute('for', 'home-input');
 composer.appendChild(etichetta);
 composer.appendChild(campo);
 for (const x of [filo, vuoto, lavoro, rete, allegati, composer]) chat.appendChild(x);
@@ -140,11 +140,11 @@ p0.appendChild(chat);
 
 /* Il filo di una conversazione: un messaggio per nome. */
 function scrivi(...nomi) {
-  for (const m of filo.querySelectorAll('.casa-msg')) m.remove();
-  for (const n of nomi) filo.appendChild(crea('div', { cls: 'casa-msg', testo: n }));
+  for (const m of filo.querySelectorAll('.home-msg')) m.remove();
+  for (const n of nomi) filo.appendChild(crea('div', { cls: 'home-msg', testo: n }));
 }
-const messaggiDi = (el) => el.querySelectorAll('.casa-msg').map((m) => m.testo);
-const fotoDi = (p) => p.children.find((c) => c.classList.contains('casa-foto')) || null;
+const messaggiDi = (el) => el.querySelectorAll('.home-msg').map((m) => m.testo);
+const fotoDi = (p) => p.children.find((c) => c.classList.contains('home-snapshot')) || null;
 
 /* Il cambio di conversazione, come `mostraConversazione`: la chiave cambia
    **subito**, il filo si svuota subito (la parte sincrona di `reload`), e i
@@ -231,7 +231,7 @@ def test_the_page_it_leaves_keeps_a_photo_of_what_it_was() -> None:
 def test_the_photo_has_no_ids_so_nobody_writes_into_it() -> None:
     """**La trappola.** La pagina 0 sta prima nel documento.
 
-    Se la foto si portasse dietro `#casa-thread`, `getElementById` —
+    Se la foto si portasse dietro `#home-thread`, `getElementById` —
     che cerca in ordine di documento — restituirebbe lei, e il filo
     comincerebbe a scrivere i messaggi dentro una copia inerte, fuori schermo.
     """
@@ -241,8 +241,8 @@ def test_the_photo_has_no_ids_so_nobody_writes_into_it() -> None:
         "assert.equal(foto.getAttribute('id'), null);\n"
         "assert.equal(foto.querySelectorAll('[id]').length, 0, 'id rimasti nella foto');\n"
         "assert.equal(foto.querySelectorAll('[for]').length, 0, 'for rimasti nella foto');\n"
-        "assert.equal(document.getElementById('casa-thread'), filo);\n"
-        "assert.equal(document.getElementById('casa-input'), campo);\n"
+        "assert.equal(document.getElementById('home-thread'), filo);\n"
+        "assert.equal(document.getElementById('home-input'), campo);\n"
     )
 
 
@@ -253,7 +253,7 @@ def test_the_photo_is_inert_and_silent() -> None:
         "const foto = fotoDi(p0);\n"
         "assert.ok(foto.hasAttribute('inert'));\n"
         "assert.equal(foto.getAttribute('aria-hidden'), 'true');\n"
-        "assert.ok(foto.classList.contains('casa-foto'));\n"
+        "assert.ok(foto.classList.contains('home-snapshot'));\n"
     )
 
 
@@ -267,7 +267,7 @@ def test_what_belongs_to_a_moment_stays_out_of_the_photo() -> None:
         "campo.value = 'mezza frase';\n"
         "t.arriva(p1, 'B');\n"
         "const foto = fotoDi(p0);\n"
-        "for (const sel of ['.home-activity', '.casa-wire', '.casa-pending']) {\n"
+        "for (const sel of ['.home-activity', '.home-wire', '.home-pending']) {\n"
         "  assert.ok(foto.querySelector(sel).hasAttribute('hidden'), sel);\n"
         "}\n"
         "assert.equal(foto.querySelector('textarea').value, '');\n"
@@ -290,7 +290,7 @@ def test_the_photo_starts_at_the_bottom_like_the_chat() -> None:
     """Un clone parte dall'alto: senza, entrerebbero i messaggi vecchi."""
     _run(
         "t.arriva(p1, 'B');\n"
-        "const f = fotoDi(p0).querySelector('.casa-thread');\n"
+        "const f = fotoDi(p0).querySelector('.home-thread');\n"
         "assert.equal(f.scrollTop, f.scrollHeight);\n"
     )
 
@@ -306,7 +306,7 @@ def test_the_chat_arrives_under_a_cover_and_the_cover_goes_when_read() -> None:
     """
     _run(
         "const arrivo = t.arriva(p1, 'B');\n"
-        "assert.equal(p1.children[p1.children.length - 1].classList.contains('casa-foto'), true,\n"
+        "assert.equal(p1.children[p1.children.length - 1].classList.contains('home-snapshot'), true,\n"
         "  'la foto deve stare sopra: ultimo figlio del pannello');\n"
         "assert.equal(p1.children[0], chat, 'la chat deve stare sotto');\n"
         "letture[0].finisci();\n"
@@ -417,7 +417,7 @@ def test_a_notebook_never_seen_arrives_as_an_empty_chat() -> None:
         "const f = fotoDi(p2);\n"
         "assert.ok(f, 'nessuna foto');\n"
         "assert.deepEqual(messaggiDi(f), []);\n"
-        "assert.ok(f.querySelector('.casa-empty').hasAttribute('hidden'));\n"
+        "assert.ok(f.querySelector('.home-empty').hasAttribute('hidden'));\n"
     )
 
 
@@ -452,7 +452,7 @@ def test_a_panel_about_to_be_thrown_away_gives_the_chat_back_first() -> None:
         "assert.equal(chat.parentElement, p0);\n"
         "assert.equal(p0.children[0], chat, 'la chat deve stare sotto la foto');\n"
         "p1.remove();\n"
-        "assert.equal(document.getElementById('casa-thread'), filo, 'la chat e andata via col pannello');\n"
+        "assert.equal(document.getElementById('home-thread'), filo, 'la chat e andata via col pannello');\n"
     )
 
 

@@ -8,8 +8,8 @@ import { AppState } from './state.js';
  *
  *  Una conversazione ha due nomi e questa è la conversione fra i due: la chiave
  *  di sessione lato client (`websocket:default` per la personale,
- *  `project:<nome>` per un progetto) e il `chat_id` che viaggia sul filo
- *  (`default`, `project:<nome>` — v. `WEBUI_DEFAULT_CHAT_ID` e
+ *  `project:<name>` per un progetto) e il `chat_id` che viaggia sul filo
+ *  (`default`, `project:<name>` — v. `WEBUI_DEFAULT_CHAT_ID` e
  *  `WebSocketChannel._envelope_chat_id`).
  *
  *  **Sta qui, in una funzione sola, perché la regola serve in due direzioni**:

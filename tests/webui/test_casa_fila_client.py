@@ -111,7 +111,7 @@ def _run(corpo: str) -> None:
             const { dotColor } = await import('./home-who.js');
             /* La pista finta: le voci come le da' quella vera, e cosa le si chiede. */
             const chieste = [];
-            const pagine = {
+            const homePages = {
               fixed: ['app', 'chat', 'notebooks', 'settings'],
               pages: [{ id: 'p1', kind: 'app', ref: 'todo' },
                           { id: 'q1', kind: 'conversation', ref: 'project:piante' }],
@@ -135,17 +135,17 @@ def _run(corpo: str) -> None:
                 return this.rifiuta ? false : { pages: s, order: o };
               },
             };
-            let nomeChat = { nome: 'Jenny', colore: null };
+            let nomeChat = { name: 'Jenny', colore: null };
             const cambi = [];
             const el = creaEl('div');
-            const fila = new HomeStrip(el, {
-              pagine,
+            const strip = new HomeStrip(el, {
+              homePages,
               nomeChat: () => nomeChat,
               onCambia: (aperta) => cambi.push(aperta),
             });
-            fila.disegna();
+            strip.disegna();
             const voci = () => el.children[0].children;
-            const nomi = () => voci().map((b) => tutti(b).find((c) => c.className === 'casa-fila-nome').textContent);
+            const nomi = () => voci().map((b) => tutti(b).find((c) => c.className === 'home-strip-name').textContent);
             const pastiglie = () => el.children[1].children;
             """
         )
@@ -157,8 +157,8 @@ def _run(corpo: str) -> None:
         shutil.copy(ASSETS / "home-strip.js", radice / "home-strip.js")
         shutil.copy(ASSETS / "home-who.js", radice / "home-who.js")
         shutil.copy(ASSETS / "shared" / "conversation-list.js", radice / "shared" / "conversation-list.js")
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)
@@ -172,7 +172,7 @@ def test_every_page_has_its_name_in_order() -> None:
     le aggiunte col loro."""
     _run("""
       assert.deepEqual(nomi(), [
-        'casa.fila.app', 'Jenny', 'todo', 'piante', 'casa.fila.notebooks', 'casa.fila.settings',
+        'home.strip.app', 'Jenny', 'todo', 'piante', 'home.strip.notebooks', 'home.strip.settings',
       ]);
     """)
 
@@ -185,8 +185,8 @@ def test_the_page_you_are_on_is_the_big_one_and_says_so() -> None:
       assert.equal(accese[0].dataset.id, 'chat');
       assert.equal(accese[0].attrs['aria-selected'], 'true');
       assert.equal(voci()[0].attrs['aria-selected'], 'false');
-      pagine.indice = 4;
-      fila.disegna();
+      homePages.indice = 4;
+      strip.disegna();
       assert.equal(voci().find((b) => b.classList.contains('is-on')).dataset.id, 'notebooks');
     """)
 
@@ -195,14 +195,14 @@ def test_inside_a_notebook_the_chat_page_wears_its_name_and_dot() -> None:
     """Deciso con l'utente il 23/09/2026: il nome del quaderno al posto di
     «Jenny», col pallino dei Quaderni."""
     _run("""
-      nomeChat = { nome: 'ristrutturazione', colore: dotColor('ristrutturazione') };
-      fila.disegna();
+      nomeChat = { name: 'ristrutturazione', colore: dotColor('ristrutturazione') };
+      strip.disegna();
       const chat = voci()[1];
       assert.equal(nomi()[1], 'ristrutturazione');
-      const dot = chat.children.find((c) => c.className === 'casa-fila-dot');
+      const dot = chat.children.find((c) => c.className === 'home-strip-dot');
       assert.ok(dot, 'la chat dentro un quaderno non ha il pallino');
       assert.equal(dot.style.background, dotColor('ristrutturazione'));
-      const personale = voci()[0].children.find((c) => c.className === 'casa-fila-dot');
+      const personale = voci()[0].children.find((c) => c.className === 'home-strip-dot');
       assert.equal(personale, undefined, 'il cassetto ha un pallino');
     """)
 
@@ -210,7 +210,7 @@ def test_inside_a_notebook_the_chat_page_wears_its_name_and_dot() -> None:
 def test_a_notebook_page_has_the_dot_of_its_notebook() -> None:
     _run("""
       const q = voci()[3];
-      const dot = q.children.find((c) => c.className === 'casa-fila-dot');
+      const dot = q.children.find((c) => c.className === 'home-strip-dot');
       assert.equal(dot.style.background, dotColor('piante'));
     """)
 
@@ -233,7 +233,7 @@ def test_the_tap_that_follows_a_long_press_goes_nowhere() -> None:
       p.cb();
       lancia(b, 'click');
       assert.deepEqual(chieste, [], 'il click dopo la pressione lunga ha cambiato pagina');
-      assert.equal(fila.ordinando, true);
+      assert.equal(strip.ordinando, true);
     """)
 
 
@@ -244,11 +244,11 @@ def test_holding_a_name_opens_the_moving_mode() -> None:
     """Le pagine diventano pastiglie, nell'ordine di adesso, e il guscio lo sa
     (la pagina sotto si spegne, la tastiera si chiude)."""
     _run("""
-      fila.apriOrdina();
-      assert.equal(fila.ordinando, true);
+      strip.apriOrdina();
+      assert.equal(strip.ordinando, true);
       assert.deepEqual(cambi, [true]);
-      assert.ok(el.classList.contains('is-ordina'));
-      assert.deepEqual(pastiglie().map((p) => p.dataset.id), pagine.order);
+      assert.ok(el.classList.contains('is-sort'));
+      assert.deepEqual(pastiglie().map((p) => p.dataset.id), homePages.order);
     """)
 
 
@@ -256,12 +256,12 @@ def test_only_added_pages_have_the_cross() -> None:
     """Le quattro fisse si spostano ma non si tolgono: senza Impostazioni non ci
     sarebbe piu' una strada per tornarci."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       const conCroce = pastiglie()
-        .filter((p) => p.children.some((c) => c.className === 'casa-ordina-togli'))
+        .filter((p) => p.children.some((c) => c.className === 'home-sort-remove'))
         .map((p) => p.dataset.id);
       assert.deepEqual(conCroce, ['p1', 'q1']);
-      fila.togli('settings');
+      strip.remove('settings');
       assert.equal(pastiglie().length, 6, 'una pagina fissa si e tolta');
     """)
 
@@ -269,15 +269,15 @@ def test_only_added_pages_have_the_cross() -> None:
 def test_done_writes_the_new_order_once() -> None:
     """Spostare e togliere sono una scrittura sola, e parte a «Fatto»."""
     _run("""
-      fila.apriOrdina();
-      fila.sposta('p1', 0);
-      fila.togli('q1');
+      strip.apriOrdina();
+      strip.move('p1', 0);
+      strip.remove('q1');
       assert.deepEqual(chieste, [], 'ha scritto prima di Fatto');
-      await fila.chiudiOrdina({ salva: true });
+      await strip.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste, [
         ['salva', ['p1'], ['p1', 'app', 'chat', 'notebooks', 'settings']],
       ]);
-      assert.equal(fila.ordinando, false);
+      assert.equal(strip.ordinando, false);
       assert.deepEqual(cambi, [true, false]);
     """)
 
@@ -287,17 +287,17 @@ def test_a_refused_done_keeps_the_moving_mode_and_the_draft() -> None:
     perdeva l'ordine in silenzio, e la modalita' ordina era gia' chiusa.
     Ora si resta dentro, con la bozza com'era, e «Fatto» si ripreme."""
     _run("""
-      fila.apriOrdina();
-      fila.sposta('p1', 0);
-      pagine.rifiuta = true;
-      assert.equal(await fila.chiudiOrdina({ salva: true }), false);
-      assert.equal(fila.ordinando, true, 'un salvataggio rifiutato ha chiuso la modalita\\u2019 ordina');
+      strip.apriOrdina();
+      strip.move('p1', 0);
+      homePages.rifiuta = true;
+      assert.equal(await strip.chiudiOrdina({ salva: true }), false);
+      assert.equal(strip.ordinando, true, 'un salvataggio rifiutato ha chiuso la modalita\\u2019 ordina');
       assert.deepEqual(cambi, [true], 'il guscio crede che la modalita\\u2019 ordina sia chiusa');
-      fila.disegna();
+      strip.disegna();
       assert.equal(pastiglie()[0].dataset.id, 'p1', 'la bozza si e\\u2019 persa');
-      pagine.rifiuta = false;
-      assert.equal(await fila.chiudiOrdina({ salva: true }), true);
-      assert.equal(fila.ordinando, false);
+      homePages.rifiuta = false;
+      assert.equal(await strip.chiudiOrdina({ salva: true }), true);
+      assert.equal(strip.ordinando, false);
       assert.equal(chieste.length, 2);
       assert.deepEqual(chieste[1], chieste[0], 'il secondo Fatto non ha riscritto la stessa bozza');
     """)
@@ -305,34 +305,34 @@ def test_a_refused_done_keeps_the_moving_mode_and_the_draft() -> None:
 
 def test_a_second_done_while_the_first_is_writing_does_nothing() -> None:
     _run("""
-      fila.apriOrdina();
-      fila.sposta('p1', 0);
+      strip.apriOrdina();
+      strip.move('p1', 0);
       let lascia;
-      pagine.inAttesa = new Promise((r) => { lascia = r; });
-      const primo = fila.chiudiOrdina({ salva: true });
-      assert.equal(await fila.chiudiOrdina({ salva: true }), false);
+      homePages.inAttesa = new Promise((r) => { lascia = r; });
+      const primo = strip.chiudiOrdina({ salva: true });
+      assert.equal(await strip.chiudiOrdina({ salva: true }), false);
       lascia();
       assert.equal(await primo, true);
       assert.equal(chieste.filter((c) => c[0] === 'salva').length, 1, 'due Fatto, due scritture');
-      assert.equal(fila.ordinando, false);
+      assert.equal(strip.ordinando, false);
     """)
 
 
 def test_back_leaves_everything_as_it_was() -> None:
     _run("""
-      fila.apriOrdina();
-      fila.sposta('settings', 0);
-      fila.togli('p1');
-      await fila.chiudiOrdina();
+      strip.apriOrdina();
+      strip.move('settings', 0);
+      strip.remove('p1');
+      await strip.chiudiOrdina();
       assert.deepEqual(chieste, []);
-      assert.deepEqual(nomi()[0], 'casa.fila.app', 'la fila mostra un ordine mai salvato');
+      assert.deepEqual(nomi()[0], 'home.strip.app', 'la fila mostra un ordine mai salvato');
     """)
 
 
 def test_done_without_changes_writes_nothing() -> None:
     _run("""
-      fila.apriOrdina();
-      await fila.chiudiOrdina({ salva: true });
+      strip.apriOrdina();
+      await strip.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste, []);
     """)
 
@@ -341,12 +341,12 @@ def test_the_arrows_move_a_page_too() -> None:
     """Chi non trascina — o non puo' — sposta con le frecce la pastiglia che ha
     il fuoco, e il fuoco la segue."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       const chat = pastiglie().find((p) => p.dataset.id === 'chat');
       lancia(chat, 'keydown', { key: 'ArrowLeft', preventDefault() {} });
       assert.deepEqual(pastiglie().map((p) => p.dataset.id).slice(0, 2), ['chat', 'app']);
       assert.equal(globalThis.fuoco.dataset.id, 'chat', 'il fuoco non ha seguito la pastiglia');
-      await fila.chiudiOrdina({ salva: true });
+      await strip.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste.at(-1)[2].slice(0, 2), ['chat', 'app']);
     """)
 
@@ -360,17 +360,17 @@ def test_dragging_a_page_past_a_neighbour_swaps_them() -> None:
     dito — misurato sul telefono il 23/09/2026, la pastiglia restava sollevata.
     Qui il rilascio arriva al documento e basta, come la'."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       pastiglie().forEach((p, i) => { p.offsetLeft = i * 70; });
       const app = pastiglie()[0];
       lancia(app, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
-      assert.ok(app.classList.contains('is-sollevata'));
+      assert.ok(app.classList.contains('is-lifted'));
       sulDocumento('pointermove', { pointerId: 1, clientX: 110, clientY: 20 });
       sulDocumento('pointerup', { pointerId: 1 });
       assert.equal(app.style.transform, '');
-      assert.ok(!app.classList.contains('is-sollevata'));
+      assert.ok(!app.classList.contains('is-lifted'));
       assert.equal((docAscolto.pointermove || []).length, 0, 'il documento ascolta ancora il dito');
-      await fila.chiudiOrdina({ salva: true });
+      await strip.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste.at(-1)[2].slice(0, 2), ['chat', 'app']);
     """)
 
@@ -391,7 +391,7 @@ def test_a_dragged_page_does_not_scroll_the_page() -> None:
     """Senza, Chromium si prende il movimento come uno scorrimento e manda
     `pointercancel` a meta' trascinamento."""
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    regola = css.split("\n.casa-ordina-pastiglia {", 1)[1].split("}", 1)[0]
+    regola = css.split("\n.home-sort-pill {", 1)[1].split("}", 1)[0]
     assert "touch-action: none" in regola
 
 
@@ -400,7 +400,7 @@ def test_the_lifted_page_sits_under_the_finger() -> None:
     con `offsetTop`, misurato dal guscio, la pastiglia finiva un'intestazione
     piu' in alto del dito (telefono, 23/09/2026)."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       const app = pastiglie()[0];
       app.getBoundingClientRect = () => app.style.transform
         ? { left: 999, top: 999, width: 60, height: 40 }   // col transform: falso
@@ -420,11 +420,11 @@ def test_closing_the_moving_mode_mid_drag_lets_go_of_the_document() -> None:
     """Indietro col dito ancora sulla pastiglia: la chiusura azzerava il
     trascinamento ma lasciava i suoi ascoltatori sul documento, per sempre."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       const app = pastiglie()[0];
       lancia(app, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
       assert.equal(docAscolto.pointermove.length, 1);
-      await fila.chiudiOrdina();
+      await strip.chiudiOrdina();
       for (const tipo of ['pointermove', 'pointerup', 'pointercancel']) {
         assert.equal((docAscolto[tipo] || []).length, 0, tipo + ' ancora ascoltato dopo la chiusura');
       }
@@ -435,13 +435,13 @@ def test_a_second_finger_does_not_start_a_second_drag() -> None:
     """Il secondo `pointerdown` sovrascriveva gli ascoltatori del primo, che
     nessuno poteva piu' togliere."""
     _run("""
-      fila.apriOrdina();
+      strip.apriOrdina();
       const [a, b] = pastiglie();
       lancia(a, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
       lancia(b, 'pointerdown', { button: 0, pointerId: 2, clientX: 80, clientY: 20 });
       assert.equal(docAscolto.pointermove.length, 1, 'due trascinamenti insieme');
-      assert.ok(!b.classList.contains('is-sollevata'));
+      assert.ok(!b.classList.contains('is-lifted'));
       sulDocumento('pointerup', { pointerId: 1 });
       assert.equal((docAscolto.pointermove || []).length, 0, 'il documento ascolta ancora un dito');
-      assert.ok(!a.classList.contains('is-sollevata'));
+      assert.ok(!a.classList.contains('is-lifted'));
     """)

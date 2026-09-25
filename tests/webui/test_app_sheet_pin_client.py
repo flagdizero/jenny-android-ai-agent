@@ -88,9 +88,9 @@ function righe() {
 """
 
 
-def _run(corpo: str, *, app: dict, pagine: str | None) -> None:
+def _run(corpo: str, *, app: dict, pages: str | None) -> None:
     """*pagine*: il JS della porta che il guscio passa, o `None` per l'officina."""
-    porta = "null" if pagine is None else pagine
+    porta = "null" if pages is None else pages
     script = (
         "import assert from 'node:assert/strict';\n"
         + _FINTO_DOM
@@ -108,7 +108,7 @@ def _run(corpo: str, *, app: dict, pagine: str | None) -> None:
             }};
             const PORTA = {porta};
             const shell = {{ sendChatPrompt() {{}} }};
-            if (PORTA) shell.pagine = () => PORTA;
+            if (PORTA) shell.homePages = () => PORTA;
             const azioni = new AppsActions(fonte, shell);
             azioni.showJennyAppSheet(APP.slug);
             """
@@ -119,8 +119,8 @@ def _run(corpo: str, *, app: dict, pagine: str | None) -> None:
         radice = Path(tmp)
         (radice / "shared").mkdir()
         shutil.copy(ASSETS / "shared" / "apps-actions.js", radice / "shared" / "apps-actions.js")
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)
@@ -147,7 +147,7 @@ def test_in_the_home_the_sheet_has_four_rows_in_order() -> None:
         "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'edit', 'delete']);\n"
         "assert.deepEqual(chiamate[0], ['stato', 'app', 'orto']);\n",
         app=ORTO,
-        pagine=_porta("libera"),
+        pages=_porta("libera"),
     )
 
 
@@ -164,7 +164,7 @@ def test_in_the_workshop_the_sheet_is_exactly_as_before() -> None:
         "assert.ok(!html.includes('oc-sheet-label'), 'le righe dell officina hanno cambiato forma');\n"
         "assert.ok(!html.includes('disabled'));\n",
         app=ORTO,
-        pagine=None,
+        pages=None,
     )
 
 
@@ -172,7 +172,7 @@ def test_a_pinned_app_offers_to_unpin_it() -> None:
     _run(
         "assert.deepEqual(righe().map((r) => r.azione), ['open', 'unpin', 'edit', 'delete']);\n",
         app=ORTO,
-        pagine=_porta("appesa"),
+        pages=_porta("appesa"),
     )
 
 
@@ -194,7 +194,7 @@ def test_a_row_that_cannot_be_used_is_shown_off_with_its_reason(app, stato, perc
         "assert.equal(r.spenta, true, 'la riga si puo toccare');\n"
         f"assert.equal(r.perche, {json.dumps(perche)});\n",
         app=app,
-        pagine=_porta(stato),
+        pages=_porta(stato),
     )
 
 
@@ -204,7 +204,7 @@ def test_a_row_that_can_be_used_is_not_off() -> None:
         "assert.equal(r.spenta, false);\n"
         "assert.equal(r.perche, null);\n",
         app=ORTO,
-        pagine=_porta("libera"),
+        pages=_porta("libera"),
     )
 
 
@@ -216,7 +216,7 @@ def test_pin_asks_the_pages_for_this_app() -> None:
         "await azioni._handleJennySheetAction('pin', APP);\n"
         "assert.deepEqual(chiamate.at(-1), ['appendi', 'app', 'orto']);\n",
         app=ORTO,
-        pagine=_porta("libera"),
+        pages=_porta("libera"),
     )
 
 
@@ -226,7 +226,7 @@ def test_unpin_takes_it_off_and_says_so() -> None:
         "assert.deepEqual(chiamate.at(-1), ['stacca', 'app', 'orto']);\n"
         "assert.deepEqual(avvisi.at(-1), ['apps.unpinned', 'success']);\n",
         app=ORTO,
-        pagine=_porta("appesa"),
+        pages=_porta("appesa"),
     )
 
 
@@ -238,7 +238,7 @@ def test_deleting_an_app_rereads_the_pages() -> None:
         "assert.deepEqual(api.cancellate, ['orto']);\n"
         "assert.ok(chiamate.some((c) => c[0] === 'ricarica'), 'le pagine non sono state rilette');\n",
         app=ORTO,
-        pagine=_porta("appesa"),
+        pages=_porta("appesa"),
     )
 
 
@@ -249,7 +249,7 @@ def test_deleting_from_the_workshop_needs_no_pages() -> None:
         "assert.deepEqual(api.cancellate, ['orto']);\n"
         "assert.deepEqual(avvisi.at(-1), ['apps.appDeleted', 'success']);\n",
         app=ORTO,
-        pagine=None,
+        pages=None,
     )
 
 
@@ -267,5 +267,5 @@ def test_back_on_an_app_opened_from_the_home_closes_it() -> None:
         "assert.equal(azioni._openApp, null, 'l app e rimasta aperta');\n"
         "assert.equal(azioni.handleBack(), false, 'con niente aperto Indietro non e suo');\n",
         app=ORTO,
-        pagine=_porta("libera"),
+        pages=_porta("libera"),
     )

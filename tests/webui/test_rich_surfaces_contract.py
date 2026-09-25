@@ -65,10 +65,10 @@ def _funzione_attorno(righe: list[str], i: int) -> str:
 
 
 def test_every_surface_that_draws_markdown_draws_the_rest_too() -> None:
-    for nome, segno in SUPERFICI.items():
-        righe = (ASSETS / nome).read_text(encoding="utf-8").splitlines()
+    for name, segno in SUPERFICI.items():
+        righe = (ASSETS / name).read_text(encoding="utf-8").splitlines()
         siti = [i for i, r in enumerate(righe) if re.search(segno, r)]
-        assert siti, f"{nome}: nessun punto che disegna markdown — il segno e' cambiato"
+        assert siti, f"{name}: nessun punto che disegna markdown — il segno e' cambiato"
         for i in siti:
             # Quindici righe e non quattro: fra la scrittura e il disegno ci
             # sta il commento che spiega la scelta (il dollaro in riga nel
@@ -78,8 +78,8 @@ def test_every_surface_that_draws_markdown_draws_the_rest_too() -> None:
             if RICCO.search(vicino):
                 continue
             fn = _funzione_attorno(righe, i)
-            assert (nome, fn) in ESENTI, (
-                f"{nome}:{i + 1} (in `{fn}`) scrive markdown e non disegna formule "
+            assert (name, fn) in ESENTI, (
+                f"{name}:{i + 1} (in `{fn}`) scrive markdown e non disegna formule "
                 f"e diagrammi. Se e' voluto, l'esenzione va dichiarata nel banco "
                 f"col suo motivo — non lasciata implicita, che e' come la chat di "
                 f"casa e' rimasta senza formule per due giorni senza che si vedesse."
@@ -90,15 +90,15 @@ def test_no_surface_talks_to_the_libraries_by_itself() -> None:
     """Il *come* in un posto solo. Due copie e' come e' cominciato il guaio: chat
     e lettore ne avevano una ciascuno, ne e' morta una, e la cancellazione delle
     librerie ha guardato solo quella."""
-    for nome in SUPERFICI:
-        src = (ASSETS / nome).read_text(encoding="utf-8")
+    for name in SUPERFICI:
+        src = (ASSETS / name).read_text(encoding="utf-8")
         codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S))
         for diretto in ("renderMathInElement", "mermaid.render", "mermaid.initialize"):
             assert diretto not in codice, (
-                f"{nome} chiama {diretto} per conto suo: il come sta in "
+                f"{name} chiama {diretto} per conto suo: il come sta in "
                 f"shared/rich-content.js, o le copie divergono"
             )
-        assert "rich-content.js" in src, f"{nome} non importa il modulo condiviso"
+        assert "rich-content.js" in src, f"{name} non importa il modulo condiviso"
 
 
 def test_the_inline_dollar_is_on_only_where_the_skill_mandates_it() -> None:

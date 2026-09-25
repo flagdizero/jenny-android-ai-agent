@@ -15,21 +15,21 @@
  * variante, a colori, col nome piano — v. .agent/mascot-faces-plan.md, F9.
  */
 
-const VISIBLE_KEY = 'jenny-mascotte-visible';
-const SIZE_KEY = 'jenny-mascotte-size';
+const VISIBLE_KEY = 'jenny-mascot-visible';
+const SIZE_KEY = 'jenny-mascot-size';
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
    non una per lettura: non hanno più un getter in cui nascondersi. Stanno qui
    anche quelle che non erano della mascotte, perché questo modulo lo caricano
    tutti e due i gusci:
-   - `jenny-mascotte-color`: il bianco/nero (08/09/2026);
-   - `jenny-mascotte-dock-side`, `jenny-mascotte-side`: il lato (5961d22);
+   - `jenny-mascot-color`: il bianco/nero (08/09/2026);
+   - `jenny-mascot-dock-side`, `jenny-mascot-side`: il lato (5961d22);
    - `jenny-advanced-mode`: la modalità sviluppatore (78ff330);
    - `jenny-home-view`: la vista di Home scelta dall'utente (3d57980);
    - `locale`: il selettore di lingua dell'officina (v. shared/i18n.js). */
 const DEAD_KEYS = [
-  'jenny-mascotte-color',
-  'jenny-mascotte-dock-side',
-  'jenny-mascotte-side',
+  'jenny-mascot-color',
+  'jenny-mascot-dock-side',
+  'jenny-mascot-side',
   'jenny-advanced-mode',
   'jenny-home-view',
   'locale',

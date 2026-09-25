@@ -6,7 +6,7 @@ quattro**. Il motivo stava in una riga che non sembrava niente:
     view = document.getElementById(`view-${this.currentMode}`);
     if (!view) return;
 
-`cervello`, `mani` e `memoria` non hanno una vista propria — sono lo stesso
+`brain`, `hands` e `memory` non hanno una vista propria — sono lo stesso
 `view-settings` — quindi la ricerca tornava `null` e il gesto moriva alla prima
 riga, in silenzio. Da fuori sembrava che il carosello non ci fosse.
 
@@ -42,7 +42,7 @@ GESTO_JS = ASSETS / "shared" / "horizontal-swipe.js"
 
 pytestmark = requires_node
 
-MODI = ["chat", "cervello", "mani", "memoria"]
+MODI = ["chat", "brain", "hands", "memory"]
 
 
 def _corpo(src: str, start: int) -> str:
@@ -82,24 +82,24 @@ def _corpo(src: str, start: int) -> str:
     raise AssertionError("graffe sbilanciate")
 
 
-def _metodo(source: str, nome: str) -> str:
-    """`nome(parametri) { corpo }`, pronto da incollare in un oggetto letterale."""
-    m = re.search(rf"\n  {re.escape(nome)}\(", source)
-    assert m, f"metodo {nome} non trovato"
+def _metodo(source: str, name: str) -> str:
+    """`name(parameters) { corpo }`, pronto da incollare in un oggetto letterale."""
+    m = re.search(rf"\n  {re.escape(name)}\(", source)
+    assert m, f"metodo {name} non trovato"
     apertura = source.index("{", m.end())
     return source[m.start() + 1 : apertura] + _corpo(source, m.end())
 
 
-def _costante(source: str, nome: str) -> str:
+def _costante(source: str, name: str) -> str:
     """`export const NOME = ...;` su una riga, pronta da incollare."""
-    m = re.search(rf"^export const {re.escape(nome)} = .*$", source, re.M)
-    assert m, f"const {nome} non trovata"
+    m = re.search(rf"^export const {re.escape(name)} = .*$", source, re.M)
+    assert m, f"const {name} non trovata"
     return m.group(0).replace("export ", "")
 
 
-def _funzione(source: str, nome: str) -> str:
-    m = re.search(rf"(?ms)^export function {re.escape(nome)}\(.*?^\}}$", source)
-    assert m, f"function {nome} non trovata"
+def _funzione(source: str, name: str) -> str:
+    m = re.search(rf"(?ms)^export function {re.escape(name)}\(.*?^\}}$", source)
+    assert m, f"function {name} non trovata"
     return m.group(0).replace("export function", "function")
 
 
@@ -251,8 +251,8 @@ def _harness() -> str:
         .replace(
             "__COMPONENTE__",
             "\n".join(
-                _funzione(swipe, nome)
-                for nome in (
+                _funzione(swipe, name)
+                for name in (
                     "componentSwipe", "claimsHorizontal", "isCommand", "selectedText",
                     "lockVertical",
                 )
@@ -272,14 +272,14 @@ def _run_js(script: str) -> None:
 
 
 def test_a_drawer_is_swipeable_at_all() -> None:
-    """Da `cervello` il gesto parte. Prima usciva alla prima riga.
+    """Da `brain` il gesto parte. Prima usciva alla prima riga.
 
     E' *il* difetto: `view-cervello` non esiste, la ricerca grezza tornava
     `null`, e `if (!view) return` chiudeva la faccenda senza dire niente.
     """
     _run_js("""
-      assert.equal(scorri('cervello', SINISTRA), 'mani');
-      assert.equal(scorri('cervello', DESTRA), 'chat');
+      assert.equal(scorri('brain', SINISTRA), 'hands');
+      assert.equal(scorri('brain', DESTRA), 'chat');
     """)
 
 
@@ -287,10 +287,10 @@ def test_every_tab_moves_in_both_directions() -> None:
     """Tutte e otto le mosse: quattro linguette per due versi."""
     _run_js("""
       const atteso = {
-        chat:     { destra: 'memoria',  sinistra: 'cervello' },
-        cervello: { destra: 'chat',     sinistra: 'mani' },
-        mani:     { destra: 'cervello', sinistra: 'memoria' },
-        memoria:  { destra: 'mani',     sinistra: 'chat' },
+        chat:     { destra: 'memory',  sinistra: 'brain' },
+        brain: { destra: 'chat',     sinistra: 'hands' },
+        hands:     { destra: 'brain', sinistra: 'memory' },
+        memory:  { destra: 'hands',     sinistra: 'chat' },
       };
       for (const [da, versi] of Object.entries(atteso)) {
         assert.equal(scorri(da, DESTRA), versi.destra, `${da} verso destra`);
@@ -310,8 +310,8 @@ def test_the_ends_wrap_around() -> None:
     linguetta».
     """
     _run_js("""
-      assert.equal(scorri('chat', DESTRA), 'memoria', 'dal primo indietro si arriva in fondo');
-      assert.equal(scorri('memoria', SINISTRA), 'chat', 'dall ultimo avanti si torna in testa');
+      assert.equal(scorri('chat', DESTRA), 'memory', 'dal primo indietro si arriva in fondo');
+      assert.equal(scorri('memory', SINISTRA), 'chat', 'dall ultimo avanti si torna in testa');
     """)
 
 
@@ -333,7 +333,7 @@ def test_one_tab_alone_has_nowhere_to_go() -> None:
 
 
 def test_between_two_drawers_the_animation_gets_a_real_element() -> None:
-    """`cervello → mani` e' **lo stesso nodo** che si ridisegna.
+    """`brain → hands` e' **lo stesso nodo** che si ridisegna.
 
     Il gesto non scambia due viste: ne ridisegna una. Quel che conta e' che
     l'animazione d'arrivo riceva un elemento vero — se ricevesse `null`
@@ -341,7 +341,7 @@ def test_between_two_drawers_the_animation_gets_a_real_element() -> None:
     romperebbe niente: semplicemente non succederebbe niente.
     """
     _run_js("""
-      assert.equal(scorri('cervello', SINISTRA), 'mani');
+      assert.equal(scorri('brain', SINISTRA), 'hands');
       assert.equal(animati.length, 1);
       assert.ok(animati[0], 'l animazione ha ricevuto null');
       assert.equal(animati[0].id, 'view-settings');
@@ -367,7 +367,7 @@ def test_all_four_tabs_animate_a_real_element() -> None:
 def test_a_short_drag_springs_back() -> None:
     """Sotto soglia non si cambia linguetta: si torna al suo posto."""
     _run_js("""
-      assert.equal(scorri('cervello', SINISTRA, { corto: true }), null);
+      assert.equal(scorri('brain', SINISTRA, { corto: true }), null);
       assert.equal(animati.length, 0);
     """)
 
@@ -376,9 +376,9 @@ def test_an_open_drawer_owns_the_gesture() -> None:
     """Col cassetto aperto il carosello non si arma."""
     _run_js("""
       app.drawer.activeDrawer = 'qualcosa';
-      assert.equal(scorri('cervello', SINISTRA), null);
+      assert.equal(scorri('brain', SINISTRA), null);
       app.drawer.activeDrawer = null;
-      assert.equal(scorri('cervello', SINISTRA), 'mani');
+      assert.equal(scorri('brain', SINISTRA), 'hands');
     """)
 
 
@@ -399,7 +399,7 @@ def test_the_slide_in_switches_scroll_anchoring_off_and_back_on() -> None:
     """
     _run_js("""
       radice.style.overflowAnchor = '';
-      scorri('memoria', SINISTRA);
+      scorri('memory', SINISTRA);
       assert.equal(radice.style.overflowAnchor, 'none', 'non spento durante la scivolata');
       // fine animazione
       const fine = animati[0].ascolto.transitionend;
@@ -419,7 +419,7 @@ def test_the_anchor_comes_back_even_if_the_transition_never_ends() -> None:
     """
     _run_js("""
       radice.style.overflowAnchor = '';
-      scorri('memoria', SINISTRA);
+      scorri('memory', SINISTRA);
       assert.equal(radice.style.overflowAnchor, 'none');
       await new Promise(r => setTimeout(r, 500));   // nessun transitionend, solo la rete
       assert.equal(radice.style.overflowAnchor, '', 'la rete di sicurezza non ha rimesso l ancoraggio');

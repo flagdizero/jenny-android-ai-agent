@@ -50,9 +50,9 @@ import { describeWireError } from './shared/wire-error.js';
    l'iniziale maiuscola ("Floating"), che e' il nome che ha nel codice. Qui e'
    il nome che ha per chi lo legge. */
 const ORIGINS = {
-  telegram: { icon: 'ti-brand-telegram', key: 'casa.origin.telegram' },
-  notification: { icon: 'ti-bell', key: 'casa.origin.notification' },
-  floating: { icon: 'ti-message-circle', key: 'casa.origin.floating' },
+  telegram: { icon: 'ti-brand-telegram', key: 'home.origin.telegram' },
+  notification: { icon: 'ti-bell', key: 'home.origin.notification' },
+  floating: { icon: 'ti-message-circle', key: 'home.origin.floating' },
 };
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
@@ -120,8 +120,8 @@ export class HomeChat {
        del guscio e' `script-src 'self'`, quindi niente `onclick` scritto nel
        markup. */
     this.el.addEventListener('click', (e) => {
-      const btn = e.target.closest('.casa-copia');
-      if (btn && this.el.contains(btn)) this._copia(btn.closest('.casa-msg'));
+      const btn = e.target.closest('.home-copy');
+      if (btn && this.el.contains(btn)) this._copia(btn.closest('.home-msg'));
     });
 
     /* La pagina precedente: stessa macchina dell'officina
@@ -343,7 +343,7 @@ export class HomeChat {
     if (msg.text) {
       if (this.buffer) this._streamEnd();
       const block = document.createElement('div');
-      block.className = 'casa-block';
+      block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
       this._ensureTurn().appendChild(block);
@@ -413,7 +413,7 @@ export class HomeChat {
      che non è andata si dice come si direbbe a voce. */
   _appendNote(text) {
     const node = document.createElement('div');
-    node.className = 'casa-note';
+    node.className = 'home-note';
     node.textContent = text;
     this._append(node);
     this.scrollToBottom();
@@ -471,7 +471,7 @@ export class HomeChat {
    */
   async reload() {
     this._resetTurn();
-    this.el.querySelectorAll('.casa-msg, .casa-boundary').forEach((n) => n.remove());
+    this.el.querySelectorAll('.home-msg, .home-boundary').forEach((n) => n.remove());
     this._empty = true;
     /* La bolla in sospeso muore col DOM che la conteneva. Senza azzerarla, un
        rifiuto in arrivo — che e' l'unico frame che la lascia in vita — la
@@ -493,12 +493,12 @@ export class HomeChat {
 
   _appendUser(text, origin, media, toTop = false) {
     const node = document.createElement('div');
-    node.className = 'casa-msg casa-msg-user';
+    node.className = 'home-msg home-msg-user';
     const badge = this._originBadge(origin);
     if (badge) node.appendChild(badge);
     if (text) {
       const block = document.createElement('div');
-      block.className = 'casa-block';
+      block.className = 'home-block';
       // Testo dell'utente: mai markdown. E' quello che ha scritto, alla lettera.
       block.textContent = text;
       node.appendChild(block);
@@ -509,10 +509,10 @@ export class HomeChat {
 
   _appendAssistant(content, media, toTop = false, latencyMs = null) {
     const node = document.createElement('div');
-    node.className = 'casa-msg casa-msg-jenny';
+    node.className = 'home-msg home-msg-jenny';
     if (content) {
       const block = document.createElement('div');
-      block.className = 'casa-block';
+      block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);
       renderRich(block);
       node.appendChild(block);
@@ -538,26 +538,26 @@ export class HomeChat {
    *  nessuno ha misurato niente, e in quel caso resta il solo Copia.
    */
   _codaDi(node, latencyMs) {
-    if (!node || node.querySelector('.casa-coda')) return;
+    if (!node || node.querySelector('.home-tail')) return;
     /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col
        suo bordo: e' separato da se', e un Copia sotto le proprie parole non
        serve a nessuno. Oggi nessun chiamante ci passa una bolla utente — la
        guardia e' perche' la prossima non debba ricordarselo. */
-    if (!String(node.className).includes('casa-msg-jenny')) return;
+    if (!String(node.className).includes('home-msg-jenny')) return;
     // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
     if (!this._testoDi(node)) return;
     const riga = document.createElement('div');
-    riga.className = 'casa-coda';
+    riga.className = 'home-tail';
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'casa-copia';
+    btn.className = 'home-copy';
     btn.title = i18n.t('chat.copy');
     btn.setAttribute('aria-label', i18n.t('chat.copy'));
     btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
     riga.appendChild(btn);
     if (latencyMs != null) {
       const s = document.createElement('span');
-      s.className = 'casa-secondi';
+      s.className = 'home-seconds';
       s.textContent = (latencyMs / 1000).toFixed(1) + 's';
       riga.appendChild(s);
     }
@@ -579,7 +579,7 @@ export class HomeChat {
     if (!node) return '';
     const registrato = this._sorgente.get(node);
     if (registrato) return registrato;
-    return [...node.querySelectorAll('.casa-block')]
+    return [...node.querySelectorAll('.home-block')]
       .map((el) => (el.innerText || '').trim())
       .filter(Boolean)
       .join('\n\n');
@@ -600,7 +600,7 @@ export class HomeChat {
      sopra e sotto non si parlano. */
   _appendBoundary(toTop = false) {
     const hr = document.createElement('div');
-    hr.className = 'casa-boundary';
+    hr.className = 'home-boundary';
     this._append(hr, toTop);
   }
 
@@ -608,7 +608,7 @@ export class HomeChat {
     if (!origin || origin === 'websocket') return null;
     const known = ORIGINS[origin];
     const badge = document.createElement('div');
-    badge.className = 'casa-origin';
+    badge.className = 'home-origin';
     const icon = known ? known.icon : 'ti-arrows-exchange';
     const label = known ? i18n.t(known.key) : origin;
     badge.innerHTML = `<i class="ti ${icon}"></i>${escapeHtml(label)}`;
@@ -617,7 +617,7 @@ export class HomeChat {
 
   _appendMedia(node, entries) {
     const wrap = document.createElement('div');
-    wrap.className = 'casa-media';
+    wrap.className = 'home-media';
     for (const raw of entries) {
       const entry = typeof raw === 'string' ? { url: raw } : raw;
       if (!entry.url) continue;
@@ -632,7 +632,7 @@ export class HomeChat {
            questa un'immagine si guarda solo alla misura della miniatura. */
         img.addEventListener('click', () => openImageLightbox(entry.url, {
           alt: entry.name || '',
-          closeLabel: i18n.t('casa.closeImage'),
+          closeLabel: i18n.t('home.closeImage'),
         }));
         wrap.appendChild(img);
       } else if (kind === 'video') {
@@ -643,7 +643,7 @@ export class HomeChat {
         wrap.appendChild(video);
       } else {
         const chip = document.createElement('a');
-        chip.className = 'casa-file';
+        chip.className = 'home-file';
         chip.href = entry.url;
         chip.textContent = entry.name || entry.url;
         wrap.appendChild(chip);
@@ -656,7 +656,7 @@ export class HomeChat {
   _ensureTurn() {
     if (!this.turnNode) {
       this.turnNode = document.createElement('div');
-      this.turnNode.className = 'casa-msg casa-msg-jenny';
+      this.turnNode.className = 'home-msg home-msg-jenny';
       this._append(this.turnNode);
     }
     return this.turnNode;
@@ -666,7 +666,7 @@ export class HomeChat {
   _ensureBlock() {
     if (!this.blockNode) {
       this.blockNode = document.createElement('div');
-      this.blockNode.className = 'casa-block';
+      this.blockNode.className = 'home-block';
       this._ensureTurn().appendChild(this.blockNode);
     }
     return this.blockNode;
@@ -688,7 +688,7 @@ export class HomeChat {
 
   /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. */
   syncEmpty() {
-    const empty = document.getElementById('casa-empty');
+    const empty = document.getElementById('home-empty');
     if (empty) empty.hidden = !this._empty;
   }
 

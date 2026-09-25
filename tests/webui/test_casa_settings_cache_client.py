@@ -43,7 +43,7 @@ class Casa {{
   {_member(src, "_askSettings")}
   {_member(src, "_keepFloating")}
 }}
-const casa = new Casa();
+const home = new Casa();
 const giro = () => new Promise((r) => setTimeout(r, 0));
 """
     run_js(harness + script)
@@ -51,11 +51,11 @@ const giro = () => new Promise((r) => setTimeout(r, 0));
 
 def test_reopening_settings_reads_the_switch_as_it_ended() -> None:
     _run_js("""
-      const prima = await casa._askSettings();
+      const prima = await home._askSettings();
       assert.equal(prima.floating.enabled, false);
-      casa._keepFloating({ available: true, enabled: true, active: true });
+      home._keepFloating({ available: true, enabled: true, active: true });
       await giro();
-      const dopo = await casa._askSettings();
+      const dopo = await home._askSettings();
       assert.equal(dopo.floating.enabled, true, 'la cache ha rimesso lo stato di prima');
       assert.equal(letture, 1, 'resta una lettura sola: la cache non si butta');
     """)
@@ -65,9 +65,9 @@ def test_nothing_to_keep_when_nothing_was_read() -> None:
     """Senza cache non c'e' niente da correggere: la prossima apertura legge
     dal server, che sa gia' il valore nuovo."""
     _run_js("""
-      casa._keepFloating({ enabled: true });
-      assert.equal(casa._settings, null);
-      await casa._askSettings();
+      home._keepFloating({ enabled: true });
+      assert.equal(home._settings, null);
+      await home._askSettings();
       assert.equal(letture, 1);
     """)
 

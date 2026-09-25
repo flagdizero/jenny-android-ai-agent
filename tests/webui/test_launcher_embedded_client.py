@@ -86,7 +86,7 @@ globalThis.document = {
   activeElement: null,
   documentElement: Object.assign(html, { style: { setProperty() {} } }),
   getElementById: (id) => perId.get(id) || null,
-  querySelector: (sel) => (sel === '.casa-shell' ? guscio : null),
+  querySelector: (sel) => (sel === '.home-shell' ? guscio : null),
   createElement: () => creaEl(null),
   addEventListener(t, fn) { (docAscolto[t] = docAscolto[t] || []).push(fn); },
 };
@@ -120,10 +120,10 @@ def _run(corpo: str, *, con_foglio: bool = False) -> None:
         radice = Path(tmp)
         (radice / "shared").mkdir()
         shutil.copy(ASSETS / "mobile-launcher.js", radice / "mobile-launcher.js")
-        for nome in ("launcher-rank.js", "type-ahead.js"):
-            shutil.copy(ASSETS / "shared" / nome, radice / "shared" / nome)
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name in ("launcher-rank.js", "type-ahead.js"):
+            shutil.copy(ASSETS / "shared" / name, radice / "shared" / name)
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)

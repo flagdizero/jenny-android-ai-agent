@@ -217,9 +217,9 @@ async def test_a_wiki_outside_wikis_is_not_reachable_by_name(handler, due_proget
     assert response.status_code == 404, response.status_code
 
     # …e le due vere si raggiungono entrambe.
-    for nome in ("patreon", "etf"):
-        ok = await _call(handler, "/api/graph", wiki=nome)
-        assert ok is not None and ok.status_code == 200, nome
+    for name in ("patreon", "etf"):
+        ok = await _call(handler, "/api/graph", wiki=name)
+        assert ok is not None and ok.status_code == 200, name
 
 
 # ── il tetto di lettura ───────────────────────────────────────────────────

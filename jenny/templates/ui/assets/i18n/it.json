@@ -8,9 +8,9 @@
     "onboarding": "Setup",
     "ariaLabel": "Navigazione",
     "console": "Console",
-    "cervello": "Cervello",
-    "mani": "Mani",
-    "memoria": "Memoria",
+    "brain": "Cervello",
+    "hands": "Mani",
+    "memory": "Memoria",
     "launcher": "Cassetto delle app"
   },
   "chat": {
@@ -457,7 +457,7 @@
       "summaryUnknown": "non leggibile"
     },
     "brands": "Le marche",
-    "modelLivesInCasa": "Quale modello risponde si sceglie in casa, da «Chi risponde»: un tocco su un modello salva modello e marca insieme. Qui si decide quali marche esistono.",
+    "modelLivesInHome": "Quale modello risponde si sceglie in casa, da «Chi risponde»: un tocco su un modello salva modello e marca insieme. Qui si decide quali marche esistono.",
     "firstModel": "Primo modello",
     "firstModelPlaceholder": "es. deepseek-v4.1-flash",
     "firstModelHint": "Una marca senza un modello che funziona non è una marca che c'è. Dopo lo cambi dalla casa.",
@@ -465,7 +465,7 @@
     "useNow": "Usala adesso",
     "providerSavedAndActive": "Salvata, e adesso risponde lei",
     "providerSavedNotActive": "Marca salvata, ma non attivata: {error}",
-    "updatesLiveInCasa": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti».",
+    "updatesLiveInHome": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti».",
     "addProviderHint": "Nome, formato, indirizzo, chiave e il primo modello. Una marca senza un modello che funziona non è una marca che c'è.",
     "answersNow": "risponde",
     "contextWindow": "Finestra di contesto"
@@ -619,7 +619,7 @@
     "sticker": {
       "desc": "Ogni messaggio è un adesivo ritagliato: bordo bianco, ombra dura, rotazione imperfetta."
     },
-    "fumetto": {
+    "comic": {
       "desc": "China su carta, retini e nuvolette: ogni risposta è una vignetta."
     },
     "y2k": {
@@ -842,7 +842,7 @@
     "askReadonly": "Chiedi qualcosa (sola lettura)…",
     "askAboutReadonly": "Chiedi qualcosa su {name} (sola lettura)…"
   },
-  "casa": {
+  "home": {
     "empty": "Non c'è ancora niente qui.\nComincia tu.",
     "emptyNotebook": "Questo quaderno c’è, la conversazione no.\nQuello che scrivi qui resta qui.",
     "placeholder": "Scrivi a Jenny",
@@ -919,16 +919,16 @@
       "pages": "torna alle pagine",
       "settings": "Impostazioni"
     },
-    "tu": {
+    "you": {
       "workshopHint": "osserva, regola, ripara"
     },
     "jenny": {
       "title": "Jenny",
       "hidden": "nascosta",
       "floatingShort": "flottante",
-      "nome": "Come si chiama",
-      "nomeHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",
-      "nomeFailed": "Non sono riuscita a salvare il nome.",
+      "name": "Come si chiama",
+      "nameHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",
+      "nameFailed": "Non sono riuscita a salvare il nome.",
       "rules": "Le regole che le hai dato tu",
       "rulesHint": "Questo resta tuo: lo rilegge a ogni turno e non lo riscrive. Il resto del suo carattere lo tiene lei, e si legge in officina.",
       "rulesPlaceholder": "Per esempio: chiamami per nome, e niente emoji.",
@@ -955,7 +955,7 @@
         "leftoverNoCount": "Sotto questo nome c’è ancora la chat di un quaderno che non c’è più. Posso riprenderla — se l’avevi cancellato per sbaglio è tutta lì — oppure partire pulito e buttarla."
       }
     },
-    "pages": {
+    "notebookPages": {
       "open": "Pagine del quaderno",
       "countOne": "1 pagina",
       "countMany": "{count} pagine",
@@ -1034,14 +1034,14 @@
       "msgHead": "In «{page}», dove dice «{quote}»:",
       "msgRef": "segnalazione"
     },
-    "pagine": {
-      "appSparita": "L'app «{nome}» non c'è più.",
-      "quadernoSparito": "Il quaderno «{nome}» non c'è più.",
-      "togliPagina": "Togli la pagina",
-      "salvaFallito": "Non ho potuto salvare le pagine. Non ho cambiato niente."
+    "pages": {
+      "appGone": "L'app «{name}» non c'è più.",
+      "notebookGone": "Il quaderno «{name}» non c'è più.",
+      "removePage": "Togli la pagina",
+      "saveFailed": "Non ho potuto salvare le pagine. Non ho cambiato niente."
     },
-    "quaderno": {
-      "rinomina": "Rinomina",
+    "notebook": {
+      "rename": "Rinomina",
       "eliminato": "Quaderno «{name}» eliminato",
       "deleteConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
       "deleteConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
@@ -1054,59 +1054,59 @@
       "renameTaken": "C'è già un quaderno o una conversazione che si chiama «{name}».",
       "renameMissing": "«{name}» non c'è più: forse è stato cancellato o rinominato."
     },
-    "fila": {
+    "strip": {
       "label": "Pagine di casa",
       "app": "App",
       "notebooks": "Quaderni",
       "settings": "Impostazioni",
-      "ordinaAiuto": "Trascina per spostare · × per togliere",
-      "fatto": "Fatto",
-      "sposta": "Sposta {nome}: frecce sinistra e destra",
-      "togli": "Togli {nome} dalle pagine"
+      "sortHelp": "Trascina per spostare · × per togliere",
+      "done": "Fatto",
+      "move": "Sposta {name}: frecce sinistra e destra",
+      "remove": "Togli {name} dalle pagine"
     }
   },
   "workshop": {
     "eyebrow": "officina",
-    "casaPill": "Jenny",
+    "homePill": "Jenny",
     "sub": {
-      "cervello": "quali marche ci sono, con che testa pensa, e cosa le lascia fare il telefono",
-      "mani": "cosa può fare, con che permessi, e quando parte da sola",
-      "memoria": "cosa ricorda, chi gliela riempie, e dove sta su disco"
+      "brain": "quali marche ci sono, con che testa pensa, e cosa le lascia fare il telefono",
+      "hands": "cosa può fare, con che permessi, e quando parte da sola",
+      "memory": "cosa ricorda, chi gliela riempie, e dove sta su disco"
     },
-    "gruppi": {
-      "chiPensa": "Chi pensa",
-      "parametri": "Parametri",
-      "quantoRicorda": "Quanto ricorda",
+    "groups": {
+      "whoThinks": "Chi pensa",
+      "parameters": "Parametri",
+      "howMuchItRemembers": "Quanto ricorda",
       "dream": "Dream — chi riempie quei tre file",
-      "giardiniere": "Giardiniere — chi riempie i quaderni",
+      "gardener": "Giardiniere — chi riempie i quaderni",
       "file": "I file veri",
       "skill": "Skill"
     },
-    "rimando": {
-      "dreamInMemoria": "Chi riempie la memoria — Dream e il giardiniere — sta accanto a quel che riempie, in Memoria."
+    "link": {
+      "dreamInMemory": "Chi riempie la memoria — Dream e il giardiniere — sta accanto a quel che riempie, in Memoria."
     },
     "file": {
       "desc": "La sua cartella di lavoro, per intero: le cartelle si aprono qui. I file di servizio non si elencano."
     }
   },
   "skills": {
-    "riepilogoNome": "Cosa sa fare",
-    "riepilogo": "{integrate} integrate, {tue} tue",
-    "riepilogoNessunaTua": "{integrate} integrate, nessuna tua",
-    "riepilogoErrore": "non si è potuto leggere",
-    "comeInsegnare": "Per insegnargliene una, chiediglielo in chat.",
-    "pannello": "Skill",
-    "tue": "Le tue",
+    "summaryName": "Cosa sa fare",
+    "summary": "{integrate} integrate, {yours} tue",
+    "summaryNoneYours": "{integrate} integrate, nessuna tua",
+    "summaryError": "non si è potuto leggere",
+    "howToTeach": "Per insegnargliene una, chiediglielo in chat.",
+    "panel": "Skill",
+    "yours": "Le tue",
     "integrate": "Integrate",
-    "servizio": "Più {n} di servizio, che Jenny usa da sé.",
-    "vuotaTitolo": "Non gliene hai ancora insegnata nessuna",
-    "vuotaTesto": "Spiegale una cosa che le chiedi spesso: la trasforma in una skill.",
-    "chiedi": "Chiedi a Jenny",
-    "chiediPrompt": "Voglio insegnarti una nuova skill. Usa la skill \"skill-creator\" e guidami passo passo.",
-    "attiva": "Attiva la skill {name}",
+    "service": "Più {n} di servizio, che Jenny usa da sé.",
+    "emptyTitle": "Non gliene hai ancora insegnata nessuna",
+    "emptyText": "Spiegale una cosa che le chiedi spesso: la trasforma in una skill.",
+    "ask": "Chiedi a Jenny",
+    "askPrompt": "Voglio insegnarti una nuova skill. Usa la skill \"skill-creator\" e guidami passo passo.",
+    "active": "Attiva la skill {name}",
     "integrataBloccata": "Viene con l'app: non si spegne da qui.",
     "tuaBloccata": "Bloccata dal suo file: non si spegne da qui.",
-    "erroreLettura": "L'elenco delle skill non si è potuto leggere.",
+    "readError": "L'elenco delle skill non si è potuto leggere.",
     "riprova": "Riprova"
   }
 }

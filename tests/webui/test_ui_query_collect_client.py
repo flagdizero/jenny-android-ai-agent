@@ -1,7 +1,7 @@
 """Lo strumento ``ui_view`` vede davvero lo schermo, anche nei tre cassetti.
 
 ``UiQueryResponder._collect`` cercava ``getElementById('view-' + view)``: per
-``cervello``, ``mani`` e ``memoria`` quell'id non esiste (sono tutti e tre
+``brain``, ``hands`` e ``memory`` quell'id non esiste (sono tutti e tre
 ``view-settings``), quindi Jenny riceveva un HTML vuoto proprio dove l'utente le
 chiede «cosa vedi?». E la mini-app aperta si cercava in ``controllers.apps`` con
 ``view === 'apps'``: la scheda «App» che non esiste piu', quindi l'app non le
@@ -52,7 +52,7 @@ def test_each_drawer_sends_the_settings_view() -> None:
     out = run_js(
         _script(
             """
-for (const mode of ['cervello', 'mani', 'memoria']) {
+for (const mode of ['brain', 'hands', 'memory']) {
   AppState.currentMode = mode;
   const p = await r._collect();
   assert.equal(p.view, mode);
@@ -70,7 +70,7 @@ def test_an_open_miniapp_is_described_over_any_view() -> None:
     out = run_js(
         _script(
             """
-AppState.currentMode = 'mani';
+AppState.currentMode = 'hands';
 window.mobileApp._appsSource = { jennyApps: [{ slug: 'spesa', name: 'Spesa' }] };
 window.mobileApp._appsActions = {
   _openApp: { slug: 'spesa' },

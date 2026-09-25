@@ -177,7 +177,7 @@ async function apri(items, { rotto = false } = {}) {
 def _harness() -> str:
     ws = WORKSPACE_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
-    metodi = "\n".join("  " + member(ws, nome) for nome in _VERI)
+    metodi = "\n".join("  " + member(ws, name) for name in _VERI)
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
@@ -278,15 +278,15 @@ def test_reopening_the_card_stays_in_the_folder_you_were_in() -> None:
     Vive nel controller, e il riaggancio la rilegge da li'."""
     _run_js("""
 const { c } = await apri([voce('progetti', 'directory')]);
-await c.navigateTo('progetti/casa');
-assert.equal(c.currentDir, 'progetti/casa');
+await c.navigateTo('progetti/home');
+assert.equal(c.currentDir, 'progetti/home');
 
 // Memoria si ridisegna: nodi nuovi, stesso controller.
 const s2 = scheda();
 chiamate.length = 0;
 c.mount(s2.host);
 await new Promise((r) => setTimeout(r, 0));
-assert.deepEqual(chiamate, ['progetti/casa'],
+assert.deepEqual(chiamate, ['progetti/home'],
   'il riaggancio riparte dalla radice invece che da dove si era');
 assert.equal(c.gridEl, s2.griglia, 'la griglia vecchia e\\' rimasta agganciata');
 """)
@@ -298,7 +298,7 @@ def test_walking_into_a_folder_never_leaves_memoria() -> None:
     _run_js("""
 const { c } = await apri([voce('progetti', 'directory')]);
 await c.navigateTo('progetti');
-await c.navigateTo('progetti/casa');
+await c.navigateTo('progetti/home');
 assert.deepEqual(guscio.mosse, [],
   'girare tra le cartelle ha lasciato il cassetto');
 """)
@@ -310,10 +310,10 @@ def test_back_walks_up_one_folder_and_then_lets_go() -> None:
     la mangerebbe senza cambiare niente a schermo."""
     _run_js("""
 const { c } = await apri([voce('progetti', 'directory')]);
-await c.navigateTo('progetti/casa/note');
+await c.navigateTo('progetti/home/note');
 
 assert.equal(c.handleCardBack(), true);
-assert.equal(c.currentDir, 'progetti/casa');
+assert.equal(c.currentDir, 'progetti/home');
 assert.equal(c.handleCardBack(), true);
 assert.equal(c.currentDir, 'progetti');
 assert.equal(c.handleCardBack(), true);
@@ -335,20 +335,20 @@ def test_closing_a_file_returns_to_the_folder_it_was_opened_from() -> None:
     un'altra sezione e l'esploratore non era la schermata da cui si veniva."""
     _run_js("""
 const { c } = await apri([voce('progetti', 'directory')]);
-await c.navigateTo('progetti/casa');
+await c.navigateTo('progetti/home');
 c.viewMode = 'editor';
-c.currentPath = 'progetti/casa/note.md';
+c.currentPath = 'progetti/home/note.md';
 guscio.mosse.length = 0;
 
 assert.equal(c._closeEditor({ hardwareBack: true }), false,
   'col back hardware la history riporta indietro da se\\'');
-assert.equal(c.currentDir, 'progetti/casa');
+assert.equal(c.currentDir, 'progetti/home');
 assert.deepEqual(guscio.mosse, [], 'il back hardware ha anche navigato');
 
 // La freccia dell'header invece naviga: nessuno lo fa al posto suo.
 c.viewMode = 'editor';
 assert.equal(c._closeEditor(), true);
-assert.deepEqual(guscio.mosse, [['navigateBack', 'memoria']]);
+assert.deepEqual(guscio.mosse, [['navigateBack', 'memory']]);
 """)
 
 
@@ -357,7 +357,7 @@ def test_home_dismounts_the_file_without_a_second_destination() -> None:
     una pressione produrrebbe due destinazioni di fila."""
     _run_js("""
 const { c } = await apri([voce('progetti', 'directory')]);
-await c.navigateTo('progetti/casa');
+await c.navigateTo('progetti/home');
 c.viewMode = 'editor';
 guscio.mosse.length = 0;
 c.collapseToRoot();
@@ -389,9 +389,9 @@ const { c, nuovo } = await apri([voce('progetti', 'directory')]);
 nuovo.clic();
 assert.equal(c.menuNuovo, 1, 'il bottone «nuovo» non e\\' agganciato');
 
-await c.navigateTo('progetti/casa');
+await c.navigateTo('progetti/home');
 await c._handleNewAction('newFile');
-assert.deepEqual(c.creati, [['newFile', 'progetti/casa']]);
+assert.deepEqual(c.creati, [['newFile', 'progetti/home']]);
 """)
 
 
@@ -427,11 +427,11 @@ def test_a_redrawn_card_does_not_eat_back() -> None:
     era una pressione spesa su una griglia che nessuno vede."""
     _run_js("""
 const { c, griglia } = await apri([voce('progetti', 'directory')]);
-await c.navigateTo('progetti/casa');
+await c.navigateTo('progetti/home');
 griglia.isConnected = false;
 const prima = chiamate.length;
 assert.equal(c.handleCardBack(), false, 'Indietro mangiato da una griglia staccata');
-assert.equal(c.currentDir, 'progetti/casa');
+assert.equal(c.currentDir, 'progetti/home');
 assert.equal(chiamate.length, prima, 'letta una cartella per una griglia staccata');
 """)
 
@@ -457,10 +457,10 @@ class C {
         + back
         + """
 }
-assert.equal(new C('cervello').handleBack(), false);
-assert.equal(new C('mani').handleBack(), false);
+assert.equal(new C('brain').handleBack(), false);
+assert.equal(new C('hands').handleBack(), false);
 assert.equal(girate, 0, 'la pressione e\\' andata al gestore file fuori da Memoria');
-assert.equal(new C('memoria').handleBack(), true);
+assert.equal(new C('memory').handleBack(), true);
 assert.equal(girate, 1);
 """
     )

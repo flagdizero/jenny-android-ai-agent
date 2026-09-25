@@ -1,7 +1,7 @@
 /** Session Manager — quale conversazione è aperta: attach + caricamento thread.
  *
  *  La chiave *è* l'indirizzo della conversazione, e ne esistono due forme:
- *  `websocket:default` per la chat personale e `project:<nome>` per un progetto.
+ *  `websocket:default` per la chat personale e `project:<name>` per un progetto.
  *  Il gateway la usa per due cose diverse — la sessione che Jenny rilegge e il
  *  thread che viene disegnato — e le tiene separate da sé.
  */

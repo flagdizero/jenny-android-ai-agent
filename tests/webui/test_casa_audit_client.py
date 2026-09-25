@@ -126,7 +126,7 @@ def test_nothing_in_the_flow_asks_for_a_severity() -> None:
 
     for lang in ("it", "en"):
         data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
-        assert "sev" not in data["casa"]["audit"], lang
+        assert "sev" not in data["home"]["audit"], lang
 
 
 # ── L'atterraggio in chat ───────────────────────────────────────────────────
@@ -143,7 +143,7 @@ import assert from 'node:assert/strict';
    modo in cui li riempie che il banco deve misurare. */
 const i18n = {
   locale: 'it',
-  translations: { it: { casa: { audit: __AUDIT_WORDS__ } } },
+  translations: { it: { home: { audit: __AUDIT_WORDS__ } } },
   __T__
 };
 
@@ -171,7 +171,7 @@ class Casa {
 
 
 def _run_app(script: str) -> None:
-    parole = locale("it")["casa"]["audit"]
+    parole = locale("it")["home"]["audit"]
     harness = (
         _HARNESS
         .replace("__AUDIT_WORDS__", json.dumps(parole, ensure_ascii=False))
@@ -344,7 +344,7 @@ def test_an_anchor_that_cannot_hold_is_said_before_the_comment_is_written() -> N
       scelto = 'legare a giugno';
       f.open();
       assert.equal(f.dialog.open, false, 'il foglio si e\\u2019 aperto su un\\u2019ancora ambigua');
-      assert.deepEqual(avvisi, [['casa.audit.ambiguous', 'error']]);
+      assert.deepEqual(avvisi, [['home.audit.ambiguous', 'error']]);
       scelto = 'E poi';
       f.open();
       assert.equal(f.dialog.open, true);

@@ -30,8 +30,8 @@ APP_JS = ASSETS / "mobile-app.js"
 WORKSHOP = ROOT / "jenny" / "templates" / "ui" / "workshop.html"
 
 
-def _src(nome: str) -> str:
-    return (ASSETS / nome).read_text(encoding="utf-8")
+def _src(name: str) -> str:
+    return (ASSETS / name).read_text(encoding="utf-8")
 
 
 def _cassetti() -> dict[str, dict[str, list[str]]]:
@@ -41,7 +41,7 @@ def _cassetti() -> dict[str, dict[str, list[str]]]:
     assert m, "CASSETTI non si trova piu': il meccanismo dei cassetti e' sparito"
     corpo = m.group(1)
     fuori = {}
-    for nome, dentro in re.findall(r"(\w+): \{(.*?)\n  \}", corpo, re.S):
+    for name, dentro in re.findall(r"(\w+): \{(.*?)\n  \}", corpo, re.S):
         def elenco(chiave: str, aperta: str = "[", chiusa: str = "]") -> list[str]:
             voci = re.search(rf"{chiave}: \{aperta}([^\{chiusa}]*)\{chiusa}", dentro)
             return re.findall(r"'([^']+)'", voci.group(1)) if voci else []
@@ -50,7 +50,7 @@ def _cassetti() -> dict[str, dict[str, list[str]]]:
         # scheda «I file veri» si disegna da se'. Un meccanismo generico per
         # una riga era piu' codice della cosa che reggeva. Chi chiede «questa
         # vista si apre da qualche parte?» guarda ora il `data-porta` nel DOM.
-        fuori[nome] = {"sezioni": elenco("sezioni")}
+        fuori[name] = {"sezioni": elenco("sezioni")}
     assert fuori, "la tabella e' vuota"
     return fuori
 
@@ -152,8 +152,8 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     # file. Senza questa terza fonte il banco chiederebbe di rimettere una porta
     # per una schermata che si raggiunge gia'.
     gesti = set()
-    for nome in ("mobile-settings.js", "mobile-workspace.js", "mobile-chat.js"):
-        gesti |= set(re.findall(r"switchMode\('([a-z]+)'", _src(nome)))
+    for name in ("mobile-settings.js", "mobile-workspace.js", "mobile-chat.js"):
+        gesti |= set(re.findall(r"switchMode\('([a-z]+)'", _src(name)))
     cassetti = set(_cassetti())
     # `settings` e' il contenitore dei tre cassetti; `onboarding` si apre da
     # dentro, al primo avvio. `wiki` era esente perche' «si apre dal grafo»:
@@ -189,7 +189,7 @@ def test_the_three_drawers_share_one_screen_and_one_fetch() -> None:
     stato che invecchiano mentre guardi la terza."""
     app = _src("mobile-app.js")
     assert "const settings = () => (this._settings ||= new SettingsController());" in app
-    for modo in ("settings", "cervello", "mani", "memoria"):
+    for modo in ("settings", "brain", "hands", "memory"):
         assert re.search(rf"{modo}:\s+settings,", app), f"«{modo}» non condivide il controller"
     # E il cassetto va detto **prima** di activate(), o il primo frame mostra
     # quello di prima.
@@ -224,8 +224,8 @@ def test_no_drawer_row_leads_out_of_its_drawer_any_more() -> None:
 CASA = ASSETS  # gli stessi file: le due interfacce condividono `shared/`
 
 
-def _casa(nome: str) -> str:
-    return (ASSETS / nome).read_text(encoding="utf-8")
+def _home(name: str) -> str:
+    return (ASSETS / name).read_text(encoding="utf-8")
 
 
 def test_the_encrypted_backup_lives_in_one_place() -> None:
@@ -248,8 +248,8 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
 
     # E la casa ce li ha davvero: se un giorno sparissero di la', questo banco
     # starebbe difendendo un buco invece di un confine.
-    casa = _casa("home-backup.js")
-    assert "runExportFlow" in casa and "runImportFlow" in casa, (
+    home = _home("home-backup.js")
+    assert "runExportFlow" in home and "runImportFlow" in home, (
         "la casa non ha piu' il backup cifrato: toglierlo dall'officina lo "
         "toglierebbe dall'app"
     )
@@ -257,7 +257,7 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
     # Quel che resta di qua: la storia locale, con le sue tre manopole.
     for pezzo in ("btn-snapshot-create", "snapshot-retention", "runSnapshotRestore"):
         assert pezzo in workshop, f"la storia locale ha perso {pezzo}"
-    assert "runSnapshotRestore" not in casa, (
+    assert "runSnapshotRestore" not in home, (
         "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
     )
 
@@ -275,16 +275,16 @@ def test_choosing_the_model_lives_in_the_casa() -> None:
     for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
         assert pezzo not in workshop, f"«{pezzo}» e' tornato in officina"
 
-    casa = _casa("home-model.js")
-    assert "getProviderModels" in casa, "la casa non chiede piu' l'elenco dei modelli"
-    assert "default_provider: provider" in casa, (
+    home = _home("home-model.js")
+    assert "getProviderModels" in home, "la casa non chiede piu' l'elenco dei modelli"
+    assert "default_provider: provider" in home, (
         "la casa non salva piu' modello e marca insieme: e' il punto del redesign"
     )
     # E l'anagrafica resta **solo** di qua: la casa sostituisce una chiave, non
     # compila un endpoint.
     for campo in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
         assert campo in workshop, f"l'anagrafica ha perso {campo}"
-        assert campo not in casa, f"la casa ha preso {campo}: quello ha bisogno di un paragrafo"
+        assert campo not in home, f"la casa ha preso {campo}: quello ha bisogno di un paragrafo"
 
 
 def test_adding_a_brand_finishes_the_job() -> None:
@@ -332,8 +332,8 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
     ricostruisce la vista ma basta a far ricomparire un bottone che non apre
     niente — che e' il modo in cui questa rimozione puo' andare a meta'.
     """
-    for nome in ("mobile-wiki.js", "mobile-graph.js"):
-        assert not (ASSETS / nome).exists(), f"{nome} e' tornato"
+    for name in ("mobile-wiki.js", "mobile-graph.js"):
+        assert not (ASSETS / name).exists(), f"{name} e' tornato"
 
     for js in sorted(ASSETS.rglob("*.js")):
         if "vendor" in js.parts:
@@ -380,9 +380,9 @@ def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
             f"officina.html carica {pesante} all'avvio: si carica quando serve, "
             f"non a ogni partenza"
         )
-    casa = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
     for pesante in ("katex", "mermaid", "d3.min.js"):
-        assert pesante not in casa, f"index.html carica {pesante} all'avvio"
+        assert pesante not in home, f"index.html carica {pesante} all'avvio"
 
 
 def test_the_notebook_did_not_disappear_with_it() -> None:
@@ -393,8 +393,8 @@ def test_the_notebook_did_not_disappear_with_it() -> None:
     La casa ne ha tre pezzi — l'elenco, la mappa e il lettore — e le route del
     server che li nutrono non si sono toccate.
     """
-    for nome in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
-        assert (ASSETS / nome).exists(), f"{nome} manca: il quaderno non si apre da nessuna parte"
-    casa = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    for name in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
+        assert (ASSETS / name).exists(), f"{name} manca: il quaderno non si apre da nessuna parte"
+    home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
     for nodo in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
-        assert nodo in casa, f"{nodo} manca dalla casa"
+        assert nodo in home, f"{nodo} manca dalla casa"

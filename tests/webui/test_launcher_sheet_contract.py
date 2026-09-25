@@ -638,19 +638,19 @@ def test_the_dock_is_a_console_and_three_faculties() -> None:
     sono quattro per domanda. L'ordine del DOM e' anche quello del carosello
     (``_visibleModes``), quindi e' un contratto e non una preferenza grafica.
 
-    ``cervello``, ``mani`` e ``memoria`` non hanno una vista propria: sono tre
+    ``brain``, ``hands`` e ``memory`` non hanno una vista propria: sono tre
     cassetti di ``view-settings``, e il guscio lo sa da una tabella sola.
     """
     html = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     modes = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
-    assert modes == ["chat", "cervello", "mani", "memoria"], modes
+    assert modes == ["chat", "brain", "hands", "memory"], modes
 
     # La tabella sta accanto a `CASSETTI`, non nel guscio: serve anche
     # all'intestazione (`mobile-header.js::_mount`), e la copia che mancava li'
     # lasciava i tre cassetti senza titolo.
     assert (
-        "export const VISTA_DI = { cervello: 'settings', mani: 'settings', memoria: 'settings' };"
+        "export const VISTA_DI = { brain: 'settings', hands: 'settings', memory: 'settings' };"
         in _src("mobile-settings.js")
     )
     app = _src("mobile-app.js")
@@ -797,15 +797,15 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     #    ingresso che esiste e si vede — e qui la pretende il banco: la pagina
     #    c'e', e' una delle fisse (che non si tolgono), e il cassetto dentro e'
     #    quello vero, incorporato. Nessun gesto dal bordo basso, di nuovo.
-    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
-    assert 'data-pagina="app"' in casa, "la casa non ha piu' la pagina App"
-    pagina_app = casa.split('data-pagina="app"', 1)[1].split('data-pagina="chat"', 1)[0]
+    home = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    assert 'data-page="app"' in home, "la casa non ha piu' la pagina App"
+    pagina_app = home.split('data-page="app"', 1)[1].split('data-page="chat"', 1)[0]
     assert 'id="launcher-list"' in pagina_app, "la pagina App non contiene il cassetto"
     assert re.search(r"export const FIXED_PAGES = \['app',", _src("home-pages.js")), (
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
     assert "new LauncherController(this, { incorporato: true })" in _src("home-app.js")
-    assert "casa-drawer" not in casa, "il bottone del cassetto e' tornato accanto a una pagina"
+    assert "casa-drawer" not in home, "il bottone del cassetto e' tornato accanto a una pagina"
     assert "openLauncher" not in _src("home-pages.js"), (
         "la pista riprova ad aprire il cassetto con un gesto che il sistema "
         "non consegna"
@@ -819,8 +819,8 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     # dopo: un `split` su quel metodo lasciava fuori dal controllo metà file.
     launcher = _src("mobile-launcher.js")
     inert_body = _method(launcher, "_setBackgroundInert")
-    assert "casa-shell" in inert_body, "il punto che nomina la casa non e' piu' qui"
-    assert "casa-shell" not in launcher.replace(inert_body, "", 1), (
+    assert "home-shell" in inert_body, "il punto che nomina la casa non e' piu' qui"
+    assert "home-shell" not in launcher.replace(inert_body, "", 1), (
         "il cassetto ha imparato un id della casa fuori dall'unico punto che la nomina"
     )
 
@@ -856,7 +856,7 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
     """
     js = _src("mobile-launcher.js")
     workshop = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
-    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    home = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
     css = _src("mobile-style.css")
 
     # I campi che il cassetto nasconde a runtime, risaliti al loro nodo.
@@ -868,7 +868,7 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
         m = re.search(rf"this\.{campo}\s*=\s*document\.getElementById\('([^']+)'\)", js)
         assert m, f"non risalgo al nodo di this.{campo}"
         nodo_id = m.group(1)
-        for doc, nome in ((workshop, "workshop.html"), (casa, "index.html")):
+        for doc, name in ((workshop, "workshop.html"), (home, "index.html")):
             tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(nodo_id)}"[^>]*>', doc)
             if not tag:
                 continue
@@ -880,7 +880,7 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
                 if not re.search(r"display:\s*(?!none)", corpo):
                     continue
                 if f".{classe}[hidden]" not in css:
-                    guasti.append(f"{classe} ({nome})")
+                    guasti.append(f"{classe} ({name})")
 
     assert not guasti, (
         f"il JS li nasconde ma il CSS li riaccende: {sorted(set(guasti))} "
@@ -905,7 +905,7 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
     scritta da qualcuno**: dal cassetto, che ora ha la sua passata, o dal
     guscio. Una chiave che nessuno scrive è un segnaposto che resta a schermo.
     """
-    casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    home = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
     # I moduli che possiedono dei nodi nel markup della casa. `apps-actions.js`
     # e' entrato nell'elenco il 21/09/2026 con i due fogli per-app, che sono
     # arrivati dall'officina portandosi dietro le sue parole.
@@ -914,7 +914,7 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
         + _src("shared/apps-actions.js")
     )
 
-    chiavi = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', casa))
+    chiavi = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', home))
     assert chiavi, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"
 
     orfane = [k for k in sorted(chiavi) if f"'{k}'" not in scrittori]

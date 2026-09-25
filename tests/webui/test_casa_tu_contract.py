@@ -49,12 +49,12 @@ def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
     """
     html = INDEX.read_text(encoding="utf-8")
     assert 'id="casa-door"' not in html, "l'avatar e' tornato in testa"
-    pagina = html.split('data-pagina="settings"', 1)[1]
-    assert '<section class="home-you" id="home-you">' in pagina, "«Tu e Jenny» non e' nella sua pagina"
+    page = html.split('data-page="settings"', 1)[1]
+    assert '<section class="home-you" id="home-you">' in page, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
     assert "this.door" not in app
-    assert "this.pagine.registra('settings', { accendi: () => this._apriImpostazioni() });" in app
-    tu_parole = json.loads((I18N / "it.json").read_text(encoding="utf-8"))["casa"]["tu"]
+    assert "this.homePages.registra('settings', { accendi: () => this._apriImpostazioni() });" in app
+    tu_parole = json.loads((I18N / "it.json").read_text(encoding="utf-8"))["home"]["you"]
     assert "avatar" not in tu_parole["workshopHint"], "il suggerimento parla di un bottone che non c'e'"
 
 
@@ -64,15 +64,15 @@ def test_the_workshop_card_is_the_other_way_in() -> None:
     La stanza non sa come si apre l'officina — quello lo sa il guscio, che ha
     la chiave di sessione da passarle. La scheda chiama indietro.
     """
-    tu = TU_JS.read_text(encoding="utf-8")
-    assert "getElementById('casa-workshop')" in tu and "onWorkshop?.()" in tu, (
+    you = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('home-workshop')" in you and "onWorkshop?.()" in you, (
         "la scheda dell'officina non chiama piu' indietro"
     )
     assert "onWorkshop: () => this._openInWorkshop(null)," in _app(), (
         "il guscio non passa piu' la porta dell'officina alla stanza"
     )
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-workshop", "casa-workshop-name", "casa-workshop-hint"):
+    for el_id in ("home-workshop", "home-workshop-name", "home-workshop-hint"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
 
 
@@ -100,8 +100,8 @@ def test_the_room_of_her_is_not_the_sprite_of_her() -> None:
     `data-view` avrebbe smesso di parlare solo di stanze."""
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
-    assert '<section class="casa-jenny-room" id="casa-jenny-room">' in html
-    assert ".casa-shell[data-view='jenny'] .casa-jenny-room" in css
+    assert '<section class="home-jenny-room" id="home-jenny-room">' in html
+    assert ".home-shell[data-view='jenny'] .home-jenny-room" in css
     assert not re.search(r"\[data-view='jenny'\] \.(?:home-jenny\b(?!-room)|jenny-duo)", css), (
         "la regola della stanza morde lo sprite di lei"
     )
@@ -111,11 +111,11 @@ def test_the_theme_is_chosen_where_it_is_seen() -> None:
     """Il tema non apre una stanza: si tocca e c'e'. Le pastiglie stanno nella
     pagina, e il tocco le trova per attributo — non per posizione, che cambia
     col numero dei temi."""
-    tu = TU_JS.read_text(encoding="utf-8")
-    assert "closest('[data-theme]')" in tu, "la striscia non riconosce piu' la pastiglia toccata"
-    assert "setTheme(id)" in tu, "il tema non viene piu' applicato"
+    you = TU_JS.read_text(encoding="utf-8")
+    assert "closest('[data-theme]')" in you, "la striscia non riconosce piu' la pastiglia toccata"
+    assert "setTheme(id)" in you, "il tema non viene piu' applicato"
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-themes", "casa-theme-label", "casa-theme-value", "casa-theme-desc"):
+    for el_id in ("home-themes", "home-theme-label", "home-theme-value", "home-theme-desc"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
 
 
@@ -124,7 +124,7 @@ def test_the_theme_is_chosen_where_it_is_seen() -> None:
 
 def _rooms_in_css() -> set[str]:
     css = CSS.read_text(encoding="utf-8")
-    return set(re.findall(r"\.casa-shell\[data-view='(\w+)'\]", css))
+    return set(re.findall(r"\.home-shell\[data-view='(\w+)'\]", css))
 
 
 def _rooms_in_back_chain() -> dict[str, str]:
@@ -185,29 +185,29 @@ def test_the_fourth_room_speaks_both_languages() -> None:
     parole = {}
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        casa = data["casa"]
+        home = data["home"]
         # Il titolo della stanza non c'e' piu': dal 23/09 la testata porta il
         # nome della pagina (361a129).
-        assert casa["tu"].get("workshopHint", "").strip(), f"casa.tu.workshopHint manca in {locale}.json"
+        assert home["you"].get("workshopHint", "").strip(), f"casa.you.workshopHint manca in {locale}.json"
         # La versione ha cambiato posto: era una riga muta in fondo alla
         # pagina, adesso e' il valore della riga che apre gli aggiornamenti.
         for key in ("title", "current", "waiting", "upToDate"):
-            assert casa["updates"].get(key, "").strip(), f"casa.updates.{key} manca in {locale}.json"
-        assert "{version}" in casa["updates"]["current"], "la riga non interpola la versione"
-        parole[locale] = casa["tu"]
+            assert home["updates"].get(key, "").strip(), f"home.updates.{key} manca in {locale}.json"
+        assert "{version}" in home["updates"]["current"], "la riga non interpola la versione"
+        parole[locale] = home["you"]
     assert parole["it"] != parole["en"], "una delle due lingue non e' stata tradotta"
 
 
 def test_the_eyelet_has_a_phrase_for_every_landing() -> None:
     """L'occhiello nomina la stanza in cui si atterra, e le destinazioni sono
-    quelle della catena: una frase che manca lascia a schermo `casa.back.tu`."""
+    quelle della catena: una frase che manca lascia a schermo `home.back.you`."""
     destinazioni = set(_rooms_in_back_chain().values())
     assert destinazioni, "la catena non porta piu' da nessuna parte"
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        frasi = data["casa"]["back"]
+        frasi = data["home"]["back"]
         for dove in destinazioni:
-            assert frasi.get(dove, "").strip(), f"casa.back.{dove} manca in {locale}.json"
+            assert frasi.get(dove, "").strip(), f"home.back.{dove} manca in {locale}.json"
         assert len(set(frasi.values())) == len(frasi), (
             "due destinazioni con la stessa frase: l'occhiello ha smesso di dire dove porta"
         )
@@ -252,10 +252,10 @@ def test_the_room_says_what_happens_to_what_you_write() -> None:
     campo di testo accanto a «Jenny» promette di poter riscrivere lei."""
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        jenny = data["casa"]["jenny"]
+        jenny = data["home"]["jenny"]
         for key in ("rules", "rulesHint", "rulesPlaceholder", "rulesSave",
                     "rulesSaved", "rulesFailed"):
-            assert jenny.get(key, "").strip(), f"casa.jenny.{key} manca in {locale}.json"
+            assert jenny.get(key, "").strip(), f"home.jenny.{key} manca in {locale}.json"
 
 
 # ── Lei sta dietro, e le schede la coprono davvero ──────────────────────────
@@ -300,12 +300,12 @@ def test_she_is_on_top_of_everything_in_the_house() -> None:
     meta': il fondo delle stanze e' alto quanto lei, quindi l'ultima riga si
     porta sopra di lei **scorrendo**, come fa la chat con l'ultimo messaggio.
     """
-    casa = CSS.read_text(encoding="utf-8")
+    home = CSS.read_text(encoding="utf-8")
     temi = TEMI.read_text(encoding="utf-8")
 
     # La casa non dichiara livelli: nemmeno il suo, che sta nell'altro foglio.
-    assert not css_levels.levels(casa), (
-        f"home-style.css dichiara dei livelli: {css_levels.levels(casa)}. Il livello "
+    assert not css_levels.levels(home), (
+        f"home-style.css dichiara dei livelli: {css_levels.levels(home)}. Il livello "
         f"di Jenny e' quello di `.jenny-duo` in mobile-style.css; qualunque altro "
         f"deve stare sotto il suo, e va scritto perche'"
     )
@@ -316,7 +316,7 @@ def test_she_is_on_top_of_everything_in_the_house() -> None:
     # Nessuna regola la abbassa in un caso particolare (era `:root.launcher-open
     # .jenny-duo { z-index: 98 }`, sotto lo scrim del cassetto).
     ritocchi = [
-        (sel, z) for sel, z in css_levels.levels(temi + casa)
+        (sel, z) for sel, z in css_levels.levels(temi + home)
         if "jenny-duo" in css_levels.key_names(sel) and sel != ".jenny-duo"
     ]
     assert not ritocchi, f"qualcuno cambia il suo livello in un caso: {ritocchi}"
@@ -326,19 +326,19 @@ def test_she_is_on_top_of_everything_in_the_house() -> None:
         (sel, z) for sel, z in css_levels.levels(temi)
         if z >= lei
         and sel != ".jenny-duo"
-        and all(nome in parole for nome in css_levels.key_names(sel))
+        and all(name in parole for name in css_levels.key_names(sel))
     ]
     assert not sopra, (
         f"regole di mobile-style.css che nella casa le passano davanti: {sopra}. "
         f"Il suo livello e' {lei}: una cosa che la casa puo' mostrare sta sotto"
     )
     # Il banco morde: mini-app e lightbox sono davvero parole della casa.
-    for nome in ("app-frame-overlay", "image-lightbox", "jenny-duo"):
-        assert nome in parole, f"{nome} non risulta piu' nel DOM della casa"
+    for name in ("app-frame-overlay", "image-lightbox", "jenny-duo"):
+        assert name in parole, f"{name} non risulta piu' nel DOM della casa"
 
     # E il fondo che le lascia il posto: e' quello che rende superfluo
     # coprirla, quindi toglierlo riaprirebbe il difetto per cui era nata.
-    scroll = _rule(casa, ".casa-tu-scroll")
+    scroll = _rule(home, ".home-you-scroll")
     assert "--jenny-art-h" in scroll, (
         "il fondo delle stanze non e' piu' alto quanto lei: l'ultima riga non "
         "si puo' piu' portare sopra di lei scorrendo"
@@ -350,7 +350,7 @@ def test_a_card_that_has_to_cover_her_is_not_see_through() -> None:
     la lasciava vedere **attraverso** — «osserva, regola, ripara» letto sopra la
     sua faccia. Una scheda che deve coprire dev'essere opaca."""
     css = CSS.read_text(encoding="utf-8")
-    for selettore in (".casa-workshop", ".casa-rows", ".casa-card"):
+    for selettore in (".home-workshop", ".home-rows", ".home-card"):
         corpo = _rule(css, selettore)
         sfondo = re.search(r"\n  background: ([^;]+);", corpo)
         assert sfondo, f"{selettore} non dichiara piu' uno sfondo"
@@ -362,7 +362,7 @@ def test_a_card_that_has_to_cover_her_is_not_see_through() -> None:
 def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> None:
     """Un nome di classe vuol dire **una** cosa.
 
-    `casa-block` era gia' la bolla di un messaggio, e chiamando cosi' le schede
+    `home-block` era gia' la bolla di un messaggio, e chiamando cosi' le schede
     di questa pagina le loro regole sono atterrate su ogni riga della
     conversazione: i messaggi sono diventati schede con bordo e sfondo, e lo
     `z-index` che serviva a coprire Jenny l'ha mandata **dietro la chat**.
@@ -380,7 +380,7 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
 
     html = INDEX.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="(?:home-you|casa-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
+        r'<section class="(?:home-you|home-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
     )
     assert len(stanze) == 4, f"le quattro stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
@@ -418,7 +418,7 @@ def test_the_workshop_card_is_inverted() -> None:
     semi-trasparente e Jenny si vedeva attraverso — risolta pero' rendendola
     identica a tutte le altre schede.
     """
-    corpo = _rule(CSS.read_text(encoding="utf-8"), ".casa-workshop")
+    corpo = _rule(CSS.read_text(encoding="utf-8"), ".home-workshop")
     sfondo = re.search(r"\n  background: ([^;]+);", corpo)
     testo = re.search(r"\n  color: ([^;]+);", corpo)
     assert sfondo and "var(--text)" == sfondo.group(1).strip(), (
@@ -428,7 +428,7 @@ def test_the_workshop_card_is_inverted() -> None:
         "fondo invertito e testo no: la scheda e' illeggibile"
     )
 
-    icona = re.search(r"\.casa-workshop > \.ti-tool \{([^}]*)\}", CSS.read_text(encoding="utf-8"))
+    icona = re.search(r"\.home-workshop > \.ti-tool \{([^}]*)\}", CSS.read_text(encoding="utf-8"))
     assert icona and "var(--accent-on-text)" in icona.group(1), (
         "l'icona e' tornata a `--accent`: su Chanel e su Fumetto l'accento "
         "**e'** il testo, cioe' esattamente il fondo di questa scheda"
@@ -443,7 +443,7 @@ def test_pressing_the_workshop_card_does_not_punch_a_hole_in_it() -> None:
     opposto — bianca nei temi scuri, dove la scheda invertita e' chiara.
     """
     css = CSS.read_text(encoding="utf-8")
-    premuta = _rule(css, ".casa-workshop:active")
+    premuta = _rule(css, ".home-workshop:active")
     assert premuta.strip(), "la scheda dell'officina non risponde piu' al tocco"
     assert "--overlay" not in premuta, (
         "lo stato premuto e' tornato traslucido: lei si vede attraverso"
@@ -476,8 +476,8 @@ def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> N
     """
     css = TEMI.read_text(encoding="utf-8")
 
-    def dichiara(corpo: str, nome: str) -> str | None:
-        m = re.search(rf"--{nome}:\s*([^;]+);", corpo)
+    def dichiara(corpo: str, name: str) -> str | None:
+        m = re.search(rf"--{name}:\s*([^;]+);", corpo)
         return m.group(1).strip() if m else None
 
     # Le regole in ordine, col loro elenco di selettori: una sola regola di
@@ -498,14 +498,14 @@ def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> N
         for selettori, corpo in regole:  # in ordine: l'ultimo che parla vince
             if not (selettori & vale):
                 continue
-            for nome in valori:
-                if (v := dichiara(corpo, nome)) is not None:
-                    valori[nome] = v
+            for name in valori:
+                if (v := dichiara(corpo, name)) is not None:
+                    valori[name] = v
         assert valori["accent-on-text"], f"{tema}: `--accent-on-text` non arriva"
         # Una sola indirezione, che e' tutto cio' che il foglio usa.
         risolto = valori["accent-on-text"]
-        for nome in ("accent", "text", "bg"):
-            risolto = risolto.replace(f"var(--{nome})", valori[nome] or "")
+        for name in ("accent", "text", "bg"):
+            risolto = risolto.replace(f"var(--{name})", valori[name] or "")
         rapporto = _contrasto(risolto, valori["text"])
         assert rapporto >= 3.0, (
             f"tema «{tema}»: l'icona dell'officina e' {risolto} su un fondo "
@@ -522,10 +522,10 @@ def test_who_answers_is_a_row_that_carries_its_value() -> None:
     venti e i trenta caratteri e in quella riga finirebbe troncato — l'errore
     gia' pagato una volta sulle pastiglie dei temi."""
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-row-model", "casa-model-label", "casa-model-value"):
+    for el_id in ("home-row-model", "home-model-label", "home-model-value"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
-    tu = TU_JS.read_text(encoding="utf-8")
-    assert "getElementById('casa-row-model')" in tu and "onModel?.()" in tu, (
+    you = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('home-row-model')" in you and "onModel?.()" in you, (
         "la riga non chiama piu' indietro"
     )
     assert "onModel: () => this.openModel()," in _app(), (
@@ -540,7 +540,7 @@ def test_the_room_of_who_answers_starts_with_its_notes_closed() -> None:
     (`test_casa_model_client.py`), quindi se il markup cambiasse il banco
     misurerebbe una stanza che non esiste."""
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-key-row", "casa-key-edit", "casa-models-note", "casa-model-restart"):
+    for el_id in ("home-key-row", "home-key-edit", "home-models-note", "home-model-restart"):
         riga = re.search(rf'<[^>]*id="{el_id}"[^>]*>', html)
         assert riga, f"{el_id} non esiste nel guscio"
         assert " hidden" in riga.group(0), f"{el_id} non nasce piu' chiuso"
@@ -552,7 +552,7 @@ def test_the_key_field_never_carries_a_key() -> None:
     da nessuno: un `value` nel markup, o un autocomplete acceso, rimetterebbe
     dentro qualcosa che poi verrebbe salvato al posto della chiave buona."""
     html = INDEX.read_text(encoding="utf-8")
-    campo = re.search(r'<input[^>]*id="casa-key-input"[^>]*>', html)
+    campo = re.search(r'<input[^>]*id="home-key-input"[^>]*>', html)
     assert campo, "il campo della chiave non esiste"
     assert 'type="password"' in campo.group(0), "la chiave si legge a schermo mentre la incolli"
     assert 'autocomplete="off"' in campo.group(0), "il campo si fa ricordare dal browser"
@@ -568,7 +568,7 @@ def test_the_key_field_never_carries_a_key() -> None:
 def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     """`[hidden]` sta nel foglio del browser: una classe con `display` lo scavalca.
 
-    La casa quel difetto l'ha gia' pagato due volte — `.casa-back` porta il
+    La casa quel difetto l'ha gia' pagato due volte — `.home-back` porta il
     suo `[hidden]` con un commento, e cosi' la riga della versione finche' c'e' stata —
     e una terza volta con la riga della chiave, che si vedeva senza nessuna
     marca da guardare. Un caso per volta e' una riga di CSS; il banco invece
@@ -577,7 +577,7 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="(?:home-you|casa-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
+        r'<section class="(?:home-you|home-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
     )
     assert stanze, "le stanze non si trovano piu'"
 
@@ -607,14 +607,14 @@ def test_the_updates_row_carries_the_version() -> None:
     basta non e' un'impostazione: e' un'etichetta. Adesso apre la stanza che
     quel numero puo' cambiarlo."""
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-row-updates", "casa-updates-label", "casa-updates-value"):
+    for el_id in ("home-row-updates", "home-updates-label", "home-updates-value"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
     assert 'id="casa-version"' not in html, (
         "la riga muta della versione e' ancora li': due posti che dicono la "
         "stessa cosa, e uno dei due si dimentica"
     )
-    tu = TU_JS.read_text(encoding="utf-8")
-    assert "getElementById('casa-row-updates')" in tu and "onUpdates?.()" in tu
+    you = TU_JS.read_text(encoding="utf-8")
+    assert "getElementById('home-row-updates')" in you and "onUpdates?.()" in you
     assert "onUpdates: () => this.openUpdates()," in _app()
 
 
@@ -629,10 +629,10 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
     non per essere usato due volte.
     """
     flusso = (ASSETS / "shared" / "update-flow.js").read_text(encoding="utf-8")
-    casa = (ASSETS / "home-updates.js").read_text(encoding="utf-8")
+    home = (ASSETS / "home-updates.js").read_text(encoding="utf-8")
     workshop = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
-    assert "update-flow.js" in casa, "la casa non usa piu' il flusso condiviso"
+    assert "update-flow.js" in home, "la casa non usa piu' il flusso condiviso"
     assert "update-flow.js" not in workshop, (
         "l'officina ha ripreso il giro degli aggiornamenti: e' in casa"
     )
@@ -640,21 +640,21 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
         assert pezzo not in workshop, f"«{pezzo}» e' tornato in officina"
 
     # Le rotte si chiamano da un posto solo.
-    for vista, sorgente in (("la casa", casa), ("l'workshop", workshop)):
+    for vista, sorgente in (("la casa", home), ("l'workshop", workshop)):
         rotte = re.findall(r"/api/updates/\w+", sorgente)
         assert not rotte, f"{vista} parla da sola con {sorted(set(rotte))}"
     assert re.findall(r"/api/updates/\w+", flusso), "il flusso non chiama piu' nessuna rotta"
 
     # E la tabella delle fasi resta una.
     assert flusso.count("phaseDownloading") == 1
-    assert "phaseDownloading" not in casa and "phaseDownloading" not in workshop
+    assert "phaseDownloading" not in home and "phaseDownloading" not in workshop
 
 
 def test_the_backup_row_carries_the_date_that_did_not_exist() -> None:
     """«Ultimo backup: ieri alle 23:10» non aveva nessuna fonte: non c'era un
     `last_backup` in nessun file. Adesso c'e', e arriva dal payload."""
     html = INDEX.read_text(encoding="utf-8")
-    for el_id in ("casa-row-backup", "casa-backup-label", "casa-backup-value"):
+    for el_id in ("home-row-backup", "home-backup-label", "home-backup-value"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
     assert "onBackup: () => this.openBackup()," in _app()
     assert "this.backupRoom.setBackup(data?.backup || null);" in _app(), (
@@ -685,10 +685,10 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
     stesso telefono. La stanza le distingue con due frasi diverse."""
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        backup = data["casa"]["backup"]
+        backup = data["home"]["backup"]
         for key in ("title", "never", "neverLong", "last", "export", "import",
                     "exportHint", "importHint", "snapshots", "snapshotsOff"):
-            assert backup.get(key, "").strip(), f"casa.backup.{key} manca in {locale}.json"
+            assert backup.get(key, "").strip(), f"home.backup.{key} manca in {locale}.json"
         assert "{when}" in backup["last"], "la riga non interpola la data"
         assert backup["snapshots"] != backup["snapshotsOff"], (
             "la storia locale accesa e spenta si leggono uguali"

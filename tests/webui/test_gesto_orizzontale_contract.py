@@ -91,7 +91,7 @@ def test_the_module_does_not_know_what_it_moves() -> None:
         "querySelector",
         "view-",
         "dock-item",
-        "casa-",
+        "home-",
         "switchMode",
     ]
     trovati = [t for t in proibiti if t in src]

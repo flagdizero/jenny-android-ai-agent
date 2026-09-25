@@ -130,12 +130,12 @@ def test_never_having_made_one_is_said_out_loud() -> None:
     """E' l'informazione piu' utile che quella riga possa portare, ed e' anche
     l'unico momento in cui serve leggerla."""
     _run_js("""
-      assert.equal(backupValue(null), i18n.t('casa.backup.never'));
-      assert.equal(backupValue({ last_export_at: 0 }), i18n.t('casa.backup.never'));
+      assert.equal(backupValue(null), i18n.t('home.backup.never'));
+      assert.equal(backupValue({ last_export_at: 0 }), i18n.t('home.backup.never'));
 
       const s = room(null);
-      assert.equal(nodi['casa-backup-when'].textContent, i18n.t('casa.backup.neverLong'));
-      assert.ok(nodi['casa-backup-when'].classList.contains('is-warn'),
+      assert.equal(nodi['home-backup-when'].textContent, i18n.t('home.backup.neverLong'));
+      assert.ok(nodi['home-backup-when'].classList.contains('is-warn'),
         'mai fatto non si distingue da un backup di ieri');
     """)
 
@@ -155,8 +155,8 @@ def test_the_row_says_when_like_a_person_would() -> None:
         backupValue({ last_export_at: treGiorni }));
 
       const s = room({ last_export_at: adesso });
-      assert.ok(nodi['casa-backup-when'].textContent.includes('oggi alle '));
-      assert.equal(nodi['casa-backup-when'].classList.contains('is-warn'), false);
+      assert.ok(nodi['home-backup-when'].textContent.includes('oggi alle '));
+      assert.equal(nodi['home-backup-when'].classList.contains('is-warn'), false);
     """)
 
 
@@ -169,9 +169,9 @@ def test_a_cancelled_export_does_not_move_the_row() -> None:
       await s.runExport();
 
       assert.deepEqual(fatti, ['export']);
-      assert.equal(s.value(), i18n.t('casa.backup.never'), 'la riga si e mossa su un annullamento');
+      assert.equal(s.value(), i18n.t('home.backup.never'), 'la riga si e mossa su un annullamento');
       assert.deepEqual(avvisi, [], 'ha avvisato «Tu e Jenny» di un backup che non c e');
-      assert.equal(nodi['casa-backup-export'].disabled, false, 'il bottone e rimasto spento');
+      assert.equal(nodi['home-backup-export'].disabled, false, 'il bottone e rimasto spento');
     """)
 
 
@@ -182,7 +182,7 @@ def test_a_finished_export_moves_the_row_at_once() -> None:
       const s = room(null);
       await s.runExport();
 
-      assert.notEqual(s.value(), i18n.t('casa.backup.never'));
+      assert.notEqual(s.value(), i18n.t('home.backup.never'));
       assert.ok(s.value().startsWith('oggi alle '), s.value());
       assert.deepEqual(avvisi, ['riga riscritta']);
     """)
@@ -195,11 +195,11 @@ def test_a_second_tap_while_exporting_does_nothing() -> None:
     _run_js("""
       const s = room(null);
       const primo = s.runExport();               // non atteso: e' ancora in volo
-      assert.equal(nodi['casa-backup-export'].disabled, true, 'si puo premere di nuovo');
+      assert.equal(nodi['home-backup-export'].disabled, true, 'si puo premere di nuovo');
       await s.runExport();                       // il secondo tocco
       await primo;
       assert.deepEqual(fatti, ['export'], 'due giri di export insieme: ' + fatti.join(','));
-      assert.equal(nodi['casa-backup-export'].disabled, false, 'il bottone e rimasto spento');
+      assert.equal(nodi['home-backup-export'].disabled, false, 'il bottone e rimasto spento');
     """)
 
 
@@ -211,14 +211,14 @@ def test_without_the_native_bridge_the_buttons_are_not_there() -> None:
       nativoPresente = false;
       const s = new HomeBackup({});
       s.setBackup(null);
-      assert.equal(nodi['casa-backup-export'].hidden, true);
-      assert.equal(nodi['casa-backup-import'].hidden, true);
+      assert.equal(nodi['home-backup-export'].hidden, true);
+      assert.equal(nodi['home-backup-import'].hidden, true);
       /* Una nota senza il suo bottone promette un gesto che non c'e': la
          scheda del ripristino sparisce tutta (visto sul rig). */
-      assert.equal(nodi['casa-backup-import-card'].hidden, true);
-      const nota = nodi['casa-backup-export-note'].textContent;
+      assert.equal(nodi['home-backup-import-card'].hidden, true);
+      const nota = nodi['home-backup-export-note'].textContent;
       assert.ok(nota.includes(i18n.t('backup.androidOnly')), 'non dice perche non si puo');
-      assert.ok(nota.includes(i18n.t('casa.backup.exportHint')),
+      assert.ok(nota.includes(i18n.t('home.backup.exportHint')),
         'il motivo ha mangiato la spiegazione di cosa sia un backup');
     """)
 
@@ -229,13 +229,13 @@ def test_the_local_history_is_told_apart_from_a_backup() -> None:
     telefono, quindi di un telefono perso non salva niente."""
     _run_js("""
       room({ snapshots_enabled: true });
-      const accesa = nodi['casa-backup-snapshots'].textContent;
-      assert.equal(accesa, i18n.t('casa.backup.snapshots'));
+      const accesa = nodi['home-backup-snapshots'].textContent;
+      assert.equal(accesa, i18n.t('home.backup.snapshots'));
       assert.ok(accesa.length > 40, 'la frase non spiega niente');
 
       room({ snapshots_enabled: false });
-      assert.equal(nodi['casa-backup-snapshots'].textContent,
-                   i18n.t('casa.backup.snapshotsOff'));
-      assert.notEqual(i18n.t('casa.backup.snapshots'), i18n.t('casa.backup.snapshotsOff'),
+      assert.equal(nodi['home-backup-snapshots'].textContent,
+                   i18n.t('home.backup.snapshotsOff'));
+      assert.notEqual(i18n.t('home.backup.snapshots'), i18n.t('home.backup.snapshotsOff'),
         'spenta e accesa si leggono uguali');
     """)

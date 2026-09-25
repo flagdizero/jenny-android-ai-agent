@@ -79,11 +79,11 @@ export function offsetsIn(raw, selected) {
  *  sola, anche: un titolo che contiene «{quote}» resta com'e'.
  */
 export function messaggioSegnalazione({ title, quote, comment, id }) {
-  const testa = i18n.t('casa.audit.msgHead', {
+  const testa = i18n.t('home.audit.msgHead', {
     page: String(title || ''),
     quote: String(quote || '').trim(),
   });
-  const coda = id ? `\n(${i18n.t('casa.audit.msgRef')} ${id})` : '';
+  const coda = id ? `\n(${i18n.t('home.audit.msgRef')} ${id})` : '';
   return `${testa}\n${String(comment || '').trim()}${coda}`;
 }
 
@@ -93,14 +93,14 @@ export class HomeAudit {
     /** Chi porta la segnalazione in chat. Sta fuori perche' questa classe non
      *  sa niente di stanze ne' di sessioni: sa solo che e' stata depositata. */
     this.onFiled = null;
-    this.barEl = document.getElementById('casa-sel-bar');
-    this.openBtn = document.getElementById('casa-sel-report');
-    this.dialog = document.getElementById('casa-audit-dialog');
-    this.quoteEl = document.getElementById('casa-audit-quote');
-    this.commentEl = document.getElementById('casa-audit-comment');
-    this.sendBtn = document.getElementById('casa-audit-send');
-    this.cancelBtn = document.getElementById('casa-audit-cancel');
-    this.titleEl = document.getElementById('casa-audit-title');
+    this.barEl = document.getElementById('home-sel-bar');
+    this.openBtn = document.getElementById('home-sel-report');
+    this.dialog = document.getElementById('home-audit-dialog');
+    this.quoteEl = document.getElementById('home-audit-quote');
+    this.commentEl = document.getElementById('home-audit-comment');
+    this.sendBtn = document.getElementById('home-audit-send');
+    this.cancelBtn = document.getElementById('home-audit-cancel');
+    this.titleEl = document.getElementById('home-audit-title');
     /** Il testo su cui si e' aperto il foglio: la selezione sparisce appena il
      *  dialogo prende il fuoco, quindi va copiata adesso. */
     this._selected = '';
@@ -123,11 +123,11 @@ export class HomeAudit {
   }
 
   applyTranslations() {
-    if (this.openBtn) this.openBtn.textContent = i18n.t('casa.audit.report');
-    if (this.titleEl) this.titleEl.textContent = i18n.t('casa.audit.title');
-    if (this.sendBtn) this.sendBtn.textContent = i18n.t('casa.audit.send');
-    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('casa.audit.cancel');
-    if (this.commentEl) this.commentEl.placeholder = i18n.t('casa.audit.placeholder');
+    if (this.openBtn) this.openBtn.textContent = i18n.t('home.audit.report');
+    if (this.titleEl) this.titleEl.textContent = i18n.t('home.audit.title');
+    if (this.sendBtn) this.sendBtn.textContent = i18n.t('home.audit.send');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.audit.cancel');
+    if (this.commentEl) this.commentEl.placeholder = i18n.t('home.audit.placeholder');
   }
 
   /** Apre il foglio sul testo scelto.
@@ -141,7 +141,7 @@ export class HomeAudit {
     if (!selected.trim()) return;
     const spot = offsetsIn(this.reader?.raw, selected);
     if (!spot.ok) {
-      showToast(i18n.t(`casa.audit.${spot.reason}`), 'error');
+      showToast(i18n.t(`home.audit.${spot.reason}`), 'error');
       return;
     }
     this._selected = selected;
@@ -171,12 +171,12 @@ export class HomeAudit {
   async _send() {
     const comment = (this.commentEl?.value || '').trim();
     if (!comment) {
-      showToast(i18n.t('casa.audit.needComment'), 'info');
+      showToast(i18n.t('home.audit.needComment'), 'info');
       return;
     }
     const spot = offsetsIn(this.reader?.raw, this._selected);
     if (!spot.ok) {
-      showToast(i18n.t(`casa.audit.${spot.reason}`), 'error');
+      showToast(i18n.t(`home.audit.${spot.reason}`), 'error');
       return;
     }
     let creata;
@@ -190,7 +190,7 @@ export class HomeAudit {
       });
     } catch (err) {
       console.warn('casa.audit: report not filed', err);
-      showToast(i18n.t('casa.audit.failed'), 'error');
+      showToast(i18n.t('home.audit.failed'), 'error');
       return;
     }
     this.dialog?.close();

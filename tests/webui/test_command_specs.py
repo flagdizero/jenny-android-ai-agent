@@ -30,7 +30,7 @@ _TABLER_CSS = (
 
 def _tabler_icon_names() -> set[str]:
     css = _TABLER_CSS.read_text(encoding="utf-8")
-    # Le classi del webfont sono `.ti-<nome>:before{content:"\\xxxx"}`.
+    # Le classi del webfont sono `.ti-<name>:before{content:"\\xxxx"}`.
     return set(re.findall(r"\.ti-([a-z0-9-]+):before", css))
 
 

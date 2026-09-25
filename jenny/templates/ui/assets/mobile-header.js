@@ -18,14 +18,14 @@ import { VISTA_DI, elementoTitolo } from './mobile-settings.js';
  *  si carica.** Il pill e' l'unica azione dell'officina che porta una parola
  *  visibile invece di una sola icona, quindi e' anche l'unica in cui una
  *  traduzione letta troppo presto si vede a schermo — e infatti si e' vista:
- *  «officina.casaPill» scritto per esteso dentro il bottone.
+ *  «officina.homePill» scritto per esteso dentro il bottone.
  */
 function pillCasa() {
   return {
     icon: 'ti-home',
-    title: i18n.t('casa.backHome'),
-    action: 'go-casa',
-    pill: i18n.t('workshop.casaPill'),
+    title: i18n.t('home.backHome'),
+    action: 'go-home',
+    pill: i18n.t('workshop.homePill'),
   };
 }
 
@@ -36,11 +36,11 @@ function pillCasa() {
  *  destinazione del tasto in fondo a «Sistema», che da qui in poi e' un
  *  doppione e se ne va (`_renderSystem`).
  */
-function cassetto(nome) {
+function cassetto(name) {
   return {
     eyebrow: i18n.t('workshop.eyebrow'),
-    title: i18n.t(`nav.${nome}`),
-    sub: i18n.t(`workshop.sub.${nome}`),
+    title: i18n.t(`nav.${name}`),
+    sub: i18n.t(`workshop.sub.${name}`),
     /* Niente «aggiorna»: la tavola non ce l'ha, e non serve — `activate()`
        ricarica a ogni apertura del cassetto, e ogni salvataggio ridisegna. Un
        bottone che rifa' quel che e' appena successo insegna a premerlo per
@@ -114,9 +114,9 @@ export class ViewTitleController {
          e «Cervello» da solo nemmeno. La tavola mette una riga sotto il nome —
          `workshop` sopra, il nome in serif, la riga che spiega — ed e' quella
          riga a trasformare quattro etichette in una pagina. */
-      cervello: { ...cassetto('cervello') },
-      mani: { ...cassetto('mani') },
-      memoria: { ...cassetto('memoria') },
+      brain: { ...cassetto('brain') },
+      hands: { ...cassetto('hands') },
+      memory: { ...cassetto('memory') },
     };
   }
 
@@ -129,13 +129,13 @@ export class ViewTitleController {
     /* I tre cassetti hanno tre stringhe a testa (soprascritta, nome,
        sottotitolo) piu' il pill: si ricostruiscono interi invece di
        riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */
-    for (const nome of Object.keys(VISTA_DI)) this.modeConfigs[nome] = cassetto(nome);
+    for (const name of Object.keys(VISTA_DI)) this.modeConfigs[name] = cassetto(name);
     if (this.currentMode) this.setMode(this.currentMode);
   }
 
   /* Il mount di un modo e' `title-<modo>`, **tranne** per i tre cassetti, che
      condividono la vista delle impostazioni e quindi il suo mount. Senza
-     questa riga `setMode('cervello')` cercava `title-cervello`, non lo
+     questa riga `setMode('brain')` cercava `title-cervello`, non lo
      trovava, e usciva lasciando i cassetti senza intestazione. */
   _mount(mode) {
     return elementoTitolo(mode);
@@ -248,7 +248,7 @@ export class ViewTitleController {
     const app = window.mobileApp;
     /* La stessa destinazione del vecchio tasto in fondo a «Sistema»: la casa e'
        un documento a parte, quindi si naviga, non si cambia vista. */
-    if (action === 'go-casa') {
+    if (action === 'go-home') {
       api.navigate('/html-mobile/index.html');
       return;
     }

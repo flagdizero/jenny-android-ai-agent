@@ -163,7 +163,7 @@ export class UsageRanking {
   }
 
   /** Una voce è stata aperta. La chiave è quella di `launcherEntries()`
-   *  (`android:<pkg>` / `jenny:<slug>` / `skill:<nome>`): due voci omonime in
+   *  (`android:<pkg>` / `jenny:<slug>` / `skill:<name>`): due voci omonime in
    *  spazi diversi hanno chiavi diverse e non si sovrascrivono a vicenda. */
   record(key, now = Date.now()) {
     if (!key) return;

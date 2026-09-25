@@ -252,7 +252,7 @@ def test_hidden_wins_over_the_size() -> None:
       assert.equal(jennyValue({ visible: true, size: 'md', floating: false }),
                    i18n.t('settings.mascotSizeMedium').toLowerCase());
       assert.equal(jennyValue({ visible: false, size: 'md', floating: false }),
-                   i18n.t('casa.jenny.hidden').toLowerCase());
+                   i18n.t('home.jenny.hidden').toLowerCase());
     """)
 
 
@@ -261,8 +261,8 @@ def test_the_window_adds_itself_even_to_a_hidden_one() -> None:
     la casa non c'e'."""
     _run_js("""
       const con = jennyValue({ visible: false, size: 'sm', floating: true });
-      assert.ok(con.includes(i18n.t('casa.jenny.hidden').toLowerCase()));
-      assert.ok(con.includes(i18n.t('casa.jenny.floatingShort').toLowerCase()));
+      assert.ok(con.includes(i18n.t('home.jenny.hidden').toLowerCase()));
+      assert.ok(con.includes(i18n.t('home.jenny.floatingShort').toLowerCase()));
       assert.ok(con.includes('\\u00b7'), 'le due cose non sono separate: ' + con);
 
       const senza = jennyValue({ visible: true, size: 'sm', floating: false });
@@ -473,7 +473,7 @@ def test_saving_sends_the_trimmed_text_and_remembers_it() -> None:
       assert.deepEqual(salvataggi, ['Dammi del tu.']);
       assert.equal(lei.rulesSave.hidden, true, '«Salva» e\\u2019 rimasto dopo aver salvato');
       assert.equal(brindisi.length, 1);
-      assert.equal(brindisi[0][0], i18n.t('casa.jenny.rulesSaved'));
+      assert.equal(brindisi[0][0], i18n.t('home.jenny.rulesSaved'));
     """)
 
 
@@ -488,7 +488,7 @@ def test_a_save_that_failed_keeps_the_button_and_says_so() -> None:
       salvataggioRotto = true;
       await lei.saveRules();
       assert.equal(lei.rulesSave.hidden, false);
-      assert.equal(brindisi[0][0], i18n.t('casa.jenny.rulesFailed'));
+      assert.equal(brindisi[0][0], i18n.t('home.jenny.rulesFailed'));
       assert.equal(brindisi[0][1], 'error');
     """)
 
@@ -528,19 +528,19 @@ def test_the_save_button_only_shows_when_there_is_something_to_save() -> None:
     il server ripiegherebbe su «Jenny» senza dirlo."""
     _run_js("""
       const lei = room();
-      assert.equal(nodi['casa-nome-save'].hidden, true, 'nascosto finche\u2019 non si sa il nome');
+      assert.equal(nodi['home-name-save'].hidden, true, 'nascosto finche\u2019 non si sa il nome');
 
       lei.setName('Ada');
-      assert.equal(nodi['casa-nome'].value, 'Ada', 'il campo non porta il nome del server');
-      assert.equal(nodi['casa-nome-save'].hidden, true, 'niente da salvare: e\u2019 lo stesso nome');
+      assert.equal(nodi['home-name'].value, 'Ada', 'il campo non porta il nome del server');
+      assert.equal(nodi['home-name-save'].hidden, true, 'niente da salvare: e\u2019 lo stesso nome');
 
-      nodi['casa-nome'].value = 'Ada Lovelace';
-      nodi['casa-nome'].listeners.input[0]();
-      assert.equal(nodi['casa-nome-save'].hidden, false, 'il nome e\u2019 cambiato e non si puo\u2019 salvare');
+      nodi['home-name'].value = 'Ada Lovelace';
+      nodi['home-name'].listeners.input[0]();
+      assert.equal(nodi['home-name-save'].hidden, false, 'il nome e\u2019 cambiato e non si puo\u2019 salvare');
 
-      nodi['casa-nome'].value = '   ';
-      nodi['casa-nome'].listeners.input[0]();
-      assert.equal(nodi['casa-nome-save'].hidden, true, 'un nome vuoto non si salva');
+      nodi['home-name'].value = '   ';
+      nodi['home-name'].listeners.input[0]();
+      assert.equal(nodi['home-name-save'].hidden, true, 'un nome vuoto non si salva');
     """)
 
 
@@ -549,9 +549,9 @@ def test_a_name_being_typed_is_never_overwritten() -> None:
     e non deve mai riscrivere quel che la persona sta scrivendo."""
     _run_js("""
       const lei = room();
-      nodi['casa-nome'].value = 'Vera';
+      nodi['home-name'].value = 'Vera';
       lei.setName('Jenny');
-      assert.equal(nodi['casa-nome'].value, 'Vera', 'la risposta ha scritto sopra');
+      assert.equal(nodi['home-name'].value, 'Vera', 'la risposta ha scritto sopra');
     """)
 
 
@@ -562,10 +562,10 @@ def test_saving_the_name_goes_through_the_settings_call() -> None:
     _run_js("""
       const lei = room();
       lei.setName('Jenny');
-      nodi['casa-nome'].value = 'Ada';
+      nodi['home-name'].value = 'Ada';
       await lei.saveNome();
       assert.deepEqual(nomiSalvati, [{ bot_name: 'Ada' }]);
-      assert.equal(nodi['casa-nome-save'].hidden, true, 'salvato, e il bottone resta li\u2019');
+      assert.equal(nodi['home-name-save'].hidden, true, 'salvato, e il bottone resta li\u2019');
     """)
 
 
@@ -575,11 +575,11 @@ def test_a_refused_save_says_so_and_keeps_the_button() -> None:
     _run_js("""
       const lei = room();
       lei.setName('Jenny');
-      nodi['casa-nome'].value = 'Ada';
-      nodi['casa-nome'].listeners.input[0]();
+      nodi['home-name'].value = 'Ada';
+      nodi['home-name'].listeners.input[0]();
       nomeRotto = true;
       await lei.saveNome();
-      assert.equal(nodi['casa-nome-save'].hidden, false, 'il bottone e\u2019 sparito su un errore');
+      assert.equal(nodi['home-name-save'].hidden, false, 'il bottone e\u2019 sparito su un errore');
       assert.equal(brindisi.length, 1, 'l\u2019errore non l\u2019ha detto');
       assert.equal(brindisi[0][1], 'error');
     """)
@@ -592,7 +592,7 @@ def test_a_saved_name_is_told_to_the_shell() -> None:
     _run_js("""
       const lei = room();
       lei.setName('Jenny');
-      nodi['casa-nome'].value = 'Ada';
+      nodi['home-name'].value = 'Ada';
       nomeRotto = true;
       await lei.saveNome();
       assert.deepEqual(nomiDetti, [], 'un nome non salvato e\u2019 arrivato al guscio');
@@ -609,10 +609,10 @@ def test_a_name_that_could_not_be_read_is_not_an_empty_name() -> None:
     _run_js("""
       const lei = room();
       lei.setName(null);
-      nodi['casa-nome'].value = 'Ada';
-      nodi['casa-nome'].listeners.input[0]();
-      assert.equal(nodi['casa-nome-save'].hidden, true, 'si salva un nome confrontato col nulla');
+      nodi['home-name'].value = 'Ada';
+      nodi['home-name'].listeners.input[0]();
+      assert.equal(nodi['home-name-save'].hidden, true, 'si salva un nome confrontato col nulla');
       lei.setName('Jenny');
-      assert.equal(nodi['casa-nome'].value, 'Ada', 'la risposta ha scritto sopra');
-      assert.equal(nodi['casa-nome-save'].hidden, false);
+      assert.equal(nodi['home-name'].value, 'Ada', 'la risposta ha scritto sopra');
+      assert.equal(nodi['home-name-save'].hidden, false);
     """)

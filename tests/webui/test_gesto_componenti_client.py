@@ -164,14 +164,14 @@ for (const [tag, role] of [['A', null], ['LABEL', null], ['DIV', 'button'],
 def test_a_component_that_drags_sideways_keeps_the_swipe() -> None:
     _run_js(
         """
-for (const [nome, bersaglio] of [
+for (const [name, bersaglio] of [
   ['una mappa con touch-action none', dentro('DIV', { touchAction: 'none' })],
   ['un carosello con pan-y', el('IMG', { parent: dentro('DIV', { touchAction: 'pan-y' }) })],
   ['un cursore a slitta', dentro('INPUT', { type: 'range' })],
 ]) {
   const { visto, stacca } = osserva();
   scorri(bersaglio);
-  assert.deepEqual(visto, [], nome + ': la pagina ha scorso lo stesso');
+  assert.deepEqual(visto, [], name + ': la pagina ha scorso lo stesso');
   stacca();
 }
 

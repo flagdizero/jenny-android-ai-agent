@@ -140,7 +140,7 @@ function walk(el, out = []) {
 function righeDi(panel) {
   return walk(panel._body).filter((n) => {
     const cls = String(n.className);
-    return cls.split(' ')[0] === 'casa-who-row' && !cls.includes('casa-who-new');
+    return cls.split(' ')[0] === 'home-who-row' && !cls.includes('casa-who-new');
   });
 }
 
@@ -162,10 +162,10 @@ function readout(panel) {
   const walk = (el) => {
     for (const child of el.children) {
       const cls = String(child.className);
-      if (cls.startsWith('casa-who-label')) out.push('etichetta: ' + child.textContent);
-      else if (cls.startsWith('casa-who-note')) {
+      if (cls.startsWith('home-who-label')) out.push('etichetta: ' + child.textContent);
+      else if (cls.startsWith('home-who-note')) {
         out.push((cls.includes('is-error') ? 'guasto: ' : 'nota: ') + child.textContent);
-      } else if (cls.split(' ')[0] === 'casa-who-row') {
+      } else if (cls.split(' ')[0] === 'home-who-row') {
         const parts = child.children.map((c) => c.textContent).filter(Boolean);
         const mark = cls.includes('casa-who-new') ? '+'
           : (cls.includes('is-personal') ? 'io' : (cls.includes('is-blocked') ? 'x' : '-'));
@@ -384,8 +384,8 @@ def test_the_personal_row_takes_you_home() -> None:
       const panel = await open(ELENCO);
       panel._currentProject = () => 'etf';
       panel.render();
-      const casa = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
-      tocca(casa);
+      const home = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
+      tocca(home);
       assert.deepEqual(panel.storia, ['scelto:null']);
     """)
 
@@ -457,7 +457,7 @@ def test_a_blocked_row_has_no_colour_at_all() -> None:
         dir: 'wikis', projects: [{ name: 'piante', modified: 1 }],
         unopenable: [{ name: 'Ricerca ETF', modified: 1, reason: 'invalid_name' }],
       });
-      const pallini = walk(panel._body).filter((n) => String(n.className) === 'casa-who-dot');
+      const pallini = walk(panel._body).filter((n) => String(n.className) === 'home-who-dot');
       assert.equal(pallini.length, 2);
       assert.ok(pallini[0].style.background, 'il quaderno ha perso il suo colore');
       assert.equal(pallini[1].style.background, undefined,
@@ -473,11 +473,11 @@ def test_the_house_row_carries_jennys_flower() -> None:
     un pallino — non è un quaderno fra i quaderni."""
     _run_js("""
       const panel = await open(ELENCO);
-      const casa = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
-      const fiore = casa.children.find((c) => String(c.className).includes('casa-who-flower'));
+      const home = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
+      const fiore = home.children.find((c) => String(c.className).includes('home-who-flower'));
       assert.ok(fiore, 'la riga della casa ha perso il fiore');
       assert.equal(fiore.textContent, '✿');
-      assert.ok(!casa.children.some((c) => String(c.className) === 'casa-who-dot'),
+      assert.ok(!home.children.some((c) => String(c.className) === 'home-who-dot'),
                 'la casa si è presa anche un pallino da quaderno');
     """)
 
@@ -614,7 +614,7 @@ def test_holding_a_row_does_not_select_its_text() -> None:
     si apriva. Nessun banco in node lo vede — il DOM finto non seleziona niente
     — quindi lo tiene questo, sul foglio di stile."""
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    riga = css.split("\n.casa-who-row {", 1)[1].split("}", 1)[0]
+    riga = css.split("\n.home-who-row {", 1)[1].split("}", 1)[0]
     for regola in ("user-select: none;", "-webkit-user-select: none;", "-webkit-touch-callout: none;"):
         assert regola in riga, f"la riga della tendina ha perso `{regola}`"
 

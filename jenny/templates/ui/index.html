@@ -36,9 +36,9 @@
 <link rel="stylesheet" href="/html-mobile/assets/mobile-style.css">
 <link rel="stylesheet" href="/html-mobile/assets/home-style.css">
 </head>
-<body class="casa">
+<body class="home">
 
-<main class="casa-shell" data-view="chat" data-pagina="chat">
+<main class="home-shell" data-view="chat" data-page="chat">
 
   <!-- ── La fila delle pagine ─────────────────────────────────────────────
        I nomi delle pagine, quella dove sei grande: prende il posto del titolo
@@ -56,27 +56,27 @@
 
        Il titolo non apre piu' niente, quindi non e' piu' un bottone: la tendina
        delle conversazioni e' diventata la pagina Quaderni. -->
-  <header class="casa-head">
-    <div class="casa-title">
+  <header class="home-head">
+    <div class="home-title">
       <!-- Un bottone a parte e non l'occhiello travestito: quello e' una
            parola, questo e' un comando, e un <div> con un gestore sopra e' un
            comando che la tastiera non trova. -->
-      <button class="casa-back" id="casa-back" type="button">
+      <button class="home-back" id="home-back" type="button">
         <i class="ti ti-chevron-left" aria-hidden="true"></i>
-        <span id="casa-back-label"></span>
+        <span id="home-back-label"></span>
       </button>
-      <h1><span class="casa-head-name" id="casa-head-name"></span></h1>
+      <h1><span class="home-head-name" id="home-head-name"></span></h1>
     </div>
-    <div class="casa-actions">
+    <div class="home-actions">
       <!-- Dalle pagine: torna a parlarne. -->
-      <button class="casa-talk" id="casa-talk" type="button" hidden>
+      <button class="home-talk" id="home-talk" type="button" hidden>
         <i class="ti ti-message" aria-hidden="true"></i>
-        <span id="casa-talk-label"></span>
+        <span id="home-talk-label"></span>
       </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
-      <button class="casa-edit" id="casa-edit" type="button" hidden>
+      <button class="home-edit" id="home-edit" type="button" hidden>
         <i class="ti ti-pencil" aria-hidden="true"></i>
       </button>
     </div>
@@ -96,15 +96,15 @@
        Le stanze (`home-notebook-pages`, `home-reader`, …) restano sorelle della pista
        e le passano sopra: entrare in una stanza copre le pagine, non le
        sposta. -->
-  <div class="casa-vetrina">
-    <div class="casa-pista" id="casa-pista">
+  <div class="home-showcase">
+    <div class="home-track" id="home-track">
     <!-- La pagina App: il cassetto delle app, che fino al 23/09/2026 era un
          foglio che saliva dalla barra dove scrivi. Stesso codice
          (`mobile-launcher.js`, in modalita' incorporata) e stessi id, quindi
          ricerca, classifica e schede sono quelle di sempre; mancano solo le
          cose di un foglio — maniglia, velo, ✕. -->
-    <div class="casa-pagina" data-pagina="app">
-      <div class="casa-cassetto" id="launcher-sheet" tabindex="-1">
+    <div class="home-page" data-page="app">
+      <div class="home-drawer" id="launcher-sheet" tabindex="-1">
         <div class="launcher-search-row">
           <i class="ti ti-search launcher-search-icon"></i>
           <input class="launcher-search" id="launcher-search" type="text"
@@ -129,21 +129,21 @@
              aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
       </div>
     </div>
-    <div class="casa-pagina" data-pagina="chat">
+    <div class="home-page" data-page="chat">
       <!-- La chat vera, in un involucro solo: e' una, e si **sposta** intera
            nella pagina di un quaderno quando ci arrivi (v. `home-move.js`).
            Non si copia mai — i controller la prendono per id — e nelle pagine
            che non abita c'e' la sua foto. -->
       <div class="home-chat" id="home-chat">
       <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
-      <div class="casa-thread" id="casa-thread"></div>
+      <div class="home-thread" id="home-thread"></div>
 
       <!-- Lo stato vuoto sta FUORI dal filo, sovrapposto. Dentro sarebbe il primo
            figlio, e il primo figlio del filo porta il `margin-top:auto` che tiene
            una conversazione corta appoggiata al fondo: un nodo nascosto se lo
            prenderebbe lui, e i messaggi resterebbero incollati in cima. -->
-      <div class="casa-empty" id="casa-empty" hidden>
-        <div class="casa-empty-text" id="casa-empty-text"></div>
+      <div class="home-empty" id="home-empty" hidden>
+        <div class="home-empty-text" id="home-empty-text"></div>
       </div>
 
       <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
@@ -152,27 +152,27 @@
 
       <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
            riconnessione). A filo funzionante non occupa spazio. -->
-      <div class="casa-wire" id="casa-wire" hidden></div>
+      <div class="home-wire" id="home-wire" hidden></div>
 
       <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
-      <div class="casa-pending" id="casa-pending" hidden></div>
+      <div class="home-pending" id="home-pending" hidden></div>
 
-      <div class="casa-composer">
+      <div class="home-composer">
         <!-- Le pagine del quaderno in cui sei. Stava in testa, accanto al titolo;
              la testa e' diventata la fila delle pagine, e la pastiglia e' scesa
              qui, al posto che era del bottone del cassetto — il cassetto oggi e'
              la pagina App. Compare solo dentro un quaderno. -->
-        <button class="casa-pages-open" id="casa-pages-open" type="button" hidden>
+        <button class="home-notebook-pages-open" id="home-notebook-pages-open" type="button" hidden>
           <i class="ti ti-book" aria-hidden="true"></i>
-          <span id="casa-pages-count"></span>
+          <span id="home-notebook-pages-count"></span>
         </button>
-        <label class="casa-field">
-          <textarea class="casa-input" id="casa-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
-          <button class="casa-attach" id="casa-attach" type="button" aria-label="Allega">
+        <label class="home-field">
+          <textarea class="home-input" id="home-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
+          <button class="home-attach" id="home-attach" type="button" aria-label="Allega">
             <i class="ti ti-paperclip"></i>
           </button>
         </label>
-        <button class="casa-send" id="casa-send" type="button" aria-label="Manda">
+        <button class="home-send" id="home-send" type="button" aria-label="Manda">
           <i class="ti ti-arrow-up"></i>
         </button>
       </div>
@@ -180,18 +180,18 @@
     </div>
     <!-- La pagina Quaderni: «Con chi parli», che era la tendina del titolo. La
          disegna `home-who.js` qui dentro invece che in un `<dialog>`. -->
-    <div class="casa-pagina" data-pagina="notebooks">
-      <div class="casa-quaderni" id="casa-quaderni"></div>
+    <div class="home-page" data-page="notebooks">
+      <div class="home-notebooks" id="home-notebooks"></div>
       <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.
            Era una riga in fondo all'elenco, e con tanti quaderni finiva sotto il
-           bordo. Fuori da `#casa-quaderni` apposta: quello scorre, e il
+           bordo. Fuori da `#home-notebooks` apposta: quello scorre, e il
            pannello no. -->
-      <button class="casa-quaderni-nuovo" id="casa-quaderni-nuovo" type="button"
+      <button class="home-notebooks-new" id="home-notebooks-new" type="button"
               aria-label="Nuovo quaderno">
         <i class="ti ti-plus" aria-hidden="true"></i>
       </button>
     </div>
-    <div class="casa-pagina" data-pagina="settings">
+    <div class="home-page" data-page="settings">
       <!-- La pagina Impostazioni: «Tu e Jenny», che fino al 23/09/2026 era una
            stanza dietro l'ingranaggio. E' **nell'HTML del pannello** e non
            prestata a runtime: il prestito delle stanze alle pagine era il pezzo
@@ -208,68 +208,68 @@
          `i18n.detectLocale()` fa gia' quando nessuno ha scelto. Misure e ragioni
          in `.agent/casa-tu-e-jenny-plan.md`. -->
     <section class="home-you" id="home-you">
-      <div class="casa-tu-scroll">
+      <div class="home-you-scroll">
 
         <!-- Il tema non apre una stanza: si tocca e c'e'. E' l'unica impostazione
              della casa il cui effetto e' tutto a schermo, e mandarla a scegliere
              altrove vorrebbe dire sceglierla senza vederla. -->
-        <div class="casa-card">
-          <div class="casa-card-head">
+        <div class="home-card">
+          <div class="home-card-head">
             <i class="ti ti-palette" aria-hidden="true"></i>
-            <span class="casa-card-label" id="casa-theme-label"></span>
-            <span class="casa-card-value" id="casa-theme-value"></span>
+            <span class="home-card-label" id="home-theme-label"></span>
+            <span class="home-card-value" id="home-theme-value"></span>
           </div>
-          <div class="casa-themes" id="casa-themes" role="radiogroup"></div>
-          <div class="casa-card-note" id="casa-theme-desc"></div>
+          <div class="home-themes" id="home-themes" role="radiogroup"></div>
+          <div class="home-card-note" id="home-theme-desc"></div>
         </div>
 
         <!-- Lei. La riga dice come sta adesso — «piccola · flottante» — perche'
              una riga che non porta il suo valore e' un collegamento. -->
-        <div class="casa-rows">
+        <div class="home-rows">
           <!-- Chi risponde. La riga porta la **marca**, non l'id del modello:
                un id sta fra i venti e i trenta caratteri e in questa riga ci
                starebbe troncato, che e' l'errore gia' pagato una volta sulle
                pastiglie dei temi. L'id sta dentro, dove c'e' larghezza. -->
-          <button class="casa-row" id="casa-row-model" type="button">
+          <button class="home-row" id="home-row-model" type="button">
             <i class="ti ti-message-2" aria-hidden="true"></i>
-            <span class="casa-row-label" id="casa-model-label"></span>
-            <span class="casa-row-value" id="casa-model-value"></span>
-            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-model-label"></span>
+            <span class="home-row-value" id="home-model-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
-          <button class="casa-row" id="casa-row-jenny" type="button">
+          <button class="home-row" id="home-row-jenny" type="button">
             <i class="ti ti-flower" aria-hidden="true"></i>
-            <span class="casa-row-label" id="casa-jenny-label"></span>
-            <span class="casa-row-value" id="casa-jenny-value"></span>
-            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-jenny-label"></span>
+            <span class="home-row-value" id="home-jenny-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
           <!-- Gli aggiornamenti. La riga porta la versione, quindi la riga muta
                che la scriveva in fondo alla pagina non serve piu': un numero e
                basta non e' un'impostazione, e' un'etichetta. -->
-          <button class="casa-row" id="casa-row-updates" type="button">
+          <button class="home-row" id="home-row-updates" type="button">
             <i class="ti ti-refresh" aria-hidden="true"></i>
-            <span class="casa-row-label" id="casa-updates-label"></span>
-            <span class="casa-row-value" id="casa-updates-value"></span>
-            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-updates-label"></span>
+            <span class="home-row-value" id="home-updates-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
           <!-- Il backup. La riga porta **quando l'hai esportato**, non quando il
                telefono ha fatto l'ultimo snapshot: sono due cose diverse, e
                quella che la parola promette e' la prima. -->
-          <button class="casa-row" id="casa-row-backup" type="button">
+          <button class="home-row" id="home-row-backup" type="button">
             <i class="ti ti-archive" aria-hidden="true"></i>
-            <span class="casa-row-label" id="casa-backup-label"></span>
-            <span class="casa-row-value" id="casa-backup-value"></span>
-            <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-backup-label"></span>
+            <span class="home-row-value" id="home-backup-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
         </div>
 
         <!-- L'officina non sparisce: scende in fondo, come nella tavola. -->
-        <button class="casa-workshop" id="casa-workshop" type="button">
+        <button class="home-workshop" id="home-workshop" type="button">
           <i class="ti ti-tool" aria-hidden="true"></i>
-          <span class="casa-workshop-text">
-            <span class="casa-workshop-name" id="casa-workshop-name"></span>
-            <span class="casa-workshop-hint" id="casa-workshop-hint"></span>
+          <span class="home-workshop-text">
+            <span class="home-workshop-name" id="home-workshop-name"></span>
+            <span class="home-workshop-hint" id="home-workshop-hint"></span>
           </span>
-          <i class="ti ti-chevron-right casa-row-go" aria-hidden="true"></i>
+          <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
         </button>
       </div>
     </section>
@@ -282,16 +282,16 @@
        questa e' quella cosa: due linguette sopra la stessa risposta del
        server — `/api/graph` porta nodi, archi e indice full-text insieme. -->
   <section class="home-notebook-pages" id="home-notebook-pages">
-    <div class="casa-tabs" role="tablist">
-      <button class="casa-tab is-on" id="casa-tab-list" type="button"
-              role="tab" aria-selected="true" aria-controls="casa-page-list"></button>
-      <button class="casa-tab" id="casa-tab-map" type="button"
+    <div class="home-tabs" role="tablist">
+      <button class="home-tab is-on" id="home-tab-list" type="button"
+              role="tab" aria-selected="true" aria-controls="home-notebook-page-list"></button>
+      <button class="home-tab" id="home-tab-map" type="button"
               role="tab" aria-selected="false" aria-controls="home-map"></button>
     </div>
 
-    <label class="casa-search" for="casa-pages-q">
+    <label class="home-search" for="home-notebook-pages-q">
       <i class="ti ti-search" aria-hidden="true"></i>
-      <input class="casa-search-input" id="casa-pages-q" type="search"
+      <input class="home-search-input" id="home-notebook-pages-q" type="search"
              autocomplete="off" autocapitalize="none" spellcheck="false">
     </label>
 
@@ -299,15 +299,15 @@
          vuoto si prende tutta l'altezza e spingerebbe «nessuna pagina con
          queste parole» sul bordo inferiore, dove sembra un piede di pagina
          invece che la risposta alla ricerca appena fatta. -->
-    <div class="casa-pages-note" id="casa-pages-note" hidden></div>
+    <div class="home-notebook-pages-note" id="home-notebook-pages-note" hidden></div>
 
-    <div class="casa-page-list" id="casa-page-list" role="tabpanel"
-         aria-labelledby="casa-tab-list"></div>
+    <div class="home-notebook-page-list" id="home-notebook-page-list" role="tabpanel"
+         aria-labelledby="home-tab-list"></div>
 
     <div class="home-map" id="home-map" role="tabpanel"
-         aria-labelledby="casa-tab-map" hidden>
-      <svg class="casa-map-svg" id="casa-map-svg" aria-hidden="true"></svg>
-      <div class="casa-map-note" id="casa-map-note" hidden></div>
+         aria-labelledby="home-tab-map" hidden>
+      <svg class="home-map-svg" id="home-map-svg" aria-hidden="true"></svg>
+      <div class="home-map-note" id="home-map-note" hidden></div>
     </div>
   </section>
 
@@ -316,21 +316,21 @@
        cablano i wikilink, che aprono un'altra pagina dello stesso quaderno.
        Audit, briciole di pane e LaTeX restano dell'officina. -->
   <section class="home-reader" id="home-reader">
-    <article class="casa-reader-body" id="casa-reader-body"></article>
+    <article class="home-reader-body" id="home-reader-body"></article>
     <!-- Modifica: una textarea, e niente CodeMirror. Sono 200+ kB per colorare
          del markdown su 590 px, e la casa e' rimasta magra apposta. Il contatore
          di righe, il fold, la ricerca: nessuna di quelle cose serve a correggere
          un refuso in una nota che hai scritto tu.
          `spellcheck` spento come nell'editor dell'officina: sottolinea di rosso
          meta' di un testo tecnico, e la lingua qui non e' quella del sistema. -->
-    <textarea class="casa-reader-edit" id="casa-reader-edit" hidden
+    <textarea class="home-reader-edit" id="home-reader-edit" hidden
               spellcheck="false" autocapitalize="sentences"></textarea>
     <!-- In basso e non nell'intestazione: sul Titan il pollice sta qui, e
          «Modifica» lassu' e' la porta d'ingresso, non il comando che si preme
          due volte. -->
-    <div class="casa-reader-bar" id="casa-reader-bar" hidden>
-      <button class="casa-reader-cancel" id="casa-reader-cancel" type="button"></button>
-      <button class="casa-reader-save" id="casa-reader-save" type="button"></button>
+    <div class="home-reader-bar" id="home-reader-bar" hidden>
+      <button class="home-reader-cancel" id="home-reader-cancel" type="button"></button>
+      <button class="home-reader-save" id="home-reader-save" type="button"></button>
     </div>
 
     <!-- «Segnala», e sta **in basso** e non appeso alla selezione. Un
@@ -339,8 +339,8 @@
          hit-test dalle proprie coordinate: se li' sotto c'e' della chrome,
          vince lei e la selezione salta (v. `shared/selection.js`). Qui il
          bottone e' fuori dal testo, e il problema non si pone. -->
-    <div class="casa-reader-bar casa-sel-bar" id="casa-sel-bar" hidden>
-      <button class="casa-reader-cancel" id="casa-sel-report" type="button"></button>
+    <div class="home-reader-bar home-sel-bar" id="home-sel-bar" hidden>
+      <button class="home-reader-cancel" id="home-sel-report" type="button"></button>
     </div>
   </section>
 
@@ -348,17 +348,17 @@
   <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
        mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico
        z-index che esista. -->
-  <dialog class="oc-sheet home-audit" id="casa-audit-dialog">
-    <div class="oc-sheet-inner casa-audit-inner">
-      <h2 class="casa-audit-title" id="casa-audit-title"></h2>
+  <dialog class="oc-sheet home-audit" id="home-audit-dialog">
+    <div class="oc-sheet-inner home-audit-inner">
+      <h2 class="home-audit-title" id="home-audit-title"></h2>
       <!-- Il testo scelto, come citazione: e' quel che l'ancora legherà, e
            vederlo prima di scrivere e' l'unico modo di accorgersi che la
            selezione ha preso una riga in piu'. -->
-      <blockquote class="casa-audit-quote" id="casa-audit-quote"></blockquote>
-      <textarea class="casa-audit-comment" id="casa-audit-comment" rows="3"></textarea>
+      <blockquote class="home-audit-quote" id="home-audit-quote"></blockquote>
+      <textarea class="home-audit-comment" id="home-audit-comment" rows="3"></textarea>
       <div class="oc-dialog-buttons">
-        <button class="oc-btn oc-btn-cancel" id="casa-audit-cancel" type="button"></button>
-        <button class="oc-btn oc-btn-confirm" id="casa-audit-send" type="button"></button>
+        <button class="oc-btn oc-btn-cancel" id="home-audit-cancel" type="button"></button>
+        <button class="oc-btn oc-btn-confirm" id="home-audit-send" type="button"></button>
       </div>
     </div>
   </dialog>
@@ -366,10 +366,10 @@
 
   <!-- ── La quinta stanza: «Jenny» ────────────────────────────────────────
        Com'e' fatta — quanto e' grande, se si vede, se sta sopra le altre app.
-       La classe e' `casa-jenny-room` e non `home-jenny`: quella e' lo sprite
+       La classe e' `home-jenny-room` e non `home-jenny`: quella e' lo sprite
        di lei, che vive nel guscio da prima di questa stanza. -->
-  <section class="casa-jenny-room" id="casa-jenny-room">
-    <div class="casa-tu-scroll">
+  <section class="home-jenny-room" id="home-jenny-room">
+    <div class="home-you-scroll">
 
       <!-- Come si chiama. Era l'unica voce della «Personalizzazione»
            dell'officina che in casa non esistesse gia', e il 21/09/2026 quel
@@ -379,40 +379,40 @@
            e' — le regole che le hai dato tu — e il nome e' la stessa domanda.
            Stessa forma della scheda delle regole: il «Salva» compare solo
            quando c'e' davvero qualcosa da salvare. -->
-      <div class="casa-card">
-        <div class="casa-card-head">
+      <div class="home-card">
+        <div class="home-card-head">
           <i class="ti ti-signature" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-nome-label"></span>
-          <button class="casa-save" id="casa-nome-save" type="button" hidden></button>
+          <span class="home-card-label" id="home-name-label"></span>
+          <button class="home-save" id="home-name-save" type="button" hidden></button>
         </div>
-        <input class="casa-rules casa-nome" id="casa-nome" type="text" maxlength="40"
+        <input class="home-rules home-name" id="home-name" type="text" maxlength="40"
                autocapitalize="words" autocomplete="off" spellcheck="false">
-        <div class="casa-card-note" id="casa-nome-note"></div>
+        <div class="home-card-note" id="home-name-note"></div>
       </div>
 
-      <div class="casa-rows">
-        <div class="casa-row">
-          <span class="casa-row-label" id="casa-jenny-visible-label"></span>
-          <button class="casa-switch" id="casa-jenny-visible" type="button" role="switch">
-            <span class="casa-switch-knob"></span>
+      <div class="home-rows">
+        <div class="home-row">
+          <span class="home-row-label" id="home-jenny-visible-label"></span>
+          <button class="home-switch" id="home-jenny-visible" type="button" role="switch">
+            <span class="home-switch-knob"></span>
           </button>
         </div>
-        <div class="casa-row casa-row-stack">
-          <span class="casa-row-label" id="casa-jenny-size-label"></span>
-          <div class="casa-seg" id="casa-jenny-size" role="radiogroup"></div>
+        <div class="home-row home-row-stack">
+          <span class="home-row-label" id="home-jenny-size-label"></span>
+          <div class="home-seg" id="home-jenny-size" role="radiogroup"></div>
         </div>
         <!-- La finestra che sta sopra le altre app. Fuori da Android non puo'
              esistere, e la riga non c'e': `available` lo dice il server. -->
-        <div class="casa-row" id="casa-jenny-floating-row" hidden>
-          <span class="casa-row-label" id="casa-jenny-floating-label"></span>
-          <button class="casa-switch" id="casa-jenny-floating" type="button" role="switch">
-            <span class="casa-switch-knob"></span>
+        <div class="home-row" id="home-jenny-floating-row" hidden>
+          <span class="home-row-label" id="home-jenny-floating-label"></span>
+          <button class="home-switch" id="home-jenny-floating" type="button" role="switch">
+            <span class="home-switch-knob"></span>
           </button>
         </div>
         <!-- La spiegazione sta **dentro** la scheda e non sotto: fuori sarebbe
              testo nudo, e a taglia grande le finirebbe addosso — le schede le
              passano davanti perche' sono opache, una riga di testo no. -->
-        <div class="casa-card-note" id="casa-jenny-floating-note" hidden></div>
+        <div class="home-card-note" id="home-jenny-floating-note" hidden></div>
       </div>
 
       <!-- Chi e'. Non e' `SOUL.md` intero: e' **la tua parte** di quel file.
@@ -420,15 +420,15 @@
            (misurato, v. `agent/soul_rules.py`) — quindi quel che scrivi qui
            vive altrove, in un file che nessuna passata puo' toccare, e dentro
            `SOUL.md` ne resta una copia rifatta dopo ogni passata. -->
-      <div class="casa-card">
-        <div class="casa-card-head">
+      <div class="home-card">
+        <div class="home-card-head">
           <i class="ti ti-quote" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-rules-label"></span>
-          <button class="casa-save" id="casa-rules-save" type="button" hidden></button>
+          <span class="home-card-label" id="home-rules-label"></span>
+          <button class="home-save" id="home-rules-save" type="button" hidden></button>
         </div>
-        <textarea class="casa-rules" id="casa-rules" rows="4" maxlength="2000"
+        <textarea class="home-rules" id="home-rules" rows="4" maxlength="2000"
                   autocapitalize="sentences" spellcheck="false"></textarea>
-        <div class="casa-card-note" id="casa-rules-note"></div>
+        <div class="home-card-note" id="home-rules-note"></div>
       </div>
     </div>
   </section>
@@ -440,44 +440,44 @@
        **Toccare una mattonella non cambia chi risponde**: mostra i suoi
        modelli. Il cambio e' il tocco su un modello, e salva modello e
        provider **insieme** — v. `home-model.js`. -->
-  <section class="casa-model-room" id="casa-model-room">
-    <div class="casa-tu-scroll">
+  <section class="home-model-room" id="home-model-room">
+    <div class="home-you-scroll">
 
-      <div class="casa-card">
-        <div class="casa-card-head">
+      <div class="home-card">
+        <div class="home-card-head">
           <i class="ti ti-message-2" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-providers-label"></span>
-          <span class="casa-card-value" id="casa-providers-value"></span>
+          <span class="home-card-label" id="home-providers-label"></span>
+          <span class="home-card-value" id="home-providers-value"></span>
         </div>
-        <div class="casa-brands" id="casa-providers" role="radiogroup"></div>
+        <div class="home-brands" id="home-providers" role="radiogroup"></div>
 
         <!-- La chiave della marca **guardata**. Il suggerimento offuscato
              arriva dal server; la chiave vera non torna mai al client, quindi
              il campo parte vuoto e quel che non riscrivi resta com'e'. -->
-        <div class="casa-key" id="casa-key-row" hidden>
-          <span class="casa-key-label" id="casa-key-label"></span>
-          <span class="casa-key-hint" id="casa-key-hint"></span>
-          <button class="casa-key-btn" id="casa-key-btn" type="button"></button>
+        <div class="home-key" id="home-key-row" hidden>
+          <span class="home-key-label" id="home-key-label"></span>
+          <span class="home-key-hint" id="home-key-hint"></span>
+          <button class="home-key-btn" id="home-key-btn" type="button"></button>
         </div>
-        <div class="casa-key-edit" id="casa-key-edit" hidden>
-          <input class="casa-key-input" id="casa-key-input" type="password"
+        <div class="home-key-edit" id="home-key-edit" hidden>
+          <input class="home-key-input" id="home-key-input" type="password"
                  autocomplete="off" autocapitalize="none" spellcheck="false">
-          <button class="casa-save" id="casa-key-save" type="button"></button>
+          <button class="home-save" id="home-key-save" type="button"></button>
         </div>
       </div>
 
-      <div class="casa-card">
-        <div class="casa-card-head">
+      <div class="home-card">
+        <div class="home-card-head">
           <i class="ti ti-cpu" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-models-label"></span>
+          <span class="home-card-label" id="home-models-label"></span>
         </div>
-        <div class="casa-models" id="casa-models" role="radiogroup"></div>
-        <div class="casa-card-note" id="casa-models-note" hidden></div>
+        <div class="home-models" id="home-models" role="radiogroup"></div>
+        <div class="home-card-note" id="home-models-note" hidden></div>
       </div>
 
       <!-- Alcuni cambi valgono dal turno dopo, altri vogliono un riavvio: lo
            dice il payload, e va detto invece di lasciarlo indovinare. -->
-      <div class="casa-card-note is-warn" id="casa-model-restart" hidden></div>
+      <div class="home-card-note is-warn" id="home-model-restart" hidden></div>
     </div>
   </section>
 
@@ -486,37 +486,37 @@
        **meccanismo** e non la versione: verde vuol dire «il controllo
        funziona», non «sei aggiornata» — un manifest irraggiungibile da un mese
        mostrerebbe altrimenti la stessa schermata di chi lo e' davvero. -->
-  <section class="casa-updates-room" id="casa-updates-room">
-    <div class="casa-tu-scroll">
+  <section class="home-updates-room" id="home-updates-room">
+    <div class="home-you-scroll">
 
-      <div class="casa-card">
-        <div class="casa-card-head">
-          <span class="casa-update-dot is-ok" id="casa-update-dot" aria-hidden="true"></span>
-          <span class="casa-card-label" id="casa-update-headline"></span>
+      <div class="home-card">
+        <div class="home-card-head">
+          <span class="home-update-dot is-ok" id="home-update-dot" aria-hidden="true"></span>
+          <span class="home-card-label" id="home-update-headline"></span>
         </div>
-        <div class="casa-card-note" id="casa-update-summary" hidden></div>
-        <a class="casa-update-notes" id="casa-update-notes" target="_blank"
+        <div class="home-card-note" id="home-update-summary" hidden></div>
+        <a class="home-update-notes" id="home-update-notes" target="_blank"
            rel="noopener" hidden></a>
 
         <!-- Quel che sta succedendo adesso. La nota sopravvive ai cambi di
              fase: dice cosa aspettarsi, la fase dice solo a che punto e'. -->
-        <div class="casa-update-progress" id="casa-update-progress" hidden>
-          <div class="casa-card-note" id="casa-update-note" hidden></div>
-          <div class="casa-update-phase" id="casa-update-phase" hidden></div>
-          <div class="casa-update-detail" id="casa-update-detail" hidden></div>
-          <div class="casa-update-track" id="casa-update-track" hidden>
-            <span class="casa-update-bar" id="casa-update-bar"></span>
+        <div class="home-update-progress" id="home-update-progress" hidden>
+          <div class="home-card-note" id="home-update-note" hidden></div>
+          <div class="home-update-phase" id="home-update-phase" hidden></div>
+          <div class="home-update-detail" id="home-update-detail" hidden></div>
+          <div class="home-update-track" id="home-update-track" hidden>
+            <span class="home-update-bar" id="home-update-bar"></span>
           </div>
         </div>
 
-        <button class="casa-save" id="casa-update-install" type="button" hidden></button>
+        <button class="home-save" id="home-update-install" type="button" hidden></button>
       </div>
 
       <!-- Il meccanismo che dovrebbe trovarli, e che c'e' sempre — anche,
            soprattutto, quando non c'e' niente da installare. -->
-      <div class="casa-card">
-        <div class="casa-update-lines" id="casa-update-lines"></div>
-        <button class="casa-key-btn" id="casa-update-check" type="button"></button>
+      <div class="home-card">
+        <div class="home-update-lines" id="home-update-lines"></div>
+        <button class="home-key-btn" id="home-update-check" type="button"></button>
       </div>
     </div>
   </section>
@@ -525,26 +525,26 @@
        La terza vista di `shared/backup-flow.js` (le altre due: officina e
        onboarding). L'unica cosa nuova e' la data: «ultimo backup» non aveva
        nessuna fonte, in nessun file — v. `home-backup.js`. -->
-  <section class="casa-backup-room" id="casa-backup-room">
-    <div class="casa-tu-scroll">
+  <section class="home-backup-room" id="home-backup-room">
+    <div class="home-you-scroll">
 
-      <div class="casa-card">
-        <div class="casa-card-head">
+      <div class="home-card">
+        <div class="home-card-head">
           <i class="ti ti-archive" aria-hidden="true"></i>
-          <span class="casa-card-label" id="casa-backup-when"></span>
+          <span class="home-card-label" id="home-backup-when"></span>
         </div>
-        <div class="casa-card-note" id="casa-backup-export-note"></div>
-        <button class="casa-save" id="casa-backup-export" type="button"></button>
+        <div class="home-card-note" id="home-backup-export-note"></div>
+        <button class="home-save" id="home-backup-export" type="button"></button>
       </div>
 
-      <div class="casa-card" id="casa-backup-import-card">
-        <div class="casa-card-note" id="casa-backup-import-note"></div>
-        <button class="casa-key-btn" id="casa-backup-import" type="button"></button>
+      <div class="home-card" id="home-backup-import-card">
+        <div class="home-card-note" id="home-backup-import-note"></div>
+        <button class="home-key-btn" id="home-backup-import" type="button"></button>
       </div>
 
       <!-- La storia locale: somiglia abbastanza da essere scambiata per un
            backup, e non lo e' — vive sullo stesso telefono. -->
-      <div class="casa-card-note" id="casa-backup-snapshots"></div>
+      <div class="home-card-note" id="home-backup-snapshots"></div>
     </div>
   </section>
 
@@ -575,11 +575,11 @@
 
 <!-- La scheda di un quaderno: la pressione lunga nella pagina Quaderni. Gemella di quella qui sopra — stesso markup, stesse classi —
      perche' e' la stessa cosa detta per un'altra specie (v. home-notebook.js). -->
-<dialog class="oc-sheet" id="casa-quaderno-sheet">
+<dialog class="oc-sheet" id="home-notebook-sheet">
   <div class="oc-sheet-inner">
-    <div class="oc-sheet-title" id="casa-quaderno-sheet-title"></div>
-    <div class="oc-sheet-actions" id="casa-quaderno-sheet-actions"></div>
-    <button class="oc-sheet-cancel" id="casa-quaderno-sheet-cancel" data-i18n="common.cancel">Annulla</button>
+    <div class="oc-sheet-title" id="home-notebook-sheet-title"></div>
+    <div class="oc-sheet-actions" id="home-notebook-sheet-actions"></div>
+    <button class="oc-sheet-cancel" id="home-notebook-sheet-cancel" data-i18n="common.cancel">Annulla</button>
   </div>
 </dialog>
 

@@ -91,8 +91,8 @@ def _posizione(corpo: str, pattern: str, cosa: str) -> int:
 def test_the_mode_class_is_written_before_the_controller_wakes_up() -> None:
     corpo = _switch_mode(APP_JS.read_text(encoding="utf-8"))
     classe = _posizione(corpo, r"classList\.add\(`mode-\$\{", "la classe mode-*")
-    attiva = _posizione(corpo, r"\.activate\(\)", "activate()")
-    assert classe < attiva, (
+    active = _posizione(corpo, r"\.activate\(\)", "activate()")
+    assert classe < active, (
         "switchMode notifica il controller prima di scrivere `mode-<modo>` su "
         "<html>. Per la chat quella distanza e' un difetto: il suo scroller e' "
         "il documento, e il documento scorre solo sotto `:root.mode-chat` — "
@@ -130,5 +130,5 @@ def test_the_drawer_check_still_precedes_everything() -> None:
     """
     corpo = _switch_mode(APP_JS.read_text(encoding="utf-8"))
     cassetto = _posizione(corpo, r"setCassetto\?\.\(", "setCassetto")
-    attiva = _posizione(corpo, r"\.activate\(\)", "activate()")
-    assert cassetto < attiva, "setCassetto e' finito dopo activate()"
+    active = _posizione(corpo, r"\.activate\(\)", "activate()")
+    assert cassetto < active, "setCassetto e' finito dopo activate()"

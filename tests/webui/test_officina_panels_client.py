@@ -35,7 +35,7 @@ _VERI = (
 
 
 def _script(body: str) -> str:
-    metodi = "\n".join(member(SRC, nome) for nome in _VERI)
+    metodi = "\n".join(member(SRC, name) for name in _VERI)
     return f"""
 import assert from 'node:assert/strict';
 
@@ -194,7 +194,7 @@ def _etichette(html_var: str) -> str:
     """JS che estrae le coppie (etichetta, valore) delle righe di un pannello."""
     return (
         "[...nodi['" + html_var + "'].innerHTML.matchAll("
-        "/settings-label\">([^<]*)<\\/span>\\s*<span class=\"settings-riepilogo-valore\">([^<]*)</g"
+        "/settings-label\">([^<]*)<\\/span>\\s*<span class=\"settings-summary-value\">([^<]*)</g"
         ")].map((m) => [m[1], m[2]])"
     )
 
@@ -209,12 +209,12 @@ def test_each_panel_row_has_a_label_that_names_it() -> None:
 settings.providers[1].api_key_hint = 'sk-…abcd';
 await s.loadSettings();
 s._apriMarca('b');
-assert.deepEqual({_etichette('drawer-marca-body')}, [
+assert.deepEqual({_etichette('drawer-brand-body')}, [
   ['settings.brandAddress', 'https://b'],
   ['settings.brandKey', 'sk-…abcd'],
 ]);
 s._apriMarca('a');
-assert.deepEqual({_etichette('drawer-marca-body')}, [
+assert.deepEqual({_etichette('drawer-brand-body')}, [
   ['settings.brandAddress', 'settings.defaultUrl'],
   ['settings.brandKey', 'settings.noKey'],
 ]);

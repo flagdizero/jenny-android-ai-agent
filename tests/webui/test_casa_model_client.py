@@ -164,7 +164,7 @@ async function room(dati, catalogo) {
   /* Quel che nel markup nasce `hidden`. Il banco parte da li' o misurerebbe
      una stanza che non esiste: che quei quattro nodi lo siano davvero lo
      tiene `test_casa_tu_contract.py`. */
-  for (const id of ['casa-key-row', 'casa-key-edit', 'casa-models-note', 'casa-model-restart']) {
+  for (const id of ['home-key-row', 'home-key-edit', 'home-models-note', 'home-model-restart']) {
     document.getElementById(id).hidden = true;
   }
   const stanzaModelli = new HomeModel({ onSettings: (d) => passati.push(d) });
@@ -176,18 +176,18 @@ async function room(dati, catalogo) {
 
 /* Le righe a schermo, come le legge chi guarda. */
 function modelliAVideo() {
-  return nodi['casa-models'].children.map((r) => r.dataset.model);
+  return nodi['home-models'].children.map((r) => r.dataset.model);
 }
 function acceso() {
-  const on = nodi['casa-models'].children.filter((r) => r.classList.contains.call(null, 'is-on')
+  const on = nodi['home-models'].children.filter((r) => r.classList.contains.call(null, 'is-on')
     || String(r.className).split(' ').includes('is-on'));
   return on.map((r) => r.dataset.model);
 }
 function mattonelle() {
-  return nodi['casa-providers'].children.map((t) => ({
+  return nodi['home-providers'].children.map((t) => ({
     provider: t.dataset.provider,
-    nome: t.children[1].textContent,
-    attiva: String(t.className).split(' ').includes('is-on'),
+    name: t.children[1].textContent,
+    active: String(t.className).split(' ').includes('is-on'),
     guardata: String(t.className).split(' ').includes('is-viewing'),
   }));
 }
@@ -268,9 +268,9 @@ def test_the_row_says_it_is_not_set_up_when_no_provider_answers() -> None:
     """`default_provider` puo' nominare un provider che non c'e' piu': la riga
     non deve scrivere quel nome come se rispondesse."""
     _run_js("""
-      assert.equal(modelValue({ providers: [], active: null }), i18n.t('casa.model.none'));
+      assert.equal(modelValue({ providers: [], active: null }), i18n.t('home.model.none'));
       assert.equal(modelValue({ providers: [{ name: 'groq' }], active: 'sparito' }),
-                   i18n.t('casa.model.none'));
+                   i18n.t('home.model.none'));
       assert.equal(modelValue({ providers: [{ name: 'groq' }], active: 'groq' }),
                    getProviderBrand('groq').label);
     """)
@@ -294,7 +294,7 @@ def test_tapping_a_tile_does_not_change_who_answers() -> None:
       assert.deepEqual(salvataggi, [], 'guardare un elenco ha salvato qualcosa');
       assert.equal(s.data.default_provider, 'groq', 'chi risponde e cambiato da solo');
       const tiles = mattonelle();
-      assert.deepEqual(tiles.map((t) => t.attiva), [true, false], 'l acceso ha seguito lo sguardo');
+      assert.deepEqual(tiles.map((t) => t.active), [true, false], 'l acceso ha seguito lo sguardo');
       assert.deepEqual(tiles.map((t) => t.guardata), [false, true], 'lo sguardo non si e mosso');
       assert.deepEqual(modelliAVideo(), ['claude-x']);
     """)
@@ -434,14 +434,14 @@ def test_an_empty_list_says_why() -> None:
     _run_js("""
       const dati = settings([{ name: 'groq' }], 'groq', '');
       await room(dati, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
-      assert.equal(nodi['casa-models-note'].textContent, i18n.t('casa.model.needsKey'));
-      assert.equal(nodi['casa-models-note'].hidden, false);
+      assert.equal(nodi['home-models-note'].textContent, i18n.t('home.model.needsKey'));
+      assert.equal(nodi['home-models-note'].hidden, false);
 
       await room(dati, { groq: { status: 'missing_api_base', models: [] } });
-      assert.equal(nodi['casa-models-note'].textContent, i18n.t('casa.model.needsBase'));
+      assert.equal(nodi['home-models-note'].textContent, i18n.t('home.model.needsBase'));
 
       await room(dati, { groq: { status: 'available', models: [{ id: 'x' }] } });
-      assert.equal(nodi['casa-models-note'].hidden, true, 'una nota sopra un elenco che c e');
+      assert.equal(nodi['home-models-note'].hidden, true, 'una nota sopra un elenco che c e');
     """)
 
 
@@ -455,14 +455,14 @@ def test_the_key_field_starts_empty_and_the_hint_comes_from_the_server() -> None
     _run_js("""
       const dati = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
       const s = await room(dati, { groq: { status: 'available', models: [] } });
-      assert.equal(nodi['casa-key-hint'].textContent, 'gsk_...4f2a');
-      assert.equal(nodi['casa-key-input'].value, '', 'il campo e partito con dentro qualcosa');
-      assert.equal(nodi['casa-key-btn'].textContent, i18n.t('casa.model.keyChange'));
+      assert.equal(nodi['home-key-hint'].textContent, 'gsk_...4f2a');
+      assert.equal(nodi['home-key-input'].value, '', 'il campo e partito con dentro qualcosa');
+      assert.equal(nodi['home-key-btn'].textContent, i18n.t('home.model.keyChange'));
 
       const senza = settings([{ name: 'groq', api_key_hint: '' }], 'groq', 'm');
       const s2 = await room(senza, { groq: { status: 'available', models: [] } });
-      assert.equal(nodi['casa-key-hint'].textContent, i18n.t('casa.model.keyNone'));
-      assert.equal(nodi['casa-key-btn'].textContent, i18n.t('casa.model.keyAdd'));
+      assert.equal(nodi['home-key-hint'].textContent, i18n.t('home.model.keyNone'));
+      assert.equal(nodi['home-key-btn'].textContent, i18n.t('home.model.keyAdd'));
     """)
 
 
@@ -471,7 +471,7 @@ def test_saving_an_empty_key_does_nothing() -> None:
     _run_js("""
       const dati = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
       const s = await room(dati, { groq: { status: 'available', models: [] } });
-      nodi['casa-key-input'].value = '   ';
+      nodi['home-key-input'].value = '   ';
       await s.saveKey();
       assert.deepEqual(salvataggi, [], 'una chiave vuota e arrivata al server');
     """)
@@ -487,15 +487,15 @@ def test_a_new_key_makes_the_catalogue_be_asked_again() -> None:
 
       ultimoPayload = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', '');
       cataloghi = { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] } };
-      nodi['casa-key-input'].value = 'gsk_una_chiave_vera';
+      nodi['home-key-input'].value = 'gsk_una_chiave_vera';
       await s.saveKey();
       await new Promise((r) => setImmediate(r));
 
       assert.deepEqual(salvataggi, [{ tipo: 'provider', name: 'groq', api_key: 'gsk_una_chiave_vera' }]);
       assert.deepEqual(chiesti, ['groq', 'groq'], 'l elenco non e stato richiesto');
       assert.deepEqual(modelliAVideo(), ['llama-3.3-70b']);
-      assert.equal(nodi['casa-key-input'].value, '', 'la chiave e rimasta nel campo');
-      assert.equal(nodi['casa-key-edit'].hidden, true);
+      assert.equal(nodi['home-key-input'].value, '', 'la chiave e rimasta nel campo');
+      assert.equal(nodi['home-key-edit'].hidden, true);
     """)
 
 
@@ -505,12 +505,12 @@ def test_a_change_that_needs_a_restart_says_so() -> None:
     _run_js("""
       const dati = settings([{ name: 'groq' }], 'groq', 'm');
       const s = await room(dati, { groq: { status: 'available', models: [{ id: 'altro' }] } });
-      assert.equal(nodi['casa-model-restart'].hidden, true);
+      assert.equal(nodi['home-model-restart'].hidden, true);
 
       ultimoPayload = settings(dati.providers, 'groq', 'altro', { requires_restart: true });
       await s.pickModel('altro');
-      assert.equal(nodi['casa-model-restart'].hidden, false);
-      assert.equal(nodi['casa-model-restart'].textContent, i18n.t('casa.model.restart'));
+      assert.equal(nodi['home-model-restart'].hidden, false);
+      assert.equal(nodi['home-model-restart'].textContent, i18n.t('home.model.restart'));
     """)
 
 
@@ -524,13 +524,13 @@ def test_the_list_is_titled_with_the_brand_you_are_reading() -> None:
         [{ name: 'opencode_go' }, { name: 'anthropic' }], 'opencode_go', 'grok-code-fast-1');
       const s = await room(dati, { opencode_go: { status: 'available', models: [] },
                                      anthropic: { status: 'available', models: [] } });
-      assert.equal(nodi['casa-models-label'].textContent,
-        i18n.t('casa.model.models', { provider: getProviderBrand('opencode_go').label }));
+      assert.equal(nodi['home-models-label'].textContent,
+        i18n.t('home.model.models', { provider: getProviderBrand('opencode_go').label }));
 
       s.pickProvider('anthropic');
       await new Promise((r) => setImmediate(r));
-      assert.equal(nodi['casa-models-label'].textContent,
-        i18n.t('casa.model.models', { provider: shortBrand(getProviderBrand('anthropic').label) }),
+      assert.equal(nodi['home-models-label'].textContent,
+        i18n.t('home.model.models', { provider: shortBrand(getProviderBrand('anthropic').label) }),
         'il titolo nomina chi risponde invece di chi stai guardando');
       /* E la riga di «Tu e Jenny» continua a dire chi risponde: sono due
          domande diverse, e una sola risposta non puo' servirle entrambe. */
@@ -549,7 +549,7 @@ def test_the_brand_that_answers_carries_a_mark_and_not_only_a_ring() -> None:
         [{ name: 'opencode_go' }, { name: 'anthropic' }], 'opencode_go', 'm');
       const s = await room(dati, { opencode_go: { status: 'available', models: [] },
                                      anthropic: { status: 'available', models: [] } });
-      const segni = () => nodi['casa-providers'].children.map(
+      const segni = () => nodi['home-providers'].children.map(
         (t) => t.children.some((c) => String(c.className).includes('ti-check')));
       assert.deepEqual(segni(), [true, false], 'chi risponde non porta nessun segno');
 

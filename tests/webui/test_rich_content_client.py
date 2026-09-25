@@ -216,7 +216,7 @@ reset();
 sospesi = new Map();
 const giro = () => new Promise((r) => setTimeout(r, 0));
 const risolvi = (fine) => [...sospesi].find(([src]) => src.endsWith(fine))[1]();
-const fatto = renderRich(corpo([txt('vale $$E = mc^2$$')]));
+const done = renderRich(corpo([txt('vale $$E = mc^2$$')]));
 await giro();
 assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'KaTeX non chiesto');
 assert.ok(!caricati.some((s) => s.endsWith('auto-render.min.js')),
@@ -225,7 +225,7 @@ risolvi('katex.min.js');
 await giro();
 assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'auto-render mai chiesto');
 risolvi('auto-render.min.js');
-await fatto;
+await done;
 assert.equal(reseFormule.length, 1);
 """)
 
@@ -250,8 +250,8 @@ def test_a_diagram_is_recognised_in_both_shapes() -> None:
     e' il motivo per cui in chat un diagramma non ha mai disegnato niente."""
     _run("""
 reset();
-const pagina = corpo([bloccoServer('flowchart LR\\n A --> B')]);
-await renderDiagrams(pagina);
+const page = corpo([bloccoServer('flowchart LR\\n A --> B')]);
+await renderDiagrams(page);
 assert.deepEqual(reseDiagrammi.map((c) => c.trim()), ['flowchart LR\\n A --> B']);
 
 reset();
@@ -271,7 +271,7 @@ reset();
 const chat = corpo([bloccoChat('graph TD\\n X --> Y')]);
 await renderDiagrams(chat);
 assert.equal(chat.childNodes.length, 1);
-assert.equal(chat.childNodes[0].className, 'diagramma',
+assert.equal(chat.childNodes[0].className, 'diagram',
   "l'involucro del blocco di codice e' rimasto intorno al disegno");
 """)
 
@@ -312,12 +312,12 @@ reset(); caricamentoFallisce = true;
 const avvisi = [];
 const warnVero = console.warn;
 console.warn = (msg) => avvisi.push(String(msg));
-const pagina = corpo([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
-await renderRich(pagina, { inlineDollar: true });
+const page = corpo([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
+await renderRich(page, { inlineDollar: true });
 console.warn = warnVero;
 assert.deepEqual(reseFormule, []);
 assert.deepEqual(reseDiagrammi, []);
-assert.equal(pagina.childNodes.length, 2, 'il contenuto e stato smontato');
+assert.equal(page.childNodes.length, 2, 'il contenuto e stato smontato');
 // Il fallimento si dice nel log, e i log sono in inglese (AGENTS.md).
 assert.deepEqual(avvisi.sort(), [
   'rich-content: KaTeX failed to load', 'rich-content: Mermaid failed to load',

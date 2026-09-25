@@ -645,11 +645,11 @@ export class LauncherController {
 
   _setBackgroundInert(on) {
     /* I due gusci chiamano la propria radice in due modi — `#app` in officina,
-       `.casa-shell` in casa — e questo e' l'unico punto del cassetto che ne
+       `.home-shell` in casa — e questo e' l'unico punto del cassetto che ne
        tocca una. Si cercano tutte e due invece di passarla dal costruttore:
        un argomento in piu' su ogni chiamante per un nodo che si trova da se'. */
     const shell = document.getElementById('app')
-      || document.querySelector('.casa-shell');
+      || document.querySelector('.home-shell');
     if (shell) shell.inert = on;
     /* `inert` toglie fuoco e tocchi, **non** l'impilamento: la mascotte vive
        dentro la radice (v. `JennyCompanion._buildDom`) a z-index 120, e resta

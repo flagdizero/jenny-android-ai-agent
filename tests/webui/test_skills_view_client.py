@@ -44,10 +44,10 @@ def test_each_kind_of_skill_lands_where_the_plan_says() -> None:
           { name: 'mia', bundled: false, internal: false, locked: false },
           { name: 'mia-di-servizio', bundled: false, internal: true, locked: false },
         ];
-        const { tue, integrate, servizio } = dividiSkill(skills);
-        assert.deepEqual(tue.map(s => s.name), ['mia-bloccata', 'mia']);
+        const { yours, integrate, service } = dividiSkill(skills);
+        assert.deepEqual(yours.map(s => s.name), ['mia-bloccata', 'mia']);
         assert.deepEqual(integrate.map(s => s.name), ['cron']);
-        assert.equal(servizio, 2);
+        assert.equal(service, 2);
         """
     )
 
@@ -67,8 +67,8 @@ def test_only_your_unlocked_skills_get_a_switch() -> None:
 def test_a_payload_without_skills_divides_into_nothing() -> None:
     _run_js(
         """
-        assert.deepEqual(dividiSkill([]), { tue: [], integrate: [], servizio: 0 });
-        assert.deepEqual(dividiSkill(undefined), { tue: [], integrate: [], servizio: 0 });
+        assert.deepEqual(dividiSkill([]), { yours: [], integrate: [], service: 0 });
+        assert.deepEqual(dividiSkill(undefined), { yours: [], integrate: [], service: 0 });
         """
     )
 
@@ -102,10 +102,10 @@ def test_the_drawer_row_has_two_forms() -> None:
     _run_js(
         """
         const t = (k, v) => `${k}:${JSON.stringify(v)}`;
-        assert.equal(riepilogoSkill({ tue: [{}, {}], integrate: [{}] }, t),
-          'skills.riepilogo:{"integrate":1,"tue":2}');
-        assert.equal(riepilogoSkill({ tue: [], integrate: [{}, {}] }, t),
-          'skills.riepilogoNessunaTua:{"integrate":2}');
+        assert.equal(riepilogoSkill({ yours: [{}, {}], integrate: [{}] }, t),
+          'skills.summary:{"integrate":1,"yours":2}');
+        assert.equal(riepilogoSkill({ yours: [], integrate: [{}, {}] }, t),
+          'skills.summaryNoneYours:{"integrate":2}');
         """
     )
 

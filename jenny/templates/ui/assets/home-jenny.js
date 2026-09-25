@@ -52,8 +52,8 @@ export const SIZE_KEYS = {
  */
 export function jennyValue({ visible, size, floating }) {
   const parti = [];
-  parti.push(visible ? i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm) : i18n.t('casa.jenny.hidden'));
-  if (floating) parti.push(i18n.t('casa.jenny.floatingShort'));
+  parti.push(visible ? i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm) : i18n.t('home.jenny.hidden'));
+  if (floating) parti.push(i18n.t('home.jenny.floatingShort'));
   return parti.join(' · ').toLowerCase();
 }
 
@@ -64,23 +64,23 @@ export class HomeJenny {
    *  @param onName  il nome appena salvato: la casa lo scrive nella fila e nei
    *    Quaderni, e nella sua copia delle impostazioni (v. `HomeApp._keepName`). */
   constructor({ onChange, onFloating, onName } = {}) {
-    this.el = document.getElementById('casa-jenny-room');
-    this.visibleBtn = document.getElementById('casa-jenny-visible');
-    this.visibleLabel = document.getElementById('casa-jenny-visible-label');
-    this.sizeEl = document.getElementById('casa-jenny-size');
-    this.sizeLabel = document.getElementById('casa-jenny-size-label');
-    this.floatingRow = document.getElementById('casa-jenny-floating-row');
-    this.floatingBtn = document.getElementById('casa-jenny-floating');
-    this.floatingLabel = document.getElementById('casa-jenny-floating-label');
-    this.floatingNote = document.getElementById('casa-jenny-floating-note');
-    this.nomeEl = document.getElementById('casa-nome');
-    this.nomeLabel = document.getElementById('casa-nome-label');
-    this.nomeNote = document.getElementById('casa-nome-note');
-    this.nomeSave = document.getElementById('casa-nome-save');
-    this.rulesEl = document.getElementById('casa-rules');
-    this.rulesLabel = document.getElementById('casa-rules-label');
-    this.rulesNote = document.getElementById('casa-rules-note');
-    this.rulesSave = document.getElementById('casa-rules-save');
+    this.el = document.getElementById('home-jenny-room');
+    this.visibleBtn = document.getElementById('home-jenny-visible');
+    this.visibleLabel = document.getElementById('home-jenny-visible-label');
+    this.sizeEl = document.getElementById('home-jenny-size');
+    this.sizeLabel = document.getElementById('home-jenny-size-label');
+    this.floatingRow = document.getElementById('home-jenny-floating-row');
+    this.floatingBtn = document.getElementById('home-jenny-floating');
+    this.floatingLabel = document.getElementById('home-jenny-floating-label');
+    this.floatingNote = document.getElementById('home-jenny-floating-note');
+    this.nomeEl = document.getElementById('home-name');
+    this.nomeLabel = document.getElementById('home-name-label');
+    this.nomeNote = document.getElementById('home-name-note');
+    this.nomeSave = document.getElementById('home-name-save');
+    this.rulesEl = document.getElementById('home-rules');
+    this.rulesLabel = document.getElementById('home-rules-label');
+    this.rulesNote = document.getElementById('home-rules-note');
+    this.rulesSave = document.getElementById('home-rules-save');
 
     this._onChange = onChange;
     this._onFloating = onFloating;
@@ -127,8 +127,8 @@ export class HomeJenny {
    *  «vuoto»: «Salva» resta nascosto, perche' non c'e' niente con cui
    *  confrontare quel che scrivi.
    */
-  setName(nome) {
-    this._nomeSalvato = typeof nome === 'string' ? nome : null;
+  setName(name) {
+    this._nomeSalvato = typeof name === 'string' ? name : null;
     if (this.nomeEl && !this.nomeEl.value && this._nomeSalvato !== null) {
       this.nomeEl.value = this._nomeSalvato;
     }
@@ -148,19 +148,19 @@ export class HomeJenny {
   /** Salva il nome. Stessa chiamata con cui la casa salva il modello. */
   async saveNome() {
     if (!this.nomeEl) return;
-    const nome = this.nomeEl.value.trim();
-    if (!nome) return;
+    const name = this.nomeEl.value.trim();
+    if (!name) return;
     try {
-      await api.updateSettings({ bot_name: nome });
+      await api.updateSettings({ bot_name: name });
     } catch (err) {
       console.warn('casa.jenny: name not saved', err);
-      showToast(i18n.t('casa.jenny.nomeFailed'), 'error');
+      showToast(i18n.t('home.jenny.nameFailed'), 'error');
       return;
     }
-    this._nomeSalvato = nome;
+    this._nomeSalvato = name;
     this._markNome();
-    this._onName?.(nome);
-    showToast(i18n.t('casa.jenny.rulesSaved'), 'success');
+    this._onName?.(name);
+    showToast(i18n.t('home.jenny.rulesSaved'), 'success');
   }
 
   /** Quel che il server dice della finestra flottante. `null` = non si sa. */
@@ -173,13 +173,13 @@ export class HomeJenny {
     if (this.visibleLabel) this.visibleLabel.textContent = i18n.t('settings.mascotVisible');
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
-    if (this.nomeLabel) this.nomeLabel.textContent = i18n.t('casa.jenny.nome');
-    if (this.nomeNote) this.nomeNote.textContent = i18n.t('casa.jenny.nomeHint');
-    if (this.nomeSave) this.nomeSave.textContent = i18n.t('casa.jenny.rulesSave');
-    if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('casa.jenny.rules');
-    if (this.rulesNote) this.rulesNote.textContent = i18n.t('casa.jenny.rulesHint');
-    if (this.rulesSave) this.rulesSave.textContent = i18n.t('casa.jenny.rulesSave');
-    if (this.rulesEl) this.rulesEl.placeholder = i18n.t('casa.jenny.rulesPlaceholder');
+    if (this.nomeLabel) this.nomeLabel.textContent = i18n.t('home.jenny.name');
+    if (this.nomeNote) this.nomeNote.textContent = i18n.t('home.jenny.nameHint');
+    if (this.nomeSave) this.nomeSave.textContent = i18n.t('home.jenny.rulesSave');
+    if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('home.jenny.rules');
+    if (this.rulesNote) this.rulesNote.textContent = i18n.t('home.jenny.rulesHint');
+    if (this.rulesSave) this.rulesSave.textContent = i18n.t('home.jenny.rulesSave');
+    if (this.rulesEl) this.rulesEl.placeholder = i18n.t('home.jenny.rulesPlaceholder');
     if (this._painted) {
       for (const btn of this.sizeEl.children) {
         btn.textContent = i18n.t(SIZE_KEYS[btn.dataset.size]);
@@ -272,12 +272,12 @@ export class HomeJenny {
       await rpc.writeSoulRules(testo);
     } catch (err) {
       console.warn('casa.jenny: rules not saved', err);
-      showToast(i18n.t('casa.jenny.rulesFailed'), 'error');
+      showToast(i18n.t('home.jenny.rulesFailed'), 'error');
       return;
     }
     this._rulesOnDisk = testo;
     this._markRules();
-    showToast(i18n.t('casa.jenny.rulesSaved'), 'success');
+    showToast(i18n.t('home.jenny.rulesSaved'), 'success');
   }
 
   /* Le tre taglie si disegnano una volta: non cambiano mentre guardi. */
@@ -287,7 +287,7 @@ export class HomeJenny {
       if (!(size in MASCOT_SIZES)) continue;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'casa-seg-btn';
+      btn.className = 'home-seg-btn';
       btn.dataset.size = size;
       btn.setAttribute('role', 'radio');
       btn.textContent = i18n.t(SIZE_KEYS[size]);

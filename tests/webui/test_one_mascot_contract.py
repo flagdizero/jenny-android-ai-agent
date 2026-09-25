@@ -62,10 +62,10 @@ def test_the_house_does_not_drive_her_by_hand() -> None:
     """In casa lei legge i frame da se', con le regole dell'officina. Una
     chiamata a mano da `home-app.js` sarebbe una seconda macchina a stati
     sopra la prima — ed e' esattamente come le due erano divergite."""
-    casa = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "new JennyMascot(" in casa
+    home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
+    assert "new JennyMascot(" in home
     pilotaggi = re.findall(
-        r"this\.jenny\.(thinking|talking|idle|setMood|noteTurn\w*|_set\w+)\(", casa
+        r"this\.jenny\.(thinking|talking|idle|setMood|noteTurn\w*|_set\w+)\(", home
     )
     assert not pilotaggi, f"la casa pilota ancora la mascotte: {pilotaggi}"
 
@@ -85,7 +85,7 @@ def test_the_house_sheet_only_moves_the_floor() -> None:
         if d.strip()
     }
     assert dichiarate == {"bottom"}, dichiarate
-    assert "--casa-composer-h" in proprie[0], "i piedi non appoggiano piu' sul composer"
+    assert "--home-composer-h" in proprie[0], "i piedi non appoggiano piu' sul composer"
     # Le altre regole che la nominano, in casa, sono di chi le lascia spazio
     # (la riga di lavoro) e non toccano lei.
     assert ".home-jenny {" not in css and ".home-jenny." not in css, (

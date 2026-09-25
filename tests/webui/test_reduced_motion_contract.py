@@ -19,24 +19,24 @@ SHEETS = ("mobile-style.css", "home-style.css")
 
 
 def _rules():
-    for nome in SHEETS:
+    for name in SHEETS:
         for selettori, corpo, contesto in css_levels.rules(
-            (css_levels.ASSETS / nome).read_text(encoding="utf-8")
+            (css_levels.ASSETS / name).read_text(encoding="utf-8")
         ):
-            yield nome, [" ".join(s.split()) for s in selettori.split(",")], corpo, contesto
+            yield name, [" ".join(s.split()) for s in selettori.split(",")], corpo, contesto
 
 
 def test_reduced_motion_stops_every_press_from_shrinking() -> None:
     ridotto = [
-        (nome, sel, corpo)
-        for nome, sel, corpo, ctx in _rules()
+        (name, sel, corpo)
+        for name, sel, corpo, ctx in _rules()
         if any("prefers-reduced-motion: reduce" in at for at in ctx)
     ]
     spenti = {s for _, sel, corpo in ridotto if "transform: none" in corpo for s in sel}
 
     rimpiccioliscono = [
-        (nome, s)
-        for nome, sel, corpo, ctx in _rules()
+        (name, s)
+        for name, sel, corpo, ctx in _rules()
         if "scale(" in corpo and not any("prefers-reduced-motion" in at for at in ctx)
         for s in sel
         if ":active" in s
@@ -44,7 +44,7 @@ def test_reduced_motion_stops_every_press_from_shrinking() -> None:
     assert len(rimpiccioliscono) > 15, (
         f"la grep sui tocchi che rimpiccioliscono non morde piu' ({len(rimpiccioliscono)})"
     )
-    scoperti = [(nome, s) for nome, s in rimpiccioliscono if s not in spenti]
+    scoperti = [(name, s) for name, s in rimpiccioliscono if s not in spenti]
     assert not scoperti, (
         f"a movimento ridotto rimpiccioliscono ancora: {scoperti}. Aggiungili al blocco "
         f"«Movimento ridotto: il tocco non rimpicciolisce» in fondo a mobile-style.css"
@@ -67,7 +67,7 @@ def test_the_block_that_stops_them_comes_after_every_press() -> None:
         and any("prefers-reduced-motion: reduce" in at for at in ctx)
     )
     assert blocco > ultimo_scale, "il blocco del movimento ridotto non e' piu' in fondo"
-    casa = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
+    home = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert not [
-        sel for sel, corpo, _ in css_levels.rules(casa) if ":active" in sel and "scale(" in corpo
+        sel for sel, corpo, _ in css_levels.rules(home) if ":active" in sel and "scale(" in corpo
     ], "home-style.css rimpicciolisce al tocco: il blocco in mobile-style.css non la copre"

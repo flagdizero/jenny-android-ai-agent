@@ -119,9 +119,9 @@ function room(version) {
   s.setVersion(version);
   return s;
 }
-function pallino() { return nodi['casa-update-dot'].className; }
+function pallino() { return nodi['home-update-dot'].className; }
 function righe() {
-  return nodi['casa-update-lines'].children.map(
+  return nodi['home-update-lines'].children.map(
     (r) => [r.textContent, String(r.className).includes('is-warn')]);
 }
 """
@@ -226,16 +226,16 @@ def test_the_install_button_exists_only_when_there_is_something_to_install() -> 
     _run_js("""
       const s = room({ current: '0.11.0', update_available: false,
                          last_check: Date.now(), last_success: Date.now() });
-      assert.equal(nodi['casa-update-install'].hidden, true);
-      assert.equal(nodi['casa-update-notes'].hidden, true, 'un link alle note che non ci sono');
+      assert.equal(nodi['home-update-install'].hidden, true);
+      assert.equal(nodi['home-update-notes'].hidden, true, 'un link alle note che non ci sono');
 
       s.setVersion({ current: '0.11.0', latest: '0.12.0', update_available: true,
                      summary: 'tre cose nuove', notes_url: 'https://esempio.invalid/note',
                      last_check: Date.now(), last_success: Date.now() });
-      assert.equal(nodi['casa-update-install'].hidden, false);
-      assert.equal(nodi['casa-update-summary'].textContent, 'tre cose nuove');
-      assert.equal(nodi['casa-update-notes'].href, 'https://esempio.invalid/note');
-      assert.ok(nodi['casa-update-headline'].textContent.includes('0.12.0'));
+      assert.equal(nodi['home-update-install'].hidden, false);
+      assert.equal(nodi['home-update-summary'].textContent, 'tre cose nuove');
+      assert.equal(nodi['home-update-notes'].href, 'https://esempio.invalid/note');
+      assert.ok(nodi['home-update-headline'].textContent.includes('0.12.0'));
     """)
 
 
@@ -246,14 +246,14 @@ def test_a_critical_update_does_not_read_like_an_ordinary_one() -> None:
     _run_js("""
       const normale = room({ current: '0.11.0', latest: '0.12.0', update_available: true,
                                last_check: Date.now(), last_success: Date.now() });
-      const parole = nodi['casa-update-headline'].textContent;
-      assert.equal(nodi['casa-update-install'].classList.contains('is-critical'), false);
+      const parole = nodi['home-update-headline'].textContent;
+      assert.equal(nodi['home-update-install'].classList.contains('is-critical'), false);
 
       normale.setVersion({ current: '0.11.0', latest: '0.12.0', update_available: true,
                            critical: true, last_check: Date.now(), last_success: Date.now() });
-      assert.notEqual(nodi['casa-update-headline'].textContent, parole,
+      assert.notEqual(nodi['home-update-headline'].textContent, parole,
         'un aggiornamento critico si legge come uno qualunque');
-      assert.equal(nodi['casa-update-install'].classList.contains('is-critical'), true);
+      assert.equal(nodi['home-update-install'].classList.contains('is-critical'), true);
     """)
 
 
@@ -262,29 +262,29 @@ def test_the_progress_block_is_not_there_before_you_press() -> None:
     riquadro vuoto sembrerebbe qualcosa che e' andato storto."""
     _run_js("""
       const s = room({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() });
-      assert.equal(nodi['casa-update-progress'].hidden, true);
+      assert.equal(nodi['home-update-progress'].hidden, true);
 
       /* Durante: la nota dice cosa aspettarsi, la fase dice a che punto e', e
          la barra c'e' solo mentre qualcosa si muove davvero. */
       s.flow.state = { busy: true, noteKey: 'settings.update.starting',
                        phase: 'downloading', progress: 40, detail: '10 MB' };
       s._paint();
-      assert.equal(nodi['casa-update-progress'].hidden, false);
-      assert.equal(nodi['casa-update-note'].textContent, i18n.t('settings.update.starting'));
-      assert.equal(nodi['casa-update-phase'].textContent,
+      assert.equal(nodi['home-update-progress'].hidden, false);
+      assert.equal(nodi['home-update-note'].textContent, i18n.t('settings.update.starting'));
+      assert.equal(nodi['home-update-phase'].textContent,
                    i18n.t('settings.update.phaseDownloading'));
-      assert.equal(nodi['casa-update-detail'].textContent, '10 MB');
-      assert.equal(nodi['casa-update-track'].hidden, false);
-      assert.equal(nodi['casa-update-bar'].style.width, '40%');
-      assert.equal(nodi['casa-update-install'].disabled, true, 'si puo premere due volte');
+      assert.equal(nodi['home-update-detail'].textContent, '10 MB');
+      assert.equal(nodi['home-update-track'].hidden, false);
+      assert.equal(nodi['home-update-bar'].style.width, '40%');
+      assert.equal(nodi['home-update-install'].disabled, true, 'si puo premere due volte');
 
       /* In attesa della conferma di sistema la barra non c'e': non si sta
          muovendo niente, sta aspettando una persona. */
       s.flow.state = { busy: false, noteKey: 'settings.update.promptNote',
                        phase: 'prompt', progress: 0, detail: '' };
       s._paint();
-      assert.equal(nodi['casa-update-track'].hidden, true);
-      assert.equal(nodi['casa-update-install'].disabled, false,
+      assert.equal(nodi['home-update-track'].hidden, true);
+      assert.equal(nodi['home-update-install'].disabled, false,
         'la conferma persa non si puo piu riprovare');
     """)
 
@@ -312,10 +312,10 @@ def test_not_knowing_the_version_is_said_and_not_masked() -> None:
     secondo, e si dice."""
     _run_js("""
       room(null);
-      assert.equal(nodi['casa-update-headline'].textContent, i18n.t('casa.updates.unknown'));
+      assert.equal(nodi['home-update-headline'].textContent, i18n.t('home.updates.unknown'));
 
       room({ current: '0.11.0' });
-      assert.ok(nodi['casa-update-headline'].textContent.includes('0.11.0'));
-      assert.ok(!nodi['casa-update-headline'].textContent.includes('{'),
+      assert.ok(nodi['home-update-headline'].textContent.includes('0.11.0'));
+      assert.ok(!nodi['home-update-headline'].textContent.includes('{'),
         'il segnaposto e rimasto dentro');
     """)

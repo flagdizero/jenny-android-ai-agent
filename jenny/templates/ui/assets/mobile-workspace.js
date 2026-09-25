@@ -249,7 +249,7 @@ export class WorkspaceController {
       queueMicrotask(() => {
         const app = window.mobileApp;
         if (this.viewMode === 'editor' || app?.currentMode !== 'workspace') return;
-        app.navigateBack('memoria');
+        app.navigateBack('memory');
       });
       return;
     }
@@ -356,7 +356,7 @@ export class WorkspaceController {
     this._resetToExplorerAt(dir !== null ? dir : this.currentDir);
     if (stay) return true;
     if (hardwareBack) return false;
-    window.mobileApp?.navigateBack('memoria');
+    window.mobileApp?.navigateBack('memory');
     return true;
   }
 

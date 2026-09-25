@@ -25,10 +25,10 @@ import { disegnaRiga } from './shared/apps-actions.js';
 import { projectKey } from './shared/conversation-list.js';
 
 export class NotebookCard {
-  /** @param guscio `{ pagine(), apri(nome), elimina(nome), rinomina?(nome) }`. */
+  /** @param guscio `{ homePages(), apri(name), elimina(name), rename?(name) }`. */
   constructor(guscio) {
     this.guscio = guscio;
-    this.foglio = document.getElementById('casa-quaderno-sheet');
+    this.foglio = document.getElementById('home-notebook-sheet');
   }
 
   get isOpen() {
@@ -40,9 +40,9 @@ export class NotebookCard {
   }
 
   /** Le righe per il quaderno *nome*, nell'ordine della scheda di un'app. */
-  righe(nome) {
-    const chiave = projectKey(nome);
-    const stato = this.guscio.pagine?.()?.stato('conversation', chiave) || null;
+  righe(name) {
+    const chiave = projectKey(name);
+    const stato = this.guscio.homePages?.()?.stato('conversation', chiave) || null;
     const righe = [{ icon: 'ti-message', label: i18n.t('apps.open'), action: 'open' }];
     if (stato === 'appesa') {
       righe.push({ icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' });
@@ -54,32 +54,32 @@ export class NotebookCard {
         ...(stato === 'piena' ? { disabled: true, reason: i18n.t('apps.pageFull') } : {}),
       });
     }
-    if (this.guscio.rinomina) {
-      righe.push({ icon: 'ti-cursor-text', label: i18n.t('casa.quaderno.rinomina'), action: 'rename' });
+    if (this.guscio.rename) {
+      righe.push({ icon: 'ti-cursor-text', label: i18n.t('home.notebook.rename'), action: 'rename' });
     }
     righe.push({ icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true });
     return righe;
   }
 
-  mostra(nome) {
-    if (!this.foglio || !nome) return;
-    document.getElementById('casa-quaderno-sheet-title').innerHTML =
+  mostra(name) {
+    if (!this.foglio || !name) return;
+    document.getElementById('home-notebook-sheet-title').innerHTML =
       `<div class="app-sheet-head">
         <div class="app-sheet-icon"><i class="ti ti-notebook"></i></div>
-        <div class="app-sheet-name">${escapeHtml(nome)}</div>
+        <div class="app-sheet-name">${escapeHtml(name)}</div>
       </div>`;
 
-    const azioni = document.getElementById('casa-quaderno-sheet-actions');
-    azioni.innerHTML = this.righe(nome).map(disegnaRiga).join('');
+    const azioni = document.getElementById('home-notebook-sheet-actions');
+    azioni.innerHTML = this.righe(name).map(disegnaRiga).join('');
     azioni.querySelectorAll('.oc-sheet-action').forEach((b) => {
       b.addEventListener('click', async (e) => {
         e.stopPropagation();
         this.close();
-        await this.fai(b.dataset.action, nome);
+        await this.fai(b.dataset.action, name);
       });
     });
 
-    const annulla = document.getElementById('casa-quaderno-sheet-cancel');
+    const annulla = document.getElementById('home-notebook-sheet-cancel');
     if (annulla) {
       annulla.textContent = i18n.t('common.cancel');
       annulla.onclick = () => this.close();
@@ -95,14 +95,14 @@ export class NotebookCard {
   }
 
   /** Cosa fa ogni riga: chiede al guscio. */
-  async fai(azione, nome) {
-    const chiave = projectKey(nome);
-    const pagine = this.guscio.pagine?.();
-    if (azione === 'open') return this.guscio.apri(nome);
-    if (azione === 'pin') return pagine?.appendi('conversation', chiave);
-    if (azione === 'unpin') return pagine?.stacca('conversation', chiave);
-    if (azione === 'rename') return this.guscio.rinomina?.(nome);
-    if (azione === 'delete') return this.guscio.elimina(nome);
+  async fai(azione, name) {
+    const chiave = projectKey(name);
+    const homePages = this.guscio.homePages?.();
+    if (azione === 'open') return this.guscio.apri(name);
+    if (azione === 'pin') return homePages?.appendi('conversation', chiave);
+    if (azione === 'unpin') return homePages?.stacca('conversation', chiave);
+    if (azione === 'rename') return this.guscio.rename?.(name);
+    if (azione === 'delete') return this.guscio.elimina(name);
     return undefined;
   }
 }

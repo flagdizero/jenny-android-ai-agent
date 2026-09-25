@@ -75,8 +75,8 @@ def _sorgenti() -> dict[str, str]:
 
 def _chiamanti(segni: tuple[str, ...]) -> list[str]:
     return sorted(
-        nome
-        for nome, src in _sorgenti().items()
+        name
+        for name, src in _sorgenti().items()
         # I commenti raccontano il prima: qui contano solo le chiamate vere.
         if any(re.search(s, re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S)))
                for s in segni)
@@ -92,22 +92,22 @@ def test_a_library_with_callers_is_actually_shipped() -> None:
     """
     from jenny.utils.android_assets import _UI_MANIFEST
 
-    for nome, dati in LIBRERIE.items():
+    for name, dati in LIBRERIE.items():
         chiamanti = _chiamanti(dati["segni"])
         if not chiamanti:
             continue
         percorso = dati["spedito"]
         assert (ASSETS.parent / percorso).exists(), (
-            f"{nome} la chiamano {chiamanti} e il file non c'e': quelle chiamate "
+            f"{name} la chiamano {chiamanti} e il file non c'e': quelle chiamate "
             f"sono protette da un «se la libreria c'e'», quindi non falliscono — "
             f"si spengono in silenzio"
         )
         assert percorso in _UI_MANIFEST, (
-            f"{nome} e' su disco ma non nel manifesto: sul telefono non arriva, "
+            f"{name} e' su disco ma non nel manifesto: sul telefono non arriva, "
             f"e in locale il difetto non si vede"
         )
-        assert nome in NOTICES.read_text(encoding="utf-8").lower(), (
-            f"{nome} e' spedito e le note di licenza non lo dicono"
+        assert name in NOTICES.read_text(encoding="utf-8").lower(), (
+            f"{name} e' spedito e le note di licenza non lo dicono"
         )
 
 
@@ -115,11 +115,11 @@ def test_a_shipped_library_has_someone_who_calls_it() -> None:
     """Il verso opposto: un bundle spedito e mai eseguito e' peso nell'APK e una
     licenza da tenere aggiornata per niente. E' la ragione per cui lo
     sfoltimento cercava questi file — la ragione era buona, la misura no."""
-    for nome, dati in LIBRERIE.items():
+    for name, dati in LIBRERIE.items():
         if not (ASSETS.parent / dati["spedito"]).exists():
             continue
         assert _chiamanti(dati["segni"]), (
-            f"{nome} e' nel pacchetto e non lo chiama nessuno: e' peso morto"
+            f"{name} e' nel pacchetto e non lo chiama nessuno: e' peso morto"
         )
 
 

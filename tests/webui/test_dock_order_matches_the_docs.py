@@ -5,7 +5,7 @@ non è cosmetico: è anche l'ordine del carosello dello swipe (``_visibleModes``
 quindi la pagina che lo sbaglia insegna la gesture sbagliata.
 
 Dal 20/09/2026 sono quattro — una console e tre facoltà — e il ``data-mode``
-non è più il nome del sottosistema: ``cervello``, ``mani`` e ``memoria`` sono
+non è più il nome del sottosistema: ``brain``, ``hands`` e ``memory`` sono
 tre cassetti della stessa vista.
 
 Si confronta la sequenza, non i nomi presi uno per uno: uno slot spostato è
@@ -28,9 +28,9 @@ _HIDDEN_MODES = {"onboarding"}
 # Come la tabella nomina ciascun mode. La chiave è il ``data-mode`` del DOM.
 _DOC_LABELS = {
     "chat": "Console",
-    "cervello": "Brain",
-    "mani": "Hands",
-    "memoria": "Memory",
+    "brain": "Brain",
+    "hands": "Hands",
+    "memory": "Memory",
 }
 
 

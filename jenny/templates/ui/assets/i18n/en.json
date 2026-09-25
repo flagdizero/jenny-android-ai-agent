@@ -8,9 +8,9 @@
     "onboarding": "Setup",
     "ariaLabel": "Navigation",
     "console": "Console",
-    "cervello": "Brain",
-    "mani": "Hands",
-    "memoria": "Memory",
+    "brain": "Brain",
+    "hands": "Hands",
+    "memory": "Memory",
     "launcher": "App drawer"
   },
   "chat": {
@@ -457,7 +457,7 @@
       "summaryUnknown": "could not read"
     },
     "brands": "Brands",
-    "modelLivesInCasa": "Which model answers is chosen in the house, under «Who answers»: one tap on a model saves the model and the brand together. Here you decide which brands exist.",
+    "modelLivesInHome": "Which model answers is chosen in the house, under «Who answers»: one tap on a model saves the model and the brand together. Here you decide which brands exist.",
     "firstModel": "First model",
     "firstModelPlaceholder": "e.g. deepseek-v4.1-flash",
     "firstModelHint": "A brand with no working model is not a brand that exists. You change it later from the house.",
@@ -465,7 +465,7 @@
     "useNow": "Use it now",
     "providerSavedAndActive": "Saved, and it answers now",
     "providerSavedNotActive": "Brand saved, but not activated: {error}",
-    "updatesLiveInCasa": "Checking for and installing updates happens in the house, under «Updates».",
+    "updatesLiveInHome": "Checking for and installing updates happens in the house, under «Updates».",
     "addProviderHint": "Name, format, endpoint, key and the first model. A brand without a working model is not a brand you have.",
     "answersNow": "answers",
     "contextWindow": "Context window"
@@ -619,7 +619,7 @@
     "sticker": {
       "desc": "Every message is a cut-out sticker: white border, hard shadow, imperfect rotation."
     },
-    "fumetto": {
+    "comic": {
       "desc": "Ink on paper, hatching and speech bubbles: every reply is a comic panel."
     },
     "y2k": {
@@ -842,7 +842,7 @@
     "askReadonly": "Ask something (read-only)…",
     "askAboutReadonly": "Ask about {name} (read-only)…"
   },
-  "casa": {
+  "home": {
     "empty": "Nothing here yet.\nGo ahead.",
     "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to Jenny",
@@ -916,16 +916,16 @@
       "pages": "back to the pages",
       "settings": "Settings"
     },
-    "tu": {
+    "you": {
       "workshopHint": "watch, tune, repair"
     },
     "jenny": {
       "title": "Jenny",
       "hidden": "hidden",
       "floatingShort": "floating",
-      "nome": "Her name",
-      "nomeHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
-      "nomeFailed": "I couldn't save the name.",
+      "name": "Her name",
+      "nameHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
+      "nameFailed": "I couldn't save the name.",
       "rules": "The rules you gave her",
       "rulesHint": "This one stays yours: she reads it every turn and never rewrites it. The rest of her character is hers, and you can read it in the workshop.",
       "rulesPlaceholder": "For example: call me by name, and no emoji.",
@@ -952,7 +952,7 @@
         "leftoverNoCount": "There is still the chat of a notebook that no longer exists under this name. I can pick it back up — if you deleted it by mistake it is all there — or start clean and throw it away."
       }
     },
-    "pages": {
+    "notebookPages": {
       "open": "Notebook pages",
       "countOne": "1 page",
       "countMany": "{count} pages",
@@ -1031,14 +1031,14 @@
       "msgHead": "In “{page}”, where it says “{quote}”:",
       "msgRef": "report"
     },
-    "pagine": {
-      "appSparita": "The app “{nome}” is gone.",
-      "quadernoSparito": "The notebook “{nome}” is gone.",
-      "togliPagina": "Remove the page",
-      "salvaFallito": "Couldn't save the pages. Nothing was changed."
+    "pages": {
+      "appGone": "The app “{name}” is gone.",
+      "notebookGone": "The notebook “{name}” is gone.",
+      "removePage": "Remove the page",
+      "saveFailed": "Couldn't save the pages. Nothing was changed."
     },
-    "quaderno": {
-      "rinomina": "Rename",
+    "notebook": {
+      "rename": "Rename",
       "eliminato": "Notebook “{name}” deleted",
       "deleteConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
       "deleteConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
@@ -1051,59 +1051,59 @@
       "renameTaken": "There is already a notebook or a conversation called “{name}”.",
       "renameMissing": "“{name}” is no longer there: it may have been deleted or renamed."
     },
-    "fila": {
+    "strip": {
       "label": "Home pages",
       "app": "Apps",
       "notebooks": "Notebooks",
       "settings": "Settings",
-      "ordinaAiuto": "Drag to move · × to remove",
-      "fatto": "Done",
-      "sposta": "Move {nome}: left and right arrows",
-      "togli": "Remove {nome} from the pages"
+      "sortHelp": "Drag to move · × to remove",
+      "done": "Done",
+      "move": "Move {name}: left and right arrows",
+      "remove": "Remove {name} from the pages"
     }
   },
   "workshop": {
     "eyebrow": "workshop",
-    "casaPill": "Jenny",
+    "homePill": "Jenny",
     "sub": {
-      "cervello": "which brands exist, which head she thinks with, and what the phone lets her do",
-      "mani": "what she can do, with which permissions, and when she acts on her own",
-      "memoria": "what she remembers, who fills it, and where it lives on disk"
+      "brain": "which brands exist, which head she thinks with, and what the phone lets her do",
+      "hands": "what she can do, with which permissions, and when she acts on her own",
+      "memory": "what she remembers, who fills it, and where it lives on disk"
     },
-    "gruppi": {
-      "chiPensa": "Who thinks",
-      "parametri": "Parameters",
-      "quantoRicorda": "How much she remembers",
+    "groups": {
+      "whoThinks": "Who thinks",
+      "parameters": "Parameters",
+      "howMuchItRemembers": "How much she remembers",
       "dream": "Dream — who fills those three files",
-      "giardiniere": "Gardener — who fills the notebooks",
+      "gardener": "Gardener — who fills the notebooks",
       "file": "The real files",
       "skill": "Skills"
     },
-    "rimando": {
-      "dreamInMemoria": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
+    "link": {
+      "dreamInMemory": "Who fills the memory — Dream and the gardener — lives next to what it fills, in Memory."
     },
     "file": {
       "desc": "Her working folder, all of it: folders open right here. Service files are never listed."
     }
   },
   "skills": {
-    "riepilogoNome": "What she knows",
-    "riepilogo": "{integrate} built in, {tue} yours",
-    "riepilogoNessunaTua": "{integrate} built in, none yours",
-    "riepilogoErrore": "couldn't be read",
-    "comeInsegnare": "To teach her one, ask in chat.",
-    "pannello": "Skills",
-    "tue": "Yours",
+    "summaryName": "What she knows",
+    "summary": "{integrate} built in, {yours} yours",
+    "summaryNoneYours": "{integrate} built in, none yours",
+    "summaryError": "couldn't be read",
+    "howToTeach": "To teach her one, ask in chat.",
+    "panel": "Skills",
+    "yours": "Yours",
     "integrate": "Built in",
-    "servizio": "Plus {n} internal ones Jenny uses on her own.",
-    "vuotaTitolo": "You haven't taught her one yet",
-    "vuotaTesto": "Explain something you ask her often: she'll turn it into a skill.",
-    "chiedi": "Ask Jenny",
-    "chiediPrompt": "I want to teach you a new skill. Use the \"skill-creator\" skill and guide me step by step.",
-    "attiva": "Turn on the {name} skill",
+    "service": "Plus {n} internal ones Jenny uses on her own.",
+    "emptyTitle": "You haven't taught her one yet",
+    "emptyText": "Explain something you ask her often: she'll turn it into a skill.",
+    "ask": "Ask Jenny",
+    "askPrompt": "I want to teach you a new skill. Use the \"skill-creator\" skill and guide me step by step.",
+    "active": "Turn on the {name} skill",
     "integrataBloccata": "Comes with the app: it can't be turned off here.",
     "tuaBloccata": "Locked by its own file: it can't be turned off here.",
-    "erroreLettura": "The skill list couldn't be read.",
+    "readError": "The skill list couldn't be read.",
     "riprova": "Retry"
   }
 }

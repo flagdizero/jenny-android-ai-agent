@@ -24,7 +24,7 @@ from jenny.utils.android_assets import _UI_MANIFEST
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
-DEAD_KEY = "jenny-mascotte-color"
+DEAD_KEY = "jenny-mascot-color"
 
 node = requires_node
 
@@ -98,7 +98,7 @@ def test_a_phone_that_had_chosen_black_and_white_gets_it_cleaned_up() -> None:
     """La chiave morta si cancella al caricamento, e non fa cambiare nient'altro."""
     _run(f"""
 import assert from 'node:assert/strict';
-const store = new Map([[{json.dumps(DEAD_KEY)}, '0'], ['jenny-mascotte-size', 'lg']]);
+const store = new Map([[{json.dumps(DEAD_KEY)}, '0'], ['jenny-mascot-size', 'lg']]);
 globalThis.localStorage = {{
   getItem(k) {{ return store.has(k) ? store.get(k) : null; }},
   setItem(k, v) {{ store.set(k, String(v)); }},
@@ -139,7 +139,7 @@ def test_every_retired_preference_is_cleaned_up_and_nothing_reads_it() -> None:
     e nessun sorgente della WebUI le legge più, o la pulizia cancellerebbe
     una preferenza viva."""
     ritirate = [
-        "jenny-mascotte-dock-side", "jenny-mascotte-side", "jenny-advanced-mode",
+        "jenny-mascot-dock-side", "jenny-mascot-side", "jenny-advanced-mode",
         "jenny-home-view", "locale",
     ]
     for path in sorted(ASSETS.rglob("*.js")):

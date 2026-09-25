@@ -139,12 +139,12 @@ console.log('ok');
 def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
     """L'altra meta' della correzione: il tetto se n'e' andato davvero.
 
-    Senza questa riga si potrebbe rimettere `max-width` su `.casa-msg-jenny` e
+    Senza questa riga si potrebbe rimettere `max-width` su `.home-msg-jenny` e
     tutti i banchi qui sopra resterebbero verdi — misurerebbero un margine
     giusto sopra una larghezza sbagliata.
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    blocco = css.split(".casa-msg-jenny {")[1].split("}")[0]
+    blocco = css.split(".home-msg-jenny {")[1].split("}")[0]
     # `max-width: 100%` e' la colonna, non un tetto: serve perche' un `<pre>`
     # lungo non allarghi il messaggio oltre il filo (09f43fc). Un tetto e'
     # qualunque valore piu' stretto della colonna.
@@ -155,7 +155,7 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
     assert not tetti, (
         f"il tetto e' tornato ({tetti}): il margine condizionale non serve piu' a niente"
     )
-    assert ".casa-msg-jenny.is-under-jenny" in css, "manca la regola del margine"
+    assert ".home-msg-jenny.is-under-jenny" in css, "manca la regola del margine"
 
 
 # ── Chi si scansa: tutti e due i lati della conversazione ──────────────────
@@ -205,13 +205,13 @@ def test_a_bubble_of_ours_in_her_corner_dodges_too() -> None:
     Le bolle di chi scrive sono `align-self: flex-end` — incollate al bordo
     destro, che e' la colonna di Jenny — e la piu' recente e' anche la piu' in
     basso. Cioe' l'unica cosa che lei copriva sempre era **quello che hai
-    appena scritto tu**. Con il selettore vecchio (`.casa-msg-jenny`) questo
+    appena scritto tu**. Con il selettore vecchio (`.home-msg-jenny`) questo
     banco e' rosso.
     """
     out = _con_dom("""
-const risposta = nodo('casa-msg casa-msg-jenny', { right: 540, bottom: 200 });
-const mia      = nodo('casa-msg casa-msg-user',  { right: 556.4, bottom: 300 });
-const vecchia  = nodo('casa-msg casa-msg-user',  { right: 556.4, bottom: 90 });
+const risposta = nodo('home-msg home-msg-jenny', { right: 540, bottom: 200 });
+const mia      = nodo('home-msg home-msg-user',  { right: 556.4, bottom: 300 });
+const vecchia  = nodo('home-msg home-msg-user',  { right: 556.4, bottom: 90 });
 const filo = filoCon([vecchia, risposta, mia]);
 new JennyGap(filo, mascotte).aggiorna();
 assert.ok(mia.classi.has(CLASSE), 'la bolla nel suo angolo non si e scansata');
@@ -231,7 +231,7 @@ def test_a_bubble_that_stops_dodging_gets_cleaned_up() -> None:
     c'e' nessuno da scansare.
     """
     out = _con_dom("""
-const mia = nodo('casa-msg casa-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
+const mia = nodo('home-msg home-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
 new JennyGap(filoCon([mia]), mascotte).aggiorna();
 assert.ok(!mia.classi.has(CLASSE), 'il margine e rimasto attaccato');
 console.log('ok');
@@ -248,8 +248,8 @@ def test_our_bubble_moves_aside_it_does_not_hollow_out() -> None:
     resta coperta lo stesso. Deve muoversi tutta intera: `margin`.
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    assert ".casa-msg-user.is-under-jenny" in css, "le bolle non si scansano affatto"
-    blocco = css.split(".casa-msg-user.is-under-jenny {")[1].split("}")[0]
+    assert ".home-msg-user.is-under-jenny" in css, "le bolle non si scansano affatto"
+    blocco = css.split(".home-msg-user.is-under-jenny {")[1].split("}")[0]
     assert "margin-right: var(--jenny-gap" in blocco, blocco
     assert "padding-right" not in blocco, (
         "con padding la bolla si svuota a destra invece di spostarsi"

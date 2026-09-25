@@ -73,7 +73,7 @@ export class HomePages {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
   constructor(app) {
     this.app = app;
-    this.pista = document.getElementById('casa-pista');
+    this.pista = document.getElementById('home-track');
     /** Le pagine aggiunte, come le ha salvate il server. */
     this.pages = [];
     this.fixed = [...FIXED_PAGES];
@@ -183,8 +183,8 @@ export class HomePages {
     try {
       salvate = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
     } catch (err) {
-      console.warn('casa.pagine: pages not saved', err);
-      showToast(i18n.t('casa.pagine.salvaFallito'), 'error');
+      console.warn('casa.homePages: pages not saved', err);
+      showToast(i18n.t('home.pages.saveFailed'), 'error');
       return false;
     }
     this.pages = salvate.pages || [];
@@ -241,7 +241,7 @@ export class HomePages {
   _pannelloPer(id) {
     if (!this.pista) return null;
     const figli = Array.from(this.pista.children);
-    if (this.fixed.includes(id)) return figli.find((c) => c.dataset?.pagina === id) || null;
+    if (this.fixed.includes(id)) return figli.find((c) => c.dataset?.page === id) || null;
     return figli.find((c) => c.dataset?.id === id) || null;
   }
 
@@ -360,23 +360,23 @@ export class HomePages {
        un `remove()` secco la porterebbe via insieme al pannello — cioe' filo,
        composer e bozza (trovato il 23/09/2026, quando le pagine tenevano anche
        le stanze del guscio e perdevano pure quelle). */
-    const casa = this._pannelloPer('chat');
+    const home = this._pannelloPer('chat');
     for (const vecchio of Array.from(this.pista.children).filter((c) => c.dataset?.id)) {
-      this.app?.trasloco?.riportaACasa(vecchio, casa);
+      this.app?.trasloco?.riportaACasa(vecchio, home);
       vecchio.remove();
     }
     this.order.forEach((id, i) => {
-      let pannello = this._pannelloPer(id);
-      if (!pannello) {
+      let panel = this._pannelloPer(id);
+      if (!panel) {
         const s = this.pages.find((x) => x.id === id);
         if (!s) return;
-        pannello = document.createElement('div');
-        pannello.className = 'casa-pagina';
-        pannello.dataset.id = s.id;
-        pannello.dataset.kind = s.kind;
+        panel = document.createElement('div');
+        panel.className = 'home-page';
+        panel.dataset.id = s.id;
+        panel.dataset.kind = s.kind;
       }
       const qui = this.pista.children[i];
-      if (qui !== pannello) this.pista.insertBefore(pannello, qui || null);
+      if (qui !== panel) this.pista.insertBefore(panel, qui || null);
     });
     this.app?.onPagineCambiate?.();
   }
@@ -399,12 +399,12 @@ export class HomePages {
        tastiera fisica, e chi legge lo schermo, finivano nelle pagine accanto —
        un campo di ricerca, un interruttore delle impostazioni — che si
        attivavano senza vederle. Vale per tutti i pannelli, fissi compresi. */
-    for (const pannello of Array.from(this.pista.children)) {
-      pannello.inert = pannello !== corrente;
+    for (const panel of Array.from(this.pista.children)) {
+      panel.inert = panel !== corrente;
     }
-    for (const pannello of this._pannelli()) {
-      if (pannello === corrente) this._riempi(pannello);
-      else this._svuota(pannello);
+    for (const panel of this._pannelli()) {
+      if (panel === corrente) this._riempi(panel);
+      else this._svuota(panel);
     }
     const id = this.order[indice];
     if (this._accesa && this._accesa !== id) {
@@ -421,15 +421,15 @@ export class HomePages {
   }
 
   /** Il contenuto di una pagina, costruito adesso perche' adesso si guarda. */
-  async _riempi(pannello) {
+  async _riempi(panel) {
     /* `pieno` porta il **numero del tentativo**, non un `1`: qui basta che sia
        valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
     /* Una pagina conversazione non si riempie: ci arriva la chat, e la porta
        il trasloco da `vaiA`. */
-    if (pannello.dataset.kind === 'conversation') return;
-    if (pannello.dataset.pieno) return;
-    const schermata = this.pages.find((x) => x.id === pannello.dataset.id);
+    if (panel.dataset.kind === 'conversation') return;
+    if (panel.dataset.pieno) return;
+    const schermata = this.pages.find((x) => x.id === panel.dataset.id);
     if (!schermata) return;
     /* Un segno **per tentativo**, non un flag condiviso.
        Un dito veloce fra due pagine fa: riempi → svuota → riempi. Il primo
@@ -439,7 +439,7 @@ export class HomePages {
        Col numero di tentativo ognuno riconosce se e' ancora il suo giro.
        Misurato dal banco, non ipotizzato (22/09/2026). */
     const mio = String((this._tentativo = (this._tentativo || 0) + 1));
-    pannello.dataset.pieno = mio;
+    panel.dataset.pieno = mio;
     if (schermata.kind === 'app') {
       /* Il segreto **prima** della cornice: l'indirizzo se lo porta dentro, e
          costruirla senza vorrebbe dire un `token=undefined`, cioe' un 401 e
@@ -447,21 +447,21 @@ export class HomePages {
          era persa estraendo la cornice. */
       if (!api.getSecret()) {
         try { await api.bootstrap(); } catch {
-          if (pannello.dataset.pieno === mio) pannello.dataset.pieno = '';
+          if (panel.dataset.pieno === mio) panel.dataset.pieno = '';
           return;
         }
       }
       /* Nel frattempo si puo' essere usciti dalla pagina, o rientrati: in tutti
          e due i casi il giro buono non e' piu' il nostro. */
-      if (pannello.dataset.pieno !== mio) return;
+      if (panel.dataset.pieno !== mio) return;
       const cornice = cornicePerApp(schermata.ref);
-      cornice.className = 'casa-pagina-app';
-      pannello.appendChild(cornice);
+      cornice.className = 'home-page-app';
+      panel.appendChild(cornice);
       /* La cornice si monta **subito**, e intanto si chiede se l'app c'e'
          ancora: aspettare l'elenco prima di montare vorrebbe dire una pagina
          vuota a ogni ingresso, per un caso raro. Sul telefono l'elenco e' gia'
          in cache e la risposta arriva prima che l'app abbia dipinto. */
-      this._controllaApp(pannello, schermata, mio);
+      this._controllaApp(panel, schermata, mio);
       this._ascoltaDatiApp();
     }
   }
@@ -488,20 +488,20 @@ export class HomePages {
   }
 
   /** Spegne una pagina: la cornice dell'app se ne va, e con lei l'app viva. */
-  _svuota(pannello) {
+  _svuota(panel) {
     /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
        mentre guardi un'app. Spenta resta comunque — una foto non gira. */
-    if (pannello.dataset.kind === 'conversation') {
-      const s = this.pages.find((x) => x.id === pannello.dataset.id);
-      this.app?.trasloco?.fotoSeServe(pannello, s?.ref);
+    if (panel.dataset.kind === 'conversation') {
+      const s = this.pages.find((x) => x.id === panel.dataset.id);
+      this.app?.trasloco?.fotoSeServe(panel, s?.ref);
       return;
     }
-    if (!pannello.dataset.pieno) return;
-    pannello.textContent = '';
-    pannello.dataset.pieno = '';
+    if (!panel.dataset.pieno) return;
+    panel.textContent = '';
+    panel.dataset.pieno = '';
     /* L'avviso se n'e' andato col resto: al prossimo ingresso lo rimette, se
        serve, il controllo dell'app. */
-    delete pannello.dataset.sparita;
+    delete panel.dataset.sparita;
   }
 
   /* ── La pagina di una cosa che non c'e' piu' ─────────────────────────── */
@@ -515,7 +515,7 @@ export class HomePages {
 
      Una lettura che fallisce non segna niente: «non lo so» non e' «sparito». */
 
-  async _controllaApp(pannello, schermata, mio) {
+  async _controllaApp(panel, schermata, mio) {
     const fonte = this.app?.appsSource?.();
     if (!fonte?.attendiJennyApps) return;
     let elenco;
@@ -525,14 +525,14 @@ export class HomePages {
       return;
     }
     if (fonte.jennyListFailed?.()) return;
-    if (pannello.dataset.pieno !== mio) return;       // nel frattempo sei uscito
+    if (panel.dataset.pieno !== mio) return;       // nel frattempo sei uscito
     if (elenco.some((a) => a.slug === schermata.ref)) return;
-    pannello.textContent = '';                        // via la cornice verso il nulla
-    this._sparita(pannello, schermata);
+    panel.textContent = '';                        // via la cornice verso il nulla
+    this._sparita(panel, schermata);
   }
 
-  async _controllaQuaderno(pannello, schermata) {
-    if (!pannello || !schermata) return;
+  async _controllaQuaderno(panel, schermata) {
+    if (!panel || !schermata) return;
     let nomi;
     try {
       const dati = await api.listProjects();
@@ -540,8 +540,8 @@ export class HomePages {
     } catch {
       return;
     }
-    if (nomi.has(projectNameOf(schermata.ref))) this._togliSparita(pannello);
-    else this._sparita(pannello, schermata);
+    if (nomi.has(projectNameOf(schermata.ref))) this._togliSparita(panel);
+    else this._sparita(panel, schermata);
   }
 
   /** L'avviso, **sopra** quel che c'e' nel pannello e non al suo posto: in una
@@ -553,33 +553,33 @@ export class HomePages {
    *  chat) e i tasti scrivevano a `project:<cancellato>`. Il pannello porta
    *  quindi un segno che il guscio legge (`sparitaQui`) prima di dare o
    *  lasciare il fuoco al campo, e gli si dice che la pagina e' cambiata. */
-  _sparita(pannello, schermata) {
-    this._togliSparita(pannello);
+  _sparita(panel, schermata) {
+    this._togliSparita(panel);
     const scheda = document.createElement('div');
-    scheda.className = 'casa-pagina-sparita';
+    scheda.className = 'home-page-gone';
     const testo = document.createElement('p');
     testo.textContent = i18n.t(
-      schermata.kind === 'app' ? 'casa.pagine.appSparita' : 'casa.pagine.quadernoSparito',
-      { nome: this.nomeDi(schermata) },
+      schermata.kind === 'app' ? 'home.pages.appGone' : 'home.pages.notebookGone',
+      { name: this.nomeDi(schermata) },
     );
-    const togli = document.createElement('button');
-    togli.type = 'button';
-    togli.className = 'casa-pagina-sparita-togli';
-    togli.textContent = i18n.t('casa.pagine.togliPagina');
-    togli.addEventListener('click', () => this.stacca(schermata.kind, schermata.ref));
-    scheda.append(testo, togli);
-    pannello.appendChild(scheda);
-    pannello.dataset.sparita = '1';
-    this.app?.onSparitaCambiata?.(pannello);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'home-page-gone-remove';
+    remove.textContent = i18n.t('home.pages.removePage');
+    remove.addEventListener('click', () => this.stacca(schermata.kind, schermata.ref));
+    scheda.append(testo, remove);
+    panel.appendChild(scheda);
+    panel.dataset.sparita = '1';
+    this.app?.onSparitaCambiata?.(panel);
   }
 
-  _togliSparita(pannello) {
-    for (const c of Array.from(pannello.children)) {
-      if (c.className === 'casa-pagina-sparita') c.remove();
+  _togliSparita(panel) {
+    for (const c of Array.from(panel.children)) {
+      if (c.className === 'home-page-gone') c.remove();
     }
-    if (!pannello.dataset.sparita) return;
-    delete pannello.dataset.sparita;
-    this.app?.onSparitaCambiata?.(pannello);
+    if (!panel.dataset.sparita) return;
+    delete panel.dataset.sparita;
+    this.app?.onSparitaCambiata?.(panel);
   }
 
   /** La pagina a schermo dice che la sua cosa non c'e' piu'? Il guscio lo
@@ -589,7 +589,7 @@ export class HomePages {
   }
 
   /** I pannelli delle pagine aggiunte, in ordine. Quelli fissi non ci sono:
-   *  hanno `data-pagina` e non `data-id`. */
+   *  hanno `data-page` e non `data-id`. */
   _pannelli() {
     if (!this.pista) return [];
     return Array.from(this.pista.children).filter((c) => c.dataset?.id);
@@ -605,7 +605,7 @@ export class HomePages {
     // Fuori dalla chat comandano le stanze, non le pagine.
     if (this.app?.view && this.app.view !== 'chat') return false;
     // Mentre si spostano le pagine il dito e' della modalita' ordina.
-    if (this.app?.fila?.ordinando) return false;
+    if (this.app?.strip?.ordinando) return false;
     if (this.quante < 2) return false;
     return true;
   }
@@ -682,9 +682,9 @@ export class HomePages {
    *  controllare anche la specie vorrebbe dire due regole da tenere d'accordo.
    */
   _finestraPagina() {
-    const pannello = this.pannelloDi(this.indice);
-    if (!pannello?.dataset?.id) return null;
-    const cornice = pannello.children[0] || pannello.firstElementChild;
+    const panel = this.pannelloDi(this.indice);
+    if (!panel?.dataset?.id) return null;
+    const cornice = panel.children[0] || panel.firstElementChild;
     return cornice?.contentWindow || null;
   }
 

@@ -189,10 +189,10 @@ async def test_the_cap_travels_with_the_list(env) -> None:
 
 
 async def test_saving_a_page_and_reading_it_back(env) -> None:
-    pagine = [{"id": "p1", "kind": "app", "ref": "orto"}]
-    esito = await _salva(env, pagine)
-    assert esito == {"ok": True, "pages": pagine, "order": _ordine_semplice(pagine)}
-    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pagine
+    pages = [{"id": "p1", "kind": "app", "ref": "orto"}]
+    esito = await _salva(env, pages)
+    assert esito == {"ok": True, "pages": pages, "order": _ordine_semplice(pages)}
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pages
 
 
 async def test_the_write_lands_in_the_config_file(env) -> None:
@@ -290,9 +290,9 @@ async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
     una pagina dell'utente per conto proprio sarebbe una decisione presa dal
     codice al posto suo.
     """
-    pagine = [{"id": "p1", "kind": "app", "ref": "app-che-non-esiste"}]
-    await _salva(env, pagine)
-    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pagine
+    pages = [{"id": "p1", "kind": "app", "ref": "app-che-non-esiste"}]
+    await _salva(env, pages)
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pages
 
 
 # ── Le pagine conversazione (23/09/2026) ────────────────────────────────────
@@ -303,10 +303,10 @@ async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
 
 
 async def test_a_notebook_can_be_a_page(env) -> None:
-    pagine = [{"id": "p1", "kind": "conversation", "ref": "project:piante"}]
-    assert (await _salva(env, pagine))["ok"] is True
+    pages = [{"id": "p1", "kind": "conversation", "ref": "project:piante"}]
+    assert (await _salva(env, pages))["ok"] is True
     corpo = _corpo(await _dispatch(env, "/api/home/pages"))
-    assert corpo["pages"] == pagine
+    assert corpo["pages"] == pages
     assert "conversation" in corpo["kinds"]
 
 
@@ -325,8 +325,8 @@ async def test_a_conversation_page_must_point_at_a_notebook(env) -> None:
 
 async def test_the_notebook_rule_does_not_leak_onto_apps(env) -> None:
     """La regola vale per la sua specie: uno slug d'app non e' un quaderno."""
-    pagine = [{"id": "p1", "kind": "app", "ref": "orto"}]
-    assert (await _salva(env, pagine))["ok"] is True
+    pages = [{"id": "p1", "kind": "app", "ref": "orto"}]
+    assert (await _salva(env, pages))["ok"] is True
 
 
 # ── Cancellare la cosa porta via la sua pagina (23/09/2026) ─────────────────
@@ -340,8 +340,8 @@ def _pagine_su_disco(env) -> list[dict]:
     return json.loads(env.config_path.read_text(encoding="utf-8"))["home"]["pages"]
 
 
-async def _con_pagine(env, pagine: list[dict]) -> None:
-    assert (await _salva(env, pagine))["ok"] is True
+async def _con_pagine(env, pages: list[dict]) -> None:
+    assert (await _salva(env, pages))["ok"] is True
 
 
 async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:

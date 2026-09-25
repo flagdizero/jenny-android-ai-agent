@@ -138,9 +138,9 @@ def test_nothing_is_dropped_without_saying_so() -> None:
 
 def test_both_shells_listen_to_the_refusal() -> None:
     assets = ROOT / "jenny" / "templates" / "ui" / "assets"
-    casa = (assets / "home-app.js").read_text(encoding="utf-8")
+    home = (assets / "home-app.js").read_text(encoding="utf-8")
     workshop = (assets / "mobile-chat.js").read_text(encoding="utf-8")
-    assert "onReject = (reason) =>" in casa, "la casa non ascolta i rifiuti locali"
+    assert "onReject = (reason) =>" in home, "la casa non ascolta i rifiuti locali"
     assert "imageHandler.onReject = (reason) =>" in workshop, "l'officina non li ascolta"
 
 

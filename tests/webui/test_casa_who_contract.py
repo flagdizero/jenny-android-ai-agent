@@ -35,11 +35,11 @@ def test_the_notebooks_are_a_page_of_the_home() -> None:
     Quaderni della pista (`.agent/pagine-in-alto-plan.md`). Il pannello si
     disegna dentro il suo pannello, e si rilegge quando ci arrivi."""
     html = INDEX.read_text(encoding="utf-8")
-    pagina = html.split('data-pagina="notebooks"', 1)[1].split('data-pagina="settings"', 1)[0]
-    assert 'id="casa-quaderni"' in pagina, "la pagina Quaderni non ha dove disegnarsi"
+    page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
+    assert 'id="home-notebooks"' in page, "la pagina Quaderni non ha dove disegnarsi"
     app = APP_JS.read_text(encoding="utf-8")
-    assert "new WhoPanel(document.getElementById('casa-quaderni')" in app
-    assert "this.pagine.registra('notebooks', { accendi: () => this.who.mostra() });" in app
+    assert "new WhoPanel(document.getElementById('home-notebooks')" in app
+    assert "this.homePages.registra('notebooks', { accendi: () => this.who.mostra() });" in app
 
 
 def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
@@ -47,17 +47,17 @@ def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
     scorre: e' tutto il motivo per cui ha preso il posto della riga. Si vede
     anche con zero quaderni — e' li' che serve di piu' — e crea come prima."""
     html = INDEX.read_text(encoding="utf-8")
-    pagina = html.split('data-pagina="notebooks"', 1)[1].split('data-pagina="settings"', 1)[0]
-    assert 'id="casa-quaderni-nuovo"' in pagina, "la pagina Quaderni non ha il +"
-    elenco = pagina.split('id="casa-quaderni"', 1)[1].split("</div>", 1)[0]
-    assert "casa-quaderni-nuovo" not in elenco, "il + e' finito dentro l'elenco che scorre"
+    page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
+    assert 'id="home-notebooks-new"' in page, "la pagina Quaderni non ha il +"
+    elenco = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
+    assert "home-notebooks-new" not in elenco, "il + e' finito dentro l'elenco che scorre"
     app = APP_JS.read_text(encoding="utf-8")
-    assert "getElementById('casa-quaderni-nuovo')" in app
+    assert "getElementById('home-notebooks-new')" in app
     assert "addEventListener('click', () => this.createNotebook())" in app
     css = CSS.read_text(encoding="utf-8")
-    regola = css.split("\n.casa-quaderni-nuovo {", 1)[1].split("}", 1)[0]
+    regola = css.split("\n.home-notebooks-new {", 1)[1].split("}", 1)[0]
     assert "position: absolute" in regola and "z-index" not in regola
-    elenco_css = css.split("\n.casa-quaderni {", 1)[1].split("}", 1)[0]
+    elenco_css = css.split("\n.home-notebooks {", 1)[1].split("}", 1)[0]
     assert "max(88px" in elenco_css, "l'ultimo quaderno finisce sotto il +"
 
 
@@ -150,9 +150,9 @@ def test_the_panel_speaks_both_languages() -> None:
     words = {}
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
-        section = data["casa"]["who"]
+        section = data["home"]["who"]
         for key in ("title", "personal", "notebooks", "none", "loadFailed"):
-            assert section.get(key, "").strip(), f"casa.who.{key} manca in {locale}.json"
+            assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"
 

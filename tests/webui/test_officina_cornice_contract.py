@@ -7,7 +7,7 @@ senza un nome sotto.
 
 La macchina dell'intestazione c'era gia' e funzionava. Il difetto era una
 tabella mancante: ``ViewTitleController._mount`` cercava ``title-<modo>``, e i
-tre cassetti (``cervello``, ``mani``, ``memoria``) condividono **una vista
+tre cassetti (``brain``, ``hands``, ``memory``) condividono **una vista
 sola**, il cui mount si chiama ``title-settings``. Nessun mount, ``setMode``
 usciva subito, e l'intestazione non si disegnava — silenziosamente, che e' il
 modo peggiore.
@@ -34,7 +34,7 @@ SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 WORKSHOP = (UI / "workshop.html").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 
-CASSETTI = ("cervello", "mani", "memoria")
+CASSETTI = ("brain", "hands", "memory")
 LINGUE = ("it", "en")
 
 
@@ -67,7 +67,7 @@ def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, cassetto: str) -> None
 def test_la_soprascritta_e_il_pill_esistono(lingua: str) -> None:
     d = _i18n(lingua)["workshop"]
     assert d["eyebrow"].strip()
-    assert d["casaPill"].strip()
+    assert d["homePill"].strip()
 
 
 def test_i_sottotitoli_dicono_cose_diverse() -> None:
@@ -158,7 +158,7 @@ def _voci_dock() -> list[re.Match]:
     return list(re.finditer(r'<div class="dock-item[^"]*"([^>]*)>(.*?)</div>', WORKSHOP))
 
 
-@pytest.mark.parametrize("modo", ("chat", "cervello", "mani", "memoria"))
+@pytest.mark.parametrize("modo", ("chat", "brain", "hands", "memory"))
 def test_ogni_voce_visibile_del_dock_ha_il_suo_nome(modo: str) -> None:
     """Icona **e** parola.
 
@@ -205,7 +205,7 @@ def test_tornare_in_casa_sta_in_un_posto_solo() -> None:
         "e' il pill dell'intestazione"
     )
     assert "_renderOpenCasa" not in SETTINGS
-    assert "'go-casa'" in HEADER, "l'intestazione non porta piu' in casa"
+    assert "'go-home'" in HEADER, "l'intestazione non porta piu' in casa"
     assert "/html-mobile/index.html" in HEADER
 
 
@@ -237,17 +237,17 @@ def test_il_gruppo_e_una_scheda_aperta() -> None:
     """Il mattone che l'ha sostituita: soprascritta fuori, scheda dentro."""
     # `porte` è arrivato dopo: le destinazioni stanno **dentro** la scheda, come
     # sua ultima riga. Concatenarle fuori le lasciava fluttuare fra due gruppi.
-    m = re.search(r"_gruppo\(id, etichetta, corpo(?:, porte = '')?\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    m = re.search(r"_group\(id, etichetta, corpo(?:, porte = '')?\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo non trovato"
     corpo = m.group(1)
-    assert "settings-gruppo-label" in corpo, "il gruppo non ha soprascritta"
+    assert "settings-group-label" in corpo, "il gruppo non ha soprascritta"
     assert "settings-card" in corpo, "il gruppo non ha una scheda"
     assert "chevron" not in corpo and "collapsed" not in corpo, "il gruppo si richiude"
     # La **regola** della classe, non una sua comparsa qualunque: `.settings-card`
     # compare anche in due selettori discendenti (`.settings-card .tstrip`), e un
     # controllo che accettasse quelli restava verde con la scheda senza stile —
     # misurato mutando `.settings-card {` in `.settings-carta {`.
-    for classe in ("settings-gruppo", "settings-gruppo-label", "settings-card"):
+    for classe in ("settings-group", "settings-group-label", "settings-card"):
         assert re.search(rf"^\.{classe} \{{", CSS, re.M), f"{classe} non ha una regola sua"
 
 
@@ -263,10 +263,10 @@ def test_le_pezze_della_fisarmonica_se_ne_vanno_con_lei() -> None:
 
 
 def test_ogni_gruppo_ha_ancora_un_id_nel_dom() -> None:
-    """`data-gruppo` non serve piu' a ricordare chi e' aperto, ma serve a chi
+    """`data-group` non serve piu' a ricordare chi e' aperto, ma serve a chi
     cerca un gruppo nel DOM — il banco, e i caricatori asincroni che scrivono
     nel proprio segnaposto."""
-    assert 'data-gruppo="${id}"' in SETTINGS
+    assert 'data-group="${id}"' in SETTINGS
 
 
 # ── Il ritaglio ──────────────────────────────────────────────────────────────
@@ -300,14 +300,14 @@ def test_ogni_gruppo_di_un_cassetto_si_sa_disegnare() -> None:
     stessa famiglia dei metodi fantasma (v. test_no_ghost_methods_contract).
     """
     disegnabili = _gruppi_disegnabili()
-    for cassetto, gruppi in _gruppi_dichiarati().items():
-        mancanti = [g for g in gruppi if g not in disegnabili]
+    for cassetto, groups in _gruppi_dichiarati().items():
+        mancanti = [g for g in groups if g not in disegnabili]
         assert not mancanti, f"{cassetto}: gruppi senza disegnatore {mancanti}"
 
 
 def test_nessun_gruppo_disegnabile_resta_orfano() -> None:
     """E il contrario: un disegnatore che nessun cassetto usa e' codice morto."""
-    usati = {g for gruppi in _gruppi_dichiarati().values() for g in gruppi}
+    usati = {g for groups in _gruppi_dichiarati().values() for g in groups}
     orfani = _gruppi_disegnabili() - usati
     assert not orfani, f"gruppi che nessun cassetto mostra: {sorted(orfani)}"
 
@@ -317,8 +317,8 @@ def test_un_gruppo_sta_in_un_cassetto_solo() -> None:
     separatamente — ed e' esattamente il difetto da cui il giro dei cassetti e'
     partito."""
     visti: dict[str, str] = {}
-    for cassetto, gruppi in _gruppi_dichiarati().items():
-        for g in gruppi:
+    for cassetto, groups in _gruppi_dichiarati().items():
+        for g in groups:
             assert g not in visti, f"{g} sta sia in {visti[g]} sia in {cassetto}"
             visti[g] = cassetto
 
@@ -326,9 +326,9 @@ def test_un_gruppo_sta_in_un_cassetto_solo() -> None:
 @pytest.mark.parametrize("lingua", LINGUE)
 def test_le_soprascritte_nuove_sono_tradotte(lingua: str) -> None:
     """I cinque gruppi che il ritaglio ha creato hanno un nome vero."""
-    gruppi = _i18n(lingua)["workshop"]["gruppi"]
-    for chiave in ("chiPensa", "parametri", "quantoRicorda", "dream", "giardiniere"):
-        assert gruppi.get(chiave, "").strip(), f"{lingua}: officina.gruppi.{chiave} manca"
+    groups = _i18n(lingua)["workshop"]["groups"]
+    for chiave in ("whoThinks", "parameters", "howMuchItRemembers", "dream", "gardener"):
+        assert groups.get(chiave, "").strip(), f"{lingua}: officina.groups.{chiave} manca"
 
 
 def test_il_taglio_fine_e_arrivato() -> None:
@@ -353,7 +353,7 @@ def test_il_taglio_fine_e_arrivato() -> None:
     dichiarati = _gruppi_dichiarati()
     totale = sum(len(g) for g in dichiarati.values())
     assert totale >= 14, f"solo {totale} gruppi: il taglio fine non c'e'"
-    tutti = {g for gruppi in dichiarati.values() for g in gruppi}
+    tutti = {g for groups in dichiarati.values() for g in groups}
     assert "personalization" not in tutti, (
         "la personalizzazione e' tornata in officina: temi, mascotte e nome "
         "stanno in casa, e tenerli in due posti vuol dire tenerli allineati"
@@ -440,7 +440,7 @@ def test_il_pill_e_definito_una_volta_sola() -> None:
     due resta indietro.
     """
     assert "function pillCasa()" in HEADER, "il pill non ha piu' una definizione sua"
-    assert HEADER.count("i18n.t('workshop.casaPill')") == 1, (
+    assert HEADER.count("i18n.t('workshop.homePill')") == 1, (
         "la stringa del pill compare piu' di una volta: e' tornata a essere copiata"
     )
 
@@ -468,7 +468,7 @@ def test_una_intestazione_col_pill_si_rifa_intera() -> None:
     La prima versione di questa intestazione riassegnava il solo `title` al
     cambio lingua. Il resto della voce restava quello costruito **al
     caricamento del file**, quando le traduzioni non ci sono ancora — e nel
-    bottone c'era scritto, per esteso, `workshop.casaPill`.
+    bottone c'era scritto, per esteso, `workshop.homePill`.
 
     Perche' solo li'. Ogni intestazione dell'officina ha azioni con una
     stringa dentro, ma quella stringa e' quasi sempre un `title=`, cioe' un
@@ -510,9 +510,9 @@ def test_la_casa_non_e_stata_toccata() -> None:
     un `title-chat` o un `nav.console` comparsi li' vorrebbero dire che il
     cambio e' tracimato nel documento sbagliato.
     """
-    casa = (UI / "index.html").read_text(encoding="utf-8")
-    assert "title-chat" not in casa
-    assert "view-title-mount" not in casa
+    home = (UI / "index.html").read_text(encoding="utf-8")
+    assert "title-chat" not in home
+    assert "view-title-mount" not in home
 
 
 def test_an_icon_button_fades_under_the_finger_on_the_phone() -> None:

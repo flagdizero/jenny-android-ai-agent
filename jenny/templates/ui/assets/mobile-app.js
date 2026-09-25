@@ -71,9 +71,9 @@ class MobileApp {
       chat:      () => new ChatController(),
       workspace: () => new WorkspaceController(),
       settings:  settings,
-      cervello:  settings,
-      mani:      settings,
-      memoria:   settings,
+      brain:  settings,
+      hands:      settings,
+      memory:   settings,
       onboarding: () => new OnboardingController(),
     };
     this.controllers = {};
@@ -211,7 +211,7 @@ class MobileApp {
        in Memoria, e questa vista senza il suo file e' una schermata bianca.
        Da `mobile-last-mode` arriva esattamente cosi' — chiudendo l'app con un
        file aperto — quindi si riparte da dove i file stanno. */
-    if (initialMode === 'workspace') initialMode = 'memoria';
+    if (initialMode === 'workspace') initialMode = 'memory';
 
     // Radice dello stack, marcata *prima* dei due await qui sotto. I listener
     // del dock sono già registrati da un pezzo: un tap durante il boot impilava
@@ -1002,10 +1002,10 @@ class MobileApp {
     void view.offsetWidth; // force reflow so the start transform sticks
     view.style.transition = 'transform .2s cubic-bezier(.22,.61,.36,1)';
     view.style.transform = 'translateX(0)';
-    let fatto = false;
+    let done = false;
     const onEnd = () => {
-      if (fatto) return;
-      fatto = true;
+      if (done) return;
+      done = true;
       view.style.transition = '';
       view.style.willChange = '';
       view.style.transform = '';

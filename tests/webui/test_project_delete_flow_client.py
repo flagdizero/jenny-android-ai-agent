@@ -46,8 +46,8 @@ console.log(JSON.stringify(globalThis.__esito));
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         shutil.copy(SHARED / "project-delete.js", radice / "project-delete.js")
-        for nome, testo in _VICINI.items():
-            (radice / nome).write_text(testo, encoding="utf-8")
+        for name, testo in _VICINI.items():
+            (radice / name).write_text(testo, encoding="utf-8")
         (radice / "rpc-client.js").write_text(
             "export const rpc = { async deleteProject() {"
             " const c = globalThis.__rifiuto; if (c === null) return {};"

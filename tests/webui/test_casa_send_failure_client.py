@@ -94,8 +94,8 @@ function makeChat() {
 
 /* Quel che si legge nel filo, dall'alto verso il basso. */
 const thread = (chat) => chat.el.children.map((n) => {
-  if (String(n.className).includes('casa-note')) return 'nota: ' + n.textContent;
-  const block = n.children.find((c) => c.className === 'casa-block');
+  if (String(n.className).includes('home-note')) return 'nota: ' + n.textContent;
+  const block = n.children.find((c) => c.className === 'home-block');
   return 'tu: ' + (block ? block.textContent : '');
 });
 """

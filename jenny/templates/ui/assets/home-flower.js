@@ -130,17 +130,17 @@ export class Flower {
     this.petals = [];
     for (let i = 0; i < 5; i++) {
       const g = nodo('g', {}, this.main);
-      nodo('path', { d: PETALO, class: 'casa-fiore-petalo' }, g);
-      nodo('path', { d: VENA, class: 'casa-fiore-vena' }, g);
+      nodo('path', { d: PETALO, class: 'home-flower-petal' }, g);
+      nodo('path', { d: VENA, class: 'home-flower-vein' }, g);
       this.petals.push(g);
     }
-    this.center = nodo('circle', { r: 7, class: 'casa-fiore-cuore' }, this.main);
-    this.dot = nodo('circle', { r: 2.2, class: 'casa-fiore-polline' }, this.main);
+    this.center = nodo('circle', { r: 7, class: 'home-flower-heart' }, this.main);
+    this.dot = nodo('circle', { r: 2.2, class: 'home-flower-pollen' }, this.main);
     this.sat = nodo('g', { opacity: 0 }, svg);
     for (let i = 0; i < 5; i++) {
-      nodo('path', { d: PETALO, class: 'casa-fiore-petalo', transform: `rotate(${i * 72})` }, this.sat);
+      nodo('path', { d: PETALO, class: 'home-flower-petal', transform: `rotate(${i * 72})` }, this.sat);
     }
-    nodo('circle', { r: 7, class: 'casa-fiore-cuore' }, this.sat);
+    nodo('circle', { r: 7, class: 'home-flower-heart' }, this.sat);
   }
 
   /** Torna bocciolo, fermo: la prossima comparsa sboccia da qui. */

@@ -89,7 +89,7 @@ function makeChat() {
     _appendMedia(node, media) {
       for (const m of media) {
         const el = makeNode();
-        el.className = 'casa-media';
+        el.className = 'home-media';
         el.textContent = m.name || '';
         node.appendChild(el);
       }
@@ -109,9 +109,9 @@ function makeChat() {
 
 /* Quel che si legge nel filo, dall'alto verso il basso: una riga per bolla. */
 const readThread = (chat) => chat.el.children.map((n) => {
-  if (String(n.className).includes('casa-boundary')) return '---';
-  const block = n.children.find((c) => c.className === 'casa-block');
-  const who = String(n.className).includes('casa-msg-user') ? 'tu' : 'jenny';
+  if (String(n.className).includes('home-boundary')) return '---';
+  const block = n.children.find((c) => c.className === 'home-block');
+  const who = String(n.className).includes('home-msg-user') ? 'tu' : 'jenny';
   return who + ': ' + (block ? (block.textContent || block.innerHTML) : '');
 });
 

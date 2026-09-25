@@ -26,13 +26,13 @@ const MARGINE_IN_VISTA = 24;
 export class HomeStrip {
   /** @param el        il contenitore (`#home-strip`)
    *  @param pagine    la pista: `voci`, `indice`, `vaiA`, `salva`, `pages`
-   *  @param nomeChat  `() => ({nome, colore})`: la pagina chat si chiama come
+   *  @param nomeChat  `() => ({name, colore})`: la pagina chat si chiama come
    *                   la conversazione che mostra — «Jenny», o il quaderno
    *  @param onCambia  chiamata quando la modalita' ordina si apre o si chiude */
-  constructor(el, { pagine, nomeChat, onCambia } = {}) {
+  constructor(el, { homePages, nomeChat, onCambia } = {}) {
     this.el = el;
-    this.pagine = pagine;
-    this._nomeChat = nomeChat || (() => ({ nome: 'Jenny', colore: null }));
+    this.homePages = homePages;
+    this._nomeChat = nomeChat || (() => ({ name: 'Jenny', colore: null }));
     this._onCambia = onCambia || null;
     /** In modalita' ordina: la bozza dell'ordine, finche' non si preme Fatto. */
     this._bozza = null;
@@ -44,11 +44,11 @@ export class HomeStrip {
   }
 
   /** Il nome di una voce, come si legge nella fila. */
-  nome(voce) {
+  name(voce) {
     if (!voce) return '';
-    if (voce.kind === 'chat') return this._nomeChat().nome;
-    if (voce.fissa) return i18n.t(`casa.fila.${voce.id}`);
-    return this.pagine.nomeDi(voce);
+    if (voce.kind === 'chat') return this._nomeChat().name;
+    if (voce.fissa) return i18n.t(`home.strip.${voce.id}`);
+    return this.homePages.nomeDi(voce);
   }
 
   /** Il pallino di una voce, se ne ha uno: la chat dentro un quaderno, e le
@@ -56,7 +56,7 @@ export class HomeStrip {
    *  sola cosa che lega il nome alla stanza in cui sei. */
   colore(voce) {
     if (voce?.kind === 'chat') return this._nomeChat().colore || null;
-    if (voce?.kind === 'conversation') return dotColor(this.nome(voce));
+    if (voce?.kind === 'conversation') return dotColor(this.name(voce));
     return null;
   }
 
@@ -69,19 +69,19 @@ export class HomeStrip {
   /* ── La fila ─────────────────────────────────────────────────────────── */
 
   _disegnaNomi() {
-    this.el.classList.remove('is-ordina');
+    this.el.classList.remove('is-sort');
     const nav = document.createElement('nav');
-    nav.className = 'casa-fila-nomi';
+    nav.className = 'home-strip-names';
     nav.setAttribute('role', 'tablist');
-    nav.setAttribute('aria-label', i18n.t('casa.fila.label'));
+    nav.setAttribute('aria-label', i18n.t('home.strip.label'));
     let acceso = null;
-    this.pagine.voci.forEach((voce, i) => {
+    this.homePages.voci.forEach((voce, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'casa-fila-voce';
+      b.className = 'home-strip-entry';
       b.dataset.id = voce.id;
       b.setAttribute('role', 'tab');
-      const on = i === this.pagine.indice;
+      const on = i === this.homePages.indice;
       b.setAttribute('aria-selected', String(on));
       if (on) {
         b.classList.add('is-on');
@@ -90,21 +90,21 @@ export class HomeStrip {
       const colore = this.colore(voce);
       if (colore) {
         const dot = document.createElement('span');
-        dot.className = 'casa-fila-dot';
+        dot.className = 'home-strip-dot';
         dot.style.background = colore;
         dot.setAttribute('aria-hidden', 'true');
         b.appendChild(dot);
       }
-      const nome = document.createElement('span');
-      nome.className = 'casa-fila-nome';
-      nome.textContent = this.nome(voce);
-      b.appendChild(nome);
+      const name = document.createElement('span');
+      name.className = 'home-strip-name';
+      name.textContent = this.name(voce);
+      b.appendChild(name);
       /* Il tocco che segue una pressione lunga non e' un tocco: senza questa
          riga tenere premuto un nome aprirebbe la modalita' ordina **e** ci
          porterebbe sopra. Stessa guardia di ogni pressione lunga della casa. */
       b.addEventListener('click', () => {
         if (b.dataset.longpress) { delete b.dataset.longpress; return; }
-        this.pagine.vaiA(i);
+        this.homePages.vaiA(i);
       });
       setupLongPress(b, () => this.apriOrdina());
       nav.appendChild(b);
@@ -126,8 +126,8 @@ export class HomeStrip {
       nav.scrollLeft = Math.max(0, inizio - MARGINE_IN_VISTA);
     }
     const sfuma = () => {
-      nav.classList.toggle('sfuma-dopo', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
-      nav.classList.toggle('sfuma-prima', nav.scrollLeft > 1);
+      nav.classList.toggle('fade-after', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+      nav.classList.toggle('fade-before', nav.scrollLeft > 1);
     };
     sfuma();
     nav.addEventListener('scroll', sfuma, { passive: true });
@@ -137,7 +137,7 @@ export class HomeStrip {
 
   apriOrdina() {
     if (this.ordinando) return;
-    this._bozza = this.pagine.voci.map((v) => v.id);
+    this._bozza = this.homePages.voci.map((v) => v.id);
     this.disegna();
     this._onCambia?.(true);
   }
@@ -155,15 +155,15 @@ export class HomeStrip {
     const bozza = this._bozza;
     if (salva) {
       if (this._salvando) return false;
-      const restano = this.pagine.pages.filter((s) => bozza.includes(s.id));
-      const prima = this.pagine.voci.map((v) => v.id);
-      const uguale = restano.length === this.pagine.pages.length
+      const restano = this.homePages.pages.filter((s) => bozza.includes(s.id));
+      const prima = this.homePages.voci.map((v) => v.id);
+      const uguale = restano.length === this.homePages.pages.length
         && prima.join() === bozza.join();
       if (!uguale) {
         this._salvando = true;
         let salvate;
         try {
-          salvate = await this.pagine.salva(restano, [...bozza]);
+          salvate = await this.homePages.salva(restano, [...bozza]);
         } finally {
           this._salvando = false;
         }
@@ -180,7 +180,7 @@ export class HomeStrip {
   }
 
   /** Sposta la voce `id` alla posizione `dove` della bozza. */
-  sposta(id, dove) {
+  move(id, dove) {
     if (!this.ordinando) return;
     const da = this._bozza.indexOf(id);
     if (da < 0) return;
@@ -191,29 +191,29 @@ export class HomeStrip {
   }
 
   /** Toglie dalla bozza una pagina aggiunta. Le fisse non si tolgono. */
-  togli(id) {
-    if (!this.ordinando || this.pagine.fixed.includes(id)) return;
+  remove(id) {
+    if (!this.ordinando || this.homePages.fixed.includes(id)) return;
     this._bozza = this._bozza.filter((x) => x !== id);
     this.disegna();
   }
 
   _disegnaOrdina() {
-    this.el.classList.add('is-ordina');
+    this.el.classList.add('is-sort');
     const testa = document.createElement('div');
-    testa.className = 'casa-ordina-testa';
+    testa.className = 'home-sort-head';
     const aiuto = document.createElement('span');
-    aiuto.className = 'casa-ordina-aiuto';
-    aiuto.textContent = i18n.t('casa.fila.ordinaAiuto');
-    const fatto = document.createElement('button');
-    fatto.type = 'button';
-    fatto.className = 'casa-ordina-fatto';
-    fatto.textContent = i18n.t('casa.fila.fatto');
-    fatto.addEventListener('click', () => this.chiudiOrdina({ salva: true }));
-    testa.append(aiuto, fatto);
+    aiuto.className = 'home-sort-help';
+    aiuto.textContent = i18n.t('home.strip.sortHelp');
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'home-sort-done';
+    done.textContent = i18n.t('home.strip.done');
+    done.addEventListener('click', () => this.chiudiOrdina({ salva: true }));
+    testa.append(aiuto, done);
 
     const pastiglie = document.createElement('div');
-    pastiglie.className = 'casa-ordina-pastiglie';
-    const voci = new Map(this.pagine.voci.map((v) => [v.id, v]));
+    pastiglie.className = 'home-sort-pills';
+    const voci = new Map(this.homePages.voci.map((v) => [v.id, v]));
     for (const id of this._bozza) {
       const voce = voci.get(id);
       if (voce) pastiglie.appendChild(this._pastiglia(voce, pastiglie));
@@ -223,37 +223,37 @@ export class HomeStrip {
 
   _pastiglia(voce, contenitore) {
     const p = document.createElement('div');
-    p.className = 'casa-ordina-pastiglia';
+    p.className = 'home-sort-pill';
     p.dataset.id = voce.id;
     /* Una pastiglia si prende con Tab e si sposta con le frecce: chi non
        trascina — o non puo' — deve poter fare lo stesso. */
     p.tabIndex = 0;
     p.setAttribute('role', 'button');
-    p.setAttribute('aria-label', i18n.t('casa.fila.sposta', { nome: this.nome(voce) }));
+    p.setAttribute('aria-label', i18n.t('home.strip.move', { name: this.name(voce) }));
     const presa = document.createElement('i');
     presa.className = 'ti ti-grip-vertical';
     presa.setAttribute('aria-hidden', 'true');
-    const nome = document.createElement('span');
-    nome.textContent = this.nome(voce);
-    p.append(presa, nome);
+    const name = document.createElement('span');
+    name.textContent = this.name(voce);
+    p.append(presa, name);
     if (!voce.fissa) {
       const x = document.createElement('button');
       x.type = 'button';
-      x.className = 'casa-ordina-togli';
-      x.setAttribute('aria-label', i18n.t('casa.fila.togli', { nome: this.nome(voce) }));
+      x.className = 'home-sort-remove';
+      x.setAttribute('aria-label', i18n.t('home.strip.remove', { name: this.name(voce) }));
       x.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
       /* Il dito che preme la × non deve cominciare un trascinamento. */
       x.addEventListener('pointerdown', (e) => e.stopPropagation());
-      x.addEventListener('click', () => this.togli(voce.id));
+      x.addEventListener('click', () => this.remove(voce.id));
       p.appendChild(x);
     }
     p.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       const i = this._bozza.indexOf(voce.id);
-      this.sposta(voce.id, i + (e.key === 'ArrowRight' ? 1 : -1));
+      this.move(voce.id, i + (e.key === 'ArrowRight' ? 1 : -1));
       this.disegna();
-      this.el.querySelector(`.casa-ordina-pastiglia[data-id="${CSS.escape(voce.id)}"]`)?.focus();
+      this.el.querySelector(`.home-sort-pill[data-id="${CSS.escape(voce.id)}"]`)?.focus();
     });
     p.addEventListener('pointerdown', (e) => this._prendi(e, p, contenitore));
     return p;
@@ -286,7 +286,7 @@ export class HomeStrip {
       presaY: e.clientY - r.top,
       pointerId: e.pointerId,
     };
-    p.classList.add('is-sollevata');
+    p.classList.add('is-lifted');
     this._suMuovi = (ev) => this._muovi(ev);
     this._suLascia = (ev) => this._lascia(ev);
     document.addEventListener('pointermove', this._suMuovi);
@@ -315,7 +315,7 @@ export class HomeStrip {
       let dove = oltreMeta ? a + 1 : a;
       if (da < dove) dove -= 1;
       if (dove !== da) {
-        this.sposta(t.id, dove);
+        this.move(t.id, dove);
         const prossima = this._bozza[dove + 1];
         const nodo = prossima ? t.contenitore.querySelector(`[data-id="${CSS.escape(prossima)}"]`) : null;
         t.contenitore.insertBefore(t.el, nodo);
@@ -351,6 +351,6 @@ export class HomeStrip {
     this._suLascia = null;
     if (!t) return;
     t.el.style.transform = '';
-    t.el.classList.remove('is-sollevata');
+    t.el.classList.remove('is-lifted');
   }
 }

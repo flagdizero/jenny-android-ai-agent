@@ -43,7 +43,7 @@ export const rpc = {
 
   /** Salva una pagina di quaderno modificata a mano dal lettore.
    *
-   *  Non e' `writeWorkspaceFile` su `wikis/<q>/wiki/<pagina>`: la cartella dei
+   *  Non e' `writeWorkspaceFile` su `wikis/<q>/wiki/<page>`: la cartella dei
    *  quaderni la decide la config (`wiki.wikis_dir`) e il client non la
    *  conosce — comporla di qua vorrebbe dire indovinarla.
    *
@@ -56,7 +56,7 @@ export const rpc = {
 
   /** Cancella un progetto: l'albero della wiki **e** la sua conversazione.
    *
-   *  Non e' `api.deleteWorkspace` su `wikis/<nome>`, ed e' il punto di tutto:
+   *  Non e' `api.deleteWorkspace` su `wikis/<name>`, ed e' il punto di tutto:
    *  quella toglie una cartella e non sa cosa sia un progetto, quindi lasciava
    *  la chat sotto un nome ormai libero e il progetto successivo con lo stesso
    *  nome se la riprendeva (difetto del 24/08/2026). Il server rifiuta ormai

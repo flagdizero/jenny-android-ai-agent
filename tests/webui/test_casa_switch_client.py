@@ -182,7 +182,7 @@ class App {
        che il guscio le apra, e cosa ci mette dentro di quel che sa. */
     this.versioni = [];
     this.flottanti = [];
-    this.tu = {
+    this.you = {
       applyTranslations: () => {},
       open: () => this.fatti.push('tu aperta'),
       sayUpdates: (v) => this.versioni.push(v),
@@ -260,10 +260,10 @@ class App {
     };
     /* La fila in alto: qui interessa solo la modalita' ordina, che Indietro
        chiude senza salvare. Il suo disegno ha il banco suo. */
-    this.fila = {
+    this.strip = {
       ordinando: false,
       disegna: () => {},
-      chiudiOrdina: () => { this.fila.ordinando = false; this.fatti.push('ordina chiusa'); },
+      chiudiOrdina: () => { this.strip.ordinando = false; this.fatti.push('ordina chiusa'); },
     };
     /* La pista, finta ma con la regola che conta: **la chat puo' stare
        ovunque**, e chi cambia pagina lo fa per nome. Arrivare su Impostazioni
@@ -272,7 +272,7 @@ class App {
        passano dritte al corpo del cambio: la regola di dove aprirle ha il suo
        banco (`test_casa_pista_client.py`). */
     const app = this;
-    this.pagine = {
+    this.homePages = {
       order: ['app', 'chat', 'notebooks', 'settings'],
       indice: 1,
       conversazioneCasa: null,
@@ -337,7 +337,7 @@ class App {
   __BIND_COMPOSER__
 }
 
-function casa() {
+function home() {
   lightbox = null;
   createOutcome = null;
   creations.length = 0;
@@ -440,7 +440,7 @@ def test_opening_a_notebook_rereads_the_thread_of_that_notebook() -> None:
     """E lo rilegge **dopo** aver cambiato chiave: nell'ordine opposto
     rileggerebbe la conversazione che stai lasciando."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       assert.equal(sessionManager.currentKey, 'project:piante');
       assert.deepEqual(app.fatti, ['riletto:project:piante']);
@@ -451,7 +451,7 @@ def test_going_where_you_already_are_is_not_a_switch() -> None:
     """Toccare la riga su cui sei non deve ributtare giù la conversazione: un
     filo che si svuota e si ridisegna per niente sembra averti perso qualcosa."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(null);
       await app.switchConversation('websocket:default');
       assert.deepEqual(app.fatti, []);
@@ -463,7 +463,7 @@ def test_the_draft_stays_with_the_conversation_it_was_written_in() -> None:
     subito dopo. È la stessa famiglia di guasto di `switchGeneration` — quel che
     dici finisce nel diario di un altro progetto — solo un attimo prima."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.input.value = 'ricordami di annaffiare';
       await app.switchConversation(projectKey('piante'));
       assert.equal(app.input.value, '', 'la bozza ha seguito nel quaderno');
@@ -489,9 +489,9 @@ def test_the_chat_page_is_named_after_the_notebook_it_is_in() -> None:
     stanza in cui sei finito, e due colori diversi per lo stesso quaderno
     slegherebbero le due."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
-      assert.deepEqual(app._nomeChat(), { nome: 'piante', colore: dotColor('piante') });
+      assert.deepEqual(app._nomeChat(), { name: 'piante', colore: dotColor('piante') });
       assert.equal(app.input.placeholder, 'Scrivi a Jenny, nel quaderno');
       assert.ok(app.emptyText.textContent.includes('resta qui'), app.emptyText.textContent);
     """)
@@ -502,10 +502,10 @@ def test_the_house_takes_its_own_name_back() -> None:
     la testa delle stanze porta il nome del quaderno, e leggerlo di lì lo
     farebbe restare «piante» per sempre."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       await app.switchConversation(null);
-      assert.deepEqual(app._nomeChat(), { nome: 'Jenny', colore: null },
+      assert.deepEqual(app._nomeChat(), { name: 'Jenny', colore: null },
                        'la casa non è un quaderno fra i quaderni');
       assert.equal(app.input.placeholder, 'Scrivi a Jenny');
     """)
@@ -516,10 +516,10 @@ def test_the_chat_page_keeps_its_own_name_while_it_is_lent_to_a_notebook_page() 
     fila scrive sulla pagina chat e' quello a cui tornerai, non quello a
     schermo."""
     _run_js("""
-      const app = casa();
-      app.pagine.conversazioneCasa = 'websocket:default';
+      const app = home();
+      app.homePages.conversazioneCasa = 'websocket:default';
       sessionManager.currentKey = projectKey('piante');
-      assert.equal(app._nomeChat().nome, 'Jenny');
+      assert.equal(app._nomeChat().name, 'Jenny');
     """)
 
 
@@ -535,7 +535,7 @@ def test_leaving_closes_the_turn_that_was_running() -> None:
     stesso `chat:switch` (`_releaseTrackedTurn` in `shared/jenny-mascot.js`,
     provato in `test_chat_scope_client.py`)."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app._releaseTurn();
       assert.deepEqual(app.fatti, ['riga ferma', 'ferma:false']);
     """)
@@ -546,7 +546,7 @@ def test_leaving_closes_the_turn_that_was_running() -> None:
 
 def test_back_from_a_notebook_is_the_front_door() -> None:
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       app.fatti.length = 0;
       app.handleHardwareBack();
@@ -559,7 +559,7 @@ def test_back_at_the_root_still_does_nothing() -> None:
     """Questa app è il launcher del telefono: Indietro non deve mai chiudere il
     task, e nella conversazione personale non c'è niente sotto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.handleHardwareBack();
       await new Promise((r) => setTimeout(r, 0));
       assert.deepEqual(app.fatti, []);
@@ -569,7 +569,7 @@ def test_back_at_the_root_still_does_nothing() -> None:
 
 # Un foglio aperto con una pressione lunga: un `<dialog>` nel top layer.
 _FOGLIO = """
-      const foglio = document.getElementById('casa-quaderno-sheet');
+      const foglio = document.getElementById('home-notebook-sheet');
       foglio.open = true;
       foglio.close = () => { foglio.open = false; app.fatti.push('foglio chiuso'); };
 """
@@ -580,7 +580,7 @@ def test_one_press_closes_one_thing() -> None:
     scheda e basta: uscire anche dal quaderno farebbe sparire due cose per un
     gesto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
     """ + _FOGLIO + """
       app.fatti.length = 0;
@@ -595,7 +595,7 @@ def test_home_means_the_personal_conversation() -> None:
     """«Sei a casa» torna a voler dire qualcosa il giorno in cui si può essere
     altrove."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
     """ + _FOGLIO + """
       app.fatti.length = 0;
@@ -610,11 +610,11 @@ def test_back_from_any_page_lands_on_the_chat_wherever_it_sits() -> None:
     """La chat si sposta come le altre: Indietro la cerca per nome, non va alla
     prima casella. E sulla chat Indietro e' la porta di casa, come sempre."""
     _run_js("""
-      const app = casa();
-      app.pagine.order = ['notebooks', 'app', 'settings', 'chat'];
-      app.pagine.indice = 0;
+      const app = home();
+      app.homePages.order = ['notebooks', 'app', 'settings', 'chat'];
+      app.homePages.indice = 0;
       app.handleHardwareBack();
-      assert.equal(app.pagine.corrente, 'chat');
+      assert.equal(app.homePages.corrente, 'chat');
       app.fatti.length = 0;
       app.handleHardwareBack();
       assert.deepEqual(app.fatti, [], 'dalla chat personale Indietro ha fatto qualcosa');
@@ -626,7 +626,7 @@ def test_a_tapped_alert_opens_the_conversation_the_alert_is_in() -> None:
     dentro un quaderno, «porta in chat» senza tornare a casa aprirebbe la
     stanza in cui quell'avviso non c'è."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       app.openChat();
       await new Promise((r) => setTimeout(r, 0));
@@ -641,7 +641,7 @@ def test_a_switch_that_cannot_read_the_thread_says_so() -> None:
     """Una conversazione irraggiungibile e una conversazione vuota sono due cose
     diverse, e confonderle fa credere di aver perso tutto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.reloadFails = true;
       await app.switchConversation(projectKey('piante'));
       assert.ok(app.fatti.includes('non si legge'));
@@ -653,7 +653,7 @@ def test_a_reading_that_works_takes_the_error_back() -> None:
     """Se restasse, il vuoto di questa conversazione direbbe «non riesco a
     leggerla» di una storia appena letta."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.reloadFails = true;
       await app.switchConversation(projectKey('piante'));
       app.reloadFails = false;
@@ -676,7 +676,7 @@ def test_the_house_asks_in_its_own_words() -> None:
         .filter((k) => NOTEBOOK_WORDS[k] !== PROJECT_WORDS[k]);
       assert.ok(proprie.length >= 6, 'la casa ha smesso di parlare come casa');
       for (const k of proprie) {
-        assert.ok(NOTEBOOK_WORDS[k].startsWith('casa.'), k + ' non è una parola di casa');
+        assert.ok(NOTEBOOK_WORDS[k].startsWith('home.'), k + ' non è una parola di casa');
       }
       assert.equal(NOTEBOOK_WORDS.invalidName, PROJECT_WORDS.invalidName,
                    'la regola dei nomi è stata copiata una seconda volta');
@@ -690,7 +690,7 @@ def test_a_notebook_created_is_a_notebook_you_are_in() -> None:
     """Aver dato un nome e scritto la riga di scope senza finire dentro
     lascerebbe a metà il gesto cominciato."""
     _run_js("""
-      const app = casa();
+      const app = home();
       createOutcome = 'orto';
       await app.createNotebook();
       assert.equal(creations[0].words, NOTEBOOK_WORDS);
@@ -706,7 +706,7 @@ def test_a_creation_that_did_not_happen_opens_nothing() -> None:
     che non hanno scritto su disco, e nessuna di quelle deve portare dentro un
     quaderno che non c'è."""
     _run_js("""
-      const app = casa();
+      const app = home();
       createOutcome = null;
       await app.createNotebook();
       assert.equal(sessionManager.currentKey, 'websocket:default');
@@ -726,7 +726,7 @@ def test_back_peels_one_room_at_a_time() -> None:
     regola vieta alla tendina.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app.view = 'reader';
       app.shell.attrs['data-view'] = 'reader';
@@ -746,7 +746,7 @@ def test_a_panel_over_the_pages_still_closes_first() -> None:
     """Gli strati vengono prima delle stanze: il foglio sta nel top layer, e
     chiuderlo e' quel che l'occhio si aspetta da quel tasto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('pages');
     """ + _FOGLIO + """
@@ -763,7 +763,7 @@ def test_leaving_the_chat_puts_jenny_away_and_coming_back_restores_her() -> None
     una decisione dell'utente, e una stanza non la disfa.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
 
       app._setView('pages');
@@ -784,13 +784,13 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
     c'e': il suo `offsetHeight` la' e' zero, quindi il token va dichiarato o
     lei appoggia i piedi sul bordo dello schermo. Al ritorno si rimisura."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app.fatti.length = 0;
 
       app._setView('pages');
       assert.equal(
-        document.documentElement.style.props['--casa-composer-h'],
+        document.documentElement.style.props['--home-composer-h'],
         FLOOR_NO_COMPOSER + 'px',
         'le pagine non dichiarano il loro pavimento',
       );
@@ -807,7 +807,7 @@ def test_the_pages_pill_only_exists_inside_a_notebook() -> None:
     """Nella conversazione personale non c'e' nessun quaderno da aprire, e una
     porta che non porta da nessuna parte e' peggio di nessuna porta."""
     _run_js("""
-      const app = casa();
+      const app = home();
       assert.equal(app.pagesBtn.hidden, true, 'la pastiglia c\\u2019e\\u2019 anche a casa');
       await app.switchConversation(projectKey('orto'));
       assert.equal(app.pagesBtn.hidden, false, 'dentro un quaderno la pastiglia manca');
@@ -821,7 +821,7 @@ def test_the_count_belongs_to_the_notebook_that_asked_for_it() -> None:
     quaderno: scrivere li' il conteggio di quello di prima sarebbe un numero
     sbagliato su una stanza giusta."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.pageCounts = { orto: 34, erbe: 1 };
       await app.switchConversation(projectKey('orto'));
       await new Promise((r) => setTimeout(r, 0));
@@ -845,7 +845,7 @@ def test_a_notebook_whose_count_is_unknown_still_has_its_door() -> None:
     le pagine ce le ha comunque, e aspettare la cifra per mostrarla vorrebbe
     dire nascondere la porta a chi ha la rete lenta."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.pageCounts = {};
       await app.switchConversation(projectKey('orto'));
       await new Promise((r) => setTimeout(r, 0));
@@ -859,7 +859,7 @@ def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
     conversazione personale: restare sull'elenco vorrebbe dire leggere le
     pagine di una stanza in cui non sei piu'."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('pages');
       app.openChat();
@@ -877,14 +877,14 @@ def test_settings_is_a_page_and_back_from_it_is_the_chat() -> None:
     alla chat — **senza uscire dal quaderno**: tornare da una pagina di
     impostazioni non e' un modo di cambiare conversazione."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiAId('settings');
       assert.equal(app.view, 'chat', 'le impostazioni sono ancora una stanza');
-      assert.equal(app.pagine.corrente, 'settings');
+      assert.equal(app.homePages.corrente, 'settings');
       assert.ok(app.fatti.includes('tu aperta'), 'la pagina non e\u2019 stata caricata');
       app.handleHardwareBack();
-      assert.equal(app.pagine.corrente, 'chat');
+      assert.equal(app.homePages.corrente, 'chat');
       assert.equal(sessionManager.currentKey, 'project:orto', 'e il quaderno e\u2019 rimasto');
     """)
 
@@ -899,13 +899,13 @@ def test_the_eyelet_names_where_you_land() -> None:
     decide il salto.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       const dice = (room) => { app._setView(room); return app.backLabel.textContent; };
-      assert.equal(dice('pages'), i18n.t('casa.back.chat'));
-      assert.equal(dice('reader'), i18n.t('casa.back.pages'), 'dal lettore si torna alle pagine');
-      assert.equal(dice('jenny'), i18n.t('casa.back.settings'), 'da lei si torna alle impostazioni');
-      assert.notEqual(i18n.t('casa.back.pages'), i18n.t('casa.back.chat'),
+      assert.equal(dice('pages'), i18n.t('home.back.chat'));
+      assert.equal(dice('reader'), i18n.t('home.back.pages'), 'dal lettore si torna alle pagine');
+      assert.equal(dice('jenny'), i18n.t('home.back.settings'), 'da lei si torna alle impostazioni');
+      assert.notEqual(i18n.t('home.back.pages'), i18n.t('home.back.chat'),
                       'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
     """)
 
@@ -917,13 +917,13 @@ def test_talking_about_it_belongs_to_a_notebook() -> None:
     Era `hidden = inChat`, che con tre stanze diceva la stessa cosa.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('pages');
       assert.equal(app.talkBtn.hidden, false, 'dalle pagine si torna a parlarne');
       app._setView('jenny');
       assert.equal(app.talkBtn.hidden, true, '«Parlane» in mezzo alle impostazioni');
-      assert.equal(app.nameEl.textContent, i18n.t('casa.jenny.title'), 'la testa non dice dove sei');
+      assert.equal(app.nameEl.textContent, i18n.t('home.jenny.title'), 'la testa non dice dove sei');
     """)
 
 
@@ -933,13 +933,13 @@ def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
     della finestra flottante. Chiederlo due volte sarebbe due volte quel
     peso."""
     _run_js("""
-      const app = casa();
-      app.pagine.vaiAId('settings');
+      const app = home();
+      app.homePages.vaiAId('settings');
       await app.accensione;
       await app.openJenny();
       app._setView('chat');
-      app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiA(app.homePages.indiceChat);
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
       assert.deepEqual(app.versioniDate, [{ current: '0.11.0' }, { current: '0.11.0' }]);
@@ -952,15 +952,15 @@ def test_a_settings_call_that_failed_is_tried_again() -> None:
     la riga della finestra flottante nascosta fino al riavvio della casa — e
     quella non e' una versione che manca, e' un'impostazione sparita."""
     _run_js("""
-      const app = casa();
+      const app = home();
       settingsPayload = null;
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.flottanti, [null], 'senza risposta la finestra resta sconosciuta');
 
       settingsPayload = { version: { current: '0.12.0' }, floating: { available: true } };
-      app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiA(app.homePages.indiceChat);
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 2, 'il guscio si e\u2019 ricordato del fallimento');
       /* Anche il giro andato male passa dalla stanza: le dice «non lo so», e
@@ -973,16 +973,16 @@ def test_her_room_hangs_off_you_and_jenny() -> None:
     """Indietro sbuccia una stanza per volta anche di qua: da lei si torna alla
     pagina Impostazioni, non alla chat — e da li', alla chat."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.openJenny();
       assert.equal(app.view, 'jenny');
       assert.ok(app.fatti.includes('jenny aperta'));
-      assert.equal(app.nameEl.textContent, i18n.t('casa.jenny.title'), 'la testa non dice dove sei');
+      assert.equal(app.nameEl.textContent, i18n.t('home.jenny.title'), 'la testa non dice dove sei');
       app.handleHardwareBack();
       assert.equal(app.view, 'chat');
-      assert.equal(app.pagine.corrente, 'settings');
+      assert.equal(app.homePages.corrente, 'settings');
       app.handleHardwareBack();
-      assert.equal(app.pagine.corrente, 'chat');
+      assert.equal(app.homePages.corrente, 'chat');
     """)
 
 
@@ -992,7 +992,7 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
     riaggancia da se'. Il guscio lo dice a **ogni** cambio di stanza, non solo
     tornando indietro: dalla chat, da un quaderno, da dove capita."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.openUpdates();
       assert.equal(app.view, 'updates');
       assert.ok(app.fatti.includes('aggiornamenti aperta'));
@@ -1000,7 +1000,7 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
 
       app.goBackOneRoom();
       assert.equal(app.view, 'chat', 'da li si torna alle impostazioni');
-      assert.equal(app.pagine.corrente, 'settings');
+      assert.equal(app.homePages.corrente, 'settings');
       assert.ok(app.fatti.includes('aggiornamenti chiusa'), 'il polling resta vivo');
 
       /* E anche uscendo da un'altra parte: il guscio non sa da dove vieni. */
@@ -1019,11 +1019,11 @@ def test_a_page_without_a_composer_puts_jenny_on_the_floor() -> None:
     stesso — sta nella pagina accanto, alto quanto era — la terrebbe sospesa
     a mezz'aria sopra le righe. Una pagina quaderno il composer ce l'ha."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.fatti.length = 0;
       app._voce = { id: 'app', kind: 'cassetto', fissa: true };
       app._posaJenny();
-      assert.equal(document.documentElement.style.props['--casa-composer-h'], FLOOR_NO_COMPOSER + 'px');
+      assert.equal(document.documentElement.style.props['--home-composer-h'], FLOOR_NO_COMPOSER + 'px');
       assert.ok(!app.fatti.includes('pavimento rimisurato'));
       app._voce = { id: 'q1', kind: 'conversation', ref: 'project:piante' };
       app._posaJenny();
@@ -1045,9 +1045,9 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
     passato verde.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       const chiesti = [];
-      app.pagine = { apriConversazione: (k) => { chiesti.push(k); return Promise.resolve('instradata'); } };
+      app.homePages = { apriConversazione: (k) => { chiesti.push(k); return Promise.resolve('instradata'); } };
       const r = await app.switchConversation(projectKey('piante'));
       assert.deepEqual(chiesti, ['project:piante']);
       assert.deepEqual(app.fatti, [], 'il guscio ha riletto il filo senza chiedere dove');
@@ -1077,7 +1077,7 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
 # Un'app aperta sopra tutto, con due schermate interne: Indietro torna
 # indietro *dentro* di lei, e solo `closeApp` la chiude davvero.
 _APP_PROFONDA = """
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       const mini = { aperta: true, depth: 2, indietro: 0 };
       app._azioniApp = {
@@ -1129,7 +1129,7 @@ def test_the_chat_under_an_open_app_is_not_on_screen() -> None:
     """Gli avvisi si cancellano quando la chat si vede: con un'app aperta
     sopra, la chat c'e' ma non la stai guardando."""
     _run_js("""
-      const app = casa();
+      const app = home();
       app.onPaginaCambiata(1, { id: 'chat', kind: 'chat', fissa: true });
       assert.equal(app.isChatOnScreen(), true);
       app._azioniApp = { isAppOpen: () => true };
@@ -1148,9 +1148,9 @@ def test_back_peels_the_layers_of_the_app_page_one_at_a_time() -> None:
     allora la pagina, che torna alla chat.
     """
     _run_js("""
-      const app = casa();
+      const app = home();
       app._voce = { id: 'app', kind: 'cassetto', fissa: true };
-      app.pagine.indice = app.pagine.indiceDi('app');
+      app.homePages.indice = app.homePages.indiceDi('app');
       let appAperta = true;
       app._azioniApp = { handleBack: () => { if (!appAperta) return false; appAperta = false; return true; } };
       app.launcher = { search: { value: 'tel' }, dismiss() { this.search.value = ''; } };
@@ -1169,15 +1169,15 @@ def test_back_peels_the_layers_of_the_app_page_one_at_a_time() -> None:
       assert.equal(app.launcher.search.value, '', 'la ricerca non si svuota');
       assert.equal(app._closeOverlays(), false);
       app.handleHardwareBack();
-      assert.equal(app.pagine.corrente, 'chat');
+      assert.equal(app.homePages.corrente, 'chat');
     """)
 
 
 def test_back_leaves_the_moving_mode_without_saving() -> None:
     """Salvare e' «Fatto». Indietro e' «lascia com'era»."""
     _run_js("""
-      const app = casa();
-      app.fila.ordinando = true;
+      const app = home();
+      app.strip.ordinando = true;
       assert.equal(app._closeOverlays(), true);
       assert.deepEqual(app.fatti, ['ordina chiusa']);
     """)
@@ -1188,19 +1188,19 @@ def test_the_row_asks_for_the_app_names_once_and_only_the_light_list() -> None:
     Si chiede l'elenco delle Jenny App e basta — non quello delle app Android,
     che porta le icone — una volta, e solo se c'e' un'app appesa."""
     _run_js("""
-      const app = casa();
+      const app = home();
       const chieste = [];
       let disegni = 0;
-      app.fila.disegna = () => { disegni += 1; };
+      app.strip.disegna = () => { disegni += 1; };
       app.appsSource = () => ({
         jennyApps: [],
         loadJennyApps: () => { chieste.push('jenny'); return Promise.resolve(); },
         ensureLoaded: () => chieste.push('tutto'),
       });
-      app.pagine.pages = [{ id: 'q1', kind: 'conversation', ref: 'project:piante' }];
+      app.homePages.pages = [{ id: 'q1', kind: 'conversation', ref: 'project:piante' }];
       app._chiediNomiApp();
       assert.deepEqual(chieste, [], 'senza app appese ha letto un elenco');
-      app.pagine.pages.push({ id: 'p1', kind: 'app', ref: 'todo' });
+      app.homePages.pages.push({ id: 'p1', kind: 'app', ref: 'todo' });
       app._chiediNomiApp();
       app._chiediNomiApp();
       await new Promise((r) => setTimeout(r, 0));
@@ -1224,7 +1224,7 @@ def test_boot_says_the_chat_is_not_on_screen_yet() -> None:
     """Prima che la pista dica dove sei, la risposta e' no: nel dubbio un avviso
     resta, che e' la direzione d'errore giusta."""
     _run_js("""
-      const app = casa();
+      const app = home();
       assert.equal(app.isChatOnScreen(), false);
       assert.equal(window.JennyNative.aperte, 0);
     """)
@@ -1232,7 +1232,7 @@ def test_boot_says_the_chat_is_not_on_screen_yet() -> None:
 
 def test_arriving_on_the_chat_page_clears_the_alerts() -> None:
     _run_js(f"""
-      const app = casa();
+      const app = home();
       app.onPaginaCambiata(1, {CHAT});
       assert.equal(app.isChatOnScreen(), true);
       assert.equal(window.JennyNative.aperte, 1);
@@ -1241,7 +1241,7 @@ def test_arriving_on_the_chat_page_clears_the_alerts() -> None:
 
 def test_another_page_is_not_the_chat() -> None:
     _run_js(f"""
-      const app = casa();
+      const app = home();
       app.onPaginaCambiata(0, {CASSETTO});
       assert.equal(app.isChatOnScreen(), false);
       assert.equal(window.JennyNative.aperte, 0);
@@ -1252,7 +1252,7 @@ def test_the_chat_page_on_a_notebook_is_not_where_alerts_are() -> None:
     """Gli avvisi proattivi arrivano nella conversazione personale: la pagina
     chat su un quaderno non li mostra. Tornando alla personale, si'."""
     _run_js(f"""
-      const app = casa();
+      const app = home();
       app.onPaginaCambiata(1, {CHAT});
       window.JennyNative.aperte = 0;
       await app.mostraConversazione(projectKey('piante'));
@@ -1266,7 +1266,7 @@ def test_the_chat_page_on_a_notebook_is_not_where_alerts_are() -> None:
 
 def test_a_room_over_the_chat_hides_it_and_coming_back_clears() -> None:
     _run_js(f"""
-      const app = casa();
+      const app = home();
       app.onPaginaCambiata(1, {CHAT});
       app._setView('jenny');
       window.JennyNative.aperte = 0;
@@ -1280,11 +1280,11 @@ def test_a_room_over_the_chat_hides_it_and_coming_back_clears() -> None:
 # ── La pagina di un quaderno cancellato (M7, 25/09/2026) ─────────────────────
 
 _SPARITA = """
-      const app = casa();
-      const pannello = { dataset: {} };
+      const app = home();
+      const panel = { dataset: {} };
       let sparita = false;
-      app.pagine.pannelloDi = () => pannello;
-      app.pagine.sparitaQui = () => sparita;
+      app.homePages.pannelloDi = () => panel;
+      app.homePages.sparitaQui = () => sparita;
       const fuoco = [];
       app.fuoco = { rimetti: () => { fuoco.push('rimesso'); return true; } };
       app.input.blur = () => fuoco.push('tolto');
@@ -1300,7 +1300,7 @@ def test_the_keyboard_leaves_the_field_under_a_gone_notebook() -> None:
       app.onPaginaCambiata(1, QUADERNO);
       assert.deepEqual(fuoco, ['rimesso']);
       sparita = true;
-      app.onSparitaCambiata(pannello);
+      app.onSparitaCambiata(panel);
       assert.equal(fuoco.at(-1), 'tolto', 'il campo sotto l\\u2019avviso ha tenuto il fuoco');
       assert.equal(app._composerAttivo(), false, 'i tasti vanno ancora al campo coperto');
       fuoco.length = 0;
@@ -1308,7 +1308,7 @@ def test_the_keyboard_leaves_the_field_under_a_gone_notebook() -> None:
       assert.deepEqual(fuoco, ['tolto'], 'tornando sulla pagina il fuoco e\\u2019 tornato sul campo');
       /* Il quaderno e' tornato: il campo si riprende. */
       sparita = false;
-      app.onSparitaCambiata(pannello);
+      app.onSparitaCambiata(panel);
       assert.equal(fuoco.at(-1), 'rimesso');
     """)
 
@@ -1341,15 +1341,15 @@ def test_enter_on_a_gone_notebook_sends_nothing() -> None:
 # ── Rinominare e cancellare dalla pagina Quaderni (M8, 25/09/2026) ───────────
 
 _QUADERNI = """
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
-      app.pagine.conversazioneCasa = projectKey('piante');
-      app.pagine.rinominaConversazione = function (v, n) {
+      app.homePages.conversazioneCasa = projectKey('piante');
+      app.homePages.rinominaConversazione = function (v, n) {
         if (this.conversazioneCasa === v) this.conversazioneCasa = n;
       };
       /* La regola delle pagine vera, da qui (la pagina Quaderni), porta alla
          pagina chat: il finto lo segna. */
-      app.pagine.apriConversazione = (k) => {
+      app.homePages.apriConversazione = (k) => {
         app.fatti.push('dirottata:' + k);
         return app.mostraConversazione(k);
       };
@@ -1370,7 +1370,7 @@ def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
       assert.ok(!app.fatti.some((f) => f.startsWith('dirottata')), 'rinominare ha portato alla chat');
       assert.equal(app.input.value, 'mezza frase', 'la bozza si e\\u2019 persa col nome vecchio');
       assert.ok(!app._drafts.has('project:piante'), 'resta una bozza sotto il nome vecchio');
-      assert.equal(app.pagine.conversazioneCasa, 'project:orto');
+      assert.equal(app.homePages.conversazioneCasa, 'project:orto');
     """)
 
 
@@ -1392,7 +1392,7 @@ def test_deleting_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
       assert.equal(await app.deleteNotebook('piante'), true);
       assert.equal(sessionManager.currentKey, 'websocket:default');
       assert.ok(!app.fatti.some((f) => f.startsWith('dirottata')), 'cancellare ha portato alla chat');
-      assert.equal(app.pagine.conversazioneCasa, 'websocket:default');
+      assert.equal(app.homePages.conversazioneCasa, 'websocket:default');
       assert.ok(!app._drafts.has('project:piante'), 'la bozza di un quaderno cancellato resta in memoria');
     """)
 
@@ -1401,10 +1401,10 @@ def test_deleting_a_notebook_puts_the_chat_back_where_the_chat_page_is() -> None
     """La chat parcheggiata nella pagina del quaderno cancellato torna alla
     conversazione della pagina chat, non d'ufficio alla personale."""
     _run_js(_QUADERNI + """
-      app.pagine.conversazioneCasa = projectKey('erbe');
+      app.homePages.conversazioneCasa = projectKey('erbe');
       await app.deleteNotebook('piante');
       assert.equal(sessionManager.currentKey, 'project:erbe');
-      assert.equal(app.pagine.conversazioneCasa, 'project:erbe');
+      assert.equal(app.homePages.conversazioneCasa, 'project:erbe');
     """)
 
 
@@ -1425,13 +1425,13 @@ def test_the_personal_conversation_is_named_after_her() -> None:
     era il testo fisso dell'intestazione. Ora e' `bot_name`, e i due che lo
     scrivono si ridisegnano quando arriva."""
     _run_js("""
-      const app = casa();
+      const app = home();
       let disegni = 0, righe = 0;
-      app.fila.disegna = () => { disegni += 1; };
+      app.strip.disegna = () => { disegni += 1; };
       app.who.render = () => { righe += 1; };
       settingsPayload = { agent: { bot_name: 'Ada' } };
       await app._leggiNome();
-      assert.deepEqual(app._nomeChat(), { nome: 'Ada', colore: null });
+      assert.deepEqual(app._nomeChat(), { name: 'Ada', colore: null });
       assert.equal(disegni, 1, 'la fila dice ancora il nome di prima');
       assert.equal(righe, 1, 'i Quaderni dicono ancora il nome di prima');
     """)
@@ -1439,13 +1439,13 @@ def test_the_personal_conversation_is_named_after_her() -> None:
 
 def test_an_empty_or_unread_name_falls_back_like_the_server() -> None:
     _run_js("""
-      const app = casa();
+      const app = home();
       settingsPayload = null;
       await app._leggiNome();
-      assert.equal(app._nomeChat().nome, DEFAULT_BOT_NAME);
+      assert.equal(app._nomeChat().name, DEFAULT_BOT_NAME);
       settingsPayload = { agent: { bot_name: '   ' } };
       await app._leggiNome();
-      assert.equal(app._nomeChat().nome, DEFAULT_BOT_NAME);
+      assert.equal(app._nomeChat().name, DEFAULT_BOT_NAME);
     """)
 
 
@@ -1454,20 +1454,20 @@ def test_a_saved_name_reaches_the_row_and_the_cache() -> None:
     Impostazioni riaperta non rimette il nome letto la prima volta (la cache,
     come per la finestra flottante)."""
     _run_js("""
-      const app = casa();
+      const app = home();
       settingsPayload = { agent: { bot_name: 'Ada' }, floating: null };
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.nomi, ['Ada']);
       app._keepName('Vera');
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app._nomeChat().nome, 'Vera', 'la fila dice ancora il nome vecchio');
-      app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('settings');
+      assert.equal(app._nomeChat().name, 'Vera', 'la fila dice ancora il nome vecchio');
+      app.homePages.vaiA(app.homePages.indiceChat);
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 1);
       assert.deepEqual(app.nomi, ['Ada', 'Vera'], 'la cache ha rimesso il nome vecchio');
-      assert.equal(app._nomeChat().nome, 'Vera');
+      assert.equal(app._nomeChat().name, 'Vera');
     """)
 
 
@@ -1475,9 +1475,9 @@ def test_settings_that_could_not_be_read_do_not_say_an_empty_name() -> None:
     """`null`, cioe' «non lo so»: con `''` la stanza offriva «Salva» contro
     un nome vuoto che nessuno aveva scelto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       settingsPayload = null;
-      app.pagine.vaiAId('settings');
+      app.homePages.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.nomi, [null]);
     """)
@@ -1489,15 +1489,15 @@ def test_the_name_is_asked_at_start_and_heard_from_her_room() -> None:
     src = APP_JS.read_text(encoding="utf-8")
     init = member(src, "init", prefixes=("async ",))
     assert "this._leggiNome()" in init, "all'avvio il nome non si chiede"
-    assert "onName: (nome) => this._keepName(nome)" in src, "la stanza di lei non avvisa il guscio"
+    assert "onName: (name) => this._keepName(name)" in src, "la stanza di lei non avvisa il guscio"
     html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    assert 'id="casa-head-name"></span>' in html, "l'intestazione porta di nuovo un nome fisso"
+    assert 'id="home-head-name"></span>' in html, "l'intestazione porta di nuovo un nome fisso"
 
 
 # ── Home con l'editor del lettore modificato ─────────────────────────────────
 
 _LETTORE_SPORCO = """
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('piante'));
       let sporco = true;
       app.reader = {
@@ -1557,7 +1557,7 @@ def test_a_page_title_that_arrives_after_back_does_not_take_the_head() -> None:
     """La pagina si legge dalla rete: tornati alle pagine prima che arrivi,
     il suo titolo finiva nella testa delle pagine al posto del quaderno."""
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       let arriva;
       app.reader = {
@@ -1578,7 +1578,7 @@ def test_a_page_title_that_arrives_after_back_does_not_take_the_head() -> None:
 
 def test_a_page_title_that_arrives_in_the_reader_is_written() -> None:
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app.reader = {
         load: async () => 'Semina di marzo',
@@ -1596,7 +1596,7 @@ def test_a_title_from_a_save_after_leaving_the_reader_is_dropped() -> None:
     src = APP_JS.read_text(encoding="utf-8")
     assert "this.reader.onTitle = (title) => this._readerTitle(title);" in src
     _run_js("""
-      const app = casa();
+      const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('pages');
       app._readerTitle('Semina di marzo');
@@ -1609,7 +1609,7 @@ def test_jenny_stands_on_the_real_composer_not_on_a_photo() -> None:
     ricerca per classe poteva trovare quella di una foto prima nel documento,
     e il pavimento di Jenny si misurava su una copia."""
     _run_js("""
-      const app = casa();
+      const app = home();
       const ascolta = { addEventListener() {} };
       Object.assign(app.attach, ascolta);
       Object.assign(app.send, ascolta);
@@ -1618,11 +1618,11 @@ def test_jenny_stands_on_the_real_composer_not_on_a_photo() -> None:
       app.composer = { offsetHeight: 90 };
       const fotoComposer = { offsetHeight: 12 };
       const cerca = document.querySelector;
-      document.querySelector = (sel) => (sel === '.casa-composer' ? fotoComposer : cerca(sel));
+      document.querySelector = (sel) => (sel === '.home-composer' ? fotoComposer : cerca(sel));
       app._voce = { id: 'chat', kind: 'chat', fissa: true };
       app._bindComposer();
       document.querySelector = cerca;
-      assert.equal(document.documentElement.style.props['--casa-composer-h'], '90px',
+      assert.equal(document.documentElement.style.props['--home-composer-h'], '90px',
                    'il pavimento e\u2019 stato misurato sul composer di una foto');
     """)
 
@@ -1632,7 +1632,7 @@ def test_every_sheet_that_back_closes_counts_as_something_above() -> None:
     stesso elenco di fogli: erano due elenchi scritti a mano, e un foglio
     nuovo aggiunto a uno solo avrebbe lasciato la tastiera al campo sotto."""
     _run_js("""
-      const app = casa();
+      const app = home();
       for (const id of [...FOGLI_PRESSIONE_LUNGA, FOGLIO_SEGNALA]) {
         const foglio = document.getElementById(id);
         foglio.open = true;

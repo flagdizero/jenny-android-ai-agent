@@ -52,31 +52,31 @@ export class HomeYou {
    *  @param onBackup    la riga che porta al backup. */
   constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup } = {}) {
     this.el = document.getElementById('home-you');
-    this.themesEl = document.getElementById('casa-themes');
-    this.themeLabel = document.getElementById('casa-theme-label');
-    this.themeValue = document.getElementById('casa-theme-value');
-    this.themeDesc = document.getElementById('casa-theme-desc');
-    this.workshopName = document.getElementById('casa-workshop-name');
-    this.workshopHint = document.getElementById('casa-workshop-hint');
-    this.jennyLabel = document.getElementById('casa-jenny-label');
-    this.jennyValue = document.getElementById('casa-jenny-value');
-    this.modelLabel = document.getElementById('casa-model-label');
-    this.modelValue = document.getElementById('casa-model-value');
-    this.updatesLabel = document.getElementById('casa-updates-label');
-    this.updatesValue = document.getElementById('casa-updates-value');
-    this.backupLabel = document.getElementById('casa-backup-label');
-    this.backupValue = document.getElementById('casa-backup-value');
+    this.themesEl = document.getElementById('home-themes');
+    this.themeLabel = document.getElementById('home-theme-label');
+    this.themeValue = document.getElementById('home-theme-value');
+    this.themeDesc = document.getElementById('home-theme-desc');
+    this.workshopName = document.getElementById('home-workshop-name');
+    this.workshopHint = document.getElementById('home-workshop-hint');
+    this.jennyLabel = document.getElementById('home-jenny-label');
+    this.jennyValue = document.getElementById('home-jenny-value');
+    this.modelLabel = document.getElementById('home-model-label');
+    this.modelValue = document.getElementById('home-model-value');
+    this.updatesLabel = document.getElementById('home-updates-label');
+    this.updatesValue = document.getElementById('home-updates-value');
+    this.backupLabel = document.getElementById('home-backup-label');
+    this.backupValue = document.getElementById('home-backup-value');
     this._painted = false;
 
-    document.getElementById('casa-workshop')
+    document.getElementById('home-workshop')
       ?.addEventListener('click', () => onWorkshop?.());
-    document.getElementById('casa-row-jenny')
+    document.getElementById('home-row-jenny')
       ?.addEventListener('click', () => onJenny?.());
-    document.getElementById('casa-row-model')
+    document.getElementById('home-row-model')
       ?.addEventListener('click', () => onModel?.());
-    document.getElementById('casa-row-updates')
+    document.getElementById('home-row-updates')
       ?.addEventListener('click', () => onUpdates?.());
-    document.getElementById('casa-row-backup')
+    document.getElementById('home-row-backup')
       ?.addEventListener('click', () => onBackup?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
@@ -118,12 +118,12 @@ export class HomeYou {
 
   applyTranslations() {
     if (this.themeLabel) this.themeLabel.textContent = i18n.t('settings.themeLabel');
-    if (this.workshopName) this.workshopName.textContent = i18n.t('casa.workshop');
-    if (this.workshopHint) this.workshopHint.textContent = i18n.t('casa.tu.workshopHint');
-    if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('casa.jenny.title');
-    if (this.modelLabel) this.modelLabel.textContent = i18n.t('casa.model.title');
-    if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('casa.updates.title');
-    if (this.backupLabel) this.backupLabel.textContent = i18n.t('casa.backup.title');
+    if (this.workshopName) this.workshopName.textContent = i18n.t('home.workshop');
+    if (this.workshopHint) this.workshopHint.textContent = i18n.t('home.you.workshopHint');
+    if (this.jennyLabel) this.jennyLabel.textContent = i18n.t('home.jenny.title');
+    if (this.modelLabel) this.modelLabel.textContent = i18n.t('home.model.title');
+    if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('home.updates.title');
+    if (this.backupLabel) this.backupLabel.textContent = i18n.t('home.backup.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();
@@ -157,17 +157,17 @@ export class HomeYou {
   _themeCard(theme) {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'casa-theme';
+    el.className = 'home-theme';
     el.dataset.theme = theme.id;
     el.setAttribute('role', 'radio');
 
     const swatch = document.createElement('span');
-    swatch.className = 'casa-theme-swatch';
+    swatch.className = 'home-theme-swatch';
     swatch.style.background = swatchGradient(theme.swatch);
     el.appendChild(swatch);
 
     const name = document.createElement('span');
-    name.className = 'casa-theme-name';
+    name.className = 'home-theme-name';
     name.textContent = shortThemeName(theme.label);
     el.appendChild(name);
     return el;

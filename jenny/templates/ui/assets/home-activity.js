@@ -64,7 +64,7 @@ const SHOW_AFTER_MS = 500;
 const ROTATE_MS = 4_000;
 
 /* Quanto resta a schermo la parola che esce, mentre entra la nuova: la durata
-   della sua animazione in `home-style.css` (`casa-parola-esce`). */
+   della sua animazione in `home-style.css` (`home-word-exits`). */
 const WORD_OUT_MS = 280;
 
 function reducedMotion() {
@@ -90,12 +90,12 @@ export class ActivityLine {
        — la parola intera in chiaro: le lettere spezzate una per una si
        leggerebbero una per una. */
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'casa-activity-fiore');
+    svg.setAttribute('class', 'home-activity-flower');
     this.words = document.createElement('span');
-    this.words.className = 'casa-activity-parole';
+    this.words.className = 'home-activity-words';
     this.words.setAttribute('aria-hidden', 'true');
     this.plain = document.createElement('span');
-    this.plain.className = 'casa-activity-testo';
+    this.plain.className = 'home-activity-text';
     this.el.append(svg, this.words, this.plain);
     this.fiore = new Flower(svg, { reducedMotion: this._reduced });
 
@@ -185,27 +185,27 @@ export class ActivityLine {
      di spingersi. Ogni lettera porta il proprio indice (`--i`), da cui il CSS
      ricava il ritardo d'entrata e il passaggio del luccichio. */
   _setWord(word) {
-    for (const old of this.words.querySelectorAll('.casa-parola:not(.esce)')) {
+    for (const old of this.words.querySelectorAll('.home-word:not(.exits)')) {
       if (this._reduced) { old.remove(); continue; }
-      old.classList.add('esce');
+      old.classList.add('exits');
       setTimeout(() => old.remove(), WORD_OUT_MS);
     }
     const base = word.replace(/…$/, '');
     const w = document.createElement('span');
-    w.className = 'casa-parola';
+    w.className = 'home-word';
     [...base].forEach((ch, i) => {
       const l = document.createElement('span');
-      l.className = 'casa-lettera';
+      l.className = 'home-letter';
       l.style.setProperty('--i', String(i));
       l.textContent = ch === ' ' ? '\u00a0' : ch;
       w.appendChild(l);
     });
     if (base !== word) {
       const dots = document.createElement('span');
-      dots.className = 'casa-puntini';
+      dots.className = 'home-ellipsis';
       for (let k = 0; k < 3; k++) {
         const d = document.createElement('span');
-        d.className = 'casa-puntino';
+        d.className = 'home-ellipsis-dot';
         d.style.setProperty('--k', String(k));
         d.textContent = '.';
         dots.appendChild(d);
@@ -222,7 +222,7 @@ export class ActivityLine {
      elenchi. Lettura sola, nessun ritocco allo strato condiviso. */
   _word() {
     const dict = i18n.translations[i18n.locale];
-    const words = dict?.casa?.verbs?.[this.family] || dict?.casa?.verbs?.[FALLBACK_FAMILY];
+    const words = dict?.home?.verbs?.[this.family] || dict?.home?.verbs?.[FALLBACK_FAMILY];
     if (!words || !words.length) return '';
     if (words.length === 1) return words[0];
     let pick = this.lastWord;

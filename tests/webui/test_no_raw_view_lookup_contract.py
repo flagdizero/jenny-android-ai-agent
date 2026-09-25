@@ -1,6 +1,6 @@
 """L'elemento di un modo si chiede alla tabella, non si scrive a mano.
 
-Tre modi dell'officina — `cervello`, `mani`, `memoria` — **non hanno una vista
+Tre modi dell'officina — `brain`, `hands`, `memory` — **non hanno una vista
 propria**: sono lo stesso `<div id="view-settings">` che cambia contenuto, e la
 tabella che lo dice e' `VISTA_DI`. Stessa cosa per l'intestazione, che per tutti
 e tre e' `title-settings`.
@@ -78,7 +78,7 @@ def _dentro_una_definizione(src: str, numero_riga: int) -> bool:
     """
     righe = src.splitlines()
     sopra = "\n".join(righe[max(0, numero_riga - 4) : numero_riga - 1])
-    return any(f"function {nome}(" in sopra for nome in DEFINIZIONI)
+    return any(f"function {name}(" in sopra for name in DEFINIZIONI)
 
 
 @pytest.mark.parametrize("sorgente", SORGENTI, ids=lambda p: p.name)
@@ -105,8 +105,8 @@ def test_the_two_helpers_exist_and_are_the_only_ones_translating() -> None:
     il test di sopra — e la vista non si troverebbe piu' affatto.
     """
     src = SETTINGS.read_text(encoding="utf-8")
-    for nome in DEFINIZIONI:
-        assert f"export function {nome}(" in src, f"manca {nome} in mobile-settings.js"
+    for name in DEFINIZIONI:
+        assert f"export function {name}(" in src, f"manca {name} in mobile-settings.js"
     crude = _righe_crude(src)
     assert len(crude) == 2, (
         f"mobile-settings.js dovrebbe tradurre in due punti soli (le due "

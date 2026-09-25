@@ -83,8 +83,8 @@ def _run(corpo: str) -> None:
         (radice / "shared").mkdir()
         shutil.copy(ASSETS / "mobile-jenny.js", radice / "mobile-jenny.js")
         shutil.copy(ASSETS / "shared" / "jenny-mascot.js", radice / "shared" / "jenny-mascot.js")
-        for nome, testo in _VICINI.items():
-            (radice / "shared" / nome).write_text(testo, encoding="utf-8")
+        for name, testo in _VICINI.items():
+            (radice / "shared" / name).write_text(testo, encoding="utf-8")
         entry = radice / "prova.mjs"
         entry.write_text(_PRELUDIO + textwrap.dedent(corpo), encoding="utf-8")
         run_module(entry)

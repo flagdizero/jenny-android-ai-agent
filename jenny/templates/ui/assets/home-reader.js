@@ -71,7 +71,7 @@ export function linkTarget({ href, wikilink, notebook, currentPath }) {
   if (/^(https?:)\/\//i.test(raw)) return { kind: 'external', href: raw };
   if (/^(mailto:|tel:)/i.test(raw)) return { kind: 'external', href: raw };
 
-  /* I wikilink il renderer li scrive come `?wiki=<nome>&page=<path>`. Un
+  /* I wikilink il renderer li scrive come `?wiki=<name>&page=<path>`. Un
      wikilink verso un **altro** quaderno non si apre da qui: in casa una
      pagina appartiene alla conversazione in cui sei, e saltare in un'altra
      stanza senza dirlo sarebbe il tipo di scorciatoia che poi non si sa piu'
@@ -96,11 +96,11 @@ export function linkTarget({ href, wikilink, notebook, currentPath }) {
 export class HomeReader {
   constructor() {
     this.el = document.getElementById('home-reader');
-    this.bodyEl = document.getElementById('casa-reader-body');
-    this.editEl = document.getElementById('casa-reader-edit');
-    this.barEl = document.getElementById('casa-reader-bar');
-    this.saveBtn = document.getElementById('casa-reader-save');
-    this.cancelBtn = document.getElementById('casa-reader-cancel');
+    this.bodyEl = document.getElementById('home-reader-body');
+    this.editEl = document.getElementById('home-reader-edit');
+    this.barEl = document.getElementById('home-reader-bar');
+    this.saveBtn = document.getElementById('home-reader-save');
+    this.cancelBtn = document.getElementById('home-reader-cancel');
     this.notebook = null;
     this.path = null;
     this.title = '';
@@ -121,8 +121,8 @@ export class HomeReader {
   /** Le parole dei due bottoni in basso. Chiamata all'avvio e a ogni cambio
    *  di lingua: sono scritte solo qui, mai nell'HTML. */
   applyTranslations() {
-    if (this.saveBtn) this.saveBtn.textContent = i18n.t('casa.reader.save');
-    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('casa.reader.cancel');
+    if (this.saveBtn) this.saveBtn.textContent = i18n.t('home.reader.save');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.reader.cancel');
   }
 
   /* ── Modifica ── */
@@ -181,7 +181,7 @@ export class HomeReader {
       return;
     }
     this.blurEditor();
-    if (!(await confirmDialog(i18n.t('casa.reader.discardConfirm')))) return;
+    if (!(await confirmDialog(i18n.t('home.reader.discardConfirm')))) return;
     this.cancelEdit();
   }
 
@@ -217,7 +217,7 @@ export class HomeReader {
         await this._onConflict();
         return;
       }
-      showToast(i18n.t('casa.reader.saveFailed'), 'error');
+      showToast(i18n.t('home.reader.saveFailed'), 'error');
       return;
     }
     this.editing = false;
@@ -227,7 +227,7 @@ export class HomeReader {
     this.onEditing?.();
     const title = await this.load(notebook, path, this.title);
     this.onTitle?.(title);
-    showToast(i18n.t('casa.reader.saved'), 'success');
+    showToast(i18n.t('home.reader.saved'), 'success');
   }
 
   /** Jenny ha riscritto la pagina mentre era aperta.
@@ -236,7 +236,7 @@ export class HomeReader {
    *  resta aperto col suo testo dentro, che e' l'unica copia rimasta. */
   async _onConflict() {
     this.blurEditor();
-    const reload = await confirmDialog(i18n.t('casa.reader.conflict'));
+    const reload = await confirmDialog(i18n.t('home.reader.conflict'));
     if (!reload) return;
     this.cancelEdit();
     const title = await this.load(this.notebook, this.path, this.title);
@@ -254,7 +254,7 @@ export class HomeReader {
        che non e' quello a schermo, e lo salverebbe sopra un'altra pagina. */
     this.raw = '';
     this.bodyEl.innerHTML = '';
-    this._say('casa.pages.loading');
+    this._say('home.notebookPages.loading');
 
     let page;
     try {
@@ -262,7 +262,7 @@ export class HomeReader {
     } catch (err) {
       if (token !== this._token) return this.title;
       console.warn('casa.reader: page failed', err);
-      this._say('casa.reader.failed');
+      this._say('home.reader.failed');
       return this.title;
     }
     if (token !== this._token) return this.title;
@@ -292,13 +292,13 @@ export class HomeReader {
   _safeHtml(html, raw) {
     if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(html || '');
     console.warn('casa.reader: DOMPurify missing, falling back to markdown');
-    return `<pre class="casa-reader-raw">${escapeHtml(raw || '')}</pre>`;
+    return `<pre class="home-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
 
   _say(key) {
     this.bodyEl.innerHTML = '';
     const note = document.createElement('p');
-    note.className = 'casa-reader-note';
+    note.className = 'home-reader-note';
     note.textContent = i18n.t(key);
     this.bodyEl.appendChild(note);
   }

@@ -34,21 +34,21 @@ import { runExportFlow, runImportFlow, backupNativeAvailable } from './shared/ba
  */
 export function backupValue(backup) {
   const quando = Number(backup?.last_export_at) || 0;
-  return quando ? whenText(quando * 1000) : i18n.t('casa.backup.never');
+  return quando ? whenText(quando * 1000) : i18n.t('home.backup.never');
 }
 
 export class HomeBackup {
   /** @param onExported  un export riuscito: la riga di «Tu e Jenny» si
    *                     riscrive senza aspettare la prossima apertura. */
   constructor({ onExported } = {}) {
-    this.el = document.getElementById('casa-backup-room');
-    this.whenEl = document.getElementById('casa-backup-when');
-    this.exportBtn = document.getElementById('casa-backup-export');
-    this.exportNote = document.getElementById('casa-backup-export-note');
-    this.importBtn = document.getElementById('casa-backup-import');
-    this.importCard = document.getElementById('casa-backup-import-card');
-    this.importNote = document.getElementById('casa-backup-import-note');
-    this.snapNote = document.getElementById('casa-backup-snapshots');
+    this.el = document.getElementById('home-backup-room');
+    this.whenEl = document.getElementById('home-backup-when');
+    this.exportBtn = document.getElementById('home-backup-export');
+    this.exportNote = document.getElementById('home-backup-export-note');
+    this.importBtn = document.getElementById('home-backup-import');
+    this.importCard = document.getElementById('home-backup-import-card');
+    this.importNote = document.getElementById('home-backup-import-note');
+    this.snapNote = document.getElementById('home-backup-snapshots');
 
     this._onExported = onExported;
     this.backup = null;
@@ -82,8 +82,8 @@ export class HomeBackup {
     if (!this.exportBtn || this.exportBtn.disabled) return;
     this.exportBtn.disabled = true;
     try {
-      const fatto = await runExportFlow();
-      if (!fatto) return;
+      const done = await runExportFlow();
+      if (!done) return;
       /* Il record l'ha appena scritto il flusso: qui si aggiorna quel che si
          legge, senza richiedere l'intero payload delle impostazioni per un
          campo solo. La data e' quella del client e non quella scritta dal
@@ -115,14 +115,14 @@ export class HomeBackup {
     if (this.whenEl) {
       const quando = Number(this.backup?.last_export_at) || 0;
       this.whenEl.textContent = quando
-        ? i18n.t('casa.backup.last', { when: whenText(quando * 1000) })
-        : i18n.t('casa.backup.neverLong');
+        ? i18n.t('home.backup.last', { when: whenText(quando * 1000) })
+        : i18n.t('home.backup.neverLong');
       this.whenEl.classList.toggle('is-warn', !quando);
     }
-    if (this.exportBtn) this.exportBtn.textContent = i18n.t('casa.backup.export');
-    if (this.importBtn) this.importBtn.textContent = i18n.t('casa.backup.import');
-    if (this.exportNote) this.exportNote.textContent = i18n.t('casa.backup.exportHint');
-    if (this.importNote) this.importNote.textContent = i18n.t('casa.backup.importHint');
+    if (this.exportBtn) this.exportBtn.textContent = i18n.t('home.backup.export');
+    if (this.importBtn) this.importBtn.textContent = i18n.t('home.backup.import');
+    if (this.exportNote) this.exportNote.textContent = i18n.t('home.backup.exportHint');
+    if (this.importNote) this.importNote.textContent = i18n.t('home.backup.importHint');
 
     /* Fuori dall'APK i due picker non esistono, e un bottone che non fa niente
        e' peggio di un bottone che manca. La spiegazione di **cosa sia** un
@@ -135,14 +135,14 @@ export class HomeBackup {
     if (this.importBtn) this.importBtn.hidden = !native;
     if (this.importCard) this.importCard.hidden = !native;
     if (!native && this.exportNote) {
-      this.exportNote.textContent = `${i18n.t('casa.backup.exportHint')} ${i18n.t('backup.androidOnly')}`;
+      this.exportNote.textContent = `${i18n.t('home.backup.exportHint')} ${i18n.t('backup.androidOnly')}`;
     }
 
     if (this.snapNote) {
       /* La storia locale e' un'altra cosa, e somiglia abbastanza da essere
          scambiata per questa: si dice cos'e' e cosa **non** e'. */
       this.snapNote.textContent = i18n.t(
-        this.backup?.snapshots_enabled ? 'casa.backup.snapshots' : 'casa.backup.snapshotsOff',
+        this.backup?.snapshots_enabled ? 'home.backup.snapshots' : 'home.backup.snapshotsOff',
       );
     }
   }

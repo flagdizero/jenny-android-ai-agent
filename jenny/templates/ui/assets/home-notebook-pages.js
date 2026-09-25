@@ -4,7 +4,7 @@
  *  conversazioni» (la tavola `Concetto`). Questa e' quella cosa: due linguette
  *  — l'elenco e la mappa — sopra **una sola risposta del server**.
  *
- *  `/api/graph?wiki=<nome>` porta insieme i nodi, gli archi e l'indice
+ *  `/api/graph?wiki=<name>` porta insieme i nodi, gli archi e l'indice
  *  full-text, e non e' una comodita': il commento in `wiki_routes.py` dice
  *  perche' non sono due endpoint — fra due chiamate la wiki puo' cambiare, e il
  *  client accenderebbe i nodi sbagliati. Quindi elenco, ricerca e mappa non
@@ -103,13 +103,13 @@ export class NotebookPages {
    */
   constructor({ onOpenPage, onNeedMap } = {}) {
     this.el = document.getElementById('home-notebook-pages');
-    this.listEl = document.getElementById('casa-page-list');
-    this.noteEl = document.getElementById('casa-pages-note');
-    this.queryEl = document.getElementById('casa-pages-q');
-    this.tabListEl = document.getElementById('casa-tab-list');
-    this.tabMapEl = document.getElementById('casa-tab-map');
+    this.listEl = document.getElementById('home-notebook-page-list');
+    this.noteEl = document.getElementById('home-notebook-pages-note');
+    this.queryEl = document.getElementById('home-notebook-pages-q');
+    this.tabListEl = document.getElementById('home-tab-list');
+    this.tabMapEl = document.getElementById('home-tab-map');
     this.mapEl = document.getElementById('home-map');
-    this.mapNoteEl = document.getElementById('casa-map-note');
+    this.mapNoteEl = document.getElementById('home-map-note');
 
     this._onOpenPage = onOpenPage;
     this._onNeedMap = onNeedMap;
@@ -135,8 +135,8 @@ export class NotebookPages {
   /** Le parole della stanza. Il campo di ricerca riusa il segnaposto del grafo
    *  dell'officina — e' gia', parola per parola, quel che la tavola scrive. */
   applyTranslations() {
-    if (this.tabListEl) this.tabListEl.textContent = i18n.t('casa.pages.tabList');
-    if (this.tabMapEl) this.tabMapEl.textContent = i18n.t('casa.pages.tabMap');
+    if (this.tabListEl) this.tabListEl.textContent = i18n.t('home.notebookPages.tabList');
+    if (this.tabMapEl) this.tabMapEl.textContent = i18n.t('home.notebookPages.tabMap');
     if (this.queryEl) this.queryEl.placeholder = i18n.t('graph.searchPlaceholder');
     /* Le righe gia' a schermo portano l'etichetta del gruppo: cambiata la
        lingua, si ridisegnano invece di restare nella precedente. */
@@ -152,7 +152,7 @@ export class NotebookPages {
     this._index = null;
     if (this.queryEl) this.queryEl.value = '';
     this.showTab('list');
-    this._say('casa.pages.loading');
+    this._say('home.notebookPages.loading');
     this.listEl.innerHTML = '';
 
     let data;
@@ -164,7 +164,7 @@ export class NotebookPages {
       /* Le wiki spente sono un 503 e non un guasto: la frase esiste gia', ed e'
          quella che il giro di creazione usa per dire la stessa cosa. */
       const off = /\b503\b/.test(String(err?.message || ''));
-      this._say(off ? 'casa.who.create.wikiOff' : 'casa.pages.failed');
+      this._say(off ? 'home.who.create.wikiOff' : 'home.notebookPages.failed');
       return;
     }
     if (token !== this._token) return;
@@ -190,7 +190,7 @@ export class NotebookPages {
     if (this.mapEl) this.mapEl.hidden = onList;
     /* Il campo di ricerca e' dell'elenco: nella mappa non c'e' niente da
        filtrare che si legga. */
-    const search = this.queryEl?.closest('.casa-search');
+    const search = this.queryEl?.closest('.home-search');
     if (search) search.hidden = !onList;
     if (!onList && this.data) this._onNeedMap?.(this.data, this.rows, this.notebook);
   }
@@ -204,7 +204,7 @@ export class NotebookPages {
   _render() {
     this.listEl.innerHTML = '';
     if (!this.rows.length) {
-      this._say('casa.pages.none');
+      this._say('home.notebookPages.none');
       return;
     }
     this._say(null);
@@ -217,7 +217,7 @@ export class NotebookPages {
   _row(row, withGroups) {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'casa-page';
+    el.className = 'home-notebook-page';
     el.dataset.page = row.path;
     el.dataset.label = row.label;
     /* L'indice di partenza viaggia col nodo del DOM: e' cosi' che la ricerca
@@ -226,18 +226,18 @@ export class NotebookPages {
 
     if (withGroups) {
       const dot = document.createElement('span');
-      dot.className = `casa-page-dot casa-group-${row.group}`;
+      dot.className = `home-notebook-page-dot home-group-${row.group}`;
       el.appendChild(dot);
     }
 
     const name = document.createElement('span');
-    name.className = 'casa-page-name';
+    name.className = 'home-notebook-page-name';
     name.textContent = row.label;
     el.appendChild(name);
 
     if (withGroups) {
       const group = document.createElement('span');
-      group.className = 'casa-page-group';
+      group.className = 'home-notebook-page-group';
       group.textContent = i18n.t(GROUP_KEYS[row.group]);
       el.appendChild(group);
     }
@@ -255,6 +255,6 @@ export class NotebookPages {
       if (on) shown += 1;
     }
     if (!this.rows.length) return;
-    this._say(shown ? null : 'casa.pages.noMatch');
+    this._say(shown ? null : 'home.notebookPages.noMatch');
   }
 }

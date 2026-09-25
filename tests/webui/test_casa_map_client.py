@@ -53,8 +53,8 @@ function selezione(dati, larghezze) {
     each(fn) {
       for (const d of dati) fn.call({ getComputedTextLength: () => larghezze[d.id] }, d);
     },
-    attr(nome, f) {
-      scritti[nome] = dati.map((d) => [d.id, typeof f === 'function' ? f(d) : f]);
+    attr(name, f) {
+      scritti[name] = dati.map((d) => [d.id, typeof f === 'function' ? f(d) : f]);
       return sel;
     },
   };
@@ -476,7 +476,7 @@ function fisicaFinta() {
     alphaTarget(v) { diario.push(['alphaTarget', v]); return sim; },
     restart() { diario.push(['restart']); return sim; },
     molle: {},
-    force(nome, f) { sim.molle[nome] = f; diario.push(['force', nome]); return sim; },
+    force(name, f) { sim.molle[name] = f; diario.push(['force', name]); return sim; },
   };
   return sim;
 }
@@ -489,10 +489,10 @@ function svgFinto() {
 const zoomFinto = { transform: 'TRANSFORM' };
 
 class Mappa {
-  constructor(quaderno = 'quaderno') {
+  constructor(notebook = 'quaderno') {
     this._presaInMano = false;
     this._sim = fisicaFinta();
-    this._quaderno = quaderno;
+    this._notebook = notebook;
     this._spilli = null;
     this._w = 600;
     this._h = 400;
@@ -596,7 +596,7 @@ def test_the_transform_reaches_the_drawing_either_way() -> None:
     _run_gesti("""
 const m = new Mappa();
 const viste = [];
-const radice = { attr: (nome, v) => viste.push([nome, v]) };
+const radice = { attr: (name, v) => viste.push([name, v]) };
 m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
 m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
 assert.deepEqual(viste, [['transform', 'MIA'], ['transform', 'NOSTRA']]);

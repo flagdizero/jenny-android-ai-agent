@@ -67,12 +67,12 @@ def test_nessuna_posa_sfasa_grandezza_o_spinta_fra_i_petali() -> None:
         // read e write muovono un petalo alla volta: v. il test che segue.
         const inFase = Object.keys(POSE).filter((k) => k !== 'read' && k !== 'write');
         assert.ok(inFase.length >= 7, inFase.join(','));
-        for (const nome of inFase) {
+        for (const name of inFase) {
           for (let t = 0; t < 12; t += 0.037) {
-            const petali = [0, 1, 2, 3, 4].map((i) => POSE[nome].petal(t, i));
+            const petali = [0, 1, 2, 3, 4].map((i) => POSE[name].petal(t, i));
             for (const p of petali) {
-              assert.ok(Math.abs(p.s - petali[0].s) < 1e-9, `${nome}: scala sfasata a t=${t}`);
-              assert.ok(Math.abs(p.push - petali[0].push) < 1e-9, `${nome}: spinta sfasata a t=${t}`);
+              assert.ok(Math.abs(p.s - petali[0].s) < 1e-9, `${name}: scala sfasata a t=${t}`);
+              assert.ok(Math.abs(p.push - petali[0].push) < 1e-9, `${name}: spinta sfasata a t=${t}`);
             }
           }
         }
@@ -96,16 +96,16 @@ def test_nessun_petalo_si_schiaccia_su_un_asse() -> None:
     _run(
         """
         // Nelle pose: nessuna larghezza separata dalla scala.
-        for (const [nome, posa] of Object.entries(POSE)) {
+        for (const [name, posa] of Object.entries(POSE)) {
           for (let t = 0; t < 6; t += 0.1) {
             for (let i = 0; i < 5; i++) {
-              assert.equal(posa.petal(t, i).sx, undefined, `${nome} ha una larghezza`);
+              assert.equal(posa.petal(t, i).sx, undefined, `${name} ha una larghezza`);
             }
           }
         }
         // Nel disegno: ogni scale() scritto sui nodi ha un argomento solo.
         const f = new Flower(document.createElementNS('', 'svg'), { reducedMotion: true });
-        for (const nome of Object.keys(POSE)) f.setMode(nome);
+        for (const name of Object.keys(POSE)) f.setMode(name);
         const trasformazioni = creati.map((n) => n.attrs.transform).filter(Boolean);
         assert.ok(trasformazioni.length > 5);
         for (const tr of trasformazioni) {
