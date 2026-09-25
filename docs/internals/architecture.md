@@ -78,14 +78,16 @@ Useful docs:
 
 ## Channels
 
-Jenny has **two** channels, both owned by `WebSocketDispatcher` (`jenny/channels/dispatcher.py`), which fans outbound bus messages out to whichever channels are active:
+Jenny has **four** channels, all owned by `WebSocketDispatcher` (`jenny/channels/dispatcher.py`), which fans outbound bus messages out to whichever channels are active:
 
 | Channel | File | Notes |
 |---|---|---|
 | WebSocket (WebUI) | `jenny/channels/websocket.py` (+ `ws_sender.py`, `ws_parsing.py`) | Always enabled on Android; serves the mobile WebUI over the same port as the HTTP API. |
-| Telegram | `jenny/channels/telegram.py` | Optional, personal-bot channel; created only if `telegram.enabled` is true and a `bot_token` is set. Paired via a 6-digit code; both channels share the single unified session, so `/new` from either one resets the other too. |
+| Telegram | `jenny/channels/telegram.py` | Optional, personal-bot channel; created only if `telegram.enabled` is true and a `bot_token` is set. Paired via a 6-digit code; it shares the single unified session with the WebUI, so `/new` from either one resets the other too. |
+| Notification | `jenny/channels/notification.py` | Android only. A reply typed into one of Jenny's notifications comes in on this channel, and her answer goes back as a system alert. No connection of its own. |
+| Floating | `jenny/channels/floating.py` | Android only. The floating mascot's bubble: what you type there comes in on this channel, and the answer is shown in the bubble. |
 
-`WebSocketDispatcher` also owns retry, delta coalescing for streaming updates, and progress-message filtering per channel — see [`dispatcher.py`](../../jenny/channels/dispatcher.py). This is a decomposition, not a generic channel registry: the two channels are wired explicitly in `_init_channel()`/`_init_telegram()`, not discovered.
+`WebSocketDispatcher` also owns retry, delta coalescing for streaming updates, and progress-message filtering per channel — see [`dispatcher.py`](../../jenny/channels/dispatcher.py). This is a decomposition, not a generic channel registry: the four channels are wired explicitly in `_init_channel()`/`_init_telegram()`/`_init_notification()`/`_init_floating()`, not discovered.
 
 Useful docs:
 
@@ -142,7 +144,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 
 The numbering is the load order in `_HARDCODED_TOOL_MODULES`, which is the order `discover()` walks.
 
-`self.py`'s module-level `TOOLS` list is deliberately empty. `MyTool` (the `my` introspection/self-check tool) needs a live reference to the running `AgentLoop`, which the generic loader can't provide, so it is instantiated and registered by hand in `AgentLoop._register_default_tools()`, gated on `tools.my.enable`. Two other tools reach the registry the same way and for the same reason — `memory_entry` needs the memory store, and the per-app action tool is synced per turn — so this list is not a complete inventory of the tool surface.
+`self.py`'s module-level `TOOLS` list is deliberately empty. `MyTool` (the `my` introspection/self-check tool) needs a live reference to the running `AgentLoop`, which the generic loader can't provide, so it is instantiated and registered by hand in `AgentLoop._register_default_tools()`, gated on `tools.my.enable`. Two other tools reach the registry the same way and for the same reason — `memory` (`MemoryEntryTool`) needs the memory store, and the per-app action tool is synced per turn — so this list is not a complete inventory of the tool surface.
 
 `ToolLoader.discover()` therefore returns 41 tool classes across those 23 modules, plus the manually-registered `MyTool` — 42 built-in tool classes in total. Not all of them are necessarily *registered* at runtime, and no single agent ever sees all 42: `ToolLoader.load()` filters by the caller's `scope` against each tool's `_scopes` (`core`, `orchestrator`, `subagent`, `remote`), then optionally by an `allow` list of names (that is how agent types narrow their toolset), then checks each tool's `enabled(ctx)` against the current config. The live tool count for a given install therefore depends on the config toggles *and* on which agent is asking. On top of the built-ins, Jenny Apps register their own dynamic `<slug>_<action>` tools per turn (`AppToolsSyncer`) — see [Mini-apps](../using/mini-apps.md) and [Tool reference](../reference/tools.md) for the full, toggle-aware picture.
 

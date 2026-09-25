@@ -13,9 +13,9 @@ Use this page when you want to understand how Jenny works before touching advanc
 | Channels | Two: the built-in WebSocket channel (the WebUI, always on) and an optional paired Telegram bot |
 | Tools | Capabilities the model may call — files, `python_exec`, Android web search/fetch, location, cron, subagents, mini-app actions, and more |
 | Memory | Workspace files and session history that keep useful context across turns, consolidated periodically by Dream |
-| Gateway | The single long-running process that serves both channels and the HTTP API behind the WebUI |
+| Gateway | The single long-running process that serves every channel and the HTTP API behind the WebUI |
 
-The long-running path is the gateway, started by the Android runtime via `jenny.android_entry.run_gateway()`: it receives messages from the Android WebView over WebSocket (and, if paired, from Telegram), publishes them to the agent loop, and sends replies back out through both channels via the outbound dispatcher.
+The long-running path is the gateway, started by the Android runtime via `jenny.android_entry.run_gateway()`: it receives messages from the Android WebView over WebSocket (and, if paired, from Telegram), publishes them to the agent loop, and sends replies back out through the channels via the outbound dispatcher.
 
 ## Config vs workspace
 
@@ -46,7 +46,7 @@ A normal turn follows this flow:
 
 ## Gateway and WebUI
 
-There is one entry point and one process: `jenny.android_entry.run_gateway()`, started by the Android app and never invoked as a separate desktop process in normal use. It serves the embedded WebUI, the heartbeat, Dream, and both channels out of the same asyncio event loop.
+There is one entry point and one process: `jenny.android_entry.run_gateway()`, started by the Android app and never invoked as a separate desktop process in normal use. It serves the embedded WebUI, the heartbeat, Dream, and every channel out of the same asyncio event loop.
 
 **There is no `/health` endpoint.** On the device, the WebSocket handshake and the HTTP API behind the WebUI (`/api/...`) share one port — `gateway.port`, `18790` by default — so the WebView can reach both from a single origin without a CORS story. That sharing is enforced by the Android entry point itself (`run_gateway(..., port=18790)` forces both the gateway port and the WebSocket port to the same value at startup), not by anything you configure. The production UI is served over that same WebSocket channel, rendered inside the Android app's WebView; nothing about it assumes a desktop browser.
 
@@ -78,9 +78,9 @@ See [Providers and models](../reference/providers.md) for practical setup and [C
 
 ## Channels and sessions
 
-Jenny has two channels: the built-in WebSocket channel (always active — it's how the in-app WebUI talks to the gateway) and an optional Telegram bot, paired from Settings. Both are owned by the same outbound dispatcher, which fans replies out to whichever channels are active.
+Jenny has four channels: the built-in WebSocket channel (always active — it's how the in-app WebUI talks to the gateway), an optional Telegram bot paired from Settings, and two that exist only on Android — a reply typed into one of Jenny's notifications, and the floating mascot's bubble. All four are owned by the same outbound dispatcher, which fans replies out to whichever channels are active.
 
-Every inbound message from either channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream, heartbeat) runs under separate internal session keys so it never pollutes the user-visible conversation.
+Every inbound message from any channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream, heartbeat) runs under separate internal session keys so it never pollutes the user-visible conversation.
 
 There is one user-visible exception to "a single session": a **project** conversation (`project:<name>`), opened from the scope chip and bound to one folder under `<workspace>/wikis/`. It has its own session file, its own transcript, and its own memory rules — its content is never archived into `history.jsonl`, so Dream cannot see it. Only the WebSocket channel can name a project; a Telegram message stays personal whatever it contains. Session keys are therefore classified three ways, not two — `personal`, `project`, `internal` — and anything unrecognised is treated as internal rather than personal, so an unregistered kind can never reach `MEMORY.md`. See [Projects](../using/projects.md) for the user-facing design.
 
