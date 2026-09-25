@@ -932,46 +932,38 @@ body {
   transform: scale(0.95);
 }
 
-/* Send button */
-/* Il cassetto delle app, gemello sinistro del tasto manda.
-   **Non** in accento, e non e' timidezza: in questa riga la cosa accesa deve
-   restare una sola — quella che manda il messaggio. Un secondo tondo pieno
-   accanto farebbe due primi attori e nessuno dei due si leggerebbe piu' come
-   «il» gesto. Stessa taglia pero', perche' sono la stessa classe di bottone e
-   la riga resta simmetrica. */
-.compose-drawer {
-  width: 50px; height: 50px;   /* come .compose-send: la riga resta allineata */
+/* Il tasto manda e il cassetto delle app, suo gemello sinistro: lo stesso
+   tondo, alto quanto `.compose-pill` perche' la riga resti allineata, e la
+   stessa molla al tocco. */
+.compose-drawer, .compose-send {
+  width: 50px; height: 50px;
   border-radius: 50%;
-  background: var(--overlay);
   border: none;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text);
   font-size: 18px;
   flex-shrink: 0;
-  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), background 0.3s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.compose-drawer i { font-size: 18px; }
-.compose-drawer:active { transform: scale(0.92); background: var(--overlay-strong); }
+.compose-drawer i, .compose-send i { font-size: 18px; }
+.compose-drawer:active, .compose-send:active { transform: scale(0.92); }
+
+/* Il cassetto **non** in accento, e non e' timidezza: in questa riga la cosa
+   accesa deve restare una sola — quella che manda il messaggio. Un secondo
+   tondo pieno accanto farebbe due primi attori e nessuno dei due si
+   leggerebbe piu' come «il» gesto. */
+.compose-drawer {
+  background: var(--overlay);
+  color: var(--text);
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), background 0.3s ease;
+}
+.compose-drawer:active { background: var(--overlay-strong); }
 
 .compose-send {
-  width: 50px; height: 50px; /* alto quanto .compose-pill: restano allineati */
-  border-radius: 50%;
   background: var(--accent);
-  border: none;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
   color: var(--on-accent);
-  font-size: 18px;
-  flex-shrink: 0;
   transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), background 0.3s ease, opacity 0.3s ease;
-  -webkit-tap-highlight-color: transparent;
 }
-.compose-send:active {
-  transform: scale(0.92);
-}
-.compose-send i { font-size: 18px; }
 
 .compose-send[disabled] {
   background: var(--overlay-strong);
@@ -1140,7 +1132,13 @@ body {
   color: var(--text-faint); letter-spacing: .06em;
   text-transform: uppercase;
 }
-.drawer-close {
+/* La crocetta, una per quattro pannelli: i cassetti, il cassetto delle app,
+   e i due pannelli sopra la chat (l'anteprima di un file e le informazioni
+   della sessione). Stessa taglia, stesso bordo, stessa molla al tocco — tranne
+   quella del cassetto delle app, che la molla non ce l'ha: nessuno stato le
+   da' un `transform`, quindi la transizione di `transform` qui sotto per lei
+   non parte mai. Erano tre regole ricopiate, identiche riga per riga. */
+.drawer-close, .launcher-close, .file-preview-close, .session-info-close {
   width: 22px; height: 22px;
   border-radius: var(--radius-sm);
   border: 0.5px solid var(--border-strong);
@@ -1149,9 +1147,12 @@ body {
   display: flex; align-items: center; justify-content: center;
   transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
 }
-.drawer-close:hover { color: var(--text); border-color: var(--border-strong); background: var(--overlay-strong); transform: scale(1.1); }
-.drawer-close:active { transform: scale(0.9); }
-.drawer-close i { font-size: 13px; }
+.drawer-close:hover, .launcher-close:hover,
+.file-preview-close:hover, .session-info-close:hover { color: var(--text); }
+.drawer-close:hover, .launcher-close:hover { background: var(--overlay-strong); }
+.drawer-close:hover, .file-preview-close:hover, .session-info-close:hover { transform: scale(1.1); }
+.drawer-close:active, .file-preview-close:active, .session-info-close:active { transform: scale(0.9); }
+.drawer-close i, .launcher-close i { font-size: 13px; }
 
 /* Drawer body */
 .drawer-body {
@@ -1679,9 +1680,10 @@ body {
 }
 
 /* Le intestazioni che si toccano per aprire un pezzo del turno — il
-   ragionamento, un tool, il gruppo dei tool: la stessa etichetta squadrata.
-   Quella del singolo tool si scrive nel colore del testo e senza grassetto. */
-.chat-thinking-header, .chat-tool-header, .tool-events-header {
+   ragionamento, un tool, il gruppo dei tool, il resoconto di un subagent: la
+   stessa etichetta squadrata. Quella del singolo tool si scrive nel colore del
+   testo e senza grassetto. */
+.chat-thinking-header, .chat-tool-header, .tool-events-header, .sa-digest-head {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1694,7 +1696,7 @@ body {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.chat-thinking-header, .tool-events-header {
+.chat-thinking-header, .tool-events-header, .sa-digest-head {
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -3007,17 +3009,7 @@ body {
   color: var(--text-faint); letter-spacing: .06em;
   text-transform: uppercase;
 }
-.launcher-close {
-  width: 22px; height: 22px;
-  border-radius: var(--radius-sm);
-  border: 0.5px solid var(--border-strong);
-  background: var(--overlay); color: var(--text-faint);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s;
-}
-.launcher-close:hover { color: var(--text); background: var(--overlay-strong); }
-.launcher-close i { font-size: 13px; }
+/* `.launcher-close`: la crocetta dei cassetti, v. `.drawer-close`. */
 
 /* ── Il campo di ricerca ──
    Sta fra l'intestazione e la lista, ed è il corpo del cassetto: alto quanto
@@ -3962,12 +3954,12 @@ body {
 .sa-digest {
   display: contents;
 }
-/* Chip: stessa taglia e stessa forma di `.chat-thinking-header`. Sta nella stessa
-   riga e apre la stessa specie di cosa — se si distingue, si distingue a caso. */
+/* Chip: stessa taglia e stessa forma di `.chat-thinking-header`, e sta nel suo
+   gruppo (v. «Le intestazioni che si toccano»). Sta nella stessa riga e apre
+   la stessa specie di cosa — se si distingue, si distingue a caso. Qui solo
+   quel che le serve in piu': e' un `<button>`, che carattere e allineamento
+   non li eredita, e vive anche fuori dalla meta-row. */
 .sa-digest-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   /* Il chip non può essere più larga della riga: è ciò che dà a `.sa-digest-sub`
      un limite contro cui troncare quando l'etichetta del job è lunga. */
   max-width: 100%;
@@ -3976,18 +3968,8 @@ body {
      flex a colonna — senza questo lo `stretch` di default la allargherebbe a
      tutta la chat, cioè l'opposto della gerarchia che deve avere. */
   align-self: flex-start;
-  padding: 3px 9px;
-  background: var(--overlay);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-seg);
-  color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 500;
   text-align: left;
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
 }
 .sa-digest-head:active { background: var(--active); }
 .sa-digest-head > i:first-child {
@@ -4383,8 +4365,9 @@ body {
 /* La riga delle liste dell'officina — lavori, marche, host SSH: un pulsante
    largo quanto la lista, filetto sopra tranne la prima, e il tocco che la
    sbiadisce. Il `min-height` resta in ogni riga: è il bersaglio del dito, e i
-   contratti di ciascuna lo cercano lì. */
-.cron-riga, .marca-riga, .ssh-riga {
+   contratti di ciascuna lo cercano lì. La riga di riepilogo delle
+   impostazioni è lo stesso pulsante senza filetto (v. `.settings-riepilogo`). */
+.cron-riga, .marca-riga, .ssh-riga, .settings-riepilogo {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4400,7 +4383,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 .cron-riga:first-of-type, .marca-riga:first-of-type, .ssh-riga:first-of-type { border-top: 0; }
-.cron-riga:active, .marca-riga:active, .ssh-riga:active { opacity: .6; }
+.cron-riga:active, .marca-riga:active, .ssh-riga:active,
+.settings-riepilogo:active { opacity: .6; }
 /* Il lavoro periodico ha due righe di testo, e un filo d'aria in più. */
 .cron-riga { min-height: 52px; padding: 6px 0; }
 .cron-riga-testo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -4604,21 +4588,14 @@ body {
    pannello col dettaglio.
 
    E' `<button>` e non una riga cliccabile: da tastiera ci si arriva, e chi
-   legge lo schermo sente che e' un comando invece di due frasi accostate. */
+   legge lo schermo sente che e' un comando invece di due frasi accostate.
+   Il pulsante e' quello di `.cron-riga` (stesso gruppo, e stesso tocco che
+   sbiadisce); qui cio' che cambia: niente filetto, niente aria sopra e sotto,
+   e il bersaglio del dito. */
 .settings-riepilogo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
   min-height: 44px;
   padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  border-top: 0;
 }
 .settings-riepilogo-nome { flex-shrink: 0; font-size: 13px; color: var(--text); }
 /* La risposta si prende lo spazio che resta e si tronca: e' un riassunto, e un
@@ -4635,7 +4612,6 @@ body {
   white-space: nowrap;
 }
 .settings-riepilogo i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
-.settings-riepilogo:active { opacity: .6; }
 
 /* ── La riga a due colonne: nome a sinistra, comando a destra ─────────────
    La forma della tavola, e la forma che `.settings-toggle-row` ha sempre avuto:
@@ -5063,27 +5039,8 @@ body {
   white-space: nowrap;
 }
 
-/* La crocetta dei due pannelli sopra la chat, l'anteprima di un file e le
-   informazioni della sessione: stessa taglia, stessa molla al tocco. */
-.file-preview-close, .session-info-close {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  border: 0.5px solid var(--border-strong);
-  background: var(--overlay);
-  color: var(--text-faint);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
-}
-.file-preview-close:hover, .session-info-close:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  transform: scale(1.1);
-}
-.file-preview-close:active, .session-info-close:active { transform: scale(0.9); }
+/* La crocetta dei due pannelli sopra la chat e' quella dei cassetti, v.
+   `.drawer-close`. Qui solo quel che cambia. */
 .file-preview-close { flex-shrink: 0; }
 
 .file-preview-close i {

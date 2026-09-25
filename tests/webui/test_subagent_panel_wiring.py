@@ -14,6 +14,8 @@ import json
 import re
 from pathlib import Path
 
+from support import css_levels
+
 UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
 DIALOG_JS = UI_DIR / "assets" / "shared" / "dialog.js"
@@ -483,10 +485,15 @@ def test_the_digest_takes_the_whole_row_when_open() -> None:
     body = re.search(r"\n\.sa-digest-body\s*\{(.*?)\}", css, re.S)
     assert body and "width: 100%" in body.group(1), "il corpo del digest non prende la riga"
     # La testata resta un chip: se si allargasse anche lei, il fold chiuso
-    # occuperebbe una riga intera per tre parole.
-    head = re.search(r"\n\.sa-digest-head\s*\{(.*?)\}", css, re.S)
-    assert head and "display: inline-flex" in head.group(1)
-    assert "align-self: flex-start" in head.group(1), (
+    # occuperebbe una riga intera per tre parole. Le sue dichiarazioni stanno
+    # in due posti — il gruppo delle testate del turno e la regola sua — quindi
+    # si leggono tutte le regole che la nominano.
+    head = "\n".join(
+        corpo for selettori, corpo, _ in css_levels.rules(css)
+        if ".sa-digest-head" in {x.strip() for x in selettori.split(",")}
+    )
+    assert "display: inline-flex" in head
+    assert "align-self: flex-start" in head, (
         "fuori dalla meta-row (chat, flex a colonna) lo stretch allargherebbe la chip"
     )
 
