@@ -242,3 +242,48 @@ class TestTheShippedCapOnTheFileItWillMeet:
 
     def test_a_write_that_lands_under_the_cap_passes(self, store, over_budget):
         assert over_budget(store.memory_file, "z" * 2999) is None
+
+
+class TestUserRulesDoNotCountAgainstSoul:
+    """Le regole dell'utente, proiettate in SOUL.md dall'app, non sono di Dream.
+
+    Il budget di SOUL.md esiste per limitare ciò che Dream scrive. Contare il
+    blocco dell'utente vorrebbe dire che un testo lungo nella casella «Tu e
+    Jenny» porta il file oltre il tetto, e da lì ogni scrittura di Dream viene
+    rifiutata — ``stuck`` sale e parte un review forzato per righe non sue.
+    """
+
+    RULES = "Regola dell'utente, lunga. " * 40  # ~1.100 caratteri
+
+    def _with_rules(self, store):
+        from jenny.agent.soul_rules import save_rules
+
+        save_rules(store.soul_file.parent, self.RULES)
+        return store.soul_file.read_text(encoding="utf-8")
+
+    def test_the_report_leaves_the_block_out(self, store):
+        text = self._with_rules(store)
+        soul = _report(store, soul=500)[2]
+        assert len(text) > 1000
+        # Il testo di lei più gli a capo attorno al blocco: nessuna riga sua.
+        assert soul.chars == len("# Soul\n- Helpful\n\n\n"), soul
+        assert soul.over is False
+
+    def test_the_guard_does_not_refuse_dream_because_of_the_rules(self, store):
+        text = self._with_rules(store)
+        guard = make_write_size_guard(_report(store, soul=500))
+        grown = text.replace("- Helpful", "- Helpful\n- Brief")
+        assert guard(store.soul_file, grown) is None
+
+    def test_dreams_own_text_still_counts(self, store):
+        text = self._with_rules(store)
+        guard = make_write_size_guard(_report(store, soul=500))
+        grown = text.replace("- Helpful", "- Helpful\n" + "- x" * 300)
+        refusal = guard(store.soul_file, grown)
+        assert refusal is not None and "SOUL.md" in refusal
+
+    def test_other_files_count_everything(self, store):
+        from jenny.agent.soul_rules import MARK_END, MARK_START
+
+        store.user_file.write_text(MARK_START + "\nabc\n" + MARK_END, encoding="utf-8")
+        assert _report(store)[1].chars == len(MARK_START + "\nabc\n" + MARK_END)

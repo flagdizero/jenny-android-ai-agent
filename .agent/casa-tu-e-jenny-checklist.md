@@ -166,6 +166,10 @@ sopra, e a quel punto le scritture *di Dream* verrebbero rifiutate dal budget ‚Ä
 esiste per limitare ci√≤ che Dream scrive, e quelle righe non sono sue. Con i
 default (budget a 0, non applicato) il caso non esiste.
 
+**Chiuso il 26/09/2026.** `memory_budget` misura `SOUL.md` senza il blocco
+che `soul_rules.find_block` riconosce (`FileBudget.skip_user_rules`): report,
+gauge, guard e i confronti di crescita di Dream usano la stessa misura.
+
 ## Le mutazioni
 
 18, tutte rosse. Tre erano verdi al primo giro, e le tre ragioni sono diverse:

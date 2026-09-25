@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.agent import dream_review
-from jenny.agent.memory_budget import budget_report, count_chars, make_write_size_guard
+from jenny.agent.memory_budget import budget_report, make_write_size_guard
 from jenny.session.turn_visibility import silent_progress
 
 if TYPE_CHECKING:
@@ -239,7 +239,7 @@ def consolidation_landed(before: Sequence["FileBudget"]) -> bool:
     stesso batch, e poi si avanza. Il costo del falso *negativo* — che è lo stato
     di oggi — è un fatto perso per sempre.
     """
-    return any(count_chars(item.path) > item.chars for item in before)
+    return any(item.measure_now() > item.chars for item in before)
 
 
 def batch_was_not_consolidated(

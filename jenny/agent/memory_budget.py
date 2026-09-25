@@ -50,6 +50,20 @@ class FileBudget:
     path: Path
     chars: int
     budget: int
+    # Solo per SOUL.md: il blocco con le regole dell'utente non conta. Il budget
+    # esiste per limitare ciò che scrive Dream, e quelle righe non sono sue —
+    # le proietta l'app da ``.jenny/soul_rules.md`` (v. ``agent/soul_rules.py``).
+    # Contate, un testo lungo dell'utente porterebbe il file oltre il tetto e
+    # ogni scrittura di Dream verrebbe rifiutata.
+    skip_user_rules: bool = False
+
+    def measure(self, text: str) -> int:
+        """Caratteri di *text* come li conta questo budget."""
+        return measure_text(text, skip_user_rules=self.skip_user_rules)
+
+    def measure_now(self) -> int:
+        """Caratteri del file adesso, con la stessa regola di ``chars``."""
+        return count_chars(self.path, skip_user_rules=self.skip_user_rules)
 
     @property
     def enforced(self) -> bool:
@@ -72,7 +86,25 @@ class FileBudget:
         return self.chars * 100 // self.budget
 
 
-def count_chars(path: Path) -> int:
+def measure_text(text: str, *, skip_user_rules: bool = False) -> int:
+    """Caratteri di *text*; con *skip_user_rules* senza il blocco dell'utente.
+
+    Il blocco è quello che ``soul_rules.find_block`` riconosce: gli stessi
+    estremi che la proiezione riscrive, così budget e proiezione non possono
+    disaccordarsi su dove finisca la parte dell'utente.
+    """
+    if not skip_user_rules:
+        return len(text)
+    from jenny.agent.soul_rules import find_block
+
+    ends = find_block(text)
+    if not ends:
+        return len(text)
+    start, end = ends
+    return len(text) - (end - start)
+
+
+def count_chars(path: Path, *, skip_user_rules: bool = False) -> int:
     """Caratteri del file, ``0`` se manca o non è leggibile.
 
     ``errors="ignore"`` perché la misura non deve mai diventare il motivo per
@@ -81,9 +113,10 @@ def count_chars(path: Path) -> int:
     modo di riparare.
     """
     try:
-        return len(path.read_text(encoding="utf-8", errors="ignore"))
+        text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return 0
+    return measure_text(text, skip_user_rules=skip_user_rules)
 
 
 def _canonical(path: Path) -> Path:
@@ -125,13 +158,19 @@ def budget_report(
     del contratto: ``render_gauge`` non riordina.
     """
     specs = (
-        ("MEMORY.md", store.memory_file, memory_chars),
-        ("USER.md", store.user_file, user_chars),
-        ("SOUL.md", store.soul_file, soul_chars),
+        ("MEMORY.md", store.memory_file, memory_chars, False),
+        ("USER.md", store.user_file, user_chars, False),
+        ("SOUL.md", store.soul_file, soul_chars, True),
     )
     return [
-        FileBudget(label=label, path=path, chars=count_chars(path), budget=max(0, budget))
-        for label, path, budget in specs
+        FileBudget(
+            label=label,
+            path=path,
+            chars=count_chars(path, skip_user_rules=skip),
+            budget=max(0, budget),
+            skip_user_rules=skip,
+        )
+        for label, path, budget, skip in specs
     ]
 
 
@@ -218,10 +257,10 @@ def make_write_size_guard(report: Sequence[FileBudget]) -> WriteSizeGuard:
         item = budgets.get(_canonical(path))
         if item is None or not item.enforced:
             return None
-        size = len(new)
+        size = item.measure(new)
         if size <= item.budget:
             return None
-        old_size = count_chars(path)
+        old_size = item.measure_now()
         # La clausola "non sta rimpicciolendo" non è un di più. Anche la potatura
         # passa da una scrittura: senza di essa un file già oltre budget non
         # potrebbe più essere accorciato — il primo tentativo di potarlo verrebbe
