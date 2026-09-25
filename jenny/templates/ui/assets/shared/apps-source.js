@@ -52,6 +52,7 @@ export class AppsSource {
     /* Ogni fetch delle app Android prende un numero: solo la piu' recente ha
        il diritto di scrivere. */
     this._seqAndroid = 0;
+    this._seqJenny = 0;
     /* Le rimozioni gia' annunciate per la via del broadcast, per non dirle due
        volte quando la fetch successiva le riscopre. */
     this._annunciate = new Set();
@@ -151,14 +152,28 @@ export class AppsSource {
   /* ── Le due fetch ───────────────────────────────────────────────────────── */
 
   async loadJennyApps() {
+    /* Da quando anche il gateway fa rileggere l'elenco (`apps_list_changed`)
+       due letture possono accavallarsi: vince l'ultima partita, come per le
+       app Android (`_seqAndroid`). */
+    const token = ++this._seqJenny;
+    let apps = null;
     try {
       const data = await api.getJennyApps();
-      this.jennyApps = data.apps || [];
-      this._failed.jenny = false;
+      apps = data.apps || [];
     } catch {
+      apps = null;
+    }
+    if (token !== this._seqJenny) return;
+    if (apps) {
+      this.jennyApps = apps;
+      this._failed.jenny = false;
+    } else if (!this._jennyLoaded || this._failed.jenny) {
       this.jennyApps = [];
       this._failed.jenny = true;
     }
+    /* Altrimenti una rilettura e' fallita su un elenco che era buono: lo si
+       tiene, invece di svuotare il cassetto e accenderne l'errore per un
+       attimo di gateway occupato. */
     this._jennyLoaded = true;
     this._emit();
   }

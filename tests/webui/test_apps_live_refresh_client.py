@@ -181,3 +181,55 @@ def test_unrelated_frames_do_nothing() -> None:
         assert.deepEqual(visti, []);
         """
     )
+
+
+def test_an_older_answer_does_not_overwrite_a_newer_one() -> None:
+    """Da quando anche il gateway fa rileggere l'elenco (``apps_list_changed``),
+    due letture possono accavallarsi: vince l'ultima partita, non l'ultima
+    arrivata. Stessa guardia che ``loadAndroidApps`` ha già (``_seqAndroid``)."""
+    _run(
+        """
+        const fonte = new AppsSource();
+        const attese = [];
+        api.getJennyApps = () => new Promise((r) => attese.push(r));
+        const prima = fonte.loadJennyApps();
+        const seconda = fonte.loadJennyApps();
+        attese[1]({ apps: [{ slug: 'nuova', name: 'Nuova' }] });
+        await seconda;
+        attese[0]({ apps: [{ slug: 'vecchia', name: 'Vecchia' }] });
+        await prima;
+        assert.deepEqual(fonte.jennyApps.map((a) => a.slug), ['nuova']);
+        """
+    )
+
+
+def test_a_failed_refresh_keeps_the_list_that_was_fine() -> None:
+    """Una rilettura fallita (un attimo di gateway occupato) non svuota un elenco
+    che era buono, e non accende l'errore nel cassetto."""
+    _run(
+        """
+        const fonte = new AppsSource();
+        await fonte.loadJennyApps();
+        api.getJennyApps = async () => { throw new Error('giù'); };
+        frame({ event: 'apps_list_changed' });
+        await giro();
+        assert.deepEqual(fonte.jennyApps.map((a) => a.slug), ['orto']);
+        assert.equal(fonte.jennyListFailed(), false);
+        """
+    )
+
+
+def test_a_first_reading_that_fails_still_says_so() -> None:
+    """Senza un elenco buono da tenere, il guasto resta un guasto."""
+    _run(
+        """
+        const fonte = new AppsSource();
+        api.getJennyApps = async () => { throw new Error('giù'); };
+        await fonte.loadJennyApps();
+        assert.deepEqual(fonte.jennyApps, []);
+        assert.equal(fonte.jennyListFailed(), true);
+        api.getJennyApps = async () => ({ apps: [{ slug: 'orto' }] });
+        await fonte.loadJennyApps();
+        assert.equal(fonte.jennyListFailed(), false, 'una lettura buona spegne il guasto');
+        """
+    )
