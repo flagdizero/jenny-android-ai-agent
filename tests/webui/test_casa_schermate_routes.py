@@ -335,7 +335,11 @@ async def test_deleting_a_notebook_takes_its_page(env, monkeypatch) -> None:
         {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
         {"id": "p2", "kind": "app", "ref": "piante"},
     ])
-    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: env.workspace,
+        invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (),
+    )
     await commands.project_delete(ctx, {"name": "piante"})
 
     assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
@@ -351,7 +355,11 @@ async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch
 
     monkeypatch.setattr(modulo, "delete_project", _rifiuta)
     await _con_pagine(env, [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}])
-    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: env.workspace,
+        invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (),
+    )
     with pytest.raises(CommandError):
         await commands.project_delete(ctx, {"name": "piante"})
 

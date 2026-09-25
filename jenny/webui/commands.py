@@ -78,10 +78,11 @@ class CommandContext:
     # cioe' l'orfano, di nuovo. Meglio un TypeError all'avvio.
     invalidate_session: Callable[[str], None]
     # Le sessioni sotto cui qualcosa scrive adesso (``AgentLoop.busy_session_keys``):
-    # un turno, un subagent lanciato da li', una passata del giardiniere.
-    # ``project.rename`` le rifiuta: sgomberare la cache non ferma chi la sessione
-    # ce l'ha gia' in mano, e a fine lavoro scriverebbe sotto il nome vecchio — una
-    # chat senza cartella accanto a quella spostata. Obbligatorio per la stessa
+    # un turno, un subagent lanciato da li', una passata del giardiniere,
+    # l'autocompact. ``project.rename`` e ``project.delete`` le rifiutano:
+    # sgomberare la cache non ferma chi la sessione ce l'ha gia' in mano, e a fine
+    # lavoro scriverebbe sotto il nome vecchio — una chat senza cartella accanto a
+    # quella spostata, o al posto di quella cancellata. Obbligatorio per la stessa
     # ragione di ``invalidate_session``.
     busy_session_keys: Callable[[], Collection[str]]
 
@@ -411,7 +412,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     e' **distruttiva**, e questa e' la superficie autenticata all'handshake che
     la WebView usa per le operazioni che cambiano il disco.
     """
-    from jenny.session.keys import is_valid_project_name
+    from jenny.session.keys import is_valid_project_name, project_session_key
     from jenny.webui.project_delete import ProjectDeleteError, delete_project
 
     name = _require_str(params, "name").strip()
@@ -419,6 +420,15 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", "invalid project name")
 
     _require_wiki_enabled()
+
+    # Stessa guardia del rinomino, e per la stessa ragione: chi ha la sessione in
+    # mano a fine lavoro la salverebbe di nuovo, e il quaderno appena cancellato
+    # tornerebbe come una chat orfana. Sul loop, prima del thread.
+    if project_session_key(name) in set(ctx.busy_session_keys()):
+        raise CommandError(
+            "conflict",
+            "Jenny is still working in this notebook: delete it when she has finished",
+        )
 
     try:
         esito = await asyncio.to_thread(
@@ -436,7 +446,6 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
     # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
     # cancellato: la pagina verso il nulla la toglie l'utente.
-    from jenny.session.keys import project_session_key
     from jenny.webui.casa_routes import stacca_pagine_di
 
     try:
