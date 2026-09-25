@@ -72,6 +72,17 @@ export const rpc = {
     return wsManager.request('project.rename', { name, new_name: newName });
   },
 
+  /** Apre una segnalazione su un punto di una pagina di quaderno. Fra i
+   *  comandi per il commento, che e' testo libero (v.
+   *  `webui/commands.py::audit_create`). `author` e' la costante che
+   *  `/api/wiki/config` dichiarava per questo campo: l'audit lo scrive chi
+   *  legge, non lei. */
+  createAudit({ wiki, target, selStart, selEnd, comment }) {
+    return wsManager.request('audit.create', {
+      wiki, target, sel_start: selStart, sel_end: selEnd, comment, author: 'me',
+    });
+  },
+
   /** Salva le pagine della casa: l'elenco intero e l'ordine di tutte. Lo chiama
    *  `api.savePages`, gemella della lettura `api.getPages`
    *  (v. `webui/commands.py::home_pages_set`). */

@@ -250,16 +250,13 @@ class ApiClient {
    *  rilegge il file da solo e calcola le tre ancore: il vecchio client gli
    *  mandava anche `rawMarkdown` e la rotta lo **ignorava**.
    *
-   *  `author` e' la stessa costante che `/api/wiki/config` gia' dichiarava per
-   *  questo campo: l'audit lo scrive chi legge, non lei. */
+   *  Viaggia sul WebSocket (`rpc.createAudit`, comando `audit.create`): il
+   *  commento e' testo libero, e fino al 26/09/2026 stava nella query di una
+   *  GET, sotto il tetto di 8192 byte della riga di richiesta. Import
+   *  **dinamico** per la stessa ragione di `savePages`. */
   async createAudit({ wiki, target, selStart, selEnd, comment }) {
-    const params = new URLSearchParams({
-      wiki, target, selStart: String(selStart), selEnd: String(selEnd),
-      comment, author: 'me',
-    });
-    const res = await this._fetch(`/api/audit/create?${params}`);
-    if (!res.ok) throw new Error(`Audit create failed: ${res.status}`);
-    return res.json();
+    const { rpc } = await import('./rpc-client.js');
+    return rpc.createAudit({ wiki, target, selStart, selEnd, comment });
   }
 
   async getPage({ wiki, page } = {}) {

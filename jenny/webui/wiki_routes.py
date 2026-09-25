@@ -5,7 +5,9 @@ Solo letture e parametri corti — questo trasporto non può trasportare contenu
 (v. la docstring di ``webui.commands``), e infatti la scrittura di una pagina sta
 di là (``page.write``).
 
-**Una segnalazione si apre e basta.** Leggerle e chiuderle non passa più di qui:
+**Una segnalazione si apre e basta**, e nemmeno quello passa più di qui: il
+commento è testo libero, quindi dal 26/09/2026 è il comando ``audit.create``.
+Leggerle e chiuderle non passa di qui:
 dal 22/09/2026 confermarne una porta l'utente nella chat del quaderno, e di lì in
 poi sono Jenny e i suoi strumenti file a lavorarle, con lo script della skill
 (``llm-wiki/scripts/audit_review.py``). Le rotte che le elencavano e il comando
@@ -57,7 +59,7 @@ _FRONTMATTER_ALLOWLIST = frozenset(
 # lunga, è un file finito lì per sbaglio.
 #
 # **Rifiuta invece di troncare**, e la ragione non è la prudenza: il client usa
-# il ``raw`` per calcolare gli offset di un audit, e ``/api/audit/create`` rilegge
+# il ``raw`` per calcolare gli offset di un audit, e ``audit.create`` rilegge
 # il file **intero** per ancorarlo. Un ``raw`` tagliato darebbe ancore giuste per
 # un testo che il server non ha, cioè un commento attaccato al punto sbagliato —
 # un guasto silenzioso al posto di un 413 che si legge.
@@ -145,7 +147,12 @@ def _collect_projects(wikis_dir: Path) -> tuple[list[dict[str, Any]], list[dict[
 
 
 class WikiRoutes:
-    """Route ``/api/{projects,project/describe,graph,page}`` e ``/api/audit/create``."""
+    """Route ``/api/{projects,project/describe,graph,page}``.
+
+    Solo letture. ``/api/audit/create`` scriveva una segnalazione col commento
+    nell'indirizzo; dal 26/09/2026 è il comando RPC ``audit.create``
+    (``webui/commands.py``), perché un commento è testo libero.
+    """
 
     def __init__(
         self,
@@ -216,8 +223,6 @@ class WikiRoutes:
             return await self._wiki_graph(request)
         if path == "/api/page":
             return await self._wiki_page(request)
-        if path == "/api/audit/create":
-            return await self._audit_create(request)
         return None
 
     # -- wiki handlers --
@@ -232,7 +237,7 @@ class WikiRoutes:
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""
-        # Il nome del quaderno è **obbligatorio**, come per ``/api/audit/create``.
+        # Il nome del quaderno è **obbligatorio**, come per ``audit.create``.
         # C'era una vista senza nome — il grafo a stella di *tutte* le wiki — e
         # non c'è più: l'unica informazione che portava era quante pagine ha
         # ciascuna, e l'elenco dei quaderni la dà già con nomi, date e ricerca,
@@ -421,56 +426,3 @@ class WikiRoutes:
         if not described["exists"] and not described["orphan"]:
             return http_error(404, "project not found")
         return http_json_response(described)
-
-    # -- audit handlers --
-
-    async def _audit_create(self, request: WsRequest) -> Response:
-        if not self._check_api_token(request):
-            return http_error(401, "Unauthorized")
-        err = self._check_wiki_enabled()
-        if err:
-            return err
-        from jenny.webui.wiki import create_audit, discover_wikis
-
-        query = parse_query(request.path)
-        wikis = discover_wikis(self._get_wikis_dir())
-
-        wiki_name = query_first(query, "wiki") or ""
-        if not wiki_name or wiki_name not in wikis:
-            return http_error(400, "wiki required")
-
-        wiki_root = wikis[wiki_name].parent
-        target = query_first(query, "target") or ""
-
-        pages_dir = wikis[wiki_name]
-        # Il percorso grezzo: lo risolve ``is_path_within``, e un loop di symlink
-        # (``RuntimeError`` su Python 3.11, fuori da ogni ``try``) e' un 403, non un 500.
-        raw_path = pages_dir / (target or WIKI_INDEX_FILENAME)
-        if not is_path_within(raw_path, pages_dir):
-            return http_error(403, "Forbidden")
-        raw_markdown = ""
-        if raw_path.is_file():
-            raw_markdown = raw_path.read_text("utf-8")
-
-        try:
-            sel_start = int(query_first(query, "selStart") or 0)
-            sel_end = int(query_first(query, "selEnd") or 0)
-        except (ValueError, TypeError):
-            return http_error(400, "invalid selStart/selEnd")
-
-        try:
-            result = create_audit(
-                wiki_root=wiki_root,
-                target=target,
-                raw_markdown=raw_markdown,
-                sel_start=sel_start,
-                sel_end=sel_end,
-                comment=query_first(query, "comment") or "",
-                author=query_first(query, "author") or "anonymous",
-            )
-            result.pop("entry", None)
-            return http_json_response(result)
-        except FileNotFoundError as exc:
-            return http_error(404, str(exc))
-        except ValueError as exc:
-            return http_error(400, str(exc))

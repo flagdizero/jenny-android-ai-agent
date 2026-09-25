@@ -29,7 +29,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import safe_wiki_page_path
+from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 
 # Tetto sul contenuto di una singola scrittura. Allineato al ``max_size`` di
 # ``workspace_files.read_file``: ciò che l'editor non può aprire non deve
@@ -121,18 +121,26 @@ def _require_workspace_flag(attr: str, code: str, message: str) -> None:
         raise CommandError(code, message)
 
 
-def _require_wiki_enabled() -> None:
+def _require_wiki_enabled(*, fail_closed: bool = False) -> None:
     """``config.wiki.enabled``, con lo stesso fail-open storico della route.
 
     A differenza del workspace, una config illeggibile qui non blocca: la route
     HTTP si comportava così (``except Exception: pass``) e la wiki non è un gate
     di sicurezza sul filesystem, è una feature che può essere spenta.
+
+    *fail_closed* è per ``audit.create``, che viene da una route
+    (``/api/audit/create``) il cui gate era già passato a fail-closed
+    (``WikiRoutes._check_wiki_enabled``): spostarla sul WebSocket non deve
+    riaprirlo.
     """
     from jenny.config.loader import load_config
 
     try:
         enabled = bool(load_config().wiki.enabled)
     except Exception:
+        if fail_closed:
+            logger.exception("wiki gate: could not read config; refusing")
+            raise CommandError("unavailable", "wiki is unavailable") from None
         return
     if not enabled:
         raise CommandError("unavailable", "wiki is disabled")
@@ -351,6 +359,83 @@ async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
     return {"wiki": wiki_name, "page": page_path, "bytes": size}
+
+
+def _int_param(params: Mapping[str, Any], key: str) -> int:
+    """Un offset intero; assente vale 0, come nella query della route di prima."""
+    value = params.get(key, 0)
+    # ``bool`` è un ``int`` per Python, e ``True`` come offset è un errore del client.
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise CommandError("bad_request", "invalid sel_start/sel_end")
+    return value
+
+
+async def audit_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Apre una segnalazione ancorata a un punto di una pagina di quaderno.
+
+    Fino al 26/09/2026 era ``GET /api/audit/create?comment=…``: il commento è
+    testo libero, e nell'indirizzo stava sotto il tetto di 8192 byte per riga
+    di ``websockets`` — un commento lungo e accentato (ogni lettera accentata
+    percent-encodata vale sei byte) falliva. È la regola di ``.agent/design.md``:
+    ``/api/`` è per letture e parametri corti, le note libere vanno qui.
+
+    Stessa validazione e stessi esiti della route, tradotti nei codici di
+    ``CommandError``: quaderno sconosciuto o assente ``bad_request`` (era 400
+    «wiki required»), bersaglio fuori dalla pages-dir ``forbidden`` (403),
+    pagina che non c'è ``not_found`` (404), selezione impossibile
+    ``bad_request`` (400), wiki spenta o config illeggibile ``unavailable``
+    (503). ``sel_start``/``sel_end`` sono offset nel **markdown sorgente**: il
+    file lo rilegge il server, come faceva la route.
+    """
+    from jenny.webui.wiki import create_audit, discover_wikis
+
+    wiki_name = params.get("wiki")
+    target = params.get("target", "")
+    comment = params.get("comment", "")
+    author = params.get("author", "")
+    for key, value in (("target", target), ("comment", comment), ("author", author)):
+        if not isinstance(value, str):
+            raise CommandError("bad_request", f"{key} must be a string")
+    sel_start = _int_param(params, "sel_start")
+    sel_end = _int_param(params, "sel_end")
+    size = len(comment.encode("utf-8"))
+    if size > MAX_WRITE_BYTES:
+        raise CommandError("too_large", f"comment too large ({size} > {MAX_WRITE_BYTES} bytes)")
+
+    _require_wiki_enabled(fail_closed=True)
+
+    wikis = discover_wikis(_wikis_dir(ctx))
+    if not isinstance(wiki_name, str) or not wiki_name or wiki_name not in wikis:
+        raise CommandError("bad_request", "wiki required")
+    pages_dir = wikis[wiki_name]
+
+    # Il percorso grezzo: lo risolve ``is_path_within``, e un loop di symlink
+    # (``RuntimeError`` su Python 3.11) e' un rifiuto, non un errore interno.
+    raw_path = pages_dir / (target or WIKI_INDEX_FILENAME)
+    if not is_path_within(raw_path, pages_dir):
+        raise CommandError("forbidden", "path escapes wiki root")
+
+    def _create() -> dict[str, Any]:
+        raw_markdown = raw_path.read_text("utf-8") if raw_path.is_file() else ""
+        return create_audit(
+            wiki_root=pages_dir.parent,
+            target=target,
+            raw_markdown=raw_markdown,
+            sel_start=sel_start,
+            sel_end=sel_end,
+            comment=comment,
+            author=author or "anonymous",
+        )
+
+    try:
+        # Su disco, quindi fuori dal loop: stessa ragione di ``workspace.write``.
+        result = await asyncio.to_thread(_create)
+    except FileNotFoundError as exc:
+        raise CommandError("not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise CommandError("bad_request", str(exc)) from exc
+    result.pop("entry", None)
+    return result
 
 
 _CONVERSATION_CHOICES = frozenset({"refuse", "keep", "discard"})
@@ -612,6 +697,7 @@ COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
     "soul.rules.write": soul_rules_write,
     "page.write": page_write,
+    "audit.create": audit_create,
     "project.create": project_create,
     "project.delete": project_delete,
     "project.rename": project_rename,

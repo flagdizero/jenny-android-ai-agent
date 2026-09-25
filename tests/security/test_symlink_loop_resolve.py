@@ -26,7 +26,6 @@ from jenny.agent import wiki_provenance
 from jenny.webui import media_api
 from jenny.webui.apps_routes import AppsRoutes
 from jenny.webui.wiki import create_audit
-from jenny.webui.wiki_routes import WikiRoutes
 
 _resolve_real = pathlib.Path.resolve
 
@@ -73,19 +72,24 @@ def test_an_audit_on_a_loop_is_not_found(tmp_path: Path) -> None:
         create_audit(root, "ciclo.md", "", 0, 0, "nota", "u")
 
 
-async def test_the_audit_route_answers_403_to_a_loop(tmp_path: Path) -> None:
+async def test_the_audit_command_refuses_a_loop(tmp_path: Path, monkeypatch) -> None:
+    """Era la route ``/api/audit/create`` (403); dal 26/09/2026 e' il comando
+    ``audit.create``, e il loop resta un rifiuto, non un errore interno."""
+    from jenny.webui import commands
+    from jenny.webui.commands import CommandContext, CommandError, dispatch_command
+
     root, pages = _project(tmp_path)
     (pages / "index.md").write_text("# indice\n", encoding="utf-8")
-    routes = WikiRoutes(
-        check_api_token=lambda r: True,
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda **_kw: None)
+    monkeypatch.setattr(commands, "_wikis_dir", lambda _ctx: root.parent)
+    ctx = CommandContext(
         get_workspace_root=lambda: tmp_path,
-        json_safe=lambda v: v,
+        invalidate_session=lambda _key: None,
+        busy_session_keys=lambda: (),
     )
-    routes._check_wiki_enabled = lambda: None  # type: ignore[method-assign]
-    routes._get_wikis_dir = lambda: root.parent  # type: ignore[method-assign]
-    req = WsRequest(path="/api/audit/create?wiki=progetto&target=ciclo.md", headers=Headers())
-    reply = await routes.dispatch(req, "/api/audit/create")
-    assert reply is not None and reply.status_code == 403
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "audit.create", {"wiki": "progetto", "target": "ciclo.md"})
+    assert exc.value.code == "forbidden"
 
 
 def test_a_static_file_through_a_loop_is_403(tmp_path: Path) -> None:

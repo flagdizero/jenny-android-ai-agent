@@ -473,6 +473,148 @@ async def test_page_write_refuses_more_than_the_cap(
 
 
 # ---------------------------------------------------------------------------
+# audit.create
+# ---------------------------------------------------------------------------
+
+
+def _audits(workspace_root: Path) -> list[Path]:
+    audit_dir = workspace_root / "wikis" / "main" / "audit"
+    return sorted(audit_dir.glob("**/*.md")) if audit_dir.exists() else []
+
+
+async def test_audit_create_carries_a_long_accented_comment(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il caso per cui la GET non bastava: un commento che percent-encodato
+    supera da solo gli 8192 byte della riga di richiesta di ``websockets``."""
+    import urllib.parse
+
+    _workspace_with_page(workspace_root)
+    comment = "Non è così: però la città già lo sa, perché ciò è ovvio 😏 " * 60
+    assert len(urllib.parse.quote(comment)) > 8192
+
+    start = _PAGE.index("legati a giugno")
+    result = await dispatch_command(
+        ctx,
+        "audit.create",
+        {
+            "wiki": "main",
+            "target": "index.md",
+            "sel_start": start,
+            "sel_end": start + len("legati a giugno"),
+            "comment": comment,
+            "author": "me",
+        },
+    )
+
+    assert result["id"] and result["filename"]
+    assert "entry" not in result
+    [written] = _audits(workspace_root)
+    text = written.read_text(encoding="utf-8")
+    assert comment.strip() in text
+    assert "legati a giugno" in text
+
+
+async def test_audit_create_refuses_a_target_outside_the_pages(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il bersaglio fuori dalla pages-dir non si legge e non si ancora: niente
+    audit su disco, e il segreto non finisce dentro il quaderno."""
+    _workspace_with_page(workspace_root)
+    (workspace_root / "secret.txt").write_text("TOPSECRET-EXFIL-MARKER", encoding="utf-8")
+
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx,
+            "audit.create",
+            {"wiki": "main", "target": "../../../secret.txt", "sel_start": 0,
+             "sel_end": 5, "comment": "x"},
+        )
+    assert exc.value.code == "forbidden"
+    assert _audits(workspace_root) == []
+    for f in (workspace_root / "wikis").rglob("*"):
+        if f.is_file():
+            assert "TOPSECRET" not in f.read_text(encoding="utf-8", errors="replace")
+
+
+@pytest.mark.parametrize(
+    ("params", "code"),
+    [
+        ({"wiki": "ghost", "target": "index.md"}, "bad_request"),
+        ({"target": "index.md"}, "bad_request"),
+        ({"wiki": "main", "target": "nuova.md"}, "not_found"),
+        ({"wiki": "main", "target": "index.md", "sel_start": "3"}, "bad_request"),
+        ({"wiki": "main", "target": "index.md", "sel_end": True}, "bad_request"),
+        ({"wiki": "main", "target": "index.md", "comment": 5}, "bad_request"),
+        ({"wiki": "main", "target": "index.md", "sel_start": 10, "sel_end": 2}, "bad_request"),
+    ],
+)
+async def test_audit_create_refusals_keep_the_routes_outcomes(
+    ctx: CommandContext, workspace_root: Path, config_path: Path, params, code
+) -> None:
+    _workspace_with_page(workspace_root)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "audit.create", {"comment": "c", **params})
+    assert exc.value.code == code, exc.value.message
+    assert _audits(workspace_root) == []
+
+
+async def test_audit_create_is_blocked_when_the_wiki_is_off(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    _workspace_with_page(workspace_root)
+    config = load_config(config_path)
+    config.wiki.enabled = False
+    save_config(config, config_path)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "audit.create", {"wiki": "main", "target": "index.md", "comment": "c"}
+        )
+    assert exc.value.code == "unavailable"
+    assert _audits(workspace_root) == []
+
+
+async def test_audit_create_fails_closed_when_config_raises(
+    ctx: CommandContext, workspace_root: Path, config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """La route da cui viene aveva il gate fail-closed: spostarla sul
+    WebSocket non deve riaprirlo."""
+    _workspace_with_page(workspace_root)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("config rotta")
+
+    monkeypatch.setattr("jenny.config.loader.load_config", _boom)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(
+            ctx, "audit.create", {"wiki": "main", "target": "index.md", "comment": "c"}
+        )
+    assert exc.value.code == "unavailable"
+    assert _audits(workspace_root) == []
+
+
+async def test_the_audit_get_route_is_gone(workspace_root: Path) -> None:
+    """La GET che scriveva un file col commento nell'indirizzo non c'e' piu'."""
+    from websockets.http11 import Headers
+    from websockets.http11 import Request as WsRequest
+
+    from jenny.webui.wiki_routes import WikiRoutes
+
+    _workspace_with_page(workspace_root)
+    routes = WikiRoutes(
+        check_api_token=lambda r: True,
+        get_workspace_root=lambda: workspace_root,
+        json_safe=lambda v: v,
+    )
+    req = WsRequest(
+        path="/api/audit/create?wiki=main&target=index.md&comment=x", headers=Headers()
+    )
+    assert await routes.dispatch(req, "/api/audit/create") is None
+    assert _audits(workspace_root) == []
+
+
+# ---------------------------------------------------------------------------
 # soul.rules.write
 # ---------------------------------------------------------------------------
 

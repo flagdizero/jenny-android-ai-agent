@@ -1,8 +1,7 @@
-"""Regression tests for /api/workspace/download and /api/audit filtering."""
+"""Regression tests for /api/workspace/download."""
 
 from __future__ import annotations
 
-import urllib.parse
 from pathlib import Path
 from unittest.mock import patch
 
@@ -110,70 +109,6 @@ class TestWorkspaceDownload:
         assert response.status_code == 401
 
 
-class TestAuditCreateTraversal:
-    """A1: /api/audit/create must not read files outside the wiki pages dir."""
-
-    def _setup_workspace(self, tmp_path: Path) -> Path:
-        """Create a workspace with wikis/main/wiki/index.md and an external secret."""
-        workspace = tmp_path / "workspace"
-        pages_dir = workspace / "wikis" / "main" / "wiki"
-        pages_dir.mkdir(parents=True)
-        (pages_dir / "index.md").write_text("# Home\ncontent here", encoding="utf-8")
-        # A secret file outside any wiki, target of the traversal attempt.
-        (workspace / "secret.txt").write_text("TOPSECRET-EXFIL-MARKER", encoding="utf-8")
-        return workspace
-
-    @pytest.mark.asyncio
-    async def test_traversal_target_is_forbidden_and_not_exfiltrated(self, tmp_path):
-        handler = _make_handler(tmp_path)
-        workspace = self._setup_workspace(tmp_path)
-
-        traversal = urllib.parse.quote("../../../../secret.txt")
-        with patch.object(handler, "_get_workspace_root", return_value=workspace):
-            create_req = _make_request(
-                f"/api/audit/create?wiki=main&target={traversal}"
-                "&selStart=0&selEnd=5&comment=x&author=t"
-            )
-            create_resp = await handler.wiki_routes._audit_create(create_req)
-
-        assert create_resp.status_code in (403, 404)
-
-        # Nessun audit deve essere nato, e **si guarda il disco**: la rotta che
-        # li elencava e' uscita il 22/09/2026 insieme alle altre senza clienti,
-        # e il disco e' comunque la misura piu' forte delle due — e' quel che
-        # Jenny legge, non quel che una risposta racconta.
-        audit_dir = workspace / "wikis" / "main" / "audit"
-        written = list(audit_dir.glob("**/*.md")) if audit_dir.exists() else []
-        assert written == []
-        # E il segreto non deve essere finito da nessuna parte dentro la wiki.
-        for f in (workspace / "wikis").rglob("*"):
-            if f.is_file():
-                assert "TOPSECRET-EXFIL-MARKER" not in f.read_text(
-                    encoding="utf-8", errors="replace"
-                ), f
-
-    @pytest.mark.asyncio
-    async def test_audit_on_real_page_succeeds(self, tmp_path):
-        handler = _make_handler(tmp_path)
-        workspace = self._setup_workspace(tmp_path)
-
-        with patch.object(handler, "_get_workspace_root", return_value=workspace):
-            create_req = _make_request(
-                "/api/audit/create?wiki=main&target=index.md"
-                "&selStart=8&selEnd=15&comment=typo&author=t"
-            )
-            create_resp = await handler.wiki_routes._audit_create(create_req)
-
-        assert create_resp.status_code == 200
-        import json
-
-        payload = json.loads(create_resp.body.decode("utf-8"))
-        assert "id" in payload
-        assert payload["filename"]
-
-
-# ---------------------------------------------------------------------------
-# /api/audit/{id}/resolve
-# ---------------------------------------------------------------------------
-
-
+# La creazione di un audit non e' piu' una rotta: e' il comando RPC
+# ``audit.create``, e il suo banco (traversal compreso) sta in
+# ``tests/webui/test_commands.py``.

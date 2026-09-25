@@ -1,6 +1,6 @@
 """«Segnala»: dalla selezione agli offset nel markdown sorgente.
 
-`/api/audit/create` vuole `selStart`/`selEnd`, che sono posizioni nel **`.md`**,
+Il comando `audit.create` vuole gli offset della selezione, che sono posizioni nel **`.md`**,
 ma la selezione avviene nel reso. Il sorgente pero' e' gia' in mano — `/api/page`
 manda `raw` — quindi non serve ricostruire la mappa fra i due: basta ritrovarci
 dentro il testo scelto.
@@ -17,12 +17,13 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import function, locale, member, requires_node, run_js
+from support.js_harness import function, locale, member, requires_node, run_js, run_module
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "home-audit.js"
 APP_JS = ASSETS / "home-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
+RPC_JS = ASSETS / "shared" / "rpc-client.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 
 
@@ -86,15 +87,76 @@ def test_the_client_does_not_send_the_markdown_the_route_ignores() -> None:
     """Il vecchio client mandava anche `rawMarkdown`, e la rotta lo **ignorava**:
     si rilegge il file da sola (`raw_path.read_text`) e calcola le ancore.
 
-    Mandarlo sarebbe una pagina intera nella query string, cioe' nella riga di
-    richiesta, dove `websockets` ne ammette 8192 byte in tutto: non un peso
-    inutile, un errore di trasporto.
+    Oggi il trasporto e' il WebSocket e non avrebbe il tetto della riga di
+    richiesta, ma resta una pagina intera spedita a vuoto a ogni segnalazione.
     """
-    src = API_JS.read_text(encoding="utf-8")
-    m = re.search(r"async createAudit\(.*?\n  \}", src, re.S)
-    assert m, "createAudit non trovata"
-    assert "rawMarkdown" not in m.group(0)
-    assert "raw" not in m.group(0).replace("rawMarkdown", "")
+    for path, pattern in ((API_JS, r"async createAudit\(.*?\n  \}"),
+                          (RPC_JS, r"createAudit\(.*?\n  \},")):
+        m = re.search(pattern, path.read_text(encoding="utf-8"), re.S)
+        assert m, f"createAudit non trovata in {path.name}"
+        assert "rawMarkdown" not in m.group(0)
+        assert "raw" not in m.group(0).replace("rawMarkdown", "")
+
+
+_FAKE_WS = """
+export const requests = [];
+export const wsManager = {
+  outcome: null,
+  request(method, params) {
+    requests.push([method, params]);
+    return this.outcome(method, params);
+  },
+};
+"""
+
+_AUDIT_ENTRY = r"""
+import assert from 'node:assert/strict';
+import { api } from './api-client.js';
+import { wsManager, requests } from './ws-manager.js';
+
+let fetched = 0;
+globalThis.fetch = async () => { fetched += 1; throw new Error('niente HTTP'); };
+
+const comment = 'Non \u00e8 cos\u00ec: per\u00f2 la citt\u00e0 gi\u00e0 lo sa \ud83d\ude0f '.repeat(120);
+assert.ok(encodeURIComponent(comment).length > 8192);
+
+wsManager.outcome = async () => ({ id: 'a1', filename: 'f.md', path: 'audit/f.md' });
+const created = await api.createAudit({
+  wiki: 'orto', target: 'semina.md', selStart: 3, selEnd: 9, comment,
+});
+assert.equal(created.id, 'a1');
+assert.deepEqual(requests, [['audit.create', {
+  wiki: 'orto', target: 'semina.md', sel_start: 3, sel_end: 9, comment, author: 'me',
+}]]);
+assert.equal(fetched, 0, 'la segnalazione passa ancora da /api/');
+
+wsManager.outcome = async () => {
+  const err = new Error('target file not found');
+  err.code = 'not_found';
+  throw err;
+};
+await assert.rejects(
+  api.createAudit({ wiki: 'orto', target: 'x.md', selStart: 0, selEnd: 1, comment: 'c' }),
+  (err) => err.code === 'not_found',
+);
+console.log('ok');
+"""
+
+
+def test_the_report_is_an_rpc_command_not_a_get(tmp_path: Path) -> None:
+    """Il commento e' testo libero: nella query di una GET stava sotto gli
+    8192 byte della riga di richiesta di `websockets`, e un commento lungo e
+    accentato non partiva. Ora viaggia sul WebSocket, intero, e nessuna
+    richiesta HTTP parte."""
+    import shutil
+
+    for name in ("api-client.js", "rpc-client.js"):
+        shutil.copy(ASSETS / "shared" / name, tmp_path / name)
+    (tmp_path / "ws-manager.js").write_text(_FAKE_WS, encoding="utf-8")
+    (tmp_path / "package.json").write_text('{"type": "module"}', encoding="utf-8")
+    entry = tmp_path / "entry.js"
+    entry.write_text(_AUDIT_ENTRY, encoding="utf-8")
+    assert run_module(entry).strip() == "ok"
 
 
 def test_nothing_in_the_flow_asks_for_a_severity() -> None:
@@ -295,7 +357,7 @@ let chosen = '';
 const document = {
   getSelection: () => ({ toString: () => chosen, removeAllRanges() {} }),
 };
-/* `/api/audit/create`: ricorda gli invii, e risponde quando il caso lo lascia. */
+/* `audit.create`: ricorda gli invii, e risponde quando il caso lo lascia. */
 const posted = [];
 let release = null;
 const api = {

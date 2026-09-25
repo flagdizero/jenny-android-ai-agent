@@ -19,7 +19,7 @@
  *  la stessa persona. Un menu' che chiede di dare un voto alla propria
  *  lamentela e' la cosa piu' innaturale che ci fosse in questa schermata.
  *
- *  **Il server fa quasi tutto da solo.** `/api/audit/create` si rilegge il
+ *  **Il server fa quasi tutto da solo.** Il comando `audit.create` si rilegge il
  *  markdown dal disco e calcola le tre ancore (`anchor_before`/`anchor_text`/
  *  `anchor_after`). Il vecchio client gli mandava anche `rawMarkdown` e la
  *  rotta lo ignorava: qui non si manda.
@@ -30,11 +30,11 @@ import { showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { selectionInside, onSelectionChange } from './shared/selection.js';
 
-/** Tetto sul commento, e **non e' una misura di stile**: il commento viaggia
- *  nella query string, cioe' nella riga di richiesta, dove `websockets` ne
- *  ammette 8192 byte in tutto. Un'emoji percent-encodata ne costa 12, quindi
- *  500 caratteri restano al sicuro anche nel caso peggiore. Oltre non e' piu'
- *  un riscontro ancorato a una frase, e' una pagina — e quella si scrive. */
+/** Tetto sul commento. Nacque come limite di trasporto — il commento viaggiava
+ *  nella query di una GET, dove `websockets` ammette 8192 byte per riga — e dal
+ *  26/09/2026 viaggia sul WebSocket (`audit.create`), che quel tetto non ce
+ *  l'ha. Resta per l'altra ragione: oltre non e' piu' un riscontro ancorato a
+ *  una frase, e' una pagina — e quella si scrive. */
 const MAX_COMMENT = 500;
 
 /** Da un testo selezionato ai due offset nel **markdown sorgente**.
