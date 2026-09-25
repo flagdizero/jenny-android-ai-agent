@@ -369,7 +369,7 @@ async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch
 async def test_nothing_to_take_means_no_write(env) -> None:
     """Se la cosa non aveva pagine il file non si riscrive: niente backup
     ruotato per un'operazione che in casa non ha cambiato niente."""
-    from jenny.webui.casa_routes import stacca_pagine_di
+    from jenny.webui.casa_pages import stacca_pagine_di
 
     await _con_pagine(env, [{"id": "p1", "kind": "app", "ref": "lampo"}])
     prima = env.config_path.stat().st_mtime_ns
@@ -380,12 +380,12 @@ async def test_nothing_to_take_means_no_write(env) -> None:
 async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeypatch) -> None:
     """La cancellazione e' gia' avvenuta e non si disfa: un guaio con la
     pagina non deve diventare un 500 su un'operazione riuscita."""
-    from jenny.webui import casa_routes
+    from jenny.webui import casa_pages
 
     async def _rotto(kind, ref):
         raise RuntimeError("disco pieno")
 
-    monkeypatch.setattr(casa_routes, "stacca_pagine_di", _rotto)
+    monkeypatch.setattr(casa_pages, "stacca_pagine_di", _rotto)
     (env.workspace / "apps" / "orto").mkdir(parents=True)
     req = _richiesta("/api/webui/apps/orto/delete")
     risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
@@ -399,7 +399,7 @@ async def test_a_delete_does_not_reach_across_kinds(env) -> None:
     del riferimento, a dire di chi e' una pagina: senza, cancellare il quaderno
     toglierebbe anche quella. Trovato mutando: il controllo sulla specie
     sopravviveva a tutti gli altri banchi (23/09/2026)."""
-    from jenny.webui.casa_routes import stacca_pagine_di
+    from jenny.webui.casa_pages import stacca_pagine_di
 
     await _con_pagine(env, [
         {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
@@ -494,7 +494,7 @@ async def test_an_object_without_pages_is_refused(env) -> None:
 
 
 async def test_deleting_an_app_takes_its_id_out_of_the_order(env) -> None:
-    from jenny.webui.casa_routes import stacca_pagine_di
+    from jenny.webui.casa_pages import stacca_pagine_di
 
     todo = {"id": "p1", "kind": "app", "ref": "todo"}
     await _dispatch(env, _set_tutto([todo], ["p1", "app", "chat", "quaderni", "impostazioni"]))

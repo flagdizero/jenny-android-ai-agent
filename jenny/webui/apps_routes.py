@@ -143,7 +143,9 @@ class AppsRoutes:
         except Exception as e:
             self._log.warning("app delete {} failed: {}", slug, e)
             return http_error(500, "internal error")
-        await _stacca_la_pagina(self._log, "app", slug)
+        from jenny.webui.casa_pages import detach_pages_quietly
+
+        await detach_pages_quietly("app", slug, log=self._log)
         return http_json_response(esito)
 
     def _resolve_view_app(self, raw_slug: str) -> tuple[str, str] | Response:
@@ -298,19 +300,3 @@ class AppsRoutes:
             extra_headers=[("Cache-Control", "no-store")],
         )
 
-
-async def _stacca_la_pagina(log: Any, kind: str, ref: str) -> None:
-    """La pagina se ne va con la cosa; se non ci riesce, la cosa resta cancellata.
-
-    La cancellazione e' gia' avvenuta e non si disfa: un errore qui non deve
-    diventare un 500 su un'operazione riuscita. Resta una pagina verso il
-    nulla, che il client disegna «non c'e' piu'» e l'utente toglie.
-    """
-    from jenny.webui.casa_routes import stacca_pagine_di
-
-    try:
-        await stacca_pagine_di(kind, ref)
-    except Exception as exc:  # noqa: BLE001 — v. docstring
-        # Solo `warning`: il log iniettato non e' per forza loguru, e un
-        # `opt()` che non esiste qui dentro farebbe proprio il 500 da evitare.
-        log.warning("Page of deleted {} {} not removed: {}", kind, ref, exc)

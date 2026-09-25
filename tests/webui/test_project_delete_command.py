@@ -38,17 +38,49 @@ async def test_the_command_refuses_while_someone_writes_there(
 async def test_another_notebook_busy_does_not_stop_the_delete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jenny.webui import casa_routes
+    from jenny.webui import casa_pages
 
     async def _nessuna_pagina(kind, ref):
         return 0
 
     monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
     monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
-    monkeypatch.setattr(casa_routes, "stacca_pagine_di", _nessuna_pagina)
+    monkeypatch.setattr(casa_pages, "stacca_pagine_di", _nessuna_pagina)
     ctx = SimpleNamespace(
         get_workspace_root=lambda: tmp_path,
         invalidate_session=lambda k: None,
         busy_session_keys=lambda: ("project:orto",),
     )
     assert await commands.project_delete(ctx, {"name": "piante"}) == {"name": "piante"}
+
+
+async def test_a_page_that_cannot_be_taken_does_not_undo_the_notebook_delete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lo stesso involucro tollerante della cancellazione di un'app
+    (``casa_pages.detach_pages_quietly``): il quaderno e' gia' cancellato."""
+    from jenny.webui import casa_pages
+
+    async def _rotto(kind, ref):
+        raise RuntimeError("disco pieno")
+
+    monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+    monkeypatch.setattr(casa_pages, "stacca_pagine_di", _rotto)
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: tmp_path,
+        invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (),
+    )
+    assert await commands.project_delete(ctx, {"name": "piante"}) == {"name": "piante"}
+
+
+def test_the_commands_do_not_import_http_routes() -> None:
+    """``commands.py`` di trasporti non sa niente: le pagine della casa le tocca
+    da ``casa_pages``, il modulo neutro, non da ``casa_routes``."""
+    import inspect
+
+    from jenny.webui import apps_routes
+
+    assert "casa_routes" not in inspect.getsource(commands)
+    assert not hasattr(apps_routes, "_stacca_la_pagina")

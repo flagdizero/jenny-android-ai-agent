@@ -446,12 +446,9 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
     # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
     # cancellato: la pagina verso il nulla la toglie l'utente.
-    from jenny.webui.casa_routes import stacca_pagine_di
+    from jenny.webui.casa_pages import detach_pages_quietly
 
-    try:
-        await stacca_pagine_di("conversazione", project_session_key(name))
-    except Exception:  # noqa: BLE001 — la cancellazione e' gia' riuscita
-        logger.opt(exception=True).warning("Page of deleted notebook {} not removed", name)
+    await detach_pages_quietly("conversazione", project_session_key(name))
     return esito
 
 
@@ -502,7 +499,7 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
 
-    from jenny.webui.casa_routes import rinomina_pagine_di
+    from jenny.webui.casa_pages import rinomina_pagine_di
 
     try:
         await rinomina_pagine_di(
