@@ -665,7 +665,10 @@ def _parse_context_window_tokens(value: str | None) -> int | None:
     except ValueError:
         raise WebUISettingsError("context_window_tokens must be an integer") from None
     if parsed not in _CONTEXT_WINDOW_TOKEN_OPTIONS:
-        raise WebUISettingsError("context_window_tokens must be 65536 or 262144")
+        # Dalla tupla, non scritto a mano: una terza opzione non deve lasciare un
+        # messaggio che ne nomina due.
+        ammessi = " or ".join(str(v) for v in _CONTEXT_WINDOW_TOKEN_OPTIONS)
+        raise WebUISettingsError(f"context_window_tokens must be {ammessi}")
     return parsed
 
 

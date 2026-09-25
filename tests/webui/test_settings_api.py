@@ -166,6 +166,16 @@ async def test_update_context_window_rejects_unknown_values(
         await update_agent_settings({"context_window_tokens": ["128000"]})
 
 
+def test_the_context_window_refusal_names_the_options_it_has(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jenny.webui import settings_api
+
+    monkeypatch.setattr(settings_api, "_CONTEXT_WINDOW_TOKEN_OPTIONS", (65_536, 131_072, 262_144))
+    with pytest.raises(WebUISettingsError, match="65536 or 131072 or 262144"):
+        settings_api._parse_context_window_tokens("1000")
+
+
 async def test_update_timezone_rejects_unknown_name(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
