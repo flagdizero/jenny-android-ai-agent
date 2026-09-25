@@ -134,6 +134,19 @@ def _validate_mode_for_add(raw: Any) -> Literal["reminder", "monitor"]:
     return "monitor" if raw == "monitor" else "reminder"
 
 
+def _schedule_tzinfo(schedule: CronSchedule):
+    """Il fuso in cui leggere l'espressione: quello del job, o l'ora locale.
+
+    Una sola risoluzione per chi calcola la prossima esecuzione e per chi valida
+    all'aggiunta: due copie potevano divergere, e un job validato in un fuso
+    sarebbe poi scattato in un altro. ``safe_zoneinfo`` non solleva mai
+    (ripiego: l'offset locale, poi UTC).
+    """
+    from jenny.utils.helpers import safe_zoneinfo
+
+    return safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
+
+
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     """Compute next run time in ms."""
     if schedule.kind == "at":
@@ -148,12 +161,10 @@ def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     if schedule.kind == "cron" and schedule.expr:
         try:
             from jenny.cron.cronexpr import next_after
-            from jenny.utils.helpers import safe_zoneinfo
+
             # Use caller-provided reference time for deterministic scheduling
             base_time = now_ms / 1000
-            # safe_zoneinfo non solleva mai (fallback: offset locale, poi UTC).
-            tz = safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
-            base_dt = datetime.fromtimestamp(base_time, tz=tz)
+            base_dt = datetime.fromtimestamp(base_time, tz=_schedule_tzinfo(schedule))
             # Non più croniter: v. il cappello di ``cronexpr`` per il perché.
             return int(next_after(schedule.expr, base_dt).timestamp() * 1000)
         except Exception:
@@ -221,13 +232,11 @@ def _validate_cron_expr(schedule: CronSchedule) -> None:
     silenzio. Qui c'e' ancora qualcuno a cui dirlo.
     """
     from jenny.cron.cronexpr import next_after
-    from jenny.utils.helpers import safe_zoneinfo
 
     if not schedule.expr:
         raise ValueError("a cron schedule needs an expression")
-    tz = safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
     try:
-        next_after(schedule.expr, datetime.now(tz))
+        next_after(schedule.expr, datetime.now(_schedule_tzinfo(schedule)))
     except ValueError as exc:
         raise ValueError(f"invalid cron expression {schedule.expr!r}: {exc}") from None
 

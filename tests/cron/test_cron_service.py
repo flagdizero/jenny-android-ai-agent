@@ -75,6 +75,30 @@ def test_add_job_rejects_an_expression_that_would_never_fire(tmp_path, expr, why
     assert service.list_jobs(include_disabled=True) == []
 
 
+def test_validation_and_scheduling_read_the_same_timezone(monkeypatch) -> None:
+    """Chi valida all'aggiunta e chi calcola la prossima esecuzione risolvono il
+    fuso con lo stesso helper: due copie potevano divergere."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from jenny.cron import service as service_mod
+
+    chieste: list[str | None] = []
+
+    def _spia(schedule):
+        chieste.append(schedule.tz)
+        return ZoneInfo("Pacific/Kiritimati")
+
+    monkeypatch.setattr(service_mod, "_schedule_tzinfo", _spia)
+    schedule = CronSchedule(kind="cron", expr="0 9 * * *", tz="Europe/Rome")
+    service_mod._validate_cron_expr(schedule)
+    prossima = service_mod._compute_next_run(schedule, 1_790_000_000_000)
+
+    assert chieste == ["Europe/Rome", "Europe/Rome"]
+    ora = datetime.fromtimestamp(prossima / 1000, ZoneInfo("Pacific/Kiritimati"))
+    assert (ora.hour, ora.minute) == (9, 0)
+
+
 @pytest.mark.parametrize("every_ms", [0, -60_000, None])
 def test_add_job_rejects_an_interval_that_would_never_fire(tmp_path, every_ms) -> None:
     """Un intervallo nullo o negativo faceva un job abilitato e muto."""
