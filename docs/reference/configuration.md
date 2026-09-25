@@ -406,10 +406,10 @@ Every page can be moved, the four fixed ones included: press and hold a name at 
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `home.pages` | list | `[]` | The pages you added. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversation` (a notebook's chat, `ref` is `project:<name>`). At most 8, the ids must differ, and none may be one of the fixed page ids below. Pages of kind `room` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
+| `home.pages` | list | `[]` | The pages you added. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversation` (a notebook's chat, `ref` is `project:<name>`). At most 8, the ids must differ, and none may be one of the fixed page ids below. Pages that were rooms of the home (kind `stanza` in the old `casa` block, see below) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
 | `home.order` | list | `[]` | Where each page sits, left to right: the fixed ids `app`, `chat`, `notebooks`, `settings` and the `id` of each page you added. Empty means you never moved anything, and reads as `app, chat, <your pages>, notebooks, settings`. |
 
-Until 0.11 this block was called `casa`, with Italian names inside (`schermate`, `ordine`, the kind `conversazione`, the fixed ids `quaderni` and `impostazioni`). A file that still has it loads with everything translated, and the old block is dropped the first time the file is written.
+Up to version 0.11.0 this block was called `casa`, with Italian names inside (`schermate`, `ordine`, the kind `conversazione`, the fixed ids `quaderni` and `impostazioni`). A file that still has it loads with everything translated, and the old block is dropped the first time the file is written.
 
 `home.order` is **tidied on every read, never rejected**: ids that match nothing and repeats are dropped, a fixed page that is missing comes back at the end, and a page of yours that is missing goes right after the chat. A config file that fails validation falls back to the backup and then to the defaults — losing providers and keys over a page order would be the wrong trade. Writes from the app are stricter: an order that does not list every fixed page and every page of yours exactly once is refused.
 

@@ -8,7 +8,7 @@
    arriva a runtime dall'SDK (`APP_TOKEN_MAP` in shared/theme.js la serializza
    dai valori calcolati della SPA), perché questo file da solo non può
    conoscere quale dei 7 temi è in uso. La riserva porta quindi i colori dei
-   due temi di default — chanel per lo scuro, pietra per il chiaro, come in
+   due temi di default — chanel per lo scuro, stone per il chiaro, come in
    `MIGRATION` — e non un accent inventato: quando erano indaco, un accent che
    nessun tema ha, i punti che l'SDK non riscriveva ancora (il velo di sfondo
    del <body>, il pressed dei bottoni primari) restavano blu per sempre. */

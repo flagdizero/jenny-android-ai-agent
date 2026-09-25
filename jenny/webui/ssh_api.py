@@ -60,7 +60,7 @@ from jenny.webui.settings_api import WebUISettingsError
 _ALIAS_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 
 # Impronte viste da un probe e non ancora accettate, per alias:
-# ``alias -> (row known_hosts, impronta, timestamp)``.
+# ``alias -> (riga known_hosts, impronta, timestamp)``.
 #
 # L'accettazione non ri-sonda: l'utente approva *l'impronta che ha letto*, e
 # fra il probe e il tap potrebbe rispondere una macchina diversa. Tenere qui la

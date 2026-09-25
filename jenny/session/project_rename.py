@@ -222,7 +222,7 @@ def follow_renamed_project(
 ) -> tuple[bool, str | None]:
     """Rinomina le tracce di *old_key* in quelle di *new_key*.
 
-    Ritorna ``(moved, motivo)``: ``motivo`` e' valorizzato solo quando **non**
+    Ritorna ``(spostato, motivo)``: ``motivo`` e' valorizzato solo quando **non**
     si e' spostato niente, e dice perche' in una forma che si possa mostrare.
 
     Tutto o niente, e quando non riesce a esserlo lo **scrive**: si controllano

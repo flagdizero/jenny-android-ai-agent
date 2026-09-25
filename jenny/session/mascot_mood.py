@@ -135,7 +135,7 @@ def _own_text(text: str) -> str:
 
 
 def _signals(text: str) -> list[tuple[int, str, str]]:
-    """``(position, faccia, mark)`` per ogni emoji o faccina riconosciuta.
+    """``(posizione, faccia, segno)`` per ogni emoji o faccina riconosciuta.
 
     Una sequenza ZWJ si cerca intera e, se non e' nel dizionario, per il suo
     primo emoji: ❤️‍🔥 vale ❤️, 😶‍🌫️ non vale niente perche' 😶 e' fuori.

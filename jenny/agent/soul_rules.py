@@ -66,9 +66,9 @@ def find_block(soul: str) -> tuple[int, int] | None:
     caso in cui una potatura ha portato via un commento ma non il testo.
     """
     start = soul.find(MARK_START)
-    fine = soul.find(MARK_END)
-    if start != -1 and fine > start:
-        return start, fine + len(MARK_END)
+    end = soul.find(MARK_END)
+    if start != -1 and end > start:
+        return start, end + len(MARK_END)
 
     rows = soul.splitlines(keepends=True)
     offset = 0
@@ -93,8 +93,8 @@ def extract_rules(soul: str) -> str:
     ends = find_block(soul or "")
     if not ends:
         return ""
-    start, fine = ends
-    inside = (soul or "")[start:fine]
+    start, end = ends
+    inside = (soul or "")[start:end]
     for mark in (MARK_START, MARK_END, HEADING):
         inside = inside.replace(mark, "")
     return inside.strip()
@@ -113,12 +113,12 @@ def project(soul: str, rules: str) -> str:
     if _blank(rules):
         if not ends:
             return text
-        start, fine = ends
-        return (text[:start].rstrip() + "\n" + text[fine:].lstrip("\n")).rstrip() + "\n"
+        start, end = ends
+        return (text[:start].rstrip() + "\n" + text[end:].lstrip("\n")).rstrip() + "\n"
     block = _block(rules)
     if ends:
-        start, fine = ends
-        return text[:start] + block + text[fine:]
+        start, end = ends
+        return text[:start] + block + text[end:]
     tail = text.rstrip()
     return (tail + "\n\n" + block + "\n") if tail else block + "\n"
 

@@ -194,7 +194,7 @@ def _map_page_targets(text: str) -> list[str]:
     aggiungerebbe niente di apribile.
 
     ``\\|`` come nella WebUI: dentro una tabella markdown la pipe va scappata, e
-    ``[[a\\|b]]`` e' lo stesso link di ``[[a|b]]``. ``[[#again]]`` invece non e'
+    ``[[a\\|b]]`` e' lo stesso link di ``[[a|b]]``. ``[[#ancora]]`` invece non e'
     una pagina — nella mappa di ``main`` ce ne sono quattro, ed elencarle come
     pagine mandarebbe l'agente a cercare file che non esistono.
 

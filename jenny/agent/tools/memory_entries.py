@@ -339,7 +339,7 @@ def requested_heading(raw: Any) -> str | None:
 def add_entry(text: str, new_text: str, *, heading: str | None = None) -> tuple[str, str]:
     """Aggiunge una voce in coda alla sua sezione.
 
-    Ritorna ``(nuovo_testo, error)``. In coda alla *sezione* e non al file
+    Ritorna ``(nuovo_testo, errore)``. In coda alla *sezione* e non al file
     perché l'intestazione è l'unica struttura che questi file hanno, e una voce
     finita sotto quella sbagliata è peggio di una voce mancante: si legge come
     vera in un contesto che non è il suo.
