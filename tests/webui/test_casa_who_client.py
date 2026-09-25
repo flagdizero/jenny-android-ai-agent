@@ -617,3 +617,30 @@ def test_holding_a_row_does_not_select_its_text() -> None:
     riga = css.split("\n.casa-who-row {", 1)[1].split("}", 1)[0]
     for regola in ("user-select: none;", "-webkit-user-select: none;", "-webkit-touch-callout: none;"):
         assert regola in riga, f"la riga della tendina ha perso `{regola}`"
+
+
+def test_a_redraw_keeps_where_you_had_scrolled() -> None:
+    """La pagina Quaderni scorre dentro il proprio contenitore, e il ridisegno
+    lo svuota: come nel DOM vero, svuotato torna in cima. Arrivava anche
+    mentre la guardavi — l'elenco riletto, un rinomino — e ti riportava su."""
+    _run_js("""
+      const panel = await open(ELENCO);
+      const body = panel._body;
+      /* Il DOM vero: svuotato, il contenitore non ha piu' altezza e lo
+         scorrimento torna a zero. */
+      let scorso = 0;
+      body.children = new Proxy([...body.children], {
+        set(t, k, v) {
+          if (k === 'length' && v === 0) scorso = 0;
+          t[k] = v;
+          return true;
+        },
+      });
+      Object.defineProperty(body, 'scrollTop', {
+        get() { return scorso; },
+        set(v) { scorso = body.children.length ? v : 0; },
+      });
+      body.scrollTop = 240;
+      panel.render();
+      assert.equal(body.scrollTop, 240, 'il ridisegno ha riportato l\\u2019elenco in cima');
+    """)

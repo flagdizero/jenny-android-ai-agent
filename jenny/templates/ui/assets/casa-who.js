@@ -107,10 +107,15 @@ export class WhoPanel {
     this.render();
   }
 
-  /** Ridisegna il contenuto. Pubblico: lo richiama un cambio di lingua. */
+  /** Ridisegna il contenuto. Pubblico: lo richiama un cambio di lingua.
+   *
+   *  Lo scorrimento si rimette dov'era: il contenitore e' lui (`overflow-y:
+   *  auto`), svuotarlo lo riporta in cima, e il ridisegno arriva anche mentre
+   *  guardi — l'elenco riletto, un nome salvato, un quaderno rinominato. */
   render() {
     if (!this._body) return;
     const body = this._body;
+    const scorso = body.scrollTop;
     body.innerHTML = '';
 
     body.appendChild(this._label(i18n.t('casa.who.title')));
@@ -158,6 +163,7 @@ export class WhoPanel {
     /* «Nuovo quaderno» non sta qui: e' il tasto + tondo della pagina, fermo
        sopra l'elenco che scorre (index.html, `#casa-quaderni-nuovo`). Una riga
        in fondo all'elenco, con tanti quaderni, finiva sotto il bordo. */
+    if (scorso) body.scrollTop = scorso;
   }
 
   _label(text, divided = false) {
