@@ -75,6 +75,39 @@ def test_add_job_rejects_an_expression_that_would_never_fire(tmp_path, expr, why
     assert service.list_jobs(include_disabled=True) == []
 
 
+@pytest.mark.parametrize("every_ms", [0, -60_000, None])
+def test_add_job_rejects_an_interval_that_would_never_fire(tmp_path, every_ms) -> None:
+    """Un intervallo nullo o negativo faceva un job abilitato e muto."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+
+    with pytest.raises(ValueError, match="positive interval"):
+        service.add_job(
+            name="mai",
+            schedule=CronSchedule(kind="every", every_ms=every_ms),
+            message="hello",
+            **_bound_chat(),
+        )
+
+    assert service.list_jobs(include_disabled=True) == []
+
+
+@pytest.mark.parametrize("every_seconds", [0, -30])
+def test_the_cron_tool_reports_a_non_positive_interval_as_an_error(
+    tmp_path, every_seconds
+) -> None:
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.cron import CronTool
+
+    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone="Europe/Rome")
+    tool.set_context(
+        RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
+    )
+
+    result = tool._add_job(None, "Standup", every_seconds, None, None, None)
+
+    assert result.startswith("Error:"), result
+
+
 def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> None:
     from jenny.agent.tools.context import RequestContext
     from jenny.agent.tools.cron import CronTool

@@ -60,6 +60,12 @@ class TestSchemaContract:
         _, _, err = registry.prepare_call("cron", {"action": "remove", "job_id": "abc"})
         assert err is None
 
+    def test_a_negative_interval_is_refused_by_the_schema(self, registry: ToolRegistry) -> None:
+        _, _, err = registry.prepare_call(
+            "cron", {"action": "add", "message": "ping", "every_seconds": -60}
+        )
+        assert err is not None and "every_seconds" in err
+
     def test_add_with_message_accepted(self, registry: ToolRegistry) -> None:
         _, _, err = registry.prepare_call(
             "cron", {"action": "add", "message": "ping", "at": "2030-01-01T00:00:00"}

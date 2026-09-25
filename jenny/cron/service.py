@@ -205,6 +205,11 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
     if schedule.kind == "cron":
         _validate_cron_expr(schedule)
 
+    # Un intervallo nullo o negativo: ``_compute_next_run`` torna ``None`` e il
+    # job nasceva abilitato ma muto, senza mai partire ne' dirlo.
+    if schedule.kind == "every" and (not schedule.every_ms or schedule.every_ms <= 0):
+        raise ValueError("an interval schedule needs a positive interval")
+
 
 def _validate_cron_expr(schedule: CronSchedule) -> None:
     """Un'espressione che non si legge, o che non scatta mai, si rifiuta qui.
