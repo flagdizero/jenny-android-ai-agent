@@ -20,6 +20,7 @@ from pathlib import Path
 from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+SHARED_MAP_LAYOUT_JS = ASSETS / "shared" / "map-layout.js"
 MAP_JS = ASSETS / "home-map.js"
 
 
@@ -514,6 +515,11 @@ def _run_swipes(script: str) -> None:
         + _const(src, "FIT_MAX_SCALE")
         + "\n"
         + _const(src, "TAP_THRESHOLD")
+        + "\n"
+        # Il nome del file vive in `shared/map-layout.js` (26/09/2026): il
+        # ritaglio della riga lo nomina soltanto, il valore lo porta questa.
+        + _const(SHARED_MAP_LAYOUT_JS.read_text(encoding="utf-8").replace("export const", "const"),
+                 "MAP_LAYOUT_FILE")
         + "\n"
         + _const(src, "PINS_FILE")
         + "\n"

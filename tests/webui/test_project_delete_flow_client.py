@@ -28,6 +28,8 @@ _NEIGHBORS = {
     "i18n.js": "export const i18n = { t: (k, p) => k + ':' + (p && p.name) };\n",
     "utils.js": "export const toasts = []; export function showToast(t, kind) { toasts.push([t, kind]); }\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
+    # La disposizione della mappa: la misura ``test_map_layout_client.py``.
+    "map-layout.js": "export async function dropLayoutKey() { return false; }\n",
 }
 
 

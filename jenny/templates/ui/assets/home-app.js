@@ -55,6 +55,7 @@ import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
 import { PROJECT_WORDS, createProjectFlow } from './shared/project-create.js';
 import { deleteProjectFlow } from './shared/project-delete.js';
+import { moveLayoutKey } from './shared/map-layout.js';
 import { showToast } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
@@ -578,6 +579,12 @@ class HomeApp {
       showToast(i18n.t(key, parameters), 'error');
       return false;
     }
+    /* La disposizione della mappa ha per chiave il nome: la si sposta, e la
+       mappa dimentica quel che aveva letto, o il suo primo trascinamento
+       riscriverebbe il file con la chiave vecchia. Di cortesia: un errore
+       qui non disfa un rinomino riuscito (v. `shared/map-layout.js`). */
+    await moveLayoutKey(name, newName);
+    this.map?.forgetPins();
     const oldKey = projectKey(name);
     const newKey = projectKey(newName);
     this.homePages.renameConversation(oldKey, newKey);
@@ -623,6 +630,9 @@ class HomeApp {
    */
   async deleteNotebook(name) {
     if (!(await deleteProjectFlow(name, NOTEBOOK_DELETE_WORDS))) return false;
+    /* La chiave della sua mappa l'ha tolta dal file `deleteProjectFlow`; la
+       mappa, se c'e', dimentica la copia che aveva letto. */
+    this.map?.forgetPins();
     const key = projectKey(name);
     /* Come nel rinomino, **senza portarti alla chat**: si cancella dalla
        pagina Quaderni, e li' si resta. La pagina chat che mostrava il

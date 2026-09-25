@@ -325,6 +325,8 @@ def _run_rename(
             }}
           }},
         }};
+        // La disposizione della mappa: la misura test_map_layout_client.py.
+        async function moveLayoutKey(a, b) {{ history.push(['mappa', a, b]); return true; }}
         const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
         const i18n = {{ t: (k, p) => p && p.error !== undefined ? k + ':' + p.error
           : p && p.name !== undefined ? k + '|' + p.name : k }};

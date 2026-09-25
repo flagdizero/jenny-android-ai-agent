@@ -20,6 +20,7 @@ import { rpc } from './rpc-client.js';
 import { showToast } from './utils.js';
 import { confirmDialog } from './dialog.js';
 import { i18n } from './i18n.js';
+import { dropLayoutKey } from './map-layout.js';
 
 /** Le frasi del giro, come chiavi i18n.
  *
@@ -71,5 +72,10 @@ export async function deleteProjectFlow(name, words = PROJECT_DELETE_WORDS) {
     showToast(i18n.t(key, { name }), 'error');
     return false;
   }
+  /* La disposizione della sua mappa se ne va con lui, o un quaderno nuovo con
+     lo stesso nome la erediterebbe. Qui e non nei chiamanti: i chiamanti sono
+     tre (la casa, il chip, il gestore file) e la cancellazione e' una. Di
+     cortesia: non fallisce mai, e non cambia l'esito. */
+  await dropLayoutKey(name);
   return true;
 }

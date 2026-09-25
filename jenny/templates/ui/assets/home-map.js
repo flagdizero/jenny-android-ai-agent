@@ -23,6 +23,7 @@ import { ensureVendor } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
+import { MAP_LAYOUT_FILE } from './shared/map-layout.js';
 
 const D3_SRC = '/html-mobile/assets/vendor/d3@7/d3.min.js';
 
@@ -54,28 +55,11 @@ const FIT_MAX_SCALE = 1.6;
  */
 const TAP_THRESHOLD = 10;
 
-/* Dove restano gli spilli fra un'apertura e l'altra.
- *
- *  **Non `localStorage`**, ed e' una misura del repo e non un gusto: il
- *  commento di `MainActivity.kt` che `shared/launcher-usage-store.js` cita dice
- *  che «il localStorage della WebView non sopravvive al kill (persistenza
- *  asincrona di Chromium)». Jenny e' il launcher del telefono e il sistema la
- *  uccide di routine: una disposizione tenuta li' si sbriciolerebbe da sola,
- *  poco alla volta, e una mappa che ogni tanto dimentica non sembra rotta —
- *  sembra che il salvataggio non funzioni, che e' peggio.
- *
- *  Il ponte nativo sarebbe durevole ma ha **un cassetto solo**, ed e' del
- *  cassetto delle app: prendergli la chiave non e' roba nostra.
- *
- *  Quindi nel workspace, che e' dove stanno i quaderni: sopravvive al kill,
- *  alla reinstallazione, e se lo porta dietro un backup. Un file solo per tutti
- *  i quaderni invece di uno dentro `wikis/<name>/`, perche' quella cartella la
- *  decide la config (`wiki.wikis_dir`) e il client non la conosce — cercarla
- *  vorrebbe dire indovinarla. Sotto `.jenny/` perche' e' stato dell'interfaccia
- *  e non roba dell'utente: il gestore file lo nasconde da se' (i pattern
- *  `internal`), quindi non compare fra i suoi file.
- */
-const PINS_FILE = '.jenny/map-layout.json';
+/* Dove restano gli spilli fra un'apertura e l'altra: un file del workspace,
+   uno per tutti i quaderni, chiave il nome del quaderno. Il perche' — e chi
+   altro lo tocca (il rinomino e la cancellazione di un quaderno) — sta in
+   `shared/map-layout.js`. */
+const PINS_FILE = MAP_LAYOUT_FILE;
 
 /* Quanto tira il punto dove hai lasciato un pallino.
  *
@@ -307,6 +291,14 @@ export class HomeMap {
     /* Quale quaderno e' disegnato: e' la chiave degli spilli. */
     this._notebook = null;
     /* Gli spilli letti da disco, per id. Null finche' non si e' letto. */
+    this._pins = null;
+  }
+
+  /** Dimentica gli spilli letti: il file e' cambiato da fuori — un quaderno
+   *  rinominato o cancellato ne ha spostato o tolto la chiave (v.
+   *  `shared/map-layout.js`). Senza, il primo trascinamento dopo riscriverebbe
+   *  il file dalla cache, rimettendo la chiave vecchia; cosi' lo rilegge. */
+  forgetPins() {
     this._pins = null;
   }
 

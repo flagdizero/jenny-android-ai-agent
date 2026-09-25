@@ -131,6 +131,15 @@ let confirmDelete = true;
 const promptDialog = () => Promise.resolve(writtenName);
 const deleteProjectFlow = () => Promise.resolve(confirmDelete);
 const rpc = { renameProject: () => Promise.resolve() };
+/* La disposizione della mappa (`shared/map-layout.js`): il finto segna chi
+   sposta cosa, e sa anche fallire — un rinomino riuscito resta riuscito. */
+const layoutMoves = [];
+let layoutFails = false;
+const moveLayoutKey = async (from, to) => {
+  layoutMoves.push([from, to]);
+  if (layoutFails) { console.warn('map layout: rename failed'); return false; }
+  return true;
+};
 const showToast = () => {};
 /* La conferma di buttare le modifiche del lettore: risponde quando il caso
    chiama `reply`, come una modale vera. */
@@ -1380,6 +1389,51 @@ def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
       assert.equal(app.input.value, 'mezza frase', 'la bozza si e\\u2019 persa col nome vecchio');
       assert.ok(!app._drafts.has('project:piante'), 'resta una bozza sotto il nome vecchio');
       assert.equal(app.homePages.homeConversation, 'project:orto');
+    """)
+
+
+def test_a_renamed_notebook_takes_its_map_layout_along() -> None:
+    """Gli spilli della mappa hanno per chiave il nome del quaderno: rinominato,
+    il quaderno perdeva la sua disposizione. La chiave si sposta, e la mappa
+    dimentica la copia letta — o il primo trascinamento riscriverebbe il file
+    con la chiave vecchia."""
+    _run_js(_NOTEBOOKS + """
+      let forgot = 0;
+      app.map = { forgetPins: () => { forgot += 1; } };
+      writtenName = 'orto';
+      assert.equal(await app.renameNotebook('piante'), true);
+      assert.deepEqual(layoutMoves, [['piante', 'orto']]);
+      assert.equal(forgot, 1, 'la mappa riscriverebbe la chiave vecchia dalla sua cache');
+    """)
+
+
+def test_a_layout_that_cannot_move_does_not_fail_the_rename() -> None:
+    _run_js(_NOTEBOOKS + """
+      console.warn = () => {};
+      layoutFails = true;
+      writtenName = 'orto';
+      assert.equal(await app.renameNotebook('piante'), true);
+      assert.equal(sessionManager.currentKey, 'project:orto');
+    """)
+
+
+def test_a_refused_rename_moves_no_layout() -> None:
+    _run_js(_NOTEBOOKS + """
+      rpc.renameProject = () => Promise.reject(Object.assign(new Error('x'), { code: 'name_taken' }));
+      writtenName = 'orto';
+      assert.equal(await app.renameNotebook('piante'), false);
+      assert.deepEqual(layoutMoves, []);
+    """)
+
+
+def test_a_deleted_notebook_makes_the_map_forget_its_copy() -> None:
+    """La chiave nel file la toglie `deleteProjectFlow`; la mappa, se c'e',
+    butta la copia letta, o la rimetterebbe al primo trascinamento."""
+    _run_js(_NOTEBOOKS + """
+      let forgot = 0;
+      app.map = { forgetPins: () => { forgot += 1; } };
+      assert.equal(await app.deleteNotebook('piante'), true);
+      assert.equal(forgot, 1);
     """)
 
 
