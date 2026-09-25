@@ -317,7 +317,8 @@ def _run_rinomina(
           }},
         }};
         const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
-        const i18n = {{ t: (k, p) => p && p.error !== undefined ? k + ':' + p.error : k }};
+        const i18n = {{ t: (k, p) => p && p.error !== undefined ? k + ':' + p.error
+          : p && p.name !== undefined ? k + '|' + p.name : k }};
         function showToast(t, tipo) {{ storia.push(['avviso', t, tipo]); }}
         class Guscio {{
           constructor() {{
@@ -404,7 +405,7 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     inglese del server. Un altro errore resta quello di sempre, col motivo."""
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.deepEqual(storia.at(-1), ['avviso', 'casa.quaderno.renameBusy', 'error']);\n",
+        "assert.deepEqual(storia.at(-1), ['avviso', 'casa.quaderno.renameBusy|viaggio', 'error']);\n",
         scritto="viaggi",
         corrente="project:viaggio",
         rifiuta="conflict",
@@ -417,6 +418,36 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
         corrente="project:viaggio",
         rifiuta=True,
     )
+
+
+@pytest.mark.parametrize(
+    ("codice", "attesa"),
+    [
+        ("name_taken", "casa.quaderno.renameTaken|viaggi"),
+        ("not_found", "casa.quaderno.renameMissing|viaggio"),
+    ],
+)
+def test_the_expected_refusals_are_said_in_the_readers_language(codice, attesa) -> None:
+    """Q4 della revisione profonda: «a folder named viaggi already exists» finiva
+    tale e quale dentro la frase italiana. Il nome occupato e' quello **nuovo**,
+    il quaderno sparito e' il **vecchio**; nessuno dei due porta il testo del
+    server."""
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), false);\n"
+        f"assert.deepEqual(storia.at(-1), ['avviso', {json.dumps(attesa)}, 'error']);\n",
+        scritto="viaggi",
+        corrente="project:viaggio",
+        rifiuta=codice,
+    )
+
+
+def test_the_refusal_keys_exist_in_both_languages() -> None:
+    from support.js_harness import locale
+
+    for lingua in ("it", "en"):
+        quaderno = locale(lingua)["casa"]["quaderno"]
+        for chiave in ("renameBusy", "renameTaken", "renameMissing", "renameFailed"):
+            assert quaderno.get(chiave), f"{lingua}: casa.quaderno.{chiave}"
 
 
 def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:

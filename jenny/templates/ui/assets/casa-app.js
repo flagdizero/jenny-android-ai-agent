@@ -524,13 +524,20 @@ class CasaApp {
     try {
       await rpc.renameProject(nome, nuovo);
     } catch (err) {
-      /* `conflict` e' il rifiuto per chi ci sta scrivendo (un turno, un
-         subagent, una passata del giardiniere): e' una condizione attesa, e va
-         detta nella lingua di chi legge. Il testo del server resta per i log. */
-      const testo = err?.code === 'conflict'
-        ? i18n.t('casa.quaderno.renameBusy', { name: nome })
-        : i18n.t('casa.quaderno.renameFailed', { name: nome, error: err?.message || '' });
-      showToast(testo, 'error');
+      /* I rifiuti attesi hanno un codice, e vanno detti nella lingua di chi
+         legge: `conflict` (qualcuno ci sta scrivendo: un turno, un subagent,
+         una passata del giardiniere, l'autocompact), `name_taken` (il nome
+         nuovo e' gia' di una cartella o di una conversazione), `not_found` (il
+         quaderno non c'e' piu'). Il testo inglese del server resta per i log;
+         il motivo lo porta solo l'errore imprevisto. */
+      const attesi = {
+        conflict: ['casa.quaderno.renameBusy', { name: nome }],
+        name_taken: ['casa.quaderno.renameTaken', { name: nuovo }],
+        not_found: ['casa.quaderno.renameMissing', { name: nome }],
+      };
+      const [chiave, parametri] = attesi[err?.code]
+        || ['casa.quaderno.renameFailed', { name: nome, error: err?.message || '' }];
+      showToast(i18n.t(chiave, parametri), 'error');
       return false;
     }
     const vecchia = projectKey(nome);

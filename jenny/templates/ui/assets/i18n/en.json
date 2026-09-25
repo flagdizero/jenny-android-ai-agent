@@ -1042,7 +1042,9 @@
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
       "renameFailed": "I could not rename “{name}”. {error}",
-      "renameBusy": "I'm still working in “{name}”: rename it once I've finished."
+      "renameBusy": "I'm still working in “{name}”: rename it once I've finished.",
+      "renameTaken": "There is already a notebook or a conversation called “{name}”.",
+      "renameMissing": "“{name}” is no longer there: it may have been deleted or renamed."
     },
     "fila": {
       "label": "Home pages",

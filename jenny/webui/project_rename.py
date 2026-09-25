@@ -40,7 +40,18 @@ from jenny.webui.wiki_registry import refresh_wiki_registry
 
 
 class ProjectRenameError(Exception):
-    """Un rifiuto che si puo' dire all'utente. Niente e' stato toccato."""
+    """Un rifiuto che si puo' dire all'utente. Niente e' stato toccato.
+
+    ``code`` e' il codice di ``CommandError`` con cui il comando lo inoltra. I due
+    rifiuti **attesi** hanno il loro — ``name_taken`` (il nome nuovo e' gia' di
+    una cartella o di una conversazione) e ``not_found`` (il vecchio non e' un
+    quaderno) — perche' il client li dica nella lingua di chi legge invece di
+    mostrare il testo inglese del server; gli altri restano ``bad_request``.
+    """
+
+    def __init__(self, message: str, *, code: str = "bad_request") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def rename_project(
@@ -63,13 +74,15 @@ def rename_project(
     new_key = project_session_key(new_name)
 
     if not root.exists() or not is_wiki_root(root):
-        raise ProjectRenameError(f"no notebook named {name}")
+        raise ProjectRenameError(f"no notebook named {name}", code="not_found")
     if target.exists():
-        raise ProjectRenameError(f"a folder named {new_name} already exists")
+        raise ProjectRenameError(f"a folder named {new_name} already exists", code="name_taken")
     if describe_project_traces(workspace, new_key).exists:
         # Una chat senza cartella sotto il nome nuovo: e' lo scambio di due nomi
         # di `session/project_rename.py`, e come li' non si sceglie — si dice.
-        raise ProjectRenameError(f"a conversation named {new_name} already exists")
+        raise ProjectRenameError(
+            f"a conversation named {new_name} already exists", code="name_taken"
+        )
 
     # La cache prima di tutto, per tutti e due i nomi: una sessione viva in
     # memoria riscriverebbe il proprio file sotto il nome vecchio appena

@@ -1045,7 +1045,9 @@
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
       "renameFailed": "Non ho potuto rinominare «{name}». {error}",
-      "renameBusy": "Sto ancora lavorando in «{name}»: rinominalo quando ho finito."
+      "renameBusy": "Sto ancora lavorando in «{name}»: rinominalo quando ho finito.",
+      "renameTaken": "C'è già un quaderno o una conversazione che si chiama «{name}».",
+      "renameMissing": "«{name}» non c'è più: forse è stato cancellato o rinominato."
     },
     "fila": {
       "label": "Pagine di casa",

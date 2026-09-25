@@ -319,6 +319,31 @@ async def test_the_command_refuses_while_a_turn_is_running_there(
     assert toccato == []
 
 
+@pytest.mark.parametrize(
+    ("prepara", "codice"),
+    [
+        ((VECCHIO, NUOVO), "name_taken"),     # una cartella ha gia' il nome nuovo
+        ((NUOVO,), "not_found"),              # il vecchio non e' un quaderno
+    ],
+    ids=["taken", "missing"],
+)
+async def test_the_expected_refusals_carry_their_own_code(
+    workspace, config, prepara, codice
+) -> None:
+    """Q4: il client dice questi rifiuti nella sua lingua, e per farlo gli serve
+    il codice, non il testo inglese del server."""
+    from jenny.webui import commands
+    from jenny.webui.commands import CommandError
+
+    for nome in prepara:
+        _quaderno(workspace, nome)
+    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
+                          busy_session_keys=lambda: ())
+    with pytest.raises(CommandError) as err:
+        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+    assert err.value.code == codice
+
+
 def test_the_command_is_registered() -> None:
     from jenny.webui.commands import COMMANDS, project_rename
 

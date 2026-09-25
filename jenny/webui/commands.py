@@ -46,9 +46,13 @@ class CommandError(Exception):
     """Errore di un comando, con un codice che il trasporto sa tradurre.
 
     I codici sono un insieme chiuso — ``bad_request``, ``forbidden``,
-    ``not_found``, ``too_large``, ``conflict``, ``unavailable``, ``internal`` —
-    così un adapter può mapparli (a uno status HTTP, a un frame WS) senza
-    indovinare dal testo del messaggio.
+    ``not_found``, ``too_large``, ``conflict``, ``name_taken``, ``unavailable``,
+    ``internal`` — così un adapter può mapparli (a uno status HTTP, a un frame
+    WS) senza indovinare dal testo del messaggio, e un client può dire nella
+    propria lingua i rifiuti che si aspetta.
+
+    ``name_taken``: il nome chiesto è già di qualcos'altro (oggi: il nome nuovo
+    di un quaderno è già di una cartella o di una conversazione).
 
     ``conflict`` è l'unico che non parla della richiesta ma del *mondo*: la
     richiesta era buona, e nel frattempo il file è cambiato sotto. Chi lo riceve
@@ -495,7 +499,7 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             invalidate_session=ctx.invalidate_session,
         )
     except ProjectRenameError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
+        raise CommandError(exc.code, str(exc)) from exc
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
 
