@@ -12,67 +12,12 @@
  */
 
 import { AppState } from './shared/state.js';
-import { wsManager } from './shared/ws-manager.js';
+import { UiQueryResponder as ShellResponder } from './shared/ui-query.js';
 import { viewElement } from './mobile-settings.js';
 
-// Cap per blocco HTML (il backend rifiuta comunque payload oltre 256 KB).
-const HTML_CAP = 48 * 1024;
-// Elementi rimossi dalla potatura: rumore inutile al modello o troppo pesanti.
-const STRIP_SELECTOR = 'script, style, link, svg, template, noscript';
-
-export class UiQueryResponder {
-  constructor() {
-    // Stream non filtrato per `chat_id` di proposito: una `ui_query` è una
-    // richiesta mirata a *questa* connessione, correlata da `correlation_id`, e
-    // la risposta descrive lo schermo — non il thread di una conversazione.
-    wsManager.addEventListener('chat:message', (e) => {
-      if (e.detail?.event === 'ui_query') this._respond(e.detail);
-    });
-  }
-
-  async _respond(msg) {
-    const id = msg.correlation_id;
-    if (!id) return;
-    try {
-      const payload = await this._collect();
-      wsManager.sendUiResult(id, payload);
-    } catch (err) {
-      console.error('ui_query collect failed:', err);
-      wsManager.sendUiResult(id, null, 'collect_failed');
-    }
-  }
-
-  /* Pota una stringa HTML: rimuove script/style/svg ecc. e commenti, tronca gli
-     attributi lunghi (src/href, data-URI base64), comprime lo spazio, cappa. */
-  _pruneHtml(htmlString) {
-    if (!htmlString) return '';
-    let out;
-    try {
-      const doc = new DOMParser().parseFromString(htmlString, 'text/html');
-      doc.querySelectorAll(STRIP_SELECTOR).forEach((el) => el.remove());
-      // Rimuovi i nodi commento.
-      const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
-      const comments = [];
-      while (walker.nextNode()) comments.push(walker.currentNode);
-      comments.forEach((c) => c.remove());
-      // Tronca attributi pesanti (immagini inline, URL lunghi).
-      doc.querySelectorAll('[src], [href]').forEach((el) => {
-        for (const attr of ['src', 'href']) {
-          const v = el.getAttribute(attr);
-          if (v && (v.length > 128 || v.startsWith('data:'))) {
-            el.setAttribute(attr, '[stripped]');
-          }
-        }
-      });
-      out = doc.body ? doc.body.innerHTML : doc.documentElement.outerHTML;
-    } catch {
-      out = htmlString;
-    }
-    out = out.replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*\n+/g, '\n\n').trim();
-    if (out.length > HTML_CAP) out = out.slice(0, HTML_CAP) + '\n<!--[truncated]-->';
-    return out;
-  }
-
+/* Il giro del filo, la potatura e il cap stanno in `shared/ui-query.js`, che la
+   casa condivide dal 26/09/2026; qui resta cosa descrive l'officina. */
+export class UiQueryResponder extends ShellResponder {
   async _collect() {
     const view = AppState.currentMode || 'unknown';
     const drawer = window.mobileApp?.drawer?.activeDrawer || null;

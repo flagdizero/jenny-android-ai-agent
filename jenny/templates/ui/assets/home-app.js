@@ -46,6 +46,7 @@ import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { HomePages } from './home-pages.js';
 import { HomeStrip } from './home-strip.js';
+import { HomeUiQuery } from './home-ui-query.js';
 import { ComposerFocus } from './home-focus.js';
 import { NotebookCard } from './home-notebook.js';
 import { ChatMove } from './home-move.js';
@@ -322,6 +323,11 @@ class HomeApp {
        (arrivano in `init`, dopo il bootstrap) e i nomi delle pagine fisse
        uscivano come chiavi grezze — «casa.fila.app» — per il tempo di un giro.
        La disegna `_applyTranslations`, appena le parole sono arrivate. */
+
+    /* «Cosa vedi?»: il tool `ui_view` interroga la connessione da cui e'
+       partito il messaggio, e scrivendo da qui e' questa. Senza chi risponde
+       Jenny aspettava sei secondi e diceva che l'app era in background. */
+    this.uiQuery = new HomeUiQuery(this);
 
     window.mobileApp = this;
     this.init();
