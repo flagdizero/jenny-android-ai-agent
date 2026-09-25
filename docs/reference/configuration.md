@@ -400,7 +400,7 @@ She hides herself whenever Jenny's own UI is in the foreground: this app is the 
 
 ## casa
 
-The home screen's pages. The home is a row of pages you swipe between, the way any launcher works, and their names run along the top of the screen: the page you are on is written large, the others small. Tap a name to jump to it, or swipe sideways. Four pages are always there — **App** (the app drawer), **Jenny** (the conversation), **Notebooks** and **Settings** — and the home always opens on Jenny. Beside them you can keep pages of your own: press and hold an app or a notebook and choose *Add as a page*.
+The home screen's pages. The home is a row of pages you swipe between, the way any launcher works, and their names run along the top of the screen: the page you are on is written large, the others small. Tap a name to jump to it, or swipe sideways. Four pages are always there — **Apps** (the app drawer), **Jenny** (the conversation), **Notebooks** and **Settings** — and the home always opens on Jenny. Beside them you can keep pages of your own: press and hold a mini-app in the drawer or a notebook in Notebooks and choose *Add as a page* (a mini-app that opens outside Jenny, or a broken one, cannot be a page).
 
 Every page can be moved, the four fixed ones included: press and hold a name at the top and drag it where you want it. The pages you added can also be removed there; the four fixed ones cannot, or a home without its Settings page would have no way back to them. Back always returns to Jenny, wherever it sits in the row.
 
@@ -415,7 +415,7 @@ A **conversation page is a shortcut, not a second chat.** The home has exactly o
 
 Rooms that depend on where you came from are not pinnable either: the notebook pages read their notebook from the current conversation, and the reader needs a specific page. Pinned to a fixed place they would show something different every time.
 
-These live in `config.json` and not in the browser's storage on purpose: they are the phone's home screen, and losing them to a restore or a reinstall would be the worst kind of surprise — browser storage is not part of the [encrypted backup](../using/backup.md). A page whose `ref` no longer resolves (an app you uninstalled) is kept, not silently dropped: it is drawn as missing, and removing it stays your decision. Deleting the app or the notebook itself, from its own sheet, takes its page with it.
+These live in `config.json` and not in the browser's storage on purpose: they are the phone's home screen, and losing them to a restore or a reinstall would be the worst kind of surprise — browser storage is not part of the [encrypted backup](../using/backup.md). Deleting a mini-app or a notebook from its own sheet takes its page with it. A page whose `ref` stops resolving any other way — the folder removed without going through its sheet, or a deletion whose page cleanup failed (the deletion stands, and the failure is logged) — is kept, not silently dropped: it is drawn as missing, and removing it stays your decision.
 
 ## wiki
 
