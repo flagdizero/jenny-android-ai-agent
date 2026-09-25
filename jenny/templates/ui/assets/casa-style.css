@@ -1502,8 +1502,13 @@ body.casa {
 }
 
 /* Il raggio lo scrive il JS (dice quanti collegamenti ha la pagina); il colore
-   lo scrive il gruppo, con le stesse classi dei pallini dell'elenco. */
-.casa-map-node { cursor: pointer; }
+   lo scrive il gruppo, con le stesse classi dei pallini dell'elenco.
+   Il `fill` qui e' il ripiego, lo stesso grigio di `other`: la mappa prende il
+   gruppo cosi' come arriva (`node.group || 'other'` in casa-map.js, senza la
+   `sanitizeGroup` dell'elenco), e una cartella che i tre colori non prevedono
+   — `sources/`, per dire — restava col nero di default di SVG, invisibile nel
+   tema scuro. Le tre regole sotto vincono per specificita'. */
+.casa-map-node { cursor: pointer; fill: var(--text-faint); }
 
 .casa-map-nodes .casa-group-concepts { fill: var(--ok); }
 .casa-map-nodes .casa-group-entities { fill: var(--error); }

@@ -320,6 +320,23 @@ def test_the_map_paints_its_nodes_with_the_same_three() -> None:
     assert elenco == mappa, f"elenco {elenco} contro mappa {mappa}"
 
 
+def test_a_node_of_an_unforeseen_group_is_still_painted() -> None:
+    """Un gruppo che i tre colori non prevedono prende il grigio di `other`.
+
+    La mappa non passa da `sanitizeGroup` come l'elenco: il nodo porta
+    `casa-group-<quel che arriva>`, e senza un `fill` di ripiego SVG lo
+    dipinge nero — invisibile nel tema scuro (revisione del 25/09/2026, M20).
+    """
+    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    ripiego = re.search(r"\n\.casa-map-node \{([^}]*)\}", css)
+    assert ripiego, "regola .casa-map-node non trovata"
+    altri = re.search(r"\.casa-map-nodes \.casa-group-other \{ fill: (var\(--[a-z-]+\)); \}", css)
+    assert altri, "il colore di `other` non si trova piu'"
+    assert f"fill: {altri.group(1)}" in ripiego.group(1), (
+        "un nodo di un gruppo non previsto resta col nero di default di SVG"
+    )
+
+
 def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> None:
     """`[hidden]` e' una regola del browser a specificita' bassissima.
 
