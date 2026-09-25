@@ -215,8 +215,10 @@ def test_the_thread_keeps_its_bottom_when_the_rows_below_it_grow() -> None:
     block = re.search(r"if \(window\.ResizeObserver\) \{(.*?)\n    \}", src, re.S)
     assert block, "nessun osservatore delle altezze"
     body = block.group(1)
-    for sel in (".casa-composer", ".casa-pending", ".casa-activity", ".casa-wire"):
-        assert sel in body, f"{sel} non è osservato: il filo perderà il fondo"
+    # Per riferimento e non per classe (25/09/2026): le foto del trasloco
+    # copiano la chat, e una ricerca per classe puo' trovare una copia.
+    for ref in ("this.composer", "this.pending", "this.activityEl", "this.wire"):
+        assert ref in body, f"{ref} non è osservato: il filo perderà il fondo"
     assert "keepBottom()" in body, "l'osservatore misura e basta, non riaggancia il fondo"
 
     chat = CASA_CHAT_JS.read_text(encoding="utf-8")

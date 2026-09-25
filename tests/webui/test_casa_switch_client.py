@@ -333,6 +333,7 @@ class App {
   __CONFIRM_LEAVE__
   __OPEN_PAGE__
   __READER_TITLE__
+  __BIND_COMPOSER__
 }
 
 function casa() {
@@ -407,6 +408,7 @@ def _harness() -> str:
         .replace("__CONFIRM_LEAVE__", member(src, "_confirmLeaveReader"))
         .replace("__OPEN_PAGE__", member(src, "openPage"))
         .replace("__READER_TITLE__", member(src, "_readerTitle"))
+        .replace("__BIND_COMPOSER__", member(src, "_bindComposer"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
@@ -1597,4 +1599,27 @@ def test_a_title_from_a_save_after_leaving_the_reader_is_dropped() -> None:
       app._setView('pages');
       app._readerTitle('Semina di marzo');
       assert.equal(app.nameEl.textContent, 'orto');
+    """)
+
+
+def test_jenny_stands_on_the_real_composer_not_on_a_photo() -> None:
+    """Le foto del trasloco sono copie della chat, composer compreso: una
+    ricerca per classe poteva trovare quella di una foto prima nel documento,
+    e il pavimento di Jenny si misurava su una copia."""
+    _run_js("""
+      const app = casa();
+      const ascolta = { addEventListener() {} };
+      Object.assign(app.attach, ascolta);
+      Object.assign(app.send, ascolta);
+      app.pending = Object.assign(makeEl('div'), ascolta);
+      Object.assign(app.input, ascolta, { scrollHeight: 20 });
+      app.composer = { offsetHeight: 90 };
+      const fotoComposer = { offsetHeight: 12 };
+      const cerca = document.querySelector;
+      document.querySelector = (sel) => (sel === '.casa-composer' ? fotoComposer : cerca(sel));
+      app._voce = { id: 'chat', kind: 'chat', fissa: true };
+      app._bindComposer();
+      document.querySelector = cerca;
+      assert.equal(document.documentElement.style.props['--casa-composer-h'], '90px',
+                   'il pavimento e\u2019 stato misurato sul composer di una foto');
     """)

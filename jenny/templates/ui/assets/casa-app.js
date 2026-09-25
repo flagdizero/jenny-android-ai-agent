@@ -146,6 +146,11 @@ class CasaApp {
     this.send = document.getElementById('casa-send');
     this.attach = document.getElementById('casa-attach');
     this.pending = document.getElementById('casa-pending');
+    /* Il composer vero, preso adesso per riferimento: piu' tardi il trasloco
+       mette nelle pagine delle foto della chat, e un `querySelector` per
+       classe puo' rispondere con il composer di una foto (v. `_bindComposer`). */
+    this.composer = this.input?.closest?.('.casa-composer') || null;
+    this.activityEl = document.getElementById('casa-activity');
     this.shell = document.querySelector('.casa-shell');
 
     /* I comandi dell'intestazione che cambiano con la stanza — e la pastiglia
@@ -1440,7 +1445,10 @@ class CasaApp {
       /* ...e solo sulle pagine che un composer ce l'hanno. Le altre il loro
          pavimento lo dichiarano (v. `_posaJenny`). */
       if (this._voce && !this._haComposer(this._voce)) return;
-      const h = document.querySelector('.casa-composer')?.offsetHeight || 64;
+      /* Il riferimento, non una ricerca per classe: le foto del trasloco sono
+         copie della chat col loro composer, e una che sta prima nel documento
+         veniva misurata al posto di quello vero. */
+      const h = this.composer?.offsetHeight || 64;
       document.documentElement.style.setProperty('--casa-composer-h', `${h}px`);
     };
     /* Serve anche a chi rientra nella chat da un'altra stanza: li' il composer
@@ -1463,8 +1471,7 @@ class CasaApp {
         measure();
         this.chat.keepBottom();
       });
-      for (const sel of ['.casa-composer', '.casa-pending', '.casa-activity', '.casa-wire']) {
-        const el = document.querySelector(sel);
+      for (const el of [this.composer, this.pending, this.activityEl, this.wire]) {
         if (el) observer.observe(el);
       }
     }
