@@ -147,17 +147,15 @@ def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
 
     if schedule.kind == "cron" and schedule.expr:
         try:
-            from croniter import croniter
-
+            from jenny.cron.cronexpr import next_after
             from jenny.utils.helpers import safe_zoneinfo
             # Use caller-provided reference time for deterministic scheduling
             base_time = now_ms / 1000
             # safe_zoneinfo non solleva mai (fallback: offset locale, poi UTC).
             tz = safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
             base_dt = datetime.fromtimestamp(base_time, tz=tz)
-            cron = croniter(schedule.expr, base_dt)
-            next_dt = cron.get_next(datetime)
-            return int(next_dt.timestamp() * 1000)
+            # Non più croniter: v. il cappello di ``cronexpr`` per il perché.
+            return int(next_after(schedule.expr, base_dt).timestamp() * 1000)
         except Exception:
             return None
 

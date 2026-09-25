@@ -40,9 +40,8 @@ OFL text and the per-font copyright notices are in `vendor/fonts/LICENSE.txt`.
 ## Bundled Python packages
 
 Chaquopy installs the wheels pinned in `requirements-android.lock.txt` into the
-APK at build time: `httpx`, `websockets`, `loguru`, `croniter`, `json-repair`,
-`jinja2`, `filelock`, `markdown`, `pyyaml`, `pypdf`, `typing-extensions`,
-`tzdata`. All are pure-Python and resolve from public PyPI — none is local or
+APK at build time: `httpx`, `websockets`, `loguru`, `json-repair`, `jinja2`,
+`filelock`, `markdown`, `pyyaml`, `pypdf`, `typing-extensions`, `tzdata`. All are pure-Python and resolve from public PyPI — none is local or
 patched. Each is governed by its own license, available in the installed
 wheel's metadata and in its upstream repository.
 
