@@ -524,7 +524,13 @@ class CasaApp {
     try {
       await rpc.renameProject(nome, nuovo);
     } catch (err) {
-      showToast(i18n.t('casa.quaderno.renameFailed', { name: nome, error: err?.message || '' }), 'error');
+      /* `conflict` e' il rifiuto per chi ci sta scrivendo (un turno, un
+         subagent, una passata del giardiniere): e' una condizione attesa, e va
+         detta nella lingua di chi legge. Il testo del server resta per i log. */
+      const testo = err?.code === 'conflict'
+        ? i18n.t('casa.quaderno.renameBusy', { name: nome })
+        : i18n.t('casa.quaderno.renameFailed', { name: nome, error: err?.message || '' });
+      showToast(testo, 'error');
       return false;
     }
     const vecchia = projectKey(nome);

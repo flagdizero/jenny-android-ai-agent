@@ -1044,7 +1044,8 @@
       "deleteFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente.",
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
-      "renameFailed": "Non ho potuto rinominare «{name}». {error}"
+      "renameFailed": "Non ho potuto rinominare «{name}». {error}",
+      "renameBusy": "Sto ancora lavorando in «{name}»: rinominalo quando ho finito."
     },
     "fila": {
       "label": "Pagine di casa",

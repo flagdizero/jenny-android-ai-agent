@@ -1041,7 +1041,8 @@
       "deleteFailed": "I could not delete the notebook “{name}”. Nothing was changed.",
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
-      "renameFailed": "I could not rename “{name}”. {error}"
+      "renameFailed": "I could not rename “{name}”. {error}",
+      "renameBusy": "I'm still working in “{name}”: rename it once I've finished."
     },
     "fila": {
       "label": "Home pages",

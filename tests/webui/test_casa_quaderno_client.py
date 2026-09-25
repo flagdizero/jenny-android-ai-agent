@@ -294,7 +294,9 @@ def test_the_workshop_still_asks_about_a_project() -> None:
 # ── Rinomina, dal lato della casa ───────────────────────────────────────────
 
 
-def _run_rinomina(corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool = False) -> None:
+def _run_rinomina(
+    corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool | str = False,
+) -> None:
     metodo = _member((ASSETS / "casa-app.js").read_text(encoding="utf-8"), "renameNotebook")
     script = textwrap.dedent(
         f"""
@@ -306,11 +308,16 @@ def _run_rinomina(corpo: str, *, scritto: str | None, corrente: str | None, rifi
         const rpc = {{
           async renameProject(a, b) {{
             storia.push(['rpc', a, b]);
-            if ({json.dumps(rifiuta)}) throw new Error('a folder named viaggi already exists');
+            const rifiuto = {json.dumps(rifiuta)};
+            if (rifiuto) {{
+              const err = new Error('a folder named viaggi already exists');
+              if (typeof rifiuto === 'string') err.code = rifiuto;
+              throw err;
+            }}
           }},
         }};
         const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
-        const i18n = {{ t: (k) => k }};
+        const i18n = {{ t: (k, p) => p && p.error !== undefined ? k + ':' + p.error : k }};
         function showToast(t, tipo) {{ storia.push(['avviso', t, tipo]); }}
         class Guscio {{
           constructor() {{
@@ -385,6 +392,27 @@ def test_a_refused_rename_changes_nothing_at_home() -> None:
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
         "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'rpc', 'avviso']);\n"
         "assert.equal(storia.at(-1)[2], 'error');\n",
+        scritto="viaggi",
+        corrente="project:viaggio",
+        rifiuta=True,
+    )
+
+
+def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_language() -> None:
+    """Il rifiuto ``conflict`` (un turno, un subagent, una passata del giardiniere
+    in corso) e' una condizione attesa: la sua frase sta nell'i18n, non nel testo
+    inglese del server. Un altro errore resta quello di sempre, col motivo."""
+    _run_rinomina(
+        "assert.equal(await g.renameNotebook('viaggio'), false);\n"
+        "assert.deepEqual(storia.at(-1), ['avviso', 'casa.quaderno.renameBusy', 'error']);\n",
+        scritto="viaggi",
+        corrente="project:viaggio",
+        rifiuta="conflict",
+    )
+    _run_rinomina(
+        "await g.renameNotebook('viaggio');\n"
+        "assert.deepEqual(storia.at(-1), ['avviso',\n"
+        "  'casa.quaderno.renameFailed:a folder named viaggi already exists', 'error']);\n",
         scritto="viaggi",
         corrente="project:viaggio",
         rifiuta=True,
