@@ -543,29 +543,61 @@ class CasaApp {
     const vecchia = projectKey(nome);
     const nuova = projectKey(nuovo);
     this.pagine.rinominaConversazione(vecchia, nuova);
+    this._rinominaBozza(vecchia, nuova);
     /* I Quaderni rileggono **prima** del cambio: la pastiglia delle pagine,
        ridisegnandosi, chiede alla loro cache quante pagine ha il quaderno — e
        con la cache ancora sul nome vecchio perdeva il numero. Visto sul
        telefono il 23/09/2026 rinominando un quaderno di prova. */
     await this.who.refresh();
-    if (sessionManager.currentKey === vecchia) await this.switchConversation(nuova);
+    /* La chat segue il nome nuovo **dove sta**, senza passare dalla regola
+       delle pagine: `switchConversation` da qui — la pagina Quaderni —
+       portava alla pagina chat, e rinominare non e' un modo di andarci. */
+    if (sessionManager.currentKey === vecchia) {
+      await this.mostraConversazione(nuova);
+      this._drafts.delete(vecchia);
+    }
     await this.portaPagine().ricarica();
     showToast(i18n.t('casa.quaderno.renamed', { name: nuovo }), 'success');
     return true;
   }
 
+  /* La bozza di un quaderno rinominato passa al nome nuovo. Restava sotto la
+     chiave vecchia, cioe' persa: nessuna conversazione la chiede piu'. Se il
+     quaderno e' quello a schermo la bozza viva e' nel campo, non in
+     `_drafts`: si prende da li'. */
+  _rinominaBozza(vecchia, nuova) {
+    const bozza = sessionManager.currentKey === vecchia
+      ? this.input?.value || ''
+      : this._drafts.get(vecchia);
+    this._drafts.delete(vecchia);
+    if (bozza !== undefined) this._drafts.set(nuova, bozza);
+  }
+
   /** Cancella un quaderno dalla sua scheda, e fa il seguito che e' di casa.
    *
    *  La domanda la fa `deleteProjectFlow`, con le parole della casa. Il seguito:
-   *  se eri li' dentro torni alla conversazione personale — restare in una
-   *  chat che non esiste piu' vorrebbe dire scrivere a vuoto; la pagina
+   *  se la chat era li' dentro torna a un'altra conversazione (la personale,
+   *  se la pagina chat mostrava quel quaderno) — restare in una chat che non
+   *  esiste piu' vorrebbe dire scrivere a vuoto; la pagina
    *  Quaderni, sotto la scheda, si ridisegna senza quella riga; e le
    *  pagine si rileggono, perche' il gateway ha tolto anche la sua, se ne aveva
    *  una (v. `project_delete.py`).
    */
   async deleteNotebook(nome) {
     if (!(await deleteProjectFlow(nome, NOTEBOOK_DELETE_WORDS))) return false;
-    if (projectNameOf(sessionManager.currentKey) === nome) await this.switchConversation(null);
+    const chiave = projectKey(nome);
+    /* Come nel rinomino, **senza portarti alla chat**: si cancella dalla
+       pagina Quaderni, e li' si resta. La pagina chat che mostrava il
+       quaderno torna alla personale; la chat, se lo mostrava, torna a quel
+       che mostra la pagina chat. La bozza se ne va col quaderno: era scritta
+       per una conversazione che non c'e' piu'. */
+    if (this.pagine?.conversazioneCasa === chiave) {
+      this.pagine.conversazioneCasa = sessionManager.personalKey;
+    }
+    if (sessionManager.currentKey === chiave) {
+      await this.mostraConversazione(this.pagine?.conversazioneCasa || null);
+    }
+    this._drafts.delete(chiave);
     await this.who.refresh();
     await this.portaPagine().ricarica();
     showToast(i18n.t('casa.quaderno.eliminato', { name: nome }), 'success');

@@ -199,14 +199,19 @@ def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
           return {json.dumps(confermato)};
         }}
         const projectNameOf = (k) => (k && k.startsWith('project:') ? k.slice(8) : null);
-        const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
+        const projectKey = (n) => 'project:' + n;
+        const sessionManager = {{ currentKey: {json.dumps(corrente)}, personalKey: 'websocket:default' }};
         const i18n = {{ t: (k) => k }};
         function showToast(t) {{ storia.push(['avviso', t]); }}
         class Guscio {{
           constructor() {{
             this.who = {{ refresh: async () => storia.push(['tendina']) }};
+            this._drafts = new Map();
           }}
-          async switchConversation(k) {{ storia.push(['conversazione', k]); }}
+          /* La chat cambia dove sta: passare dalla regola delle pagine, dalla
+             pagina Quaderni, porterebbe alla pagina chat. */
+          async mostraConversazione(k) {{ storia.push(['conversazione', k]); }}
+          async switchConversation(k) {{ storia.push(['dirottata', k]); }}
           portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
           {metodo}
         }}
@@ -297,7 +302,9 @@ def test_the_workshop_still_asks_about_a_project() -> None:
 def _run_rinomina(
     corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool | str = False,
 ) -> None:
-    metodo = _member((ASSETS / "casa-app.js").read_text(encoding="utf-8"), "renameNotebook")
+    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    metodo = _member(app_js, "renameNotebook")
+    bozza = _member(app_js, "_rinominaBozza")
     script = textwrap.dedent(
         f"""
         import assert from 'node:assert/strict';
@@ -324,10 +331,14 @@ def _run_rinomina(
           constructor() {{
             this.who = {{ refresh: async () => storia.push(['tendina']) }};
             this.pagine = {{ rinominaConversazione: (a, b) => storia.push(['pagina0', a, b]) }};
+            this._drafts = new Map();
+            this.input = {{ value: '' }};
           }}
-          async switchConversation(k) {{ storia.push(['conversazione', k]); }}
+          async mostraConversazione(k) {{ storia.push(['conversazione', k]); }}
+          async switchConversation(k) {{ storia.push(['dirottata', k]); }}
           portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
           {metodo}
+          {bozza}
         }}
         const g = new Guscio();
         """

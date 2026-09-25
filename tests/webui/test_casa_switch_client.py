@@ -47,7 +47,7 @@ def _const_block(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const { projectKey, projectNameOf } = await import('__LIST_URL__');
+const { projectKey, projectNameOf, isOpenableProjectName } = await import('__LIST_URL__');
 
 const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = {
@@ -122,6 +122,17 @@ const sessionManager = {
     return true;
   },
 };
+
+/* Rinominare e cancellare un quaderno: le domande hanno i loro banchi, qui
+   si misura il seguito. `nomeScritto` e' la risposta al prompt, `cancella`
+   quella della conferma. */
+let nomeScritto = null;
+let cancella = true;
+const promptDialog = () => Promise.resolve(nomeScritto);
+const deleteProjectFlow = () => Promise.resolve(cancella);
+const rpc = { renameProject: () => Promise.resolve() };
+const showToast = () => {};
+__NOTEBOOK_DELETE_WORDS__
 
 /* Il filo: ricorda cosa gli si manda. */
 const wsManager = { inviati: [], sendToChat(...a) { this.inviati.push(a); return true; } };
@@ -308,6 +319,9 @@ class App {
   __ON_SPARITA__
   __COMPOSER_ATTIVO__
   __SEND__
+  __RENAME_NOTEBOOK__
+  __RINOMINA_BOZZA__
+  __DELETE_NOTEBOOK__
 }
 
 function casa() {
@@ -373,6 +387,10 @@ def _harness() -> str:
         .replace("__ON_SPARITA__", member(src, "onSparitaCambiata"))
         .replace("__COMPOSER_ATTIVO__", member(src, "_composerAttivo"))
         .replace("__SEND__", member(src, "_send"))
+        .replace("__RENAME_NOTEBOOK__", member(src, "renameNotebook"))
+        .replace("__RINOMINA_BOZZA__", member(src, "_rinominaBozza"))
+        .replace("__DELETE_NOTEBOOK__", member(src, "deleteNotebook"))
+        .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
@@ -1295,4 +1313,83 @@ def test_enter_on_a_gone_notebook_sends_nothing() -> None:
       sparita = false;
       assert.equal(app._send(), true);
       assert.equal(wsManager.inviati.length, 1);
+    """)
+
+
+# ── Rinominare e cancellare dalla pagina Quaderni (M8, 25/09/2026) ───────────
+
+_QUADERNI = """
+      const app = casa();
+      await app.switchConversation(projectKey('piante'));
+      app.pagine.conversazioneCasa = projectKey('piante');
+      app.pagine.rinominaConversazione = function (v, n) {
+        if (this.conversazioneCasa === v) this.conversazioneCasa = n;
+      };
+      /* La regola delle pagine vera, da qui (la pagina Quaderni), porta alla
+         pagina chat: il finto lo segna. */
+      app.pagine.apriConversazione = (k) => {
+        app.fatti.push('dirottata:' + k);
+        return app.mostraConversazione(k);
+      };
+      app.who.refresh = async () => {};
+      app.portaPagine = () => ({ ricarica: async () => {} });
+      app.fatti.length = 0;
+"""
+
+
+def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> None:
+    """Rinominare dalla pagina Quaderni portava alla pagina chat, e la bozza
+    restava sotto la chiave vecchia — cioe' persa."""
+    _run_js(_QUADERNI + """
+      app.input.value = 'mezza frase';
+      nomeScritto = 'orto';
+      assert.equal(await app.renameNotebook('piante'), true);
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.ok(!app.fatti.some((f) => f.startsWith('dirottata')), 'rinominare ha portato alla chat');
+      assert.equal(app.input.value, 'mezza frase', 'la bozza si e\\u2019 persa col nome vecchio');
+      assert.ok(!app._drafts.has('project:piante'), 'resta una bozza sotto il nome vecchio');
+      assert.equal(app.pagine.conversazioneCasa, 'project:orto');
+    """)
+
+
+def test_the_draft_of_a_renamed_notebook_follows_the_new_name() -> None:
+    _run_js(_QUADERNI + """
+      app.input.value = 'da finire';
+      await app.switchConversation(null);
+      nomeScritto = 'orto';
+      await app.renameNotebook('piante');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      await app.mostraConversazione(projectKey('orto'));
+      assert.equal(app.input.value, 'da finire', 'la bozza e\\u2019 rimasta al nome vecchio');
+    """)
+
+
+def test_deleting_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> None:
+    _run_js(_QUADERNI + """
+      app.input.value = 'mezza frase';
+      assert.equal(await app.deleteNotebook('piante'), true);
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.ok(!app.fatti.some((f) => f.startsWith('dirottata')), 'cancellare ha portato alla chat');
+      assert.equal(app.pagine.conversazioneCasa, 'websocket:default');
+      assert.ok(!app._drafts.has('project:piante'), 'la bozza di un quaderno cancellato resta in memoria');
+    """)
+
+
+def test_deleting_a_notebook_puts_the_chat_back_where_the_chat_page_is() -> None:
+    """La chat parcheggiata nella pagina del quaderno cancellato torna alla
+    conversazione della pagina chat, non d'ufficio alla personale."""
+    _run_js(_QUADERNI + """
+      app.pagine.conversazioneCasa = projectKey('erbe');
+      await app.deleteNotebook('piante');
+      assert.equal(sessionManager.currentKey, 'project:erbe');
+      assert.equal(app.pagine.conversazioneCasa, 'project:erbe');
+    """)
+
+
+def test_a_deletion_that_did_not_happen_moves_nothing() -> None:
+    _run_js(_QUADERNI + """
+      cancella = false;
+      assert.equal(await app.deleteNotebook('piante'), false);
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      cancella = true;
     """)
