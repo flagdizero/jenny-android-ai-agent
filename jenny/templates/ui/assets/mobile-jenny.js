@@ -121,7 +121,7 @@ export class JennyCompanion extends JennyMascot {
     if (this._abortFlight) this._abortFlight();
     this._closeMini();
     // Nascosta durante l'onboarding, oppure per preferenza utente
-    // (Impostazioni → Personalizzazione → mascotte visibile, v. shared/mascot.js).
+    // (la stanza «Jenny» della casa → visibile, v. shared/mascot.js).
     const hidden = mode === 'onboarding' || !mascotVisible();
     this.el.classList.toggle('hidden-mode', hidden);
     // Coerente col media-query landscape: nascondi anche gli overlay

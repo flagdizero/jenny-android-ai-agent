@@ -129,7 +129,7 @@ export class JennyMascot {
     this._onChatSwitch = () => this._releaseTrackedTurn();
     sessionManager.addEventListener('chat:switch', this._onChatSwitch);
 
-    // Preferenze mascotte (Impostazioni → Personalizzazione): visibilità e
+    // Preferenze mascotte (la stanza «Jenny» della casa): visibilità e
     // taglia, v. shared/mascot.js.
     this._onMascotChange = () => this._applyMascotPrefs();
     window.addEventListener('mascotchange', this._onMascotChange);
@@ -416,15 +416,15 @@ export class JennyMascot {
 
   /* ── Preferenze ── */
 
-  /* Visibile o spenta (Impostazioni → Personalizzazione, v. shared/mascot.js).
+  /* Visibile o spenta (la stanza «Jenny» della casa, v. shared/mascot.js).
      L'officina la spegne anche durante l'onboarding, e lo fa da `setMode`. */
   _applyVisibility() {
     this.el.classList.toggle('hidden-mode', !mascotVisible());
     this._updateGestureExclusion();
   }
 
-  /* Riallinea visibilità e lato quando l'utente cambia le preferenze da
-     Impostazioni → Personalizzazione (evento 'mascotchange'). Le img del volo
+  /* Riallinea visibilità e arte quando l'utente cambia le preferenze dalla
+     stanza «Jenny» della casa (evento 'mascotchange'). Le img del volo
      hanno src fisso a creazione e non si ricablano più: da quando l'arte ha
      una sola variante, il loro path non dipende da nessuna preferenza. */
   _applyMascotPrefs() {

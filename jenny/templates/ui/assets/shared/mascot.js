@@ -1,8 +1,8 @@
 /** Preferenze della mascotte (JennyCompanion) — visibilità e aspetto.
  *
- * Stato puramente client-side (localStorage), come tema/lingua/modalità
- * avanzata: non passa mai dal backend. Visibilità e taglia sono scelte
- * dell'utente (Impostazioni → Personalizzazione).
+ * Stato puramente client-side (localStorage), come il tema: non passa mai
+ * dal backend. Visibilità e taglia sono scelte dell'utente, nella stanza
+ * «Jenny» della casa (`casa-jenny.js`).
  *
  * Il lato non c'è più (24/09/2026): Jenny sta **sempre a destra**, in casa e in
  * officina, e dopo un lancio ci torna a piedi da dovunque l'hai lasciata. A
@@ -18,8 +18,22 @@
 const VISIBLE_KEY = 'jenny-mascotte-visible';
 const SIZE_KEY = 'jenny-mascotte-size';
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
-   non una per lettura: non hanno più un getter in cui nascondersi. */
-const DEAD_KEYS = ['jenny-mascotte-color'];
+   non una per lettura: non hanno più un getter in cui nascondersi. Stanno qui
+   anche quelle che non erano della mascotte, perché questo modulo lo caricano
+   tutti e due i gusci:
+   - `jenny-mascotte-color`: il bianco/nero (08/09/2026);
+   - `jenny-mascotte-dock-side`, `jenny-mascotte-side`: il lato (5961d22);
+   - `jenny-advanced-mode`: la modalità sviluppatore (78ff330);
+   - `jenny-home-view`: la vista di Home scelta dall'utente (3d57980);
+   - `locale`: il selettore di lingua dell'officina (v. shared/i18n.js). */
+const DEAD_KEYS = [
+  'jenny-mascotte-color',
+  'jenny-mascotte-dock-side',
+  'jenny-mascotte-side',
+  'jenny-advanced-mode',
+  'jenny-home-view',
+  'locale',
+];
 for (const key of DEAD_KEYS) {
   try {
     localStorage.removeItem(key);

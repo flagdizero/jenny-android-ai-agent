@@ -20,6 +20,7 @@ finisce lei, che non ha stato leggibile da fuori se non il ``transform``.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from support.js_harness import requires_node, run_js
@@ -52,6 +53,10 @@ def test_no_left_side_rules_or_hooks_remain() -> None:
         if path.suffix not in {".js", ".css", ".html", ".json"} or "vendor" in path.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        if path.name == "mascot.js":
+            # L'elenco delle chiavi ritirate le nomina per cancellarle: e'
+            # l'opposto di un gancio, e il suo commento dice da dove vengono.
+            text = re.sub(r"/\* Chiavi di preferenze ritirate.*?\];", "", text, flags=re.S)
         for needle in (
             "side-left", "onSideChange", "mascotSide", "_setSide", "mascotte-side",
             "mascotte-dock-side", "data-mascot-side",

@@ -130,3 +130,34 @@ globalThis.localStorage = {{
 const mod = await import({json.dumps(MASCOT_JS.as_uri())});
 assert.ok(typeof mod.mascotSize === 'function');
 """)
+
+
+@node
+def test_every_retired_preference_is_cleaned_up_and_nothing_reads_it() -> None:
+    """Le chiavi delle preferenze ritirate (lato, modalità sviluppatore, vista
+    di Home, lingua scelta a mano) si cancellano al caricamento come il B/N —
+    e nessun sorgente della WebUI le legge più, o la pulizia cancellerebbe
+    una preferenza viva."""
+    ritirate = [
+        "jenny-mascotte-dock-side", "jenny-mascotte-side", "jenny-advanced-mode",
+        "jenny-home-view", "locale",
+    ]
+    for path in sorted(ASSETS.rglob("*.js")):
+        if "vendor" in path.parts or path == MASCOT_JS:
+            continue
+        testo = path.read_text(encoding="utf-8", errors="replace")
+        for chiave in ritirate:
+            assert f"Item('{chiave}'" not in testo and f'Item("{chiave}"' not in testo, (
+                f"{path.name} usa ancora {chiave}"
+            )
+    _run(f"""
+import assert from 'node:assert/strict';
+const store = new Map({json.dumps([[k, "x"] for k in ritirate] + [["tc-theme", "kyoto"]])});
+globalThis.localStorage = {{
+  getItem(k) {{ return store.has(k) ? store.get(k) : null; }},
+  setItem(k, v) {{ store.set(k, String(v)); }},
+  removeItem(k) {{ store.delete(k); }},
+}};
+await import({json.dumps(MASCOT_JS.as_uri())});
+assert.deepEqual([...store.keys()], ['tc-theme'], 'restano chiavi ritirate');
+""")
