@@ -1053,6 +1053,10 @@ export class WorkspaceController {
 
   _showNewMenu() {
     document.getElementById('ws-context-title').textContent = i18n.t('workspace.new');
+    // Stesso foglio del menu contestuale: la spiegazione dell'ultimo file
+    // aperto non deve restare sotto «Nuovo» (v. `showContextSheet`).
+    const descEl = document.getElementById('ws-context-desc');
+    if (descEl) descEl.textContent = '';
     this._apriFoglio(`
       <button class="oc-sheet-action" data-action="newFile">
         <i class="ti ti-file-plus"></i>${i18n.t('workspace.newFile')}

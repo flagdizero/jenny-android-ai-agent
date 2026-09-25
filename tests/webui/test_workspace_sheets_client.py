@@ -159,3 +159,15 @@ def test_cancel_closes_and_unhooks() -> None:
       assert.deepEqual(ws.picked, []);
       assert.equal((sheet.on.close || []).length, 0, 'lo sgancio è `once`');
     """)
+
+
+def test_the_new_menu_does_not_inherit_the_help_text_of_a_file() -> None:
+    """Il foglio è uno: aperto su un file «spiegato» e poi riaperto come
+    «Nuovo», mostrava ancora la spiegazione di quel file."""
+    _run_js("""
+      ws.showContextSheet({ name: 'SOUL.md', path: 'SOUL.md', kind: 'file' });
+      assert.equal(nodes['ws-context-desc'].textContent, 'aiuto:SOUL.md');
+      nodes['ws-context-cancel'].onclick();
+      ws._showNewMenu();
+      assert.equal(nodes['ws-context-desc'].textContent, '');
+    """)
