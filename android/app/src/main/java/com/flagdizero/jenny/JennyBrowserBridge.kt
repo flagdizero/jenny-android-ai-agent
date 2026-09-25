@@ -54,10 +54,16 @@ class JennyBrowserBridge(context: Context) {
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
 
-        /** Il cancello di [open]: chi fa partire la pagina e chi ci rinuncia. */
+        /**
+         * Il cancello di [open] e di [evaluate]: chi tocca la pagina (il main
+         * thread) e chi ci rinuncia (il chiamante, a tetto scaduto).
+         * [GATE_FAILED] e' solo di [open]: il main l'aveva preso, ma `loadUrl`
+         * ha sollevato e nessuna pagina e' partita.
+         */
         private const val GATE_OPEN = 0
         private const val GATE_LOADING = 1
         private const val GATE_ABANDONED = 2
+        private const val GATE_FAILED = 3
 
         /**
          * Le stesse reti di ``jenny/security/network.py::_BLOCKED_NETWORKS``.
@@ -422,16 +428,43 @@ class JennyBrowserBridge(context: Context) {
         return false
     }
 
+    /**
+     * Esegue [js] nella pagina e ne aspetta il valore.
+     *
+     * Lo stesso cancello di [open], per la stessa ragione: un tetto scaduto non
+     * toglie il blocco dalla coda del main, che gira dopo. Per uno snapshot
+     * sarebbe solo lavoro buttato; per un `act` sarebbe un **click tardivo**,
+     * eseguito dopo che il modello ha sentito «timeout» e magari mentre sta
+     * già facendo altro. Il main prende il cancello prima di toccare la
+     * pagina, questo thread lo chiude prima di rispondere «timeout»: uno dei
+     * due soltanto.
+     */
     private fun evaluate(js: String, timeoutSeconds: Long): String {
         val out = AtomicReference("")
         val done = CountDownLatch(1)
+        val gate = AtomicInteger(GATE_OPEN)
         handler.post {
-            val wv = webView
-            if (wv == null) { done.countDown(); return@post }
-            wv.evaluateJavascript(js) { v -> out.set(v ?: ""); done.countDown() }
+            try {
+                val wv = webView
+                if (wv == null || !gate.compareAndSet(GATE_OPEN, GATE_LOADING)) {
+                    done.countDown()
+                    return@post
+                }
+                wv.evaluateJavascript(js) { v -> out.set(v ?: ""); done.countDown() }
+            } catch (e: Exception) {
+                // Sul main thread un'eccezione senza `try` abbatte il processo.
+                Log.e(TAG, "evaluateJavascript failed on the main thread", e)
+                done.countDown()
+            }
         }
         if (!done.await(timeoutSeconds, TimeUnit.SECONDS)) {
-            return """{"error":"evaluateJavascript timeout dopo ${timeoutSeconds}s"}"""
+            if (gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
+                return """{"error":"evaluateJavascript timeout dopo ${timeoutSeconds}s: la pagina non e' stata toccata"}"""
+            }
+            // Il cancello l'ha gia' preso il main: lo script e' partito, e un
+            // `act` puo' aver cliccato. Dirlo, invece di un «timeout» che
+            // suona come «non e' successo niente».
+            return """{"error":"evaluateJavascript timeout dopo ${timeoutSeconds}s: lo script e' partito senza rispondere, la pagina puo' essere cambiata"}"""
         }
         return out.get()
     }
@@ -484,18 +517,33 @@ class JennyBrowserBridge(context: Context) {
             if (!gate.compareAndSet(GATE_OPEN, GATE_LOADING)) return@call false
             loading.set(true)
             lastError.set(null)
-            wv.loadUrl(url)
+            try {
+                wv.loadUrl(url)
+            } catch (e: Exception) {
+                // Il cancello e' preso ma nessuna pagina parte: lo si scrive
+                // nel cancello stesso, e si spegne `loading`, o l'attesa qui
+                // sotto durerebbe il tetto intero per un caricamento che non c'e'.
+                gate.set(GATE_FAILED)
+                loading.set(false)
+                throw e   // MainHop lo scrive nel log e vale `false`
+            }
             true
         }
         // Un "no" che non riesce a chiudere il cancello vuol dire che il blocco
-        // l'ha gia' passato (il tetto e' scaduto a meta' strada): la pagina sta
-        // partendo, e la si aspetta come le altre.
+        // l'ha gia' preso. O la pagina sta partendo (il tetto e' scaduto a
+        // meta' strada), e la si aspetta come le altre; o `loadUrl` ha sollevato
+        // (GATE_FAILED), e allora l'attesa torna subito perche' `loading` e'
+        // spento — il cancello si rilegge dopo, cosi' vale anche per un
+        // `loadUrl` che solleva quando questo thread sta gia' aspettando.
         if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
             openInFlight.set(false)
             return """{"error":"il browser non si e' aperto: la pagina non e' partita"}"""
         }
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
+        if (gate.get() == GATE_FAILED) {
+            return """{"error":"il browser non si e' aperto: la pagina non e' partita"}"""
+        }
         lastBlocked.getAndSet(null)?.let {
             return """{"error":${quote(describeBlock(it))}}"""
         }
