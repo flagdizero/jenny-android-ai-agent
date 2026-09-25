@@ -1068,10 +1068,7 @@ class CasaApp {
         return this.pagine.pienoZeppo ? 'piena' : 'libera';
       },
       appendi: async (kind, ref) => {
-        /* Uno strato per giro, e con un tetto: `_closeOverlays` torna vero
-           anche quando delega la chiusura (la lightbox), e un ciclo senza
-           fine qui sarebbe la casa bloccata su un tocco. */
-        for (let i = 0; i < 8 && this._closeOverlays(); i += 1) { /* avanti */ }
+        this._closeAllOverlays();
         return this.pagine.appendi(kind, ref);
       },
       stacca: (kind, ref) => this.pagine.stacca(kind, ref),
@@ -1114,7 +1111,7 @@ class CasaApp {
    *  della conversazione.
    */
   goHome() {
-    this._closeOverlays();
+    this._closeAllOverlays();
     this._setView('chat');
     this.switchConversation(null);
     /* Con la tastiera fisica non c'e' niente da chiudere, e a casa si torna
@@ -1205,6 +1202,24 @@ class CasaApp {
     return false;
   }
 
+  /** Chiude **tutto** quel che sta sopra le pagine, non uno strato.
+   *
+   *  Home e un avviso toccato sono un indirizzo, non un passo indietro — e lo
+   *  stesso vale per chi appende una pagina da una scheda aperta. Passare da
+   *  `_closeOverlays` una volta sola chiudeva uno strato con la logica di
+   *  Indietro: un'app con schermate interne (`depth > 1`) risponde tornando
+   *  indietro **dentro di se'**, e restava aperta sotto la chat — che intanto
+   *  `isChatOnScreen` dava per vista, cancellando avvisi mai letti.
+   *
+   *  L'app si chiude per prima e davvero (`closeApp`); poi gli altri strati,
+   *  uno per giro e con un tetto: `_closeOverlays` torna vero anche quando
+   *  delega la chiusura (la lightbox), e un ciclo senza fine qui sarebbe la
+   *  casa bloccata su un tocco. */
+  _closeAllOverlays() {
+    this._azioniApp?.closeApp();
+    for (let i = 0; i < 8 && this._closeOverlays(); i += 1) { /* avanti */ }
+  }
+
   /** Il tocco su un avviso proattivo: porta *in chat*.
    *
    *  **Nella conversazione personale**, e non in quella che stavi guardando:
@@ -1218,7 +1233,7 @@ class CasaApp {
    *  Indietro, e' un indirizzo.
    */
   openChat() {
-    this._closeOverlays();
+    this._closeAllOverlays();
     this._setView('chat');
     this.switchConversation(null);
     this.chat.scrollToBottom();
@@ -1239,7 +1254,10 @@ class CasaApp {
   isChatOnScreen() {
     return this.view === 'chat'
       && this._voce?.kind === 'chat'
-      && sessionManager.currentKey === sessionManager.personalKey;
+      && sessionManager.currentKey === sessionManager.personalKey
+      /* Un'app aperta, una scheda o la modalita' ordina la coprono: sotto
+         c'e', ma non la stai guardando. */
+      && !this.hasOverlayAbove();
   }
 
   /* Il secondo dei tre modi in cui la chat arriva a schermo (v.

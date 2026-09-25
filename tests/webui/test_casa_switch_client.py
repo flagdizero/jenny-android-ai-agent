@@ -277,6 +277,8 @@ class App {
   __APPLY_CONVERSATION__
   __RELEASE_TURN__
   __CLOSE_OVERLAYS__
+  __CLOSE_ALL_OVERLAYS__
+  __HAS_OVERLAY_ABOVE__
   __BACK__
   __GO_HOME__
   __OPEN_CHAT__
@@ -335,6 +337,8 @@ def _harness() -> str:
         .replace("__APPLY_CONVERSATION__", member(src, "_applyConversation"))
         .replace("__RELEASE_TURN__", member(src, "_releaseTurn"))
         .replace("__CLOSE_OVERLAYS__", member(src, "_closeOverlays"))
+        .replace("__CLOSE_ALL_OVERLAYS__", member(src, "_closeAllOverlays"))
+        .replace("__HAS_OVERLAY_ABOVE__", member(src, "hasOverlayAbove"))
         .replace("__BACK__", member(src, "handleHardwareBack"))
         .replace("__GO_HOME__", member(src, "goHome"))
         .replace("__OPEN_CHAT__", member(src, "openChat"))
@@ -984,6 +988,11 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
     `CasaPagine.apriConversazione`. Un guscio che cambiasse la chat per conto
     suo lascerebbe la personale dentro la pagina di «piante». E la personale si
     chiede con la sua chiave, non con `null`: le pagine confrontano chiavi.
+
+    Ognuna delle quattro strade si esercita per conto suo: fino al 25/09/2026
+    questo banco lo prometteva e chiamava solo `switchConversation`, quindi un
+    `goHome` che avesse chiamato `mostraConversazione` direttamente sarebbe
+    passato verde.
     """
     _run_js("""
       const app = casa();
@@ -995,6 +1004,87 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
       assert.equal(r, 'instradata', 'la promessa delle pagine non torna a chi chiama');
       await app.switchConversation(null);
       assert.equal(chiesti[1], sessionManager.personalKey);
+
+      /* Le pagine finte non cambiano conversazione: si resta in «piante», e
+         ognuna delle tre strade deve chiedere la personale alle pagine. */
+      sessionManager.currentKey = projectKey('piante');
+      for (const [strada, fai] of [
+        ['Home', () => app.goHome()],
+        ['un avviso', () => app.openChat()],
+        ['Indietro', () => app.handleHardwareBack()],
+      ]) {
+        chiesti.length = 0;
+        app.fatti.length = 0;
+        fai();
+        await new Promise((r) => setTimeout(r, 0));
+        assert.deepEqual(chiesti, [sessionManager.personalKey], strada + ': non ha chiesto alle pagine');
+        assert.ok(!app.fatti.some((f) => f.startsWith('riletto:')),
+                  strada + ': il guscio ha cambiato la chat per conto suo');
+      }
+    """)
+
+
+# Un'app aperta sopra tutto, con due schermate interne: Indietro torna
+# indietro *dentro* di lei, e solo `closeApp` la chiude davvero.
+_APP_PROFONDA = """
+      const app = casa();
+      await app.switchConversation(projectKey('piante'));
+      const mini = { aperta: true, depth: 2, indietro: 0 };
+      app._azioniApp = {
+        get _openApp() { return mini.aperta ? mini : null; },
+        isAppOpen() { return mini.aperta; },
+        handleBack() {
+          if (!mini.aperta) return false;
+          if (mini.depth > 1) { mini.depth -= 1; mini.indietro += 1; return true; }
+          mini.aperta = false;
+          return true;
+        },
+        closeApp() { mini.aperta = false; },
+      };
+      app.fatti.length = 0;
+"""
+
+
+def test_home_closes_an_app_with_inner_screens_for_good() -> None:
+    """Home e' un indirizzo, non Indietro: un'app con una schermata interna
+    aperta tornava indietro dentro di se' e restava sopra la chat."""
+    _run_js(_APP_PROFONDA + """
+      app.goHome();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(mini.aperta, false, 'l\\u2019app e\\u2019 rimasta aperta sotto la chat');
+      assert.equal(mini.indietro, 0, 'Home ha fatto Indietro dentro l\\u2019app');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+    """)
+
+
+def test_a_tapped_alert_closes_an_app_with_inner_screens_for_good() -> None:
+    _run_js(_APP_PROFONDA + """
+      app.openChat();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(mini.aperta, false, 'l\\u2019avviso ha lasciato l\\u2019app aperta sopra la chat');
+      assert.equal(mini.indietro, 0);
+    """)
+
+
+def test_back_still_steps_inside_the_app_first() -> None:
+    """Indietro resta un passo: una schermata interna dell'app, prima."""
+    _run_js(_APP_PROFONDA + """
+      app.handleHardwareBack();
+      assert.equal(mini.aperta, true);
+      assert.equal(mini.indietro, 1);
+      assert.equal(sessionManager.currentKey, 'project:piante');
+    """)
+
+
+def test_the_chat_under_an_open_app_is_not_on_screen() -> None:
+    """Gli avvisi si cancellano quando la chat si vede: con un'app aperta
+    sopra, la chat c'e' ma non la stai guardando."""
+    _run_js("""
+      const app = casa();
+      app.onPaginaCambiata(1, { id: 'chat', kind: 'chat', fissa: true });
+      assert.equal(app.isChatOnScreen(), true);
+      app._azioniApp = { _openApp: {}, isAppOpen: () => true };
+      assert.equal(app.isChatOnScreen(), false, 'un\\u2019app aperta sopra la chat non la copre');
     """)
 
 

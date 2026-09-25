@@ -26,7 +26,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
+from support.js_harness import member, requires_node, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
@@ -1366,13 +1366,17 @@ def test_pinning_from_a_sheet_closes_what_is_above_first() -> None:
     """Si appende dal cassetto o dalla tendina: atterrare sotto un cassetto
     aperto vorrebbe dire non vedere di aver fatto niente. E il giro che chiude
     gli strati ha un tetto, perche' `_closeOverlays` torna vero anche quando
-    delega la chiusura."""
+    delega la chiusura.
+
+    Il giro e' quello di Home (`_closeAllOverlays`, provato in
+    `test_casa_switch_client.py`): qui si controlla che l'appendere ci passi."""
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
     porta = app_js.split("portaPagine() {", 1)[1].split("\n  }\n", 1)[0]
     appendi = porta.split("appendi:", 1)[1].split("stacca:", 1)[0]
-    assert "this._closeOverlays()" in appendi
-    assert appendi.index("_closeOverlays") < appendi.index("this.pagine.appendi")
-    assert "i < 8" in appendi, "il giro che chiude gli strati non ha piu' un tetto"
+    assert "this._closeAllOverlays()" in appendi
+    assert appendi.index("_closeAllOverlays") < appendi.index("this.pagine.appendi")
+    tutti = member(app_js, "_closeAllOverlays")
+    assert "i < 8" in tutti, "il giro che chiude gli strati non ha piu' un tetto"
 
 
 # ── La pagina di una cosa che non c'e' piu' (23/09/2026) ────────────────────
