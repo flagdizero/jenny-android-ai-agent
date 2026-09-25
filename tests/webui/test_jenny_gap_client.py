@@ -20,6 +20,7 @@ nessuno — cioe' rifare, piu' piccolo, il difetto che si stava correggendo.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from support.js_harness import requires_node, run_js
@@ -144,8 +145,15 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
     """
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
     blocco = css.split(".casa-msg-jenny {")[1].split("}")[0]
-    assert "max-width" not in blocco, (
-        "il tetto e' tornato: il margine condizionale non serve piu' a niente"
+    # `max-width: 100%` e' la colonna, non un tetto: serve perche' un `<pre>`
+    # lungo non allarghi il messaggio oltre il filo (09f43fc). Un tetto e'
+    # qualunque valore piu' stretto della colonna.
+    tetti = [
+        v.strip() for v in re.findall(r"max-width\s*:\s*([^;]+);", blocco)
+        if v.strip() != "100%"
+    ]
+    assert not tetti, (
+        f"il tetto e' tornato ({tetti}): il margine condizionale non serve piu' a niente"
     )
     assert ".casa-msg-jenny.is-under-jenny" in css, "manca la regola del margine"
 
