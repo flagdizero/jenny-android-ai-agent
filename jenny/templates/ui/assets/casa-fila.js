@@ -173,7 +173,7 @@ export class CasaFila {
       }
     }
     this._bozza = null;
-    this._trascina = null;
+    this._fineTrascina();
     this.disegna();
     this._onCambia?.(false);
     return true;
@@ -273,6 +273,10 @@ export class CasaFila {
 
   _prendi(e, p, contenitore) {
     if (e.button !== undefined && e.button !== 0) return;
+    /* Un secondo dito mentre il primo trascina non ne comincia un altro: gli
+       ascoltatori del primo restavano attaccati al documento per sempre,
+       sovrascritti da quelli del secondo. */
+    if (this._trascina) return;
     const r = p.getBoundingClientRect();
     this._trascina = {
       id: p.dataset.id,
@@ -327,10 +331,25 @@ export class CasaFila {
   _lascia(e) {
     const t = this._trascina;
     if (!t || e.pointerId !== t.pointerId) return;
+    this._fineTrascina();
+  }
+
+  /* La fine di un trascinamento, da qualunque strada ci si arrivi — il dito
+     che si alza, o la modalita' ordina che si chiude col dito ancora giu'
+     (Indietro, «Fatto»): gli ascoltatori sul documento se ne vanno sempre.
+     Prima la chiusura azzerava solo `_trascina`, e li lasciava li'.
+     Idempotente: chiamarla senza un trascinamento in corso non fa niente. */
+  _fineTrascina() {
+    const t = this._trascina;
     this._trascina = null;
-    document.removeEventListener?.('pointermove', this._suMuovi);
-    document.removeEventListener?.('pointerup', this._suLascia);
-    document.removeEventListener?.('pointercancel', this._suLascia);
+    if (this._suMuovi) {
+      document.removeEventListener?.('pointermove', this._suMuovi);
+      document.removeEventListener?.('pointerup', this._suLascia);
+      document.removeEventListener?.('pointercancel', this._suLascia);
+    }
+    this._suMuovi = null;
+    this._suLascia = null;
+    if (!t) return;
     t.el.style.transform = '';
     t.el.classList.remove('is-sollevata');
   }

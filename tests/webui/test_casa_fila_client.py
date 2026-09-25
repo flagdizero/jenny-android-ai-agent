@@ -414,3 +414,34 @@ def test_the_lifted_page_sits_under_the_finger() -> None:
 def test_the_row_is_shipped() -> None:
     manifest = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
     assert '"assets/casa-fila.js"' in manifest
+
+
+def test_closing_the_moving_mode_mid_drag_lets_go_of_the_document() -> None:
+    """Indietro col dito ancora sulla pastiglia: la chiusura azzerava il
+    trascinamento ma lasciava i suoi ascoltatori sul documento, per sempre."""
+    _run("""
+      fila.apriOrdina();
+      const app = pastiglie()[0];
+      lancia(app, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
+      assert.equal(docAscolto.pointermove.length, 1);
+      await fila.chiudiOrdina();
+      for (const tipo of ['pointermove', 'pointerup', 'pointercancel']) {
+        assert.equal((docAscolto[tipo] || []).length, 0, tipo + ' ancora ascoltato dopo la chiusura');
+      }
+    """)
+
+
+def test_a_second_finger_does_not_start_a_second_drag() -> None:
+    """Il secondo `pointerdown` sovrascriveva gli ascoltatori del primo, che
+    nessuno poteva piu' togliere."""
+    _run("""
+      fila.apriOrdina();
+      const [a, b] = pastiglie();
+      lancia(a, 'pointerdown', { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
+      lancia(b, 'pointerdown', { button: 0, pointerId: 2, clientX: 80, clientY: 20 });
+      assert.equal(docAscolto.pointermove.length, 1, 'due trascinamenti insieme');
+      assert.ok(!b.classList.contains('is-sollevata'));
+      sulDocumento('pointerup', { pointerId: 1 });
+      assert.equal((docAscolto.pointermove || []).length, 0, 'il documento ascolta ancora un dito');
+      assert.ok(!a.classList.contains('is-sollevata'));
+    """)
