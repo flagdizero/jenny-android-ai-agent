@@ -33,7 +33,6 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 WHO_JS = ASSETS / "casa-who.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node

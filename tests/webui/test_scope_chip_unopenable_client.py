@@ -43,7 +43,6 @@ CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 CSS = ASSETS / "mobile-style.css"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node

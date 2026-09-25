@@ -29,7 +29,6 @@ from jenny.command.specs import BUILTIN_COMMAND_SPECS
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "commands-chip.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node

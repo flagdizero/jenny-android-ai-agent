@@ -27,7 +27,6 @@ ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "a
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 CSS = ASSETS / "mobile-style.css"
 
 
