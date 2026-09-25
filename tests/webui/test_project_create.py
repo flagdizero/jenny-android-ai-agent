@@ -696,9 +696,9 @@ class TestTheLogDoesNotStealAnyonesStdout:
             "import threading\n"
             "\n"
             "def regenerate_index(wikis_dir):\n"
-            "    def un_altro_turno():\n"
+            "    def another_turn():\n"
             "        print('OUTPUT-DI-UN-ALTRO-THREAD')\n"
-            "    t = threading.Thread(target=un_altro_turno)\n"
+            "    t = threading.Thread(target=another_turn)\n"
             "    t.start()\n"
             "    t.join()\n"
             "    return wikis_dir / '_index.md'\n",

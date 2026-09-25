@@ -40,23 +40,23 @@ NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 # il caricatore stesso — cioe' il banco si autoconferma.
 LIBRARIES = {
     "katex": {
-        "segni": (r"\brenderMathInElement\s*\(", r"\bkatex\.render\w*\s*\("),
+        "marks": (r"\brenderMathInElement\s*\(", r"\bkatex\.render\w*\s*\("),
         "spedito": "assets/vendor/katex@0.16.10/dist/katex.min.js",
     },
     "mermaid": {
-        "segni": (r"\bmermaid\.render\s*\(", r"\bmermaid\.initialize\s*\("),
+        "marks": (r"\bmermaid\.render\s*\(", r"\bmermaid\.initialize\s*\("),
         "spedito": "assets/vendor/mermaid@10/dist/mermaid.min.js",
     },
     "d3": {
-        "segni": (r"\bd3\.\w+\s*\(",),
+        "marks": (r"\bd3\.\w+\s*\(",),
         "spedito": "assets/vendor/d3@7/d3.min.js",
     },
     "marked": {
-        "segni": (r"\bmarked\.parse\s*\(", r"\bmarked\.setOptions\s*\("),
+        "marks": (r"\bmarked\.parse\s*\(", r"\bmarked\.setOptions\s*\("),
         "spedito": "assets/vendor/marked@15.0.7/marked.min.js",
     },
     "dompurify": {
-        "segni": (r"\bDOMPurify\.sanitize\s*\(",),
+        "marks": (r"\bDOMPurify\.sanitize\s*\(",),
         "spedito": "assets/vendor/dompurify@3/purify.min.js",
     },
 }
@@ -73,13 +73,13 @@ def _sources() -> dict[str, str]:
     }
 
 
-def _callers(segni: tuple[str, ...]) -> list[str]:
+def _callers(marks: tuple[str, ...]) -> list[str]:
     return sorted(
         name
         for name, src in _sources().items()
         # I commenti raccontano il prima: qui contano solo le chiamate vere.
         if any(re.search(s, re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S)))
-               for s in segni)
+               for s in marks)
     )
 
 
@@ -93,7 +93,7 @@ def test_a_library_with_callers_is_actually_shipped() -> None:
     from jenny.utils.android_assets import _UI_MANIFEST
 
     for name, data in LIBRARIES.items():
-        callers = _callers(data["segni"])
+        callers = _callers(data["marks"])
         if not callers:
             continue
         path = data["spedito"]
@@ -118,7 +118,7 @@ def test_a_shipped_library_has_someone_who_calls_it() -> None:
     for name, data in LIBRARIES.items():
         if not (ASSETS.parent / data["spedito"]).exists():
             continue
-        assert _callers(data["segni"]), (
+        assert _callers(data["marks"]), (
             f"{name} e' nel pacchetto e non lo chiama nessuno: e' peso morto"
         )
 

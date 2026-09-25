@@ -69,7 +69,7 @@ def _run_map(script: str) -> None:
     src = APP_JS.read_text(encoding="utf-8")
     method = member(src, "_drawMap", prefixes=("async ",))
     assert "import('./home-map.js')" in method
-    method = method.replace("import('./home-map.js')", "caricaMappa()")
+    method = method.replace("import('./home-map.js')", "loadMap()")
     harness = (
         "import assert from 'node:assert/strict';\n"
         "let nate = 0, draws = 0, release = null, broken = false;\n"
@@ -77,7 +77,7 @@ def _run_map(script: str) -> None:
         "  constructor() { nate += 1; }\n"
         "  async draw() { draws += 1; }\n"
         "}\n"
-        "function caricaMappa() {\n"
+        "function loadMap() {\n"
         "  return new Promise((r, no) => { release = () => (broken ? no(new Error('rete')) : r({ HomeMap })); });\n"
         "}\n"
         "class App {\n  constructor() { this.map = null; }\n  openPage() {}\n  "
@@ -124,10 +124,10 @@ def test_the_open_app_question_has_a_public_answer() -> None:
     src = (APP_JS.parent / "shared" / "apps-actions.js").read_text(encoding="utf-8")
     run_js(
         "import assert from 'node:assert/strict';\n"
-        "class Azioni {\n  constructor() { this._openApp = null; }\n  "
+        "class FakeActions {\n  constructor() { this._openApp = null; }\n  "
         + member(src, "isAppOpen", prefixes=())
         + "\n}\n"
-        "const a = new Azioni();\n"
+        "const a = new FakeActions();\n"
         "assert.equal(a.isAppOpen(), false);\n"
         "a._openApp = { slug: 'orto' };\n"
         "assert.equal(a.isAppOpen(), true);\n"

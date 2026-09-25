@@ -233,7 +233,7 @@ def _script(body: str, pages: list[dict], view: str = "chat") -> str:
     """Un modulo che monta il DOM finto, poi importa i file veri."""
     return (
         _FAKE_DOM
-        + f"\nconst SCHERMATE = {json.dumps(pages)};\n"
+        + f"\nconst PAGES = {json.dumps(pages)};\n"
         + f"const VIEW = {json.dumps(view)};\n"
         + textwrap.dedent(
             """
@@ -476,7 +476,7 @@ def test_the_fixed_panels_are_moved_never_redrawn() -> None:
     """
     _run(
         "const fissi = [appPanel, chatPanel, notebooksPanel, settingsPanel];\n"
-        "await homePages.save(SCHERMATE.concat([{id:'p3',kind:'app',ref:'x'}]),\n"
+        "await homePages.save(PAGES.concat([{id:'p3',kind:'app',ref:'x'}]),\n"
         "  ['p3', 'settings', 'app', 'chat', 'p1', 'p2', 'notebooks']);\n"
         "for (const f of fissi) assert.ok(track.children.includes(f), 'un pannello fisso e stato buttato');\n"
         "assert.equal(track.children.length, 7);\n"
@@ -579,10 +579,10 @@ def test_while_the_pages_are_being_moved_the_finger_is_theirs() -> None:
 def test_saving_sends_the_whole_list(tmp_path: Path) -> None:
     """Aggiungere, togliere e spostare sono la stessa scrittura."""
     _run(
-        "await homePages.save([SCHERMATE[1]], ['p2', 'app', 'chat', 'notebooks', 'settings']);\n"
+        "await homePages.save([PAGES[1]], ['p2', 'app', 'chat', 'notebooks', 'settings']);\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
         "assert.equal(api.writes.length, 1);\n"
-        "assert.deepEqual(api.writes[0], [SCHERMATE[1]]);\n"
+        "assert.deepEqual(api.writes[0], [PAGES[1]]);\n"
         "assert.deepEqual(api.ordini[0], ['p2', 'app', 'chat', 'notebooks', 'settings']);\n"
         "assert.deepEqual(homePages.order, api.ordini[0]);\n"
         "assert.equal(homePages.howMany, 5);",
@@ -607,7 +607,7 @@ def test_removing_the_page_you_are_on_takes_you_to_the_chat() -> None:
     _run(
         "scroll(LEFT); scroll(LEFT);\n"
         "assert.equal(homePages.index, I('p2'));\n"
-        "await homePages.save([SCHERMATE[0]], homePages.order.filter((x) => x !== 'p2'));\n"
+        "await homePages.save([PAGES[0]], homePages.order.filter((x) => x !== 'p2'));\n"
         "assert.equal(homePages.howMany, 5);\n"
         "assert.equal(homePages.index, CHAT());",
         pages=DUE,
@@ -831,7 +831,7 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     run_js(
         "import assert from 'node:assert/strict';\n"
-        "class Guscio {\n"
+        "class FakeShell {\n"
         "  constructor() {\n"
         "    this.shell = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };\n"
         "  }\n"
@@ -841,7 +841,7 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
         "  _reportChatOnScreen() {}\n  "
         + member(app_js, "onPageChanged")
         + "\n}\n"
-        "const g = new Guscio();\n"
+        "const g = new FakeShell();\n"
         "g.onPageChanged(2, { id: 'notebooks', kind: 'notebooks', fixed: true });\n"
         "assert.equal(g.shell.attrs['data-page'], 'notebooks');\n"
         "g.onPageChanged(4, { id: 'p1', kind: 'app', ref: 'orto', fixed: false });\n"
@@ -1201,7 +1201,7 @@ def test_redrawing_the_pages_takes_the_chat_back_before_throwing_a_panel() -> No
     """
     _run(
         "moves.length = 0;\n"
-        "await homePages.save(SCHERMATE);\n"
+        "await homePages.save(PAGES);\n"
         "const c = moves.filter((x) => x.fa === 'home');\n"
         "assert.equal(c.length, 3, 'non ha chiesto per ogni pannello');\n"
         "assert.ok(c.every((x) => x.attached), 'ha chiesto dopo aver buttato il pannello');\n"
@@ -1213,7 +1213,7 @@ def test_redrawing_the_pages_takes_the_chat_back_before_throwing_a_panel() -> No
 def test_a_notebook_page_is_named_after_its_notebook() -> None:
     """Il nome, non la chiave: `project:piante` in testa sarebbe gergo."""
     _run(
-        "assert.equal(homePages.nameOf(SCHERMATE[1]), 'piante');\n",
+        "assert.equal(homePages.nameOf(PAGES[1]), 'piante');\n",
         MIXED,
     )
 
@@ -1436,7 +1436,7 @@ def test_rereading_keeps_you_on_your_page_when_it_is_still_there() -> None:
     _run(
         "homePages.goToId('p2');\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
-        "api._list = [SCHERMATE[1]];\n"
+        "api._list = [PAGES[1]];\n"
         "await homePages.reload();\n"
         "assert.equal(homePages.howMany, 5);\n"
         "assert.equal(homePages.index, I('p2'), 'non e rimasta sulla sua pagina');\n"
@@ -1449,7 +1449,7 @@ def test_rereading_when_your_page_is_gone_takes_you_to_the_chat() -> None:
     _run(
         "homePages.goToId('p2');\n"
         "const api = (await import('./shared/api-client.js')).api;\n"
-        "api._list = [SCHERMATE[0]];\n"
+        "api._list = [PAGES[0]];\n"
         "await homePages.reload();\n"
         "assert.equal(homePages.howMany, 5);\n"
         "assert.equal(homePages.index, CHAT());\n",
