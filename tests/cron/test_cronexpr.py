@@ -18,9 +18,10 @@ calcolato minuto per minuto (13.552 partenze in quattro fusi, nessuna
 differenza); qui ne restano i casi che le raccontano.
 
 Le tre differenze volute:
-1. ai cambi d'ora un orario che non esiste parte una volta, appena finito il
-   salto, e uno che capita due volte parte una volta, la prima (croniter era
-   incoerente: vedi il cappello di ``cronexpr``);
+1. ai cambi d'ora la regola del cron di Vixie (croniter era incoerente: vedi
+   il cappello di ``cronexpr``): un lavoro a orario fisso parte una volta, appena
+   finito il salto se il suo orario non esiste, la prima volta se capita due;
+   uno a ripetizione segue il tempo vero, e salta o ripete con l'orologio;
 2. dove croniter si arrendeva con un errore perché uno dei due rami
    dell'"oppure" fra giorno del mese e giorno della settimana non trovava mai
    niente (``16 * fri#2``, ``15W * 0``), qui vale l'altro ramo;
@@ -136,18 +137,10 @@ def test_the_result_is_always_after_the_base_and_in_its_timezone() -> None:
 
 
 def test_a_time_that_does_not_exist_runs_once_when_the_jump_ends() -> None:
-    """Roma, 29/03/2026: alle 02:00 si va alle 03:00. croniter faceva partire
-    il giornaliero delle 02:30 alle 03:00 ma saltava l'orario ``30 *``."""
+    """Roma, 29/03/2026: alle 02:00 si va alle 03:00. Un lavoro a orario fisso
+    segue il calendario: il giornaliero delle 02:30 parte alle 03:00, una volta."""
     day_before = _rome(2026, 3, 28, 23, 0)
     assert _chain("30 2 * * *", day_before, 2) == [_rome(2026, 3, 29, 3, 0), _rome(2026, 3, 30, 2, 30)]
-    assert _chain("30 * * * *", _rome(2026, 3, 29, 1, 50), 3) == [
-        _rome(2026, 3, 29, 3, 0), _rome(2026, 3, 29, 3, 30), _rome(2026, 3, 29, 4, 30),
-    ]
-    # Quattro orari nel salto: una partenza sola, alle 03:00, e non doppia con
-    # quella vera delle 03:00.
-    assert _chain("*/15 * * * *", _rome(2026, 3, 29, 1, 50), 3) == [
-        _rome(2026, 3, 29, 3, 0), _rome(2026, 3, 29, 3, 15), _rome(2026, 3, 29, 3, 30),
-    ]
 
 
 def test_a_time_that_happens_twice_runs_once_the_first_time() -> None:
@@ -162,9 +155,55 @@ def test_a_base_inside_the_repeated_hour_does_not_go_back_in_time() -> None:
     sono già trascorse: fra due datetime con lo stesso fuso Python confronta
     l'orario da parete, e un confronto ingenuo le darebbe ancora da venire."""
     second_pass = datetime(2026, 10, 25, 2, 30, 28, tzinfo=ROME, fold=1)
-    got = next_after("* 2,9 * * *", second_pass)
-    assert got.isoformat() == "2026-10-25T09:00:00+01:00"
+    got = next_after("31 2,9 * * *", second_pass)
+    assert got.isoformat() == "2026-10-25T09:31:00+01:00"
     assert got.timestamp() > second_pass.timestamp()
+
+
+# Un lavoro a ripetizione (il minuto o l'ora cominciano con ``*``) segue il tempo
+# che passa davvero, come nel cron di Vixie: ai cambi d'ora il ritmo resta quello.
+
+
+def _gaps_in_minutes(runs: list[datetime]) -> list[float]:
+    return [(b.timestamp() - a.timestamp()) / 60 for a, b in zip(runs, runs[1:])]
+
+
+def test_a_repeating_job_keeps_its_rhythm_through_the_repeated_hour() -> None:
+    """Il difetto: ``*/15`` partito alle 02:50 della prima passata tornava alle
+    03:00, un'ora e dieci dopo — un controllo ogni quindici minuti zitto per
+    tutta la seconda passata."""
+    first_pass = _rome(2026, 10, 25, 2, 50)
+    runs = [first_pass, *_chain("*/15 * * * *", first_pass, 6)]
+    assert _gaps_in_minutes(runs) == [10, 15, 15, 15, 15, 15]
+    assert [r.isoformat() for r in runs[1:3]] == [
+        "2026-10-25T02:00:00+01:00", "2026-10-25T02:15:00+01:00",
+    ]
+
+
+def test_an_hourly_job_runs_in_both_passes_of_the_repeated_hour() -> None:
+    got = _chain("30 * * * *", _rome(2026, 10, 25, 1, 45), 3)
+    assert [d.isoformat() for d in got] == [
+        "2026-10-25T02:30:00+02:00", "2026-10-25T02:30:00+01:00", "2026-10-25T03:30:00+01:00",
+    ]
+
+
+def test_a_repeating_job_skips_the_times_that_do_not_exist() -> None:
+    """Da 01:30 alle 03:30 del salto passa un'ora: l'orario ``30 *`` non ha niente
+    da recuperare. (Com'era in croniter.) E ``*/15`` riprende alle 03:00."""
+    assert _chain("30 * * * *", _rome(2026, 3, 29, 1, 50), 2) == [
+        _rome(2026, 3, 29, 3, 30), _rome(2026, 3, 29, 4, 30),
+    ]
+    runs = [_rome(2026, 3, 29, 1, 45), *_chain("*/15 * * * *", _rome(2026, 3, 29, 1, 45), 3)]
+    assert _gaps_in_minutes(runs) == [15, 15, 15]
+    assert runs[1] == _rome(2026, 3, 29, 3, 0)
+
+
+def test_a_half_hour_shift_keeps_the_rhythm_too() -> None:
+    """Lord Howe torna indietro di mezz'ora (alle 02:00 si torna alle 01:30)."""
+    lord_howe = ZoneInfo("Australia/Lord_Howe")
+    base = datetime(2026, 4, 5, 1, 20, tzinfo=lord_howe)
+    runs = [base, *_chain("*/10 * * * *", base, 8)]
+    assert set(_gaps_in_minutes(runs)) == {10}
 
 
 @pytest.mark.parametrize(

@@ -36,9 +36,19 @@ casuali (``tests/cron/test_cronexpr.py`` ne tiene i risultati come campioni):
 **L'unica differenza, voluta, è ai cambi d'ora**, dove croniter era incoerente:
 un lavoro giornaliero alle 02:30 partiva alle 03:00 nella notte in cui si salta
 un'ora mentre uno orario la saltava, e nella notte in cui l'ora si ripete
-partiva due volte. Qui la regola è quella del cron classico: un orario che quel
-giorno non esiste parte una volta sola, appena finito il salto; uno che capita
-due volte parte una volta sola, la prima.
+partiva due volte. Qui la regola è quella del cron classico (Vixie), che
+distingue due specie di lavori:
+
+- **a orario fisso** (né il minuto né l'ora cominciano con ``*``: ``30 2 * * *``)
+  seguono il calendario, una volta al giorno: un orario che quel giorno non
+  esiste parte una volta sola, appena finito il salto; uno che capita due volte
+  parte una volta sola, la prima;
+- **a ripetizione** (``*/15 * * * *``, ``30 * * * *``, ``@hourly``) seguono il
+  tempo che passa davvero: un orario che non esiste si salta, uno che capita due
+  volte parte due volte. Da 01:30 alle 03:30 del salto di primavera passa
+  un'ora, come fra 02:30 e 02:30 della notte d'autunno: il ritmo resta quello.
+  Farli partire una volta sola, la prima, lasciava un lavoro ogni cinque minuti
+  zitto per un'ora e dieci.
 """
 
 from __future__ import annotations
@@ -101,6 +111,9 @@ class CronExpr:
     # {giorno: {n o "l"}}.
     dow: frozenset[int] | None
     dow_nth: tuple[tuple[int, frozenset[int | str]], ...]
+    # Il minuto o l'ora cominciano con ``*``: ai cambi d'ora segue il tempo vero
+    # e non il calendario (v. il cappello del modulo).
+    repeating: bool = False
 
     def matches_day(self, day: date) -> bool:
         if self.months is not None and day.month not in self.months:
@@ -330,6 +343,7 @@ def parse(expr: str) -> CronExpr:
         dom_weekday=frozenset(fields[_DOM][2]),
         dow=_ints(dow_expanded),
         dow_nth=tuple(sorted((day, frozenset(n)) for day, n in nth.items())),
+        repeating=parts[_MINUTE].startswith("*") or parts[_HOUR].startswith("*"),
     )
 
 
@@ -352,6 +366,63 @@ def _resolve(wall: datetime, tz) -> datetime:
     raise ValueError(f"no valid local time after {wall} in {tz}")  # pragma: no cover
 
 
+def _instants(wall: datetime, tz) -> list[datetime]:
+    """Gli istanti in cui un orario da parete capita davvero nel fuso *tz*.
+
+    Uno di solito; nessuno se cade nell'ora saltata; due, in ordine, se cade
+    nell'ora che si ripete.
+    """
+    out: list[datetime] = []
+    for fold in (0, 1):
+        candidate = wall.replace(tzinfo=tz, fold=fold)
+        back = candidate.astimezone(timezone.utc)
+        if back.astimezone(tz).replace(tzinfo=None) != wall:
+            continue
+        if not any(o.astimezone(timezone.utc) == back for o in out):
+            out.append(candidate)
+    return out
+
+
+def _changes_offset(day: date, tz) -> bool:
+    """Il giorno *day* contiene un cambio d'ora nel fuso *tz*?"""
+    start = datetime(day.year, day.month, day.day, tzinfo=tz)
+    end = start + timedelta(days=1)
+    return start.utcoffset() != end.utcoffset()
+
+
+# Oltre questa distanza sul quadrante due orari sono in ordine anche in UTC: il
+# cambio d'ora sposta al massimo di un'ora (mezz'ora a Lord Howe), e due ore
+# tengono il margine.
+_SHIFT_MARGIN = timedelta(hours=2)
+
+
+def _next_on_changing_day(
+    spec: CronExpr, day: date, tz, start: datetime, base_utc: datetime
+) -> datetime | None:
+    """Il primo istante vero dopo *base_utc* per un lavoro a ripetizione, in un
+    giorno con un cambio d'ora.
+
+    Qui l'ordine sul quadrante non è quello del tempo: le 02:10 della seconda
+    passata vengono dopo le 02:50 della prima. Si guardano quindi anche gli
+    orari poco prima di *start*, e si tiene il più piccolo in UTC.
+    """
+    best: datetime | None = None
+    best_wall: datetime | None = None
+    for hour in spec.hours:
+        for minute in spec.minutes:
+            for second in spec.seconds:
+                wall = datetime(day.year, day.month, day.day, hour, minute, second)
+                if wall < start - _SHIFT_MARGIN:
+                    continue
+                if best_wall is not None and wall > best_wall + _SHIFT_MARGIN:
+                    return best
+                for instant in _instants(wall, tz):
+                    at = instant.astimezone(timezone.utc)
+                    if at > base_utc and (best is None or at < best.astimezone(timezone.utc)):
+                        best, best_wall = instant, wall
+    return best
+
+
 def next_after(expr: str | CronExpr, base: datetime) -> datetime:
     """La prima esecuzione **dopo** *base* (che deve avere un fuso).
 
@@ -369,6 +440,12 @@ def next_after(expr: str | CronExpr, base: datetime) -> datetime:
     limit = date(start.year + _SEARCH_YEARS, 12, 31)
     while day <= limit:
         if spec.matches_day(day):
+            if spec.repeating and _changes_offset(day, tz):
+                found = _next_on_changing_day(spec, day, tz, start, base_utc)
+                if found is not None:
+                    return found
+                day += timedelta(days=1)
+                continue
             for hour in spec.hours:
                 for minute in spec.minutes:
                     for second in spec.seconds:
