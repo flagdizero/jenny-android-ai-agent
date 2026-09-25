@@ -37,6 +37,14 @@ from jenny.session.keys import is_internal_session_key
 TURN_VISIBILITY_META = "_turn_visibility"
 
 
+async def silent_progress(*_args: Any, **_kwargs: Any) -> None:
+    """``on_progress`` muto: un run interno non ha nessuno a cui riferire.
+
+    L'unica copia: Dream, il suo review pass, il giardiniere e i job di sistema
+    del cron ne avevano ognuno una propria.
+    """
+
+
 class TurnVisibility(str, Enum):
     """Se un turno puo' raggiungere l'utente da se'."""
 

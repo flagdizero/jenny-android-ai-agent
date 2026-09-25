@@ -71,6 +71,7 @@ from jenny.agent.internal_run import (
 # ``jenny/agent/wiki_provenance.py``.
 from jenny.agent.wiki_provenance import _provenance_guard
 from jenny.session.keys import GARDENER_SESSION_PREFIX
+from jenny.session.turn_visibility import silent_progress
 from jenny.utils.helpers import safe_zoneinfo
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
@@ -985,10 +986,6 @@ class GardenerStore:
             logger.warning("gardener: log not written to {}: {}", page, exc)
 
 
-async def _silent(*_args: Any, **_kwargs: Any) -> None:
-    pass
-
-
 def _lines_backwards(path: Path, *, chunk: int = 64 * 1024) -> Iterator[str]:
     """Le righe di *path* dalla fine verso l'inizio, un blocco alla volta.
 
@@ -1502,7 +1499,7 @@ async def _run_pass(
                 session_key=session_key,
                 ephemeral=True,
                 tools=tools,
-                on_progress=_silent,
+                on_progress=silent_progress,
             )
         except Exception as exc:  # noqa: BLE001 — l'esito viaggia nell'outcome
             logger.exception("gardener: pass over {} failed", store.name)

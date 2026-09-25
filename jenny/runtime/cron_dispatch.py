@@ -51,7 +51,7 @@ from jenny.cron.types import CronMonitorCouldNotCheckError
 from jenny.runtime.power import keep_awake
 from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
 from jenny.session.manager import last_user_message_ms
-from jenny.session.turn_visibility import TurnVisibility
+from jenny.session.turn_visibility import TurnVisibility, silent_progress
 from jenny.utils import clock
 
 if TYPE_CHECKING:
@@ -202,10 +202,6 @@ _UPDATE_PREAMBLE = (
     "internal file, and do not start the download or the installation: the "
     "user answers in chat, and that answer is where the decision happens.]\n\n"
 )
-
-
-async def _silent(*_args: Any, **_kwargs: Any) -> None:
-    pass
 
 
 def _alert_gardener_stuck(name: str, failures: int, status: str) -> None:
@@ -817,7 +813,7 @@ class CronDispatcher:
             session_key=UPDATE_SESSION_KEY,
             channel="websocket",
             chat_id="default",
-            on_progress=_silent,
+            on_progress=silent_progress,
             visibility=TurnVisibility.SILENT,
             metadata=source_metadata,
         )
@@ -993,7 +989,7 @@ class CronDispatcher:
             session_key=HEARTBEAT_SESSION_KEY,
             channel=channel,
             chat_id=chat_id,
-            on_progress=_silent,
+            on_progress=silent_progress,
             # Il contratto dell'heartbeat, dichiarato una volta e fatto valere
             # dal turno: niente consegna implicita. Prima si diceva al modello di
             # produrre un riempitivo ("All clear.") e poi si pagava una seconda

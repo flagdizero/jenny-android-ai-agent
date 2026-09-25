@@ -46,6 +46,7 @@ from loguru import logger
 from jenny.agent.memory import MemoryStore
 from jenny.agent.memory_archive import archived_ids, summarize_archived
 from jenny.agent.memory_budget import count_chars, render_gauge
+from jenny.session.turn_visibility import silent_progress
 from jenny.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
@@ -133,10 +134,6 @@ def review_session_key() -> str:
     secondo pruner che nessuno si ricorderebbe di scrivere.
     """
     return f"dream:review-{datetime.now():%Y%m%d-%H%M%S}"
-
-
-async def _silent(*_args: Any, **_kwargs: Any) -> None:
-    """``on_progress`` no-op: un run interno non ha nessuno a cui riferire."""
 
 
 def _measure(report: Sequence[FileBudget]) -> dict[str, int]:
@@ -230,7 +227,7 @@ async def run_dream_review(
             session_key=review_session_key(),
             ephemeral=True,
             tools=tools,
-            on_progress=_silent,
+            on_progress=silent_progress,
         )
     except Exception:  # noqa: BLE001 — l'esito viaggia nell'outcome, non in un raise
         # Un review pass è un lavoro di manutenzione: farlo esplodere in faccia

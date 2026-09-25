@@ -43,6 +43,7 @@ from loguru import logger
 
 from jenny.agent import dream_review
 from jenny.agent.memory_budget import budget_report, count_chars, make_write_size_guard
+from jenny.session.turn_visibility import silent_progress
 
 if TYPE_CHECKING:
     from jenny.agent.memory import MemoryStore
@@ -665,21 +666,26 @@ class DreamOutcome(Enum):
 class DreamTurnResult:
     """L'esito del turno, per chi lo chiude e per chi lo racconta.
 
-    ``advanced`` è il valore per :func:`finish_dream_cycle`: ``None`` se non
-    c'era niente da consolidare. ``refused`` sono i rifiuti di budget rimasti
-    aperti, cioè la **causa** che decide quale dei due contatori del livelock
-    sale. ``last_cursor`` è quello del batch, anche quando non si è avanzati.
+    ``refused`` sono i rifiuti di budget rimasti aperti, cioè la **causa** che
+    decide quale dei due contatori del livelock sale. ``last_cursor`` è quello
+    del batch, anche quando non si è avanzati.
     """
 
     outcome: DreamOutcome
-    advanced: bool | None
     refused: int
-    resp: Any = None
     last_cursor: int | None = None
 
+    @property
+    def advanced(self) -> bool | None:
+        """Il valore per :func:`finish_dream_cycle`, dedotto dall'esito.
 
-async def _silent(*_args: Any, **_kwargs: Any) -> None:
-    """``on_progress`` muto: un run interno non ha nessuno a cui riferire."""
+        ``None`` se non c'era niente da consolidare, ``True`` se il batch è
+        atterrato, ``False`` altrimenti. Era un secondo campo da tenere allineato
+        a ``outcome`` a mano, in ogni ``return``.
+        """
+        if self.outcome is DreamOutcome.NO_INPUT:
+            return None
+        return self.outcome is DreamOutcome.ADVANCED
 
 
 def _int_or_zero(value: object) -> int:
@@ -707,7 +713,7 @@ async def run_dream_turn(
 
     result = store.build_dream_prompt(gauge=render_gauge(prologue.report))
     if result is None:
-        return DreamTurnResult(DreamOutcome.NO_INPUT, advanced=None, refused=0)
+        return DreamTurnResult(DreamOutcome.NO_INPUT, refused=0)
     prompt, last_cursor = result[0], result[1]
     # ``getattr`` con un default: ``build_dream_prompt`` è sostituito nei test da
     # doppi che ritornano una coppia nuda, e un batch che non dichiara il proprio
@@ -729,7 +735,7 @@ async def run_dream_turn(
         session_key=MemoryStore.dream_session_key(),
         ephemeral=True,
         tools=dream_tools,
-        on_progress=_silent,
+        on_progress=silent_progress,
     )
     advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
     # Il run ha scritto, ma il batch è atterrato? Sono due domande diverse e fino
@@ -755,23 +761,15 @@ async def run_dream_turn(
         # stesura lo teneva a parte e uscivano due diagnosi, la seconda "attempts
         # blocked/refused" su un run senza né blocchi né rifiuti (logcat,
         # 2026-08-18 14:02:35). Un run, un esito.
-        return DreamTurnResult(
-            DreamOutcome.HELD_BATCH, advanced=False, refused=refused,
-            resp=resp, last_cursor=last_cursor,
-        )
+        return DreamTurnResult(DreamOutcome.HELD_BATCH, refused=refused, last_cursor=last_cursor)
     if advanced:
         store.set_last_dream_cursor(last_cursor)
-        return DreamTurnResult(
-            DreamOutcome.ADVANCED, advanced=True, refused=refused,
-            resp=resp, last_cursor=last_cursor,
-        )
+        return DreamTurnResult(DreamOutcome.ADVANCED, refused=refused, last_cursor=last_cursor)
     outcome = (
         DreamOutcome.BLOCKED if MemoryStore.dream_run_completed(resp)
         else DreamOutcome.INCOMPLETE
     )
-    return DreamTurnResult(
-        outcome, advanced=False, refused=refused, resp=resp, last_cursor=last_cursor,
-    )
+    return DreamTurnResult(outcome, refused=refused, last_cursor=last_cursor)
 
 
 def finish_dream_cycle(
