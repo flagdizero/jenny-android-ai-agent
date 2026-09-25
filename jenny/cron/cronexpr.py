@@ -370,6 +370,26 @@ def _covers_the_cycle(values: tuple[int, ...], lo: int, hi: int) -> bool:
     return values == tuple(range(lo, hi + 1, step))
 
 
+def _walls(spec: CronExpr, day: date):
+    """Gli orari da parete di *day* che *spec* elenca, in ordine sul quadrante."""
+    for hour in spec.hours:
+        for minute in spec.minutes:
+            for second in spec.seconds:
+                yield datetime(day.year, day.month, day.day, hour, minute, second)
+
+
+def _existing(wall: datetime, tz, fold: int) -> datetime | None:
+    """*wall* nel fuso *tz* con *fold*, se quell'orario esiste davvero; se no ``None``.
+
+    Esiste se il giro andata e ritorno per UTC lo restituisce uguale: un orario
+    dell'ora saltata torna spostato.
+    """
+    candidate = wall.replace(tzinfo=tz, fold=fold)
+    if candidate.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) == wall:
+        return candidate
+    return None
+
+
 def _resolve(wall: datetime, tz) -> datetime:
     """L'istante di un orario da parete nel fuso *tz*.
 
@@ -377,14 +397,14 @@ def _resolve(wall: datetime, tz) -> datetime:
     uno che non esiste (l'ora saltata) vale il primo minuto che esiste dopo, cioè
     la fine del salto.
     """
-    first = wall.replace(tzinfo=tz, fold=0)
-    if first.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) == wall:
+    first = _existing(wall, tz, 0)
+    if first is not None:
         return first
     probe = wall.replace(second=0)
     for _ in range(24 * 60):
         probe += timedelta(minutes=1)
-        candidate = probe.replace(tzinfo=tz, fold=0)
-        if candidate.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) == probe:
+        candidate = _existing(probe, tz, 0)
+        if candidate is not None:
             return candidate
     raise ValueError(f"no valid local time after {wall} in {tz}")  # pragma: no cover
 
@@ -397,10 +417,10 @@ def _instants(wall: datetime, tz) -> list[datetime]:
     """
     out: list[datetime] = []
     for fold in (0, 1):
-        candidate = wall.replace(tzinfo=tz, fold=fold)
-        back = candidate.astimezone(timezone.utc)
-        if back.astimezone(tz).replace(tzinfo=None) != wall:
+        candidate = _existing(wall, tz, fold)
+        if candidate is None:
             continue
+        back = candidate.astimezone(timezone.utc)
         if not any(o.astimezone(timezone.utc) == back for o in out):
             out.append(candidate)
     return out
@@ -413,9 +433,11 @@ def _changes_offset(day: date, tz) -> bool:
     return start.utcoffset() != end.utcoffset()
 
 
-# Oltre questa distanza sul quadrante due orari sono in ordine anche in UTC: il
-# cambio d'ora sposta al massimo di un'ora (mezz'ora a Lord Howe), e due ore
-# tengono il margine.
+# Oltre questa distanza sul quadrante due orari sono in ordine anche in UTC.
+# Quasi ovunque il cambio d'ora sposta di un'ora (mezz'ora a Lord Howe), ma
+# ``Antarctica/Troll`` sposta di **due**: li' il margine e' esatto, non largo, e
+# regge perche' i confronti che lo usano sono stretti (``<`` e ``>``) — l'orario
+# che sta a due ore esatte resta dentro.
 _SHIFT_MARGIN = timedelta(hours=2)
 
 
@@ -431,18 +453,15 @@ def _next_on_changing_day(
     """
     best: datetime | None = None
     best_wall: datetime | None = None
-    for hour in spec.hours:
-        for minute in spec.minutes:
-            for second in spec.seconds:
-                wall = datetime(day.year, day.month, day.day, hour, minute, second)
-                if wall < start - _SHIFT_MARGIN:
-                    continue
-                if best_wall is not None and wall > best_wall + _SHIFT_MARGIN:
-                    return best
-                for instant in _instants(wall, tz):
-                    at = instant.astimezone(timezone.utc)
-                    if at > base_utc and (best is None or at < best.astimezone(timezone.utc)):
-                        best, best_wall = instant, wall
+    for wall in _walls(spec, day):
+        if wall < start - _SHIFT_MARGIN:
+            continue
+        if best_wall is not None and wall > best_wall + _SHIFT_MARGIN:
+            return best
+        for instant in _instants(wall, tz):
+            at = instant.astimezone(timezone.utc)
+            if at > base_utc and (best is None or at < best.astimezone(timezone.utc)):
+                best, best_wall = instant, wall
     return best
 
 
@@ -450,7 +469,9 @@ def next_after(expr: str | CronExpr, base: datetime) -> datetime:
     """La prima esecuzione **dopo** *base* (che deve avere un fuso).
 
     Il risultato è nel fuso di *base*. ``ValueError`` se l'espressione non va o
-    non scatta nei prossimi cinquant'anni (``0 0 31 2 *``).
+    non scatta entro il limite della ricerca (``0 0 31 2 *``): la fine dell'anno
+    cinquanta anni dopo *base*, oppure, se c'e' il campo dell'anno, la fine del
+    suo ultimo anno.
     """
     if base.tzinfo is None:
         raise ValueError("base must be timezone-aware")
@@ -478,18 +499,15 @@ def next_after(expr: str | CronExpr, base: datetime) -> datetime:
                     return found
                 day += timedelta(days=1)
                 continue
-            for hour in spec.hours:
-                for minute in spec.minutes:
-                    for second in spec.seconds:
-                        candidate = datetime(day.year, day.month, day.day, hour, minute, second)
-                        if candidate < start:
-                            continue
-                        instant = _resolve(candidate, tz)
-                        # In UTC, non fra loro: due datetime con lo stesso fuso
-                        # Python li confronta per orario da parete, ignorando
-                        # ``fold``, e nella seconda passata dell'ora ripetuta un
-                        # orario già trascorso sembrerebbe ancora da venire.
-                        if instant.astimezone(timezone.utc) > base_utc:
-                            return instant
+            for candidate in _walls(spec, day):
+                if candidate < start:
+                    continue
+                instant = _resolve(candidate, tz)
+                # In UTC, non fra loro: due datetime con lo stesso fuso Python li
+                # confronta per orario da parete, ignorando ``fold``, e nella
+                # seconda passata dell'ora ripetuta un orario già trascorso
+                # sembrerebbe ancora da venire.
+                if instant.astimezone(timezone.utc) > base_utc:
+                    return instant
         day += timedelta(days=1)
     raise ValueError(f"cron expression {expr!r} has no run before {limit.year}")

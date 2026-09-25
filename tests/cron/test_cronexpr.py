@@ -234,6 +234,21 @@ def test_a_half_hour_shift_keeps_the_rhythm_too() -> None:
     assert set(_gaps_in_minutes(runs)) == {10}
 
 
+def test_a_two_hour_shift_keeps_the_rhythm_too() -> None:
+    """``Antarctica/Troll`` torna indietro di **due** ore (alle 03:00 si torna
+    alle 01:00): e' il caso che mette alla prova ``_SHIFT_MARGIN``, che li' e'
+    esatto. Dall'ultimo istante della prima passata il prossimo e' l'inizio
+    della seconda, due ore prima sul quadrante."""
+    troll = ZoneInfo("Antarctica/Troll")
+    base = datetime(2026, 10, 25, 2, 20, tzinfo=troll)
+    runs = [base, *_chain("*/10 * * * *", base, 20)]
+    assert set(_gaps_in_minutes(runs)) == {10}
+    ultimo = datetime(2026, 10, 25, 2, 59, 59, tzinfo=troll)
+    seguente = next_after("*/30 * * * *", ultimo)
+    assert seguente.astimezone(timezone.utc) == datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)
+    assert (seguente.hour, seguente.minute, seguente.fold) == (1, 0, 1)
+
+
 @pytest.mark.parametrize(
     ("expr", "expected"),
     [
