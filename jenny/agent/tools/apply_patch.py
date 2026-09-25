@@ -169,7 +169,8 @@ class ApplyPatchTool(_FsTool):
                             new_norm += "\n"
                         writes[source] = new_norm
                         # Lo stesso conto della riga che la WebUI mostra durante la
-                        # modifica (``file_edit_events``): uno solo, non due.
+                        # modifica: ``line_diff_stats`` conta le righe con la stessa
+                        # regola per un file nuovo e per uno che c'era gia'.
                         added, deleted = line_diff_stats("", new_norm)
                         action_name = "add"
 

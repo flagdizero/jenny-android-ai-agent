@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -89,14 +90,34 @@ def read_file_snapshot(path: Path, *, max_bytes: int = _MAX_SNAPSHOT_BYTES) -> F
     return FileSnapshot(path=path, exists=True, text=text.replace("\r\n", "\n"))
 
 
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def _split_lines(text: str) -> list[str]:
+    """Le righe di *text*, con una sola regola: ``\r\n``, ``\r`` o ``\n``.
+
+    La stessa per un file nuovo e per uno esistente. Prima il file nuovo si
+    contava così e l'esistente con ``str.splitlines()``, che spezza anche su
+    ``\f``, ``\v``, ``\x1c``… e ``\u2028``: lo stesso testo dava due conti
+    diversi a seconda che il file ci fosse già. Un a-capo finale non apre una
+    riga in più.
+    """
+    if not text:
+        return []
+    lines = _LINE_BREAK.split(text)
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def line_diff_stats(before: str | None, after: str | None) -> tuple[int, int]:
     """Return ``(added, deleted)`` for a UTF-8 text line-level diff."""
     if before is None or after is None:
         return 0, 0
-    if before == "":
-        return _text_line_count(after), 0
-    before_lines = before.replace("\r\n", "\n").splitlines()
-    after_lines = after.replace("\r\n", "\n").splitlines()
+    before_lines = _split_lines(before)
+    after_lines = _split_lines(after)
+    if not before_lines:
+        return len(after_lines), 0
     added = 0
     deleted = 0
     matcher = difflib.SequenceMatcher(a=before_lines, b=after_lines, autojunk=False)
@@ -111,25 +132,7 @@ def line_diff_stats(before: str | None, after: str | None) -> tuple[int, int]:
 
 
 def _text_line_count(text: str) -> int:
-    if not text:
-        return 0
-    line_count = 0
-    last_was_newline = False
-    last_was_cr = False
-    for ch in text:
-        if ch == "\r":
-            line_count += 1
-            last_was_newline = True
-            last_was_cr = True
-        elif ch == "\n":
-            if not last_was_cr:
-                line_count += 1
-            last_was_newline = True
-            last_was_cr = False
-        else:
-            last_was_newline = False
-            last_was_cr = False
-    return line_count if last_was_newline else line_count + 1
+    return len(_split_lines(text))
 
 
 def prepare_file_edit_tracker(

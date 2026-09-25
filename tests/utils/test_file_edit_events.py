@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from jenny.utils.file_edit_events import (
     build_file_edit_end_event,
     build_file_edit_start_event,
@@ -22,6 +24,16 @@ def test_line_diff_stats_counts_replacements_insertions_and_deletions() -> None:
 
 def test_line_diff_stats_normalizes_crlf() -> None:
     assert line_diff_stats("a\r\nb\r\n", "a\nb\nc\n") == (1, 0)
+
+
+@pytest.mark.parametrize("testo", ["a\fb\n", "a\u2028b\n", "a\x1cb\n", "a\rb\n", "a\nb"])
+def test_a_new_file_and_an_existing_one_count_lines_the_same_way(testo) -> None:
+    """Prima il file nuovo contava ``\r``/``\n`` e l'esistente usava
+    ``splitlines()``, che spezza anche su ``\f``, ``\u2028``…: lo stesso testo
+    aggiunto dava due numeri diversi."""
+    nuovo, _ = line_diff_stats("", testo)
+    esistente, _ = line_diff_stats("x\n", "x\n" + testo)
+    assert nuovo == esistente
 
 
 def test_line_diff_stats_counts_new_file_crlf_lines_once() -> None:
