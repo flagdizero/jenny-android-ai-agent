@@ -26,7 +26,7 @@ _CONTEXT_CHARS = 80
 _VALID_SOURCES: tuple[str, ...] = ("obsidian-plugin", "web-viewer", "manual")
 _VALID_STATUSES: tuple[str, ...] = ("open", "resolved")
 
-_ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
+_ID_RE = re.compile(r"\A\d{8}-\d{6}-[0-9a-f]{4}\Z")
 
 
 # ── Schema ──────────────────────────────────────────────────────────────────

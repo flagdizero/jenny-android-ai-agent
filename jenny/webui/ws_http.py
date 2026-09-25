@@ -85,13 +85,13 @@ if TYPE_CHECKING:
 
 def _decode_api_key(raw_key: str) -> str | None:
     key = unquote(raw_key)
-    _api_key_re = re.compile(r"^[A-Za-z0-9_:.-]{1,128}$")
+    _api_key_re = re.compile(r"\A[A-Za-z0-9_:.-]{1,128}\Z")
     if _api_key_re.match(key) is None:
         return None
     return key
 
 
-_ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z0-9_.]{1,255}$")
+_ANDROID_PACKAGE_RE = re.compile(r"\A[A-Za-z0-9_.]{1,255}\Z")
 
 # I documenti-guscio della WebUI: le pagine che *ospitano* una SPA, non i suoi
 # asset. Sono due perche' le interfacce sono due — la casa (``index.html``, cioe'

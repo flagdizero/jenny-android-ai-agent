@@ -447,7 +447,7 @@ WIKI_ID_KEY = "id"
 # leggibile, deve solo essere improbabile da ripetere. Se un domani diventasse
 # l'indirizzo, i nomi dei file diventerebbero ``project_<id>.jsonl``, cioe'
 # illeggibili con adb: e' una delle ragioni per cui non lo e'.
-_WIKI_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+_WIKI_ID_RE = re.compile(r"\A[0-9a-f]{12}\Z")
 
 
 def is_valid_wiki_id(value: Any) -> bool:

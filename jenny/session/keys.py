@@ -52,7 +52,7 @@ PROJECT_SESSION_PREFIX = "project:"
 # nel dialogo del chip e, appena dopo, in ogni ``chat_id`` — e i due punti devono
 # rispondere alla stessa domanda: il controllo nel dialogo e' cortesia, questi
 # sono i caratteri che possono diventare una sessione e una cartella.
-_PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_PROJECT_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 
 def is_valid_project_name(name: str) -> bool:

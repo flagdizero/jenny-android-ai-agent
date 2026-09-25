@@ -87,7 +87,7 @@ _HOST_FALLBACK_VERSION_CODE = 0
 # questo caso non è normale.
 _UNKNOWN_ANDROID_VERSION_CODE = 2**31 - 1
 
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 
 
 @dataclass(frozen=True)

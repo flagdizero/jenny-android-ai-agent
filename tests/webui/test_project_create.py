@@ -599,6 +599,7 @@ class TestLoScaffolderAvvisa:
         for name in [
             "a", "X2", "b.eta_1-2", "x" * 64,
             "Ricerca ETF", "università", ".nascosto", "-x", "", "x" * 65, "a..b",
+            "x\n",  # ``$`` combacia anche prima di un a capo finale: ``\Z`` no
         ]:
             copied = bool(scaffold._VALID_WIKI_NAME.match(name)) and ".." not in name
             assert copied == is_valid_project_name(name), name

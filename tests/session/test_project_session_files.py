@@ -32,6 +32,8 @@ import pytest
 
 from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
+    UNIFIED_SESSION_KEY,
+    WEBUI_CHANNEL,
     is_valid_project_name,
     session_key_for_channel,
 )
@@ -128,6 +130,16 @@ def test_the_longest_allowed_name_still_makes_a_usable_filename() -> None:
 
 def test_a_longer_name_is_refused_before_it_becomes_a_path() -> None:
     assert not is_valid_project_name("x" * 65)
+
+
+def test_a_trailing_newline_is_refused_before_it_becomes_a_path() -> None:
+    """Con ``re.match`` un ``$`` combacia anche prima di un a capo finale: fino al
+    25/09/2026 ``project:viaggi\n`` diventava una sessione e una cartella col a
+    capo nel nome. Il ``chat_id`` arriva dal client senza ``strip``."""
+    assert not is_valid_project_name("viaggi\n")
+    assert session_key_for_channel(
+        WEBUI_CHANNEL, f"{PROJECT_SESSION_PREFIX}viaggi\n"
+    ) == UNIFIED_SESSION_KEY
 
 
 # ── Il quarto è l'unico che sta nel turno ────────────────────────────────

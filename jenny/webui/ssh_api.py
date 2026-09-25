@@ -57,7 +57,7 @@ from jenny.webui.settings_api import WebUISettingsError
 # solo ciò che quel filtro lascia passare intatto, due alias diversi non possono
 # collassare sullo stesso file: "prod/../nas" e "prodnas" avrebbero la stessa
 # chiave privata, e cancellare il primo scollegherebbe il secondo.
-_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+_ALIAS_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 
 # Impronte viste da un probe e non ancora accettate, per alias:
 # ``alias -> (riga known_hosts, impronta, timestamp)``.

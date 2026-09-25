@@ -421,7 +421,7 @@ Working journal: `raw/journal/` — one file per day, append-only.
 # ``reindex_wikis``: questi script sono un checkout della skill, copiato nel
 # workspace e modificabile dall'utente, non una libreria del package — non
 # possono importare ``jenny``. Se la regex canonica cambia, cambia anche questa.
-_VALID_WIKI_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_VALID_WIKI_NAME = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 
 def _warn_if_unopenable(root: str) -> bool:
