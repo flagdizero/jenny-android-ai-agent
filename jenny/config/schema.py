@@ -598,6 +598,23 @@ class SchermataConfig(Base):
         return data
 
 
+# Le righe di ``casa.schermate`` gia' segnalate in questo processo. Il validatore
+# le scarta dal modello ma non dal file — il loader legge e basta, ogni scrittura
+# passa da ``store.mutate`` — e ``load_config()`` non ha cache: senza questo la
+# stessa riga storta tornava nel log a ogni lettura, piu' volte per turno, finche'
+# qualcos'altro non riscriveva la config.
+_DROPPED_PAGES_WARNED: set[str] = set()
+
+
+def _warn_dropped_page(reason: str, row: Any) -> None:
+    """Un avviso per riga scartata per avvio, poi silenzio."""
+    key = f"{reason}|{row!r}"
+    if key in _DROPPED_PAGES_WARNED:
+        return
+    _DROPPED_PAGES_WARNED.add(key)
+    logger.warning("casa page dropped ({}): {!r}", reason, row)
+
+
 class CasaConfig(Base):
     """Quel che la casa ricorda fra un avvio e l'altro.
 
@@ -649,7 +666,7 @@ class CasaConfig(Base):
             return data
         grezze = data["schermate"]
         if not isinstance(grezze, list):
-            logger.warning("casa.schermate non e' un elenco ({!r}): ignorato", grezze)
+            _warn_dropped_page("casa.schermate is not a list", grezze)
             return {**data, "schermate": []}
         rimaste: list[Any] = []
         visti: set[str] = set()
@@ -662,13 +679,13 @@ class CasaConfig(Base):
                     else SchermataConfig.model_validate(riga)
                 )
             except Exception as exc:  # noqa: BLE001 — qualunque rifiuto costa solo la riga
-                logger.warning("Pagina di casa scartata ({}): {!r}", exc, riga)
+                _warn_dropped_page(str(exc), riga)
                 continue
             if pagina.id in visti or pagina.id in PAGINE_FISSE:
-                logger.warning("Pagina di casa scartata (id doppio o riservato): {!r}", riga)
+                _warn_dropped_page("duplicate or reserved id", riga)
                 continue
             if len(rimaste) >= MAX_SCHERMATE:
-                logger.warning("Pagina di casa scartata (oltre {}): {!r}", MAX_SCHERMATE, riga)
+                _warn_dropped_page(f"more than {MAX_SCHERMATE} pages", riga)
                 continue
             visti.add(pagina.id)
             rimaste.append(riga)

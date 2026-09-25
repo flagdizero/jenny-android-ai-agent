@@ -122,6 +122,29 @@ def test_too_many_and_duplicate_pages_are_trimmed_not_refused() -> None:
     assert casa.schermate[0].ref == "a0", "vince la prima delle due con lo stesso id"
 
 
+def test_a_dropped_page_is_reported_once_not_at_every_read(monkeypatch) -> None:
+    """Il file tiene la riga finche' qualcuno non riscrive la config, e
+    ``load_config()`` non ha cache: senza memoria lo stesso avviso tornava a ogni
+    lettura, piu' volte per turno."""
+    from loguru import logger
+
+    from jenny.config import schema
+
+    monkeypatch.setattr(schema, "_DROPPED_PAGES_WARNED", set())
+    visti: list[str] = []
+    sink = logger.add(lambda m: visti.append(str(m)), level="WARNING", format="{message}")
+    try:
+        storta = {"id": "p9", "kind": "widget", "ref": "meteo"}
+        for _ in range(3):
+            CasaConfig(schermate=[storta])
+        CasaConfig(schermate=[{"id": "p8", "kind": "widget", "ref": "orologio"}])
+    finally:
+        logger.remove(sink)
+
+    assert len(visti) == 2, visti
+    assert all(v.startswith("casa page dropped (") for v in visti), visti
+
+
 def test_a_room_can_no_longer_be_saved() -> None:
     """Chi prova a scriverne una nuova se la vede rifiutare, non ingoiare.
 
