@@ -31,8 +31,12 @@ import assert from 'node:assert/strict';
 /* Chi e' stato chiesto, e in che ordine. E' la misura di «pigro». */
 const caricati = [];
 let caricamentoFallisce = false;
+/* Quando c'e', ogni script resta in attesa finche' il banco non lo risolve a
+   mano: e' cosi' che si vede *quando* parte una richiesta, non solo che parte. */
+let sospesi = null;
 function ensureVendor(src) {
   caricati.push(src);
+  if (sospesi) return new Promise((ok) => sospesi.set(src, ok));
   return caricamentoFallisce ? Promise.reject(new Error('giu')) : Promise.resolve();
 }
 function ensureVendorStyle(href) {
@@ -126,7 +130,7 @@ function bloccoChat(codice) {
 function corpo(figli) { return el('div', figli); }
 function reset() {
   caricati.length = 0; reseFormule.length = 0; reseDiagrammi.length = 0;
-  caricamentoFallisce = false; schema = 'dark';
+  caricamentoFallisce = false; schema = 'dark'; sospesi = null;
 }
 """
 
@@ -199,6 +203,30 @@ await renderRich(corpo([txt('vale $$E = mc^2$$')]));
 assert.ok(caricati.some((s) => s.endsWith('katex.min.css')), 'manca il foglio di stile');
 assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'manca il codice');
 assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'manca auto-render');
+""")
+
+
+def test_auto_render_is_asked_for_only_after_katex_has_arrived() -> None:
+    """``auto-render`` chiama ``katex`` appena si carica: chiederlo insieme a
+    KaTeX vuol dire una corsa, persa ogni volta che il file piccolo arriva prima
+    di quello grande. Qui KaTeX si risolve a mano, e fino ad allora auto-render
+    non deve essere stato nemmeno chiesto."""
+    _run("""
+reset();
+sospesi = new Map();
+const giro = () => new Promise((r) => setTimeout(r, 0));
+const risolvi = (fine) => [...sospesi].find(([src]) => src.endsWith(fine))[1]();
+const fatto = renderRich(corpo([txt('vale $$E = mc^2$$')]));
+await giro();
+assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'KaTeX non chiesto');
+assert.ok(!caricati.some((s) => s.endsWith('auto-render.min.js')),
+  'auto-render chiesto prima che KaTeX fosse arrivato');
+risolvi('katex.min.js');
+await giro();
+assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'auto-render mai chiesto');
+risolvi('auto-render.min.js');
+await fatto;
+assert.equal(reseFormule.length, 1);
 """)
 
 
