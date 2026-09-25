@@ -17,7 +17,9 @@ body.casa {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
+  /* Il carattere dal token, come nell'officina: il tema Fumetto lo cambia, e
+     scritto a mano ('Inter') la casa restava fuori dal tema. */
+  font-family: var(--font-sans);
   /* dvh e non vh: con la tastiera fisica aperta e la barra di sistema che va e
      viene, vh resta fermo sull'altezza massima e il composer finisce sotto il
      bordo. */
@@ -698,7 +700,7 @@ body.casa {
   padding: 1px 5px;
   border-radius: var(--radius-sm);
   background: var(--overlay);
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 .casa-block pre {
@@ -1524,7 +1526,7 @@ body.casa {
 
 .casa-map-labels text {
   fill: var(--text-muted);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 9px;
   text-anchor: middle;
   /* Il bersaglio e' il pallino: un'etichetta che intercetta il tocco fa

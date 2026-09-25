@@ -693,3 +693,21 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
         assert backup["snapshots"] != backup["snapshotsOff"], (
             "la storia locale accesa e spenta si leggono uguali"
         )
+
+
+def test_the_house_takes_its_typefaces_from_the_theme() -> None:
+    """Ogni `font-family` della casa viene da un token (o eredita).
+
+    Il tema Fumetto cambia `--font-sans`; il corpo della casa, il codice nei
+    messaggi e le etichette della mappa avevano il carattere scritto a mano
+    ('Inter', 'Fira Code'), e in Fumetto la casa restava in Inter mentre
+    l'officina passava a Comic Neue (revisione del 25/09/2026).
+    """
+    css = re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=re.S)
+    a_mano = [
+        riga.strip()
+        for riga in css.splitlines()
+        if re.match(r"\s*font-family:", riga)
+        and not re.match(r"\s*font-family:\s*(var\(--font-|inherit)", riga)
+    ]
+    assert not a_mano, f"caratteri scritti a mano invece che dal token: {a_mano}"
