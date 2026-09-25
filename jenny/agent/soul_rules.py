@@ -41,6 +41,7 @@ altre subito dopo il blocco, con un WARNING che dice quante.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from loguru import logger
@@ -64,6 +65,17 @@ def _blank(text: str | None) -> bool:
 
 def _block(rules: str) -> str:
     return f"{MARK_START}\n{HEADING}\n\n{rules.strip()}\n{MARK_END}"
+
+
+# Una sola serratura per ogni lettura-modifica-scrittura di ``SOUL.md`` fatta da
+# questo modulo. Le strade sono due e girano su thread diversi: ``save_rules``
+# dal thread della RPC (``asyncio.to_thread`` in ``webui/commands.py``) e
+# ``sync_soul`` dal loop, alla fine di ogni passata di Dream. Senza, una delle
+# due rilegge il file mentre l'altra lo riscrive e la sua copia vecchia vince.
+# Rientrante perché ``save_rules`` la tiene attorno a ``sync_soul``, che la
+# riprende. Non protegge dalle scritture che Dream fa coi suoi tool: quelle
+# stanno in un altro modulo e sono ciò che la proiezione ripara dopo.
+_SOUL_LOCK = threading.RLock()
 
 
 def _rule_lines(*texts: str | None) -> set[str]:
@@ -236,14 +248,15 @@ def sync_soul(
     """
     soul = Path(soul_file) if soul_file else Path(workspace) / "SOUL.md"
     try:
-        rules = read_rules(workspace)
-        if _blank(rules) and not soul.exists():
-            return False
-        text = soul.read_text(encoding="utf-8")
-        fresh, rescued = _project(text, rules, previous)
-        if fresh == text:
-            return False
-        atomic_write(soul, fresh)
+        with _SOUL_LOCK:
+            rules = read_rules(workspace)
+            if _blank(rules) and not soul.exists():
+                return False
+            text = soul.read_text(encoding="utf-8")
+            fresh, rescued = _project(text, rules, previous)
+            if fresh == text:
+                return False
+            atomic_write(soul, fresh)
         if rescued:
             logger.warning(
                 "SOUL.md: {} line(s) found inside the user-rules block were not the user's "
@@ -271,10 +284,12 @@ def save_rules(workspace: Path, rules: str) -> str:
 
     Le regole di prima si leggono prima di sovrascriverle: sono le righe che la
     proiezione deve sostituire, e non salvare fuori dal blocco come se le
-    avesse scritte Dream.
+    avesse scritte Dream. Tutto sotto la serratura, perché una passata che
+    sincronizza in mezzo leggerebbe la verità nuova col blocco vecchio.
     """
     text = (rules or "").strip()
-    previous = read_rules(workspace)
-    write_rules(workspace, text)
-    sync_soul(workspace, previous=previous)
+    with _SOUL_LOCK:
+        previous = read_rules(workspace)
+        write_rules(workspace, text)
+        sync_soul(workspace, previous=previous)
     return text

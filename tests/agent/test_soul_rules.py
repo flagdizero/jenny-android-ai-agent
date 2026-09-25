@@ -366,6 +366,31 @@ def test_emptying_the_rules_keeps_what_dream_wrote_in_the_block(tmp_path: Path) 
     assert "Never moralize" in text
 
 
+def test_saving_and_syncing_share_one_lock(tmp_path: Path) -> None:
+    """``save_rules`` gira sul thread della RPC, ``sync_soul`` sul loop dopo
+    Dream: entrambi rileggono e riscrivono ``SOUL.md``. Il banco tiene la
+    serratura da un altro thread e controlla che il salvataggio la aspetti."""
+    import threading
+
+    from jenny.agent import soul_rules
+
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    done = threading.Event()
+
+    def _save() -> None:
+        save_rules(tmp_path, RULES)
+        done.set()
+
+    with soul_rules._SOUL_LOCK:
+        worker = threading.Thread(target=_save)
+        worker.start()
+        assert not done.wait(0.2), "il salvataggio non ha aspettato la serratura"
+        assert extract_rules((tmp_path / "SOUL.md").read_text(encoding="utf-8")) == ""
+    worker.join(2)
+    assert done.is_set()
+    assert extract_rules((tmp_path / "SOUL.md").read_text(encoding="utf-8")) == RULES
+
+
 # ── Il gancio ───────────────────────────────────────────────────────────────
 
 
