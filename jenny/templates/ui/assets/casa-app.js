@@ -708,17 +708,22 @@ class CasaApp {
    *  atterraggio esiste. Un gesto, un atto completo.
    *
    *  Quel che l'utente stava scrivendo non si perde: se la casella non e'
-   *  vuota, la bozza torna dov'era appena il messaggio e' partito. */
+   *  vuota, la bozza torna dov'era appena il messaggio e' partito.
+   *
+   *  **Se non parte** (il filo e' giu') nella casella resta il messaggio della
+   *  segnalazione, che e' quello da non perdere: la bozza rimessa al suo posto
+   *  lo cancellava, e la segnalazione tornava nel vuoto. La bozza gli va sotto,
+   *  cosi' non si perde niente dei due e si rimanda con un tocco. */
   _portaInChat(segnalazione) {
     if (!this.input) return;
     const bozza = this.input.value;
     this._setView('chat');
-    this.input.value = messaggioSegnalazione(segnalazione);
-    this._send();
-    if (bozza.trim()) {
-      this.input.value = bozza;
-      this._autosize();
-    }
+    const messaggio = messaggioSegnalazione(segnalazione);
+    this.input.value = messaggio;
+    const partito = this._send();
+    if (!bozza.trim()) return;
+    this.input.value = partito ? bozza : `${messaggio}\n\n${bozza}`;
+    this._autosize();
   }
 
   /** Conferma di uscire dal lettore buttando via le modifiche.
@@ -1390,12 +1395,14 @@ class CasaApp {
     });
   }
 
+  /* Vero se il messaggio e' partito: `_portaInChat` lo chiede per sapere
+     cosa lasciare nella casella. */
   _send() {
     const text = this.input.value.trim();
     /* Una foto senza didascalia e' un messaggio: la bolla e' l'immagine. E' la
        stessa regola che il gateway applica all'eco di Telegram — col solo
        controllo sul testo, una foto muta non partirebbe. */
-    if (!text && !this.files.count) return;
+    if (!text && !this.files.count) return false;
     /* Scritto a mano, `/stop` resta il comando che e' — in casa i comandi non
        ci sono, ma niente impedisce di digitarne uno, e disegnarne la bolla
        vorrebbe dire mostrare in chat una cosa che il transcript esclude
@@ -1404,7 +1411,7 @@ class CasaApp {
       this._stop();
       this.input.value = '';
       this._autosize();
-      return;
+      return true;
     }
     const chatId = sessionManager.currentChatId;
     const media = this.files.getImages();
@@ -1414,7 +1421,7 @@ class CasaApp {
          bolla che compare e un messaggio che non arriva sono la stessa cosa
          vista da due parti, e la prima fa credere alla seconda. */
       this._setWire(false);
-      return;
+      return false;
     }
     /* La bolla la disegna il client: il gateway rimanda l'eco solo dei messaggi
        entrati da *altri* canali (v. webui_turns._handle_session_turn_started,
@@ -1423,6 +1430,7 @@ class CasaApp {
     this.files.clear();
     this.input.value = '';
     this._autosize();
+    return true;
   }
 
   /* Fermare un turno e' `/stop`, come in officina: non esiste un frame apposta,

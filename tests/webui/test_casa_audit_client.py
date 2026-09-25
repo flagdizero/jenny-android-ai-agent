@@ -157,7 +157,13 @@ class Casa {
     this.autosize = 0;
   }
   _setView(v) { this.view = v; }
-  _send() { mandati.push(this.input.value); this.input.value = ''; }
+  /* Come il vero: col filo giu' il messaggio non parte e resta nella casella. */
+  _send() {
+    if (this.filoGiu) return false;
+    mandati.push(this.input.value);
+    this.input.value = '';
+    return true;
+  }
   _autosize() { this.autosize += 1; }
   __PORTA__
 }
@@ -247,4 +253,31 @@ def test_a_draft_in_the_composer_is_not_eaten() -> None:
       assert.ok(!mandati[0].includes('stavo scrivendo'), mandati[0]);
       assert.equal(c.input.value, 'stavo scrivendo questo');
       mandati.length = 0;
+    """)
+
+
+def test_a_report_that_did_not_leave_stays_in_the_composer() -> None:
+    """Col filo giu' `_send` non manda niente e lascia il messaggio nella
+    casella: la bozza rimessa al suo posto lo cancellava, e la segnalazione —
+    il cui file e' gia' nato — tornava nel vuoto. Restano tutti e due, prima
+    la segnalazione."""
+    _run_app("""
+      const c = new Casa();
+      c.filoGiu = true;
+      c.input.value = 'stavo scrivendo questo';
+      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      assert.equal(mandati.length, 0);
+      assert.ok(c.input.value.includes('non va'), 'la segnalazione non partita e\\u2019 sparita: ' + c.input.value);
+      assert.ok(c.input.value.includes('abc'), c.input.value);
+      assert.ok(c.input.value.endsWith('stavo scrivendo questo'), 'la bozza si e\\u2019 persa: ' + c.input.value);
+    """)
+
+
+def test_a_report_that_did_not_leave_without_a_draft_is_left_alone() -> None:
+    _run_app("""
+      const c = new Casa();
+      c.filoGiu = true;
+      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      assert.ok(c.input.value.includes('non va'), c.input.value);
+      assert.ok(!c.input.value.endsWith('\\n'), c.input.value);
     """)
