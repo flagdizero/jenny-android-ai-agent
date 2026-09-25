@@ -306,7 +306,7 @@ Reply — always one `rpc_result` per request, correlated by the opaque `id`:
 
 Error codes: `bad_request`, `forbidden`, `not_found`, `too_large`, `conflict`, `name_taken`, `unavailable`, `internal`.
 `name_taken` means the name asked for already belongs to something else (today: a notebook's new name is already a folder's or a conversation's).
-`conflict` is the only one that is not about the request but about the world: the request was fine, and the file changed underneath. A client that gets it should re-read, not correct what it sent.
+`conflict` is the only one that is not about the request but about the world: the request was fine, and the world moved underneath it — the file changed since the client read it (`page.write`), or Jenny is still writing in that notebook (`project.rename`, `project.delete`). A client that gets it should not correct what it sent: re-read, or try again once she has finished.
 A frame whose `id` is missing or malformed is dropped with a log line — there is nothing to
 correlate a reply to.
 
@@ -316,8 +316,8 @@ correlate a reply to.
 | `soul.rules.write` | `content` | Save the user's standing rules (2 000-character cap) and re-project them into the marked block in `SOUL.md`. Honours the same workspace flags. |
 | `page.write` | `wiki`, `page`, `content`, `base` | Save a notebook page edited by hand from the reader. `base` is the markdown the editor opened on: if the file changed underneath, the answer is `conflict` and nothing is written. Honours `wiki.enabled` plus the same workspace flags. |
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
-| `project.delete` | `name` | Delete a project chat and its session. A home page pinned to it goes with it. |
-| `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open (`bad_request`), is already taken by a folder or a conversation (`name_taken`), or the old name is not a notebook (`not_found`). A home page pinned to it follows the new name. |
+| `project.delete` | `name` | Delete a project chat and its session. Refused with `conflict` before anything is touched while something is still writing under that notebook (a turn, a subagent started there, a gardener pass, the autocompact), and with `bad_request` if the name is no project. A home page pinned to it goes with it. |
+| `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open (`bad_request`), is already taken by a folder or a conversation (`name_taken`), or the old name is not a notebook (`not_found`), and with `conflict` while something is still writing under either name (a turn, a subagent started there, a gardener pass, the autocompact). A home page pinned to it follows the new name. |
 | `casa.schermate.set` | `schermate`, `ordine` | Save the home pages: the whole list of added pages (`{id, kind, ref}`, at most 8, unique ids) and the order of every page, fixed ones included — each exactly once, or the answer is `bad_request` and nothing is written. Replies `{ok, schermate, ordine}`. The list is read with `GET /api/casa/schermate`. |
 
 **Authorization is the handshake's, not the frame's.** When `token_issue_secret` is set, only

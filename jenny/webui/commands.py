@@ -55,8 +55,11 @@ class CommandError(Exception):
     di un quaderno è già di una cartella o di una conversazione).
 
     ``conflict`` è l'unico che non parla della richiesta ma del *mondo*: la
-    richiesta era buona, e nel frattempo il file è cambiato sotto. Chi lo riceve
-    non deve correggere quel che ha mandato, deve rileggere.
+    richiesta era buona, e il mondo si è mosso sotto — il file è cambiato da
+    quando il client l'ha letto (``page.write``), oppure Jenny sta ancora
+    scrivendo in quel quaderno (``project.rename``, ``project.delete``). Chi lo
+    riceve non deve correggere quel che ha mandato: rilegge, o riprova quando
+    lei ha finito.
     """
 
     def __init__(self, code: str, message: str) -> None:
