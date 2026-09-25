@@ -452,9 +452,13 @@ class JennyBrowserBridge(context: Context) {
         if (isBlockedLiteral(uri)) return """{"error":"indirizzo non consentito"}"""
         lastBlocked.set(null)
         // Un browser_open e' un atto esplicito: il perimetro si rifa' **dopo**,
-        // sull'indirizzo dove la pagina si e' posata davvero.
+        // sull'indirizzo dove la pagina si e' posata davvero. Fino ad allora il
+        // recinto vecchio resta al suo posto: durante l'apertura lo sospende
+        // `openInFlight`, e un'apertura che fallisce lascia la pagina di prima
+        // (o una pagina d'errore), che deve restare recintata. Azzerarlo qui
+        // lasciava, a ogni ritorno d'errore, la pagina precedente caricata e
+        // senza perimetro.
         openInFlight.set(true)
-        scopeDomain.set(null)
         // Se la WebView non nasce (il costruttore solleva, per esempio mentre
         // Android aggiorna il provider WebView) o il main thread non risponde
         // entro il tetto, nessuna pagina e' partita: dirlo, invece di
@@ -463,8 +467,8 @@ class JennyBrowserBridge(context: Context) {
         //
         // Ma un tetto scaduto non ferma il blocco: resta in coda sul main e
         // gira dopo. Se allora caricasse, la pagina partirebbe dopo che l'agente
-        // ha sentito "non e' partita", e senza recinto — `scopeDomain` e' gia'
-        // `null` e nessuno lo rimette. Il cancello decide **una volta**, per
+        // ha sentito "non e' partita": una navigazione che nessuno aspetta e
+        // che nessuno descrive. Il cancello decide **una volta**, per
         // tutti e due i thread, se il caricamento c'e': il main lo prende prima
         // di `loadUrl`, questo thread lo chiude prima di dire di no. Chi arriva
         // secondo si adegua.
@@ -497,7 +501,9 @@ class JennyBrowserBridge(context: Context) {
         }
         lastError.get()?.let { return """{"error":${quote(it)}}""" }
         val (u, t) = currentUrlAndTitle()
-        // Il recinto si pianta dove si e' finiti, non dove si era chiesto.
+        // Il recinto si pianta dove si e' finiti, non dove si era chiesto, e
+        // solo qui: la pagina nuova si e' posata. Senza un host (lettura
+        // scaduta) resta quello di prima, che sbaglia per eccesso di chiusura.
         Uri.parse(u).host?.let { scopeDomain.set(registrable(it)) }
         return """{"ok":true,"settled":$settled,"url":${quote(u)},"title":${quote(t)}}"""
     }

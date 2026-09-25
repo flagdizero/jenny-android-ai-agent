@@ -49,8 +49,8 @@ def test_open_reads_whether_the_page_started() -> None:
 
 def test_a_timed_out_open_cannot_load_its_page_later() -> None:
     """Un tetto scaduto non toglie il blocco dalla coda del main: gira dopo. Se
-    allora caricasse, la pagina partirebbe dopo il «non e' partita» e senza
-    recinto (``scopeDomain`` e' gia' ``null``). Il cancello si prende **prima**
+    allora caricasse, la pagina partirebbe dopo il «non e' partita»: una
+    navigazione che nessuno aspetta. Il cancello si prende **prima**
     di ``loadUrl``, e il «no» lo chiude prima di rispondere: uno dei due soltanto."""
     body = _open_body()
     block = body.split("MainHop.call(10_000L, false, TAG)", 1)[1].split("\n        }\n", 1)[0]
