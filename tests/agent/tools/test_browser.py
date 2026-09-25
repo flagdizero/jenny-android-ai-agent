@@ -191,6 +191,38 @@ class TestOpen:
         assert "ref=1:e0" in out
         assert "web_fetch" not in out
 
+    async def test_l_isolamento_si_chiede_una_volta_per_sessione(self, monkeypatch):
+        """L'aggancio del profilo si decide quando nasce la WebView: dentro una
+        sessione non cambia, e non vale il lucchetto globale a ogni apertura."""
+        _allow_url(monkeypatch)
+        holder = _install(monkeypatch)
+        tool = _tool(BrowserOpenTool)
+        await tool.execute(url="https://esempio.test/")
+        await tool.execute(url="https://esempio.test/due")
+        first = holder["bridge"]
+        assert [c[0] for c in first.calls].count("isIsolated") == 1
+
+        await _tool(BrowserCloseTool).execute()
+        await tool.execute(url="https://esempio.test/")
+        assert holder["bridge"] is not first
+        assert [c[0] for c in holder["bridge"].calls].count("isIsolated") == 1
+
+    async def test_un_bridge_senza_il_metodo_non_si_richiede(self, monkeypatch):
+        _allow_url(monkeypatch)
+        tentativi = []
+
+        class Muto(FakeBridge):
+            def isIsolated(self):  # noqa: N802
+                tentativi.append(1)
+                raise RuntimeError("metodo assente in un APK vecchio")
+
+        _install(monkeypatch, Muto)
+        tool = _tool(BrowserOpenTool)
+        for _ in range(3):
+            out = await tool.execute(url="https://esempio.test/")
+            assert "web_fetch" not in out
+        assert len(tentativi) == 1
+
     async def test_errore_di_apertura_non_chiede_lo_snapshot(self, monkeypatch):
         _allow_url(monkeypatch)
         class Rotto(FakeBridge):

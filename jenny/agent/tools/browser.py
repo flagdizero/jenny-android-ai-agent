@@ -39,6 +39,11 @@ _BROWSER_INSTANCE: Any = None
 _LAST_USE: float = 0.0
 _IDLE_TASK: asyncio.Task[None] | None = None
 
+# La risposta di ``isIsolated`` per la sessione viva, con l'istanza a cui si
+# riferisce: l'aggancio del profilo si decide una volta, quando nasce la
+# WebView, quindi dentro una sessione non cambia. Si butta con la sessione.
+_ISOLATED_FOR: tuple[Any, bool | None] | None = None
+
 # Ogni quanto il guardiano guarda l'orologio. Costante di modulo perche' un
 # test non deve aspettare i minuti veri.
 _IDLE_POLL_S = 15
@@ -88,8 +93,9 @@ def reset_browser_state() -> None:
     (gateway ripartito nello stesso processo) esplode con "bound to a different
     event loop" al primo acquire.
     """
-    global _BROWSER_INSTANCE, _BROWSER_LOCK, _IDLE_TASK, _LAST_USE
+    global _BROWSER_INSTANCE, _BROWSER_LOCK, _IDLE_TASK, _LAST_USE, _ISOLATED_FOR
     _LAST_INDEX.clear()
+    _ISOLATED_FOR = None
     if _IDLE_TASK is not None:
         # Il task puo' appartenere a un loop gia' chiuso (e' proprio il caso
         # per cui questa funzione esiste): li' ``cancel`` solleva invece di
@@ -161,8 +167,9 @@ def _detach_browser() -> Any:
     Istantaneo e sul thread del loop: da qui in poi nessuno la vede piu', anche
     se la chiusura vera (``close`` in Kotlin) deve ancora girare.
     """
-    global _BROWSER_INSTANCE
+    global _BROWSER_INSTANCE, _ISOLATED_FOR
     _LAST_INDEX.clear()
+    _ISOLATED_FOR = None
     bridge, _BROWSER_INSTANCE = _BROWSER_INSTANCE, None
     return bridge
 
@@ -263,24 +270,36 @@ async def _session_isolated() -> bool | None:
     """La sessione aperta ha un profilo suo, o divide i cookie con ``web_fetch``?
 
     Il bridge mette la sessione in un profilo separato (``MULTI_PROFILE``) e lo
-    butta alla chiusura; dove la WebView non lo supporta resta sul profilo di
-    default, cioe' sullo stesso barattolo di cookie di ``web_fetch``, e
-    ``browser_close`` non cancella niente. Il modello lo deve sapere: la
-    descrizione del tool gli promette il contrario.
+    svuota alla chiusura; dove la WebView non lo supporta, o l'aggancio fallisce,
+    resta sul profilo di default, cioe' sullo stesso barattolo di cookie di
+    ``web_fetch``, e ``browser_close`` non cancella niente. Il modello lo deve
+    sapere: la descrizione del tool gli promette il contrario.
 
     ``None`` se non si sa (nessuna sessione, bridge vecchio, errore): nel dubbio
     non si avvisa di un difetto che forse non c'e'. Non passa da ``_call`` perche'
     il metodo rende un booleano, non JSON.
+
+    La risposta si tiene per la sessione (``_ISOLATED_FOR``): prima si prendeva
+    il lucchetto globale a ogni ``browser_open`` per rileggere un valore che,
+    dentro una sessione, non cambia. Un ``None`` da errore si tiene anche lui: e'
+    un APK senza il metodo, e non lo acquista a meta' sessione.
     """
+    global _ISOLATED_FOR
+    cached = _ISOLATED_FOR
+    if cached is not None and cached[0] is _BROWSER_INSTANCE:
+        return cached[1]
     async with _BROWSER_LOCK:
         bridge = _BROWSER_INSTANCE
         if bridge is None:
             return None
+        answer: bool | None
         try:
-            return bool(await asyncio.to_thread(bridge.isIsolated))
+            answer = bool(await asyncio.to_thread(bridge.isIsolated))
         except Exception:
-            logger.opt(exception=True).debug("isIsolated non disponibile")
-            return None
+            logger.opt(exception=True).debug("isIsolated not available on this bridge")
+            answer = None
+        _ISOLATED_FOR = (bridge, answer)
+        return answer
 
 
 _NOT_ISOLATED_NOTICE = (

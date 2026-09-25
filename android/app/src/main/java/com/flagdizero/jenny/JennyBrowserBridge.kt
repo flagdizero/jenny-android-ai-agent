@@ -406,9 +406,17 @@ class JennyBrowserBridge(context: Context) {
         return """{"notice":${quote(describeBlock(raw))}}"""
     }
 
-    /** La sessione ha un profilo suo? Lo chiede ``browser_open`` (``browser.py``)
-     *  per avvisare il modello quando i cookie sono quelli di ``web_fetch``. */
-    fun isIsolated(): Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
+    /**
+     * La WebView di questa sessione è agganciata al profilo separato? Lo chiede
+     * ``browser_open`` (``browser.py``), dopo l'apertura, per avvisare il
+     * modello quando i cookie sono quelli di ``web_fetch``.
+     *
+     * Legge l'aggancio, non il supporto: prima rendeva solo se la WebView
+     * supporta `MULTI_PROFILE`, e diceva «isolata» anche quando l'aggancio in
+     * [ensureWebViewOnMain] era fallito e la sessione stava sul profilo di
+     * default. Prima che la WebView nasca, e dopo [close], è `false`.
+     */
+    fun isIsolated(): Boolean = profile != null
 
     // ------------------------------------------------------------------ attese
 

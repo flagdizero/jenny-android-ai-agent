@@ -60,3 +60,18 @@ def test_no_silent_catch_in_the_bridge() -> None:
     """Un ``catch`` vuoto è quello che ha nascosto il difetto per un mese."""
     empty = re.findall(r"catch\s*\([^)]*\)\s*\{\s*\}", _code())
     assert not empty, f"catch muti nel ponte del browser: {empty}"
+
+
+def test_is_isolated_reports_the_attached_profile_not_the_feature() -> None:
+    """``isIsolated`` rendeva il solo supporto di ``MULTI_PROFILE``: «isolata»
+    anche con l'aggancio fallito e la sessione sul profilo di ``web_fetch``."""
+    code = _code()
+    m = re.search(r"\bfun\s+isIsolated\s*\(\s*\)\s*:\s*Boolean\s*=\s*([^\n]+)", code)
+    assert m, "isIsolated non è più un'espressione su una riga: rileggere il test"
+    assert m.group(1).strip() == "profile != null"
+    ensure = function_body(code, "ensureWebViewOnMain")
+    attach = ensure.find("WebViewCompat.setProfile(")
+    assign = re.search(r"\bprofile\s*=\s*p\b", ensure)
+    assert attach != -1 and assign and attach < assign.start(), (
+        "il profilo si ricorda solo dopo che l'aggancio è riuscito"
+    )
