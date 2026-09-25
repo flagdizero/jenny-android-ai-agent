@@ -73,10 +73,14 @@ def test_projecting_twice_does_not_write_it_twice() -> None:
 def test_a_changed_rule_replaces_the_old_one_in_place() -> None:
     """Il posto si conserva. Riscrivere il blocco in fondo a ogni salvataggio
     lo sposterebbe sotto a quel che Dream ha aggiunto nel frattempo, e dopo un
-    mese le regole dell'utente sarebbero in coda a tutto."""
+    mese le regole dell'utente sarebbero in coda a tutto.
+
+    ``previous`` e' quel che ``save_rules`` passa: le regole che si stanno
+    sostituendo. Senza, le loro righe sarebbero righe estranee al blocco, e si
+    salverebbero fuori come se le avesse scritte Dream."""
     before = project(SOUL, RULES)
     with_tail = before + "\n## Something Dream added\n\n- a line\n"
-    after = project(with_tail, "Dammi del tu.")
+    after = project(with_tail, "Dammi del tu.", previous=RULES)
 
     assert "Something Dream added" in after, "la coda di Dream e' sparita"
     assert RULES not in after, "la regola vecchia e' rimasta accanto alla nuova"
@@ -144,12 +148,18 @@ def test_markers_in_the_wrong_order_are_not_a_block() -> None:
 def test_an_orphan_marker_is_absorbed_not_stacked() -> None:
     """Meta' potatura: resta il marcatore d'apertura. Senza questo ramo
     resterebbe li' per sempre, e ogni proiezione ne metterebbe uno nuovo
-    sotto."""
+    sotto.
+
+    Quel che il marcatore orfano si trascina dietro fino in fondo al file non
+    e' una regola dell'utente, quindi non si butta: resta, ma **fuori** dal
+    blocco. Una volta questo banco ne pretendeva la sparizione, ed era il
+    difetto: il cursore di Dream e' gia' avanzato, e una riga tolta qui e'
+    persa per sempre."""
     orphan = SOUL + "\n" + MARK_START + "\nqualcosa di vecchio\n"
     redone = project(orphan, RULES)
     assert redone.count(MARK_START) == 1
-    assert "qualcosa di vecchio" not in redone
     assert extract_rules(redone) == RULES
+    assert "qualcosa di vecchio" in redone.split(MARK_END, 1)[1]
 
 
 def test_the_block_stops_at_the_next_section() -> None:
@@ -247,6 +257,115 @@ def test_removing_the_rules_takes_the_block_out_of_the_file(tmp_path: Path) -> N
     assert "Never moralize" in text
 
 
+# ── Quel che Dream scrive dentro il blocco ──────────────────────────────────
+
+
+def _capture_warnings() -> tuple[list[str], int]:
+    from loguru import logger
+
+    seen: list[str] = []
+    sink = logger.add(lambda m: seen.append(str(m)), level="WARNING", format="{message}")
+    return seen, sink
+
+
+def test_a_line_dream_added_inside_the_block_survives_the_sync(tmp_path: Path) -> None:
+    """Una passata aggiunge una riga *dentro* il blocco dell'utente. Il suo
+    cursore a quel punto e' gia' avanzato: se la proiezione la togliesse, quel
+    fatto non tornerebbe mai piu'. Resta, subito dopo il blocco, e un WARNING
+    dice quante righe sono state salvate."""
+    from loguru import logger
+
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    save_rules(tmp_path, RULES)
+    soul = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    dreamt = soul.replace(RULES + "\n", RULES + "\n- Dream: she answers in Italian.\n")
+    (tmp_path / "SOUL.md").write_text(dreamt, encoding="utf-8")
+
+    seen, sink = _capture_warnings()
+    try:
+        assert sync_soul(tmp_path) is True
+    finally:
+        logger.remove(sink)
+
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert "- Dream: she answers in Italian." in text, "la riga di Dream e' stata buttata"
+    assert extract_rules(text) == RULES, "la riga di Dream e' rimasta dentro il blocco"
+    assert text.index(MARK_END) < text.index("- Dream: she answers in Italian.")
+    assert any("1 line(s)" in m for m in seen), seen
+    # Idempotente: la seconda passata non ha piu' niente da spostare.
+    assert sync_soul(tmp_path) is False
+
+
+def test_trailing_text_after_a_markerless_heading_survives(tmp_path: Path) -> None:
+    """Senza marcatori il blocco arriva fino alla prossima ``## `` o alla fine
+    del file. Un paragrafo che Dream ha messo in coda senza un'intestazione
+    nuova sta quindi *dentro* quel ripiego, e non e' dell'utente."""
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    save_rules(tmp_path, RULES)
+    soul = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    pruned = soul.replace(MARK_START + "\n", "").replace("\n" + MARK_END, "")
+    pruned += "\nShe keeps her answers short.\n\nShe never apologises twice.\n"
+    (tmp_path / "SOUL.md").write_text(pruned, encoding="utf-8")
+
+    assert sync_soul(tmp_path) is True
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert "She keeps her answers short." in text
+    assert "She never apologises twice." in text
+    assert extract_rules(text) == RULES
+    assert text.count(HEADING) == 1
+    assert text.index(MARK_END) < text.index("She keeps her answers short.")
+
+
+def test_a_rule_with_a_heading_line_is_not_duplicated(tmp_path: Path) -> None:
+    """Le regole dell'utente possono contenere una riga ``## ``. Nel ripiego
+    sull'intestazione quella riga non e' la sezione dopo: se chiudesse il
+    blocco, la coda delle regole resterebbe fuori e la proiezione la
+    scriverebbe una seconda volta."""
+    rules = "Chiamami per nome.\n## Lavoro\nNiente riunioni prima delle 10."
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    save_rules(tmp_path, rules)
+    soul = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    pruned = soul.replace(MARK_START + "\n", "").replace("\n" + MARK_END, "")
+    (tmp_path / "SOUL.md").write_text(pruned, encoding="utf-8")
+
+    sync_soul(tmp_path)
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert text.count("## Lavoro") == 1, text
+    assert text.count("Niente riunioni prima delle 10.") == 1, text
+    assert extract_rules(text) == rules
+
+
+def test_changing_the_rules_replaces_them_and_keeps_dream_lines(tmp_path: Path) -> None:
+    """Il salvataggio vero, su disco: le regole vecchie spariscono (sono quelle
+    che si sostituiscono), la riga che Dream aveva messo nel blocco resta."""
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    save_rules(tmp_path, RULES)
+    soul = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    dreamt = soul.replace(RULES + "\n", RULES + "\n- Dream line.\n")
+    (tmp_path / "SOUL.md").write_text(dreamt, encoding="utf-8")
+
+    save_rules(tmp_path, "Dammi del tu.")
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert RULES not in text, "la regola vecchia e' stata salvata come se fosse di Dream"
+    assert extract_rules(text) == "Dammi del tu."
+    assert "- Dream line." in text
+
+
+def test_emptying_the_rules_keeps_what_dream_wrote_in_the_block(tmp_path: Path) -> None:
+    (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
+    save_rules(tmp_path, RULES)
+    soul = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    (tmp_path / "SOUL.md").write_text(
+        soul.replace(RULES + "\n", RULES + "\n- Dream line.\n"), encoding="utf-8"
+    )
+
+    save_rules(tmp_path, "")
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert HEADING not in text and MARK_START not in text and RULES not in text
+    assert "- Dream line." in text
+    assert "Never moralize" in text
+
+
 # ── Il gancio ───────────────────────────────────────────────────────────────
 
 
@@ -287,3 +406,13 @@ def test_every_dream_pass_puts_the_rules_back(tmp_path: Path) -> None:
     assert extract_rules(text) == RULES, "le regole non sono tornate dopo la passata"
     assert "- Be brief." in text, "la sincronizzazione ha buttato via la passata"
     assert store.written["runs_since_review"] == 4, "i contatori non vengono piu' scritti"
+
+
+def test_dreams_prompt_names_the_block_it_must_not_touch() -> None:
+    """La proiezione ripara, ma il prompt e' il primo argine: dice a Dream che
+    quel blocco lo scrive l'app. Il banco lega le due metà — se i marcatori
+    cambiassero nel codice, il prompt nominerebbe un blocco che non esiste."""
+    from jenny.utils.helpers import load_bundled_template
+
+    text = load_bundled_template("agent/dream.md") or ""
+    assert MARK_START in text and MARK_END in text and HEADING.lstrip("# ") in text

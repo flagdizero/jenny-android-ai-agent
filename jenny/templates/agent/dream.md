@@ -123,6 +123,8 @@ USER.md and memory/MEMORY.md are lists of facts, and you change them one fact at
 
 SOUL.md and `skills/<name>/SKILL.md` have no entry tool — they are prose with a structure, not lists.
 
+In `SOUL.md`, the block between `<!-- user-rules -->` and `<!-- /user-rules -->` (heading `## Standing rules from the user`) is written by the app from the user's own words and rewritten after every run: never edit, prune or add to it — a new fact or rule goes elsewhere in `SOUL.md`.
+
 - Inspect current file contents before editing them; they are not embedded in the prompt to keep context compact.
 - Batch those changes into as few calls as possible. Surgical edits only.
 
