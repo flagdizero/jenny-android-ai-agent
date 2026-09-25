@@ -39,7 +39,7 @@ un'ora mentre uno orario la saltava, e nella notte in cui l'ora si ripete
 partiva due volte. Qui la regola è quella del cron classico (Vixie), che
 distingue due specie di lavori:
 
-- **a orario fisso** (né il minuto né l'ora cominciano con ``*``: ``30 2 * * *``)
+- **a orario fisso** (né il minuto né l'ora sono una ``*``: ``30 2 * * *``)
   seguono il calendario, una volta al giorno: un orario che quel giorno non
   esiste parte una volta sola, appena finito il salto; uno che capita due volte
   parte una volta sola, la prima;
@@ -49,6 +49,10 @@ distingue due specie di lavori:
   un'ora, come fra 02:30 e 02:30 della notte d'autunno: il ritmo resta quello.
   Farli partire una volta sola, la prima, lasciava un lavoro ogni cinque minuti
   zitto per un'ora e dieci.
+
+Una ``*`` è una ``*`` anche scritta per esteso: ``0-23``, ``0-22/2`` o
+``0,15,30,45`` hanno gli stessi valori di un ``*/n``, e valgono come lei
+(:func:`_covers_the_cycle`). Qui si allarga Vixie, che guarda solo il testo.
 """
 
 from __future__ import annotations
@@ -111,8 +115,8 @@ class CronExpr:
     # {giorno: {n o "l"}}.
     dow: frozenset[int] | None
     dow_nth: tuple[tuple[int, frozenset[int | str]], ...]
-    # Il minuto o l'ora cominciano con ``*``: ai cambi d'ora segue il tempo vero
-    # e non il calendario (v. il cappello del modulo).
+    # Il minuto o l'ora sono una ``*``, scritta o per esteso: ai cambi d'ora segue
+    # il tempo vero e non il calendario (v. il cappello del modulo).
     repeating: bool = False
 
     def matches_day(self, day: date) -> bool:
@@ -343,8 +347,27 @@ def parse(expr: str) -> CronExpr:
         dom_weekday=frozenset(fields[_DOM][2]),
         dow=_ints(dow_expanded),
         dow_nth=tuple(sorted((day, frozenset(n)) for day, n in nth.items())),
-        repeating=parts[_MINUTE].startswith("*") or parts[_HOUR].startswith("*"),
+        repeating=any(
+            parts[i].startswith("*") or _covers_the_cycle(ints(i, ()), *_RANGES[i])
+            for i in (_MINUTE, _HOUR)
+        ),
     )
+
+
+def _covers_the_cycle(values: tuple[int, ...], lo: int, hi: int) -> bool:
+    """I valori sono esattamente quelli di un ``*/n``?
+
+    E' la ``*`` scritta in un altro modo: ``0-23``, ``0-22/2``, ``0,15,30,45``.
+    Vixie guarda solo il testo, e cosi' ``0 0-23 * * *`` — lo stesso lavoro
+    orario di ``0 * * * *`` — al cambio d'ora d'autunno restava zitto un'ora e
+    dieci. La regola resta stretta di proposito: si parte dal minimo del ciclo e
+    lo si copre, come fa ``*/n``. ``9-17`` (un orario d'ufficio), ``9,21`` e
+    ``1-23/2`` (passi sfasati) restano a orario fisso, come in Vixie.
+    """
+    if len(values) < 2 or values[0] != lo:
+        return False
+    step = values[1] - values[0]
+    return values == tuple(range(lo, hi + 1, step))
 
 
 def _resolve(wall: datetime, tz) -> datetime:

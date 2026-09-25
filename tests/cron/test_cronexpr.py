@@ -198,6 +198,30 @@ def test_a_repeating_job_skips_the_times_that_do_not_exist() -> None:
     assert runs[1] == _rome(2026, 3, 29, 3, 0)
 
 
+@pytest.mark.parametrize(
+    ("spelled_out", "starred"),
+    [
+        ("0 0-23 * * *", "0 * * * *"),
+        ("*/30 0-23 * * *", "*/30 * * * *"),
+        ("0,15,30,45 2 * * *", "*/15 2 * * *"),
+    ],
+)
+def test_a_star_spelled_out_behaves_like_a_star(spelled_out: str, starred: str) -> None:
+    """``0 0-23`` e ``0 *`` sono lo stesso lavoro: le stesse partenze al cambio
+    d'ora d'autunno e a quello di primavera."""
+    assert parse(spelled_out).repeating
+    for base in (_rome(2026, 10, 25, 0, 50), _rome(2026, 3, 29, 0, 50)):
+        assert _chain(spelled_out, base, 8) == _chain(starred, base, 8)
+
+
+def test_only_the_values_of_a_star_step_count_as_a_star() -> None:
+    """La regola resta stretta: stessi valori di un ``*/n``, niente di più. Un
+    orario d'ufficio, due orari al giorno, un passo sfasato: a orario fisso."""
+    assert parse("0 0-22/2 * * *").repeating
+    for fixed in ("0 9-17 * * *", "30 2 * * *", "0 9,21 * * *", "0 1-23/2 * * *"):
+        assert not parse(fixed).repeating, fixed
+
+
 def test_a_half_hour_shift_keeps_the_rhythm_too() -> None:
     """Lord Howe torna indietro di mezz'ora (alle 02:00 si torna alle 01:30)."""
     lord_howe = ZoneInfo("Australia/Lord_Howe")
