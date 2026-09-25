@@ -1691,7 +1691,12 @@ body {
   color: var(--text-muted);
 }
 
-.chat-thinking-header i, .tool-events-header i {
+/* L'icona della testata, non la freccina in fondo: con un selettore `i` nudo
+   (0,1,1) la regola vinceva su `.chat-thinking-chevron` e
+   `.tool-events-chevron` (0,1,0), e le freccine uscivano colore accento a
+   12px invece che tenui a 11px. */
+.chat-thinking-header i:not(.chat-thinking-chevron),
+.tool-events-header i:not(.tool-events-chevron) {
   font-size: 12px;
   color: var(--accent);
 }
