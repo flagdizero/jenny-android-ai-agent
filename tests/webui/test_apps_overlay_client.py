@@ -26,7 +26,13 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 pytestmark = requires_node
 
 _NEIGHBORS = {
-    "api-client.js": "export const api = { getSecret() { return 'segreto'; } };\n",
+    "api-client.js": (
+        "export const api = {\n"
+        "  getSecret() { return 'segreto'; },\n"
+        # Il token dell'app, non il segreto: e' quello che finisce nella cornice.
+        "  async appToken(slug) { return 'app-' + slug; },\n"
+        "};\n"
+    ),
     "utils.js": """
 export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -119,7 +125,9 @@ def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
         const frame = veil.children[0];
         assert.equal(frame.tag, 'iframe');
         assert.equal(frame.attrs.sandbox, 'allow-scripts');
-        assert.ok(frame.src.startsWith('/apps/orto/index.html?token=segreto'));
+        assert.ok(frame.src.startsWith('/apps/orto/index.html?token=app-orto'),
+                  'nella cornice il token dell\u2019app, mai il segreto del gateway');
+        assert.ok(!frame.src.includes('segreto'));
         assert.deepEqual(Object.keys(actions._openApp).sort(), ['depth', 'iframe', 'overlay', 'slug']);
         assert.equal(actions._openApp.slug, 'orto');
         assert.equal(actions._openApp.overlay, veil);

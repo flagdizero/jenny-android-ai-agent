@@ -159,12 +159,16 @@ hosts*, not "everything inline". The kit is documented for the generator in
 
 The JS SDK is minimal:
 
-- `jenny.action(name, params)` — call one of the app's own actions with the auth token.
+- `jenny.action(name, params)` — call one of the app's own actions with the app's token
+  (`?token=` in the frame `src`: an HMAC of the gateway secret over the slug, valid only on
+  that app's files and actions — never the gateway secret itself, see `.agent/security.md`).
 - `jenny.discuss(text)` — hand off to chat with app context.
 - `data-changed` WebSocket event — live refresh when Jenny writes while the app is open.
 
 The iframe sandbox is a second line of defense: an app cannot navigate the SPA or touch the
-chat DOM; it only talks to its own endpoints.
+chat DOM. That it only talks to its own endpoints is **not** the sandbox's doing — it is the
+per-app token, which the gateway accepts on that app's routes and nowhere else (until Sept 2026
+the frame carried the gateway secret, and the claim was false).
 
 ## Credentials
 

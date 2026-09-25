@@ -332,9 +332,12 @@ def _run(
         # e i colori nell'indirizzo, e quello si prova dove vive.
         (root / "shared" / "apps-actions.js").write_text(
             "import { api } from './api-client.js';\n"
-            "export function frameForApp(slug) {\n"
+            "export function frameForApp(slug, opts) {\n"
             "  const f = document.createElement('iframe');\n"
             "  f.dataset.slug = slug;\n"
+            # Il token che finisce nell'indirizzo: quello dell'app, mai il
+            # segreto del gateway.
+            "  f.dataset.token = (opts || {}).token;\n"
             # Il segreto **nel momento in cui** la cornice nasce: quello vero
             # finisce nel suo indirizzo, e dopo non cambia piu'.
             "  f.dataset.secret = api.getSecret();\n"
@@ -387,6 +390,7 @@ def _run(
             "  _secret: '',\n"
             "  getSecret() { return this._secret; },\n"
             "  async bootstrap() { this._secret = 'ok'; },\n"
+            "  async appToken(slug) { return 'app-token:' + slug; },\n"
             # Un caso puo' imporre i suoi quaderni — un elenco di nomi, o
             # 'rotto' per una lettura che fallisce — e allora vale quello:
             # serve alla pagina «non c'e' piu'». Altrimenti l'elenco di sotto.
@@ -871,7 +875,9 @@ def test_the_app_frame_is_not_built_without_the_secret() -> None:
         "const page = track.children.find((c) => c.dataset.id === 'p1');\n"
         "assert.equal(page.children.length, 1, 'la cornice non e stata montata');\n"
         "assert.equal(page.children[0].dataset.secret, 'ok',\n"
-        "  'la cornice e\\u2019 nata prima del segreto: token=undefined');",
+        "  'la cornice e\\u2019 nata prima del segreto: token=undefined');\n"
+        "assert.equal(page.children[0].dataset.token, 'app-token:' + page.children[0].dataset.slug,\n"
+        "  'alla cornice va il token dell\\u2019app, non il segreto del gateway');",
         pages=DUE,
     )
 

@@ -162,6 +162,8 @@ The `data-changed` push comes from the agent side: `AppActionTool._notify_data_c
 
 Because the iframe has no `allow-same-origin`, its origin is opaque — that's why auth travels as a `?token=` query param baked into the iframe `src` rather than an `Authorization` header (a header would need a CORS preflight the GET-only server can't answer).
 
+That token is the app's own, not the gateway's: an HMAC of the per-install secret over the app's slug (`jenny/apps/token.py`), which the gateway accepts on `/apps/<slug>/…` and `/api/apps/<slug>/actions/…` and nowhere else — not on any other `/api/` route, not on another app's routes, not on the WebSocket. Don't try to reuse it for anything else; it won't open it.
+
 ### Sandbox rules that will actually break your app
 
 - No `<form>` — submission is blocked before the `submit` event fires, so `event.preventDefault()` can't rescue it. Use a plain `<button type="button">` with a click handler.

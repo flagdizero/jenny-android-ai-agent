@@ -63,6 +63,6 @@ def test_the_full_screen_overlay_does_not() -> None:
 def test_only_the_overlay_frame_says_so() -> None:
     """Il velo lo dice, la pagina della casa no: il default e' la pagina, cosi'
     ``home-pages.js`` non deve passare niente."""
-    assert "frameForApp(slug, { overlay: true })" in ACTIONS
+    assert "frameForApp(slug, { overlay: true, token })" in ACTIONS
     home = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
     assert "overlay" not in home

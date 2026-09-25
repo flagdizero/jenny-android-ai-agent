@@ -54,8 +54,18 @@ class AppsRoutes:
         check_api_token: Callable[[WsRequest], bool],
         get_workspace_root: Callable[[], Path],
         log: Any,
+        check_app_token: Callable[[WsRequest, str], bool] | None = None,
+        get_secret: Callable[[], str] | None = None,
     ) -> None:
         self._check_api_token = check_api_token
+        # Le due route che la cornice di un'app chiama da sé — i suoi file e le
+        # sue azioni — accettano anche il token **di quell'app** (v.
+        # ``jenny/apps/token.py``). Tutte le altre, qui comprese quelle
+        # ``/api/webui/apps`` che chiama la SPA, vogliono il segreto intero.
+        # Senza collaboratore si resta sul solo segreto: chiuso, non aperto.
+        self._check_app_token = check_app_token or (lambda request, _slug: check_api_token(request))
+        # Il segreto da cui si deriva il token di un'app: solo per ``_token``.
+        self._app_token_secret = get_secret or (lambda: "")
         self._get_workspace_root = get_workspace_root
         self._log = log
         # slug -> AppViewProxy vivo. Un solo proxy per app: riaprire la stessa
@@ -117,6 +127,9 @@ class AppsRoutes:
         m = re.match(r"^/api/webui/apps/([^/]+)/view/close$", path)
         if m:
             return await self._view_close(request, m.group(1))
+        m = re.match(r"^/api/webui/apps/([^/]+)/token$", path)
+        if m:
+            return self._token(request, m.group(1))
         m = re.match(r"^/api/apps/([^/]+)/actions/([^/]+)$", path)
         if m:
             return await self._action(request, m.group(1), m.group(2))
@@ -227,17 +240,40 @@ class AppsRoutes:
             await proxy.close()
         return http_json_response({"ok": True}, extra_headers=APP_CORS_HEADERS)
 
+    def _token(self, request: WsRequest, raw_slug: str) -> Response:
+        """Il token con cui la SPA incornicia l'app *slug* (v. ``frameForApp``).
+
+        Chiede il segreto intero: e' la SPA che lo domanda, per passarlo alla
+        cornice al posto del segreto stesso.
+        """
+        if not self._check_api_token(request):
+            return http_error(401, "Unauthorized")
+        disabled = self._check_apps_enabled()
+        if disabled is not None:
+            return disabled
+        slug = unquote(raw_slug)
+        if not slug or APP_SLUG_RE.match(slug) is None:
+            return http_error(400, "invalid app slug")
+        secret = self._app_token_secret()
+        if not secret:
+            return http_error(503, "no gateway secret configured")
+        from jenny.apps.token import app_token
+
+        return http_json_response(
+            {"token": app_token(secret, slug)}, extra_headers=[("Cache-Control", "no-store")]
+        )
+
     async def _action(self, request: WsRequest, raw_slug: str, raw_action: str) -> Response:
         def respond(payload: dict, status: int) -> Response:
             return http_json_response(payload, status=status, extra_headers=APP_CORS_HEADERS)
 
-        if not self._check_api_token(request):
+        slug = unquote(raw_slug)
+        if not self._check_app_token(request, slug):
             return respond({"ok": False, "error": "Unauthorized"}, 401)
         disabled = self._check_apps_enabled()
         if disabled is not None:
             return respond({"ok": False, "error": "apps are disabled"}, 503)
 
-        slug = unquote(raw_slug)
         action = unquote(raw_action)
         if not slug or APP_SLUG_RE.match(slug) is None:
             return respond({"ok": False, "error": "invalid app slug"}, 400)
@@ -268,14 +304,14 @@ class AppsRoutes:
         return respond(payload, status)
 
     def _static(self, request: WsRequest, got: str) -> Response:
-        if not self._check_api_token(request):
+        parts = got[len("/apps/") :].split("/", 1)
+        slug = unquote(parts[0])
+        if not self._check_app_token(request, slug):
             return http_error(401, "Unauthorized")
         disabled = self._check_apps_enabled()
         if disabled is not None:
             return disabled
 
-        parts = got[len("/apps/") :].split("/", 1)
-        slug = unquote(parts[0])
         rel = unquote(parts[1]) if len(parts) > 1 and parts[1] else "index.html"
         if not slug or APP_SLUG_RE.match(slug) is None:
             return http_error(400, "invalid app slug")

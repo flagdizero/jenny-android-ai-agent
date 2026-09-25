@@ -38,9 +38,15 @@ import { currentTheme, themeTokens } from './theme.js';
  *  via `jenny:theme` (v. sopra), quindi cambiare tema **non** obbliga a
  *  ricostruirla.
  *
- *  Chi chiama deve gia' avere il segreto: `api.getSecret()` qui e' letto e non
- *  atteso, perche' un `await` in mezzo alla costruzione di un nodo e' il modo
- *  in cui una cornice finisce attaccata a una pagina che non c'e' piu'.
+ *  **Il token e' quello dell'app, non il segreto del gateway.** Fino a Sett
+ *  2026 qui viaggiava `api.getSecret()`, che apre ogni route `/api/` e la
+ *  WebSocket: il sandbox teneva l'app fuori dal DOM della SPA, non fuori dal
+ *  gateway. `token` e' `await api.appToken(slug)`, che il gateway accetta solo
+ *  sui file e sulle azioni di quell'app (`jenny/apps/token.py`).
+ *
+ *  Chi chiama deve gia' averlo: qui e' passato e non atteso, perche' un
+ *  `await` in mezzo alla costruzione di un nodo e' il modo in cui una cornice
+ *  finisce attaccata a una pagina che non c'e' piu'.
  *
  *  `overlay` dice all'app che sta nel velo a tutto schermo e non in una
  *  pagina della casa: li' nessuno ascolta lo scorrimento laterale, e il kit
@@ -48,11 +54,11 @@ import { currentTheme, themeTokens } from './theme.js';
  *  gesto di lato, per niente). Il default e' la pagina, cosi' la casa non
  *  deve dire niente.
  */
-export function frameForApp(slug, { overlay = false } = {}) {
+export function frameForApp(slug, { overlay = false, token } = {}) {
   const t = currentTheme();
   const lang = document.documentElement.lang || 'it';
   const src = `/apps/${encodeURIComponent(slug)}/index.html`
-    + `?token=${encodeURIComponent(api.getSecret())}`
+    + `?token=${encodeURIComponent(token || '')}`
     + `&theme=${encodeURIComponent(t.scheme)}&lang=${encodeURIComponent(lang)}`
     + `&accent=${encodeURIComponent(t.accent)}&onAccent=${encodeURIComponent(t.onAccent)}`
     + `&tokens=${encodeURIComponent(themeTokens())}`
@@ -211,7 +217,14 @@ export class AppsActions {
       return;
     }
 
-    this._mountVeil(slug, app, frameForApp(slug, { overlay: true }));
+    let token;
+    try {
+      token = await api.appToken(slug);
+    } catch (e) {
+      showToast(String(e.message || e), 'error');
+      return;
+    }
+    this._mountVeil(slug, app, frameForApp(slug, { overlay: true, token }));
   }
 
   /* Il velo sopra tutto con la testata e la *iframe* dentro: è lo stesso per

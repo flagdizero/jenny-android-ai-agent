@@ -294,6 +294,8 @@ class GatewayHTTPHandler:
             check_api_token=self.check_api_secret,
             get_workspace_root=lambda: self._get_workspace_root(),
             log=self._log,
+            check_app_token=self.check_app_secret,
+            get_secret=lambda: self.config.token_issue_secret.strip(),
         )
 
         from jenny.webui.backup_routes import BackupRoutes
@@ -358,6 +360,14 @@ class GatewayHTTPHandler:
         from jenny.channels.http_utils import check_api_secret as _check
 
         return _check(request.headers, request.path, self.config.token_issue_secret.strip())
+
+    def check_app_secret(self, request: WsRequest, slug: str) -> bool:
+        """Il segreto, **o** il token della Jenny App *slug*: solo per le sue route."""
+        from jenny.channels.http_utils import check_app_secret as _check
+
+        return _check(
+            request.headers, request.path, self.config.token_issue_secret.strip(), slug
+        )
 
     # -- Main dispatch ------------------------------------------------------
 

@@ -451,10 +451,18 @@ export class HomePages {
           return;
         }
       }
+      /* E il token **dell'app**, non il segreto: la cornice se lo porta
+         nell'indirizzo, e il segreto aprirebbe all'app l'intera API del
+         gateway (v. `frameForApp`). */
+      let token;
+      try { token = await api.appToken(page.ref); } catch {
+        if (panel.dataset.full === mine) panel.dataset.full = '';
+        return;
+      }
       /* Nel frattempo si puo' essere usciti dalla pagina, o rientrati: in tutti
          e due i casi il giro buono non e' piu' il nostro. */
       if (panel.dataset.full !== mine) return;
-      const frame = frameForApp(page.ref);
+      const frame = frameForApp(page.ref, { token });
       frame.className = 'home-page-app';
       panel.appendChild(frame);
       /* La cornice si monta **subito**, e intanto si chiede se l'app c'e'

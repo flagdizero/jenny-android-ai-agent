@@ -52,6 +52,7 @@ Apps run inside a sandboxed iframe with `allow-scripts` only. That means:
 
 - No native `<form>` submission, no `alert()`/`confirm()`/`prompt()`, and no direct `fetch()` calls out of the app's own JavaScript. All data access goes through the app SDK's `jenny.action()` call.
 - The app cannot navigate the rest of the WebUI or touch the chat DOM.
+- The key the app is handed opens only its own files and actions. It is not the key the WebUI itself uses, so an app — or something injected into one — cannot change your settings, read your conversation, or talk to Jenny through the gateway.
 
 Storage actions (append/set/update/delete/query on a `data/` collection):
 

@@ -190,6 +190,13 @@ throws, its own fetches carry `Origin: null`). This is also why an external view
 overlay rather than being nested inside the app frame: **sandbox flags are inherited by nested
 browsing contexts**, so nesting would restore the opaque origin.
 
+**What the sandbox does not do: keep an app away from the gateway API.** The opaque origin
+keeps the app out of the SPA's DOM and storage; it says nothing about which routes the app's
+requests can open. Until Sept 2026 the frame's `?token=` *was* the gateway secret
+(`websocket.token_issue_secret`), accepted by every `/api/` route and by the WebSocket — so
+an app, or an injection inside one, had the whole API: provider settings, the write RPC,
+prompts to an agent that has `python_exec`. See the next section.
+
 **Rule**: The capability check and the loopback bind are the two things holding this up — do not
 "simplify" either. Serving an external view from the gateway's own origin, or adding
 `allow-same-origin` to the normal app frame, both defeat the isolation entirely.
@@ -212,6 +219,27 @@ two kinds exist: Jenny App pages, and files outside the UI manifest in `workspac
 
 A request without Fetch Metadata is not refused — the rule adds a refusal, it removes no access
 that existed. Fixed by `tests/webui/test_foreign_navigation_to_the_shell.py`.
+
+### A Jenny App's token opens its own routes only
+
+`frameForApp` (`shared/apps-actions.js`, used by the full-screen veil and by apps pinned as home
+pages) passes `app_token(secret, slug)` (`jenny/apps/token.py`): an HMAC-SHA256 of the gateway
+secret over the slug, with a domain separator. `http_utils.check_app_secret` accepts it — or the
+full secret — **only** on the two route families an app frame calls by itself:
+`/apps/<slug>/**` (its files) and `/api/apps/<slug>/actions/*` (what `jenny-sdk.js`
+`jenny.action()` issues). Every other route compares with the full secret alone
+(`check_api_secret`), and so does the WebSocket handshake, so the token of an app is worth
+nothing there, and the token of app A is worth nothing on app B's routes (the slug is inside the
+HMAC). The SPA gets the token from `/api/webui/apps/<slug>/token`, which itself wants the full
+secret — an app cannot mint one for another.
+
+Deterministic on purpose: nothing to store, nothing to renew while an app is open, and it rotates
+by itself with the secret. What it does **not** limit: an app can still do everything its own
+actions do, and read its own `data/` through them — that is its contract, not a leak.
+
+**Rule**: a new route an app frame must call gets `check_app_secret` with the slug parsed from
+the path; never widen `check_app_secret` to a prefix, and never pass the full secret into an
+iframe `src` again. Fixed by `tests/security/test_app_token_scope.py`.
 
 ### SSH target policy (a third one, wider still)
 

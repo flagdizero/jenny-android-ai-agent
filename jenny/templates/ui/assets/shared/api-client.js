@@ -207,6 +207,24 @@ class ApiClient {
     return res.json();
   }
 
+  /** Il token con cui si incornicia la Jenny App *slug* (v. `frameForApp`).
+   *
+   *  Non il segreto del gateway: quello apre ogni route e la WebSocket, e
+   *  un'app — o un'iniezione dentro un'app — avrebbe avuto l'intera API. Questo
+   *  vale solo per i file e le azioni di quell'app (`jenny/apps/token.py`).
+   *  Deterministico lato server, quindi si chiede una volta per slug. */
+  async appToken(slug) {
+    this._appTokens ||= new Map();
+    const cached = this._appTokens.get(slug);
+    if (cached) return cached;
+    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/token`);
+    if (!res.ok) throw new Error(`App token failed: ${res.status}`);
+    const { token } = await res.json();
+    if (!token) throw new Error('App token failed: empty');
+    this._appTokens.set(slug, token);
+    return token;
+  }
+
   async deleteJennyApp(slug) {
     const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/delete`);
     if (!res.ok) throw new Error(`Jenny app delete failed: ${res.status}`);

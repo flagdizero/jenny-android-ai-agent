@@ -217,3 +217,25 @@ def check_api_secret(headers: Any, path_with_query: str, secret: str) -> bool:
     if not supplied:
         return False
     return hmac.compare_digest(supplied, secret)
+
+
+def check_app_secret(headers: Any, path_with_query: str, secret: str, slug: str) -> bool:
+    """Come :func:`check_api_secret`, ma sulle route della Jenny App *slug*.
+
+    Accetta il segreto intero (la SPA) **oppure** il token di quell'app
+    (``jenny.apps.token.app_token``), che la cornice dell'app riceve al posto
+    del segreto. Il token di un'altra app non combacia: lo slug è dentro l'HMAC.
+    Da chiamare **solo** dalle route ``/apps/<slug>/`` e
+    ``/api/apps/<slug>/actions/``: altrove si usa :func:`check_api_secret`.
+    """
+    if not secret:
+        return False
+    supplied = bearer_token(headers) or query_first(parse_query(path_with_query), "token")
+    if not supplied:
+        return False
+    from jenny.apps.token import app_token
+
+    given = supplied.encode("utf-8")
+    if hmac.compare_digest(given, secret.encode("utf-8")):
+        return True
+    return hmac.compare_digest(given, app_token(secret, slug).encode("utf-8"))
