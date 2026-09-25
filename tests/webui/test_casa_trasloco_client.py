@@ -158,8 +158,14 @@ function cambia(chiave) {
   attuale = chiave;
   scrivi();
   let finisci;
-  const p = new Promise((r) => { finisci = () => { scrivi(...storie[chiave]); r(); }; });
-  letture.push({ chiave, finisci });
+  let risolvi;
+  const p = new Promise((r) => {
+    finisci = () => { scrivi(...storie[chiave]); r(); };
+    /* Una lettura superata: quella vera la scarta la generazione, e non
+       scrive niente nel filo — ma la sua promessa si risolve lo stesso. */
+    risolvi = r;
+  });
+  letture.push({ chiave, finisci, risolvi });
   return p;
 }
 let inFondo = 0;
@@ -347,6 +353,13 @@ def test_a_half_read_chat_is_not_photographed() -> None:
 
     In quel momento il filo e' vuoto: fotografarlo vorrebbe dire rimpiazzare
     la foto buona di B con una vuota, fino alla visita dopo.
+
+    **E una lettura vecchia che finisce dopo una nuova non garantisce per
+    lei.** Fino al 25/09/2026 il banco si fermava qui sopra, e le letture
+    arrivavano sempre in ordine: il controllo che solo l'*ultima* lettura
+    renda la chat di nuovo fotografabile si poteva togliere, e restava verde.
+    Qui la lettura di B (superata) finisce mentre quella di A e' ancora in
+    corso: se B dicesse «affidabile», lasciare A la fotograferebbe vuota.
     """
     _run(
         "let a = t.arriva(p1, 'B'); letture[0].finisci(); await a;\n"
@@ -355,6 +368,13 @@ def test_a_half_read_chat_is_not_photographed() -> None:
         "t.arriva(p0, 'A');\n"          # e si riparte subito
         "assert.deepEqual(messaggiDi(fotoDi(p1)), ['B1', 'B2', 'B3'],\n"
         "  'la foto di B e stata rifatta a meta lettura');\n"
+        # La lettura di B, gia' superata, finisce adesso: come quella vera,
+        # scartata dalla generazione, non scrive nel filo — ma si risolve.
+        "letture[2].risolvi();\n"
+        "await giro();\n"
+        "t.arriva(p1, 'B');\n"          # si lascia A mentre la sua lettura e' in corso
+        "assert.deepEqual(messaggiDi(fotoDi(p0)), ['A1', 'A2'],\n"
+        "  'una lettura vecchia finita tardi ha fatto fotografare A a meta lettura');\n"
     )
 
 

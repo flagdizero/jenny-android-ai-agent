@@ -26,7 +26,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_module
+from support.js_harness import member, requires_node, run_js, run_module
 
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
@@ -331,9 +331,13 @@ def _run(
         # costruita e con quale slug — il vero `cornicePerApp` mette il token
         # e i colori nell'indirizzo, e quello si prova dove vive.
         (radice / "shared" / "apps-actions.js").write_text(
+            "import { api } from './api-client.js';\n"
             "export function cornicePerApp(slug) {\n"
             "  const f = document.createElement('iframe');\n"
             "  f.dataset.slug = slug;\n"
+            # Il segreto **nel momento in cui** la cornice nasce: quello vero
+            # finisce nel suo indirizzo, e dopo non cambia piu'.
+            "  f.dataset.segreto = api.getSecret();\n"
             # La feritoia: il guscio riconosce chi parla confrontando
             # **questa**, e senza il banco non vedrebbe la guardia.
             # Ricorda anche cosa le si manda: `jenny:data-changed`.
@@ -819,9 +823,30 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     assert '<main class="casa-shell" data-view="chat" data-pagina="chat">' in html, (
         "il guscio non nasce dichiarando su che pagina e'"
     )
+    # Il valore, non la presenza della stringa: fino al 25/09/2026 bastava che
+    # «data-pagina» comparisse nel metodo, e un attributo scritto con l'id
+    # sbagliato (o sempre uguale) passava verde.
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
-    cambio = app_js.split("onPaginaCambiata(", 1)[1].split("_applyHead();", 1)[0]
-    assert "data-pagina" in cambio, "l'attributo non viene aggiornato al cambio pagina"
+    run_js(
+        "import assert from 'node:assert/strict';\n"
+        "class Guscio {\n"
+        "  constructor() {\n"
+        "    this.shell = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };\n"
+        "  }\n"
+        "  _haComposer() { return false; }\n"
+        "  _posaJenny() {}\n"
+        "  _applyHead() {}\n"
+        "  _segnalaChatAschermo() {}\n  "
+        + member(app_js, "onPaginaCambiata")
+        + "\n}\n"
+        "const g = new Guscio();\n"
+        "g.onPaginaCambiata(2, { id: 'quaderni', kind: 'quaderni', fissa: true });\n"
+        "assert.equal(g.shell.attrs['data-pagina'], 'quaderni');\n"
+        "g.onPaginaCambiata(4, { id: 'p1', kind: 'app', ref: 'orto', fissa: false });\n"
+        "assert.equal(g.shell.attrs['data-pagina'], 'p1');\n"
+        "g.onPaginaCambiata(9, null);\n"
+        "assert.equal(g.shell.attrs['data-pagina'], '', 'fuori dalla pista resta la pagina di prima');\n"
+    )
 
 
 def test_the_app_frame_is_not_built_without_the_secret() -> None:
@@ -830,6 +855,10 @@ def test_the_app_frame_is_not_built_without_the_secret() -> None:
     Costruirla prima che il segreto ci sia vuol dire `token=undefined`, cioe'
     un 401 e una pagina bianca. `openApp` questa guardia ce l'ha da sempre; si
     era persa estraendo la cornice, e qui si prova che c'e' di nuovo.
+
+    Il finto `cornicePerApp` si segna il segreto **al momento della chiamata**:
+    fino al 25/09/2026 il banco guardava solo che alla fine il segreto ci
+    fosse, e una cornice costruita prima del bootstrap passava verde.
     """
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
@@ -838,7 +867,9 @@ def test_the_app_frame_is_not_built_without_the_secret() -> None:
         "await new Promise((r) => setTimeout(r, 20));\n"
         "assert.equal(api.getSecret(), 'ok', 'non ha atteso il segreto');\n"
         "const pagina = pista.children.find((c) => c.dataset.id === 'p1');\n"
-        "assert.equal(pagina.children.length, 1, 'la cornice non e stata montata');",
+        "assert.equal(pagina.children.length, 1, 'la cornice non e stata montata');\n"
+        "assert.equal(pagina.children[0].dataset.segreto, 'ok',\n"
+        "  'la cornice e\\u2019 nata prima del segreto: token=undefined');",
         schermate=DUE,
     )
 
