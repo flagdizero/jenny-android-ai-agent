@@ -805,7 +805,12 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     # li possiede. Senza questo il foglio saprebbe di stare in due case.
     assert "btn-launcher" not in _src("mobile-launcher.js")
     assert "casa-drawer" not in _src("mobile-launcher.js")
-    assert "casa-shell" not in _src("mobile-launcher.js").split("_setBackgroundInert(on) {", 1)[0], (
+    # Tolto il solo corpo di `_setBackgroundInert`, non tutto quel che viene
+    # dopo: un `split` su quel metodo lasciava fuori dal controllo metà file.
+    launcher = _src("mobile-launcher.js")
+    inert_body = _method(launcher, "_setBackgroundInert")
+    assert "casa-shell" in inert_body, "il punto che nomina la casa non e' piu' qui"
+    assert "casa-shell" not in launcher.replace(inert_body, "", 1), (
         "il cassetto ha imparato un id della casa fuori dall'unico punto che la nomina"
     )
 
