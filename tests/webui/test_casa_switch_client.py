@@ -139,6 +139,7 @@ const wsManager = { inviati: [], sendToChat(...a) { this.inviati.push(a); return
 
 __DOT_COLOR__
 __FLOOR__
+__DEFAULT_BOT_NAME__
 __BACK_TO__
 
 /* I due vocabolari, presi dai sorgenti: quello dell'officina e quello di casa,
@@ -322,6 +323,9 @@ class App {
   __RENAME_NOTEBOOK__
   __RINOMINA_BOZZA__
   __DELETE_NOTEBOOK__
+  __KEEP_NAME__
+  __LEGGI_NOME__
+  __APPLY_BOT_NAME__
 }
 
 function casa() {
@@ -390,6 +394,10 @@ def _harness() -> str:
         .replace("__RENAME_NOTEBOOK__", member(src, "renameNotebook"))
         .replace("__RINOMINA_BOZZA__", member(src, "_rinominaBozza"))
         .replace("__DELETE_NOTEBOOK__", member(src, "deleteNotebook"))
+        .replace("__KEEP_NAME__", member(src, "_keepName"))
+        .replace("__LEGGI_NOME__", member(src, "_leggiNome"))
+        .replace("__APPLY_BOT_NAME__", member(src, "_applyBotName"))
+        .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
@@ -1393,3 +1401,80 @@ def test_a_deletion_that_did_not_happen_moves_nothing() -> None:
       assert.equal(sessionManager.currentKey, 'project:piante');
       cancella = true;
     """)
+
+
+# ── Il nome di lei (M10, 25/09/2026) ─────────────────────────────────────────
+
+
+def test_the_personal_conversation_is_named_after_her() -> None:
+    """La fila e i Quaderni dicevano «Jenny» comunque si chiamasse: il nome
+    era il testo fisso dell'intestazione. Ora e' `bot_name`, e i due che lo
+    scrivono si ridisegnano quando arriva."""
+    _run_js("""
+      const app = casa();
+      let disegni = 0, righe = 0;
+      app.fila.disegna = () => { disegni += 1; };
+      app.who.render = () => { righe += 1; };
+      settingsPayload = { agent: { bot_name: 'Ada' } };
+      await app._leggiNome();
+      assert.deepEqual(app._nomeChat(), { nome: 'Ada', colore: null });
+      assert.equal(disegni, 1, 'la fila dice ancora il nome di prima');
+      assert.equal(righe, 1, 'i Quaderni dicono ancora il nome di prima');
+    """)
+
+
+def test_an_empty_or_unread_name_falls_back_like_the_server() -> None:
+    _run_js("""
+      const app = casa();
+      settingsPayload = null;
+      await app._leggiNome();
+      assert.equal(app._nomeChat().nome, DEFAULT_BOT_NAME);
+      settingsPayload = { agent: { bot_name: '   ' } };
+      await app._leggiNome();
+      assert.equal(app._nomeChat().nome, DEFAULT_BOT_NAME);
+    """)
+
+
+def test_a_saved_name_reaches_the_row_and_the_cache() -> None:
+    """Salvato nella stanza di lei: la fila lo scrive subito, e la pagina
+    Impostazioni riaperta non rimette il nome letto la prima volta (la cache,
+    come per la finestra flottante)."""
+    _run_js("""
+      const app = casa();
+      settingsPayload = { agent: { bot_name: 'Ada' }, floating: null };
+      app.pagine.vaiAId('impostazioni');
+      await app.accensione;
+      assert.deepEqual(app.nomi, ['Ada']);
+      app._keepName('Vera');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app._nomeChat().nome, 'Vera', 'la fila dice ancora il nome vecchio');
+      app.pagine.vaiA(app.pagine.indiceChat);
+      app.pagine.vaiAId('impostazioni');
+      await app.accensione;
+      assert.equal(settingsCalls, 1);
+      assert.deepEqual(app.nomi, ['Ada', 'Vera'], 'la cache ha rimesso il nome vecchio');
+      assert.equal(app._nomeChat().nome, 'Vera');
+    """)
+
+
+def test_settings_that_could_not_be_read_do_not_say_an_empty_name() -> None:
+    """`null`, cioe' «non lo so»: con `''` la stanza offriva «Salva» contro
+    un nome vuoto che nessuno aveva scelto."""
+    _run_js("""
+      const app = casa();
+      settingsPayload = null;
+      app.pagine.vaiAId('impostazioni');
+      await app.accensione;
+      assert.deepEqual(app.nomi, [null]);
+    """)
+
+
+def test_the_name_is_asked_at_start_and_heard_from_her_room() -> None:
+    """I due fili che `init` e il costruttore legano, e che il banco sopra non
+    puo' esercitare: la lettura all'avvio, e l'avviso della stanza di lei."""
+    src = APP_JS.read_text(encoding="utf-8")
+    init = member(src, "init", prefixes=("async ",))
+    assert "this._leggiNome()" in init, "all'avvio il nome non si chiede"
+    assert "onName: (nome) => this._keepName(nome)" in src, "la stanza di lei non avvisa il guscio"
+    html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    assert 'id="casa-head-name"></span>' in html, "l'intestazione porta di nuovo un nome fisso"

@@ -173,6 +173,8 @@ class CasaJenny {
 let cambi = 0;
 /* Cosa la stanza ha detto alla casa della finestra flottante (v. `onFloating`). */
 const flottanti = [];
+/* I nomi che la stanza ha detto al guscio dopo un salvataggio. */
+const nomiDetti = [];
 /* `disco` e' quel che il file delle regole contiene: `undefined` = non c'e'
    (404). `rotta` e' l'altro caso, quello che conta: la lettura non e' arrivata
    affatto. Si passano alla costruzione perche' la stanza legge all'apertura. */
@@ -192,9 +194,11 @@ function stanza(floating, disco, rotta) {
   brindisi.length = 0;
   cambi = 0;
   flottanti.length = 0;
+  nomiDetti.length = 0;
   const lei = new CasaJenny({
     onChange: () => { cambi += 1; },
     onFloating: (f) => { flottanti.push(f); },
+    onName: (n) => { nomiDetti.push(n); },
   });
   lei.open();
   if (floating !== undefined) lei.setFloating(floating);
@@ -578,4 +582,37 @@ def test_a_refused_save_says_so_and_keeps_the_button() -> None:
       assert.equal(nodi['casa-nome-save'].hidden, false, 'il bottone e\u2019 sparito su un errore');
       assert.equal(brindisi.length, 1, 'l\u2019errore non l\u2019ha detto');
       assert.equal(brindisi[0][1], 'error');
+    """)
+
+
+def test_a_saved_name_is_told_to_the_shell() -> None:
+    """La fila e i Quaderni scrivono il nome di lei: il guscio deve saperlo
+    appena e' salvato, o direbbero il nome vecchio fino al riavvio. Un
+    salvataggio rifiutato non dice niente."""
+    _run_js("""
+      const lei = stanza();
+      lei.setName('Jenny');
+      nodi['casa-nome'].value = 'Ada';
+      nomeRotto = true;
+      await lei.saveNome();
+      assert.deepEqual(nomiDetti, [], 'un nome non salvato e\u2019 arrivato al guscio');
+      nomeRotto = false;
+      await lei.saveNome();
+      assert.deepEqual(nomiDetti, ['Ada']);
+    """)
+
+
+def test_a_name_that_could_not_be_read_is_not_an_empty_name() -> None:
+    """Lettura fallita: `null` e' «non lo so». Con `''` al suo posto «Salva»
+    compariva al primo tasto, confrontando quel che scrivi con un nome vuoto
+    che nessuno ha mai scelto."""
+    _run_js("""
+      const lei = stanza();
+      lei.setName(null);
+      nodi['casa-nome'].value = 'Ada';
+      nodi['casa-nome'].listeners.input[0]();
+      assert.equal(nodi['casa-nome-save'].hidden, true, 'si salva un nome confrontato col nulla');
+      lei.setName('Jenny');
+      assert.equal(nodi['casa-nome'].value, 'Ada', 'la risposta ha scritto sopra');
+      assert.equal(nodi['casa-nome-save'].hidden, false);
     """)

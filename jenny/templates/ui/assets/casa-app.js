@@ -76,6 +76,11 @@ const WIRE_GRACE_MS = 2_500;
    dal fondo — sopra la maniglia del cassetto, che e' la tavola dopo. */
 const FLOOR_NO_COMPOSER = 20;
 
+/* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
+   ripiego del server (`settings_api`, `bot_name or "Jenny"`). E' un nome
+   proprio, non una frase da tradurre. */
+const DEFAULT_BOT_NAME = 'Jenny';
+
 /* Le stanze oltre la conversazione, e dove si atterra premendo Indietro una
    volta. La catena e' lineare e sta **in un posto solo**: `_setView` la usa per
    sapere quali nomi esistono, `goBackOneRoom` per percorrerla e l'occhiello
@@ -169,6 +174,7 @@ class CasaApp {
     this.jennyRoom = new CasaJenny({
       onChange: () => this.tu.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
+      onName: (nome) => this._keepName(nome),
     });
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
        `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
@@ -211,12 +217,13 @@ class CasaApp {
        ricomparire: quella era una tua decisione, non lo stato della stanza. */
     this._jennyWasOut = true;
 
-    /* Il nome della conversazione personale, messo da parte **prima** che il
-       titolo delle stanze cominci a cambiare: da li' in poi porta il nome del
-       quaderno o della pagina, e la riga personale dei Quaderni direbbe
-       «piante». */
+    /* Il nome della conversazione personale e' il nome di lei: `bot_name`
+       delle impostazioni, che arriva dopo (v. `_leggiNome`). Non si legge
+       dalla testa — porta il nome del quaderno o della pagina, e la riga
+       personale dei Quaderni direbbe «piante» — ne' si scrive fisso: con un
+       altro nome la fila e i Quaderni dicevano comunque «Jenny». */
     this.nameEl = document.getElementById('casa-head-name');
-    this._personalName = this.nameEl?.textContent?.trim() || 'Jenny';
+    this._personalName = DEFAULT_BOT_NAME;
 
     /* Le bozze, una per conversazione. Senza, mezza frase scritta in casa
        partirebbe dentro il quaderno che apri subito dopo: e' la stessa famiglia
@@ -378,6 +385,9 @@ class CasaApp {
        finche' non ci sono la casa e' quella di chi non ha spostato niente, su
        Jenny — che e' esattamente quel che deve essere. */
     this.pagine.carica();
+    /* Neanche il nome si aspetta: fino ad allora la fila dice quello di
+       sempre. */
+    this._leggiNome();
 
     try {
       await this.chat.load();
@@ -638,7 +648,9 @@ class CasaApp {
     this.tu.sayJenny(this.jennyRoom.value());
     const data = await this._askSettings();
     this.jennyRoom.setFloating(data?.floating || null);
-    this.jennyRoom.setName(data?.agent?.bot_name || '');
+    /* Lettura fallita: `null`, cioe' «non lo so», non un nome vuoto. */
+    this.jennyRoom.setName(data ? data.agent?.bot_name || '' : null);
+    if (data) this._applyBotName(data.agent?.bot_name);
     this.tu.sayJenny(this.jennyRoom.value());
     this.modelRoom.setSettings(data);
     this.tu.sayModel(this.modelRoom.value());
@@ -696,6 +708,33 @@ class CasaApp {
     });
   }
 
+  /* Il nome appena salvato nella stanza di lei: va nella cache, o alla
+     prossima apertura delle Impostazioni `setName` rimetterebbe il nome letto
+     la prima volta; e va nella fila e nei Quaderni, che lo scrivono. */
+  _keepName(nome) {
+    this._settings?.then?.((data) => {
+      if (data && nome) (data.agent ||= {}).bot_name = nome;
+    });
+    this._applyBotName(nome);
+  }
+
+  /* Il nome di lei, dalle impostazioni: la stessa lettura che la pagina
+     Impostazioni fa comunque, e che resta in cache per lei. */
+  async _leggiNome() {
+    const data = await this._askSettings();
+    if (data) this._applyBotName(data.agent?.bot_name);
+  }
+
+  /* Il nome della conversazione personale, dove lo si scrive: la fila e la
+     riga personale dei Quaderni. Vuoto vuol dire il ripiego, come sul server. */
+  _applyBotName(nome) {
+    const nuovo = (typeof nome === 'string' && nome.trim()) || DEFAULT_BOT_NAME;
+    if (nuovo === this._personalName) return;
+    this._personalName = nuovo;
+    this.fila?.disegna();
+    this.who?.render();
+  }
+
   /* Il payload fresco che torna da un salvataggio: ha la stessa forma di
      `/api/settings`, quindi prende il posto di quello in cache e le righe che
      lo leggono si riscrivono. Senza, la riga «Chi risponde» direbbe la marca
@@ -718,7 +757,7 @@ class CasaApp {
   _askSettings() {
     if (!this._settings) {
       this._settings = api.getSettings().catch((err) => {
-        console.warn('casa: impostazioni non lette', err);
+        console.warn('casa: settings not read', err);
         this._settings = null;
         return null;
       });

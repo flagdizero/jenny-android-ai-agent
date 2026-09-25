@@ -60,8 +60,10 @@ export function jennyValue({ visible, size, floating }) {
 export class CasaJenny {
   /** @param onChange  la riga di «Tu e Jenny» si riscrive da se'.
    *  @param onFloating  com'e' finita la finestra flottante dopo un tocco: la
-   *    casa ne tiene una copia (v. `CasaApp._keepFloating`). */
-  constructor({ onChange, onFloating } = {}) {
+   *    casa ne tiene una copia (v. `CasaApp._keepFloating`).
+   *  @param onName  il nome appena salvato: la casa lo scrive nella fila e nei
+   *    Quaderni, e nella sua copia delle impostazioni (v. `CasaApp._keepName`). */
+  constructor({ onChange, onFloating, onName } = {}) {
     this.el = document.getElementById('casa-jenny-room');
     this.visibleBtn = document.getElementById('casa-jenny-visible');
     this.visibleLabel = document.getElementById('casa-jenny-visible-label');
@@ -82,6 +84,7 @@ export class CasaJenny {
 
     this._onChange = onChange;
     this._onFloating = onFloating;
+    this._onName = onName;
     /* Quel che il server dice della finestra: `null` finche' non l'ha detto. */
     this.floating = null;
     this._painted = false;
@@ -119,10 +122,16 @@ export class CasaJenny {
    *  Arriva col payload di «Tu e Jenny», come lo stato della finestra: una
    *  sola lettura per entrambi. Un campo che l'utente sta scrivendo non si
    *  sovrascrive — stesso patto delle regole qui sotto.
+   *
+   *  `null` e' «non lo so» — la lettura non e' riuscita — e non vuol dire
+   *  «vuoto»: «Salva» resta nascosto, perche' non c'e' niente con cui
+   *  confrontare quel che scrivi.
    */
   setName(nome) {
-    this._nomeSalvato = typeof nome === 'string' ? nome : '';
-    if (this.nomeEl && !this.nomeEl.value) this.nomeEl.value = this._nomeSalvato;
+    this._nomeSalvato = typeof nome === 'string' ? nome : null;
+    if (this.nomeEl && !this.nomeEl.value && this._nomeSalvato !== null) {
+      this.nomeEl.value = this._nomeSalvato;
+    }
     this._markNome();
   }
 
@@ -144,12 +153,13 @@ export class CasaJenny {
     try {
       await api.updateSettings({ bot_name: nome });
     } catch (err) {
-      console.warn('casa.jenny: nome non salvato', err);
+      console.warn('casa.jenny: name not saved', err);
       showToast(i18n.t('casa.jenny.nomeFailed'), 'error');
       return;
     }
     this._nomeSalvato = nome;
     this._markNome();
+    this._onName?.(nome);
     showToast(i18n.t('casa.jenny.rulesSaved'), 'success');
   }
 
