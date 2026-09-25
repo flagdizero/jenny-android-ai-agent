@@ -8,6 +8,8 @@ usava ``\\A…\\Z``. Dal 24/09/2026 tutti usano la stessa regex (``WIRE_ID_RE``)
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from jenny.agent.tools import ssh_jobs
@@ -24,10 +26,20 @@ def test_a_good_rpc_id_is_accepted() -> None:
     assert ws_rpc.parse_rpc_frame({"id": "rpc-0af3_Z", "method": "x", "params": {}})[0] == "rpc-0af3_Z"
 
 
-def test_a_ui_result_with_a_newline_correlation_id_is_ignored() -> None:
+async def test_a_ui_result_with_a_newline_correlation_id_is_ignored() -> None:
+    """Un id malformato si scarta prima di cercarlo fra le query in volo.
+
+    La query in attesa è registrata proprio sotto la chiave con il ``\\n``:
+    è l'unico modo in cui la regex decide qualcosa, perché con un ``$`` lasco
+    l'id passerebbe il controllo, troverebbe la Future e la risolverebbe.
+    """
     coordinator = ui_query.UiQueryCoordinator()
-    # Non solleva e non risolve niente: un id malformato si scarta con un warning.
-    coordinator.handle_ui_result("conn", {"correlation_id": "uiq-1\n", "result": {}})
+    future = asyncio.get_running_loop().create_future()
+    coordinator._pending["uiq-1\n"] = ui_query._PendingQuery("conn", future)
+
+    coordinator.handle_ui_result("conn", {"correlation_id": "uiq-1\n", "payload": {}})
+
+    assert not future.done(), "un id con \\n finale ha risolto una query in volo"
 
 
 def test_the_ui_query_regex_refuses_a_trailing_newline() -> None:
