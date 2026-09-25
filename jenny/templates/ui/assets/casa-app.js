@@ -200,7 +200,7 @@ class CasaApp {
       onNeedMap: (data, _rows, quaderno) => this._drawMap(data, quaderno),
     });
     this.reader = new CasaReader();
-    this.reader.onTitle = (title) => this._setHeadTitle(title);
+    this.reader.onTitle = (title) => this._readerTitle(title);
     this.audit = new CasaAudit(this.reader);
     this.audit.onFiled = (segnalazione) => this._portaInChat(segnalazione);
     /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
@@ -637,7 +637,15 @@ class CasaApp {
     if (!notebook || !path) return;
     this._setView('reader');
     this._setHeadTitle(label || '');
-    this._setHeadTitle(await this.reader.load(notebook, path, label));
+    this._readerTitle(await this.reader.load(notebook, path, label));
+  }
+
+  /* Il titolo di una pagina arriva dopo una lettura — l'apertura, un
+     salvataggio, un conflitto — e si scrive solo se si e' ancora nel lettore:
+     tornati indietro nel frattempo, la testa dice gia' dove sei, e il titolo
+     della pagina lasciata ci scriverebbe sopra. */
+  _readerTitle(title) {
+    if (this.view === 'reader') this._setHeadTitle(title);
   }
 
 

@@ -331,6 +331,8 @@ class App {
   __LEGGI_NOME__
   __APPLY_BOT_NAME__
   __CONFIRM_LEAVE__
+  __OPEN_PAGE__
+  __READER_TITLE__
 }
 
 function casa() {
@@ -403,6 +405,8 @@ def _harness() -> str:
         .replace("__LEGGI_NOME__", member(src, "_leggiNome"))
         .replace("__APPLY_BOT_NAME__", member(src, "_applyBotName"))
         .replace("__CONFIRM_LEAVE__", member(src, "_confirmLeaveReader"))
+        .replace("__OPEN_PAGE__", member(src, "openPage"))
+        .replace("__READER_TITLE__", member(src, "_readerTitle"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
@@ -1542,4 +1546,55 @@ def test_a_tapped_alert_waits_for_the_reader_confirm_too() -> None:
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(app.view, 'chat');
       assert.equal(sessionManager.currentKey, 'websocket:default');
+    """)
+
+
+def test_a_page_title_that_arrives_after_back_does_not_take_the_head() -> None:
+    """La pagina si legge dalla rete: tornati alle pagine prima che arrivi,
+    il suo titolo finiva nella testa delle pagine al posto del quaderno."""
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      let arriva;
+      app.reader = {
+        load: () => new Promise((r) => { arriva = r; }),
+        isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
+      };
+      app._setView('pages');
+      const aperta = app.openPage('semina.md', 'Semina');
+      assert.equal(app.nameEl.textContent, 'Semina');
+      app.handleHardwareBack();
+      assert.equal(app.view, 'pages');
+      assert.equal(app.nameEl.textContent, 'orto');
+      arriva('Semina di marzo');
+      await aperta;
+      assert.equal(app.nameEl.textContent, 'orto', 'il titolo della pagina lasciata ha preso la testa');
+    """)
+
+
+def test_a_page_title_that_arrives_in_the_reader_is_written() -> None:
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app.reader = {
+        load: async () => 'Semina di marzo',
+        isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
+      };
+      app._setView('pages');
+      await app.openPage('semina.md', 'Semina');
+      assert.equal(app.nameEl.textContent, 'Semina di marzo');
+    """)
+
+
+def test_a_title_from_a_save_after_leaving_the_reader_is_dropped() -> None:
+    """Lo stesso per il titolo che il lettore annuncia dopo un salvataggio o
+    un conflitto (`onTitle`): e' lo stesso cancello."""
+    src = APP_JS.read_text(encoding="utf-8")
+    assert "this.reader.onTitle = (title) => this._readerTitle(title);" in src
+    _run_js("""
+      const app = casa();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('pages');
+      app._readerTitle('Semina di marzo');
+      assert.equal(app.nameEl.textContent, 'orto');
     """)
