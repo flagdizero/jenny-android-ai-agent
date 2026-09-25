@@ -482,7 +482,7 @@ def _json_bool_true(source: str, key: str) -> bool:
 def _scan_json_string(source: str, key: str) -> tuple[str, bool] | None:
     """Il valore della stringa JSON di *key*, decodificato, e se è chiusa.
 
-    ``None`` se la chiave non c'è. Altrimenti ``(testo, completa)``: il testo fin
+    ``None`` se la chiave non c'è. Altrimenti ``(text, completa)``: il testo fin
     dove si è riusciti a leggere, e ``completa`` solo se si è arrivati alle
     virgolette di chiusura. Un ``\\u`` troncato o non esadecimale ferma la lettura
     lì (la stringa resta incompleta). ``\\b``, ``\\f`` e ``\\/`` rendono la lettera

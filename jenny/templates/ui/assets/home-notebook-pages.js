@@ -99,7 +99,7 @@ export class NotebookPages {
   /**
    * @param onOpenPage  cosa fare quando si tocca una riga: `(path, label)`.
    * @param onNeedMap   la mappa la disegna un altro modulo, e si carica al
-   *                    primo tocco sulla linguetta: `(dati) => Promise`.
+   *                    primo tocco sulla linguetta: `(data) => Promise`.
    */
   constructor({ onOpenPage, onNeedMap } = {}) {
     this.el = document.getElementById('home-notebook-pages');

@@ -1896,7 +1896,7 @@ class TestReadingWhatWasSaid:
         """Il taglio non è solo il tetto: è anche il file che si è spezzato.
 
         Superati gli 8 MB, ``transcript_store`` sposta i turni vecchi in
-        ``<chiave>.segments/`` e lascia sul posto la coda. La finestra risultava
+        ``<key>.segments/`` e lascia sul posto la coda. La finestra risultava
         allora **intera** — tre messaggi, ``truncated=False`` — mentre metà
         conversazione stava in un altro file: la rete del controllo incrociato
         era lossy *e* muta.

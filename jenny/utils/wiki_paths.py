@@ -153,7 +153,7 @@ def is_wiki_page_rel(
     **Una regola sola per i quattro camminatori** (T9.5). Prima ce n'erano
     quattro, e le differenze non erano decisioni: :func:`iter_wiki_pages`
     saltava i nascosti, ``webui/wiki.py::iter_page_files`` no — quindi un
-    ``.bozza.md`` sotto ``wiki/`` non arrivava al modello ma diventava un nodo
+    ``.draft.md`` sotto ``wiki/`` non arrivava al modello ma diventava un nodo
     del grafo e un risultato di ricerca — e ``_walk`` saltava i nascosti a ogni
     livello, cioe' **anche le cartelle**, mentre gli altri due guardavano solo
     il nome del file. Il risultato: l'albero dei file nascondeva una cartella

@@ -97,7 +97,7 @@ export class ActivityLine {
     this.plain = document.createElement('span');
     this.plain.className = 'home-activity-text';
     this.el.append(svg, this.words, this.plain);
-    this.fiore = new Flower(svg, { reducedMotion: this._reduced });
+    this.flower = new Flower(svg, { reducedMotion: this._reduced });
 
     if (this._onOpen) {
       const line = this.el;
@@ -170,10 +170,10 @@ export class ActivityLine {
   }
 
   _paint() {
-    this.fiore.setMode(this.family);
+    this.flower.setMode(this.family);
     this._setWord(this._word());
     this.el.hidden = false;
-    this.fiore.start();
+    this.flower.start();
     clearInterval(this._rotateTimer);
     this._rotateTimer = setInterval(() => {
       this._setWord(this._word());
@@ -241,6 +241,6 @@ export class ActivityLine {
     this.el.hidden = true;
     this.words.replaceChildren();
     this.plain.textContent = '';
-    this.fiore.reset();
+    this.flower.reset();
   }
 }

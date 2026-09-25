@@ -30,13 +30,13 @@ import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { watchHorizontalSwipe } from './shared/horizontal-swipe.js';
-import { cornicePerApp } from './shared/apps-actions.js';
+import { frameForApp } from './shared/apps-actions.js';
 import { projectNameOf } from './shared/conversation-list.js';
 
 /** Quanto la pista si lascia tirare oltre il capo, in frazione di schermo.
  *  Serve a dire «di la' non c'e' niente» col dito invece che con un blocco
  *  secco, che sembra un difetto. */
-const OLTRE_IL_CAPO = 0.06;
+const BEYOND_NEWLINE = 0.06;
 
 /** Le pagine che ci sono sempre, nell'ordine di chi non ha mai spostato
  *  niente. E' la copia di `FIXED_PAGES` dello schema, e serve solo finche' il
@@ -46,26 +46,26 @@ export const FIXED_PAGES = ['app', 'chat', 'notebooks', 'settings'];
 /** La specie di una pagina fissa. Il cassetto non si chiama `app` qui dentro:
  *  `app` e' gia' la specie di una **Jenny App** appesa, e due cose diverse con
  *  lo stesso nome si confondono al primo `if`. */
-const FIXED_KINDS = { app: 'cassetto', chat: 'chat', notebooks: 'notebooks', settings: 'settings' };
+const FIXED_KINDS = { app: 'drawer', chat: 'chat', notebooks: 'notebooks', settings: 'settings' };
 
 /** L'ordine reso coerente con le pagine che ci sono. La stessa regola di
  *  `normalize_order` nello schema, per quando il server non l'ha detta (una
  *  lettura fallita, un gateway vecchio): mai un ordine che perde una pagina. */
 export function normalizeOrder(order, pages, fixed = FIXED_PAGES) {
   const ids = pages.map((s) => s.id);
-  const validi = new Set([...fixed, ...ids]);
-  const visti = [];
+  const valid = new Set([...fixed, ...ids]);
+  const seen = [];
   for (const v of Array.isArray(order) ? order : []) {
-    if (typeof v === 'string' && validi.has(v) && !visti.includes(v)) visti.push(v);
+    if (typeof v === 'string' && valid.has(v) && !seen.includes(v)) seen.push(v);
   }
-  if (!visti.length) {
+  if (!seen.length) {
     const i = fixed.indexOf('chat') + 1;
     return [...fixed.slice(0, i), ...ids, ...fixed.slice(i)];
   }
-  for (const f of fixed) if (!visti.includes(f)) visti.push(f);
-  const mancanti = ids.filter((id) => !visti.includes(id));
-  const dopo = visti.indexOf('chat') + 1;
-  return [...visti.slice(0, dopo), ...mancanti, ...visti.slice(dopo)];
+  for (const f of fixed) if (!seen.includes(f)) seen.push(f);
+  const missing = ids.filter((id) => !seen.includes(id));
+  const after = seen.indexOf('chat') + 1;
+  return [...seen.slice(0, after), ...missing, ...seen.slice(after)];
 }
 
 
@@ -73,96 +73,96 @@ export class HomePages {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
   constructor(app) {
     this.app = app;
-    this.pista = document.getElementById('home-track');
+    this.track = document.getElementById('home-track');
     /** Le pagine aggiunte, come le ha salvate il server. */
     this.pages = [];
     this.fixed = [...FIXED_PAGES];
     /** Dove sta ogni pagina: gli id delle fisse e delle schermate. */
     this.order = normalizeOrder([], [], this.fixed);
-    this.indice = this.indiceChat;
-    this._tetto = 8;
-    /** Chi accende e spegne una pagina fissa: `{accendi, spegni}` per id. */
-    this._ganci = {};
+    this.index = this.chatIndex;
+    this._cap = 8;
+    /** Chi accende e spegne una pagina fissa: `{activate, deactivate}` per id. */
+    this._hooks = {};
     /** La pagina fissa accesa adesso, per spegnerla quando la lasci. */
-    this._accesa = null;
+    this._active = null;
     /** La conversazione della pagina chat — la chat «libera», quella che
      *  scegli dai Quaderni. Le pagine conversazione hanno la loro nel `ref`;
      *  questa non sta nell'elenco salvato. Parte da quella che la chat mostra
      *  all'avvio, cioe' la personale. */
-    this.conversazioneCasa = app?.chiaveAttuale?.() || null;
+    this.homeConversation = app?.currentKey?.() || null;
 
-    if (this.pista) {
+    if (this.track) {
       /* Si parte sulla chat anche prima che il server abbia detto l'ordine:
          nell'HTML la chat e' la seconda, e senza questo il primo fotogramma
-         sarebbe il cassetto. Solo il `transform` — `vaiA` vorrebbe un guscio
+         sarebbe il cassetto. Solo il `transform` — `goTo` vorrebbe un guscio
          gia' costruito, e qui lo si sta ancora costruendo. */
-      this.pista.style.transform = `translateX(${-this.indice * 100}%)`;
-      this._armaGesto();
+      this.track.style.transform = `translateX(${-this.index * 100}%)`;
+      this._armSwipe();
     }
   }
 
   /** Quante caselle ha la pista. */
-  get quante() {
+  get howMany() {
     return this.order.length;
   }
 
   /** Dove sta la chat adesso. */
-  get indiceChat() {
+  get chatIndex() {
     return Math.max(0, this.order.indexOf('chat'));
   }
 
   /** Dove sta la pagina `id`, o -1. */
-  indiceDi(id) {
+  indexOf(id) {
     return this.order.indexOf(id);
   }
 
   /** Se il tetto e' pieno non si puo' aggiungere: lo chiedono le schede. */
-  get pienoZeppo() {
-    return this.pages.length >= this._tetto;
+  get full() {
+    return this.pages.length >= this._cap;
   }
 
-  /** Cosa c'e' nella casella `i`: `{id, kind, fissa}`, piu' il `ref` di una
+  /** Cosa c'e' nella casella `i`: `{id, kind, fixed}`, piu' il `ref` di una
    *  schermata. `null` fuori dalla pista. */
-  voce(i) {
+  entry(i) {
     const id = this.order[i];
     if (id === undefined) return null;
-    if (this.fixed.includes(id)) return { id, kind: FIXED_KINDS[id] || id, fissa: true };
+    if (this.fixed.includes(id)) return { id, kind: FIXED_KINDS[id] || id, fixed: true };
     const s = this.pages.find((x) => x.id === id);
-    return s ? { ...s, fissa: false } : null;
+    return s ? { ...s, fixed: false } : null;
   }
 
   /** Tutte le voci, in ordine: la fila le disegna, la modalita' ordina le sposta. */
-  get voci() {
-    return this.order.map((_, i) => this.voce(i)).filter(Boolean);
+  get entries() {
+    return this.order.map((_, i) => this.entry(i)).filter(Boolean);
   }
 
   /** Una pagina fissa dice come accendersi quando la guardi e spegnersi
    *  quando la lasci. Il cassetto legge le app, le impostazioni il server. */
-  registra(id, ganci) {
-    this._ganci[id] = ganci;
-    /* Se la si sta gia' guardando, si accende adesso: il `vaiA` che ci ha
+  register(id, hooks) {
+    this._hooks[id] = hooks;
+    /* Se la si sta gia' guardando, si accende adesso: il `goTo` che ci ha
        portato qui e' passato quando il gancio non c'era ancora. */
-    if (this.order[this.indice] === id) this._accendiFissa(id);
+    if (this.order[this.index] === id) this._activateFixed(id);
   }
 
   /** Legge l'elenco dal server e disegna. Non alza: una casa che non apre
    *  perche' non ha saputo leggere le sue pagine e' peggio di una casa con le
    *  sole quattro. */
-  async carica() {
+  async load() {
     try {
-      this._prendi(await api.getPages());
+      this._take(await api.getPages());
     } catch {
-      this._prendi(null);
+      this._take(null);
     }
-    this._disegna();
-    this.vaiA(this.indiceChat, { animato: false });
+    this._draw();
+    this.goTo(this.chatIndex, { animated: false });
   }
 
-  _prendi(dati) {
-    this.pages = Array.isArray(dati?.pages) ? dati.pages : [];
-    if (Array.isArray(dati?.fixed) && dati.fixed.includes('chat')) this.fixed = dati.fixed;
-    if (Number.isFinite(dati?.max)) this._tetto = dati.max;
-    this.order = normalizeOrder(dati?.order, this.pages, this.fixed);
+  _take(data) {
+    this.pages = Array.isArray(data?.pages) ? data.pages : [];
+    if (Array.isArray(data?.fixed) && data.fixed.includes('chat')) this.fixed = data.fixed;
+    if (Number.isFinite(data?.max)) this._cap = data.max;
+    this.order = normalizeOrder(data?.order, this.pages, this.fixed);
   }
 
   /** Salva tutto — aggiungere, togliere e spostare sono la stessa scrittura,
@@ -177,72 +177,72 @@ export class HomePages {
    *  e nessuno lo prendeva: «Fatto» in modalita' ordina perdeva l'ordine in
    *  silenzio, «Metti/Togli pagina» non diceva niente. Chi ha qualcosa da
    *  tenere da parte (la bozza dell'ordine) la tiene finche' non torna vero. */
-  async salva(pages, order) {
-    const dove = this.order[this.indice];
-    let salvate;
+  async save(pages, order) {
+    const where = this.order[this.index];
+    let saved;
     try {
-      salvate = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
+      saved = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
     } catch (err) {
       console.warn('casa.homePages: pages not saved', err);
       showToast(i18n.t('home.pages.saveFailed'), 'error');
       return false;
     }
-    this.pages = salvate.pages || [];
-    this.order = normalizeOrder(salvate.order, this.pages, this.fixed);
-    this._disegna();
-    const ancora = this.indiceDi(dove);
-    this.vaiA(ancora >= 0 ? ancora : this.indiceChat, { animato: false });
-    return salvate;
+    this.pages = saved.pages || [];
+    this.order = normalizeOrder(saved.order, this.pages, this.fixed);
+    this._draw();
+    const again = this.indexOf(where);
+    this.goTo(again >= 0 ? again : this.chatIndex, { animated: false });
+    return saved;
   }
 
 
   /** Va alla casella `i`, se esiste. */
-  vaiA(i, { animato = true } = {}) {
-    if (!this.pista) return;
-    const bersaglio = Math.max(0, Math.min(i, this.quante - 1));
-    this.indice = bersaglio;
-    this.pista.style.transition = animato
+  goTo(i, { animated = true } = {}) {
+    if (!this.track) return;
+    const target = Math.max(0, Math.min(i, this.howMany - 1));
+    this.index = target;
+    this.track.style.transition = animated
       ? 'transform .22s cubic-bezier(.22,.61,.36,1)'
       : 'none';
-    this.pista.style.transform = `translateX(${-bersaglio * 100}%)`;
-    this._accendiSolo(bersaglio);
-    const voce = this.voce(bersaglio);
+    this.track.style.transform = `translateX(${-target * 100}%)`;
+    this._activateOnly(target);
+    const entry = this.entry(target);
     /* La chat arriva **prima** che l'intestazione si ridisegni: il trasloco
        cambia conversazione subito, e la fila deve gia' leggere quella nuova. */
-    const chiave = this.conversazioneDi(bersaglio);
-    if (chiave) this.app?.trasloco?.arriva(this.pannelloDi(bersaglio), chiave);
-    if (voce?.kind === 'conversation') this._controllaQuaderno(this.pannelloDi(bersaglio), voce);
-    this.app?.onPaginaCambiata?.(bersaglio, voce);
+    const key = this.conversationOf(target);
+    if (key) this.app?.chatMove?.arrives(this.panelOf(target), key);
+    if (entry?.kind === 'conversation') this._checkNotebook(this.panelOf(target), entry);
+    this.app?.onPageChanged?.(target, entry);
   }
 
   /** Va alla pagina `id`. */
-  vaiAId(id, opts) {
-    const i = this.indiceDi(id);
-    if (i >= 0) this.vaiA(i, opts);
+  goToId(id, opts) {
+    const i = this.indexOf(id);
+    if (i >= 0) this.goTo(i, opts);
   }
 
   /** Quale conversazione mostra la casella `i`, o `null` se non e' di chat.
    *
-   *  La chat ha la sua (`conversazioneCasa`), una pagina conversazione il suo
+   *  La chat ha la sua (`homeConversation`), una pagina conversazione il suo
    *  quaderno; il resto nessuna — attraversarle non cambia la chat.
    */
-  conversazioneDi(i) {
-    const voce = this.voce(i);
-    if (voce?.kind === 'chat') return this.conversazioneCasa;
-    return voce?.kind === 'conversation' ? voce.ref : null;
+  conversationOf(i) {
+    const entry = this.entry(i);
+    if (entry?.kind === 'chat') return this.homeConversation;
+    return entry?.kind === 'conversation' ? entry.ref : null;
   }
 
   /** Il pannello della casella `i`. */
-  pannelloDi(i) {
+  panelOf(i) {
     const id = this.order[i];
-    return id === undefined ? null : this._pannelloPer(id);
+    return id === undefined ? null : this._panelFor(id);
   }
 
-  _pannelloPer(id) {
-    if (!this.pista) return null;
-    const figli = Array.from(this.pista.children);
-    if (this.fixed.includes(id)) return figli.find((c) => c.dataset?.page === id) || null;
-    return figli.find((c) => c.dataset?.id === id) || null;
+  _panelFor(id) {
+    if (!this.track) return null;
+    const children = Array.from(this.track.children);
+    if (this.fixed.includes(id)) return children.find((c) => c.dataset?.page === id) || null;
+    return children.find((c) => c.dataset?.id === id) || null;
   }
 
   /** Da fuori — i Quaderni, Home, un avviso — si chiede una conversazione.
@@ -259,15 +259,15 @@ export class HomePages {
    *  Torna la promessa del cambio, e non per scrupolo: chi chiama ci manda
    *  subito dopo un messaggio, e deve finire nella conversazione giusta.
    */
-  apriConversazione(chiave) {
-    const qui = this.voce(this.indice);
-    if (qui?.kind === 'conversation' && chiave === qui.ref) {
-      return this.app?.mostraConversazione?.(chiave);
+  openConversation(key) {
+    const here = this.entry(this.index);
+    if (here?.kind === 'conversation' && key === here.ref) {
+      return this.app?.showConversation?.(key);
     }
-    this.conversazioneCasa = chiave;
-    if (qui?.kind === 'chat') return this.app?.mostraConversazione?.(chiave);
-    this.vaiA(this.indiceChat);
-    return this.app?.trasloco?.lettura;
+    this.homeConversation = key;
+    if (here?.kind === 'chat') return this.app?.showConversation?.(key);
+    this.goTo(this.chatIndex);
+    return this.app?.chatMove?.read;
   }
 
   /* ── Appendere e staccare ───────────────────────────────────────────── */
@@ -277,7 +277,7 @@ export class HomePages {
      porta: le schede chiedono, e qui si decide. */
 
   /** E' gia' una pagina? */
-  appesa(kind, ref) {
+  pending(kind, ref) {
     return this.pages.some((s) => s.kind === kind && s.ref === ref);
   }
 
@@ -290,58 +290,58 @@ export class HomePages {
    *  **Ci si atterra**: chi l'ha appena aggiunta vuole vederla, e lasciarlo
    *  dov'era gli farebbe credere che non sia successo niente.
    */
-  async appendi(kind, ref) {
-    if (this.appesa(kind, ref) || this.pienoZeppo) return false;
+  async append(kind, ref) {
+    if (this.pending(kind, ref) || this.full) return false;
     const id = `p${Date.now().toString(36)}`;
-    const aggiunte = this.order
+    const added = this.order
       .map((x, i) => (this.fixed.includes(x) ? -1 : i))
       .filter((i) => i >= 0);
-    const dopo = aggiunte.length ? Math.max(...aggiunte) : this.indiceChat;
+    const after = added.length ? Math.max(...added) : this.chatIndex;
     const order = [...this.order];
-    order.splice(dopo + 1, 0, id);
-    if (!(await this.salva([...this.pages, { id, kind, ref }], order))) return false;
-    this.vaiAId(id);
+    order.splice(after + 1, 0, id);
+    if (!(await this.save([...this.pages, { id, kind, ref }], order))) return false;
+    this.goToId(id);
     return true;
   }
 
   /** La stacca. Niente conferma: una pagina si rimette con una pressione, e
    *  una domanda per un gesto annullabile e' solo un tocco in piu' ogni volta. */
-  async stacca(kind, ref) {
+  async detach(kind, ref) {
     const via = this.pages.find((s) => s.kind === kind && s.ref === ref);
     if (!via) return false;
-    const salvate = await this.salva(
+    const saved = await this.save(
       this.pages.filter((s) => s !== via),
       this.order.filter((id) => id !== via.id),
     );
-    return Boolean(salvate);
+    return Boolean(saved);
   }
 
   /** Un quaderno ha cambiato nome: la pagina chat lo segue, se era il suo.
    *  Le pagine appese le ha gia' rinominate il gateway; la conversazione della
    *  pagina chat non sta nell'elenco salvato, e senza questa resterebbe
    *  puntata a un nome che non c'e' piu'. */
-  rinominaConversazione(vecchia, nuova) {
-    if (this.conversazioneCasa === vecchia) this.conversazioneCasa = nuova;
+  renameConversation(oldKey, newKey) {
+    if (this.homeConversation === oldKey) this.homeConversation = newKey;
   }
 
   /** Rilegge dal server **senza** spostarti.
    *
    *  Serve dopo una cancellazione: il gateway ha tolto la pagina insieme alla
-   *  cosa, e qui bisogna saperlo. `carica()` qui sarebbe sbagliato — riporta
+   *  cosa, e qui bisogna saperlo. `load()` qui sarebbe sbagliato — riporta
    *  sempre alla chat, cioe' ti sposta anche quando la tua pagina c'e' ancora.
    */
-  async ricarica() {
-    let dati;
+  async reload() {
+    let data;
     try {
-      dati = await api.getPages();
+      data = await api.getPages();
     } catch {
       return;
     }
-    const dove = this.order[this.indice];
-    this._prendi(dati);
-    this._disegna();
-    const ancora = this.indiceDi(dove);
-    this.vaiA(ancora >= 0 ? ancora : this.indiceChat, { animato: false });
+    const where = this.order[this.index];
+    this._take(data);
+    this._draw();
+    const again = this.indexOf(where);
+    this.goTo(again >= 0 ? again : this.chatIndex, { animated: false });
   }
 
   /* ── Sotto ──────────────────────────────────────────────────────────── */
@@ -354,19 +354,19 @@ export class HomePages {
    *  e solo quelli fuori posto: spostare un nodo che e' gia' dove deve stare
    *  gli costerebbe il fuoco e lo scorrimento per niente.
    */
-  _disegna() {
-    if (!this.pista) return;
+  _draw() {
+    if (!this.track) return;
     /* Prima di buttare un pannello, si riprende la chat se era parcheggiata li':
        un `remove()` secco la porterebbe via insieme al pannello — cioe' filo,
        composer e bozza (trovato il 23/09/2026, quando le pagine tenevano anche
        le stanze del guscio e perdevano pure quelle). */
-    const home = this._pannelloPer('chat');
-    for (const vecchio of Array.from(this.pista.children).filter((c) => c.dataset?.id)) {
-      this.app?.trasloco?.riportaACasa(vecchio, home);
-      vecchio.remove();
+    const home = this._panelFor('chat');
+    for (const oldValue of Array.from(this.track.children).filter((c) => c.dataset?.id)) {
+      this.app?.chatMove?.bringBackHome(oldValue, home);
+      oldValue.remove();
     }
     this.order.forEach((id, i) => {
-      let panel = this._pannelloPer(id);
+      let panel = this._panelFor(id);
       if (!panel) {
         const s = this.pages.find((x) => x.id === id);
         if (!s) return;
@@ -375,10 +375,10 @@ export class HomePages {
         panel.dataset.id = s.id;
         panel.dataset.kind = s.kind;
       }
-      const qui = this.pista.children[i];
-      if (qui !== panel) this.pista.insertBefore(panel, qui || null);
+      const here = this.track.children[i];
+      if (here !== panel) this.track.insertBefore(panel, here || null);
     });
-    this.app?.onPagineCambiate?.();
+    this.app?.onPagesChanged?.();
   }
 
   /** «Resta viva solo la pagina che guardi: le altre si spengono, o te le
@@ -392,45 +392,45 @@ export class HomePages {
    *  Vale anche per le fisse, a modo loro: il cassetto ascolta la tastiera solo
    *  mentre lo guardi, e le impostazioni si rileggono quando ci arrivi.
    */
-  _accendiSolo(indice) {
-    if (!this.pista) return;
-    const corrente = this.pannelloDi(indice);
+  _activateOnly(index) {
+    if (!this.track) return;
+    const corrente = this.panelOf(index);
     /* Fuori schermo non vuol dire fuori portata: senza `inert` il Tab della
        tastiera fisica, e chi legge lo schermo, finivano nelle pagine accanto —
        un campo di ricerca, un interruttore delle impostazioni — che si
        attivavano senza vederle. Vale per tutti i pannelli, fissi compresi. */
-    for (const panel of Array.from(this.pista.children)) {
+    for (const panel of Array.from(this.track.children)) {
       panel.inert = panel !== corrente;
     }
-    for (const panel of this._pannelli()) {
-      if (panel === corrente) this._riempi(panel);
-      else this._svuota(panel);
+    for (const panel of this._panels()) {
+      if (panel === corrente) this._fill(panel);
+      else this._empty(panel);
     }
-    const id = this.order[indice];
-    if (this._accesa && this._accesa !== id) {
-      const prima = this._accesa;
-      this._accesa = null;
-      this._ganci[prima]?.spegni?.();
+    const id = this.order[index];
+    if (this._active && this._active !== id) {
+      const before = this._active;
+      this._active = null;
+      this._hooks[before]?.deactivate?.();
     }
-    if (this.fixed.includes(id) && this._accesa !== id) this._accendiFissa(id);
+    if (this.fixed.includes(id) && this._active !== id) this._activateFixed(id);
   }
 
-  _accendiFissa(id) {
-    this._accesa = id;
-    this._ganci[id]?.accendi?.();
+  _activateFixed(id) {
+    this._active = id;
+    this._hooks[id]?.activate?.();
   }
 
   /** Il contenuto di una pagina, costruito adesso perche' adesso si guarda. */
-  async _riempi(panel) {
-    /* `pieno` porta il **numero del tentativo**, non un `1`: qui basta che sia
+  async _fill(panel) {
+    /* `full` porta il **numero del tentativo**, non un `1`: qui basta che sia
        valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
     /* Una pagina conversazione non si riempie: ci arriva la chat, e la porta
-       il trasloco da `vaiA`. */
+       il trasloco da `goTo`. */
     if (panel.dataset.kind === 'conversation') return;
-    if (panel.dataset.pieno) return;
-    const schermata = this.pages.find((x) => x.id === panel.dataset.id);
-    if (!schermata) return;
+    if (panel.dataset.full) return;
+    const page = this.pages.find((x) => x.id === panel.dataset.id);
+    if (!page) return;
     /* Un segno **per tentativo**, non un flag condiviso.
        Un dito veloce fra due pagine fa: riempi → svuota → riempi. Il primo
        tentativo e' fermo sull'attesa del segreto; quando riparte trova la
@@ -438,70 +438,70 @@ export class HomePages {
        lui pure. Due cornici, cioe' la stessa app viva due volte.
        Col numero di tentativo ognuno riconosce se e' ancora il suo giro.
        Misurato dal banco, non ipotizzato (22/09/2026). */
-    const mio = String((this._tentativo = (this._tentativo || 0) + 1));
-    panel.dataset.pieno = mio;
-    if (schermata.kind === 'app') {
+    const mine = String((this._attempt = (this._attempt || 0) + 1));
+    panel.dataset.full = mine;
+    if (page.kind === 'app') {
       /* Il segreto **prima** della cornice: l'indirizzo se lo porta dentro, e
          costruirla senza vorrebbe dire un `token=undefined`, cioe' un 401 e
          una pagina bianca. `openApp` questa guardia ce l'ha da sempre; qui si
          era persa estraendo la cornice. */
       if (!api.getSecret()) {
         try { await api.bootstrap(); } catch {
-          if (panel.dataset.pieno === mio) panel.dataset.pieno = '';
+          if (panel.dataset.full === mine) panel.dataset.full = '';
           return;
         }
       }
       /* Nel frattempo si puo' essere usciti dalla pagina, o rientrati: in tutti
          e due i casi il giro buono non e' piu' il nostro. */
-      if (panel.dataset.pieno !== mio) return;
-      const cornice = cornicePerApp(schermata.ref);
-      cornice.className = 'home-page-app';
-      panel.appendChild(cornice);
+      if (panel.dataset.full !== mine) return;
+      const frame = frameForApp(page.ref);
+      frame.className = 'home-page-app';
+      panel.appendChild(frame);
       /* La cornice si monta **subito**, e intanto si chiede se l'app c'e'
          ancora: aspettare l'elenco prima di montare vorrebbe dire una pagina
          vuota a ogni ingresso, per un caso raro. Sul telefono l'elenco e' gia'
          in cache e la risposta arriva prima che l'app abbia dipinto. */
-      this._controllaApp(panel, schermata, mio);
-      this._ascoltaDatiApp();
+      this._checkApp(panel, page, mine);
+      this._listenAppData();
     }
   }
 
   /** La pagina app che si guarda si rilegge quando i suoi dati cambiano da
    *  fuori (Jenny ha girato una sua azione): `jenny:data-changed` e' cio' che
    *  `jenny-sdk.js` ascolta. Come la mini-app sopra tutto in `apps-actions.js`,
-   *  ma la cornice e' di questo file — v. `_finestraPagina`.
+   *  ma la cornice e' di questo file — v. `_pageWindow`.
    *
    *  Ci si iscrive una volta sola, alla prima pagina app riempita: prima non
    *  c'e' nessuna cornice da avvisare, e chiedere la sorgente al boot la
    *  costruirebbe per niente. Solo la pagina corrente e' viva, quindi si avvisa
    *  lei e solo se e' l'app di cui si parla.
    */
-  _ascoltaDatiApp() {
-    if (this._staccaDatiApp) return;
-    const fonte = this.app?.appsSource?.();
-    if (!fonte?.onAppDataChanged) return;
-    this._staccaDatiApp = fonte.onAppDataChanged((slug) => {
-      const voce = this.voce(this.indice);
-      if (voce?.kind !== 'app' || voce.ref !== slug) return;
-      this._finestraPagina()?.postMessage({ type: 'jenny:data-changed', slug }, '*');
+  _listenAppData() {
+    if (this._detachAppData) return;
+    const source = this.app?.appsSource?.();
+    if (!source?.onAppDataChanged) return;
+    this._detachAppData = source.onAppDataChanged((slug) => {
+      const entry = this.entry(this.index);
+      if (entry?.kind !== 'app' || entry.ref !== slug) return;
+      this._pageWindow()?.postMessage({ type: 'jenny:data-changed', slug }, '*');
     });
   }
 
   /** Spegne una pagina: la cornice dell'app se ne va, e con lei l'app viva. */
-  _svuota(panel) {
+  _empty(panel) {
     /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
        mentre guardi un'app. Spenta resta comunque — una foto non gira. */
     if (panel.dataset.kind === 'conversation') {
       const s = this.pages.find((x) => x.id === panel.dataset.id);
-      this.app?.trasloco?.fotoSeServe(panel, s?.ref);
+      this.app?.chatMove?.snapshotIfNeeded(panel, s?.ref);
       return;
     }
-    if (!panel.dataset.pieno) return;
+    if (!panel.dataset.full) return;
     panel.textContent = '';
-    panel.dataset.pieno = '';
+    panel.dataset.full = '';
     /* L'avviso se n'e' andato col resto: al prossimo ingresso lo rimette, se
        serve, il controllo dell'app. */
-    delete panel.dataset.sparita;
+    delete panel.dataset.gone;
   }
 
   /* ── La pagina di una cosa che non c'e' piu' ─────────────────────────── */
@@ -515,33 +515,33 @@ export class HomePages {
 
      Una lettura che fallisce non segna niente: «non lo so» non e' «sparito». */
 
-  async _controllaApp(panel, schermata, mio) {
-    const fonte = this.app?.appsSource?.();
-    if (!fonte?.attendiJennyApps) return;
-    let elenco;
+  async _checkApp(panel, page, mine) {
+    const source = this.app?.appsSource?.();
+    if (!source?.awaitJennyApps) return;
+    let list;
     try {
-      elenco = await fonte.attendiJennyApps();
+      list = await source.awaitJennyApps();
     } catch {
       return;
     }
-    if (fonte.jennyListFailed?.()) return;
-    if (panel.dataset.pieno !== mio) return;       // nel frattempo sei uscito
-    if (elenco.some((a) => a.slug === schermata.ref)) return;
+    if (source.jennyListFailed?.()) return;
+    if (panel.dataset.full !== mine) return;       // nel frattempo sei uscito
+    if (list.some((a) => a.slug === page.ref)) return;
     panel.textContent = '';                        // via la cornice verso il nulla
-    this._sparita(panel, schermata);
+    this._gone(panel, page);
   }
 
-  async _controllaQuaderno(panel, schermata) {
-    if (!panel || !schermata) return;
-    let nomi;
+  async _checkNotebook(panel, page) {
+    if (!panel || !page) return;
+    let names;
     try {
-      const dati = await api.listProjects();
-      nomi = new Set((dati?.projects || []).map((q) => q?.name));
+      const data = await api.listProjects();
+      names = new Set((data?.projects || []).map((q) => q?.name));
     } catch {
       return;
     }
-    if (nomi.has(projectNameOf(schermata.ref))) this._togliSparita(panel);
-    else this._sparita(panel, schermata);
+    if (names.has(projectNameOf(page.ref))) this._removeGone(panel);
+    else this._gone(panel, page);
   }
 
   /** L'avviso, **sopra** quel che c'e' nel pannello e non al suo posto: in una
@@ -551,48 +551,48 @@ export class HomePages {
    *  Coprirla ferma il dito, **non la tastiera**: sul Titan il campo sotto
    *  l'avviso teneva il fuoco (glielo rimette ogni arrivo su una pagina con la
    *  chat) e i tasti scrivevano a `project:<cancellato>`. Il pannello porta
-   *  quindi un segno che il guscio legge (`sparitaQui`) prima di dare o
+   *  quindi un segno che il guscio legge (`goneHere`) prima di dare o
    *  lasciare il fuoco al campo, e gli si dice che la pagina e' cambiata. */
-  _sparita(panel, schermata) {
-    this._togliSparita(panel);
-    const scheda = document.createElement('div');
-    scheda.className = 'home-page-gone';
-    const testo = document.createElement('p');
-    testo.textContent = i18n.t(
-      schermata.kind === 'app' ? 'home.pages.appGone' : 'home.pages.notebookGone',
-      { name: this.nomeDi(schermata) },
+  _gone(panel, page) {
+    this._removeGone(panel);
+    const card = document.createElement('div');
+    card.className = 'home-page-gone';
+    const text = document.createElement('p');
+    text.textContent = i18n.t(
+      page.kind === 'app' ? 'home.pages.appGone' : 'home.pages.notebookGone',
+      { name: this.nameOf(page) },
     );
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'home-page-gone-remove';
     remove.textContent = i18n.t('home.pages.removePage');
-    remove.addEventListener('click', () => this.stacca(schermata.kind, schermata.ref));
-    scheda.append(testo, remove);
-    panel.appendChild(scheda);
-    panel.dataset.sparita = '1';
-    this.app?.onSparitaCambiata?.(panel);
+    remove.addEventListener('click', () => this.detach(page.kind, page.ref));
+    card.append(text, remove);
+    panel.appendChild(card);
+    panel.dataset.gone = '1';
+    this.app?.onGoneChanged?.(panel);
   }
 
-  _togliSparita(panel) {
+  _removeGone(panel) {
     for (const c of Array.from(panel.children)) {
       if (c.className === 'home-page-gone') c.remove();
     }
-    if (!panel.dataset.sparita) return;
-    delete panel.dataset.sparita;
-    this.app?.onSparitaCambiata?.(panel);
+    if (!panel.dataset.gone) return;
+    delete panel.dataset.gone;
+    this.app?.onGoneChanged?.(panel);
   }
 
   /** La pagina a schermo dice che la sua cosa non c'e' piu'? Il guscio lo
    *  chiede prima di dare il fuoco al campo o di mandare un messaggio. */
-  sparitaQui() {
-    return Boolean(this.pannelloDi(this.indice)?.dataset?.sparita);
+  goneHere() {
+    return Boolean(this.panelOf(this.index)?.dataset?.gone);
   }
 
   /** I pannelli delle pagine aggiunte, in ordine. Quelli fissi non ci sono:
    *  hanno `data-page` e non `data-id`. */
-  _pannelli() {
-    if (!this.pista) return [];
-    return Array.from(this.pista.children).filter((c) => c.dataset?.id);
+  _panels() {
+    if (!this.track) return [];
+    return Array.from(this.track.children).filter((c) => c.dataset?.id);
   }
 
   /** Le guardie del guscio: si puo' cambiare pagina adesso?
@@ -601,12 +601,12 @@ export class HomePages {
    *  dito sulla pista e il dito dentro una app — e una seconda copia
    *  divergerebbe al primo caso particolare.
    */
-  _puoScorrere() {
+  _canScroll() {
     // Fuori dalla chat comandano le stanze, non le pagine.
     if (this.app?.view && this.app.view !== 'chat') return false;
     // Mentre si spostano le pagine il dito e' della modalita' ordina.
-    if (this.app?.strip?.ordinando) return false;
-    if (this.quante < 2) return false;
+    if (this.app?.strip?.sorting) return false;
+    if (this.howMany < 2) return false;
     return true;
   }
 
@@ -618,13 +618,13 @@ export class HomePages {
    *  leggerla in mezzo a un trascinamento costa un ricalcolo di layout per
    *  frame.
    */
-  _risposta() {
-    let larghezzaPista = 0;
+  _reply() {
+    let trackWidth = 0;
     return {
       start: () => {
-        larghezzaPista = this.pista.clientWidth || window.innerWidth;
-        this.pista.style.transition = 'none';
-        this.pista.style.willChange = 'transform';
+        trackWidth = this.track.clientWidth || window.innerWidth;
+        this.track.style.transition = 'none';
+        this.track.style.willChange = 'transform';
       },
 
       drag: (dx) => {
@@ -632,60 +632,60 @@ export class HomePages {
            cerchio come le linguette dell'officina. Li' le voci sono quattro e
            note; qui quante siano lo decide l'utente, e girando in tondo fra
            dodici pagine non si sa piu' dove si e'. */
-        let scostamento = dx;
-        const alPrimo = this.indice === 0 && dx > 0;
-        const allUltimo = this.indice === this.quante - 1 && dx < 0;
-        if (alPrimo || allUltimo) {
-          scostamento = dx * OLTRE_IL_CAPO * 2;
+        let offset = dx;
+        const toFirst = this.index === 0 && dx > 0;
+        const toLast = this.index === this.howMany - 1 && dx < 0;
+        if (toFirst || toLast) {
+          offset = dx * BEYOND_NEWLINE * 2;
         }
-        const base = -this.indice * larghezzaPista;
-        this.pista.style.transform = `translateX(${(base + scostamento).toFixed(2)}px)`;
+        const base = -this.index * trackWidth;
+        this.track.style.transform = `translateX(${(base + offset).toFixed(2)}px)`;
       },
 
       end: ({ direction, confirm }) => {
-        this.pista.style.willChange = '';
-        const passo = confirm ? (direction === 'prev' ? -1 : +1) : 0;
-        this.vaiA(this.indice + passo);
+        this.track.style.willChange = '';
+        const step = confirm ? (direction === 'prev' ? -1 : +1) : 0;
+        this.goTo(this.index + step);
       },
 
       cancel: () => {
-        this.pista.style.willChange = '';
-        this.vaiA(this.indice);
+        this.track.style.willChange = '';
+        this.goTo(this.index);
       },
     };
   }
 
-  _armaGesto() {
-    const risposta = this._risposta();
+  _armSwipe() {
+    const reply = this._reply();
 
     /* Il gesto vive quanto la pista, cioe' quanto la pagina: non c'e' niente
        da staccare, e il valore che `watchHorizontalSwipe` torna non serve. */
-    watchHorizontalSwipe(this.pista, {
-      canStart: () => this._puoScorrere(),
-      onHorizontal: risposta.start,
-      onDrag: risposta.drag,
-      onEnd: risposta.end,
-      onCancel: risposta.cancel,
+    watchHorizontalSwipe(this.track, {
+      canStart: () => this._canScroll(),
+      onHorizontal: reply.start,
+      onDrag: reply.drag,
+      onEnd: reply.end,
+      onCancel: reply.cancel,
     });
 
-    this._ascoltaGestoDaApp(risposta);
+    this._listenAppSwipe(reply);
   }
 
   /** La finestra della pagina che si sta guardando, se e' una app appesa.
    *
    *  Serve a una cosa sola: **riconoscere chi parla**. Solo la pagina corrente
-   *  e' viva (v. `_accendiSolo`), quindi questa e' l'unica finestra da cui un
+   *  e' viva (v. `_activateOnly`), quindi questa e' l'unica finestra da cui un
    *  gesto possa arrivare davvero.
    *
-   *  Le pagine fisse sono fuori per costruzione: non sono in `_pannelli()`. E
+   *  Le pagine fisse sono fuori per costruzione: non sono in `_panels()`. E
    *  una pagina quaderno ospita la chat, che una `contentWindow` non ce l'ha:
    *  controllare anche la specie vorrebbe dire due regole da tenere d'accordo.
    */
-  _finestraPagina() {
-    const panel = this.pannelloDi(this.indice);
+  _pageWindow() {
+    const panel = this.panelOf(this.index);
     if (!panel?.dataset?.id) return null;
-    const cornice = panel.children[0] || panel.firstElementChild;
-    return cornice?.contentWindow || null;
+    const frame = panel.children[0] || panel.firstElementChild;
+    return frame?.contentWindow || null;
   }
 
   /** Il gesto che arriva da **dentro** una app.
@@ -711,42 +711,42 @@ export class HomePages {
    *  si confronta con la cornice viva, e i numeri si ripassano. Un `dx` che
    *  non e' un numero scriverebbe `translateX(NaN)` e la pista sparirebbe.
    */
-  _ascoltaGestoDaApp(risposta) {
-    let nostro = false;
+  _listenAppSwipe(reply) {
+    let ours = false;
     window.addEventListener?.('message', (e) => {
       const msg = e?.data;
       if (!msg || typeof msg !== 'object' || msg.type !== 'jenny:swipe') return;
-      /* `!finestra` **prima** del confronto, e non e' ridondante: su una
+      /* `!win` **prima** del confronto, e non e' ridondante: su una
          pagina che non e' una app qui c'e' `null`, e `MessageEvent.source` e'
          nullabile per specifica. Senza, un messaggio con sorgente nulla si
          confronterebbe `null !== null`, cioe' falso, cioe' passerebbe — e
          muoverebbe la pista chiunque. L'ha detto la mutazione, non la
          rilettura (22/09/2026). */
-      const finestra = this._finestraPagina();
-      if (!finestra || e.source !== finestra) return;
+      const win = this._pageWindow();
+      if (!win || e.source !== win) return;
 
       if (msg.phase === 'start') {
-        nostro = this._puoScorrere();
-        if (nostro) risposta.start();
+        ours = this._canScroll();
+        if (ours) reply.start();
         return;
       }
       /* Senza questa, un `move` che arrivasse senza il suo `start` —
          perche' rifiutato, o perche' la pagina e' cambiata in mezzo —
          muoverebbe la pista su una larghezza mai misurata. */
-      if (!nostro) return;
+      if (!ours) return;
 
       if (msg.phase === 'move') {
         const dx = Number(msg.dx);
-        if (Number.isFinite(dx)) risposta.drag(dx);
+        if (Number.isFinite(dx)) reply.drag(dx);
       } else if (msg.phase === 'end') {
-        nostro = false;
-        risposta.end({
+        ours = false;
+        reply.end({
           direction: msg.direction === 'prev' ? 'prev' : 'next',
           confirm: msg.confirm === true,
         });
       } else if (msg.phase === 'cancel') {
-        nostro = false;
-        risposta.cancel();
+        ours = false;
+        reply.cancel();
       }
     });
   }
@@ -758,9 +758,9 @@ export class HomePages {
    *  nome vero lo sa l'elenco delle app se e' gia' stato letto: fino ad
    *  allora lo slug, che e' comunque quel che l'utente ha visto nascere.
    */
-  nomeDi(schermata) {
-    if (!schermata) return '';
-    if (schermata.kind === 'conversation') return projectNameOf(schermata.ref) || schermata.ref;
-    return this.app?.nomeApp?.(schermata.ref) || schermata.ref;
+  nameOf(page) {
+    if (!page) return '';
+    if (page.kind === 'conversation') return projectNameOf(page.ref) || page.ref;
+    return this.app?.appName?.(page.ref) || page.ref;
   }
 }

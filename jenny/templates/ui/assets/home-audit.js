@@ -74,17 +74,17 @@ export function offsetsIn(raw, selected) {
  *      fra parentesi.
  *
  *  I segnaposto li riempie `i18n.t`, che sostituisce con una funzione: un
- *  `.replace(stringa, testo)` interpreta `$$`, `$&` e `$'` dentro il testo, e
+ *  `.replace(stringa, text)` interpreta `$$`, `$&` e `$'` dentro il testo, e
  *  una formula citata (`$$E = mc^2$$`) arrivava a Jenny storpiata. Una passata
  *  sola, anche: un titolo che contiene «{quote}» resta com'e'.
  */
-export function messaggioSegnalazione({ title, quote, comment, id }) {
-  const testa = i18n.t('home.audit.msgHead', {
+export function reportMessage({ title, quote, comment, id }) {
+  const head = i18n.t('home.audit.msgHead', {
     page: String(title || ''),
     quote: String(quote || '').trim(),
   });
-  const coda = id ? `\n(${i18n.t('home.audit.msgRef')} ${id})` : '';
-  return `${testa}\n${String(comment || '').trim()}${coda}`;
+  const tail = id ? `\n(${i18n.t('home.audit.msgRef')} ${id})` : '';
+  return `${head}\n${String(comment || '').trim()}${tail}`;
 }
 
 export class HomeAudit {
@@ -116,10 +116,10 @@ export class HomeAudit {
    *  solo se non si sta gia' modificando: li' il gesto e' un altro. */
   refresh() {
     if (!this.barEl) return;
-    const attivo = !this.reader?.editing
+    const active = !this.reader?.editing
       && selectionInside(this.reader?.bodyEl)
       && !!this.reader?.raw;
-    this.barEl.hidden = !attivo;
+    this.barEl.hidden = !active;
   }
 
   applyTranslations() {
@@ -179,9 +179,9 @@ export class HomeAudit {
       showToast(i18n.t(`home.audit.${spot.reason}`), 'error');
       return;
     }
-    let creata;
+    let created;
     try {
-      creata = await api.createAudit({
+      created = await api.createAudit({
         wiki: this.reader.notebook,
         target: this.reader.path,
         selStart: spot.start,
@@ -198,7 +198,7 @@ export class HomeAudit {
       title: this.reader.title || this.reader.path,
       quote: this._selected,
       comment,
-      id: creata?.id || '',
+      id: created?.id || '',
     });
   }
 }

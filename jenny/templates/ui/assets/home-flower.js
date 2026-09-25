@@ -24,8 +24,8 @@ const NS = 'http://www.w3.org/2000/svg';
 const TAU = Math.PI * 2;
 
 // Un lobo del ✿: largo in punta, con la tacca, stretto alla base.
-const PETALO = 'M0,-5 C-13,-12 -22,-30 -12,-41 C-7,-46 -2,-45 0,-39 C2,-45 7,-46 12,-41 C22,-30 13,-12 0,-5 Z';
-const VENA = 'M0,-12 C-6,-17 -10,-28 -5.5,-34 C-3,-36.5 -1,-35.5 0,-32 C1,-35.5 3,-36.5 5.5,-34 C10,-28 6,-17 0,-12 Z';
+const PETAL = 'M0,-5 C-13,-12 -22,-30 -12,-41 C-7,-46 -2,-45 0,-39 C2,-45 7,-46 12,-41 C22,-30 13,-12 0,-5 Z';
+const VEIN = 'M0,-12 C-6,-17 -10,-28 -5.5,-34 C-3,-36.5 -1,-35.5 0,-32 C1,-35.5 3,-36.5 5.5,-34 C10,-28 6,-17 0,-12 Z';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const easeOutBack = (x) => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
@@ -105,7 +105,7 @@ export const POSE = {
 
 const BLOOM_S = 0.65;
 
-function nodo(tag, attrs, parent) {
+function node(tag, attrs, parent) {
   const n = document.createElementNS(NS, tag);
   for (const k in attrs) n.setAttribute(k, attrs[k]);
   parent.appendChild(n);
@@ -126,21 +126,21 @@ export class Flower {
     const svg = this.svg;
     svg.setAttribute('viewBox', '-60 -60 120 120');
     svg.setAttribute('aria-hidden', 'true');
-    this.main = nodo('g', {}, svg);
+    this.main = node('g', {}, svg);
     this.petals = [];
     for (let i = 0; i < 5; i++) {
-      const g = nodo('g', {}, this.main);
-      nodo('path', { d: PETALO, class: 'home-flower-petal' }, g);
-      nodo('path', { d: VENA, class: 'home-flower-vein' }, g);
+      const g = node('g', {}, this.main);
+      node('path', { d: PETAL, class: 'home-flower-petal' }, g);
+      node('path', { d: VEIN, class: 'home-flower-vein' }, g);
       this.petals.push(g);
     }
-    this.center = nodo('circle', { r: 7, class: 'home-flower-heart' }, this.main);
-    this.dot = nodo('circle', { r: 2.2, class: 'home-flower-pollen' }, this.main);
-    this.sat = nodo('g', { opacity: 0 }, svg);
+    this.center = node('circle', { r: 7, class: 'home-flower-heart' }, this.main);
+    this.dot = node('circle', { r: 2.2, class: 'home-flower-pollen' }, this.main);
+    this.sat = node('g', { opacity: 0 }, svg);
     for (let i = 0; i < 5; i++) {
-      nodo('path', { d: PETALO, class: 'home-flower-petal', transform: `rotate(${i * 72})` }, this.sat);
+      node('path', { d: PETAL, class: 'home-flower-petal', transform: `rotate(${i * 72})` }, this.sat);
     }
-    nodo('circle', { r: 7, class: 'home-flower-heart' }, this.sat);
+    node('circle', { r: 7, class: 'home-flower-heart' }, this.sat);
   }
 
   /** Torna bocciolo, fermo: la prossima comparsa sboccia da qui. */

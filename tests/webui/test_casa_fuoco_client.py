@@ -31,7 +31,7 @@ pytestmark = requires_node
 
 _HARNESS = """
 import assert from 'node:assert/strict';
-const { ComposerFocus, tastieraFisica } = await import('__URL__');
+const { ComposerFocus, physicalKeyboard } = await import('__URL__');
 
 function target() {
   const listeners = {};
@@ -42,20 +42,20 @@ function target() {
   };
 }
 
-function banco({ tastiera = true, attivo = true } = {}) {
+function banco({ keyboard = true, active = true } = {}) {
   const doc = target();
   doc.activeElement = null;
   doc.visibilityState = 'visible';
   const input = { tagName: 'TEXTAREA', focusCalls: [] };
   input.focus = (opts) => { input.focusCalls.push(opts); doc.activeElement = input; };
   const chat = target();
-  const stato = { tastiera, attivo };
-  const fuoco = new ComposerFocus({
-    input, superfici: [chat], doc,
-    attivo: () => stato.attivo,
-    tastiera: () => stato.tastiera,
+  const state = { keyboard, active };
+  const focus = new ComposerFocus({
+    input, surfaces: [chat], doc,
+    active: () => state.active,
+    keyboard: () => state.keyboard,
   });
-  return { doc, input, chat, stato, fuoco };
+  return { doc, input, chat, state, focus };
 }
 
 function tocco(el) {
@@ -91,7 +91,7 @@ def test_type_ahead_works_without_a_physical_keyboard_flag() -> None:
     chiederlo, e un guscio vecchio senza il metodo nativo non lo perde."""
     out = _run_js(
         """
-const b = banco({ tastiera: false });
+const b = banco({ keyboard: false });
 b.doc.fire('keydown', { key: 'x' });
 assert.equal(b.doc.activeElement, b.input);
 console.log(JSON.stringify({ ok: true }));
@@ -105,10 +105,10 @@ def test_no_key_is_taken_when_the_chat_is_not_on_screen() -> None:
     aperto sono del foglio. Il campo dietro non li prende."""
     out = _run_js(
         """
-const b = banco({ attivo: false });
+const b = banco({ active: false });
 b.doc.fire('keydown', { key: 'a' });
 assert.equal(b.doc.activeElement, null);
-assert.equal(b.fuoco.rimetti(), false);
+assert.equal(b.focus.restore(), false);
 assert.equal(b.input.focusCalls.length, 0);
 console.log(JSON.stringify({ ok: true }));
 """
@@ -174,12 +174,12 @@ def test_with_an_on_screen_keyboard_a_tap_behaves_as_always() -> None:
     fatto."""
     out = _run_js(
         """
-const b = banco({ tastiera: false });
+const b = banco({ keyboard: false });
 const e = tocco({ tagName: 'DIV' });
 b.chat.fire('mousedown', e);
 assert.equal(e.prevented, false);
 assert.equal(b.doc.activeElement, null);
-assert.equal(b.fuoco.rimetti(), false);
+assert.equal(b.focus.restore(), false);
 console.log(JSON.stringify({ ok: true }));
 """
     )
@@ -223,12 +223,12 @@ def test_the_physical_keyboard_question_goes_to_the_native_shell() -> None:
     e fuori dal guscio decide il puntatore."""
     out = _run_js(
         """
-assert.equal(tastieraFisica({ JennyNative: { hasHardwareKeyboard: () => true } }), true);
-assert.equal(tastieraFisica({ JennyNative: { hasHardwareKeyboard: () => false } }), false);
-assert.equal(tastieraFisica({ JennyNative: { hasHardwareKeyboard: () => { throw new Error('x'); } } }), false);
-assert.equal(tastieraFisica({ JennyNative: {}, matchMedia: () => ({ matches: true }) }), false);
-assert.equal(tastieraFisica({ matchMedia: () => ({ matches: true }) }), true);
-assert.equal(tastieraFisica({ matchMedia: () => ({ matches: false }) }), false);
+assert.equal(physicalKeyboard({ JennyNative: { hasHardwareKeyboard: () => true } }), true);
+assert.equal(physicalKeyboard({ JennyNative: { hasHardwareKeyboard: () => false } }), false);
+assert.equal(physicalKeyboard({ JennyNative: { hasHardwareKeyboard: () => { throw new Error('x'); } } }), false);
+assert.equal(physicalKeyboard({ JennyNative: {}, matchMedia: () => ({ matches: true }) }), false);
+assert.equal(physicalKeyboard({ matchMedia: () => ({ matches: true }) }), true);
+assert.equal(physicalKeyboard({ matchMedia: () => ({ matches: false }) }), false);
 console.log(JSON.stringify({ ok: true }));
 """
     )

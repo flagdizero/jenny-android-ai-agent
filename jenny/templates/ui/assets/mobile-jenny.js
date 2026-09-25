@@ -95,7 +95,7 @@ export class JennyCompanion extends JennyMascot {
        MobileApp), e fino ad allora `i18n.t` torna le chiavi grezze. Prima si
        rileggeva solo il placeholder, e scrim, campo e invio restavano con
        «jenny.send» come etichetta per il lettore di schermo. */
-    const traduci = () => {
+    const translate = () => {
       this.scrim.setAttribute('aria-label', i18n.t('jenny.closeMinichat'));
       this.input.setAttribute('aria-label', i18n.t('jenny.askJenny'));
       this.sendBtn.setAttribute('aria-label', i18n.t('jenny.send'));
@@ -103,8 +103,8 @@ export class JennyCompanion extends JennyMascot {
       const t = i18n.t('chat.placeholder');
       this.input.placeholder = t && t !== 'chat.placeholder' ? t : i18n.t('jenny.askHere');
     };
-    traduci();
-    i18n.load(i18n.locale).then(traduci).catch(() => {});
+    translate();
+    i18n.load(i18n.locale).then(translate).catch(() => {});
   }
 
   /* ── Modalità vista ── */

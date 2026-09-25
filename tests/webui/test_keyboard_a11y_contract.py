@@ -220,11 +220,11 @@ def test_the_workspace_sheets_ignore_the_synthetic_tap() -> None:
     ``<dialog>`` appena aperto e lo richiudeva all'istante. La sezione App aveva
     già la finestra di grazia; i due sheet del Workspace no."""
     source = _read("mobile-workspace.js")
-    # I due menu montano il foglio da `_apriFoglio`; il comportamento vero è
+    # I due menu montano il foglio da `_openSheet`; il comportamento vero è
     # in `test_workspace_sheets_client.py`.
     for name in ("showContextSheet", "_showNewMenu"):
-        assert "this._apriFoglio(" in _method(source, name), f"{name} monta il foglio da sé"
-    body = _method(source, "_apriFoglio")
+        assert "this._openSheet(" in _method(source, name), f"{name} monta il foglio da sé"
+    body = _method(source, "_openSheet")
     assert "const openedAt = Date.now();" in body, "il foglio non misura da quando è aperto"
     assert "Date.now() - openedAt > 400" in body, "il foglio non ha la finestra di grazia"
     assert "sheet.addEventListener('click'" not in body, (

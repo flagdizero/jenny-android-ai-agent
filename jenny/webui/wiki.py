@@ -156,7 +156,7 @@ def iter_page_files(pages_dir: Path) -> list[tuple[str, Path]]:
     **Quali file** lo decide :func:`jenny.utils.wiki_paths.is_wiki_page_rel`,
     la stessa regola dell'iniettore e dell'albero (T9.5): fuori i
     ``summaries/``, fuori i nascosti a ogni livello. I nascosti prima entravano
-    — un ``.bozza.md`` sotto ``wiki/`` non arrivava al modello e non compariva
+    — un ``.draft.md`` sotto ``wiki/`` non arrivava al modello e non compariva
     nell'albero, ma era un nodo del grafo e un risultato di ricerca.
 
     L'indice invece **e' una pagina**, qui, e la differenza e' voluta: per il

@@ -14,7 +14,7 @@
 
 /** Un interruttore ha senso solo dove la scelta resta scritta. `locked` su una
  *  skill tua è il suo frontmatter che chiede di non toccarla: la si ascolta. */
-export function controllabile(skill) {
+export function controllable(skill) {
   return !skill.bundled && !skill.internal && !skill.locked;
 }
 
@@ -24,7 +24,7 @@ export function controllabile(skill) {
  *  `locked` nel frontmatter si leggeva «Viene con l'app», che per una skill
  *  scritta dall'utente e' falso — e lo manda a cercare il motivo nel posto
  *  sbagliato. */
-export function motivoBlocco(skill) {
+export function blockReason(skill) {
   return skill.bundled ? 'skills.integrataBloccata' : 'skills.tuaBloccata';
 }
 
@@ -33,7 +33,7 @@ export function motivoBlocco(skill) {
  *  Le `internal` non si elencano (la modalità sviluppatore che le mostrava non
  *  c'è più) ma si **contano**: un totale che non torna con quel che si vede
  *  sembra un difetto. L'ordine è quello del backend, che già ordina per nome. */
-export function dividiSkill(skills) {
+export function splitSkill(skills) {
   const yours = [];
   const integrate = [];
   let service = 0;
@@ -49,17 +49,17 @@ export function dividiSkill(skills) {
  *  l'altra, poi la descrizione per il modello — e **niente** se la descrizione
  *  è il nome stesso: è il ripiego di `_description()` lato server, e ripeterlo
  *  sotto il nome non dice nulla. */
-export function riassuntoSkill(skill, locale) {
+export function skillBlurb(skill, locale) {
   const s = skill.user_summary;
-  const perUtente = s && (s[locale] || s.it || s.en);
-  if (perUtente) return perUtente;
+  const perUser = s && (s[locale] || s.it || s.en);
+  if (perUser) return perUser;
   const d = (skill.description || '').trim();
   return d && d !== skill.name ? d : '';
 }
 
 /** La risposta breve della riga in cassetto. `t` è `i18n.t`, passato da chi
  *  chiama perché il modulo resti eseguibile fuori dal browser. */
-export function riepilogoSkill({ yours, integrate }, t) {
+export function skillsSummary({ yours, integrate }, t) {
   return yours.length
     ? t('skills.summary', { integrate: integrate.length, yours: yours.length })
     : t('skills.summaryNoneYours', { integrate: integrate.length });

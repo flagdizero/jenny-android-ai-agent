@@ -87,8 +87,8 @@ def _ereditati(sorgente: Path, src: str) -> set[str]:
         if not m:
             continue
         percorso = (sorgente.parent / m.group(1)).resolve()
-        testo = percorso.read_text(encoding="utf-8")
-        trovati |= _definiti(testo) | _ereditati(percorso, testo)
+        text = percorso.read_text(encoding="utf-8")
+        trovati |= _definiti(text) | _ereditati(percorso, text)
     return trovati
 
 

@@ -235,7 +235,7 @@ async def _root_journal(env: Env) -> Path:
 
     created = list(env.tmp.rglob("raw/journal/*.md"))
     assert len(created) == 1, f"una sola pagina di diario attesa, trovate {created}"
-    # ``<radice>/raw/journal/<AAAAMMGG>.md`` → tre livelli sopra il file.
+    # ``<root>/raw/journal/<AAAAMMGG>.md`` → tre livelli sopra il file.
     return created[0].parents[2]
 
 

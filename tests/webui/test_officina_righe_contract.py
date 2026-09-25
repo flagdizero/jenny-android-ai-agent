@@ -34,7 +34,7 @@ CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 BACKUP = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
 
 
-def _corpo(name: str) -> str:
+def _body(name: str) -> str:
     """Il corpo di un metodo di `SettingsController`, per nome.
 
     `async` è opzionale: senza, i tre metodi che aspettano la rete —
@@ -52,11 +52,11 @@ def _corpo(name: str) -> str:
 @pytest.mark.parametrize("helper", ("_field", "_select", "_numberField"))
 def test_i_tre_aiutanti_fanno_una_riga_non_una_pila(helper: str) -> None:
     """I tre che disegnano «etichetta + controllo» usano la riga, non la pila."""
-    corpo = _corpo(helper)
-    assert 'class="settings-row"' in corpo, (
+    body = _body(helper)
+    assert 'class="settings-row"' in body, (
         f"{helper} disegna ancora una pila: l'etichetta finirebbe sopra il campo"
     )
-    assert 'class="settings-field"' not in corpo
+    assert 'class="settings-field"' not in body
 
 
 def test_la_riga_ha_le_sue_regole() -> None:
@@ -135,10 +135,10 @@ def test_i_valori_di_macchina_sono_in_monospazio(selettore: str) -> None:
 
 def test_il_monospazio_viene_dal_token_e_non_da_un_nome_di_carattere() -> None:
     """Sette temi, sette caratteri possibili: inchiodarne uno ne rompe sei."""
-    for riga in CSS.splitlines():
-        if "font-family" in riga and ("Fira Code" in riga or "monospace" in riga):
-            assert "--font-mono" in riga or "@font-face" in riga or "--font-" in riga, (
-                f"carattere monospazio scritto a mano invece che dal token: {riga.strip()}"
+    for row in CSS.splitlines():
+        if "font-family" in row and ("Fira Code" in row or "monospace" in row):
+            assert "--font-mono" in row or "@font-face" in row or "--font-" in row, (
+                f"carattere monospazio scritto a mano invece che dal token: {row.strip()}"
             )
 
 
@@ -159,17 +159,17 @@ WORKSHOP_HTML = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_tex
 
 def test_la_storia_in_cassetto_e_una_riga() -> None:
     """`_renderBackup` non disegna più l'elenco, il menù, né «crea adesso»."""
-    corpo = _corpo("_renderBackup")
-    assert "_summary(" in corpo, "la storia non è più riassunta in una riga"
+    body = _body("_renderBackup")
+    assert "_summary(" in body, "la storia non è più riassunta in una riga"
     for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
-        assert roba not in corpo, f"«{roba}» è tornato disteso nel cassetto"
+        assert roba not in body, f"«{roba}» è tornato disteso nel cassetto"
 
 
 def test_il_dettaglio_vive_nel_pannello() -> None:
     """Niente è stato **tolto**: è solo andato dietro il tocco."""
-    corpo = _corpo("_apriStoria")
+    body = _body("_openHistory")
     for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
-        assert roba in corpo, f"«{roba}» non è nel pannello: allora è sparito davvero"
+        assert roba in body, f"«{roba}» non è nel pannello: allora è sparito davvero"
     assert 'id="drawer-history"' in WORKSHOP_HTML, "il pannello non esiste nel documento"
     assert 'id="drawer-history-body"' in WORKSHOP_HTML
 
@@ -181,14 +181,14 @@ def test_il_corpo_del_pannello_si_disegna_all_apertura() -> None:
     scriverebbe nel vuoto e la riga resterebbe su «Caricamento…» — in silenzio,
     che è il modo in cui questo difetto è già arrivato sul telefono una volta.
     """
-    assert "this._apriStoria" in SETTINGS, "niente collega la riga al suo pannello"
-    apri = _corpo("_apriStoria")
-    assert "_wireStoria" in apri and "_loadSnapshotList" in apri, (
+    assert "this._openHistory" in SETTINGS, "niente collega la riga al suo pannello"
+    open = _body("_openHistory")
+    assert "_wireHistory" in open and "_loadSnapshotList" in open, (
         "il pannello si disegna ma non si aggancia né si riempie"
     )
     # E il caricatore cerca il nodo nel documento, non dentro la vista: il
     # pannello vive fuori da `contentEl`.
-    carico = _corpo("_loadSnapshotList")
+    carico = _body("_loadSnapshotList")
     assert "document.getElementById('snapshot-list')" in carico
     assert "contentEl.querySelector('#snapshot-list')" not in carico
 
@@ -207,24 +207,24 @@ def test_il_riepilogo_racconta_la_piu_vecchia_non_la_piu_recente() -> None:
         "import assert from 'node:assert/strict';\n"
         "const i18n = { t: (k, p) => k + ' ' + JSON.stringify(p || {}) };\n"
         "const whenText = (ms) => 'ms=' + ms;\n"
-        "let risposta;\n"
-        "const api = { getSnapshotHistory: async () => risposta };\n"
+        "let reply;\n"
+        "const api = { getSnapshotHistory: async () => reply };\n"
         "class C {\n"
         "  constructor() { this._gen = 0; this.el = { textContent: '' };\n"
         "    this.contentEl = { querySelector: () => this.el }; }\n"
         "  _stale(g) { return g !== this._gen; }\n"
-        f"{member(SETTINGS, '_caricaRiepilogoStoria')}\n"
+        f"{member(SETTINGS, '_loadHistorySummary')}\n"
         "}\n"
         """
 const c = new C();
-risposta = { snapshots: [
+reply = { snapshots: [
   { created_at_ms: 3000 }, { created_at_ms: 1000 }, { created_at_ms: 2000 },
 ] };
-await c._caricaRiepilogoStoria();
+await c._loadHistorySummary();
 assert.equal(c.el.textContent,
   'backup.snapshotSummary ' + JSON.stringify({ count: 3, when: 'ms=1000' }));
-risposta = { snapshots: [] };
-await c._caricaRiepilogoStoria();
+reply = { snapshots: [] };
+await c._loadHistorySummary();
 assert.match(c.el.textContent, /^backup.snapshotSummaryEmpty/);
 console.log('ok');
 """
@@ -235,9 +235,9 @@ console.log('ok');
 def test_il_riepilogo_non_resta_a_caricamento_per_sempre() -> None:
     """Un errore è un'informazione; un «Caricamento…» eterno è un guasto
     travestito da attesa."""
-    corpo = _corpo("_caricaRiepilogoStoria")
-    assert "catch" in corpo
-    assert "snapshotHistoryUnavailable" in corpo
+    body = _body("_loadHistorySummary")
+    assert "catch" in body
+    assert "snapshotHistoryUnavailable" in body
 
 
 @pytest.mark.parametrize("lingua", ("it", "en"))
@@ -255,7 +255,7 @@ def test_le_righe_di_riepilogo_si_agganciano_con_una_regola_sola() -> None:
     """Ne arriveranno altre due (Telegram, SSH): un `if` per ognuna le farebbe
     divergere una per volta."""
     assert "[data-summary]" in SETTINGS, "il cablaggio non è generico"
-    assert "_APRI_PANNELLO" in SETTINGS, "manca la tabella pannello -> chi lo riempie"
+    assert "_OPEN_PANEL" in SETTINGS, "manca la tabella pannello -> chi lo riempie"
 
 
 def test_telegram_in_cassetto_e_una_riga() -> None:
@@ -264,8 +264,8 @@ def test_telegram_in_cassetto_e_una_riga() -> None:
     In cassetto ne resta la risposta alla sola domanda che si fa da lì: «posso
     scriverle da fuori, adesso?».
     """
-    corpo = _corpo("_renderTelegram")
-    assert "_summary(" in corpo
+    body = _body("_renderTelegram")
+    assert "_summary(" in body
     assert "settings-telegram-widget" not in SETTINGS, (
         "il widget è ancora montato nel cassetto invece che nel pannello"
     )
@@ -273,19 +273,19 @@ def test_telegram_in_cassetto_e_una_riga() -> None:
 
 
 def test_il_widget_si_monta_all_apertura_del_pannello() -> None:
-    corpo = _corpo("_apriTelegram")
-    assert "TelegramPairingWidget" in corpo and "drawer-telegram-body" in corpo
-    assert "destroy()" in corpo, (
+    body = _body("_openTelegram")
+    assert "TelegramPairingWidget" in body and "drawer-telegram-body" in body
+    assert "destroy()" in body, (
         "riaprire il pannello lascerebbe due widget vivi sullo stesso stato"
     )
 
 
 def test_la_riga_telegram_si_legge_senza_il_widget() -> None:
     """La riga deve dire qualcosa **prima** che il pannello esista."""
-    corpo = _corpo("_caricaRiepilogoTelegram")
-    assert "getTelegramStatus" in corpo, "la riga aspetta il widget per sapere cosa dire"
-    assert "_scriviRiepilogoTelegram(" in corpo
-    assert "telegramSummary" in _corpo("_scriviRiepilogoTelegram")
+    body = _body("_loadTelegramSummary")
+    assert "getTelegramStatus" in body, "la riga aspetta il widget per sapere cosa dire"
+    assert "_writeTelegramSummary(" in body
+    assert "telegramSummary" in _body("_writeTelegramSummary")
 
 
 @requires_node
@@ -304,20 +304,20 @@ def test_la_riga_telegram_segue_il_widget() -> None:
         "  _stopPolling() {} _startPolling() {}\n"
         "  _renderDisabled() {} _renderPaired() {} _renderPairing() {} _renderTokenForm() {}\n"
         "}\n"
-        "const riga = { textContent: 'settings.telegram.summaryNotPaired' };\n"
+        "const row = { textContent: 'settings.telegram.summaryNotPaired' };\n"
         "globalThis.document = { getElementById: () => ({}) };\n"
         "class C {\n"
-        "  constructor() { this.contentEl = { querySelector: () => riga }; }\n"
-        f"{member(SETTINGS, '_apriTelegram')}\n"
-        f"{member(SETTINGS, '_scriviRiepilogoTelegram')}\n"
+        "  constructor() { this.contentEl = { querySelector: () => row }; }\n"
+        f"{member(SETTINGS, '_openTelegram')}\n"
+        f"{member(SETTINGS, '_writeTelegramSummary')}\n"
         "}\n"
         """
 const c = new C();
 TelegramPairingWidget.prototype.refresh = function () {};
-c._apriTelegram();
+c._openTelegram();
 c._tgWidget.status = { enabled: true, configured: true, paired: true, paired_username: 'io' };
 c._tgWidget.render();
-assert.equal(riga.textContent, 'settings.telegram.summaryPaired {"who":"@io"}');
+assert.equal(row.textContent, 'settings.telegram.summaryPaired {"who":"@io"}');
 console.log('ok');
 """
     )
@@ -354,9 +354,9 @@ def test_il_riassunto_telegram_copre_tutti_gli_stati() -> None:
 
 
 def test_un_host_e_una_riga() -> None:
-    corpo = _corpo("_renderSshHost")
-    assert 'class="ssh-row"' in corpo, "l'host è tornato una scheda"
-    assert "provider-card" not in corpo
+    body = _body("_renderSshHost")
+    assert 'class="ssh-row"' in body, "l'host è tornato una scheda"
+    assert "provider-card" not in body
     m = re.search(r"^\.ssh-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1)), (
         "la riga non ha l'altezza della tavola"
@@ -369,42 +369,42 @@ def test_i_due_stati_restano_in_chiaro_nella_riga() -> None:
     Se qualcuno li sposta nel pannello per accorciare la riga, un host a cui
     manca la chiave sembra a posto finché non fallisce il primo comando.
     """
-    corpo = _corpo("_renderSshHost")
-    assert corpo.count("this._segnoSsh(") == 2, "i due stati non sono più due"
-    assert "has_key" in corpo and "pinned" in corpo, (
+    body = _body("_renderSshHost")
+    assert body.count("this._sshMark(") == 2, "i due stati non sono più due"
+    assert "has_key" in body and "pinned" in body, (
         "la riga non guarda più credenziale e impronta"
     )
-    panel = _corpo("_apriHostSsh")
-    assert "_segnoSsh" not in panel, "i due stati sono migrati dietro il tocco"
+    panel = _body("_openSshHost")
+    assert "_sshMark" not in panel, "i due stati sono migrati dietro il tocco"
 
 
 def test_lo_stato_si_distingue_anche_senza_colore() -> None:
     """Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
     l'accento **è** il colore del testo, due pallini colorati si somigliano."""
-    corpo = _corpo("_segnoSsh")
-    assert "ti-circle-check-filled" in corpo and "ti-circle" in corpo, (
+    body = _body("_sshMark")
+    assert "ti-circle-check-filled" in body and "ti-circle" in body, (
         "la differenza è affidata al solo colore"
     )
-    assert "title=" in corpo, "il testo lungo non è più raggiungibile da nessuna parte"
+    assert "title=" in body, "il testo lungo non è più raggiungibile da nessuna parte"
 
 
 def test_i_comandi_dell_host_stanno_nel_pannello() -> None:
     """Genera, verifica, modifica, elimina, copia: sono cose che si fanno **a**
     un host, non informazioni su di lui."""
-    panel = _corpo("_apriHostSsh")
+    panel = _body("_openSshHost")
     for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
         assert cmd in panel, f"«{cmd}» non è nel pannello"
-    riga = _corpo("_renderSshHost")
+    row = _body("_renderSshHost")
     for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
-        assert cmd not in riga, f"«{cmd}» è rimasto nella riga"
+        assert cmd not in row, f"«{cmd}» è rimasto nella riga"
     assert 'id="drawer-ssh-host"' in WORKSHOP_HTML
 
 
 def test_il_cablaggio_dei_comandi_guarda_dentro_il_pannello() -> None:
     """Cercarli in `contentEl` non troverebbe niente: il pannello è fuori."""
-    corpo = _corpo("_wireHostSsh")
-    assert "#drawer-ssh-host-body" in corpo
-    assert "contentEl" not in corpo
+    body = _body("_wireHostSsh")
+    assert "#drawer-ssh-host-body" in body
+    assert "contentEl" not in body
 
 
 @pytest.mark.parametrize("lingua", ("it", "en"))
@@ -446,13 +446,13 @@ def test_una_scheda_contiene_invece_di_mandare_altrove() -> None:
     # E la scheda dei file monta il gestore vero, non una seconda copia
     # dell'elenco: due elenchi degli stessi file col tempo si raccontano
     # diversi, ed e' come il riassunto aveva cominciato.
-    corpo = _corpo("_renderFile")
-    assert "data-ws-grid" in corpo, "la scheda non ha piu' dove montare il gestore file"
-    assert "listWorkspace" not in corpo, "la scheda si e' rifatta un elenco suo"
+    body = _body("_renderFile")
+    assert "data-ws-grid" in body, "la scheda non ha piu' dove montare il gestore file"
+    assert "listWorkspace" not in body, "la scheda si e' rifatta un elenco suo"
 
-    m = re.search(r"_group\(id, etichetta, corpo\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    m = re.search(r"_group\(id, label, body\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo ha cambiato forma"
-    assert "${corpo}</section>" in m.group(1), (
+    assert "${body}</section>" in m.group(1), (
         "il gruppo appende di nuovo qualcosa dopo il corpo: le porte fluttuavano "
         "cosi' fra due schede, al primo tentativo"
     )
@@ -460,11 +460,11 @@ def test_una_scheda_contiene_invece_di_mandare_altrove() -> None:
 
 def test_i_tetti_si_leggono_e_si_cambiano_altrove() -> None:
     """«Quanto ricorda» è una domanda con una risposta da leggere."""
-    corpo = _corpo("_renderQuantoRicorda")
-    assert "_misuraTetto(" in corpo
-    assert "_numberField(" not in corpo, "i campi modificabili sono tornati in cassetto"
-    assert 'data-summary="tetti"' in corpo, "manca il modo di cambiarli"
-    panel = _corpo("_apriTetti")
+    body = _body("_renderHowMuchItRemembers")
+    assert "_measureCap(" in body
+    assert "_numberField(" not in body, "i campi modificabili sono tornati in cassetto"
+    assert 'data-summary="tetti"' in body, "manca il modo di cambiarli"
+    panel = _body("_openCaps")
     assert panel.count("_numberField(") == 3, "i tre campi non sono nel pannello"
 
 
@@ -474,10 +474,10 @@ def test_la_misura_dice_quanto_resta_non_solo_quanto_misura() -> None:
     E sopra il tetto la frase cambia del tutto, perché cambia la conseguenza:
     Dream smette di scrivere.
     """
-    corpo = _corpo("_statoTetto")
-    assert "_statoTetto(" in _corpo("_misuraTetto")
-    assert "settings.memory.headroom" in corpo
-    assert "headroomOver" in corpo, "sopra il tetto non si dice cosa succede"
+    body = _body("_capState")
+    assert "_capState(" in _body("_measureCap")
+    assert "settings.memory.headroom" in body
+    assert "headroomOver" in body, "sopra il tetto non si dice cosa succede"
     import json
 
     for lingua in ("it", "en"):
@@ -489,13 +489,13 @@ def test_la_misura_dice_quanto_resta_non_solo_quanto_misura() -> None:
 def test_una_marca_e_una_riga_con_chi_risponde() -> None:
     """La pastiglia «risponde» la scheda non ce l'aveva: da qui si amministrano
     le marche, e sapere quale sta rispondendo è il contesto di ogni decisione."""
-    corpo = _corpo("_renderProviderListHtml")
-    assert 'class="brand-row"' in corpo and "provider-card" not in corpo
-    assert "brand-answers" in corpo and "settings.answersNow" in corpo
-    assert "provider-edit" not in corpo and "provider-delete" not in corpo, (
+    body = _body("_renderProviderListHtml")
+    assert 'class="brand-row"' in body and "provider-card" not in body
+    assert "brand-answers" in body and "settings.answersNow" in body
+    assert "provider-edit" not in body and "provider-delete" not in body, (
         "modifica ed elimina sono rimaste nella riga"
     )
-    assert "provider-edit" in _corpo("_apriMarca")
+    assert "provider-edit" in _body("_openBrand")
     m = re.search(r"^\.brand-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1))
 
@@ -507,7 +507,7 @@ def test_il_colore_della_marca_e_uno_solo_e_mai_grigio() -> None:
     aveva due colori. E una tabella da sola lascerebbe grigie proprio le marche
     che l'utente si è aggiunto da sé: per quelle c'è la tinta dal nome.
     ``getProviderBrand`` vero, importato."""
-    assert "getProviderBrand(name).color" in _corpo("_coloreMarca")
+    assert "getProviderBrand(name).color" in _body("_brandColor")
     home = (ASSETS / "home-model.js").read_text(encoding="utf-8")
     assert "getProviderBrand(p.name).color" in home
     brand = (ASSETS / "shared" / "provider-brand.js").as_uri()
@@ -529,12 +529,12 @@ console.log(getProviderBrand('la-mia-marca').color === getProviderBrand('la-mia-
 
 def test_tenere_sveglia_la_cpu_e_un_comando_a_segmenti() -> None:
     """Tre voci stanno in riga; il criterio era già scritto nel codice."""
-    corpo = _corpo("_renderKeepAwake")
-    assert "settings-seg" in corpo and "<select" not in corpo
-    assert "keepAwakeShort" in corpo, "le parole lunghe non stanno in un terzo di riga"
-    assert 'role="radiogroup"' in corpo and 'role="radio"' in corpo
+    body = _body("_renderKeepAwake")
+    assert "settings-seg" in body and "<select" not in body
+    assert "keepAwakeShort" in body, "le parole lunghe non stanno in un terzo di riga"
+    assert 'role="radiogroup"' in body and 'role="radio"' in body
     # Il testo lungo — «(consigliato)» compreso — non si perde: va nel title.
-    assert "title=" in corpo and "settings.battery.keepAwake.$" in corpo.replace("{id}", "$")
+    assert "title=" in body and "settings.battery.keepAwake.$" in body.replace("{id}", "$")
 
 
 def test_il_bottone_principale_e_pieno_e_uno_solo() -> None:
@@ -556,14 +556,14 @@ def test_la_finestra_di_contesto_ha_finalmente_un_comando() -> None:
     """Esisteva nello schema, nel payload e nella rotta — con due soli valori
     accettati — e **nessuna schermata la mostrava**. Non era un dato mancante:
     era un comando mancante."""
-    corpo = _corpo("_renderParametri")
-    assert "context_window_tokens" in corpo
+    body = _body("_renderParameters")
+    assert "context_window_tokens" in body
     # L'**espressione**, non la parola: `context_window_options` compare anche
     # nel commento sopra, e cercarla lì lasciava passare la mutazione che
     # ricopiava l'elenco a mano (misurato il 21/09/2026, banco verde su codice
     # rotto). E nessun numero scritto qui: la rotta ne rifiuta ogni altro, e
     # due copie divergono in silenzio alla prima aggiunta.
-    assert "a.context_window_options" in corpo, (
+    assert "a.context_window_options" in body, (
         "le voci sono ricopiate qui invece di arrivare dal server"
     )
     codice = "\n".join(
@@ -574,7 +574,7 @@ def test_la_finestra_di_contesto_ha_finalmente_un_comando() -> None:
         "un valore della finestra di contesto è scritto a mano nel client"
     )
     # E si salva: senza questa chiave il menù cambia e non succede niente.
-    assert "'context_window_tokens'" in _corpo("_wireSections")
+    assert "'context_window_tokens'" in _body("_wireSections")
 
 
 def test_le_voci_della_finestra_vengono_dal_server() -> None:
@@ -592,9 +592,9 @@ def test_le_voci_della_finestra_vengono_dal_server() -> None:
 
 def test_i_numeri_del_menu_hanno_i_separatori() -> None:
     """«65536» non si conta a occhio; «65 536» sì."""
-    corpo = _corpo("_renderParametri")
-    assert "toLocaleString" in corpo
-    sel = _corpo("_select")
+    body = _body("_renderParameters")
+    assert "toLocaleString" in body
+    sel = _body("_select")
     assert "typeof o === 'object'" in sel, (
         "il menù non sa più separare quel che salva da quel che mostra"
     )
@@ -606,7 +606,7 @@ def test_l_intestazione_non_porta_nessuna_pastiglia_di_stato() -> None:
 
     Il banco guarda **tutte e quattro** le tracce, perche' reintrodurne una
     sola basta a far tornare la pastiglia a meta': il nodo nel markup, la
-    chiave `stato` che lo accendeva, il lettore della connessione e il suo
+    chiave `state` che lo accendeva, il lettore della connessione e il suo
     vestito. Il lettore in particolare non e' un dettaglio: era l'unico motivo
     per cui questo file conosceva `ws-manager`.
     """
@@ -630,7 +630,7 @@ def test_le_parole_della_pastiglia_non_restano_orfane() -> None:
         (ASSETS / name).read_text(encoding="utf-8")
         for name in ("mobile-header.js", "mobile-settings.js", "mobile-app.js")
     )
-    assert "workshop.stato" not in sorgenti
+    assert "workshop.state" not in sorgenti
     for lingua in ("it", "en"):
         d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
         assert "stato" not in d["workshop"], f"{lingua}: le parole della pastiglia sono ancora li'"
@@ -641,8 +641,8 @@ def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
     bottone che rifà quel che è appena successo insegna a premerlo per
     scaramanzia."""
     header = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
-    m = re.search(r"function cassetto\(name\) \{(.*?)\n\}", header, re.S)
-    assert m, "cassetto() non trovata"
+    m = re.search(r"function drawer\(name\) \{(.*?)\n\}", header, re.S)
+    assert m, "drawer() non trovata"
     assert "'refresh'" not in m.group(1), "l'icona «aggiorna» è tornata nei cassetti"
 
 
@@ -666,9 +666,9 @@ def test_un_lavoro_periodico_e_una_riga() -> None:
     «Last:» su due righe intere — facevano **oltre un terzo** dei 3 729 px di
     Mani misurati sul telefono il 21/09/2026.
     """
-    corpo = _corpo("_renderCronJob")
-    assert 'class="cron-row' in corpo, "il lavoro è ancora una scheda"
-    assert "cron-card-head" not in corpo and "cron-lines" not in corpo
+    body = _body("_renderCronJob")
+    assert 'class="cron-row' in body, "il lavoro è ancora una scheda"
+    assert "cron-card-head" not in body and "cron-lines" not in body
     m = re.search(r"^\.cron-row \{(.*?)\}", CSS, re.S | re.M)
     assert m and re.search(r"min-height:\s*52px", m.group(1))
 
@@ -677,11 +677,11 @@ def test_la_riga_del_lavoro_tiene_quel_che_cambia_il_significato() -> None:
     """Le targhette non sono decorazione: un lavoro **spento** con su scritto
     «fra 4 minuti» sarebbe una bugia. E il pallino dell'esito distingue «ha
     guardato e non c'era niente» da «è andata male»."""
-    corpo = _corpo("_renderCronJob")
+    body = _body("_renderCronJob")
     for pezzo in ("cron.job.disabled", "cron.job.inert", "cron-dot", "couldNotCheck"):
-        assert pezzo in corpo, f"«{pezzo}» è sparito dalla riga"
+        assert pezzo in body, f"«{pezzo}» è sparito dalla riga"
     # Le due parole spariscono: la colonna di destra *è* il prossimo giro.
-    assert "cron.job.next'" not in corpo and "cron.job.last'" not in corpo, (
+    assert "cron.job.next'" not in body and "cron.job.last'" not in body, (
         "«Next:» e «Last:» sono tornate: sono due etichette per due colonne che "
         "si spiegano da sole"
     )
@@ -696,51 +696,51 @@ def test_la_riga_del_lavoro_tiene_quel_che_cambia_il_significato() -> None:
 
 
 def test_le_skill_in_cassetto_sono_una_riga() -> None:
-    corpo = _corpo("_renderSkill")
-    assert "_summary(" in corpo, "le skill non sono più riassunte in una riga"
-    assert "toggle-switch" not in corpo, "un interruttore è tornato disteso nel cassetto"
+    body = _body("_renderSkill")
+    assert "_summary(" in body, "le skill non sono più riassunte in una riga"
+    assert "toggle-switch" not in body, "un interruttore è tornato disteso nel cassetto"
 
 
 def test_il_riepilogo_delle_skill_non_resta_a_caricamento_per_sempre() -> None:
-    corpo = _corpo("_caricaRiepilogoSkill")
-    assert "catch" in corpo and "summaryError" in corpo
-    assert "riepilogoSkill(" in corpo, "la riga non legge la regola condivisa"
+    body = _body("_loadSkillsSummary")
+    assert "catch" in body and "summaryError" in body
+    assert "skillsSummary(" in body, "la riga non legge la regola condivisa"
 
 
 def test_il_pannello_delle_skill_esiste_e_si_disegna_all_apertura() -> None:
     assert 'id="drawer-skill"' in WORKSHOP_HTML
     assert 'id="drawer-skill-body"' in WORKSHOP_HTML
-    assert "skill: this._apriSkill" in SETTINGS, "niente collega la riga al pannello"
-    corpo = _corpo("_apriSkill")
+    assert "skill: this._openSkill" in SETTINGS, "niente collega la riga al pannello"
+    body = _body("_openSkill")
     # Il pannello vive fuori da `contentEl`: cercarlo lì scrive nel vuoto.
-    assert "document.getElementById('drawer-skill-body')" in corpo
-    assert "contentEl" not in corpo
-    assert "dividiSkill(" in corpo, "il pannello divide l'elenco per conto suo"
+    assert "document.getElementById('drawer-skill-body')" in body
+    assert "contentEl" not in body
+    assert "splitSkill(" in body, "il pannello divide l'elenco per conto suo"
 
 
 def test_l_interruttore_passa_dalla_regola_che_sa_chi_sopravvive_al_riavvio() -> None:
     """Le integrate l'avvio le ri-estrae: un interruttore su di loro mente."""
-    corpo = _corpo("_rigaSkill")
-    assert "controllabile(sk)" in corpo
-    assert corpo.index("controllabile(sk)") < corpo.index("toggle-switch")
-    assert "ti-lock" in corpo, "senza interruttore la riga deve dire perché"
+    body = _body("_skillRow")
+    assert "controllable(sk)" in body
+    assert body.index("controllable(sk)") < body.index("toggle-switch")
+    assert "ti-lock" in body, "senza interruttore la riga deve dire perché"
 
 
 def test_la_scelta_del_21_09_resta_una_scelta() -> None:
     """Crearle, cambiarle e cancellarle non stanno nel pannello: si chiede a
     Jenny. Chi le rimette lo fa sapendolo, non per inerzia."""
     panel = "".join(
-        _corpo(name) for name in ("_apriSkill", "_rigaSkill", "_skillVuota", "_cablaSkill")
+        _body(name) for name in ("_openSkill", "_skillRow", "_skillEmpty", "_wireSkill")
     )
     for roba in ("deleteSkill", "/delete", "ti-trash", "ti-edit", "confirmDialog"):
         assert roba not in panel, f"«{roba}» è comparso nel pannello delle skill"
 
 
 def test_chiedi_a_jenny_scrive_e_non_manda() -> None:
-    corpo = _corpo("_cablaSkill")
-    assert "mandaInChat" in corpo and "skills.askPrompt" in corpo
-    assert "sendMessage" not in corpo
+    body = _body("_wireSkill")
+    assert "sendInChat" in body and "skills.askPrompt" in body
+    assert "sendMessage" not in body
     app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
-    assert re.search(r"\n  mandaInChat\(testo\) \{", app), (
+    assert re.search(r"\n  sendInChat\(text\) \{", app), (
         "il guscio non espone più il modo di scrivere nel composer"
     )

@@ -273,7 +273,7 @@ def fragment_heading(heading: str) -> str:
 def find_entry(entries: list[Entry], target: str) -> tuple[Entry | None, str]:
     """Risolve un id o un frammento di testo in **una** voce.
 
-    Ritorna ``(voce, "")`` oppure ``(None, motivo)``. L'ambiguità è un errore,
+    Ritorna ``(entry, "")`` oppure ``(None, motivo)``. L'ambiguità è un errore,
     non una scelta: con due voci che contengono lo stesso frammento, indovinare
     significa cancellare quella sbagliata, e il modello ha in mano gli id per
     disambiguare da solo. Il motivo le elenca, così la seconda chiamata è

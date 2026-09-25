@@ -101,7 +101,7 @@ const document = {
 };
 
 /* La risposta del server, decisa dal banco. */
-let risposta = null;
+let reply = null;
 let errore = null;
 /* Quanto ci mette *questa* chiamata. Una wiki grossa torna dopo una piccola,
    ed e' l'unico ordine in cui la corsa si vede: con ritardi uguali il primo
@@ -112,7 +112,7 @@ const api = {
   getGraph(wiki) {
     chiamate.push(wiki);
     if (errore) return Promise.reject(errore);
-    const mia = risposta;
+    const mia = reply;
     const attesa = ritardo;
     return new Promise((r) => setTimeout(() => r(mia), attesa));
   },
@@ -166,7 +166,7 @@ class Pages {
 
 function homePages() {
   for (const k of Object.keys(nodi)) delete nodi[k];
-  risposta = null;
+  reply = null;
   errore = null;
   ritardo = 0;
   maschera = null;
@@ -259,7 +259,7 @@ def test_the_search_lights_the_row_the_server_meant() -> None:
     """
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
       assert.deepEqual(p.listEl.children.map((r) => r.dataset.label),
                        ['annaffi', 'orto', 'zucche', 'index']);
@@ -277,7 +277,7 @@ def test_an_empty_query_shows_everything_again() -> None:
     «niente»."""
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
       maschera = new Uint8Array([0, 1, 0, 0]);
       p._applySearch();
@@ -291,7 +291,7 @@ def test_an_empty_query_shows_everything_again() -> None:
 def test_a_query_that_matches_nothing_says_so() -> None:
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
       maschera = new Uint8Array([0, 0, 0, 0]);
       p._applySearch();
@@ -309,7 +309,7 @@ def test_a_flat_notebook_shows_no_group_at_all() -> None:
     _run("""
       assert.equal(groupsAreMeaningful(orderPages(PIATTO.nodes)), false);
       const p = homePages();
-      risposta = PIATTO;
+      reply = PIATTO;
       await p.load('diario');
       for (const row of p.listEl.children) {
         assert.equal(row.children.length, 1, 'una riga piatta ha piu\\u2019 di un pezzo');
@@ -321,12 +321,12 @@ def test_a_flat_notebook_shows_no_group_at_all() -> None:
 def test_a_notebook_with_groups_shows_the_dot_and_the_word() -> None:
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
-      const prima = p.listEl.children[0];
-      assert.equal(prima.children.length, 3);
-      assert.ok(prima.children[0].className.includes('home-group-entities'));
-      assert.equal(prima.children[2].textContent, i18n.t('graph.entities'));
+      const before = p.listEl.children[0];
+      assert.equal(before.children.length, 3);
+      assert.ok(before.children[0].className.includes('home-group-entities'));
+      assert.equal(before.children[2].textContent, i18n.t('graph.entities'));
       const ultima = p.listEl.children[3];
       assert.equal(ultima.children[2].textContent, i18n.t('graph.other'));
     """)
@@ -372,10 +372,10 @@ def test_only_the_last_load_draws() -> None:
     """
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       ritardo = 40;                 // il quaderno grosso, lento
       const primo = p.load('orto');
-      risposta = PIATTO;
+      reply = PIATTO;
       ritardo = 0;                  // quello piccolo, subito
       const secondo = p.load('diario');
       await Promise.all([primo, secondo]);
@@ -411,7 +411,7 @@ def test_a_real_failure_is_not_the_same_sentence() -> None:
 def test_a_notebook_with_no_pages_yet_says_so() -> None:
     _run("""
       const p = homePages();
-      risposta = { nodes: [], edges: [], search: null };
+      reply = { nodes: [], edges: [], search: null };
       await p.load('nuovo');
       assert.equal(p.noteEl.hidden, false);
       assert.equal(p.noteEl.textContent, i18n.t('home.notebookPages.none'));
@@ -425,7 +425,7 @@ def test_the_map_is_asked_for_only_when_you_tap_its_tab() -> None:
     """280 kB di D3: chi non apre la mappa non la paga."""
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
       assert.equal(p.mappe, 0, 'la mappa e\\u2019 stata chiesta senza toccarla');
       /* E nemmeno ritoccando la linguetta dell'elenco, che e' il gesto con cui
@@ -448,10 +448,10 @@ def test_a_new_notebook_comes_back_to_the_list() -> None:
     prima mentre l'elenco nuovo arriva."""
     _run("""
       const p = homePages();
-      risposta = CON_GRUPPI;
+      reply = CON_GRUPPI;
       await p.load('orto');
       p.showTab('map');
-      risposta = PIATTO;
+      reply = PIATTO;
       await p.load('diario');
       assert.equal(p._tab, 'list');
       assert.equal(p.listEl.hidden, false);

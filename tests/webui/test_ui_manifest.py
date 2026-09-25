@@ -165,13 +165,13 @@ def test_backdrop_filter_only_on_the_drawer_scrim():
     concessi = {".launcher-scrim"}
 
     colpevoli = []
-    for blocco in css.split("}"):
-        if not re.search(r"backdrop-filter\s*:", blocco):
+    for block in css.split("}"):
+        if not re.search(r"backdrop-filter\s*:", block):
             continue
-        testa = blocco.split("{")[0].strip()
-        nomi = {s.strip().splitlines()[-1].strip() for s in testa.split(",") if s.strip()}
-        if not (nomi & concessi):
-            colpevoli.append(testa.splitlines()[-1].strip() if testa else "?")
+        head = block.split("{")[0].strip()
+        names = {s.strip().splitlines()[-1].strip() for s in head.split(",") if s.strip()}
+        if not (names & concessi):
+            colpevoli.append(head.splitlines()[-1].strip() if head else "?")
 
     assert not colpevoli, (
         f"backdrop-filter su selettori non concessi: {colpevoli}. "
@@ -185,9 +185,9 @@ def test_the_drawer_scrim_actually_blurs():
     svista. Senza questa riga, il banco qui sopra passerebbe anche a
     sfocatura sparita."""
     css = (UI_DIR / "assets/mobile-style.css").read_text()
-    blocco = next(b for b in css.split("}") if ".launcher-scrim" in b.split("{")[0])
-    assert re.search(r"[^-]backdrop-filter:\s*blur\(", blocco), "lo scrim non sfoca piu\'"
-    assert "-webkit-backdrop-filter" in blocco, "manca il prefisso: il WebView usa quello"
+    block = next(b for b in css.split("}") if ".launcher-scrim" in b.split("{")[0])
+    assert re.search(r"[^-]backdrop-filter:\s*blur\(", block), "lo scrim non sfoca piu\'"
+    assert "-webkit-backdrop-filter" in block, "manca il prefisso: il WebView usa quello"
 
 
 def test_accent_backgrounds_use_on_accent():

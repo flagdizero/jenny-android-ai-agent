@@ -5,7 +5,7 @@ l'esito. Qui vive l'altra meta: i messaggi accumulati dal subagent, cioe cio che
 serve per rispondere a "no, cambia il titolo" senza ri-specificare il lavoro da
 zero. ``AgentRunResult.messages`` porta gia l'intera conversazione, quindi
 riprendere e meccanicamente banale: si risalva e si rilancia con
-``initial_messages = storia + [user(follow-up)]``.
+``initial_messages = history + [user(follow-up)]``.
 
 Non c'e un layer di persistenza nuovo: la storia e una sessione sotto la chiave
 ``subagent:<lineage_id>`` gestita dal :class:`~jenny.session.manager.SessionManager`

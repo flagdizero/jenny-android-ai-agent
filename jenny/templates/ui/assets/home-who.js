@@ -23,7 +23,7 @@
  *  **E' una pagina, non piu' una tendina.** Fino al 23/09/2026 si apriva dal
  *  titolo in un `<dialog>`; da allora e' la pagina Quaderni della pista (v.
  *  `.agent/pagine-in-alto-plan.md`): chi la ospita le da' il contenitore e la
- *  ridisegna quando ci arrivi (`mostra`). Non c'e' niente da aprire ne' da
+ *  ridisegna quando ci arrivi (`show`). Non c'e' niente da aprire ne' da
  *  chiudere, e toccare una riga lascia al guscio di portarti alla chat.
  */
 
@@ -48,13 +48,13 @@ export class WhoPanel {
    *         pressione lunga su un'app nel cassetto. Una cosa si appende dal
    *         posto dove vive, e i quaderni vivono qui.
    */
-  constructor(contenitore, { personalName, currentProject, onPick, onHold } = {}) {
+  constructor(container, { personalName, currentProject, onPick, onHold } = {}) {
     this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
     this._onHold = onHold || null;
     this._list = new ConversationList(() => api.listProjects());
-    this._body = contenitore || null;
+    this._body = container || null;
   }
 
   /** I quaderni che il pannello conosce, per chi sta per crearne uno.
@@ -100,7 +100,7 @@ export class WhoPanel {
   /** La pagina Quaderni e' diventata quella che guardi: si ridisegna subito con
    *  quel che c'e' e poi con l'elenco riletto, perche' i quaderni cambiano
    *  anche mentre non la guardi — Jenny ne crea, una mano ne cancella. */
-  async mostra() {
+  async show() {
     this.render();
     this._list.invalidate();
     await this._list.load();
@@ -115,7 +115,7 @@ export class WhoPanel {
   render() {
     if (!this._body) return;
     const body = this._body;
-    const scorso = body.scrollTop;
+    const last = body.scrollTop;
     body.innerHTML = '';
 
     body.appendChild(this._label(i18n.t('home.who.title')));
@@ -163,7 +163,7 @@ export class WhoPanel {
     /* «Nuovo quaderno» non sta qui: e' il tasto + tondo della pagina, fermo
        sopra l'elenco che scorre (index.html, `#home-notebooks-new`). Una riga
        in fondo all'elenco, con tanti quaderni, finiva sotto il bordo. */
-    if (scorso) body.scrollTop = scorso;
+    if (last) body.scrollTop = last;
   }
 
   _label(text, divided = false) {

@@ -53,7 +53,7 @@ def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
     assert '<section class="home-you" id="home-you">' in page, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
     assert "this.door" not in app
-    assert "this.homePages.registra('settings', { accendi: () => this._apriImpostazioni() });" in app
+    assert "this.homePages.register('settings', { activate: () => this._openSettings() });" in app
     tu_parole = json.loads((I18N / "it.json").read_text(encoding="utf-8"))["home"]["you"]
     assert "avatar" not in tu_parole["workshopHint"], "il suggerimento parla di un bottone che non c'e'"
 
@@ -161,9 +161,9 @@ def test_the_back_chain_lands_somewhere_real() -> None:
     # stanze delle impostazioni: Indietro ci torna sopra (`goBackOneRoom`).
     stanze = set(catena) | {"chat", "settings"}
     assert "target === 'settings'" in _app(), "Indietro non sa tornare alla pagina Impostazioni"
-    for da, a in catena.items():
-        assert a in stanze, f"{da} torna a {a}, che non e' una stanza"
-        assert da != a, f"{da} torna in se' stessa"
+    for from_index, a in catena.items():
+        assert a in stanze, f"{from_index} torna a {a}, che non e' una stanza"
+        assert from_index != a, f"{from_index} torna in se' stessa"
 
 
 def test_the_room_is_in_the_shell_from_the_first_frame() -> None:
@@ -206,8 +206,8 @@ def test_the_eyelet_has_a_phrase_for_every_landing() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         frasi = data["home"]["back"]
-        for dove in destinazioni:
-            assert frasi.get(dove, "").strip(), f"home.back.{dove} manca in {locale}.json"
+        for where in destinazioni:
+            assert frasi.get(where, "").strip(), f"home.back.{where} manca in {locale}.json"
         assert len(set(frasi.values())) == len(frasi), (
             "due destinazioni con la stessa frase: l'occhiello ha smesso di dire dove porta"
         )
@@ -269,10 +269,10 @@ def _rule(css: str, selector: str) -> str:
     che veste quella singola — e guardarne una sola dice «non c'e'».
     """
     corpi = []
-    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        nomi = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
-        if selector in nomi:
-            corpi.append(corpo)
+    for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        names = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+        if selector in names:
+            corpi.append(body)
     return "\n".join(corpi)
 
 
@@ -351,8 +351,8 @@ def test_a_card_that_has_to_cover_her_is_not_see_through() -> None:
     sua faccia. Una scheda che deve coprire dev'essere opaca."""
     css = CSS.read_text(encoding="utf-8")
     for selettore in (".home-workshop", ".home-rows", ".home-card"):
-        corpo = _rule(css, selettore)
-        sfondo = re.search(r"\n  background: ([^;]+);", corpo)
+        body = _rule(css, selettore)
+        sfondo = re.search(r"\n  background: ([^;]+);", body)
         assert sfondo, f"{selettore} non dichiara piu' uno sfondo"
         assert "--overlay" not in sfondo.group(1), (
             f"{selettore} e' semi-trasparente: lei si vede attraverso"
@@ -374,8 +374,8 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
     """
     chat = (ASSETS / "home-chat.js").read_text(encoding="utf-8")
     della_chat = set()
-    for valore in re.findall(r"className = '([^']+)'", chat):
-        della_chat |= set(valore.split())
+    for value in re.findall(r"className = '([^']+)'", chat):
+        della_chat |= set(value.split())
     assert della_chat, "la grep sulle classi della chat non morde piu'"
 
     html = INDEX.read_text(encoding="utf-8")
@@ -385,8 +385,8 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
     assert len(stanze) == 4, f"le quattro stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
     for room in stanze:
-        for valore in re.findall(r'class="([^"]+)"', room):
-            delle_stanze |= set(valore.split())
+        for value in re.findall(r'class="([^"]+)"', room):
+            delle_stanze |= set(value.split())
 
     in_comune = della_chat & delle_stanze
     assert not in_comune, (
@@ -400,14 +400,14 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
 def _contrasto(a: str, b: str) -> float:
     """Il rapporto di contrasto WCAG fra due colori esadecimali."""
 
-    def luminanza(colore: str) -> float:
-        colore = colore.strip().lstrip("#")
-        canali = [int(colore[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    def luminanza(color: str) -> float:
+        color = color.strip().lstrip("#")
+        canali = [int(color[i : i + 2], 16) / 255 for i in (0, 2, 4)]
         lineari = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in canali]
         return 0.2126 * lineari[0] + 0.7152 * lineari[1] + 0.0722 * lineari[2]
 
-    chiaro, scuro = sorted((luminanza(a), luminanza(b)), reverse=True)
-    return (chiaro + 0.05) / (scuro + 0.05)
+    light, scuro = sorted((luminanza(a), luminanza(b)), reverse=True)
+    return (light + 0.05) / (scuro + 0.05)
 
 
 
@@ -418,13 +418,13 @@ def test_the_workshop_card_is_inverted() -> None:
     semi-trasparente e Jenny si vedeva attraverso — risolta pero' rendendola
     identica a tutte le altre schede.
     """
-    corpo = _rule(CSS.read_text(encoding="utf-8"), ".home-workshop")
-    sfondo = re.search(r"\n  background: ([^;]+);", corpo)
-    testo = re.search(r"\n  color: ([^;]+);", corpo)
+    body = _rule(CSS.read_text(encoding="utf-8"), ".home-workshop")
+    sfondo = re.search(r"\n  background: ([^;]+);", body)
+    text = re.search(r"\n  color: ([^;]+);", body)
     assert sfondo and "var(--text)" == sfondo.group(1).strip(), (
         "la scheda dell'officina non e' piu' invertita: ha lo sfondo delle altre"
     )
-    assert testo and "var(--bg)" == testo.group(1).strip(), (
+    assert text and "var(--bg)" == text.group(1).strip(), (
         "fondo invertito e testo no: la scheda e' illeggibile"
     )
 
@@ -476,16 +476,16 @@ def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> N
     """
     css = TEMI.read_text(encoding="utf-8")
 
-    def dichiara(corpo: str, name: str) -> str | None:
-        m = re.search(rf"--{name}:\s*([^;]+);", corpo)
+    def dichiara(body: str, name: str) -> str | None:
+        m = re.search(rf"--{name}:\s*([^;]+);", body)
         return m.group(1).strip() if m else None
 
     # Le regole in ordine, col loro elenco di selettori: una sola regola di
     # gruppo vale per cinque temi, e guardarne solo l'ultimo direbbe che agli
     # altri quattro quel valore non arriva.
     regole = [
-        ({s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}, corpo)
-        for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css)
+        ({s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}, body)
+        for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
     ]
     temi = sorted({m.group(1) for m in re.finditer(r'\[data-theme="([^"]+)"\]', css)})
     assert len(temi) >= 7, f"i temi trovati sono {len(temi)}, non i sette che esistono"
@@ -495,11 +495,11 @@ def test_the_workshop_icon_is_legible_on_the_inverted_card_in_every_theme() -> N
         valori: dict[str, str | None] = dict.fromkeys(
             ("text", "accent", "bg", "accent-on-text"), None
         )
-        for selettori, corpo in regole:  # in ordine: l'ultimo che parla vince
+        for selettori, body in regole:  # in ordine: l'ultimo che parla vince
             if not (selettori & vale):
                 continue
             for name in valori:
-                if (v := dichiara(corpo, name)) is not None:
+                if (v := dichiara(body, name)) is not None:
                     valori[name] = v
         assert valori["accent-on-text"], f"{tema}: `--accent-on-text` non arriva"
         # Una sola indirezione, che e' tutto cio' che il foglio usa.
@@ -541,9 +541,9 @@ def test_the_room_of_who_answers_starts_with_its_notes_closed() -> None:
     misurerebbe una stanza che non esiste."""
     html = INDEX.read_text(encoding="utf-8")
     for el_id in ("home-key-row", "home-key-edit", "home-models-note", "home-model-restart"):
-        riga = re.search(rf'<[^>]*id="{el_id}"[^>]*>', html)
-        assert riga, f"{el_id} non esiste nel guscio"
-        assert " hidden" in riga.group(0), f"{el_id} non nasce piu' chiuso"
+        row = re.search(rf'<[^>]*id="{el_id}"[^>]*>', html)
+        assert row, f"{el_id} non esiste nel guscio"
+        assert " hidden" in row.group(0), f"{el_id} non nasce piu' chiuso"
 
 
 def test_the_key_field_never_carries_a_key() -> None:
@@ -552,11 +552,11 @@ def test_the_key_field_never_carries_a_key() -> None:
     da nessuno: un `value` nel markup, o un autocomplete acceso, rimetterebbe
     dentro qualcosa che poi verrebbe salvato al posto della chiave buona."""
     html = INDEX.read_text(encoding="utf-8")
-    campo = re.search(r'<input[^>]*id="home-key-input"[^>]*>', html)
-    assert campo, "il campo della chiave non esiste"
-    assert 'type="password"' in campo.group(0), "la chiave si legge a schermo mentre la incolli"
-    assert 'autocomplete="off"' in campo.group(0), "il campo si fa ricordare dal browser"
-    assert "value=" not in campo.group(0), "il markup mette qualcosa dentro il campo"
+    field = re.search(r'<input[^>]*id="home-key-input"[^>]*>', html)
+    assert field, "il campo della chiave non esiste"
+    assert 'type="password"' in field.group(0), "la chiave si legge a schermo mentre la incolli"
+    assert 'autocomplete="off"' in field.group(0), "il campo si fa ricordare dal browser"
+    assert "value=" not in field.group(0), "il markup mette qualcosa dentro il campo"
     model = (ASSETS / "home-model.js").read_text(encoding="utf-8")
     assert "api_key_hint" in model, "la stanza non legge piu' il suggerimento offuscato"
     assert not re.search(r"\.api_key\b(?!_hint)", model), (
@@ -584,12 +584,12 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     guasti = []
     for room in stanze:
         for tag in re.findall(r"<[a-z]+[^>]*\bhidden\b[^>]*>", room):
-            classi = re.search(r'class="([^"]+)"', tag)
-            if not classi:
+            classes = re.search(r'class="([^"]+)"', tag)
+            if not classes:
                 continue
-            for classe in classi.group(1).split():
-                corpo = _rule(css, f".{classe}")
-                if not re.search(r"\n  display: (?!none)", corpo):
+            for classe in classes.group(1).split():
+                body = _rule(css, f".{classe}")
+                if not re.search(r"\n  display: (?!none)", body):
                     continue
                 if f".{classe}[hidden]" not in css:
                     guasti.append(classe)
@@ -668,12 +668,12 @@ def test_the_export_is_recorded_only_after_the_system_screen() -> None:
     l'unico posto in cui si sa che il file c'e' davvero — e non dopo la
     chiamata che prepara il container."""
     flusso = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
-    dentro = re.search(r"_pending\.export = \(ok\) => \{(.*?)\n      \};", flusso, re.S)
-    assert dentro, "il callback del picker non si trova piu'"
-    assert "api.noteBackupExported()" in dentro.group(1), (
+    inside = re.search(r"_pending\.export = \(ok\) => \{(.*?)\n      \};", flusso, re.S)
+    assert inside, "il callback del picker non si trova piu'"
+    assert "api.noteBackupExported()" in inside.group(1), (
         "il record non si scrive dove si sa l'esito"
     )
-    assert "if (ok)" in dentro.group(1), "si segna un backup anche quando e' stato annullato"
+    assert "if (ok)" in inside.group(1), "si segna un backup anche quando e' stato annullato"
     # E da nessun'altra parte: una seconda chiamata segnerebbe il backup
     # quando il container e' solo pronto.
     assert flusso.count("noteBackupExported") == 1, "il record si scrive da due posti"
@@ -705,9 +705,9 @@ def test_the_house_takes_its_typefaces_from_the_theme() -> None:
     """
     css = re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=re.S)
     a_mano = [
-        riga.strip()
-        for riga in css.splitlines()
-        if re.match(r"\s*font-family:", riga)
-        and not re.match(r"\s*font-family:\s*(var\(--font-|inherit)", riga)
+        row.strip()
+        for row in css.splitlines()
+        if re.match(r"\s*font-family:", row)
+        and not re.match(r"\s*font-family:\s*(var\(--font-|inherit)", row)
     ]
     assert not a_mano, f"caratteri scritti a mano invece che dal token: {a_mano}"

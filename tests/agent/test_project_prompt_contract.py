@@ -10,7 +10,7 @@ come se fosse il workspace. Tre affermazioni false, tutte misurate il 21/08:
    lavoro dell'1.2, che aveva sdoppiato la radice dei soli file di bootstrap.
 2. ``## Where Produced Files Go`` (in ``tool_contract.md``, e parola per parola
    anche in ``subagent_system.md``) mandava quel che si produce in
-   ``<radice>/output/`` e vietava di scrivere nella "radice del workspace"
+   ``<root>/output/`` e vietava di scrivere nella "radice del workspace"
    perché "contiene un insieme fisso di documenti". Dentro una wiki sono due
    cose false, ed è **da qui** che il file di prova del 21/08 è finito in
    ``wikis/zz-prova-claude/output/`` — una cartella che nello scaffold non
@@ -1905,7 +1905,7 @@ def test_a_page_that_cannot_fit_at_all_is_not_opened(tmp_path) -> None:
 
     rel_a, rel_b = "grande-a.md", "grande-b.md"
     len_a = CAP // 2
-    # ``cost = len(rel) + 22 + len(testo)`` (+2 per il ``\n\n`` del join).
+    # ``cost = len(rel) + 22 + len(text)`` (+2 per il ``\n\n`` del join).
     body_a = "a" * (len_a - 22 - len(rel_a))
     body_b = "b" * (CAP - len_a - 2 - 22 - len(rel_b) - 5)  # chiude il tetto a 5 dalla fine
     pages = {rel_a: body_a, rel_b: body_b}

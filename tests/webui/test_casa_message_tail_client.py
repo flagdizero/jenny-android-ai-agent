@@ -33,9 +33,9 @@ CASA_CSS = ASSETS / "home-style.css"
 pytestmark = requires_node
 
 _METODI = (
-    "_codaDi",
-    "_registra",
-    "_testoDi",
+    "_tailOf",
+    "_register",
+    "_textOf",
     "_appendAssistant",
     "_resetTurn",
     "_turnEnd",
@@ -88,8 +88,8 @@ function makeChat() {
   return {
     el: makeNode(),
     _empty: false,
-    _sorgente: new WeakMap(),
-    _secondi: null,
+    _source: new WeakMap(),
+    _seconds: null,
     turnNode: null,
     blockNode: null,
     buffer: '',
@@ -104,10 +104,10 @@ function makeChat() {
 
 /* Cosa c'e' nella coda di una bolla, nell'ordine: le classi dei pulsanti e il
    testo dei secondi. `null` se la coda non c'e' proprio. */
-function coda(node) {
-  const riga = node.children.find((c) => c.className === 'home-tail');
-  if (!riga) return null;
-  return riga.children.map((c) => (
+function tail(node) {
+  const row = node.children.find((c) => c.className === 'home-tail');
+  if (!row) return null;
+  return row.children.map((c) => (
     c.className === 'home-seconds' ? c.textContent : c.className
   ));
 }
@@ -133,7 +133,7 @@ def test_a_history_answer_gets_copy_then_the_seconds() -> None:
     _run_js("""
       const c = makeChat();
       c._appendAssistant('una risposta', [], false, 4000);
-      assert.deepEqual(coda(ultima(c)), ['home-copy', '4.0s']);
+      assert.deepEqual(tail(ultima(c)), ['home-copy', '4.0s']);
     """)
 
 
@@ -143,7 +143,7 @@ def test_without_a_measured_turn_only_copy_remains() -> None:
     _run_js("""
       const c = makeChat();
       c._appendAssistant('un avviso arrivato da solo', [], false, null);
-      assert.deepEqual(coda(ultima(c)), ['home-copy']);
+      assert.deepEqual(tail(ultima(c)), ['home-copy']);
     """)
 
 
@@ -153,7 +153,7 @@ def test_a_silent_turn_gets_no_tail() -> None:
     _run_js("""
       const c = makeChat();
       c._appendAssistant('', [], false, 4000);
-      assert.equal(coda(ultima(c)), null);
+      assert.equal(tail(ultima(c)), null);
     """)
 
 
@@ -164,12 +164,12 @@ def test_a_user_bubble_has_no_tail() -> None:
       const c = makeChat();
       const tua = makeNode();
       tua.className = 'home-msg home-msg-user';
-      const blocco = makeNode();
-      blocco.className = 'home-block';
-      blocco.innerText = 'ciao';
-      tua.appendChild(blocco);
-      c._codaDi(tua, 4000);
-      assert.equal(coda(tua), null);
+      const block = makeNode();
+      block.className = 'home-block';
+      block.innerText = 'ciao';
+      tua.appendChild(block);
+      c._tailOf(tua, 4000);
+      assert.equal(tail(tua), null);
     """)
 
 
@@ -180,9 +180,9 @@ def test_the_live_turn_gets_its_tail_at_turn_end() -> None:
     _run_js("""
       const c = makeChat();
       const bolla = c._ensureTurn();
-      c._registra(bolla, 'risposta dal vivo');
+      c._register(bolla, 'risposta dal vivo');
       c._turnEnd(21300);
-      assert.deepEqual(coda(bolla), ['home-copy', '21.3s']);
+      assert.deepEqual(tail(bolla), ['home-copy', '21.3s']);
     """)
 
 
@@ -196,14 +196,14 @@ def test_an_answer_cut_short_by_the_next_one_still_gets_its_tail() -> None:
     """
     _run_js("""
       const c = makeChat();
-      const prima = c._ensureTurn();
-      c._registra(prima, 'la prima');
+      const before = c._ensureTurn();
+      c._register(before, 'la prima');
       c._resetTurn();                  // arriva un turno nuovo, niente turn_end
       const seconda = c._ensureTurn();
-      c._registra(seconda, 'la seconda');
+      c._register(seconda, 'la seconda');
       c._turnEnd(1500);
-      assert.deepEqual(coda(prima), ['home-copy'], 'la prima è rimasta senza confine');
-      assert.deepEqual(coda(seconda), ['home-copy', '1.5s']);
+      assert.deepEqual(tail(before), ['home-copy'], 'la prima è rimasta senza confine');
+      assert.deepEqual(tail(seconda), ['home-copy', '1.5s']);
     """)
 
 
@@ -212,13 +212,13 @@ def test_the_seconds_do_not_leak_into_the_next_answer() -> None:
     filo, la risposta dopo mostrerebbe il tempo di quella prima."""
     _run_js("""
       const c = makeChat();
-      const prima = c._ensureTurn();
-      c._registra(prima, 'la prima');
+      const before = c._ensureTurn();
+      c._register(before, 'la prima');
       c._turnEnd(9000);
       const seconda = c._ensureTurn();
-      c._registra(seconda, 'la seconda');
+      c._register(seconda, 'la seconda');
       c._resetTurn();
-      assert.deepEqual(coda(seconda), ['home-copy']);
+      assert.deepEqual(tail(seconda), ['home-copy']);
     """)
 
 
@@ -226,12 +226,12 @@ def test_the_tail_is_written_once() -> None:
     _run_js("""
       const c = makeChat();
       const bolla = c._ensureTurn();
-      c._registra(bolla, 'risposta');
-      c._codaDi(bolla, 4000);
-      c._codaDi(bolla, 9999);
-      const righe = bolla.children.filter((x) => x.className === 'home-tail');
-      assert.equal(righe.length, 1);
-      assert.deepEqual(coda(bolla), ['home-copy', '4.0s']);
+      c._register(bolla, 'risposta');
+      c._tailOf(bolla, 4000);
+      c._tailOf(bolla, 9999);
+      const rows = bolla.children.filter((x) => x.className === 'home-tail');
+      assert.equal(rows.length, 1);
+      assert.deepEqual(tail(bolla), ['home-copy', '4.0s']);
     """)
 
 
@@ -244,12 +244,12 @@ def test_copy_takes_the_markdown_source_not_the_rendering() -> None:
     _run_js("""
       const c = makeChat();
       const bolla = makeNode();
-      const blocco = makeNode();
-      blocco.className = 'home-block';
-      blocco.innerText = 'Ecco:\\n\\nprint(1)';
-      bolla.appendChild(blocco);
-      c._registra(bolla, 'Ecco:\\n\\n```python\\nprint(1)\\n```');
-      assert.equal(c._testoDi(bolla), 'Ecco:\\n\\n```python\\nprint(1)\\n```');
+      const block = makeNode();
+      block.className = 'home-block';
+      block.innerText = 'Ecco:\\n\\nprint(1)';
+      bolla.appendChild(block);
+      c._register(bolla, 'Ecco:\\n\\n```python\\nprint(1)\\n```');
+      assert.equal(c._textOf(bolla), 'Ecco:\\n\\n```python\\nprint(1)\\n```');
     """)
 
 
@@ -260,11 +260,11 @@ def test_inner_text_is_the_net_when_nothing_was_recorded() -> None:
     _run_js("""
       const c = makeChat();
       const bolla = makeNode();
-      const blocco = makeNode();
-      blocco.className = 'home-block';
-      blocco.innerText = 'una risposta vecchia';
-      bolla.appendChild(blocco);
-      assert.equal(c._testoDi(bolla), 'una risposta vecchia');
+      const block = makeNode();
+      block.className = 'home-block';
+      block.innerText = 'una risposta vecchia';
+      bolla.appendChild(block);
+      assert.equal(c._textOf(bolla), 'una risposta vecchia');
     """)
 
 
@@ -273,9 +273,9 @@ def test_a_turn_with_several_segments_copies_whole() -> None:
     _run_js("""
       const c = makeChat();
       const bolla = makeNode();
-      c._registra(bolla, 'primo');
-      c._registra(bolla, 'secondo');
-      assert.equal(c._testoDi(bolla), 'primo\\n\\nsecondo');
+      c._register(bolla, 'primo');
+      c._register(bolla, 'secondo');
+      assert.equal(c._textOf(bolla), 'primo\\n\\nsecondo');
     """)
 
 
@@ -287,7 +287,7 @@ def test_the_source_is_recorded_wherever_the_text_is_complete() -> None:
     """
     src = CASA_CHAT_JS.read_text(encoding="utf-8")
     for metodo in ("_streamEnd", "_message", "_appendAssistant"):
-        assert "_registra(" in member(src, metodo), f"{metodo} non registra il sorgente"
+        assert "_register(" in member(src, metodo), f"{metodo} non registra il sorgente"
 
 
 # ── Il contorno ──────────────────────────────────────────────────────────────

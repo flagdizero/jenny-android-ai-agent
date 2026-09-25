@@ -23,13 +23,13 @@ SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 _VERI = (
     "loadSettings",
     "_loadSsh",
-    "_apriHostSsh",
-    "_riallineaPannello",
+    "_openSshHost",
+    "_realignPanel",
     "_renderSshPublicKey",
     "_setSshVerifyBusy",
     "_sshGenerateKey",
     "_sshDelete",
-    "_apriMarca",
+    "_openBrand",
     "_deleteProvider",
 )
 
@@ -47,10 +47,10 @@ const confirmDialog = async () => true;
 globalThis.CSS = {{ escape: (s) => s }};
 
 const nodi = {{}};
-const nodo = (id) => (nodi[id] ||= {{ id, innerHTML: '', textContent: '' }});
+const node = (id) => (nodi[id] ||= {{ id, innerHTML: '', textContent: '' }});
 const verifica = {{ disabled: false, textContent: '' }};
 globalThis.document = {{
-  getElementById: (id) => nodo(id),
+  getElementById: (id) => node(id),
   querySelectorAll: () => [],
   querySelector: (sel) =>
     sel.startsWith('#drawer-ssh-host-body .ssh-verify[data-ssh-alias="nas"]') ? verifica : null,
@@ -83,7 +83,7 @@ class Settings {{
   constructor() {{
     this._gen = 0;
     this.contentEl = {{
-      querySelector: (sel) => (sel === '#ssh-block' ? nodo('ssh-block') : null),
+      querySelector: (sel) => (sel === '#ssh-block' ? node('ssh-block') : null),
     }};
   }}
   _stale(g) {{ return g !== this._gen; }}
@@ -113,7 +113,7 @@ def test_the_verify_button_shows_it_is_busy() -> None:
         _script(
             """
 drawer.open('ssh-host');
-s._apriHostSsh('nas');
+s._openSshHost('nas');
 s._setSshVerifyBusy('nas', true);
 assert.equal(verifica.disabled, true, 'il bottone del pannello non si e\\' spento');
 assert.equal(verifica.textContent, 'settings.ssh.verifying');
@@ -130,13 +130,13 @@ def test_generating_a_key_redraws_the_open_panel() -> None:
         _script(
             """
 drawer.open('ssh-host');
-s._apriHostSsh('nas');
+s._openSshHost('nas');
 assert.match(nodi['drawer-ssh-host-body'].innerHTML, /noKeyYet/);
 await s._sshGenerateKey('nas', false);
 await settle();
-const corpo = nodi['drawer-ssh-host-body'].innerHTML;
-assert.match(corpo, /ssh-ed25519 AAAA nas/, 'il pannello mostra ancora «nessuna chiave»');
-assert.doesNotMatch(corpo, /noKeyYet/);
+const body = nodi['drawer-ssh-host-body'].innerHTML;
+assert.match(body, /ssh-ed25519 AAAA nas/, 'il pannello mostra ancora «nessuna chiave»');
+assert.doesNotMatch(body, /noKeyYet/);
 assert.equal(drawer.activeDrawer, 'ssh-host');
 """
         )
@@ -149,7 +149,7 @@ def test_deleting_a_host_closes_its_panel() -> None:
         _script(
             """
 drawer.open('ssh-host');
-s._apriHostSsh('nas');
+s._openSshHost('nas');
 await s._sshDelete('nas');
 await settle();
 assert.equal(drawer.activeDrawer, null, "il pannello e' rimasto su un host cancellato");
@@ -163,8 +163,8 @@ def test_deleting_a_brand_closes_its_panel() -> None:
     out = run_js(
         _script(
             """
-drawer.open('marca');
-s._apriMarca('b');
+drawer.open('brand');
+s._openBrand('b');
 await s._deleteProvider('b');
 await settle();
 assert.equal(drawer.activeDrawer, null, "il pannello e' rimasto su una marca cancellata");
@@ -179,7 +179,7 @@ def test_another_drawer_is_left_alone() -> None:
     out = run_js(
         _script(
             """
-s._apriHostSsh('nas');
+s._openSshHost('nas');
 drawer.open('tetti');
 await s._sshDelete('nas');
 await settle();
@@ -190,7 +190,7 @@ assert.equal(drawer.activeDrawer, 'tetti');
     assert out.strip() == "ok"
 
 
-def _etichette(html_var: str) -> str:
+def _labels(html_var: str) -> str:
     """JS che estrae le coppie (etichetta, valore) delle righe di un pannello."""
     return (
         "[...nodi['" + html_var + "'].innerHTML.matchAll("
@@ -208,18 +208,18 @@ def test_each_panel_row_has_a_label_that_names_it() -> None:
             f"""
 settings.providers[1].api_key_hint = 'sk-…abcd';
 await s.loadSettings();
-s._apriMarca('b');
-assert.deepEqual({_etichette('drawer-brand-body')}, [
+s._openBrand('b');
+assert.deepEqual({_labels('drawer-brand-body')}, [
   ['settings.brandAddress', 'https://b'],
   ['settings.brandKey', 'sk-…abcd'],
 ]);
-s._apriMarca('a');
-assert.deepEqual({_etichette('drawer-brand-body')}, [
+s._openBrand('a');
+assert.deepEqual({_labels('drawer-brand-body')}, [
   ['settings.brandAddress', 'settings.defaultUrl'],
   ['settings.brandKey', 'settings.noKey'],
 ]);
-s._apriHostSsh('nas');
-assert.deepEqual({_etichette('drawer-ssh-host-body')}, [['settings.ssh.where', 'u@h:22']]);
+s._openSshHost('nas');
+assert.deepEqual({_labels('drawer-ssh-host-body')}, [['settings.ssh.where', 'u@h:22']]);
 """
         )
     )

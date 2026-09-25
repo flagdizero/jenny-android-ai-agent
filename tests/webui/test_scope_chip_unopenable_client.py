@@ -540,7 +540,7 @@ def test_the_name_rule_is_not_copied_a_fourth_time() -> None:
     }
     citazioni = sum(src.count("'scope.invalidName'") for src in trio.values())
     assert citazioni == 2, (
-        f"la regola si cita per chiave, e i punti che la citano sono due (trovati {citazioni})"
+        f"la regola si cita per key, e i punti che la citano sono due (trovati {citazioni})"
     )
     for name, src in trio.items():
         assert "underscore" not in src.lower(), (

@@ -6,7 +6,7 @@ ordine, della scheda di un'app nel cassetto. **Una cosa si appende dal posto
 dove vive** (`.agent/pagine-dal-posto-plan.md`).
 
 `home-notebook.js` si importa vero, coi suoi vicini finti; `apps-actions.js`
-invece e' vero anche lui, perche' la riga la disegna la sua `disegnaRiga` — la
+invece e' vero anche lui, perche' la riga la disegna la sua `drawRow` — la
 scheda e' la stessa cosa a vedersi, e una seconda copia del disegno
 divergerebbe al primo ritocco.
 """
@@ -64,21 +64,21 @@ globalThis.document = {
 globalThis.window = { addEventListener() {} };
 globalThis.MutationObserver = class { observe() {} };
 
-function righe() {
+function rows() {
   const html = elementi.get('home-notebook-sheet-actions').innerHTML;
   return [...html.matchAll(/<button[^>]*data-action="([^"]+)"([^>]*)>/g)]
-    .map(([, azione, attr]) => ({ azione, spenta: /\\bdisabled\\b/.test(attr) }));
+    .map(([, action, attr]) => ({ action, off: /\\bdisabled\\b/.test(attr) }));
 }
 """
 
 
-def _run(corpo: str, *, stato: str | None = "libera", rename: bool = False) -> None:
+def _run(body: str, *, state: str | None = "free", rename: bool = False) -> None:
     porta = (
         "null"
-        if stato is None
-        else "{ stato: (k, r) => { chiamate.push(['stato', k, r]); return '" + stato + "'; },"
-        "  appendi: async (k, r) => { chiamate.push(['appendi', k, r]); return true; },"
-        "  stacca: async (k, r) => { chiamate.push(['stacca', k, r]); return true; } }"
+        if state is None
+        else "{ state: (k, r) => { chiamate.push(['stato', k, r]); return '" + state + "'; },"
+        "  append: async (k, r) => { chiamate.push(['append', k, r]); return true; },"
+        "  detach: async (k, r) => { chiamate.push(['detach', k, r]); return true; } }"
     )
     script = (
         "import assert from 'node:assert/strict';\n"
@@ -88,25 +88,25 @@ def _run(corpo: str, *, stato: str | None = "libera", rename: bool = False) -> N
             const {{ NotebookCard }} = await import('./home-notebook.js');
             const chiamate = [];
             const PORTA = {porta};
-            const guscio = {{
+            const shell = {{
               homePages: () => PORTA,
-              apri: (n) => chiamate.push(['apri', n]),
-              elimina: (n) => chiamate.push(['elimina', n]),
+              open: (n) => chiamate.push(['open', n]),
+              delete: (n) => chiamate.push(['delete', n]),
             }};
-            if ({json.dumps(rename)}) guscio.rename = (n) => chiamate.push(['rename', n]);
-            const scheda = new NotebookCard(guscio);
+            if ({json.dumps(rename)}) shell.rename = (n) => chiamate.push(['rename', n]);
+            const card = new NotebookCard(shell);
             """
         )
-        + corpo
+        + body
     )
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "home-notebook.js", radice / "home-notebook.js")
-        shutil.copy(ASSETS / "shared" / "apps-actions.js", radice / "shared" / "apps-actions.js")
-        for name, testo in _VICINI.items():
-            (radice / "shared" / name).write_text(testo, encoding="utf-8")
-        entry = radice / "prova.mjs"
+        root = Path(tmp)
+        (root / "shared").mkdir()
+        shutil.copy(ASSETS / "home-notebook.js", root / "home-notebook.js")
+        shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
+        for name, text in _VICINI.items():
+            (root / "shared" / name).write_text(text, encoding="utf-8")
+        entry = root / "prova.mjs"
         entry.write_text(script, encoding="utf-8")
         run_module(entry)
 
@@ -117,8 +117,8 @@ def _run(corpo: str, *, stato: str | None = "libera", rename: bool = False) -> N
 def test_the_rows_are_the_app_sheets_rows_in_the_same_order() -> None:
     """Chi ha imparato la scheda di un'app ha imparato questa."""
     _run(
-        "scheda.mostra('piante');\n"
-        "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'rename', 'delete']);\n"
+        "card.show('piante');\n"
+        "assert.deepEqual(rows().map((r) => r.action), ['open', 'pin', 'rename', 'delete']);\n"
         "assert.deepEqual(chiamate[0], ['stato', 'conversation', 'project:piante']);\n"
         "assert.equal(document.getElementById('home-notebook-sheet').open, true);\n",
         rename=True,
@@ -128,33 +128,33 @@ def test_the_rows_are_the_app_sheets_rows_in_the_same_order() -> None:
 def test_without_a_way_to_rename_there_is_no_rename_row() -> None:
     """Una riga che non fa niente e' peggio di una riga che manca."""
     _run(
-        "scheda.mostra('piante');\n"
-        "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'delete']);\n",
+        "card.show('piante');\n"
+        "assert.deepEqual(rows().map((r) => r.action), ['open', 'pin', 'delete']);\n",
         rename=False,
     )
 
 
 def test_a_pinned_notebook_offers_to_unpin_it() -> None:
     _run(
-        "scheda.mostra('piante');\n"
-        "assert.equal(righe()[1].azione, 'unpin');\n",
-        stato="appesa",
+        "card.show('piante');\n"
+        "assert.equal(rows()[1].action, 'unpin');\n",
+        state="pending",
     )
 
 
 def test_with_the_pages_full_the_pin_row_is_off() -> None:
     _run(
-        "scheda.mostra('piante');\n"
-        "assert.equal(righe()[1].azione, 'pin');\n"
-        "assert.equal(righe()[1].spenta, true);\n",
-        stato="piena",
+        "card.show('piante');\n"
+        "assert.equal(rows()[1].action, 'pin');\n"
+        "assert.equal(rows()[1].off, true);\n",
+        state="piena",
     )
 
 
 def test_the_name_in_the_title_is_text_not_markup() -> None:
     """Il nome del quaderno viene dal disco: nel titolo e' testo."""
     _run(
-        "scheda.mostra('<b>x');\n"
+        "card.show('<b>x');\n"
         "const t = document.getElementById('home-notebook-sheet-title').innerHTML;\n"
         "assert.ok(t.includes('&lt;b>x'), t);\n"
     )
@@ -164,18 +164,18 @@ def test_the_name_in_the_title_is_text_not_markup() -> None:
 
 
 @pytest.mark.parametrize(
-    ("azione", "attesa"),
+    ("action", "attesa"),
     [
-        ("open", ["apri", "piante"]),
-        ("pin", ["appendi", "conversation", "project:piante"]),
-        ("unpin", ["stacca", "conversation", "project:piante"]),
+        ("open", ["open", "piante"]),
+        ("pin", ["append", "conversation", "project:piante"]),
+        ("unpin", ["detach", "conversation", "project:piante"]),
         ("rename", ["rename", "piante"]),
-        ("delete", ["elimina", "piante"]),
+        ("delete", ["delete", "piante"]),
     ],
 )
-def test_each_row_asks_the_shell(azione, attesa) -> None:
+def test_each_row_asks_the_shell(action, attesa) -> None:
     _run(
-        f"await scheda.fai({json.dumps(azione)}, 'piante');\n"
+        f"await card.perform({json.dumps(action)}, 'piante');\n"
         f"assert.deepEqual(chiamate.at(-1), {json.dumps(attesa)});\n",
         rename=True,
     )
@@ -188,37 +188,37 @@ def _member(source: str, name: str) -> str:
     return member(source, name, prefixes=("async ",))
 
 
-def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
+def _run_seguito(body: str, *, confermato: bool, corrente: str | None) -> None:
     metodo = _member((ASSETS / "home-app.js").read_text(encoding="utf-8"), "deleteNotebook")
     script = textwrap.dedent(
         f"""
         import assert from 'node:assert/strict';
-        const storia = [];
+        const history = [];
         const NOTEBOOK_DELETE_WORDS = {{ confirm: 'c' }};
         async function deleteProjectFlow(name, parole) {{
-          storia.push(['chiede', name, parole === NOTEBOOK_DELETE_WORDS]);
+          history.push(['chiede', name, parole === NOTEBOOK_DELETE_WORDS]);
           return {json.dumps(confermato)};
         }}
         const projectNameOf = (k) => (k && k.startsWith('project:') ? k.slice(8) : null);
         const projectKey = (n) => 'project:' + n;
         const sessionManager = {{ currentKey: {json.dumps(corrente)}, personalKey: 'websocket:default' }};
         const i18n = {{ t: (k) => k }};
-        function showToast(t) {{ storia.push(['avviso', t]); }}
+        function showToast(t) {{ history.push(['avviso', t]); }}
         class Guscio {{
           constructor() {{
-            this.who = {{ refresh: async () => storia.push(['tendina']) }};
+            this.who = {{ refresh: async () => history.push(['tendina']) }};
             this._drafts = new Map();
           }}
           /* La chat cambia dove sta: passare dalla regola delle pagine, dalla
              pagina Quaderni, porterebbe alla pagina chat. */
-          async mostraConversazione(k) {{ storia.push(['conversation', k]); }}
-          async switchConversation(k) {{ storia.push(['dirottata', k]); }}
-          portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
+          async showConversation(k) {{ history.push(['conversation', k]); }}
+          async switchConversation(k) {{ history.push(['dirottata', k]); }}
+          pagesPort() {{ return {{ reload: async () => history.push(['pagine']) }}; }}
           {metodo}
         }}
         const g = new Guscio();
         """
-    ) + corpo
+    ) + body
     run_js(script)
 
 
@@ -226,7 +226,7 @@ def test_a_delete_asks_with_the_notebook_words() -> None:
     """In casa quel che si cancella e' un quaderno, non un progetto."""
     _run_seguito(
         "await g.deleteNotebook('piante');\n"
-        "assert.deepEqual(storia[0], ['chiede', 'piante', true]);\n",
+        "assert.deepEqual(history[0], ['chiede', 'piante', true]);\n",
         confermato=True,
         corrente=None,
     )
@@ -236,8 +236,8 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
     """Restare in una chat che non esiste piu' vorrebbe dire scrivere a vuoto."""
     _run_seguito(
         "await g.deleteNotebook('piante');\n"
-        "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
-        "assert.deepEqual(storia[1], ['conversation', null]);\n",
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
+        "assert.deepEqual(history[1], ['conversation', null]);\n",
         confermato=True,
         corrente="project:piante",
     )
@@ -246,9 +246,9 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
 def test_deleting_another_notebook_leaves_you_where_you_are() -> None:
     _run_seguito(
         "await g.deleteNotebook('piante');\n"
-        "assert.ok(!storia.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
-        "assert.ok(storia.some((x) => x[0] === 'pagine'), 'le pagine non sono state rilette');\n"
-        "assert.ok(storia.some((x) => x[0] === 'tendina'), 'la tendina non si e ridisegnata');\n",
+        "assert.ok(!history.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
+        "assert.ok(history.some((x) => x[0] === 'pagine'), 'le pagine non sono state rilette');\n"
+        "assert.ok(history.some((x) => x[0] === 'tendina'), 'la tendina non si e ridisegnata');\n",
         confermato=True,
         corrente="project:altro",
     )
@@ -258,7 +258,7 @@ def test_saying_no_changes_nothing() -> None:
     _run_seguito(
         "const done = await g.deleteNotebook('piante');\n"
         "assert.equal(done, false);\n"
-        "assert.deepEqual(storia.map((x) => x[0]), ['chiede']);\n",
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede']);\n",
         confermato=False,
         corrente="project:piante",
     )
@@ -273,9 +273,9 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     pagina."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
-    fogli = re.search(r"(?m)^const FOGLI_PRESSIONE_LUNGA = \[(.*)\];$", app_js)
+    fogli = re.search(r"(?m)^const LONG_PRESS_SHEETS = \[(.*)\];$", app_js)
     assert fogli and "'home-notebook-sheet'" in fogli.group(1)
-    assert catena.index("FOGLI_PRESSIONE_LUNGA") < catena.index("handleBack()")
+    assert catena.index("LONG_PRESS_SHEETS") < catena.index("handleBack()")
 
 
 def test_the_sheet_is_in_the_page_and_shipped() -> None:
@@ -302,21 +302,21 @@ def test_the_workshop_still_asks_about_a_project() -> None:
 
 
 def _run_rinomina(
-    corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool | str = False,
+    body: str, *, written: str | None, corrente: str | None, rifiuta: bool | str = False,
 ) -> None:
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     metodo = _member(app_js, "renameNotebook")
-    bozza = _member(app_js, "_rinominaBozza")
+    draft = _member(app_js, "_renameDraft")
     script = textwrap.dedent(
         f"""
         import assert from 'node:assert/strict';
         const {{ isOpenableProjectName }} = await import({json.dumps((ASSETS / "shared" / "conversation-list.js").as_uri())});
-        const storia = [];
+        const history = [];
         const projectKey = (n) => 'project:' + n;
-        async function promptDialog(msg, opz) {{ storia.push(['chiede', opz.initial]); return {json.dumps(scritto)}; }}
+        async function promptDialog(msg, opz) {{ history.push(['chiede', opz.initial]); return {json.dumps(written)}; }}
         const rpc = {{
           async renameProject(a, b) {{
-            storia.push(['rpc', a, b]);
+            history.push(['rpc', a, b]);
             const rifiuto = {json.dumps(rifiuta)};
             if (rifiuto) {{
               const err = new Error('a folder named viaggi already exists');
@@ -328,43 +328,43 @@ def _run_rinomina(
         const sessionManager = {{ currentKey: {json.dumps(corrente)} }};
         const i18n = {{ t: (k, p) => p && p.error !== undefined ? k + ':' + p.error
           : p && p.name !== undefined ? k + '|' + p.name : k }};
-        function showToast(t, tipo) {{ storia.push(['avviso', t, tipo]); }}
+        function showToast(t, type) {{ history.push(['avviso', t, type]); }}
         class Guscio {{
           constructor() {{
-            this.who = {{ refresh: async () => storia.push(['tendina']) }};
-            this.homePages = {{ rinominaConversazione: (a, b) => storia.push(['pagina0', a, b]) }};
+            this.who = {{ refresh: async () => history.push(['tendina']) }};
+            this.homePages = {{ renameConversation: (a, b) => history.push(['pagina0', a, b]) }};
             this._drafts = new Map();
             this.input = {{ value: '' }};
           }}
-          async mostraConversazione(k) {{ storia.push(['conversation', k]); }}
-          async switchConversation(k) {{ storia.push(['dirottata', k]); }}
-          portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
+          async showConversation(k) {{ history.push(['conversation', k]); }}
+          async switchConversation(k) {{ history.push(['dirottata', k]); }}
+          pagesPort() {{ return {{ reload: async () => history.push(['pagine']) }}; }}
           {metodo}
-          {bozza}
+          {draft}
         }}
         const g = new Guscio();
         """
-    ) + corpo
+    ) + body
     run_js(script)
 
 
 def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -> None:
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), true);\n"
-        "assert.deepEqual(storia[0], ['chiede', 'viaggio'], 'la domanda non parte dal nome attuale');\n"
-        "assert.deepEqual(storia[1], ['rpc', 'viaggio', 'viaggi']);\n"
-        "assert.ok(storia.some((x) => x[0] === 'pagina0' && x[2] === 'project:viaggi'));\n"
-        "assert.ok(storia.some((x) => x[0] === 'conversation' && x[1] === 'project:viaggi'),\n"
+        "assert.deepEqual(history[0], ['chiede', 'viaggio'], 'la domanda non parte dal nome attuale');\n"
+        "assert.deepEqual(history[1], ['rpc', 'viaggio', 'viaggi']);\n"
+        "assert.ok(history.some((x) => x[0] === 'pagina0' && x[2] === 'project:viaggi'));\n"
+        "assert.ok(history.some((x) => x[0] === 'conversation' && x[1] === 'project:viaggi'),\n"
         "  'eri nel quaderno e non ci sei rimasta');\n"
-        "assert.ok(storia.some((x) => x[0] === 'tendina'));\n"
-        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n"
+        "assert.ok(history.some((x) => x[0] === 'tendina'));\n"
+        "assert.ok(history.some((x) => x[0] === 'pagine'));\n"
         # La tendina rilegge prima del cambio: il titolo chiede alla sua cache
         # quante pagine ha il quaderno, e sul telefono la pastiglia perdeva il
         # numero (23/09/2026).
-        "const order = storia.map((x) => x[0]);\n"
+        "const order = history.map((x) => x[0]);\n"
         "assert.ok(order.indexOf('tendina') < order.indexOf('conversation'),\n"
         "  'la tendina rilegge dopo il cambio: la pastiglia perde il numero');\n",
-        scritto=" viaggi ",
+        written=" viaggi ",
         corrente="project:viaggio",
     )
 
@@ -372,19 +372,19 @@ def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -
 def test_renaming_another_notebook_leaves_you_where_you_are() -> None:
     _run_rinomina(
         "await g.renameNotebook('viaggio');\n"
-        "assert.ok(!storia.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
-        "assert.ok(storia.some((x) => x[0] === 'pagine'));\n",
-        scritto="viaggi",
+        "assert.ok(!history.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
+        "assert.ok(history.some((x) => x[0] === 'pagine'));\n",
+        written="viaggi",
         corrente=None,
     )
 
 
-@pytest.mark.parametrize("scritto", [None, "", "   ", "viaggio"], ids=["annulla", "vuoto", "spazi", "uguale"])
-def test_nothing_to_rename_asks_nothing_of_the_gateway(scritto) -> None:
+@pytest.mark.parametrize("written", [None, "", "   ", "viaggio"], ids=["cancel", "vuoto", "spazi", "uguale"])
+def test_nothing_to_rename_asks_nothing_of_the_gateway(written) -> None:
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.deepEqual(storia.map((x) => x[0]), ['chiede']);\n",
-        scritto=scritto,
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede']);\n",
+        written=written,
         corrente="project:viaggio",
     )
 
@@ -394,9 +394,9 @@ def test_a_name_that_would_not_open_is_said_before_the_round_trip() -> None:
     andrebbe e tornerebbe col suo rifiuto."""
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.ok(!storia.some((x) => x[0] === 'rpc'), 'un nome non valido e arrivato al gateway');\n"
-        "assert.deepEqual(storia.at(-1), ['avviso', 'scope.invalidName', 'error']);\n",
-        scritto="Ricerca ETF",
+        "assert.ok(!history.some((x) => x[0] === 'rpc'), 'un nome non valido e arrivato al gateway');\n"
+        "assert.deepEqual(history.at(-1), ['avviso', 'scope.invalidName', 'error']);\n",
+        written="Ricerca ETF",
         corrente=None,
     )
 
@@ -404,9 +404,9 @@ def test_a_name_that_would_not_open_is_said_before_the_round_trip() -> None:
 def test_a_refused_rename_changes_nothing_at_home() -> None:
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'rpc', 'avviso']);\n"
-        "assert.equal(storia.at(-1)[2], 'error');\n",
-        scritto="viaggi",
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'rpc', 'avviso']);\n"
+        "assert.equal(history.at(-1)[2], 'error');\n",
+        written="viaggi",
         corrente="project:viaggio",
         rifiuta=True,
     )
@@ -418,16 +418,16 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     inglese del server. Un altro errore resta quello di sempre, col motivo."""
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        "assert.deepEqual(storia.at(-1), ['avviso', 'home.notebook.renameBusy|viaggio', 'error']);\n",
-        scritto="viaggi",
+        "assert.deepEqual(history.at(-1), ['avviso', 'home.notebook.renameBusy|viaggio', 'error']);\n",
+        written="viaggi",
         corrente="project:viaggio",
         rifiuta="conflict",
     )
     _run_rinomina(
         "await g.renameNotebook('viaggio');\n"
-        "assert.deepEqual(storia.at(-1), ['avviso',\n"
+        "assert.deepEqual(history.at(-1), ['avviso',\n"
         "  'home.notebook.renameFailed:a folder named viaggi already exists', 'error']);\n",
-        scritto="viaggi",
+        written="viaggi",
         corrente="project:viaggio",
         rifiuta=True,
     )
@@ -447,8 +447,8 @@ def test_the_expected_refusals_are_said_in_the_readers_language(codice, attesa) 
     server."""
     _run_rinomina(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
-        f"assert.deepEqual(storia.at(-1), ['avviso', {json.dumps(attesa)}, 'error']);\n",
-        scritto="viaggi",
+        f"assert.deepEqual(history.at(-1), ['avviso', {json.dumps(attesa)}, 'error']);\n",
+        written="viaggi",
         corrente="project:viaggio",
         rifiuta=codice,
     )
@@ -459,12 +459,12 @@ def test_the_refusal_keys_exist_in_both_languages() -> None:
 
     for lingua in ("it", "en"):
         notebook = locale(lingua)["home"]["notebook"]
-        for chiave in ("renameBusy", "renameTaken", "renameMissing", "renameFailed"):
-            assert notebook.get(chiave), f"{lingua}: casa.notebook.{chiave}"
+        for key in ("renameBusy", "renameTaken", "renameMissing", "renameFailed"):
+            assert notebook.get(key), f"{lingua}: casa.notebook.{key}"
 
 
 def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:
     """La riga «Rinomina» c'e' solo se il guscio sa rinominare: adesso sa."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    scheda = app_js.split("schedaQuaderno() {", 1)[1].split("\n  }\n", 1)[0]
-    assert "rename: (name) => this.renameNotebook(name)" in scheda
+    card = app_js.split("notebookCard() {", 1)[1].split("\n  }\n", 1)[0]
+    assert "rename: (name) => this.renameNotebook(name)" in card

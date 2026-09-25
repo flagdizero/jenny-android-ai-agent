@@ -46,12 +46,12 @@ function ensureVendorStyle(href) {
 
 /* Un DOM finto con quel poco che il modulo tocca: camminata sui figli,
    `code.language-mermaid`, `closest`, `replaceWith`. */
-function _match(nodo, sel) {
-  const [tag, ...classi] = sel.split('.');
-  if (tag && nodo.tagName !== tag.toUpperCase()) return false;
-  return classi.every((c) => nodo.className.split(/\\s+/).includes(c));
+function _match(node, sel) {
+  const [tag, ...classes] = sel.split('.');
+  if (tag && node.tagName !== tag.toUpperCase()) return false;
+  return classes.every((c) => node.className.split(/\\s+/).includes(c));
 }
-function el(tag, figli = [], className = '') {
+function el(tag, children = [], className = '') {
   const n = {
     nodeType: 1, tagName: tag.toUpperCase(), className, childNodes: [],
     isConnected: true, parentNode: null,
@@ -80,15 +80,15 @@ function el(tag, figli = [], className = '') {
       while (x) { if (_match(x, sel)) return x; x = x.parentNode; }
       return null;
     },
-    replaceWith(nuovo) {
+    replaceWith(fresh) {
       const p = n.parentNode;
       if (!p) return;
-      p.childNodes[p.childNodes.indexOf(n)] = nuovo;
-      nuovo.parentNode = p;
+      p.childNodes[p.childNodes.indexOf(n)] = fresh;
+      fresh.parentNode = p;
       n.isConnected = false;
     },
   };
-  for (const f of figli) n.appendChild(f);
+  for (const f of children) n.appendChild(f);
   return n;
 }
 const txt = (v) => ({ nodeType: 3, nodeValue: v, childNodes: [] });
@@ -127,7 +127,7 @@ function bloccoChat(codice) {
     el('pre', [el('code', [txt(codice)], 'hljs language-mermaid')]),
   ], 'chat-code-block');
 }
-function corpo(figli) { return el('div', figli); }
+function body(children) { return el('div', children); }
 function reset() {
   caricati.length = 0; reseFormule.length = 0; reseDiagrammi.length = 0;
   caricamentoFallisce = false; schema = 'dark'; sospesi = null;
@@ -148,7 +148,7 @@ def test_plain_text_loads_nothing_at_all() -> None:
     messaggio su cento."""
     _run("""
 reset();
-await renderRich(corpo([txt('ciao, come va? tutto bene')]));
+await renderRich(body([txt('ciao, come va? tutto bene')]));
 assert.deepEqual(caricati, [], 'ha caricato qualcosa per del testo semplice');
 """)
 
@@ -160,7 +160,7 @@ def test_a_shell_prompt_is_not_a_formula() -> None:
     messaggio — e per contenuto che KaTeX poi salta comunque."""
     _run("""
 reset();
-const msg = corpo([
+const msg = body([
   txt('esporta cosi:'),
   el('pre', [el('code', [txt('export $EDITOR=vim && echo $PATH')])]),
 ]);
@@ -176,17 +176,17 @@ def test_money_is_not_maths_in_chat_but_inline_is_in_a_page() -> None:
     scrive conosce la regola della casa."""
     _run("""
 reset();
-await renderRich(corpo([txt('costa $5, forse $10')]));
+await renderRich(body([txt('costa $5, forse $10')]));
 assert.deepEqual(caricati, [], 'in chat due prezzi hanno acceso la matematica');
 
 reset();
-await renderRich(corpo([txt('la somma $f(x) = w_i x_i$ pesa')]), { inlineDollar: true });
+await renderRich(body([txt('la somma $f(x) = w_i x_i$ pesa')]), { inlineDollar: true });
 assert.ok(caricati.length, 'in una pagina il dollaro in riga non ha acceso niente');
 assert.ok(reseFormule[0].delimitatori.includes('$'), 'manca il delimitatore in riga');
 
 // E in chat una formula vera si scrive lo stesso, coi delimitatori non ambigui.
 reset();
-await renderRich(corpo([txt('vale $$E = mc^2$$ sempre')]));
+await renderRich(body([txt('vale $$E = mc^2$$ sempre')]));
 assert.ok(reseFormule.length === 1, 'in chat $$ non ha disegnato');
 assert.ok(!reseFormule[0].delimitatori.includes('$'),
   'la chat ha acceso anche il dollaro in riga');
@@ -199,7 +199,7 @@ def test_the_stylesheet_comes_with_the_code() -> None:
     insieme, non in fila: sono due richieste indipendenti."""
     _run("""
 reset();
-await renderRich(corpo([txt('vale $$E = mc^2$$')]));
+await renderRich(body([txt('vale $$E = mc^2$$')]));
 assert.ok(caricati.some((s) => s.endsWith('katex.min.css')), 'manca il foglio di stile');
 assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'manca il codice');
 assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'manca auto-render');
@@ -215,16 +215,16 @@ def test_auto_render_is_asked_for_only_after_katex_has_arrived() -> None:
 reset();
 sospesi = new Map();
 const giro = () => new Promise((r) => setTimeout(r, 0));
-const risolvi = (fine) => [...sospesi].find(([src]) => src.endsWith(fine))[1]();
-const done = renderRich(corpo([txt('vale $$E = mc^2$$')]));
+const resolve = (fine) => [...sospesi].find(([src]) => src.endsWith(fine))[1]();
+const done = renderRich(body([txt('vale $$E = mc^2$$')]));
 await giro();
 assert.ok(caricati.some((s) => s.endsWith('katex.min.js')), 'KaTeX non chiesto');
 assert.ok(!caricati.some((s) => s.endsWith('auto-render.min.js')),
   'auto-render chiesto prima che KaTeX fosse arrivato');
-risolvi('katex.min.js');
+resolve('katex.min.js');
 await giro();
 assert.ok(caricati.some((s) => s.endsWith('auto-render.min.js')), 'auto-render mai chiesto');
-risolvi('auto-render.min.js');
+resolve('auto-render.min.js');
 await done;
 assert.equal(reseFormule.length, 1);
 """)
@@ -237,7 +237,7 @@ def test_code_blocks_stay_code() -> None:
     roba che non verra' toccata."""
     _run("""
 reset();
-await renderRich(corpo([txt('vale $$x$$')]));
+await renderRich(body([txt('vale $$x$$')]));
 const ignorati = reseFormule[0].opts.ignoredTags.map((t) => t.toLowerCase());
 assert.ok(ignorati.includes('code') && ignorati.includes('pre'),
   'KaTeX entrerebbe nei blocchi di codice');
@@ -250,12 +250,12 @@ def test_a_diagram_is_recognised_in_both_shapes() -> None:
     e' il motivo per cui in chat un diagramma non ha mai disegnato niente."""
     _run("""
 reset();
-const page = corpo([bloccoServer('flowchart LR\\n A --> B')]);
+const page = body([bloccoServer('flowchart LR\\n A --> B')]);
 await renderDiagrams(page);
 assert.deepEqual(reseDiagrammi.map((c) => c.trim()), ['flowchart LR\\n A --> B']);
 
 reset();
-const chat = corpo([bloccoChat('graph TD\\n X --> Y')]);
+const chat = body([bloccoChat('graph TD\\n X --> Y')]);
 await renderDiagrams(chat);
 assert.deepEqual(reseDiagrammi.map((c) => c.trim()), ['graph TD\\n X --> Y'],
   'in chat il diagramma resta codice colorato');
@@ -268,7 +268,7 @@ def test_the_whole_code_block_is_replaced_not_just_the_code() -> None:
     sembrare che il disegno sia dentro un blocco di codice."""
     _run("""
 reset();
-const chat = corpo([bloccoChat('graph TD\\n X --> Y')]);
+const chat = body([bloccoChat('graph TD\\n X --> Y')]);
 await renderDiagrams(chat);
 assert.equal(chat.childNodes.length, 1);
 assert.equal(chat.childNodes[0].className, 'diagram',
@@ -280,7 +280,7 @@ def test_nothing_is_loaded_for_a_page_without_diagrams() -> None:
     """Mermaid sono 3,3 MB: aprire una pagina di solo testo non deve costarli."""
     _run("""
 reset();
-await renderDiagrams(corpo([el('pre', [el('code', [txt('print(1)')], 'language-python')])]));
+await renderDiagrams(body([el('pre', [el('code', [txt('print(1)')], 'language-python')])]));
 assert.deepEqual(caricati, [], 'ha caricato mermaid per del python');
 """)
 
@@ -292,13 +292,13 @@ def test_the_dark_theme_reaches_mermaid() -> None:
     a contenuto aperto viene raccolto."""
     _run("""
 reset();
-await renderDiagrams(corpo([bloccoServer('graph TD\\n A --> B')]));
+await renderDiagrams(body([bloccoServer('graph TD\\n A --> B')]));
 assert.equal(mermaid._config.theme, 'dark');
 assert.equal(mermaid._config.securityLevel, 'strict',
   "i diagrammi arrivano dal modello: l'HTML sta fuori dalle etichette");
 
 reset(); schema = 'light';
-await renderDiagrams(corpo([bloccoServer('graph TD\\n A --> B')]));
+await renderDiagrams(body([bloccoServer('graph TD\\n A --> B')]));
 assert.equal(mermaid._config.theme, 'default');
 """)
 
@@ -312,7 +312,7 @@ reset(); caricamentoFallisce = true;
 const avvisi = [];
 const warnVero = console.warn;
 console.warn = (msg) => avvisi.push(String(msg));
-const page = corpo([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
+const page = body([txt('vale $$E$$'), bloccoServer('graph TD\\n A --> B')]);
 await renderRich(page, { inlineDollar: true });
 console.warn = warnVero;
 assert.deepEqual(reseFormule, []);

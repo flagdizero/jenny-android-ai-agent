@@ -291,7 +291,7 @@ def test_every_talking_signal_keeps_the_mouth_alive() -> None:
       const m = makeMascot('out');
       m._setAgentState('talking');
       const first = m._talk.lastTextAt;
-      assert.ok(m._talk.timer, 'l\\'animatore non è partito');
+      assert.ok(m._talk.timer, 'l\\'animatore non è started');
       const spin = performance.now() + 5;
       while (performance.now() < spin) { /* fa passare il tempo */ }
       m._setAgentState('talking');   // stesso stato, nuovo testo
@@ -431,7 +431,7 @@ def test_clearing_redraws_once_and_is_idempotent() -> None:
       assert.equal(m._mood, null);
       assert.equal(m.syncs, before + 1);
       m._clearMood();
-      assert.equal(m.syncs, before + 1, 'senza umore non c\\'è niente da ridisegnare');
+      assert.equal(m.syncs, before + 1, 'senza umore non c\\'è niente fromIndex ridisegnare');
     """)
 
 

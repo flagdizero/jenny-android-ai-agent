@@ -95,7 +95,7 @@ export const APP_TOKEN_MAP = {
   '--warning':      '--warning',
 };
 
-/** Palette del tema attivo per un'app, come `name:valore;...` (senza `--`).
+/** Palette del tema attivo per un'app, come `name:value;...` (senza `--`).
  *
  *  Legge i valori *calcolati* invece dei letterali del registro: è la stessa
  *  lettura che fa `syncNativeBars` per le barre di sistema, e vale anche per i

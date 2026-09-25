@@ -2,7 +2,7 @@
 
 Il dock e' passato da cinque voci per sottosistema a quattro per domanda — una
 console e tre facolta' (`.agent/officina-tavole-plan.md`). Il meccanismo e' una
-tabella sola, `CASSETTI`, e questo file misura le tre cose che quella tabella
+tabella sola, `DRAWERS`, e questo file misura le tre cose che quella tabella
 puo' sbagliare **in silenzio**:
 
 * **una sezione senza cassetto** sparisce dalla schermata. Non da' errore, non
@@ -10,7 +10,7 @@ puo' sbagliare **in silenzio**:
   cui la cerchi. E' il difetto che questo giro puo' introdurre a ogni passo,
   perche' ogni passo sposta stringhe da un elenco all'altro;
 * **un cassetto che nomina una sezione che non esiste** esplode al primo
-  tocco (`sezioni[id]()` su `undefined`), e solo su quel cassetto;
+  tocco (`sections[id]()` su `undefined`), e solo su quel cassetto;
 * **la stessa sezione in due cassetti** e' il doppione che il giro esiste per
   togliere, letto dalla parte del codice invece che dal disegno.
 
@@ -35,22 +35,22 @@ def _src(name: str) -> str:
 
 
 def _cassetti() -> dict[str, dict[str, list[str]]]:
-    """La tabella `CASSETTI`, letta dal sorgente."""
+    """La tabella `DRAWERS`, letta dal sorgente."""
     src = _src("mobile-settings.js")
-    m = re.search(r"(?ms)^export const CASSETTI = \{(.*?)^\};", src)
+    m = re.search(r"(?ms)^export const DRAWERS = \{(.*?)^\};", src)
     assert m, "CASSETTI non si trova piu': il meccanismo dei cassetti e' sparito"
-    corpo = m.group(1)
+    body = m.group(1)
     fuori = {}
-    for name, dentro in re.findall(r"(\w+): \{(.*?)\n  \}", corpo, re.S):
-        def elenco(chiave: str, aperta: str = "[", chiusa: str = "]") -> list[str]:
-            voci = re.search(rf"{chiave}: \{aperta}([^\{chiusa}]*)\{chiusa}", dentro)
-            return re.findall(r"'([^']+)'", voci.group(1)) if voci else []
+    for name, inside in re.findall(r"(\w+): \{(.*?)\n  \}", body, re.S):
+        def list(key: str, open: str = "[", closed: str = "]") -> list[str]:
+            entries = re.search(rf"{key}: \{open}([^\{closed}]*)\{closed}", inside)
+            return re.findall(r"'([^']+)'", entries.group(1)) if entries else []
         # `porte` non c'e' piu' dal 21/09/2026: era una mappa gruppo -> viste
         # uscite dal dock, e ne e' rimasta una sola — il gestore file, che la
         # scheda «I file veri» si disegna da se'. Un meccanismo generico per
         # una riga era piu' codice della cosa che reggeva. Chi chiede «questa
         # vista si apre da qualche parte?» guarda ora il `data-porta` nel DOM.
-        fuori[name] = {"sezioni": elenco("sezioni")}
+        fuori[name] = {"sections": list("sections")}
     assert fuori, "la tabella e' vuota"
     return fuori
 
@@ -58,7 +58,7 @@ def _cassetti() -> dict[str, dict[str, list[str]]]:
 def _sezioni_disegnabili() -> set[str]:
     """Gli id che `render()` sa costruire."""
     src = _src("mobile-settings.js")
-    m = re.search(r"(?s)const sezioni = \{(.*?)\n    \};", src)
+    m = re.search(r"(?s)const sections = \{(.*?)\n    \};", src)
     assert m, "l'elenco delle sezioni dentro render() non si trova piu'"
     return set(re.findall(r"(\w+): \(\) =>", m.group(1)))
 
@@ -71,9 +71,9 @@ def test_every_section_has_exactly_one_drawer() -> None:
     """
     disegnabili = _sezioni_disegnabili()
     collocate: dict[str, list[str]] = {}
-    for cassetto, contenuto in _cassetti().items():
-        for sezione in contenuto["sezioni"]:
-            collocate.setdefault(sezione, []).append(cassetto)
+    for drawer, contenuto in _cassetti().items():
+        for sezione in contenuto["sections"]:
+            collocate.setdefault(sezione, []).append(drawer)
 
     senza_casa = sorted(disegnabili - set(collocate))
     assert not senza_casa, (
@@ -85,12 +85,12 @@ def test_every_section_has_exactly_one_drawer() -> None:
 
 
 def test_no_drawer_names_a_section_that_does_not_exist() -> None:
-    """`sezioni[id]()` su un id sconosciuto e' un `TypeError` al primo tocco,
+    """`sections[id]()` su un id sconosciuto e' un `TypeError` al primo tocco,
     e solo su quel cassetto: gli altri tre restano verdi."""
     disegnabili = _sezioni_disegnabili()
-    for cassetto, contenuto in _cassetti().items():
-        fantasmi = [s for s in contenuto["sezioni"] if s not in disegnabili]
-        assert not fantasmi, f"il cassetto «{cassetto}» nomina sezioni che non esistono: {fantasmi}"
+    for drawer, contenuto in _cassetti().items():
+        fantasmi = [s for s in contenuto["sections"] if s not in disegnabili]
+        assert not fantasmi, f"il cassetto «{drawer}» nomina sezioni che non esistono: {fantasmi}"
 
 
 def test_every_drawer_in_the_table_is_a_dock_voice_and_the_other_way_round() -> None:
@@ -100,22 +100,22 @@ def test_every_drawer_in_the_table_is_a_dock_voice_and_the_other_way_round() -> 
     tabella = set(_cassetti())
     html = WORKSHOP.read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
-    voci = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
+    entries = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
 
-    # `VISTA_DI` vive accanto a `CASSETTI` (mobile-settings.js): rispondono
+    # `VIEW_OF` vive accanto a `DRAWERS` (mobile-settings.js): rispondono
     # alla stessa domanda, e tenerle in due file ha gia' prodotto una copia
     # mancante — v. tests/webui/test_officina_cornice_contract.py.
-    m = re.search(r"const VISTA_DI = \{([^}]*)\}", _src("mobile-settings.js"))
-    assert m, "VISTA_DI non si trova piu'"
+    m = re.search(r"const VIEW_OF = \{([^}]*)\}", _src("mobile-settings.js"))
+    assert m, "VIEW_OF non si trova piu'"
     condivisi = set(re.findall(r"(\w+): 'settings'", m.group(1)))
 
     assert tabella == condivisi, (
         f"la tabella dei cassetti e la mappa delle viste non dicono la stessa "
         f"cosa: {tabella ^ condivisi}"
     )
-    assert condivisi <= set(voci), f"cassetti che il dock non apre: {condivisi - set(voci)}"
+    assert condivisi <= set(entries), f"cassetti che il dock non apre: {condivisi - set(entries)}"
     # La console e' l'unica voce che non e' un cassetto: e' la chat.
-    assert set(voci) - condivisi == {"chat"}, set(voci) - condivisi
+    assert set(entries) - condivisi == {"chat"}, set(entries) - condivisi
 
 
 def test_the_views_that_left_the_dock_are_still_reachable() -> None:
@@ -174,12 +174,12 @@ def test_a_drawer_only_builds_what_it_shows() -> None:
     src = _src("mobile-settings.js")
     m = re.search(r"(?s)this\.contentEl\.innerHTML = \[(.*?)\]\.join\(''\);", src)
     assert m, "il corpo di render() non si trova piu'"
-    corpo = m.group(1)
-    assert "quali.map((id) => sezioni[id]()" in corpo, (
-        "render() non disegna piu' per cassetto: se le costruisce tutte, le "
+    body = m.group(1)
+    assert "which.map((id) => sections[id]()" in body, (
+        "render() non disegna piu' per drawer: se le costruisce tutte, le "
         "costruisce tutte anche quando ne mostra una"
     )
-    assert "this._renderModelSettings(" not in corpo, (
+    assert "this._renderModelSettings(" not in body, (
         "una sezione viene costruita fuori dalla tabella: torna a pagarsi sempre"
     )
 
@@ -193,7 +193,7 @@ def test_the_three_drawers_share_one_screen_and_one_fetch() -> None:
         assert re.search(rf"{modo}:\s+settings,", app), f"«{modo}» non condivide il controller"
     # E il cassetto va detto **prima** di activate(), o il primo frame mostra
     # quello di prima.
-    i = app.index("next.setCassetto?.(")
+    i = app.index("next.setDrawer?.(")
     j = app.index("next.activate()")
     assert i < j, "il cassetto viene scelto dopo che la schermata si e' gia' disegnata"
 
@@ -282,9 +282,9 @@ def test_choosing_the_model_lives_in_the_casa() -> None:
     )
     # E l'anagrafica resta **solo** di qua: la casa sostituisce una chiave, non
     # compila un endpoint.
-    for campo in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
-        assert campo in workshop, f"l'anagrafica ha perso {campo}"
-        assert campo not in home, f"la casa ha preso {campo}: quello ha bisogno di un paragrafo"
+    for field in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
+        assert field in workshop, f"l'anagrafica ha perso {field}"
+        assert field not in home, f"la casa ha preso {field}: quello ha bisogno di un paragrafo"
 
 
 def test_adding_a_brand_finishes_the_job() -> None:
@@ -297,23 +297,23 @@ def test_adding_a_brand_finishes_the_job() -> None:
     risposta successiva.
     """
     src = _src("mobile-settings.js")
-    for campo in ("dlg-first-model", "dlg-use-now"):
-        assert campo in src, f"il dialogo di aggiunta ha perso {campo}"
+    for field in ("dlg-first-model", "dlg-use-now"):
+        assert field in src, f"il dialogo di aggiunta ha perso {field}"
     assert 'id="dlg-use-now" checked' in src, (
         "«usala adesso» parte spento: nove volte su dieci la aggiungi per usarla"
     )
-    assert "primoModello: isEdit ? '' : " in src and "usalaAdesso: !isEdit" in src, (
+    assert "firstModel: isEdit ? '' : " in src and "useItNow: !isEdit" in src, (
         "il primo modello si raccoglie anche in modifica: cambiare l'endpoint di "
         "una marca in uso non deve poter cambiare chi risponde"
     )
-    salva = re.search(r"(?s)async _saveProvider\(.*?\n  \}", src).group(0)
-    i = salva.index("api.updateProvider(")
-    j = salva.index("api.updateSettings(")
+    save = re.search(r"(?s)async _saveProvider\(.*?\n  \}", src).group(0)
+    i = save.index("api.updateProvider(")
+    j = save.index("api.updateSettings(")
     assert i < j, (
         "la marca si attiva prima di esistere: se la prima scrittura fallisce, "
         "`default_provider` punta a un provider che non c'e'"
     )
-    assert "usalaAdesso && primoModello" in salva, "si attiva anche senza un modello"
+    assert "useItNow && firstModel" in save, "si attiva anche senza un modello"
 
 
 # ── La wiki e' uscita dall'officina ─────────────────────────────────────────
@@ -338,21 +338,21 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
     for js in sorted(ASSETS.rglob("*.js")):
         if "vendor" in js.parts:
             continue
-        for riga in js.read_text(encoding="utf-8").splitlines():
-            testa = riga.lstrip()
-            assert not (testa.startswith("import") and ("mobile-wiki" in riga or "mobile-graph" in riga)), (
+        for row in js.read_text(encoding="utf-8").splitlines():
+            head = row.lstrip()
+            assert not (head.startswith("import") and ("mobile-wiki" in row or "mobile-graph" in row)), (
                 f"{js.name} importa di nuovo una vista che non c'e'"
             )
 
     html = WORKSHOP.read_text(encoding="utf-8")
-    for nodo in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
+    for node in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
                  'id="drawer-files"', 'id="wiki-feedback-dialog"'):
-        assert nodo not in html, f"{nodo} e' tornato in officina.html"
+        assert node not in html, f"{node} e' tornato in officina.html"
 
     from jenny.utils.android_assets import _UI_MANIFEST
 
-    for voce in ("assets/mobile-wiki.js", "assets/mobile-graph.js"):
-        assert voce not in _UI_MANIFEST, f"il manifesto elenca ancora {voce}"
+    for entry in ("assets/mobile-wiki.js", "assets/mobile-graph.js"):
+        assert entry not in _UI_MANIFEST, f"il manifesto elenca ancora {entry}"
 
 
 def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
@@ -396,5 +396,5 @@ def test_the_notebook_did_not_disappear_with_it() -> None:
     for name in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
         assert (ASSETS / name).exists(), f"{name} manca: il quaderno non si apre da nessuna parte"
     home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    for nodo in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
-        assert nodo in home, f"{nodo} manca dalla casa"
+    for node in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
+        assert node in home, f"{node} manca dalla casa"

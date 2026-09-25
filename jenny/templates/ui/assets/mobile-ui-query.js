@@ -5,7 +5,7 @@
  * raccogliamo, descriviamo la vista attiva come HTML potato (e, se aperta, l'HTML
  * della Jenny app via SDK) e rispondiamo con un frame `ui_result`.
  *
- * L'HTML della vista nativa si legge direttamente dal DOM (`elementoVista(modo)`:
+ * L'HTML della vista nativa si legge direttamente dal DOM (`viewElement(modo)`:
  * cervello, mani e memoria sono tutti e tre `#view-settings`).
  * L'HTML dell'app NO: l'iframe è sandboxato con origin opaca, illeggibile dal
  * parent — è l'app stessa a spedirlo fuori tramite l'SDK (jenny:ui-query).
@@ -13,7 +13,7 @@
 
 import { AppState } from './shared/state.js';
 import { wsManager } from './shared/ws-manager.js';
-import { elementoVista } from './mobile-settings.js';
+import { viewElement } from './mobile-settings.js';
 
 // Cap per blocco HTML (il backend rifiuta comunque payload oltre 256 KB).
 const HTML_CAP = 48 * 1024;
@@ -78,7 +78,7 @@ export class UiQueryResponder {
     const drawer = window.mobileApp?.drawer?.activeDrawer || null;
     /* Dalla tabella, non dall'id costruito: `view-cervello` non esiste, e
        per i tre cassetti Jenny riceveva un HTML vuoto. */
-    const container = elementoVista(view);
+    const container = viewElement(view);
     const html = this._pruneHtml(container ? container.outerHTML : '');
 
     const payload = { view, drawer, html };

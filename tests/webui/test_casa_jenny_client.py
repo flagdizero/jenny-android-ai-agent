@@ -98,7 +98,7 @@ function mascotSize() { return taglia; }
 function setMascotSize(size) { taglia = size; return size; }
 
 /* Quel che il server risponde all'interruttore, deciso dal banco. */
-let risposta = null;
+let reply = null;
 let errore = null;
 const chiamate = [];
 /* E quel che c'e' su disco: `null` = il file non c'e' (404), una stringa = c'e'.
@@ -120,7 +120,7 @@ const api = {
   updateFloating(params) {
     chiamate.push(params);
     if (errore) return Promise.reject(errore);
-    return Promise.resolve(risposta);
+    return Promise.resolve(reply);
   },
   readWorkspaceFile(path) {
     if (letturaRotta) {
@@ -142,7 +142,7 @@ const rpc = {
     return salvataggioRotto ? Promise.reject(new Error('rifiutato')) : Promise.resolve({});
   },
 };
-function showToast(msg, tipo) { brindisi.push([msg, tipo]); }
+function showToast(msg, type) { brindisi.push([msg, type]); }
 
 __JENNY_VALUE__
 __SIZE_LIST__
@@ -182,7 +182,7 @@ function room(floating, disco, rotta) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   visibile = true;
   taglia = 'sm';
-  risposta = null;
+  reply = null;
   errore = null;
   chiamate.length = 0;
   suDisco = disco === undefined ? null : disco;
@@ -220,8 +220,8 @@ def _harness() -> str:
         .replace("__CTOR__", member(src, "constructor"))
         .replace("__OPEN__", member(src, "open"))
         .replace("__SET_NAME__", member(src, "setName"))
-        .replace("__MARK_NOME__", member(src, "_markNome"))
-        .replace("__SAVE_NOME__", member(src, "saveNome"))
+        .replace("__MARK_NOME__", member(src, "_markName"))
+        .replace("__SAVE_NOME__", member(src, "saveName"))
         .replace("__SET_FLOATING__", member(src, "setFloating"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
         .replace("__VALUE__", member(src, "value"))
@@ -352,7 +352,7 @@ def test_the_switch_moves_before_the_server_answers_and_takes_its_word_after() -
       /* Il server risponde il **contrario** dell'ipotesi: il permesso c'e' e
          la finestra e' su. Con una risposta uguale a quel che la stanza aveva
          gia' indovinato, buttarla via non si vedrebbe da nessuna parte. */
-      risposta = { floating: { available: true, enabled: true, active: true } };
+      reply = { floating: { available: true, enabled: true, active: true } };
       const giro = lei.toggleFloating();
       assert.equal(lei.floatingBtn.classList.contains('is-on'), true, 'non si e\\u2019 mosso subito');
       assert.equal(lei.floatingNote.textContent, i18n.t('settings.floatingBlocked'),
@@ -386,7 +386,7 @@ def test_the_house_hears_what_the_switch_ended_up_as() -> None:
     rimesso a posto se la chiamata e' fallita — non l'ipotesi ottimista."""
     _run_js("""
       const lei = room({ available: true, enabled: false, active: false });
-      risposta = { floating: { available: true, enabled: true, active: true } };
+      reply = { floating: { available: true, enabled: true, active: true } };
       await lei.toggleFloating();
       assert.deepEqual(flottanti.at(-1), { available: true, enabled: true, active: true });
 
@@ -563,7 +563,7 @@ def test_saving_the_name_goes_through_the_settings_call() -> None:
       const lei = room();
       lei.setName('Jenny');
       nodi['home-name'].value = 'Ada';
-      await lei.saveNome();
+      await lei.saveName();
       assert.deepEqual(nomiSalvati, [{ bot_name: 'Ada' }]);
       assert.equal(nodi['home-name-save'].hidden, true, 'salvato, e il bottone resta li\u2019');
     """)
@@ -578,7 +578,7 @@ def test_a_refused_save_says_so_and_keeps_the_button() -> None:
       nodi['home-name'].value = 'Ada';
       nodi['home-name'].listeners.input[0]();
       nomeRotto = true;
-      await lei.saveNome();
+      await lei.saveName();
       assert.equal(nodi['home-name-save'].hidden, false, 'il bottone e\u2019 sparito su un errore');
       assert.equal(brindisi.length, 1, 'l\u2019errore non l\u2019ha detto');
       assert.equal(brindisi[0][1], 'error');
@@ -594,10 +594,10 @@ def test_a_saved_name_is_told_to_the_shell() -> None:
       lei.setName('Jenny');
       nodi['home-name'].value = 'Ada';
       nomeRotto = true;
-      await lei.saveNome();
+      await lei.saveName();
       assert.deepEqual(nomiDetti, [], 'un nome non salvato e\u2019 arrivato al guscio');
       nomeRotto = false;
-      await lei.saveNome();
+      await lei.saveName();
       assert.deepEqual(nomiDetti, ['Ada']);
     """)
 

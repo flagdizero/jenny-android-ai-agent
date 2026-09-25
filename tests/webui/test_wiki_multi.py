@@ -301,13 +301,13 @@ class TestAudit:
 
         scritti = _audit_files(wiki_root)
         assert len(scritti) == 1
-        testo = scritti[0].read_text(encoding="utf-8")
+        text = scritti[0].read_text(encoding="utf-8")
         # L'ancora e' il punto di tutto: senza, il commento parla della pagina e
         # non del punto, che e' quel che gli audit esistono per fare.
-        assert "anchor_text: content" in testo
-        assert "target: index.md" in testo
-        assert "status: open" in testo
-        assert "typo" in testo
+        assert "anchor_text: content" in text
+        assert "target: index.md" in text
+        assert "status: open" in text
+        assert "typo" in text
 
     def test_create_audit_missing_target(self, wikis_dir: Path):
         wiki_root = _make_wiki(wikis_dir, "main", {"index.md": "# Home"})
@@ -485,11 +485,11 @@ class TestNessunaGravita:
             comment="typo",
             author="test",
         )
-        testo = (wiki_root / created["path"]).read_text(encoding="utf-8")
-        assert "severity" not in testo
+        text = (wiki_root / created["path"]).read_text(encoding="utf-8")
+        assert "severity" not in text
         # …e il resto del frontmatter c'e' ancora: il taglio e' uno solo.
-        for chiave in ("id:", "target:", "anchor_text:", "author:", "status:"):
-            assert chiave in testo, chiave
+        for key in ("id:", "target:", "anchor_text:", "author:", "status:"):
+            assert key in text, key
 
 
 # ── Frontmatter allowlist (/api/page privacy) ───────────────────────────────

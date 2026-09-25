@@ -604,10 +604,10 @@ def test_the_mascot_stays_on_top_of_the_sheet_and_lets_taps_through() -> None:
     assert ".launcher-open .jenny-duo" not in css, "col cassetto aperto lei torna sotto lo scrim"
     # Il suo livello supera quello di foglio e scrim.
     lei = re.search(r"\n\.jenny-duo \{[^}]*?z-index: (\d+);", css)
-    foglio = re.search(r"\.launcher-sheet\s*\{[^}]*?z-index: (\d+);", css)
+    sheet = re.search(r"\.launcher-sheet\s*\{[^}]*?z-index: (\d+);", css)
     scrim = re.search(r"\.launcher-scrim\s*\{[^}]*?z-index: (\d+);", css)
-    assert lei and foglio and scrim
-    assert int(lei.group(1)) > max(int(foglio.group(1)), int(scrim.group(1)))
+    assert lei and sheet and scrim
+    assert int(lei.group(1)) > max(int(sheet.group(1)), int(scrim.group(1)))
 
 
 def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
@@ -646,11 +646,11 @@ def test_the_dock_is_a_console_and_three_faculties() -> None:
     modes = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
     assert modes == ["chat", "brain", "hands", "memory"], modes
 
-    # La tabella sta accanto a `CASSETTI`, non nel guscio: serve anche
+    # La tabella sta accanto a `DRAWERS`, non nel guscio: serve anche
     # all'intestazione (`mobile-header.js::_mount`), e la copia che mancava li'
     # lasciava i tre cassetti senza titolo.
     assert (
-        "export const VISTA_DI = { brain: 'settings', hands: 'settings', memory: 'settings' };"
+        "export const VIEW_OF = { brain: 'settings', hands: 'settings', memory: 'settings' };"
         in _src("mobile-settings.js")
     )
     app = _src("mobile-app.js")
@@ -694,10 +694,10 @@ def _rule(css: str, selector: str) -> str:
     che veste quella singola — e guardarne una sola dice «non c'e'».
     """
     corpi = []
-    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        nomi = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
-        if selector in nomi:
-            corpi.append(corpo)
+    for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        names = {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
+        if selector in names:
+            corpi.append(body)
     return "\n".join(corpi)
 
 
@@ -804,7 +804,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     assert re.search(r"export const FIXED_PAGES = \['app',", _src("home-pages.js")), (
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
-    assert "new LauncherController(this, { incorporato: true })" in _src("home-app.js")
+    assert "new LauncherController(this, { builtin: true })" in _src("home-app.js")
     assert "casa-drawer" not in home, "il bottone del cassetto e' tornato accanto a una pagina"
     assert "openLauncher" not in _src("home-pages.js"), (
         "la pista riprova ad aprire il cassetto con un gesto che il sistema "
@@ -864,20 +864,20 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
     assert campi, "nessun `.hidden =` trovato: il banco guarda il posto sbagliato"
 
     guasti = []
-    for campo in sorted(campi):
-        m = re.search(rf"this\.{campo}\s*=\s*document\.getElementById\('([^']+)'\)", js)
-        assert m, f"non risalgo al nodo di this.{campo}"
+    for field in sorted(campi):
+        m = re.search(rf"this\.{field}\s*=\s*document\.getElementById\('([^']+)'\)", js)
+        assert m, f"non risalgo al nodo di this.{field}"
         nodo_id = m.group(1)
         for doc, name in ((workshop, "workshop.html"), (home, "index.html")):
             tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(nodo_id)}"[^>]*>', doc)
             if not tag:
                 continue
-            classi = re.search(r'class="([^"]+)"', tag.group(0))
-            if not classi:
+            classes = re.search(r'class="([^"]+)"', tag.group(0))
+            if not classes:
                 continue
-            for classe in classi.group(1).split():
-                corpo = _rule(css, f".{classe}")
-                if not re.search(r"display:\s*(?!none)", corpo):
+            for classe in classes.group(1).split():
+                body = _rule(css, f".{classe}")
+                if not re.search(r"display:\s*(?!none)", body):
                     continue
                 if f".{classe}[hidden]" not in css:
                     guasti.append(f"{classe} ({name})")
@@ -914,10 +914,10 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
         + _src("shared/apps-actions.js")
     )
 
-    chiavi = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', home))
-    assert chiavi, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"
+    keys = set(re.findall(r'data-i18n(?:-[a-z]+)?="([^"]+)"', home))
+    assert keys, "nessuna chiave nel markup della casa: il banco guarda il posto sbagliato"
 
-    orfane = [k for k in sorted(chiavi) if f"'{k}'" not in scrittori]
+    orfane = [k for k in sorted(keys) if f"'{k}'" not in scrittori]
     assert not orfane, (
         f"queste chiavi nessuno le scrive, quindi a schermo resta il segnaposto "
         f"del markup: {orfane}"
@@ -989,7 +989,7 @@ def test_the_drawer_only_calls_methods_its_collaborators_have() -> None:
     launcher = _src("mobile-launcher.js")
     # I tre modi in cui il foglio nomina i suoi due collaboratori.
     chiamate = set(_re.findall(
-        r"(?:this\._apps|this\._azioni|\bapps)\??\.([A-Za-z][A-Za-z0-9]*)\(", launcher))
+        r"(?:this\._apps|this\._actions|\bapps)\??\.([A-Za-z][A-Za-z0-9]*)\(", launcher))
     assert chiamate, "nessuna chiamata trovata: il banco guarda il posto sbagliato"
 
     fantasmi = sorted(chiamate - offerti)

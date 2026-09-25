@@ -63,10 +63,10 @@ def rules(css: str) -> list[tuple[str, str, tuple[str, ...]]]:
 def levels(css: str) -> list[tuple[str, int]]:
     """(selettore, z-index) per ogni selettore di ogni regola che ne dichiara uno."""
     out = []
-    for selettori, corpo, contesto in rules(css):
+    for selettori, body, contesto in rules(css):
         if any(at.startswith("@keyframes") for at in contesto):
             continue
-        m = re.search(r"(?:^|;)\s*z-index:\s*(-?\d+)", corpo)
+        m = re.search(r"(?:^|;)\s*z-index:\s*(-?\d+)", body)
         if not m:
             continue
         for s in selettori.split(","):
@@ -76,9 +76,9 @@ def levels(css: str) -> list[tuple[str, int]]:
 
 def key_names(selector: str) -> list[str]:
     """Classi e id dell'ultimo composto (`:root.x .a.b > .c` -> ``['c']``)."""
-    ultimo = re.split(r"[\s>+~]+", selector.strip())[-1]
-    ultimo = re.sub(r":[\w-]+\([^)]*\)", "", ultimo)
-    return re.findall(r"[.#]([\w-]+)", ultimo)
+    last = re.split(r"[\s>+~]+", selector.strip())[-1]
+    last = re.sub(r":[\w-]+\([^)]*\)", "", last)
+    return re.findall(r"[.#]([\w-]+)", last)
 
 
 def _closure(entry: Path) -> set[Path]:
@@ -99,6 +99,6 @@ def casa_vocabulary() -> set[str]:
     """Le parole che il DOM della casa puo' contenere (stima per eccesso)."""
     moduli = _closure(ASSETS / "home-app.js")
     assert len(moduli) > 20, f"la chiusura degli import della casa non morde piu' ({len(moduli)})"
-    testo = (UI / "index.html").read_text(encoding="utf-8")
-    testo += "".join(p.read_text(encoding="utf-8") for p in moduli)
-    return set(re.findall(r"[A-Za-z][\w-]*", testo))
+    text = (UI / "index.html").read_text(encoding="utf-8")
+    text += "".join(p.read_text(encoding="utf-8") for p in moduli)
+    return set(re.findall(r"[A-Za-z][\w-]*", text))

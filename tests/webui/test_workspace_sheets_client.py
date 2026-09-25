@@ -9,7 +9,7 @@ cosa, ognuna con le sue voci.
 
 I metodi si estraggono dal sorgente e girano in node su una classe finta, come
 in ``test_chat_scope_client.py``: il modulo intero si porta dietro mezza WebUI.
-Si estrae anche ``_apriFoglio`` se c'è, così il banco vale prima e dopo che il
+Si estrae anche ``_openSheet`` se c'è, così il banco vale prima e dopo che il
 montaggio diventi uno.
 """
 
@@ -28,12 +28,12 @@ pytestmark = requires_node
 
 def _members(source: str) -> str:
     out = []
-    for name in ("showContextSheet", "_showNewMenu", "_apriFoglio"):
+    for name in ("showContextSheet", "_showNewMenu", "_openSheet"):
         m = re.search(rf"\n  ({re.escape(name)}\([^)]*\)\s*\{{.*?\n  \}})", source, re.S)
         if m:
             out.append(m.group(1))
         else:
-            assert name == "_apriFoglio", f"{name} non trovato"
+            assert name == "_openSheet", f"{name} non trovato"
     return "\n".join(out)
 
 

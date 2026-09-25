@@ -29,7 +29,7 @@ SETTINGS_SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
 def _script(body: str) -> str:
     vista_di = next(
-        line for line in SETTINGS_SRC.splitlines() if line.startswith("export const VISTA_DI")
+        line for line in SETTINGS_SRC.splitlines() if line.startswith("export const VIEW_OF")
     ).replace("export ", "")
     return f"""
 import assert from 'node:assert/strict';
@@ -49,7 +49,7 @@ globalThis.document = {{
     }},
   }},
 }};
-const elementoVista = (mode) => document.getElementById(`view-${{VISTA_DI[mode] || mode}}`);
+const viewElement = (mode) => document.getElementById(`view-${{VIEW_OF[mode] || mode}}`);
 globalThis.localStorage = {{ getItem: () => '1' }};
 const AppState = {{ values: {{}}, set(k, v) {{ this.values[k] = v; }} }};
 const showToast = () => {{}};

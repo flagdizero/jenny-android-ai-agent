@@ -86,9 +86,9 @@ export class LauncherController {
    *         guardi**: chi lo ospita chiama `open()` quando ci arrivi e `close()`
    *         quando la lasci, e i tasti sono suoi solo in quel mentre.
    *         L'officina non lo passa, e il suo foglio resta com'era. */
-  constructor(app, { incorporato = false } = {}) {
+  constructor(app, { builtin = false } = {}) {
     this.app = app;
-    this._incorporato = incorporato;
+    this._builtin = builtin;
     this.sheet = document.getElementById('launcher-sheet');
     this.scrim = document.getElementById('launcher-scrim');
     this.list = document.getElementById('launcher-list');
@@ -117,7 +117,7 @@ export class LauncherController {
     // foglio, altrimenti riaprirlo mostrerebbe l'elenco di quando si è chiuso.
     this._apps = null;
     /** Le azioni (aprire, la scheda). V. `_attachSource`. */
-    this._azioni = null;
+    this._actions = null;
     // Le voci come le consegna `launcherEntries()`, non ordinate per la query:
     // riordinarle e filtrarle è lavoro di `_renderList()`, che gira a ogni
     // tasto, mentre questa si rinfresca solo quando i dati cambiano davvero.
@@ -232,7 +232,7 @@ export class LauncherController {
 
     /* Un foglio si trascina e si adatta alla tastiera; una pagina no: sta
        dentro la pista, e la sua altezza e' quella della pagina. */
-    if (this._incorporato) return;
+    if (this._builtin) return;
     this._setupDrag();
     this._setupGeometry();
   }
@@ -259,8 +259,8 @@ export class LauncherController {
     }
     this.clearBtn?.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
     this.list?.setAttribute('aria-label', i18n.t('launcher.resultsList'));
-    const testo = this.statusEl?.querySelector('.launcher-status-text');
-    if (testo) testo.textContent = i18n.t('launcher.loadFailed');
+    const text = this.statusEl?.querySelector('.launcher-status-text');
+    if (text) text.textContent = i18n.t('launcher.loadFailed');
     if (this.retryBtn) this.retryBtn.textContent = i18n.t('launcher.retry');
     document.getElementById('launcher-close')
       ?.setAttribute('aria-label', i18n.t('common.close'));
@@ -482,7 +482,7 @@ export class LauncherController {
     /* Incorporato non e' uno strato sopra niente: chi chiede «e' aperto?» —
        Indietro, il gesto fra le pagine — vuole sapere se c'e' un foglio da
        chiudere, e non c'e'. */
-    return this._incorporato ? false : this._open;
+    return this._builtin ? false : this._open;
   }
 
   open() {
@@ -518,7 +518,7 @@ export class LauncherController {
        passati a tre pulsanti, si è ruotato lo schermo, la tastiera è su per il
        composer della chat. Si rilegge prima di mostrarlo, non dopo: il foglio
        arriva già dell'altezza giusta invece di assestarsi a fine corsa. */
-    if (!this._incorporato) {
+    if (!this._builtin) {
       this._syncGestureInset();
       this._syncViewport();
     }
@@ -529,7 +529,7 @@ export class LauncherController {
     /* Una pagina non sale e non copre niente: niente velo, niente sfondo
        inerte, e il fuoco resta dov'e'. Spostarlo qui vorrebbe dire far
        scorrere la vetrina della pista mentre la pagina sta ancora entrando. */
-    if (this._incorporato) {
+    if (this._builtin) {
       this.search?.setAttribute('aria-expanded', 'true');
       return;
     }
@@ -562,7 +562,7 @@ export class LauncherController {
   close() {
     if (!this.sheet || !this._open) return;
     this._open = false;
-    if (this._incorporato) {
+    if (this._builtin) {
       this.search?.setAttribute('aria-expanded', 'false');
       /* Lasciando la pagina, il fuoco non resta su un campo che non si vede:
          i tasti che seguono andrebbero li' dentro. */
@@ -679,7 +679,7 @@ export class LauncherController {
     /* Le **azioni** sono un oggetto a parte: la sorgente sa cosa c'e', non cosa
        farci. I due gusci la costruiscono ognuno col proprio modo di mandare un
        messaggio in chat, che e' l'unica cosa in cui differiscono. */
-    this._azioni = this.app.appsActions?.() || null;
+    this._actions = this.app.appsActions?.() || null;
     apps.addChangeListener(() => this._onDataChanged());
     apps.ensureLoaded();
   }
@@ -989,7 +989,7 @@ export class LauncherController {
     /* La scheda **non** conta come uso: è il posto dove si va per disinstallare
        o per capire cosa sia una voce, e contarla farebbe salire in classifica
        proprio le app di cui si dubita. Il ranking misura gli avvii. */
-    this._azioni?.detailEntry(entry);
+    this._actions?.detailEntry(entry);
   }
 
   /** Il titolo del foglio dice in che ordine si sta guardando: a campo vuoto è
@@ -1028,7 +1028,7 @@ export class LauncherController {
        registrare un avvio poi fallito è una posizione in classifica; il costo
        opposto è un cassetto che non impara mai le app che si usano di più. */
     this._usage.record(entry.key);
-    const started = this._azioni?.activateEntry(entry);
+    const started = this._actions?.activateEntry(entry);
     /* Una app Android se ne va con tutto il task: il foglio deve chiudersi, o
        al ritorno lo si ritroverebbe aperto sopra la conversazione senza averlo
        chiesto. Le altre due no — una Jenny App si apre *sopra* il foglio e
@@ -1058,7 +1058,7 @@ export class LauncherController {
        col dito non c'era niente, e disinstallare restava una cosa da fare
        altrove. Il click resta delegato sulla lista (v. il costruttore); questo
        sta sulla riga perche' `setupLongPress` vuole l'elemento. */
-    setupLongPress(row, () => this._azioni?.detailEntry(entry));
+    setupLongPress(row, () => this._actions?.detailEntry(entry));
     /* Semantica giusta dalla nascita, non aggiunta dopo — la stessa regola che
        la scheda Apps ha poi adottato per le sue tre stanze (`mobile-apps.js`),
        dove le righe nascono `<button>` invece di essere `<div>` a cui si

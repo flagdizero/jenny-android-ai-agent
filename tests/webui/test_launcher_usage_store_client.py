@@ -151,10 +151,10 @@ def test_fresh_data_on_the_bridge_is_never_overwritten_by_a_stale_copy() -> None
     stantia e' ancora li', e riportarla sopra butterebbe via il vero.
     """
     out = _run_js("""
-const local = fakeLocal({ 'launcher-usage': '{"android:vecchio":[99,1]}' });
-const native = fakeNative('{"android:nuovo":[2,500]}');
+const local = fakeLocal({ 'launcher-usage': '{"android:old":[99,1]}' });
+const native = fakeNative('{"android:fresh":[2,500]}');
 assert.equal(migrateUsage(native, local), 'native-has-data');
-assert.equal(native.peek(), '{"android:nuovo":[2,500]}');
+assert.equal(native.peek(), '{"android:fresh":[2,500]}');
 console.log('ok');
 """)
     assert "ok" in out

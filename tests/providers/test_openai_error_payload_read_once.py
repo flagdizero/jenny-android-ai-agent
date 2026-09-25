@@ -24,10 +24,10 @@ class _BodyError(Exception):
 
 def test_the_error_body_is_read_once_and_reaches_both_message_and_metadata() -> None:
     err = _BodyError()
-    risposta = OpenAICompatProvider._handle_error(err)
+    reply = OpenAICompatProvider._handle_error(err)
 
     assert err.letture == 1
-    assert "rate_limit_error" in risposta.content
-    assert risposta.error_type == "rate_limit_error"
-    assert risposta.error_code == "rate_limited"
-    assert risposta.error_status_code == 429
+    assert "rate_limit_error" in reply.content
+    assert reply.error_type == "rate_limit_error"
+    assert reply.error_code == "rate_limited"
+    assert reply.error_status_code == 429

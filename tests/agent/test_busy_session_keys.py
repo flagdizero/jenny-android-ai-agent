@@ -124,10 +124,10 @@ async def test_a_diary_harvest_keeps_its_project_busy_until_it_saves() -> None:
 
 def test_the_gardener_hands_out_a_copy_of_its_passes(monkeypatch) -> None:
     monkeypatch.setattr(gardener, "_PASSES_IN_FLIGHT", {"orto"})
-    copia = gardener.passes_in_flight()
-    assert copia == frozenset({"orto"})
+    copy = gardener.passes_in_flight()
+    assert copy == frozenset({"orto"})
     with pytest.raises(AttributeError):
-        copia.add("altro")  # type: ignore[attr-defined]
+        copy.add("altro")  # type: ignore[attr-defined]
 
 
 # ── Il collegamento nel container ───────────────────────────────────────────

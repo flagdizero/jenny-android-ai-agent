@@ -48,7 +48,7 @@ import { currentTheme, themeTokens } from './theme.js';
  *  gesto di lato, per niente). Il default e' la pagina, cosi' la casa non
  *  deve dire niente.
  */
-export function cornicePerApp(slug, { overlay = false } = {}) {
+export function frameForApp(slug, { overlay = false } = {}) {
   const t = currentTheme();
   const lang = document.documentElement.lang || 'it';
   const src = `/apps/${encodeURIComponent(slug)}/index.html`
@@ -65,7 +65,7 @@ export function cornicePerApp(slug, { overlay = false } = {}) {
 
 export class AppsActions {
   /** @param source {import('./apps-source.js').AppsSource}
-   *  @param shell  `{ sendChatPrompt(testo) }` */
+   *  @param shell  `{ sendChatPrompt(text) }` */
   constructor(source, shell) {
     this.source = source;
     this.shell = shell;
@@ -119,8 +119,8 @@ export class AppsActions {
    *  `i18n.load()` e' asincrona, e chiamarla presto stampa la chiave grezza
    *  (gia' successo il 20/09/2026 sul campo di ricerca).
    */
-  _traduciFoglio(foglio) {
-    const b = foglio?.querySelector('[id$="cancel"]');
+  _translateSheet(sheet) {
+    const b = sheet?.querySelector('[id$="cancel"]');
     if (b) b.textContent = i18n.t('common.cancel');
   }
 
@@ -211,14 +211,14 @@ export class AppsActions {
       return;
     }
 
-    this._montaVelo(slug, app, cornicePerApp(slug, { overlay: true }));
+    this._mountVeil(slug, app, frameForApp(slug, { overlay: true }));
   }
 
   /* Il velo sopra tutto con la testata e la *iframe* dentro: è lo stesso per
      l'app del gateway e per la vista esterna, che differiscono solo nella
      cornice (sandbox e origine, v. `_openExternalView`) e nel proxy da
      chiudere, che `closeApp` riconosce da *external*. */
-  _montaVelo(slug, app, iframe, { external = false } = {}) {
+  _mountVeil(slug, app, iframe, { external = false } = {}) {
     this.closeApp();
     const overlay = document.createElement('div');
     overlay.className = 'app-frame-overlay';
@@ -274,7 +274,7 @@ export class AppsActions {
       'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
     );
     iframe.src = url;
-    this._montaVelo(slug, app, iframe, { external: true });
+    this._mountVeil(slug, app, iframe, { external: true });
   }
   /** C'e' una mini-app aperta sopra tutto? Lo chiede il guscio della casa,
    *  che prima leggeva `_openApp` da fuori. */
@@ -433,7 +433,7 @@ export class AppsActions {
     const openedAt = Date.now();
     sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
 
-    this._traduciFoglio(sheet);
+    this._translateSheet(sheet);
     sheet.showModal();
   }
   async _handleAndroidSheetAction(action, app) {
@@ -473,13 +473,13 @@ export class AppsActions {
     const homePages = this.shell?.homePages?.() || null;
     const actions = [
       { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
-      ...(homePages ? [rigaPagina(homePages.stato('app', slug), app)] : []),
+      ...(homePages ? [pageRow(homePages.state('app', slug), app)] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
       { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
     ];
 
     const actionsEl = document.getElementById('jenny-app-sheet-actions');
-    actionsEl.innerHTML = actions.map(disegnaRiga).join('');
+    actionsEl.innerHTML = actions.map(drawRow).join('');
 
     const close = () => sheet.close();
 
@@ -497,7 +497,7 @@ export class AppsActions {
     const openedAt = Date.now();
     sheet.onclick = (e) => { if (e.target === sheet && Date.now() - openedAt > 400) close(); };
 
-    this._traduciFoglio(sheet);
+    this._translateSheet(sheet);
     sheet.showModal();
   }
   async _handleJennySheetAction(action, app) {
@@ -505,9 +505,9 @@ export class AppsActions {
     if (action === 'open') {
       this.openApp(slug);
     } else if (action === 'pin') {
-      await this.shell?.homePages?.()?.appendi('app', slug);
+      await this.shell?.homePages?.()?.append('app', slug);
     } else if (action === 'unpin') {
-      if (await this.shell?.homePages?.()?.stacca('app', slug)) {
+      if (await this.shell?.homePages?.()?.detach('app', slug)) {
         showToast(i18n.t('apps.unpinned'), 'success');
       }
     } else if (action === 'edit') {
@@ -523,7 +523,7 @@ export class AppsActions {
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
            `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
            pagina verso un'app che non c'e' piu'. */
-        await this.shell?.homePages?.()?.ricarica();
+        await this.shell?.homePages?.()?.reload();
         showToast(i18n.t('apps.appDeleted'), 'success');
       } catch {
         showToast(i18n.t('apps.deleteFailed'), 'error');
@@ -542,35 +542,35 @@ export class AppsActions {
  *  lo dice. Un'app *esterna* apre un indirizzo che il guscio non controlla;
  *  una *rotta* resterebbe li' a non funzionare tutti i giorni.
  */
-function rigaPagina(stato, app) {
-  const perche = app.broken
+function pageRow(state, app) {
+  const why = app.broken
     ? 'apps.pageBroken'
     : app.view_kind === 'external'
       ? 'apps.pageExternal'
-      : stato === 'piena' ? 'apps.pageFull' : null;
-  if (stato === 'appesa') {
+      : state === 'piena' ? 'apps.pageFull' : null;
+  if (state === 'pending') {
     return { icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' };
   }
   return {
     icon: 'ti-pin',
     label: i18n.t('apps.pinAsPage'),
     action: 'pin',
-    ...(perche ? { disabled: true, reason: i18n.t(perche) } : {}),
+    ...(why ? { disabled: true, reason: i18n.t(why) } : {}),
   };
 }
 
 /** Una riga di scheda, come testo. Esportata perche' la scheda di un quaderno
  *  in casa e' **la stessa cosa a vedersi**: stesso markup, stesse classi, e una
  *  seconda copia divergerebbe al primo ritocco. */
-export function disegnaRiga(a) {
-  const classi = `oc-sheet-action${a.danger ? ' danger' : ''}`;
-  const spenta = a.disabled ? ' disabled aria-disabled="true"' : '';
+export function drawRow(a) {
+  const classes = `oc-sheet-action${a.danger ? ' danger' : ''}`;
+  const off = a.disabled ? ' disabled aria-disabled="true"' : '';
   /* Il testo nudo come prima, se non c'e' un perche': la stessa scheda la
      disegna anche l'officina, e li' non deve cambiare niente. */
-  const testo = a.reason
+  const text = a.reason
     ? `<span class="oc-sheet-label">${a.label}<span class="oc-sheet-reason">${escapeHtml(a.reason)}</span></span>`
     : a.label;
-  return `<button class="${classi}" data-action="${a.action}"${spenta}>
-        <i class="ti ${a.icon}"></i>${testo}
+  return `<button class="${classes}" data-action="${a.action}"${off}>
+        <i class="ti ${a.icon}"></i>${text}
       </button>`;
 }

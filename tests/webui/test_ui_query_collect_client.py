@@ -7,7 +7,7 @@ chiede «cosa vedi?». E la mini-app aperta si cercava in ``controllers.apps`` c
 ``view === 'apps'``: la scheda «App» che non esiste piu', quindi l'app non le
 arrivava mai.
 
-Il metodo vero gira in node, con l'``elementoVista`` vero di mobile-settings.js.
+Il metodo vero gira in node, con l'``viewElement`` vero di mobile-settings.js.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ SETTINGS_SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
 def _script(body: str) -> str:
     vista_di = next(
-        line for line in SETTINGS_SRC.splitlines() if line.startswith("export const VISTA_DI")
+        line for line in SETTINGS_SRC.splitlines() if line.startswith("export const VIEW_OF")
     ).replace("export ", "")
     return f"""
 import assert from 'node:assert/strict';
@@ -33,7 +33,7 @@ const views = {{
   'view-chat': {{ outerHTML: '<div id="view-chat">chat</div>' }},
 }};
 globalThis.document = {{ getElementById: (id) => views[id] ?? null }};
-{function(SETTINGS_SRC, "elementoVista")}
+{function(SETTINGS_SRC, "viewElement")}
 const AppState = {{ currentMode: 'chat' }};
 globalThis.window = {{ mobileApp: {{ drawer: {{ activeDrawer: null }} }} }};
 

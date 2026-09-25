@@ -327,7 +327,7 @@ def _decided_cap_reason(
     ai marcatori. È a ``open`` per sempre, correttamente, e in due giorni di
     lavoro niente e nessuno l'ha detto.
 
-    Torna ``(motivo, esito)`` — uno di :data:`_CAP_FIXABLE`, :data:`_CAP_HISTORY`,
+    Torna ``(motivo, outcome)`` — uno di :data:`_CAP_FIXABLE`, :data:`_CAP_HISTORY`,
     :data:`_CAP_DOCUMENT`. **La seconda metà decide come si stampa**, e non è
     pedanteria: su una wiki scritta prima dei marcatori *quasi ogni* pagina a
     ``open`` è qui dentro, e un elenco che le nomina tutte per dire «non si può

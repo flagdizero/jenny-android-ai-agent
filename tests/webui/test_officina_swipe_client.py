@@ -45,7 +45,7 @@ pytestmark = requires_node
 MODI = ["chat", "brain", "hands", "memory"]
 
 
-def _corpo(src: str, start: int) -> str:
+def _body(src: str, start: int) -> str:
     """Dalla graffa aperta alla sua chiusa, saltando commenti e stringhe.
 
     I commenti vanno saltati sul serio: questo repo li scrive in italiano, e un
@@ -83,11 +83,11 @@ def _corpo(src: str, start: int) -> str:
 
 
 def _metodo(source: str, name: str) -> str:
-    """`name(parameters) { corpo }`, pronto da incollare in un oggetto letterale."""
+    """`name(parameters) { body }`, pronto da incollare in un oggetto letterale."""
     m = re.search(rf"\n  {re.escape(name)}\(", source)
     assert m, f"metodo {name} non trovato"
-    apertura = source.index("{", m.end())
-    return source[m.start() + 1 : apertura] + _corpo(source, m.end())
+    opening = source.index("{", m.end())
+    return source[m.start() + 1 : opening] + _body(source, m.end())
 
 
 def _costante(source: str, name: str) -> str:
@@ -122,7 +122,7 @@ function creaEl(id) {
     scrollLeft: 0,
     parentElement: null,
     classList: { contains: () => false, toggle() {}, add() {}, remove() {} },
-    addEventListener(tipo, fn) { ascolto[tipo] = fn; },
+    addEventListener(type, fn) { ascolto[type] = fn; },
     setAttribute() {},
     removeAttribute() {},
     removeEventListener() {},
@@ -148,10 +148,10 @@ const VOCI_DOCK = __MODI__.map((m) => {
   return el;
 });
 
-const radice = creaEl('html');
+const root = creaEl('html');
 
 globalThis.document = {
-  documentElement: radice,
+  documentElement: root,
   getElementById: (id) => elementi.get(id) || null,
   querySelector: (sel) => (sel === '.main' ? main : null),
   querySelectorAll: (sel) => (sel.includes('dock-item') ? VOCI_DOCK : []),
@@ -165,7 +165,7 @@ function hasSelection() { return false; }
 
 /* ── I pezzi veri, ritagliati dal sorgente ─────────────────────────────── */
 
-__VISTA_DI__
+__VIEW_OF__
 __ELEMENTO_VISTA__
 
 /* Il riconoscimento del gesto, dal modulo condiviso. */
@@ -214,13 +214,13 @@ function dito(x, y) {
 }
 
 /** Un gesto completo. Torna il modo su cui si e' atterrati, o null. */
-function scorri(da, direction, { corto = false } = {}) {
-  app.currentMode = da;
+function scorri(fromIndex, direction, { short = false } = {}) {
+  app.currentMode = fromIndex;
   modiVisti.length = 0;
   animati.length = 0;
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88; corto resta sotto, lungo la supera
-  const dx = direction * (corto ? 20 : 200);
+  const dx = direction * (short ? 20 : 200);
   main.ascolto.touchstart({ touches: [dito(x0, 100)], target: contenuto });
   main.ascolto.touchmove({
     touches: [dito(x0 + dx, 100)],
@@ -236,12 +236,12 @@ def _harness() -> str:
     app = APP_JS.read_text(encoding="utf-8")
     settings = SETTINGS_JS.read_text(encoding="utf-8")
     swipe = GESTO_JS.read_text(encoding="utf-8")
-    vista_di = re.search(r"^export const VISTA_DI = .*$", settings, re.M)
-    assert vista_di, "VISTA_DI non trovata"
+    vista_di = re.search(r"^export const VIEW_OF = .*$", settings, re.M)
+    assert vista_di, "VIEW_OF non trovata"
     return (
         _HARNESS.replace("__MODI__", json.dumps(MODI))
-        .replace("__VISTA_DI__", vista_di.group(0).replace("export ", ""))
-        .replace("__ELEMENTO_VISTA__", _funzione(settings, "elementoVista"))
+        .replace("__VIEW_OF__", vista_di.group(0).replace("export ", ""))
+        .replace("__ELEMENTO_VISTA__", _funzione(settings, "viewElement"))
         .replace("__VISIBLE_MODES__", _metodo(app, "_visibleModes"))
         .replace("__AXIS_THRESHOLD__", _costante(swipe, "AXIS_THRESHOLD"))
         .replace("__VELOCITA__", _costante(swipe, "CONFIRM_SPEED"))
@@ -287,14 +287,14 @@ def test_every_tab_moves_in_both_directions() -> None:
     """Tutte e otto le mosse: quattro linguette per due versi."""
     _run_js("""
       const atteso = {
-        chat:     { destra: 'memory',  sinistra: 'brain' },
-        brain: { destra: 'chat',     sinistra: 'hands' },
-        hands:     { destra: 'brain', sinistra: 'memory' },
-        memory:  { destra: 'hands',     sinistra: 'chat' },
+        chat:     { right: 'memory',  sinistra: 'brain' },
+        brain: { right: 'chat',     sinistra: 'hands' },
+        hands:     { right: 'brain', sinistra: 'memory' },
+        memory:  { right: 'hands',     sinistra: 'chat' },
       };
-      for (const [da, versi] of Object.entries(atteso)) {
-        assert.equal(scorri(da, DESTRA), versi.destra, `${da} verso destra`);
-        assert.equal(scorri(da, SINISTRA), versi.sinistra, `${da} verso sinistra`);
+      for (const [fromIndex, versi] of Object.entries(atteso)) {
+        assert.equal(scorri(fromIndex, DESTRA), versi.right, `${fromIndex} verso destra`);
+        assert.equal(scorri(fromIndex, SINISTRA), versi.sinistra, `${fromIndex} verso sinistra`);
       }
     """)
 
@@ -351,11 +351,11 @@ def test_between_two_drawers_the_animation_gets_a_real_element() -> None:
 def test_all_four_tabs_animate_a_real_element() -> None:
     """E vale per tutte, non solo per quelle che hanno una vista propria."""
     _run_js("""
-      for (const da of __MODI__) {
+      for (const fromIndex of __MODI__) {
         for (const direction of [DESTRA, SINISTRA]) {
-          scorri(da, direction);
-          assert.equal(animati.length, 1, `${da}: nessuna animazione`);
-          assert.ok(animati[0], `${da}: animazione su null`);
+          scorri(fromIndex, direction);
+          assert.equal(animati.length, 1, `${fromIndex}: nessuna animazione`);
+          assert.ok(animati[0], `${fromIndex}: animazione su null`);
         }
       }
     """.replace("__MODI__", json.dumps(MODI)))
@@ -367,7 +367,7 @@ def test_all_four_tabs_animate_a_real_element() -> None:
 def test_a_short_drag_springs_back() -> None:
     """Sotto soglia non si cambia linguetta: si torna al suo posto."""
     _run_js("""
-      assert.equal(scorri('brain', SINISTRA, { corto: true }), null);
+      assert.equal(scorri('brain', SINISTRA, { short: true }), null);
       assert.equal(animati.length, 0);
     """)
 
@@ -398,14 +398,14 @@ def test_the_slide_in_switches_scroll_anchoring_off_and_back_on() -> None:
     quel che tiene il segno quando la cronologia cresce sopra.
     """
     _run_js("""
-      radice.style.overflowAnchor = '';
+      root.style.overflowAnchor = '';
       scorri('memory', SINISTRA);
-      assert.equal(radice.style.overflowAnchor, 'none', 'non spento durante la scivolata');
+      assert.equal(root.style.overflowAnchor, 'none', 'non spento durante la scivolata');
       // fine animazione
       const fine = animati[0].ascolto.transitionend;
       assert.ok(fine, 'nessun ascoltatore di fine transizione');
       fine();
-      assert.equal(radice.style.overflowAnchor, '', 'non rimesso a fine corsa');
+      assert.equal(root.style.overflowAnchor, '', 'non rimesso a fine corsa');
     """)
 
 
@@ -418,9 +418,9 @@ def test_the_anchor_comes_back_even_if_the_transition_never_ends() -> None:
     nessuno terrebbe piu' il segno quando la cronologia cresce.
     """
     _run_js("""
-      radice.style.overflowAnchor = '';
+      root.style.overflowAnchor = '';
       scorri('memory', SINISTRA);
-      assert.equal(radice.style.overflowAnchor, 'none');
+      assert.equal(root.style.overflowAnchor, 'none');
       await new Promise(r => setTimeout(r, 500));   // nessun transitionend, solo la rete
-      assert.equal(radice.style.overflowAnchor, '', 'la rete di sicurezza non ha rimesso l ancoraggio');
+      assert.equal(root.style.overflowAnchor, '', 'la rete di sicurezza non ha rimesso l ancoraggio');
     """)

@@ -26,10 +26,10 @@ SORGENTI = sorted(
 )
 
 
-def _codice(testo: str) -> str:
+def _codice(text: str) -> str:
     """Il sorgente senza commenti. Grezzo ma sufficiente: ``//`` dopo ``:`` o
     dentro una stringa e' un indirizzo, non un commento."""
-    return re.sub(r"/\*.*?\*/|(?<![:'\"`\\])//[^\n]*", "", testo, flags=re.S)
+    return re.sub(r"/\*.*?\*/|(?<![:'\"`\\])//[^\n]*", "", text, flags=re.S)
 
 
 MORTI = (
@@ -50,15 +50,15 @@ def test_no_code_talks_to_a_removed_mode(sorgente) -> None:
 
 @pytest.mark.parametrize("sorgente", SORGENTI, ids=lambda p: p.name)
 def test_no_comment_points_at_a_line_number_of_another_file(sorgente) -> None:
-    testo = sorgente.read_text(encoding="utf-8", errors="replace")
-    righe = re.findall(r"\b[\w-]+\.(?:css|js|html|py):\d+\b", testo)
-    assert not righe, f"{sorgente.name} rimanda a righe che si spostano: {righe}"
+    text = sorgente.read_text(encoding="utf-8", errors="replace")
+    rows = re.findall(r"\b[\w-]+\.(?:css|js|html|py):\d+\b", text)
+    assert not rows, f"{sorgente.name} rimanda a righe che si spostano: {rows}"
 
 
 def test_the_guard_sees_what_it_is_for() -> None:
     finto = _codice(
         "dismiss: () => this.controllers.apps?.handleBack() ?? false,\n"
-        "if (guscio.currentMode !== 'apps') guscio.switchMode('apps', false);\n"
+        "if (shell.currentMode !== 'apps') shell.switchMode('apps', false);\n"
         "/* qui c'era controllers.apps */ const ok = 1; // switchMode('apps')\n"
         "this.replaceNav(this._navStateFor('chat', null, null));\n"
     )

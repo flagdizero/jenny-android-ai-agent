@@ -45,18 +45,18 @@ import assert from 'node:assert/strict';
 /* Il giornale di bordo del banco: cosa e' stato spedito, cosa e' stato detto. */
 const spedite = [];
 const toast = [];
-let risposta = true;          // cosa risponde chi guarda la modale
-let esito = null;             // null = va bene; altrimenti l'errore da lanciare
+let reply = true;          // cosa risponde chi guarda la modale
+let outcome = null;             // null = va bene; altrimenti l'errore da lanciare
 
 const rpc = {
   writePage(wiki, page, content, base) {
     spedite.push({ wiki, page, content, base });
-    return esito ? Promise.reject(esito) : Promise.resolve({});
+    return outcome ? Promise.reject(outcome) : Promise.resolve({});
   },
 };
 const i18n = { t: (k) => k };
 function showToast(m, t) { toast.push([m, t]); }
-function confirmDialog() { return Promise.resolve(risposta); }
+function confirmDialog() { return Promise.resolve(reply); }
 function elemento() {
   return {
     value: '', hidden: true, scrollTop: 999, caret: null,
@@ -155,7 +155,7 @@ def test_a_failed_save_keeps_the_editor_open() -> None:
       const r = new Lettore();
       r.startEdit();
       r.editEl.value = 'lavoro non salvato';
-      esito = Object.assign(new Error('boom'), { code: 'internal' });
+      outcome = Object.assign(new Error('boom'), { code: 'internal' });
       await r.save();
       assert.equal(r.editing, true);
       assert.equal(r.editEl.value, 'lavoro non salvato');
@@ -175,8 +175,8 @@ def test_a_conflict_refused_keeps_the_text_and_does_not_reload() -> None:
       const r = new Lettore();
       r.startEdit();
       r.editEl.value = 'il mio testo';
-      esito = Object.assign(new Error('conflict'), { code: 'conflict' });
-      risposta = false;
+      outcome = Object.assign(new Error('conflict'), { code: 'conflict' });
+      reply = false;
       await r.save();
       assert.equal(r.editing, true);
       assert.equal(r.editEl.value, 'il mio testo');
@@ -189,8 +189,8 @@ def test_a_conflict_accepted_reloads_the_page() -> None:
       const r = new Lettore();
       r.startEdit();
       r.editEl.value = 'il mio testo';
-      esito = Object.assign(new Error('conflict'), { code: 'conflict' });
-      risposta = true;
+      outcome = Object.assign(new Error('conflict'), { code: 'conflict' });
+      reply = true;
       await r.save();
       assert.equal(r.editing, false);
       assert.equal(r.ricariche, 1);
@@ -200,13 +200,13 @@ def test_a_conflict_accepted_reloads_the_page() -> None:
 def test_an_untouched_editor_closes_without_asking() -> None:
     """Aperto e richiuso senza scrivere: non c'e' niente da chiedere.
 
-    `risposta = false` e' la parte che conta — se la modale comparisse
+    `reply = false` e' la parte che conta — se la modale comparisse
     comunque, questa risposta terrebbe aperto l'editor.
     """
     _run("""
       const r = new Lettore();
       r.startEdit();
-      risposta = false;
+      reply = false;
       await r.askCancel();
       assert.equal(r.editing, false);
       assert.equal(r.bodyEl.hidden, false);
@@ -218,10 +218,10 @@ def test_a_touched_editor_asks_before_throwing_the_text_away() -> None:
       const r = new Lettore();
       r.startEdit();
       r.editEl.value = 'scritto a mano';
-      risposta = false;
+      reply = false;
       await r.askCancel();
       assert.equal(r.editing, true, 'un no tiene aperto');
-      risposta = true;
+      reply = true;
       await r.askCancel();
       assert.equal(r.editing, false, 'un si chiude');
     """)

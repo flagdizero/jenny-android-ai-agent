@@ -773,7 +773,7 @@ class GardenerStore:
         passata non riesce a scrivere niente.
 
         *write_guard* è il gancio **pre-scrittura** dei tre tool di scrittura:
-        ``(path, testo) -> None`` per lasciar passare, o la frase di rifiuto che
+        ``(path, text) -> None`` per lasciar passare, o la frase di rifiuto che
         il modello legge. Il parametro dei tool si chiama ``write_size_guard``
         perché il primo (e finora unico) uso era il budget dei file di memoria,
         ma il contratto è generico — «questa scrittura può andare su disco?» — ed
@@ -1068,7 +1068,7 @@ def read_recent_user_messages(
 
     **E il taglio dice la verità anche quando il file è ruotato.** Superati gli
     8 MB, ``transcript_store`` sposta i turni vecchi in
-    ``<chiave>.segments/NNNNNN.jsonl`` e lascia sul posto solo la coda: la
+    ``<key>.segments/NNNNNN.jsonl`` e lascia sul posto solo la coda: la
     finestra risultava allora «intera» — ``truncated=False`` — mentre metà
     conversazione era in un altro file. Un segmento esiste solo perché una
     rotazione è avvenuta, e ogni turno comincia con un messaggio dell'utente

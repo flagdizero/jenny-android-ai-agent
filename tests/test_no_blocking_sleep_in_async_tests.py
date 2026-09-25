@@ -82,6 +82,6 @@ def test_no_async_test_blocks_the_loop() -> None:
         + "\n\nUsa ``await asyncio.sleep(...)``: stessa attesa, ma il loop resta "
         "libero di far girare quello che il test ha avviato. Se il ritardo deve "
         "essere bloccante di proposito — simulare una chiamata che blocca —, "
-        "mettilo in una ``def`` sincrona: là dentro è giusto, e questo test non "
+        "mettilo in una ``def`` sincrona: là inside è giusto, e questo test non "
         "lo guarda."
     )

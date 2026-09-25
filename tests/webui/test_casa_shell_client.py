@@ -42,11 +42,11 @@ def test_an_installed_app_reaches_the_apps_page() -> None:
     trova."""
     _run_pacchetti("""
       const app = new App();
-      const visti = [];
-      app._apps = { onPackageChanged: (k, p) => visti.push([k, p]) };
+      const seen = [];
+      app._apps = { onPackageChanged: (k, p) => seen.push([k, p]) };
       app.onPackageChanged('added', 'org.example.notes');
       app.onPackageChanged('removed', 'org.example.old');
-      assert.deepEqual(visti, [['added', 'org.example.notes'], ['removed', 'org.example.old']]);
+      assert.deepEqual(seen, [['added', 'org.example.notes'], ['removed', 'org.example.old']]);
     """)
 
 
@@ -147,9 +147,9 @@ def test_the_row_is_first_drawn_once_the_words_have_arrived() -> None:
     in `init`, che nessun banco puo' eseguire interi."""
     src = APP_JS.read_text(encoding="utf-8")
     costruttore = member(src, "constructor", prefixes=())
-    assert not re.search(r"this\.strip\??\.disegna\(\)", costruttore), (
+    assert not re.search(r"this\.strip\??\.draw\(\)", costruttore), (
         "la fila si disegna prima che le traduzioni siano arrivate"
     )
     init = member(src, "init", prefixes=("async ",))
     assert init.index("await i18n.load(") < init.index("this._applyTranslations()")
-    assert "this.strip?.disegna();" in member(src, "_applyTranslations")
+    assert "this.strip?.draw();" in member(src, "_applyTranslations")

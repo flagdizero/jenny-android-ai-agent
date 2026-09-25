@@ -2,7 +2,7 @@
 
 D4 della revisione profonda: ``api.savePages`` mandava l'elenco nell'indirizzo
 di ``/api/casa/schermate/set`` (il nome di allora), che scriveva ``config.json``. Ora e' il comando
-RPC ``home.pages.set``; il chiamante (``home-pages.js::salva``) deve
+RPC ``home.pages.set``; il chiamante (``home-pages.js::save``) deve
 ricevere lo stesso ``{ok, pages, order}`` e un errore lanciato se fallisce.
 
 In node sui file veri: ``api-client.js`` e ``rpc-client.js`` si importano davvero,
@@ -21,10 +21,10 @@ pytestmark = requires_node
 _WS_FINTO = """
 export const richieste = [];
 export const wsManager = {
-  esito: null,
+  outcome: null,
   request(method, params) {
     richieste.push([method, params]);
-    return this.esito(method, params);
+    return this.outcome(method, params);
   },
 };
 """
@@ -40,13 +40,13 @@ globalThis.fetch = async () => { fetchate += 1; throw new Error('niente HTTP'); 
 const homePages = [{ id: 'p1', kind: 'app', ref: 'orto' }];
 const order = ['p1', 'app', 'chat', 'notebooks', 'settings'];
 
-wsManager.esito = async (method, params) => ({ ok: true, ...params });
-const salvate = await api.savePages(homePages, order);
-assert.deepEqual(salvate, { ok: true, pages: homePages, order });
+wsManager.outcome = async (method, params) => ({ ok: true, ...params });
+const saved = await api.savePages(homePages, order);
+assert.deepEqual(saved, { ok: true, pages: homePages, order });
 assert.deepEqual(richieste, [['home.pages.set', { pages: homePages, order }]]);
 assert.equal(fetchate, 0, 'la scrittura non passa piu da /api/');
 
-wsManager.esito = async () => {
+wsManager.outcome = async () => {
   const err = new Error('duplicate page id');
   err.code = 'bad_request';
   throw err;

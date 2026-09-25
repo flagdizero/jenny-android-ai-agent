@@ -175,7 +175,7 @@ def test_an_in_flight_provider_save_cannot_be_dismissed() -> None:
     methods = _methods(source)
     save = methods["_saveProvider"]
 
-    assert "async _saveProvider(" in source, "senza await non esiste nemmeno la finestra da proteggere"
+    assert "async _saveProvider(" in source, "senza await non exists nemmeno la win fromIndex proteggere"
     assert "dialog.dataset.busy = '1';" in save
     assert "b.disabled = true;" in save, "i bottoni restano premibili durante la richiesta"
     assert "} finally {" in save and "delete dialog.dataset.busy;" in save, (

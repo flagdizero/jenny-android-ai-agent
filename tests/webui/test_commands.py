@@ -242,16 +242,16 @@ async def test_page_write_saves_and_reads_back(
 ) -> None:
     """Il giro intero, con il contenuto che il vecchio trasporto non spediva."""
     pages_dir = _workspace_with_page(workspace_root)
-    nuovo = "# Orto\n\nI pomodori vanno legati a giugno — pero' gia' a maggio 😏\n"
+    fresh = "# Orto\n\nI pomodori vanno legati a giugno — pero' gia' a maggio 😏\n"
 
     out = await dispatch_command(
         ctx,
         "page.write",
-        {"wiki": "main", "page": "index.md", "content": nuovo, "base": _PAGE},
+        {"wiki": "main", "page": "index.md", "content": fresh, "base": _PAGE},
     )
 
-    assert (pages_dir / "index.md").read_text(encoding="utf-8") == nuovo
-    assert out["bytes"] == len(nuovo.encode("utf-8"))
+    assert (pages_dir / "index.md").read_text(encoding="utf-8") == fresh
+    assert out["bytes"] == len(fresh.encode("utf-8"))
 
 
 async def test_page_write_keeps_the_files_crlf_line_endings(
@@ -261,15 +261,15 @@ async def test_page_write_keeps_the_files_crlf_line_endings(
     ``content`` a LF: il confronto deve riuscire, e il file resta a CRLF."""
     pages_dir = _workspace_with_page(workspace_root)
     (pages_dir / "index.md").write_bytes(_PAGE.replace("\n", "\r\n").encode("utf-8"))
-    nuovo = _PAGE + "Seconda riga.\n"
+    fresh = _PAGE + "Seconda riga.\n"
 
     await dispatch_command(
         ctx,
         "page.write",
-        {"wiki": "main", "page": "index.md", "content": nuovo, "base": _PAGE},
+        {"wiki": "main", "page": "index.md", "content": fresh, "base": _PAGE},
     )
 
-    assert (pages_dir / "index.md").read_bytes() == nuovo.replace("\n", "\r\n").encode("utf-8")
+    assert (pages_dir / "index.md").read_bytes() == fresh.replace("\n", "\r\n").encode("utf-8")
 
 
 async def test_page_write_keeps_lf_files_lf(
@@ -368,8 +368,8 @@ async def test_page_write_refuses_a_symlink_out_of_the_pages_dir(
     la supera. A fermarla e' il ``resolve().relative_to(...)``.
     """
     pages_dir = _workspace_with_page(workspace_root)
-    bersaglio = workspace_root / "wikis" / "main" / "raw" / "appunti.md"
-    (pages_dir / "scorciatoia.md").symlink_to(bersaglio)
+    target = workspace_root / "wikis" / "main" / "raw" / "appunti.md"
+    (pages_dir / "scorciatoia.md").symlink_to(target)
 
     with pytest.raises(CommandError) as exc:
         await dispatch_command(
@@ -379,7 +379,7 @@ async def test_page_write_refuses_a_symlink_out_of_the_pages_dir(
         )
 
     assert exc.value.code == "forbidden"
-    assert bersaglio.read_text(encoding="utf-8") == "# grezzo\n"
+    assert target.read_text(encoding="utf-8") == "# grezzo\n"
 
 
 async def test_page_write_only_touches_md(

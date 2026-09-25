@@ -126,7 +126,7 @@ function flusso() {
   generazione = 0;
   return new UpdateFlow({
     generation: () => generazione,
-    onToast: (testo, tipo) => brindisi.push([testo, tipo]),
+    onToast: (text, type) => brindisi.push([text, type]),
     onVersion: (v) => versioni.push(v),
     onChange: (s) => passi.push(s && { ...s }),
   });
@@ -356,11 +356,11 @@ def test_leaving_the_screen_stops_everything() -> None:
       risposte.install = { ok: true, state: 'silent' };
       risposte.status = { phase: 'downloading', progress: 30, detail: '' };
       await f.start();
-      const prima = { ...f.state };
+      const before = { ...f.state };
 
       generazione += 1;          // si e' cambiata schermata
       await battito();
-      assert.deepEqual({ ...f.state }, prima, 'ha scritto in una schermata lasciata');
+      assert.deepEqual({ ...f.state }, before, 'ha scritto in una schermata lasciata');
       assert.equal(pendenti(), 0);
 
       /* E chi rientra riaggancia: l'installazione va avanti per conto suo. */
@@ -444,17 +444,17 @@ def test_a_fresh_install_is_not_an_alarm() -> None:
     un'installazione appena fatta, e darle l'aria dell'allarme sarebbe la prima
     cosa falsa che Jenny dice."""
     _run_js("""
-      const righe = checkLines({});
-      assert.equal(righe.length, 1);
-      assert.equal(righe[0].key, 'settings.update.neverChecked');
-      assert.equal(righe[0].warn, false, 'la prima accensione e un allarme');
+      const rows = checkLines({});
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].key, 'settings.update.neverChecked');
+      assert.equal(rows[0].warn, false, 'la prima accensione e un allarme');
     """)
 
 
 def test_tries_without_a_single_success_are_a_warning() -> None:
     _run_js("""
-      const righe = checkLines({ last_check: Date.now(), last_success: 0 });
-      assert.deepEqual(righe.map((r) => [r.key, r.warn]),
+      const rows = checkLines({ last_check: Date.now(), last_success: 0 });
+      assert.deepEqual(rows.map((r) => [r.key, r.warn]),
                        [['settings.update.staleNever', true]]);
     """)
 
@@ -466,8 +466,8 @@ def test_a_phone_that_was_off_for_a_week_is_not_a_broken_mechanism() -> None:
     settimana li ha vecchi entrambi."""
     _run_js("""
       const spento = Date.now() - 20 * 86400000;
-      const righe = checkLines({ last_check: spento, last_success: spento });
-      assert.deepEqual(righe.map((r) => r.warn), [false],
+      const rows = checkLines({ last_check: spento, last_success: spento });
+      assert.deepEqual(rows.map((r) => r.warn), [false],
         'un telefono spento viene segnalato come meccanismo rotto');
 
       /* Tentativi che continuano e non arrivano piu': quello si', e sopra la
@@ -500,9 +500,9 @@ def test_when_it_happened_reads_like_a_person_would_say_it() -> None:
          «2 giorni fa» — cioe' un giorno piu' recente di quel che e'. */
       assert.equal(whenText(mezzanotte.getTime() - 2 * giorno - 3600000), '3 giorni fa');
 
-      const vecchio = whenText(mezzanotte.getTime() - 90 * giorno);
-      assert.ok(!vecchio.includes('giorni fa'), 'a novanta giorni dice ancora «giorni fa»: ' + vecchio);
-      assert.ok(/\\d{4}/.test(vecchio), 'e senza l anno: ' + vecchio);
+      const old = whenText(mezzanotte.getTime() - 90 * giorno);
+      assert.ok(!old.includes('giorni fa'), 'a novanta giorni dice ancora «giorni fa»: ' + old);
+      assert.ok(/\\d{4}/.test(old), 'e senza l anno: ' + old);
     """)
 
 
@@ -513,8 +513,8 @@ def test_idle_has_no_phrase_of_its_own() -> None:
       assert.equal(phaseKey('idle'), '');
       assert.equal(phaseKey(undefined), '');
       for (const fase of ['downloading', 'installing', 'prompt', 'error', 'done']) {
-        const chiave = phaseKey(fase);
-        assert.ok(chiave, 'la fase ' + fase + ' non ha parola');
-        assert.notEqual(i18n.t(chiave), chiave, 'la fase ' + fase + ' non e tradotta');
+        const key = phaseKey(fase);
+        assert.ok(key, 'la fase ' + fase + ' non ha parola');
+        assert.notEqual(i18n.t(key), key, 'la fase ' + fase + ' non e tradotta');
       }
     """)

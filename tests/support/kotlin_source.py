@@ -63,7 +63,7 @@ def _string_end(src: str, i: int) -> int:
 def code_only(src: str) -> str:
     """Il sorgente senza commenti né contenuto delle stringhe.
 
-    Le virgolette restano (``""`` al posto di ``"testo"``), così un letterale
+    Le virgolette restano (``""`` al posto di ``"text"``), così un letterale
     si riconosce ancora come tale; i template ``${...}`` si svuotano con la
     stringa che li contiene: per questi contratti non contano.
     """

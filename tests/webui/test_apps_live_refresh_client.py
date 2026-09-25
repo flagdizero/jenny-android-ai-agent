@@ -68,40 +68,40 @@ function frame(msg) {
 const giro = () => new Promise((r) => setTimeout(r, 0));
 
 /* Una mini-app aperta sopra tutto, con la finestra che ricorda la posta. */
-function apri(azioni, slug) {
+function open(actions, slug) {
   const posta = [];
-  azioni._openApp = { slug, iframe: { contentWindow: { postMessage: (m) => posta.push(m) } } };
+  actions._openApp = { slug, iframe: { contentWindow: { postMessage: (m) => posta.push(m) } } };
   return posta;
 }
 """
 
 
-def _run(corpo: str) -> None:
+def _run(body: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        (radice / "shared").mkdir()
+        root = Path(tmp)
+        (root / "shared").mkdir()
         for name in ("apps-source.js", "apps-actions.js"):
-            shutil.copy(ASSETS / "shared" / name, radice / "shared" / name)
-        for name, testo in _VICINI.items():
-            (radice / "shared" / name).write_text(testo, encoding="utf-8")
-        entry = radice / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(corpo), encoding="utf-8")
+            shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
+        for name, text in _VICINI.items():
+            (root / "shared" / name).write_text(text, encoding="utf-8")
+        entry = root / "prova.mjs"
+        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
 def test_a_list_already_read_is_read_again() -> None:
     _run(
         """
-        const fonte = new AppsSource();
-        await fonte.loadJennyApps();
+        const source = new AppsSource();
+        await source.loadJennyApps();
         assert.equal(api.letture, 1);
         let avvisi = 0;
-        fonte.addChangeListener(() => { avvisi += 1; });
+        source.addChangeListener(() => { avvisi += 1; });
         frame({ event: 'apps_list_changed' });
         // La rilettura non torna «in caricamento»: il cassetto aperto non
         // deve riaccendere lo scheletro per una risposta che arriva subito.
-        assert.equal(fonte.isLoadingLists(), true, 'le Android non sono lette: resta vero');
-        assert.equal(fonte._jennyLoaded, true);
+        assert.equal(source.isLoadingLists(), true, 'le Android non sono lette: resta vero');
+        assert.equal(source._jennyLoaded, true);
         await giro();
         assert.equal(api.letture, 2);
         assert.equal(avvisi, 1, 'chi guarda il cassetto deve saperlo');
@@ -125,9 +125,9 @@ def test_a_list_nobody_asked_for_is_not_read() -> None:
 def test_the_open_app_hears_that_its_data_changed() -> None:
     _run(
         """
-        const fonte = new AppsSource();
-        const azioni = new AppsActions(fonte, { sendChatPrompt() {} });
-        const posta = apri(azioni, 'orto');
+        const source = new AppsSource();
+        const actions = new AppsActions(source, { sendChatPrompt() {} });
+        const posta = open(actions, 'orto');
         frame({ event: 'app_data_changed', slug: 'orto' });
         assert.deepEqual(posta, [{ type: 'jenny:data-changed', slug: 'orto' }]);
         """
@@ -137,14 +137,14 @@ def test_the_open_app_hears_that_its_data_changed() -> None:
 def test_another_app_data_change_is_not_forwarded() -> None:
     _run(
         """
-        const fonte = new AppsSource();
-        const azioni = new AppsActions(fonte, { sendChatPrompt() {} });
-        const posta = apri(azioni, 'orto');
+        const source = new AppsSource();
+        const actions = new AppsActions(source, { sendChatPrompt() {} });
+        const posta = open(actions, 'orto');
         frame({ event: 'app_data_changed', slug: 'lampo' });
         frame({ event: 'app_data_changed' });
         assert.deepEqual(posta, []);
         // E senza app aperta non si rompe niente.
-        azioni._openApp = null;
+        actions._openApp = null;
         frame({ event: 'app_data_changed', slug: 'orto' });
         """
     )
@@ -153,15 +153,15 @@ def test_another_app_data_change_is_not_forwarded() -> None:
 def test_a_listener_that_throws_does_not_silence_the_others() -> None:
     _run(
         """
-        const fonte = new AppsSource();
-        const visti = [];
+        const source = new AppsSource();
+        const seen = [];
         const errore = console.error;
         console.error = () => {};
-        fonte.onAppDataChanged(() => { throw new Error('boom'); });
-        fonte.onAppDataChanged((slug) => visti.push(slug));
+        source.onAppDataChanged(() => { throw new Error('boom'); });
+        source.onAppDataChanged((slug) => seen.push(slug));
         frame({ event: 'app_data_changed', slug: 'orto' });
         console.error = errore;
-        assert.deepEqual(visti, ['orto']);
+        assert.deepEqual(seen, ['orto']);
         """
     )
 
@@ -169,16 +169,16 @@ def test_a_listener_that_throws_does_not_silence_the_others() -> None:
 def test_unrelated_frames_do_nothing() -> None:
     _run(
         """
-        const fonte = new AppsSource();
-        await fonte.loadJennyApps();
-        const visti = [];
-        fonte.onAppDataChanged((slug) => visti.push(slug));
+        const source = new AppsSource();
+        await source.loadJennyApps();
+        const seen = [];
+        source.onAppDataChanged((slug) => seen.push(slug));
         for (const event of ['delta', 'turn_end', 'message', 'runtime_model_updated']) {
           frame({ event, slug: 'orto' });
         }
         await giro();
         assert.equal(api.letture, 1);
-        assert.deepEqual(visti, []);
+        assert.deepEqual(seen, []);
         """
     )
 
@@ -189,16 +189,16 @@ def test_an_older_answer_does_not_overwrite_a_newer_one() -> None:
     arrivata. Stessa guardia che ``loadAndroidApps`` ha già (``_seqAndroid``)."""
     _run(
         """
-        const fonte = new AppsSource();
+        const source = new AppsSource();
         const attese = [];
         api.getJennyApps = () => new Promise((r) => attese.push(r));
-        const prima = fonte.loadJennyApps();
-        const seconda = fonte.loadJennyApps();
+        const before = source.loadJennyApps();
+        const seconda = source.loadJennyApps();
         attese[1]({ apps: [{ slug: 'nuova', name: 'Nuova' }] });
         await seconda;
         attese[0]({ apps: [{ slug: 'vecchia', name: 'Vecchia' }] });
-        await prima;
-        assert.deepEqual(fonte.jennyApps.map((a) => a.slug), ['nuova']);
+        await before;
+        assert.deepEqual(source.jennyApps.map((a) => a.slug), ['nuova']);
         """
     )
 
@@ -208,13 +208,13 @@ def test_a_failed_refresh_keeps_the_list_that_was_fine() -> None:
     che era buono, e non accende l'errore nel cassetto."""
     _run(
         """
-        const fonte = new AppsSource();
-        await fonte.loadJennyApps();
+        const source = new AppsSource();
+        await source.loadJennyApps();
         api.getJennyApps = async () => { throw new Error('giù'); };
         frame({ event: 'apps_list_changed' });
         await giro();
-        assert.deepEqual(fonte.jennyApps.map((a) => a.slug), ['orto']);
-        assert.equal(fonte.jennyListFailed(), false);
+        assert.deepEqual(source.jennyApps.map((a) => a.slug), ['orto']);
+        assert.equal(source.jennyListFailed(), false);
         """
     )
 
@@ -223,13 +223,13 @@ def test_a_first_reading_that_fails_still_says_so() -> None:
     """Senza un elenco buono da tenere, il guasto resta un guasto."""
     _run(
         """
-        const fonte = new AppsSource();
+        const source = new AppsSource();
         api.getJennyApps = async () => { throw new Error('giù'); };
-        await fonte.loadJennyApps();
-        assert.deepEqual(fonte.jennyApps, []);
-        assert.equal(fonte.jennyListFailed(), true);
+        await source.loadJennyApps();
+        assert.deepEqual(source.jennyApps, []);
+        assert.equal(source.jennyListFailed(), true);
         api.getJennyApps = async () => ({ apps: [{ slug: 'orto' }] });
-        await fonte.loadJennyApps();
-        assert.equal(fonte.jennyListFailed(), false, 'una lettura buona spegne il guasto');
+        await source.loadJennyApps();
+        assert.equal(source.jennyListFailed(), false, 'una lettura buona spegne il guasto');
         """
     )

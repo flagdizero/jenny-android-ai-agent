@@ -53,7 +53,7 @@ def _run_js(script: str) -> str:
 def test_the_ratios_still_say_what_this_module_assumes() -> None:
     """Il 45% non e' scritto qui per caso: viene da `mascot.js`.
 
-    `MARGINE_LATERALE` lo ricalcola da quel numero. Se un giorno l'arte
+    `SIDE_MARGIN` lo ricalcola da quel numero. Se un giorno l'arte
     cambiasse e il rapporto con lei, questo banco lo dice invece di lasciare il
     modulo a scansare il posto sbagliato in silenzio.
     """
@@ -62,10 +62,10 @@ def test_the_ratios_still_say_what_this_module_assumes() -> None:
         "il rapporto in altezza e' cambiato: rivedere la banda di jenny-gap.js"
     )
     assert "il 45% centrale del canvas quadrato" in mascot, (
-        "il rapporto in larghezza e' cambiato: rivedere MARGINE_LATERALE"
+        "il rapporto in larghezza e' cambiato: rivedere SIDE_MARGIN"
     )
     gap = GAP_JS.read_text(encoding="utf-8")
-    assert "export const MARGINE_LATERALE = (1 - 0.45) / 2;" in gap
+    assert "export const SIDE_MARGIN = (1 - 0.45) / 2;" in gap
 
 
 def test_the_figure_is_not_the_square_it_sits_in() -> None:
@@ -79,9 +79,9 @@ def test_the_figure_is_not_the_square_it_sits_in() -> None:
     out = _run_js("""
 // --jenny-size 120, OUT_RATIO 0.25, viewport 574.4:
 // il quadrato sborda di 30 a destra, quindi left = 574.4 + 30 - 120.
-const lato = 120;
-const quadrato = { left: 484.4, right: 604.4, top: 100, bottom: 220 };
-const f = figuraDi(quadrato, lato);
+const side = 120;
+const square = { left: 484.4, right: 604.4, top: 100, bottom: 220 };
+const f = figureOf(square, side);
 assert.ok(Math.abs(f.left - 517.4) < 0.01, 'left = ' + f.left);
 // In altezza: i piedi appoggiano sul fondo del quadrato meno i margini, e la
 // figura e' alta il 73% -> il suo bordo alto sta 87,6 sopra il fondo.
@@ -100,7 +100,7 @@ def test_only_the_messages_in_her_corner_are_marked() -> None:
     la pagina.
     """
     out = _run_js("""
-const figura = { left: 517.4, top: 132.4 };
+const figure = { left: 517.4, top: 132.4 };
 const casi = [
   // [right, bottom, atteso, perche]
   [556, 220, true,  "in basso e a destra: e il suo angolo"],
@@ -109,9 +109,9 @@ const casi = [
   [500, 120, false, "nessuno dei due assi"],
   [517.4, 220, false, "tocca il bordo esatto: non si sovrappone"],
 ];
-for (const [right, bottom, atteso, perche] of casi) {
-  const avuto = serveScansare({ right, bottom }, figura);
-  assert.equal(avuto, atteso, `${perche}: atteso ${atteso}, avuto ${avuto}`);
+for (const [right, bottom, atteso, why] of casi) {
+  const avuto = needsDodge({ right, bottom }, figure);
+  assert.equal(avuto, atteso, `${why}: atteso ${atteso}, avuto ${avuto}`);
 }
 console.log('ok');
 """)
@@ -128,9 +128,9 @@ def test_the_margin_is_the_distance_to_her_and_never_negative() -> None:
     """
     out = _run_js("""
 // destra del contenuto del filo = 574.4 - 18 di padding
-assert.equal(margineDa({ left: 517.4 }, 556.4), 39);
+assert.equal(marginFrom({ left: 517.4 }, 556.4), 39);
 // tutta fuori: niente margine, e mai un numero negativo
-assert.equal(margineDa({ left: 600 }, 556.4), 0);
+assert.equal(marginFrom({ left: 600 }, 556.4), 0);
 console.log('ok');
 """)
     assert "ok" in out
@@ -144,16 +144,16 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
     giusto sopra una larghezza sbagliata.
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    blocco = css.split(".home-msg-jenny {")[1].split("}")[0]
+    block = css.split(".home-msg-jenny {")[1].split("}")[0]
     # `max-width: 100%` e' la colonna, non un tetto: serve perche' un `<pre>`
     # lungo non allarghi il messaggio oltre il filo (09f43fc). Un tetto e'
     # qualunque valore piu' stretto della colonna.
-    tetti = [
-        v.strip() for v in re.findall(r"max-width\s*:\s*([^;]+);", blocco)
+    caps = [
+        v.strip() for v in re.findall(r"max-width\s*:\s*([^;]+);", block)
         if v.strip() != "100%"
     ]
-    assert not tetti, (
-        f"il tetto e' tornato ({tetti}): il margine condizionale non serve piu' a niente"
+    assert not caps, (
+        f"il tetto e' tornato ({caps}): il margine condizionale non serve piu' a niente"
     )
     assert ".home-msg-jenny.is-under-jenny" in css, "manca la regola del margine"
 
@@ -162,15 +162,15 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
 
 
 def _con_dom(script: str) -> str:
-    """`aggiorna()` con un DOM finto, che e' l'unico modo di provare *quali*
+    """`refresh()` con un DOM finto, che e' l'unico modo di provare *quali*
     nodi la classe la prendono. La geometria qui sopra si prova pura; questo
     invece e' l'aggancio, ed e' dove stava il difetto."""
     return _run_js(
         """
-function nodo(classi, rect) {
-  const set = new Set(classi.split(' '));
+function node(classes, rect) {
+  const set = new Set(classes.split(' '));
   return {
-    classi: set,
+    classes: set,
     classList: {
       add: (c) => set.add(c),
       remove: (c) => set.delete(c),
@@ -180,18 +180,18 @@ function nodo(classi, rect) {
   };
 }
 globalThis.getComputedStyle = () => ({ paddingRight: '18px' });
-const mascotte = {
+const mascot = {
   hidden: false,
   getBoundingClientRect: () => (
     { left: 484.4, right: 604.4, top: 100, bottom: 220, width: 120 }),
 };
 function filoCon(nodi) {
   return {
-    style: { setProperty: (k, v) => { filoCon.scritto = [k, v]; } },
+    style: { setProperty: (k, v) => { filoCon.written = [k, v]; } },
     getBoundingClientRect: () => ({ right: 574.4 }),
     querySelectorAll: (sel) => nodi.filter((n) => sel
       .split(',').map((s) => s.trim())
-      .some((s) => n.classi.has(s.slice(1)))),
+      .some((s) => n.classes.has(s.slice(1)))),
   };
 }
 """
@@ -209,15 +209,15 @@ def test_a_bubble_of_ours_in_her_corner_dodges_too() -> None:
     banco e' rosso.
     """
     out = _con_dom("""
-const risposta = nodo('home-msg home-msg-jenny', { right: 540, bottom: 200 });
-const mia      = nodo('home-msg home-msg-user',  { right: 556.4, bottom: 300 });
-const vecchia  = nodo('home-msg home-msg-user',  { right: 556.4, bottom: 90 });
-const filo = filoCon([vecchia, risposta, mia]);
-new JennyGap(filo, mascotte).aggiorna();
-assert.ok(mia.classi.has(CLASSE), 'la bolla nel suo angolo non si e scansata');
-assert.ok(risposta.classi.has(CLASSE), 'la risposta nel suo angolo non si e scansata');
-assert.ok(!vecchia.classi.has(CLASSE), 'una bolla sopra di lei non deve scansarsi');
-assert.deepEqual(filoCon.scritto, ['--jenny-gap', '39px']);
+const reply = node('home-msg home-msg-jenny', { right: 540, bottom: 200 });
+const mia      = node('home-msg home-msg-user',  { right: 556.4, bottom: 300 });
+const old  = node('home-msg home-msg-user',  { right: 556.4, bottom: 90 });
+const thread = filoCon([old, reply, mia]);
+new JennyGap(thread, mascot).refresh();
+assert.ok(mia.classes.has(CLASS), 'la bolla nel suo angolo non si e scansata');
+assert.ok(reply.classes.has(CLASS), 'la risposta nel suo angolo non si e scansata');
+assert.ok(!old.classes.has(CLASS), 'una bolla sopra di lei non deve scansarsi');
+assert.deepEqual(filoCon.written, ['--jenny-gap', '39px']);
 console.log('ok');
 """)
     assert "ok" in out
@@ -231,9 +231,9 @@ def test_a_bubble_that_stops_dodging_gets_cleaned_up() -> None:
     c'e' nessuno da scansare.
     """
     out = _con_dom("""
-const mia = nodo('home-msg home-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
-new JennyGap(filoCon([mia]), mascotte).aggiorna();
-assert.ok(!mia.classi.has(CLASSE), 'il margine e rimasto attaccato');
+const mia = node('home-msg home-msg-user is-under-jenny', { right: 556.4, bottom: 90 });
+new JennyGap(filoCon([mia]), mascot).refresh();
+assert.ok(!mia.classes.has(CLASS), 'il margine e rimasto attaccato');
 console.log('ok');
 """)
     assert "ok" in out
@@ -249,8 +249,8 @@ def test_our_bubble_moves_aside_it_does_not_hollow_out() -> None:
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert ".home-msg-user.is-under-jenny" in css, "le bolle non si scansano affatto"
-    blocco = css.split(".home-msg-user.is-under-jenny {")[1].split("}")[0]
-    assert "margin-right: var(--jenny-gap" in blocco, blocco
-    assert "padding-right" not in blocco, (
+    block = css.split(".home-msg-user.is-under-jenny {")[1].split("}")[0]
+    assert "margin-right: var(--jenny-gap" in block, block
+    assert "padding-right" not in block, (
         "con padding la bolla si svuota a destra invece di spostarsi"
     )

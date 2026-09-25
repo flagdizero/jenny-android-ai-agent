@@ -92,11 +92,11 @@ def test_a_library_with_callers_is_actually_shipped() -> None:
     """
     from jenny.utils.android_assets import _UI_MANIFEST
 
-    for name, dati in LIBRERIE.items():
-        chiamanti = _chiamanti(dati["segni"])
+    for name, data in LIBRERIE.items():
+        chiamanti = _chiamanti(data["segni"])
         if not chiamanti:
             continue
-        percorso = dati["spedito"]
+        percorso = data["spedito"]
         assert (ASSETS.parent / percorso).exists(), (
             f"{name} la chiamano {chiamanti} e il file non c'e': quelle chiamate "
             f"sono protette da un «se la libreria c'e'», quindi non falliscono — "
@@ -115,10 +115,10 @@ def test_a_shipped_library_has_someone_who_calls_it() -> None:
     """Il verso opposto: un bundle spedito e mai eseguito e' peso nell'APK e una
     licenza da tenere aggiornata per niente. E' la ragione per cui lo
     sfoltimento cercava questi file — la ragione era buona, la misura no."""
-    for name, dati in LIBRERIE.items():
-        if not (ASSETS.parent / dati["spedito"]).exists():
+    for name, data in LIBRERIE.items():
+        if not (ASSETS.parent / data["spedito"]).exists():
             continue
-        assert _chiamanti(dati["segni"]), (
+        assert _chiamanti(data["segni"]), (
             f"{name} e' nel pacchetto e non lo chiama nessuno: e' peso morto"
         )
 

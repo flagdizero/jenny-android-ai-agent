@@ -22,14 +22,14 @@
  *    alzata sopra meta' della conversazione che stai leggendo.
  *
  *  Il modulo non sa quando la chat e' a schermo: lo chiede a chi lo crea
- *  (`attivo`), che conosce stanze, pagine e strati.
+ *  (`active`), che conosce stanze, pagine e strati.
  */
 
 import { isTypeAheadKey } from './shared/type-ahead.js';
 
 /* Chi riceve gia' testo per conto suo: un tocco li' sposta il fuoco, ed e'
    giusto — e' un campo in cui hai scelto di scrivere. */
-function _eCampo(el) {
+function _isField(el) {
   return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
                         el.tagName === 'SELECT' || el.isContentEditable));
 }
@@ -42,12 +42,12 @@ function _eCampo(el) {
  *  Bluetooth si attacca e si stacca. Fuori dal guscio — un browser sul Mac —
  *  un puntatore fine vuol dire un mouse, e accanto a un mouse c'e' una
  *  tastiera. */
-export function tastieraFisica(win = globalThis.window) {
-  const nativo = win?.JennyNative;
-  if (typeof nativo?.hasHardwareKeyboard === 'function') {
-    try { return Boolean(nativo.hasHardwareKeyboard()); } catch { return false; }
+export function physicalKeyboard(win = globalThis.window) {
+  const native = win?.JennyNative;
+  if (typeof native?.hasHardwareKeyboard === 'function') {
+    try { return Boolean(native.hasHardwareKeyboard()); } catch { return false; }
   }
-  if (nativo) return false;  // guscio vecchio: nel dubbio, come prima
+  if (native) return false;  // guscio vecchio: nel dubbio, come prima
   return Boolean(win?.matchMedia?.('(any-pointer: fine)')?.matches);
 }
 
@@ -60,51 +60,51 @@ export class ComposerFocus {
    * @param {() => boolean} [opts.tastiera] c'e' una tastiera fisica.
    * @param {Document} [opts.doc]
    */
-  constructor({ input, superfici, attivo, tastiera = tastieraFisica, doc = document }) {
+  constructor({ input, surfaces, active, keyboard = physicalKeyboard, doc = document }) {
     this.input = input;
-    this.attivo = attivo;
-    this.tastiera = tastiera;
+    this.active = active;
+    this.keyboard = keyboard;
     this.doc = doc;
-    doc.addEventListener('keydown', (e) => this._onTasto(e));
-    for (const el of superfici) el?.addEventListener('mousedown', (e) => this._onTocco(e));
+    doc.addEventListener('keydown', (e) => this._onKey(e));
+    for (const el of surfaces) el?.addEventListener('mousedown', (e) => this._onTap(e));
     /* Tornando all'app da un'altra, il campo riprende il fuoco: sul Titan si
        torna per scrivere. */
     doc.addEventListener('visibilitychange', () => {
-      if (doc.visibilityState === 'visible') this.rimetti();
+      if (doc.visibilityState === 'visible') this.restore();
     });
   }
 
   /** Il fuoco sul campo, se c'e' una tastiera fisica e il campo e' a schermo.
    *  Lo chiama chi riporta la chat davanti — una pagina, una stanza, Home. */
-  rimetti() {
-    if (!this.input || !this.tastiera() || !this.attivo()) return false;
-    this._fuoco();
+  restore() {
+    if (!this.input || !this.keyboard() || !this.active()) return false;
+    this._focus();
     return true;
   }
 
   /* `preventScroll` sempre: la chat puo' essere a meta' di una scivolata della
      pista, e mettere a fuoco un campo fuori vista fa scorrere il browser per
      raggiungerlo — la lezione di `test_chat_focus_no_scroll_contract.py`. */
-  _fuoco() {
+  _focus() {
     if (this.doc.activeElement !== this.input) this.input.focus({ preventScroll: true });
   }
 
-  _onTasto(e) {
+  _onKey(e) {
     if (!this.input || !isTypeAheadKey(e, this.doc.activeElement)) return;
-    if (!this.attivo()) return;
+    if (!this.active()) return;
     /* `focus()` sincrono dentro il keydown: Chromium recapita il carattere
        all'elemento che ha il fuoco quando lo inserisce, cioe' al campo. */
-    this._fuoco();
+    this._focus();
   }
 
   /* `mousedown` e non `pointerdown`: su un tocco il browser sposta il fuoco
      come azione di default del `mousedown` di compatibilita', ed e' li' che
      si puo' impedirlo. La pressione lunga non ne produce, quindi selezionare
      il testo di una bolla resta com'era. */
-  _onTocco(e) {
-    if (!this.input || _eCampo(e.target)) return;
-    if (!this.tastiera() || !this.attivo()) return;
+  _onTap(e) {
+    if (!this.input || _isField(e.target)) return;
+    if (!this.keyboard() || !this.active()) return;
     e.preventDefault();
-    this._fuoco();
+    this._focus();
   }
 }

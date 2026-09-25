@@ -71,8 +71,8 @@ def _activate(src: str) -> str:
 
 
 def test_entering_the_chat_focuses_without_scrolling() -> None:
-    corpo = _activate(CHAT_JS.read_text(encoding="utf-8"))
-    fuochi = re.findall(r"\.focus\(([^)]*)\)", corpo)
+    body = _activate(CHAT_JS.read_text(encoding="utf-8"))
+    fuochi = re.findall(r"\.focus\(([^)]*)\)", body)
     assert fuochi, "activate() non mette piu' a fuoco il campo"
     for arg in fuochi:
         # `preventScroll: true`, non la parola: `{ preventScroll: false }` la

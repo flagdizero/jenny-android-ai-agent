@@ -290,7 +290,7 @@ def test_the_reconnect_resync_retries_a_load_that_never_landed() -> None:
 
       assert.deepEqual(chat.rendered, ['da bordi']);
       assert.equal(errorRows().length, 0,
-                   'la riga d\\'errore deve sparire quando la storia arriva');
+                   'la riga d\\'errore deve sparire when la history arrives');
       assert.equal(chat._initialHistoryLoaded, true);
       assert.equal(chat.historyCursor, 'b-1');
     """)

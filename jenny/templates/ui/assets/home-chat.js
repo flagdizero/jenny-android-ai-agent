@@ -10,7 +10,7 @@
  *  c'era scritto che nemmeno i tempi si leggevano, e il risultato a schermo era
  *  che quattro risposte di fila sembravano un messaggio solo — niente le
  *  separava, perche' in casa non c'e' ne' bolla ne' avatar, solo paragrafi. La
- *  riga in coda (Copia e i secondi, v. `_codaDi`) e' il confine: dice dove una
+ *  riga in coda (Copia e i secondi, v. `_tailOf`) e' il confine: dice dove una
  *  risposta finisce, e lo dice con due cose che servono invece che con una
  *  linea che non serve a niente.
  *
@@ -91,9 +91,9 @@ export class HomeChat {
        reso: le recinzioni dei blocchi di codice sono esattamente cio' che
        serve quando una risposta si incolla altrove. `WeakMap` perche' la
        chiave e' il nodo, e una ricarica del filo li butta tutti. */
-    this._sorgente = new WeakMap();
+    this._source = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
-    this._secondi = null;
+    this._seconds = null;
     /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
        `null` = non c'è niente da riprendere. */
     this._pendingSend = null;
@@ -121,7 +121,7 @@ export class HomeChat {
        markup. */
     this.el.addEventListener('click', (e) => {
       const btn = e.target.closest('.home-copy');
-      if (btn && this.el.contains(btn)) this._copia(btn.closest('.home-msg'));
+      if (btn && this.el.contains(btn)) this._copy(btn.closest('.home-msg'));
     });
 
     /* La pagina precedente: stessa macchina dell'officina
@@ -323,7 +323,7 @@ export class HomeChat {
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
       renderRich(this.blockNode);
-      this._registra(this.turnNode, finalText);
+      this._register(this.turnNode, finalText);
     }
     this.blockNode = null;
     this.buffer = '';
@@ -347,7 +347,7 @@ export class HomeChat {
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
       this._ensureTurn().appendChild(block);
-      this._registra(this.turnNode, msg.text);
+      this._register(this.turnNode, msg.text);
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
@@ -430,7 +430,7 @@ export class HomeChat {
   }
 
   _turnEnd(latencyMs) {
-    this._secondi = latencyMs != null ? latencyMs : null;
+    this._seconds = latencyMs != null ? latencyMs : null;
     this._resetTurn();
   }
 
@@ -445,18 +445,18 @@ export class HomeChat {
    */
   _resetTurn() {
     if (this.turnNode) {
-      const chiusa = this.turnNode;
-      this._codaDi(chiusa, this._secondi);
+      const closed = this.turnNode;
+      this._tailOf(closed, this._seconds);
       /* La bolla e' cresciuta di una riga **dopo** essere stata misurata: il
          margine per scansare la mascotte va rifatto, e chi era in fondo deve
          restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
          qui con un nodo che sta per essere buttato. */
-      if (chiusa.isConnected) {
-        this.gap?.aggiorna();
+      if (closed.isConnected) {
+        this.gap?.refresh();
         this._follow();
       }
     }
-    this._secondi = null;
+    this._seconds = null;
     this.turnNode = null;
     this.blockNode = null;
     this.buffer = '';
@@ -516,12 +516,12 @@ export class HomeChat {
       block.innerHTML = renderMarkdown(content);
       renderRich(block);
       node.appendChild(block);
-      this._registra(node, content);
+      this._register(node, content);
     }
     if (media?.length) this._appendMedia(node, media);
     /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
        misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
-    this._codaDi(node, latencyMs);
+    this._tailOf(node, latencyMs);
     this._append(node, toTop);
   }
 
@@ -537,7 +537,7 @@ export class HomeChat {
    *  mancare del tutto: una consegna proattiva non ha un turno dietro, quindi
    *  nessuno ha misurato niente, e in quel caso resta il solo Copia.
    */
-  _codaDi(node, latencyMs) {
+  _tailOf(node, latencyMs) {
     if (!node || node.querySelector('.home-tail')) return;
     /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col
        suo bordo: e' separato da se', e un Copia sotto le proprie parole non
@@ -545,50 +545,50 @@ export class HomeChat {
        guardia e' perche' la prossima non debba ricordarselo. */
     if (!String(node.className).includes('home-msg-jenny')) return;
     // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
-    if (!this._testoDi(node)) return;
-    const riga = document.createElement('div');
-    riga.className = 'home-tail';
+    if (!this._textOf(node)) return;
+    const row = document.createElement('div');
+    row.className = 'home-tail';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'home-copy';
     btn.title = i18n.t('chat.copy');
     btn.setAttribute('aria-label', i18n.t('chat.copy'));
     btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
-    riga.appendChild(btn);
+    row.appendChild(btn);
     if (latencyMs != null) {
       const s = document.createElement('span');
       s.className = 'home-seconds';
       s.textContent = (latencyMs / 1000).toFixed(1) + 's';
-      riga.appendChild(s);
+      row.appendChild(s);
     }
-    node.appendChild(riga);
+    node.appendChild(row);
   }
 
   /* Il markdown di una bolla si accumula: un turno testo → strumento → testo
      apre piu' blocchi, e copiarne uno solo sarebbe copiare meta' risposta. */
-  _registra(node, testo) {
-    const pulito = String(testo || '').trim();
-    if (!node || !pulito) return;
-    const prima = this._sorgente.get(node);
-    this._sorgente.set(node, prima ? `${prima}\n\n${pulito}` : pulito);
+  _register(node, text) {
+    const clean = String(text || '').trim();
+    if (!node || !clean) return;
+    const before = this._source.get(node);
+    this._source.set(node, before ? `${before}\n\n${clean}` : clean);
   }
 
   /* Il sorgente se c'e', altrimenti la rete di `innerText`: perde le
      recinzioni, ma non lascia mai un Copia che non copia niente. */
-  _testoDi(node) {
+  _textOf(node) {
     if (!node) return '';
-    const registrato = this._sorgente.get(node);
-    if (registrato) return registrato;
+    const registered = this._source.get(node);
+    if (registered) return registered;
     return [...node.querySelectorAll('.home-block')]
       .map((el) => (el.innerText || '').trim())
       .filter(Boolean)
       .join('\n\n');
   }
 
-  async _copia(node) {
-    const testo = this._testoDi(node);
-    if (!testo) return;
-    if (!(await copyToClipboard(testo))) {
+  async _copy(node) {
+    const text = this._textOf(node);
+    if (!text) return;
+    if (!(await copyToClipboard(text))) {
       showToast(i18n.t('chat.copyFailed'), 'error');
       return;
     }
@@ -682,7 +682,7 @@ export class HomeChat {
     /* Chi le finisce nell'angolo si scansa. Qui e non nel `_follow()`: quello
        scorre, e il margine va deciso **dopo** che il nodo e' nel filo e prima
        che l'occhio ci arrivi. */
-    this.gap?.aggiorna();
+    this.gap?.refresh();
     return node;
   }
 
@@ -708,7 +708,7 @@ export class HomeChat {
        Si ricalcola a scorrimento **fermo** e non qui dentro: il margine manda
        il testo a capo, e rifarlo a ogni fotogramma sposterebbe sotto le dita
        quel che si sta leggendo. */
-    this.gap?.scorrendo();
+    this.gap?.scrolling();
   }
 
   _atBottom() {

@@ -35,7 +35,7 @@ export function updatesValue(version) {
  *  annunciarla come una novita' fresca sarebbe la cosa sbagliata da dire.
  */
 export function updatesMood(version) {
-  if (checkLines(version).some((riga) => riga.warn)) return 'warn';
+  if (checkLines(version).some((row) => row.warn)) return 'warn';
   return version?.update_available ? 'new' : 'ok';
 }
 
@@ -66,7 +66,7 @@ export class HomeUpdates {
 
     this.flow = new UpdateFlow({
       generation: () => this._gen,
-      onToast: (testo, tipo) => showToast(testo, tipo),
+      onToast: (text, type) => showToast(text, type),
       onVersion: (v) => {
         if (v) this.version = v;
         this._onVersion?.(v);
@@ -132,18 +132,18 @@ export class HomeUpdates {
          ed e' l'ultima», che e' una frase con un buco — visto sul rig, ed e'
          lo stato normale finche' `/api/settings` non ha risposto. Non sapere
          si dice, non si maschera. */
-      let frase;
+      let phrase;
       if (v.update_available) {
-        frase = i18n.t(
+        phrase = i18n.t(
           v.critical ? 'settings.update.availableCritical' : 'settings.update.available',
           { version: v.latest || '' },
         );
       } else {
-        frase = v.current
+        phrase = v.current
           ? i18n.t('home.updates.upToDate', { version: v.current })
           : i18n.t('home.updates.unknown');
       }
-      this.headline.textContent = frase;
+      this.headline.textContent = phrase;
     }
     if (this.summary) {
       this.summary.textContent = (v.update_available && v.summary) ? v.summary : '';
@@ -178,18 +178,18 @@ export class HomeUpdates {
       this.note.textContent = u.noteKey ? i18n.t(u.noteKey) : '';
       this.note.hidden = !u.noteKey;
     }
-    const chiave = phaseKey(u.phase);
+    const key = phaseKey(u.phase);
     if (this.phase) {
-      this.phase.textContent = chiave ? i18n.t(chiave) : '';
-      this.phase.hidden = !chiave;
+      this.phase.textContent = key ? i18n.t(key) : '';
+      this.phase.hidden = !key;
     }
     if (this.detail) {
       this.detail.textContent = u.detail || '';
       this.detail.hidden = !u.detail;
     }
-    const correndo = (u.phase === 'downloading' || u.phase === 'installing') && u.progress > 0;
-    if (this.track) this.track.hidden = !correndo;
-    if (this.bar && correndo) {
+    const running = (u.phase === 'downloading' || u.phase === 'installing') && u.progress > 0;
+    if (this.track) this.track.hidden = !running;
+    if (this.bar && running) {
       this.bar.style.width = `${Math.min(Math.max(u.progress, 0), 100)}%`;
     }
   }
@@ -199,10 +199,10 @@ export class HomeUpdates {
   _paintLines() {
     if (this.lines) {
       this.lines.replaceChildren();
-      for (const riga of checkLines(this.version)) {
+      for (const row of checkLines(this.version)) {
         const el = document.createElement('div');
-        el.className = riga.warn ? 'home-update-line is-warn' : 'home-update-line';
-        el.textContent = i18n.t(riga.key, riga.params);
+        el.className = row.warn ? 'home-update-line is-warn' : 'home-update-line';
+        el.textContent = i18n.t(row.key, row.params);
         this.lines.appendChild(el);
       }
     }

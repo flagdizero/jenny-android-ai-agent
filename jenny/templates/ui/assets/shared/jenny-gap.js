@@ -42,7 +42,7 @@ import { ART_HEIGHT_RATIO } from './mascot.js';
  *  «dove comincia il suo riquadro» da «dove comincia lei», e sono 33 px a 120:
  *  scansare il riquadro vorrebbe dire lasciare un buco dove non c'e' nessuno.
  */
-export const MARGINE_LATERALE = (1 - 0.45) / 2;
+export const SIDE_MARGIN = (1 - 0.45) / 2;
 
 /** Il rettangolo della **figura**, ricavato da quello del suo riquadro.
  *
@@ -51,12 +51,12 @@ export const MARGINE_LATERALE = (1 - 0.45) / 2;
  *  @returns {{left:number, top:number}} gli unici due bordi che contano: da
  *           dove comincia lei andando verso destra, e da dove verso l'alto.
  */
-export function figuraDi(quadrato, lato) {
+export function figureOf(square, side) {
   return {
-    left: quadrato.left + lato * MARGINE_LATERALE,
+    left: square.left + side * SIDE_MARGIN,
     /* I piedi appoggiano sul composer, quindi la figura sta **in basso** nel
        quadrato: il suo bordo alto si conta dal fondo, non dall'alto. */
-    top: quadrato.bottom - lato * ART_HEIGHT_RATIO,
+    top: square.bottom - side * ART_HEIGHT_RATIO,
   };
 }
 
@@ -67,55 +67,55 @@ export function figuraDi(quadrato, lato) {
  *  un messaggio alto che finisce sopra di lei non va scansato, e nemmeno uno
  *  corto che sta alla sua altezza ma tutto a sinistra.
  */
-export function serveScansare(messaggio, figura) {
-  return messaggio.right > figura.left && messaggio.bottom > figura.top;
+export function needsDodge(message, figure) {
+  return message.right > figure.left && message.bottom > figure.top;
 }
 
 /** Quanto margine destro serve perche' il testo le si fermi accanto. */
-export function margineDa(figura, destraDelFilo) {
-  return Math.max(0, Math.round(destraDelFilo - figura.left));
+export function marginFrom(figure, rightOfThread) {
+  return Math.max(0, Math.round(rightOfThread - figure.left));
 }
 
 /* ── L'aggancio al DOM ───────────────────────────────────────────────────── */
 
-export const CLASSE = 'is-under-jenny';
+export const CLASS = 'is-under-jenny';
 /** Quanto si aspetta, dopo l'ultimo evento di scorrimento, prima di rifare i
  *  conti. Abbastanza da non cadere dentro uno scorrimento con l'inerzia
  *  ancora viva, abbastanza poco da non farsi notare. */
-export const QUIETE_MS = 120;
+export const QUIET_MS = 120;
 
 export class JennyGap {
   /** @param thread   il contenitore che scorre
    *  @param mascotte il nodo della mascotte, o `null` se e' spenta */
-  constructor(thread, mascotte) {
+  constructor(thread, mascot) {
     this.thread = thread;
-    this.mascotte = mascotte;
+    this.mascot = mascot;
     this._timer = null;
-    this._segnati = new Set();
+    this._marked = new Set();
   }
 
   /** Ricalcola adesso. Da chiamare all'arrivo di un messaggio. */
-  aggiorna() {
-    if (!this.thread || !this.mascotte || this.mascotte.classList?.contains('hidden-mode')) {
-      this._pulisci();
+  refresh() {
+    if (!this.thread || !this.mascot || this.mascot.classList?.contains('hidden-mode')) {
+      this._clean();
       return;
     }
-    const quadrato = this.mascotte.getBoundingClientRect();
-    if (!quadrato.width) {
-      this._pulisci();
+    const square = this.mascot.getBoundingClientRect();
+    if (!square.width) {
+      this._clean();
       return;
     }
-    const figura = figuraDi(quadrato, quadrato.width);
-    const filo = this.thread.getBoundingClientRect();
+    const figure = figureOf(square, square.width);
+    const thread = this.thread.getBoundingClientRect();
     /* Il bordo destro del **contenuto**, non della scatola: il padding del filo
        non e' spazio in cui il testo possa finire. */
-    const stile = getComputedStyle(this.thread);
-    const destra = filo.right - parseFloat(stile.paddingRight || '0');
-    const margine = margineDa(figura, destra);
+    const style = getComputedStyle(this.thread);
+    const right = thread.right - parseFloat(style.paddingRight || '0');
+    const margin = marginFrom(figure, right);
 
-    this.thread.style.setProperty('--jenny-gap', `${margine}px`);
+    this.thread.style.setProperty('--jenny-gap', `${margin}px`);
 
-    const vivi = new Set();
+    const live = new Set();
     /* **Tutti** i messaggi, non solo le risposte. Qui c'era `.home-msg-jenny`,
        e le bolle di chi scrive restavano fuori: peccato che quelle siano
        `align-self: flex-end`, cioe' incollate al bordo destro — proprio la
@@ -127,28 +127,28 @@ export class JennyGap {
       /* Il rettangolo va letto **senza** il margine che gli abbiamo messo noi,
          altrimenti un messaggio scansato si misura piu' stretto, esce dalla
          banda, e al giro dopo rientra: un'altalena a ogni ricalcolo. */
-      const segnato = msg.classList.contains(CLASSE);
-      if (segnato) msg.classList.remove(CLASSE);
+      const marked = msg.classList.contains(CLASS);
+      if (marked) msg.classList.remove(CLASS);
       const r = msg.getBoundingClientRect();
-      if (serveScansare(r, figura)) {
-        msg.classList.add(CLASSE);
-        vivi.add(msg);
+      if (needsDodge(r, figure)) {
+        msg.classList.add(CLASS);
+        live.add(msg);
       }
     }
-    this._segnati = vivi;
+    this._marked = live;
   }
 
   /** Lo scorrimento e' in corso: si aspetta che si fermi. */
-  scorrendo() {
+  scrolling() {
     clearTimeout(this._timer);
     this._timer = setTimeout(() => {
       this._timer = null;
-      this.aggiorna();
-    }, QUIETE_MS);
+      this.refresh();
+    }, QUIET_MS);
   }
 
-  _pulisci() {
-    for (const msg of this._segnati) msg.classList.remove(CLASSE);
-    this._segnati = new Set();
+  _clean() {
+    for (const msg of this._marked) msg.classList.remove(CLASS);
+    this._marked = new Set();
   }
 }

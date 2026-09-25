@@ -26,14 +26,14 @@ def test_line_diff_stats_normalizes_crlf() -> None:
     assert line_diff_stats("a\r\nb\r\n", "a\nb\nc\n") == (1, 0)
 
 
-@pytest.mark.parametrize("testo", ["a\fb\n", "a\u2028b\n", "a\x1cb\n", "a\rb\n", "a\nb"])
-def test_a_new_file_and_an_existing_one_count_lines_the_same_way(testo) -> None:
+@pytest.mark.parametrize("text", ["a\fb\n", "a\u2028b\n", "a\x1cb\n", "a\rb\n", "a\nb"])
+def test_a_new_file_and_an_existing_one_count_lines_the_same_way(text) -> None:
     """Prima il file nuovo contava ``\r``/``\n`` e l'esistente usava
     ``splitlines()``, che spezza anche su ``\f``, ``\u2028``…: lo stesso testo
     aggiunto dava due numeri diversi."""
-    nuovo, _ = line_diff_stats("", testo)
-    esistente, _ = line_diff_stats("x\n", "x\n" + testo)
-    assert nuovo == esistente
+    fresh, _ = line_diff_stats("", text)
+    existing, _ = line_diff_stats("x\n", "x\n" + text)
+    assert fresh == existing
 
 
 def test_line_diff_stats_counts_new_file_crlf_lines_once() -> None:

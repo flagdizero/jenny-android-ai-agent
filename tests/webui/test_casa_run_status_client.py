@@ -35,14 +35,14 @@ class App {
       innerHTML: '',
       setAttribute() {},
     };
-    this.righe = [];
+    this.rows = [];
     this.activity = {
       turnId: null,
-      start: (id) => this.righe.push('start:' + id),
-      stop: () => this.righe.push('stop'),
-      reasoning: () => this.righe.push('reasoning'),
-      tools: () => this.righe.push('tools'),
-      answering: () => this.righe.push('answering'),
+      start: (id) => this.rows.push('start:' + id),
+      stop: () => this.rows.push('stop'),
+      reasoning: () => this.rows.push('reasoning'),
+      tools: () => this.rows.push('tools'),
+      answering: () => this.rows.push('answering'),
     };
   }
   __READ_RUN__
@@ -70,7 +70,7 @@ def test_a_turn_in_another_conversation_does_not_light_the_stop_button() -> None
       app._readRunStatus({ event: 'goal_status', status: 'running', chat_id: 'project:orto' });
       assert.equal(app._running, false, 'Ferma acceso da un turno di un altro quaderno');
       app._readActivity({ event: 'goal_status', status: 'running', chat_id: 'project:orto', turn_id: 't9' });
-      assert.deepEqual(app.righe, [], 'la riga di lavoro racconta un altro quaderno');
+      assert.deepEqual(app.rows, [], 'la riga di lavoro racconta un altro quaderno');
       assert.equal(app.activity.turnId, null, 'il turno di un altro quaderno e\\u2019 diventato il nostro');
     """)
 
@@ -82,9 +82,9 @@ def test_a_turn_ending_elsewhere_does_not_turn_off_ours() -> None:
       assert.equal(app._running, true);
       app._readRunStatus({ event: 'goal_status', status: 'idle', chat_id: 'project:orto' });
       assert.equal(app._running, true, 'la fine di un altro turno ha spento Ferma sul nostro');
-      app.righe.length = 0;
+      app.rows.length = 0;
       app._readActivity({ event: 'turn_end', chat_id: 'project:orto' });
-      assert.deepEqual(app.righe, [], 'la riga di lavoro si e\\u2019 fermata per un altro turno');
+      assert.deepEqual(app.rows, [], 'la riga di lavoro si e\\u2019 fermata per un altro turno');
     """)
 
 
@@ -97,6 +97,6 @@ def test_frames_of_this_conversation_and_frames_without_a_chat_still_count() -> 
       app._readRunStatus({ event: 'goal_status', status: 'idle', chat_id: 'default' });
       assert.equal(app._running, false);
       app._readActivity({ event: 'goal_status', status: 'running', chat_id: 'default', turn_id: 't1' });
-      assert.deepEqual(app.righe, ['start:t1']);
+      assert.deepEqual(app.rows, ['start:t1']);
     """)
 

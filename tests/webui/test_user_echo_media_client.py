@@ -89,5 +89,5 @@ def test_an_empty_echo_is_still_ignored() -> None:
       chat._handleExternalUser({ event: 'user', text: '   ', origin: 'telegram' });
       chat._handleExternalUser({ event: 'user', origin: 'telegram', media_urls: [] });
       assert.equal(chat.calls.length, 0);
-      assert.equal(chat.resets, 0, 'uno stream e\\' stato azzerato per niente');
+      assert.equal(chat.resets, 0, 'uno stream e\\' state azzerato per niente');
     """)

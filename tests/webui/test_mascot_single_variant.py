@@ -84,7 +84,7 @@ globalThis.localStorage = {{
 }};
 const mod = await import({json.dumps(MASCOT_JS.as_uri())});
 for (const gone of ['poseUrl', 'mascotColor', 'setMascotColor']) {{
-  assert.ok(!(gone in mod), `{{gone}} è ancora esportato`.replace('{{gone}}', gone));
+  assert.ok(!(gone in mod), `{{gone}} è again esportato`.replace('{{gone}}', gone));
 }}
 // Quello che resta, resta.
 for (const kept of ['mascotVisible', 'mascotSize', 'applyMascotSize']) {{
@@ -145,10 +145,10 @@ def test_every_retired_preference_is_cleaned_up_and_nothing_reads_it() -> None:
     for path in sorted(ASSETS.rglob("*.js")):
         if "vendor" in path.parts or path == MASCOT_JS:
             continue
-        testo = path.read_text(encoding="utf-8", errors="replace")
-        for chiave in ritirate:
-            assert f"Item('{chiave}'" not in testo and f'Item("{chiave}"' not in testo, (
-                f"{path.name} usa ancora {chiave}"
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for key in ritirate:
+            assert f"Item('{key}'" not in text and f'Item("{key}"' not in text, (
+                f"{path.name} usa ancora {key}"
             )
     _run(f"""
 import assert from 'node:assert/strict';

@@ -55,29 +55,29 @@ ESENTI = {
 }
 
 
-def _funzione_attorno(righe: list[str], i: int) -> str:
+def _funzione_attorno(rows: list[str], i: int) -> str:
     """Il nome del metodo che contiene la riga *i*, guardando all'indietro."""
     for j in range(i, max(-1, i - 40), -1):
-        m = re.match(r"\s{2,6}(?:async )?(_?\w+)\([^)]*\)\s*\{\s*$", righe[j])
+        m = re.match(r"\s{2,6}(?:async )?(_?\w+)\([^)]*\)\s*\{\s*$", rows[j])
         if m:
             return m.group(1)
     return "?"
 
 
 def test_every_surface_that_draws_markdown_draws_the_rest_too() -> None:
-    for name, segno in SUPERFICI.items():
-        righe = (ASSETS / name).read_text(encoding="utf-8").splitlines()
-        siti = [i for i, r in enumerate(righe) if re.search(segno, r)]
+    for name, mark in SUPERFICI.items():
+        rows = (ASSETS / name).read_text(encoding="utf-8").splitlines()
+        siti = [i for i, r in enumerate(rows) if re.search(mark, r)]
         assert siti, f"{name}: nessun punto che disegna markdown — il segno e' cambiato"
         for i in siti:
             # Quindici righe e non quattro: fra la scrittura e il disegno ci
             # sta il commento che spiega la scelta (il dollaro in riga nel
             # lettore, per dirne uno), e un banco che punisce la spiegazione
             # insegna a non scriverla.
-            vicino = "\n".join(righe[i : i + 15])
+            vicino = "\n".join(rows[i : i + 15])
             if RICCO.search(vicino):
                 continue
-            fn = _funzione_attorno(righe, i)
+            fn = _funzione_attorno(rows, i)
             assert (name, fn) in ESENTI, (
                 f"{name}:{i + 1} (in `{fn}`) scrive markdown e non disegna formule "
                 f"e diagrammi. Se e' voluto, l'esenzione va dichiarata nel banco "

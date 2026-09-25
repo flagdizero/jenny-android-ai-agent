@@ -48,7 +48,7 @@ export class AppsSource {
     this._listeners = new Set();
     /** Chi vuole sapere che i dati di una Jenny App sono cambiati: riceve lo
      *  slug. Separati da `_listeners`, che parlano delle **liste**. */
-    this._datiListeners = new Set();
+    this._dataListeners = new Set();
     /* Ogni fetch delle app Android prende un numero: solo la piu' recente ha
        il diritto di scrivere. */
     this._seqAndroid = 0;
@@ -57,7 +57,7 @@ export class AppsSource {
        volte quando la fetch successiva le riscopre. */
     this._annunciate = new Set();
     this._timerAndroid = null;
-    this._rientroArmato = false;
+    this._reentryArmed = false;
     /* I due frame del gateway sulle Jenny App (v. `_onFrame`). L'ascolto sta
        qui e non in una vista perche' ogni cornice di app — la mini-app sopra
        tutto, la pagina app della casa — nasce dopo che la sorgente e' stata
@@ -107,14 +107,14 @@ export class AppsSource {
    *  distinguere «vuota» da «non letta» e' gia' il mestiere di
    *  `listsFailed()`.
    */
-  attendiJennyApps() {
+  awaitJennyApps() {
     this.ensureLoaded();
     if (this._jennyLoaded) return Promise.resolve(this.jennyApps);
-    return new Promise((risolvi) => {
-      const stacca = this.addChangeListener(() => {
+    return new Promise((resolve) => {
+      const detach = this.addChangeListener(() => {
         if (!this._jennyLoaded) return;
-        stacca();
-        risolvi(this.jennyApps);
+        detach();
+        resolve(this.jennyApps);
       });
     });
   }
@@ -182,7 +182,7 @@ export class AppsSource {
    *         rispetto alla lettura precedente. */
   async loadAndroidApps({ announceRemovals = false } = {}) {
     const token = ++this._seqAndroid;
-    const prima = this.androidApps;
+    const before = this.androidApps;
     let apps = null;
     let failed = false;
     try {
@@ -208,12 +208,12 @@ export class AppsSource {
        `[]`, cioe' verissima a guardarla, e senza questa guardia annuncerebbe
        come disinstallate tutte le app del telefono in un colpo. */
     if (announceRemovals && apps && !failed) {
-      const presenti = new Set(apps.map((a) => a.packageName));
-      const sparite = prima.filter(
-        (a) => !presenti.has(a.packageName) && !this._annunciate.has(a.packageName),
+      const present = new Set(apps.map((a) => a.packageName));
+      const gone = before.filter(
+        (a) => !present.has(a.packageName) && !this._annunciate.has(a.packageName),
       );
       this._annunciate.clear();
-      if (sparite.length) this._annuncia(sparite.map((a) => a.label));
+      if (gone.length) this._announce(gone.map((a) => a.label));
     }
     this._emit();
   }
@@ -221,11 +221,11 @@ export class AppsSource {
   /** Conferma visibile di una disinstallazione: il dialogo di sistema non ne
    *  da' nessuna. Un solo toast anche per piu' app — i toast si sovrappongono
    *  invece di impilarsi, quindi due insieme si coprirebbero. */
-  _annuncia(etichette) {
+  _announce(labels) {
     showToast(
-      etichette.length === 1
-        ? i18n.t('apps.uninstalled', { name: etichette[0] })
-        : i18n.t('apps.uninstalledMany', { names: etichette.join(', ') }),
+      labels.length === 1
+        ? i18n.t('apps.uninstalled', { name: labels[0] })
+        : i18n.t('apps.uninstalledMany', { names: labels.join(', ') }),
       'success',
     );
   }
@@ -241,7 +241,7 @@ export class AppsSource {
         this.androidApps = this.androidApps.filter((a) => a.packageName !== packageName);
         this._emit();
         this._annunciate.add(packageName);
-        this._annuncia([app.label]);
+        this._announce([app.label]);
       }
     }
     clearTimeout(this._timerAndroid);
@@ -262,15 +262,15 @@ export class AppsSource {
    *  da «Info app» — quindi annuncia anche lei le app sparite.
    */
   reloadOnReturn() {
-    if (this._rientroArmato) return;
-    this._rientroArmato = true;
-    const quandoTorna = () => {
+    if (this._reentryArmed) return;
+    this._reentryArmed = true;
+    const whenBack = () => {
       if (document.visibilityState !== 'visible') return;
-      document.removeEventListener('visibilitychange', quandoTorna);
-      this._rientroArmato = false;
+      document.removeEventListener('visibilitychange', whenBack);
+      this._reentryArmed = false;
       this.loadAndroidApps({ announceRemovals: true });
     };
-    document.addEventListener('visibilitychange', quandoTorna);
+    document.addEventListener('visibilitychange', whenBack);
   }
 
   /** Il gateway dice che una Jenny App ha cambiato i suoi dati (una sua
@@ -297,7 +297,7 @@ export class AppsSource {
       return;
     }
     if (msg?.event === 'app_data_changed' && msg.slug) {
-      for (const fn of this._datiListeners) {
+      for (const fn of this._dataListeners) {
         try {
           fn(msg.slug);
         } catch (err) {
@@ -310,8 +310,8 @@ export class AppsSource {
   /** Iscrive chi ha una cornice di app da avvisare; ritorna la funzione che lo
    *  disiscrive. */
   onAppDataChanged(fn) {
-    this._datiListeners.add(fn);
-    return () => this._datiListeners.delete(fn);
+    this._dataListeners.add(fn);
+    return () => this._dataListeners.delete(fn);
   }
 
   /* ── Le righe del cassetto ──────────────────────────────────────────────── */
@@ -333,10 +333,10 @@ export class AppsSource {
    *  da `com.google.android.gm`.
    */
   launcherEntries() {
-    const righe = [];
+    const rows = [];
     for (const app of this.jennyApps) {
       const problem = app.broken ? (app.error || i18n.t('apps.invalidManifest')) : null;
-      righe.push({
+      rows.push({
         key: `jenny:${app.slug}`, id: app.slug, kind: 'jenny',
         name: app.name || app.slug,
         glyph: app.broken ? 'ti-alert-triangle' : (app.icon || 'ti-apps'),
@@ -351,7 +351,7 @@ export class AppsSource {
     }
     if (this._androidLoaded) {
       for (const app of this.androidApps) {
-        righe.push({
+        rows.push({
           key: `android:${app.packageName}`, id: app.packageName, kind: 'android',
           name: app.label,
           glyph: 'ti-apps', icon: app.icon || null,
@@ -362,9 +362,9 @@ export class AppsSource {
         });
       }
     }
-    righe.sort((a, b) =>
+    rows.sort((a, b) =>
       a.name.localeCompare(b.name, i18n.locale, { sensitivity: 'base' })
       || a.key.localeCompare(b.key));
-    return righe;
+    return rows;
   }
 }

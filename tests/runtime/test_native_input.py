@@ -262,10 +262,10 @@ class TestConsegna:
 
     async def test_il_rebind_sposta_il_bus(self):
         """Un gateway che riparte nello stesso processo non deve consegnare al vecchio."""
-        vecchio = await _bound()
-        nuovo = _FakeBus()
-        ni.bind_native_input(nuovo)
+        old = await _bound()
+        fresh = _FakeBus()
+        ni.bind_native_input(fresh)
         ni.on_native_text("dopo il riavvio")
-        await asyncio.wait_for(nuovo.arrived.wait(), 2)
-        assert vecchio.inbound == []
-        assert nuovo.inbound[0].content == "dopo il riavvio"
+        await asyncio.wait_for(fresh.arrived.wait(), 2)
+        assert old.inbound == []
+        assert fresh.inbound[0].content == "dopo il riavvio"

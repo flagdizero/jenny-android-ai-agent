@@ -1972,8 +1972,8 @@ def test_the_page_list_finding_is_yellow_and_counts_once(lint_wiki, tmp_path, ca
 
     out = _run(lint_wiki, root, capsys)
 
-    riga = next(line for line in out.splitlines() if "carries a page list" in line)
-    assert riga.startswith("🟡"), riga
+    row = next(line for line in out.splitlines() if "carries a page list" in line)
+    assert row.startswith("🟡"), row
     assert "1 issue(s) found" in out
     # E questa è metà dell'argomento del messaggio, provata invece che
     # asserita: le venti voci puntano a pagine che non esistono, e **nessun

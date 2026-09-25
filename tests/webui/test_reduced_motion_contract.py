@@ -20,24 +20,24 @@ SHEETS = ("mobile-style.css", "home-style.css")
 
 def _rules():
     for name in SHEETS:
-        for selettori, corpo, contesto in css_levels.rules(
+        for selettori, body, contesto in css_levels.rules(
             (css_levels.ASSETS / name).read_text(encoding="utf-8")
         ):
-            yield name, [" ".join(s.split()) for s in selettori.split(",")], corpo, contesto
+            yield name, [" ".join(s.split()) for s in selettori.split(",")], body, contesto
 
 
 def test_reduced_motion_stops_every_press_from_shrinking() -> None:
     ridotto = [
-        (name, sel, corpo)
-        for name, sel, corpo, ctx in _rules()
+        (name, sel, body)
+        for name, sel, body, ctx in _rules()
         if any("prefers-reduced-motion: reduce" in at for at in ctx)
     ]
-    spenti = {s for _, sel, corpo in ridotto if "transform: none" in corpo for s in sel}
+    spenti = {s for _, sel, body in ridotto if "transform: none" in body for s in sel}
 
     rimpiccioliscono = [
         (name, s)
-        for name, sel, corpo, ctx in _rules()
-        if "scale(" in corpo and not any("prefers-reduced-motion" in at for at in ctx)
+        for name, sel, body, ctx in _rules()
+        if "scale(" in body and not any("prefers-reduced-motion" in at for at in ctx)
         for s in sel
         if ":active" in s
     ]
@@ -57,17 +57,17 @@ def test_the_block_that_stops_them_comes_after_every_press() -> None:
     css = (css_levels.ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     regole = css_levels.rules(css)
     ultimo_scale = max(
-        i for i, (sel, corpo, ctx) in enumerate(regole)
-        if ":active" in sel and "scale(" in corpo
+        i for i, (sel, body, ctx) in enumerate(regole)
+        if ":active" in sel and "scale(" in body
         and not any("prefers-reduced-motion" in at for at in ctx)
     )
-    blocco = max(
-        i for i, (sel, corpo, ctx) in enumerate(regole)
-        if "transform: none" in corpo and ".btn-icon:active" in sel
+    block = max(
+        i for i, (sel, body, ctx) in enumerate(regole)
+        if "transform: none" in body and ".btn-icon:active" in sel
         and any("prefers-reduced-motion: reduce" in at for at in ctx)
     )
-    assert blocco > ultimo_scale, "il blocco del movimento ridotto non e' piu' in fondo"
+    assert block > ultimo_scale, "il blocco del movimento ridotto non e' piu' in fondo"
     home = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert not [
-        sel for sel, corpo, _ in css_levels.rules(home) if ":active" in sel and "scale(" in corpo
+        sel for sel, body, _ in css_levels.rules(home) if ":active" in sel and "scale(" in body
     ], "home-style.css rimpicciolisce al tocco: il blocco in mobile-style.css non la copre"

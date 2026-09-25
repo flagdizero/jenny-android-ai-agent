@@ -243,7 +243,7 @@ class TestCheCosaEUnaPagina:
     dicevano la stessa cosa. Il difetto non era l'estetica della duplicazione:
 
     * ``iter_page_files`` (grafo + ricerca) **non** saltava i nascosti, quindi un
-      ``.bozza.md`` sotto ``wiki/`` non arrivava al modello e non compariva
+      ``.draft.md`` sotto ``wiki/`` non arrivava al modello e non compariva
       nell'albero, ma era un nodo del grafo e un risultato di ricerca;
     * ``_walk`` (albero dei file) saltava i nascosti a **ogni** livello, cioè
       anche le *cartelle*, mentre gli altri due guardavano solo il nome del

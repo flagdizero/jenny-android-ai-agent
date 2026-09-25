@@ -372,7 +372,7 @@ class TestIlContestoDelTurnoArrivaAlWorker:
         ws, project, _other, _skill = scoped
         visto: dict[str, Any] = {}
 
-        def _registra() -> None:
+        def _register() -> None:
             from jenny.security.workspace_access import current_workspace_scope
 
             scope = current_workspace_scope()
@@ -380,9 +380,9 @@ class TestIlContestoDelTurnoArrivaAlWorker:
             visto["project_path"] = None if scope is None else str(scope.project_path)
 
         tool = _tool(ws)
-        tool.namespace.register_function("_registra", _registra)
+        tool.namespace.register_function("_register", _register)
 
-        await tool.execute(code="_registra()")
+        await tool.execute(code="_register()")
 
         assert visto["thread"] != threading.get_ident(), (
             "il codice ha girato sul thread del test: questa prova non dice più "

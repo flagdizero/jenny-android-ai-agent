@@ -51,10 +51,10 @@ export const SIZE_KEYS = {
  *  dentro la casa non c'e'.
  */
 export function jennyValue({ visible, size, floating }) {
-  const parti = [];
-  parti.push(visible ? i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm) : i18n.t('home.jenny.hidden'));
-  if (floating) parti.push(i18n.t('home.jenny.floatingShort'));
-  return parti.join(' · ').toLowerCase();
+  const parts = [];
+  parts.push(visible ? i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm) : i18n.t('home.jenny.hidden'));
+  if (floating) parts.push(i18n.t('home.jenny.floatingShort'));
+  return parts.join(' · ').toLowerCase();
 }
 
 export class HomeJenny {
@@ -73,10 +73,10 @@ export class HomeJenny {
     this.floatingBtn = document.getElementById('home-jenny-floating');
     this.floatingLabel = document.getElementById('home-jenny-floating-label');
     this.floatingNote = document.getElementById('home-jenny-floating-note');
-    this.nomeEl = document.getElementById('home-name');
-    this.nomeLabel = document.getElementById('home-name-label');
-    this.nomeNote = document.getElementById('home-name-note');
-    this.nomeSave = document.getElementById('home-name-save');
+    this.nameEl = document.getElementById('home-name');
+    this.nameLabel = document.getElementById('home-name-label');
+    this.nameNote = document.getElementById('home-name-note');
+    this.nameSave = document.getElementById('home-name-save');
     this.rulesEl = document.getElementById('home-rules');
     this.rulesLabel = document.getElementById('home-rules-label');
     this.rulesNote = document.getElementById('home-rules-note');
@@ -96,9 +96,9 @@ export class HomeJenny {
       if (card) this.pickSize(card.dataset.size);
     });
     /* Come si chiama secondo il server. `null` finche' non l'ha detto. */
-    this._nomeSalvato = null;
-    this.nomeEl?.addEventListener('input', () => this._markNome());
-    this.nomeSave?.addEventListener('click', () => this.saveNome());
+    this._savedName = null;
+    this.nameEl?.addEventListener('input', () => this._markName());
+    this.nameSave?.addEventListener('click', () => this.saveName());
 
     /* Quel che c'e' su disco, per sapere se c'e' qualcosa da salvare. `null`
        finche' non si e' letto: diverso da «letto, ed era vuoto». */
@@ -113,7 +113,7 @@ export class HomeJenny {
     /* Il «Salva» del nome parte nascosto anche nel markup, ma affidare a un
        attributo HTML l'unica garanzia che non compaia prima di sapere come si
        chiama vuol dire perderla al primo ritocco della pagina. */
-    this._markNome();
+    this._markName();
     this._loadRules();
   }
 
@@ -128,27 +128,27 @@ export class HomeJenny {
    *  confrontare quel che scrivi.
    */
   setName(name) {
-    this._nomeSalvato = typeof name === 'string' ? name : null;
-    if (this.nomeEl && !this.nomeEl.value && this._nomeSalvato !== null) {
-      this.nomeEl.value = this._nomeSalvato;
+    this._savedName = typeof name === 'string' ? name : null;
+    if (this.nameEl && !this.nameEl.value && this._savedName !== null) {
+      this.nameEl.value = this._savedName;
     }
-    this._markNome();
+    this._markName();
   }
 
   /** «Salva» c'e' solo quando c'e' qualcosa da salvare, e un nome vuoto non
    *  e' qualcosa: il server ripiegherebbe su «Jenny» senza dirlo. */
-  _markNome() {
-    if (!this.nomeSave || !this.nomeEl) return;
-    const scritto = this.nomeEl.value.trim();
-    this.nomeSave.hidden = this._nomeSalvato === null
-      || !scritto
-      || scritto === this._nomeSalvato;
+  _markName() {
+    if (!this.nameSave || !this.nameEl) return;
+    const written = this.nameEl.value.trim();
+    this.nameSave.hidden = this._savedName === null
+      || !written
+      || written === this._savedName;
   }
 
   /** Salva il nome. Stessa chiamata con cui la casa salva il modello. */
-  async saveNome() {
-    if (!this.nomeEl) return;
-    const name = this.nomeEl.value.trim();
+  async saveName() {
+    if (!this.nameEl) return;
+    const name = this.nameEl.value.trim();
     if (!name) return;
     try {
       await api.updateSettings({ bot_name: name });
@@ -157,8 +157,8 @@ export class HomeJenny {
       showToast(i18n.t('home.jenny.nameFailed'), 'error');
       return;
     }
-    this._nomeSalvato = name;
-    this._markNome();
+    this._savedName = name;
+    this._markName();
     this._onName?.(name);
     showToast(i18n.t('home.jenny.rulesSaved'), 'success');
   }
@@ -173,9 +173,9 @@ export class HomeJenny {
     if (this.visibleLabel) this.visibleLabel.textContent = i18n.t('settings.mascotVisible');
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
-    if (this.nomeLabel) this.nomeLabel.textContent = i18n.t('home.jenny.name');
-    if (this.nomeNote) this.nomeNote.textContent = i18n.t('home.jenny.nameHint');
-    if (this.nomeSave) this.nomeSave.textContent = i18n.t('home.jenny.rulesSave');
+    if (this.nameLabel) this.nameLabel.textContent = i18n.t('home.jenny.name');
+    if (this.nameNote) this.nameNote.textContent = i18n.t('home.jenny.nameHint');
+    if (this.nameSave) this.nameSave.textContent = i18n.t('home.jenny.rulesSave');
     if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('home.jenny.rules');
     if (this.rulesNote) this.rulesNote.textContent = i18n.t('home.jenny.rulesHint');
     if (this.rulesSave) this.rulesSave.textContent = i18n.t('home.jenny.rulesSave');
@@ -237,10 +237,10 @@ export class HomeJenny {
   async _loadRules() {
     if (this._rulesAsked || !this.rulesEl) return;
     this._rulesAsked = true;
-    let testo = '';
+    let text = '';
     try {
       const file = await api.readWorkspaceFile(RULES_PATH);
-      testo = (file?.content || '').trim();
+      text = (file?.content || '').trim();
     } catch (err) {
       /* 404 = non ne ha ancora scritte, ed e' lo stato normale del primo
          giorno. Qualunque altro errore lascia il campo vuoto e non lo dice:
@@ -251,31 +251,31 @@ export class HomeJenny {
         return;
       }
     }
-    this._rulesOnDisk = testo;
-    if (!this.rulesEl.value) this.rulesEl.value = testo;
+    this._rulesOnDisk = text;
+    if (!this.rulesEl.value) this.rulesEl.value = text;
     this._markRules();
   }
 
   /** «Salva» c'e' solo quando c'e' qualcosa da salvare. */
   _markRules() {
     if (!this.rulesSave || !this.rulesEl) return;
-    const cambiato = this._rulesOnDisk !== null
+    const changed = this._rulesOnDisk !== null
       && this.rulesEl.value.trim() !== this._rulesOnDisk;
-    this.rulesSave.hidden = !cambiato;
+    this.rulesSave.hidden = !changed;
   }
 
   /** Salva le regole. Il comando scrive la verita' **e** rifa' la copia. */
   async saveRules() {
     if (!this.rulesEl) return;
-    const testo = this.rulesEl.value.trim();
+    const text = this.rulesEl.value.trim();
     try {
-      await rpc.writeSoulRules(testo);
+      await rpc.writeSoulRules(text);
     } catch (err) {
       console.warn('casa.jenny: rules not saved', err);
       showToast(i18n.t('home.jenny.rulesFailed'), 'error');
       return;
     }
-    this._rulesOnDisk = testo;
+    this._rulesOnDisk = text;
     this._markRules();
     showToast(i18n.t('home.jenny.rulesSaved'), 'success');
   }

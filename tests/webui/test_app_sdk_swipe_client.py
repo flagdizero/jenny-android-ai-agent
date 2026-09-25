@@ -6,7 +6,7 @@ giusto — il guscio ne fa un cambio di pagina. Nel velo a tutto schermo (la
 mini-app aperta, in casa e in officina) quel gesto non lo ascolta nessuno, e
 l'app perdeva il dito a ogni movimento di lato, per niente.
 
-La cornice del velo porta ``overlay=1`` (``cornicePerApp(slug, {overlay: true})``);
+La cornice del velo porta ``overlay=1`` (``frameForApp(slug, {overlay: true})``);
 il kit vero gira qui in node e si guarda se va a cercare il modulo del gesto.
 """
 
@@ -34,9 +34,9 @@ globalThis.location = {{
   search: {json.dumps(query)}, pathname: '/apps/spesa/index.html',
   href: 'http://127.0.0.1:8080/apps/spesa/index.html' + {json.dumps(query)},
 }};
-const radice = {{ style: {{ setProperty() {{}} }}, setAttribute() {{}}, lang: '' }};
+const root = {{ style: {{ setProperty() {{}} }}, setAttribute() {{}}, lang: '' }};
 globalThis.document = {{
-  documentElement: radice,
+  documentElement: root,
   addEventListener() {{}},
   querySelectorAll: () => [],
 }};
@@ -63,6 +63,6 @@ def test_the_full_screen_overlay_does_not() -> None:
 def test_only_the_overlay_frame_says_so() -> None:
     """Il velo lo dice, la pagina della casa no: il default e' la pagina, cosi'
     ``home-pages.js`` non deve passare niente."""
-    assert "cornicePerApp(slug, { overlay: true })" in ACTIONS
+    assert "frameForApp(slug, { overlay: true })" in ACTIONS
     home = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
     assert "overlay" not in home

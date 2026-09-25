@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-app.js"
 
 
-def _corpo(src: str, inizio: int) -> str:
+def _body(src: str, start: int) -> str:
     """Dalla graffa aperta alla sua chiusa, saltando commenti e stringhe.
 
     I commenti vanno saltati sul serio: questo repo li scrive in italiano, e un
@@ -47,7 +47,7 @@ def _corpo(src: str, inizio: int) -> str:
     stringa — da li' in poi le graffe non si contano piu'. Costato una prima
     stesura di questo banco, rossa su codice sano (22/09/2026).
     """
-    i = src.index("{", inizio)
+    i = src.index("{", start)
     profondita, j, stringa = 0, i, None
     while j < len(src):
         c = src[j]
@@ -79,19 +79,19 @@ def _corpo(src: str, inizio: int) -> str:
 def _switch_mode(src: str) -> str:
     m = re.search(r"\n  switchMode\(", src)
     assert m, "switchMode non trovato"
-    return _corpo(src, m.end())
+    return _body(src, m.end())
 
 
-def _posizione(corpo: str, pattern: str, cosa: str) -> int:
-    m = re.search(pattern, corpo)
+def _position(body: str, pattern: str, cosa: str) -> int:
+    m = re.search(pattern, body)
     assert m, f"{cosa} non trovato in switchMode"
     return m.start()
 
 
 def test_the_mode_class_is_written_before_the_controller_wakes_up() -> None:
-    corpo = _switch_mode(APP_JS.read_text(encoding="utf-8"))
-    classe = _posizione(corpo, r"classList\.add\(`mode-\$\{", "la classe mode-*")
-    active = _posizione(corpo, r"\.activate\(\)", "activate()")
+    body = _switch_mode(APP_JS.read_text(encoding="utf-8"))
+    classe = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
+    active = _position(body, r"\.activate\(\)", "activate()")
     assert classe < active, (
         "switchMode notifica il controller prima di scrivere `mode-<modo>` su "
         "<html>. Per la chat quella distanza e' un difetto: il suo scroller e' "
@@ -109,10 +109,10 @@ def test_the_mode_class_is_written_next_to_the_display() -> None:
     tenerle vicine e' quel che impedisce alla distanza di riaprirsi un pezzo
     per volta.
     """
-    corpo = _switch_mode(APP_JS.read_text(encoding="utf-8"))
-    display = _posizione(corpo, r"view\.style\.display = 'flex'", "il display della vista")
-    classe = _posizione(corpo, r"classList\.add\(`mode-\$\{", "la classe mode-*")
-    righe_in_mezzo = corpo[display:classe].count("\n")
+    body = _switch_mode(APP_JS.read_text(encoding="utf-8"))
+    display = _position(body, r"view\.style\.display = 'flex'", "il display della vista")
+    classe = _position(body, r"classList\.add\(`mode-\$\{", "la classe mode-*")
+    righe_in_mezzo = body[display:classe].count("\n")
     assert 0 < righe_in_mezzo <= 30, (
         f"fra il `display` della vista e la classe `mode-*` ci sono "
         f"{righe_in_mezzo} righe: sono la stessa informazione e vanno tenute "
@@ -123,12 +123,12 @@ def test_the_mode_class_is_written_next_to_the_display() -> None:
 def test_the_drawer_check_still_precedes_everything() -> None:
     """Quel che il riordino **non** doveva spostare.
 
-    `setCassetto` deve restare prima di `activate()` — il commento sul posto lo
+    `setDrawer` deve restare prima di `activate()` — il commento sul posto lo
     dice: «quello ricarica e ridisegna, e saperlo dopo vorrebbe dire un frame
     col cassetto di prima». Il banco lo ripete qui perche' le due regole
     vivono nello stesso metodo e si spostano a vicenda.
     """
-    corpo = _switch_mode(APP_JS.read_text(encoding="utf-8"))
-    cassetto = _posizione(corpo, r"setCassetto\?\.\(", "setCassetto")
-    active = _posizione(corpo, r"\.activate\(\)", "activate()")
-    assert cassetto < active, "setCassetto e' finito dopo activate()"
+    body = _switch_mode(APP_JS.read_text(encoding="utf-8"))
+    drawer = _position(body, r"setDrawer\?\.\(", "setDrawer")
+    active = _position(body, r"\.activate\(\)", "activate()")
+    assert drawer < active, "setDrawer e' finito dopo activate()"

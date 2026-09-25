@@ -23,7 +23,7 @@ import { openImageLightbox } from './shared/image-lightbox.js';
  *  **Niente `$...$` in riga, qui.** In chat si parla di prezzi, e «costa $5,
  *  forse $10» diventerebbe un tentativo di matematica. Nelle pagine della wiki,
  *  dove la skill impone `$f(x)$`, il lettore lo accende. Qui quindi ogni
- *  chiamata è `renderRich(contenitore)`, senza opzioni: fino al 24/09/2026 lo
+ *  chiamata è `renderRich(container)`, senza opzioni: fino al 24/09/2026 lo
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';

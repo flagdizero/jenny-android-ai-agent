@@ -163,8 +163,8 @@ def test_the_home_view_preference_is_gone_from_the_product() -> None:
     for js in sorted(ASSETS.rglob("*.js")):
         if "vendor" in js.parts:
             continue
-        for riga in js.read_text(encoding="utf-8").splitlines():
-            assert not (riga.lstrip().startswith("import") and "home-view" in riga), (
+        for row in js.read_text(encoding="utf-8").splitlines():
+            assert not (row.lstrip().startswith("import") and "home-view" in row), (
                 f"{js.name} importa ancora la preferenza della vista home"
             )
 

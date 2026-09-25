@@ -33,8 +33,8 @@ _ART = ("jenny-body-front", "jenny-face-front", "jenny-side.webp", "jenny-side-t
 def _rules(css: str, selector_re: str) -> list[str]:
     """I corpi delle regole il cui selettore contiene ``selector_re``."""
     return [
-        corpo
-        for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css)
+        body
+        for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
         if re.search(selector_re, selettori.strip().splitlines()[-1])
     ]
 
@@ -102,8 +102,8 @@ def test_she_does_not_sway_against_the_edge() -> None:
     css = WORKSHOP_CSS.read_text(encoding="utf-8")
     dondoli = [
         selettori.strip().splitlines()[-1]
-        for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css)
-        if "jenny-wobble" in corpo and "@keyframes" not in selettori
+        for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
+        if "jenny-wobble" in body and "@keyframes" not in selettori
     ]
     assert dondoli, "il pensa non dondola piu'"
     for sel in dondoli:
@@ -126,7 +126,7 @@ def test_she_is_on_top_of_everything_in_the_workshop() -> None:
     suoi = [z for sel, z in livelli if sel == ".jenny-duo"]
     assert len(suoi) == 1, suoi
     lei = suoi[0]
-    ammessi = {
+    allowed = {
         # La sua minichat: il fumetto sopra la sua testa.
         ".jenny-mc",
         # Livelli locali: vivono dentro `.chat-bottom`, che apre un contesto
@@ -138,7 +138,7 @@ def test_she_is_on_top_of_everything_in_the_workshop() -> None:
         ".onboarding-loading-overlay",
     }
     sopra = [(sel, z) for sel, z in livelli if z >= lei and sel != ".jenny-duo"]
-    fuori = [(sel, z) for sel, z in sopra if sel not in ammessi]
+    fuori = [(sel, z) for sel, z in sopra if sel not in allowed]
     assert not fuori, f"le passano davanti: {fuori} (il suo livello e' {lei})"
     ritocchi = [
         (sel, z) for sel, z in livelli
@@ -168,7 +168,7 @@ def test_a_short_screen_hides_her_only_where_the_dock_goes() -> None:
     contrario era falso."""
     css = WORKSHOP_CSS.read_text(encoding="utf-8")
     corti = [
-        (sel, corpo) for sel, corpo, ctx in css_levels.rules(css)
+        (sel, body) for sel, body, ctx in css_levels.rules(css)
         if any("max-height: 500px" in at for at in ctx) and "jenny" in sel
     ]
     assert corti, "la regola che la nasconde a schermo basso non si trova piu'"
@@ -176,7 +176,7 @@ def test_a_short_screen_hides_her_only_where_the_dock_goes() -> None:
         for s in sel.split(","):
             assert s.strip().startswith(".app "), f"a schermo basso la nasconde anche in casa: {s}"
     nascoste = [
-        corpo for sel, corpo, _ in css_levels.rules(css)
-        if "jenny" in sel and "display: none" in corpo
+        body for sel, body, _ in css_levels.rules(css)
+        if "jenny" in sel and "display: none" in body
     ]
     assert nascoste and not [c for c in nascoste if "!important" in c], nascoste

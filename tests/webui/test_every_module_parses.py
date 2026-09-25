@@ -84,7 +84,7 @@ def test_the_check_catches_the_one_that_shipped() -> None:
     """
     rotto = """
 export class Prova {
-  apri() {
+  open() {
     document.body.appendChild(overlay);
   }
 

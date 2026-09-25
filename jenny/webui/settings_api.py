@@ -663,8 +663,8 @@ def _parse_context_window_tokens(value: str | None) -> int | None:
     if parsed not in _CONTEXT_WINDOW_TOKEN_OPTIONS:
         # Dalla tupla, non scritto a mano: una terza opzione non deve lasciare un
         # messaggio che ne nomina due.
-        ammessi = " or ".join(str(v) for v in _CONTEXT_WINDOW_TOKEN_OPTIONS)
-        raise WebUISettingsError(f"context_window_tokens must be {ammessi}")
+        allowed = " or ".join(str(v) for v in _CONTEXT_WINDOW_TOKEN_OPTIONS)
+        raise WebUISettingsError(f"context_window_tokens must be {allowed}")
     return parsed
 
 

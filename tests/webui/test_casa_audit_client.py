@@ -177,8 +177,8 @@ def _run_app(script: str) -> None:
         .replace("__AUDIT_WORDS__", json.dumps(parole, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__MESSAGGIO__", function(AUDIT_JS.read_text(encoding="utf-8"),
-                                            "messaggioSegnalazione"))
-        .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_portaInChat"))
+                                            "reportMessage"))
+        .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_bringToChat"))
     )
     run_js(harness + "\n" + script)
 
@@ -192,7 +192,7 @@ def test_the_message_carries_the_page_the_quote_and_the_id() -> None:
     chiudere.
     """
     _run_app("""
-      const m = messaggioSegnalazione({
+      const m = reportMessage({
         title: 'Orto', quote: 'legare a giugno',
         comment: 'e\\' marzo', id: '20260922-143012-a1b2',
       });
@@ -204,12 +204,12 @@ def test_the_message_carries_the_page_the_quote_and_the_id() -> None:
 
 
 def test_a_quoted_formula_reaches_jenny_as_it_was_written() -> None:
-    """`String.replace(stringa, testo)` legge `$$`, `$&` e `$'` nel testo come
+    """`String.replace(stringa, text)` legge `$$`, `$&` e `$'` nel testo come
     comandi: una formula citata arrivava a Jenny storpiata — `$$` diventava `$`,
     `$&` il segnaposto stesso, `$'` il resto della frase."""
     _run_app("""
       const quote = "$$E = mc^2$$ e $& e $' e $1";
-      const m = messaggioSegnalazione({ title: 'Fisica $&', quote, comment: 'c', id: 'x' });
+      const m = reportMessage({ title: 'Fisica $&', quote, comment: 'c', id: 'x' });
       assert.ok(m.includes(quote), m);
       assert.ok(m.includes('«Fisica $&»'), m);
     """)
@@ -217,7 +217,7 @@ def test_a_quoted_formula_reaches_jenny_as_it_was_written() -> None:
 
 def test_without_an_id_there_is_no_empty_parenthesis() -> None:
     _run_app("""
-      const m = messaggioSegnalazione({ title: 'X', quote: 'y', comment: 'z', id: '' });
+      const m = reportMessage({ title: 'X', quote: 'y', comment: 'z', id: '' });
       assert.ok(!m.includes('('), m);
     """)
 
@@ -231,7 +231,7 @@ def test_filing_lands_in_the_chat_with_the_message_already_sent() -> None:
     """
     _run_app("""
       const c = new Casa();
-      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      c._bringToChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
       assert.equal(c.view, 'chat');
       assert.equal(mandati.length, 1);
       assert.ok(mandati[0].includes('non va'), mandati[0]);
@@ -248,7 +248,7 @@ def test_a_draft_in_the_composer_is_not_eaten() -> None:
     _run_app("""
       const c = new Casa();
       c.input.value = 'stavo scrivendo questo';
-      c._portaInChat({ title: 'X', quote: 'q', comment: 'w', id: 'abc' });
+      c._bringToChat({ title: 'X', quote: 'q', comment: 'w', id: 'abc' });
       assert.equal(mandati.length, 1);
       assert.ok(!mandati[0].includes('stavo scrivendo'), mandati[0]);
       assert.equal(c.input.value, 'stavo scrivendo questo');
@@ -265,7 +265,7 @@ def test_a_report_that_did_not_leave_stays_in_the_composer() -> None:
       const c = new Casa();
       c.filoGiu = true;
       c.input.value = 'stavo scrivendo questo';
-      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      c._bringToChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
       assert.equal(mandati.length, 0);
       assert.ok(c.input.value.includes('non va'), 'la segnalazione non partita e\\u2019 sparita: ' + c.input.value);
       assert.ok(c.input.value.includes('abc'), c.input.value);
@@ -277,7 +277,7 @@ def test_a_report_that_did_not_leave_without_a_draft_is_left_alone() -> None:
     _run_app("""
       const c = new Casa();
       c.filoGiu = true;
-      c._portaInChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
+      c._bringToChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
       assert.ok(c.input.value.includes('non va'), c.input.value);
       assert.ok(!c.input.value.endsWith('\\n'), c.input.value);
     """)
@@ -289,7 +289,7 @@ _FOGLIO = """
 import assert from 'node:assert/strict';
 
 const avvisi = [];
-function showToast(t, tipo) { avvisi.push([t, tipo]); }
+function showToast(t, type) { avvisi.push([t, type]); }
 const i18n = { t: (k) => k };
 let scelto = '';
 const document = {
@@ -299,8 +299,8 @@ const document = {
 const inviati = [];
 let lascia = null;
 const api = {
-  createAudit(dati) {
-    inviati.push(dati);
+  createAudit(data) {
+    inviati.push(data);
     return new Promise((r) => { lascia = () => r({ id: 'a' + inviati.length }); });
   },
 };

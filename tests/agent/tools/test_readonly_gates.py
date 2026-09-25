@@ -437,16 +437,16 @@ class TestIlFlagArrivaAlThreadCheEsegue:
     ) -> None:
         visto: dict[str, Any] = {}
 
-        def _registra() -> None:
+        def _register() -> None:
             from jenny.security.workspace_access import current_turn_is_readonly
 
             visto["thread"] = threading.get_ident()
             visto["readonly"] = current_turn_is_readonly()
 
         tool = _tool(readonly_scope, True)
-        tool.namespace.register_function("_registra", _registra)
+        tool.namespace.register_function("_register", _register)
 
-        await tool.execute(code="_registra()")
+        await tool.execute(code="_register()")
 
         assert visto["thread"] != threading.get_ident(), (
             "il codice ha girato sul thread del test: questa prova non dice più "

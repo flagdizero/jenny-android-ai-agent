@@ -9,7 +9,7 @@
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
-import { VISTA_DI, elementoTitolo } from './mobile-settings.js';
+import { VIEW_OF, titleElement } from './mobile-settings.js';
 
 /** Il pill «Jenny»: l'unica porta dell'officina verso la casa.
  *
@@ -20,7 +20,7 @@ import { VISTA_DI, elementoTitolo } from './mobile-settings.js';
  *  traduzione letta troppo presto si vede a schermo — e infatti si e' vista:
  *  «officina.homePill» scritto per esteso dentro il bottone.
  */
-function pillCasa() {
+function homePill() {
   return {
     icon: 'ti-home',
     title: i18n.t('home.backHome'),
@@ -36,7 +36,7 @@ function pillCasa() {
  *  destinazione del tasto in fondo a «Sistema», che da qui in poi e' un
  *  doppione e se ne va (`_renderSystem`).
  */
-function cassetto(name) {
+function drawer(name) {
   return {
     eyebrow: i18n.t('workshop.eyebrow'),
     title: i18n.t(`nav.${name}`),
@@ -46,7 +46,7 @@ function cassetto(name) {
        bottone che rifa' quel che e' appena successo insegna a premerlo per
        scaramanzia, e occupa il posto accanto all'unico che porta da qualche
        parte. */
-    actions: [pillCasa()],
+    actions: [homePill()],
   };
 }
 
@@ -57,19 +57,19 @@ function cassetto(name) {
  *  «Console», la stessa stringa della voce del dock (`nav.console` in
  *  officina.html) — una parola sola per due posti, cosi' non possono divergere.
  *
- *  Come `cassetto`, e' una funzione perche' si ricostruisce intera a ogni
+ *  Come `drawer`, e' una funzione perche' si ricostruisce intera a ogni
  *  cambio di lingua: riassegnare il solo titolo lasciava il pill con la
  *  stringa letta al caricamento del file, cioe' la chiave grezza.
  */
-function consolle() {
+function consoleConfig() {
   return {
     title: i18n.t('nav.console'),
-    actions: [pillCasa()],
+    actions: [homePill()],
   };
 }
 
 /* Le due viste rimaste fuori dai cassetti. Funzioni per la stessa ragione di
-   `consolle`: nel costruttore `i18n.load()` non e' ancora tornato, e i titoli
+   `consoleConfig`: nel costruttore `i18n.load()` non e' ancora tornato, e i titoli
    delle azioni (che sono tooltip ed etichetta per il lettore di schermo)
    restavano le chiavi grezze — `_refreshTitles` riscriveva solo `title`. */
 
@@ -78,7 +78,7 @@ function consolle() {
    in modalita' editor) e «nuovo» crea file nella cartella che si sta
    guardando, che ora si guarda altrove: il bottone e' andato accanto alle
    briciole, dentro la scheda. Resta la freccia indietro. */
-function fileAperto() {
+function openFile() {
   return {
     title: i18n.t('nav.workspace'),
     actions: [{ icon: 'ti-arrow-left', title: i18n.t('header.back'), action: 'ws-back' }],
@@ -100,36 +100,36 @@ export class ViewTitleController {
     this.modeConfigs = {
       /* La chat. Fino al 21/09/2026 era l'unica vista dell'officina a partire
          dal bordo dello schermo: nessun titolo, e nessuna via verso casa che
-         non passasse da un altro cassetto. V. `consolle()`. */
-      chat: consolle(),
+         non passasse da un altro cassetto. V. `consoleConfig()`. */
+      chat: consoleConfig(),
       /* Qui c'era anche `apps`, la scheda uscita il 21/09/2026 col suo
          «mostra app nascoste»: nessun modo la raggiunge piu'. */
-      workspace: fileAperto(),
+      workspace: openFile(),
       settings: settings(),
       /* I tre cassetti. Stessa vista e stesso mount (`title-settings`, via
-         `VISTA_DI`), titolo e sottotitolo diversi.
+         `VIEW_OF`), titolo e sottotitolo diversi.
 
          Il sottotitolo e' la differenza che si vede di piu' rispetto a prima:
          un cassetto che si apre su quattro righe chiuse non dice a cosa serve,
          e «Cervello» da solo nemmeno. La tavola mette una riga sotto il nome —
          `workshop` sopra, il nome in serif, la riga che spiega — ed e' quella
          riga a trasformare quattro etichette in una pagina. */
-      brain: { ...cassetto('brain') },
-      hands: { ...cassetto('hands') },
-      memory: { ...cassetto('memory') },
+      brain: { ...drawer('brain') },
+      hands: { ...drawer('hands') },
+      memory: { ...drawer('memory') },
     };
   }
 
   _refreshTitles() {
     /* Intera, non il solo titolo: il pill porta una parola visibile, e
        riassegnare `title` lasciava quella com'era al caricamento del file. */
-    this.modeConfigs.chat = consolle();
-    this.modeConfigs.workspace = fileAperto();
+    this.modeConfigs.chat = consoleConfig();
+    this.modeConfigs.workspace = openFile();
     this.modeConfigs.settings = settings();
     /* I tre cassetti hanno tre stringhe a testa (soprascritta, nome,
        sottotitolo) piu' il pill: si ricostruiscono interi invece di
        riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */
-    for (const name of Object.keys(VISTA_DI)) this.modeConfigs[name] = cassetto(name);
+    for (const name of Object.keys(VIEW_OF)) this.modeConfigs[name] = drawer(name);
     if (this.currentMode) this.setMode(this.currentMode);
   }
 
@@ -138,7 +138,7 @@ export class ViewTitleController {
      questa riga `setMode('brain')` cercava `title-cervello`, non lo
      trovava, e usciva lasciando i cassetti senza intestazione. */
   _mount(mode) {
-    return elementoTitolo(mode);
+    return titleElement(mode);
   }
 
   setMode(mode, customTitle = null) {

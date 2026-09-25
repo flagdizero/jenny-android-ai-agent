@@ -699,10 +699,10 @@ class TestTheStringsTheUIAsksFor:
         """
         import re
 
-        chiavi: set[str] = set()
+        keys: set[str] = set()
         for js in self._UI.rglob("*.js"):
-            chiavi |= set(re.findall(r"'(settings\.update\.[A-Za-z]+)'", js.read_text(encoding="utf-8")))
-        return chiavi
+            keys |= set(re.findall(r"'(settings\.update\.[A-Za-z]+)'", js.read_text(encoding="utf-8")))
+        return keys
 
     def _keys_defined_in(self, locale: str) -> set[str]:
         data = json.loads((self._UI / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))

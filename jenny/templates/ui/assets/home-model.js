@@ -56,18 +56,18 @@ export function shortBrand(label) {
  *  In quel caso vincono i nomi configurati, che sono unici per costruzione.
  */
 export function tileNames(providers) {
-  const marche = (providers || []).map((p) => shortBrand(getProviderBrand(p.name).label));
-  const quante = {};
-  for (const marca of marche) quante[marca] = (quante[marca] || 0) + 1;
-  return (providers || []).map((p, i) => (quante[marche[i]] > 1 ? p.name : marche[i]));
+  const brands = (providers || []).map((p) => shortBrand(getProviderBrand(p.name).label));
+  const howMany = {};
+  for (const brand of brands) howMany[brand] = (howMany[brand] || 0) + 1;
+  return (providers || []).map((p, i) => (howMany[brands[i]] > 1 ? p.name : brands[i]));
 }
 
 /** La riga che si legge senza entrare: la marca di chi risponde adesso. */
 export function modelValue({ providers, active }) {
-  const elenco = providers || [];
-  const i = elenco.findIndex((p) => p.name === active);
+  const list = providers || [];
+  const i = list.findIndex((p) => p.name === active);
   if (i < 0) return i18n.t('home.model.none');
-  return tileNames(elenco)[i];
+  return tileNames(list)[i];
 }
 
 export class HomeModel {
@@ -100,7 +100,7 @@ export class HomeModel {
     /** Cataloghi gia' chiesti, per nome di provider. Una richiesta per
      *  provider e per apertura: l'elenco lo va a chiedere al provider vero,
      *  e passa dalla rete. */
-    this._cataloghi = new Map();
+    this._catalogs = new Map();
 
     this.brandsEl?.addEventListener('click', (e) => {
       const tile = e.target.closest('[data-provider]');
@@ -123,12 +123,12 @@ export class HomeModel {
   /** Quel che sa il server. La stessa forma di `/api/settings`. */
   setSettings(data) {
     this.data = data || null;
-    const attivo = this.data?.default_provider || null;
+    const active = this.data?.default_provider || null;
     /* Il provider guardato segue quello attivo finche' non ne scegli un
        altro: dopo un salvataggio i due coincidono comunque, e ripiombare
        sull'attivo mentre stai guardando l'elenco di un'altra marca vorrebbe
        dire cambiare pagina sotto le mani. */
-    if (!this.viewing || !this._provider(this.viewing)) this.viewing = attivo;
+    if (!this.viewing || !this._provider(this.viewing)) this.viewing = active;
     this._paint();
   }
 
@@ -140,9 +140,9 @@ export class HomeModel {
    *  sono le righe che stai per toccare.
    */
   viewName() {
-    const elenco = this.data?.providers || [];
-    const i = elenco.findIndex((p) => p.name === this.viewing);
-    return i < 0 ? '' : tileNames(elenco)[i];
+    const list = this.data?.providers || [];
+    const i = list.findIndex((p) => p.name === this.viewing);
+    return i < 0 ? '' : tileNames(list)[i];
   }
 
   /** Il valore per la riga di «Tu e Jenny»: la marca di chi risponde. */
@@ -186,9 +186,9 @@ export class HomeModel {
   /** Apre o chiude il campo della chiave. */
   toggleKeyEdit() {
     if (!this.keyEdit) return;
-    const aperto = !this.keyEdit.hidden;
-    this.keyEdit.hidden = aperto;
-    if (!aperto) this.keyInput?.focus();
+    const open = !this.keyEdit.hidden;
+    this.keyEdit.hidden = open;
+    if (!open) this.keyInput?.focus();
     else if (this.keyInput) this.keyInput.value = '';
   }
 
@@ -196,16 +196,16 @@ export class HomeModel {
    *  modo piu' silenzioso di cancellare la chiave buona. */
   async saveKey() {
     const provider = this.viewing;
-    const chiave = (this.keyInput?.value || '').trim();
-    if (!provider || !chiave) return;
+    const key = (this.keyInput?.value || '').trim();
+    if (!provider || !key) return;
     try {
-      const payload = await api.updateProvider({ name: provider, api_key: chiave });
+      const payload = await api.updateProvider({ name: provider, api_key: key });
       if (this.keyInput) this.keyInput.value = '';
       if (this.keyEdit) this.keyEdit.hidden = true;
       this._apply(payload);
       /* Il catalogo si richiede: una chiave nuova puo' essere esattamente la
          ragione per cui l'elenco era vuoto. */
-      this._cataloghi.delete(provider);
+      this._catalogs.delete(provider);
       this._loadModels(provider);
       showToast(i18n.t('home.model.keySaved'), 'success');
     } catch (err) {
@@ -231,25 +231,25 @@ export class HomeModel {
 
   async _loadModels(provider) {
     if (!provider || !this.modelsEl) return;
-    if (this._cataloghi.has(provider)) {
+    if (this._catalogs.has(provider)) {
       this._paintModels();
       return;
     }
-    this._cataloghi.set(provider, { status: 'loading', models: [] });
+    this._catalogs.set(provider, { status: 'loading', models: [] });
     this._paintModels();
-    let esito;
+    let outcome;
     try {
       const res = await api.getProviderModels(provider);
-      esito = {
+      outcome = {
         status: res?.status || 'available',
         models: (res?.models || []).map((m) => m.id || m),
         message: res?.message || '',
       };
     } catch (err) {
       console.warn('casa.model: model list not read', err);
-      esito = { status: 'error', models: [], message: '' };
+      outcome = { status: 'error', models: [], message: '' };
     }
-    this._cataloghi.set(provider, esito);
+    this._catalogs.set(provider, outcome);
     /* Il catalogo si tiene comunque; il ridisegno si salta se nel frattempo
        hai cambiato marca. Non e' quel che impedisce a una risposta in ritardo
        di scavalcare l'elenco che stai leggendo — quello lo fa `_paintModels`,
@@ -267,21 +267,21 @@ export class HomeModel {
      cambia da sotto (una chiave salvata cambia `configured`), ed e' corto. */
   _paintBrands() {
     if (!this.brandsEl) return;
-    const elenco = this.data?.providers || [];
-    const nomi = tileNames(elenco);
+    const list = this.data?.providers || [];
+    const names = tileNames(list);
     this.brandsEl.replaceChildren();
-    for (const [i, p] of elenco.entries()) {
+    for (const [i, p] of list.entries()) {
       const tile = document.createElement('button');
       tile.type = 'button';
       tile.className = 'home-brand';
       tile.dataset.provider = p.name;
       tile.setAttribute('role', 'radio');
-      const attivo = p.name === this.data?.default_provider;
+      const active = p.name === this.data?.default_provider;
       /* Due cose diverse, e vanno dette diversamente: **acceso** e' chi
          risponde adesso, **guardato** e' l'elenco che stai leggendo. */
-      tile.classList.toggle('is-on', attivo);
+      tile.classList.toggle('is-on', active);
       tile.classList.toggle('is-viewing', p.name === this.viewing);
-      tile.setAttribute('aria-checked', String(attivo));
+      tile.setAttribute('aria-checked', String(active));
 
       const dot = document.createElement('span');
       dot.className = 'home-brand-dot';
@@ -290,7 +290,7 @@ export class HomeModel {
 
       const name = document.createElement('span');
       name.className = 'home-brand-name';
-      name.textContent = nomi[i];
+      name.textContent = names[i];
       tile.appendChild(name);
 
       /* Chi risponde porta il segno, e non solo un anello d'accento: nei temi
@@ -298,11 +298,11 @@ export class HomeModel {
          a schermo non si distingueva quale elenco stessi leggendo (visto sul
          rig, tema Y2K). Il segno prende `currentColor`, quindi resta leggibile
          sia sulla pastiglia piena sia su quella vuota. */
-      if (attivo) {
-        const segno = document.createElement('i');
-        segno.className = 'ti ti-check';
-        segno.setAttribute('aria-hidden', 'true');
-        tile.appendChild(segno);
+      if (active) {
+        const mark = document.createElement('i');
+        mark.className = 'ti ti-check';
+        mark.setAttribute('aria-hidden', 'true');
+        tile.appendChild(mark);
       }
       this.brandsEl.appendChild(tile);
     }
@@ -334,23 +334,23 @@ export class HomeModel {
         ? i18n.t('home.model.models', { provider: this.viewName() })
         : i18n.t('home.model.none');
     }
-    const catalogo = this._cataloghi.get(this.viewing) || { status: 'loading', models: [] };
+    const catalog = this._catalogs.get(this.viewing) || { status: 'loading', models: [] };
     const corrente = this.data?.agent?.model || '';
-    const attivo = this.viewing === this.data?.default_provider;
+    const active = this.viewing === this.data?.default_provider;
     /* Il modello in uso sta in cima **anche se il provider non lo elenca**:
        puo' essere un id battuto a mano in officina, o l'elenco puo' non
        essere arrivato. Non vederlo da nessuna parte vorrebbe dire una stanza
        che non risponde alla domanda che ha in testa. */
-    const righe = [...catalogo.models];
-    if (attivo && corrente && !righe.includes(corrente)) righe.unshift(corrente);
+    const rows = [...catalog.models];
+    if (active && corrente && !rows.includes(corrente)) rows.unshift(corrente);
 
     this.modelsEl.replaceChildren();
-    for (const id of righe) {
+    for (const id of rows) {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'home-model';
       row.dataset.model = id;
-      const on = attivo && id === corrente;
+      const on = active && id === corrente;
       row.classList.toggle('is-on', on);
       row.setAttribute('aria-checked', String(on));
       row.setAttribute('role', 'radio');
@@ -360,31 +360,31 @@ export class HomeModel {
       name.textContent = id;
       row.appendChild(name);
 
-      const segno = document.createElement('i');
-      segno.className = on ? 'ti ti-check' : 'ti';
-      segno.setAttribute('aria-hidden', 'true');
-      row.appendChild(segno);
+      const mark = document.createElement('i');
+      mark.className = on ? 'ti ti-check' : 'ti';
+      mark.setAttribute('aria-hidden', 'true');
+      row.appendChild(mark);
       this.modelsEl.appendChild(row);
     }
-    this._sayModels(catalogo, righe.length);
+    this._sayModels(catalog, rows.length);
   }
 
   /* Perche' l'elenco e' corto o vuoto. I quattro stati del server hanno una
      frase ciascuno: `message` e' diagnostica in inglese, e in casa la lingua
      e' quella del telefono. Se lo stato non si riconosce si mostra comunque
      quel che il server ha detto, che e' meglio del silenzio. */
-  _sayModels(catalogo, quante) {
+  _sayModels(catalog, howMany) {
     if (!this.modelsNote) return;
-    const chiavi = {
+    const keys = {
       loading: 'home.model.loading',
       not_configured: 'home.model.needsKey',
       missing_api_base: 'home.model.needsBase',
       error: 'home.model.listFailed',
     };
-    const chiave = chiavi[catalogo.status];
-    const testo = chiave ? i18n.t(chiave) : (quante ? '' : catalogo.message || '');
-    this.modelsNote.textContent = testo;
-    this.modelsNote.hidden = !testo;
+    const key = keys[catalog.status];
+    const text = key ? i18n.t(key) : (howMany ? '' : catalog.message || '');
+    this.modelsNote.textContent = text;
+    this.modelsNote.hidden = !text;
   }
 
   _sayRestart(serve) {

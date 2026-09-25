@@ -101,10 +101,10 @@ __DOT_COLOR__
    non cambi conversazione — per questo mette lo stesso segno di quella vera. */
 const premute = [];
 function setupLongPress(el, cb) { premute.push({ el, cb }); }
-function tieni(riga) {
-  const p = premute.find((x) => x.el === riga);
+function keep(row) {
+  const p = premute.find((x) => x.el === row);
   assert.ok(p, 'quella riga non si puo tenere premuta');
-  riga.dataset.longpress = 'true';
+  row.dataset.longpress = 'true';
   p.cb();
 }
 
@@ -114,9 +114,9 @@ class Panel {
     this._currentProject = () => null;
     /* Cosa e' successo e in che ordine. Dal 23/09/2026 e' una pagina: non c'e'
        niente da chiudere prima di cambiare conversazione. */
-    this.storia = [];
-    this._onPick = (name) => this.storia.push('scelto:' + name);
-    this._onHold = (name) => this.storia.push('tenuto:' + name);
+    this.history = [];
+    this._onPick = (name) => this.history.push('scelto:' + name);
+    this._onHold = (name) => this.history.push('tenuto:' + name);
     this._list = new ConversationList(() => api.listProjects());
     this._body = makeEl('div');
   }
@@ -149,8 +149,8 @@ function nuovoDi(panel) {
   return walk(panel._body).find((n) => String(n.className).includes('casa-who-new'));
 }
 
-function tocca(riga) {
-  const click = riga.listeners.find((l) => l.type === 'click');
+function tocca(row) {
+  const click = row.listeners.find((l) => l.type === 'click');
   assert.ok(click, 'quella riga non risponde a un tocco');
   click.fn();
 }
@@ -227,9 +227,9 @@ def test_the_panel_opens_on_the_conversation_you_are_in() -> None:
     """La prima riga e' dove sei, e la spunta e' sua."""
     _run_js("""
       const panel = await open(ELENCO);
-      const righe = readout(panel);
-      assert.equal(righe[0], 'etichetta: Con chi parli');
-      assert.equal(righe[1], 'io ✿ · Jenny · personale');
+      const rows = readout(panel);
+      assert.equal(rows[0], 'etichetta: Con chi parli');
+      assert.equal(rows[1], 'io ✿ · Jenny · personale');
     """)
 
 
@@ -251,8 +251,8 @@ def test_the_personal_row_keeps_its_own_name() -> None:
 def test_notebooks_come_down_from_the_most_recent() -> None:
     _run_js("""
       const panel = await open(ELENCO);
-      const nomi = readout(panel).filter((r) => r.startsWith('- ')).map((r) => r.split(' ')[1]);
-      assert.deepEqual(nomi, ['memory', 'etf', 'piante']);
+      const names = readout(panel).filter((r) => r.startsWith('- ')).map((r) => r.split(' ')[1]);
+      assert.deepEqual(names, ['memory', 'etf', 'piante']);
     """)
 
 
@@ -272,9 +272,9 @@ def test_a_list_never_read_says_nothing_about_being_empty() -> None:
     _run_js("""
       const panel = new Panel();
       panel.render();
-      const righe = readout(panel).join(' | ');
-      assert.ok(righe.includes('Caricamento'), righe);
-      assert.ok(!righe.includes('Non hai ancora nessun quaderno'), righe);
+      const rows = readout(panel).join(' | ');
+      assert.ok(rows.includes('Caricamento'), rows);
+      assert.ok(!rows.includes('Non hai ancora nessun quaderno'), rows);
     """)
 
 
@@ -289,12 +289,12 @@ def test_a_failed_read_keeps_the_notebooks_and_says_so_on_top() -> None:
       nextPayload = 'fail';
       await panel._list.load();
       panel.render();
-      const righe = readout(panel);
-      const guasto = righe.findIndex((r) => r.startsWith('guasto: '));
-      const primoQuaderno = righe.findIndex((r) => r.startsWith('- '));
-      assert.ok(guasto !== -1, 'il guasto non si dichiara: ' + righe.join(' | '));
+      const rows = readout(panel);
+      const guasto = rows.findIndex((r) => r.startsWith('guasto: '));
+      const primoQuaderno = rows.findIndex((r) => r.startsWith('- '));
+      assert.ok(guasto !== -1, 'il guasto non si dichiara: ' + rows.join(' | '));
       assert.ok(guasto < primoQuaderno, 'la nota del guasto sta sotto le righe che spiega');
-      assert.equal(righe.filter((r) => r.startsWith('- ')).length, 3,
+      assert.equal(rows.filter((r) => r.startsWith('- ')).length, 3,
                    'un guasto ha cancellato i quaderni');
     """)
 
@@ -303,10 +303,10 @@ def test_a_failure_is_never_told_as_an_empty_list() -> None:
     """Prima lettura fallita: non si sa niente, e non si dice il contrario."""
     _run_js("""
       const panel = await open('fail');
-      const righe = readout(panel).join(' | ');
-      assert.ok(righe.includes('Non sono riuscita a leggere'), righe);
-      assert.ok(!righe.includes('Non hai ancora nessun quaderno'), righe);
-      assert.ok(!righe.includes('Caricamento'), righe);
+      const rows = readout(panel).join(' | ');
+      assert.ok(rows.includes('Non sono riuscita a leggere'), rows);
+      assert.ok(!rows.includes('Non hai ancora nessun quaderno'), rows);
+      assert.ok(!rows.includes('Caricamento'), rows);
     """)
 
 
@@ -326,12 +326,12 @@ def test_folders_that_do_not_open_are_shown_last_with_one_note_each_reason() -> 
           { name: 'università', modified: 200, reason: 'invalid_name' },
         ],
       });
-      const righe = readout(panel);
-      assert.deepEqual(righe.filter((r) => r.startsWith('x ')).map((r) => r.split(' · ')[0]),
+      const rows = readout(panel);
+      assert.deepEqual(rows.filter((r) => r.startsWith('x ')).map((r) => r.split(' · ')[0]),
                        ['x Ricerca ETF', 'x università']);
-      assert.ok(righe.indexOf('etichetta: Non apribili') > righe.findIndex((r) => r.startsWith('- ')),
+      assert.ok(rows.indexOf('etichetta: Non apribili') > rows.findIndex((r) => r.startsWith('- ')),
                 'le non apribili vanno dopo i quaderni veri');
-      assert.equal(righe.filter((r) => r.startsWith('nota: Queste cartelle')).length, 1,
+      assert.equal(rows.filter((r) => r.startsWith('nota: Queste cartelle')).length, 1,
                    'una nota per riga invece che una per motivo');
     """)
 
@@ -360,8 +360,8 @@ def test_a_notebook_row_is_a_command() -> None:
       const panel = await open(ELENCO);
       const aperte = righeDi(panel).filter((r) => !String(r.className).includes('is-blocked'));
       assert.equal(aperte.length, 4, 'la personale piu\\' i tre notebooks');
-      for (const riga of aperte) {
-        assert.equal(riga.tag, 'button', 'una riga ha smesso di essere un comando');
+      for (const row of aperte) {
+        assert.equal(row.tag, 'button', 'una riga ha smesso di essere un comando');
       }
     """)
 
@@ -373,7 +373,7 @@ def test_the_name_you_touch_is_the_name_that_comes_back() -> None:
       const panel = await open(ELENCO);
       const etf = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));
       tocca(etf);
-      assert.deepEqual(panel.storia, ['scelto:etf'],
+      assert.deepEqual(panel.history, ['scelto:etf'],
                        'il pannello deve chiudersi prima di cambiare conversazione');
     """)
 
@@ -386,7 +386,7 @@ def test_the_personal_row_takes_you_home() -> None:
       panel.render();
       const home = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
       tocca(home);
-      assert.deepEqual(panel.storia, ['scelto:null']);
+      assert.deepEqual(panel.history, ['scelto:null']);
     """)
 
 
@@ -419,9 +419,9 @@ def test_only_the_row_you_are_on_carries_the_check() -> None:
       panel._currentProject = () => 'etf';
       panel.render();
       assert.equal(spunte(panel).length, 1, 'due spunte: una delle due mente');
-      const riga = marcata(panel);
-      assert.ok(riga.children.some((c) => c.textContent === 'etf'));
-      assert.equal(riga.attrs['aria-current'], 'true',
+      const row = marcata(panel);
+      assert.ok(row.children.some((c) => c.textContent === 'etf'));
+      assert.equal(row.attrs['aria-current'], 'true',
                    'la spunta e\\' decorativa: chi non la vede deve saperlo lo stesso');
     """)
 
@@ -435,7 +435,7 @@ def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
       panel._currentProject = () => 'sparito';
       panel.render();
       const spunte = walk(panel._body).filter((n) => String(n.className).includes('ti-check'));
-      assert.equal(spunte.length, 0, 'la spunta e\\' finita su una conversation che non e\\' tua');
+      assert.equal(spunte.length, 0, 'la spunta e\\' finished su una conversation che non e\\' tua');
     """)
 
 
@@ -474,9 +474,9 @@ def test_the_house_row_carries_jennys_flower() -> None:
     _run_js("""
       const panel = await open(ELENCO);
       const home = righeDi(panel).find((r) => String(r.className).includes('is-personal'));
-      const fiore = home.children.find((c) => String(c.className).includes('home-who-flower'));
-      assert.ok(fiore, 'la riga della casa ha perso il fiore');
-      assert.equal(fiore.textContent, '✿');
+      const flower = home.children.find((c) => String(c.className).includes('home-who-flower'));
+      assert.ok(flower, 'la riga della casa ha perso il fiore');
+      assert.equal(flower.textContent, '✿');
       assert.ok(!home.children.some((c) => String(c.className) === 'home-who-dot'),
                 'la casa si è presa anche un pallino da quaderno');
     """)
@@ -487,8 +487,8 @@ def test_the_new_notebook_command_is_not_drawn_by_the_panel() -> None:
     in fondo, con tanti quaderni, finiva sotto il bordo. Il pannello non la
     disegna piu' — ne' con l'elenco pieno, ne' vuoto, ne' rotto."""
     _run_js("""
-      for (const dati of [ELENCO, { dir: 'wikis', projects: [], unopenable: [] }, 'fail']) {
-        const panel = await open(dati);
+      for (const data of [ELENCO, { dir: 'wikis', projects: [], unopenable: [] }, 'fail']) {
+        const panel = await open(data);
         assert.equal(nuovoDi(panel), undefined, 'il pannello disegna ancora «Nuovo quaderno»');
       }
     """)
@@ -560,9 +560,9 @@ def test_the_panel_answers_how_many_pages_and_reads_the_list_if_it_has_to() -> N
 def test_holding_a_notebook_asks_for_its_sheet() -> None:
     _run_js(
         "const panel = await open(ELENCO);\n"
-        "const riga = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
-        "tieni(riga);\n"
-        "assert.deepEqual(panel.storia, ['tenuto:etf']);\n"
+        "const row = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
+        "keep(row);\n"
+        "assert.deepEqual(panel.history, ['tenuto:etf']);\n"
     )
 
 
@@ -571,12 +571,12 @@ def test_the_tap_after_a_hold_does_not_switch_conversation() -> None:
     conversazione sotto. E il tocco dopo quello torna a essere un tocco."""
     _run_js(
         "const panel = await open(ELENCO);\n"
-        "const riga = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
-        "tieni(riga);\n"
-        "tocca(riga);\n"
-        "assert.deepEqual(panel.storia, ['tenuto:etf'], 'il tocco dopo la pressione ha cambiato conversazione');\n"
-        "tocca(riga);\n"
-        "assert.deepEqual(panel.storia.slice(1), ['scelto:etf']);\n"
+        "const row = righeDi(panel).find((r) => r.children.some((c) => c.textContent === 'etf'));\n"
+        "keep(row);\n"
+        "tocca(row);\n"
+        "assert.deepEqual(panel.history, ['tenuto:etf'], 'il tocco dopo la pressione ha cambiato conversazione');\n"
+        "tocca(row);\n"
+        "assert.deepEqual(panel.history.slice(1), ['scelto:etf']);\n"
     )
 
 
@@ -614,9 +614,9 @@ def test_holding_a_row_does_not_select_its_text() -> None:
     si apriva. Nessun banco in node lo vede — il DOM finto non seleziona niente
     — quindi lo tiene questo, sul foglio di stile."""
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    riga = css.split("\n.home-who-row {", 1)[1].split("}", 1)[0]
+    row = css.split("\n.home-who-row {", 1)[1].split("}", 1)[0]
     for regola in ("user-select: none;", "-webkit-user-select: none;", "-webkit-touch-callout: none;"):
-        assert regola in riga, f"la riga della tendina ha perso `{regola}`"
+        assert regola in row, f"la riga della tendina ha perso `{regola}`"
 
 
 def test_a_redraw_keeps_where_you_had_scrolled() -> None:
@@ -628,17 +628,17 @@ def test_a_redraw_keeps_where_you_had_scrolled() -> None:
       const body = panel._body;
       /* Il DOM vero: svuotato, il contenitore non ha piu' altezza e lo
          scorrimento torna a zero. */
-      let scorso = 0;
+      let last = 0;
       body.children = new Proxy([...body.children], {
         set(t, k, v) {
-          if (k === 'length' && v === 0) scorso = 0;
+          if (k === 'length' && v === 0) last = 0;
           t[k] = v;
           return true;
         },
       });
       Object.defineProperty(body, 'scrollTop', {
-        get() { return scorso; },
-        set(v) { scorso = body.children.length ? v : 0; },
+        get() { return last; },
+        set(v) { last = body.children.length ? v : 0; },
       });
       body.scrollTop = 240;
       panel.render();

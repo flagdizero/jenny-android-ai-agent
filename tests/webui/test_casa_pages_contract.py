@@ -80,14 +80,14 @@ def test_the_rooms_after_the_chat_are_not_in_the_flow_by_default() -> None:
     accese = set(re.findall(r"\.home-shell\[data-view='(?!chat')\w+'\] (\.home-[\w-]+)", css))
     assert accese, "nessuna stanza nel foglio: la grep non morde piu'"
     spente = set()
-    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        if "display: none" not in corpo:
+    for selettori, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        if "display: none" not in body:
             continue
         # L'ultima riga di ogni pezzo: davanti al primo selettore di un blocco
         # c'e' il commento che lo spiega, e quello non e' un selettore.
         spente |= {s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()}
-    mancanti = accese - spente
-    assert not mancanti, f"stanze che partono dentro il flusso: {mancanti}"
+    missing = accese - spente
+    assert not missing, f"stanze che partono dentro il flusso: {missing}"
 
 
 # ── I 280 kB che si pagano solo aprendo la mappa ────────────────────────────
@@ -293,10 +293,10 @@ def test_the_three_group_dots_are_telling_apart_in_every_theme() -> None:
         sfondo = _rgb(tokens.get("bg", "#000000")) or (0, 0, 0)
         colori = {}
         for group, token in usati.items():
-            valore = tokens.get(token)
-            assert valore, f"{name}: il tema non definisce --{token}"
-            rgb = _rgb(valore, sfondo)
-            assert rgb, f"{name}: --{token} non si sa leggere ({valore})"
+            value = tokens.get(token)
+            assert value, f"{name}: il tema non definisce --{token}"
+            rgb = _rgb(value, sfondo)
+            assert rgb, f"{name}: --{token} non si sa leggere ({value})"
             colori[group] = rgb
         coppie = [("concepts", "entities"), ("concepts", "other"), ("entities", "other")]
         for a, b in coppie:
@@ -311,13 +311,13 @@ def test_the_map_paints_its_nodes_with_the_same_three() -> None:
     """Elenco e mappa sono due rese della stessa risposta: un pallino verde
     deve voler dire la stessa cosa in tutte e due."""
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    elenco = dict(
+    list = dict(
         re.findall(r"\.home-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
     )
     mappa = dict(
         re.findall(r"\.home-map-nodes \.home-group-(\w+) \{ fill: var\(--([a-z-]+)\); \}", css)
     )
-    assert elenco == mappa, f"elenco {elenco} contro mappa {mappa}"
+    assert list == mappa, f"elenco {list} contro mappa {mappa}"
 
 
 def test_a_node_of_an_unforeseen_group_is_still_painted() -> None:
@@ -363,27 +363,27 @@ def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> Non
     nascosti = {campi[c] for c in re.findall(r"this\.(\w+)\.hidden = ", app) if c in campi}
     assert nascosti, "nessun elemento nascosto per attributo: la grep non morde piu'"
 
-    mancanti = []
+    missing = []
     for el_id in sorted(nascosti):
         if f'id="{el_id}"' in strip.group(1):
             continue  # coperto dalla regola della fila
         m = re.search(rf'<[^>]*id="{re.escape(el_id)}"[^>]*>', html)
         if not m:
             continue
-        classi = re.search(r'class="([^"]+)"', m.group(0))
-        if not classi:
+        classes = re.search(r'class="([^"]+)"', m.group(0))
+        if not classes:
             continue
-        classi = classi.group(1).split()
+        classes = classes.group(1).split()
         ha_display = any(
-            re.search(rf"\.{re.escape(c)}[^{{]*\{{[^}}]*display:", css) for c in classi
+            re.search(rf"\.{re.escape(c)}[^{{]*\{{[^}}]*display:", css) for c in classes
         )
-        ha_regola = any(re.search(rf"\.{re.escape(c)}\[hidden\]", css) for c in classi)
+        ha_regola = any(re.search(rf"\.{re.escape(c)}\[hidden\]", css) for c in classes)
         if ha_display and not ha_regola:
-            mancanti.append((el_id, classi))
+            missing.append((el_id, classes))
 
-    assert not mancanti, (
+    assert not missing, (
         "questi si nascondono con `hidden` ma hanno un `display` che lo "
-        f"scavalca, e resteranno a schermo: {mancanti}"
+        f"scavalca, e resteranno a schermo: {missing}"
     )
 
 
@@ -396,8 +396,8 @@ def test_the_note_sits_above_the_list_and_not_under_it() -> None:
     """
     html = INDEX.read_text(encoding="utf-8")
     nota = html.index('id="home-notebook-pages-note"')
-    elenco = html.index('id="home-notebook-page-list"')
-    assert nota < elenco, "la nota e' tornata sotto l'elenco"
+    list = html.index('id="home-notebook-page-list"')
+    assert nota < list, "la nota e' tornata sotto l'elenco"
 
 
 def test_the_names_are_placed_once_the_physics_stops() -> None:

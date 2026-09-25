@@ -75,10 +75,10 @@ def test_validation_and_scheduling_read_the_same_timezone(monkeypatch) -> None:
     monkeypatch.setattr(service_mod, "_schedule_tzinfo", _spia)
     schedule = CronSchedule(kind="cron", expr="0 9 * * *", tz="Europe/Rome")
     service_mod._validate_cron_expr(schedule)
-    prossima = service_mod._compute_next_run(schedule, 1_790_000_000_000)
+    next = service_mod._compute_next_run(schedule, 1_790_000_000_000)
 
     assert chieste == ["Europe/Rome", "Europe/Rome"]
-    ora = datetime.fromtimestamp(prossima / 1000, ZoneInfo("Pacific/Kiritimati"))
+    ora = datetime.fromtimestamp(next / 1000, ZoneInfo("Pacific/Kiritimati"))
     assert (ora.hour, ora.minute) == (9, 0)
 
 

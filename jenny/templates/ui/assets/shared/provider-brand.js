@@ -69,13 +69,13 @@ const PROVIDER_ALIASES = {
 /** Il colore di una marca che la tabella non conosce: una tinta ricavata dal
  *  nome, saturazione e chiarezza fisse.
  *
- *  Era la regola del pallino nell'officina (`_coloreMarca`), mentre la casa
+ *  Era la regola del pallino nell'officina (`_brandColor`), mentre la casa
  *  leggeva la tabella: la stessa marca aveva due colori, e ogni marca che
  *  l'utente si aggiunge da se' — il motivo per cui quella schermata esiste —
  *  in casa era grigia. Ora le conosciute prendono il loro colore e le altre
  *  questa tinta, stabile fra un'apertura e l'altra, in tutti e due i gusci.
  *  Non passa dai token del tema: identifica una marca, non un ruolo. */
-function coloreDalNome(name) {
+function colorFromName(name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
   return `hsl(${h}, 62%, 55%)`;
@@ -85,5 +85,5 @@ export function getProviderBrand(name) {
   if (!name) return { label: 'Unknown', color: '#888', logo: null };
   const normalized = name.toLowerCase().replace(/[\s-]+/g, '_');
   const aliased = PROVIDER_ALIASES[normalized] || normalized;
-  return PROVIDER_BRANDS[aliased] || { label: name, color: coloreDalNome(name), logo: null };
+  return PROVIDER_BRANDS[aliased] || { label: name, color: colorFromName(name), logo: null };
 }

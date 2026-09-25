@@ -51,12 +51,12 @@ const giro = () => new Promise((r) => setTimeout(r, 0));
 
 def test_reopening_settings_reads_the_switch_as_it_ended() -> None:
     _run_js("""
-      const prima = await home._askSettings();
-      assert.equal(prima.floating.enabled, false);
+      const before = await home._askSettings();
+      assert.equal(before.floating.enabled, false);
       home._keepFloating({ available: true, enabled: true, active: true });
       await giro();
-      const dopo = await home._askSettings();
-      assert.equal(dopo.floating.enabled, true, 'la cache ha rimesso lo stato di prima');
+      const after = await home._askSettings();
+      assert.equal(after.floating.enabled, true, 'la cache ha rimesso lo stato di prima');
       assert.equal(letture, 1, 'resta una lettura sola: la cache non si butta');
     """)
 

@@ -46,15 +46,15 @@ def _member(source: str, name: str) -> str:
 _APPLICA = """
 /* Una selezione di D3 ridotta a cio' che `_placeLabels` usa: `each` con
    `this` sul nodo del testo, e `attr` con una funzione per dato. */
-function selezione(dati, larghezze) {
+function selezione(data, larghezze) {
   const scritti = {};
   const sel = {
     scritti,
     each(fn) {
-      for (const d of dati) fn.call({ getComputedTextLength: () => larghezze[d.id] }, d);
+      for (const d of data) fn.call({ getComputedTextLength: () => larghezze[d.id] }, d);
     },
     attr(name, f) {
-      scritti[name] = dati.map((d) => [d.id, typeof f === 'function' ? f(d) : f]);
+      scritti[name] = data.map((d) => [d.id, typeof f === 'function' ? f(d) : f]);
       return sel;
     },
   };
@@ -154,10 +154,10 @@ def test_the_same_notebook_gets_the_same_names_every_time() -> None:
 
 def test_a_title_that_is_a_sentence_gets_cut() -> None:
     _run("""
-      const lungo = 'Coltivazione-Monstera-Roma \\u2014 Sostegno, fertilizzazione, crescita';
-      const corto = shortLabel(lungo);
-      assert.ok(corto.length <= LABEL_CHARS, corto);
-      assert.ok(corto.endsWith('\\u2026'), corto);
+      const long = 'Coltivazione-Monstera-Roma \\u2014 Sostegno, fertilizzazione, crescita';
+      const short = shortLabel(long);
+      assert.ok(short.length <= LABEL_CHARS, short);
+      assert.ok(short.endsWith('\\u2026'), short);
       assert.equal(shortLabel('Acero'), 'Acero', 'un nome corto non si tocca');
       assert.equal(shortLabel(''), '');
     """)
@@ -205,11 +205,11 @@ def test_two_names_on_top_of_each_other_move_apart() -> None:
     _run("""
       const a = { id: 'a', x: 100, y: 100, w: 80, r: 8, priority: 5 };
       const b = { id: 'b', x: 104, y: 104, w: 80, r: 8, priority: 3 };
-      const dove = placeLabels([a, b]);
-      assert.equal(dove.size, 2, 'un nome e\\u2019 sparito quando bastava spostarlo');
-      assert.notEqual(dove.get('a'), dove.get('b'), 'sono ancora nello stesso posto');
-      assert.ok(dove.get('a') > 0, 'il piu\\u2019 collegato ha perso il posto buono');
-      assert.ok(dove.get('b') < 0, 'il secondo non e\\u2019 andato sopra');
+      const where = placeLabels([a, b]);
+      assert.equal(where.size, 2, 'un nome e\\u2019 sparito quando bastava spostarlo');
+      assert.notEqual(where.get('a'), where.get('b'), 'sono ancora nello stesso posto');
+      assert.ok(where.get('a') > 0, 'il piu\\u2019 collegato ha perso il posto buono');
+      assert.ok(where.get('b') < 0, 'il secondo non e\\u2019 andato sopra');
     """)
 
 
@@ -219,8 +219,8 @@ def test_the_most_connected_page_keeps_the_good_spot() -> None:
     _run("""
       const debole = { id: 'debole', x: 100, y: 100, w: 90, r: 8, priority: 1 };
       const hub = { id: 'hub', x: 100, y: 100, w: 90, r: 8, priority: 9 };
-      const dove = placeLabels([debole, hub]);
-      assert.equal(dove.get('hub'), labelOffsets(8)[0], 'il nodo hub non sta sotto');
+      const where = placeLabels([debole, hub]);
+      assert.equal(where.get('hub'), labelOffsets(8)[0], 'il nodo hub non sta sotto');
     """)
 
 
@@ -231,10 +231,10 @@ def test_a_name_with_nowhere_to_go_disappears() -> None:
       const items = [0, 1, 2].map((i) => ({
         id: 'n' + i, x: 100, y: 100, w: 120, r: 8, priority: 3 - i,
       }));
-      const dove = placeLabels(items);
-      assert.equal(dove.size, 2, 'tre nomi nello stesso punto e ne restano ' + dove.size);
-      assert.ok(dove.has('n0') && dove.has('n1'));
-      assert.ok(!dove.has('n2'), 'il terzo si e\\u2019 accavallato');
+      const where = placeLabels(items);
+      assert.equal(where.size, 2, 'tre nomi nello stesso punto e ne restano ' + where.size);
+      assert.ok(where.has('n0') && where.has('n1'));
+      assert.ok(!where.has('n2'), 'il terzo si e\\u2019 accavallato');
     """)
 
 
@@ -244,9 +244,9 @@ def test_far_apart_names_all_keep_the_preferred_spot() -> None:
       const items = [0, 1, 2, 3].map((i) => ({
         id: 'n' + i, x: 60 + i * 200, y: 60 + i * 120, w: 70, r: 6, priority: i,
       }));
-      const dove = placeLabels(items);
-      assert.equal(dove.size, 4);
-      for (const off of dove.values()) assert.equal(off, labelOffsets(6)[0]);
+      const where = placeLabels(items);
+      assert.equal(where.size, 4);
+      for (const off of where.values()) assert.equal(off, labelOffsets(6)[0]);
     """)
 
 
@@ -274,14 +274,14 @@ def test_names_that_merely_brush_are_treated_as_touching() -> None:
     _run("""
       const a = { id: 'a', x: 100, y: 100, w: 40, r: 6, priority: 9 };
       // A destra di `a`, un pixel di distanza.
-      const destra = { id: 'b', x: 141, y: 100, w: 40, r: 6, priority: 1 };
+      const right = { id: 'b', x: 141, y: 100, w: 40, r: 6, priority: 1 };
       // E a sinistra, uguale: le due condizioni del confronto sono due righe
       // diverse, e una sola delle due morde a seconda di chi sta dove.
       const sinistra = { id: 'b', x: 59, y: 100, w: 40, r: 6, priority: 1 };
-      for (const vicino of [destra, sinistra]) {
-        const dove = placeLabels([a, vicino]);
-        assert.equal(dove.get('a'), labelOffsets(6)[0]);
-        assert.equal(dove.get('b'), labelOffsets(6)[1],
+      for (const vicino of [right, sinistra]) {
+        const where = placeLabels([a, vicino]);
+        assert.equal(where.get('a'), labelOffsets(6)[0]);
+        assert.equal(where.get('b'), labelOffsets(6)[1],
                      'un pixel d\\u2019aria e\\u2019 bastato a farli passare per lontani');
       }
     """)
@@ -318,9 +318,9 @@ def test_a_name_is_centred_on_its_dot() -> None:
     _run("""
       const largo = { id: 'largo', x: 100, y: 100, w: 100, r: 6, priority: 9 };
       const stretto = { id: 'stretto', x: 175, y: 100, w: 20, r: 6, priority: 1 };
-      const dove = placeLabels([largo, stretto]);
-      assert.equal(dove.get('largo'), labelOffsets(6)[0]);
-      assert.equal(dove.get('stretto'), labelOffsets(6)[0],
+      const where = placeLabels([largo, stretto]);
+      assert.equal(where.get('largo'), labelOffsets(6)[0]);
+      assert.equal(where.get('stretto'), labelOffsets(6)[0],
                    'si e\\u2019 spostato senza che ce ne fosse bisogno');
     """)
 
@@ -439,8 +439,8 @@ const d3 = {
   },
 };
 
-function molla(asse, bersaglio) {
-  const f = { asse, bersaglio, forza: null };
+function molla(axis, target) {
+  const f = { axis, target, forza: null };
   f.strength = (v) => { f.forza = v; return f; };
   return f;
 }
@@ -490,10 +490,10 @@ const zoomFinto = { transform: 'TRANSFORM' };
 
 class Mappa {
   constructor(notebook = 'quaderno') {
-    this._presaInMano = false;
+    this._grabbed = false;
     this._sim = fisicaFinta();
     this._notebook = notebook;
-    this._spilli = null;
+    this._pins = null;
     this._w = 600;
     this._h = 400;
   }
@@ -513,18 +513,18 @@ def _run_gesti(script: str) -> None:
         + "\n"
         + _const(src, "FIT_MAX_SCALE")
         + "\n"
-        + _const(src, "SOGLIA_TOCCO")
+        + _const(src, "TAP_THRESHOLD")
         + "\n"
-        + _const(src, "FILE_SPILLI")
+        + _const(src, "PINS_FILE")
         + "\n"
-        + _const(src, "FORZA_ANCORA")
+        + _const(src, "ANCHOR_FORCE")
         + "\n"
         + _CAMERA.replace(
             "__METODI__",
             "\n".join(
                 "  " + _member(src, n)
-                for n in ("_onZoom", "_trascina", "_inquadra", "_molla",
-                          "_caricaSpilli", "_leggiSpilli", "_salvaSpilli")
+                for n in ("_onZoom", "_drag", "_frame", "_release",
+                          "_loadPins", "_readPins", "_savePins")
             ),
         )
     )
@@ -538,7 +538,7 @@ def test_at_rest_the_cloud_gets_framed() -> None:
     _run_gesti("""
 const m = new Mappa();
 const svg = svgFinto();
-m._inquadra(svg, zoomFinto, NODI, 590, 400);
+m._frame(svg, zoomFinto, NODI, 590, 400);
 assert.equal(svg.applicate.length, 1, 'la nuvola non viene inquadrata');
 assert.ok(svg.applicate[0].k > 0, "l'inquadratura non porta una scala");
 """)
@@ -558,14 +558,14 @@ def test_the_frame_never_writes_over_your_finger() -> None:
     """
     _run_gesti("""
 const m = new Mappa();
-const radice = { attr() {} };
+const root = { attr() {} };
 
 // Il dito: D3 porta `sourceEvent` solo per un gesto vero.
-m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
-assert.equal(m._presaInMano, true, 'un gesto vero non viene riconosciuto');
+m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, root);
+assert.equal(m._grabbed, true, 'un gesto vero non viene riconosciuto');
 
 const svg = svgFinto();
-m._inquadra(svg, zoomFinto, NODI, 590, 400);
+m._frame(svg, zoomFinto, NODI, 590, 400);
 assert.deepEqual(svg.applicate, [],
   "l'inquadratura ha riscritto dove stava guardando l'utente");
 """)
@@ -579,13 +579,13 @@ def test_framing_ourselves_does_not_count_as_your_finger() -> None:
     proprio per questo."""
     _run_gesti("""
 const m = new Mappa();
-const radice = { attr() {} };
-m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
-assert.equal(m._presaInMano, false,
+const root = { attr() {} };
+m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, root);
+assert.equal(m._grabbed, false,
   'inquadrarsi da soli viene contato come un gesto dell\\'utente');
 
 const svg = svgFinto();
-m._inquadra(svg, zoomFinto, NODI, 590, 400);
+m._frame(svg, zoomFinto, NODI, 590, 400);
 assert.equal(svg.applicate.length, 1, 'la nuvola non viene piu' + ' inquadrata');
 """)
 
@@ -596,9 +596,9 @@ def test_the_transform_reaches_the_drawing_either_way() -> None:
     _run_gesti("""
 const m = new Mappa();
 const viste = [];
-const radice = { attr: (name, v) => viste.push([name, v]) };
-m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, radice);
-m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, radice);
+const root = { attr: (name, v) => viste.push([name, v]) };
+m._onZoom({ sourceEvent: { type: 'touchmove' }, transform: 'MIA' }, root);
+m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, root);
 assert.deepEqual(viste, [['transform', 'MIA'], ['transform', 'NOSTRA']]);
 """)
 
@@ -615,10 +615,10 @@ def test_a_redrawn_map_gets_its_frame_back_but_a_revisit_does_not() -> None:
     src = MAP_JS.read_text(encoding="utf-8")
     render = _member(src, "_render")
     draw = _member(src, "draw")
-    assert "this._presaInMano = false;" in render, (
+    assert "this._grabbed = false;" in render, (
         "un quaderno ridisegnato si apre guardando dove guardava il precedente"
     )
-    assert "_presaInMano" not in draw, (
+    assert "_grabbed" not in draw, (
         "tornare sulla linguetta butta via l'inquadratura dell'utente"
     )
 
@@ -641,15 +641,15 @@ def test_the_names_are_replaced_at_every_rest() -> None:
     src = MAP_JS.read_text(encoding="utf-8")
     m = re.search(r"this\._sim\.on\('end', \(\) => \{(.*?)\n    \}\);", src, re.S)
     assert m, "il gestore della quiete non si trova piu'"
-    corpo = m.group(1)
-    assert "this._placeLabels(" in corpo, (
+    body = m.group(1)
+    assert "this._placeLabels(" in body, (
         "a fisica ferma i nomi non si ricollocano: restano dove stavano prima"
     )
-    assert "_presaInMano" not in corpo, (
+    assert "_grabbed" not in body, (
         "la ricollocazione dei nomi e' finita sotto la guardia dell'inquadratura: "
         "chi ha spostato la mappa col dito non li vedrebbe piu' aggiustare"
     )
-    assert corpo.index("this._placeLabels(") < corpo.index("this._inquadra("), (
+    assert body.index("this._placeLabels(") < body.index("this._frame("), (
         "si inquadra prima di sapere dove stanno i nomi"
     )
 
@@ -671,7 +671,7 @@ def test_letting_go_anchors_the_dot_instead_of_nailing_it() -> None:
     _run_gesti("""
 const m = new Mappa();
 const d = { id: 'p1', x: 100, y: 100 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 
 t.gestori.start({ active: 0 }, d);
 assert.deepEqual([d.fx, d.fy], [100, 100], 'il pallino non si tiene sotto il dito');
@@ -699,15 +699,15 @@ def test_the_springs_are_rebuilt_when_an_anchor_appears() -> None:
     _run_gesti("""
 const m = new Mappa();
 const d = { id: 'p1', x: 1, y: 1 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.drag({ x: 300, y: 200 }, d);
 t.gestori.end({ active: 0 }, d);
 
 assert.deepEqual(Object.keys(m._sim.molle).sort(), ['x', 'y'],
   'le molle non vengono rimesse: la nuova ancora resta invisibile alla fisica');
-assert.equal(m._sim.molle.x.bersaglio(d), 300, "la molla non punta all'ancora");
-assert.equal(m._sim.molle.x.forza(d), FORZA_ANCORA, "la molla dell'ancora e' quella debole");
+assert.equal(m._sim.molle.x.target(d), 300, "la molla non punta all'ancora");
+assert.equal(m._sim.molle.x.forza(d), ANCHOR_FORCE, "la molla dell'ancora e' quella debole");
 """)
 
 
@@ -718,12 +718,12 @@ def test_a_dot_nobody_moved_is_still_pulled_to_the_middle() -> None:
     mezza stanza resterebbe vuota — e' il difetto per cui quella molla esiste."""
     _run_gesti("""
 const m = new Mappa();
-const f = m._molla('x', 600, 400);
-assert.equal(f.bersaglio({ id: 'libero' }), 300, 'un pallino libero non punta al centro');
+const f = m._release('x', 600, 400);
+assert.equal(f.target({ id: 'libero' }), 300, 'un pallino libero non punta al centro');
 assert.equal(f.forza({ id: 'libero' }), 0.06, 'la molla debole ha cambiato valore');
-assert.ok(FORZA_ANCORA > 0.06,
+assert.ok(ANCHOR_FORCE > 0.06,
   "l'ancora non tira piu' del centro: il trascinamento non lascerebbe traccia");
-assert.ok(FORZA_ANCORA < 1, "un'ancora cosi' tesa e' di nuovo un chiodo");
+assert.ok(ANCHOR_FORCE < 1, "un'ancora cosi' tesa e' di nuovo un chiodo");
 """)
 
 
@@ -739,11 +739,11 @@ def test_dragging_takes_the_map_in_hand() -> None:
     """
     _run_gesti("""
 const m = new Mappa();
-m._trascina([]).gestori.start({ active: 0 }, { x: 10, y: 10 });
-assert.equal(m._presaInMano, true, 'il trascinamento non prende la mappa in mano');
+m._drag([]).gestori.start({ active: 0 }, { x: 10, y: 10 });
+assert.equal(m._grabbed, true, 'il trascinamento non prende la mappa in mano');
 
 const svg = svgFinto();
-m._inquadra(svg, zoomFinto, NODI, 590, 400);
+m._frame(svg, zoomFinto, NODI, 590, 400);
 assert.deepEqual(svg.applicate, [],
   'la quiete dopo il trascinamento ha reinquadrato la nuvola');
 """)
@@ -758,12 +758,12 @@ def test_a_small_gesture_is_still_a_tap_on_the_page() -> None:
     Se ne occupa `clickDistance` di D3: sotto la soglia il gesto resta un tocco,
     sopra il click viene soppresso. Senza, ogni trascinamento aprirebbe una
     pagina. Il numero e' l'unica cosa qui che solo un pollice puo' giudicare, e
-    ha il suo commento in `SOGLIA_TOCCO`; il banco misura che ci sia e che sia
+    ha il suo commento in `TAP_THRESHOLD`; il banco misura che ci sia e che sia
     quello, non che sia giusto.
     """
     _run_gesti("""
-const soglia = new Mappa()._trascina([]).soglia;
-assert.equal(soglia, SOGLIA_TOCCO, 'il gesto non distingue un tocco da un trascinamento');
+const soglia = new Mappa()._drag([]).soglia;
+assert.equal(soglia, TAP_THRESHOLD, 'il gesto non distingue un tocco da un trascinamento');
 assert.ok(soglia > 0 && soglia <= 16,
   'una soglia fuori scala: sotto lo zero ogni tocco e\\' un trascinamento, ' +
   'sopra la sedicina un trascinamento apre anche la pagina');
@@ -778,7 +778,7 @@ def test_the_physics_wakes_for_the_drag_and_goes_back_to_sleep() -> None:
     _run_gesti("""
 const m = new Mappa();
 const d = { id: 'p1', x: 1, y: 1 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 assert.deepEqual(m._sim.diario.filter((r) => r[0] === 'alphaTarget' || r[0] === 'restart'),
@@ -794,7 +794,7 @@ def test_a_second_finger_does_not_restart_the_physics_twice() -> None:
     tirando."""
     _run_gesti("""
 const m = new Mappa();
-const t = m._trascina([]);
+const t = m._drag([]);
 const d = { id: 'p1', x: 1, y: 1 };
 t.gestori.start({ active: 1 }, d);
 t.gestori.end({ active: 1 }, d);
@@ -812,17 +812,17 @@ def test_letting_go_writes_the_arrangement() -> None:
     _run_gesti("""
 const m = new Mappa('piante');
 const d = { id: 'Monstera.md', x: 10, y: 10 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.drag({ x: 240.4, y: 91.6 }, d);
 t.gestori.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
 
 assert.equal(scritture.length, 1, 'alzando il dito non si salva niente');
-const [path, testo] = scritture[0];
-assert.equal(path, FILE_SPILLI);
-assert.deepEqual(JSON.parse(testo), { piante: { 'Monstera.md': [240, 92] } },
-  'la posizione salvata non e\\' quella dove il dito ha lasciato il pallino');
+const [path, text] = scritture[0];
+assert.equal(path, PINS_FILE);
+assert.deepEqual(JSON.parse(text), { piante: { 'Monstera.md': [240, 92] } },
+  'la posizione salvata non e\\' quella where il dito ha lasciato il pallino');
 """)
 
 
@@ -834,7 +834,7 @@ def test_only_the_pinned_dots_are_written() -> None:
 const m = new Mappa('piante');
 const spillato = { id: 'a', x: 5, y: 5 };
 const libero = { id: 'b', x: 99, y: 99 };
-const t = m._trascina([spillato, libero]);
+const t = m._drag([spillato, libero]);
 t.gestori.start({ active: 0 }, spillato);
 t.gestori.end({ active: 0 }, spillato);
 await new Promise((r) => setTimeout(r, 0));
@@ -849,16 +849,16 @@ def test_another_notebook_keeps_its_own_arrangement() -> None:
     _run_gesti("""
 letto = JSON.stringify({ viaggi: { 'Kyoto.md': [1, 2] } });
 const m = new Mappa('piante');
-await m._leggiSpilli();
+await m._readPins();
 const d = { id: 'a', x: 5, y: 5 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
-const scritto = JSON.parse(scritture[0][1]);
-assert.deepEqual(scritto.viaggi, { 'Kyoto.md': [1, 2] },
+const written = JSON.parse(scritture[0][1]);
+assert.deepEqual(written.viaggi, { 'Kyoto.md': [1, 2] },
   'salvando un quaderno si e\\' persa la disposizione di un altro');
-assert.ok(scritto.piante, 'e la propria non c\\'e\\'');
+assert.ok(written.piante, 'e la propria non c\\'e\\'');
 """)
 
 
@@ -869,10 +869,10 @@ def test_a_page_that_left_the_notebook_leaves_the_file_too() -> None:
     _run_gesti("""
 letto = JSON.stringify({ piante: { 'Monstera.md': [1, 2], 'Sparita.md': [3, 4] } });
 const m = new Mappa('piante');
-await m._leggiSpilli();
+await m._readPins();
 // Nel disegno di oggi c'e' solo Monstera, ed e' spillata.
 const viva = { id: 'Monstera.md', x: 7, y: 8, ax: 7, ay: 8 };
-const t = m._trascina([viva]);
+const t = m._drag([viva]);
 t.gestori.start({ active: 0 }, viva);
 t.gestori.end({ active: 0 }, viva);
 await new Promise((r) => setTimeout(r, 0));
@@ -888,19 +888,19 @@ def test_no_arrangement_yet_is_not_a_failure() -> None:
     una mappa che non si disegna è un guasto, e fra i due non c'è partita."""
     _run_gesti("""
 rotto = 404;
-assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+assert.equal(await new Mappa('piante')._readPins(), null,
   'un file che non c\\'e\\' ancora viene preso per un guasto');
 
 rotto = 500;
-assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+assert.equal(await new Mappa('piante')._readPins(), null,
   'una lettura fallita fa saltare il disegno invece di essere ignorata');
 
 rotto = 0; letto = '{ questo non e' + String.fromCharCode(39) + ' json';
-assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+assert.equal(await new Mappa('piante')._readPins(), null,
   'un file rotto fa saltare il disegno invece di essere ignorato');
 
 letto = JSON.stringify({ altro: { a: [1, 2] } });
-assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+assert.equal(await new Mappa('piante')._readPins(), null,
   'un quaderno senza spilli non torna null');
 """)
 
@@ -919,9 +919,9 @@ for (const [come, prepara] of [
   prepara();
   scritture.length = 0;
   const m = new Mappa('piante');
-  await m._leggiSpilli();
+  await m._readPins();
   const d = { id: 'a', x: 5, y: 5 };
-  const t = m._trascina([d]);
+  const t = m._drag([d]);
   t.gestori.start({ active: 0 }, d);
   t.gestori.end({ active: 0 }, d);
   await new Promise((r) => setTimeout(r, 0));
@@ -936,11 +936,11 @@ def test_a_read_that_failed_is_tried_again() -> None:
     _run_gesti("""
 rotto = 500;
 const m = new Mappa('piante');
-assert.equal(await m._leggiSpilli(), null);
+assert.equal(await m._readPins(), null);
 rotto = 0;
 letto = JSON.stringify({ viaggi: { 'Kyoto.md': [1, 2] } });
 const d = { id: 'a', x: 5, y: 5 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
@@ -954,9 +954,9 @@ def test_a_file_that_is_not_there_yet_is_written_from_scratch() -> None:
     _run_gesti("""
 rotto = 404;
 const m = new Mappa('piante');
-assert.equal(await m._leggiSpilli(), null);
+assert.equal(await m._readPins(), null);
 const d = { id: 'a', x: 5, y: 5 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
@@ -978,7 +978,7 @@ rpc.writeWorkspaceFile = (path, content) => {
 };
 const m = new Mappa('piante');
 const d = { id: 'a', x: 1, y: 1 };
-const t = m._trascina([d]);
+const t = m._drag([d]);
 t.gestori.start({ active: 0 }, d);
 t.gestori.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
@@ -993,8 +993,8 @@ def test_the_pins_are_applied_before_the_physics_starts() -> None:
     sorgente perché `draw` è la funzione che carica D3."""
     src = MAP_JS.read_text(encoding="utf-8")
     draw = _member(src, "draw")
-    assert "_leggiSpilli()" in draw, "gli spilli non si leggono affatto"
-    assert draw.index("_leggiSpilli()") < draw.index("this._render("), (
+    assert "_readPins()" in draw, "gli spilli non si leggono affatto"
+    assert draw.index("_readPins()") < draw.index("this._render("), (
         "si disegna prima di sapere dove vanno i pallini spillati"
     )
     assert "n.ax = n.x" in draw and "n.ay = n.y" in draw, (

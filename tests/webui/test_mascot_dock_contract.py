@@ -45,11 +45,11 @@ def _anchors(css: str) -> list[str]:
     allineato — e' un margine.
     """
     trovate = []
-    for blocco in css.split("}"):
-        selettore, _, corpo = blocco.rpartition("{")
-        if not corpo or not any(re.search(s, selettore) for s in SPRITE):
+    for block in css.split("}"):
+        selettore, _, body = block.rpartition("{")
+        if not body or not any(re.search(s, selettore) for s in SPRITE):
             continue
-        trovate += ANCORAGGIO.findall(corpo)
+        trovate += ANCORAGGIO.findall(body)
     return trovate
 
 
@@ -138,8 +138,8 @@ def test_the_walk_home_uses_the_same_number_as_the_css() -> None:
     # Una costante importata e poi non usata e' esattamente cio' che resta
     # quando qualcuno rimette il numero a mano una riga piu' giu'.
     usi = [
-        riga for riga in src.splitlines()
-        if "OUT_SHIFT_RATIO" in riga and "import" not in riga
+        row for row in src.splitlines()
+        if "OUT_SHIFT_RATIO" in row and "import" not in row
     ]
     assert usi, "OUT_SHIFT_RATIO e' importata ma non la usa nessuno"
     assert not re.search(r"0\.469|0\.25\b|0\.219", src), (
@@ -152,11 +152,11 @@ def test_neither_shell_is_the_exception_any_more() -> None:
     tutti e due, e un interruttore con un valore solo e' un ramo morto che il
     prossimo lettore prende per una possibilita' vera."""
     for f in (DRAG_JS, ASSETS / "mobile-jenny.js", ASSETS / "shared" / "jenny-mascot.js"):
-        corpo = "\n".join(
-            riga for riga in f.read_text(encoding="utf-8").splitlines()
-            if "hasOut" in riga and not riga.lstrip().startswith((" *", "*", "//", "/*"))
+        body = "\n".join(
+            row for row in f.read_text(encoding="utf-8").splitlines()
+            if "hasOut" in row and not row.lstrip().startswith((" *", "*", "//", "/*"))
         )
-        assert not corpo, f"{f.name} parla ancora di hasOut:\n{corpo}"
+        assert not body, f"{f.name} parla ancora di hasOut:\n{body}"
 
 
 def test_both_shells_answer_the_tap() -> None:

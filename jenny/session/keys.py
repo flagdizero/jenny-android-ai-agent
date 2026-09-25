@@ -115,7 +115,7 @@ _INTERNAL_KIND_BY_KEY: dict[str, str] = {HEARTBEAT_SESSION_KEY: "heartbeat"}
 # incontrano solo rileggendo un ``jobs.json`` scritto prima della sessione unica —
 # **e le voci di ``history.jsonl``** scritte allora, che a Dream servono ancora.
 #
-# **Elenco chiuso, e non un pattern.** Un pattern "``<parola>:<parola>``"
+# **Elenco chiuso, e non un pattern.** Un pattern "``<word>:<word>``"
 # prenderebbe anche ``project:<id>``, che e' una sessione vera: collassarla sulla
 # conversazione personale farebbe girare un job di progetto nella chat personale,
 # cioe' esattamente la confusione che le sessioni-progetto esistono per evitare.

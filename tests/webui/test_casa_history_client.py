@@ -80,8 +80,8 @@ function makeChat() {
     el: makeNode(),
     _empty: true,
     _stick: true,
-    _sorgente: new WeakMap(),
-    _secondi: null,
+    _source: new WeakMap(),
+    _seconds: null,
     _follow() {},
     syncEmpty() {},
     scrollToBottom() {},
@@ -130,9 +130,9 @@ def _harness() -> str:
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
         .replace("__APPEND__", member(src, "_append"))
-        .replace("__CODA__", member(src, "_codaDi"))
-        .replace("__REGISTRA__", member(src, "_registra"))
-        .replace("__TESTO__", member(src, "_testoDi"))
+        .replace("__CODA__", member(src, "_tailOf"))
+        .replace("__REGISTRA__", member(src, "_register"))
+        .replace("__TESTO__", member(src, "_textOf"))
     )
 
 

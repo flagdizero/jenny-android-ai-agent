@@ -56,7 +56,7 @@ _VERI = (
     "_resetToExplorerAt",
     "showExplorerView",
     "_handleNewAction",
-    "_esploratoreASchermo",
+    "_explorerOnScreen",
 )
 
 _HARNESS = """
@@ -74,52 +74,52 @@ const URL = { revokeObjectURL() {} };
 const parentPath = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
 
 /* Quel che il server risponde a `/api/workspace/list`, deciso dal banco. */
-let risposta = null;
+let reply = null;
 let errore = null;
 const chiamate = [];
 const api = {
   listWorkspace(path) {
     chiamate.push(path);
-    return errore ? Promise.reject(errore) : Promise.resolve(risposta);
+    return errore ? Promise.reject(errore) : Promise.resolve(reply);
   },
 };
 
 /* Un nodo finto: quel tanto che serve a `navigateTo` e `renderGrid`. */
-function nodo(sotto = {}) {
+function node(under = {}) {
   return {
-    innerHTML: '', style: {}, figli: [], ascolti: {},
+    innerHTML: '', style: {}, children: [], ascolti: {},
     textContent: '',
     /* Nel documento finche' la scheda non si ridisegna: allora il banco lo
        mette a false, come fa il DOM vero con i nodi buttati. */
     isConnected: true,
-    appendChild(c) { this.figli.push(c); },
-    querySelector(sel) { return sotto[sel] ?? null; },
+    appendChild(c) { this.children.push(c); },
+    querySelector(sel) { return under[sel] ?? null; },
     addEventListener(ev, cb) { (this.ascolti[ev] ||= []).push(cb); },
     clic() { (this.ascolti.click || []).forEach((cb) => cb()); },
   };
 }
 
 /* La scheda appena disegnata da `SettingsController.render()`. */
-function scheda() {
-  const crumb = nodo();
-  const griglia = nodo();
-  const sub = nodo();
-  const vuoto = nodo({ '.ws-empty-sub': sub });
-  const nuovo = nodo();
-  const host = nodo({
+function card() {
+  const crumb = node();
+  const griglia = node();
+  const sub = node();
+  const vuoto = node({ '.ws-empty-sub': sub });
+  const fresh = node();
+  const host = node({
     '[data-ws-crumb]': crumb, '[data-ws-grid]': griglia,
-    '[data-ws-empty]': vuoto, '[data-ws-new]': nuovo,
+    '[data-ws-empty]': vuoto, '[data-ws-new]': fresh,
   });
-  return { host, crumb, griglia, vuoto, sub, nuovo };
+  return { host, crumb, griglia, vuoto, sub, fresh };
 }
 
 /* Il guscio: `switchMode` e `navigateBack` sono i due modi di lasciare
    Memoria, e questo banco conta quante volte accadono. */
-const guscio = { mosse: [] };
+const shell = { mosse: [] };
 const window_ = {
   mobileApp: {
-    switchMode: (m) => guscio.mosse.push(['switchMode', m]),
-    navigateBack: (m) => guscio.mosse.push(['navigateBack', m]),
+    switchMode: (m) => shell.mosse.push(['switchMode', m]),
+    navigateBack: (m) => shell.mosse.push(['navigateBack', m]),
     header: null,
   },
 };
@@ -149,23 +149,23 @@ class WorkspaceController {
   showEditorView() {}
   _syncHeaderBack() {}
   _showNewMenu() { this.menuNuovo++; }
-  _createEntry(azione, base) { this.creati.push([azione, base]); }
+  _createEntry(action, base) { this.creati.push([action, base]); }
   _confirmDiscard() { this.scartoChiesto = true; }
 __METODI__
 }
 
-function voce(name, type, size, internal) {
+function entry(name, type, size, internal) {
   return { name, type, size: size ?? null, internal: !!internal };
 }
 
 /* Un giro completo: la scheda si disegna, il gestore ci si aggancia, e la
    radice arriva. */
-async function apri(items, { rotto = false } = {}) {
-  risposta = items === null ? null : { items, path: '' };
+async function open(items, { rotto = false } = {}) {
+  reply = items === null ? null : { items, path: '' };
   errore = rotto ? new Error('gateway giu') : null;
   chiamate.length = 0;
-  guscio.mosse.length = 0;
-  const s = scheda();
+  shell.mosse.length = 0;
+  const s = card();
   const c = new WorkspaceController();
   c.mount(s.host);
   await new Promise((r) => setTimeout(r, 0));
@@ -194,7 +194,7 @@ def test_outside_memoria_nothing_is_read() -> None:
     contenitore non esiste, e una richiesta al workspace partita comunque
     sarebbe traffico per un disegno che nessuno vedra'."""
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    monta = member(settings, "_montaFile")
+    monta = member(settings, "_mountFile")
     run_js("""
 import assert from 'node:assert/strict';
 let montaggi = 0;
@@ -208,10 +208,10 @@ class C {
             + """
 }
 // Cassetto senza la scheda dei file: il contenitore non c'e'.
-new C({ querySelector: () => null })._montaFile();
+new C({ querySelector: () => null })._mountFile();
 assert.equal(montaggi, 0, 'il gestore file si monta fuori da Memoria');
 // E in Memoria si monta, o il banco sopra passerebbe per un refuso.
-new C({ querySelector: () => ({}) })._montaFile();
+new C({ querySelector: () => ({}) })._mountFile();
 assert.equal(montaggi, 1, 'in Memoria il gestore non si monta affatto');
 """,)
 
@@ -222,11 +222,11 @@ def test_service_files_are_never_listed() -> None:
     li faceva comparire: tolto il 21/09/2026, e con lui l'unica condizione
     davanti a questo filtro."""
     _run_js("""
-const { c } = await apri([
-  voce('USER.md', 'file', 120),
-  voce('config.json', 'file', 80, true),
-  voce('sessions', 'directory', null, true),
-  voce('progetti', 'directory'),
+const { c } = await open([
+  entry('USER.md', 'file', 120),
+  entry('config.json', 'file', 80, true),
+  entry('sessions', 'directory', null, true),
+  entry('progetti', 'directory'),
 ]);
 assert.deepEqual(c.tessere, ['cartella:progetti', 'file:USER.md']);
 """)
@@ -236,9 +236,9 @@ def test_folders_come_first_then_files_each_alphabetical() -> None:
     """Un ordine solo per gli stessi dati. Due schermate che li ordinano
     diversamente sembrano parlare di due cartelle diverse."""
     _run_js("""
-const { c } = await apri([
-  voce('zeta.md', 'file', 1), voce('foto', 'directory'),
-  voce('alfa.md', 'file', 1), voce('archivio', 'directory'),
+const { c } = await open([
+  entry('zeta.md', 'file', 1), entry('foto', 'directory'),
+  entry('alfa.md', 'file', 1), entry('archivio', 'directory'),
 ]);
 assert.deepEqual(c.tessere, [
   'cartella:archivio', 'cartella:foto', 'file:alfa.md', 'file:zeta.md',
@@ -257,11 +257,11 @@ def test_the_card_shows_every_file_and_not_a_sample() -> None:
    delle due famiglie passerebbe inosservato contando solo l'altra. */
 const molte = [
   ...Array.from({ length: 20 }, (_, i) =>
-    voce('c' + String(i).padStart(3, '0'), 'directory')),
+    entry('c' + String(i).padStart(3, '0'), 'directory')),
   ...Array.from({ length: 20 }, (_, i) =>
-    voce(String(i).padStart(3, '0') + '.md', 'file', 10)),
+    entry(String(i).padStart(3, '0') + '.md', 'file', 10)),
 ];
-const { c } = await apri(molte);
+const { c } = await open(molte);
 assert.equal(c.tessere.filter((t) => t.startsWith('cartella:')).length, 20,
   'le cartelle sono un campione invece di tutte');
 assert.equal(c.tessere.filter((t) => t.startsWith('file:')).length, 20,
@@ -277,12 +277,12 @@ def test_reopening_the_card_stays_in_the_folder_you_were_in() -> None:
     di Memoria rimbalzerebbe alla radice chi stava a tre livelli di profondita'.
     Vive nel controller, e il riaggancio la rilegge da li'."""
     _run_js("""
-const { c } = await apri([voce('progetti', 'directory')]);
+const { c } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti/home');
 assert.equal(c.currentDir, 'progetti/home');
 
 // Memoria si ridisegna: nodi nuovi, stesso controller.
-const s2 = scheda();
+const s2 = card();
 chiamate.length = 0;
 c.mount(s2.host);
 await new Promise((r) => setTimeout(r, 0));
@@ -296,10 +296,10 @@ def test_walking_into_a_folder_never_leaves_memoria() -> None:
     """E' la ragione per cui il gestore e' entrato nella scheda: girare tra le
     cartelle non deve cambiare schermata. Solo **aprire** un file lo fa."""
     _run_js("""
-const { c } = await apri([voce('progetti', 'directory')]);
+const { c } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti');
 await c.navigateTo('progetti/home');
-assert.deepEqual(guscio.mosse, [],
+assert.deepEqual(shell.mosse, [],
   'girare tra le cartelle ha lasciato il cassetto');
 """)
 
@@ -309,7 +309,7 @@ def test_back_walks_up_one_folder_and_then_lets_go() -> None:
     da sbucciare e la pressione deve proseguire la catena: un `true` di troppo
     la mangerebbe senza cambiare niente a schermo."""
     _run_js("""
-const { c } = await apri([voce('progetti', 'directory')]);
+const { c } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti/home/note');
 
 assert.equal(c.handleCardBack(), true);
@@ -334,21 +334,21 @@ def test_closing_a_file_returns_to_the_folder_it_was_opened_from() -> None:
     c'era un `ret ? '' : this.currentDir`, giusto finche' l'origine era
     un'altra sezione e l'esploratore non era la schermata da cui si veniva."""
     _run_js("""
-const { c } = await apri([voce('progetti', 'directory')]);
+const { c } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti/home');
 c.viewMode = 'editor';
 c.currentPath = 'progetti/home/note.md';
-guscio.mosse.length = 0;
+shell.mosse.length = 0;
 
 assert.equal(c._closeEditor({ hardwareBack: true }), false,
   'col back hardware la history riporta indietro da se\\'');
 assert.equal(c.currentDir, 'progetti/home');
-assert.deepEqual(guscio.mosse, [], 'il back hardware ha anche navigato');
+assert.deepEqual(shell.mosse, [], 'il back hardware ha anche navigato');
 
 // La freccia dell'header invece naviga: nessuno lo fa al posto suo.
 c.viewMode = 'editor';
 assert.equal(c._closeEditor(), true);
-assert.deepEqual(guscio.mosse, [['navigateBack', 'memory']]);
+assert.deepEqual(shell.mosse, [['navigateBack', 'memory']]);
 """)
 
 
@@ -356,13 +356,13 @@ def test_home_dismounts_the_file_without_a_second_destination() -> None:
     """Home porta in chat per conto suo. Se lo smontaggio navigasse anche lui,
     una pressione produrrebbe due destinazioni di fila."""
     _run_js("""
-const { c } = await apri([voce('progetti', 'directory')]);
+const { c } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti/home');
 c.viewMode = 'editor';
-guscio.mosse.length = 0;
+shell.mosse.length = 0;
 c.collapseToRoot();
-assert.deepEqual(guscio.mosse, [], 'Home ha navigato due volte');
-assert.equal(c.currentDir, '', 'Home non e\\' tornata alla radice');
+assert.deepEqual(shell.mosse, [], 'Home ha navigato due volte');
+assert.equal(c.currentDir, '', 'Home non e\\' tornata alla root');
 """)
 
 
@@ -370,11 +370,11 @@ def test_an_unreadable_folder_says_so_instead_of_looking_empty() -> None:
     """Un guasto di rete che si traveste da cartella vuota e' il modo in cui si
     dice all'utente che i suoi file non ci sono piu'."""
     _run_js("""
-const vuota = await apri([]);
+const vuota = await open([]);
 assert.equal(vuota.vuoto.style.display, '');
 assert.equal(vuota.sub.textContent, '', 'una cartella vuota si e\\' inventata un guasto');
 
-const rotta = await apri([], { rotto: true });
+const rotta = await open([], { rotto: true });
 assert.equal(rotta.vuoto.style.display, '');
 assert.match(rotta.sub.textContent, /gateway giu/,
   'la cartella illeggibile si presenta come vuota');
@@ -385,8 +385,8 @@ def test_the_new_button_creates_where_you_are_looking() -> None:
     """«Nuovo» e' passato dall'intestazione della vista alla scheda, e crea
     nella cartella che si sta guardando — non in quella da cui si e' partiti."""
     _run_js("""
-const { c, nuovo } = await apri([voce('progetti', 'directory')]);
-nuovo.clic();
+const { c, fresh } = await open([entry('progetti', 'directory')]);
+fresh.clic();
 assert.equal(c.menuNuovo, 1, 'il bottone «nuovo» non e\\' agganciato');
 
 await c.navigateTo('progetti/home');
@@ -404,17 +404,17 @@ def test_a_stale_answer_never_overwrites_a_newer_one() -> None:
     # partenza il gettone non serviva — l'ultima arrivata era anche la giusta —
     # e il test passava con la guardia tolta.
     _run_js("""
-const { c } = await apri([voce('a', 'directory'), voce('b', 'directory')]);
+const { c } = await open([entry('a', 'directory'), entry('b', 'directory')]);
 const inAttesa = [];
 api.listWorkspace = (path) => new Promise((ok) => inAttesa.push({ path, ok }));
 c.tessere.length = 0;
-const vecchia = c.navigateTo('a');
-const nuova = c.navigateTo('b');
+const old = c.navigateTo('a');
+const fresh = c.navigateTo('b');
 assert.deepEqual(inAttesa.map((r) => r.path), ['a', 'b']);
-inAttesa[1].ok({ items: [voce('dentro-b.md', 'file', 1)], path: 'b' });
-await nuova;
-inAttesa[0].ok({ items: [voce('dentro-a.md', 'file', 1)], path: 'a' });
-await vecchia;
+inAttesa[1].ok({ items: [entry('dentro-b.md', 'file', 1)], path: 'b' });
+await fresh;
+inAttesa[0].ok({ items: [entry('dentro-a.md', 'file', 1)], path: 'a' });
+await old;
 assert.deepEqual(c.tessere, ['file:dentro-b.md'],
   'la risposta della cartella lasciata ha riempito quella aperta');
 assert.equal(c.currentDir, 'b');
@@ -426,13 +426,13 @@ def test_a_redrawn_card_does_not_eat_back() -> None:
     griglia di prima resta in mano al gestore, staccata. Risalire li' dentro
     era una pressione spesa su una griglia che nessuno vede."""
     _run_js("""
-const { c, griglia } = await apri([voce('progetti', 'directory')]);
+const { c, griglia } = await open([entry('progetti', 'directory')]);
 await c.navigateTo('progetti/home');
 griglia.isConnected = false;
-const prima = chiamate.length;
+const before = chiamate.length;
 assert.equal(c.handleCardBack(), false, 'Indietro mangiato da una griglia staccata');
 assert.equal(c.currentDir, 'progetti/home');
-assert.equal(chiamate.length, prima, 'letta una cartella per una griglia staccata');
+assert.equal(chiamate.length, before, 'letta una cartella per una griglia staccata');
 """)
 
 
@@ -440,7 +440,7 @@ def test_only_the_drawer_with_the_files_card_hands_back_to_it() -> None:
     """``SettingsController.handleBack`` gira la pressione al gestore file solo
     nel cassetto che ha la scheda «I file veri»."""
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    cassetti = re.search(r"(?ms)^export const CASSETTI = \{.*?^\};$", settings)
+    cassetti = re.search(r"(?ms)^export const DRAWERS = \{.*?^\};$", settings)
     assert cassetti, "CASSETTI non trovata"
     back = member(settings, "handleBack")
     run_js(
@@ -452,14 +452,14 @@ globalThis.window = { mobileApp: { controllers: { workspace: {
   handleCardBack: () => { girate++; return true; },
 } } } };
 class C {
-  constructor(cassetto) { this._cassetto = cassetto; }
+  constructor(drawer) { this._drawer = drawer; }
 """
         + back
         + """
 }
 assert.equal(new C('brain').handleBack(), false);
 assert.equal(new C('hands').handleBack(), false);
-assert.equal(girate, 0, 'la pressione e\\' andata al gestore file fuori da Memoria');
+assert.equal(girate, 0, 'la pressione e\\' andata al gestore file fuori fromIndex Memoria');
 assert.equal(new C('memory').handleBack(), true);
 assert.equal(girate, 1);
 """

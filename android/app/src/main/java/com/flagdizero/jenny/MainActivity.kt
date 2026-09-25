@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         // sistema, che su Samsung e Xiaomi rimette l'app fra quelle ottimizzate.
         private const val PREF_LAST_FINGERPRINT = "last_build_fingerprint"
         // Quante volte, e quando, hai aperto ogni voce del cassetto. Formato
-        // compatto `{"<chiave>": [conteggio, ultimoMs]}` — lo decide
+        // compatto `{"<key>": [conteggio, ultimoMs]}` — lo decide
         // `shared/launcher-rank.js`, qui è una stringa opaca.
         private const val PREF_LAUNCHER_USAGE = "launcher_usage"
         // First launch pays Chaquopy bootstrap + package extraction inside
@@ -1074,7 +1074,7 @@ class MainActivity : AppCompatActivity() {
          * Il conteggio d'uso del cassetto: letto e scritto **qui**, non nel
          * `localStorage` della WebView.
          *
-         * Il dato è `{"<chiave>": [conteggio, ultimoMs]}` e lo produce
+         * Il dato è `{"<key>": [conteggio, ultimoMs]}` e lo produce
          * `shared/launcher-rank.js`; per il Kotlin è una stringa opaca, e va
          * tenuta tale — la forma la decide chi la sa leggere.
          *

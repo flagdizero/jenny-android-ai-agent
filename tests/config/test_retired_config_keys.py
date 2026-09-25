@@ -148,10 +148,10 @@ async def test_the_mood_model_preset_is_retired_for_real(tmp_path) -> None:
 
     assert _warnings_while(lambda: load_config_with_raw(path)) == []
 
-    def _spegni(config) -> None:
+    def _deactivate(config) -> None:
         config.agents.defaults.mascot_mood = False
 
-    await mutate(_spegni, config_path=path)
+    await mutate(_deactivate, config_path=path)
     defaults = json.loads(path.read_text(encoding="utf-8"))["agents"]["defaults"]
     assert defaults["mascotMood"] is False
     assert "mascotMoodModelPreset" not in defaults
@@ -175,10 +175,10 @@ async def test_the_wiki_extensions_are_retired(tmp_path) -> None:
 
     assert _warnings_while(lambda: load_config_with_raw(path)) == []
 
-    def _spegni(config) -> None:
+    def _deactivate(config) -> None:
         config.wiki.enabled = False
 
-    await mutate(_spegni, config_path=path)
+    await mutate(_deactivate, config_path=path)
     wiki = json.loads(path.read_text(encoding="utf-8"))["wiki"]
     assert wiki["enabled"] is False
     assert "extensions" not in wiki

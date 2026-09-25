@@ -120,7 +120,7 @@ function room(version) {
   return s;
 }
 function pallino() { return nodi['home-update-dot'].className; }
-function righe() {
+function rows() {
   return nodi['home-update-lines'].children.map(
     (r) => [r.textContent, String(r.className).includes('is-warn')]);
 }
@@ -176,9 +176,9 @@ def test_a_broken_check_wins_over_a_new_version() -> None:
                       last_check: Date.now(), last_success: Date.now() - 30 * giorno };
       assert.equal(updatesMood(rotto), 'warn');
 
-      const nuova = { current: '0.11.0', latest: '0.12.0', update_available: true,
+      const fresh = { current: '0.11.0', latest: '0.12.0', update_available: true,
                       last_check: Date.now(), last_success: Date.now() };
-      assert.equal(updatesMood(nuova), 'new');
+      assert.equal(updatesMood(fresh), 'new');
 
       const aposto = { current: '0.11.0', update_available: false,
                        last_check: Date.now(), last_success: Date.now() };
@@ -196,7 +196,7 @@ def test_the_dot_says_the_mechanism() -> None:
 
       room({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() - 30 * giorno });
       assert.ok(pallino().includes('is-warn'), pallino());
-      const dette = righe();
+      const dette = rows();
       assert.equal(dette.length, 2, 'la riga che spiega il guasto non c e');
       assert.equal(dette[1][1], true, 'il guasto non e segnalato come tale');
     """)
@@ -298,10 +298,10 @@ def test_leaving_stops_the_polling_and_invalidates_the_generation() -> None:
       s.flow._schedulePoll(0);
       assert.ok(s.flow._timer, 'il polling non e partito');
 
-      const prima = s._gen;
+      const before = s._gen;
       s.close();
       assert.equal(s.flow._timer, null, 'il timer e rimasto vivo');
-      assert.notEqual(s._gen, prima, 'la generazione non e cambiata: le continuazioni scrivono ancora');
+      assert.notEqual(s._gen, before, 'la generazione non e cambiata: le continuazioni scrivono ancora');
     """)
 
 

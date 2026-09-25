@@ -503,8 +503,8 @@ def test_the_editor_has_one_origin_and_does_not_remember_it_as_state() -> None:
     assert "_returnMode" not in codice, "la destinazione è tornata a essere uno stato"
     # E l'origine unica va *scritta*, o `_closeEditor` non sa dove riportare.
     assert "navigateBack('memory')" in codice, "l'uscita dal file non nomina la sua origine"
-    apri = _method(workspace, "_enterEditorView")
-    assert "switchMode('workspace')" in apri, (
+    open = _method(workspace, "_enterEditorView")
+    assert "switchMode('workspace')" in open, (
         "aprire un file deve impilare la propria schermata: senza, il file si "
         "disegna sotto la scheda e Indietro non ha niente da togliere"
     )

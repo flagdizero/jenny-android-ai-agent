@@ -278,7 +278,7 @@ export class WorkspaceController {
     this.currentDir = '';
     // Se la scheda non e' a schermo non c'e' niente da ridisegnare: la
     // cartella e' gia' tornata alla radice, e `mount()` legge di li'.
-    if (this._esploratoreASchermo()) this.navigateTo('');
+    if (this._explorerOnScreen()) this.navigateTo('');
   }
 
   /** La griglia che `mount()` ha agganciato e' ancora nel documento?
@@ -288,7 +288,7 @@ export class WorkspaceController {
    *  restano in mano nostra, staccati. Contro quelli un «risali di una
    *  cartella» ridisegnava una griglia che nessuno vede — e in Cervello o in
    *  Mani Indietro sembrava non fare niente. */
-  _esploratoreASchermo() {
+  _explorerOnScreen() {
     return !!this.gridEl?.isConnected;
   }
 
@@ -308,7 +308,7 @@ export class WorkspaceController {
    *  profondita', e tutto il cammino fatto sparirebbe in un colpo. */
   handleCardBack() {
     if (this.viewMode === 'editor' || !this.currentDir) return false;
-    if (!this._esploratoreASchermo()) return false;
+    if (!this._explorerOnScreen()) return false;
     this.navigateTo(parentPath(this.currentDir));
     return true;
   }
@@ -397,7 +397,7 @@ export class WorkspaceController {
     // stata ridisegnata: la cartella e' registrata, il disegno lo fara'
     // `mount()`. Andare avanti a DOM staccato riempirebbe nodi gia' buttati:
     // e staccati sono anche quelli della scheda di prima, non solo il null.
-    if (!this._esploratoreASchermo()) return;
+    if (!this._explorerOnScreen()) return;
 
     this.renderBreadcrumb(dirPath);
 
@@ -439,15 +439,15 @@ export class WorkspaceController {
    *  dire quale delle due si sta disegnando: dedurlo da `viewMode` sarebbe
    *  vero oggi e falso al primo chiamante che lo imposta dopo. */
   renderBreadcrumb(dirPath, fileName) {
-    const barra = fileName ? this.editorCrumbEl : this.breadcrumbEl;
-    if (!barra) return;
-    barra.innerHTML = '';
+    const bar = fileName ? this.editorCrumbEl : this.breadcrumbEl;
+    if (!bar) return;
+    bar.innerHTML = '';
 
     const rootCrumb = document.createElement('span');
     rootCrumb.className = 'ws-crumb';
     rootCrumb.textContent = i18n.t('workspace.root');
     rootCrumb.addEventListener('click', () => this.backToExplorerAt(''));
-    barra.appendChild(rootCrumb);
+    bar.appendChild(rootCrumb);
 
     const parts = dirPath ? dirPath.split('/').filter(Boolean) : [];
     let accumulated = '';
@@ -456,7 +456,7 @@ export class WorkspaceController {
       const sep = document.createElement('span');
       sep.className = 'ws-sep';
       sep.textContent = '\u203a';
-      barra.appendChild(sep);
+      bar.appendChild(sep);
 
       accumulated = accumulated ? accumulated + '/' + parts[i] : parts[i];
       const crumb = document.createElement('span');
@@ -466,28 +466,28 @@ export class WorkspaceController {
       const targetPath = accumulated;
       crumb.addEventListener('click', () => this.backToExplorerAt(targetPath));
 
-      barra.appendChild(crumb);
+      bar.appendChild(crumb);
     }
 
     if (fileName) {
       const sep = document.createElement('span');
       sep.className = 'ws-sep';
       sep.textContent = '\u203a';
-      barra.appendChild(sep);
+      bar.appendChild(sep);
 
       const fileCrumb = document.createElement('span');
       fileCrumb.className = 'ws-crumb';
       fileCrumb.textContent = fileName;
-      barra.appendChild(fileCrumb);
+      bar.appendChild(fileCrumb);
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'ws-save-btn';
       saveBtn.textContent = i18n.t('workspace.save');
       saveBtn.addEventListener('click', () => this.saveFile());
-      barra.appendChild(saveBtn);
+      bar.appendChild(saveBtn);
     }
 
-    barra.scrollLeft = barra.scrollWidth;
+    bar.scrollLeft = bar.scrollWidth;
   }
 
   // ── Grid rendering ──
@@ -633,7 +633,7 @@ export class WorkspaceController {
       actions.push({ icon: 'ti-trash', label: i18n.t('workspace.delete'), action: 'delete', danger: true });
     }
 
-    this._apriFoglio(
+    this._openSheet(
       actions.map(a =>
         `<button class="oc-sheet-action${a.danger ? ' danger' : ''}" data-action="${a.action}">
           <i class="ti ${a.icon}"></i>${a.label}
@@ -646,7 +646,7 @@ export class WorkspaceController {
   /* Il foglio delle azioni (`ws-context-sheet`) è uno e lo usano due menu, il
      contestuale e «Nuovo»: qui si mettono i pulsanti, si aggancia la scelta
      (*onPick* riceve il `data-action`), Annulla e il backdrop, e si apre. */
-  _apriFoglio(actionsHtml, onPick) {
+  _openSheet(actionsHtml, onPick) {
     const sheet = document.getElementById('ws-context-sheet');
     const actionsEl = document.getElementById('ws-context-actions');
     actionsEl.innerHTML = actionsHtml;
@@ -1080,7 +1080,7 @@ export class WorkspaceController {
     // aperto non deve restare sotto «Nuovo» (v. `showContextSheet`).
     const descEl = document.getElementById('ws-context-desc');
     if (descEl) descEl.textContent = '';
-    this._apriFoglio(`
+    this._openSheet(`
       <button class="oc-sheet-action" data-action="newFile">
         <i class="ti ti-file-plus"></i>${i18n.t('workspace.newFile')}
       </button>

@@ -309,8 +309,8 @@ def test_a_two_hour_shift_keeps_the_rhythm_too() -> None:
     base = datetime(2026, 10, 25, 2, 20, tzinfo=troll)
     runs = [base, *_chain("*/10 * * * *", base, 20)]
     assert set(_gaps_in_minutes(runs)) == {10}
-    ultimo = datetime(2026, 10, 25, 2, 59, 59, tzinfo=troll)
-    seguente = next_after("*/30 * * * *", ultimo)
+    last = datetime(2026, 10, 25, 2, 59, 59, tzinfo=troll)
+    seguente = next_after("*/30 * * * *", last)
     assert seguente.astimezone(timezone.utc) == datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)
     assert (seguente.hour, seguente.minute, seguente.fold) == (1, 0, 1)
 

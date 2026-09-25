@@ -31,7 +31,7 @@ _VICINI = {
 export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-export function showToast(testo, tipo) { globalThis.toasts.push([testo, tipo]); }
+export function showToast(text, type) { globalThis.toasts.push([text, type]); }
 """,
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
@@ -84,47 +84,47 @@ globalThis.fetch = async (url, opts) => {
 };
 
 const { AppsActions } = await import('./shared/apps-actions.js');
-const fonte = { onAppDataChanged() {}, jennyApps: [
+const source = { onAppDataChanged() {}, jennyApps: [
   { slug: 'orto', name: 'Orto <b>' },
   { slug: 'meteo', name: 'Meteo', view_kind: 'external' },
 ] };
-const azioni = new AppsActions(fonte, { sendChatPrompt() {} });
+const actions = new AppsActions(source, { sendChatPrompt() {} });
 const veli = () => document.body.children;
 const aspetta = (ms) => new Promise((r) => setTimeout(r, ms));
 """
 
 
-def _run(corpo: str) -> None:
+def _run(body: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "shared" / "apps-actions.js", radice / "shared" / "apps-actions.js")
-        for name, testo in _VICINI.items():
-            (radice / "shared" / name).write_text(testo, encoding="utf-8")
-        entry = radice / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(corpo), encoding="utf-8")
+        root = Path(tmp)
+        (root / "shared").mkdir()
+        shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
+        for name, text in _VICINI.items():
+            (root / "shared" / name).write_text(text, encoding="utf-8")
+        entry = root / "prova.mjs"
+        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
 def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
     _run(
         """
-        await azioni.openApp('orto');
+        await actions.openApp('orto');
         assert.equal(veli().length, 1);
         const velo = veli()[0];
         assert.equal(velo.className, 'app-frame-overlay');
         assert.ok(velo.classList.contains('visible'));
         assert.ok(velo.innerHTML.includes('Orto &lt;b&gt;'), 'il nome passa da escapeHtml');
         assert.ok(velo.innerHTML.includes('apps.close'));
-        const cornice = velo.children[0];
-        assert.equal(cornice.tag, 'iframe');
-        assert.equal(cornice.attrs.sandbox, 'allow-scripts');
-        assert.ok(cornice.src.startsWith('/apps/orto/index.html?token=segreto'));
-        assert.deepEqual(Object.keys(azioni._openApp).sort(), ['depth', 'iframe', 'overlay', 'slug']);
-        assert.equal(azioni._openApp.slug, 'orto');
-        assert.equal(azioni._openApp.overlay, velo);
-        assert.equal(azioni._openApp.iframe, cornice);
-        assert.equal(azioni._openApp.depth, 1);
+        const frame = velo.children[0];
+        assert.equal(frame.tag, 'iframe');
+        assert.equal(frame.attrs.sandbox, 'allow-scripts');
+        assert.ok(frame.src.startsWith('/apps/orto/index.html?token=segreto'));
+        assert.deepEqual(Object.keys(actions._openApp).sort(), ['depth', 'iframe', 'overlay', 'slug']);
+        assert.equal(actions._openApp.slug, 'orto');
+        assert.equal(actions._openApp.overlay, velo);
+        assert.equal(actions._openApp.iframe, frame);
+        assert.equal(actions._openApp.depth, 1);
         """
     )
 
@@ -132,14 +132,14 @@ def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
 def test_the_close_button_closes_the_veil() -> None:
     _run(
         """
-        await azioni.openApp('orto');
+        await actions.openApp('orto');
         const velo = veli()[0];
         velo.close.on.click[0]();
-        assert.equal(azioni._openApp, null);
+        assert.equal(actions._openApp, null);
         assert.equal(velo.classList.contains('visible'), false);
         await aspetta(250);
         assert.equal(velo.removed, true);
-        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy da chiudere');
+        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy fromIndex chiudere');
         """
     )
 
@@ -147,17 +147,17 @@ def test_the_close_button_closes_the_veil() -> None:
 def test_an_external_view_gets_the_wider_sandbox_and_its_proxy_closed() -> None:
     _run(
         """
-        await azioni.openApp('meteo');
+        await actions.openApp('meteo');
         assert.deepEqual(fetches, ['/api/webui/apps/meteo/view']);
         const velo = veli()[0];
         assert.equal(velo.className, 'app-frame-overlay');
         assert.ok(velo.innerHTML.includes('Meteo'));
-        const cornice = velo.children[0];
-        assert.equal(cornice.src, 'http://127.0.0.1:4555/');
-        assert.equal(cornice.attrs.sandbox,
+        const frame = velo.children[0];
+        assert.equal(frame.src, 'http://127.0.0.1:4555/');
+        assert.equal(frame.attrs.sandbox,
                      'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
-        assert.equal(azioni._openApp.external, true);
-        assert.equal(azioni._openApp.depth, 1);
+        assert.equal(actions._openApp.external, true);
+        assert.equal(actions._openApp.depth, 1);
         velo.close.on.click[0]();
         assert.deepEqual(fetches, ['/api/webui/apps/meteo/view', '/api/webui/apps/meteo/view/close']);
         """
@@ -167,13 +167,13 @@ def test_an_external_view_gets_the_wider_sandbox_and_its_proxy_closed() -> None:
 def test_opening_another_app_closes_the_first() -> None:
     _run(
         """
-        await azioni.openApp('meteo');
+        await actions.openApp('meteo');
         const primo = veli()[0];
-        await azioni.openApp('orto');
+        await actions.openApp('orto');
         assert.equal(primo.classList.contains('visible'), false);
         assert.ok(fetches.includes('/api/webui/apps/meteo/view/close'),
                   'il proxy della vista chiusa va chiuso');
-        assert.equal(azioni._openApp.slug, 'orto');
+        assert.equal(actions._openApp.slug, 'orto');
         assert.equal(veli().length, 2, 'il primo esce dopo la dissolvenza');
         await aspetta(250);
         assert.equal(primo.removed, true);
@@ -186,11 +186,11 @@ def test_a_failed_external_view_leaves_the_open_app_alone() -> None:
     vista, poi si smonta la vecchia."""
     _run(
         """
-        await azioni.openApp('orto');
-        const aperto = azioni._openApp;
+        await actions.openApp('orto');
+        const open = actions._openApp;
         globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({}) });
-        await azioni.openApp('meteo');
-        assert.equal(azioni._openApp, aperto);
+        await actions.openApp('meteo');
+        assert.equal(actions._openApp, open);
         assert.deepEqual(toasts, [['apps.viewProxyFailed', 'error']]);
         assert.equal(veli().length, 1);
         """

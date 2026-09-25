@@ -52,7 +52,7 @@ const FIT_MAX_SCALE = 1.6;
  *  condividono un numero sono due numeri, non uno — legarli vuol dire
  *  romperne uno aggiustando l'altro.
  */
-const SOGLIA_TOCCO = 10;
+const TAP_THRESHOLD = 10;
 
 /* Dove restano gli spilli fra un'apertura e l'altra.
  *
@@ -75,7 +75,7 @@ const SOGLIA_TOCCO = 10;
  *  e non roba dell'utente: il gestore file lo nasconde da se' (i pattern
  *  `internal`), quindi non compare fra i suoi file.
  */
-const FILE_SPILLI = '.jenny/map-layout.json';
+const PINS_FILE = '.jenny/map-layout.json';
 
 /* Quanto tira il punto dove hai lasciato un pallino.
  *
@@ -97,7 +97,7 @@ const FILE_SPILLI = '.jenny/map-layout.json';
  *  Il numero e' da pollice, come la soglia del tocco: troppo poco e il
  *  trascinamento non lascia traccia, troppo e si torna al chiodo.
  */
-const FORZA_ANCORA = 0.3;
+const ANCHOR_FORCE = 0.3;
 
 /* Quante pagine portano il nome scritto, e quanto lungo.
  *
@@ -187,10 +187,10 @@ export function labelledNodes(nodes) {
      risposta; a 40 non ne cambia nessuna, perche' undici nodi passano interi
      dallo `slice` comunque. Un ramo che non puo' cambiare l'esito e' solo un
      posto in piu' dove sbagliare. */
-  const ordinati = [...all].sort(
+  const sorted = [...all].sort(
     (a, b) => (b.degree || 0) - (a.degree || 0) || String(a.label).localeCompare(String(b.label)),
   );
-  return new Set(ordinati.slice(0, MAX_LABELS).map((n) => n.id));
+  return new Set(sorted.slice(0, MAX_LABELS).map((n) => n.id));
 }
 
 /* Due riquadri si toccano? `LABEL_GAP` allarga quello che si sta provando, e
@@ -261,23 +261,23 @@ export function labelBox(item, offset) {
  *  @returns `Map<id, offset>`, solo per i nomi che ci stanno.
  */
 export function placeLabels(items) {
-  const presi = [];
-  const scelti = new Map();
-  const ordinati = [...(items || [])].sort(
+  const taken = [];
+  const chosen = new Map();
+  const sorted = [...(items || [])].sort(
     (a, b) =>
       (b.priority || 0) - (a.priority || 0) ||
       String(a.id).localeCompare(String(b.id)),
   );
-  for (const item of ordinati) {
+  for (const item of sorted) {
     for (const offset of labelOffsets(item.r || 0)) {
       const box = labelBox(item, offset);
-      if (presi.some((p) => overlap(p, box))) continue;
-      presi.push(box);
-      scelti.set(item.id, offset);
+      if (taken.some((p) => overlap(p, box))) continue;
+      taken.push(box);
+      chosen.set(item.id, offset);
       break;
     }
   }
-  return scelti;
+  return chosen;
 }
 
 export class HomeMap {
@@ -296,18 +296,18 @@ export class HomeMap {
     this._drawn = null;
     /* Vero appena l'utente ha messo le mani sulla mappa: spostata, avvicinata
        o un pallino trascinato. Da quel momento quel che si vede e' una sua
-       decisione, e nessuno la riscrive — v. `_inquadra`.
+       decisione, e nessuno la riscrive — v. `_frame`.
 
        Copre tutti e tre perche' tutti e tre rispondono alla stessa domanda:
        **chi ha deciso cosa c'e' a schermo.** Lo spostamento sceglie da dove
        guardare, il trascinamento dove sta una pagina; un'inquadratura
        automatica dopo l'uno o l'altro e' un cambiamento che l'utente non ha
        chiesto e non capisce. */
-    this._presaInMano = false;
+    this._grabbed = false;
     /* Quale quaderno e' disegnato: e' la chiave degli spilli. */
     this._notebook = null;
     /* Gli spilli letti da disco, per id. Null finche' non si e' letto. */
-    this._spilli = null;
+    this._pins = null;
   }
 
   /** Disegna la mappa di *data*. La stessa risposta dell'elenco.
@@ -338,10 +338,10 @@ export class HomeMap {
        partire la fisica da posizioni casuali e poi strattonare i nodi al loro
        posto sotto gli occhi. Una lettura per disegno, non per apertura: la
        linguetta che ritorna esce prima, sopra. */
-    const spilli = await this._leggiSpilli();
+    const pins = await this._readPins();
     if (gen !== this._gen) return;
     for (const n of nodes) {
-      const p = spilli?.[n.id];
+      const p = pins?.[n.id];
       if (!p) continue;
       /* L'ancora **e** la posizione di partenza: la prima dice alle forze dove
          richiamarlo, la seconda evita che parta da un punto a caso e ci venga
@@ -377,11 +377,11 @@ export class HomeMap {
     this.stop();
     /* Un disegno nuovo e' una mappa da capo, quindi si riparte a mani libere:
        i nodi sono oggetti nuovi e gli spilli del disegno precedente non ci sono
-       piu' (v. `_trascina`). **Qui e non in `draw`**: per
+       piu' (v. `_drag`). **Qui e non in `draw`**: per
        una risposta gia' disegnata `draw` esce subito (`this._drawn === data`),
        quindi azzerarlo li' vorrebbe dire buttare via dove l'utente stava
        guardando ogni volta che torna sulla linguetta. */
-    this._presaInMano = false;
+    this._grabbed = false;
     const box = this.el.getBoundingClientRect();
     const w = Math.max(240, Math.round(box.width) || 320);
     const h = Math.max(240, Math.round(box.height) || 320);
@@ -409,9 +409,9 @@ export class HomeMap {
        intercetta il tocco fa mancare la pagina accanto. Lo scarto verticale
        vero lo sceglie `placeLabels` a fisica ferma; questo e' il posto di
        preferenza, buono finche' i nodi si muovono. */
-    const conNome = labelledNodes(nodes);
+    const withName = labelledNodes(nodes);
     const name = root.append('g').attr('class', 'home-map-labels')
-      .selectAll('text').data(nodes.filter((d) => conNome.has(d.id))).join('text')
+      .selectAll('text').data(nodes.filter((d) => withName.has(d.id))).join('text')
       .text((d) => shortLabel(d.label))
       .attr('dy', (d) => labelOffsets(radiusOf(d.degree))[0]);
 
@@ -435,8 +435,8 @@ export class HomeMap {
          Il risultato, visto al banco, e' un nodo solo all'angolo opposto e
          mezza stanza vuota in mezzo. Una molla debole verso il centro li tiene
          nella stessa pagina senza appiattire il disegno. */
-      .force('x', this._molla('x', w, h))
-      .force('y', this._molla('y', w, h))
+      .force('x', this._release('x', w, h))
+      .force('y', this._release('y', w, h))
       .force('collision', d3.forceCollide().radius((d) => radiusOf(d.degree) + 14))
       .on('tick', () => {
         line
@@ -446,7 +446,7 @@ export class HomeMap {
         name.attr('x', (d) => d.x).attr('y', (d) => d.y);
       });
 
-    dot.call(this._trascina(nodes));
+    dot.call(this._drag(nodes));
 
     /* Si trascina e si avvicina: su 590x566 un quaderno da sessanta pagine non
        ci sta, e rimpicciolire i pallini non lo renderebbe leggibile. */
@@ -459,7 +459,7 @@ export class HomeMap {
       /* I nomi si ricollocano **sempre**: dipendono da dove stanno i nodi, non
          da dove guarda l'utente. */
       this._placeLabels(name);
-      this._inquadra(svg, zoom, nodes, w, h);
+      this._frame(svg, zoom, nodes, w, h);
     });
   }
 
@@ -468,10 +468,10 @@ export class HomeMap {
    *  D3 manda lo stesso evento per un dito e per un `zoom.transform` scritto da
    *  noi, e li distingue con `sourceEvent`: c'e' solo nel primo caso. E' la
    *  differenza fra «l'utente ha guardato da qualche parte» e «ci siamo
-   *  inquadrati da soli», e serve a `_inquadra` per non passare sopra al dito.
+   *  inquadrati da soli», e serve a `_frame` per non passare sopra al dito.
    */
   _onZoom(e, root) {
-    if (e.sourceEvent) this._presaInMano = true;
+    if (e.sourceEvent) this._grabbed = true;
     root.attr('transform', e.transform);
   }
 
@@ -486,12 +486,12 @@ export class HomeMap {
    *  per i primi istanti. Rimettere la forza la fa reinizializzare, ed e' la
    *  strada di D3.
    */
-  _molla(asse, w, h) {
-    const centro = asse === 'x' ? w / 2 : h / 2;
-    const ancora = (d) => (asse === 'x' ? d.ax : d.ay);
-    const f = asse === 'x' ? d3.forceX : d3.forceY;
-    return f((d) => ancora(d) ?? centro)
-      .strength((d) => (ancora(d) == null ? 0.06 : FORZA_ANCORA));
+  _release(axis, w, h) {
+    const center = axis === 'x' ? w / 2 : h / 2;
+    const again = (d) => (axis === 'x' ? d.ax : d.ay);
+    const f = axis === 'x' ? d3.forceX : d3.forceY;
+    return f((d) => again(d) ?? center)
+      .strength((d) => (again(d) == null ? 0.06 : ANCHOR_FORCE));
   }
 
   /** Porta il file degli spilli nella cache. Vero se la cache e' buona.
@@ -504,18 +504,18 @@ export class HomeMap {
    *  gli altri quaderni**. Non in cache vuol dire anche che al prossimo disegno
    *  si riprova.
    */
-  async _caricaSpilli() {
-    if (this._spilli) return true;
+  async _loadPins() {
+    if (this._pins) return true;
     try {
-      const r = await api.readWorkspaceFile(FILE_SPILLI);
-      const dati = JSON.parse(r?.content || '{}');
-      if (!dati || typeof dati !== 'object' || Array.isArray(dati)) {
+      const r = await api.readWorkspaceFile(PINS_FILE);
+      const data = JSON.parse(r?.content || '{}');
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new Error('map layout is not an object');
       }
-      this._spilli = dati;
+      this._pins = data;
     } catch (err) {
       if (err?.status === 404) {
-        this._spilli = {};
+        this._pins = {};
         return true;
       }
       console.warn('casa.map: pin layout unreadable, left untouched', err);
@@ -529,12 +529,12 @@ export class HomeMap {
    *  Una lettura non riuscita torna null anche lei, **di proposito**: una
    *  disposizione che non si vede per un giro e' un peccato, una mappa che non
    *  si disegna e' un guasto, e fra i due non c'e' partita. Quel che la lettura
-   *  fallita non fa piu' e' autorizzare una scrittura (v. `_caricaSpilli`).
+   *  fallita non fa piu' e' autorizzare una scrittura (v. `_loadPins`).
    */
-  async _leggiSpilli() {
+  async _readPins() {
     if (!this._notebook) return null;
-    if (!(await this._caricaSpilli())) return null;
-    return this._spilli[this._notebook] || null;
+    if (!(await this._loadPins())) return null;
+    return this._pins[this._notebook] || null;
   }
 
   /** Scrive gli spilli di questo quaderno. Chiamata a fine trascinamento.
@@ -554,23 +554,23 @@ export class HomeMap {
    *  stanza e' una), ma una scrittura venuta da fuori nel frattempo si perde:
    *  il file si rilegge solo al primo disegno.
    */
-  async _salvaSpilli(nodes) {
+  async _savePins(nodes) {
     const notebook = this._notebook;
     if (!notebook) return;
-    if (!(await this._caricaSpilli())) return;
-    const miei = {};
+    if (!(await this._loadPins())) return;
+    const mine = {};
     for (const n of nodes) {
       if (n.ax === null || n.ax === undefined) continue;
       /* L'ancora, non dove il nodo si trova adesso: quella e' la scelta
          dell'utente, questa e' dove le forze l'hanno lasciato riposare — e
          salvare la seconda farebbe scivolare la disposizione a ogni apertura. */
-      miei[n.id] = [Math.round(n.ax), Math.round(n.ay)];
+      mine[n.id] = [Math.round(n.ax), Math.round(n.ay)];
     }
-    const tutti = { ...this._spilli, [notebook]: miei };
-    this._spilli = tutti;
-    const testo = JSON.stringify(tutti);
+    const all = { ...this._pins, [notebook]: mine };
+    this._pins = all;
+    const text = JSON.stringify(all);
     try {
-      await rpc.writeWorkspaceFile(FILE_SPILLI, testo);
+      await rpc.writeWorkspaceFile(PINS_FILE, text);
     } catch (err) {
       /* La cartella puo' non esserci su un workspace appena nato: `.jenny/` la
          creano le funzioni che ci scrivono, e questa potrebbe essere la prima.
@@ -579,7 +579,7 @@ export class HomeMap {
          una disposizione non salvata sarebbe rumore sopra un gesto riuscito. */
       try {
         await api.createWorkspaceFolder('.jenny');
-        await rpc.writeWorkspaceFile(FILE_SPILLI, testo);
+        await rpc.writeWorkspaceFile(PINS_FILE, text);
       } catch (err2) {
         console.warn('casa.map: pin layout not saved', err2);
       }
@@ -600,12 +600,12 @@ export class HomeMap {
    *  Lo spillo e' una **molla**, non un chiodo: all'`end` il punto dove il dito
    *  ha lasciato il pallino diventa la sua ancora (`ax`/`ay`) e `fx`/`fy` si
    *  rilasciano, quindi le forze lo toccano ancora ma lo richiamano li' (v.
-   *  `_molla`). E dura piu' del disegno: all'`end` gli spilli si scrivono nel
-   *  workspace (`_salvaSpilli`, chiave il quaderno e poi il percorso della
+   *  `_release`). E dura piu' del disegno: all'`end` gli spilli si scrivono nel
+   *  workspace (`_savePins`, chiave il quaderno e poi il percorso della
    *  pagina) e il disegno dopo li rilegge prima di far partire la fisica.
    *
    *  **`clickDistance` e' la parte che si rompe per prima**, ed e' anche il
-   *  motivo per cui il numero ha un commento suo (v. `SOGLIA_TOCCO`): sotto la
+   *  motivo per cui il numero ha un commento suo (v. `TAP_THRESHOLD`): sotto la
    *  soglia il gesto resta un tocco e la pagina si apre, sopra D3 sopprime il
    *  click e il pallino si e' solo spostato. Senza, ogni trascinamento aprirebbe
    *  anche la pagina — cioe' ti butterebbe nel lettore proprio mentre stavi
@@ -616,14 +616,14 @@ export class HomeMap {
    *  che niente si riassesti. Si spegne all'`end`, e la quiete che segue
    *  ricolloca i nomi (v. `_placeLabels`, chiamato da `sim.on('end')`).
    */
-  _trascina(nodes) {
+  _drag(nodes) {
     return d3.drag()
-      .clickDistance(SOGLIA_TOCCO)
+      .clickDistance(TAP_THRESHOLD)
       .on('start', (e, d) => {
         /* Da qui la mappa e' sua: senza questo, la quiete dopo il
            trascinamento reinquadrerebbe la nuvola e sposterebbe sotto gli occhi
            il pallino appena messo a posto. */
-        this._presaInMano = true;
+        this._grabbed = true;
         if (!e.active) this._sim.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
@@ -642,12 +642,12 @@ export class HomeMap {
         d.ay = d.fy;
         d.fx = null;
         d.fy = null;
-        this._sim.force('x', this._molla('x', this._w, this._h));
-        this._sim.force('y', this._molla('y', this._w, this._h));
+        this._sim.force('x', this._release('x', this._w, this._h));
+        this._sim.force('y', this._release('y', this._w, this._h));
         /* Si salva alzando il dito, che e' l'unico momento in cui uno spillo
            nasce o si sposta. Non si aspetta: la scrittura va su localhost e il
            gesto e' gia' finito. */
-        this._salvaSpilli(nodes);
+        this._savePins(nodes);
       });
   }
 
@@ -672,8 +672,8 @@ export class HomeMap {
    *  riga **ogni pallino trascinato costerebbe un salto della vista** nel
    *  momento in cui si alza il dito.
    */
-  _inquadra(svg, zoom, nodes, w, h) {
-    if (this._presaInMano) return;
+  _frame(svg, zoom, nodes, w, h) {
+    if (this._grabbed) return;
     const xs = nodes.map((n) => n.x);
     const ys = nodes.map((n) => n.y);
     const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
@@ -698,9 +698,9 @@ export class HomeMap {
    *  riquadri che non si toccavano non cominciano a toccarsi.
    */
   _placeLabels(selection) {
-    const misure = [];
+    const measures = [];
     selection.each(function (d) {
-      misure.push({
+      measures.push({
         id: d.id,
         x: d.x,
         y: d.y,
@@ -712,9 +712,9 @@ export class HomeMap {
         priority: d.degree || 0,
       });
     });
-    const scelti = placeLabels(misure);
+    const chosen = placeLabels(measures);
     selection
-      .attr('dy', (d) => scelti.get(d.id) ?? 0)
-      .attr('display', (d) => (scelti.has(d.id) ? null : 'none'));
+      .attr('dy', (d) => chosen.get(d.id) ?? 0)
+      .attr('display', (d) => (chosen.has(d.id) ? null : 'none'));
   }
 }

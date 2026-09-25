@@ -52,18 +52,18 @@ def _notebook(workspace: Path, name: str, *, con_chat: bool = True) -> None:
                 _ensure(traccia)
 
 
-def _rename(workspace: Path, name: str = VECCHIO, nuovo: str = NUOVO, **kw):
+def _rename(workspace: Path, name: str = VECCHIO, fresh: str = NUOVO, **kw):
     svuotate: list[str] = []
-    esito = rename_project(
+    outcome = rename_project(
         wikis_dir=workspace / "wikis",
         scripts_dir=workspace / "skills" / "llm-wiki" / "scripts",
         workspace=workspace,
         name=name,
-        new_name=nuovo,
+        new_name=fresh,
         invalidate_session=svuotate.append,
         **kw,
     )
-    return esito, svuotate
+    return outcome, svuotate
 
 
 # ── Cosa si sposta ──────────────────────────────────────────────────────────
@@ -71,9 +71,9 @@ def _rename(workspace: Path, name: str = VECCHIO, nuovo: str = NUOVO, **kw):
 
 def test_after_a_rename_no_trace_carries_the_old_name(workspace) -> None:
     _notebook(workspace, VECCHIO)
-    esito, _ = _rename(workspace)
+    outcome, _ = _rename(workspace)
 
-    assert esito["chat_moved"] is True
+    assert outcome["chat_moved"] is True
     assert not (workspace / "wikis" / VECCHIO).exists()
     assert (workspace / "wikis" / NUOVO / "wiki" / "index.md").exists()
     assert not describe_project_traces(workspace, f"project:{VECCHIO}").exists, (
@@ -88,22 +88,22 @@ def test_the_rename_logs_in_english(workspace) -> None:
     """AGENTS.md: log in inglese (Q6 della revisione profonda)."""
     from loguru import logger
 
-    righe: list[str] = []
-    sink = logger.add(lambda m: righe.append(m.record["message"]), level="DEBUG")
+    rows: list[str] = []
+    sink = logger.add(lambda m: rows.append(m.record["message"]), level="DEBUG")
     try:
         _notebook(workspace, VECCHIO)
         _rename(workspace)
     finally:
         logger.remove(sink)
-    assert f"Notebook renamed: {VECCHIO} -> {NUOVO} (chat moved: True)" in righe
+    assert f"Notebook renamed: {VECCHIO} -> {NUOVO} (chat moved: True)" in rows
 
 
 def test_a_notebook_without_a_conversation_just_moves_its_folder(workspace) -> None:
     """Un quaderno appena creato non ha ancora chat: non c'e' niente da seguire,
     e questo non e' un rifiuto (`follow_renamed_project` lo sarebbe)."""
     _notebook(workspace, VECCHIO, con_chat=False)
-    esito, _ = _rename(workspace)
-    assert esito["chat_moved"] is False
+    outcome, _ = _rename(workspace)
+    assert outcome["chat_moved"] is False
     assert (workspace / "wikis" / NUOVO / "wiki").is_dir()
 
 
@@ -124,7 +124,7 @@ def test_a_name_that_would_not_open_is_refused(workspace, cattivo) -> None:
     riapre e' una chat perduta con l'apparenza di un successo."""
     _notebook(workspace, VECCHIO)
     with pytest.raises(ProjectRenameError):
-        _rename(workspace, nuovo=cattivo)
+        _rename(workspace, fresh=cattivo)
     assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
     assert describe_project_traces(workspace, f"project:{VECCHIO}").exists
 
@@ -140,7 +140,7 @@ def test_a_notebook_without_a_chat_gets_no_second_guard(workspace) -> None:
     """
     _notebook(workspace, VECCHIO, con_chat=False)
     with pytest.raises(ProjectRenameError):
-        _rename(workspace, nuovo="../fuori")
+        _rename(workspace, fresh="../fuori")
     assert (workspace / "wikis" / VECCHIO / "wiki").is_dir()
     assert not (workspace / "fuori").exists(), "la cartella e' uscita da wikis/"
 
@@ -190,7 +190,7 @@ def test_something_that_is_not_a_notebook_is_refused(workspace) -> None:
 def test_the_same_name_is_refused(workspace) -> None:
     _notebook(workspace, VECCHIO)
     with pytest.raises(ProjectRenameError):
-        _rename(workspace, nuovo=VECCHIO)
+        _rename(workspace, fresh=VECCHIO)
 
 
 # ── Quando la chat non puo' seguire ─────────────────────────────────────────
@@ -220,13 +220,13 @@ def test_halfway_is_left_to_the_journal_not_undone(workspace, monkeypatch) -> No
 
     _notebook(workspace, VECCHIO)
 
-    def _a_meta(ws, vecchia, nuova):
-        seguito._write_journal(ws, [(vecchia, nuova)])
+    def _a_meta(ws, old, fresh):
+        seguito._write_journal(ws, [(old, fresh)])
         return False, "moving the conversation's files stopped halfway"
 
     monkeypatch.setattr(modulo, "follow_renamed_project", _a_meta)
-    esito, _ = _rename(workspace)
-    assert esito["chat_moved"] is False
+    outcome, _ = _rename(workspace)
+    assert outcome["chat_moved"] is False
     assert (workspace / "wikis" / NUOVO / "wiki").is_dir(), "la cartella e' tornata indietro"
 
 

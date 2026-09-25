@@ -185,9 +185,9 @@ def test_the_cost_line_follows_the_selection() -> None:
     # l'informazione che l'utente sta valutando. Il comando è passato da
     # tendina a segmenti (la tavola lo vuole così, e il pezzo esisteva già):
     # cambia l'evento, non la regola.
-    click = source.index("bottoni.forEach(btn => btn.addEventListener('click'")
-    assert "const mostra = (mode)" in source[:click], "`mostra` definita dopo l'uso"
-    assert "mostra(mode)" in source[click : click + 400]
+    click = source.index("buttons.forEach(btn => btn.addEventListener('click'")
+    assert "const show = (mode)" in source[:click], "`mostra` definita dopo l'uso"
+    assert "show(mode)" in source[click : click + 400]
 
 
 def test_an_unknown_mode_prints_nothing_instead_of_the_raw_key() -> None:

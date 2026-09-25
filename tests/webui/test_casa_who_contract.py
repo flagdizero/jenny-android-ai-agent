@@ -39,7 +39,7 @@ def test_the_notebooks_are_a_page_of_the_home() -> None:
     assert 'id="home-notebooks"' in page, "la pagina Quaderni non ha dove disegnarsi"
     app = APP_JS.read_text(encoding="utf-8")
     assert "new WhoPanel(document.getElementById('home-notebooks')" in app
-    assert "this.homePages.registra('notebooks', { accendi: () => this.who.mostra() });" in app
+    assert "this.homePages.register('notebooks', { activate: () => this.who.show() });" in app
 
 
 def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
@@ -49,8 +49,8 @@ def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
     html = INDEX.read_text(encoding="utf-8")
     page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
     assert 'id="home-notebooks-new"' in page, "la pagina Quaderni non ha il +"
-    elenco = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
-    assert "home-notebooks-new" not in elenco, "il + e' finito dentro l'elenco che scorre"
+    list = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
+    assert "home-notebooks-new" not in list, "il + e' finito dentro l'elenco che scorre"
     app = APP_JS.read_text(encoding="utf-8")
     assert "getElementById('home-notebooks-new')" in app
     assert "addEventListener('click', () => this.createNotebook())" in app
@@ -68,8 +68,8 @@ def test_the_old_dropdown_left_nothing_behind() -> None:
     assert 'id="home-who"' not in html, "il titolo e' tornato un comando"
     assert not re.search(r"<h1>\s*<button", html), "c'e' di nuovo un bottone nel titolo"
     src = WHO_JS.read_text(encoding="utf-8")
-    for resto in ("showModal", "createElement('dialog')", "::backdrop", "aria-expanded"):
-        assert resto not in src, f"{resto}: il pannello e' ancora una tendina"
+    for rest in ("showModal", "createElement('dialog')", "::backdrop", "aria-expanded"):
+        assert rest not in src, f"{rest}: il pannello e' ancora una tendina"
     assert ".home-who::backdrop" not in CSS.read_text(encoding="utf-8")
 
 

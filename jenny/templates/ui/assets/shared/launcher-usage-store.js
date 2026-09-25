@@ -78,27 +78,27 @@ export function nativeStore(native) {
  *  @returns {'migrated'|'native-has-data'|'nothing-to-move'|'failed'}
  */
 export function migrateUsage(native, local) {
-  let esistente = null;
+  let existing = null;
   try {
-    esistente = native.getLauncherUsage() || null;
+    existing = native.getLauncherUsage() || null;
   } catch {
     return 'failed';
   }
   /* Il ponte ha già qualcosa: è lui la verità, e riportarci sopra un
      `localStorage` stantio butterebbe via gli avvii veri di oggi. */
-  if (esistente) return 'native-has-data';
+  if (existing) return 'native-has-data';
 
-  let vecchio = null;
+  let old = null;
   try {
-    vecchio = local?.getItem(USAGE_KEY) || null;
+    old = local?.getItem(USAGE_KEY) || null;
   } catch {
-    vecchio = null;
+    old = null;
   }
-  if (!vecchio) return 'nothing-to-move';
+  if (!old) return 'nothing-to-move';
 
   try {
-    native.setLauncherUsage(String(vecchio));
-    if (native.getLauncherUsage() !== String(vecchio)) return 'failed';
+    native.setLauncherUsage(String(old));
+    if (native.getLauncherUsage() !== String(old)) return 'failed';
   } catch {
     return 'failed';
   }

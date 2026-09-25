@@ -303,10 +303,10 @@ class TestIlNumeroEQuelloDellIniettore:
         (project / "wiki").mkdir(parents=True)
         page = _page(project, "lunga.md", "# Lunga\n\n" + "x" * 5_900 + "CODA")
 
-        sotto = await _append_with_edit(root, page, "CODA", "y" * 50)
+        under = await _append_with_edit(root, page, "CODA", "y" * 50)
         sopra = await _append_with_edit(root, page, "CODA", "y" * 200)
 
-        assert FIRED not in sotto
+        assert FIRED not in under
         assert FIRED in sopra
         assert f"{len(page.read_text(encoding='utf-8').strip()):,}" in sopra
 

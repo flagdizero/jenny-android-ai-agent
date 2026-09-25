@@ -101,7 +101,7 @@ export function scoreEntry(entry, terms) {
  *  che esplode (quota piena, modalità privata di certi WebView) deve degradare
  *  a "cassetto in ordine alfabetico", mai a un cassetto che non si apre.
  *
- *  Formato compatto `{ "<chiave>": [conteggio, ultimoMs] }`: con qualche
+ *  Formato compatto `{ "<key>": [conteggio, ultimoMs] }`: con qualche
  *  centinaio di voci un oggetto per riga costerebbe il triplo dei byte per
  *  informazione identica, e questo valore si riscrive interamente a ogni avvio.
  */

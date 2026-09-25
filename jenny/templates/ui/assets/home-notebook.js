@@ -21,88 +21,88 @@
 
 import { i18n } from './shared/i18n.js';
 import { escapeHtml } from './shared/utils.js';
-import { disegnaRiga } from './shared/apps-actions.js';
+import { drawRow } from './shared/apps-actions.js';
 import { projectKey } from './shared/conversation-list.js';
 
 export class NotebookCard {
-  /** @param guscio `{ homePages(), apri(name), elimina(name), rename?(name) }`. */
-  constructor(guscio) {
-    this.guscio = guscio;
-    this.foglio = document.getElementById('home-notebook-sheet');
+  /** @param guscio `{ homePages(), open(name), delete(name), rename?(name) }`. */
+  constructor(shell) {
+    this.shell = shell;
+    this.sheet = document.getElementById('home-notebook-sheet');
   }
 
   get isOpen() {
-    return Boolean(this.foglio?.open);
+    return Boolean(this.sheet?.open);
   }
 
   close() {
-    if (this.isOpen) this.foglio.close();
+    if (this.isOpen) this.sheet.close();
   }
 
   /** Le righe per il quaderno *nome*, nell'ordine della scheda di un'app. */
-  righe(name) {
-    const chiave = projectKey(name);
-    const stato = this.guscio.homePages?.()?.stato('conversation', chiave) || null;
-    const righe = [{ icon: 'ti-message', label: i18n.t('apps.open'), action: 'open' }];
-    if (stato === 'appesa') {
-      righe.push({ icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' });
-    } else if (stato) {
-      righe.push({
+  rows(name) {
+    const key = projectKey(name);
+    const state = this.shell.homePages?.()?.state('conversation', key) || null;
+    const rows = [{ icon: 'ti-message', label: i18n.t('apps.open'), action: 'open' }];
+    if (state === 'pending') {
+      rows.push({ icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' });
+    } else if (state) {
+      rows.push({
         icon: 'ti-pin',
         label: i18n.t('apps.pinAsPage'),
         action: 'pin',
-        ...(stato === 'piena' ? { disabled: true, reason: i18n.t('apps.pageFull') } : {}),
+        ...(state === 'piena' ? { disabled: true, reason: i18n.t('apps.pageFull') } : {}),
       });
     }
-    if (this.guscio.rename) {
-      righe.push({ icon: 'ti-cursor-text', label: i18n.t('home.notebook.rename'), action: 'rename' });
+    if (this.shell.rename) {
+      rows.push({ icon: 'ti-cursor-text', label: i18n.t('home.notebook.rename'), action: 'rename' });
     }
-    righe.push({ icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true });
-    return righe;
+    rows.push({ icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true });
+    return rows;
   }
 
-  mostra(name) {
-    if (!this.foglio || !name) return;
+  show(name) {
+    if (!this.sheet || !name) return;
     document.getElementById('home-notebook-sheet-title').innerHTML =
       `<div class="app-sheet-head">
         <div class="app-sheet-icon"><i class="ti ti-notebook"></i></div>
         <div class="app-sheet-name">${escapeHtml(name)}</div>
       </div>`;
 
-    const azioni = document.getElementById('home-notebook-sheet-actions');
-    azioni.innerHTML = this.righe(name).map(disegnaRiga).join('');
-    azioni.querySelectorAll('.oc-sheet-action').forEach((b) => {
+    const actions = document.getElementById('home-notebook-sheet-actions');
+    actions.innerHTML = this.rows(name).map(drawRow).join('');
+    actions.querySelectorAll('.oc-sheet-action').forEach((b) => {
       b.addEventListener('click', async (e) => {
         e.stopPropagation();
         this.close();
-        await this.fai(b.dataset.action, name);
+        await this.perform(b.dataset.action, name);
       });
     });
 
-    const annulla = document.getElementById('home-notebook-sheet-cancel');
-    if (annulla) {
-      annulla.textContent = i18n.t('common.cancel');
-      annulla.onclick = () => this.close();
+    const cancel = document.getElementById('home-notebook-sheet-cancel');
+    if (cancel) {
+      cancel.textContent = i18n.t('common.cancel');
+      cancel.onclick = () => this.close();
     }
     /* Il tocco sintetico che segue una pressione lunga arriva sul velo e
        chiuderebbe subito la scheda appena aperta: per un attimo lo si ignora,
        come fa la scheda di un'app. */
-    const aperta = Date.now();
-    this.foglio.onclick = (e) => {
-      if (e.target === this.foglio && Date.now() - aperta > 400) this.close();
+    const open = Date.now();
+    this.sheet.onclick = (e) => {
+      if (e.target === this.sheet && Date.now() - open > 400) this.close();
     };
-    this.foglio.showModal();
+    this.sheet.showModal();
   }
 
   /** Cosa fa ogni riga: chiede al guscio. */
-  async fai(azione, name) {
-    const chiave = projectKey(name);
-    const homePages = this.guscio.homePages?.();
-    if (azione === 'open') return this.guscio.apri(name);
-    if (azione === 'pin') return homePages?.appendi('conversation', chiave);
-    if (azione === 'unpin') return homePages?.stacca('conversation', chiave);
-    if (azione === 'rename') return this.guscio.rename?.(name);
-    if (azione === 'delete') return this.guscio.elimina(name);
+  async perform(action, name) {
+    const key = projectKey(name);
+    const homePages = this.shell.homePages?.();
+    if (action === 'open') return this.shell.open(name);
+    if (action === 'pin') return homePages?.append('conversation', key);
+    if (action === 'unpin') return homePages?.detach('conversation', key);
+    if (action === 'rename') return this.shell.rename?.(name);
+    if (action === 'delete') return this.shell.delete(name);
     return undefined;
   }
 }

@@ -175,9 +175,9 @@ def test_reduced_motion_covers_the_switch_too() -> None:
     # (v. anche `test_reduced_motion_contract.py`).
     spenti = {
         " ".join(s.split())
-        for selettori, corpo, ctx in css_levels.rules(css)
+        for selettori, body, ctx in css_levels.rules(css)
         if any("prefers-reduced-motion: reduce" in at for at in ctx)
-        and "transform: none" in corpo
+        and "transform: none" in body
         for s in selettori.split(",")
     }
     assert spenti, "blocco prefers-reduced-motion non trovato"

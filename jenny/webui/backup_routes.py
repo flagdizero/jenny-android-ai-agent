@@ -152,12 +152,12 @@ class BackupRoutes:
         """
         from jenny.config import store
 
-        adesso = time.time()
+        now = time.time()
 
         def _apply(config: Config) -> bool:
-            if config.snapshots.last_export_at == adesso:
+            if config.snapshots.last_export_at == now:
                 return False
-            config.snapshots.last_export_at = adesso
+            config.snapshots.last_export_at = now
             return True
 
         try:
@@ -165,7 +165,7 @@ class BackupRoutes:
         except Exception:
             self._log.exception("Recording the backup export failed")
             return http_error(500, "could not record the export")
-        return http_json_response({"ok": True, "last_export_at": adesso})
+        return http_json_response({"ok": True, "last_export_at": now})
 
     async def _import(self, request: WsRequest, manager: "BackupManager") -> Response:
         from jenny.snapshot.backup import BackupError

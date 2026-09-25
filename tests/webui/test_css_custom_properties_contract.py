@@ -21,8 +21,8 @@ ASSETS = UI / "assets"
 SHEETS = ("mobile-style.css", "home-style.css")
 
 
-def _senza_commenti(testo: str) -> str:
-    return re.sub(r"/\*.*?\*/", "", testo, flags=re.S)
+def _senza_commenti(text: str) -> str:
+    return re.sub(r"/\*.*?\*/", "", text, flags=re.S)
 
 
 def test_every_custom_property_read_by_the_sheets_is_defined() -> None:
@@ -37,9 +37,9 @@ def test_every_custom_property_read_by_the_sheets_is_defined() -> None:
         if "vendor" not in f.relative_to(ASSETS).parts
     ]
     sorgenti += [f.read_text(encoding="utf-8") for f in UI.glob("*.html")]
-    testo = "".join(sorgenti)
-    scritte = set(re.findall(r"""['"`](--[\w-]+)['"`]""", testo))
-    scritte |= set(re.findall(r"(--[\w-]+)\s*:", testo))
+    text = "".join(sorgenti)
+    scritte = set(re.findall(r"""['"`](--[\w-]+)['"`]""", text))
+    scritte |= set(re.findall(r"(--[\w-]+)\s*:", text))
 
     mai = sorted(lette - dichiarate - scritte)
     assert not mai, (

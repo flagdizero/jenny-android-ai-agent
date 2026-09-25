@@ -144,9 +144,9 @@ def test_the_row_says_when_like_a_person_would() -> None:
     """La stessa frase dell'ultimo controllo aggiornamenti: e' la stessa
     domanda, e la risposta la scrive un posto solo (`shared/when.js`)."""
     _run_js("""
-      const adesso = Date.now() / 1000;
-      assert.ok(backupValue({ last_export_at: adesso }).startsWith('oggi alle '),
-        backupValue({ last_export_at: adesso }));
+      const now = Date.now() / 1000;
+      assert.ok(backupValue({ last_export_at: now }).startsWith('oggi alle '),
+        backupValue({ last_export_at: now }));
 
       /* I secondi epoch del config diventano millisecondi: sbagliare la
          conversione darebbe «gennaio 1970», che a schermo sembra un guasto. */
@@ -154,7 +154,7 @@ def test_the_row_says_when_like_a_person_would() -> None:
       assert.ok(!backupValue({ last_export_at: treGiorni }).includes('1970'),
         backupValue({ last_export_at: treGiorni }));
 
-      const s = room({ last_export_at: adesso });
+      const s = room({ last_export_at: now });
       assert.ok(nodi['home-backup-when'].textContent.includes('oggi alle '));
       assert.equal(nodi['home-backup-when'].classList.contains('is-warn'), false);
     """)

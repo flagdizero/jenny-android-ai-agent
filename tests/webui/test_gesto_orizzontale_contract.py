@@ -70,8 +70,8 @@ def test_the_measured_constants_live_in_one_place() -> None:
     for p in SORGENTI:
         if p == MODULO:
             continue
-        testo = p.read_text(encoding="utf-8")
-        if re.search(r"Math\.abs\(d[xy]\)", testo):
+        text = p.read_text(encoding="utf-8")
+        if re.search(r"Math\.abs\(d[xy]\)", text):
             altrove.append(p.relative_to(ASSETS).as_posix())
     assert not altrove, f"{altrove} decidono un asse per conto loro"
 

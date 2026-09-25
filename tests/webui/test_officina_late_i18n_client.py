@@ -38,11 +38,11 @@ const i18n = {
 def test_the_header_actions_are_translated_after_load() -> None:
     funzioni = "\n".join(
         function(HEADER, name)
-        for name in ("pillCasa", "cassetto", "consolle", "fileAperto", "settings")
+        for name in ("homePill", "drawer", "consoleConfig", "openFile", "settings")
     )
     out = run_js(
         _I18N
-        + "const VISTA_DI = { brain: 'settings', hands: 'settings', memory: 'settings' };\n"
+        + "const VIEW_OF = { brain: 'settings', hands: 'settings', memory: 'settings' };\n"
         + funzioni
         + "\nclass H {\n"
         + member(HEADER, "constructor")
@@ -71,21 +71,21 @@ def test_the_minichat_labels_are_translated_after_load() -> None:
     out = run_js(
         _I18N
         + """
-function nodo() {
+function node() {
   const n = {
     attrs: {}, classList: { add() {} }, dataset: {}, placeholder: '',
     setAttribute(k, v) { this.attrs[k] = v; },
     addEventListener() {},
     appendChild() {},
-    figli: {},
-    querySelector(sel) { return (this.figli[sel] ||= nodo()); },
+    children: {},
+    querySelector(sel) { return (this.children[sel] ||= node()); },
   };
   return n;
 }
-globalThis.document = { createElement: () => nodo() };
+globalThis.document = { createElement: () => node() };
 class JennyMascot { _buildDom() {} }
 class J extends JennyMascot {
-  constructor() { super(); this.host = nodo(); }
+  constructor() { super(); this.host = node(); }
 """
         + member(JENNY, "_buildDom")
         + """

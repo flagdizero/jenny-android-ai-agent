@@ -437,7 +437,7 @@ def test_a_drawer_shows_only_its_own_jobs() -> None:
       const hands = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
           _job('heartbeat', 'system'), _job('acqua-basilico', 'user')]))},
-        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
         tutto: tutto.rows.map((r) => r.id),
         hands: hands.rows.map((r) => r.id),
@@ -463,7 +463,7 @@ def test_the_banner_talks_about_the_jobs_you_can_see() -> None:
     out = _run_js(f"""
       const tutto = buildCronView({_payload(jobs=spenti)}, {{ tr }});
       const hands = buildCronView({_payload(jobs=spenti)},
-        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{
         tutto: tutto.banner, hands: hands.banner,
       }}));
@@ -486,7 +486,7 @@ def test_the_count_describes_what_is_on_screen() -> None:
     out = _run_js(f"""
       const tutto = buildCronView({_payload(jobs=jobs)}, {{ tr }});
       const hands = buildCronView({_payload(jobs=jobs)},
-        {{ tr, tieni: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
       console.log(JSON.stringify({{ tutto: tutto.counts, hands: hands.counts }}));
     """)
     visto = json.loads(out)
@@ -500,7 +500,7 @@ def test_without_a_filter_nothing_changes() -> None:
     jobs = ', '.join([_job('dream', 'system'), _job('acqua-basilico', 'user')])
     out = _run_js(f"""
       const a = buildCronView({_payload(jobs=jobs)}, {{ tr }});
-      const b = buildCronView({_payload(jobs=jobs)}, {{ tr, tieni: undefined }});
+      const b = buildCronView({_payload(jobs=jobs)}, {{ tr, keep: undefined }});
       console.log(JSON.stringify({{ a: a.rows.map((r) => r.id), b: b.rows.map((r) => r.id),
                                     conti: a.counts }}));
     """)
@@ -510,7 +510,7 @@ def test_without_a_filter_nothing_changes() -> None:
 
 
 def _predicato_di_mani() -> str:
-    """`LAVORI_DI_MANI` preso dal sorgente, non riscritto qui.
+    """`HANDS_JOBS` preso dal sorgente, non riscritto qui.
 
     Ricopiarlo vorrebbe dire misurare la copia: il difetto che conta e' che
     *quel* predicato cambi, non che ne esista uno giusto da qualche parte.
@@ -521,8 +521,8 @@ def _predicato_di_mani() -> str:
         Path(__file__).resolve().parents[2]
         / "jenny" / "templates" / "ui" / "assets" / "mobile-settings.js"
     ).read_text(encoding="utf-8")
-    m = re.search(r"^export const LAVORI_DI_MANI = (.+);$", src, re.M)
-    assert m, "LAVORI_DI_MANI non si trova piu' in mobile-settings.js"
+    m = re.search(r"^export const HANDS_JOBS = (.+);$", src, re.M)
+    assert m, "HANDS_JOBS non si trova piu' in mobile-settings.js"
     return m.group(1)
 
 
@@ -536,7 +536,7 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
     giro e' in casa.
     """
     out = _run_js(f"""
-      const tieni = {_predicato_di_mani()};
+      const keep = {_predicato_di_mani()};
       const lavori = [
         {{ id: 'dream', kind: 'system' }},
         {{ id: 'gardener', kind: 'system' }},
@@ -544,7 +544,7 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
         {{ id: 'heartbeat', kind: 'system' }},
         {{ id: 'acqua-basilico', kind: 'user' }},
       ];
-      console.log(JSON.stringify(lavori.filter(tieni).map((j) => j.id)));
+      console.log(JSON.stringify(lavori.filter(keep).map((j) => j.id)));
     """)
     assert sorted(json.loads(out)) == ["acqua-basilico", "heartbeat"], json.loads(out)
 
@@ -555,11 +555,11 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
 def test_counting_survives_a_payload_without_jobs() -> None:
     """Un guardiano su due non e' un guardiano.
 
-    ``visto`` nasce da ``tieni && payload?.jobs ? {...} : payload``: quando
+    ``visto`` nasce da ``keep && payload?.jobs ? {...} : payload``: quando
     ``jobs`` manca, ``visto`` **e'** ``payload``, cioe' un oggetto senza
     ``jobs``. Le due righe che ricontano i lavori ci facevano ``.filter``
     sopra — e con un filtro attivo, che Mani passa **sempre**
-    (``LAVORI_DI_MANI``), era un ``TypeError`` che portava via l'intero gruppo
+    (``HANDS_JOBS``), era un ``TypeError`` che portava via l'intero gruppo
     «quando agisce da sola».
 
     Trovato per caso il 21/09/2026 mentre si provava un altro passo, con una
@@ -569,7 +569,7 @@ def test_counting_survives_a_payload_without_jobs() -> None:
     out = _run_js("""
       const vista = buildCronView(
         { service_running: true },
-        { nowMs: NOW, tr, locale: 'it', tieni: (j) => j.kind !== 'system' },
+        { nowMs: NOW, tr, locale: 'it', keep: (j) => j.kind !== 'system' },
       );
       console.log(JSON.stringify({ disponibile: vista.available, conteggi: vista.counts }));
     """)

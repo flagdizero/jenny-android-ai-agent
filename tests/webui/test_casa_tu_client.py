@@ -93,12 +93,12 @@ const document = {
    `<html>`, sul `localStorage` e sulle barre di sistema di Android. Qui conta
    che la striscia chieda il tema giusto e si rimetta a posto dopo. */
 __THEMES__
-let acceso = 'chanel';
+let lit = 'chanel';
 const applicati = [];
-function currentTheme() { return THEMES.find((t) => t.id === acceso) || THEMES[0]; }
+function currentTheme() { return THEMES.find((t) => t.id === lit) || THEMES[0]; }
 function setTheme(id) {
   applicati.push(id);
-  acceso = id;
+  lit = id;
   return currentTheme();
 }
 
@@ -120,7 +120,7 @@ class HomeYou {
 
 function room() {
   for (const k of Object.keys(nodi)) delete nodi[k];
-  acceso = 'chanel';
+  lit = 'chanel';
   applicati.length = 0;
   return new HomeYou({});
 }
@@ -183,10 +183,10 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
         assert.equal(card.dataset.theme, tema.id, 'ordine diverso da quello del registro');
         const name = card.children[card.children.length - 1];
         assert.equal(name.textContent, shortThemeName(tema.label));
-        const quadrato = card.children[0];
+        const square = card.children[0];
         for (const c of tema.swatch) {
-          assert.ok(quadrato.style.background.includes(c),
-                    tema.id + ' non porta ' + c + ': ' + quadrato.style.background);
+          assert.ok(square.style.background.includes(c),
+                    tema.id + ' non porta ' + c + ': ' + square.style.background);
         }
       });
     """)
@@ -198,7 +198,7 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
 def test_the_ring_marks_exactly_the_one_that_is_on() -> None:
     _run_js("""
       const you = room();
-      acceso = 'kyoto';
+      lit = 'kyoto';
       you.open();
       const accese = you.themesEl.children.filter((c) => c.classList.contains('is-on'));
       assert.equal(accese.length, 1, 'anelli accesi: ' + accese.length);
@@ -217,12 +217,12 @@ def test_picking_a_theme_moves_the_ring_without_redrawing_the_strip() -> None:
     _run_js("""
       const you = room();
       you.open();
-      const prima = [...you.themesEl.children];
+      const before = [...you.themesEl.children];
       you.pickTheme('y2k');
       assert.deepEqual(applicati, ['y2k'], 'il tema non e\\u2019 stato applicato');
-      assert.equal(you.themesEl.children.length, prima.length);
+      assert.equal(you.themesEl.children.length, before.length);
       you.themesEl.children.forEach((card, i) => {
-        assert.equal(card, prima[i], 'la striscia e\\u2019 stata ridisegnata');
+        assert.equal(card, before[i], 'la striscia e\\u2019 stata ridisegnata');
       });
       const accese = you.themesEl.children.filter((c) => c.classList.contains('is-on'));
       assert.equal(accese.length, 1);
@@ -234,7 +234,7 @@ def test_picking_a_theme_moves_the_ring_without_redrawing_the_strip() -> None:
       you.open();
       assert.equal(you.themesEl.children.length, THEMES.length, 'la striscia si accumula');
       you.themesEl.children.forEach((card, i) => {
-        assert.equal(card, prima[i], 'ridisegnata alla riapertura');
+        assert.equal(card, before[i], 'ridisegnata alla riapertura');
       });
     """)
 

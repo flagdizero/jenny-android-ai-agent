@@ -50,8 +50,8 @@ def _progetto(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_a_journal_source_through_a_loop_is_unresolved(tmp_path: Path) -> None:
     root, _ = _progetto(tmp_path)
-    esito = wiki_provenance._journal_line_provenance(root, "raw/ciclo.md#13:55")
-    assert esito == wiki_provenance._UNRESOLVED
+    outcome = wiki_provenance._journal_line_provenance(root, "raw/ciclo.md#13:55")
+    assert outcome == wiki_provenance._UNRESOLVED
 
 
 def test_a_document_source_through_a_loop_is_not_a_document(tmp_path: Path) -> None:
@@ -84,8 +84,8 @@ async def test_the_audit_route_answers_403_to_a_loop(tmp_path: Path) -> None:
     routes._check_wiki_enabled = lambda: None  # type: ignore[method-assign]
     routes._get_wikis_dir = lambda: root.parent  # type: ignore[method-assign]
     req = WsRequest(path="/api/audit/create?wiki=progetto&target=ciclo.md", headers=Headers())
-    risposta = await routes.dispatch(req, "/api/audit/create")
-    assert risposta is not None and risposta.status_code == 403
+    reply = await routes.dispatch(req, "/api/audit/create")
+    assert reply is not None and reply.status_code == 403
 
 
 def test_a_static_file_through_a_loop_is_403(tmp_path: Path) -> None:
@@ -109,8 +109,8 @@ def test_a_static_file_through_a_loop_is_403(tmp_path: Path) -> None:
     )
     handler.static_dist_path = (tmp_path / "ui").resolve()
     (handler.static_dist_path / "assets").mkdir(parents=True)
-    risposta = handler._serve_static("/html-mobile/assets/ciclo.js")
-    assert risposta is not None and risposta.status_code == 403
+    reply = handler._serve_static("/html-mobile/assets/ciclo.js")
+    assert reply is not None and reply.status_code == 403
 
 
 def _b64(data: bytes) -> str:
@@ -124,10 +124,10 @@ def test_signed_media_through_a_loop_is_404_and_is_not_signed(tmp_path: Path) ->
     payload = _b64(b"ciclo.bin")
     mac = hmac.new(segreto, payload.encode("ascii"), hashlib.sha256).digest()[:16]
 
-    risposta = media_api.serve_signed_media(
+    reply = media_api.serve_signed_media(
         _b64(mac), payload, secret=segreto, media_dir=lambda _c: cartella
     )
-    assert risposta.status_code == 404
+    assert reply.status_code == 404
     firmato = media_api.sign_media_path(
         cartella / "ciclo.bin", secret=segreto, media_dir=lambda _c: cartella
     )
@@ -143,5 +143,5 @@ def test_an_app_static_file_through_a_loop_is_403(tmp_path: Path) -> None:
     )
     routes._check_apps_enabled = lambda: None  # type: ignore[method-assign]
     req = WsRequest(path="/apps/orto/ciclo.js", headers=Headers())
-    risposta = routes._static(req, "/apps/orto/ciclo.js")
-    assert risposta.status_code == 403
+    reply = routes._static(req, "/apps/orto/ciclo.js")
+    assert reply.status_code == 403

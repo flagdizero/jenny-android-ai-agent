@@ -237,7 +237,7 @@ export function heartbeatView(block) {
 }
 
 /** Il modello di vista completo. Una chiamata, tutto quel che la sezione rende. */
-export function buildCronView(payload, { nowMs, tr, locale, tieni } = {}) {
+export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
   const stamp = Number.isFinite(nowMs) ? nowMs : payload?.now_ms;
   /* Il filtro si applica **prima** del banner, non dopo le righe.
    *
@@ -248,8 +248,8 @@ export function buildCronView(payload, { nowMs, tr, locale, tieni } = {}) {
    * I banner che non dipendono dai lavori (servizio giu', store recuperato)
    * restano comunque: quelli rompono anche i lavori che stai guardando.
    */
-  const visto = tieni && payload?.jobs
-    ? { ...payload, jobs: payload.jobs.filter(tieni) }
+  const visto = keep && payload?.jobs
+    ? { ...payload, jobs: payload.jobs.filter(keep) }
     : payload;
   const banner = pickBanner(visto);
   if (!visto || visto.available === false) {
@@ -293,10 +293,10 @@ export function buildCronView(payload, { nowMs, tr, locale, tieni } = {}) {
      con `payload?.jobs`, e quando quello manca `visto` **e'** `payload`, cioe'
      un oggetto senza `jobs`. Con un filtro attivo — e Mani ne passa sempre uno
      — queste due righe esplodevano. Stesso guardiano di sopra, non uno nuovo. */
-  const daContare = visto.jobs ?? [];
-  const counts = tieni
-    ? { system: daContare.filter((j) => j.kind === 'system').length,
-        user: daContare.filter((j) => j.kind !== 'system').length }
+  const toCount = visto.jobs ?? [];
+  const counts = keep
+    ? { system: toCount.filter((j) => j.kind === 'system').length,
+        user: toCount.filter((j) => j.kind !== 'system').length }
     : payload.counts ?? null;
   return { available: true, banner, rows, counts, asOf: stamp };
 }

@@ -75,11 +75,11 @@ export function checkLines(version) {
     return [{ key: 'settings.update.staleNever', params: {}, warn: true }];
   }
   const when = whenText(success);
-  const righe = [{ key: 'settings.update.lastSuccess', params: { when }, warn: false }];
+  const rows = [{ key: 'settings.update.lastSuccess', params: { when }, warn: false }];
   if (check - success > STALE_MS) {
-    righe.push({ key: 'settings.update.stale', params: { when }, warn: true });
+    rows.push({ key: 'settings.update.stale', params: { when }, warn: true });
   }
-  return righe;
+  return rows;
 }
 
 export class UpdateFlow {

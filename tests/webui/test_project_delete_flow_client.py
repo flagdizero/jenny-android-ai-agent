@@ -39,30 +39,30 @@ const {{ deleteProjectFlow, PROJECT_DELETE_WORDS }} = await import('./project-de
 const {{ toasts }} = await import('./utils.js');
 globalThis.__rifiuto = {rifiuto};
 const words = {words};
-const esito = await deleteProjectFlow('viaggio', words);
-globalThis.__esito = {{ esito, toasts }};
-console.log(JSON.stringify(globalThis.__esito));
+const outcome = await deleteProjectFlow('viaggio', words);
+globalThis.__outcome = {{ outcome, toasts }};
+console.log(JSON.stringify(globalThis.__outcome));
 """
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        shutil.copy(SHARED / "project-delete.js", radice / "project-delete.js")
-        for name, testo in _VICINI.items():
-            (radice / name).write_text(testo, encoding="utf-8")
-        (radice / "rpc-client.js").write_text(
+        root = Path(tmp)
+        shutil.copy(SHARED / "project-delete.js", root / "project-delete.js")
+        for name, text in _VICINI.items():
+            (root / name).write_text(text, encoding="utf-8")
+        (root / "rpc-client.js").write_text(
             "export const rpc = { async deleteProject() {"
             " const c = globalThis.__rifiuto; if (c === null) return {};"
             " const e = new Error('refused'); if (c) e.code = c; throw e; } };\n",
             encoding="utf-8",
         )
-        (radice / "prova.mjs").write_text(script + _ATTESE[(code, words)], encoding="utf-8")
-        run_module(radice / "prova.mjs")
+        (root / "prova.mjs").write_text(script + _ATTESE[(code, words)], encoding="utf-8")
+        run_module(root / "prova.mjs")
 
 
 _NB = "{ confirm: 'c', confirmWithChat: 'cc', failed: 'nb.failed', busy: 'nb.busy' }"
 _SENZA_BUSY = "{ confirm: 'c', confirmWithChat: 'cc', failed: 'nb.failed' }"
 _ATTESE = {
     ("conflict", "PROJECT_DELETE_WORDS"):
-        "assert.equal(esito, false);\n"
+        "assert.equal(outcome, false);\n"
         "assert.deepEqual(toasts, [['workspace.deleteProjectBusy:viaggio', 'error']]);\n",
     ("conflict", _NB):
         "assert.deepEqual(toasts, [['nb.busy:viaggio', 'error']]);\n",
@@ -71,7 +71,7 @@ _ATTESE = {
     ("conflict", _SENZA_BUSY):
         "assert.deepEqual(toasts, [['nb.failed:viaggio', 'error']]);\n",
     (None, _NB):
-        "assert.equal(esito, true);\nassert.deepEqual(toasts, []);\n",
+        "assert.equal(outcome, true);\nassert.deepEqual(toasts, []);\n",
 }
 
 

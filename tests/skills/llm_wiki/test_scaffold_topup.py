@@ -214,7 +214,7 @@ def test_il_topup_non_affianca_agents_a_un_claude_esistente(
     top-up vorrebbe dire produrlo di proposito sulle sette wiki vere. Il rinomino
     e' il passo 7, e passa da li'.
     """
-    prima = (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes()
+    before = (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes()
 
     created = scaffold.scaffold(str(wiki_col_nome_vecchio), "Android ROM")
     capsys.readouterr()
@@ -223,7 +223,7 @@ def test_il_topup_non_affianca_agents_a_un_claude_esistente(
         "il top-up ha affiancato un secondo file di istruzioni a quello che c'era"
     )
     assert "AGENTS.md" not in created
-    assert (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes() == prima, (
+    assert (wiki_col_nome_vecchio / "CLAUDE.md").read_bytes() == before, (
         "il file di chi l'ha scritto a mano non si tocca: il rinomino e' il passo 7"
     )
     # Il resto del top-up deve comunque aver lavorato, sennò il test passerebbe

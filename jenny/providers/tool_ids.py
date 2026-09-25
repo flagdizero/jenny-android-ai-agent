@@ -44,7 +44,7 @@ def dedupe_tool_ids(
     annunciato in streaming e che i consumatori dei delta hanno già visto.
     Rinominare quello, invece del duplicato, li disallineerebbe.
 
-    *replacement* riceve ``(id_grezzo, indice)`` e viene chiamata solo per gli id
+    *replacement* riceve ``(id_grezzo, index)`` e viene chiamata solo per gli id
     vuoti o già visti. L'id che restituisce non viene ri-verificato contro i
     successivi, esattamente come nel percorso OpenAI da cui questa regola viene.
     """

@@ -46,16 +46,16 @@ globalThis.document = {
 """
 
 
-def _run(corpo: str) -> None:
+def _run(body: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        shutil.copy(ASSETS / "home-flower.js", radice / "home-flower.js")
-        entry = radice / "prova.mjs"
+        root = Path(tmp)
+        shutil.copy(ASSETS / "home-flower.js", root / "home-flower.js")
+        entry = root / "prova.mjs"
         entry.write_text(
             "import assert from 'node:assert/strict';\n"
             + _DOM
             + "const { POSE, Flower } = await import('./home-flower.js');\n"
-            + textwrap.dedent(corpo),
+            + textwrap.dedent(body),
             encoding="utf-8",
         )
         run_module(entry)

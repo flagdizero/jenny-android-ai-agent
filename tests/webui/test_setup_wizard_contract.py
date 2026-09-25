@@ -236,13 +236,13 @@ def test_from_the_first_run_there_is_no_way_out() -> None:
         f"{member(source, 'handleBack')}\n"
         "}\n"
         """
-for (const [step, saving, dopo] of [[0, false, 0], [1, false, 0], [2, false, 1],
+for (const [step, saving, after] of [[0, false, 0], [1, false, 0], [2, false, 1],
                                     [3, false, 3], [2, true, 2]]) {
   const w = new W();
   w.step = step;
   w.saving = saving;
   assert.equal(w.handleBack(), true, `step ${step}: la pressione esce dal wizard`);
-  assert.equal(w.step, dopo, `step ${step}: finito sullo step ${w.step}`);
+  assert.equal(w.step, after, `step ${step}: finito sullo step ${w.step}`);
 }
 """
     )

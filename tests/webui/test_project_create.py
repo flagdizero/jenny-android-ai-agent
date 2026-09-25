@@ -235,17 +235,17 @@ class TestUnProgettoAMetaSiPuoFinire:
         (workspace / "wikis" / "morta-a-meta" / "wiki").mkdir(parents=True)
         migrate_wikis(workspace / "wikis")
         schema = workspace / "wikis" / "morta-a-meta" / "AGENTS.md"
-        prima = _frontmatter(schema.read_text("utf-8"))
-        assert prima["summary"].startswith("<"), "il fixture non riproduce il segnaposto"
+        before = _frontmatter(schema.read_text("utf-8"))
+        assert before["summary"].startswith("<"), "il fixture non riproduce il segnaposto"
 
         result = await _create(ctx, name="morta-a-meta", seed="Come si cresce su Patreon.")
 
-        dopo = _frontmatter(schema.read_text("utf-8"))
-        assert dopo["summary"] == "Come si cresce su Patreon."
+        after = _frontmatter(schema.read_text("utf-8"))
+        assert after["summary"] == "Come si cresce su Patreon."
         assert result["seeded"] is True
         # L'id scritto dalla migrazione resta quello: è l'identità della wiki, e
         # riscriverlo staccherebbe la cartella dalla sua chat.
-        assert dopo["id"] == prima["id"]
+        assert after["id"] == before["id"]
         # E il registro adesso la vede con la sua riga, non con «(no scope set)».
         registry = (workspace / "wikis" / "_index.md").read_text("utf-8")
         assert "Come si cresce su Patreon." in registry
@@ -439,12 +439,12 @@ class TestElencoProgetti:
 
         payload = await _get_projects(handler)
 
-        voce = next(p for p in payload["projects"] if p["name"] == "alpha")
-        tutti = sum(1 for _ in pages.rglob("*.md"))
-        assert voce["pages"] == tutti - 1, (
-            f"il riassunto e' stato contato: {voce['pages']} su {tutti} file"
+        entry = next(p for p in payload["projects"] if p["name"] == "alpha")
+        all = sum(1 for _ in pages.rglob("*.md"))
+        assert entry["pages"] == all - 1, (
+            f"il riassunto e' stato contato: {entry['pages']} su {all} file"
         )
-        assert voce["pages"] >= 3, payload
+        assert entry["pages"] >= 3, payload
 
     async def test_serve_il_token(self, handler):
         request = WsRequest(path="/api/projects", headers=Headers())

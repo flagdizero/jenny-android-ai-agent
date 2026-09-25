@@ -418,9 +418,9 @@ async def test_the_export_record_is_written_by_the_client_and_not_by_the_export(
         _make_request("/api/backup/exported"), "/api/backup/exported"
     )
     assert noted.status_code == 200
-    quando = load_config(config_path).snapshots.last_export_at
-    assert quando > 0
-    assert _json(noted)["last_export_at"] == pytest.approx(quando)
+    when = load_config(config_path).snapshots.last_export_at
+    assert when > 0
+    assert _json(noted)["last_export_at"] == pytest.approx(when)
 
 
 async def test_the_export_record_needs_a_token(env) -> None:

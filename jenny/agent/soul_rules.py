@@ -65,39 +65,39 @@ def find_block(soul: str) -> tuple[int, int] | None:
     blocco arriva fino alla prossima di pari livello o alla fine del file: è il
     caso in cui una potatura ha portato via un commento ma non il testo.
     """
-    inizio = soul.find(MARK_START)
+    start = soul.find(MARK_START)
     fine = soul.find(MARK_END)
-    if inizio != -1 and fine > inizio:
-        return inizio, fine + len(MARK_END)
+    if start != -1 and fine > start:
+        return start, fine + len(MARK_END)
 
-    righe = soul.splitlines(keepends=True)
+    rows = soul.splitlines(keepends=True)
     offset = 0
-    apertura = None
-    for riga in righe:
-        if apertura is None and riga.strip() == HEADING:
-            apertura = offset
-        elif apertura is not None and riga.startswith("## "):
-            return apertura, offset
-        offset += len(riga)
-    if apertura is not None:
-        return apertura, len(soul)
-    if inizio != -1:
+    opening = None
+    for row in rows:
+        if opening is None and row.strip() == HEADING:
+            opening = offset
+        elif opening is not None and row.startswith("## "):
+            return opening, offset
+        offset += len(row)
+    if opening is not None:
+        return opening, len(soul)
+    if start != -1:
         # Marcatore d'apertura orfano: senza questo ramo resterebbe lì per
         # sempre, e ogni proiezione ne aggiungerebbe uno nuovo sotto.
-        return inizio, len(soul)
+        return start, len(soul)
     return None
 
 
 def extract_rules(soul: str) -> str:
     """Il testo dell'utente dentro *soul*. Stringa vuota se non c'è blocco."""
-    estremi = find_block(soul or "")
-    if not estremi:
+    ends = find_block(soul or "")
+    if not ends:
         return ""
-    inizio, fine = estremi
-    dentro = (soul or "")[inizio:fine]
-    for segno in (MARK_START, MARK_END, HEADING):
-        dentro = dentro.replace(segno, "")
-    return dentro.strip()
+    start, fine = ends
+    inside = (soul or "")[start:fine]
+    for mark in (MARK_START, MARK_END, HEADING):
+        inside = inside.replace(mark, "")
+    return inside.strip()
 
 
 def project(soul: str, rules: str) -> str:
@@ -108,19 +108,19 @@ def project(soul: str, rules: str) -> str:
     conserva se c'era già — riscriverlo in fondo a ogni salvataggio lo
     sposterebbe sotto a quel che Dream ha aggiunto nel frattempo.
     """
-    testo = soul or ""
-    estremi = find_block(testo)
+    text = soul or ""
+    ends = find_block(text)
     if _blank(rules):
-        if not estremi:
-            return testo
-        inizio, fine = estremi
-        return (testo[:inizio].rstrip() + "\n" + testo[fine:].lstrip("\n")).rstrip() + "\n"
-    blocco = _block(rules)
-    if estremi:
-        inizio, fine = estremi
-        return testo[:inizio] + blocco + testo[fine:]
-    coda = testo.rstrip()
-    return (coda + "\n\n" + blocco + "\n") if coda else blocco + "\n"
+        if not ends:
+            return text
+        start, fine = ends
+        return (text[:start].rstrip() + "\n" + text[fine:].lstrip("\n")).rstrip() + "\n"
+    block = _block(rules)
+    if ends:
+        start, fine = ends
+        return text[:start] + block + text[fine:]
+    tail = text.rstrip()
+    return (tail + "\n\n" + block + "\n") if tail else block + "\n"
 
 
 # ── Su disco ────────────────────────────────────────────────────────────────
@@ -163,11 +163,11 @@ def sync_soul(workspace: Path, soul_file: Path | None = None) -> bool:
         rules = read_rules(workspace)
         if _blank(rules) and not soul.exists():
             return False
-        testo = soul.read_text(encoding="utf-8")
-        nuovo = project(testo, rules)
-        if nuovo == testo:
+        text = soul.read_text(encoding="utf-8")
+        fresh = project(text, rules)
+        if fresh == text:
             return False
-        atomic_write(soul, nuovo)
+        atomic_write(soul, fresh)
         logger.info("SOUL.md: user rules re-projected ({} chars)", len(rules.strip()))
         return True
     except FileNotFoundError:
@@ -187,7 +187,7 @@ def save_rules(workspace: Path, rules: str) -> str:
     fallisce, quel che l'utente ha scritto è comunque su disco e la proiezione
     si rifà da sé alla prossima passata di Dream.
     """
-    testo = (rules or "").strip()
-    write_rules(workspace, testo)
+    text = (rules or "").strip()
+    write_rules(workspace, text)
     sync_soul(workspace)
-    return testo
+    return text

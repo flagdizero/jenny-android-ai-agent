@@ -26,15 +26,15 @@ def _codes_raised() -> set[str]:
     ]
     trovati: set[str] = set()
     for path in sorgenti:
-        testo = path.read_text(encoding="utf-8")
-        trovati |= set(re.findall(r'CommandError\(\s*"([a-z_]+)"', testo))
-        trovati |= set(re.findall(r'code="([a-z_]+)"', testo))
+        text = path.read_text(encoding="utf-8")
+        trovati |= set(re.findall(r'CommandError\(\s*"([a-z_]+)"', text))
+        trovati |= set(re.findall(r'code="([a-z_]+)"', text))
     return trovati
 
 
 def _doc_codes() -> set[str]:
-    riga = next(r for r in DOC.splitlines() if r.startswith("Error codes:"))
-    return set(re.findall(r"`([a-z_]+)`", riga))
+    row = next(r for r in DOC.splitlines() if r.startswith("Error codes:"))
+    return set(re.findall(r"`([a-z_]+)`", row))
 
 
 def _row(method: str) -> str:
@@ -42,8 +42,8 @@ def _row(method: str) -> str:
 
 
 def test_every_code_the_gateway_sends_is_documented() -> None:
-    mancanti = _codes_raised() - _doc_codes()
-    assert not mancanti, f"codici non documentati in websocket.md: {sorted(mancanti)}"
+    missing = _codes_raised() - _doc_codes()
+    assert not missing, f"codici non documentati in websocket.md: {sorted(missing)}"
 
 
 def test_every_documented_code_is_in_the_closed_set_of_the_docstring() -> None:

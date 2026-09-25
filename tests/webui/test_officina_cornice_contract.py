@@ -34,7 +34,7 @@ SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 WORKSHOP = (UI / "workshop.html").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 
-CASSETTI = ("brain", "hands", "memory")
+DRAWERS = ("brain", "hands", "memory")
 LINGUE = ("it", "en")
 
 
@@ -46,8 +46,8 @@ def _i18n(lingua: str) -> dict:
 
 
 @pytest.mark.parametrize("lingua", LINGUE)
-@pytest.mark.parametrize("cassetto", CASSETTI)
-def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, cassetto: str) -> None:
+@pytest.mark.parametrize("drawer", DRAWERS)
+def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, drawer: str) -> None:
     """Le tre stringhe che compongono l'intestazione, in tutte e due le lingue.
 
     Una chiave che manca non rompe niente: `i18n.t` restituisce la chiave
@@ -55,9 +55,9 @@ def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, cassetto: str) -> None
     traduzione mancante si presenta, ed e' indistinguibile da un difetto.
     """
     d = _i18n(lingua)
-    assert d["nav"][cassetto].strip(), f"{lingua}: nav.{cassetto} vuoto"
-    sub = d["workshop"]["sub"][cassetto]
-    assert sub.strip(), f"{lingua}: officina.sub.{cassetto} vuoto"
+    assert d["nav"][drawer].strip(), f"{lingua}: nav.{drawer} vuoto"
+    sub = d["workshop"]["sub"][drawer]
+    assert sub.strip(), f"{lingua}: officina.sub.{drawer} vuoto"
     # Una soprascritta che e' anche il sottotitolo vuol dire che qualcuno ha
     # riempito la riga per far passare il banco.
     assert sub != d["workshop"]["eyebrow"]
@@ -79,26 +79,26 @@ def test_i_sottotitoli_dicono_cose_diverse() -> None:
     """
     for lingua in LINGUE:
         subs = _i18n(lingua)["workshop"]["sub"]
-        assert len(set(subs.values())) == len(CASSETTI), f"{lingua}: sottotitoli ripetuti"
+        assert len(set(subs.values())) == len(DRAWERS), f"{lingua}: sottotitoli ripetuti"
 
 
 # ── L'aggancio che mancava ───────────────────────────────────────────────────
 
 
 def test_la_tabella_delle_viste_e_una_sola() -> None:
-    """`VISTA_DI` sta accanto a `CASSETTI` ed e' importata, non ricopiata.
+    """`VIEW_OF` sta accanto a `DRAWERS` ed e' importata, non ricopiata.
 
     Era dichiarata in `mobile-app.js` e serviva anche a `mobile-header.js`, che
     non ce l'aveva: e' esattamente la copia mancante che ha lasciato i cassetti
     senza intestazione.
     """
-    assert "export const VISTA_DI" in SETTINGS, "VISTA_DI non e' piu' in mobile-settings.js"
-    assert re.search(r"import \{[^}]*VISTA_DI[^}]*\} from '\./mobile-settings\.js'", HEADER), (
-        "mobile-header.js non importa VISTA_DI: `_mount` tornerebbe a cercare "
+    assert "export const VIEW_OF" in SETTINGS, "VIEW_OF non e' piu' in mobile-settings.js"
+    assert re.search(r"import \{[^}]*VIEW_OF[^}]*\} from '\./mobile-settings\.js'", HEADER), (
+        "mobile-header.js non importa VIEW_OF: `_mount` tornerebbe a cercare "
         "`title-cervello`, che non esiste"
     )
     app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
-    assert "const VISTA_DI = {" not in app, "mobile-app.js ha di nuovo una copia sua"
+    assert "const VIEW_OF = {" not in app, "mobile-app.js ha di nuovo una copia sua"
 
 
 def test_il_mount_passa_dalla_tabella() -> None:
@@ -108,8 +108,8 @@ def test_il_mount_passa_dalla_tabella() -> None:
     non trovano `title-settings` e `setMode` esce prima di disegnare.
 
     **Due forme valgono**, e la seconda e' la piu' forte. Il 22/09/2026 la
-    traduzione e' diventata una funzione — `elementoTitolo(mode)`, accanto a
-    `VISTA_DI` — perche' lo stesso errore era gia' uscito tre volte: qui, e due
+    traduzione e' diventata una funzione — `titleElement(mode)`, accanto a
+    `VIEW_OF` — perche' lo stesso errore era gia' uscito tre volte: qui, e due
     volte nel carosello di `mobile-app.js`, dove aveva ucciso lo scorrimento su
     tre linguette su quattro. Passare dalla funzione soddisfa questo banco
     **meglio** che consultare la tabella a mano, ed e' difeso a parte da
@@ -118,19 +118,19 @@ def test_il_mount_passa_dalla_tabella() -> None:
     """
     m = re.search(r"_mount\(mode\)\s*\{(.*?)\}", HEADER, re.S)
     assert m, "_mount non trovato"
-    corpo = m.group(1)
-    assert "VISTA_DI" in corpo or "elementoTitolo" in corpo, (
-        f"_mount non passa ne' dalla tabella ne' da elementoTitolo(): {corpo.strip()}"
+    body = m.group(1)
+    assert "VIEW_OF" in body or "titleElement" in body, (
+        f"_mount non passa ne' dalla tabella ne' da titleElement(): {body.strip()}"
     )
 
 
-@pytest.mark.parametrize("cassetto", CASSETTI)
-def test_ogni_cassetto_ha_una_intestazione(cassetto: str) -> None:
+@pytest.mark.parametrize("drawer", DRAWERS)
+def test_ogni_cassetto_ha_una_intestazione(drawer: str) -> None:
     """Il cassetto compare fra le viste che sanno disegnarsi un'intestazione."""
     m = re.search(r"this\.modeConfigs\s*=\s*\{(.*?)\n    \};", HEADER, re.S)
     assert m, "modeConfigs non trovato"
-    assert re.search(rf"\b{cassetto}\s*:", m.group(1)), (
-        f"{cassetto} non ha una voce in modeConfigs: resterebbe senza titolo"
+    assert re.search(rf"\b{drawer}\s*:", m.group(1)), (
+        f"{drawer} non ha una voce in modeConfigs: resterebbe senza titolo"
     )
 
 
@@ -145,7 +145,7 @@ def test_il_cambio_lingua_rifa_anche_i_cassetti() -> None:
     """Tre stringhe a testa: se il refresh ne dimentica una resta in italiano."""
     m = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
     assert m, "_refreshTitles non trovato"
-    assert "VISTA_DI" in m.group(1), (
+    assert "VIEW_OF" in m.group(1), (
         "_refreshTitles non ricostruisce i cassetti: al cambio lingua "
         "l'intestazione resta nella lingua di prima"
     )
@@ -165,11 +165,11 @@ def test_ogni_voce_visibile_del_dock_ha_il_suo_nome(modo: str) -> None:
     `title=` non conta: su un telefono non esiste il passaggio del mouse, quindi
     un `title` e' visibile a nessuno. Era gia' cosi' per tutte e quattro.
     """
-    voci = [m for m in _voci_dock() if f'data-mode="{modo}"' in m.group(1)]
-    assert len(voci) == 1, f"{modo}: {len(voci)} voci nel dock"
-    corpo = voci[0].group(2)
-    assert 'class="dock-label"' in corpo, f"{modo} non ha etichetta visibile"
-    assert f'data-i18n="nav.{modo if modo != "chat" else "console"}"' in corpo, (
+    entries = [m for m in _voci_dock() if f'data-mode="{modo}"' in m.group(1)]
+    assert len(entries) == 1, f"{modo}: {len(entries)} voci nel dock"
+    body = entries[0].group(2)
+    assert 'class="dock-label"' in body, f"{modo} non ha etichetta visibile"
+    assert f'data-i18n="nav.{modo if modo != "chat" else "console"}"' in body, (
         f"{modo}: l'etichetta non e' tradotta"
     )
 
@@ -228,21 +228,21 @@ def test_niente_piu_fisarmoniche() -> None:
     Si controlla il vocabolario intero — la classe, la testa, il chevron, lo
     stato — perche' reintrodurne *uno* basta a far tornare il difetto.
     """
-    for parola in ("settings-section", "settings-chevron", "_openSections"):
-        assert parola not in SETTINGS, f"la fisarmonica e' tornata in mobile-settings.js: {parola}"
-        assert parola not in CSS, f"la fisarmonica e' tornata nel foglio di stile: {parola}"
+    for word in ("settings-section", "settings-chevron", "_openSections"):
+        assert word not in SETTINGS, f"la fisarmonica e' tornata in mobile-settings.js: {word}"
+        assert word not in CSS, f"la fisarmonica e' tornata nel foglio di stile: {word}"
 
 
 def test_il_gruppo_e_una_scheda_aperta() -> None:
     """Il mattone che l'ha sostituita: soprascritta fuori, scheda dentro."""
     # `porte` è arrivato dopo: le destinazioni stanno **dentro** la scheda, come
     # sua ultima riga. Concatenarle fuori le lasciava fluttuare fra due gruppi.
-    m = re.search(r"_group\(id, etichetta, corpo(?:, porte = '')?\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
+    m = re.search(r"_group\(id, label, body(?:, porte = '')?\)\s*\{(.*?)\n  \}", SETTINGS, re.S)
     assert m, "_gruppo non trovato"
-    corpo = m.group(1)
-    assert "settings-group-label" in corpo, "il gruppo non ha soprascritta"
-    assert "settings-card" in corpo, "il gruppo non ha una scheda"
-    assert "chevron" not in corpo and "collapsed" not in corpo, "il gruppo si richiude"
+    body = m.group(1)
+    assert "settings-group-label" in body, "il gruppo non ha soprascritta"
+    assert "settings-card" in body, "il gruppo non ha una scheda"
+    assert "chevron" not in body and "collapsed" not in body, "il gruppo si richiude"
     # La **regola** della classe, non una sua comparsa qualunque: `.settings-card`
     # compare anche in due selettori discendenti (`.settings-card .tstrip`), e un
     # controllo che accettasse quelli restava verde con la scheda senza stile —
@@ -273,12 +273,12 @@ def test_ogni_gruppo_ha_ancora_un_id_nel_dom() -> None:
 
 
 def _gruppi_dichiarati() -> dict[str, list[str]]:
-    """`CASSETTI` letto dal sorgente: cassetto -> gruppi, nell'ordine."""
-    m = re.search(r"export const CASSETTI = \{(.*?)\n\};", SETTINGS, re.S)
+    """`DRAWERS` letto dal sorgente: cassetto -> gruppi, nell'ordine."""
+    m = re.search(r"export const DRAWERS = \{(.*?)\n\};", SETTINGS, re.S)
     assert m, "CASSETTI non trovato"
     out = {}
-    for c in CASSETTI:
-        b = re.search(rf"{c}: \{{\s*sezioni: \[(.*?)\]", m.group(1), re.S)
+    for c in DRAWERS:
+        b = re.search(rf"{c}: \{{\s*sections: \[(.*?)\]", m.group(1), re.S)
         assert b, f"{c} non ha una voce"
         out[c] = re.findall(r"'([A-Za-z]+)'", b.group(1))
     return out
@@ -286,7 +286,7 @@ def _gruppi_dichiarati() -> dict[str, list[str]]:
 
 def _gruppi_disegnabili() -> set[str]:
     """Le chiavi della mappa dentro `render()`."""
-    m = re.search(r"const sezioni = \{(.*?)\n    \};", SETTINGS, re.S)
+    m = re.search(r"const sections = \{(.*?)\n    \};", SETTINGS, re.S)
     assert m, "la mappa dei gruppi non si trova"
     return set(re.findall(r"^      ([A-Za-z]+):", m.group(1), re.M))
 
@@ -294,15 +294,15 @@ def _gruppi_disegnabili() -> set[str]:
 def test_ogni_gruppo_di_un_cassetto_si_sa_disegnare() -> None:
     """Un id nella tabella senza il suo disegnatore e' un `TypeError`.
 
-    `render()` fa `quali.map((id) => sezioni[id]())`: un id che la mappa non
+    `render()` fa `which.map((id) => sections[id]())`: un id che la mappa non
     conosce e' `undefined()`, cioe' la schermata intera che non si apre. Il
     file resta valido, la suite verde, e il difetto arriva sul telefono — la
     stessa famiglia dei metodi fantasma (v. test_no_ghost_methods_contract).
     """
     disegnabili = _gruppi_disegnabili()
-    for cassetto, groups in _gruppi_dichiarati().items():
-        mancanti = [g for g in groups if g not in disegnabili]
-        assert not mancanti, f"{cassetto}: gruppi senza disegnatore {mancanti}"
+    for drawer, groups in _gruppi_dichiarati().items():
+        missing = [g for g in groups if g not in disegnabili]
+        assert not missing, f"{drawer}: gruppi senza disegnatore {missing}"
 
 
 def test_nessun_gruppo_disegnabile_resta_orfano() -> None:
@@ -316,19 +316,19 @@ def test_un_gruppo_sta_in_un_cassetto_solo() -> None:
     """Due cassetti che mostrano lo stesso gruppo sono due copie che invecchiano
     separatamente — ed e' esattamente il difetto da cui il giro dei cassetti e'
     partito."""
-    visti: dict[str, str] = {}
-    for cassetto, groups in _gruppi_dichiarati().items():
+    seen: dict[str, str] = {}
+    for drawer, groups in _gruppi_dichiarati().items():
         for g in groups:
-            assert g not in visti, f"{g} sta sia in {visti[g]} sia in {cassetto}"
-            visti[g] = cassetto
+            assert g not in seen, f"{g} sta sia in {seen[g]} sia in {drawer}"
+            seen[g] = drawer
 
 
 @pytest.mark.parametrize("lingua", LINGUE)
 def test_le_soprascritte_nuove_sono_tradotte(lingua: str) -> None:
     """I cinque gruppi che il ritaglio ha creato hanno un nome vero."""
     groups = _i18n(lingua)["workshop"]["groups"]
-    for chiave in ("whoThinks", "parameters", "howMuchItRemembers", "dream", "gardener"):
-        assert groups.get(chiave, "").strip(), f"{lingua}: officina.groups.{chiave} manca"
+    for key in ("whoThinks", "parameters", "howMuchItRemembers", "dream", "gardener"):
+        assert groups.get(key, "").strip(), f"{lingua}: officina.groups.{key} manca"
 
 
 def test_il_taglio_fine_e_arrivato() -> None:
@@ -348,13 +348,13 @@ def test_il_taglio_fine_e_arrivato() -> None:
     uno **e'** il taglio, non un suo cedimento — e il controllo qui sotto dice
     proprio quello: personalizzazione in officina non deve tornare.
     """
-    for vecchio in ("_renderModelSettings", "_renderTools(", "_renderMemory("):
-        assert vecchio not in SETTINGS, f"{vecchio} e' tornato: il ritaglio si e' richiuso"
+    for old in ("_renderModelSettings", "_renderTools(", "_renderMemory("):
+        assert old not in SETTINGS, f"{old} e' tornato: il ritaglio si e' richiuso"
     dichiarati = _gruppi_dichiarati()
     totale = sum(len(g) for g in dichiarati.values())
     assert totale >= 14, f"solo {totale} gruppi: il taglio fine non c'e'"
-    tutti = {g for groups in dichiarati.values() for g in groups}
-    assert "personalization" not in tutti, (
+    all = {g for groups in dichiarati.values() for g in groups}
+    assert "personalization" not in all, (
         "la personalizzazione e' tornata in officina: temi, mascotte e nome "
         "stanno in casa, e tenerli in due posti vuol dire tenerli allineati"
     )
@@ -376,9 +376,9 @@ def test_la_console_ha_il_suo_mount() -> None:
     """Senza mount `setMode` esce in silenzio — e' il difetto da cui e' nato
     questo file, ripetuto su un'altra vista."""
     assert 'id="title-chat"' in WORKSHOP, "la vista chat non ha un mount per il titolo"
-    testa = WORKSHOP.split('id="view-chat"', 1)[1]
-    mount = testa.index('id="title-chat"')
-    area = testa.index('id="chat-area"')
+    head = WORKSHOP.split('id="view-chat"', 1)[1]
+    mount = head.index('id="title-chat"')
+    area = head.index('id="chat-area"')
     assert mount < area, "il mount non sta in cima alla vista: il titolo finirebbe sotto la chat"
 
 
@@ -392,8 +392,8 @@ def test_la_console_ha_una_voce_in_modeconfigs() -> None:
 
 def _corpo_consolle() -> str:
     """Il corpo della fabbrica che disegna l'intestazione della Console."""
-    m = re.search(r"function consolle\(\)\s*\{(.*?)\n\}", HEADER, re.S)
-    assert m, "consolle() non trovata: la Console non ha piu' un'intestazione sua"
+    m = re.search(r"function consoleConfig\(\)\s*\{(.*?)\n\}", HEADER, re.S)
+    assert m, "consoleConfig() non trovata: la Console non ha piu' un'intestazione sua"
     return m.group(1)
 
 
@@ -418,9 +418,9 @@ def test_la_console_non_ha_soprascritta() -> None:
     gia' dentro l'officina, e `setMode` nasconde la riga quando manca — quindi
     la si omette invece di riempirla.
     """
-    corpo = _corpo_consolle()
-    assert "eyebrow" not in corpo, "la console ha una soprascritta: non deve averla"
-    assert "sub:" not in corpo, "la console ha un sottotitolo: non deve averlo"
+    body = _corpo_consolle()
+    assert "eyebrow" not in body, "la console ha una soprascritta: non deve averla"
+    assert "sub:" not in body, "la console ha un sottotitolo: non deve averlo"
 
 
 def test_dalla_console_si_torna_in_casa() -> None:
@@ -429,17 +429,17 @@ def test_dalla_console_si_torna_in_casa() -> None:
     E' la porta che a questa vista mancava del tutto: l'unica per la casa sta
     nell'intestazione, e la chat non ne aveva una.
     """
-    assert "pillCasa()" in _corpo_consolle(), "dalla console non si torna in casa"
+    assert "homePill()" in _corpo_consolle(), "dalla console non si torna in casa"
 
 
 def test_il_pill_e_definito_una_volta_sola() -> None:
     """Quattro intestazioni, una definizione.
 
-    Il pill era ricopiato a mano in `cassetto()` e nella Console: due copie
+    Il pill era ricopiato a mano in `drawer()` e nella Console: due copie
     della stessa riga con due stringhe dentro, che e' il modo in cui una delle
     due resta indietro.
     """
-    assert "function pillCasa()" in HEADER, "il pill non ha piu' una definizione sua"
+    assert "function homePill()" in HEADER, "il pill non ha piu' una definizione sua"
     assert HEADER.count("i18n.t('workshop.homePill')") == 1, (
         "la stringa del pill compare piu' di una volta: e' tornata a essere copiata"
     )
@@ -484,18 +484,18 @@ def test_una_intestazione_col_pill_si_rifa_intera() -> None:
     dichiarazione = m.group(1)
     refresh = re.search(r"_refreshTitles\(\)\s*\{(.*?)\n  \}", HEADER, re.S)
     assert refresh, "_refreshTitles non trovato"
-    corpo = refresh.group(1)
+    body = refresh.group(1)
 
-    for modo, voce in re.findall(r"\n      (\w+):\s*(.+?),\n", dichiarazione):
-        fabbrica = re.match(r"(\w+)\(", voce)
+    for modo, entry in re.findall(r"\n      (\w+):\s*(.+?),\n", dichiarazione):
+        fabbrica = re.match(r"(\w+)\(", entry)
         if not fabbrica:
             continue
         sorgente = re.search(rf"function {fabbrica.group(1)}\(.*?\)\s*\{{(.*?)\n\}}", HEADER, re.S)
         if not sorgente or "pill" not in sorgente.group(1):
             continue
-        # I tre cassetti passano dal ciclo su `VISTA_DI`, che li rifa' tutti e
+        # I tre cassetti passano dal ciclo su `VIEW_OF`, che li rifa' tutti e
         # tre interi; chiunque altro deve nominarsi.
-        rifatta = modo in CASSETTI or re.search(rf"modeConfigs\.{modo}\s*=[^=]", corpo)
+        rifatta = modo in DRAWERS or re.search(rf"modeConfigs\.{modo}\s*=[^=]", body)
         assert rifatta, (
             f"{modo} porta un pill ma al cambio lingua non si rifa' intera: "
             "la parola nel bottone resta quella letta al caricamento del file, "
@@ -522,7 +522,7 @@ def test_an_icon_button_fades_under_the_finger_on_the_phone() -> None:
     alla wiki (revisione del 25/09/2026): da allora il tocco restava col solo
     rimpicciolimento, che a movimento ridotto non c'e'.
     """
-    blocchi = re.findall(r"@media \(hover: none\) \{(.*?)^\}", CSS, re.S | re.M)
-    assert any(re.search(r"\.ibtn:active \{ opacity: 0\.8; \}", b) for b in blocchi), (
+    blocks = re.findall(r"@media \(hover: none\) \{(.*?)^\}", CSS, re.S | re.M)
+    assert any(re.search(r"\.ibtn:active \{ opacity: 0\.8; \}", b) for b in blocks), (
         "al tocco sul telefono il bottone-icona non da' piu' riscontro"
     )

@@ -33,8 +33,8 @@ import { runExportFlow, runImportFlow, backupNativeAvailable } from './shared/ba
  *  davvero leggerla.
  */
 export function backupValue(backup) {
-  const quando = Number(backup?.last_export_at) || 0;
-  return quando ? whenText(quando * 1000) : i18n.t('home.backup.never');
+  const when = Number(backup?.last_export_at) || 0;
+  return when ? whenText(when * 1000) : i18n.t('home.backup.never');
 }
 
 export class HomeBackup {
@@ -113,11 +113,11 @@ export class HomeBackup {
 
   _paint() {
     if (this.whenEl) {
-      const quando = Number(this.backup?.last_export_at) || 0;
-      this.whenEl.textContent = quando
-        ? i18n.t('home.backup.last', { when: whenText(quando * 1000) })
+      const when = Number(this.backup?.last_export_at) || 0;
+      this.whenEl.textContent = when
+        ? i18n.t('home.backup.last', { when: whenText(when * 1000) })
         : i18n.t('home.backup.neverLong');
-      this.whenEl.classList.toggle('is-warn', !quando);
+      this.whenEl.classList.toggle('is-warn', !when);
     }
     if (this.exportBtn) this.exportBtn.textContent = i18n.t('home.backup.export');
     if (this.importBtn) this.importBtn.textContent = i18n.t('home.backup.import');

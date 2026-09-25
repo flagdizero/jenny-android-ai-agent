@@ -111,8 +111,8 @@ def test_every_async_action_writer_declares_which_mode_it_belongs_to() -> None:
     i chiamanti sincroni, quindi la regola si misura sulla guardia."""
     header_src = _src(HEADER_JS)
     for name in ("showAction", "hideAction"):
-        corpo = _method(header_src, name)
-        assert "if (ownerMode && ownerMode !== this.currentMode) return;" in corpo, (
+        body = _method(header_src, name)
+        assert "if (ownerMode && ownerMode !== this.currentMode) return;" in body, (
             f"{name} ha perso la guardia sul proprietario della modalità"
         )
 
@@ -135,7 +135,7 @@ def test_the_telegram_poller_cannot_outlive_its_widget() -> None:
 
     refresh = _method(tg, "refresh")
     assert refresh.index("await api.getTelegramStatus()") < refresh.index("if (this._destroyed) return;"), (
-        "il flag va controllato dopo l'await: prima dell'await non è ancora cambiato niente"
+        "il flag va controllato after l'await: prima dell'await non è again changed niente"
     )
     assert "if (this._destroyed) return;" in _method(tg, "render")
     polling = _method(tg, "_startPolling")

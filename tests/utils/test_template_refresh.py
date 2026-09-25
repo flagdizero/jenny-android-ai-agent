@@ -594,15 +594,15 @@ def test_a_second_identical_pass_writes_nothing(tmp_path: Path) -> None:
     assert primo > 0, "la prima passata deve estrarre davvero"
 
     campione = dest / _SYSTEM_PROMPT_TEMPLATES[0]
-    prima = campione.stat().st_mtime_ns
+    before = campione.stat().st_mtime_ns
     # Un mtime a grana grossa renderebbe il confronto cieco: si sposta indietro
     # di un secondo, così un'eventuale riscrittura si vede comunque.
-    os.utime(campione, ns=(prima - 1_000_000_000, prima - 1_000_000_000))
-    segnato = campione.stat().st_mtime_ns
+    os.utime(campione, ns=(before - 1_000_000_000, before - 1_000_000_000))
+    marked = campione.stat().st_mtime_ns
 
     secondo = extract_package_dir("jenny.templates", dest, only=_SYSTEM_PROMPT_TEMPLATES)
     assert secondo == 0, f"la seconda passata ha riscritto {secondo} file identici"
-    assert campione.stat().st_mtime_ns == segnato, "il file è stato riscritto uguale"
+    assert campione.stat().st_mtime_ns == marked, "il file è stato riscritto uguale"
 
 
 def test_a_changed_file_still_lands(tmp_path: Path) -> None:

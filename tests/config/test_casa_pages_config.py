@@ -82,7 +82,7 @@ def test_an_unknown_kind_leaves_the_file_not_the_file_leaves() -> None:
     prodotto non sa disegnare — resta vera.
     """
     casa = HomeConfig(pages=[
-        {"id": "p1", "kind": "cassetto", "ref": "x"},
+        {"id": "p1", "kind": "drawer", "ref": "x"},
         {"id": "p2", "kind": "app", "ref": "orto"},
     ])
     assert [s.id for s in casa.pages] == ["p2"]
@@ -137,9 +137,9 @@ def test_each_row_is_validated_once(monkeypatch) -> None:
 
 def test_too_many_and_duplicate_pages_are_trimmed_not_refused() -> None:
     """Il tetto e gli id restano regole, ma sul file si applicano togliendo."""
-    righe = [{"id": f"p{i}", "kind": "app", "ref": f"a{i}"} for i in range(12)]
-    righe.insert(1, {"id": "p0", "kind": "app", "ref": "doppione"})
-    casa = HomeConfig(pages=righe)
+    rows = [{"id": f"p{i}", "kind": "app", "ref": f"a{i}"} for i in range(12)]
+    rows.insert(1, {"id": "p0", "kind": "app", "ref": "doppione"})
+    casa = HomeConfig(pages=rows)
     assert [s.id for s in casa.pages] == [f"p{i}" for i in range(8)]
     assert casa.pages[0].ref == "a0", "vince la prima delle due con lo stesso id"
 
@@ -153,8 +153,8 @@ def test_a_dropped_page_is_reported_once_not_at_every_read(monkeypatch) -> None:
     from jenny.config import schema
 
     monkeypatch.setattr(schema, "_DROPPED_PAGES_WARNED", set())
-    visti: list[str] = []
-    sink = logger.add(lambda m: visti.append(str(m)), level="WARNING", format="{message}")
+    seen: list[str] = []
+    sink = logger.add(lambda m: seen.append(str(m)), level="WARNING", format="{message}")
     try:
         storta = {"id": "p9", "kind": "widget", "ref": "meteo"}
         for _ in range(3):
@@ -163,8 +163,8 @@ def test_a_dropped_page_is_reported_once_not_at_every_read(monkeypatch) -> None:
     finally:
         logger.remove(sink)
 
-    assert len(visti) == 2, visti
-    assert all(v.startswith("home page dropped (") for v in visti), visti
+    assert len(seen) == 2, seen
+    assert all(v.startswith("home page dropped (") for v in seen), seen
 
 
 def test_a_room_can_no_longer_be_saved() -> None:

@@ -14,7 +14,7 @@ import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
-import { SettingsController, VISTA_DI, elementoVista } from './mobile-settings.js';
+import { SettingsController, VIEW_OF, viewElement } from './mobile-settings.js';
 import { OnboardingController } from './mobile-onboarding.js';
 import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
@@ -330,7 +330,7 @@ class MobileApp {
     // Ensure inputs stay visible when keyboard opens
     const modes = ['chat', 'workspace'];
     modes.forEach(mode => {
-      const view = elementoVista(mode);
+      const view = viewElement(mode);
       if (!view) return;
       const input = view.querySelector('input, textarea');
       if (input) {
@@ -677,7 +677,7 @@ class MobileApp {
    *  chat: cambia vista e scrive nel composer. */
   appsActions() {
     return (this._appsActions ||= new AppsActions(this.appsSource(), {
-      sendChatPrompt: (testo) => this.mandaInChat(testo),
+      sendChatPrompt: (text) => this.sendInChat(text),
     }));
   }
 
@@ -685,11 +685,11 @@ class MobileApp {
    *  Pubblico perche' lo usa anche Mani («Chiedi a Jenny» fra le skill): un
    *  secondo modo di scrivere in chat divergerebbe da questo alla prima
    *  correzione. */
-  mandaInChat(testo) {
+  sendInChat(text) {
     this.switchMode('chat');
     const chat = this.controllers?.chat;
     if (!chat?.input) return;
-    chat.input.value = testo;
+    chat.input.value = text;
     chat._autoResize?.();
     chat._updateSendState?.();
     chat.input.focus();
@@ -777,7 +777,7 @@ class MobileApp {
     });
 
     // Show target view
-    const view = elementoVista(mode);
+    const view = viewElement(mode);
     if (view) {
       view.style.display = 'flex';
     }
@@ -824,7 +824,7 @@ class MobileApp {
     /* Quale cassetto, per i tre modi che condividono la schermata. Va detto
        **prima** di `activate()`: quello ricarica e ridisegna, e saperlo dopo
        vorrebbe dire un frame col cassetto di prima. */
-    next.setCassetto?.(VISTA_DI[mode] === 'settings' ? mode : null);
+    next.setDrawer?.(VIEW_OF[mode] === 'settings' ? mode : null);
     if (next.ready) {
       next.ready.then(() => next.activate());
     } else {
@@ -902,7 +902,7 @@ class MobileApp {
         // manici della selezione non deve far scivolare la vista sotto le dita.
         if (hasSelection()) return false;
 
-        view = elementoVista(this.currentMode);
+        view = viewElement(this.currentMode);
         if (!view) return false;
 
         const modes = this._visibleModes();
@@ -952,7 +952,7 @@ class MobileApp {
           setScrim(0, false);         // la vista nuova non deve ereditare il velo
           clearView(el);              // la vecchia sta per essere nascosta da switchMode
           this.switchMode(target);
-          this._animateSlideIn(elementoVista(target), goingPrev);
+          this._animateSlideIn(viewElement(target), goingPrev);
         } else {
           // Torna a riposo (offset e grigio insieme).
           setScrim(0, true);
@@ -994,9 +994,9 @@ class MobileApp {
      *  Si spegne **solo durante l'animazione** e non per sempre: fuori di qui
      *  l'ancoraggio e' utile — e' quel che tiene il segno quando la cronologia
      *  cresce sopra la riga che si sta leggendo. */
-    const radice = document.documentElement;
-    const ancoraPrima = radice.style.overflowAnchor;
-    radice.style.overflowAnchor = 'none';
+    const root = document.documentElement;
+    const previousAnchor = root.style.overflowAnchor;
+    root.style.overflowAnchor = 'none';
 
     view.style.filter = '';
     view.style.transition = 'none';
@@ -1012,7 +1012,7 @@ class MobileApp {
       view.style.transition = '';
       view.style.willChange = '';
       view.style.transform = '';
-      radice.style.overflowAnchor = ancoraPrima;
+      root.style.overflowAnchor = previousAnchor;
       view.removeEventListener('transitionend', onEnd);
     };
     view.addEventListener('transitionend', onEnd);

@@ -48,21 +48,21 @@ import assert from 'node:assert/strict';
 globalThis.window = { matchMedia: () => ({ matches: false }) };
 const { JennyCompanion } = await import('./mobile-jenny.js');
 
-function classi(...iniziali) {
+function classes(...iniziali) {
   const s = new Set(iniziali);
   return { add: (c) => s.add(c), remove: (c) => s.delete(c), contains: (c) => s.has(c) };
 }
 
 /* Una minichat aperta, con la domanda in volo: `awaiting` e il flag del turno
    alzati come li alza `_send`. */
-function minichat({ aperta = true, attesa = true, inTurno = true } = {}) {
+function minichat({ open = true, attesa = true, inTurno = true } = {}) {
   const j = Object.create(JennyCompanion.prototype);
   Object.assign(j, {
     mode: 'home', awaiting: attesa, _replyShown: false, _replyTimer: null,
     _deltaBuffer: '', _turnActive: false, _pendingTurn: inTurno,
     _streamTurnId: null, _lastClosedTurnId: null,
-    el: { classList: classi() },
-    mc: { classList: aperta ? classi('open') : classi(), dataset: {} },
+    el: { classList: classes() },
+    mc: { classList: open ? classes('open') : classes(), dataset: {} },
     bubble: { textContent: '' },
   });
   j.stati = [];
@@ -73,20 +73,20 @@ function minichat({ aperta = true, attesa = true, inTurno = true } = {}) {
   window.mobileApp = { controllers: { chat: { invalidateHistory: () => { j.invalidazioni += 1; } } } };
   return j;
 }
-const ultimo = (j) => j.stati[j.stati.length - 1];
+const last = (j) => j.stati[j.stati.length - 1];
 """
 
 
-def _run(corpo: str) -> None:
+def _run(body: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        radice = Path(tmp)
-        (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "mobile-jenny.js", radice / "mobile-jenny.js")
-        shutil.copy(ASSETS / "shared" / "jenny-mascot.js", radice / "shared" / "jenny-mascot.js")
-        for name, testo in _VICINI.items():
-            (radice / "shared" / name).write_text(testo, encoding="utf-8")
-        entry = radice / "prova.mjs"
-        entry.write_text(_PRELUDIO + textwrap.dedent(corpo), encoding="utf-8")
+        root = Path(tmp)
+        (root / "shared").mkdir()
+        shutil.copy(ASSETS / "mobile-jenny.js", root / "mobile-jenny.js")
+        shutil.copy(ASSETS / "shared" / "jenny-mascot.js", root / "shared" / "jenny-mascot.js")
+        for name, text in _VICINI.items():
+            (root / "shared" / name).write_text(text, encoding="utf-8")
+        entry = root / "prova.mjs"
+        entry.write_text(_PRELUDIO + textwrap.dedent(body), encoding="utf-8")
         run_module(entry)
 
 
@@ -98,7 +98,7 @@ def test_deltas_accumulate_into_the_bubble() -> None:
         j._handleFrame({ event: 'delta', text: '**Luca**', turn_id: 't1' });
         assert.equal(j.bubble.textContent, 'Ciao Luca', 'testo piano, accumulato');
         assert.equal(j.mc.dataset.state, 'reply');
-        assert.equal(ultimo(j), 'talking');
+        assert.equal(last(j), 'talking');
         assert.equal(j._streamTurnId, 't1', 'il primo frame adotta il turno');
         """
     )
@@ -112,11 +112,11 @@ def test_stream_end_shows_its_text_and_then_settles() -> None:
         const j = minichat();
         j._handleFrame({ event: 'stream_end', text: 'Fatto.' });
         assert.equal(j.bubble.textContent, 'Fatto.');
-        assert.equal(ultimo(j), 'idle');
+        assert.equal(last(j), 'idle');
         j._turnActive = true;
         j._handleFrame({ event: 'stream_end' });
         assert.equal(j.bubble.textContent, 'Fatto.', 'senza testo il fumetto resta');
-        assert.equal(ultimo(j), 'thinking', 'col goal in corso si torna a pensare');
+        assert.equal(last(j), 'thinking', 'col goal in corso si torna a pensare');
         """
     )
 
@@ -127,15 +127,15 @@ def test_a_message_with_text_is_shown_and_a_hint_is_not() -> None:
         const j = minichat();
         j._handleFrame({ event: 'message', kind: 'tool_hint', text: 'leggo il file' });
         assert.equal(j.bubble.textContent, '', 'un suggerimento non va nel fumetto');
-        assert.equal(ultimo(j), 'thinking');
+        assert.equal(last(j), 'thinking');
         j._handleFrame({ event: 'message', kind: 'progress', text: 'ancora un attimo' });
         assert.equal(j.bubble.textContent, '');
-        assert.equal(ultimo(j), 'thinking');
+        assert.equal(last(j), 'thinking');
         j._handleFrame({ event: 'message', tool_events: [{}] });
-        assert.equal(ultimo(j), 'thinking');
+        assert.equal(last(j), 'thinking');
         j._handleFrame({ event: 'message', text: 'Eccola' });
         assert.equal(j.bubble.textContent, 'Eccola');
-        assert.equal(ultimo(j), 'talking');
+        assert.equal(last(j), 'talking');
         """
     )
 
@@ -148,7 +148,7 @@ def test_turn_end_without_a_reply_shows_the_flower_and_invalidates_history() -> 
         j._replyTimer = setTimeout(() => { scattato = true; }, 5);
         j._handleFrame({ event: 'turn_end', turn_id: 't1' });
         assert.equal(j.bubble.textContent, '✿');
-        assert.equal(ultimo(j), 'idle', 'il fiore non lascia Jenny a parlare');
+        assert.equal(last(j), 'idle', 'il fiore non lascia Jenny a parlare');
         assert.equal(j.awaiting, false);
         assert.equal(j._pendingTurn, false);
         assert.equal(j._replyTimer, null);
@@ -167,7 +167,7 @@ def test_turn_end_after_a_reply_keeps_the_reply() -> None:
         j._handleFrame({ event: 'delta', text: 'Risposta', turn_id: 't1' });
         j._handleFrame({ event: 'turn_end', turn_id: 't1' });
         assert.equal(j.bubble.textContent, 'Risposta');
-        assert.equal(ultimo(j), 'idle');
+        assert.equal(last(j), 'idle');
         assert.equal(j._streamTurnId, null);
         """
     )
@@ -179,7 +179,7 @@ def test_error_shows_its_text_and_the_sad_face() -> None:
         const j = minichat();
         j._handleFrame({ event: 'error', detail: 'Il provider **non** risponde' });
         assert.equal(j.bubble.textContent, 'Il provider non risponde');
-        assert.equal(ultimo(j), 'idle');
+        assert.equal(last(j), 'idle');
         assert.deepEqual(j.umori, ['sad']);
         assert.equal(j.awaiting, false);
         assert.equal(j._pendingTurn, false);
@@ -213,7 +213,7 @@ def test_with_nothing_on_screen_only_the_pending_closing_passes() -> None:
     è l'unico punto che invalida lo storico della chat."""
     _run(
         """
-        const j = minichat({ aperta: false, attesa: false });
+        const j = minichat({ open: false, attesa: false });
         j._handleFrame({ event: 'delta', text: 'invisibile', turn_id: 't1' });
         assert.deepEqual(j.stati, []);
         assert.equal(j._deltaBuffer, '');
@@ -223,7 +223,7 @@ def test_with_nothing_on_screen_only_the_pending_closing_passes() -> None:
         assert.equal(j._pendingTurn, false);
         assert.equal(j.bubble.textContent, '', 'a minichat chiusa il fumetto non si scrive');
 
-        const k = minichat({ aperta: false, attesa: false, inTurno: false });
+        const k = minichat({ open: false, attesa: false, inTurno: false });
         k._handleFrame({ event: 'turn_end', turn_id: 't1' });
         assert.equal(k.invalidazioni, 0, 'senza turno in volo non è roba nostra');
         """
@@ -236,13 +236,13 @@ def test_goal_status_and_reasoning_move_the_state() -> None:
         const j = minichat();
         j._handleFrame({ event: 'goal_status', status: 'running' });
         assert.equal(j._turnActive, true);
-        assert.equal(ultimo(j), 'thinking');
+        assert.equal(last(j), 'thinking');
         j._handleFrame({ event: 'reasoning_delta', text: 'uhm' });
         j._handleFrame({ event: 'file_edit' });
-        assert.equal(ultimo(j), 'thinking');
+        assert.equal(last(j), 'thinking');
         j._handleFrame({ event: 'goal_status', status: 'idle' });
         assert.equal(j._turnActive, false);
-        assert.equal(ultimo(j), 'idle');
+        assert.equal(last(j), 'idle');
         """
     )
 
@@ -256,11 +256,11 @@ def test_in_the_chat_view_the_bubble_is_not_touched() -> None:
         j._handleFrame({ event: 'delta', text: 'in chat', turn_id: 'c1' });
         assert.equal(j.bubble.textContent, '');
         assert.equal(j._deltaBuffer, '');
-        assert.equal(ultimo(j), 'talking');
+        assert.equal(last(j), 'talking');
         j._handleFrame({ event: 'turn_end', turn_id: 'c1' });
         assert.equal(j.bubble.textContent, '');
         assert.equal(j.invalidazioni, 0);
-        assert.equal(ultimo(j), 'idle');
+        assert.equal(last(j), 'idle');
         """
     )
 

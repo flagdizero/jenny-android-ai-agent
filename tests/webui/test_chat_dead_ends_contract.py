@@ -67,7 +67,7 @@ def test_a_failing_native_bridge_is_reported_not_papered_over() -> None:
         "fuori dalla WebView (debug da browser) la scheda nuova resta l'unica strada"
     )
     assert body.index("showToast(") < body.index("window.open("), (
-        "il toast deve chiudere il ramo col bridge; window.open è l'ultima riga, "
+        "il toast deve chiudere il ramo col bridge; window.open è l'ultima row, "
         "raggiunta solo quando il bridge non esiste affatto"
     )
     toast_line = next(line for line in body.splitlines() if "showToast(" in line)

@@ -138,7 +138,7 @@ def _schema_descriptions(node: Any, path: str = "") -> Iterator[tuple[str, str]]
 
 
 def _model_facing_corpus() -> Iterator[tuple[str, str]]:
-    """``(sorgente, testo)`` per ogni pezzo di testo che il modello può leggere."""
+    """``(sorgente, text)`` per ogni pezzo di testo che il modello può leggere."""
     for name in _SYSTEM_PROMPT_TEMPLATES:
         yield f"template {name}", load_bundled_template(name) or ""
 

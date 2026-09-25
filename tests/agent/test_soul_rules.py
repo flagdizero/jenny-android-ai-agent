@@ -52,12 +52,12 @@ REGOLE = "Chiamami per nome, e niente emoji."
 def test_rules_land_in_the_file_the_prompt_reads() -> None:
     """Il blocco si aggiunge in fondo, coi due marcatori e l'intestazione che
     dice al modello di chi sono quelle righe."""
-    nuovo = project(SOUL, REGOLE)
-    assert SOUL.rstrip() in nuovo, "il resto del file e' stato toccato"
-    assert MARK_START in nuovo and MARK_END in nuovo
-    assert HEADING in nuovo
-    assert REGOLE in nuovo
-    assert extract_rules(nuovo) == REGOLE
+    fresh = project(SOUL, REGOLE)
+    assert SOUL.rstrip() in fresh, "il resto del file e' stato toccato"
+    assert MARK_START in fresh and MARK_END in fresh
+    assert HEADING in fresh
+    assert REGOLE in fresh
+    assert extract_rules(fresh) == REGOLE
 
 
 def test_projecting_twice_does_not_write_it_twice() -> None:
@@ -74,14 +74,14 @@ def test_a_changed_rule_replaces_the_old_one_in_place() -> None:
     """Il posto si conserva. Riscrivere il blocco in fondo a ogni salvataggio
     lo sposterebbe sotto a quel che Dream ha aggiunto nel frattempo, e dopo un
     mese le regole dell'utente sarebbero in coda a tutto."""
-    prima = project(SOUL, REGOLE)
-    con_coda = prima + "\n## Something Dream added\n\n- a line\n"
-    dopo = project(con_coda, "Dammi del tu.")
+    before = project(SOUL, REGOLE)
+    con_coda = before + "\n## Something Dream added\n\n- a line\n"
+    after = project(con_coda, "Dammi del tu.")
 
-    assert "Something Dream added" in dopo, "la coda di Dream e' sparita"
-    assert REGOLE not in dopo, "la regola vecchia e' rimasta accanto alla nuova"
-    assert extract_rules(dopo) == "Dammi del tu."
-    assert dopo.index(HEADING) < dopo.index("Something Dream added")
+    assert "Something Dream added" in after, "la coda di Dream e' sparita"
+    assert REGOLE not in after, "la regola vecchia e' rimasta accanto alla nuova"
+    assert extract_rules(after) == "Dammi del tu."
+    assert after.index(HEADING) < after.index("Something Dream added")
 
 
 def test_emptying_the_box_takes_the_block_away() -> None:
@@ -225,9 +225,9 @@ def test_a_sync_with_nothing_to_do_writes_nothing(tmp_path: Path) -> None:
     save_rules(tmp_path, REGOLE)
     assert sync_soul(tmp_path) is False
 
-    prima = (tmp_path / "SOUL.md").stat().st_mtime_ns
+    before = (tmp_path / "SOUL.md").stat().st_mtime_ns
     assert sync_soul(tmp_path) is False
-    assert (tmp_path / "SOUL.md").stat().st_mtime_ns == prima
+    assert (tmp_path / "SOUL.md").stat().st_mtime_ns == before
 
 
 def test_a_missing_soul_is_not_invented(tmp_path: Path) -> None:
@@ -242,9 +242,9 @@ def test_removing_the_rules_takes_the_block_out_of_the_file(tmp_path: Path) -> N
     (tmp_path / "SOUL.md").write_text(SOUL, encoding="utf-8")
     save_rules(tmp_path, REGOLE)
     save_rules(tmp_path, "")
-    testo = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
-    assert HEADING not in testo and MARK_START not in testo
-    assert "Never moralize" in testo
+    text = (tmp_path / "SOUL.md").read_text(encoding="utf-8")
+    assert HEADING not in text and MARK_START not in text
+    assert "Never moralize" in text
 
 
 # ── Il gancio ───────────────────────────────────────────────────────────────
@@ -272,10 +272,10 @@ def test_every_dream_pass_puts_the_rules_back(tmp_path: Path) -> None:
         soul_file = workspace / "SOUL.md"
 
         def __init__(self) -> None:
-            self.scritto: dict[str, int] = {}
+            self.written: dict[str, int] = {}
 
         def set_review_state(self, **kwargs: int) -> None:
-            self.scritto = kwargs
+            self.written = kwargs
 
     # La passata ha riscritto il file e si e' portata via il blocco.
     (workspace / "SOUL.md").write_text(SOUL + "\n- Be brief.\n", encoding="utf-8")
@@ -283,7 +283,7 @@ def test_every_dream_pass_puts_the_rules_back(tmp_path: Path) -> None:
     store = _Store()
     finish_dream_cycle(store, advanced=True, runs_since_review=3, stuck=0)
 
-    testo = (workspace / "SOUL.md").read_text(encoding="utf-8")
-    assert extract_rules(testo) == REGOLE, "le regole non sono tornate dopo la passata"
-    assert "- Be brief." in testo, "la sincronizzazione ha buttato via la passata"
-    assert store.scritto["runs_since_review"] == 4, "i contatori non vengono piu' scritti"
+    text = (workspace / "SOUL.md").read_text(encoding="utf-8")
+    assert extract_rules(text) == REGOLE, "le regole non sono tornate dopo la passata"
+    assert "- Be brief." in text, "la sincronizzazione ha buttato via la passata"
+    assert store.written["runs_since_review"] == 4, "i contatori non vengono piu' scritti"

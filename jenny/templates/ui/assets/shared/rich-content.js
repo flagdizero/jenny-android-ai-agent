@@ -22,7 +22,7 @@ const KATEX_CSS = '/html-mobile/assets/vendor/katex@0.16.10/dist/katex.min.css';
 const MERMAID_JS = '/html-mobile/assets/vendor/mermaid@10/dist/mermaid.min.js';
 
 /* I delimitatori che non possono voler dire altro. */
-const DELIMITATORI_SICURI = [
+const SAFE_DELIMITERS = [
   { left: '$$', right: '$$', display: true },
   { left: '\\[', right: '\\]', display: true },
   { left: '\\(', right: '\\)', display: false },
@@ -32,11 +32,11 @@ const DELIMITATORI_SICURI = [
    riga (`$f(x)$`) e che **fuori da una pagina e' una trappola**: «costa $5,
    forse $10» diventa un tentativo di scrivere «5, forse » in matematica. Sta
    qui da solo perche' si accende per superficie, non ovunque. */
-const DOLLARO_IN_RIGA = { left: '$', right: '$', display: false };
+const DOLLAR_IN_LINE = { left: '$', right: '$', display: false };
 
 /* Dentro un blocco di codice un dollaro e' un prompt di shell, e una barra
    rovesciata e' una barra rovesciata. KaTeX li salta. */
-const TAG_IGNORATI = ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'];
+const IGNORED_TAGS = ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'];
 
 /** Il testo di *root* saltando codice e blocchi di codice.
  *
@@ -47,28 +47,28 @@ const TAG_IGNORATI = ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 
  *  criterio per accendere non e' lo stesso del criterio per disegnare, si carica
  *  la libreria per contenuto che non verra' toccato.
  */
-function testoFuoriDalCodice(root) {
-  const salta = new Set(TAG_IGNORATI.map((t) => t.toUpperCase()));
-  let testo = '';
-  const cammina = (nodo) => {
-    for (const figlio of nodo.childNodes || []) {
-      if (figlio.nodeType === 3) testo += figlio.nodeValue;
-      else if (figlio.nodeType === 1 && !salta.has(figlio.tagName)) cammina(figlio);
+function textOutsideCode(root) {
+  const skip = new Set(IGNORED_TAGS.map((t) => t.toUpperCase()));
+  let text = '';
+  const walk = (node) => {
+    for (const child of node.childNodes || []) {
+      if (child.nodeType === 3) text += child.nodeValue;
+      else if (child.nodeType === 1 && !skip.has(child.tagName)) walk(child);
     }
   };
-  cammina(root);
-  return testo;
+  walk(root);
+  return text;
 }
 
 /** C'e' davvero una formula da disegnare in *testo*? */
-function contieneFormula(testo, dollaro) {
-  if (/\$\$[\s\S]+?\$\$/.test(testo)) return true;
-  if (/\\\[[\s\S]+?\\\]/.test(testo)) return true;
-  if (/\\\([\s\S]+?\\\)/.test(testo)) return true;
+function containsFormula(text, dollar) {
+  if (/\$\$[\s\S]+?\$\$/.test(text)) return true;
+  if (/\\\[[\s\S]+?\\\]/.test(text)) return true;
+  if (/\\\([\s\S]+?\\\)/.test(text)) return true;
   // Il dollaro in riga si cerca solo dove e' acceso, e su una riga sola: una
   // formula in riga non va a capo, mentre due prezzi in due paragrafi diversi
   // si', ed e' esattamente la coppia che non deve accendere niente.
-  return dollaro && /\$[^$\n]+\$/.test(testo);
+  return dollar && /\$[^$\n]+\$/.test(text);
 }
 
 /** Disegna le formule dentro *container*, caricando KaTeX solo se ce n'e'.
@@ -84,7 +84,7 @@ function contieneFormula(testo, dollaro) {
  */
 async function renderMath(container, { inlineDollar = false } = {}) {
   if (!container) return;
-  if (!contieneFormula(testoFuoriDalCodice(container), inlineDollar)) return;
+  if (!containsFormula(textOutsideCode(container), inlineDollar)) return;
   try {
     await Promise.all([
       ensureVendorStyle(KATEX_CSS),
@@ -99,12 +99,12 @@ async function renderMath(container, { inlineDollar = false } = {}) {
     return;
   }
   const delimiters = inlineDollar
-    ? [...DELIMITATORI_SICURI, DOLLARO_IN_RIGA]
-    : DELIMITATORI_SICURI;
+    ? [...SAFE_DELIMITERS, DOLLAR_IN_LINE]
+    : SAFE_DELIMITERS;
   try {
     renderMathInElement(container, {
       delimiters,
-      ignoredTags: TAG_IGNORATI,
+      ignoredTags: IGNORED_TAGS,
       throwOnError: false,
     });
   } catch (err) {
@@ -125,8 +125,8 @@ async function renderMath(container, { inlineDollar = false } = {}) {
  */
 export async function renderDiagrams(container) {
   if (!container) return;
-  const blocchi = [...container.querySelectorAll('code.language-mermaid')];
-  if (!blocchi.length) return;
+  const blocks = [...container.querySelectorAll('code.language-mermaid')];
+  if (!blocks.length) return;
   try {
     // 3,3 MB: qui dentro ci sta comodamente un cambio di schermata, e chi
     // chiama deve poter dire che non e' piu' il suo turno (v. `stale`).
@@ -140,28 +140,28 @@ export async function renderDiagrams(container) {
      fondo scuro. Dei sette temi quattro sono scuri, quindi la scelta segue
      `color-scheme` invece di essere fissata — e si rifa' a ogni passata, cosi'
      un cambio di tema a contenuto aperto viene raccolto. */
-  const chiaro = getComputedStyle(document.documentElement).colorScheme === 'light';
+  const light = getComputedStyle(document.documentElement).colorScheme === 'light';
   mermaid.initialize({
     startOnLoad: false,
-    theme: chiaro ? 'default' : 'dark',
+    theme: light ? 'default' : 'dark',
     // I diagrammi arrivano dal modello: `strict` tiene l'HTML fuori dalle
     // etichette. E' gia' il default di mermaid, lo rendiamo esplicito.
     securityLevel: 'strict',
   });
-  await Promise.all(blocchi.map(async (code, i) => {
+  await Promise.all(blocks.map(async (code, i) => {
     // Il nodo da sostituire e' l'involucro intero, non il `<code>`: in chat
     // quello porta con se' l'intestazione con «mermaid» e il tasto Copia, che
     // accanto a un disegno non vogliono dire piu' niente.
-    const blocco = code.closest('.chat-code-block') || code.closest('pre') || code;
+    const block = code.closest('.chat-code-block') || code.closest('pre') || code;
     try {
       const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, code.textContent);
       // Staccato mentre mermaid disegnava (cambio pagina, ridisegno): non si
       // riscrive un nodo che non e' piu' a schermo.
-      if (!blocco.isConnected) return;
+      if (!block.isConnected) return;
       const home = document.createElement('div');
       home.className = 'diagram';
       home.innerHTML = svg;
-      blocco.replaceWith(home);
+      block.replaceWith(home);
     } catch (err) {
       // Un diagramma con un errore di sintassi resta il suo sorgente, che e'
       // leggibile: mermaid altrimenti pianta a schermo il proprio messaggio
