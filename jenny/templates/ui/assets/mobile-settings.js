@@ -202,6 +202,11 @@ export class SettingsController {
       if (this._stale(gen)) return;
       this.data = settings;
       this.render();
+      this._riallineaPannello(
+        'marca', this._marcaAperta,
+        (this.data.providers || []).some(p => p.name === this._marcaAperta),
+        nome => this._apriMarca(nome),
+      );
     } catch (err) {
       if (this._stale(gen)) return;
       this.contentEl.innerHTML = `
@@ -879,6 +884,7 @@ export class SettingsController {
     const titolo = document.getElementById('drawer-marca-title');
     const p = (this.data?.providers || []).find(x => x.name === nome);
     if (!corpo || !p) return;
+    this._marcaAperta = nome;
     if (titolo) titolo.textContent = p.name;
     corpo.innerHTML = `
       <div class="settings-riga">
@@ -1299,6 +1305,11 @@ export class SettingsController {
     this._ssh = ssh;
     blockEl.innerHTML = this._renderSshBlock(this._ssh);
     this._wireSshBlock();
+    this._riallineaPannello(
+      'ssh-host', this._sshAperto,
+      (ssh.hosts || []).some(h => h.alias === this._sshAperto),
+      alias => this._apriHostSsh(alias),
+    );
     // Anche questo blocco era un segnaposto quando la posizione è stata rimessa.
     this._restoreScrollTop();
   }
@@ -1395,6 +1406,7 @@ export class SettingsController {
     const corpo = document.getElementById('drawer-ssh-host-body');
     const titolo = document.getElementById('drawer-ssh-host-title');
     if (!h || !corpo) return;
+    this._sshAperto = alias;
     if (titolo) titolo.textContent = h.alias;
     const byPassword = h.auth === 'password';
     const desc = h.description
@@ -1420,6 +1432,21 @@ export class SettingsController {
         </button>
       </div>`;
     this._wireHostSsh();
+  }
+
+  /** Un pannello aperto su un oggetto appena cambiato si ridisegna — o si
+   *  chiude, se l'oggetto non c'e' piu'.
+   *
+   *  I pannelli (host SSH, marca) si disegnano all'apertura con i dati di
+   *  quel momento. Dopo «Genera chiave» il pannello restava su «nessuna
+   *  chiave ancora»; dopo «Elimina» restava aperto su un host o una marca che
+   *  non esistevano piu', coi bottoni ancora attivi. Lo chiamano i due
+   *  caricamenti, cosi' qualunque azione che ricarica lo ottiene gratis. */
+  _riallineaPannello(id, nome, esiste, riapri) {
+    const drawer = window.mobileApp?.drawer;
+    if (!nome || drawer?.activeDrawer !== id) return;
+    if (esiste) riapri(nome);
+    else drawer.close(id);
   }
 
   /** I comandi dentro il pannello. All'apertura, non al caricamento. */
@@ -1516,7 +1543,10 @@ export class SettingsController {
      andato perso, preme Indietro, e la modale dell'impronta gli si apre sopra
      un'altra sezione. */
   _setSshVerifyBusy(alias, busy) {
-    const btn = this.contentEl?.querySelector(`.ssh-verify[data-ssh-alias="${CSS.escape(alias)}"]`);
+    /* Il bottone vive nel pannello dell'host, non nella schermata: cercato in
+       `contentEl` non si trovava mai, e il segno di attesa non compariva. */
+    const btn = document.querySelector(
+      `#drawer-ssh-host-body .ssh-verify[data-ssh-alias="${CSS.escape(alias)}"]`);
     if (!btn) return;
     btn.disabled = busy;
     btn.textContent = i18n.t(busy ? 'settings.ssh.verifying' : 'settings.ssh.verify');
@@ -1631,6 +1661,7 @@ export class SettingsController {
     try {
       await api.deleteSshHost(alias);
       showToast(i18n.t('settings.ssh.deleted'));
+      this._riallineaPannello('ssh-host', alias, false, null);
       this._loadSsh();
     } catch (e) { showToast(e.message, 'error'); }
   }
@@ -2804,6 +2835,7 @@ export class SettingsController {
     api.deleteProvider({ name })
       .then(() => {
         showToast(i18n.t('settings.providerDeleted'));
+        this._riallineaPannello('marca', name, false, null);
         this.loadSettings();
       })
       .catch(e => showToast(e.message, 'error'));
