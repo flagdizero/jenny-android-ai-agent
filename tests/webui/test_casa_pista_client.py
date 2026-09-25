@@ -8,7 +8,7 @@ parlano **per nome di pagina** (`I('p1')`, `CHAT()`) e non per numero: un
 banco che scrivesse `indice === 1` proverebbe un ordine, non la pista.
 
 **Perche' in node sui file veri.** Il modulo si importa davvero — con il suo
-`shared/gesto-orizzontale.js` accanto e un finto client API — invece di
+`shared/horizontal-swipe.js` accanto e un finto client API — invece di
 ritagliarne il testo: cosi' il banco vede anche gli import, che sono
 esattamente la cosa che un refactor rompe in silenzio. Il DOM e' finto, quindi
 quel che si prova e' **dove si va**, non come si vede.
@@ -169,16 +169,16 @@ globalThis.window = {
 };
 globalThis.getComputedStyle = () => ({ overflowX: 'visible' });
 
-/* Un gesto completo sulla pista. `verso` +1 = dito a destra (pagina
+/* Un gesto completo sulla pista. `direction` +1 = dito a destra (pagina
    precedente), -1 = dito a sinistra (pagina successiva). */
 function lancia(el, tipo, evento) {
   for (const fn of el.ascolto[tipo] || []) fn(evento);
 }
 
-function scorri(verso, { corto = false } = {}) {
+function scorri(direction, { corto = false } = {}) {
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88: corto resta sotto, lungo la supera
-  const dx = verso * (corto ? 20 : 200);
+  const dx = direction * (corto ? 20 : 200);
   lancia(pista, 'touchstart', { touches: [dito(x0, 100)], target: pista });
   lancia(pista, 'touchmove', {
     touches: [dito(x0 + dx, 100)],
@@ -191,7 +191,7 @@ function scorri(verso, { corto = false } = {}) {
    nessun dito, ed e' tutto il punto: la pagina di una app e' tutta l'app, e
    il dito che la tocca al guscio non ci arriva mai. */
 function daApp(dettaglio, { sorgente } = {}) {
-  const e = { data: { type: 'jenny:gesto', slug: 'orto', ...dettaglio }, source: sorgente };
+  const e = { data: { type: 'jenny:swipe', slug: 'orto', ...dettaglio }, source: sorgente };
   for (const fn of window.ascolto.message || []) fn(e);
 }
 /* La sorgente buona: la finestra della cornice che si sta guardando. */
@@ -199,16 +199,16 @@ function finestraViva() {
   const pannello = pagine.pannelloDi(pagine.indice);
   return pannello?.dataset?.id && pannello.children[0] && pannello.children[0].contentWindow;
 }
-function scorriDaApp(verso, { corto = false, sorgente } = {}) {
-  const dx = verso * (corto ? 20 : 200);
+function scorriDaApp(direction, { corto = false, sorgente } = {}) {
+  const dx = direction * (corto ? 20 : 200);
   const da = { sorgente: sorgente === undefined ? finestraViva() : sorgente };
-  daApp({ fase: 'inizio' }, da);
-  daApp({ fase: 'muove', dx }, da);
+  daApp({ phase: 'start' }, da);
+  daApp({ phase: 'move', dx }, da);
   daApp({
-    fase: 'fine',
-    verso: dx > 0 ? 'prev' : 'next',
+    phase: 'end',
+    direction: dx > 0 ? 'prev' : 'next',
     // soglia = max(60, 400*0.22) = 88, come la calcola il modulo condiviso
-    conferma: Math.abs(dx) > 88,
+    confirm: Math.abs(dx) > 88,
   }, da);
 }
 /* Un dito i cui due righelli **non vanno d'accordo**. E' quel che succede
@@ -322,8 +322,8 @@ def _run(
             radice / "shared" / "conversation-list.js",
         )
         shutil.copy(
-            ASSETS / "shared" / "gesto-orizzontale.js",
-            radice / "shared" / "gesto-orizzontale.js",
+            ASSETS / "shared" / "horizontal-swipe.js",
+            radice / "shared" / "horizontal-swipe.js",
         )
         # Il client API finto: risponde quel che il caso vuole, e ricorda le
         # scritture. Non si tocca la rete e non si tocca `config.json`.
@@ -1046,12 +1046,12 @@ def test_the_shell_decides_at_every_gesture_whether_it_can_move() -> None:
 
 
 def test_a_forwarded_drag_without_its_start_moves_nothing() -> None:
-    """Un `muove` orfano userebbe una larghezza mai misurata."""
+    """Un `move` orfano userebbe una larghezza mai misurata."""
     _run(
         "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "pista.style.transform = 'segno';\n"
-        "daApp({ fase: 'muove', dx: 120 }, { sorgente: finestraViva() });\n"
+        "daApp({ phase: 'move', dx: 120 }, { sorgente: finestraViva() });\n"
         "assert.equal(pista.style.transform, 'segno', 'un muove orfano ha mosso la pista');\n",
         UNA,
     )
@@ -1063,9 +1063,9 @@ def test_a_broken_number_never_reaches_the_track() -> None:
         "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "const da = { sorgente: finestraViva() };\n"
-        "daApp({ fase: 'inizio' }, da);\n"
+        "daApp({ phase: 'start' }, da);\n"
         "pista.style.transform = 'segno';\n"
-        "daApp({ fase: 'muove', dx: 'boh' }, da);\n"
+        "daApp({ phase: 'move', dx: 'boh' }, da);\n"
         "assert.equal(pista.style.transform, 'segno', 'un dx non numerico e passato');\n",
         UNA,
     )
@@ -1077,9 +1077,9 @@ def test_a_cancelled_forwarded_gesture_snaps_back() -> None:
         "pagine.vaiAId('p1');\n"
         "await new Promise((r) => setTimeout(r, 20));\n"
         "const da = { sorgente: finestraViva() };\n"
-        "daApp({ fase: 'inizio' }, da);\n"
-        "daApp({ fase: 'muove', dx: 150 }, da);\n"
-        "daApp({ fase: 'annulla' }, da);\n"
+        "daApp({ phase: 'start' }, da);\n"
+        "daApp({ phase: 'move', dx: 150 }, da);\n"
+        "daApp({ phase: 'cancel' }, da);\n"
         "assert.equal(pagine.indice, I('p1'));\n"
         "assert.equal(pista.style.transform, `translateX(${-I('p1') * 100}%)`, 'non e tornata a posto');\n",
         UNA,
@@ -1096,7 +1096,7 @@ def test_the_finger_is_measured_against_the_screen() -> None:
     pista sta trascinando: al limite il dito si muove di 200 e `client` dice
     zero. L'utente lo ha visto come una vibrazione — avanti, indietro, avanti —
     e la misura su Chrome del telefono l'ha confermato riga per riga
-    (22/09/2026, v. la testata di `shared/gesto-orizzontale.js`).
+    (22/09/2026, v. la testata di `shared/horizontal-swipe.js`).
     """
     _run(
         "scorriSfalsato(0, -200);\n"
@@ -1665,7 +1665,7 @@ def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
     assert "casa-foglio" not in css
     pagine_js = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
-    assert "osservaGestoOrizzontale(this.striscia" not in pagine_js, (
+    assert "watchHorizontalSwipe(this.striscia" not in pagine_js, (
         "i pallini hanno di nuovo una pressione lunga: nessuno la troverebbe"
     )
     for lingua in ("it", "en"):
@@ -1677,7 +1677,7 @@ def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
 
 def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
     """Aveva un solo chiamante, i pallini, ed e' uscita con lui."""
-    src = (ASSETS / "shared" / "gesto-orizzontale.js").read_text(encoding="utf-8")
+    src = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
     assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src
 
 

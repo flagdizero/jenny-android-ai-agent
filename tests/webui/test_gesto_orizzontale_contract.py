@@ -1,19 +1,19 @@
 """Un solo posto in cui si riconosce un trascinamento orizzontale.
 
 Il 22/09/2026 il gesto del carosello e' uscito da `MobileApp::setupSwipeNav` ed
-e' finito in `shared/gesto-orizzontale.js`, perche' la casa deve fare **lo
+e' finito in `shared/horizontal-swipe.js`, perche' la casa deve fare **lo
 stesso gesto** per cambiare pagina.
 
 **Perche' serve un banco e non basta la buona volonta'.** Le costanti di quel
 gesto non sono scelte a occhio, sono state pagate con delle misure:
 
-- `SOGLIA_ASSE = 24` e non 10, perche' il touch slop di Android e' ~8dp e sotto
+- `AXIS_THRESHOLD = 24` e non 10, perche' il touch slop di Android e' ~8dp e sotto
   quella soglia `preventDefault()` cade dentro la finestra in cui Chromium sta
   ancora decidendo se la pressione e' un long-press — che viene scartato, e la
   selezione di testo non si apre piu';
 - la dominanza `1.5`, che distingue un trascinamento diagonale (chi aggiusta una
   selezione) da uno orizzontale vero;
-- `dentroScorrevoleOrizzontale`, che cede il gesto a un blocco di codice largo
+- `insideHorizontalScrollable`, che cede il gesto a un blocco di codice largo
   invece di rubarglielo.
 
 Una seconda copia in casa partirebbe uguale e divergerebbe al primo aggiustamento,
@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-MODULO = ASSETS / "shared" / "gesto-orizzontale.js"
+MODULO = ASSETS / "shared" / "horizontal-swipe.js"
 
 # `apps/` e' nell'elenco dal 22/09/2026: da quel giorno il kit che ogni Jenny
 # App carica e' anche lui un consumatore del gesto — dentro una app il dito non
@@ -55,7 +55,7 @@ def test_only_the_shared_module_listens_to_touchmove() -> None:
     ]
     assert not colpevoli, (
         f"{colpevoli} ascoltano `touchmove` per conto loro. Il riconoscimento di "
-        f"un trascinamento sta in shared/gesto-orizzontale.js: una seconda copia "
+        f"un trascinamento sta in shared/horizontal-swipe.js: una seconda copia "
         f"diverge al primo aggiustamento, e la differenza si vede solo col dito."
     )
 
@@ -63,7 +63,7 @@ def test_only_the_shared_module_listens_to_touchmove() -> None:
 def test_the_measured_constants_live_in_one_place() -> None:
     """La soglia dell'asse e la dominanza stanno solo nel modulo."""
     src = MODULO.read_text(encoding="utf-8")
-    assert "export const SOGLIA_ASSE = 24;" in src
+    assert "export const AXIS_THRESHOLD = 24;" in src
     assert "Math.abs(dy) * 1.5" in src, "la dominanza orizzontale e' sparita"
 
     altrove = []
@@ -80,7 +80,7 @@ def test_the_module_does_not_know_what_it_moves() -> None:
     """Niente DOM dei gusci qui dentro: e' quel che lo rende riusabile.
 
     Il modulo puo' toccare `document.body` (gli serve come fondo della risalita
-    in `dentroScorrevoleOrizzontale`) e `window`, ma **non** deve sapere che
+    in `insideHorizontalScrollable`) e `window`, ma **non** deve sapere che
     esistono viste, linguette, cassetti o pagine: quella e' la parte che i due
     gusci hanno diversa, e il giorno che entra qui il modulo smette di essere
     condiviso.
@@ -110,11 +110,11 @@ def test_the_app_kit_borrows_the_gesture_instead_of_writing_one() -> None:
     che tiene le soglie in un posto solo.
     """
     src = SDK.read_text(encoding="utf-8")
-    assert "shared/gesto-orizzontale.js" in src, (
+    assert "shared/horizontal-swipe.js" in src, (
         "il kit delle app non nomina piu' il modulo condiviso: se il gesto "
         "ora se lo scrive da solo, le soglie misurate sono diventate due."
     )
-    assert "osservaGestoOrizzontale" in src
+    assert "watchHorizontalSwipe" in src
 
 
 def test_the_app_kit_imports_by_a_whole_address() -> None:
@@ -129,7 +129,7 @@ def test_the_app_kit_imports_by_a_whole_address() -> None:
     tutti verdi: **nessun banco puo' vedere questo, tranne questo qui.**
     """
     src = SDK.read_text(encoding="utf-8")
-    assert re.search(r"new URL\(\s*'/html-mobile/assets/shared/gesto-orizzontale\.js'", src), (
+    assert re.search(r"new URL\(\s*'/html-mobile/assets/shared/horizontal-swipe\.js'", src), (
         "l'indirizzo del modulo non e' piu' costruito intero"
     )
     assert not re.search(r"import\(\s*['\"]/", src), (
@@ -147,9 +147,9 @@ def test_the_app_kit_only_tells_what_the_finger_did() -> None:
     di adesso.
     """
     src = SDK.read_text(encoding="utf-8")
-    for fase in ("'inizio'", "'muove'", "'fine'", "'annulla'"):
-        assert f"fase: {fase}" in src, f"il kit non manda piu' la fase {fase}"
-    assert "jenny:gesto" in src
+    for phase in ("'start'", "'move'", "'end'", "'cancel'"):
+        assert f"phase: {phase}" in src, f"il kit non manda piu' la fase {phase}"
+    assert "jenny:swipe" in src
 
 
 def test_the_finger_is_read_off_the_screen_ruler() -> None:

@@ -238,9 +238,9 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
     telefono — di un telefono perso non salva niente».
     """
     officina = _src("mobile-settings.js")
-    for gesto in ("runExportFlow", "runImportFlow"):
-        assert gesto not in officina, (
-            f"l'officina rifa' «{gesto}», che la casa ha gia': due posti che "
+    for flow in ("runExportFlow", "runImportFlow"):
+        assert flow not in officina, (
+            f"l'officina rifa' «{flow}», che la casa ha gia': due posti che "
             f"scrivono lo stesso file"
         )
     for bottone in ("btn-backup-export", "btn-backup-import"):

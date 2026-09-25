@@ -20,7 +20,7 @@ import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
 import { keyboard } from './shared/keyboard.js';
 import { hasSelection, exposeSelectionState, forwardTapsThroughChrome } from './shared/selection.js';
-import { osservaGestoOrizzontale, elastico } from './shared/gesto-orizzontale.js';
+import { watchHorizontalSwipe, elastic } from './shared/horizontal-swipe.js';
 import './shared/theme.js';
 
 /* ── Global Error Handling ── */
@@ -856,7 +856,7 @@ class MobileApp {
    *
    *  Il *riconoscimento* del gesto — quando e' orizzontale, quando appartiene a
    *  uno scorrevole sotto il dito, quando e' abbastanza — sta in
-   *  `shared/gesto-orizzontale.js`, perche' la casa fa lo stesso gesto per
+   *  `shared/horizontal-swipe.js`, perche' la casa fa lo stesso gesto per
    *  cambiare pagina. Qui resta la **risposta**, che invece e' solo di qui: si
    *  trascina la vista corrente con una sbirciata smorzata e un velo grigio, e
    *  la vicina non viene mai disegnata. */
@@ -888,8 +888,8 @@ class MobileApp {
       el.style.filter = '';
     };
 
-    osservaGestoOrizzontale(main, {
-      puoIniziare: () => {
+    watchHorizontalSwipe(main, {
+      canStart: () => {
         view = null; neighbors = null;
         // Guardia: durante il primo avvio la navigazione e' bloccata.
         if (this._firstRun && !localStorage.getItem('onboarding-complete')) return false;
@@ -923,29 +923,29 @@ class MobileApp {
         return true;
       },
 
-      onOrizzontale: () => {
+      onHorizontal: () => {
         view.style.transition = 'none';
         view.style.willChange = 'transform';
       },
 
-      onTrascina: (dx, w) => {
+      onDrag: (dx, w) => {
         const goingPrev = dx > 0;
         const hasNeighbor = goingPrev ? neighbors.prev : neighbors.next;
         const max = w * (hasNeighbor ? PEEK : EDGE_PEEK);
-        const tx = elastico(dx, max);
+        const tx = elastic(dx, max);
         // Quanto si e' vicini all'asintoto guida il grigio.
         const progress = hasNeighbor && max ? Math.min(1, Math.abs(tx) / max) : 0;
         view.style.transform = `translateX(${tx.toFixed(2)}px)`;
         setScrim(progress, false);
       },
 
-      onFine: ({ verso, conferma }) => {
+      onEnd: ({ direction, confirm }) => {
         const el = view;
-        const goingPrev = verso === 'prev';
+        const goingPrev = direction === 'prev';
         const target = goingPrev ? neighbors.prev : neighbors.next;
         view = null; neighbors = null;
 
-        if (conferma && target) {
+        if (confirm && target) {
           setScrim(0, false);         // la vista nuova non deve ereditare il velo
           clearView(el);              // la vecchia sta per essere nascosta da switchMode
           this.switchMode(target);
@@ -960,7 +960,7 @@ class MobileApp {
         }
       },
 
-      onAnnulla: () => {
+      onCancel: () => {
         setScrim(0, false);
         clearView(view);
         view = null; neighbors = null;

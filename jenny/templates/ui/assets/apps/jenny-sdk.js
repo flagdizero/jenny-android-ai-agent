@@ -258,34 +258,34 @@
 
      Se l'import non riesce — un guscio piu' vecchio del kit — l'app resta
      esattamente com'era: niente scorrimento, nessun errore in faccia. */
-  async function armaScorrimento() {
-    let gesto;
+  async function armScroll() {
+    let swipe;
     try {
-      const dove = new URL('/html-mobile/assets/shared/gesto-orizzontale.js',
+      const where = new URL('/html-mobile/assets/shared/horizontal-swipe.js',
                            location.href);
-      gesto = await import(dove.href);
+      swipe = await import(where.href);
     } catch {
       return;
     }
-    const manda = (dettaglio) =>
-      window.parent.postMessage({ type: 'jenny:gesto', slug, ...dettaglio }, '*');
+    const send = (detail) =>
+      window.parent.postMessage({ type: 'jenny:swipe', slug, ...detail }, '*');
     /* Sulla finestra e non sulla radice: si ascolta in risalita, e dev'essere
        **l'ultimo** a sentire il dito — anche dopo chi nell'app ascolta sul
        `document` — perche' e' da quel che l'app ha fatto (un `preventDefault`
-       mentre si trascina) che si capisce se il gesto era suo. `esclusivo`:
+       mentre si trascina) che si capisce se il gesto era suo. `exclusive`:
        quando invece e' della pagina, l'app riceve l'annullo e si ferma. */
-    gesto.osservaGestoOrizzontale(window, {
-      esclusivo: true,
-      onOrizzontale: () => manda({ fase: 'inizio' }),
-      onTrascina: (dx) => manda({ fase: 'muove', dx }),
-      onFine: ({ verso, conferma }) => manda({ fase: 'fine', verso, conferma }),
-      onAnnulla: () => manda({ fase: 'annulla' }),
+    swipe.watchHorizontalSwipe(window, {
+      exclusive: true,
+      onHorizontal: () => send({ phase: 'start' }),
+      onDrag: (dx) => send({ phase: 'move', dx }),
+      onEnd: ({ direction, confirm }) => send({ phase: 'end', direction, confirm }),
+      onCancel: () => send({ phase: 'cancel' }),
     });
   }
   /* Solo in una pagina della casa. Nel velo a tutto schermo (`overlay=1`,
-     v. `cornicePerApp`) lo scorrimento laterale non lo ascolta nessuno, e
+     v. `frameForApp`) lo scorrimento laterale non lo ascolta nessuno, e
      prenderselo in esclusiva toglieva il dito all'app a ogni gesto di lato. */
-  if (qs.get('overlay') !== '1') armaScorrimento();
+  if (qs.get('overlay') !== '1') armScroll();
 
   window.jenny = { slug, theme, lang, accent: null, action, discuss, navigate, back };
   applyTokens(qs.get('tokens'));

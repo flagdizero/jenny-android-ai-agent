@@ -44,7 +44,7 @@ import { currentTheme, themeTokens } from './theme.js';
  *
  *  `overlay` dice all'app che sta nel velo a tutto schermo e non in una
  *  pagina della casa: li' nessuno ascolta lo scorrimento laterale, e il kit
- *  non deve prenderselo (con `esclusivo` l'app perderebbe il dito a ogni
+ *  non deve prenderselo (con `exclusive` l'app perderebbe il dito a ogni
  *  gesto di lato, per niente). Il default e' la pagina, cosi' la casa non
  *  deve dire niente.
  */

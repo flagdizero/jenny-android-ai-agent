@@ -31,7 +31,7 @@ SELECTION_JS = (ASSETS / "shared" / "selection.js").read_text(encoding="utf-8")
 # Il riconoscimento del gesto e' uscito da mobile-app.js il 22/09/2026: la
 # soglia e la dominanza vivono nel modulo condiviso, che li tiene per tutti e
 # due i gusci (v. test_gesto_orizzontale_contract.py).
-GESTO_JS = (ASSETS / "shared" / "gesto-orizzontale.js").read_text(encoding="utf-8")
+GESTO_JS = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
 OFFICINA_HTML = (UI / "officina.html").read_text(encoding="utf-8")
 ANDROID_ASSETS = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
 
@@ -110,18 +110,18 @@ def test_selection_module_is_shipped_to_android() -> None:
 def test_swipe_nav_stands_down_when_something_is_selected() -> None:
     """La guardia sta fra le condizioni per partire, non dopo.
 
-    Adesso il gesto e' condiviso e il guscio dice la sua in `puoIniziare`: se
+    Adesso il gesto e' condiviso e il guscio dice la sua in `canStart`: se
     quella guardia scivolasse piu' in basso, trascinare per aggiustare i manici
     della selezione farebbe scivolare la vista sotto le dita.
     """
     nav = _method(APP_JS, "setupSwipeNav")
-    puo_iniziare = nav.split("puoIniziare:", 1)[1].split("onOrizzontale:", 1)[0]
+    puo_iniziare = nav.split("canStart:", 1)[1].split("onHorizontal:", 1)[0]
     assert "if (hasSelection()) return false;" in puo_iniziare
 
 
 def test_horizontal_slop_clears_the_android_touch_slop() -> None:
-    slop = re.search(r"const SOGLIA_ASSE = (\d+);", GESTO_JS)
-    assert slop, "SOGLIA_ASSE non trovata"
+    slop = re.search(r"const AXIS_THRESHOLD = (\d+);", GESTO_JS)
+    assert slop, "AXIS_THRESHOLD non trovata"
     assert int(slop.group(1)) >= 20, "sotto il touch slop di sistema il long-press muore"
 
 

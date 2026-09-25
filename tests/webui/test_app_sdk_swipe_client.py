@@ -46,7 +46,7 @@ globalThis.addEventListener = () => {{}};
 globalThis.parent = {{ postMessage() {{}} }};
 {SDK}
 await new Promise((r) => setTimeout(r, 0));
-console.log(JSON.stringify(cercati.some((u) => u.endsWith('gesto-orizzontale.js'))));
+console.log(JSON.stringify(cercati.some((u) => u.endsWith('horizontal-swipe.js'))));
 """
     )
     return json.loads(out.strip().splitlines()[-1])

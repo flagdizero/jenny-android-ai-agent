@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "mobile-app.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
-GESTO_JS = ASSETS / "shared" / "gesto-orizzontale.js"
+GESTO_JS = ASSETS / "shared" / "horizontal-swipe.js"
 
 
 pytestmark = requires_node
@@ -45,7 +45,7 @@ pytestmark = requires_node
 MODI = ["chat", "cervello", "mani", "memoria"]
 
 
-def _corpo(src: str, inizio: int) -> str:
+def _corpo(src: str, start: int) -> str:
     """Dalla graffa aperta alla sua chiusa, saltando commenti e stringhe.
 
     I commenti vanno saltati sul serio: questo repo li scrive in italiano, e un
@@ -53,7 +53,7 @@ def _corpo(src: str, inizio: int) -> str:
     stringa — da li' in poi le graffe non si contano piu'. Costato una prima
     stesura di questo banco, rossa su codice sano (22/09/2026).
     """
-    i = src.index("{", inizio)
+    i = src.index("{", start)
     profondita, j, stringa = 0, i, None
     while j < len(src):
         c = src[j]
@@ -169,7 +169,7 @@ __VISTA_DI__
 __ELEMENTO_VISTA__
 
 /* Il riconoscimento del gesto, dal modulo condiviso. */
-__SOGLIA_ASSE__
+__AXIS_THRESHOLD__
 __SOGLIA_CONFERMA__
 __VELOCITA__
 __ELASTICO__
@@ -214,13 +214,13 @@ function dito(x, y) {
 }
 
 /** Un gesto completo. Torna il modo su cui si e' atterrati, o null. */
-function scorri(da, verso, { corto = false } = {}) {
+function scorri(da, direction, { corto = false } = {}) {
   app.currentMode = da;
   modiVisti.length = 0;
   animati.length = 0;
   const x0 = 200;
   // soglia = max(60, 400*0.22) = 88; corto resta sotto, lungo la supera
-  const dx = verso * (corto ? 20 : 200);
+  const dx = direction * (corto ? 20 : 200);
   main.ascolto.touchstart({ touches: [dito(x0, 100)], target: contenuto });
   main.ascolto.touchmove({
     touches: [dito(x0 + dx, 100)],
@@ -235,7 +235,7 @@ function scorri(da, verso, { corto = false } = {}) {
 def _harness() -> str:
     app = APP_JS.read_text(encoding="utf-8")
     settings = SETTINGS_JS.read_text(encoding="utf-8")
-    gesto = GESTO_JS.read_text(encoding="utf-8")
+    swipe = GESTO_JS.read_text(encoding="utf-8")
     vista_di = re.search(r"^export const VISTA_DI = .*$", settings, re.M)
     assert vista_di, "VISTA_DI non trovata"
     return (
@@ -243,22 +243,22 @@ def _harness() -> str:
         .replace("__VISTA_DI__", vista_di.group(0).replace("export ", ""))
         .replace("__ELEMENTO_VISTA__", _funzione(settings, "elementoVista"))
         .replace("__VISIBLE_MODES__", _metodo(app, "_visibleModes"))
-        .replace("__SOGLIA_ASSE__", _costante(gesto, "SOGLIA_ASSE"))
-        .replace("__VELOCITA__", _costante(gesto, "VELOCITA_CONFERMA"))
-        .replace("__SOGLIA_CONFERMA__", _funzione(gesto, "sogliaConferma"))
-        .replace("__ELASTICO__", _funzione(gesto, "elastico"))
-        .replace("__HSCROLL__", _funzione(gesto, "dentroScorrevoleOrizzontale"))
+        .replace("__AXIS_THRESHOLD__", _costante(swipe, "AXIS_THRESHOLD"))
+        .replace("__VELOCITA__", _costante(swipe, "CONFIRM_SPEED"))
+        .replace("__SOGLIA_CONFERMA__", _funzione(swipe, "confirmThreshold"))
+        .replace("__ELASTICO__", _funzione(swipe, "elastic"))
+        .replace("__HSCROLL__", _funzione(swipe, "insideHorizontalScrollable"))
         .replace(
             "__COMPONENTE__",
             "\n".join(
-                _funzione(gesto, nome)
+                _funzione(swipe, nome)
                 for nome in (
-                    "gestoDiUnComponente", "tieneOrizzontale", "eUnComando", "testoSelezionato",
-                    "bloccaVerticali",
+                    "componentSwipe", "claimsHorizontal", "isCommand", "selectedText",
+                    "lockVertical",
                 )
             ),
         )
-        .replace("__OSSERVA__", _funzione(gesto, "osservaGestoOrizzontale"))
+        .replace("__OSSERVA__", _funzione(swipe, "watchHorizontalSwipe"))
         .replace("__SETUP_SWIPE__", _metodo(app, "setupSwipeNav"))
         .replace("__ANIMATE__", _metodo(app, "_animateSlideIn"))
     )
@@ -352,8 +352,8 @@ def test_all_four_tabs_animate_a_real_element() -> None:
     """E vale per tutte, non solo per quelle che hanno una vista propria."""
     _run_js("""
       for (const da of __MODI__) {
-        for (const verso of [DESTRA, SINISTRA]) {
-          scorri(da, verso);
+        for (const direction of [DESTRA, SINISTRA]) {
+          scorri(da, direction);
           assert.equal(animati.length, 1, `${da}: nessuna animazione`);
           assert.ok(animati[0], `${da}: animazione su null`);
         }

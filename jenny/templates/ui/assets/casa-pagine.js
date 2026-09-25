@@ -14,7 +14,7 @@
  *  smorzata e la vicina non si disegna mai — e non per capriccio: la tavola
  *  mostra la pagina di fianco che **entra davvero**, affiancata, non che
  *  sbircia. Quel che i due gusci condividono e' il *riconoscimento* del gesto
- *  (`shared/gesto-orizzontale.js`), non la risposta.
+ *  (`shared/horizontal-swipe.js`), non la risposta.
  *
  *  **I pannelli delle quattro fisse sono nell'HTML**, come la chat e' sempre
  *  stata: qui si spostano, non si creano e non si distruggono. Il 22-23/09 le
@@ -29,7 +29,7 @@
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
-import { osservaGestoOrizzontale } from './shared/gesto-orizzontale.js';
+import { watchHorizontalSwipe } from './shared/horizontal-swipe.js';
 import { cornicePerApp } from './shared/apps-actions.js';
 import { projectNameOf } from './shared/conversation-list.js';
 
@@ -621,13 +621,13 @@ export class CasaPagine {
   _risposta() {
     let larghezzaPista = 0;
     return {
-      inizio: () => {
+      start: () => {
         larghezzaPista = this.pista.clientWidth || window.innerWidth;
         this.pista.style.transition = 'none';
         this.pista.style.willChange = 'transform';
       },
 
-      trascina: (dx) => {
+      drag: (dx) => {
         /* Ai due capi il dito tira, ma di meno: la pista non si richiude in
            cerchio come le linguette dell'officina. Li' le voci sono quattro e
            note; qui quante siano lo decide l'utente, e girando in tondo fra
@@ -642,13 +642,13 @@ export class CasaPagine {
         this.pista.style.transform = `translateX(${(base + scostamento).toFixed(2)}px)`;
       },
 
-      fine: ({ verso, conferma }) => {
+      end: ({ direction, confirm }) => {
         this.pista.style.willChange = '';
-        const passo = conferma ? (verso === 'prev' ? -1 : +1) : 0;
+        const passo = confirm ? (direction === 'prev' ? -1 : +1) : 0;
         this.vaiA(this.indice + passo);
       },
 
-      annulla: () => {
+      cancel: () => {
         this.pista.style.willChange = '';
         this.vaiA(this.indice);
       },
@@ -659,13 +659,13 @@ export class CasaPagine {
     const risposta = this._risposta();
 
     /* Il gesto vive quanto la pista, cioe' quanto la pagina: non c'e' niente
-       da staccare, e il valore che `osservaGestoOrizzontale` torna non serve. */
-    osservaGestoOrizzontale(this.pista, {
-      puoIniziare: () => this._puoScorrere(),
-      onOrizzontale: risposta.inizio,
-      onTrascina: risposta.trascina,
-      onFine: risposta.fine,
-      onAnnulla: risposta.annulla,
+       da staccare, e il valore che `watchHorizontalSwipe` torna non serve. */
+    watchHorizontalSwipe(this.pista, {
+      canStart: () => this._puoScorrere(),
+      onHorizontal: risposta.start,
+      onDrag: risposta.drag,
+      onEnd: risposta.end,
+      onCancel: risposta.cancel,
     });
 
     this._ascoltaGestoDaApp(risposta);
@@ -698,7 +698,7 @@ export class CasaPagine {
    *  Il riconoscimento lo fa la app, perche' solo li' dentro si vede il DOM
    *  della app e quindi si puo' dire che il gesto appartiene a un suo
    *  scorrevole orizzontale. **Cosa farne lo decide il guscio**, perche' solo
-   *  lui sa se una pagina di fianco c'e' — e lo decide a ogni `inizio`, non
+   *  lui sa se una pagina di fianco c'e' — e lo decide a ogni `start`, non
    *  una volta per sempre: fra un gesto e l'altro puo' essere cambiato tutto.
    *
    *  Vive qui e non in `apps-actions.js` perche' le cornici delle pagine sono
@@ -715,7 +715,7 @@ export class CasaPagine {
     let nostro = false;
     window.addEventListener?.('message', (e) => {
       const msg = e?.data;
-      if (!msg || typeof msg !== 'object' || msg.type !== 'jenny:gesto') return;
+      if (!msg || typeof msg !== 'object' || msg.type !== 'jenny:swipe') return;
       /* `!finestra` **prima** del confronto, e non e' ridondante: su una
          pagina che non e' una app qui c'e' `null`, e `MessageEvent.source` e'
          nullabile per specifica. Senza, un messaggio con sorgente nulla si
@@ -725,28 +725,28 @@ export class CasaPagine {
       const finestra = this._finestraPagina();
       if (!finestra || e.source !== finestra) return;
 
-      if (msg.fase === 'inizio') {
+      if (msg.phase === 'start') {
         nostro = this._puoScorrere();
-        if (nostro) risposta.inizio();
+        if (nostro) risposta.start();
         return;
       }
-      /* Senza questa, un `muove` che arrivasse senza il suo `inizio` —
+      /* Senza questa, un `move` che arrivasse senza il suo `start` —
          perche' rifiutato, o perche' la pagina e' cambiata in mezzo —
          muoverebbe la pista su una larghezza mai misurata. */
       if (!nostro) return;
 
-      if (msg.fase === 'muove') {
+      if (msg.phase === 'move') {
         const dx = Number(msg.dx);
-        if (Number.isFinite(dx)) risposta.trascina(dx);
-      } else if (msg.fase === 'fine') {
+        if (Number.isFinite(dx)) risposta.drag(dx);
+      } else if (msg.phase === 'end') {
         nostro = false;
-        risposta.fine({
-          verso: msg.verso === 'prev' ? 'prev' : 'next',
-          conferma: msg.conferma === true,
+        risposta.end({
+          direction: msg.direction === 'prev' ? 'prev' : 'next',
+          confirm: msg.confirm === true,
         });
-      } else if (msg.fase === 'annulla') {
+      } else if (msg.phase === 'cancel') {
         nostro = false;
-        risposta.annulla();
+        risposta.cancel();
       }
     });
   }

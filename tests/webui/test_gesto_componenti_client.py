@@ -22,7 +22,7 @@ from pathlib import Path
 from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULO = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "gesto-orizzontale.js"
+MODULO = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "horizontal-swipe.js"
 
 pytestmark = requires_node
 
@@ -91,18 +91,18 @@ const dito = (x, y = 100) => ({ screenX: x, screenY: y });
 
 function osserva(opz = {}) {
   const visto = [];
-  const stacca = M.osservaGestoOrizzontale(window, {
-    onOrizzontale: () => visto.push('inizio'),
-    onTrascina: (dx) => visto.push(['muove', dx]),
-    onFine: ({ verso }) => visto.push(['fine', verso]),
-    onAnnulla: () => visto.push('annulla'),
+  const stacca = M.watchHorizontalSwipe(window, {
+    onHorizontal: () => visto.push('start'),
+    onDrag: (dx) => visto.push(['move', dx]),
+    onEnd: ({ direction }) => visto.push(['end', direction]),
+    onCancel: () => visto.push('cancel'),
     ...opz,
   });
   return { visto, stacca };
 }
 
 /** Un dito che parte su `bersaglio` e va a sinistra di 150px in tre passi. */
-function scorri(bersaglio, { app = null, fine = true } = {}) {
+function scorri(bersaglio, { app = null, end = true } = {}) {
   lancia('pointerdown', { target: bersaglio, pointerId: 7, isPrimary: true });
   lancia('touchstart', { target: bersaglio, touches: [dito(300)] });
   const esiti = [];
@@ -110,7 +110,7 @@ function scorri(bersaglio, { app = null, fine = true } = {}) {
     lancia('pointermove', { target: bersaglio, pointerId: 7 });
     esiti.push(lancia('touchmove', { target: bersaglio, touches: [dito(x)], primaDiNoi: app }));
   }
-  if (fine) {
+  if (end) {
     lancia('pointerup', { target: bersaglio, pointerId: 7 });
     lancia('touchend', { target: bersaglio, changedTouches: [dito(150)] });
   }
@@ -133,8 +133,8 @@ def test_a_plain_area_swipes_the_page() -> None:
         """
 const { visto } = osserva();
 scorri(dentro('DIV'));
-assert.equal(visto[0], 'inizio');
-assert.deepEqual(visto.at(-1), ['fine', 'next']);
+assert.equal(visto[0], 'start');
+assert.deepEqual(visto.at(-1), ['end', 'next']);
 """
     )
 
@@ -147,14 +147,14 @@ const { visto, stacca } = osserva();
 const meno = dentro('BUTTON', { touchAction: 'none' });
 const segno = el('SPAN', { parent: meno });
 scorri(segno);
-assert.equal(visto[0], 'inizio', 'il bottone si e\\' tenuto lo scorrimento');
+assert.equal(visto[0], 'start', 'il bottone si e\\' tenuto lo scorrimento');
 stacca();
 
 for (const [tag, role] of [['A', null], ['LABEL', null], ['DIV', 'button'],
                            ['DIV', 'switch'], ['DIV', 'tab']]) {
   const { visto: v2, stacca: s2 } = osserva();
   scorri(dentro(tag, { touchAction: 'none', role }));
-  assert.equal(v2[0], 'inizio', `${tag} role=${role} e\\' un comando anche lui`);
+  assert.equal(v2[0], 'start', `${tag} role=${role} e\\' un comando anche lui`);
   s2();
 }
 """
@@ -191,7 +191,7 @@ def test_values_that_leave_sideways_to_the_browser_do_not_claim() -> None:
 for (const valore of ['auto', 'manipulation', 'pan-x', 'pan-x pan-y', 'pan-left pinch-zoom']) {
   const { visto, stacca } = osserva();
   scorri(dentro('DIV', { touchAction: valore }));
-  assert.equal(visto[0], 'inizio', valore + ' si e\\' tenuto lo scorrimento');
+  assert.equal(visto[0], 'start', valore + ' si e\\' tenuto lo scorrimento');
   stacca();
 }
 """
@@ -223,14 +223,14 @@ striscia.scrollWidth = 900;
 const tema = el('BUTTON', { parent: striscia });
 for (const [dove, scrollLeft] of [['all inizio', 0], ['alla fine', 500], ['a meta', 200]]) {
   striscia.scrollLeft = scrollLeft;
-  for (const verso of [-1, +1]) {
+  for (const direction of [-1, +1]) {
     const { visto, stacca } = osserva();
     lancia('touchstart', { target: tema, touches: [dito(700)] });
     for (const passo of [10, 50, 150]) {
-      lancia('touchmove', { target: tema, touches: [dito(700 + verso * passo)] });
+      lancia('touchmove', { target: tema, touches: [dito(700 + direction * passo)] });
     }
-    lancia('touchend', { target: tema, changedTouches: [dito(700 + verso * 150)] });
-    assert.deepEqual(visto, [], `striscia ${dove}, dito verso ${verso}: ha scorso la pagina`);
+    lancia('touchend', { target: tema, changedTouches: [dito(700 + direction * 150)] });
+    assert.deepEqual(visto, [], `striscia ${dove}, dito verso ${direction}: ha scorso la pagina`);
     stacca();
   }
 }
@@ -246,7 +246,7 @@ const tabella = dentro('DIV', { overflowX: 'auto' });
 tabella.scrollWidth = 400;
 const { visto } = osserva();
 scorri(el('TD', { parent: tabella }));
-assert.equal(visto[0], 'inizio');
+assert.equal(visto[0], 'start');
 """
     )
 
@@ -263,9 +263,9 @@ selezione = '';
 
 const { visto: v2 } = osserva();
 const b = dentro('DIV');
-scorri(b, { fine: false });
+scorri(b, { end: false });
 lancia('touchmove', { target: b, touches: [dito(140), dito(20)] });
-assert.equal(v2.at(-1), 'annulla', 'il pizzico non ha annullato lo scorrimento');
+assert.equal(v2.at(-1), 'cancel', 'il pizzico non ha annullato lo scorrimento');
 """
     )
 
@@ -274,14 +274,14 @@ def test_exclusive_cancels_the_app_and_keeps_the_finger() -> None:
     """Dentro una app: la pagina vince, e l'app riceve l'annullo e non sente piu' niente."""
     _run_js(
         """
-const { visto } = osserva({ esclusivo: true });
+const { visto } = osserva({ exclusive: true });
 const vita = dentro('BUTTON', { touchAction: 'none' });
-const esiti = scorri(vita, { fine: false });
+const esiti = scorri(vita, { end: false });
 
 const tipi = vita.ricevuti.map((e) => e.type);
 assert.deepEqual(tipi, ['pointercancel', 'touchcancel'], 'l\\'app non ha saputo di aver perso il dito');
 assert.equal(vita.ricevuti[0].pointerId, 7);
-assert.ok(!visto.includes('annulla'), 'il nostro annullo ha annullato noi');
+assert.ok(!visto.includes('cancel'), 'il nostro annullo ha annullato noi');
 
 // prima di diventare nostro il dito passava; dopo, si ferma sulla finestra
 assert.deepEqual(esiti, ['passato', 'passato', 'fermato']);
@@ -289,7 +289,7 @@ assert.equal(lancia('pointermove', { target: vita, pointerId: 7 }), 'fermato');
 assert.equal(lancia('pointerup', { target: vita, pointerId: 7 }), 'fermato');
 // ...ma il riconoscimento continua a vederlo
 lancia('touchend', { target: vita, changedTouches: [dito(150)] });
-assert.deepEqual(visto.at(-1), ['fine', 'next']);
+assert.deepEqual(visto.at(-1), ['end', 'next']);
 // e a rilascio avvenuto il dito dopo arriva di nuovo all'app
 assert.equal(lancia('pointermove', { target: vita, pointerId: 8 }), 'passato');
 """
@@ -299,7 +299,7 @@ assert.equal(lancia('pointermove', { target: vita, pointerId: 8 }), 'passato');
 def test_when_the_component_wins_the_app_is_left_alone() -> None:
     _run_js(
         """
-const { visto } = osserva({ esclusivo: true });
+const { visto } = osserva({ exclusive: true });
 const mappa = dentro('DIV', { touchAction: 'none' });
 const esiti = scorri(mappa);
 assert.deepEqual(visto, []);
@@ -317,7 +317,7 @@ const prima = ascolti.length;
 const { stacca } = osserva();
 assert.ok(ascolti.slice(prima).every((a) => !a.cattura));
 stacca();
-const { stacca: s2 } = osserva({ esclusivo: true });
+const { stacca: s2 } = osserva({ exclusive: true });
 s2();
 assert.equal(ascolti.length, prima, 'staccare ha lasciato ascolti appesi');
 """
@@ -343,8 +343,8 @@ alto.scrollHeight = 5000;
 const riga = el('P', { parent: alto });
 
 const { visto } = osserva();
-scorri(riga, { fine: false });
-assert.equal(visto[0], 'inizio');
+scorri(riga, { end: false });
+assert.equal(visto[0], 'start');
 assert.equal(filo.style.overflowY, 'hidden', 'il filo scorre ancora su e giu');
 assert.equal(radice.style.overflowY, 'hidden', 'la pagina intera scorre ancora');
 assert.equal(corto.style.overflowY, undefined, 'bloccato uno che non scorre');
@@ -355,7 +355,7 @@ assert.equal(filo.style.overflowY, 'scroll', 'il filo non e\\' tornato com\\'era
 assert.equal(radice.style.overflowY, undefined);
 
 // annullato dal sistema a meta': si libera lo stesso
-scorri(riga, { fine: false });
+scorri(riga, { end: false });
 assert.equal(filo.style.overflowY, 'hidden');
 lancia('touchcancel', { target: riga });
 assert.equal(filo.style.overflowY, 'scroll');
@@ -363,7 +363,7 @@ assert.equal(filo.style.overflowY, 'scroll');
 // e un gesto che resta al componente, o verticale, non blocca niente
 const striscia = el('DIV', { overflowX: 'auto', parent: filo });
 striscia.scrollWidth = 900;
-scorri(el('BUTTON', { parent: striscia }), { fine: false });
+scorri(el('BUTTON', { parent: striscia }), { end: false });
 assert.equal(filo.style.overflowY, 'scroll');
 lancia('touchend', { target: riga, changedTouches: [dito(150)] });
 lancia('touchstart', { target: riga, touches: [dito(300, 100)] });
@@ -375,25 +375,25 @@ assert.equal(filo.style.overflowY, 'scroll');
 
 def test_a_second_finger_mid_swipe_cancels_it_out_loud() -> None:
     """M19: un secondo dito che scende a scorrimento gia' orizzontale arriva
-    come ``touchstart`` con due tocchi. Lo azzerava senza ``onAnnulla``, e il
+    come ``touchstart`` con due tocchi. Lo azzerava senza ``onCancel``, e il
     guscio restava con la vista (o la pista) ferma a meta'."""
     _run_js(
         """
 const { visto } = osserva();
 const b = dentro('DIV');
-scorri(b, { fine: false });
-assert.equal(visto[0], 'inizio');
+scorri(b, { end: false });
+assert.equal(visto[0], 'start');
 lancia('touchstart', { target: b, touches: [dito(150), dito(200)] });
-assert.equal(visto.at(-1), 'annulla', 'il gesto e\\' sparito senza onAnnulla');
+assert.equal(visto.at(-1), 'cancel', 'il gesto e\\' sparito senza onCancel');
 // E il rilascio dopo non chiude un gesto che non c'e' piu'.
 lancia('touchend', { target: b, changedTouches: [dito(150)] });
-assert.equal(visto.filter((v) => Array.isArray(v) && v[0] === 'fine').length, 0);
+assert.equal(visto.filter((v) => Array.isArray(v) && v[0] === 'end').length, 0);
 """
     )
 
 
 def test_a_new_touch_before_the_axis_is_decided_is_silent() -> None:
-    """``onAnnulla`` arriva solo se l'asse era stato deciso."""
+    """``onCancel`` arriva solo se l'asse era stato deciso."""
     _run_js(
         """
 const { visto } = osserva();
