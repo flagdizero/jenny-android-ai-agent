@@ -316,6 +316,19 @@ class AutoCompact:
             return ()
         return tuple(path.stem.replace("_", ":", 1) for path in files)
 
+    def busy_session_keys(self) -> tuple[str, ...]:
+        """Le sessioni che l'autocompact sta riscrivendo **adesso**.
+
+        Sono due lavori, e tutti e due salvano la sessione dopo una chiamata LLM:
+        la compattazione (``_archiving``) la accorcia, la raccolta del diario
+        (``_harvesting``) ci annota fin dove ha letto. Lo chiede
+        ``AgentLoop.busy_session_keys``: un rinomino o una cancellazione di
+        progetto in quella finestra lascerebbe una chat sotto il nome vecchio.
+        """
+        keys = dict.fromkeys(sorted(self._archiving))
+        keys.update(dict.fromkeys(sorted(self._harvesting)))
+        return tuple(keys)
+
     def check_expired(self, schedule_background: Callable[[Coroutine], None],
                       active_session_keys: Collection[str] = ()) -> None:
         """Schedule archival of idle sessions, unless a task is in flight."""

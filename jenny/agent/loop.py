@@ -2403,12 +2403,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
 
         Piu' largo di :meth:`active_session_keys`, che resta com'e' perche'
         l'autocompact e il giardiniere la leggono con quel significato. Qui si
-        aggiungono gli altri due scrittori che portano il nome di una
+        aggiungono gli altri tre scrittori che portano il nome di una
         conversazione di progetto: un subagent lanciato da li', che sopravvive al
-        turno e a fine lavoro scrive record e annuncio sotto la chiave d'origine,
-        e una passata del giardiniere, che scrive nella cartella della wiki. Lo
-        chiede ``project.rename``: spostare una sessione mentre uno di questi ci
-        scrive lascia una chat sotto il nome vecchio, senza cartella.
+        turno e a fine lavoro scrive record e annuncio sotto la chiave d'origine;
+        una passata del giardiniere, che scrive nella cartella della wiki; e
+        l'autocompact, che compattando o raccogliendo il diario rilegge e salva la
+        sessione dopo una chiamata LLM. Lo chiedono ``project.rename`` e
+        ``project.delete``: spostare o cancellare una sessione mentre uno di
+        questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
         """
         from jenny.agent.gardener import passes_in_flight
         from jenny.session.keys import project_session_key
@@ -2416,6 +2418,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         keys = dict.fromkeys(self._pending_queues)
         keys.update(dict.fromkeys(self.subagents.active_origin_session_keys()))
         keys.update(dict.fromkeys(project_session_key(n) for n in sorted(passes_in_flight())))
+        keys.update(dict.fromkeys(self.auto_compact.busy_session_keys()))
         return tuple(keys)
 
     async def process_direct(

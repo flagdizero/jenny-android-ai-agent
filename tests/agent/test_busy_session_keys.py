@@ -12,6 +12,9 @@ seconda revisione ha trovato gli altri due scrittori:
 - **una passata del giardiniere** gira sotto una chiave sua (``gardener:…``) ma
   scrive nella cartella della wiki.
 
+La revisione profonda (M1) ha trovato il quarto: **l'autocompact**, che compattando
+o raccogliendo il diario rilegge e salva la sessione dopo una chiamata LLM.
+
 ``active_session_keys`` resta com'era: l'autocompact e il giardiniere la leggono
 con il significato «un turno di chat sta usando la sessione».
 """
@@ -24,6 +27,7 @@ from types import SimpleNamespace
 import pytest
 
 from jenny.agent import gardener
+from jenny.agent.autocompact import AutoCompact
 from jenny.agent.loop import AgentLoop
 from jenny.agent.subagent import SubagentManager
 from jenny.runtime.container import GatewayContainer
@@ -50,10 +54,23 @@ def test_a_subagent_still_running_keeps_its_origin_busy() -> None:
     assert set(manager.active_origin_session_keys()) == {"project:viaggio", "unified:default"}
 
 
-def _loop(*, turns: tuple[str, ...] = (), subagent_origins: tuple[str, ...] = ()) -> AgentLoop:
+def _autocompact(*, archiving: tuple[str, ...] = (), harvesting: tuple[str, ...] = ()) -> AutoCompact:
+    compact = AutoCompact.__new__(AutoCompact)
+    compact._archiving = set(archiving)
+    compact._harvesting = set(harvesting)
+    return compact
+
+
+def _loop(
+    *,
+    turns: tuple[str, ...] = (),
+    subagent_origins: tuple[str, ...] = (),
+    auto_compact: AutoCompact | None = None,
+) -> AgentLoop:
     loop = AgentLoop.__new__(AgentLoop)
     loop._pending_queues = {key: asyncio.Queue() for key in turns}
     loop.subagents = SimpleNamespace(active_origin_session_keys=lambda: subagent_origins)
+    loop.auto_compact = auto_compact or _autocompact()
     return loop
 
 
@@ -72,6 +89,37 @@ def test_a_key_busy_twice_is_listed_once(monkeypatch) -> None:
     monkeypatch.setattr(gardener, "_PASSES_IN_FLIGHT", {"viaggio"})
     loop = _loop(turns=("project:viaggio",), subagent_origins=("project:viaggio",))
     assert loop.busy_session_keys() == ("project:viaggio",)
+
+
+def test_busy_includes_what_the_autocompact_is_rewriting(monkeypatch) -> None:
+    monkeypatch.setattr(gardener, "_PASSES_IN_FLIGHT", set())
+    compact = _autocompact(archiving=("unified:default",), harvesting=("project:orto",))
+    loop = _loop(auto_compact=compact)
+
+    assert set(loop.busy_session_keys()) == {"unified:default", "project:orto"}
+    assert loop.active_session_keys() == ()
+
+
+async def test_a_diary_harvest_keeps_its_project_busy_until_it_saves() -> None:
+    """La finestra vera: la sessione si rilegge e si salva **dopo** la chiamata LLM."""
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    class _Consolidator:
+        async def archive(self, messages, *, session_key):
+            entered.set()
+            await release.wait()
+
+    session = SimpleNamespace(messages=[{"role": "user"}] * 3, metadata={})
+    sessions = SimpleNamespace(get_or_create=lambda key: session, save=lambda s: None)
+    compact = AutoCompact(sessions, _Consolidator())  # type: ignore[arg-type]
+    compact._harvesting.add("project:orto")  # come fa ``check_expired``
+
+    task = asyncio.create_task(compact._harvest_project_diary("project:orto"))
+    await entered.wait()
+    assert compact.busy_session_keys() == ("project:orto",)
+    release.set()
+    await task
+    assert compact.busy_session_keys() == ()
 
 
 def test_the_gardener_hands_out_a_copy_of_its_passes(monkeypatch) -> None:
