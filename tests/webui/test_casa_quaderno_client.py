@@ -14,6 +14,7 @@ divergerebbe al primo ritocco.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import textwrap
@@ -272,8 +273,9 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     pagina."""
     app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
     catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
-    assert "'casa-quaderno-sheet'" in catena
-    assert catena.index("casa-quaderno-sheet") < catena.index("handleBack()")
+    fogli = re.search(r"(?m)^const FOGLI_PRESSIONE_LUNGA = \[(.*)\];$", app_js)
+    assert fogli and "'casa-quaderno-sheet'" in fogli.group(1)
+    assert catena.index("FOGLI_PRESSIONE_LUNGA") < catena.index("handleBack()")
 
 
 def test_the_sheet_is_in_the_page_and_shipped() -> None:

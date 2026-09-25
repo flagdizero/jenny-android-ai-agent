@@ -98,6 +98,14 @@ const BACK_TO = {
   backup: 'impostazioni',
 };
 
+/* I fogli che stanno sopra le pagine, nel top layer (`showModal()`): quelli
+   di una pressione lunga — un quaderno dai Quaderni, un'app dal cassetto — e
+   quello di «Segnala». Scritti una volta: li leggono sia chi chiede se c'e'
+   qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
+   due elenchi separati divergevano al primo foglio nuovo. */
+const FOGLI_PRESSIONE_LUNGA = ['casa-quaderno-sheet', 'jenny-app-sheet', 'android-app-sheet'];
+const FOGLIO_SEGNALA = 'casa-audit-dialog';
+
 /* Le stesse domande dell'officina, dette come si dicono in casa.
  *
  *  Il giro di creazione e' uno solo (`shared/project-create.js`) e non sa come
@@ -958,10 +966,10 @@ class CasaApp {
    *  tasto: da pagina, e' vivo mentre la guardi — anche sotto una scheda aperta
    *  sopra, o sotto una app che ha lanciato. */
   hasOverlayAbove() {
-    for (const id of ['casa-quaderno-sheet', 'jenny-app-sheet', 'android-app-sheet', 'casa-audit-dialog']) {
+    for (const id of [...FOGLI_PRESSIONE_LUNGA, FOGLIO_SEGNALA]) {
       if (document.getElementById(id)?.open) return true;
     }
-    return Boolean(this._azioniApp?._openApp) || Boolean(this.fila?.ordinando);
+    return Boolean(this._azioniApp?.isAppOpen()) || Boolean(this.fila?.ordinando);
   }
 
   /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
@@ -1287,7 +1295,7 @@ class CasaApp {
        chiude prima loro. Visto sul telefono il 23/09/2026, quando mancavano:
        Indietro chiudeva il cassetto sotto e lasciava il foglio aperto sopra
        la chat, Delete compreso. */
-    for (const id of ['casa-quaderno-sheet', 'jenny-app-sheet', 'android-app-sheet']) {
+    for (const id of FOGLI_PRESSIONE_LUNGA) {
       const foglio = document.getElementById(id);
       if (foglio?.open) {
         foglio.close();
@@ -1317,7 +1325,7 @@ class CasaApp {
        dal guscio nativo come un evento suo e nessuno lo traduce in Escape:
        senza questa riga la pressione uscirebbe dalla *stanza* lasciando il
        foglio aperto sopra un'altra. */
-    const sheet = document.getElementById('casa-audit-dialog');
+    const sheet = document.getElementById(FOGLIO_SEGNALA);
     if (sheet?.open) {
       sheet.close();
       return true;

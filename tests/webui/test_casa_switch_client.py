@@ -143,6 +143,7 @@ const wsManager = { inviati: [], sendToChat(...a) { this.inviati.push(a); return
 
 __DOT_COLOR__
 __FLOOR__
+__FOGLI__
 __DEFAULT_BOT_NAME__
 __BACK_TO__
 
@@ -410,6 +411,8 @@ def _harness() -> str:
         .replace("__READER_TITLE__", member(src, "_readerTitle"))
         .replace("__BIND_COMPOSER__", member(src, "_bindComposer"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
+        .replace("__FOGLI__", _const_block_scalar(src, "FOGLI_PRESSIONE_LUNGA") + "\n"
+                 + _const_block_scalar(src, "FOGLIO_SEGNALA"))
         .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
@@ -1078,7 +1081,6 @@ _APP_PROFONDA = """
       await app.switchConversation(projectKey('piante'));
       const mini = { aperta: true, depth: 2, indietro: 0 };
       app._azioniApp = {
-        get _openApp() { return mini.aperta ? mini : null; },
         isAppOpen() { return mini.aperta; },
         handleBack() {
           if (!mini.aperta) return false;
@@ -1130,7 +1132,7 @@ def test_the_chat_under_an_open_app_is_not_on_screen() -> None:
       const app = casa();
       app.onPaginaCambiata(1, { id: 'chat', kind: 'chat', fissa: true });
       assert.equal(app.isChatOnScreen(), true);
-      app._azioniApp = { _openApp: {}, isAppOpen: () => true };
+      app._azioniApp = { isAppOpen: () => true };
       assert.equal(app.isChatOnScreen(), false, 'un\\u2019app aperta sopra la chat non la copre');
     """)
 
@@ -1622,4 +1624,22 @@ def test_jenny_stands_on_the_real_composer_not_on_a_photo() -> None:
       document.querySelector = cerca;
       assert.equal(document.documentElement.style.props['--casa-composer-h'], '90px',
                    'il pavimento e\u2019 stato misurato sul composer di una foto');
+    """)
+
+
+def test_every_sheet_that_back_closes_counts_as_something_above() -> None:
+    """Chi chiede «c'e' qualcosa sopra?» e chi chiude gli strati leggono lo
+    stesso elenco di fogli: erano due elenchi scritti a mano, e un foglio
+    nuovo aggiunto a uno solo avrebbe lasciato la tastiera al campo sotto."""
+    _run_js("""
+      const app = casa();
+      for (const id of [...FOGLI_PRESSIONE_LUNGA, FOGLIO_SEGNALA]) {
+        const foglio = document.getElementById(id);
+        foglio.open = true;
+        foglio.close = function () { this.open = false; };
+        assert.equal(app.hasOverlayAbove(), true, id + ' sopra la chat non conta');
+        assert.equal(app._closeOverlays(), true, id + ': Indietro non lo chiude');
+        assert.equal(foglio.open, false);
+        assert.equal(app.hasOverlayAbove(), false);
+      }
     """)

@@ -269,6 +269,11 @@ export class AppsActions {
     iframe.src = url;
     this._montaVelo(slug, app, iframe, { external: true });
   }
+  /** C'e' una mini-app aperta sopra tutto? Lo chiede il guscio della casa,
+   *  che prima leggeva `_openApp` da fuori. */
+  isAppOpen() {
+    return Boolean(this._openApp);
+  }
   closeApp() {
     const open = this._openApp;
     if (!open) return;

@@ -113,3 +113,22 @@ def test_a_module_that_failed_to_load_is_tried_again() -> None:
       await b;
       assert.equal(nate, 1, 'dopo un import fallito la mappa non nasce piu\\u2019');
     """)
+
+
+def test_the_open_app_question_has_a_public_answer() -> None:
+    """La casa chiede ad `AppsActions` se c'e' una mini-app aperta: prima lo
+    leggeva dal suo campo privato `_openApp`."""
+    src = (APP_JS.parent / "shared" / "apps-actions.js").read_text(encoding="utf-8")
+    run_js(
+        "import assert from 'node:assert/strict';\n"
+        "class Azioni {\n  constructor() { this._openApp = null; }\n  "
+        + member(src, "isAppOpen", prefixes=())
+        + "\n}\n"
+        "const a = new Azioni();\n"
+        "assert.equal(a.isAppOpen(), false);\n"
+        "a._openApp = { slug: 'orto' };\n"
+        "assert.equal(a.isAppOpen(), true);\n"
+    )
+    assert "_openApp" not in APP_JS.read_text(encoding="utf-8"), (
+        "la casa legge di nuovo il campo privato delle azioni"
+    )
