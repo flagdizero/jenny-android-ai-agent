@@ -888,11 +888,11 @@ export class SettingsController {
     if (titolo) titolo.textContent = p.name;
     corpo.innerHTML = `
       <div class="settings-riga">
-        <span class="settings-label">${i18n.t('settings.defaultUrl')}</span>
+        <span class="settings-label">${i18n.t('settings.brandAddress')}</span>
         <span class="settings-riepilogo-valore">${escapeHtml(p.api_base || i18n.t('settings.defaultUrl'))}</span>
       </div>
       <div class="settings-riga">
-        <span class="settings-label">${i18n.t('settings.noKey')}</span>
+        <span class="settings-label">${i18n.t('settings.brandKey')}</span>
         <span class="settings-riepilogo-valore">${escapeHtml(p.api_key_hint || i18n.t('settings.noKey'))}</span>
       </div>
       <div class="provider-card-actions" style="margin-top:12px">
@@ -1415,7 +1415,7 @@ export class SettingsController {
     corpo.innerHTML = `
       ${desc}
       <div class="settings-riga">
-        <span class="settings-label">${i18n.t('settings.ssh.markFingerprint')}</span>
+        <span class="settings-label">${i18n.t('settings.ssh.where')}</span>
         <span class="settings-riepilogo-valore">${escapeHtml(`${h.username}@${h.host}:${h.port}`)}</span>
       </div>
       ${this._renderSshPublicKey(h)}

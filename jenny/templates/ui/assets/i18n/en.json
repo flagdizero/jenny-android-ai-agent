@@ -306,7 +306,8 @@
       "deleted": "Host deleted",
       "markKey": "key",
       "markPassword": "password",
-      "markFingerprint": "fingerprint"
+      "markFingerprint": "fingerprint",
+      "where": "Where"
     },
     "noProviderConfigured": "No provider configured",
     "editProvider": "Edit Provider",
@@ -325,6 +326,8 @@
     "caBundleHint": "Only needed for a server using your own certificate: path to a PEM file to trust on top of the standard ones. A relative path starts at the workspace.",
     "defaultUrl": "(default)",
     "noKey": "(no key)",
+    "brandAddress": "Address",
+    "brandKey": "Key",
     "searchEngine": "Search engine",
     "maxResults": "Max results",
     "maxResultsPlaceholder": "1 – 10",

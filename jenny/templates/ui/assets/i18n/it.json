@@ -306,7 +306,8 @@
       "deleted": "Host eliminato",
       "markKey": "chiave",
       "markPassword": "password",
-      "markFingerprint": "impronta"
+      "markFingerprint": "impronta",
+      "where": "Dove"
     },
     "noProviderConfigured": "Nessun provider configurato",
     "editProvider": "Modifica Provider",
@@ -325,6 +326,8 @@
     "caBundleHint": "Serve solo con un server che usa un certificato tuo: percorso di un file PEM di cui fidarsi oltre a quelli standard. Se è relativo parte dal workspace.",
     "defaultUrl": "(predefinito)",
     "noKey": "(nessuna chiave)",
+    "brandAddress": "Indirizzo",
+    "brandKey": "Chiave",
     "searchEngine": "Motore di ricerca",
     "maxResults": "Risultati massimi",
     "maxResultsPlaceholder": "1 – 10",

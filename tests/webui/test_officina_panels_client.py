@@ -14,7 +14,7 @@ I metodi veri di ``mobile-settings.js`` girano in node su un DOM finto.
 
 from __future__ import annotations
 
-from support.js_harness import ASSETS, member, requires_node, run_js
+from support.js_harness import ASSETS, locale, member, requires_node, run_js
 
 pytestmark = requires_node
 
@@ -188,3 +188,45 @@ assert.equal(drawer.activeDrawer, 'tetti');
         )
     )
     assert out.strip() == "ok"
+
+
+def _etichette(html_var: str) -> str:
+    """JS che estrae le coppie (etichetta, valore) delle righe di un pannello."""
+    return (
+        "[...nodi['" + html_var + "'].innerHTML.matchAll("
+        "/settings-label\">([^<]*)<\\/span>\\s*<span class=\"settings-riepilogo-valore\">([^<]*)</g"
+        ")].map((m) => [m[1], m[2]])"
+    )
+
+
+def test_each_panel_row_has_a_label_that_names_it() -> None:
+    """M18: la marca etichettava l'indirizzo con «(predefinito)» e la chiave con
+    «(nessuna chiave)» — cioe' coi due valori di ripiego — e l'host metteva
+    «impronta» davanti a ``utente@host:22``."""
+    out = run_js(
+        _script(
+            f"""
+settings.providers[1].api_key_hint = 'sk-…abcd';
+await s.loadSettings();
+s._apriMarca('b');
+assert.deepEqual({_etichette('drawer-marca-body')}, [
+  ['settings.brandAddress', 'https://b'],
+  ['settings.brandKey', 'sk-…abcd'],
+]);
+s._apriMarca('a');
+assert.deepEqual({_etichette('drawer-marca-body')}, [
+  ['settings.brandAddress', 'settings.defaultUrl'],
+  ['settings.brandKey', 'settings.noKey'],
+]);
+s._apriHostSsh('nas');
+assert.deepEqual({_etichette('drawer-ssh-host-body')}, [['settings.ssh.where', 'u@h:22']]);
+"""
+        )
+    )
+    assert out.strip() == "ok"
+
+
+def test_the_new_labels_exist_in_both_languages() -> None:
+    for lingua in ("it", "en"):
+        s = locale(lingua)["settings"]
+        assert s["brandAddress"] and s["brandKey"] and s["ssh"]["where"]
