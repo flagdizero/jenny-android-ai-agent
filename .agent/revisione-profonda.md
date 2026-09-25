@@ -10,7 +10,29 @@ verificate dal revisore ma non ancora da una seconda lettura.
 Perché esiste: le due revisioni precedenti leggevano un campione (gli ultimi ~60 commit)
 e ogni giro ne trovava altri. Questa copre tutto il ramo.
 
-## Da decidere prima di correggere
+## Decisioni (25/09/2026, dall'utente)
+
+- **D1 → sì, alla fine**: rebase con firma e un solo force-push come ultimo passo, dopo
+  tutte le correzioni e prima della PR.
+- **D2 → rinominare tutto** in inglese, persistiti compresi (con migrazione del
+  `config.json`), in un passaggio unico dopo le correzioni.
+- **D3 → Jenny sempre sopra**, anche a mini-app e immagini, nella casa e nell'officina.
+- **D4 → comando RPC** `casa.schermate.set` (poi rinominato con D2); la GET di scrittura
+  sparisce, quella di lettura resta.
+
+## Piano di esecuzione
+
+1. **Correzioni per fetta**, in parallelo, ognuna in un worktree isolato su file che non si
+   sovrappongono: (F1) Android + `tools/browser.py`; (F2) Python; (F3) casa JS; (F4)
+   officina/shared JS; (F5) CSS; (F6) test e documenti. Ogni correzione con il suo test e
+   un commit firmato; i log nuovi in inglese li porta ogni fetta nei suoi file. Poi unione,
+   conflitti, suite.
+2. **Rinomino in inglese** (D2), dopo l'unione.
+3. **Verifica**: suite 3.14 e 3.11, build, installazione, prove sul telefono (H4 profilo,
+   H3 bottone Ferma, D3 Jenny sopra la mini-app).
+4. **DCO** (D1): rebase `--signoff`, force-push.
+
+## Le decisioni come erano state poste
 
 | # | Decisione | Perché ora |
 |---|-----------|------------|
