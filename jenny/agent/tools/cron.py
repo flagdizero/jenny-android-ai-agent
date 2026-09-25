@@ -293,17 +293,23 @@ class CronTool(Tool, ContextAware):
         else:
             return "Error: either every_seconds, cron_expr, or at is required"
 
-        job = self._cron.add_job(
-            name=name or message[:30],
-            schedule=schedule,
-            message=message,
-            mode=job_mode,
-            delete_after_run=delete_after,
-            session_key=session_key,
-            origin_channel=origin_channel,
-            origin_chat_id=origin_chat_id,
-            origin_metadata=dict(self._origin_metadata.get() or {}),
-        )
+        try:
+            job = self._cron.add_job(
+                name=name or message[:30],
+                schedule=schedule,
+                message=message,
+                mode=job_mode,
+                delete_after_run=delete_after,
+                session_key=session_key,
+                origin_channel=origin_channel,
+                origin_chat_id=origin_chat_id,
+                origin_metadata=dict(self._origin_metadata.get() or {}),
+            )
+        except ValueError as exc:
+            # Il rifiuto del servizio (un'espressione che non si legge o non
+            # scatta mai) torna al modello come le altre risposte d'errore di
+            # questo tool, da correggere e riprovare.
+            return f"Error: {exc}"
         return f"Created job '{job.name}' (id: {job.id})"
 
     def _format_timing(self, schedule: CronSchedule) -> str:

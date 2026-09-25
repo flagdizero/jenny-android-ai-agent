@@ -202,6 +202,30 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
         if msg := validate_timezone_name(schedule.tz):
             raise ValueError(msg)
 
+    if schedule.kind == "cron":
+        _validate_cron_expr(schedule)
+
+
+def _validate_cron_expr(schedule: CronSchedule) -> None:
+    """Un'espressione che non si legge, o che non scatta mai, si rifiuta qui.
+
+    ``_compute_next_run`` inghiotte ogni errore e torna ``None``, ed e' giusto:
+    lo chiamano anche il boot e il timer, su job gia' salvati, e li' un'eccezione
+    non ha nessuno a cui arrivare. Ma all'aggiunta quel ``None`` diventava un job
+    abilitato che non parte mai e non lo dice — ``0 25 * * *`` accettato in
+    silenzio. Qui c'e' ancora qualcuno a cui dirlo.
+    """
+    from jenny.cron.cronexpr import next_after
+    from jenny.utils.helpers import safe_zoneinfo
+
+    if not schedule.expr:
+        raise ValueError("a cron schedule needs an expression")
+    tz = safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
+    try:
+        next_after(schedule.expr, datetime.now(tz))
+    except ValueError as exc:
+        raise ValueError(f"invalid cron expression {schedule.expr!r}: {exc}") from None
+
 
 class CronService:
     """Service for managing and executing scheduled jobs."""

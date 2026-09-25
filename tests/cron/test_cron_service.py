@@ -53,6 +53,42 @@ def test_add_job_rejects_unknown_timezone(tmp_path) -> None:
     assert service.list_jobs(include_disabled=True) == []
 
 
+@pytest.mark.parametrize(
+    ("expr", "why"),
+    [
+        ("0 25 * * *", "out of range"),       # un'ora che non esiste
+        ("0 9 * *", "5, 6 or 7 fields"),       # un campo in meno
+        ("0 0 31 2 *", "has no run"),          # si legge, ma non scatta mai
+    ],
+)
+def test_add_job_rejects_an_expression_that_would_never_fire(tmp_path, expr, why) -> None:
+    """``_compute_next_run`` inghiotte l'errore e torna ``None``: senza questo
+    rifiuto il job nasceva abilitato, senza prossima esecuzione, e taceva per
+    sempre."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+
+    with pytest.raises(ValueError, match=why):
+        service.add_job(
+            name="mai", schedule=CronSchedule(kind="cron", expr=expr), message="hello",
+        )
+
+    assert service.list_jobs(include_disabled=True) == []
+
+
+def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> None:
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.cron import CronTool
+
+    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone="Europe/Rome")
+    tool.set_context(
+        RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
+    )
+
+    result = tool._add_job(None, "Standup", None, "0 25 * * *", None, None)
+
+    assert result.startswith("Error: invalid cron expression '0 25 * * *'"), result
+
+
 def test_add_job_accepts_valid_timezone(tmp_path) -> None:
     service = CronService(tmp_path / "cron" / "jobs.json")
 
