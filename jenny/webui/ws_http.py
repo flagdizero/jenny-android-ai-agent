@@ -107,6 +107,37 @@ _ANDROID_PACKAGE_RE = re.compile(r"\A[A-Za-z0-9_.]{1,255}\Z")
 _SHELL_DOCUMENTS = frozenset({"index.html", "workshop.html"})
 
 
+def _is_foreign_navigation(headers: Any) -> bool:
+    """Una navigazione verso la WebUI partita da un documento che non e' il gateway?
+
+    Il caso che la motiva e' la **vista esterna** di una Jenny App: un iframe con
+    ``allow-scripts allow-same-origin`` sull'origine del proxy
+    (``127.0.0.1:<porta effimera>``). All'apertura e' un'altra origine e la
+    same-origin policy la tiene fuori dalla SPA. Ma i flag di sandbox restano
+    all'iframe, non al documento: se la pagina remota (o un suo redirect, che il
+    proxy passa al browser) porta l'iframe su ``http://127.0.0.1:18790/...``,
+    quel documento gira **con l'origine del gateway e con allow-same-origin** —
+    cioe' con ``parent.document``, lo storage e il token della SPA. Serve che li'
+    ci sia HTML che esegua qualcosa di pilotabile (un file fuori manifest in
+    ``workspace/ui/``, che i tool dell'agente sanno scrivere, e' servito dal
+    disco): e' una catena, ma chiuderla costa una riga.
+
+    Fetch Metadata dice chi ha avviato la navigazione. ``none`` e' il guscio
+    nativo (``loadUrl``), ``same-origin`` la SPA stessa (casa ↔ officina); una
+    pagina su un'altra porta di loopback e' ``same-site``, un'origine opaca
+    ``cross-site``. Senza l'header (client che non lo manda) non si decide
+    niente: la regola aggiunge un rifiuto, non toglie un accesso che c'era.
+    """
+    get = getattr(headers, "get", None)
+    if get is None:
+        return False
+    mode = (get("Sec-Fetch-Mode") or "").strip().lower()
+    site = (get("Sec-Fetch-Site") or "").strip().lower()
+    if mode != "navigate" or not site:
+        return False
+    return site not in {"same-origin", "none"}
+
+
 def _default_model_name_from_config() -> str | None:
     try:
         from jenny.config.loader import load_config
@@ -383,6 +414,10 @@ class GatewayHTTPHandler:
 
         # Static SPA serving
         if self.static_dist_path is not None:
+            # Solo il gateway e il guscio nativo navigano fin qui: v.
+            # _is_foreign_navigation (la vista esterna che si porta sulla SPA).
+            if _is_foreign_navigation(request.headers):
+                return _http_error(403, "Forbidden")
             response = self._serve_static(got)
             if response is not None:
                 return response

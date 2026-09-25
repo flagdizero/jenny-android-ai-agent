@@ -36,6 +36,15 @@ APP_CORS_HEADERS = [
     ("Access-Control-Allow-Origin", "*"),
     ("Cache-Control", "no-store"),
 ]
+# Il sandbox dell'app detto dal **server**, non solo dall'iframe che la
+# incornicia. `sandbox="allow-scripts"` sulla cornice e' cio' che le da'
+# un'origine opaca, ma vale solo finche' l'app e' caricata da quella cornice: la
+# stessa pagina aperta in un frame con `allow-same-origin` (la vista esterna di
+# un'altra app che ci naviga) o a tutta pagina girerebbe con l'origine del
+# gateway, cioe' col DOM e lo storage della SPA. Con la CSP `sandbox` il
+# documento e' opaco comunque. Stesse restrizioni della cornice, quindi alle app
+# di oggi non cambia niente.
+APP_SANDBOX_CSP = ("Content-Security-Policy", "sandbox allow-scripts")
 
 
 class AppsRoutes:
@@ -300,6 +309,6 @@ class AppsRoutes:
             body,
             status=200,
             content_type=ctype,
-            extra_headers=[("Cache-Control", "no-store")],
+            extra_headers=[("Cache-Control", "no-store"), APP_SANDBOX_CSP],
         )
 

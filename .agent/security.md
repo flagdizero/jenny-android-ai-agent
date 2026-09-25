@@ -194,6 +194,25 @@ browsing contexts**, so nesting would restore the opaque origin.
 "simplify" either. Serving an external view from the gateway's own origin, or adding
 `allow-same-origin` to the normal app frame, both defeat the isolation entirely.
 
+**The origin is the proxy's at load time — not necessarily afterwards** (Sept 2026 review).
+Sandbox flags belong to the iframe, not to the document: if the remote page (or a redirect,
+which the proxy streams to the browser) navigates the frame to `http://127.0.0.1:18790/...`,
+that document runs with the **gateway's** origin *and* `allow-same-origin` — `parent.document`,
+the SPA's storage, its token. It needs gateway HTML that executes something steerable, and
+two kinds exist: Jenny App pages, and files outside the UI manifest in `workspace/ui/`, which
+`_serve_static` serves from disk and the agent's tools can write. Two closures, one per kind:
+
+- `ws_http._is_foreign_navigation`: a **navigation** to the WebUI whose `Sec-Fetch-Site` is
+  neither `same-origin` (the SPA itself, home ↔ workshop) nor `none` (the native shell's
+  `loadUrl`) gets 403. The external view is `same-site` (another loopback port), an opaque
+  frame `cross-site`. Subresources are not navigations, so app frames still load the kit.
+- `apps_routes.APP_SANDBOX_CSP`: every `/apps/<slug>/**` response carries
+  `Content-Security-Policy: sandbox allow-scripts`, so an app page is opaque in *any* frame,
+  not only in the one the SPA builds. Same restrictions as the frame attribute.
+
+A request without Fetch Metadata is not refused — the rule adds a refusal, it removes no access
+that existed. Fixed by `tests/webui/test_foreign_navigation_to_the_shell.py`.
+
 ### SSH target policy (a third one, wider still)
 
 `validate_ssh_target` (`security/network.py`), backed by `_SSH_BLOCKED_NETWORKS`, allows RFC1918, IPv6 ULA **and** CGNAT (`100.64.0.0/10`), blocking only `0.0.0.0/8`, loopback and link-local/metadata. CGNAT is allowed here rather than through `configure_ssrf_whitelist` on purpose: the whitelist is global, so opening it for Tailscale would also open CGNAT to `web_fetch`, where the model picks the address — a narrow permission in each policy that needs it beats a wide one across all three. (The Jenny Apps policy now allows CGNAT on the same grounds, on its own; it did not until Sept 2026.) What backs the extra room is that an SSH host is user-typed in Settings and host-key pinned before any connection, not that SSH is inherently safer.
