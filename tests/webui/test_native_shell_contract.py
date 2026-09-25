@@ -110,6 +110,12 @@ def test_the_activity_absorbs_the_config_changes_that_really_happen() -> None:
         "fontScale",
         "density",
         "locale",
+        # Sett 2026: una tastiera Bluetooth che si attacca cambia `keyboard` (e
+        # spesso `navigation`), che `keyboardHidden` non copre; `layoutDirection`
+        # accompagna `locale` quando la lingua è RTL.
+        "keyboard",
+        "navigation",
+        "layoutDirection",
     ):
         assert required in tokens, f"configChanges senza {required}"
 

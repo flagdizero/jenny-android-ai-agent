@@ -24,6 +24,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -84,6 +85,8 @@ class MainActivity : AppCompatActivity() {
         // compatto `{"<key>": [conteggio, ultimoMs]}` — lo decide
         // `shared/launcher-rank.js`, qui è una stringa opaca.
         private const val PREF_LAUNCHER_USAGE = "launcher_usage"
+        // Chiave del Bundle per pendingExportPath: v. onSaveInstanceState.
+        private const val STATE_PENDING_EXPORT = "pending_export_path"
         // First launch pays Chaquopy bootstrap + package extraction inside
         // GatewayService, which can take well beyond the WebView retry window.
         private const val BOOT_POLL_INTERVAL_MS = 250L
@@ -312,6 +315,14 @@ class MainActivity : AppCompatActivity() {
     // <filesDir>/backup_staging/; qui si fa solo la copia da/verso l'URI
     // content:// scelto dall'utente (Drive, SD, ecc.). Nessun permesso storage
     // richiesto: la Storage Access Framework delega tutto al picker di sistema.
+    //
+    // Sopravvive a una ricreazione dell'activity (onSaveInstanceState): il
+    // picker di sistema è un'altra activity, e se questa viene ricreata mentre
+    // lui è davanti il risultato arriva all'istanza nuova — che senza il path
+    // rispondeva "annullato" a un salvataggio che l'utente aveva appena
+    // confermato. Il launcher di ActivityResult si ricorda la richiesta nello
+    // stesso Bundle, quindi i due sopravvivono o si perdono insieme.
+    @Volatile
     private var pendingExportPath: String? = null
 
     private val exportBackupLauncher =
@@ -451,6 +462,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingExportPath = savedInstanceState?.getString(STATE_PENDING_EXPORT)
         setContentView(R.layout.activity_main)
 
         loadingView = findViewById(R.id.loading_view)
@@ -517,7 +529,29 @@ class MainActivity : AppCompatActivity() {
         // I comandi già in coda finiscono; quelli nuovi non entrano più (v.
         // NativeCommandListener, che guarda isShutdown prima di accodare).
         nativeExecutor.shutdown()
+        // Un picker di allegati rimasto aperto va chiuso con null (contratto di
+        // onShowFileChooser), o la WebView resta in attesa di un callback che
+        // non arriverà mai.
+        filePickerCallback?.onReceiveValue(null)
+        filePickerCallback = null
+        // La WebView va distrutta, non abbandonata: tiene il suo renderer, la
+        // WebSocket della SPA e i timer JS, e un'activity ricreata ne costruisce
+        // un'altra — per un po' giravano due SPA sullo stesso gateway. Prima
+        // si toglie dal layout (la documentazione di destroy() lo chiede), e
+        // `webView = null` prima di tutto: i callback che arrivano dopo (retry,
+        // backup, comandi nativi) leggono `webView?` e trovano niente.
+        webView?.let { wv ->
+            webView = null
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            wv.stopLoading()
+            wv.destroy()
+        }
         super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingExportPath?.let { outState.putString(STATE_PENDING_EXPORT, it) }
     }
 
     /**

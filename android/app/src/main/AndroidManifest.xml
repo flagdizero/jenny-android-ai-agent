@@ -132,6 +132,14 @@
              `density`+`smallestScreenSize`+`screenLayout` (dimensione display),
              `locale` (lingua).
 
+             Poi `keyboard` e `navigation` (Sett 2026): mancavano, e sono proprio
+             i cambi di QUESTO telefono — una tastiera Bluetooth che si attacca o
+             si stacca cambia `keyboard` (e con lei spesso `navigation`), e
+             `keyboardHidden` da solo non la copre. Ricreava l'activity con la
+             SPA dentro. `layoutDirection` è il compagno di `locale`: passare a
+             una lingua RTL cambia anche quello, e senza dichiararlo la lingua
+             assorbita qui sopra ricreava comunque.
+
              Assorbirli senza ricreare è sicuro **perché nulla di nativo dipende
              da quelle risorse**: `Theme.Jenny` è `Theme.AppCompat.Light`, non
              DayNight, quindi `uiMode` non cambia nessun colore; i temi della
@@ -140,13 +148,17 @@
              stringhe in chiaro e non referenzia nessun `@string`, quindi
              `locale` non ha niente da ri-risolvere. La WebView, invece, il
              `fontScale` lo riceve da sola (v. `loadWebView`: `textZoom` non
-             viene più forzato). -->
+             viene più forzato). `keyboard`/`navigation`: nessuna risorsa usa i
+             qualificatori di tastiera o di navigazione, e la domanda "c'è una
+             tastiera fisica?" la WebUI la fa a ogni uso (`hasHardwareKeyboard`).
+             `layoutDirection`: le due viste native (caricamento, errore) sono
+             centrate e non hanno un verso da rispecchiare. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|fontScale|density|locale">
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|fontScale|density|locale|layoutDirection">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
