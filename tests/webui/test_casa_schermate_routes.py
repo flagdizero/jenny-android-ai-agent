@@ -438,20 +438,35 @@ async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeyp
 
 
 async def test_a_delete_does_not_reach_across_kinds(env) -> None:
-    """Oggi i riferimenti delle due specie non si toccano — uno slug d'app non
-    ha i due punti, un quaderno e' `project:<nome>` — ma lo schema **non vieta**
-    a una pagina app un `ref` a forma di quaderno. E' la specie, non la forma
-    del riferimento, a dire di chi e' una pagina: senza, cancellare il quaderno
-    toglierebbe anche quella. Trovato mutando: il controllo sulla specie
-    sopravviveva a tutti gli altri banchi (23/09/2026)."""
+    """E' la specie, non il nome, a dire di chi e' una pagina: un'app che si
+    chiama come il quaderno resta. Fino al 25/09/2026 lo schema lasciava a una
+    pagina app anche un `ref` a forma di quaderno; ora non piu' (v. sotto)."""
     from jenny.webui.casa_pages import stacca_pagine_di
 
     await _con_pagine(env, [
         {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
-        {"id": "p2", "kind": "app", "ref": "project:piante"},
+        {"id": "p2", "kind": "app", "ref": "piante"},
     ])
     assert await stacca_pagine_di("conversazione", "project:piante") == 1
     assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
+
+
+@pytest.mark.parametrize(
+    "riga",
+    [
+        {"id": "p2", "kind": "app", "ref": "project:piante"},
+        {"id": "p2", "kind": "app", "ref": "Orto"},
+        {"id": "p2", "kind": "app", "ref": "../orto"},
+        {"id": "p2", "kind": "app", "ref": "a" * 33},
+        {"id": "p 2", "kind": "app", "ref": "orto"},
+        {"id": "", "kind": "app", "ref": "orto"},
+        {"id": "p" * 65, "kind": "app", "ref": "orto"},
+    ],
+    ids=["notebook-ref", "uppercase", "climbs", "too-long", "space-in-id", "empty-id", "long-id"],
+)
+async def test_an_app_page_needs_a_slug_and_a_plain_id(env, riga) -> None:
+    await _rifiuta(env, [riga])
+    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
 
 
 # ── L'ordine (23/09/2026) ───────────────────────────────────────────────────

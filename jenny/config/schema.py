@@ -1,6 +1,7 @@
 """Configuration schema using Pydantic."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -570,6 +571,25 @@ def _quaderno_valido(ref: Any) -> None:
         raise ValueError(f"invalid notebook name: {nome!r}")
 
 
+#: Com'e' fatto l'id di una pagina: il client lo genera come ``p`` piu' l'ora in
+#: base 36, quindi lettere, cifre, ``-`` e ``_`` bastano e avanzano. Il tetto
+#: tiene fuori un id che nel file e nella fila non avrebbe senso.
+_PAGE_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
+
+
+def _app_slug_valido(ref: Any) -> None:
+    """Una pagina app punta a uno slug che una Jenny App potrebbe avere.
+
+    Le regole sono quelle di :mod:`jenny.apps.manifest`, chi decide cos'e' uno
+    slug: una seconda copia qui divergerebbe in silenzio. L'app puo' non
+    esistere (la pagina si disegna «non c'e' piu'»); lo slug deve essere uno slug.
+    """
+    from jenny.apps.manifest import MAX_SLUG_LEN, SLUG_RE
+
+    if not isinstance(ref, str) or len(ref) > MAX_SLUG_LEN or not SLUG_RE.match(ref):
+        raise ValueError(f"an app page needs an app slug, not {ref!r}")
+
+
 class SchermataConfig(Base):
     """Una pagina di casa: di che specie e', e cosa ci sta dentro.
 
@@ -596,6 +616,13 @@ class SchermataConfig(Base):
                 )
             if specie == "conversazione":
                 _quaderno_valido(data.get("ref"))
+            if specie == "app":
+                _app_slug_valido(data.get("ref"))
+            ident = data.get("id")
+            if ident is not None and (
+                not isinstance(ident, str) or not _PAGE_ID_RE.match(ident)
+            ):
+                raise ValueError(f"invalid page id: {ident!r}")
         return data
 
 
@@ -655,13 +682,14 @@ class CasaConfig(Base):
         Quindi le righe si vagliano **prima** della validazione, una per una, con
         le regole della rotta: esce una specie sconosciuta, un quaderno che non si
         aprirebbe, una riga a cui manca un campo, un id doppio o riservato, e
-        quel che supera :data:`MAX_SCHERMATE`. La regola che conta resta vera —
+        quel che supera :data:`MAX_SCHERMATE` — e, dal 25/09/2026, uno slug d'app o
+        un id che non hanno la forma giusta. La regola che conta resta vera —
         in casa non entra una pagina che il prodotto non sa disegnare — ma costa
         la pagina e non il resto. Le stanze del 22-23/09/2026 escono in silenzio
         (erano pagine vere, e l'uscita e' decisa); tutto il resto con un avviso.
 
-        Chi *scrive* non passa di qui: la rotta valida ogni riga come
-        :class:`SchermataConfig` e rifiuta con un 400.
+        Chi *scrive* non passa di qui: il comando ``casa.schermate.set`` valida
+        ogni riga come :class:`SchermataConfig` e rifiuta con ``bad_request``.
         """
         if not isinstance(data, dict) or "schermate" not in data:
             return data
@@ -689,9 +717,9 @@ class CasaConfig(Base):
                 _warn_dropped_page(f"more than {MAX_SCHERMATE} pages", riga)
                 continue
             visti.add(pagina.id)
-            rimaste.append(riga)
-        if len(rimaste) == len(grezze):
-            return data
+            # La pagina gia' validata, non la riga grezza: il campo accetta
+            # un'istanza cosi' com'e', e la riga non si rivalida una seconda volta.
+            rimaste.append(pagina)
         return {**data, "schermate": rimaste}
 
     @model_validator(mode="before")

@@ -268,7 +268,7 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
     monkeypatch.setattr(modulo, "rename_project", lambda **kw: {"new_name": kw["new_name"]})
     await _con_pagine([
         {"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"},
-        {"id": "a1", "kind": "app", "ref": f"project:{VECCHIO}"},
+        {"id": "a1", "kind": "app", "ref": VECCHIO},
         {"id": "q2", "kind": "conversazione", "ref": "project:altro"},
     ])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
@@ -277,7 +277,7 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
 
     assert [(p["id"], p["ref"]) for p in _pagine(config)] == [
         ("q1", f"project:{NUOVO}"),
-        ("a1", f"project:{VECCHIO}"),        # la specie dice di chi e' una pagina
+        ("a1", VECCHIO),                     # la specie dice di chi e' una pagina
         ("q2", "project:altro"),
     ]
 

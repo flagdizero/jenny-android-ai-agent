@@ -93,6 +93,8 @@ def test_an_unknown_kind_leaves_the_file_not_the_file_leaves() -> None:
     {"id": "p9", "kind": "conversazione", "ref": "project:a b"},  # un quaderno che non si apre
     {"id": "p9", "kind": "app"},                                   # manca un campo
     "p9",                                                          # non e' nemmeno una riga
+    {"id": "p9", "kind": "app", "ref": "project:orto"},            # uno slug che non e' uno slug
+    {"id": "p 9", "kind": "app", "ref": "spesa"},                  # un id storto
 ])
 def test_a_page_that_cannot_be_drawn_does_not_cost_the_file(tmp_path, storta) -> None:
     """Dal loader vero, perche' e' li' che il danno si vedrebbe."""
@@ -111,6 +113,26 @@ def test_a_page_that_cannot_be_drawn_does_not_cost_the_file(tmp_path, storta) ->
     assert get_runtime_context().config_recovered_from is None
     assert [p.api_key for p in config.providers.providers] == ["sk-keep-me"]
     assert [s.id for s in config.casa.schermate] == ["p1"]
+
+
+def test_each_row_is_validated_once(monkeypatch) -> None:
+    """``_pagine_che_si_disegnano`` valida ogni riga per vagliarla: la pagina
+    che ne esce e' quella che il campo tiene, senza una seconda validazione."""
+    from jenny.config.schema import SchermataConfig
+
+    chiamate: list[object] = []
+    vera = SchermataConfig.model_validate.__func__
+
+    def _conta(cls, data, *args, **kwargs):
+        chiamate.append(data)
+        return vera(cls, data, *args, **kwargs)
+
+    monkeypatch.setattr(SchermataConfig, "model_validate", classmethod(_conta))
+    CasaConfig(schermate=[
+        {"id": "p1", "kind": "app", "ref": "orto"},
+        {"id": "p2", "kind": "conversazione", "ref": "project:viaggi"},
+    ])
+    assert len(chiamate) == 2
 
 
 def test_too_many_and_duplicate_pages_are_trimmed_not_refused() -> None:
