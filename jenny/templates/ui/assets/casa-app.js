@@ -802,15 +802,21 @@ class CasaApp {
    *  Il cambio stanza e' **differito**, non annullato: alla risposta
    *  affermativa si ripassa dallo stesso `_setView`, stavolta col buffer
    *  pulito. La pressione che ha aperto la modale l'ha consumata la modale,
-   *  quindi nessuno naviga piu' al posto nostro. */
-  async _confirmLeaveReader(target) {
+   *  quindi nessuno naviga piu' al posto nostro.
+   *
+   *  `poi`, se c'e', e' il resto del gesto che ha chiesto di uscire — Home, un
+   *  avviso — e parte al posto del solo cambio di stanza: anche lui aspetta la
+   *  risposta, e con un no non succede niente. */
+  async _confirmLeaveReader(target, poi = null) {
     this.reader.blurEditor();
     const ok = await confirmDialog(i18n.t('casa.reader.discardConfirm'));
     if (!ok) return;
     if (this.view !== 'reader') return;  // uscito da un'altra strada nel frattempo
     this.reader.cancelEdit();
-    this._setView(target);
+    if (poi) poi();
+    else this._setView(target);
   }
+
 
   /** Indietro di **una** stanza. Vero se c'era dove tornare.
    *
@@ -947,10 +953,14 @@ class CasaApp {
 
   /* La stanza a schermo la dice un attributo su `.casa-shell`, e il resto lo
      fa il CSS: cosi' la geometria — cosa occupa lo spazio, cosa sparisce —
-     resta in un posto solo, e qui c'e' solo quel che il CSS non sa fare. */
-  _setView(name) {
+     resta in un posto solo, e qui c'e' solo quel che il CSS non sa fare.
+
+     Falso se il cambio e' stato **differito** dalla conferma del lettore:
+     `poi`, se c'e', e' il resto del gesto, e riparte solo alla risposta
+     affermativa (v. `_confirmLeaveReader`). */
+  _setView(name, poi = null) {
     const view = Object.hasOwn(BACK_TO, name) ? name : 'chat';
-    if (view === this.view) return;
+    if (view === this.view) return true;
     /* Uscire dal lettore con modifiche non salvate chiede conferma, e la
        guardia sta **qui** e non sui bottoni. Le strade per uscire sono gia'
        quattro — l'occhiello, l'Indietro del telefono, «Parlane», un cambio di
@@ -959,8 +969,8 @@ class CasaApp {
        il controllo sul buffer sporco valeva «solo se non esiste una seconda
        strada» e le strade erano tre. */
     if (this.view === 'reader' && this.reader?.isDirty()) {
-      this._confirmLeaveReader(view);
-      return;
+      this._confirmLeaveReader(view, poi);
+      return false;
     }
     /* Editor aperto ma intonso: si chiude senza chiedere. Lasciarlo aperto
        vorrebbe dire ritrovarlo all'ingresso successivo, sopra una pagina che
@@ -997,6 +1007,7 @@ class CasaApp {
       this.input?.blur();
     }
     this._applyHead();
+    return true;
   }
 
   /* Il nome in testa: la conversazione nella chat, il quaderno nelle pagine,
@@ -1201,7 +1212,10 @@ class CasaApp {
    */
   goHome() {
     this._closeAllOverlays();
-    this._setView('chat');
+    /* Con l'editor modificato `_setView` chiede, e il resto di Home aspetta la
+       risposta: cambiare conversazione sotto la conferma lasciava, con un no,
+       il lettore di un quaderno sopra la chat personale. */
+    if (!this._setView('chat', () => this.goHome())) return;
     this.switchConversation(null);
     /* Con la tastiera fisica non c'e' niente da chiudere, e a casa si torna
        per scrivere: il fuoco resta sul campo. */
@@ -1323,7 +1337,7 @@ class CasaApp {
    */
   openChat() {
     this._closeAllOverlays();
-    this._setView('chat');
+    if (!this._setView('chat', () => this.openChat())) return true;
     this.switchConversation(null);
     this.chat.scrollToBottom();
     return true;

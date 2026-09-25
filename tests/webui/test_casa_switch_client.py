@@ -132,6 +132,10 @@ const promptDialog = () => Promise.resolve(nomeScritto);
 const deleteProjectFlow = () => Promise.resolve(cancella);
 const rpc = { renameProject: () => Promise.resolve() };
 const showToast = () => {};
+/* La conferma di buttare le modifiche del lettore: risponde quando il caso
+   chiama `rispondi`, come una modale vera. */
+let rispondi = null;
+const confirmDialog = () => new Promise((r) => { rispondi = r; });
 __NOTEBOOK_DELETE_WORDS__
 
 /* Il filo: ricorda cosa gli si manda. */
@@ -326,6 +330,7 @@ class App {
   __KEEP_NAME__
   __LEGGI_NOME__
   __APPLY_BOT_NAME__
+  __CONFIRM_LEAVE__
 }
 
 function casa() {
@@ -397,6 +402,7 @@ def _harness() -> str:
         .replace("__KEEP_NAME__", member(src, "_keepName"))
         .replace("__LEGGI_NOME__", member(src, "_leggiNome"))
         .replace("__APPLY_BOT_NAME__", member(src, "_applyBotName"))
+        .replace("__CONFIRM_LEAVE__", member(src, "_confirmLeaveReader"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__NOTEBOOK_DELETE_WORDS__", _const_block(src, "NOTEBOOK_DELETE_WORDS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
@@ -1478,3 +1484,62 @@ def test_the_name_is_asked_at_start_and_heard_from_her_room() -> None:
     assert "onName: (nome) => this._keepName(nome)" in src, "la stanza di lei non avvisa il guscio"
     html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
     assert 'id="casa-head-name"></span>' in html, "l'intestazione porta di nuovo un nome fisso"
+
+
+# ── Home con l'editor del lettore modificato ─────────────────────────────────
+
+_LETTORE_SPORCO = """
+      const app = casa();
+      await app.switchConversation(projectKey('piante'));
+      let sporco = true;
+      app.reader = {
+        isDirty: () => sporco,
+        blurEditor() {},
+        cancelEdit() { sporco = false; app.fatti.push('modifiche buttate'); },
+        applyTranslations() {},
+        editing: true,
+      };
+      app._setView('pages');
+      app._setView('reader');
+      app.fatti.length = 0;
+"""
+
+
+def test_home_waits_for_the_reader_confirm_before_switching() -> None:
+    """Home differiva il cambio di stanza (la conferma di `_setView`) ma
+    cambiava conversazione subito, sotto la modale: con un no restavi nel
+    lettore di un quaderno mentre la chat era gia' la personale."""
+    _run_js(_LETTORE_SPORCO + """
+      app.goHome();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:piante', 'la conversazione e\u2019 cambiata sotto la conferma');
+      assert.equal(app.view, 'reader');
+      rispondi(true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.ok(app.fatti.includes('modifiche buttate'));
+      assert.equal(app.view, 'chat');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+    """)
+
+
+def test_saying_no_to_the_reader_confirm_keeps_everything() -> None:
+    _run_js(_LETTORE_SPORCO + """
+      app.openChat();
+      rispondi(false);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader');
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      assert.ok(!app.fatti.includes('modifiche buttate'));
+    """)
+
+
+def test_a_tapped_alert_waits_for_the_reader_confirm_too() -> None:
+    _run_js(_LETTORE_SPORCO + """
+      assert.equal(app.openChat(), true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      rispondi(true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'chat');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+    """)

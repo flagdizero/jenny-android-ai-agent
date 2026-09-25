@@ -237,7 +237,7 @@ def test_the_leave_guard_lives_in_the_single_chokepoint() -> None:
     provato e' *dove* sta il controllo, non cosa calcola.
     """
     src = APP_JS.read_text(encoding="utf-8")
-    m = re.search(r"\n  _setView\(name\) \{.*?\n  \}", src, re.S)
+    m = re.search(r"\n  _setView\(name[^)]*\) \{.*?\n  \}", src, re.S)
     assert m, "_setView non trovato"
     assert "isDirty()" in m.group(0), "la guardia sulle modifiche non e' in _setView"
     assert "_confirmLeaveReader" in m.group(0)
