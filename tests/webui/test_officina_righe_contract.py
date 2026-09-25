@@ -24,6 +24,7 @@ import re
 from pathlib import Path
 
 import pytest
+from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -192,15 +193,43 @@ def test_il_corpo_del_pannello_si_disegna_all_apertura() -> None:
     assert "contentEl.querySelector('#snapshot-list')" not in carico
 
 
+@requires_node
 def test_il_riepilogo_racconta_la_piu_vecchia_non_la_piu_recente() -> None:
     """Quanto **indietro** si può tornare: è la cosa per cui una storia esiste.
 
     La più recente è quasi sempre «poco fa» e non distingue una storia di venti
     istantanee da una di due.
     """
-    corpo = _corpo("_caricaRiepilogoStoria")
-    assert "Math.min(" in corpo, "il riepilogo guarda la più recente"
-    assert "Math.max(" not in corpo
+    # Eseguito, non cercato: `Math.min(` nel sorgente lasciava passare un
+    # riepilogo che guardava la prima della lista — che il server manda dalla
+    # più recente — o un `Math.min` su un solo elemento.
+    out = run_js(
+        "import assert from 'node:assert/strict';\n"
+        "const i18n = { t: (k, p) => k + ' ' + JSON.stringify(p || {}) };\n"
+        "const whenText = (ms) => 'ms=' + ms;\n"
+        "let risposta;\n"
+        "const api = { getSnapshotHistory: async () => risposta };\n"
+        "class C {\n"
+        "  constructor() { this._gen = 0; this.el = { textContent: '' };\n"
+        "    this.contentEl = { querySelector: () => this.el }; }\n"
+        "  _stale(g) { return g !== this._gen; }\n"
+        f"{member(SETTINGS, '_caricaRiepilogoStoria')}\n"
+        "}\n"
+        """
+const c = new C();
+risposta = { snapshots: [
+  { created_at_ms: 3000 }, { created_at_ms: 1000 }, { created_at_ms: 2000 },
+] };
+await c._caricaRiepilogoStoria();
+assert.equal(c.el.textContent,
+  'backup.snapshotSummary ' + JSON.stringify({ count: 3, when: 'ms=1000' }));
+risposta = { snapshots: [] };
+await c._caricaRiepilogoStoria();
+assert.match(c.el.textContent, /^backup.snapshotSummaryEmpty/);
+console.log('ok');
+"""
+    )
+    assert out.strip() == "ok"
 
 
 def test_il_riepilogo_non_resta_a_caricamento_per_sempre() -> None:
