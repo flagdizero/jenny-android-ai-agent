@@ -362,7 +362,7 @@ class HomeApp {
        l'elenco di una stanza in cui non sei piu'. */
     sessionManager.addEventListener('chat:switch', () => this._setView('chat'));
 
-    wsManager.addEventListener('chat:open', () => this._setWire(true));
+    wsManager.addEventListener('chat:open', () => this._onWireOpen());
     wsManager.addEventListener('chat:close', () => this._setWire(false));
     wsManager.addEventListener('chat:message', (e) => {
       this._readRunStatus(e.detail);
@@ -412,6 +412,9 @@ class HomeApp {
        sempre. */
     this._readName();
 
+    /* In volo: una riconnessione che arrivasse adesso non deve far partire
+       una seconda lettura sopra questa (v. `_resyncAfterReconnect`). */
+    this._threadLoading = true;
     try {
       await this.chat.load();
     } catch (err) {
@@ -419,6 +422,8 @@ class HomeApp {
       api.clientLog('error', 'home.thread', String(err && err.stack || err));
       this._showThreadError();
       return;
+    } finally {
+      this._threadLoading = false;
     }
     this.chat.syncEmpty();
   }
@@ -1682,6 +1687,54 @@ class HomeApp {
   }
 
   /* ── Lo stato del filo ── */
+
+  /** Il socket si e' aperto. La prima volta e' l'avvio, e il filo lo legge
+   *  `init()`; da li' in poi e' una **riconnessione**, e quel che c'e' a
+   *  schermo puo' essere rimasto indietro. */
+  _onWireOpen() {
+    this._setWire(true);
+    const first = !this._wireOpenedOnce;
+    this._wireOpenedOnce = true;
+    if (first && !this._threadFailed) return;
+    this._resyncAfterReconnect();
+  }
+
+  /** Dopo una riconnessione: si lascia il turno e si rilegge il filo.
+   *
+   *  **Il turno.** Se il gateway e' ripartito a meta' risposta, quel turno e'
+   *  morto con lui e nessuno mandera' il suo `turn_end`: il bottone Ferma
+   *  restava acceso, la riga di lavoro e il fiore giravano, e Jenny restava a
+   *  pensare. Lo si lascia qui, come a un cambio di conversazione. Se invece
+   *  il turno e' vivo, il gateway lo ridice lui: `ws-manager` emette
+   *  `chat:open` **prima** di rifare gli `attach`, e la risposta a un `attach`
+   *  rimanda `goal_status: running` quando un turno gira — che riaccende tutto.
+   *
+   *  **Il filo.** Una caduta lascia una risposta tronca, o un messaggio
+   *  arrivato mentre il socket era giu' che non arrivera' piu'. Si butta e si
+   *  rilegge, come fa l'officina (`_resyncThreadAfterReconnect`) e per le
+   *  stesse ragioni: gli id del thread non sono un'ancora, quindi non c'e'
+   *  niente con cui riconciliare. E, come la', **solo se si era in fondo**:
+   *  chi sta rileggendo piu' su perderebbe le pagine che guarda per un
+   *  messaggio in coda che non sta guardando. Un filo che non e' mai arrivato
+   *  si riprova sempre: la riconnessione e' il segno che il gateway c'e'. */
+  async _resyncAfterReconnect() {
+    this._releaseTurn();
+    this.jenny?._releaseTrackedTurn?.();
+    if (this._threadLoading) return;
+    if (!this._threadFailed && !this.chat.following) return;
+    this._threadLoading = true;
+    try {
+      await this.chat.reload();
+      if (this._threadFailed) {
+        this._threadFailed = false;
+        this._applyTranslations();
+      }
+    } catch (err) {
+      console.warn('home: thread resync after reconnect failed', err);
+    } finally {
+      this._threadLoading = false;
+    }
+  }
 
   /** Vero quando il socket e' aperto. Una caduta breve non si annuncia. */
   _setWire(connected) {

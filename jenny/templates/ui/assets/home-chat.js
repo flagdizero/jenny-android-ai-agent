@@ -753,6 +753,11 @@ export class HomeChat {
     return gap <= STICK_PX;
   }
 
+  /** Vero se il filo sta seguendo il fondo: chi e' risalito a rileggere no. */
+  get following() {
+    return this._stick;
+  }
+
   /** Segue il fondo, ma solo se ci si era. */
   _follow() {
     if (this._stick) this.scrollToBottom();
