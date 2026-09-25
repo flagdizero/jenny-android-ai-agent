@@ -268,6 +268,11 @@ def _wiki_page_file(ctx: CommandContext, wiki_name: str, page_path: str) -> Path
     return full
 
 
+def _lf(text: str) -> str:
+    """I fine riga come li vede chi legge con ``read_text`` (universal newlines)."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _write_page_unchanged(full: Path, content: str, base: str) -> None:
     """Confronta e scrive **nello stesso thread**, per stringere la finestra.
 
@@ -277,11 +282,23 @@ def _write_page_unchanged(full: Path, content: str, base: str) -> None:
     mentre lei lavora — lo chiude il confronto; questo chiude il resto per
     quanto si può senza un lock che due scrittori diversi (gateway e strumenti
     file dell'agente) non condividerebbero comunque.
+
+    **I fine riga del file restano i suoi.** Il lettore ha ricevuto la pagina da
+    ``read_text``, che porta tutto a ``\n``, quindi ``base`` e ``content``
+    arrivano così: si confronta su quella forma, ma il file si legge grezzo
+    (``newline=""``) per sapere com'era scritto, e se andava a CRLF ci torna.
+    Prima un salvataggio convertiva in silenzio l'intero file a LF.
     """
     from jenny.webui.workspace_files import write_file
 
-    if full.read_text("utf-8") != base:
+    with open(full, encoding="utf-8", newline="") as f:
+        raw = f.read()
+    if _lf(raw) != base:
         raise CommandError("conflict", "page changed on disk")
+    content = _lf(content)
+    crlf = raw.count("\r\n")
+    if crlf and crlf >= raw.count("\n") - crlf:
+        content = content.replace("\n", "\r\n")
     write_file(full, content)
 
 

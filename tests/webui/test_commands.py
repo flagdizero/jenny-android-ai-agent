@@ -254,6 +254,36 @@ async def test_page_write_saves_and_reads_back(
     assert out["bytes"] == len(nuovo.encode("utf-8"))
 
 
+async def test_page_write_keeps_the_files_crlf_line_endings(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    """Il lettore riceve la pagina a LF (``read_text``) e rimanda ``base`` e
+    ``content`` a LF: il confronto deve riuscire, e il file resta a CRLF."""
+    pages_dir = _workspace_with_page(workspace_root)
+    (pages_dir / "index.md").write_bytes(_PAGE.replace("\n", "\r\n").encode("utf-8"))
+    nuovo = _PAGE + "Seconda riga.\n"
+
+    await dispatch_command(
+        ctx,
+        "page.write",
+        {"wiki": "main", "page": "index.md", "content": nuovo, "base": _PAGE},
+    )
+
+    assert (pages_dir / "index.md").read_bytes() == nuovo.replace("\n", "\r\n").encode("utf-8")
+
+
+async def test_page_write_keeps_lf_files_lf(
+    ctx: CommandContext, workspace_root: Path, config_path: Path
+) -> None:
+    pages_dir = _workspace_with_page(workspace_root)
+    await dispatch_command(
+        ctx,
+        "page.write",
+        {"wiki": "main", "page": "index.md", "content": "a\r\nb\n", "base": _PAGE},
+    )
+    assert (pages_dir / "index.md").read_bytes() == b"a\nb\n"
+
+
 async def test_page_write_in_a_subfolder(
     ctx: CommandContext, workspace_root: Path, config_path: Path
 ) -> None:
