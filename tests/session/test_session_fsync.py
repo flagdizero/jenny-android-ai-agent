@@ -106,6 +106,38 @@ class TestFlushAll:
         assert flushed == 1
         assert call_count["n"] == 2
 
+    def test_flush_all_does_not_create_a_file_for_a_session_nobody_wrote(
+        self, manager: SessionManager
+    ):
+        """Una sessione che ``get_or_create`` ha inventato solo per leggerla
+        (dopo un rinomino di progetto, per esempio) non deve comparire su disco
+        allo spegnimento: il file orfano sotto il nome vecchio bloccava il
+        rinomino all'indietro con ``name_taken``."""
+        manager.get_or_create("project:viaggio")
+        assert manager.flush_all() == 0
+        assert not manager._get_session_path("project:viaggio").exists()
+
+    def test_flush_all_still_rewrites_an_emptied_session_on_disk(
+        self, manager: SessionManager
+    ):
+        """Vuota ma con un file: la versione vuota è quella vera (``/new``),
+        e il file vecchio coi messaggi non deve sopravviverle."""
+        session = manager.get_or_create("test:cleared")
+        session.add_message("user", "old")
+        manager.save(session)
+        session.messages.clear()
+        assert manager.flush_all() == 1
+        reloaded = SessionManager(workspace=manager.workspace).get_or_create("test:cleared")
+        assert reloaded.messages == []
+
+    def test_flush_all_keeps_metadata_written_without_a_save(
+        self, manager: SessionManager
+    ):
+        session = manager.get_or_create("test:meta-only")
+        session.metadata["title"] = "Viaggio"
+        assert manager.flush_all() == 1
+        assert manager._get_session_path("test:meta-only").exists()
+
     def test_flush_all_data_survives_reload(self, sessions_dir: Path):
         """Data flushed by flush_all should survive a fresh SessionManager load."""
         mgr1 = SessionManager(workspace=sessions_dir)

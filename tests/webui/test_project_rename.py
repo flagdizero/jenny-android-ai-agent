@@ -115,6 +115,43 @@ def test_both_sessions_are_cleared_from_memory_first(workspace) -> None:
     assert emptied == [f"project:{OLD}", f"project:{NEW}"]
 
 
+def test_a_look_after_the_rename_does_not_resurrect_the_old_chat(workspace) -> None:
+    """Dopo il rinomino un messaggio tardivo per il nome vecchio (un job cron,
+    una seconda scheda) fa ``get_or_create`` su ``project:<vecchio>`` solo per
+    leggerne i metadati, e la sessione vuota torna in cache. Lo spegnimento
+    ordinato (``flush_all``) la scriveva: ``project_<vecchio>.jsonl`` risorgeva
+    orfano, e il rinomino all'indietro veniva rifiutato con ``name_taken``."""
+    from jenny.session.manager import SessionManager
+
+    _notebook(workspace, OLD, con_chat=False)
+    sessions = SessionManager(workspace)
+    chat = sessions.get_or_create(f"project:{OLD}")
+    chat.add_message("user", "ciao")
+    sessions.save(chat)
+
+    rename_project(
+        wikis_dir=workspace / "wikis",
+        scripts_dir=workspace / "skills" / "llm-wiki" / "scripts",
+        workspace=workspace,
+        name=OLD,
+        new_name=NEW,
+        invalidate_session=sessions.invalidate,
+    )
+    sessions.get_or_create(f"project:{OLD}")  # chi ha solo guardato
+    sessions.flush_all()
+
+    assert not describe_project_traces(workspace, f"project:{OLD}").exists
+    rename_project(
+        wikis_dir=workspace / "wikis",
+        scripts_dir=workspace / "skills" / "llm-wiki" / "scripts",
+        workspace=workspace,
+        name=NEW,
+        new_name=OLD,
+        invalidate_session=sessions.invalidate,
+    )
+    assert (workspace / "wikis" / OLD / "wiki").is_dir()
+
+
 # ── Cosa si rifiuta, prima di toccare niente ────────────────────────────────
 
 

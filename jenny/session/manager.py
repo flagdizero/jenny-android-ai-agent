@@ -554,10 +554,28 @@ class SessionManager:
         Returns the number of sessions flushed.  Errors on individual
         sessions are logged but do not prevent other sessions from being
         flushed.
+
+        Una sessione **vuota e mai salvata** non si scrive: niente messaggi,
+        niente metadati, nessun file su disco. È quella che ``get_or_create``
+        inventa per chi ha solo guardato — l'inseguimento di un progetto
+        rinominato, il controllo sull'id della wiki, l'umore della mascotte —
+        e che resta in cache dopo che il rinomino o la cancellazione l'aveva
+        invalidata. Scriverla allo spegnimento faceva risorgere
+        ``project_<vecchio>.jsonl``, e quel file orfano bastava a rifiutare un
+        rinomino all'indietro con ``name_taken``. Non si perde niente: una
+        sessione così, riletta, è identica a una che non esiste
+        (v. anche ``_repair``, che un file senza messaggi né metadati lo tratta
+        come assente).
         """
         flushed = 0
         for key, session in list(self._cache.items()):
             try:
+                if (
+                    not session.messages
+                    and not session.metadata
+                    and not self._get_session_path(key).exists()
+                ):
+                    continue
                 self.save(session, fsync=True)
                 flushed += 1
             except Exception:
