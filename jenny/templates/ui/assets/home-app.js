@@ -678,11 +678,27 @@ class HomeApp {
 
 
   /** La pagina Impostazioni e' diventata quella che guardi: si ridisegna e si
-   *  rilegge quel che sa il server. */
+   *  rilegge quel che sa il server.
+   *
+   *  **Si rilegge davvero, a ogni apertura.** Il commento lo diceva gia', ma
+   *  la lettura era quella dell'avvio, tenuta per tutta la vita della pagina:
+   *  e la casa e' il launcher, vive per giorni. Un aggiornamento trovato dal
+   *  controllo periodico non compariva mai, e «ultimo controllo» invecchiava.
+   *  Intanto si mostra quel che si sa gia' — la pagina non resta vuota per il
+   *  tempo di un giro — e quando arriva la risposta nuova si ridisegna. Una
+   *  rilettura fallita lascia a schermo quel che c'era. */
   async _openSettings() {
     this.you.open();
     this.you.sayJenny(this.jennyRoom.value());
-    const data = await this._askSettings();
+    const cached = this._settings ? await this._settings : null;
+    if (cached) this._paintSettings(cached);
+    const data = await this._askSettings({ fresh: true });
+    if (data || !cached) this._paintSettings(data);
+  }
+
+  /* Le righe di «Tu e Jenny» e le stanze che si aprono da li', da un payload
+     di `/api/settings` (`null` = lettura fallita, cioe' «non lo so»). */
+  _paintSettings(data) {
     this.jennyRoom.setFloating(data?.floating || null);
     /* Lettura fallita: `null`, cioe' «non lo so», non un nome vuoto. */
     this.jennyRoom.setName(data ? data.agent?.bot_name || '' : null);
@@ -789,14 +805,21 @@ class HomeApp {
      Il fallimento non si ricorda (stesso patto di `ensureVendor`): una rete
      andata male una volta lascerebbe la riga della finestra flottante
      nascosta fino al riavvio della casa, e quella non e' una versione che
-     manca — e' un'impostazione sparita. */
-  _askSettings() {
-    if (!this._settings) {
-      this._settings = api.getSettings().catch((err) => {
+     manca — e' un'impostazione sparita.
+
+     `fresh` la rilegge comunque: lo chiede l'apertura delle Impostazioni, che
+     e' il momento in cui quel che si mostra deve essere di adesso. */
+  _askSettings({ fresh = false } = {}) {
+    if (!this._settings || fresh) {
+      /* Una rilettura che fallisce non butta quel che si sapeva: torna `null`
+         a chi l'ha chiesta, e la cache torna quella di prima. */
+      const previous = this._settings;
+      const request = api.getSettings().catch((err) => {
         console.warn('home: settings not read', err);
-        this._settings = null;
+        if (this._settings === request) this._settings = previous;
         return null;
       });
+      this._settings = request;
     }
     return this._settings;
   }

@@ -307,6 +307,7 @@ class App {
   __OPEN_PAGES__
   __GO_BACK_ONE_ROOM__
   __OPEN_SETTINGS__
+  __PAINT_SETTINGS__
   __CHAT_NAME__
   __HA_COMPOSER__
   __PLACE_JENNY__
@@ -382,6 +383,7 @@ def _harness() -> str:
         .replace("__OPEN_PAGES__", member(src, "openPages"))
         .replace("__GO_BACK_ONE_ROOM__", member(src, "goBackOneRoom"))
         .replace("__OPEN_SETTINGS__", member(src, "_openSettings"))
+        .replace("__PAINT_SETTINGS__", member(src, "_paintSettings"))
         .replace("__CHAT_NAME__", member(src, "_chatName"))
         .replace("__HA_COMPOSER__", member(src, "_haComposer"))
         .replace("__PLACE_JENNY__", member(src, "_placeJenny"))
@@ -927,23 +929,30 @@ def test_talking_about_it_belongs_to_a_notebook() -> None:
     """)
 
 
-def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
+def test_the_settings_payload_is_asked_once_per_opening_for_both_rooms() -> None:
     """`/api/settings` porta provider, contatori e lavoratori periodici, e di
     quel peso le due stanze leggono un campo per uno: la versione e lo stato
-    della finestra flottante. Chiederlo due volte sarebbe due volte quel
-    peso."""
+    della finestra flottante. Aprire una stanza dalle Impostazioni non lo
+    richiede.
+
+    **Una volta per apertura, non una volta per sempre** (26/09/2026): la casa
+    e' il launcher e vive per giorni, e con la lettura dell'avvio un
+    aggiornamento trovato dal controllo periodico non compariva mai. Riaprendo,
+    prima si ridisegna la cache e poi la risposta nuova."""
     _run_js("""
       const app = home();
       app.homePages.goToId('settings');
       await app.powerOn;
       await app.openJenny();
+      assert.equal(settingsCalls, 1, 'la stanza di lei ha richiesto il payload');
       app._setView('chat');
       app.homePages.goTo(app.homePages.chatIndex);
       app.homePages.goToId('settings');
       await app.powerOn;
-      assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
-      assert.deepEqual(app.setVersions, [{ current: '0.11.0' }, { current: '0.11.0' }]);
-      assert.deepEqual(app.floating, [{ available: true }, { available: true }]);
+      assert.equal(settingsCalls, 2, 'la seconda apertura non ha riletto il server');
+      assert.deepEqual(app.setVersions,
+        [{ current: '0.11.0' }, { current: '0.11.0' }, { current: '0.11.0' }]);
+      assert.deepEqual(app.floating, [{ available: true }, { available: true }, { available: true }]);
     """)
 
 
@@ -1465,8 +1474,11 @@ def test_a_saved_name_reaches_the_row_and_the_cache() -> None:
       app.homePages.goTo(app.homePages.chatIndex);
       app.homePages.goToId('settings');
       await app.powerOn;
-      assert.equal(settingsCalls, 1);
-      assert.deepEqual(app.names, ['Ada', 'Vera'], 'la cache ha rimesso il nome vecchio');
+      /* Riaprendo si rilegge anche il server (qui il finto e' lo stesso
+         oggetto della cache, cioe' un server che il nome l'ha salvato): la
+         cache ridisegna «Vera» subito, la risposta nuova lo conferma. */
+      assert.equal(settingsCalls, 2);
+      assert.deepEqual(app.names, ['Ada', 'Vera', 'Vera'], 'la cache ha rimesso il nome vecchio');
       assert.equal(app._chatName().name, 'Vera');
     """)
 
