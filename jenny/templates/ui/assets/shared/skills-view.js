@@ -18,6 +18,16 @@ export function controllabile(skill) {
   return !skill.bundled && !skill.internal && !skill.locked;
 }
 
+/** La chiave i18n del perche' una skill non ha l'interruttore.
+ *
+ *  Sono due motivi diversi e il lucchetto li diceva uguali: una skill tua con
+ *  `locked` nel frontmatter si leggeva «Viene con l'app», che per una skill
+ *  scritta dall'utente e' falso — e lo manda a cercare il motivo nel posto
+ *  sbagliato. */
+export function motivoBlocco(skill) {
+  return skill.bundled ? 'skills.integrataBloccata' : 'skills.tuaBloccata';
+}
+
 /** L'elenco del payload, diviso nei due blocchi del pannello più un conto.
  *
  *  Le `internal` non si elencano (la modalità sviluppatore che le mostrava non

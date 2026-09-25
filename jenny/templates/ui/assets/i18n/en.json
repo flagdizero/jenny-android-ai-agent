@@ -1100,6 +1100,7 @@
     "chiediPrompt": "I want to teach you a new skill. Use the \"skill-creator\" skill and guide me step by step.",
     "attiva": "Turn on the {name} skill",
     "integrataBloccata": "Comes with the app: it can't be turned off here.",
+    "tuaBloccata": "Locked by its own file: it can't be turned off here.",
     "erroreLettura": "The skill list couldn't be read.",
     "riprova": "Retry"
   }

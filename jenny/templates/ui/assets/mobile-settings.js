@@ -13,7 +13,9 @@ import {
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
 import { whenText } from './shared/when.js';
-import { controllabile, dividiSkill, riassuntoSkill, riepilogoSkill } from './shared/skills-view.js';
+import {
+  controllabile, dividiSkill, motivoBlocco, riassuntoSkill, riepilogoSkill,
+} from './shared/skills-view.js';
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
@@ -2269,8 +2271,8 @@ export class SettingsController {
           <span class="toggle-slider"></span>
         </label>`
       : `<i class="ti ti-lock skill-riga-lucchetto" role="img"
-            aria-label="${escapeHtml(i18n.t('skills.integrataBloccata'))}"
-            title="${escapeHtml(i18n.t('skills.integrataBloccata'))}"></i>`;
+            aria-label="${escapeHtml(i18n.t(motivoBlocco(sk)))}"
+            title="${escapeHtml(i18n.t(motivoBlocco(sk)))}"></i>`;
     return `<div class="skill-riga">
       <button class="skill-riga-testo" type="button" aria-expanded="false">
         <span class="skill-riga-nome">${nome}</span>

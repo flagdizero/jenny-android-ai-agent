@@ -1103,6 +1103,7 @@
     "chiediPrompt": "Voglio insegnarti una nuova skill. Usa la skill \"skill-creator\" e guidami passo passo.",
     "attiva": "Attiva la skill {name}",
     "integrataBloccata": "Viene con l'app: non si spegne da qui.",
+    "tuaBloccata": "Bloccata dal suo file: non si spegne da qui.",
     "erroreLettura": "L'elenco delle skill non si è potuto leggere.",
     "riprova": "Riprova"
   }

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import locale, requires_node, run_js
 
 VIEW_JS = (
     Path(__file__).resolve().parents[2]
@@ -107,4 +107,23 @@ def test_the_drawer_row_has_two_forms() -> None:
         assert.equal(riepilogoSkill({ tue: [], integrate: [{}, {}] }, t),
           'skills.riepilogoNessunaTua:{"integrate":2}');
         """
+    )
+
+
+def test_the_lock_says_why_in_two_different_ways() -> None:
+    """Una skill tua con `locked` non «viene con l'app»: il lucchetto deve dire
+    il motivo vero, e la chiave deve esistere nelle due lingue."""
+    _run_js(
+        """
+        assert.equal(motivoBlocco({ bundled: true, locked: false }), 'skills.integrataBloccata');
+        assert.equal(motivoBlocco({ bundled: true, locked: true }), 'skills.integrataBloccata');
+        assert.equal(motivoBlocco({ bundled: false, locked: true }), 'skills.tuaBloccata');
+        """
+    )
+    for lingua in ("it", "en"):
+        voci = locale(lingua)["skills"]
+        assert voci["tuaBloccata"] and voci["tuaBloccata"] != voci["integrataBloccata"]
+    settings = (VIEW_JS.parents[1] / "mobile-settings.js").read_text(encoding="utf-8")
+    assert "i18n.t('skills.integrataBloccata')" not in settings, (
+        "il lucchetto della riga dice di nuovo «Viene con l'app» a tutte"
     )
