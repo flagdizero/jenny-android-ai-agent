@@ -66,14 +66,6 @@ class JennyBrowserBridge(context: Context) {
         private const val GATE_FAILED = 3
 
         /**
-         * Le stesse reti di ``jenny/security/network.py::_BLOCKED_NETWORKS``.
-         *
-         * Vivono qui e non solo in Python perché con una sessione interattiva
-         * **Python l'indirizzo di un link non lo vede mai**: il modello clicca,
-         * Chromium naviga. Questo è l'unico strato che vede dove porta un click,
-         * un redirect o una sottorisorsa.
-         */
-        /**
          * Suffissi pubblici a due livelli, per non ridurre `amazon.co.uk` a
          * `co.uk` — che aprirebbe il perimetro a **tutto** il Regno Unito.
          * E' una lista corta e dichiaratamente parziale: la Public Suffix List
@@ -88,6 +80,14 @@ class JennyBrowserBridge(context: Context) {
             "co.in", "co.nz", "co.za", "co.kr", "com.sg", "com.hk",
         )
 
+        /**
+         * Le stesse reti di ``jenny/security/network.py::_BLOCKED_NETWORKS``.
+         *
+         * Vivono qui e non solo in Python perché con una sessione interattiva
+         * **Python l'indirizzo di un link non lo vede mai**: il modello clicca,
+         * Chromium naviga. Questo è l'unico strato che vede dove porta un click,
+         * un redirect o una sottorisorsa.
+         */
         private val BLOCKED_V4 = listOf(
             "0.0.0.0" to 8, "10.0.0.0" to 8, "100.64.0.0" to 10, "127.0.0.0" to 8,
             "169.254.0.0" to 16, "172.16.0.0" to 12, "192.168.0.0" to 16,

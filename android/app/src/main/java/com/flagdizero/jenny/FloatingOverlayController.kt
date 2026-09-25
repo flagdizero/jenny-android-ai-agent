@@ -342,16 +342,15 @@ object FloatingOverlayController {
 
     private const val PREFS = "jenny_floating"
 
-    /**
-     * Il bordo non si ricorda: è sempre il destro (24/09/2026).
-     *
-     * **E nemmeno l'altezza.** È la riga sopra la barra di input, in ogni stato —
-     * l'invariante che `.jenny-duo` dichiara nel CSS («Non deve mai cambiare
-     * in Y») — ed è anche il pavimento del volo, come `fs.y0` in JS. Per un
-     * giro (17/09) si è provato a farla cadere fino in fondo e restare dove
-     * atterrava: finiva sempre in un angolo, mezza fuori, sotto le icone del
-     * dock di chiunque. La UI ha una riga sola, e questa è quella.
-     */
+    // Fra le preferenze non c'e' il bordo: e' sempre il destro (24/09/2026).
+    //
+    // **E nemmeno l'altezza.** E' la riga sopra la barra di input, in ogni
+    // stato — l'invariante che `.jenny-duo` dichiara nel CSS («Non deve mai
+    // cambiare in Y») — ed e' anche il pavimento del volo, come `fs.y0` in JS.
+    // Per un giro (17/09) si e' provato a farla cadere fino in fondo e restare
+    // dove atterrava: finiva sempre in un angolo, mezza fuori, sotto le icone
+    // del dock di chiunque. La UI ha una riga sola, e questa e' quella.
+
     /** La taglia spinta dalla SPA, in px. */
     private const val PREF_SIZE = "mascot_px"
 
@@ -359,19 +358,6 @@ object FloatingOverlayController {
      *  virgola, nell'ordine di [Palette]. */
     private const val PREF_PALETTE = "palette"
 
-    /**
-     * I colori della finestra flottante, presi dal tema scelto nell'app.
-     *
-     * Erano sette costanti esadecimali scritte qui dentro, ed erano la palette
-     * `chanel`: chi sceglieva Synthwave si ritrovava la barra avorio sopra la
-     * propria app rosa. Adesso arrivano dalla WebUI, che legge i token
-     * *calcolati* del tema attivo — la stessa lettura che `shared/theme.js` fa
-     * già per le barre di sistema e per le mini-app.
-     *
-     * Sei valori, non sette: [surface] veste sia la barra che il fumetto, ed è
-     * la stessa coppia `--surface`/`--text` su cui si regge ogni superficie
-     * della SPA. Il contrasto viene dal tema, non da una scelta fatta qui.
-     */
     /** Una riga della conversazione. `mine` = l'ha scritta l'utente. */
     private data class Line(val mine: Boolean, val text: String)
 
@@ -405,6 +391,19 @@ object FloatingOverlayController {
         }
     }
 
+    /**
+     * I colori della finestra flottante, presi dal tema scelto nell'app.
+     *
+     * Erano sette costanti esadecimali scritte qui dentro, ed erano la palette
+     * `chanel`: chi sceglieva Synthwave si ritrovava la barra avorio sopra la
+     * propria app rosa. Adesso arrivano dalla WebUI, che legge i token
+     * *calcolati* del tema attivo — la stessa lettura che `shared/theme.js` fa
+     * già per le barre di sistema e per le mini-app.
+     *
+     * Sei valori, non sette: [surface] veste sia la barra che il fumetto, ed è
+     * la stessa coppia `--surface`/`--text` su cui si regge ogni superficie
+     * della SPA. Il contrasto viene dal tema, non da una scelta fatta qui.
+     */
     private data class Palette(
         val surface: Int,
         val border: Int,
@@ -2510,8 +2509,9 @@ object FloatingOverlayController {
     }
 
     /** Ferma ogni animazione sul riquadro e lo rimette dritto e non traslato.
-     *  I due pivot tornano al centro: il volo li sposta sulla manica alzata,
-     *  e uno specchio o una rotazione attorno a quel punto sposta anche lei. */
+     *  I due pivot tornano al centro: il dondolio dell'attesa
+     *  ([startBreathing]) li porta ai piedi, e una rotazione attorno a quel
+     *  punto sposta anche lei. */
     private fun clearTransforms(ctx: Context) {
         val mascot = column ?: return
         sliding = false
@@ -2574,12 +2574,6 @@ object FloatingOverlayController {
     }
 
 
-    /**
-     * L'ascissa del bordo, docked o *out*.
-     *
-     * Gli stessi due ancoraggi della mascotte in chat: `-0.469 × lato` a riposo,
-     * `-0.25 × lato` quando è attiva.
-     */
     /** Il lato dello sprite: quello della WebUI, o il suo default. */
     private fun mascotSize(ctx: Context): Int =
         if (mascotPx > 0) mascotPx else dp(ctx, MASCOT_FALLBACK_DP)

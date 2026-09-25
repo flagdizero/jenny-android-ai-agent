@@ -972,15 +972,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * True solo per la pagina della SPA: origine del gateway **e** path esatto.
-     * Il prefisso non basterebbe — un href relativo scritto dal modello come
-     * `[cerca](www.google.com)` risolve in `/html-mobile/www.google.com`, che un
-     * confronto `startsWith` accetterebbe: la WebView ricaricherebbe il documento
-     * senza il fragment `#bs=` (SPA de-autenticata) o, sotto `/api/`, lo
-     * sostituirebbe con un 404 JSON, portandosi via `window.mobileApp` e con lui
-     * il tasto Indietro. Query e fragment restano liberi (`?mode=chat#bs=…`).
-     */
-    /**
      * Il path è uno dei **documenti-guscio** della WebUI?
      *
      * Le interfacce sono due — la casa (`index.html`, cioè quel che
@@ -1004,6 +995,16 @@ class MainActivity : AppCompatActivity() {
             path == "$base/officina.html"
     }
 
+    /**
+     * True solo per le pagine della SPA: origine del gateway **e** path esatto
+     * di un documento-guscio ([isShellDocument]).
+     * Il prefisso non basterebbe — un href relativo scritto dal modello come
+     * `[cerca](www.google.com)` risolve in `/html-mobile/www.google.com`, che un
+     * confronto `startsWith` accetterebbe: la WebView ricaricherebbe il documento
+     * senza il fragment `#bs=` (SPA de-autenticata) o, sotto `/api/`, lo
+     * sostituirebbe con un 404 JSON, portandosi via `window.mobileApp` e con lui
+     * il tasto Indietro. Query e fragment restano liberi (`?mode=chat#bs=…`).
+     */
     private fun isInternalGatewayUrl(uri: Uri): Boolean {
         if (!isGatewayOrigin(uri)) return false
         val path = uri.path ?: return false
@@ -1170,9 +1171,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         /**
-         * La SPA è entrata in chat (``ChatController.activate``). Secondo dei tre
-         * modi in cui la chat arriva a schermo, e l'unico che il guscio nativo
-         * non può vedere da sé: un cambio vista dentro la WebView non produce
+         * La chat è arrivata a schermo dentro la SPA: in officina da
+         * ``ChatController.activate``, in casa quando la pagina della chat torna
+         * a schermo. Secondo dei tre modi in cui la chat arriva a schermo (v.
+         * ``NotifierBridge.clearAlerts``), e l'unico che il guscio nativo non
+         * può vedere da sé: un cambio vista dentro la WebView non produce
          * nessun callback d'activity.
          *
          * ``NotificationManager`` è thread-safe, quindi non serve saltare sul
