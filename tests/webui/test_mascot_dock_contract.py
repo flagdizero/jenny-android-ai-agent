@@ -28,7 +28,7 @@ MASCOT_JS = ASSETS / "shared" / "mascot.js"
 DRAG_JS = ASSETS / "shared" / "mascot-drag.js"
 FOGLI = {
     "officina": ASSETS / "mobile-style.css",
-    "casa": ASSETS / "casa-style.css",
+    "casa": ASSETS / "home-style.css",
 }
 
 
@@ -172,7 +172,7 @@ def test_both_shells_answer_the_tap() -> None:
     officina = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
     assert "class JennyCompanion extends JennyMascot" in officina
     assert "bindMascotDrag" not in officina, "l'officina lega di nuovo la fisica per conto suo"
-    casa = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    casa = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     assert "new JennyMascot(" in casa
     assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
 
@@ -187,7 +187,7 @@ def test_the_room_that_leaves_her_space_uses_her_height_and_not_her_width() -> N
     sparirebbe **in silenzio**: nessun errore, solo la nota finita dietro la
     sua testa.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     m = re.search(r"\.casa-tu-scroll \{[^}]*?padding: [^;]*;", css, re.S)
     assert m, "il fondo della stanza non c'e' piu'"
     assert "var(--jenny-art-h)" in m.group(0), (

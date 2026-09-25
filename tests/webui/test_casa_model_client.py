@@ -30,7 +30,7 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-MODEL_JS = ASSETS / "casa-model.js"
+MODEL_JS = ASSETS / "home-model.js"
 BRAND_JS = ASSETS / "shared" / "provider-brand.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -118,7 +118,7 @@ __SHORT_BRAND__
 __TILE_NAMES__
 __MODEL_VALUE__
 
-class CasaModel {
+class HomeModel {
   __CTOR__
   __OPEN__
   __SET_SETTINGS__
@@ -167,7 +167,7 @@ async function room(dati, catalogo) {
   for (const id of ['casa-key-row', 'casa-key-edit', 'casa-models-note', 'casa-model-restart']) {
     document.getElementById(id).hidden = true;
   }
-  const stanzaModelli = new CasaModel({ onSettings: (d) => passati.push(d) });
+  const stanzaModelli = new HomeModel({ onSettings: (d) => passati.push(d) });
   stanzaModelli.setSettings(dati);
   stanzaModelli.open();
   await new Promise((r) => setImmediate(r));
@@ -408,7 +408,7 @@ def test_a_catalogue_that_arrives_late_does_not_paint_over_the_one_you_read() ->
       cataloghi = {};
       for (const k of Object.keys(nodi)) delete nodi[k];
       chiesti.length = 0;
-      const s = new CasaModel({});
+      const s = new HomeModel({});
       api.getProviderModels = (p) => {
         chiesti.push(p);
         if (p === 'groq') return attesa.then(() => ({ status: 'available', models: [{ id: 'tardi' }] }));

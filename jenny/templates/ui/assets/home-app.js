@@ -26,17 +26,17 @@
  *  non deve sapere, quale delle due interfacce ha caricato.
  */
 
-import { ActivityLine } from './casa-activity.js';
-import { CasaChat } from './casa-chat.js';
-import { CasaPages } from './casa-pages.js';
-import { CasaReader } from './casa-reader.js';
-import { CasaAudit, messaggioSegnalazione } from './casa-audit.js';
-import { CasaJenny } from './casa-jenny.js';
-import { CasaModel } from './casa-model.js';
-import { CasaUpdates } from './casa-updates.js';
-import { CasaBackup } from './casa-backup.js';
-import { CasaTu } from './casa-tu.js';
-import { WhoPanel, dotColor } from './casa-who.js';
+import { ActivityLine } from './home-activity.js';
+import { HomeChat } from './home-chat.js';
+import { NotebookPages } from './home-notebook-pages.js';
+import { HomeReader } from './home-reader.js';
+import { HomeAudit, messaggioSegnalazione } from './home-audit.js';
+import { HomeJenny } from './home-jenny.js';
+import { HomeModel } from './home-model.js';
+import { HomeUpdates } from './home-updates.js';
+import { HomeBackup } from './home-backup.js';
+import { HomeYou } from './home-you.js';
+import { WhoPanel, dotColor } from './home-who.js';
 /* Il cassetto delle app, **preso dall'officina e non ricopiato**: e' lo stesso
    modulo per i due gusci. I dati e le azioni stanno in `shared/`, fuori da
    qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
@@ -44,11 +44,11 @@ import { WhoPanel, dotColor } from './casa-who.js';
 import { JennyGap } from './shared/jenny-gap.js';
 import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
-import { CasaPagine } from './casa-pagine.js';
-import { CasaFila } from './casa-fila.js';
-import { FuocoComposer } from './casa-fuoco.js';
-import { SchedaQuaderno } from './casa-quaderno.js';
-import { Trasloco } from './casa-trasloco.js';
+import { HomePages } from './home-pages.js';
+import { HomeStrip } from './home-strip.js';
+import { ComposerFocus } from './home-focus.js';
+import { NotebookCard } from './home-notebook.js';
+import { ChatMove } from './home-move.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -134,10 +134,10 @@ const NOTEBOOK_DELETE_WORDS = {
   busy: 'casa.quaderno.deleteBusy',
 };
 
-class CasaApp {
+class HomeApp {
   constructor() {
     this.thread = document.getElementById('casa-thread');
-    this.chat = new CasaChat(this.thread);
+    this.chat = new HomeChat(this.thread);
     this.jenny = new JennyMascot(document.querySelector('.casa-shell'));
     /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
@@ -145,7 +145,7 @@ class CasaApp {
        cosi' vale anche quando cambia taglia, quando la metti via sul bordo e
        quando la trascini dall'altra parte. */
     this.chat.gap = new JennyGap(this.thread, this.jenny.el);
-    this.activity = new ActivityLine(document.getElementById('casa-activity'), {
+    this.activity = new ActivityLine(document.getElementById('home-activity'), {
       onOpenInWorkshop: (turnId) => this._openInWorkshop(turnId),
     });
     this.empty = document.getElementById('casa-empty');
@@ -159,7 +159,7 @@ class CasaApp {
        mette nelle pagine delle foto della chat, e un `querySelector` per
        classe puo' rispondere con il composer di una foto (v. `_bindComposer`). */
     this.composer = this.input?.closest?.('.casa-composer') || null;
-    this.activityEl = document.getElementById('casa-activity');
+    this.activityEl = document.getElementById('home-activity');
     this.shell = document.querySelector('.casa-shell');
 
     /* I comandi dell'intestazione che cambiano con la stanza — e la pastiglia
@@ -176,7 +176,7 @@ class CasaApp {
     /* «Tu e Jenny»: le impostazioni di chi la usa, cioe' la pagina
        Impostazioni. La porta dell'officina vive li' dentro, in fondo: la apre
        questo guscio, perche' e' lui a sapere come si apre. */
-    this.tu = new CasaTu({
+    this.tu = new HomeYou({
       onWorkshop: () => this._openInWorkshop(null),
       onJenny: () => this.openJenny(),
       onModel: () => this.openModel(),
@@ -185,7 +185,7 @@ class CasaApp {
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
-    this.jennyRoom = new CasaJenny({
+    this.jennyRoom = new HomeJenny({
       onChange: () => this.tu.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
       onName: (nome) => this._keepName(nome),
@@ -193,29 +193,29 @@ class CasaApp {
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
        `/api/settings`: lo si rimette nella cache invece di richiederlo, o la
        riga di «Tu e Jenny» resterebbe sulla marca di prima. */
-    this.modelRoom = new CasaModel({ onSettings: (data) => this._keepSettings(data) });
+    this.modelRoom = new HomeModel({ onSettings: (data) => this._keepSettings(data) });
     /* Gli aggiornamenti: la seconda vista di `shared/update-flow.js`, di cui
        l'officina e' la prima. Un controllo riuscito porta una versione fresca,
        e quella deve riscrivere la riga **e** la cache del guscio. */
-    this.updatesRoom = new CasaUpdates({
+    this.updatesRoom = new HomeUpdates({
       onVersion: (version) => this._keepVersion(version),
     });
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
-    this.backupRoom = new CasaBackup({
+    this.backupRoom = new HomeBackup({
       onExported: () => this.tu.sayBackup(this.backupRoom.value()),
     });
 
     /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
-       sulla sua linguetta insieme ai 280 kB di D3 (v. `casa-map.js`), e un
+       sulla sua linguetta insieme ai 280 kB di D3 (v. `home-map.js`), e un
        `import` statico la pagherebbe a ogni avvio della casa. */
-    this.pages = new CasaPages({
+    this.pages = new NotebookPages({
       onOpenPage: (path, label) => this.openPage(path, label),
       onNeedMap: (data, _rows, quaderno) => this._drawMap(data, quaderno),
     });
-    this.reader = new CasaReader();
+    this.reader = new HomeReader();
     this.reader.onTitle = (title) => this._readerTitle(title);
-    this.audit = new CasaAudit(this.reader);
+    this.audit = new HomeAudit(this.reader);
     this.audit.onFiled = (segnalazione) => this._portaInChat(segnalazione);
     /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
        barra della selezione, che con l'editor aperto non ha piu' senso: li' il
@@ -291,8 +291,8 @@ class CasaApp {
        arrivi: il trasloco sa spostarla e fotografarla, questo guscio sa
        cambiarle conversazione. Prima della pista, che lo usa dal primo
        `vaiA`. */
-    this.trasloco = new Trasloco({
-      chat: document.getElementById('casa-chat'),
+    this.trasloco = new ChatMove({
+      chat: document.getElementById('home-chat'),
       cambia: (chiave) => this.mostraConversazione(chiave),
       chiaveAttuale: () => sessionManager.currentKey,
       /* In fondo **senza condizioni**, non `keepBottom`: spostata nel
@@ -302,11 +302,11 @@ class CasaApp {
          fondo: arrivare altrove sarebbe il trucco che si vede. */
       inFondo: () => this.chat?.scrollToBottom(),
     });
-    this.pagine = new CasaPagine(this);
+    this.pagine = new HomePages(this);
     this._apps = null;
     /* La fila dei nomi in alto: legge le voci dalla pista, e tenendo premuto
        un nome le fa spostare. */
-    this.fila = new CasaFila(document.getElementById('casa-fila'), {
+    this.fila = new HomeStrip(document.getElementById('home-strip'), {
       pagine: this.pagine,
       nomeChat: () => this._nomeChat(),
       onCambia: (aperta) => this._onOrdina(aperta),
@@ -366,11 +366,11 @@ class CasaApp {
 
     this._bindComposer();
     /* Il fuoco resta sul campo: sul Titan la tastiera e' fisica, e un tocco sul
-       filo che glielo toglie manda i tasti dopo nel vuoto (v. `casa-fuoco.js`).
+       filo che glielo toglie manda i tasti dopo nel vuoto (v. `home-focus.js`).
        La fila ne fa parte: toccare «Jenny» mentre scrivi non deve fermarti. */
-    this.fuoco = new FuocoComposer({
+    this.fuoco = new ComposerFocus({
       input: this.input,
-      superfici: [document.getElementById('casa-chat'), document.getElementById('casa-fila')],
+      superfici: [document.getElementById('home-chat'), document.getElementById('home-strip')],
       attivo: () => this._composerAttivo(),
     });
     this.fuoco.rimetti();
@@ -448,7 +448,7 @@ class CasaApp {
     const target = key || sessionManager.personalKey;
     /* **Dove** la si apre lo decidono le pagine: una pagina di un quaderno
        mostra solo il suo, quindi da li' un'altra conversazione si apre nella
-       pagina chat (v. `CasaPagine.apriConversazione`). */
+       pagina chat (v. `HomePages.apriConversazione`). */
     if (this.pagine) return this.pagine.apriConversazione(target);
     return this.mostraConversazione(target);
   }
@@ -521,7 +521,7 @@ class CasaApp {
 
   /** La scheda di un quaderno, nata al primo uso. */
   schedaQuaderno() {
-    return (this._schedaQuaderno ||= new SchedaQuaderno({
+    return (this._schedaQuaderno ||= new NotebookCard({
       pagine: () => this.portaPagine(),
       apri: (nome) => this.switchConversation(projectKey(nome)),
       elimina: (nome) => this.deleteNotebook(nome),
@@ -955,7 +955,7 @@ class CasaApp {
   }
 
   /* Il campo dove scrivi e' a schermo e niente gli sta sopra: e' la domanda
-     che `casa-fuoco.js` fa prima di prendersi un tasto o un tocco. Oltre agli
+     che `home-focus.js` fa prima di prendersi un tasto o un tocco. Oltre agli
      strati della casa, qualunque `<dialog>` aperto — anche quelli condivisi di
      conferma — e l'immagine ingrandita, che non sono strati del cassetto. */
   _composerAttivo() {
@@ -1083,12 +1083,12 @@ class CasaApp {
 
      **La promessa, non la mappa, e' quella che si ricorda**: due tocchi sulla
      linguetta prima che il modulo arrivasse trovavano tutti e due `this.map`
-     vuota, e nascevano due `CasaMap` sullo stesso SVG — due simulazioni che
+     vuota, e nascevano due `HomeMap` sullo stesso SVG — due simulazioni che
      si contendevano i nodi. Un import fallito si dimentica, cosi' il tocco
      dopo riprova. */
   async _drawMap(data, quaderno) {
-    this._mappaPronta ||= import('./casa-map.js').then(({ CasaMap }) => {
-      this.map = new CasaMap({
+    this._mappaPronta ||= import('./home-map.js').then(({ HomeMap }) => {
+      this.map = new HomeMap({
         onOpenPage: (path, label) => this.openPage(path, label),
       });
       return this.map;
@@ -1655,7 +1655,7 @@ class CasaApp {
   }
 
   /* Il frame e' della conversazione a schermo? La stessa regola della chat
-     (`CasaChat._belongsHere`): un frame senza `chat_id` e' di tutti, uno con
+     (`HomeChat._belongsHere`): un frame senza `chat_id` e' di tutti, uno con
      un `chat_id` diverso e' di un'altra conversazione. Senza, un turno che
      gira in un quaderno accendeva il bottone Ferma sulla chat personale ferma
      — e Ferma avrebbe mandato `/stop` alla conversazione sbagliata — o lo
@@ -1734,4 +1734,4 @@ class CasaApp {
 
 }
 
-new CasaApp();
+new HomeApp();

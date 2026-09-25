@@ -44,14 +44,14 @@ export function shortThemeName(label) {
   return String(label || '').replace(/^Jenny\s+/, '').replace(/\s+'\d+$/, '');
 }
 
-export class CasaTu {
+export class HomeYou {
   /** @param onWorkshop  la porta dell'officina: la apre chi sa come si apre.
    *  @param onJenny     la riga che porta da lei.
    *  @param onModel     la riga che porta a chi risponde.
    *  @param onUpdates   la riga che porta agli aggiornamenti.
    *  @param onBackup    la riga che porta al backup. */
   constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup } = {}) {
-    this.el = document.getElementById('casa-tu');
+    this.el = document.getElementById('home-you');
     this.themesEl = document.getElementById('casa-themes');
     this.themeLabel = document.getElementById('casa-theme-label');
     this.themeValue = document.getElementById('casa-theme-value');

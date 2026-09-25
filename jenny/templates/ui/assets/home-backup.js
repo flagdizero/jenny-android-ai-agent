@@ -37,7 +37,7 @@ export function backupValue(backup) {
   return quando ? whenText(quando * 1000) : i18n.t('casa.backup.never');
 }
 
-export class CasaBackup {
+export class HomeBackup {
   /** @param onExported  un export riuscito: la riga di «Tu e Jenny» si
    *                     riscrive senza aspettare la prossima apertura. */
   constructor({ onExported } = {}) {

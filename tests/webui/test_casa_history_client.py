@@ -20,7 +20,7 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-CASA_CHAT_JS = ASSETS / "casa-chat.js"
+CASA_CHAT_JS = ASSETS / "home-chat.js"
 
 
 pytestmark = requires_node

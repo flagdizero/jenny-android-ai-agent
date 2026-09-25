@@ -95,20 +95,20 @@ export function groupsAreMeaningful(rows) {
   return seen.size > 1;
 }
 
-export class CasaPages {
+export class NotebookPages {
   /**
    * @param onOpenPage  cosa fare quando si tocca una riga: `(path, label)`.
    * @param onNeedMap   la mappa la disegna un altro modulo, e si carica al
    *                    primo tocco sulla linguetta: `(dati) => Promise`.
    */
   constructor({ onOpenPage, onNeedMap } = {}) {
-    this.el = document.getElementById('casa-pages');
+    this.el = document.getElementById('home-notebook-pages');
     this.listEl = document.getElementById('casa-page-list');
     this.noteEl = document.getElementById('casa-pages-note');
     this.queryEl = document.getElementById('casa-pages-q');
     this.tabListEl = document.getElementById('casa-tab-list');
     this.tabMapEl = document.getElementById('casa-tab-map');
-    this.mapEl = document.getElementById('casa-map');
+    this.mapEl = document.getElementById('home-map');
     this.mapNoteEl = document.getElementById('casa-map-note');
 
     this._onOpenPage = onOpenPage;

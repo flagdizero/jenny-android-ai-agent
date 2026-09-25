@@ -17,13 +17,13 @@
  *
  *  La parola entra lettera per lettera nel colore del fiore del tema, e un
  *  luccichio la attraversa; i puntini finali saltellano. Davanti le gira il ✿
- *  (`casa-fiore.js`), che si muove secondo la stessa famiglia: il fiore non
+ *  (`home-flower.js`), che si muove secondo la stessa famiglia: il fiore non
  *  racconta niente che la parola non dica gia'.
  */
 
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
-import { Fiore } from './casa-fiore.js';
+import { Flower } from './home-flower.js';
 
 /* Da quale famiglia e' ogni strumento. Tabella e non una catena di if perche'
    e' un dizionario, e perche' e' l'unico posto da aggiornare quando nasce uno
@@ -64,7 +64,7 @@ const SHOW_AFTER_MS = 500;
 const ROTATE_MS = 4_000;
 
 /* Quanto resta a schermo la parola che esce, mentre entra la nuova: la durata
-   della sua animazione in `casa-style.css` (`casa-parola-esce`). */
+   della sua animazione in `home-style.css` (`casa-parola-esce`). */
 const WORD_OUT_MS = 280;
 
 function reducedMotion() {
@@ -97,7 +97,7 @@ export class ActivityLine {
     this.plain = document.createElement('span');
     this.plain.className = 'casa-activity-testo';
     this.el.append(svg, this.words, this.plain);
-    this.fiore = new Fiore(svg, { reducedMotion: this._reduced });
+    this.fiore = new Flower(svg, { reducedMotion: this._reduced });
 
     if (this._onOpen) {
       const line = this.el;

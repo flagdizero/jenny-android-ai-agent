@@ -801,12 +801,12 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     assert 'data-pagina="app"' in casa, "la casa non ha piu' la pagina App"
     pagina_app = casa.split('data-pagina="app"', 1)[1].split('data-pagina="chat"', 1)[0]
     assert 'id="launcher-list"' in pagina_app, "la pagina App non contiene il cassetto"
-    assert re.search(r"export const FIXED_PAGES = \['app',", _src("casa-pagine.js")), (
+    assert re.search(r"export const FIXED_PAGES = \['app',", _src("home-pages.js")), (
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
-    assert "new LauncherController(this, { incorporato: true })" in _src("casa-app.js")
+    assert "new LauncherController(this, { incorporato: true })" in _src("home-app.js")
     assert "casa-drawer" not in casa, "il bottone del cassetto e' tornato accanto a una pagina"
-    assert "openLauncher" not in _src("casa-pagine.js"), (
+    assert "openLauncher" not in _src("home-pages.js"), (
         "la pista riprova ad aprire il cassetto con un gesto che il sistema "
         "non consegna"
     )
@@ -910,7 +910,7 @@ def test_nothing_in_the_casa_shows_a_hardcoded_string() -> None:
     # e' entrato nell'elenco il 21/09/2026 con i due fogli per-app, che sono
     # arrivati dall'officina portandosi dietro le sue parole.
     scrittori = (
-        _src("mobile-launcher.js") + _src("casa-app.js")
+        _src("mobile-launcher.js") + _src("home-app.js")
         + _src("shared/apps-actions.js")
     )
 

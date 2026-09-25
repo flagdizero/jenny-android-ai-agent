@@ -4,7 +4,7 @@ Una pagina «conversazione» non e' una seconda chat: e' una scorciatoia che
 cambia la conversazione dell'unica che c'e', travestita da pagina. Il
 travestimento e' una **foto**: nelle pagine di chat che la chat non abita c'e'
 una copia statica di com'era, e all'arrivo la chat vera ci scivola sotto (v.
-`casa-trasloco.js` e `.agent/pagine-conversazione-plan.md`).
+`home-move.js` e `.agent/pagine-conversazione-plan.md`).
 
 **Perche' in node sul file vero, con un DOM finto fatto apposta.** Quel che
 questo modulo fa e' spostare, copiare e cercare nodi: un finto che
@@ -123,10 +123,10 @@ pista.append = (...xs) => xs.forEach((x) => pista.appendChild(x));
 pista.append(p0, p1, p2);
 
 /* La chat vera, come in `index.html`. */
-const chat = crea('div', { id: 'casa-chat', cls: 'casa-chat' });
+const chat = crea('div', { id: 'home-chat', cls: 'home-chat' });
 const filo = crea('div', { id: 'casa-thread', cls: 'casa-thread' });
 const vuoto = crea('div', { id: 'casa-empty', cls: 'casa-empty' });
-const lavoro = crea('div', { id: 'casa-activity', cls: 'casa-activity' });
+const lavoro = crea('div', { id: 'home-activity', cls: 'home-activity' });
 const rete = crea('div', { id: 'casa-wire', cls: 'casa-wire' });
 const allegati = crea('div', { id: 'casa-pending', cls: 'casa-pending' });
 const composer = crea('div', { cls: 'casa-composer' });
@@ -177,15 +177,15 @@ const giro = () => new Promise((r) => setTimeout(r, 0));
 def _run(corpo: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
-        shutil.copy(ASSETS / "casa-trasloco.js", radice / "casa-trasloco.js")
+        shutil.copy(ASSETS / "home-move.js", radice / "home-move.js")
         entry = radice / "prova.mjs"
         entry.write_text(
             "import assert from 'node:assert/strict';\n"
             + _DOM
             + textwrap.dedent(
                 """
-                const { Trasloco, TETTO_FOTO_MS, FOTO_MESSAGGI } = await import('./casa-trasloco.js');
-                const t = new Trasloco({
+                const { ChatMove, TETTO_FOTO_MS, FOTO_MESSAGGI } = await import('./home-move.js');
+                const t = new ChatMove({
                   chat,
                   cambia,
                   chiaveAttuale: () => attuale,
@@ -208,7 +208,7 @@ def test_the_chat_moves_to_the_page_and_changes_conversation() -> None:
         "t.arriva(p1, 'B');\n"
         "assert.equal(chat.parentElement, p1, 'la chat non e arrivata');\n"
         "assert.deepEqual(cambi, ['B']);\n"
-        "assert.equal(document.getElementById('casa-chat'), chat);\n"
+        "assert.equal(document.getElementById('home-chat'), chat);\n"
     )
 
 
@@ -267,7 +267,7 @@ def test_what_belongs_to_a_moment_stays_out_of_the_photo() -> None:
         "campo.value = 'mezza frase';\n"
         "t.arriva(p1, 'B');\n"
         "const foto = fotoDi(p0);\n"
-        "for (const sel of ['.casa-activity', '.casa-wire', '.casa-pending']) {\n"
+        "for (const sel of ['.home-activity', '.casa-wire', '.casa-pending']) {\n"
         "  assert.ok(foto.querySelector(sel).hasAttribute('hidden'), sel);\n"
         "}\n"
         "assert.equal(foto.querySelector('textarea').value, '');\n"

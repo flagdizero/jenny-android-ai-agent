@@ -51,7 +51,7 @@ export function tastieraFisica(win = globalThis.window) {
   return Boolean(win?.matchMedia?.('(any-pointer: fine)')?.matches);
 }
 
-export class FuocoComposer {
+export class ComposerFocus {
   /**
    * @param {object} opts
    * @param {HTMLTextAreaElement} opts.input il campo dove scrivi.

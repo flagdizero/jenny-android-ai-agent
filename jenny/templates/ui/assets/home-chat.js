@@ -76,7 +76,7 @@ function mediaKind(entry) {
   return 'file';
 }
 
-export class CasaChat {
+export class HomeChat {
   constructor(threadEl) {
     this.el = threadEl;
     /* La bolla dell'assistente del turno in corso, e il blocco di testo aperto

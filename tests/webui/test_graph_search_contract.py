@@ -4,7 +4,7 @@
 (query → maschera) e ``test_casa_pages_client.py`` l'elenco della casa con un
 indice finto. Qui i tre pezzi veri girano insieme: la risposta di
 ``/api/graph`` la costruisce :class:`WikiSearchService` come fa la rotta, la
-smonta ``assets/shared/wiki-search.js`` e la legge ``assets/casa-pages.js``,
+smonta ``assets/shared/wiki-search.js`` e la legge ``assets/home-notebook-pages.js``,
 importato come modulo. Si guarda ciò che la ricerca *provoca*: quali righe
 restano, quali si nascondono, cosa dice la nota.
 
@@ -46,7 +46,7 @@ _PAGES = {
     "batteria.md": "# Vita della batteria\n\nConsumo e ottimizzazioni. Vedi [[Doze]].",
 }
 
-# Le due dipendenze di ``casa-pages.js`` che non sono sotto prova: la fetch
+# Le due dipendenze di ``home-notebook-pages.js`` che non sono sotto prova: la fetch
 # (che qui serve la risposta già costruita) e le traduzioni (la chiave basta).
 _API_STUB = "export const api = { getGraph: async () => globalThis.__GRAPH__ };\n"
 _I18N_STUB = "export const i18n = { t: (k) => k };\n"
@@ -55,7 +55,7 @@ _HARNESS = r"""
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-/* Un DOM finto con la sola meccanica che `CasaPages` usa. */
+/* Un DOM finto con la sola meccanica che `NotebookPages` usa. */
 function makeEl(tag) {
   const el = {
     tag, className: '', textContent: '', value: '', placeholder: '', type: '',
@@ -86,8 +86,8 @@ globalThis.document = {
 globalThis.__GRAPH__ = JSON.parse(
   fs.readFileSync(new URL('./graph.json', import.meta.url), 'utf-8'));
 
-const { CasaPages } = await import('./assets/casa-pages.js');
-const pages = new CasaPages();
+const { NotebookPages } = await import('./assets/home-notebook-pages.js');
+const pages = new NotebookPages();
 await pages.load('main');
 
 const rows = () => pages.listEl.children;
@@ -136,7 +136,7 @@ def _harness_dir(tmp_path: Path) -> Path:
     """I due moduli veri, i due stub e la risposta del server, uno accanto all'altro."""
     assets = tmp_path / "assets"
     (assets / "shared").mkdir(parents=True)
-    shutil.copy(ASSETS / "casa-pages.js", assets / "casa-pages.js")
+    shutil.copy(ASSETS / "home-notebook-pages.js", assets / "home-notebook-pages.js")
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     (assets / "shared" / "api-client.js").write_text(_API_STUB, encoding="utf-8")
     (assets / "shared" / "i18n.js").write_text(_I18N_STUB, encoding="utf-8")

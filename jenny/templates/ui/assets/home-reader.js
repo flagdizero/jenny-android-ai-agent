@@ -93,9 +93,9 @@ export function linkTarget({ href, wikilink, notebook, currentPath }) {
   return rel ? { kind: 'page', path: rel } : null;
 }
 
-export class CasaReader {
+export class HomeReader {
   constructor() {
-    this.el = document.getElementById('casa-reader');
+    this.el = document.getElementById('home-reader');
     this.bodyEl = document.getElementById('casa-reader-body');
     this.editEl = document.getElementById('casa-reader-edit');
     this.barEl = document.getElementById('casa-reader-bar');

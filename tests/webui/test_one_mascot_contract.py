@@ -24,7 +24,7 @@ from support import css_levels
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
-CASA_CSS = ASSETS / "casa-style.css"
+CASA_CSS = ASSETS / "home-style.css"
 OFFICINA_CSS = ASSETS / "mobile-style.css"
 
 _ART = ("jenny-body-front", "jenny-face-front", "jenny-side.webp", "jenny-side-talk")
@@ -60,9 +60,9 @@ def test_talking_uses_the_raised_hand() -> None:
 
 def test_the_house_does_not_drive_her_by_hand() -> None:
     """In casa lei legge i frame da se', con le regole dell'officina. Una
-    chiamata a mano da `casa-app.js` sarebbe una seconda macchina a stati
+    chiamata a mano da `home-app.js` sarebbe una seconda macchina a stati
     sopra la prima — ed e' esattamente come le due erano divergite."""
-    casa = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    casa = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     assert "new JennyMascot(" in casa
     pilotaggi = re.findall(
         r"this\.jenny\.(thinking|talking|idle|setMood|noteTurn\w*|_set\w+)\(", casa
@@ -88,7 +88,7 @@ def test_the_house_sheet_only_moves_the_floor() -> None:
     assert "--casa-composer-h" in proprie[0], "i piedi non appoggiano piu' sul composer"
     # Le altre regole che la nominano, in casa, sono di chi le lascia spazio
     # (la riga di lavoro) e non toccano lei.
-    assert ".casa-jenny {" not in css and ".casa-jenny." not in css, (
+    assert ".home-jenny {" not in css and ".home-jenny." not in css, (
         "e' tornato lo sprite della casa"
     )
 

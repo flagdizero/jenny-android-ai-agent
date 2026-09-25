@@ -203,6 +203,6 @@ def test_both_shells_ask_for_the_same_words() -> None:
     diverse per la stessa cosa.
     """
     key = "i18n.t('chat.loadPrevious')"
-    for shell in ("mobile-chat.js", "casa-chat.js"):
+    for shell in ("mobile-chat.js", "home-chat.js"):
         src = (ASSETS / shell).read_text(encoding="utf-8")
         assert key in src, f"{shell} non nomina {key}"

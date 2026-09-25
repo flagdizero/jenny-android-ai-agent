@@ -508,7 +508,7 @@ def test_il_colore_della_marca_e_uno_solo_e_mai_grigio() -> None:
     che l'utente si è aggiunto da sé: per quelle c'è la tinta dal nome.
     ``getProviderBrand`` vero, importato."""
     assert "getProviderBrand(nome).color" in _corpo("_coloreMarca")
-    casa = (ASSETS / "casa-model.js").read_text(encoding="utf-8")
+    casa = (ASSETS / "home-model.js").read_text(encoding="utf-8")
     assert "getProviderBrand(p.name).color" in casa
     brand = (ASSETS / "shared" / "provider-brand.js").as_uri()
     out = run_js(

@@ -30,7 +30,7 @@ from support.js_harness import function, locale, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-WHO_JS = ASSETS / "casa-who.js"
+WHO_JS = ASSETS / "home-who.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 
@@ -613,7 +613,7 @@ def test_holding_a_row_does_not_select_its_text() -> None:
     spegne: sopra il nome compariva «Copy, Share, Select all», e la scheda non
     si apriva. Nessun banco in node lo vede — il DOM finto non seleziona niente
     — quindi lo tiene questo, sul foglio di stile."""
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     riga = css.split("\n.casa-who-row {", 1)[1].split("}", 1)[0]
     for regola in ("user-select: none;", "-webkit-user-select: none;", "-webkit-touch-callout: none;"):
         assert regola in riga, f"la riga della tendina ha perso `{regola}`"

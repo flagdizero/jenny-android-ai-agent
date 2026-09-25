@@ -10,7 +10,7 @@
      servono davvero. KaTeX, Mermaid e D3 in casa ci sono, ma **a richiesta**:
      i primi due li carica `shared/rich-content.js` quando un messaggio o una
      pagina contengono davvero una formula o un diagramma, il terzo
-     `casa-map.js` al primo tocco sulla mappa. La differenza non e' estetica —
+     `home-map.js` al primo tocco sulla mappa. La differenza non e' estetica —
      e' il tempo che passa fra il tocco sull'icona e la prima riga leggibile.
 
      Vale la stessa CSP dell'officina (`script-src 'self'`, v. _SHELL_DOCUMENTS
@@ -32,9 +32,9 @@
 
 <!-- I token di colore dei sette temi stanno in mobile-style.css, che e' anche il
      foglio dell'officina. La casa ne usa solo le variabili, e disegna il proprio
-     con casa-style.css. -->
+     con home-style.css. -->
 <link rel="stylesheet" href="/html-mobile/assets/mobile-style.css">
-<link rel="stylesheet" href="/html-mobile/assets/casa-style.css">
+<link rel="stylesheet" href="/html-mobile/assets/home-style.css">
 </head>
 <body class="casa">
 
@@ -43,11 +43,11 @@
   <!-- ── La fila delle pagine ─────────────────────────────────────────────
        I nomi delle pagine, quella dove sei grande: prende il posto del titolo
        «Jenny ⌄», dell'ingranaggio, del bottone del cassetto e dei pallini
-       (v. `.agent/pagine-in-alto-plan.md`). La disegna `casa-fila.js`; c'e'
+       (v. `.agent/pagine-in-alto-plan.md`). La disegna `home-strip.js`; c'e'
        solo nella conversazione e nelle sue pagine di lato, le stanze hanno
        l'intestazione qui sotto. Tenere premuto un nome apre la modalita'
        ordina. -->
-  <div class="casa-fila" id="casa-fila"></div>
+  <div class="home-strip" id="home-strip"></div>
 
   <!-- L'intestazione delle stanze — le pagine di un quaderno, il lettore, le
        stanze delle impostazioni. Nella conversazione non c'e': li' la fila dice
@@ -85,7 +85,7 @@
   <!-- ── La pista delle pagine ────────────────────────────────────────────
        La casa e' un launcher: una fila di pagine. **Quattro ci sono sempre**
        — App, la chat, Quaderni, Impostazioni — e i loro pannelli stanno qui
-       nell'HTML; quelle che l'utente aggiunge le crea `casa-pagine.js`. Tutte
+       nell'HTML; quelle che l'utente aggiunge le crea `home-pages.js`. Tutte
        si spostano, la chat compresa, e l'ordine in cui compaiono qui sotto e'
        solo quello di chi non ha mai spostato niente.
 
@@ -93,7 +93,7 @@
        scelta: sono cromatura del guscio, e duplicarle in ogni pannello
        vorrebbe dire tenerne N allineate.
 
-       Le stanze (`casa-pages`, `casa-reader`, …) restano sorelle della pista
+       Le stanze (`home-notebook-pages`, `home-reader`, …) restano sorelle della pista
        e le passano sopra: entrare in una stanza copre le pagine, non le
        sposta. -->
   <div class="casa-vetrina">
@@ -131,10 +131,10 @@
     </div>
     <div class="casa-pagina" data-pagina="chat">
       <!-- La chat vera, in un involucro solo: e' una, e si **sposta** intera
-           nella pagina di un quaderno quando ci arrivi (v. `casa-trasloco.js`).
+           nella pagina di un quaderno quando ci arrivi (v. `home-move.js`).
            Non si copia mai — i controller la prendono per id — e nelle pagine
            che non abita c'e' la sua foto. -->
-      <div class="casa-chat" id="casa-chat">
+      <div class="home-chat" id="home-chat">
       <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
       <div class="casa-thread" id="casa-thread"></div>
 
@@ -148,7 +148,7 @@
 
       <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
            aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
-      <div class="casa-activity" id="casa-activity" hidden></div>
+      <div class="home-activity" id="home-activity" hidden></div>
 
       <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
            riconnessione). A filo funzionante non occupa spazio. -->
@@ -179,7 +179,7 @@
       </div>
     </div>
     <!-- La pagina Quaderni: «Con chi parli», che era la tendina del titolo. La
-         disegna `casa-who.js` qui dentro invece che in un `<dialog>`. -->
+         disegna `home-who.js` qui dentro invece che in un `<dialog>`. -->
     <div class="casa-pagina" data-pagina="notebooks">
       <div class="casa-quaderni" id="casa-quaderni"></div>
       <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.
@@ -207,7 +207,7 @@
          da `USER.md` e dal modello. La segue il sistema, che e' cio' che
          `i18n.detectLocale()` fa gia' quando nessuno ha scelto. Misure e ragioni
          in `.agent/casa-tu-e-jenny-plan.md`. -->
-    <section class="casa-tu" id="casa-tu">
+    <section class="home-you" id="home-you">
       <div class="casa-tu-scroll">
 
         <!-- Il tema non apre una stanza: si tocca e c'e'. E' l'unica impostazione
@@ -281,12 +281,12 @@
        Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e
        questa e' quella cosa: due linguette sopra la stessa risposta del
        server — `/api/graph` porta nodi, archi e indice full-text insieme. -->
-  <section class="casa-pages" id="casa-pages">
+  <section class="home-notebook-pages" id="home-notebook-pages">
     <div class="casa-tabs" role="tablist">
       <button class="casa-tab is-on" id="casa-tab-list" type="button"
               role="tab" aria-selected="true" aria-controls="casa-page-list"></button>
       <button class="casa-tab" id="casa-tab-map" type="button"
-              role="tab" aria-selected="false" aria-controls="casa-map"></button>
+              role="tab" aria-selected="false" aria-controls="home-map"></button>
     </div>
 
     <label class="casa-search" for="casa-pages-q">
@@ -304,7 +304,7 @@
     <div class="casa-page-list" id="casa-page-list" role="tabpanel"
          aria-labelledby="casa-tab-list"></div>
 
-    <div class="casa-map" id="casa-map" role="tabpanel"
+    <div class="home-map" id="home-map" role="tabpanel"
          aria-labelledby="casa-tab-map" hidden>
       <svg class="casa-map-svg" id="casa-map-svg" aria-hidden="true"></svg>
       <div class="casa-map-note" id="casa-map-note" hidden></div>
@@ -315,7 +315,7 @@
        L'HTML lo rende gia' il server (`/api/page`); qui si sanifica e si
        cablano i wikilink, che aprono un'altra pagina dello stesso quaderno.
        Audit, briciole di pane e LaTeX restano dell'officina. -->
-  <section class="casa-reader" id="casa-reader">
+  <section class="home-reader" id="home-reader">
     <article class="casa-reader-body" id="casa-reader-body"></article>
     <!-- Modifica: una textarea, e niente CodeMirror. Sono 200+ kB per colorare
          del markdown su 590 px, e la casa e' rimasta magra apposta. Il contatore
@@ -348,7 +348,7 @@
   <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
        mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico
        z-index che esista. -->
-  <dialog class="oc-sheet casa-audit" id="casa-audit-dialog">
+  <dialog class="oc-sheet home-audit" id="casa-audit-dialog">
     <div class="oc-sheet-inner casa-audit-inner">
       <h2 class="casa-audit-title" id="casa-audit-title"></h2>
       <!-- Il testo scelto, come citazione: e' quel che l'ancora legherà, e
@@ -366,7 +366,7 @@
 
   <!-- ── La quinta stanza: «Jenny» ────────────────────────────────────────
        Com'e' fatta — quanto e' grande, se si vede, se sta sopra le altre app.
-       La classe e' `casa-jenny-room` e non `casa-jenny`: quella e' lo sprite
+       La classe e' `casa-jenny-room` e non `home-jenny`: quella e' lo sprite
        di lei, che vive nel guscio da prima di questa stanza. -->
   <section class="casa-jenny-room" id="casa-jenny-room">
     <div class="casa-tu-scroll">
@@ -439,7 +439,7 @@
 
        **Toccare una mattonella non cambia chi risponde**: mostra i suoi
        modelli. Il cambio e' il tocco su un modello, e salva modello e
-       provider **insieme** — v. `casa-model.js`. -->
+       provider **insieme** — v. `home-model.js`. -->
   <section class="casa-model-room" id="casa-model-room">
     <div class="casa-tu-scroll">
 
@@ -524,7 +524,7 @@
   <!-- ── L'ottava stanza: «Backup» ───────────────────────────────────────
        La terza vista di `shared/backup-flow.js` (le altre due: officina e
        onboarding). L'unica cosa nuova e' la data: «ultimo backup» non aveva
-       nessuna fonte, in nessun file — v. `casa-backup.js`. -->
+       nessuna fonte, in nessun file — v. `home-backup.js`. -->
   <section class="casa-backup-room" id="casa-backup-room">
     <div class="casa-tu-scroll">
 
@@ -550,7 +550,7 @@
 
 </main>
 
-<script type="module" src="/html-mobile/assets/casa-app.js"></script>
+<script type="module" src="/html-mobile/assets/home-app.js"></script>
 
 <!-- Le schede di una voce del cassetto: tocco lungo su una riga.
      Stesso markup dell'officina, perche' e' lo stesso codice a riempirle
@@ -574,7 +574,7 @@
 </dialog>
 
 <!-- La scheda di un quaderno: la pressione lunga nella pagina Quaderni. Gemella di quella qui sopra — stesso markup, stesse classi —
-     perche' e' la stessa cosa detta per un'altra specie (v. casa-quaderno.js). -->
+     perche' e' la stessa cosa detta per un'altra specie (v. home-notebook.js). -->
 <dialog class="oc-sheet" id="casa-quaderno-sheet">
   <div class="oc-sheet-inner">
     <div class="oc-sheet-title" id="casa-quaderno-sheet-title"></div>

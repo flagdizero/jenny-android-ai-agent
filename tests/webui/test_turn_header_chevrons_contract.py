@@ -18,7 +18,7 @@ import re
 
 from support.js_harness import ASSETS
 
-_SHEETS = ("mobile-style.css", "casa-style.css")
+_SHEETS = ("mobile-style.css", "home-style.css")
 
 # Le testate e la classe della loro freccina.
 _HEADERS = {

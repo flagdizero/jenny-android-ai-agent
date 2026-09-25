@@ -12,7 +12,7 @@
  *  preso le correzioni misurate sul telefono. **Fra i due gusci cambia solo il
  *  pavimento** — dove appoggia i piedi, che e' una regola del foglio di stile
  *  di ciascuno (`.jenny-duo` in mobile-style.css, `.casa-shell .jenny-duo` in
- *  casa-style.css). L'officina ci aggiunge sopra la minichat
+ *  home-style.css). L'officina ci aggiunge sopra la minichat
  *  (`mobile-jenny.js`, sottoclasse), perche' la' la chat puo' non essere a
  *  schermo; in casa la chat *e'* lo schermo.
  *

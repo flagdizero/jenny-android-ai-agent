@@ -40,7 +40,7 @@ import { showToast } from './shared/utils.js';
  *  che la marca e' quella. In una striscia di pastiglie, e in «Modelli di
  *  …», e' la parola che non distingue niente — e occupa il posto di quella
  *  che distingue. Stessa ragione, e stessa forma, di `shortThemeName` in
- *  `casa-tu.js`: il nome intero resta dov'e' largo.
+ *  `home-you.js`: il nome intero resta dov'e' largo.
  */
 export function shortBrand(label) {
   return String(label || '').replace(/\s+Compatible$/, '');
@@ -70,7 +70,7 @@ export function modelValue({ providers, active }) {
   return tileNames(elenco)[i];
 }
 
-export class CasaModel {
+export class HomeModel {
   /** @param onSettings  il payload fresco che torna da un salvataggio: e' la
    *                     stessa forma di `/api/settings`, quindi il guscio lo
    *                     ridistribuisce invece di richiederlo. */
@@ -348,7 +348,7 @@ export class CasaModel {
     for (const id of righe) {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'casa-model';
+      row.className = 'home-model';
       row.dataset.model = id;
       const on = attivo && id === corrente;
       row.classList.toggle('is-on', on);

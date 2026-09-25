@@ -2,7 +2,7 @@
  *
  * Stato puramente client-side (localStorage), come il tema: non passa mai
  * dal backend. Visibilità e taglia sono scelte dell'utente, nella stanza
- * «Jenny» della casa (`casa-jenny.js`).
+ * «Jenny» della casa (`home-jenny.js`).
  *
  * Il lato non c'è più (24/09/2026): Jenny sta **sempre a destra**, in casa e in
  * officina, e dopo un lancio ci torna a piedi da dovunque l'hai lasciata. A

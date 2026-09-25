@@ -1220,7 +1220,7 @@ class MainActivity : AppCompatActivity() {
         /**
          * C'è una tastiera fisica attaccata e aperta? Sul Titan 2 sì, sempre:
          * `qwerty` con `hardKeyboardHidden=NO`. La casa lo chiede per tenere il
-         * fuoco sul campo dove scrivi (`casa-fuoco.js`) — con la tastiera a
+         * fuoco sul campo dove scrivi (`home-focus.js`) — con la tastiera a
          * schermo, invece, il fuoco è una tastiera alzata sopra la chat.
          *
          * Letto a ogni chiamata: una tastiera Bluetooth si attacca e si stacca,

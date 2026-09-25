@@ -1,4 +1,4 @@
-"""In casa il fuoco resta sul campo dove scrivi — ``casa-fuoco.js`` sotto node.
+"""In casa il fuoco resta sul campo dove scrivi — ``home-focus.js`` sotto node.
 
 Segnalato dall'utente il 24/09/2026, sul Titan 2: «se clicco da una parte si
 toglie il focus e non posso più scrivere». Riprodotto sul telefono: tocco sul
@@ -22,7 +22,7 @@ from support.js_harness import requires_node, run_js
 
 FUOCO_JS = (
     Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "casa-fuoco.js"
+    / "jenny" / "templates" / "ui" / "assets" / "home-focus.js"
 )
 
 
@@ -31,7 +31,7 @@ pytestmark = requires_node
 
 _HARNESS = """
 import assert from 'node:assert/strict';
-const { FuocoComposer, tastieraFisica } = await import('__URL__');
+const { ComposerFocus, tastieraFisica } = await import('__URL__');
 
 function target() {
   const listeners = {};
@@ -50,7 +50,7 @@ function banco({ tastiera = true, attivo = true } = {}) {
   input.focus = (opts) => { input.focusCalls.push(opts); doc.activeElement = input; };
   const chat = target();
   const stato = { tastiera, attivo };
-  const fuoco = new FuocoComposer({
+  const fuoco = new ComposerFocus({
     input, superfici: [chat], doc,
     attivo: () => stato.attivo,
     tastiera: () => stato.tastiera,

@@ -248,7 +248,7 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
 
     # E la casa ce li ha davvero: se un giorno sparissero di la', questo banco
     # starebbe difendendo un buco invece di un confine.
-    casa = _casa("casa-backup.js")
+    casa = _casa("home-backup.js")
     assert "runExportFlow" in casa and "runImportFlow" in casa, (
         "la casa non ha piu' il backup cifrato: toglierlo dall'officina lo "
         "toglierebbe dall'app"
@@ -275,7 +275,7 @@ def test_choosing_the_model_lives_in_the_casa() -> None:
     for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
         assert pezzo not in officina, f"«{pezzo}» e' tornato in officina"
 
-    casa = _casa("casa-model.js")
+    casa = _casa("home-model.js")
     assert "getProviderModels" in casa, "la casa non chiede piu' l'elenco dei modelli"
     assert "default_provider: provider" in casa, (
         "la casa non salva piu' modello e marca insieme: e' il punto del redesign"
@@ -393,8 +393,8 @@ def test_the_notebook_did_not_disappear_with_it() -> None:
     La casa ne ha tre pezzi — l'elenco, la mappa e il lettore — e le route del
     server che li nutrono non si sono toccate.
     """
-    for nome in ("casa-pages.js", "casa-map.js", "casa-reader.js"):
+    for nome in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
         assert (ASSETS / nome).exists(), f"{nome} manca: il quaderno non si apre da nessuna parte"
     casa = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    for nodo in ('id="casa-pages"', 'id="casa-map"', 'id="casa-reader"'):
+    for nodo in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
         assert nodo in casa, f"{nodo} manca dalla casa"

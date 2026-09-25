@@ -106,9 +106,9 @@ def _run(corpo: str) -> None:
         + _FINTO_DOM
         + textwrap.dedent(
             """
-            const { CasaFila } = await import('./casa-fila.js');
+            const { HomeStrip } = await import('./home-strip.js');
             const { premute } = await import('./shared/longpress.js');
-            const { dotColor } = await import('./casa-who.js');
+            const { dotColor } = await import('./home-who.js');
             /* La pista finta: le voci come le da' quella vera, e cosa le si chiede. */
             const chieste = [];
             const pagine = {
@@ -138,7 +138,7 @@ def _run(corpo: str) -> None:
             let nomeChat = { nome: 'Jenny', colore: null };
             const cambi = [];
             const el = creaEl('div');
-            const fila = new CasaFila(el, {
+            const fila = new HomeStrip(el, {
               pagine,
               nomeChat: () => nomeChat,
               onCambia: (aperta) => cambi.push(aperta),
@@ -154,8 +154,8 @@ def _run(corpo: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "casa-fila.js", radice / "casa-fila.js")
-        shutil.copy(ASSETS / "casa-who.js", radice / "casa-who.js")
+        shutil.copy(ASSETS / "home-strip.js", radice / "home-strip.js")
+        shutil.copy(ASSETS / "home-who.js", radice / "home-who.js")
         shutil.copy(ASSETS / "shared" / "conversation-list.js", radice / "shared" / "conversation-list.js")
         for nome, testo in _VICINI.items():
             (radice / "shared" / nome).write_text(testo, encoding="utf-8")
@@ -381,8 +381,8 @@ def test_dragging_a_page_past_a_neighbour_swaps_them() -> None:
 def test_names_cannot_be_selected_or_the_long_press_dies() -> None:
     """Visto sul telefono il 23/09/2026 sulle righe dei quaderni: senza, a meta'
     della pressione lunga Chromium seleziona la parola e annulla il puntatore."""
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    regola = css.split("\n.casa-fila {", 1)[1].split("}", 1)[0]
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
+    regola = css.split("\n.home-strip {", 1)[1].split("}", 1)[0]
     for dichiarazione in ("user-select: none", "-webkit-user-select: none", "-webkit-touch-callout: none"):
         assert dichiarazione in regola, dichiarazione
 
@@ -390,7 +390,7 @@ def test_names_cannot_be_selected_or_the_long_press_dies() -> None:
 def test_a_dragged_page_does_not_scroll_the_page() -> None:
     """Senza, Chromium si prende il movimento come uno scorrimento e manda
     `pointercancel` a meta' trascinamento."""
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     regola = css.split("\n.casa-ordina-pastiglia {", 1)[1].split("}", 1)[0]
     assert "touch-action: none" in regola
 
@@ -413,7 +413,7 @@ def test_the_lifted_page_sits_under_the_finger() -> None:
 
 def test_the_row_is_shipped() -> None:
     manifest = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
-    assert '"assets/casa-fila.js"' in manifest
+    assert '"assets/home-strip.js"' in manifest
 
 
 def test_closing_the_moving_mode_mid_drag_lets_go_of_the_document() -> None:

@@ -20,8 +20,8 @@ from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-CASA_CHAT_JS = ASSETS / "casa-chat.js"
-CASA_APP_JS = ASSETS / "casa-app.js"
+CASA_CHAT_JS = ASSETS / "home-chat.js"
+CASA_APP_JS = ASSETS / "home-app.js"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
 I18N = ASSETS / "i18n"
 

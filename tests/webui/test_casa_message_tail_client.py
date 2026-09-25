@@ -3,7 +3,7 @@
 Il 21/09/2026, guardando la casa sul telefono: «non c'è separazione tra i vari
 messaggi di jenny, sembra un messaggione unico». È vero, e non è un difetto di
 spaziatura. In casa Jenny non ha una bolla attorno al testo — è una scelta, sta
-scritta in `casa-style.css`: «quello che risponde Jenny non è in una scatola,
+scritta in `home-style.css`: «quello che risponde Jenny non è in una scatola,
 è testo sulla pagina, come una lettera». Quattro risposte di fila sono quindi
 quattro gruppi di paragrafi separati da 10 px, e l'occhio le legge come una.
 
@@ -26,8 +26,8 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-CASA_CHAT_JS = ASSETS / "casa-chat.js"
-CASA_CSS = ASSETS / "casa-style.css"
+CASA_CHAT_JS = ASSETS / "home-chat.js"
+CASA_CSS = ASSETS / "home-style.css"
 
 
 pytestmark = requires_node

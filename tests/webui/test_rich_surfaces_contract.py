@@ -30,8 +30,8 @@ ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 # Le superfici, e come si riconosce in ognuna «ho appena scritto del contenuto».
 SUPERFICI = {
     "mobile-chat.js": r"\.innerHTML = renderMarkdown\(",
-    "casa-chat.js": r"\.innerHTML = renderMarkdown\(",
-    "casa-reader.js": r"\.innerHTML = this\._safeHtml\(",
+    "home-chat.js": r"\.innerHTML = renderMarkdown\(",
+    "home-reader.js": r"\.innerHTML = this\._safeHtml\(",
 }
 
 # La chiamata che disegna il resto, comunque si chiami localmente.
@@ -47,7 +47,7 @@ RICCO = re.compile(r"\brenderRich\w*\(")
 # delta, l'officina una volta per frame dentro un rAF condiviso. Stessa cosa,
 # due nomi.
 ESENTI = {
-    ("casa-chat.js", "_delta"),
+    ("home-chat.js", "_delta"),
     ("mobile-chat.js", "_flushRender"),
     # Il ragionamento visibile passa di qui a ogni frame mentre arriva. Il suo
     # momento buono e' `_handleReasoningEnd`, che chiude il segmento e disegna.
@@ -106,11 +106,11 @@ def test_the_inline_dollar_is_on_only_where_the_skill_mandates_it() -> None:
     scrive conosce la regola della casa; spento nelle due chat, dove «costa $5,
     forse $10» diventerebbe un tentativo di scrivere «5, forse » in matematica.
     """
-    lettore = (ASSETS / "casa-reader.js").read_text(encoding="utf-8")
+    lettore = (ASSETS / "home-reader.js").read_text(encoding="utf-8")
     assert "inlineDollar: true" in lettore, (
         "il lettore non accende il dollaro in riga: le formule che la skill "
         "impone a Jenny resterebbero `$f(x)$` in chiaro"
     )
-    for chat in ("mobile-chat.js", "casa-chat.js"):
+    for chat in ("mobile-chat.js", "home-chat.js"):
         src = (ASSETS / chat).read_text(encoding="utf-8")
         assert "inlineDollar" not in src, f"{chat} ha acceso il dollaro in riga"

@@ -87,7 +87,7 @@ export function messaggioSegnalazione({ title, quote, comment, id }) {
   return `${testa}\n${String(comment || '').trim()}${coda}`;
 }
 
-export class CasaAudit {
+export class HomeAudit {
   constructor(reader) {
     this.reader = reader;
     /** Chi porta la segnalazione in chat. Sta fuori perche' questa classe non

@@ -237,7 +237,7 @@ def _script(corpo: str, pages: list[dict], vista: str = "chat") -> str:
         + f"const VISTA = {json.dumps(vista)};\n"
         + textwrap.dedent(
             """
-            const { CasaPagine } = await import('./casa-pagine.js');
+            const { HomePages } = await import('./home-pages.js');
             const guscio = creaEl('casa-shell', 'casa-shell');
             const app = {
               view: VISTA,
@@ -290,7 +290,7 @@ def _script(corpo: str, pages: list[dict], vista: str = "chat") -> str:
             app.chiaveAttuale = () => PERSONALE;
             const mostrate = [];
             app.mostraConversazione = (k) => { mostrate.push(k); return Promise.resolve('mostrata'); };
-            const pagine = new CasaPagine(app);
+            const pagine = new HomePages(app);
             await pagine.carica();
             /* Dove sta una pagina, per nome: i casi non contano caselle. */
             const I = (id) => pagine.indiceDi(id);
@@ -314,7 +314,7 @@ def _run(
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "casa-pagine.js", radice / "casa-pagine.js")
+        shutil.copy(ASSETS / "home-pages.js", radice / "home-pages.js")
         # Le regole sui nomi dei quaderni, vere: sono le stesse del gateway, e
         # una copia finta qui direbbe si' a un nome che il server rifiuta.
         shutil.copy(
@@ -450,7 +450,7 @@ def test_the_home_starts_on_the_chat_even_before_the_server_answers() -> None:
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api.getPages = () => new Promise(() => {});\n"
         "pista.style.transform = undefined;\n"
-        "const altre = new CasaPagine(app);\n"
+        "const altre = new HomePages(app);\n"
         "assert.equal(pista.style.transform, 'translateX(-100%)');\n"
         "assert.equal(altre.indice, altre.indiceChat);"
     )
@@ -511,7 +511,7 @@ def test_the_client_order_rule_is_the_schema_one() -> None:
     """Due copie della stessa regola, una per lato: la seconda serve quando il
     server non ha detto l'ordine. Qui si provano gli stessi casi dello schema."""
     _run(
-        "const { normalizeOrder } = await import('./casa-pagine.js');\n"
+        "const { normalizeOrder } = await import('./home-pages.js');\n"
         "const s = [{ id: 'p1' }, { id: 'p2' }];\n"
         "assert.deepEqual(normalizeOrder(null, s), ['app', 'chat', 'p1', 'p2', 'notebooks', 'settings']);\n"
         "assert.deepEqual(normalizeOrder(['chat', 'x', 'p1', 'chat', 7], s),\n"
@@ -620,7 +620,7 @@ def test_a_read_that_fails_leaves_the_chat_standing() -> None:
     _run(
         "const api = (await import('./shared/api-client.js')).api;\n"
         "api.getPages = async () => { throw new Error('rete giu'); };\n"
-        "const altre = new CasaPagine(app);\n"
+        "const altre = new HomePages(app);\n"
         "await altre.carica();\n"
         "assert.equal(altre.quante, 4);\n"
         "assert.equal(altre.indice, altre.indiceChat);",
@@ -634,7 +634,7 @@ def test_a_read_that_fails_leaves_the_chat_standing() -> None:
 def test_the_chat_lives_inside_a_page_panel() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     pista = html.split('class="casa-pista"', 1)[1].split("</div>\n\n  <!--", 1)[0]
-    for pezzo in ("casa-thread", "casa-empty", "casa-activity", "casa-composer"):
+    for pezzo in ("casa-thread", "casa-empty", "home-activity", "casa-composer"):
         assert pezzo in pista, f"{pezzo} e' rimasto fuori dalla pista"
 
 
@@ -645,9 +645,9 @@ def test_one_rule_hides_the_track_not_six_pieces() -> None:
     una stanza — ed e' il tipo di difetto che si vede solo entrando in quella
     stanza precisa.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert ".casa-shell:not([data-view='chat']) .casa-vetrina { display: none; }" in css
-    for pezzo in ("casa-thread", "casa-composer", "casa-activity"):
+    for pezzo in ("casa-thread", "casa-composer", "home-activity"):
         assert f":not([data-view='chat']) .{pezzo}" not in css
 
 
@@ -658,7 +658,7 @@ def test_the_panel_is_positioned_so_the_empty_state_stays_put() -> None:
     — un elemento trasformato ne crea uno — e senza un `relative` dichiarato
     qui lo stato vuoto salterebbe a meta' gesto.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     regola = css.split(".casa-pagina {", 1)[1].split("}", 1)[0]
     assert "position: relative" in regola
 
@@ -667,7 +667,7 @@ def test_the_track_adds_no_z_index() -> None:
     """Il foglio della casa non dichiara livelli — nemmeno quello di Jenny, che
     sta in `.jenny-duo` di mobile-style.css (D3): lei sta sopra la chat e sopra
     un'app, e i pannelli si sovrappongono con l'ordine del DOM."""
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert not [r for r in css.splitlines() if r.strip().startswith("z-index:")]
 
 
@@ -676,13 +676,13 @@ def test_the_track_adds_no_z_index() -> None:
 
 def test_the_dots_are_gone_and_the_row_took_their_place() -> None:
     """I pallini dicevano quante pagine c'erano, non che cosa: li ha sostituiti
-    la fila dei nomi in alto (`casa-fila.js`), che ha il suo banco. Qui si
+    la fila dei nomi in alto (`home-strip.js`), che ha il suo banco. Qui si
     prova che non ne resta un pezzo — una striscia vuota da 26 px e' spazio
     tolto a ogni pagina per niente."""
     html = (UI / "index.html").read_text(encoding="utf-8")
     assert "casa-pallini" not in html
-    assert 'id="casa-fila"' in html
-    for nome in ("casa-pagine.js", "casa-app.js", "casa-style.css"):
+    assert 'id="home-strip"' in html
+    for nome in ("home-pages.js", "home-app.js", "home-style.css"):
         assert "casa-pallin" not in (ASSETS / nome).read_text(encoding="utf-8"), nome
 
 
@@ -705,7 +705,7 @@ def test_the_strip_does_not_try_to_open_the_drawer() -> None:
     Il banco tiene il codice **onesto**: niente ascoltatori che aspettano un
     evento che il sistema non manda mai.
     """
-    sorgente = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
+    sorgente = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
     assert "openLauncher" not in sorgente, (
         "la striscia prova di nuovo ad aprire il cassetto: quel gesto non "
         "arriva mai all'app con la navigazione a gesti"
@@ -828,7 +828,7 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
     # Il valore, non la presenza della stringa: fino al 25/09/2026 bastava che
     # «data-pagina» comparisse nel metodo, e un attributo scritto con l'id
     # sbagliato (o sempre uguale) passava verde.
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     run_js(
         "import assert from 'node:assert/strict';\n"
         "class Guscio {\n"
@@ -934,7 +934,7 @@ def test_the_clipping_and_the_moving_are_two_different_elements() -> None:
     dire solo un telefono: in node l'iframe non esiste, e su un desktop il
     difetto non si riproduce.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     vetrina = css.split("\n.casa-vetrina {", 1)[1].split("}", 1)[0]
     assert "overflow: hidden" in vetrina, "l'involucro non ritaglia piu'"
     pista = css.split("\n.casa-pista {", 1)[1].split("}", 1)[0]
@@ -1179,7 +1179,7 @@ def test_a_notebook_page_off_screen_keeps_its_photo_and_is_never_emptied() -> No
     """
     _run(
         "const q = pagine.pannelloDi(I('q1'));\n"
-        "const parcheggiata = creaEl(null, 'casa-chat');\n"
+        "const parcheggiata = creaEl(null, 'home-chat');\n"
         "q.appendChild(parcheggiata);\n"
         "traslochi.length = 0;\n"
         "pagine.vaiAId('a1');\n"
@@ -1292,7 +1292,7 @@ def test_a_word_that_does_not_wrap_cannot_widen_every_page() -> None:
     d'invio fuori schermo — sulla pagina 0 come su quella del quaderno.
     Provato con una build che cambiava solo questa riga: sistemato tutto.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     pista = css.split(".casa-pista {", 1)[1].split("}", 1)[0]
     # La dichiarazione, non la parola: il commento sopra la nomina, e un
     # `in` sul testo del blocco era verde anche togliendo la riga — l'ha detto
@@ -1465,7 +1465,7 @@ def test_pinning_from_a_sheet_closes_what_is_above_first() -> None:
 
     Il giro e' quello di Home (`_closeAllOverlays`, provato in
     `test_casa_switch_client.py`): qui si controlla che l'appendere ci passi."""
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     porta = app_js.split("portaPagine() {", 1)[1].split("\n  }\n", 1)[0]
     appendi = porta.split("appendi:", 1)[1].split("stacca:", 1)[0]
     assert "this._closeAllOverlays()" in appendi
@@ -1662,16 +1662,16 @@ def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
     """
     html = (UI / "index.html").read_text(encoding="utf-8")
     assert "casa-pagine-dialog" not in html and "casa-foglio" not in html
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert "casa-foglio" not in css
-    pagine_js = (ASSETS / "casa-pagine.js").read_text(encoding="utf-8")
+    pagine_js = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
     assert "watchHorizontalSwipe(this.striscia" not in pagine_js, (
         "i pallini hanno di nuovo una pressione lunga: nessuno la troverebbe"
     )
     for lingua in ("it", "en"):
         voci = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
         assert "foglio" not in voci["casa"], f"{lingua}: casa.foglio e' rimasto"
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     assert "casa-pagine-dialog" not in app_js
 
 

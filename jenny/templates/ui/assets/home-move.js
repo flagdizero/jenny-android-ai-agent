@@ -48,8 +48,8 @@ function togliFoto(pannello) {
   for (const f of figli(pannello).filter(eFoto)) f.remove();
 }
 
-export class Trasloco {
-  /** @param chat          l'involucro della chat vera (`#casa-chat`)
+export class ChatMove {
+  /** @param chat          l'involucro della chat vera (`#home-chat`)
    *  @param cambia        `(chiave) => Promise`: cambia conversazione e rilegge
    *                       il filo. Deve cambiarla **subito**, prima della sua
    *                       prima attesa: chi chiede la conversazione attuale
@@ -198,7 +198,7 @@ export class Trasloco {
     /* Quel che e' *di un momento* non va in foto: la riga di lavoro di Jenny,
        lo stato della rete, gli allegati in partenza. Congelati, direbbero che
        Jenny sta ancora pensando in una conversazione che hai lasciato. */
-    for (const sel of ['.casa-activity', '.casa-wire', '.casa-pending']) {
+    for (const sel of ['.home-activity', '.casa-wire', '.casa-pending']) {
       for (const el of copia.querySelectorAll(sel)) el.setAttribute('hidden', '');
     }
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei

@@ -2,12 +2,12 @@
 
 Il canale websocket manda alla casa i frame di **tutte** le conversazioni: un
 turno che gira in un quaderno arriva anche mentre guardi la chat personale. La
-chat li scarta da sempre (`CasaChat._belongsHere`); il guscio no, e un
+chat li scarta da sempre (`HomeChat._belongsHere`); il guscio no, e un
 `goal_status` di un altro quaderno accendeva Ferma su una chat ferma — Ferma
 avrebbe mandato `/stop` alla conversazione sbagliata — o lo spegneva sul turno
 vivo di questa.
 
-I metodi si ritagliano da `casa-app.js` e girano in node su un guscio finto.
+I metodi si ritagliano da `home-app.js` e girano in node su un guscio finto.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "casa-app.js"
+APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "home-app.js"
 
 pytestmark = requires_node
 

@@ -1,8 +1,8 @@
 """La cache delle impostazioni della casa non rimette indietro la finestra flottante.
 
-``CasaApp._askSettings`` chiede ``/api/settings`` una volta e ne tiene la
+``HomeApp._askSettings`` chiede ``/api/settings`` una volta e ne tiene la
 promessa: ogni apertura delle Impostazioni la rilegge e passa ``floating`` a
-``CasaJenny.setFloating``. Toccato l'interruttore, la stanza sapeva il valore
+``HomeJenny.setFloating``. Toccato l'interruttore, la stanza sapeva il valore
 nuovo e la cache quello vecchio, e alla riapertura vinceva la cache:
 l'interruttore si ridisegnava spento con la finestra accesa (visto sul telefono
 il 25/09). ``_keepFloating`` scrive nella cache com'e' finita.
@@ -18,7 +18,7 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-APP_JS = ASSETS / "casa-app.js"
+APP_JS = ASSETS / "home-app.js"
 
 pytestmark = requires_node
 

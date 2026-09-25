@@ -143,7 +143,7 @@ def test_the_thread_keeps_no_blanket_cap_any_more() -> None:
     tutti i banchi qui sopra resterebbero verdi — misurerebbero un margine
     giusto sopra una larghezza sbagliata.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     blocco = css.split(".casa-msg-jenny {")[1].split("}")[0]
     # `max-width: 100%` e' la colonna, non un tetto: serve perche' un `<pre>`
     # lungo non allarghi il messaggio oltre il filo (09f43fc). Un tetto e'
@@ -247,7 +247,7 @@ def test_our_bubble_moves_aside_it_does_not_hollow_out() -> None:
     lei con dentro il vuoto, cioe' il testo si sposta e la pelle della bolla
     resta coperta lo stesso. Deve muoversi tutta intera: `margin`.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert ".casa-msg-user.is-under-jenny" in css, "le bolle non si scansano affatto"
     blocco = css.split(".casa-msg-user.is-under-jenny {")[1].split("}")[0]
     assert "margin-right: var(--jenny-gap" in blocco, blocco

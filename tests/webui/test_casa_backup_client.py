@@ -27,7 +27,7 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-ROOM_JS = ASSETS / "casa-backup.js"
+ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -76,7 +76,7 @@ function backupNativeAvailable() { return nativoPresente; }
 __WHEN_TEXT__
 __BACKUP_VALUE__
 
-class CasaBackup {
+class HomeBackup {
   __CTOR__
   __SET_BACKUP__
   __OPEN__
@@ -96,7 +96,7 @@ function room(backup) {
   nativoPresente = true;
   fatti.length = 0;
   avvisi.length = 0;
-  const s = new CasaBackup({ onExported: () => avvisi.push('riga riscritta') });
+  const s = new HomeBackup({ onExported: () => avvisi.push('riga riscritta') });
   s.setBackup(backup);
   return s;
 }
@@ -209,7 +209,7 @@ def test_without_the_native_bridge_the_buttons_are_not_there() -> None:
     _run_js("""
       for (const k of Object.keys(nodi)) delete nodi[k];
       nativoPresente = false;
-      const s = new CasaBackup({});
+      const s = new HomeBackup({});
       s.setBackup(null);
       assert.equal(nodi['casa-backup-export'].hidden, true);
       assert.equal(nodi['casa-backup-import'].hidden, true);

@@ -13,7 +13,7 @@ e ridisegnarli a ogni tocco butterebbe via lo scorrimento di lato — chi ha
 appena scelto il settimo si ritroverebbe riportato al primo.
 
 I membri si ritagliano dal sorgente e girano in node su un DOM finto:
-``casa-tu.js`` importa ``theme.js``, che al caricamento tocca il documento e il
+``home-you.js`` importa ``theme.js``, che al caricamento tocca il documento e il
 ``localStorage``, e importarlo davvero vorrebbe dire montare il guscio per
 provare una striscia. ``THEMES`` e ``swatchGradient`` invece sono **veri**: i
 sette temi e i loro colori sono proprio cio' che non deve essere ricostruito a
@@ -30,7 +30,7 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-TU_JS = ASSETS / "casa-tu.js"
+TU_JS = ASSETS / "home-you.js"
 THEME_JS = ASSETS / "shared" / "theme.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -105,7 +105,7 @@ function setTheme(id) {
 __SWATCH__
 __SHORT_NAME__
 
-class CasaTu {
+class HomeYou {
   __CTOR__
   __OPEN__
   __APPLY_TRANSLATIONS__
@@ -122,7 +122,7 @@ function room() {
   for (const k of Object.keys(nodi)) delete nodi[k];
   acceso = 'chanel';
   applicati.length = 0;
-  return new CasaTu({});
+  return new HomeYou({});
 }
 """
 

@@ -326,7 +326,7 @@ def test_the_chat_visible_question_asks_a_method_every_shell_has() -> None:
     assert "currentMode" not in question.group(1)
 
 
-@pytest.mark.parametrize("shell", ["mobile-app.js", "casa-app.js"])
+@pytest.mark.parametrize("shell", ["mobile-app.js", "home-app.js"])
 def test_both_shells_answer_the_chat_visible_question(shell: str) -> None:
     """Il guscio nativo non sa quale delle due interfacce ha caricato: il
     contratto vale per entrambe, o per una delle due non vale."""

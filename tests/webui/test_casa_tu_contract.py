@@ -22,9 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
 ASSETS = UI / "assets"
-APP_JS = ASSETS / "casa-app.js"
-TU_JS = ASSETS / "casa-tu.js"
-CSS = ASSETS / "casa-style.css"
+APP_JS = ASSETS / "home-app.js"
+TU_JS = ASSETS / "home-you.js"
+CSS = ASSETS / "home-style.css"
 TEMI = ASSETS / "mobile-style.css"
 I18N = ASSETS / "i18n"
 
@@ -50,7 +50,7 @@ def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
     html = INDEX.read_text(encoding="utf-8")
     assert 'id="casa-door"' not in html, "l'avatar e' tornato in testa"
     pagina = html.split('data-pagina="settings"', 1)[1]
-    assert '<section class="casa-tu" id="casa-tu">' in pagina, "«Tu e Jenny» non e' nella sua pagina"
+    assert '<section class="home-you" id="home-you">' in pagina, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
     assert "this.door" not in app
     assert "this.pagine.registra('settings', { accendi: () => this._apriImpostazioni() });" in app
@@ -81,10 +81,10 @@ def test_the_rooms_arrive_on_the_phone() -> None:
     sull'officina. Il difetto si vede solo sul telefono, ed e' una stanza che
     non si apre."""
     for asset in (
-        "assets/casa-tu.js",
-        "assets/casa-jenny.js",
-        "assets/casa-model.js",
-        "assets/casa-updates.js",
+        "assets/home-you.js",
+        "assets/home-jenny.js",
+        "assets/home-model.js",
+        "assets/home-updates.js",
         "assets/shared/update-flow.js",
     ):
         assert asset in _UI_MANIFEST, (
@@ -94,7 +94,7 @@ def test_the_rooms_arrive_on_the_phone() -> None:
 
 def test_the_room_of_her_is_not_the_sprite_of_her() -> None:
     """Lo sprite che cammina sul bordo (`.jenny-duo`, fino al 24/09/2026
-    `.casa-jenny`) vive nel guscio da prima di questa stanza. Se la stanza
+    `.home-jenny`) vive nel guscio da prima di questa stanza. Se la stanza
     avesse preso quel nome, la regola
     della vista avrebbe acceso e spento **lei** invece della pagina — e
     `data-view` avrebbe smesso di parlare solo di stanze."""
@@ -102,7 +102,7 @@ def test_the_room_of_her_is_not_the_sprite_of_her() -> None:
     css = CSS.read_text(encoding="utf-8")
     assert '<section class="casa-jenny-room" id="casa-jenny-room">' in html
     assert ".casa-shell[data-view='jenny'] .casa-jenny-room" in css
-    assert not re.search(r"\[data-view='jenny'\] \.(?:casa-jenny\b(?!-room)|jenny-duo)", css), (
+    assert not re.search(r"\[data-view='jenny'\] \.(?:home-jenny\b(?!-room)|jenny-duo)", css), (
         "la regola della stanza morde lo sprite di lei"
     )
 
@@ -170,10 +170,10 @@ def test_the_room_is_in_the_shell_from_the_first_frame() -> None:
     """Come le altre: la sezione c'e' nell'HTML e la accende `data-view`, non
     un `hidden` che il JS deve togliere."""
     html = INDEX.read_text(encoding="utf-8")
-    assert re.search(r'<section class="casa-tu" id="casa-tu">', html), (
+    assert re.search(r'<section class="home-you" id="home-you">', html), (
         "la stanza non e' piu' nel guscio"
     )
-    assert 'class="casa-tu" id="casa-tu" hidden' not in html, (
+    assert 'class="home-you" id="home-you" hidden' not in html, (
         "due meccanismi per la stessa cosa: la vista la accende gia' il CSS"
     )
 
@@ -221,7 +221,7 @@ def test_the_rules_are_written_through_the_command_and_not_as_a_file() -> None:
     puo' riscrivere, e la copia dentro `SOUL.md` che il prompt legge. Se la casa
     le salvasse con `workspace.write` ne farebbe una sola, e la copia
     comincerebbe a divergere dalla verita' al primo salvataggio."""
-    jenny = (ASSETS / "casa-jenny.js").read_text(encoding="utf-8")
+    jenny = (ASSETS / "home-jenny.js").read_text(encoding="utf-8")
     assert "rpc.writeSoulRules(" in jenny, "le regole non passano piu' dal comando"
     assert "writeWorkspaceFile" not in jenny, (
         "le regole vengono scritte come un file qualunque: la copia in SOUL.md non si rifa'"
@@ -238,7 +238,7 @@ def test_the_two_halves_look_at_the_same_file() -> None:
     """La casa legge il file, il server lo scrive: due costanti, un posto solo."""
     from jenny.agent.soul_rules import RULES_FILE
 
-    jenny = (ASSETS / "casa-jenny.js").read_text(encoding="utf-8")
+    jenny = (ASSETS / "home-jenny.js").read_text(encoding="utf-8")
     m = re.search(r"export const RULES_PATH = '([^']+)'", jenny)
     assert m, "la casa non dice piu' da dove legge le regole"
     assert m.group(1) == RULES_FILE.as_posix(), (
@@ -305,7 +305,7 @@ def test_she_is_on_top_of_everything_in_the_house() -> None:
 
     # La casa non dichiara livelli: nemmeno il suo, che sta nell'altro foglio.
     assert not css_levels.levels(casa), (
-        f"casa-style.css dichiara dei livelli: {css_levels.levels(casa)}. Il livello "
+        f"home-style.css dichiara dei livelli: {css_levels.levels(casa)}. Il livello "
         f"di Jenny e' quello di `.jenny-duo` in mobile-style.css; qualunque altro "
         f"deve stare sotto il suo, e va scritto perche'"
     )
@@ -372,7 +372,7 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
     Il banco incrocia i due insiemi: le classi che la chat si costruisce da
     sola, e quelle che le due stanze nuove scrivono nel guscio.
     """
-    chat = (ASSETS / "casa-chat.js").read_text(encoding="utf-8")
+    chat = (ASSETS / "home-chat.js").read_text(encoding="utf-8")
     della_chat = set()
     for valore in re.findall(r"className = '([^']+)'", chat):
         della_chat |= set(valore.split())
@@ -380,7 +380,7 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
 
     html = INDEX.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="casa-(?:tu|jenny-room|model-room|updates-room)".*?</section>', html, re.S
+        r'<section class="(?:home-you|casa-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
     )
     assert len(stanze) == 4, f"le quattro stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
@@ -557,7 +557,7 @@ def test_the_key_field_never_carries_a_key() -> None:
     assert 'type="password"' in campo.group(0), "la chiave si legge a schermo mentre la incolli"
     assert 'autocomplete="off"' in campo.group(0), "il campo si fa ricordare dal browser"
     assert "value=" not in campo.group(0), "il markup mette qualcosa dentro il campo"
-    model = (ASSETS / "casa-model.js").read_text(encoding="utf-8")
+    model = (ASSETS / "home-model.js").read_text(encoding="utf-8")
     assert "api_key_hint" in model, "la stanza non legge piu' il suggerimento offuscato"
     assert not re.search(r"\.api_key\b(?!_hint)", model), (
         "la stanza legge `api_key` dal payload: li' non c'e', e se ci fosse "
@@ -577,7 +577,7 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     html = INDEX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     stanze = re.findall(
-        r'<section class="casa-(?:tu|jenny-room|model-room|updates-room)".*?</section>', html, re.S
+        r'<section class="(?:home-you|casa-(?:jenny-room|model-room|updates-room))".*?</section>', html, re.S
     )
     assert stanze, "le stanze non si trovano piu'"
 
@@ -629,7 +629,7 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
     non per essere usato due volte.
     """
     flusso = (ASSETS / "shared" / "update-flow.js").read_text(encoding="utf-8")
-    casa = (ASSETS / "casa-updates.js").read_text(encoding="utf-8")
+    casa = (ASSETS / "home-updates.js").read_text(encoding="utf-8")
     officina = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
     assert "update-flow.js" in casa, "la casa non usa piu' il flusso condiviso"

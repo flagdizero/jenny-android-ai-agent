@@ -20,8 +20,8 @@ from pathlib import Path
 from support.js_harness import function, locale, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-AUDIT_JS = ASSETS / "casa-audit.js"
-APP_JS = ASSETS / "casa-app.js"
+AUDIT_JS = ASSETS / "home-audit.js"
+APP_JS = ASSETS / "home-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 

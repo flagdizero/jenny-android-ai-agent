@@ -20,7 +20,7 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "casa-app.js"
+APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "home-app.js"
 
 pytestmark = requires_node
 
@@ -68,17 +68,17 @@ def _run_mappa(script: str) -> None:
     risponde quando il caso lo lascia: l'import vero non si puo' fare da qui."""
     src = APP_JS.read_text(encoding="utf-8")
     metodo = member(src, "_drawMap", prefixes=("async ",))
-    assert "import('./casa-map.js')" in metodo
-    metodo = metodo.replace("import('./casa-map.js')", "caricaMappa()")
+    assert "import('./home-map.js')" in metodo
+    metodo = metodo.replace("import('./home-map.js')", "caricaMappa()")
     harness = (
         "import assert from 'node:assert/strict';\n"
         "let nate = 0, disegni = 0, lascia = null, rotto = false;\n"
-        "class CasaMap {\n"
+        "class HomeMap {\n"
         "  constructor() { nate += 1; }\n"
         "  async draw() { disegni += 1; }\n"
         "}\n"
         "function caricaMappa() {\n"
-        "  return new Promise((r, no) => { lascia = () => (rotto ? no(new Error('rete')) : r({ CasaMap })); });\n"
+        "  return new Promise((r, no) => { lascia = () => (rotto ? no(new Error('rete')) : r({ HomeMap })); });\n"
         "}\n"
         "class App {\n  constructor() { this.map = null; }\n  openPage() {}\n  "
         + metodo
@@ -88,7 +88,7 @@ def _run_mappa(script: str) -> None:
 
 
 def test_two_taps_before_the_module_arrives_make_one_map() -> None:
-    """Due `CasaMap` sullo stesso SVG sono due simulazioni che si contendono
+    """Due `HomeMap` sullo stesso SVG sono due simulazioni che si contendono
     i nodi: il secondo tocco arrivato prima del modulo ne faceva nascere
     un'altra."""
     _run_mappa("""
@@ -99,7 +99,7 @@ def test_two_taps_before_the_module_arrives_make_one_map() -> None:
       await Promise.all([a, b]);
       assert.equal(nate, 1, 'due mappe per due tocchi');
       assert.equal(disegni, 2);
-      assert.ok(app.map instanceof CasaMap);
+      assert.ok(app.map instanceof HomeMap);
     """)
 
 

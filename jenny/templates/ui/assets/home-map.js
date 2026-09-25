@@ -150,7 +150,7 @@ export function radiusOf(degree) {
  *
  *  `index` resta quello del server anche qui: e' la terza resa della stessa
  *  risposta, e la maschera della ricerca si legge con quel numero e non con la
- *  posizione in questo array (v. il cappello di `casa-pages.js`).
+ *  posizione in questo array (v. il cappello di `home-notebook-pages.js`).
  */
 export function toSimulation(data) {
   const nodes = (data?.nodes || []).map((node, index) => ({
@@ -280,9 +280,9 @@ export function placeLabels(items) {
   return scelti;
 }
 
-export class CasaMap {
+export class HomeMap {
   constructor({ onOpenPage } = {}) {
-    this.el = document.getElementById('casa-map');
+    this.el = document.getElementById('home-map');
     this.svgEl = document.getElementById('casa-map-svg');
     this.noteEl = document.getElementById('casa-map-note');
     this._onOpenPage = onOpenPage;

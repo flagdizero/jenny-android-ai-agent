@@ -26,9 +26,9 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-APP_JS = ASSETS / "casa-app.js"
+APP_JS = ASSETS / "home-app.js"
 CREATE_JS = ASSETS / "shared" / "project-create.js"
-WHO_JS = ASSETS / "casa-who.js"
+WHO_JS = ASSETS / "home-who.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -74,7 +74,7 @@ function makeEl(tag) {
 /* La lente ingrandita, quando c'è. */
 let lightbox = null;
 /* Un elemento per id, **lo stesso** a ogni domanda: il titolo della tendina
-   (`#casa-who`) si spegne con `disabled`, e un finto che ne dava uno nuovo
+   (`#home-who`) si spegne con `disabled`, e un finto che ne dava uno nuovo
    ogni volta non poteva dire se l'avevano spento. */
 const perId = new Map();
 const document = {
@@ -1035,7 +1035,7 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
     """Titolo, Home, Indietro, un avviso: passano **tutti** dalla regola delle pagine.
 
     Una pagina quaderno mostra solo il suo quaderno, e a deciderlo e'
-    `CasaPagine.apriConversazione`. Un guscio che cambiasse la chat per conto
+    `HomePages.apriConversazione`. Un guscio che cambiasse la chat per conto
     suo lascerebbe la personale dentro la pagina di «piante». E la personale si
     chiede con la sua chiave, non con `null`: le pagine confrontano chiavi.
 

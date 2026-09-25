@@ -57,12 +57,12 @@ export function jennyValue({ visible, size, floating }) {
   return parti.join(' · ').toLowerCase();
 }
 
-export class CasaJenny {
+export class HomeJenny {
   /** @param onChange  la riga di «Tu e Jenny» si riscrive da se'.
    *  @param onFloating  com'e' finita la finestra flottante dopo un tocco: la
-   *    casa ne tiene una copia (v. `CasaApp._keepFloating`).
+   *    casa ne tiene una copia (v. `HomeApp._keepFloating`).
    *  @param onName  il nome appena salvato: la casa lo scrive nella fila e nei
-   *    Quaderni, e nella sua copia delle impostazioni (v. `CasaApp._keepName`). */
+   *    Quaderni, e nella sua copia delle impostazioni (v. `HomeApp._keepName`). */
   constructor({ onChange, onFloating, onName } = {}) {
     this.el = document.getElementById('casa-jenny-room');
     this.visibleBtn = document.getElementById('casa-jenny-visible');

@@ -18,7 +18,7 @@ quaderno mentre ``/api/graph`` e' ancora in volo, e su una wiki grossa quella
 risposta non torna in un frame.
 
 I membri si ritagliano dal sorgente e girano in node su un DOM finto, come gli
-altri banchi della casa: ``casa-pages.js`` importa ``api``, ``i18n`` e
+altri banchi della casa: ``home-notebook-pages.js`` importa ``api``, ``i18n`` e
 l'indice, e importarlo davvero vorrebbe dire montare mezzo guscio per provare
 l'ordine di un elenco.
 """
@@ -33,7 +33,7 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-PAGES_JS = ASSETS / "casa-pages.js"
+PAGES_JS = ASSETS / "home-notebook-pages.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -137,13 +137,13 @@ __GROUPS_MEANINGFUL__
 
 class Pages {
   constructor() {
-    this.el = document.getElementById('casa-pages');
+    this.el = document.getElementById('home-notebook-pages');
     this.listEl = document.getElementById('casa-page-list');
     this.noteEl = document.getElementById('casa-pages-note');
     this.queryEl = document.getElementById('casa-pages-q');
     this.tabListEl = document.getElementById('casa-tab-list');
     this.tabMapEl = document.getElementById('casa-tab-map');
-    this.mapEl = document.getElementById('casa-map');
+    this.mapEl = document.getElementById('home-map');
     this.notebook = null;
     this.data = null;
     this.rows = [];

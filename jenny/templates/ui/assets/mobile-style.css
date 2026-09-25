@@ -5772,7 +5772,7 @@ body {
      mano li farebbe diventare due.
      **Questa e' anche la Jenny della casa** (shared/jenny-mascot.js, lo stesso
      sprite), che carica questo foglio: la' si cambia solo il pavimento — il
-     `bottom` qui sotto — in `.casa-shell .jenny-duo` di casa-style.css.
+     `bottom` qui sotto — in `.casa-shell .jenny-duo` di home-style.css.
      **Il livello e' uno per le due interfacce** (D3, 25/09/2026: «Jenny sempre
      sopra»): 120 sta sopra la mini-app (110) e la lightbox (115), e sopra di
      lei ci sono solo la sua minichat (121) e il top layer (`<dialog>`, toast),

@@ -17,9 +17,9 @@ from support.js_harness import member
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
-WHO_JS = UI / "assets" / "casa-who.js"
-APP_JS = UI / "assets" / "casa-app.js"
-CSS = UI / "assets" / "casa-style.css"
+WHO_JS = UI / "assets" / "home-who.js"
+APP_JS = UI / "assets" / "home-app.js"
+CSS = UI / "assets" / "home-style.css"
 I18N = UI / "assets" / "i18n"
 
 
@@ -65,12 +65,12 @@ def test_the_old_dropdown_left_nothing_behind() -> None:
     """Un titolo che apre una tendina che non c'e' e' una porta disegnata sul
     muro; un `<dialog>` che nessuno apre e' codice che chi legge crede vivo."""
     html = INDEX.read_text(encoding="utf-8")
-    assert 'id="casa-who"' not in html, "il titolo e' tornato un comando"
+    assert 'id="home-who"' not in html, "il titolo e' tornato un comando"
     assert not re.search(r"<h1>\s*<button", html), "c'e' di nuovo un bottone nel titolo"
     src = WHO_JS.read_text(encoding="utf-8")
     for resto in ("showModal", "createElement('dialog')", "::backdrop", "aria-expanded"):
         assert resto not in src, f"{resto}: il pannello e' ancora una tendina"
-    assert ".casa-who::backdrop" not in CSS.read_text(encoding="utf-8")
+    assert ".home-who::backdrop" not in CSS.read_text(encoding="utf-8")
 
 
 # ── Le vie d'uscita ─────────────────────────────────────────────────────────

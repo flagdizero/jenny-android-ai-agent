@@ -5,7 +5,7 @@ Apri · Metti come pagina · Rinomina · Elimina — le stesse righe, nello stes
 ordine, della scheda di un'app nel cassetto. **Una cosa si appende dal posto
 dove vive** (`.agent/pagine-dal-posto-plan.md`).
 
-`casa-quaderno.js` si importa vero, coi suoi vicini finti; `apps-actions.js`
+`home-notebook.js` si importa vero, coi suoi vicini finti; `apps-actions.js`
 invece e' vero anche lui, perche' la riga la disegna la sua `disegnaRiga` — la
 scheda e' la stessa cosa a vedersi, e una seconda copia del disegno
 divergerebbe al primo ritocco.
@@ -85,7 +85,7 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
         + _FINTO_DOM
         + textwrap.dedent(
             f"""
-            const {{ SchedaQuaderno }} = await import('./casa-quaderno.js');
+            const {{ NotebookCard }} = await import('./home-notebook.js');
             const chiamate = [];
             const PORTA = {porta};
             const guscio = {{
@@ -94,7 +94,7 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
               elimina: (n) => chiamate.push(['elimina', n]),
             }};
             if ({json.dumps(rinomina)}) guscio.rinomina = (n) => chiamate.push(['rinomina', n]);
-            const scheda = new SchedaQuaderno(guscio);
+            const scheda = new NotebookCard(guscio);
             """
         )
         + corpo
@@ -102,7 +102,7 @@ def _run(corpo: str, *, stato: str | None = "libera", rinomina: bool = False) ->
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         (radice / "shared").mkdir()
-        shutil.copy(ASSETS / "casa-quaderno.js", radice / "casa-quaderno.js")
+        shutil.copy(ASSETS / "home-notebook.js", radice / "home-notebook.js")
         shutil.copy(ASSETS / "shared" / "apps-actions.js", radice / "shared" / "apps-actions.js")
         for nome, testo in _VICINI.items():
             (radice / "shared" / nome).write_text(testo, encoding="utf-8")
@@ -189,7 +189,7 @@ def _member(source: str, name: str) -> str:
 
 
 def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
-    metodo = _member((ASSETS / "casa-app.js").read_text(encoding="utf-8"), "deleteNotebook")
+    metodo = _member((ASSETS / "home-app.js").read_text(encoding="utf-8"), "deleteNotebook")
     script = textwrap.dedent(
         f"""
         import assert from 'node:assert/strict';
@@ -271,7 +271,7 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     """La scheda sta nel top layer, **sopra** la pagina Quaderni da cui si
     apre: Indietro chiude prima lei, e solo alla pressione dopo lascia la
     pagina."""
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     catena = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
     fogli = re.search(r"(?m)^const FOGLI_PRESSIONE_LUNGA = \[(.*)\];$", app_js)
     assert fogli and "'casa-quaderno-sheet'" in fogli.group(1)
@@ -284,7 +284,7 @@ def test_the_sheet_is_in_the_page_and_shipped() -> None:
                 "casa-quaderno-sheet-actions", "casa-quaderno-sheet-cancel"):
         assert f'id="{id_}"' in html, id_
     manifest = (ROOT / "jenny" / "utils" / "android_assets.py").read_text(encoding="utf-8")
-    assert '"assets/casa-quaderno.js"' in manifest
+    assert '"assets/home-notebook.js"' in manifest
 
 
 def test_the_workshop_still_asks_about_a_project() -> None:
@@ -304,7 +304,7 @@ def test_the_workshop_still_asks_about_a_project() -> None:
 def _run_rinomina(
     corpo: str, *, scritto: str | None, corrente: str | None, rifiuta: bool | str = False,
 ) -> None:
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     metodo = _member(app_js, "renameNotebook")
     bozza = _member(app_js, "_rinominaBozza")
     script = textwrap.dedent(
@@ -465,6 +465,6 @@ def test_the_refusal_keys_exist_in_both_languages() -> None:
 
 def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:
     """La riga «Rinomina» c'e' solo se il guscio sa rinominare: adesso sa."""
-    app_js = (ASSETS / "casa-app.js").read_text(encoding="utf-8")
+    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     scheda = app_js.split("schedaQuaderno() {", 1)[1].split("\n  }\n", 1)[0]
     assert "rinomina: (nome) => this.renameNotebook(nome)" in scheda

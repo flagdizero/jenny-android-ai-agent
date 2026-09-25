@@ -1,9 +1,9 @@
 """I livelli (`z-index`) dei fogli della WebUI, letti come li legge il browser.
 
 Serve ai banchi di «Jenny sempre sopra» (D3, 25/09/2026): la casa carica
-**due** fogli, `mobile-style.css` e `casa-style.css`, e un livello che la copre
+**due** fogli, `mobile-style.css` e `home-style.css`, e un livello che la copre
 puo' arrivare da tutti e due. Il banco di prima contava i `z-index` di
-`casa-style.css` soltanto, e intanto mini-app e lightbox — regole
+`home-style.css` soltanto, e intanto mini-app e lightbox — regole
 dell'officina, costruite dal JS condiviso — le passavano davanti.
 
 - :func:`rules`: le regole di un foglio, con le at-rule che le contengono;
@@ -13,7 +13,7 @@ dell'officina, costruite dal JS condiviso — le passavano davanti.
 - :func:`key_names`: classi e id dell'ultimo composto di un selettore, cioe'
   quelli che l'elemento colpito deve portare addosso.
 - :func:`casa_vocabulary`: ogni parola che puo' finire nel DOM della casa —
-  `index.html` piu' i moduli che `casa-app.js` importa, per chiusura. E' una
+  `index.html` piu' i moduli che `home-app.js` importa, per chiusura. E' una
   stima **per eccesso** (conta anche le parole che non sono classi), che e' il
   lato sicuro: una regola in piu' da controllare, mai una in meno.
 """
@@ -97,7 +97,7 @@ def _closure(entry: Path) -> set[Path]:
 
 def casa_vocabulary() -> set[str]:
     """Le parole che il DOM della casa puo' contenere (stima per eccesso)."""
-    moduli = _closure(ASSETS / "casa-app.js")
+    moduli = _closure(ASSETS / "home-app.js")
     assert len(moduli) > 20, f"la chiusura degli import della casa non morde piu' ({len(moduli)})"
     testo = (UI / "index.html").read_text(encoding="utf-8")
     testo += "".join(p.read_text(encoding="utf-8") for p in moduli)

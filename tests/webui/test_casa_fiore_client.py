@@ -1,7 +1,7 @@
 """Il fiore della riga di lavoro: si muove, ma sempre nel piano.
 
 La richiesta era esplicita: nessun movimento che sembri profondita'. Due cose
-lo fanno sembrare, e sono le due che qui si misurano (v. `casa-fiore.js`):
+lo fanno sembrare, e sono le due che qui si misurano (v. `home-flower.js`):
 un petalo schiacciato su un asse, che e' un ribaltamento, e grandezza o spinta
 sfasate da un petalo all'altro, che fanno leggere il fiore come un disco
 inclinato. La seconda e' la piu' facile da reintrodurre ritoccando una posa —
@@ -49,12 +49,12 @@ globalThis.document = {
 def _run(corpo: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
-        shutil.copy(ASSETS / "casa-fiore.js", radice / "casa-fiore.js")
+        shutil.copy(ASSETS / "home-flower.js", radice / "home-flower.js")
         entry = radice / "prova.mjs"
         entry.write_text(
             "import assert from 'node:assert/strict';\n"
             + _DOM
-            + "const { POSE, Fiore } = await import('./casa-fiore.js');\n"
+            + "const { POSE, Flower } = await import('./home-flower.js');\n"
             + textwrap.dedent(corpo),
             encoding="utf-8",
         )
@@ -104,7 +104,7 @@ def test_nessun_petalo_si_schiaccia_su_un_asse() -> None:
           }
         }
         // Nel disegno: ogni scale() scritto sui nodi ha un argomento solo.
-        const f = new Fiore(document.createElementNS('', 'svg'), { reducedMotion: true });
+        const f = new Flower(document.createElementNS('', 'svg'), { reducedMotion: true });
         for (const nome of Object.keys(POSE)) f.setMode(nome);
         const trasformazioni = creati.map((n) => n.attrs.transform).filter(Boolean);
         assert.ok(trasformazioni.length > 5);
@@ -122,7 +122,7 @@ def test_movimento_ridotto_non_avvia_animazioni() -> None:
     # Senza requestAnimationFrame nel finto, un ciclo avviato qui esploderebbe.
     _run(
         """
-        const f = new Fiore(document.createElementNS('', 'svg'), { reducedMotion: true });
+        const f = new Flower(document.createElementNS('', 'svg'), { reducedMotion: true });
         f.setMode('search');
         f.start();
         assert.equal(f._raf, null);
@@ -134,13 +134,13 @@ def test_movimento_ridotto_non_avvia_animazioni() -> None:
 def test_ogni_famiglia_della_riga_ha_una_posa() -> None:
     """Una famiglia nuova in `FAMILY_BY_TOOL` senza posa cadrebbe su `busy` in
     silenzio: il fiore direbbe «mi do da fare» mentre la parola dice altro."""
-    sorgente = (ASSETS / "casa-activity.js").read_text(encoding="utf-8")
+    sorgente = (ASSETS / "home-activity.js").read_text(encoding="utf-8")
     tabella = sorgente.split("const FAMILY_BY_TOOL = {", 1)[1].split("};", 1)[0]
     famiglie = set(re.findall(r":\s*'([a-z]+)'", tabella)) | {"think", "busy"}
     pose = set(
         re.findall(
             r"^  ([a-z]+): \{$",
-            (ASSETS / "casa-fiore.js").read_text(encoding="utf-8"),
+            (ASSETS / "home-flower.js").read_text(encoding="utf-8"),
             re.MULTILINE,
         )
     )

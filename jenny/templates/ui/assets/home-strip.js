@@ -12,19 +12,19 @@
  *  tolgono. Indietro esce senza salvare.
  *
  *  Il modulo non sa dove si salvi niente: legge le voci dalla pista
- *  (`CasaPagine.voci`) e le rimanda indietro intere.
+ *  (`HomePages.voci`) e le rimanda indietro intere.
  */
 
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
-import { dotColor } from './casa-who.js';
+import { dotColor } from './home-who.js';
 
 /** Quanto spazio lasciare accanto al nome acceso quando la fila lo riporta in
  *  vista: a filo del bordo sembrerebbe tagliato anche quando non lo e'. */
 const MARGINE_IN_VISTA = 24;
 
-export class CasaFila {
-  /** @param el        il contenitore (`#casa-fila`)
+export class HomeStrip {
+  /** @param el        il contenitore (`#home-strip`)
    *  @param pagine    la pista: `voci`, `indice`, `vaiA`, `salva`, `pages`
    *  @param nomeChat  `() => ({nome, colore})`: la pagina chat si chiama come
    *                   la conversazione che mostra — «Jenny», o il quaderno

@@ -12,7 +12,7 @@ diverso di far sparire del lavoro senza che nessuno se ne accorga:
    fossero la stessa cosa il confronto sarebbe sempre vero e il conflitto non
    scatterebbe mai.
 2. Un errore **non chiude l'editor**: dentro c'e' l'unica copia di quel testo.
-3. La conferma di scarto sta in un posto solo, `casa-app.js::_setView`, che e'
+3. La conferma di scarto sta in un posto solo, `home-app.js::_setView`, che e'
    il collo di bottiglia da cui passano tutte le uscite.
 """
 
@@ -24,8 +24,8 @@ from pathlib import Path
 from support.js_harness import member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-READER_JS = ASSETS / "casa-reader.js"
-APP_JS = ASSETS / "casa-app.js"
+READER_JS = ASSETS / "home-reader.js"
+APP_JS = ASSETS / "home-app.js"
 
 
 pytestmark = requires_node

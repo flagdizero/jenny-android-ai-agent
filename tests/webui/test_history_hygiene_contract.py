@@ -363,7 +363,7 @@ def test_the_model_catalog_moved_to_the_casa_with_its_promise() -> None:
         assert pezzo not in settings, (
             f"«{pezzo}» e' tornato in officina: la scelta del modello e' in casa"
         )
-    casa = (SETTINGS_JS.parent / "casa-model.js").read_text(encoding="utf-8")
+    casa = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
     assert "getProviderModels" in casa and "default_provider" in casa, (
         "la casa non ha piu' il catalogo: toglierlo dall'officina lo toglierebbe "
         "dall'app"

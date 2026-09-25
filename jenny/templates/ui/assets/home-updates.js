@@ -39,7 +39,7 @@ export function updatesMood(version) {
   return version?.update_available ? 'new' : 'ok';
 }
 
-export class CasaUpdates {
+export class HomeUpdates {
   /** @param onVersion  un controllo ha portato una versione fresca: la riga di
    *                    «Tu e Jenny» e la cache del guscio si riscrivono. */
   constructor({ onVersion } = {}) {

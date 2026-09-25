@@ -18,7 +18,7 @@ from pathlib import Path
 
 UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 ASSETS = UI / "assets"
-SHEETS = ("mobile-style.css", "casa-style.css")
+SHEETS = ("mobile-style.css", "home-style.css")
 
 
 def _senza_commenti(testo: str) -> str:

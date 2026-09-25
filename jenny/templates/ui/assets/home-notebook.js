@@ -24,7 +24,7 @@ import { escapeHtml } from './shared/utils.js';
 import { disegnaRiga } from './shared/apps-actions.js';
 import { projectKey } from './shared/conversation-list.js';
 
-export class SchedaQuaderno {
+export class NotebookCard {
   /** @param guscio `{ pagine(), apri(nome), elimina(nome), rinomina?(nome) }`. */
   constructor(guscio) {
     this.guscio = guscio;

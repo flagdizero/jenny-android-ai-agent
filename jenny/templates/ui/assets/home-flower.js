@@ -1,7 +1,7 @@
 /** La casa — il fiore della riga di lavoro.
  *
  *  Il ✿ di Jenny, disegnato in SVG davanti alla parola, che si muove in modo
- *  diverso per ogni famiglia di strumenti (v. `casa-activity.js`). Quando la
+ *  diverso per ogni famiglia di strumenti (v. `home-activity.js`). Quando la
  *  famiglia cambia, il fiore si chiude e si riapre: un cambio vero si vede anche
  *  con la coda dell'occhio.
  *
@@ -112,7 +112,7 @@ function nodo(tag, attrs, parent) {
   return n;
 }
 
-export class Fiore {
+export class Flower {
   constructor(svg, { reducedMotion = false } = {}) {
     this.svg = svg;
     this.reduced = reducedMotion;

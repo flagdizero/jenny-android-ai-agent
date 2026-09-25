@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from support import css_levels
 
-SHEETS = ("mobile-style.css", "casa-style.css")
+SHEETS = ("mobile-style.css", "home-style.css")
 
 
 def _rules():
@@ -53,7 +53,7 @@ def test_reduced_motion_stops_every_press_from_shrinking() -> None:
 
 def test_the_block_that_stops_them_comes_after_every_press() -> None:
     """A pari specificita' vince chi viene dopo: il blocco deve seguire ogni
-    regola che rimpicciolisce, e casa-style.css (caricato dopo) non ne ha."""
+    regola che rimpicciolisce, e home-style.css (caricato dopo) non ne ha."""
     css = (css_levels.ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     regole = css_levels.rules(css)
     ultimo_scale = max(
@@ -67,7 +67,7 @@ def test_the_block_that_stops_them_comes_after_every_press() -> None:
         and any("prefers-reduced-motion: reduce" in at for at in ctx)
     )
     assert blocco > ultimo_scale, "il blocco del movimento ridotto non e' piu' in fondo"
-    casa = (css_levels.ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    casa = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert not [
         sel for sel, corpo, _ in css_levels.rules(casa) if ":active" in sel and "scale(" in corpo
-    ], "casa-style.css rimpicciolisce al tocco: il blocco in mobile-style.css non la copre"
+    ], "home-style.css rimpicciolisce al tocco: il blocco in mobile-style.css non la copre"

@@ -30,7 +30,7 @@ from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-JENNY_JS = ASSETS / "casa-jenny.js"
+JENNY_JS = ASSETS / "home-jenny.js"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -149,7 +149,7 @@ __SIZE_LIST__
 __SIZE_KEYS__
 __RULES_PATH__
 
-class CasaJenny {
+class HomeJenny {
   __CTOR__
   __OPEN__
   __SET_NAME__
@@ -195,7 +195,7 @@ function room(floating, disco, rotta) {
   cambi = 0;
   flottanti.length = 0;
   nomiDetti.length = 0;
-  const lei = new CasaJenny({
+  const lei = new HomeJenny({
     onChange: () => { cambi += 1; },
     onFloating: (f) => { flottanti.push(f); },
     onName: (n) => { nomiDetti.push(n); },

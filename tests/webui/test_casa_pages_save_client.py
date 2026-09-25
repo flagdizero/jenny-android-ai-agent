@@ -2,7 +2,7 @@
 
 D4 della revisione profonda: ``api.savePages`` mandava l'elenco nell'indirizzo
 di ``/api/casa/schermate/set`` (il nome di allora), che scriveva ``config.json``. Ora e' il comando
-RPC ``home.pages.set``; il chiamante (``casa-pagine.js::salva``) deve
+RPC ``home.pages.set``; il chiamante (``home-pages.js::salva``) deve
 ricevere lo stesso ``{ok, pages, order}`` e un errore lanciato se fallisce.
 
 In node sui file veri: ``api-client.js`` e ``rpc-client.js`` si importano davvero,

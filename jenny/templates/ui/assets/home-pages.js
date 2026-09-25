@@ -1,7 +1,7 @@
 /** La casa — la pista delle pagine.
  *
  *  La casa e' un launcher: una fila di pagine che si scorrono, e i loro nomi in
- *  alto (v. `casa-fila.js`). **Quattro ci sono sempre** — il cassetto delle app,
+ *  alto (v. `home-strip.js`). **Quattro ci sono sempre** — il cassetto delle app,
  *  la chat, i quaderni, le impostazioni — e accanto ci sono quelle che l'utente
  *  ha aggiunto. **Tutte si spostano**, la chat compresa: dal 23/09/2026 la chat
  *  non e' piu' la pagina 0, e nessun indice qui dentro vuol dire «la chat» da
@@ -69,7 +69,7 @@ export function normalizeOrder(order, pages, fixed = FIXED_PAGES) {
 }
 
 
-export class CasaPagine {
+export class HomePages {
   /** @param app  il guscio, per le guardie che solo lui conosce. */
   constructor(app) {
     this.app = app;

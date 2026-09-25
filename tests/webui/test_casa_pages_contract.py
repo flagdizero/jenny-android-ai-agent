@@ -20,9 +20,9 @@ UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
 OFFICINA = UI / "officina.html"
 ASSETS = UI / "assets"
-APP_JS = ASSETS / "casa-app.js"
-MAP_JS = ASSETS / "casa-map.js"
-CSS = ASSETS / "casa-style.css"
+APP_JS = ASSETS / "home-app.js"
+MAP_JS = ASSETS / "home-map.js"
+CSS = ASSETS / "home-style.css"
 I18N = ASSETS / "i18n"
 
 
@@ -33,7 +33,7 @@ def test_the_shell_says_which_room_is_on_from_the_first_frame() -> None:
     """L'attributo e' scritto anche nell'HTML, non solo dal JS.
 
     Senza, il primo frame mostra le tre stanze impilate — la conversazione, le
-    pagine e il lettore uno sotto l'altro — finche' `casa-app.js` non e' stato
+    pagine e il lettore uno sotto l'altro — finche' `home-app.js` non e' stato
     valutato. Non e' un lampo teorico: e' il motivo per cui le sezioni non
     hanno piu' `hidden`, che quel ruolo lo copriva a meta'.
     """
@@ -99,11 +99,11 @@ def test_d3_arrives_with_the_map_and_not_with_the_house() -> None:
     `import` statico li farebbe pagare a chiunque apra la chat.
     """
     app = APP_JS.read_text(encoding="utf-8")
-    assert "import('./casa-map.js')" in app, (
+    assert "import('./home-map.js')" in app, (
         "la mappa non si carica piu' su richiesta"
     )
-    assert not re.search(r"(?m)^import .*casa-map\.js", app), (
-        "casa-map.js e' tornato un import statico: D3 lo paga tutta la casa"
+    assert not re.search(r"(?m)^import .*home-map\.js", app), (
+        "home-map.js e' tornato un import statico: D3 lo paga tutta la casa"
     )
     html = INDEX.read_text(encoding="utf-8")
     assert "d3" not in html, "il guscio della casa si e' preso D3 nel <head>"
@@ -114,7 +114,7 @@ def test_every_new_asset_is_in_the_manifest() -> None:
     """Un percorso giusto ma fuori manifest non arriva sul telefono: il
     gateway ricade sulla copia su disco, che su Android e' un mirror e non e'
     autoritativa. Il difetto si vede solo sul dispositivo."""
-    for name in ("casa-pages.js", "casa-reader.js", "casa-map.js"):
+    for name in ("home-notebook-pages.js", "home-reader.js", "home-map.js"):
         rel = f"assets/{name}"
         assert (ASSETS / name).is_file(), f"{name} non esiste"
         assert rel in _UI_MANIFEST, f"{rel} non e' nel manifest"
@@ -139,11 +139,11 @@ def test_the_rooms_have_a_head_and_the_conversation_has_the_row() -> None:
     porterebbe a cambiare pagina da dentro una stanza."""
     css = CSS.read_text(encoding="utf-8")
     assert (
-        ".casa-shell:not([data-view='chat']) .casa-fila,\n"
+        ".casa-shell:not([data-view='chat']) .home-strip,\n"
         ".casa-shell[data-view='chat'] .casa-head { display: none; }"
     ) in css
     html = INDEX.read_text(encoding="utf-8")
-    assert html.index('id="casa-fila"') < html.index('class="casa-head"') < html.index('class="casa-vetrina"')
+    assert html.index('id="home-strip"') < html.index('class="casa-head"') < html.index('class="casa-vetrina"')
 
 
 # ── Le parole ───────────────────────────────────────────────────────────────
@@ -184,9 +184,9 @@ def test_the_groups_are_the_three_the_server_actually_sends() -> None:
 
     assert "summaries" in WIKI_PAGES_SKIP_DIRS, (
         "la regola e' cambiata: allora i gruppi diventano quattro e questo "
-        "banco va aggiornato insieme a GROUPS in casa-pages.js"
+        "banco va aggiornato insieme a GROUPS in home-notebook-pages.js"
     )
-    src = (ASSETS / "casa-pages.js").read_text(encoding="utf-8")
+    src = (ASSETS / "home-notebook-pages.js").read_text(encoding="utf-8")
     m = re.search(r"export const GROUPS = \[(.*?)\];", src)
     assert m and "summaries" not in m.group(1), (
         "la casa elenca un gruppo che il server non le manda"
@@ -198,7 +198,7 @@ def test_the_groups_are_the_three_the_server_actually_sends() -> None:
 def test_the_search_box_borrows_the_words_the_workshop_already_has() -> None:
     """«Cerca nelle pagine…» esiste gia' ed e', parola per parola, quel che la
     tavola scrive nel campo."""
-    src = (ASSETS / "casa-pages.js").read_text(encoding="utf-8")
+    src = (ASSETS / "home-notebook-pages.js").read_text(encoding="utf-8")
     assert "'graph.searchPlaceholder'" in src
     for key in ("graph.entities", "graph.concepts", "graph.other"):
         assert f"'{key}'" in src, f"{key} non e' piu' quella dell'officina"
@@ -207,7 +207,7 @@ def test_the_search_box_borrows_the_words_the_workshop_already_has() -> None:
 def test_no_sentence_is_hardcoded_in_the_rooms() -> None:
     """La regola di AGENTS.md non ha eccezioni, e questo e' codice nuovo: un
     `textContent` puo' ricevere solo una traduzione o un dato."""
-    for name in ("casa-pages.js", "casa-reader.js", "casa-map.js"):
+    for name in ("home-notebook-pages.js", "home-reader.js", "home-map.js"):
         for line in (ASSETS / name).read_text(encoding="utf-8").splitlines():
             m = re.search(r"\.textContent\s*=\s*(.+);", line)
             if not m:
@@ -281,7 +281,7 @@ def test_the_three_group_dots_are_telling_apart_in_every_theme() -> None:
     un tema nuovo con un accento verde non deve poter spegnere questa
     distinzione in silenzio.
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     usati = dict(
         re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
     )
@@ -310,7 +310,7 @@ def test_the_three_group_dots_are_telling_apart_in_every_theme() -> None:
 def test_the_map_paints_its_nodes_with_the_same_three() -> None:
     """Elenco e mappa sono due rese della stessa risposta: un pallino verde
     deve voler dire la stessa cosa in tutte e due."""
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     elenco = dict(
         re.findall(r"\.casa-group-(\w+) \{ background: var\(--([a-z-]+)\); \}", css)
     )
@@ -327,7 +327,7 @@ def test_a_node_of_an_unforeseen_group_is_still_painted() -> None:
     `casa-group-<quel che arriva>`, e senza un `fill` di ripiego SVG lo
     dipinge nero — invisibile nel tema scuro (revisione del 25/09/2026, M20).
     """
-    css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     ripiego = re.search(r"\n\.casa-map-node \{([^}]*)\}", css)
     assert ripiego, "regola .casa-map-node non trovata"
     altri = re.search(r"\.casa-map-nodes \.casa-group-other \{ fill: (var\(--[a-z-]+\)); \}", css)
@@ -405,7 +405,7 @@ def test_the_names_are_placed_once_the_physics_stops() -> None:
     assesta, e una misura di testo per etichetta per frame. Lo zoom non lo rifa
     perche' non serve: ingrandire e' una trasformazione del gruppo, e due
     riquadri che non si toccavano non cominciano a toccarsi."""
-    src = (ASSETS / "casa-map.js").read_text(encoding="utf-8")
+    src = (ASSETS / "home-map.js").read_text(encoding="utf-8")
     fine = re.search(r"this\._sim\.on\('end', \(\) => \{(.*?)\n    \}\);", src, re.S)
     assert fine, "la simulazione non ha piu' un gestore di fine"
     assert "_placeLabels" in fine.group(1), (
@@ -426,7 +426,7 @@ def test_the_physics_stops_in_a_few_seconds_and_not_in_ten() -> None:
     con 31 nodi. Misurato con due scatti — a 5 s le etichette erano accavallate,
     a 16 s a posto.
     """
-    src = (ASSETS / "casa-map.js").read_text(encoding="utf-8")
+    src = (ASSETS / "home-map.js").read_text(encoding="utf-8")
     m = re.search(r"\.alphaDecay\(([\d.]+)\)", src)
     assert m, "la simulazione e' tornata al tempo di assestamento di serie"
     assert float(m.group(1)) >= 0.04, (

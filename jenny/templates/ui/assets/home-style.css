@@ -46,7 +46,7 @@ body.casa {
    l'occhiello che c'era sopra. Costa **una** riga di intestazione, dove prima
    ce n'erano due in alto e una striscia in basso. */
 
-.casa-fila {
+.home-strip {
   flex: none;
   padding: 10px 18px 6px;
   /* Nomi da toccare e da tenere premuti, niente testo da selezionare. Senza,
@@ -59,7 +59,7 @@ body.casa {
 
 /* La fila e' della conversazione e delle sue pagine di lato; le stanze hanno
    l'intestazione loro, con la via del ritorno. Mai tutte e due. */
-.casa-shell:not([data-view='chat']) .casa-fila,
+.casa-shell:not([data-view='chat']) .home-strip,
 .casa-shell[data-view='chat'] .casa-head { display: none; }
 
 .casa-fila-nomi {
@@ -151,7 +151,7 @@ body.casa {
    si trascinano, e la pagina sotto si spegne. Quello che conta qui e' dove va
    il dito, e la conversazione non deve contenderglielo. */
 
-.casa-fila.is-ordina {
+.home-strip.is-ordina {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -336,7 +336,7 @@ body.casa {
    Ogni movimento qui resta nel piano — lettere che salgono, puntini che
    saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
    sembrare arrivare da lontano. */
-.casa-activity {
+.home-activity {
   flex: none;
   display: flex;
   align-items: center;
@@ -352,7 +352,7 @@ body.casa {
   -webkit-touch-callout: none;
 }
 
-.casa-activity[hidden] { display: none; }
+.home-activity[hidden] { display: none; }
 
 .casa-activity-fiore {
   flex: none;
@@ -419,7 +419,7 @@ body.casa {
   .casa-lettera,
   .casa-puntino,
   .casa-parola.esce { animation: none; }
-  .casa-activity { transition: none; }
+  .home-activity { transition: none; }
 }
 
 /* ── Lo stato del filo ── */
@@ -1092,8 +1092,8 @@ body.casa {
    L'attributo e' scritto anche nell'HTML, non solo dal JS: senza, il primo
    frame mostrerebbe tutte e tre le stanze impilate. */
 
-.casa-pages,
-.casa-reader,
+.home-notebook-pages,
+.home-reader,
 .casa-jenny-room,
 .casa-model-room,
 .casa-updates-room,
@@ -1104,8 +1104,8 @@ body.casa {
   flex-direction: column;
 }
 
-.casa-shell[data-view='pages'] .casa-pages,
-.casa-shell[data-view='reader'] .casa-reader,
+.casa-shell[data-view='pages'] .home-notebook-pages,
+.casa-shell[data-view='reader'] .home-reader,
 .casa-shell[data-view='jenny'] .casa-jenny-room,
 .casa-shell[data-view='model'] .casa-model-room,
 .casa-shell[data-view='updates'] .casa-updates-room,
@@ -1185,9 +1185,9 @@ body.casa {
 }
 
 /* La chat vera: un involucro solo, cosi' si sposta intera nella pagina di un
-   quaderno (v. `casa-trasloco.js`). Prende il flusso che prima aveva il
+   quaderno (v. `home-move.js`). Prende il flusso che prima aveva il
    pannello, e il `relative` che ancora `.casa-empty`. */
-.casa-chat {
+.home-chat {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1200,7 +1200,7 @@ body.casa {
    Niente `z-index` — questo foglio non ne dichiara: la foto e'
    sempre l'ultimo figlio posizionato del pannello, e dentro la chat non c'e'
    niente che ne porti uno, quindi si dipinge sopra da se'. */
-.casa-chat.casa-foto {
+.home-chat.casa-foto {
   position: absolute;
   inset: 0;
 }
@@ -1450,7 +1450,7 @@ body.casa {
   font-size: 11px;
 }
 
-/* I tre colori dei gruppi. Tre e non quattro: v. `GROUPS` in casa-pages.js —
+/* I tre colori dei gruppi. Tre e non quattro: v. `GROUPS` in home-notebook-pages.js —
    `summaries/` da `/api/graph` non esce.
 
    **Non sono gli stessi tre della legenda del grafo, e la ragione e' misurata.**
@@ -1485,7 +1485,7 @@ body.casa {
 
 /* ── La mappa ── */
 
-.casa-map {
+.home-map {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1493,7 +1493,7 @@ body.casa {
   margin: 0 12px 8px;
 }
 
-.casa-map[hidden] { display: none; }
+.home-map[hidden] { display: none; }
 
 .casa-map-svg {
   flex: 1;
@@ -1510,7 +1510,7 @@ body.casa {
 /* Il raggio lo scrive il JS (dice quanti collegamenti ha la pagina); il colore
    lo scrive il gruppo, con le stesse classi dei pallini dell'elenco.
    Il `fill` qui e' il ripiego, lo stesso grigio di `other`: la mappa prende il
-   gruppo cosi' come arriva (`node.group || 'other'` in casa-map.js, senza la
+   gruppo cosi' come arriva (`node.group || 'other'` in home-map.js, senza la
    `sanitizeGroup` dell'elenco), e una cartella che i tre colori non prevedono
    — `sources/`, per dire — restava col nero di default di SVG, invisibile nel
    tema scuro. Le tre regole sotto vincono per specificita'. */
@@ -1614,7 +1614,7 @@ body.casa {
 
 /* Il foglio. `.oc-sheet` lo veste (arriva da mobile-style.css, che anche la
    casa carica); qui c'e' solo quel che dentro ci sta. */
-.casa-audit .casa-audit-inner {
+.home-audit .casa-audit-inner {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1737,7 +1737,7 @@ body.casa {
    Impostazioni, e sta aperta nel suo pannello: niente `data-view` da
    aspettare. */
 
-.casa-tu {
+.home-you {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1844,7 +1844,7 @@ body.casa {
    pagina. */
 
 /* `casa-card` e non `casa-block`: quel nome e' **gia' preso**, ed e' la bolla
-   di un messaggio (`casa-chat.js`, `.casa-msg .casa-block`). Chiamando cosi'
+   di un messaggio (`home-chat.js`, `.casa-msg .casa-block`). Chiamando cosi'
    le schede, le loro regole — sfondo, bordo, e lo `z-index` che allora
    avevano — sono atterrate su ogni riga della conversazione: i messaggi sono diventati
    schede e Jenny e' finita **dietro la chat**. Visto sul telefono, 19/09/2026.
@@ -2218,7 +2218,7 @@ body.casa {
   margin: 0 -14px;
 }
 
-.casa-model {
+.home-model {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2232,9 +2232,9 @@ body.casa {
   cursor: pointer;
 }
 
-.casa-model:active { background: var(--overlay); }
-.casa-model.is-on { color: var(--text); }
-.casa-model.is-on > .ti-check { color: var(--accent); }
+.home-model:active { background: var(--overlay); }
+.home-model.is-on { color: var(--text); }
+.home-model.is-on > .ti-check { color: var(--accent); }
 
 .casa-model-id {
   flex: 1;
@@ -2246,7 +2246,7 @@ body.casa {
   font-size: 12px;
 }
 
-.casa-model > .ti { flex: none; font-size: 16px; }
+.home-model > .ti { flex: none; font-size: 16px; }
 
 /* ── «Aggiornamenti» ─────────────────────────────────────────────────────
    Il pallino dice il **meccanismo**: verde vuol dire «il controllo funziona»,
