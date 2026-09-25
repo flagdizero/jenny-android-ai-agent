@@ -36,24 +36,47 @@ export function nativeUsable(native) {
 
 /** Lo storage appoggiato al ponte nativo, nella forma che `UsageRanking` usa.
  *
- *  Una chiave diversa da `USAGE_KEY` non è roba nostra e non la si inventa: il
- *  ponte ha un cassetto solo. Tornare `null` è la risposta onesta, ed è anche
- *  quella che `UsageRanking._read` già sa gestire.
+ *  **Il ponte risponde in differita.** `getLauncherUsage` sta sulla porta del
+ *  nativo che solo la SPA raggiunge (v. `shared/native-bridge.js`): era
+ *  sincrono finché il ponte lo vedeva anche ogni iframe — cioè finché una
+ *  Jenny App poteva leggere quali app apri e quanto spesso. Ora torna una
+ *  Promise, e questo storage la assorbe:
+ *
+ *  - finché non ha risposto, `getItem` dice `null` e `setItem` non scrive
+ *    niente: `UsageRanking` parte vuoto e conta solo gli incrementi;
+ *  - quando risponde, `ready` si risolve e `UsageRanking` rilegge e **somma**
+ *    gli incrementi al valore vero (`_adoptLoaded`). Scrivere prima avrebbe
+ *    sovrascritto mesi d'uso con i due lanci di questo avvio.
+ *
+ *  Se il ponte non risponde affatto, si resta su `local` (se c'è): male come
+ *  prima, non peggio. Una chiave diversa da `USAGE_KEY` non è roba nostra e
+ *  non la si inventa: `null`, che `UsageRanking._read` già sa gestire.
+ *
+ *  @param {any} native il ponte (`getLauncherUsage`/`setLauncherUsage`)
+ *  @param {Storage|null} [local] il `localStorage`, per la migrazione e il ripiego
  */
-export function nativeStore(native) {
-  return {
+export function nativeStore(native, local = null) {
+  let backend = 'loading';   // 'loading' → 'native' | 'local'
+  let cache = null;
+
+  const store = {
+    ready: null,
     getItem(key) {
       if (key !== USAGE_KEY) return null;
-      try {
-        return native.getLauncherUsage() || null;
-      } catch {
-        return null;
+      if (backend === 'local') {
+        try { return local?.getItem(key) ?? null; } catch { return null; }
       }
+      return cache;
     },
     setItem(key, value) {
-      if (key !== USAGE_KEY) return;
+      if (key !== USAGE_KEY || backend === 'loading') return;
+      if (backend === 'local') {
+        try { local?.setItem(key, String(value)); } catch { /* v. sotto */ }
+        return;
+      }
+      cache = String(value);
       try {
-        native.setLauncherUsage(String(value));
+        Promise.resolve(native.setLauncherUsage(cache)).catch(() => {});
       } catch {
         /* Come in `UsageRanking._write`: meglio un ordine che non si ricorda di
            questo avvio che un lancio fallito. Qui ci si arriva **dopo** che la
@@ -61,6 +84,24 @@ export function nativeStore(native) {
       }
     },
   };
+
+  store.ready = (async () => {
+    const outcome = await migrateUsage(native, local);
+    if (outcome === 'failed') {
+      /* Il ponte c'è ma non risponde. Restare su `localStorage` conserva la
+         funzione — male, come prima, ma non peggio di prima. */
+      backend = 'local';
+      return;
+    }
+    try {
+      cache = (await native.getLauncherUsage()) || null;
+      backend = 'native';
+    } catch {
+      backend = 'local';
+    }
+  })();
+
+  return store;
 }
 
 /** Porta il valore da `localStorage` al ponte, una volta sola.
@@ -75,12 +116,16 @@ export function nativeStore(native) {
  *  da zero — che è quel che faceva comunque a ogni kill, cioè il difetto che
  *  questo modulo chiude.
  *
- *  @returns {'migrated'|'native-has-data'|'nothing-to-move'|'failed'}
+ *  Asincrona perché il ponte lo è. La rilettura dopo la scrittura regge
+ *  perché il nativo esegue i comandi in fila su un thread solo: il `set` è
+ *  partito prima del `get`, quindi il `get` lo vede.
+ *
+ *  @returns {Promise<'migrated'|'native-has-data'|'nothing-to-move'|'failed'>}
  */
-export function migrateUsage(native, local) {
+export async function migrateUsage(native, local) {
   let existing = null;
   try {
-    existing = native.getLauncherUsage() || null;
+    existing = (await native.getLauncherUsage()) || null;
   } catch {
     return 'failed';
   }
@@ -97,8 +142,8 @@ export function migrateUsage(native, local) {
   if (!old) return 'nothing-to-move';
 
   try {
-    native.setLauncherUsage(String(old));
-    if (native.getLauncherUsage() !== String(old)) return 'failed';
+    await native.setLauncherUsage(String(old));
+    if ((await native.getLauncherUsage()) !== String(old)) return 'failed';
   } catch {
     return 'failed';
   }
@@ -125,10 +170,5 @@ export function usageStore(deps = {}) {
     : (typeof window === 'undefined' ? null : window.localStorage);
 
   if (!nativeUsable(native)) return local || null;
-  if (migrateUsage(native, local) === 'failed') {
-    /* Il ponte c'è ma non risponde. Restare su `localStorage` conserva la
-       funzione — male, come prima, ma non peggio di prima. */
-    return local || null;
-  }
-  return nativeStore(native);
+  return nativeStore(native, local);
 }

@@ -563,11 +563,13 @@ export class ChatController {
    *  sul chip non produceva niente — nessun viewer, nessun errore, nessun
    *  segno che fosse successo qualcosa. Con il bridge presente il fallimento è
    *  un errore da dire, non da sostituire con un'apertura che non avverrà. */
-  _openMediaFile(entry) {
+  async _openMediaFile(entry) {
     const bridge = window.JennyNative;
     if (bridge && typeof bridge.openFile === 'function') {
       try {
-        if (entry.path && bridge.openFile(entry.path)) return;
+        // Asincrono: `openFile` sta sulla porta che solo la SPA raggiunge (v.
+        // `shared/native-bridge.js`) e risponde con una Promise.
+        if (entry.path && await bridge.openFile(entry.path)) return;
       } catch (e) {
         console.warn('Native openFile failed:', e);
       }

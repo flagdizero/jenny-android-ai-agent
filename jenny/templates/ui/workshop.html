@@ -8,6 +8,9 @@
      script so it runs before the body renders (avoids FOUC) while allowing a
      script-src 'self' CSP — see M1 in migliorie/webui.md. -->
 <script src="/html-mobile/assets/bootstrap.js"></script>
+<!-- Il ponte col guscio Android, ricomposto in window.JennyNative prima che
+     giri qualunque modulo: v. il commento in testa al file. -->
+<script src="/html-mobile/assets/shared/native-bridge.js"></script>
 
 <!-- Fonts (Inter + Fira Code + per-theme display fonts) -->
 <link href="/html-mobile/assets/vendor/fonts/google-fonts.css" rel="stylesheet">

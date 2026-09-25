@@ -353,7 +353,11 @@ def test_entering_the_chat_view_notifies_the_native_shell() -> None:
     body = activate.group(1)
     assert "JennyNative?.chatOpened?.()" in body
     assert "try {" in body
-    assert '@JavascriptInterface' in _main_activity().split("fun chatOpened")[0][-200:]
+    # Sta sulla porta dei comandi, che solo il frame principale della SPA
+    # raggiunge (v. tests/security/test_native_bridge_origin.py): dall'iframe
+    # di una Jenny App non si cancellano gli avvisi dell'utente.
+    assert '"chatOpened" -> chatOpened()' in _main_activity()
+    assert "'chatOpened'" in (UI_ASSETS / "shared" / "native-bridge.js").read_text("utf-8")
 
 
 def test_a_cold_start_from_the_alert_still_lands_in_chat() -> None:

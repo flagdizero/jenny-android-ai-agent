@@ -881,12 +881,16 @@ export class WorkspaceController {
 
   /** Apre il file col viewer di sistema Android via bridge nativo.
    *  Fallback (bridge assente, es. debug da browser desktop): la vecchia
-   *  schermata con il link di download. */
-  openWithSystemApp(fullPath, name) {
+   *  schermata con il link di download.
+   *
+   *  I tre metodi del ponte qui sono **asincroni**: stanno sulla porta del
+   *  nativo che solo la SPA raggiunge (v. `shared/native-bridge.js`), e la
+   *  risposta torna come Promise. */
+  async openWithSystemApp(fullPath, name) {
     const bridge = window.JennyNative;
     if (bridge && typeof bridge.openFile === 'function') {
       try {
-        if (bridge.openFile(fullPath)) return;
+        if (await bridge.openFile(fullPath)) return;
       } catch (e) { /* bridge rotto: si ripiega sul download */ }
     }
     this._enterEditorView(fullPath, name);
@@ -894,23 +898,23 @@ export class WorkspaceController {
   }
 
   /** Condivide il file con lo share sheet di sistema (bridge nativo). */
-  shareFile(fullPath) {
+  async shareFile(fullPath) {
     const bridge = window.JennyNative;
     if (bridge && typeof bridge.shareFile === 'function') {
       try {
-        if (bridge.shareFile(fullPath)) return;
+        if (await bridge.shareFile(fullPath)) return;
       } catch (e) { /* fall through */ }
     }
     showToast(i18n.t('workspace.actionFailed'), 'error');
   }
 
   /** Copia il file nella cartella Download di sistema (bridge nativo). */
-  saveToDownloads(fullPath) {
+  async saveToDownloads(fullPath) {
     const bridge = window.JennyNative;
     let ok = false;
     if (bridge && typeof bridge.saveToDownloads === 'function') {
       try {
-        ok = bridge.saveToDownloads(fullPath);
+        ok = await bridge.saveToDownloads(fullPath);
       } catch (e) { ok = false; }
     }
     showToast(

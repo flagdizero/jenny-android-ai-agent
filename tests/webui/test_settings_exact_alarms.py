@@ -58,8 +58,11 @@ def test_the_bridge_can_open_the_exact_alarm_permission_screen() -> None:
     source = _kotlin()
 
     index = source.index("fun requestExactAlarmPermission()")
-    # Senza l'annotazione il metodo, per il JS, semplicemente non esiste.
-    assert "@JavascriptInterface" in source[index - 200 : index]
+    # Raggiunto dalla porta dei comandi, non da @JavascriptInterface: apre una
+    # schermata di sistema, e nessun iframe deve poterlo fare. Senza la riga nel
+    # dispatch il metodo, per il JS, semplicemente non esiste.
+    assert '"requestExactAlarmPermission" -> requestExactAlarmPermission()' in source
+    assert "@JavascriptInterface" not in source[index - 200 : index]
     body = source[index : index + 1200]
     assert "ACTION_REQUEST_SCHEDULE_EXACT_ALARM" in body
     # L'azione senza il proprio package apre l'elenco di tutte le app.

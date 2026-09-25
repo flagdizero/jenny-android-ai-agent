@@ -200,6 +200,38 @@ browsing contexts**, so nesting would restore the opaque origin.
 
 **Rule**: Loopback stays blocked in all three policies — it is the phone itself, and the gateway's own API lives there.
 
+## The native bridge answers the SPA, not every frame
+
+The main WebView hosts pages that are not ours: Jenny App frames
+(`sandbox="allow-scripts"`, opaque origin) and the external view (the user's server's HTML,
+through the loopback proxy). `WebView.addJavascriptInterface` injects its object into
+**every** frame regardless of origin — that is documented platform behaviour, not a bug —
+so until Sept 2026 any of those pages could call `JennyNative.saveToDownloads('config.json')`
+(provider API keys copied into the shared Download folder), `restartApp()`, the backup
+export/import, or read the drawer's usage counter. The comment next to the call claimed the
+WebView "only loads the trusted gateway"; the main frame does, its children do not.
+
+The bridge is now two ports (`MainActivity.installNativeBridges`), recomposed into one
+`window.JennyNative` by `assets/shared/native-bridge.js`:
+
+- `JennyNativeInfo` — `addJavascriptInterface`, visible to every frame, and therefore
+  **only harmless reads**: gesture inset, hardware keyboard, battery exemption, manufacturer,
+  the latched "system updated" flag (its comparison was moved out of the getter so that an
+  iframe calling it first cannot consume the OTA warning). Synchronous, because the SPA
+  needs them while its modules are being built.
+- `JennyNativePort` — `WebViewCompat.addWebMessageListener` with the allowed-origin rule
+  `http://127.0.0.1:18790`. Chromium injects it only into frames of that origin (an opaque
+  origin or another loopback port does not match), and `NativeCommandListener` additionally
+  drops anything not from the main frame. Everything that writes, opens something, reads a
+  file or reads user data lives here, behind a closed `dispatch`. It is asynchronous: queries
+  return Promises. Without `WEB_MESSAGE_LISTENER` (WebView < 82) the commands are simply
+  absent — there is no fallback to the open port.
+
+**Rule**: a new native method that writes, launches an activity, reads a file or returns
+user data goes into `NativeCommands.dispatch`, never onto `JennyNativeInfo`.
+`tests/security/test_native_bridge_origin.py` fixes the exact set of `@JavascriptInterface`
+methods; widening it is a security decision, argue it there.
+
 ## Telegram pairing oracle
 
 The Telegram bot follows a **no-oracle rule** (`channels/telegram.py`): outside a pairing

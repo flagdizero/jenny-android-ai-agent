@@ -306,10 +306,15 @@ def _kotlin_fun(name: str) -> str:
 def test_the_bridge_exposes_what_the_panel_needs() -> None:
     source = _kotlin()
 
-    for method in ("fun deviceManufacturer()", "fun openBatterySettings()"):
-        index = source.index(method)
-        # L'annotazione sta sulla riga sopra: senza, il metodo non esiste per il JS.
-        assert "@JavascriptInterface" in source[index - 120 : index], method
+    # Una lettura innocua sta sulla porta sincrona: l'annotazione è sulla riga
+    # sopra, e senza il metodo non esiste per il JS.
+    index = source.index("fun deviceManufacturer()")
+    assert "@JavascriptInterface" in source[index - 120 : index]
+    # Aprire una schermata di sistema no: sta sulla porta dei comandi, che solo
+    # il frame principale della SPA raggiunge.
+    assert '"openBatterySettings" -> openBatterySettings()' in source
+    index = source.index("fun openBatterySettings()")
+    assert "@JavascriptInterface" not in source[index - 120 : index]
 
 
 def test_the_worst_offenders_all_have_their_own_screen() -> None:

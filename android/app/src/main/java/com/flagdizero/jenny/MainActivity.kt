@@ -43,7 +43,14 @@ import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
@@ -56,6 +63,16 @@ class MainActivity : AppCompatActivity() {
         // il confronto è per uguaglianza, non per prefisso.
         private const val GATEWAY_PATH = "/html-mobile/"
         private const val GATEWAY_URL = "http://${GATEWAY_HOST}:${GATEWAY_PORT}${GATEWAY_PATH}"
+        // L'origine della SPA, nella forma che vogliono le regole di
+        // addWebMessageListener (schema://host:porta, niente path). La vista
+        // esterna delle Jenny App sta su 127.0.0.1 ma su un'ALTRA porta, e le
+        // cornici delle app hanno origine opaca: nessuna delle due combacia.
+        private const val GATEWAY_ORIGIN = "http://${GATEWAY_HOST}:${GATEWAY_PORT}"
+        // I due nomi con cui il nativo compare nella pagina. Il JS non li usa
+        // direttamente: li ricompone `shared/native-bridge.js` in
+        // `window.JennyNative`. V. installNativeBridges().
+        private const val NATIVE_INFO_JS = "JennyNativeInfo"
+        private const val NATIVE_PORT_JS = "JennyNativePort"
         private const val RETRY_DELAY_MS = 500L
         private const val MAX_RETRIES = 30
         private const val PREFS_NAME = "jenny"
@@ -190,8 +207,9 @@ class MainActivity : AppCompatActivity() {
     // differenza scrivendo la nuova fingerprint, ma la risposta deve restare
     // la stessa per tutte le superfici che la chiedono (impostazioni,
     // onboarding, card Telegram) — altrimenti una sola di loro mostrerebbe
-    // l'avviso forte e le altre no. @Volatile: le chiamate del bridge
-    // arrivano dal thread JavaBridge della WebView, non dal main.
+    // l'avviso forte e le altre no. Lo decide latchSystemUpdate() sul thread di
+    // polling, prima del caricamento; @Volatile perché lo legge il thread
+    // JavaBridge della WebView.
     @Volatile
     private var systemUpdateLatch: Boolean? = null
 
@@ -496,6 +514,9 @@ class MainActivity : AppCompatActivity() {
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "packageChangeReceiver already unregistered")
         }
+        // I comandi già in coda finiscono; quelli nuovi non entrano più (v.
+        // NativeCommandListener, che guarda isShutdown prima di accodare).
+        nativeExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -504,7 +525,7 @@ class MainActivity : AppCompatActivity() {
      * consuma l'inset della status bar: la WebView parte sotto), quindi qui non
      * si tocca il layout — si allinea solo il *colore*. All'avvio valgono i
      * colori del tema Android (themes.xml); appena la SPA è pronta li riallinea
-     * al tema attivo della WebUI via JennyGestureBridge.setThemeBars.
+     * al tema attivo della WebUI via NativeCommands.setThemeBars.
      */
     private fun setupSystemBars() {
         applyBarAppearance(light = false)
@@ -724,6 +745,7 @@ class MainActivity : AppCompatActivity() {
             // read, done once at startup while we're already blocked polling.
             if (ready) {
                 resolvedGatewayUrl = buildGatewayUrl()
+                latchSystemUpdate()
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -838,13 +860,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        // Bridge minimale per la mascotte Jenny: la WebUI riporta la sua area
-        // sullo schermo così da escluderla dalle gesture di sistema (back
-        // edge-swipe), altrimenti il drag di Jenny sul bordo triggera il back.
-        // Sicuro: la WebView carica solo il gateway locale (127.0.0.1) fidato.
-        wv.addJavascriptInterface(JennyGestureBridge(), "JennyNative")
+        // Il ponte verso il nativo: due porte con due regole, v.
+        // installNativeBridges(). NON è vero che «la WebView carica solo il
+        // gateway fidato»: il documento principale sì, ma dentro ci sono le
+        // cornici delle Jenny App e la vista esterna servita dal server
+        // dell'utente, e un oggetto di addJavascriptInterface arriva a tutte.
+        installNativeBridges(wv)
         // L'inset di gesture in fondo, che il CSS non può leggere da sé: v.
-        // bottomGestureInsetPx e JennyGestureBridge.getBottomGestureInset().
+        // bottomGestureInsetPx e JennyNativeInfo.getBottomGestureInset().
         observeGestureInsets(wv)
 
         wv.webViewClient = object : WebViewClient() {
@@ -1031,168 +1054,131 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── Ponte nativo: due porte, due regole ──
+    //
+    // **Perché due.** `addJavascriptInterface` inietta l'oggetto in OGNI frame
+    // della WebView, qualunque sia la sua origine (lo dice la documentazione di
+    // WebView.addJavascriptInterface), e questa WebView ne ospita di non fidati:
+    // le cornici delle Jenny App (`sandbox="allow-scripts"`, origine opaca) e la
+    // vista esterna, cioè l'HTML del server dell'utente arrivato in chiaro dal
+    // proxy su loopback. Finché il ponte era uno solo, una qualunque di quelle
+    // pagine poteva chiamare `saveToDownloads('config.json')` — cioè copiare le
+    // chiavi dei provider nella cartella Download condivisa — o `restartApp()`,
+    // o leggere il conteggio d'uso del cassetto.
+    //
+    // - [NATIVE_INFO_JS] (`addJavascriptInterface`): SOLO letture innocue, senza
+    //   effetti e senza dati personali. Resta sincrono perché la SPA ne ha
+    //   bisogno durante la costruzione (inset di gesture, tastiera fisica) e
+    //   dentro render sincroni (card batteria). Che lo veda anche un iframe non
+    //   costa niente: è quel che un iframe saprebbe comunque, o quasi.
+    // - [NATIVE_PORT_JS] (`WebViewCompat.addWebMessageListener`): tutto il resto.
+    //   Chromium inietta l'oggetto solo nei frame la cui origine è
+    //   [GATEWAY_ORIGIN] — un'origine opaca o un'altra porta non combaciano — e
+    //   [NativeCommandListener] rifiuta in più ogni messaggio che non venga dal
+    //   frame principale. È asincrono: le risposte tornano come messaggi.
+    //
+    // Il lato JS che ricompone le due porte in un solo `window.JennyNative` è
+    // `assets/shared/native-bridge.js`: i chiamanti non sanno quale sia quale.
+    //
+    // **Regola**: un metodo nuovo che scrive, apre qualcosa, legge un file o un
+    // dato dell'utente va in [NativeCommands.dispatch], mai su [JennyNativeInfo].
+
+    // Un thread solo, e non il main: onPostMessage arriva sul thread UI, e i
+    // comandi fanno I/O (commit delle preferenze, copia in Download). Uno solo
+    // perché l'ordine conta — `setLauncherUsage` seguito da `getLauncherUsage`
+    // deve rileggere il valore appena scritto, ed è quel che la migrazione in
+    // `shared/launcher-usage-store.js` verifica.
+    private val nativeExecutor: ExecutorService =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "jenny-native-commands") }
+
+    // Una sola installazione per WebView: il pulsante Riprova richiama
+    // loadWebView(), e un secondo addWebMessageListener con lo stesso nome
+    // solleva.
+    private var nativeBridgesInstalled = false
+
+    private val nativeCommands = NativeCommands()
+
+    private fun installNativeBridges(wv: WebView) {
+        if (nativeBridgesInstalled) return
+        nativeBridgesInstalled = true
+        wv.addJavascriptInterface(JennyNativeInfo(), NATIVE_INFO_JS)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(
+                wv, NATIVE_PORT_JS, setOf(GATEWAY_ORIGIN), NativeCommandListener()
+            )
+        } else {
+            // Chiuso, non aperto: su una WebView così vecchia (< M82) i comandi
+            // non esistono e la SPA degrada come fuori dal guscio. Ripiegare su
+            // addJavascriptInterface riaprirebbe esattamente il buco.
+            Log.e(TAG, "WebView lacks WEB_MESSAGE_LISTENER: native commands are disabled")
+        }
+    }
+
     /**
-     * Esposto al JS come `JennyNative`. La WebUI passa il rettangolo di Jenny
-     * (in px fisici, già moltiplicati per devicePixelRatio) e noi lo togliamo
-     * dalle aree gesture di sistema della WebView. Su < Android Q l'API non
-     * esiste: no-op. I metodi girano su un thread binder → post sull'UI thread.
+     * Riceve i comandi della SPA. Chromium lo chiama solo per i frame di
+     * [GATEWAY_ORIGIN]; qui si esige in più il frame principale, perché nessuna
+     * cornice dentro la SPA — nemmeno una della stessa origine — ha motivo di
+     * parlare col nativo.
+     *
+     * Protocollo (JSON in una stringa): `{"m": metodo, "a": [argomenti]}`, più
+     * `"id"` quando il chiamante aspetta una risposta, che torna come
+     * `{"id", "ok", "r"}` sullo stesso canale.
      */
-    inner class JennyGestureBridge {
-        /**
-         * Esclude un rettangolo dalle aree gesture di sistema della WebView.
-         *
-         * **Vale sui bordi verticali, e solo lì.** L'esclusione toglie alla
-         * shell il *back* edge-swipe, che è la ragione per cui esiste: la
-         * mascotte vive su un bordo laterale e ogni suo trascinamento veniva
-         * letto come Indietro.
-         *
-         * **Sul bordo inferiore non si chiama, e non è una dimenticanza.** La
-         * documentazione Android sulla navigazione a gesture è esplicita: da
-         * home e quick-switch le app non possono chiamarsi fuori come fanno col
-         * Back, e `systemGestureExclusionRects` su quella fascia non le
-         * riguarda. Un rettangolo in fondo passerebbe senza errori e non
-         * cambierebbe niente — cioè lascerebbe credere a chi legge il codice
-         * che il problema sia risolto. Quello che si può fare davvero è
-         * **starne fuori**, ed è ciò che fa il cassetto: v.
-         * [getBottomGestureInset].
-         */
-        @JavascriptInterface
-        fun setGestureExclusion(left: Int, top: Int, right: Int, bottom: Int) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-            runOnUiThread {
-                val wv = webView ?: return@runOnUiThread
-                val l = left.coerceAtLeast(0)
-                val t = top.coerceAtLeast(0)
-                val r = right.coerceAtMost(wv.width)
-                val b = bottom.coerceAtMost(wv.height)
-                wv.systemGestureExclusionRects =
-                    if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
-            }
-        }
-
-        /**
-         * Il conteggio d'uso del cassetto: letto e scritto **qui**, non nel
-         * `localStorage` della WebView.
-         *
-         * Il dato è `{"<key>": [conteggio, ultimoMs]}` e lo produce
-         * `shared/launcher-rank.js`; per il Kotlin è una stringa opaca, e va
-         * tenuta tale — la forma la decide chi la sa leggere.
-         *
-         * **Perché si è spostato.** Stava in `localStorage`, e il commento di
-         * [buildGatewayUrl] dice già perché era il posto sbagliato: la
-         * persistenza di Chromium è asincrona e non sopravvive a un kill del
-         * processo, mentre le SharedPreferences sì. Jenny è il launcher del
-         * telefono e il sistema la uccide di routine, quindi l'ordine «più
-         * usate» si sbriciolava da sé — un difetto silenzioso, perché un
-         * cassetto in ordine sbagliato non sembra rotto, sembra solo inutile.
-         *
-         * Vuoto vuol dire «mai scritto»: chi legge ricostruisce da zero, che è
-         * lo stesso degrado di prima (ordine alfabetico) e non un guasto.
-         */
-        @JavascriptInterface
-        fun getLauncherUsage(): String =
-            try {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    .getString(PREF_LAUNCHER_USAGE, "") ?: ""
-            } catch (e: Exception) {
-                Log.w(TAG, "launcher usage unreadable (${e.javaClass.simpleName})")
-                ""
-            }
-
-        /**
-         * Salva il conteggio d'uso.
-         *
-         * `commit()` e non `apply()`, ed è tutto il punto dello spostamento:
-         * questa riga si scrive nell'istante in cui stai **aprendo un'altra
-         * app**, cioè esattamente quando Jenny passa in background e diventa
-         * uccidibile. Un flush asincrono è la sola cosa su cui qui non si può
-         * contare, e affidarcisi rifarebbe in Kotlin il difetto da cui si
-         * scappava.
-         *
-         * Il costo è un'I/O sincrona, e la si può pagare: i metodi
-         * `@JavascriptInterface` girano su un thread di servizio della WebView,
-         * non sul thread della UI.
-         */
-        @JavascriptInterface
-        fun setLauncherUsage(json: String) {
-            try {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    .edit().putString(PREF_LAUNCHER_USAGE, json).commit()
-            } catch (e: Exception) {
-                // Un ordine che non si ricorda di questo avvio è meno grave di
-                // un lancio fallito: la voce è già stata aperta quando
-                // arriviamo qui. Stessa scelta di `UsageRanking._write`.
-                Log.w(TAG, "launcher usage not saved (${e.javaClass.simpleName})")
-            }
-        }
-
-        /**
-         * La taglia della mascotte scelta in Impostazioni → Personalizzazione.
-         *
-         * *cssPx* è il lato del canvas quadrato (`MASCOT_SIZES` in
-         * `shared/mascot.js`: 120/160/210), *dpr* il `devicePixelRatio` della
-         * WebView. Il prodotto è il lato in px fisici, cioè **esattamente**
-         * quanto la si vede grande in chat, ed è quello che la mascotte
-         * flottante usa per sé: le due non possono divergere perché il numero
-         * viene da un posto solo.
-         *
-         * Il controller la ricorda anche a finestra non montata, quindi questa
-         * chiamata vale pure quando la mascotte flottante è spenta.
-         */
-        @JavascriptInterface
-        fun setMascotSize(cssPx: Int, dpr: Double) {
-            val px = (cssPx * (if (dpr > 0.0) dpr else 1.0)).toInt()
-            FloatingOverlayController.setMascotSize(px)
-        }
-
-        /**
-         * I colori del tema attivo per la finestra flottante.
-         *
-         * Stessa idea della taglia: là dentro non c'è CSS, quindi la
-         * tentazione è di scriverci dei colori — ed era esattamente quello che
-         * c'era, sette costanti che erano la palette `chanel` per tutti e sette
-         * i temi. La SPA spinge i token *calcolati* (`shared/theme.js`), e il
-         * Kotlin non ne ha di propri da tenere allineati.
-         *
-         * I valori arrivano già in `#AARRGGBB`: `Color.parseColor` non legge la
-         * forma `rgba(...)`, che è come tre temi su sette scrivono i bordi, e
-         * la conversione si fa dove il valore è risolto.
-         */
-        @JavascriptInterface
-        fun setFloatingPalette(
-            surface: String,
-            border: String,
-            text: String,
-            hint: String,
-            accent: String,
-            onAccent: String,
+    private inner class NativeCommandListener : WebViewCompat.WebMessageListener {
+        override fun onPostMessage(
+            view: WebView,
+            message: WebMessageCompat,
+            sourceOrigin: Uri,
+            isMainFrame: Boolean,
+            replyProxy: JavaScriptReplyProxy
         ) {
-            FloatingOverlayController.setPalette(surface, border, text, hint, accent, onAccent)
+            if (!isMainFrame || !isGatewayOrigin(sourceOrigin)) {
+                Log.w(TAG, "Native command refused: not from the SPA's main frame")
+                return
+            }
+            val request = try {
+                JSONObject(message.data ?: return)
+            } catch (e: Exception) {
+                Log.w(TAG, "Native command refused: malformed message")
+                return
+            }
+            val id = request.optInt("id", 0)
+            val method = request.optString("m", "")
+            val args = request.optJSONArray("a") ?: JSONArray()
+            if (nativeExecutor.isShutdown) return  // activity distrutta: nessuno a cui rispondere
+            nativeExecutor.execute {
+                val reply = JSONObject().put("id", id)
+                try {
+                    reply.put("ok", true).put("r", nativeCommands.dispatch(method, args) ?: JSONObject.NULL)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Native command $method failed (${e.javaClass.simpleName})")
+                    reply.put("ok", false)
+                }
+                if (id <= 0) return@execute
+                // Il proxy va usato dal thread UI, e solo finché la pagina che
+                // ha chiesto è ancora lì.
+                runOnUiThread {
+                    if (isDestroyed) return@runOnUiThread
+                    try {
+                        replyProxy.postMessage(reply.toString())
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Native reply to $method lost (${e.javaClass.simpleName})")
+                    }
+                }
+            }
         }
+    }
 
-        /**
-         * La chat è arrivata a schermo dentro la SPA: in officina da
-         * ``ChatController.activate``, in casa quando la pagina della chat torna
-         * a schermo. Secondo dei tre modi in cui la chat arriva a schermo (v.
-         * ``NotifierBridge.clearAlerts``), e l'unico che il guscio nativo non
-         * può vedere da sé: un cambio vista dentro la WebView non produce
-         * nessun callback d'activity.
-         *
-         * ``NotificationManager`` è thread-safe, quindi non serve saltare sul
-         * thread UI come fanno i metodi qui sopra — quelli toccano la WebView e
-         * la finestra, questo no.
-         */
-        @JavascriptInterface
-        fun chatOpened() {
-            NotifierBridge.clearAlerts(this@MainActivity, "chat-view-opened")
-        }
-
-        @JavascriptInterface
-        fun clearGestureExclusion() {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-            runOnUiThread { webView?.systemGestureExclusionRects = emptyList() }
-        }
-
+    /**
+     * La porta sincrona, visibile a **ogni** frame: solo letture innocue.
+     *
+     * Ogni metodo qui è una domanda sul dispositivo o sulla geometria, senza
+     * effetti e senza dati dell'utente — perché una cornice di Jenny App o la
+     * pagina di un server qualunque può chiamarlo quanto la SPA (v. il commento
+     * sopra [installNativeBridges]). Qualunque cosa scriva, apra o legga un
+     * file sta in [NativeCommands].
+     */
+    inner class JennyNativeInfo {
         /**
          * Quanti px fisici del **fondo** della WebView cadono dentro la fascia
          * in cui la shell di sistema riconosce la gesture di home (D8 del piano
@@ -1203,7 +1189,7 @@ class MainActivity : AppCompatActivity() {
          *
          * Il gemello di questo metodo — escludere quella fascia con
          * `setGestureExclusion` — **non esiste, e di proposito**: v. il commento
-         * sopra `setGestureExclusion`.
+         * sopra [NativeCommands.setGestureExclusion].
          *
          * Non tocca la WebView, quindi non serve saltare sul thread UI: legge un
          * campo `@Volatile` che il thread UI tiene aggiornato
@@ -1233,6 +1219,250 @@ class MainActivity : AppCompatActivity() {
                 config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
         }
 
+        /** True se l'app è già esente dall'ottimizzazione batteria (doze). */
+        @JavascriptInterface
+        fun isBatteryExempt(): Boolean {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            return pm.isIgnoringBatteryOptimizations(packageName)
+        }
+
+        /** True se il device ha cambiato build dall'ultimo avvio dell'app.
+         *
+         *  Gli aggiornamenti di sistema di Samsung e Xiaomi rimettono l'app
+         *  fra quelle ottimizzate senza dirlo a nessuno: l'utente aveva già
+         *  concesso l'esenzione e da un giorno all'altro cron e promemoria
+         *  ricominciano a slittare. Non esiste un evento per accorgersene, ma
+         *  Build.FINGERPRINT cambia a ogni OTA — confrontarla con quella
+         *  dell'ultimo avvio è l'unico segnale disponibile lato app.
+         *
+         *  **Una lettura e basta.** Il confronto (che registra la fingerprint
+         *  nuova) lo fa [latchSystemUpdate] prima di caricare la pagina: stava
+         *  qui, e con il metodo visibile a ogni frame un iframe che lo chiamava
+         *  per primo consumava la differenza — l'avviso non sarebbe più
+         *  comparso al prossimo avvio. */
+        @JavascriptInterface
+        fun systemUpdatedSinceLastRun(): Boolean = systemUpdateLatch == true
+
+        /** Il produttore del telefono, grezzo (`Build.MANUFACTURER`).
+         *
+         *  Alla WebUI serve per due cose: il nome da mostrare all'utente e lo
+         *  slug di dontkillmyapp.com, che ricava minuscolando questa stringa.
+         *  Vuota se Android non lo dichiara: là la UI degrada al link generico
+         *  invece di costruire un indirizzo inventato. */
+        @JavascriptInterface
+        fun deviceManufacturer(): String = (Build.MANUFACTURER ?: "").trim()
+    }
+
+    /**
+     * Confronta la fingerprint corrente con quella dell'ultimo avvio, una volta
+     * per processo, e lo ricorda in [systemUpdateLatch].
+     *
+     * Al primissimo avvio non c'è nessun "prima" da confrontare: si registra la
+     * fingerprint e si risponde false, altrimenti ogni installazione nuova
+     * aprirebbe con un allarme falso. Gira sul thread di polling, prima che la
+     * pagina esista: nessuno può chiederlo prima che sia deciso.
+     */
+    private fun latchSystemUpdate() = synchronized(this) {
+        if (systemUpdateLatch != null) return@synchronized
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val seen = prefs.getString(PREF_LAST_FINGERPRINT, null)
+        val current = Build.FINGERPRINT ?: ""
+        val changed = seen != null && seen != current
+        if (seen != current) {
+            prefs.edit().putString(PREF_LAST_FINGERPRINT, current).apply()
+        }
+        if (changed) Log.i(TAG, "system update detected since last run")
+        systemUpdateLatch = changed
+    }
+
+    /**
+     * I comandi della SPA: tutto ciò che scrive, apre, legge un file o un dato
+     * dell'utente. Raggiungibili solo da [NativeCommandListener], cioè dal frame
+     * principale del gateway; nessun metodo qui porta `@JavascriptInterface`, ed
+     * è questo — non una convenzione — che li tiene lontani dagli iframe.
+     *
+     * Girano su [nativeExecutor], non sul thread UI: chi tocca finestra o
+     * WebView ci salta da sé con `runOnUiThread`, come faceva quando era il
+     * thread JavaBridge a chiamarli.
+     */
+    inner class NativeCommands {
+        /**
+         * L'elenco chiuso dei comandi. Un nome che non è qui non esiste, e la
+         * risposta a chi lo chiede è un errore. `shared/native-bridge.js` ne
+         * tiene lo specchio (COMMANDS e QUERIES), e un test li confronta.
+         */
+        fun dispatch(method: String, a: JSONArray): Any? = when (method) {
+            "setGestureExclusion" ->
+                setGestureExclusion(a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3)).let { null }
+            "clearGestureExclusion" -> clearGestureExclusion().let { null }
+            "getLauncherUsage" -> getLauncherUsage()
+            "setLauncherUsage" -> setLauncherUsage(a.getString(0)).let { null }
+            "setMascotSize" -> setMascotSize(a.getInt(0), a.getDouble(1)).let { null }
+            "setFloatingPalette" -> setFloatingPalette(
+                a.getString(0), a.getString(1), a.getString(2),
+                a.getString(3), a.getString(4), a.getString(5)
+            ).let { null }
+            "chatOpened" -> chatOpened().let { null }
+            "setThemeBars" -> setThemeBars(a.getString(0), a.getString(1)).let { null }
+            "exportBackup" -> exportBackup(a.getString(0), a.getString(1)).let { null }
+            "importBackup" -> importBackup().let { null }
+            "openFile" -> openFile(a.getString(0))
+            "shareFile" -> shareFile(a.getString(0))
+            "saveToDownloads" -> saveToDownloads(a.getString(0))
+            "restartApp" -> restartApp().let { null }
+            "requestBatteryExemption" -> requestBatteryExemption().let { null }
+            "requestExactAlarmPermission" -> requestExactAlarmPermission()
+            "openBatterySettings" -> openBatterySettings()
+            else -> throw IllegalArgumentException("unknown native command")
+        }
+
+        /**
+         * Esclude un rettangolo dalle aree gesture di sistema della WebView.
+         *
+         * **Vale sui bordi verticali, e solo lì.** L'esclusione toglie alla
+         * shell il *back* edge-swipe, che è la ragione per cui esiste: la
+         * mascotte vive su un bordo laterale e ogni suo trascinamento veniva
+         * letto come Indietro.
+         *
+         * **Sul bordo inferiore non si chiama, e non è una dimenticanza.** La
+         * documentazione Android sulla navigazione a gesture è esplicita: da
+         * home e quick-switch le app non possono chiamarsi fuori come fanno col
+         * Back, e `systemGestureExclusionRects` su quella fascia non le
+         * riguarda. Un rettangolo in fondo passerebbe senza errori e non
+         * cambierebbe niente — cioè lascerebbe credere a chi legge il codice
+         * che il problema sia risolto. Quello che si può fare davvero è
+         * **starne fuori**, ed è ciò che fa il cassetto: v.
+         * [JennyNativeInfo.getBottomGestureInset].
+         */
+        fun setGestureExclusion(left: Int, top: Int, right: Int, bottom: Int) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+            runOnUiThread {
+                val wv = webView ?: return@runOnUiThread
+                val l = left.coerceAtLeast(0)
+                val t = top.coerceAtLeast(0)
+                val r = right.coerceAtMost(wv.width)
+                val b = bottom.coerceAtMost(wv.height)
+                wv.systemGestureExclusionRects =
+                    if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
+            }
+        }
+
+        fun clearGestureExclusion() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+            runOnUiThread { webView?.systemGestureExclusionRects = emptyList() }
+        }
+
+        /**
+         * Il conteggio d'uso del cassetto: letto e scritto **qui**, non nel
+         * `localStorage` della WebView.
+         *
+         * Il dato è `{"<key>": [conteggio, ultimoMs]}` e lo produce
+         * `shared/launcher-rank.js`; per il Kotlin è una stringa opaca, e va
+         * tenuta tale — la forma la decide chi la sa leggere.
+         *
+         * **Perché si è spostato.** Stava in `localStorage`, e il commento di
+         * [buildGatewayUrl] dice già perché era il posto sbagliato: la
+         * persistenza di Chromium è asincrona e non sopravvive a un kill del
+         * processo, mentre le SharedPreferences sì. Jenny è il launcher del
+         * telefono e il sistema la uccide di routine, quindi l'ordine «più
+         * usate» si sbriciolava da sé — un difetto silenzioso, perché un
+         * cassetto in ordine sbagliato non sembra rotto, sembra solo inutile.
+         *
+         * Vuoto vuol dire «mai scritto»: chi legge ricostruisce da zero, che è
+         * lo stesso degrado di prima (ordine alfabetico) e non un guasto.
+         */
+        fun getLauncherUsage(): String =
+            try {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(PREF_LAUNCHER_USAGE, "") ?: ""
+            } catch (e: Exception) {
+                Log.w(TAG, "launcher usage unreadable (${e.javaClass.simpleName})")
+                ""
+            }
+
+        /**
+         * Salva il conteggio d'uso.
+         *
+         * `commit()` e non `apply()`, ed è tutto il punto dello spostamento:
+         * questa riga si scrive nell'istante in cui stai **aprendo un'altra
+         * app**, cioè esattamente quando Jenny passa in background e diventa
+         * uccidibile. Un flush asincrono è la sola cosa su cui qui non si può
+         * contare, e affidarcisi rifarebbe in Kotlin il difetto da cui si
+         * scappava.
+         *
+         * Il costo è un'I/O sincrona, e la si può pagare: i comandi girano su
+         * [nativeExecutor], non sul thread della UI.
+         */
+        fun setLauncherUsage(json: String) {
+            try {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit().putString(PREF_LAUNCHER_USAGE, json).commit()
+            } catch (e: Exception) {
+                // Un ordine che non si ricorda di questo avvio è meno grave di
+                // un lancio fallito: la voce è già stata aperta quando
+                // arriviamo qui. Stessa scelta di `UsageRanking._write`.
+                Log.w(TAG, "launcher usage not saved (${e.javaClass.simpleName})")
+            }
+        }
+
+        /**
+         * La taglia della mascotte scelta in Impostazioni → Personalizzazione.
+         *
+         * *cssPx* è il lato del canvas quadrato (`MASCOT_SIZES` in
+         * `shared/mascot.js`: 120/160/210), *dpr* il `devicePixelRatio` della
+         * WebView. Il prodotto è il lato in px fisici, cioè **esattamente**
+         * quanto la si vede grande in chat, ed è quello che la mascotte
+         * flottante usa per sé: le due non possono divergere perché il numero
+         * viene da un posto solo.
+         *
+         * Il controller la ricorda anche a finestra non montata, quindi questa
+         * chiamata vale pure quando la mascotte flottante è spenta.
+         */
+        fun setMascotSize(cssPx: Int, dpr: Double) {
+            val px = (cssPx * (if (dpr > 0.0) dpr else 1.0)).toInt()
+            FloatingOverlayController.setMascotSize(px)
+        }
+
+        /**
+         * I colori del tema attivo per la finestra flottante.
+         *
+         * Stessa idea della taglia: là dentro non c'è CSS, quindi la
+         * tentazione è di scriverci dei colori — ed era esattamente quello che
+         * c'era, sette costanti che erano la palette `chanel` per tutti e sette
+         * i temi. La SPA spinge i token *calcolati* (`shared/theme.js`), e il
+         * Kotlin non ne ha di propri da tenere allineati.
+         *
+         * I valori arrivano già in `#AARRGGBB`: `Color.parseColor` non legge la
+         * forma `rgba(...)`, che è come tre temi su sette scrivono i bordi, e
+         * la conversione si fa dove il valore è risolto.
+         */
+        fun setFloatingPalette(
+            surface: String,
+            border: String,
+            text: String,
+            hint: String,
+            accent: String,
+            onAccent: String,
+        ) {
+            FloatingOverlayController.setPalette(surface, border, text, hint, accent, onAccent)
+        }
+
+        /**
+         * La chat è arrivata a schermo dentro la SPA: in officina da
+         * ``ChatController.activate``, in casa quando la pagina della chat torna
+         * a schermo. Secondo dei tre modi in cui la chat arriva a schermo (v.
+         * ``NotifierBridge.clearAlerts``), e l'unico che il guscio nativo non
+         * può vedere da sé: un cambio vista dentro la WebView non produce
+         * nessun callback d'activity.
+         *
+         * ``NotificationManager`` è thread-safe, quindi non serve saltare sul
+         * thread UI come fanno i metodi qui sopra — quelli toccano la WebView e
+         * la finestra, questo no.
+         */
+        fun chatOpened() {
+            NotifierBridge.clearAlerts(this@MainActivity, "chat-view-opened")
+        }
+
         /**
          * Allinea le barre di sistema al tema attivo della WebUI: `background`
          * è il valore CSS di `--bg` (#rrggbb), `scheme` è "dark" o "light" e
@@ -1240,7 +1470,6 @@ class MainActivity : AppCompatActivity() {
          * default sparirebbero. Senza questo la status bar resta del colore
          * fisso di themes.xml, che stona con 6 temi su 7.
          */
-        @JavascriptInterface
         fun setThemeBars(background: String, scheme: String) {
             val color = try {
                 Color.parseColor(background.trim())
@@ -1260,7 +1489,6 @@ class MainActivity : AppCompatActivity() {
 
         /** Apre il picker SAF "salva con nome" per il backup già preparato dal
          *  gateway. Accetta solo file dentro backup_staging (anti-traversal). */
-        @JavascriptInterface
         fun exportBackup(stagedPath: String, suggestedName: String) {
             val stagingRoot = try {
                 File(filesDir, "backup_staging").canonicalPath
@@ -1285,7 +1513,6 @@ class MainActivity : AppCompatActivity() {
 
         /** Apre il picker SAF di selezione file. Il .jbk non ha un MIME
          *  registrato, quindi il filtro resta aperto. */
-        @JavascriptInterface
         fun importBackup() {
             runOnUiThread { importBackupLauncher.launch(arrayOf("*/*")) }
         }
@@ -1326,7 +1553,6 @@ class MainActivity : AppCompatActivity() {
         /** Apre un file locale col viewer di sistema (ACTION_VIEW via
          *  FileProvider). Accetta path assoluti o relativi al workspace.
          *  Ritorna false se il path non è valido/apribile. */
-        @JavascriptInterface
         fun openFile(path: String): Boolean {
             val canonical = resolveLocalFile(path, "openFile") ?: return false
             val uri = contentUriFor(canonical, "openFile") ?: return false
@@ -1346,7 +1572,6 @@ class MainActivity : AppCompatActivity() {
 
         /** Condivide un file locale con lo share sheet di sistema
          *  (ACTION_SEND via FileProvider). Stessa disciplina di openFile. */
-        @JavascriptInterface
         fun shareFile(path: String): Boolean {
             val canonical = resolveLocalFile(path, "shareFile") ?: return false
             val uri = contentUriFor(canonical, "shareFile") ?: return false
@@ -1370,7 +1595,6 @@ class MainActivity : AppCompatActivity() {
          *  manager e altre app). Richiede API 29+; il runtime target
          *  (Titan 2, Android 11) la soddisfa. Sincrono sul thread binder
          *  del bridge: I/O fuori dall'UI thread, ritorno affidabile al JS. */
-        @JavascriptInterface
         fun saveToDownloads(path: String): Boolean {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 Log.w(TAG, "saveToDownloads: unsupported below API 29")
@@ -1409,7 +1633,6 @@ class MainActivity : AppCompatActivity() {
          *  pulita è: alarm one-shot che rilancia MainActivity + kill del
          *  processo. Un postDelayed non sopravviverebbe al kill; l'alarm sì.
          *  START_STICKY del GatewayService fa da seconda rete di sicurezza. */
-        @JavascriptInterface
         fun restartApp() {
             Log.i(TAG, "restartApp requested (pending restore)")
             // commit() sincrono (non apply): il processo muore tra ~650ms e la
@@ -1440,44 +1663,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        /** True se l'app è già esente dall'ottimizzazione batteria (doze). */
-        @JavascriptInterface
-        fun isBatteryExempt(): Boolean {
-            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-            return pm.isIgnoringBatteryOptimizations(packageName)
-        }
-
-        /** True se il device ha cambiato build dall'ultimo avvio dell'app.
-         *
-         *  Gli aggiornamenti di sistema di Samsung e Xiaomi rimettono l'app
-         *  fra quelle ottimizzate senza dirlo a nessuno: l'utente aveva già
-         *  concesso l'esenzione e da un giorno all'altro cron e promemoria
-         *  ricominciano a slittare. Non esiste un evento per accorgersene, ma
-         *  Build.FINGERPRINT cambia a ogni OTA — confrontarla con quella
-         *  dell'ultimo avvio è l'unico segnale disponibile lato app.
-         *
-         *  Al primissimo avvio non c'è nessun "prima" da confrontare: si
-         *  registra la fingerprint e si risponde false, altrimenti ogni
-         *  installazione nuova aprirebbe con un allarme falso. */
-        @JavascriptInterface
-        fun systemUpdatedSinceLastRun(): Boolean = synchronized(this@MainActivity) {
-            systemUpdateLatch ?: run {
-                val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                val seen = prefs.getString(PREF_LAST_FINGERPRINT, null)
-                val current = Build.FINGERPRINT ?: ""
-                val changed = seen != null && seen != current
-                if (seen != current) {
-                    prefs.edit().putString(PREF_LAST_FINGERPRINT, current).apply()
-                }
-                if (changed) Log.i(TAG, "system update detected since last run")
-                systemUpdateLatch = changed
-                changed
-            }
-        }
-
         /** Apre la richiesta di esenzione batteria: senza, il doze differisce
          *  cron, promemoria e heartbeat e rallenta il long-poll Telegram. */
-        @JavascriptInterface
         fun requestBatteryExemption() {
             runOnUiThread {
                 try {
@@ -1509,7 +1696,6 @@ class MainActivity : AppCompatActivity() {
          *
          *  @return false quando la schermata non risulta raggiungibile: la UI
          *  allora lo dice, invece di lasciare il tap senza conseguenze. */
-        @JavascriptInterface
         fun requestExactAlarmPermission(): Boolean {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
             val intent = Intent(
@@ -1527,15 +1713,6 @@ class MainActivity : AppCompatActivity() {
             return reachable
         }
 
-        /** Il produttore del telefono, grezzo (`Build.MANUFACTURER`).
-         *
-         *  Alla WebUI serve per due cose: il nome da mostrare all'utente e lo
-         *  slug di dontkillmyapp.com, che ricava minuscolando questa stringa.
-         *  Vuota se Android non lo dichiara: là la UI degrada al link generico
-         *  invece di costruire un indirizzo inventato. */
-        @JavascriptInterface
-        fun deviceManufacturer(): String = (Build.MANUFACTURER ?: "").trim()
-
         /** Porta l'utente dove la restrizione si toglie davvero.
          *
          *  Le schermate dei gestori energetici OEM sono API private: non sono
@@ -1548,7 +1725,6 @@ class MainActivity : AppCompatActivity() {
          *
          *  @return false quando nemmeno il ripiego di sistema risulta
          *  raggiungibile: la UI allora si limita al link con le istruzioni. */
-        @JavascriptInterface
         fun openBatterySettings(): Boolean {
             val candidates = batterySettingsCandidates()
             val reachable = candidates.any { canResolve(it) }

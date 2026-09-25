@@ -116,6 +116,30 @@ export class UsageRanking {
        niente: quando si sfora, si buttano le meno recenti. */
     this.limit = options.limit || 300;
     this.data = this._read();
+    /* Uno storage che risponde in differita (il ponte nativo, v.
+       `shared/launcher-usage-store.js`) espone `ready`. Fino ad allora ha
+       detto `null`, quindi `data` contiene solo le aperture di questo avvio:
+       quando il valore vero arriva si sommano, invece di perderne uno dei
+       due. Con `localStorage` `ready` non c'è e non cambia niente. */
+    const ready = this.storage?.ready;
+    if (ready && typeof ready.then === 'function') {
+      ready.then(() => this._adoptLoaded(), () => {});
+    }
+  }
+
+  /** Il valore vero è arrivato: rileggilo e sommaci le aperture fatte prima. */
+  _adoptLoaded() {
+    const early = this.data;
+    this.data = this._read();
+    if (!early.size) return;
+    for (const [key, value] of early) {
+      const current = this.get(key);
+      this.data.set(key, {
+        count: current.count + value.count,
+        last: Math.max(current.last, value.last),
+      });
+    }
+    this._write();
   }
 
   _read() {

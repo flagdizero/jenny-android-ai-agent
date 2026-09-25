@@ -641,12 +641,14 @@ export class SettingsController {
     // passa a "Sì" e la richiesta sparisce senza fare niente qui.
     const exactBtn = root.querySelector('#btn-exact-alarms');
     if (exactBtn) {
-      exactBtn.addEventListener('click', () => {
+      exactBtn.addEventListener('click', async () => {
         const native = window.JennyNative;
         if (!native || typeof native.requestExactAlarmPermission !== 'function') return;
+        // Asincrono: la richiesta sta sulla porta del nativo che solo la SPA
+        // raggiunge (v. `shared/native-bridge.js`).
         let opened = false;
         try {
-          opened = !!native.requestExactAlarmPermission();
+          opened = !!(await native.requestExactAlarmPermission());
         } catch (_) { opened = false; }
         // Sotto Android 12 il permesso non esiste e la schermata nemmeno:
         // dirlo, invece di lasciare il tap senza conseguenze visibili.
@@ -655,12 +657,12 @@ export class SettingsController {
     }
     const btn = root.querySelector('#btn-oem-battery');
     if (!btn) return;
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const native = window.JennyNative;
       if (!native || typeof native.openBatterySettings !== 'function') return;
       let opened = false;
       try {
-        opened = !!native.openBatterySettings();
+        opened = !!(await native.openBatterySettings());
       } catch (_) { opened = false; }
       // Nessuna schermata raggiungibile: dirlo, invece di lasciare il tap
       // senza conseguenze visibili. Restano le istruzioni del link.

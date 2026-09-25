@@ -2,7 +2,7 @@
 <resources>
     <style name="Theme.Jenny" parent="Theme.AppCompat.Light.NoActionBar">
         <!-- Colori di avvio, validi finché la SPA non è pronta: da lì in poi le
-             barre seguono il tema della WebUI (JennyGestureBridge.setThemeBars).
+             barre seguono il tema della WebUI (NativeCommands.setThemeBars).
              Restano il fallback per loading view ed error view. -->
         <item name="android:statusBarColor">#12121a</item>
         <item name="android:navigationBarColor">#12121a</item>
