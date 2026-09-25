@@ -67,7 +67,7 @@ def test_a_selection_across_formatting_is_refused_and_not_guessed() -> None:
     di limitarsi a fallire.
     """
     _run("""
-      const raw = 'Questo e\\' **very** important.\\n';
+      const raw = 'Questo e\\' **molto** importante.\\n';
       const r = offsetsIn(raw, 'molto importante');
       assert.equal(r.ok, false);
       assert.equal(r.reason, 'notFound');

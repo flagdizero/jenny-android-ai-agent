@@ -359,7 +359,7 @@ def test_a_notebook_row_is_a_command() -> None:
     _run_js("""
       const panel = await open(LIST);
       const opened = rowsOf(panel).filter((r) => !String(r.className).includes('is-blocked'));
-      assert.equal(opened.length, 4, 'la personale piu\\' i three notebooks');
+      assert.equal(opened.length, 4, 'la personale piu\\' i tre quaderni');
       for (const row of opened) {
         assert.equal(row.tag, 'button', 'una riga ha smesso di essere un comando');
       }
@@ -422,7 +422,7 @@ def test_only_the_row_you_are_on_carries_the_check() -> None:
       const row = marked(panel);
       assert.ok(row.children.some((c) => c.textContent === 'etf'));
       assert.equal(row.attrs['aria-current'], 'true',
-                   'la spunta e\\' decorative: who non la sees must knowIt lo same');
+                   'la spunta e\\' decorativa: chi non la vede deve saperlo lo stesso');
     """)
 
 
@@ -435,7 +435,7 @@ def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
       panel._currentProject = () => 'sparito';
       panel.render();
       const checks = walk(panel._body).filter((n) => String(n.className).includes('ti-check'));
-      assert.equal(checks.length, 0, 'la spunta e\\' finished su one conversation which non e\\' tua');
+      assert.equal(checks.length, 0, 'la spunta e\\' finita su una conversazione che non e\\' tua');
     """)
 
 

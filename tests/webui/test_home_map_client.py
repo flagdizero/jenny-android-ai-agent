@@ -582,7 +582,7 @@ const m = new MapStub();
 const root = { attr() {} };
 m._onZoom({ sourceEvent: null, transform: 'NOSTRA' }, root);
 assert.equal(m._grabbed, false,
-  'inquadrarsi da soli viene contato come un gesto dell\\'user');
+  'inquadrarsi da soli viene contato come un gesto dell\\'utente');
 
 const svg = fakeSvg();
 m._frame(svg, fakeZoom, NODI, 590, 400);
@@ -765,7 +765,7 @@ def test_a_small_gesture_is_still_a_tap_on_the_page() -> None:
 const threshold = new MapStub()._drag([]).threshold;
 assert.equal(threshold, TAP_THRESHOLD, 'il gesto non distingue un tocco da un trascinamento');
 assert.ok(threshold > 0 && threshold <= 16,
-  'una soglia fuori scala: sotto lo zero ogni tocco e\\' un drag, ' +
+  'una soglia fuori scala: sotto lo zero ogni tocco e\\' un trascinamento, ' +
   'sopra la sedicina un trascinamento apre anche la pagina');
 """)
 
@@ -822,7 +822,7 @@ assert.equal(writes.length, 1, 'alzando il dito non si salva niente');
 const [path, text] = writes[0];
 assert.equal(path, PINS_FILE);
 assert.deepEqual(JSON.parse(text), { piante: { 'Monstera.md': [240, 92] } },
-  'la posizione salvata non e\\' that where il finger ha released il dot');
+  'la posizione salvata non e\\' quella dove il dito ha lasciato il pallino');
 """)
 
 
@@ -839,7 +839,7 @@ t.handlers.start({ active: 0 }, pinned);
 t.handlers.end({ active: 0 }, pinned);
 await new Promise((r) => setTimeout(r, 0));
 assert.deepEqual(Object.keys(JSON.parse(writes[0][1]).piante), ['a'],
-  'e\\' finished within file also un dot which nobody ha moved');
+  'e\\' finito nel file anche un pallino che nessuno ha spostato');
 """)
 
 
@@ -857,7 +857,7 @@ t.handlers.end({ active: 0 }, d);
 await new Promise((r) => setTimeout(r, 0));
 const written = JSON.parse(writes[0][1]);
 assert.deepEqual(written.viaggi, { 'Kyoto.md': [1, 2] },
-  'salvando un quaderno si e\\' lost la layout di un other');
+  'salvando un quaderno si e\\' persa la disposizione di un altro');
 assert.ok(written.piante, 'e la propria non c\\'e\\'');
 """)
 

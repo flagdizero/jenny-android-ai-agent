@@ -139,7 +139,7 @@ def test_the_close_button_closes_the_veil() -> None:
         assert.equal(veil.classList.contains('visible'), false);
         await sleep(250);
         assert.equal(veil.removed, true);
-        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy fromIndex close');
+        assert.deepEqual(fetches, [], 'un\\'app del gateway non ha un proxy da chiudere');
         """
     )
 

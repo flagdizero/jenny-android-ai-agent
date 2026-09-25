@@ -328,7 +328,7 @@ def test_a_row_appearing_below_does_not_unstick_the_thread() -> None:
       // La striscia compare: il contenitore si accorcia di 64 px.
       el.clientHeight -= 64;
       el.fire();
-      assert.equal(chat._stick, true, 'una riga comparsa sotto ha staccato l\\'stick');
+      assert.equal(chat._stick, true, 'una riga comparsa sotto ha staccato l\\'aggancio');
     """)
 
 

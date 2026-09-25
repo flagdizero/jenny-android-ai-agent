@@ -129,7 +129,7 @@ def test_scroll_to_bottom_yields_to_a_finger_or_a_selection_unless_forced() -> N
       chat.scrollToBottom(); flushRaf();
       assert.equal(chat._scroller.scrollTop, 0, 'selezione viva: niente scroll');
       chat.scrollToBottom(true); flushRaf();
-      assert.equal(chat._scroller.scrollTop, 3000, 'force è un\\'intent explicit');
+      assert.equal(chat._scroller.scrollTop, 3000, 'force è un\\'intenzione esplicita');
       selectionActive = false;
     """)
 

@@ -778,7 +778,7 @@ def test_the_app_page_you_look_at_hears_that_its_data_changed() -> None:
         "await new Promise((r) => setTimeout(r, 20));\n"
         "assert.equal(globalThis.APP_DATA?.length, 1, 'la pagina app non si e iscritta');\n"
         "globalThis.APP_DATA[0]('lampo');\n"
-        "assert.deepEqual(liveWindow().mailbox, [], 'avvisata per un\\'other app');\n"
+        "assert.deepEqual(liveWindow().mailbox, [], 'avvisata per un\\'altra app');\n"
         "globalThis.APP_DATA[0]('orto');\n"
         "assert.deepEqual(liveWindow().mailbox,\n"
         "  [{ type: 'jenny:data-changed', slug: 'orto' }]);\n"

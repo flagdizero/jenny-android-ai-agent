@@ -441,8 +441,8 @@ const screen = new Screen({
   '[data-meter="MEMORY.md"]': meter,
 });
 await screen._saveWorkerParams('memory', { memory_budget_chars: '3000' });
-assert.equal(value.textContent, valueBefore, 'la misura non e\\' more\\' al suo posto');
-assert.equal(rest.textContent, restBefore, '«quanto resta» e\\' state replaced');
+assert.equal(value.textContent, valueBefore, 'la misura non e\\' piu\\' al suo posto');
+assert.equal(rest.textContent, restBefore, '«quanto resta» e\\' stato sostituito');
 assert.notEqual(rest.textContent, value.textContent, 'la misura compare due volte');
 console.log('ok');
 """,

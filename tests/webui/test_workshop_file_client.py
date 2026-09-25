@@ -288,7 +288,7 @@ c.mount(s2.host);
 await new Promise((r) => setTimeout(r, 0));
 assert.deepEqual(calls, ['progetti/home'],
   'il riaggancio riparte dalla radice invece che da dove si era');
-assert.equal(c.gridEl, s2.grid, 'la griglia vecchia e\\' remaining attached');
+assert.equal(c.gridEl, s2.grid, 'la griglia vecchia e\\' rimasta agganciata');
 """)
 
 
@@ -362,7 +362,7 @@ c.viewMode = 'editor';
 shell.moves.length = 0;
 c.collapseToRoot();
 assert.deepEqual(shell.moves, [], 'Home ha navigato due volte');
-assert.equal(c.currentDir, '', 'Home non e\\' returned toThe root');
+assert.equal(c.currentDir, '', 'Home non e\\' tornata alla radice');
 """)
 
 
@@ -372,7 +372,7 @@ def test_an_unreadable_folder_says_so_instead_of_looking_empty() -> None:
     _run_js("""
 const empty = await open([]);
 assert.equal(empty.empty.style.display, '');
-assert.equal(empty.sub.textContent, '', 'una cartella vuota si e\\' invented un broken');
+assert.equal(empty.sub.textContent, '', 'una cartella vuota si e\\' inventata un guasto');
 
 const broken = await open([], { broken: true });
 assert.equal(broken.empty.style.display, '');
@@ -387,7 +387,7 @@ def test_the_new_button_creates_where_you_are_looking() -> None:
     _run_js("""
 const { c, fresh } = await open([entry('progetti', 'directory')]);
 fresh.click();
-assert.equal(c.newMenu, 1, 'il bottone «nuovo» non e\\' attached');
+assert.equal(c.newMenu, 1, 'il bottone «nuovo» non e\\' agganciato');
 
 await c.navigateTo('progetti/home');
 await c._handleNewAction('newFile');
@@ -459,7 +459,7 @@ class C {
 }
 assert.equal(new C('brain').handleBack(), false);
 assert.equal(new C('hands').handleBack(), false);
-assert.equal(flips, 0, 'la pressione e\\' andata al gestore file outside fromIndex Memoria');
+assert.equal(flips, 0, 'la pressione e\\' andata al gestore file fuori da Memoria');
 assert.equal(new C('memory').handleBack(), true);
 assert.equal(flips, 1);
 """

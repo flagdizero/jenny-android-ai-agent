@@ -446,7 +446,7 @@ def test_no_server_english_reaches_the_toast() -> None:
         await chip._createProject();
         assert.deepEqual(toasts, [[expected, 'error']], 'codice ' + code);
         assert.equal(toasts[0][0].includes(message), false,
-                     'il testo inglese del server e\\' finished a screen (' + code + ')');
+                     'il testo inglese del server e\\' finito a schermo (' + code + ')');
         // E un rifiuto non porta dentro, qualunque sia il codice.
         assert.equal(chip.scope.kind, 'personal');
         assert.deepEqual(chip.switched, []);

@@ -115,7 +115,7 @@ def test_the_verify_button_shows_it_is_busy() -> None:
 drawer.open('ssh-host');
 s._openSshHost('nas');
 s._setSshVerifyBusy('nas', true);
-assert.equal(check.disabled, true, 'il bottone del pannello non si e\\' off');
+assert.equal(check.disabled, true, 'il bottone del pannello non si e\\' spento');
 assert.equal(check.textContent, 'settings.ssh.verifying');
 s._setSshVerifyBusy('nas', false);
 assert.equal(check.disabled, false);

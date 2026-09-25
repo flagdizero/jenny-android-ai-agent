@@ -22,7 +22,7 @@ from pathlib import Path
 from support.js_harness import requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULO = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "horizontal-swipe.js"
+MODULE = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "horizontal-swipe.js"
 
 pytestmark = requires_node
 
@@ -83,7 +83,7 @@ function fire(type, ev) {
   return 'passato';
 }
 
-const M = await import(process.env.MODULO);
+const M = await import(process.env.MODULE_URL);
 
 /* ── Guidare il dito ───────────────────────────────────────────────────── */
 
@@ -125,7 +125,7 @@ const inside = (tag, opts = {}) => el(tag, { parent: document.body, ...opts });
 
 
 def _run_js(script: str) -> None:
-    run_js(_HARNESS + "\n" + script, env={"MODULO": MODULO.as_uri(), "PATH": "/usr/bin:/bin"})
+    run_js(_HARNESS + "\n" + script, env={"MODULE_URL": MODULE.as_uri(), "PATH": "/usr/bin:/bin"})
 
 
 def test_a_plain_area_swipes_the_page() -> None:
@@ -147,7 +147,7 @@ const { visto, detach } = watch();
 const minus = inside('BUTTON', { touchAction: 'none' });
 const mark = el('SPAN', { parent: minus });
 scroll(mark);
-assert.equal(visto[0], 'start', 'il bottone si e\\' held lo scroll');
+assert.equal(visto[0], 'start', 'il bottone si e\\' tenuto lo scorrimento');
 detach();
 
 for (const [tag, role] of [['A', null], ['LABEL', null], ['DIV', 'button'],
@@ -191,7 +191,7 @@ def test_values_that_leave_sideways_to_the_browser_do_not_claim() -> None:
 for (const value of ['auto', 'manipulation', 'pan-x', 'pan-x pan-y', 'pan-left pinch-zoom']) {
   const { visto, detach } = watch();
   scroll(inside('DIV', { touchAction: value }));
-  assert.equal(visto[0], 'start', value + ' si e\\' held lo scroll');
+  assert.equal(visto[0], 'start', value + ' si e\\' tenuto lo scorrimento');
   detach();
 }
 """
@@ -279,7 +279,7 @@ const life = inside('BUTTON', { touchAction: 'none' });
 const outcomes = scroll(life, { end: false });
 
 const types = life.received.map((e) => e.type);
-assert.deepEqual(types, ['pointercancel', 'touchcancel'], 'l\\'app non ha known di aver lost il finger');
+assert.deepEqual(types, ['pointercancel', 'touchcancel'], 'l\\'app non ha saputo di aver perso il dito');
 assert.equal(life.received[0].pointerId, 7);
 assert.ok(!visto.includes('cancel'), 'il nostro annullo ha annullato noi');
 
@@ -348,10 +348,10 @@ assert.equal(visto[0], 'start');
 assert.equal(thread.style.overflowY, 'hidden', 'il filo scorre ancora su e giu');
 assert.equal(root.style.overflowY, 'hidden', 'la pagina intera scorre ancora');
 assert.equal(short.style.overflowY, undefined, 'bloccato uno che non scorre');
-assert.equal(alto.style.overflowY, undefined, 'tagliato un elemento che non e\\' one scrollable');
+assert.equal(alto.style.overflowY, undefined, 'tagliato un elemento che non e\\' uno scorrevole');
 
 fire('touchend', { target: row, changedTouches: [finger(150)] });
-assert.equal(thread.style.overflowY, 'scroll', 'il filo non e\\' returned com\\'era');
+assert.equal(thread.style.overflowY, 'scroll', 'il filo non e\\' tornato com\\'era');
 assert.equal(root.style.overflowY, undefined);
 
 // annullato dal sistema a meta': si libera lo stesso
@@ -384,7 +384,7 @@ const b = inside('DIV');
 scroll(b, { end: false });
 assert.equal(visto[0], 'start');
 fire('touchstart', { target: b, touches: [finger(150), finger(200)] });
-assert.equal(visto.at(-1), 'cancel', 'il gesto e\\' gone without onCancel');
+assert.equal(visto.at(-1), 'cancel', 'il gesto e\\' sparito senza onCancel');
 // E il rilascio dopo non chiude un gesto che non c'e' piu'.
 fire('touchend', { target: b, changedTouches: [finger(150)] });
 assert.equal(visto.filter((v) => Array.isArray(v) && v[0] === 'end').length, 0);

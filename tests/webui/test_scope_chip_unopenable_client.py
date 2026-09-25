@@ -437,7 +437,7 @@ def test_a_rename_moves_the_folder_to_the_openable_list() -> None:
       await chip._loadProjects();
       chip._renderMenu();
       assert.equal(byClass(chip.menu, 'is-unopenable').length, 1);
-      assert.equal(listeners(chip.menu), 2, 'personale + nuovo progetto, e nient\\'other');
+      assert.equal(listeners(chip.menu), 2, 'personale + nuovo progetto, e nient\\'altro');
 
       // L'agente la rinomina, e la lettura dopo la trova dall'altro lato.
       nextPayload = { dir: 'wikis', projects: [{ name: 'ricerca-etf', modified: 200 }],

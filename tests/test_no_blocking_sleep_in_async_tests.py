@@ -79,9 +79,9 @@ def test_no_async_test_blocks_the_loop() -> None:
     assert not offenders, (
         "``time.sleep`` nel corpo di una coroutine di test:\n  "
         + "\n  ".join(offenders)
-        + "\n\nUsa ``await asyncio.sleep(...)``: stessa expected, ma il loop resta "
-        "free di far girare quello which il test ha avviato. Se il delay must "
-        "essere bloccante di proposito — simulare one chiamata which lock —, "
-        "mettilo in one ``def`` sincrona: là inside è giusto, e questo test non "
+        + "\n\nUsa ``await asyncio.sleep(...)``: stessa attesa, ma il loop resta "
+        "libero di far girare quello che il test ha avviato. Se il ritardo deve "
+        "essere bloccante di proposito — simulare una chiamata che blocca —, "
+        "mettilo in una ``def`` sincrona: là dentro è giusto, e questo test non "
         "lo guarda."
     )
