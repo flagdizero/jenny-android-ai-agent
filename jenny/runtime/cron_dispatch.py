@@ -16,7 +16,6 @@ modo di parlare è il tool ``message`` chiamato dentro il turno.
 from __future__ import annotations
 
 import asyncio
-import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -53,6 +52,7 @@ from jenny.runtime.power import keep_awake
 from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
 from jenny.session.manager import last_user_message_ms
 from jenny.session.turn_visibility import TurnVisibility
+from jenny.utils import clock
 
 if TYPE_CHECKING:
     from jenny.agent.context import ContextBuilder
@@ -328,7 +328,7 @@ class CronDispatcher:
         self._cron = cron
         self._hb_cfg = heartbeat_cfg
         self._snapshot_before_dream = snapshot_before_dream
-        self._now_ms = now_ms or (lambda: int(time.time() * 1000))
+        self._now_ms = now_ms or clock.now_ms
         # Un task delegato con ``spawn`` non ha un esito dentro il turno che lo
         # delega, e il turno che quell'esito ce l'ha — l'annuncio del subagent —
         # arriva dal bus e non passa mai di qui. Il servizio cron è l'aggancio
