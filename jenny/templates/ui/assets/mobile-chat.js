@@ -95,10 +95,13 @@ function initMarked() {
       highlighted = escapeHtml(text);
     }
     const langLabel = language || 'text';
+    /* Il «Copia» qui e' solo un segnaposto: `<button>` e' fra i tag che il
+       sanificatore toglie (`SANITIZE_CONFIG`), e il bottone vero lo rimette
+       `restoreCopyButtons` dopo. */
     return `<div class="chat-code-block">` +
       `<div class="chat-code-header">` +
         `<span class="chat-code-lang">${langLabel}</span>` +
-        `<button class="chat-code-copy" type="button">${i18n.t('chat.copy')}</button>` +
+        COPY_SLOT +
       `</div>` +
       `<pre><code class="hljs language-${langLabel}">${highlighted}</code></pre>` +
     `</div>`;
@@ -136,7 +139,20 @@ async function copyCodeFromButton(btn) {
 // GFM, <a href> (http/https/relative), <img> e <pre class="mermaid">.
 function renderMarkdown(text) {
   initMarked();
-  return renderSafeMarkdown(text);
+  return restoreCopyButtons(renderSafeMarkdown(text));
+}
+
+/* Il segnaposto del «Copia» di un blocco di codice, e la sua sostituzione
+   **dopo** la sanificazione. Il bottone che entra e' una stringa fissa — tipo
+   `button`, nessun attributo che venga dal testo — quindi anche un segnaposto
+   scritto a mano dal modello diventa al piu' un altro «Copia», che non manda
+   niente da nessuna parte. */
+const COPY_SLOT = '<span class="chat-code-copy-slot"></span>';
+
+function restoreCopyButtons(html) {
+  if (!html.includes(COPY_SLOT)) return html;
+  const button = `<button class="chat-code-copy" type="button">${escapeHtml(i18n.t('chat.copy'))}</button>`;
+  return html.split(COPY_SLOT).join(button);
 }
 
 export class ChatController {

@@ -33,6 +33,7 @@ import { escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { renderRich } from './shared/rich-content.js';
+import { SANITIZE_CONFIG } from './shared/markdown.js';
 import { contentLinkTarget, openOutsideWebView } from './shared/content-link.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
@@ -296,9 +297,10 @@ export class HomeReader {
 
   /* Lo stesso ripiego dell'officina, e per la stessa ragione: senza DOMPurify
      non si mostra l'HTML del server "tanto viene da noi" — viene da un file che
-     l'agente ha scritto. Si mostra il markdown, scappato. */
+     l'agente ha scritto. Si mostra il markdown, scappato. La regola e' quella
+     della chat (`SANITIZE_CONFIG`): niente moduli, campi o bottoni. */
   _safeHtml(html, raw) {
-    if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(html || '');
+    if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(html || '', SANITIZE_CONFIG);
     console.warn('home.reader: DOMPurify missing, falling back to markdown');
     return `<pre class="home-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
