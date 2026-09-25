@@ -445,6 +445,15 @@ body {
 }
 .ibtn:hover { transform: scale(1.08); }
 .ibtn:active { transform: scale(0.92); }
+/* Sul telefono il tocco sbiadisce anche. Stava nel blocco «Responsive /
+   Touch» in coda al foglio, che 0116b1f ha tolto insieme alla wiki: le altre
+   sue regole erano di classi sparite (`.app-cell`, `.audit-item`) o gia'
+   coperte dalle misure di dock e bottoni, questa no — ed e' la meta' del
+   riscontro al tocco che resta anche a movimento ridotto, dove il
+   rimpicciolimento si spegne. */
+@media (hover: none) {
+  .ibtn:active { opacity: 0.8; }
+}
 
 .ibtn i { font-size: 14px; }
 

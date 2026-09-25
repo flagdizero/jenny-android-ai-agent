@@ -513,3 +513,16 @@ def test_la_casa_non_e_stata_toccata() -> None:
     casa = (UI / "index.html").read_text(encoding="utf-8")
     assert "title-chat" not in casa
     assert "view-title-mount" not in casa
+
+
+def test_an_icon_button_fades_under_the_finger_on_the_phone() -> None:
+    """Sul telefono (`hover: none`) il bottone-icona sbiadisce al tocco.
+
+    La regola stava nel blocco «Responsive / Touch», tolto da 0116b1f insieme
+    alla wiki (revisione del 25/09/2026): da allora il tocco restava col solo
+    rimpicciolimento, che a movimento ridotto non c'e'.
+    """
+    blocchi = re.findall(r"@media \(hover: none\) \{(.*?)^\}", CSS, re.S | re.M)
+    assert any(re.search(r"\.ibtn:active \{ opacity: 0\.8; \}", b) for b in blocchi), (
+        "al tocco sul telefono il bottone-icona non da' piu' riscontro"
+    )
