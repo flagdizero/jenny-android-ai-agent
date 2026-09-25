@@ -621,19 +621,20 @@ class ApiClient {
     return res.json();
   }
 
-  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{schermate,
-   *  ordine}` torna com'e' stato salvato. L'ordine deve nominare ogni pagina
-   *  una volta sola, o il server lo rifiuta con un 400.
+  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{ok,
+   *  schermate, ordine}` torna com'e' stato salvato. L'ordine deve nominare
+   *  ogni pagina una volta sola, o il server lo rifiuta (`bad_request`) e qui
+   *  si lancia l'errore, con il suo `code`.
    *
-   *  Ed e' una GET con i dati nell'indirizzo, non una POST: il livello HTTP
-   *  del gateway rifiuta qualunque metodo diverso da GET e qualunque body, al
-   *  parser (v. `apps_api`). Non e' una svista da correggere. */
+   *  Resta qui perche' e' la gemella di `getSchermate`, ma la scrittura viaggia
+   *  sul WebSocket (`rpc.saveCasaPages`): `/api/` e' per letture e parametri
+   *  corti (`.agent/design.md`), e fino al 25/09/2026 questa era una GET col
+   *  JSON nell'indirizzo. Import **dinamico**: `ws-manager.js` importa questo
+   *  modulo, e uno statico chiuderebbe il cerchio al caricamento. */
   async salvaPagine(schermate, ordine) {
-    const v = encodeURIComponent(JSON.stringify({ schermate, ordine }));
-    const res = await this._fetch(`/api/casa/schermate/set?v=${v}`);
-    if (!res.ok) throw new Error(`Pages write failed: ${res.status}`);
-    const body = await res.json();
-    return { schermate: body.schermate, ordine: body.ordine };
+    const { rpc } = await import('./rpc-client.js');
+    const body = await rpc.saveCasaPages(schermate, ordine);
+    return { ok: body.ok, schermate: body.schermate, ordine: body.ordine };
   }
 
   async noteBackupExported() {

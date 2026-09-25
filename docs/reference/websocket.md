@@ -317,6 +317,7 @@ correlate a reply to.
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
 | `project.delete` | `name` | Delete a project chat and its session. A home page pinned to it goes with it. |
 | `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open or is already taken by a folder or a conversation. A home page pinned to it follows the new name. |
+| `casa.schermate.set` | `schermate`, `ordine` | Save the home pages: the whole list of added pages (`{id, kind, ref}`, at most 8, unique ids) and the order of every page, fixed ones included — each exactly once, or the answer is `bad_request` and nothing is written. Replies `{ok, schermate, ordine}`. The list is read with `GET /api/casa/schermate`. |
 
 **Authorization is the handshake's, not the frame's.** When `token_issue_secret` is set, only
 a connection that presented the token at handshake time may run a command, even if

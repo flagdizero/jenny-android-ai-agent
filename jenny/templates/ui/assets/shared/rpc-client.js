@@ -72,4 +72,11 @@ export const rpc = {
     return wsManager.request('project.rename', { name, new_name: newName });
   },
 
+  /** Salva le pagine della casa: l'elenco intero e l'ordine di tutte. Lo chiama
+   *  `api.salvaPagine`, gemella della lettura `api.getSchermate`
+   *  (v. `webui/commands.py::casa_schermate_set`). */
+  saveCasaPages(schermate, ordine) {
+    return wsManager.request('casa.schermate.set', { schermate, ordine });
+  },
+
 };

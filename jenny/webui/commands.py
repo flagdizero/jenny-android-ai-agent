@@ -510,6 +510,80 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     return esito
 
 
+def _casa_pages_from(params: Mapping[str, Any]) -> tuple[list[Any], list[str]]:
+    """Le pagine e l'ordine richiesti, validati **tutti** prima di scrivere.
+
+    Validare fuori da ``store.mutate``: li' dentro si tiene un lock per tutta la
+    durata della callback, e un errore alzato dentro lo attraverserebbe come un
+    ``internal`` invece di arrivare come ``bad_request``.
+    """
+    from jenny.config.schema import MAX_SCHERMATE, PAGINE_FISSE, SchermataConfig
+
+    righe = params.get("schermate")
+    if not isinstance(righe, list):
+        raise CommandError("bad_request", "schermate must be a list")
+    try:
+        schermate = [SchermataConfig(**riga) for riga in righe]
+    except (TypeError, ValueError) as exc:
+        # ``TypeError``: una riga che non e' un oggetto. ``ValueError`` (anche la
+        # ``ValidationError`` dello schema): una specie o un riferimento storti.
+        # Il messaggio viaggia nella risposta, perche' chi l'ha mandata sappia
+        # quale riga era sbagliata.
+        raise CommandError("bad_request", str(exc)) from exc
+    if len(schermate) > MAX_SCHERMATE:
+        raise CommandError("bad_request", f"too many pages (max {MAX_SCHERMATE})")
+    identificativi = [s.id for s in schermate]
+    if len(set(identificativi)) != len(identificativi):
+        raise CommandError("bad_request", "duplicate page id")
+    riservati = sorted(set(identificativi) & set(PAGINE_FISSE))
+    if riservati:
+        raise CommandError("bad_request", f"reserved page id: {', '.join(riservati)}")
+    ordine = params.get("ordine")
+    attesi = [*PAGINE_FISSE, *identificativi]
+    if (
+        not isinstance(ordine, list)
+        or not all(isinstance(v, str) for v in ordine)
+        or sorted(ordine) != sorted(attesi)
+    ):
+        raise CommandError(
+            "bad_request", "ordine must list every fixed page and every page id, once each"
+        )
+    return schermate, ordine
+
+
+async def casa_schermate_set(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Salva le pagine della casa: l'elenco intero **e** l'ordine di tutte.
+
+    Fino al 25/09/2026 era una GET (``/api/casa/schermate/set?v=<json>``) che
+    scriveva ``config.json`` col JSON nell'indirizzo — contro la regola di
+    ``.agent/design.md``, per cui ``/api/`` e' per letture e parametri corti.
+    La lettura resta ``GET /api/casa/schermate``.
+
+    Aggiungere, togliere e spostare sono la stessa scrittura: mandare l'elenco
+    completo toglie di mezzo il caso in cui due scritture parziali si
+    incrociano lasciando un ordine che nessuno ha chiesto. L'ordine che arriva
+    deve essere **esattamente** le fisse piu' le schermate, ognuna una volta: la
+    tolleranza di ``ordine_normale`` e' per il file, non per chi scrive.
+    """
+    from jenny.config import store
+    from jenny.config.schema import Config, ordine_normale
+
+    schermate, ordine = _casa_pages_from(params)
+    ordine_dopo = ordine_normale(ordine, [s.id for s in schermate])
+    dopo = [s.model_dump() for s in schermate]
+
+    def _applica(config: Config) -> bool:
+        prima = [s.model_dump() for s in config.casa.schermate]
+        if prima == dopo and config.casa.ordine == ordine_dopo:
+            return False
+        config.casa.schermate = list(schermate)
+        config.casa.ordine = list(ordine_dopo)
+        return True
+
+    await store.mutate(_applica)
+    return {"ok": True, "schermate": dopo, "ordine": list(ordine_dopo)}
+
+
 COMMANDS: dict[str, Command] = {
     "workspace.write": workspace_write,
     "soul.rules.write": soul_rules_write,
@@ -517,6 +591,7 @@ COMMANDS: dict[str, Command] = {
     "project.create": project_create,
     "project.delete": project_delete,
     "project.rename": project_rename,
+    "casa.schermate.set": casa_schermate_set,
 }
 
 
