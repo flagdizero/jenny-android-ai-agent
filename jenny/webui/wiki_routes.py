@@ -443,8 +443,10 @@ class WikiRoutes:
         target = query_first(query, "target") or ""
 
         pages_dir = wikis[wiki_name]
-        raw_path = (pages_dir / (target or WIKI_INDEX_FILENAME)).resolve()
-        if not is_path_within(raw_path, pages_dir, path_resolved=True):
+        # Il percorso grezzo: lo risolve ``is_path_within``, e un loop di symlink
+        # (``RuntimeError`` su Python 3.11, fuori da ogni ``try``) e' un 403, non un 500.
+        raw_path = pages_dir / (target or WIKI_INDEX_FILENAME)
+        if not is_path_within(raw_path, pages_dir):
             return http_error(403, "Forbidden")
         raw_markdown = ""
         if raw_path.is_file():

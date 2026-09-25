@@ -156,10 +156,12 @@ def _journal_line_provenance(root: Path, source: str) -> str:
     if match is None:
         return _UNRESOLVED
     minute, ordinal = match.group(1), match.group(2)
-    page = (root / rel.strip()).resolve()
+    page = root / rel.strip()
     # Contenuta nel progetto: ``source:`` e' testo che il modello scrive, quindi
     # ``../..`` e' una cosa che puo' capitare — qui non serve leggere fuori.
-    if not is_path_within(page, root, path_resolved=True):
+    # Il percorso grezzo, non gia' risolto: e' ``is_path_within`` a risolverlo,
+    # e un loop di symlink (``RuntimeError`` su Python 3.11) diventa un no.
+    if not is_path_within(page, root):
         return _UNRESOLVED
     try:
         text = page.read_text(encoding="utf-8")
@@ -214,7 +216,8 @@ def _provenance_guard(root: Path, pages: Path) -> Any:
         try:
             target = Path(path).resolve()
             target.relative_to(pages)
-        except (ValueError, OSError, TypeError):
+        except (ValueError, OSError, RuntimeError, TypeError):
+            # ``RuntimeError``: un loop di symlink, su Python 3.11.
             return None
         return _check_page(root, target, text)
 
@@ -247,7 +250,8 @@ def wiki_page_provenance_guard() -> Any:
     def _guard(path: Any, text: str) -> str | None:
         try:
             target = Path(path).resolve()
-        except (OSError, TypeError):
+        except (OSError, RuntimeError, TypeError):
+            # ``RuntimeError``: un loop di symlink, su Python 3.11.
             return None
         rel = wiki_page_rel(target)
         if rel is None:
@@ -355,11 +359,10 @@ def _names_a_document(root: Path, source: str) -> bool:
     rel = source.partition("#")[0].strip()
     if not rel:
         return False
-    try:
-        page = (root / rel).resolve()
-    except (OSError, ValueError):
-        return False
-    if not is_path_within(page, root, path_resolved=True):
+    page = root / rel
+    # Il percorso grezzo: lo risolve ``is_path_within``, che tratta anche un loop
+    # di symlink (``RuntimeError`` su Python 3.11) come un no.
+    if not is_path_within(page, root):
         return False
     try:
         text = page.read_text(encoding="utf-8")

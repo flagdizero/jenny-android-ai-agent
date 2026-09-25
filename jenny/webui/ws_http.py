@@ -757,8 +757,10 @@ class GatewayHTTPHandler:
             rel = rel[len("html-mobile/"):]
         if ".." in rel.split("/") or rel.startswith("/"):
             return _http_error(403, "Forbidden")
-        candidate = (self.static_dist_path / rel).resolve()
-        if not is_path_within(candidate, self.static_dist_path, path_resolved=True):
+        # Il percorso grezzo: lo risolve ``is_path_within``, e un loop di symlink
+        # (``RuntimeError`` su Python 3.11) e' un 403 invece di un'eccezione.
+        candidate = self.static_dist_path / rel
+        if not is_path_within(candidate, self.static_dist_path):
             return _http_error(403, "Forbidden")
         served_rel = rel
         if not candidate.is_file():

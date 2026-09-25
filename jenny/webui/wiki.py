@@ -564,8 +564,10 @@ def create_audit(
 ) -> dict[str, Any]:
     """Create a new audit entry under wiki_root / audit/."""
     pages_dir = wiki_root / "wiki"
-    target_full = (pages_dir / target).resolve()
-    if not is_path_within(target_full, pages_dir, path_resolved=True):
+    # Il percorso grezzo: lo risolve ``is_path_within``, che tratta anche un loop
+    # di symlink (``RuntimeError`` su Python 3.11) come fuori.
+    target_full = pages_dir / target
+    if not is_path_within(target_full, pages_dir):
         raise FileNotFoundError(f"target file not found: {target}")
     if not target_full.is_file():
         raise FileNotFoundError(f"target file not found: {target}")

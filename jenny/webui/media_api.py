@@ -114,7 +114,8 @@ def sign_media_path(
     try:
         media_root = media_dir(None).resolve()
         rel = abs_path.resolve().relative_to(media_root)
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
+        # ``RuntimeError``: un loop di symlink, su Python 3.11.
         return None
     payload = b64url_encode(rel.as_posix().encode("utf-8"))
     mac = hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest()[:16]
@@ -212,7 +213,8 @@ def serve_signed_media(
     try:
         media_root = media_dir(None).resolve()
         candidate = (media_root / rel_str).resolve()
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
+        # ``RuntimeError``: un loop di symlink, su Python 3.11.
         return _http_error(404, "not found")
     if not is_path_within(candidate, media_root, path_resolved=True):
         return _http_error(404, "not found")

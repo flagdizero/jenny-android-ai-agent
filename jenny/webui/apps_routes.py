@@ -275,11 +275,14 @@ class AppsRoutes:
 
         # Only the app/ subfolder is web-reachable: manifest, AGENT.md and
         # data/ stay off the wire — data is only accessible through actions.
-        apps_root = (self._get_workspace_root() / "apps").resolve()
-        candidate = (apps_root / slug / "app" / rel).resolve()
+        # La radice ``app/`` **non** si risolve: se fosse un symlink verso fuori,
+        # il confronto letterale lo rifiuta. ``RuntimeError`` e' un loop di
+        # symlink su Python 3.11, che prima usciva come eccezione.
         try:
+            apps_root = (self._get_workspace_root() / "apps").resolve()
+            candidate = (apps_root / slug / "app" / rel).resolve()
             candidate.relative_to(apps_root / slug / "app")
-        except ValueError:
+        except (OSError, RuntimeError, ValueError):
             return http_error(403, "Forbidden")
         if not candidate.is_file():
             return http_error(404, "Not Found")
