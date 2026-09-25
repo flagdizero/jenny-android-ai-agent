@@ -48,6 +48,7 @@ from jenny.webui.audit import (
 
 _WIKILINK_RE = re.compile(r"\[\[(.+?)\]\]")
 
+
 def _top_group(rel: str) -> str:
     """Gruppo di primo livello di un path relativo alla pages-dir ``wiki/``."""
     parts = rel.split("/")

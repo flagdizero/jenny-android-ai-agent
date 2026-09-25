@@ -126,7 +126,6 @@ class WebSocketConfig(Base):
         )
 
 
-
 class WebSocketChannel(OutboundSenderMixin):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 

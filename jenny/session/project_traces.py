@@ -71,6 +71,7 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
         workspace / SUBAGENTS_DIRNAME / _RECORDS_DIRNAME / f"{stem}.jsonl",
     ]
 
+
 def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
     """L'id della wiki che *session_key* si e' annotato, o ``None``.
 

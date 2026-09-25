@@ -54,7 +54,6 @@ _WORKER_ENABLED_PATHS: dict[str, tuple[str, ...]] = {
 }
 
 
-
 def _dig(root: Any, path: tuple[str, ...]) -> Any:
     """Segue *path* attributo per attributo. ``None`` se un anello manca.
 

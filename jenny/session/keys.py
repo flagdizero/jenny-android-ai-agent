@@ -59,6 +59,7 @@ def is_valid_project_name(name: str) -> bool:
     """True se *name* puo' essere il nome di un progetto."""
     return bool(_PROJECT_NAME_RE.match(name)) and ".." not in name
 
+
 # Prefisso delle sessioni Tier-2 dei subagent (``subagent:<lineage_id>``).
 # Sono storia di lavoro interno, non conversazioni: non devono comparire in
 # nessun elenco user-facing ne essere leggibili dalle route HTTP della WebUI.

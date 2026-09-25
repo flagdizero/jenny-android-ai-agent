@@ -102,7 +102,6 @@ _BACKFILL_CONTENT = BACKFILL_CONTENT
 _MICROCOMPACT_KEEP_RECENT = MICROCOMPACT_KEEP_RECENT
 
 
-
 @dataclass(slots=True)
 class AgentRunSpec:
     """Configuration for a single agent execution."""
@@ -1203,7 +1202,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             state.final_content = self._max_iterations_fallback(spec)
         self._append_final_message(messages, state.final_content)
 
-
     # Contabilità usage estratta in ``agent/usage_accounting.py``. Delegatori
     # sottili: le funzioni di stima ricevono ``self.provider`` esplicitamente.
     def _usage_or_estimate(
@@ -1218,7 +1216,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
     @staticmethod
     def _merge_usage(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
         return merge_usage(left, right)
-
 
     # Classificazione errori di boundary estratta in ``agent/tool_error_policy.py``.
 

@@ -876,6 +876,7 @@ async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
         metadata=dict(ctx.msg.metadata or {}),
     )
 
+
 async def cmd_help(ctx: CommandContext) -> OutboundMessage:
     """Return available slash commands."""
     return OutboundMessage(

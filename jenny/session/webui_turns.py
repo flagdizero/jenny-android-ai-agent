@@ -109,6 +109,7 @@ async def publish_turn_run_status(
         ),
     )
 
+
 @dataclass
 class WebuiTurnCoordinator:
     """Translate generic runtime events into WebUI/WebSocket wire messages."""

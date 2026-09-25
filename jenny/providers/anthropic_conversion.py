@@ -79,7 +79,6 @@ def _sanitize_tool_id(tid: str) -> str:
     return f"{safe_prefix}_{digest}"
 
 
-
 class AnthropicConversionMixin:
     """Conversione formato messaggi Anthropic (mixin del provider)."""
 

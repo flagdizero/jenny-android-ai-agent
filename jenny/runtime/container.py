@@ -70,7 +70,7 @@ class GatewayContainer:
         """
         if self._agent is None:
             return ()
-        return tuple(self._agent.busy_session_keys())
+        return self._agent.busy_session_keys()
 
     def set_agent(self, new_agent: Any) -> None:
         self._agent = new_agent
@@ -529,7 +529,6 @@ class GatewayContainer:
             logger.info("Update check: every {}h", updates_cfg.check_interval_h)
         else:
             logger.info("Update check: disabled")
-
 
     def _instantiate_agent(self, config: Config, provider: Any) -> Any:
         """Costruisce e cabla un ``AgentLoop`` (wiring condiviso build/onboarding).

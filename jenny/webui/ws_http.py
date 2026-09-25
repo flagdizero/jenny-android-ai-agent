@@ -106,6 +106,7 @@ _ANDROID_PACKAGE_RE = re.compile(r"\A[A-Za-z0-9_.]{1,255}\Z")
 # violazione costa di piu' e si spiega di meno.
 _SHELL_DOCUMENTS = frozenset({"index.html", "officina.html"})
 
+
 def _default_model_name_from_config() -> str | None:
     try:
         from jenny.config.loader import load_config
@@ -436,8 +437,6 @@ class GatewayHTTPHandler:
                 "provider": _default_provider_name_from_config() or "",
             }
         )
-
-
 
     def _bootstrap_ws_url(self, request: Any) -> str:
         headers = getattr(request, "headers", {}) or {}

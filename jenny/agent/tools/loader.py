@@ -34,6 +34,7 @@ class ToolLoadFailure:
     stage: str  # "enabled" | "create"
     error: BaseException
 
+
 def declared_tool_name(tool_cls: type[Tool]) -> str | None:
     """Nome di un tool ricavato dalla sola classe, senza costruirla.
 

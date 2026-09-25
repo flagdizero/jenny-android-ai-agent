@@ -315,8 +315,6 @@ class WebUISettingsError(ValueError):
         self.status = status
 
 
-
-
 def _query_first_alias(query: QueryParams, *names: str) -> str | None:
     """Il primo valore fra più nomi accettati (snake_case e camelCase)."""
     for name in names:
@@ -324,7 +322,6 @@ def _query_first_alias(query: QueryParams, *names: str) -> str | None:
         if value is not None:
             return value
     return None
-
 
 
 # ── Applicatori generici ─────────────────────────────────────────────────────
@@ -397,7 +394,6 @@ def _apply_bool(query: QueryParams, target: Any, attr: str, *names: str) -> bool
         return False
     setattr(target, attr, value)
     return True
-
 
 
 def _apply_str(

@@ -103,6 +103,7 @@ def cancellation_summary(reason: str) -> str:
     entry = _CANCEL_PROVENANCE.get(reason)
     return entry[1] if entry is not None else "This subagent was cancelled."
 
+
 # Il tipo di agente e definito in ``jenny/agent/agent_types.py``; qui viene
 # ri-esportato perche i consumatori storici della spec importano da questo
 # modulo.
@@ -124,6 +125,7 @@ __all__ = [
     "cancellation_stop_reason",
     "cancellation_summary",
 ]
+
 
 class ActivityDigestDeleter(Protocol):
     """Cio che questo modulo usa di uno store di digest: solo la cancellazione.

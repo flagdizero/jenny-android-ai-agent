@@ -352,8 +352,6 @@ def build_file_edit_pending_event(
     }
 
 
-
-
 def _event_payload(
     tracker: FileEditTracker,
     *,

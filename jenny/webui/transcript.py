@@ -71,7 +71,6 @@ _TURN_DISPLAY_EVENTS: frozenset[str] = frozenset({
 })
 
 
-
 class _TranscriptTurnRef(NamedTuple):
     ordinal: int
     records: list[dict[str, Any]]
@@ -82,7 +81,6 @@ class _TranscriptChunkRef(NamedTuple):
     start_ordinal: int
     turn_count: int
     user_count: int
-
 
 
 def _encode_page_cursor(before_turn_ordinal: int) -> str:
@@ -331,18 +329,6 @@ def _select_transcript_page(
     return lines, page
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def _session_user_event(
     session_key: str,
     message: dict[str, Any],
@@ -396,8 +382,6 @@ def _session_backfill_turns(
                 assistant_texts.append(text)
     flush()
     return turns
-
-
 
 
 def _transcript_turn_signature(records: list[dict[str, Any]]) -> tuple[str, ...]:

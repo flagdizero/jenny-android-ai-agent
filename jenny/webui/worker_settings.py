@@ -70,11 +70,7 @@ from jenny.webui.settings_api import (
 REVIEW_CADENCE_FLOOR = 12
 
 
-
-
 # ── Lettura ──────────────────────────────────────────────────────────────────
-
-
 
 
 def _number(model: type, attr: str, value: Any) -> dict[str, Any]:
@@ -203,14 +199,6 @@ def _first(query: QueryParams, *names: str) -> str | None:
 def _flag(query: QueryParams, *names: str) -> bool:
     """Un flag di conferma: vero solo se dichiarato esplicitamente vero."""
     return parse_flag(_first(query, *names))
-
-
-
-
-
-
-
-
 
 
 # Le chiavi che, se presenti, chiedono un ri-armo del job di quel lavoratore.

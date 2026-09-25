@@ -503,7 +503,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             **extra,
         )
 
-
     @property
     def tool_scope(self) -> str:
         """Scope con cui viene caricato il registry dell'agente principale."""
@@ -723,7 +722,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             await self.bus.publish_outbound(result)
         else:
             logger.warning("Command '{}' matched but dispatch returned None", raw)
-
 
     async def _refuse_reincarnated_project(self, msg: InboundMessage, key: str) -> bool:
         """Rifiuta il turno se la cartella al nome di *key* non e' la sua cartella.
@@ -1423,6 +1421,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         request_token = bind_request_context(request_ctx)
         workspace_token = bind_workspace_scope(effective_scope)
         # Compute lazily because long_task may create goal metadata during this run.
+
         def _goal_continue() -> str | None:
             _goal_lines = goal_state_runtime_lines(session.metadata if session is not None else None)
             if not _goal_lines:
@@ -1926,7 +1925,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 self._runtime_events().clear_turn(session_key)
                 await self._cron_turns.publish_next_deferred(session_key)
 
-
     async def _process_system_message(
         self,
         msg: InboundMessage,
@@ -2303,7 +2301,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             content=final_content,
             metadata=meta,
         )
-
 
     def _append_channel_delivery(
         self, session_key: str, content: str, media: list[str] | None

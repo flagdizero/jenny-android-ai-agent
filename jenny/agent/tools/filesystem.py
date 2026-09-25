@@ -868,9 +868,6 @@ class WriteFileTool(_FsTool):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @tool_parameters(
     tool_parameters_schema(
         path=StringSchema("The file path to edit"),

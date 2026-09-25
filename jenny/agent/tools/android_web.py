@@ -54,6 +54,7 @@ class AndroidWebGateMixin:
             return "web access is off (Settings > Tools > Web Search)"
         return None
 
+
 # Il bridge è un browser, non un client HTTP: restituisce un documento solo per
 # ciò che Chromium renderizza *e* dove lo scripting è permesso, perché il
 # contenuto arriva da `evaluateJavascript(document.documentElement.outerHTML)`

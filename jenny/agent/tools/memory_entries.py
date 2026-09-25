@@ -446,7 +446,6 @@ def render_entries(entries: list[Entry]) -> str:
     return "\n".join(out)
 
 
-
 def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
     """Gancio pre-scrittura che degrada le voci in uscita da un file di memoria.
 
@@ -494,6 +493,7 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
         except OSError:
             # File che non c'è ancora: non se ne sta andando niente.
             return
+
         def save(text: str, heading: str) -> None:
             archived_id = entry_id(text)
             try:

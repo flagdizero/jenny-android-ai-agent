@@ -101,6 +101,7 @@ def is_gardener_session_key(key: str | None) -> bool:
     """
     return internal_session_kind(key or "") == "gardener"
 
+
 # Il blocco "già registrato" che la fase 4 del piano aggiunge al prompt del
 # Consolidator. Tre numeri, e nessuno è arbitrario:
 #

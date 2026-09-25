@@ -61,7 +61,6 @@ class CronJobSkippedError(Exception):
     """Raised by cron callbacks when a job was intentionally skipped."""
 
 
-
 _CRON_MODES: tuple[str, ...] = ("reminder", "monitor")
 
 # Quanti record di esecuzione tenere in ``runs/``. Fino al 24/08/2026 non c'era
@@ -523,6 +522,7 @@ class CronService:
             return
 
         jobs_map = {j.id: j for j in self._store.jobs}
+
         def _update(params: dict):
             j = CronJob.from_dict(params)
             # Stessa tolleranza che ``_parse_jobs`` applica a jobs.json: il
@@ -1167,7 +1167,6 @@ class CronService:
         with self._lock:
             with open(self._action_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps({"action": action, "params": params}, ensure_ascii=False) + "\n")
-
 
     # ========== Public API ==========
 

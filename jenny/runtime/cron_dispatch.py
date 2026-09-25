@@ -118,6 +118,7 @@ class CronCapableAgent(BoundCronAgent, Protocol):
 
     def evict_pruned_sessions(self, keys: list[str]) -> None: ...
 
+
 _HEARTBEAT_PREAMBLE = (
     "[This is a scheduled background check. It is SILENT by default: whatever "
     "you write as your answer is NOT delivered to the user and nobody reads it. "
@@ -292,8 +293,6 @@ def refresh_system_job(
         payload=CronPayload(kind="system_event"),
     ))
     return cfg.describe_schedule()
-
-
 
 
 class CronDispatcher:

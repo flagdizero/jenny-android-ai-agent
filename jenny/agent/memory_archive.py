@@ -171,7 +171,6 @@ def summarize_archived(memory_dir: Path, name: str) -> str:
     return first[0] if first else name
 
 
-
 def _parse_archived(text: str) -> tuple[dict[str, str], str]:
     """Separa l'intestazione dal fatto in un file d'archivio.
 

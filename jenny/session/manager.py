@@ -26,6 +26,8 @@ FILE_MAX_MESSAGES = 2000
 _MESSAGE_TIME_PREFIX_RE = re.compile(r"^\[Message Time: [^\]]+\]\n?")
 _LOCAL_IMAGE_BREADCRUMB_RE = re.compile(r"^\[image: (?:/|~)[^\]]+\]\s*$")
 _TOOL_CALL_ECHO_RE = re.compile(r'^\s*message\([^)]*\)\s*$')
+
+
 def _sanitize_assistant_replay_text(content: str) -> str:
     """Remove internal replay artifacts that the model may have copied before.
 

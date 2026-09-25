@@ -193,11 +193,9 @@ Note: This is a text placeholder. Actual assets can be any file type.
 """
 
 
-
 def title_case_skill_name(skill_name):
     """Convert hyphenated skill name to Title Case for display."""
     return " ".join(word.capitalize() for word in skill_name.split("-"))
-
 
 
 def create_resource_dirs(skill_dir, skill_name, skill_title, resources, include_examples):

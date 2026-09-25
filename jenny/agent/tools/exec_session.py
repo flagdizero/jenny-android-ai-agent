@@ -384,8 +384,6 @@ class ExecSessionManager:
         ]
 
 
-
-
 DEFAULT_EXEC_SESSION_MANAGER = ExecSessionManager()
 atexit.register(DEFAULT_EXEC_SESSION_MANAGER.shutdown)
 

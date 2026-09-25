@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 _DAY_MS = 86_400_000
 
 
-
 class SnapshotService:
     """Timer di snapshot automatici sopra uno :class:`SnapshotEngine`."""
 

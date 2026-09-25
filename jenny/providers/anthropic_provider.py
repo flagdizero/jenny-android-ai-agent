@@ -167,7 +167,6 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
     # Message conversion: OpenAI chat format → Anthropic Messages API
     # ------------------------------------------------------------------
 
-
     # ------------------------------------------------------------------
     # Build API kwargs
     # ------------------------------------------------------------------

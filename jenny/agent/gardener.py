@@ -1227,6 +1227,7 @@ def passes_in_flight() -> frozenset[str]:
     """
     return frozenset(_PASSES_IN_FLIGHT)
 
+
 # La frase che il modello legge quando l'utente è tornato. È un rifiuto di
 # scrittura perché è il solo punto che i tre tool condividono prima di toccare il
 # file: la passata si chiude dicendogli di fermarsi, e il codice — non lui —
@@ -1236,7 +1237,6 @@ _YIELD_REFUSAL = (
     "is giving way. Do not write anything else and end your turn — the journal will be "
     "read again by the next pass."
 )
-
 
 
 def _compose_write_guards(*guards: Any) -> Any:
@@ -1457,6 +1457,7 @@ async def _run_pass(
     # ``_prune_sessions`` lascia per sempre un ``gardener_<nome>-<ora>.jsonl`` e
     # una voce in ``AgentLoop._session_locks``. Era il caso di ``failed``, cioè
     # esattamente del ramo che su un provider giù si prende ogni mezz'ora.
+
     def _stamped(outcome: GardenerOutcome) -> GardenerOutcome:
         """Timbra il tentativo e attacca all'esito la lunghezza della serie.
 

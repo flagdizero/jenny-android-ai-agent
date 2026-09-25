@@ -193,6 +193,7 @@ DREAM_ALREADY_RUNNING = (
 # da dire: lo specchio del livelock che questo modulo esiste per chiudere.
 _RETAINED_TAGS = ("[durable]", "[permanent]", "[correction]")
 
+
 class _NoEntries:
     """Esito in voci di un run che non aveva il tool per voci.
 

@@ -77,8 +77,6 @@ def extract_comment_one_line(text: str) -> str:
     return "(no comment body)"
 
 
-
-
 def main(root: str, mode: str) -> int:
     root_path = Path(root)
     audit_dir = root_path / "audit"
