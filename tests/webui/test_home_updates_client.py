@@ -257,6 +257,22 @@ def test_a_critical_update_does_not_read_like_an_ordinary_one() -> None:
     """)
 
 
+def test_the_critical_class_has_a_look() -> None:
+    """La classe da sola non si vede: fino al 26/09/2026 nessun foglio la
+    definiva, e il test qui sopra passava su un bottone identico a quello di un
+    aggiornamento qualunque. Il bottone e' un ``.home-save`` (index.html), e
+    la regola deve cambiarne il fondo."""
+    html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    assert re.search(r'class="home-save"[^>]*id="home-update-install"', html), (
+        "il bottone d'installazione non e' piu' un .home-save: la regola va ripuntata"
+    )
+    css = re.sub(r"/\*.*?\*/", "", (ASSETS / "home-style.css").read_text(encoding="utf-8"), flags=re.S)
+    rules = re.findall(r"([^{}]*\.is-critical[^{}]*)\{([^}]*)\}", css)
+    install = [body for sel, body in rules if ".home-save" in sel or "#home-update-install" in sel]
+    assert install, "nessuna regola CSS per il bottone d'installazione di un aggiornamento critico"
+    assert any(re.search(r"background(?:-color)?\s*:\s*var\(--error\)", b) for b in install), install
+
+
 def test_the_progress_block_is_not_there_before_you_press() -> None:
     """Prima di premere il bottone non c'e' niente da raccontare, e un
     riquadro vuoto sembrerebbe qualcosa che e' andato storto."""

@@ -2323,6 +2323,15 @@ body.home {
    una nota. */
 #home-update-check { width: 100%; min-height: 36px; }
 
+/* Un aggiornamento critico e' una correzione da installare subito, non «una
+   versione con piu' cose»: il suo bottone ha il colore dell'errore. La classe
+   la mette `home-updates.js`; fino al 26/09/2026 nessun foglio la definiva, e
+   il bottone era identico a quello di un aggiornamento qualunque. */
+.home-save.is-critical {
+  background: var(--error);
+  color: #fff;
+}
+
 /* ── «Backup» ────────────────────────────────────────────────────────────
    Due bottoni larghi e tre frasi: esportare e importare sono le uniche due
    cose che si fanno qui, e una pastiglia stretta in mezzo al testo
