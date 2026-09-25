@@ -358,11 +358,22 @@ class JennyBrowserBridge(context: Context) {
         // sull'indirizzo dove la pagina si e' posata davvero.
         openInFlight.set(true)
         scopeDomain.set(null)
-        MainHop.call(10_000L, Unit, TAG) {
+        // Se la WebView non nasce (il costruttore solleva, per esempio mentre
+        // Android aggiorna il provider WebView) o il main thread non risponde
+        // entro il tetto, nessuna pagina e' partita: dirlo, invece di
+        // aspettare un caricamento che non c'e' e rispondere "ok" con indirizzo
+        // e titolo vuoti.
+        val started = MainHop.call(10_000L, false, TAG) {
             ensureWebViewOnMain()
+            val wv = webView ?: return@call false
             loading.set(true)
             lastError.set(null)
-            webView?.loadUrl(url)
+            wv.loadUrl(url)
+            true
+        }
+        if (!started) {
+            openInFlight.set(false)
+            return """{"error":"il browser non si e' aperto: la pagina non e' partita"}"""
         }
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
