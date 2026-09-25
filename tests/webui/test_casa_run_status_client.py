@@ -99,3 +99,4 @@ def test_frames_of_this_conversation_and_frames_without_a_chat_still_count() -> 
       app._readActivity({ event: 'goal_status', status: 'running', chat_id: 'default', turn_id: 't1' });
       assert.deepEqual(app.righe, ['start:t1']);
     """)
+

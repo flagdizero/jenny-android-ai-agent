@@ -1360,12 +1360,21 @@ class CasaApp {
 
   /** Una app Android e' stata installata o rimossa.
    *
-   *  Qui non c'e' ancora nessun elenco di app da rinfrescare — il cassetto e'
-   *  una tavola del giro dopo. Il metodo esiste comunque, e non e' cerimonia:
-   *  il guscio nativo lo chiama senza guardare, e un `undefined` sarebbe un
-   *  TypeError dentro la sua `evaluateJavascript`.
+   *  La pagina App lo deve sapere: Jenny e' il launcher, e un'app appena presa
+   *  dal Play Store che non compare li' fino al riavvio della casa e' un'app
+   *  che non si trova. Il lavoro lo fa la sorgente condivisa con l'officina
+   *  (`AppsSource.onPackageChanged`: toglie subito una rimossa, rilegge
+   *  l'elenco). Solo se esiste gia': se la pagina App non si e' mai accesa
+   *  l'elenco non e' mai stato letto, e quando lo sara' sara' gia' fresco —
+   *  costruirla qui vorrebbe dire pagare le icone per un cassetto chiuso.
+   *
+   *  Il metodo deve esistere comunque: il guscio nativo lo chiama senza
+   *  guardare, e un `undefined` sarebbe un TypeError dentro la sua
+   *  `evaluateJavascript`.
    */
-  onPackageChanged() {}
+  onPackageChanged(kind, packageName) {
+    this._apps?.onPackageChanged?.(kind, packageName);
+  }
 
   /* ── Il composer ── */
 
