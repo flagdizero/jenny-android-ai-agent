@@ -17,19 +17,38 @@
 
 const VISIBLE_KEY = 'jenny-mascot-visible';
 const SIZE_KEY = 'jenny-mascot-size';
+/* Visibilita' e taglia si chiamavano `jenny-mascotte-visible` e
+   `jenny-mascotte-size` fino al rinomino in inglese del 25/09/2026. Il valore
+   scelto dall'utente passa al nome nuovo (se quello non c'e' gia'), e il nome
+   vecchio finisce fra le chiavi morte qui sotto. */
+const RENAMED_KEYS = [
+  ['jenny-mascotte-visible', VISIBLE_KEY],
+  ['jenny-mascotte-size', SIZE_KEY],
+];
+for (const [before, after] of RENAMED_KEYS) {
+  try {
+    const value = localStorage.getItem(before);
+    if (value !== null && localStorage.getItem(after) === null) localStorage.setItem(after, value);
+  } catch (_) {
+    /* storage non disponibile */
+  }
+}
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
    non una per lettura: non hanno più un getter in cui nascondersi. Stanno qui
    anche quelle che non erano della mascotte, perché questo modulo lo caricano
    tutti e due i gusci:
-   - `jenny-mascot-color`: il bianco/nero (08/09/2026);
-   - `jenny-mascot-dock-side`, `jenny-mascot-side`: il lato (5961d22);
+   - `jenny-mascotte-color`: il bianco/nero (08/09/2026);
+   - `jenny-mascotte-dock-side`, `jenny-mascotte-side`: il lato (5961d22);
+   - `jenny-mascotte-visible`, `jenny-mascotte-size`: i nomi di prima di
+     `VISIBLE_KEY` e `SIZE_KEY`, copiati qui sopra (25/09/2026);
    - `jenny-advanced-mode`: la modalità sviluppatore (78ff330);
    - `jenny-home-view`: la vista di Home scelta dall'utente (3d57980);
    - `locale`: il selettore di lingua dell'officina (v. shared/i18n.js). */
 const DEAD_KEYS = [
-  'jenny-mascot-color',
-  'jenny-mascot-dock-side',
-  'jenny-mascot-side',
+  'jenny-mascotte-color',
+  'jenny-mascotte-dock-side',
+  'jenny-mascotte-side',
+  ...RENAMED_KEYS.map(([before]) => before),
   'jenny-advanced-mode',
   'jenny-home-view',
   'locale',

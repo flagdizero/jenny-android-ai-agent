@@ -41,7 +41,7 @@ export const THEMES = [
     swatch: ['#f7e0f8', '#f56ab5', '#b76bf0'],
     desc: 'Gradienti lucidi, gloss bubblegum, bordi bianchi.',
     reply: 'Il duemila come ce lo eravamo promesso.' },
-  { id: 'pietra',    label: 'Jenny Pietra',  scheme: 'light',
+  { id: 'stone',     label: 'Jenny Pietra',  scheme: 'light',
     accent: '#8c6f4e', onAccent: '#f4f1ec',
     swatch: ['#eae6df', '#37332c', '#8c6f4e'],
     desc: 'Travertino, bronzo e serif romani, luce di mezzogiorno.',
@@ -113,7 +113,10 @@ export function themeTokens() {
 }
 
 /** Legacy 'tc-theme' values from the old dark/light/match switcher. */
-export const MIGRATION = { dark: 'chanel', light: 'pietra', match: 'chanel' };
+/* I nomi di prima: `dark`/`light`/`match` erano i modi, `fumetto` e `pietra` gli id
+   italiani dei due temi fino al 25/09/2026. Un `tc-theme` salvato con uno di
+   questi si legge col nome di adesso (e lo riscrive `setTheme`). */
+export const MIGRATION = { dark: 'chanel', light: 'stone', match: 'chanel', fumetto: 'comic', pietra: 'stone' };
 
 export function getTheme(id) {
   return THEMES.find(t => t.id === id) || null;

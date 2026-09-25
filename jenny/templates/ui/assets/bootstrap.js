@@ -4,8 +4,10 @@
 // script-src 'self' CSP (M1). Load WITHOUT defer, in <head>, so it still
 // executes before the rest of the document (same timing as the old inline).
 (function () {
-  var THEMES = ['chanel', 'synthwave', 'kyoto', 'sticker', 'comic', 'y2k', 'pietra'];
-  var MIGRATION = { dark: 'chanel', light: 'pietra', match: 'chanel' };
+  var THEMES = ['chanel', 'synthwave', 'kyoto', 'sticker', 'comic', 'y2k', 'stone'];
+  // Come MIGRATION in shared/theme.js: i modi di una volta e gli id italiani
+  // dei temi fino al 25/09/2026.
+  var MIGRATION = { dark: 'chanel', light: 'stone', match: 'chanel', fumetto: 'comic', pietra: 'stone' };
   var t = localStorage.getItem('tc-theme') || 'chanel';
   t = MIGRATION[t] || t;
   if (THEMES.indexOf(t) === -1) t = 'chanel';
@@ -23,7 +25,9 @@
   // l'attributo iniziale su <html> per evitare che lampeggi visibile prima
   // che mobile-jenny.js applichi la preferenza "non visibile" (il lato non
   // serve: la mascotte è creata da JS e posizionata prima del primo paint).
-  var mascotVisible = localStorage.getItem('jenny-mascot-visible');
+  // Le chiavi si chiamavano `jenny-mascotte-*` fino al 25/09/2026: finche'
+  // shared/mascot.js non le ha copiate, qui si legge anche il nome vecchio.
+  var mascotVisible = localStorage.getItem('jenny-mascot-visible') || localStorage.getItem('jenny-mascotte-visible');
   if (mascotVisible === '0') {
     document.documentElement.setAttribute('data-mascot-hidden', '1');
   }
@@ -32,7 +36,7 @@
   // poi ridimensionarsi. Le misure sono duplicate da MASCOT_SIZES in
   // shared/mascot.js — qui non si possono importare moduli.
   var mascotSizes = { sm: '120px', md: '160px', lg: '210px' };
-  var mascotSize = mascotSizes[localStorage.getItem('jenny-mascot-size')];
+  var mascotSize = mascotSizes[localStorage.getItem('jenny-mascot-size') || localStorage.getItem('jenny-mascotte-size')];
   if (mascotSize) {
     document.documentElement.style.setProperty('--jenny-size', mascotSize);
   }

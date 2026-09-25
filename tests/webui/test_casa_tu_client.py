@@ -249,10 +249,10 @@ def test_the_name_and_the_phrase_follow_the_theme_that_is_on() -> None:
       assert.equal(you.themeDesc.textContent, i18n.t('themes.chanel.desc'));
       assert.ok(!you.themeDesc.textContent.startsWith('themes.'), 'la chiave grezza a schermo');
 
-      you.pickTheme('pietra');
-      assert.equal(you.themeValue.textContent, THEMES.find((t) => t.id === 'pietra').label);
-      assert.equal(you.themeDesc.textContent, i18n.t('themes.pietra.desc'));
-      assert.notEqual(i18n.t('themes.pietra.desc'), i18n.t('themes.chanel.desc'),
+      you.pickTheme('stone');
+      assert.equal(you.themeValue.textContent, THEMES.find((t) => t.id === 'stone').label);
+      assert.equal(you.themeDesc.textContent, i18n.t('themes.stone.desc'));
+      assert.notEqual(i18n.t('themes.stone.desc'), i18n.t('themes.chanel.desc'),
                       'due temi con la stessa frase: il banco non misura piu\\u2019 niente');
     """)
 

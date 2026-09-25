@@ -212,6 +212,9 @@ class MobileApp {
        Da `mobile-last-mode` arriva esattamente cosi' — chiudendo l'app con un
        file aperto — quindi si riparte da dove i file stanno. */
     if (initialMode === 'workspace') initialMode = 'memory';
+    /* I tre cassetti si chiamavano `cervello`, `mani` e `memoria` fino al
+       25/09/2026, e `mobile-last-mode` puo' averne salvato uno. */
+    initialMode = { cervello: 'brain', mani: 'hands', memoria: 'memory' }[initialMode] || initialMode;
 
     // Radice dello stack, marcata *prima* dei due await qui sotto. I listener
     // del dock sono già registrati da un pezzo: un tap durante il boot impilava

@@ -252,7 +252,7 @@
   --radius-bubble: 20px 20px 6px 20px;
 }
 
-[data-theme="pietra"] {
+[data-theme="stone"] {
   color-scheme: light;
   --font-display:  'Marcellus', serif;
   --bg:            #eae6df;
