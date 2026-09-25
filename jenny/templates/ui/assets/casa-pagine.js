@@ -28,6 +28,7 @@
 
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
+import { showToast } from './shared/utils.js';
 import { osservaGestoOrizzontale } from './shared/gesto-orizzontale.js';
 import { cornicePerApp } from './shared/apps-actions.js';
 import { projectNameOf } from './shared/conversation-list.js';
@@ -170,10 +171,23 @@ export class CasaPagine {
    *  incrociano lasciando un ordine che nessuno ha chiesto.
    *
    *  Dopo, si resta **sulla pagina in cui si era**, ovunque sia finita; se non
-   *  c'e' piu', sulla chat. */
+   *  c'e' piu', sulla chat.
+   *
+   *  **Non alza**: una scrittura rifiutata lo dice con un avviso e torna
+   *  `false`, e la pista resta com'era. Prima l'errore saliva a chi chiamava,
+   *  e nessuno lo prendeva: «Fatto» in modalita' ordina perdeva l'ordine in
+   *  silenzio, «Metti/Togli pagina» non diceva niente. Chi ha qualcosa da
+   *  tenere da parte (la bozza dell'ordine) la tiene finche' non torna vero. */
   async salva(schermate, ordine) {
     const dove = this.ordine[this.indice];
-    const salvate = await api.salvaPagine(schermate, ordineNormale(ordine, schermate, this.fisse));
+    let salvate;
+    try {
+      salvate = await api.salvaPagine(schermate, ordineNormale(ordine, schermate, this.fisse));
+    } catch (err) {
+      console.warn('casa.pagine: pages not saved', err);
+      showToast(i18n.t('casa.pagine.salvaFallito'), 'error');
+      return false;
+    }
     this.schermate = salvate.schermate || [];
     this.ordine = ordineNormale(salvate.ordine, this.schermate, this.fisse);
     this._disegna();
@@ -286,7 +300,7 @@ export class CasaPagine {
     const dopo = aggiunte.length ? Math.max(...aggiunte) : this.indiceChat;
     const ordine = [...this.ordine];
     ordine.splice(dopo + 1, 0, id);
-    await this.salva([...this.schermate, { id, kind, ref }], ordine);
+    if (!(await this.salva([...this.schermate, { id, kind, ref }], ordine))) return false;
     this.vaiAId(id);
     return true;
   }
@@ -296,11 +310,11 @@ export class CasaPagine {
   async stacca(kind, ref) {
     const via = this.schermate.find((s) => s.kind === kind && s.ref === ref);
     if (!via) return false;
-    await this.salva(
+    const salvate = await this.salva(
       this.schermate.filter((s) => s !== via),
       this.ordine.filter((id) => id !== via.id),
     );
-    return true;
+    return Boolean(salvate);
   }
 
   /** Un quaderno ha cambiato nome: la pagina chat lo segue, se era il suo.

@@ -143,19 +143,40 @@ export class CasaFila {
   }
 
   /** Esce. Con `salva` scrive l'ordine della bozza, e toglie le pagine che non
-   *  ci sono piu'; senza, lascia tutto com'era — e' Indietro. */
+   *  ci sono piu'; senza, lascia tutto com'era — e' Indietro.
+   *
+   *  **Si esce solo a salvataggio riuscito.** La bozza si azzerava prima di
+   *  scrivere, e una scrittura rifiutata perdeva l'ordine in silenzio: ora si
+   *  resta in modalita' ordina con la bozza intatta — l'avviso lo da' la pista
+   *  — e si torna `false`, cosi' «Fatto» si puo' ripremere. Un secondo «Fatto»
+   *  mentre il primo sta scrivendo non fa niente. */
   async chiudiOrdina({ salva = false } = {}) {
-    if (!this.ordinando) return;
+    if (!this.ordinando) return true;
     const bozza = this._bozza;
+    if (salva) {
+      if (this._salvando) return false;
+      const restano = this.pagine.schermate.filter((s) => bozza.includes(s.id));
+      const prima = this.pagine.voci.map((v) => v.id);
+      const uguale = restano.length === this.pagine.schermate.length
+        && prima.join() === bozza.join();
+      if (!uguale) {
+        this._salvando = true;
+        let salvate;
+        try {
+          salvate = await this.pagine.salva(restano, [...bozza]);
+        } finally {
+          this._salvando = false;
+        }
+        if (!salvate) return false;
+        /* Nel frattempo Indietro e' gia' uscito: non c'e' piu' niente da chiudere. */
+        if (this._bozza !== bozza) return true;
+      }
+    }
     this._bozza = null;
     this._trascina = null;
     this.disegna();
     this._onCambia?.(false);
-    if (!salva) return;
-    const restano = this.pagine.schermate.filter((s) => bozza.includes(s.id));
-    const prima = this.pagine.voci.map((v) => v.id);
-    if (restano.length === this.pagine.schermate.length && prima.join() === bozza.join()) return;
-    await this.pagine.salva(restano, bozza);
+    return true;
   }
 
   /** Sposta la voce `id` alla posizione `dove` della bozza. */

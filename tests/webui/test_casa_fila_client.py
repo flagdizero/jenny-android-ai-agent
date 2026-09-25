@@ -124,7 +124,16 @@ def _run(corpo: str) -> None:
               },
               nomeDi: (s) => (s.kind === 'conversazione' ? s.ref.split(':')[1] : s.ref),
               vaiA(i) { chieste.push(['vaiA', i]); this.indice = i; },
-              async salva(s, o) { chieste.push(['salva', s.map((x) => x.id), o]); },
+              /* Come la vera: l'elenco salvato, o `false` se il server ha
+                 rifiutato (l'avviso lo da' lei). `inAttesa` tiene la
+                 scrittura sospesa finche' il caso non la lascia andare. */
+              rifiuta: false,
+              inAttesa: null,
+              async salva(s, o) {
+                chieste.push(['salva', s.map((x) => x.id), o]);
+                if (this.inAttesa) await this.inAttesa;
+                return this.rifiuta ? false : { schermate: s, ordine: o };
+              },
             };
             let nomeChat = { nome: 'Jenny', colore: null };
             const cambi = [];
@@ -270,6 +279,42 @@ def test_done_writes_the_new_order_once() -> None:
       ]);
       assert.equal(fila.ordinando, false);
       assert.deepEqual(cambi, [true, false]);
+    """)
+
+
+def test_a_refused_done_keeps_the_moving_mode_and_the_draft() -> None:
+    """La bozza si azzerava **prima** di scrivere: un rifiuto del server
+    perdeva l'ordine in silenzio, e la modalita' ordina era gia' chiusa.
+    Ora si resta dentro, con la bozza com'era, e «Fatto» si ripreme."""
+    _run("""
+      fila.apriOrdina();
+      fila.sposta('p1', 0);
+      pagine.rifiuta = true;
+      assert.equal(await fila.chiudiOrdina({ salva: true }), false);
+      assert.equal(fila.ordinando, true, 'un salvataggio rifiutato ha chiuso la modalita\\u2019 ordina');
+      assert.deepEqual(cambi, [true], 'il guscio crede che la modalita\\u2019 ordina sia chiusa');
+      fila.disegna();
+      assert.equal(pastiglie()[0].dataset.id, 'p1', 'la bozza si e\\u2019 persa');
+      pagine.rifiuta = false;
+      assert.equal(await fila.chiudiOrdina({ salva: true }), true);
+      assert.equal(fila.ordinando, false);
+      assert.equal(chieste.length, 2);
+      assert.deepEqual(chieste[1], chieste[0], 'il secondo Fatto non ha riscritto la stessa bozza');
+    """)
+
+
+def test_a_second_done_while_the_first_is_writing_does_nothing() -> None:
+    _run("""
+      fila.apriOrdina();
+      fila.sposta('p1', 0);
+      let lascia;
+      pagine.inAttesa = new Promise((r) => { lascia = r; });
+      const primo = fila.chiudiOrdina({ salva: true });
+      assert.equal(await fila.chiudiOrdina({ salva: true }), false);
+      lascia();
+      assert.equal(await primo, true);
+      assert.equal(chieste.filter((c) => c[0] === 'salva').length, 1, 'due Fatto, due scritture');
+      assert.equal(fila.ordinando, false);
     """)
 
 

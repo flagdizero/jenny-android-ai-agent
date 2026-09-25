@@ -1031,7 +1031,8 @@
     "pagine": {
       "appSparita": "The app “{nome}” is gone.",
       "quadernoSparito": "The notebook “{nome}” is gone.",
-      "togliPagina": "Remove the page"
+      "togliPagina": "Remove the page",
+      "salvaFallito": "Couldn't save the pages. Nothing was changed."
     },
     "quaderno": {
       "rinomina": "Rename",

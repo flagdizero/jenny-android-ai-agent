@@ -342,6 +342,13 @@ def _run(
             "}\n",
             encoding="utf-8",
         )
+        # Gli avvisi: si ricordano, per dire se un guasto e' stato detto.
+        (radice / "shared" / "utils.js").write_text(
+            "export function showToast(testo, tipo) {\n"
+            "  (globalThis.AVVISI ||= []).push([testo, tipo]);\n"
+            "}\n",
+            encoding="utf-8",
+        )
         (radice / "shared" / "i18n.js").write_text(
             "export const i18n = {\n"
             "  t: (k, v) => k + (v ? ':' + JSON.stringify(v) : ''),\n"
@@ -361,7 +368,11 @@ def _run(
             "    return { schermate: this._elenco, ordine: this._ordine, max: 8,\n"
             "             fisse: ['app', 'chat', 'quaderni', 'impostazioni'] };\n"
             "  },\n"
+            # `_rifiuta`: la prossima scrittura fallisce, come un gateway
+            # che risponde 500 o un filo caduto.
+            "  _rifiuta: false,\n"
             "  async salvaPagine(s, o) {\n"
+            "    if (this._rifiuta) throw new Error('Pages write failed: 500');\n"
             "    this.scritture.push(s); this.ordini.push(o);\n"
             "    this._elenco = s; this._ordine = o;\n"
             "    return { schermate: s, ordine: o };\n"
@@ -1332,6 +1343,41 @@ def test_unpinning_saves_the_rest() -> None:
         "assert.ok(!api.ordini.at(-1).includes('p1'), 'la pagina staccata e rimasta nell ordine');\n"
         "assert.equal(await pagine.stacca('app', 'orto'), false, 'ha staccato due volte');\n",
         DUE,
+    )
+
+
+def test_a_refused_write_says_so_and_changes_nothing() -> None:
+    """Un salvataggio rifiutato saliva a chi chiamava, e nessuno lo prendeva:
+    «Metti come pagina» e «Togli» fallivano in silenzio. Ora lo dice un
+    avviso, torna `false` a chi chiede, e la pista resta com'era."""
+    _run(
+        "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._rifiuta = true;\n"
+        "const prima = [...pagine.ordine];\n"
+        "assert.equal(await pagine.appendi('app', 'lampo'), false, 'un appendere fallito dice di esserci riuscito');\n"
+        "assert.equal(await pagine.stacca('app', 'orto'), false, 'uno staccare fallito dice di esserci riuscito');\n"
+        "assert.equal(await pagine.salva([], []), false);\n"
+        "assert.deepEqual(pagine.ordine, prima, 'la pista e\\u2019 cambiata senza che il server abbia salvato');\n"
+        "assert.equal(globalThis.AVVISI?.length, 3, 'un guasto non e\\u2019 stato detto');\n"
+        "assert.deepEqual(globalThis.AVVISI[0], ['casa.pagine.salvaFallito', 'error']);\n",
+        UNA,
+    )
+
+
+def test_the_gone_page_button_survives_a_refused_write() -> None:
+    """Il bottone «Togli la pagina» chiama `stacca` da un gestore di click:
+    un rifiuto non preso diventava un errore non gestito nella pagina."""
+    _run(
+        "pagine.vaiAId('g1');\n"
+        "await new Promise((r) => setTimeout(r, 60));\n"
+        + _sparita_in('g1')
+        + "const api = (await import('./shared/api-client.js')).api;\n"
+        "api._rifiuta = true;\n"
+        "avviso().children[1].click();\n"
+        "await new Promise((r) => setTimeout(r, 10));\n"
+        "assert.equal(pagine.quante, 5, 'la pagina e\\u2019 sparita senza che il server l\\u2019abbia tolta');\n"
+        "assert.deepEqual(globalThis.AVVISI, [['casa.pagine.salvaFallito', 'error']]);\n",
+        SPARITA,
     )
 
 

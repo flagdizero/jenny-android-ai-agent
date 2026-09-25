@@ -1034,7 +1034,8 @@
     "pagine": {
       "appSparita": "L'app «{nome}» non c'è più.",
       "quadernoSparito": "Il quaderno «{nome}» non c'è più.",
-      "togliPagina": "Togli la pagina"
+      "togliPagina": "Togli la pagina",
+      "salvaFallito": "Non ho potuto salvare le pagine. Non ho cambiato niente."
     },
     "quaderno": {
       "rinomina": "Rinomina",
