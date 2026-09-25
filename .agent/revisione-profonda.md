@@ -1,6 +1,11 @@
 # Revisione profonda di `feat/la-casa` (25/09/2026)
 
-Stato: **registro**, nessuna voce ancora corretta. Otto revisioni parallele in sola
+Stato: **fase 1 fatta** (25/09/2026): le voci alte, medie e basse sono corrette in 104
+commit su `feat/la-casa` (`09f43fc..0f4fab9`, più `48d2e18`), suite verde su 3.14 (11.284)
+e 3.11 (11.274). Fase 2 (rinomino in inglese) in corso su `rename/english`. Esiti e
+prove sul telefono in fondo, «Avanzamento».
+
+Stato iniziale: **registro**, nessuna voce ancora corretta. Otto revisioni parallele in sola
 lettura sul diff `198da6c...HEAD` (222 commit, ~48.000 righe), divise per fetta: core
 Python dell'agente, resto del Python, casa JS, officina/shared JS, CSS, Android, test,
 convenzioni+documenti. Ogni revisore doveva **dimostrare** ogni voce (codice, comando,
@@ -115,3 +120,36 @@ Ogni voce è stata dimostrata con una mutazione in una copia: il codice rotto, i
 - **CSS**: regole morte (`.update-check`, `.settings-field[data-settings-off]`, `.model-list`, `.ws-item.selected`, bordo di `cron-card-*`, `.casa-pages-open` sovrascritta); commenti falsi su `[hidden]` e rimandi rotti; `.ibtn:active` perso con `0116b1f`; gemelle ancora separate; `.chat-history-more` duplicata; `--danger`/`--danger-bg`/`--code-bg` mai definite; `!important` evitabili; `@media (max-height: 500px)` nasconde Jenny anche nella casa; font scritti a mano (il tema Fumetto non tocca la casa).
 - **Test**: contratti Kotlin che cercano sottostringhe anche nei commenti; `test_wire_ids.py:27` senza asserzioni; parità dei parser SSE tautologica; mock sul punto sbagliato in `test_webui_turns.py:242`; `_settle` nuovo che scade senza fallire; campioni di croniter dipendenti dalla versione di tzdata; duplicazioni residue (`make_request` ×7, `make_handler` ×5, `_drain`, `_make_loop`); `test_casa_trasloco_client` lento per un timer non cancellato.
 - **Documenti e privacy**: `AGENTS.md` «two channels» (sono quattro) e `memory_entry` (si chiama `memory`); `configuration.md` §casa esempio contraddittorio; rimandi a «tavole» di design che non stanno nel repo; commit `76b707b` col soggetto in italiano; **seriali dei dispositivi e contenuti reali del workspace in alcuni piani `.agent/`** (repo pubblico).
+
+## Avanzamento
+
+**Fase 1 (25/09/2026).** Sei fette corrette in parallelo in worktree isolati, unite senza
+conflitti testuali con `cherry-pick` sopra `09f43fc` (la correzione dello scorrimento
+orizzontale della chat, di un'altra sessione): F1 Android + browser (7 commit), F2 Python
+(21), F3 casa JS (23), F4 officina/shared JS (22), F5 CSS (11), F6 test e documenti (17),
+più quattro commit d'integrazione: un solo helper per leggere il Kotlin nei contratti
+(`tests/support/kotlin_source.py`; `kotlin.py` tolto), la cancellazione rifiutata
+per «Jenny sta lavorando» detta con una frase sua, i residui fuori fetta (commento
+orfano in `api-client.js`, un nome reale di quaderno e gli orari reali dei job del
+telefono tolti dai commenti, docstring dei canali, righe jsdom inutili in CI), e il test
+del tetto della chat che distingue `max-width: 100%` (la colonna) da un tetto.
+Voce non corretta per scelta: il mixin dei canali contro `design.md`. Voci rimaste da
+decidere: filtro SSRF sulle sottorisorse della WebView di ricerca e DNS rebinding sulla
+cache dei verdetti del browser.
+
+Prove sul telefono (build `48d2e18`, installata alle 19:51):
+- **H4 confermato e chiuso.** Prima: il profilo `jenny-browser-session` esisteva dal 29/08
+  con **95 cookie di 21 domini**. Alla prima apertura dopo la build: «Discarded browser
+  profile left by a previous process», la cartella vecchia sparisce e ne nasce una nuova;
+  alla chiusura la sessione si svuota e il rifiuto atteso di `deleteProfile` («Cannot
+  delete in-use profile») finisce nel log invece che in un `catch` muto. Resta su disco
+  un profilo `probe-incognito` di una sonda del 29/08, che nessuno usa.
+- **D3 non osservabile sul telefono**: lì la mascotte in-app è spenta e si vede la
+  flottante (Kotlin). La misura è quella della fetta CSS in Chrome headless
+  (`elementFromPoint`, 590×566).
+- **H3** (bottone Ferma) coperto dai test comportamentali nuovi, non messo in scena sul
+  telefono: servono due conversazioni in volo insieme.
+
+Da notare: nel turno principale Jenny dice che `browser_open`/`browser_close` non sono nel
+suo registro e li usa attraverso un subagent. Non è in questo registro: da capire se è
+voluto.
