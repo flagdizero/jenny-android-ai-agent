@@ -96,7 +96,7 @@ _ANDROID_PACKAGE_RE = re.compile(r"\A[A-Za-z0-9_.]{1,255}\Z")
 # I documenti-guscio della WebUI: le pagine che *ospitano* una SPA, non i suoi
 # asset. Sono due perche' le interfacce sono due — la casa (``index.html``, cioe'
 # l'ingresso: e' quel che il guscio nativo carica) e l'officina
-# (``officina.html``) — e tutto cio' che vale a livello di pagina (oggi la CSP)
+# (``workshop.html``) — e tutto cio' che vale a livello di pagina (oggi la CSP)
 # deve valere per entrambe.
 #
 # Il perche' di un insieme invece del confronto con un nome solo: la CSP era
@@ -104,7 +104,7 @@ _ANDROID_PACKAGE_RE = re.compile(r"\A[A-Za-z0-9_.]{1,255}\Z")
 # senza policy e se la sarebbe presa addosso tutta insieme il giorno in cui i
 # due file si scambiano il nome — cioe' alla fine, cioe' nel momento in cui una
 # violazione costa di piu' e si spiega di meno.
-_SHELL_DOCUMENTS = frozenset({"index.html", "officina.html"})
+_SHELL_DOCUMENTS = frozenset({"index.html", "workshop.html"})
 
 
 def _default_model_name_from_config() -> str | None:

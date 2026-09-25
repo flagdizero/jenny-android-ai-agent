@@ -64,7 +64,7 @@ globalThis.history = {{
   replaceState(st) {{ stack[cursor] = st; }},
 }};
 globalThis.window = {{
-  location: 'http://x/officina.html',
+  location: 'http://x/workshop.html',
   history: {{ back() {{ setTimeout(() => {{ cursor -= 1; shell._onPop(stack[cursor]); }}, 0); }} }},
 }};
 globalThis.URL = class {{ constructor() {{ this.searchParams = {{ set() {{}}, delete() {{}} }}; }} }};

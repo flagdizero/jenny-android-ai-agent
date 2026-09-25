@@ -18,7 +18,7 @@ from jenny.utils.android_assets import _UI_MANIFEST
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
-OFFICINA = UI / "officina.html"
+WORKSHOP = UI / "workshop.html"
 ASSETS = UI / "assets"
 APP_JS = ASSETS / "home-app.js"
 MAP_JS = ASSETS / "home-map.js"
@@ -191,7 +191,7 @@ def test_the_groups_are_the_three_the_server_actually_sends() -> None:
     assert m and "summaries" not in m.group(1), (
         "la casa elenca un gruppo che il server non le manda"
     )
-    legend = re.findall(r'data-i18n="graph\.(\w+)"', OFFICINA.read_text(encoding="utf-8"))
+    legend = re.findall(r'data-i18n="graph\.(\w+)"', WORKSHOP.read_text(encoding="utf-8"))
     assert "summaries" not in legend, "la legenda dell'officina ha una riga di troppo"
 
 

@@ -25,7 +25,7 @@ function pillCasa() {
     icon: 'ti-home',
     title: i18n.t('casa.backHome'),
     action: 'go-casa',
-    pill: i18n.t('officina.casaPill'),
+    pill: i18n.t('workshop.casaPill'),
   };
 }
 
@@ -38,9 +38,9 @@ function pillCasa() {
  */
 function cassetto(nome) {
   return {
-    eyebrow: i18n.t('officina.eyebrow'),
+    eyebrow: i18n.t('workshop.eyebrow'),
     title: i18n.t(`nav.${nome}`),
-    sub: i18n.t(`officina.sub.${nome}`),
+    sub: i18n.t(`workshop.sub.${nome}`),
     /* Niente «aggiorna»: la tavola non ce l'ha, e non serve — `activate()`
        ricarica a ogni apertura del cassetto, e ogni salvataggio ridisegna. Un
        bottone che rifa' quel che e' appena successo insegna a premerlo per
@@ -112,7 +112,7 @@ export class ViewTitleController {
          Il sottotitolo e' la differenza che si vede di piu' rispetto a prima:
          un cassetto che si apre su quattro righe chiuse non dice a cosa serve,
          e «Cervello» da solo nemmeno. La tavola mette una riga sotto il nome —
-         `officina` sopra, il nome in serif, la riga che spiega — ed e' quella
+         `workshop` sopra, il nome in serif, la riga che spiega — ed e' quella
          riga a trasformare quattro etichette in una pagina. */
       cervello: { ...cassetto('cervello') },
       mani: { ...cassetto('mani') },

@@ -8,7 +8,7 @@
  *  cominciavano tutti con «se la libreria c'e'».
  *
  *  **Pigro, non all'avvio.** KaTeX stava in due `<script defer>` in
- *  `officina.html`: 275 kB di codice piu' il CSS a ogni singola partenza, anche
+ *  `workshop.html`: 275 kB di codice piu' il CSS a ogni singola partenza, anche
  *  solo per aprire la chat. Qui si carica quando nel contenuto appena disegnato
  *  c'e' davvero una formula, come ha sempre fatto mermaid. Nel pacchetto pesa,
  *  all'avvio no.

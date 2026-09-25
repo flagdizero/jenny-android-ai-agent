@@ -214,7 +214,7 @@ def test_rows_are_options_of_a_listbox_not_buttons() -> None:
     # scorrimento di TalkBack passa per gli elementi focalizzabili, e un
     # `roving tabindex` darebbe a Tab una sola fermata su tutta la lista.
     assert "setAttribute('tabindex', '0')" in body
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
     assert 'role="listbox"' in html, "la lista non si dichiara"
     assert 'role="combobox"' in html, "il campo non governa la lista"
 
@@ -390,7 +390,7 @@ def test_no_hardcoded_strings_in_the_sheet() -> None:
     for key in ("launcher.recent", "launcher.results", "launcher.noResults"):
         assert f"'{key}'" in source, f"{key} non usata"
     # Il placeholder e le etichette statiche stanno nell'HTML, non nel JS.
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
     assert 'data-i18n-placeholder="launcher.searchPlaceholder"' in html
     assert 'data-i18n-aria="launcher.clearSearch"' in html
 
@@ -402,12 +402,12 @@ def test_the_sheet_is_actually_in_the_page() -> None:
 
     Il registro dei livelli, l'ordine fra `miniapp` e `drawer`, `present` e
     `dismiss` sono coperti: ma tutti guardano il *controller*. Il foglio è fatto
-    di nodi che stanno in `officina.html` — e `LauncherController` esce subito
+    di nodi che stanno in `workshop.html` — e `LauncherController` esce subito
     (`if (!this.sheet) return`) se non li trova, senza un errore. Cancellare il
     blocco HTML lascerebbe verdi tutti gli altri test e un pulsante che non apre
     niente.
     """
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
     for node in ('id="launcher-sheet"', 'id="launcher-scrim"', 'id="launcher-list"',
                  'id="launcher-search"', 'id="launcher-title"', 'id="launcher-close"',
                  'id="launcher-handle-row"'):
@@ -438,7 +438,7 @@ def test_the_manage_row_is_gone_with_the_screen_it_led_to() -> None:
     porta che manca, ed e' il motivo per cui se n'e' andata invece di restare
     disabilitata.
     """
-    for doc in ("officina.html", "index.html"):
+    for doc in ("workshop.html", "index.html"):
         html = (ROOT / "jenny" / "templates" / "ui" / doc).read_text(encoding="utf-8")
         assert "launcher-manage" not in html, doc
     launcher = _src("mobile-launcher.js")
@@ -482,7 +482,7 @@ def test_a_broken_bridge_is_not_an_empty_phone() -> None:
     assert "listsFailed()" in apps
     launcher = _src("mobile-launcher.js")
     assert "_syncStatus" in launcher
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
     assert 'id="launcher-status"' in html
     # Fuori dalla lista: i figli di un `listbox` sono `option`, e un avviso là
     # dentro si annuncerebbe come una voce da aprire.
@@ -533,7 +533,7 @@ def test_the_new_step_six_strings_exist_in_both_locales() -> None:
 def test_the_search_field_does_not_autofocus() -> None:
     """D6: su un telefono con tastiera software l'autofocus alzerebbe la
     tastiera e si mangerebbe il foglio."""
-    html = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
     field = re.search(r'<input class="launcher-search".*?>', html, re.S)
     assert field, "campo di ricerca non trovato"
     assert "autofocus" not in field.group(0)
@@ -621,8 +621,8 @@ def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:
     composer: la Console e' sul dock, quindi quel pulsante e' a un tocco da
     ogni cassetto.
     """
-    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
-    assert 'id="btn-launcher"' in officina, "il foglio non ha piu' nessuna maniglia"
+    workshop = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
+    assert 'id="btn-launcher"' in workshop, "il foglio non ha piu' nessuna maniglia"
 
     app = _src("mobile-app.js")
     # E l'aggancio del dock resta **uno solo**: un secondo `forEach` con un
@@ -641,7 +641,7 @@ def test_the_dock_is_a_console_and_three_faculties() -> None:
     ``cervello``, ``mani`` e ``memoria`` non hanno una vista propria: sono tre
     cassetti di ``view-settings``, e il guscio lo sa da una tabella sola.
     """
-    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     modes = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
     assert modes == ["chat", "cervello", "mani", "memoria"], modes
@@ -663,7 +663,7 @@ def test_the_sheet_itself_shows_no_focus_ring() -> None:
     """Il foglio prende il fuoco all'apertura per fare da àncora a TalkBack e ai
     tasti, ma ha `tabindex="-1"`: da tastiera non ci si arriva, quindi l'anello
     non segnala nulla e si vede soltanto. I controlli *dentro* lo tengono."""
-    html = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    html = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
     sheet = re.search(r'<div class="launcher-sheet"[^>]*>', html).group(0)
     assert 'tabindex="-1"' in sheet, "se diventasse raggiungibile con Tab, l'anello servirebbe"
     css = _src("mobile-style.css")
@@ -756,7 +756,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     l'unico ingresso esista, sia agganciato, e che la Console sia sul dock —
     che è la riga da cui dipende tutto il ragionamento qui sopra.
     """
-    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    workshop = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
     settings = _src("mobile-settings.js")
 
     # La porta se n'è andata, e non deve tornare in un altro gruppo a caso.
@@ -765,14 +765,14 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     )
 
     # La Console è sul dock: è ciò che rende «un tocco» vero.
-    nav = officina[officina.index('<nav class="dock"'):officina.index("</nav>")]
+    nav = workshop[workshop.index('<nav class="dock"'):workshop.index("</nav>")]
     assert 'data-mode="chat"' in nav, (
         "senza la Console sul dock il pulsante del composer non è raggiungibile "
         "da un cassetto, e il cassetto delle app torna irraggiungibile"
     )
 
     # L'ingresso dell'officina: un pulsante, agganciato.
-    assert 'id="btn-launcher"' in officina
+    assert 'id="btn-launcher"' in workshop
     assert "getElementById('btn-launcher')" in _src("mobile-app.js")
 
     # 5. **22/09/2026, e questa e' la quinta volta.** Per un giro l'ingresso di
@@ -833,7 +833,7 @@ def test_the_dead_dock_branch_is_gone() -> None:
     attributo che nessun elemento porta è il modo in cui una funzionalità
     sparisce senza che nulla diventi rosso.
     """
-    for doc in ("officina.html", "index.html"):
+    for doc in ("workshop.html", "index.html"):
         html = (ROOT / "jenny/templates/ui" / doc).read_text(encoding="utf-8")
         assert "data-opens" not in _senza_commenti_html(html), doc
     assert "dataset.opens" not in _senza_commenti_js(_src("mobile-app.js"))
@@ -855,7 +855,7 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
     volta per questa stessa classe di difetto in questo progetto.
     """
     js = _src("mobile-launcher.js")
-    officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
+    workshop = (ROOT / "jenny/templates/ui/workshop.html").read_text(encoding="utf-8")
     casa = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
     css = _src("mobile-style.css")
 
@@ -868,7 +868,7 @@ def test_what_the_sheet_hides_at_runtime_really_disappears() -> None:
         m = re.search(rf"this\.{campo}\s*=\s*document\.getElementById\('([^']+)'\)", js)
         assert m, f"non risalgo al nodo di this.{campo}"
         nodo_id = m.group(1)
-        for doc, nome in ((officina, "officina.html"), (casa, "index.html")):
+        for doc, nome in ((workshop, "workshop.html"), (casa, "index.html")):
             tag = re.search(rf'<[a-z]+[^>]*id="{re.escape(nodo_id)}"[^>]*>', doc)
             if not tag:
                 continue

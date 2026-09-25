@@ -400,7 +400,7 @@ _UI_MANIFEST = [
     # (GATEWAY_PATH = "/html-mobile/") e su cui ricade ogni percorso ignoto.
     # L'officina ha il suo nome e si raggiunge di proposito.
     "index.html",
-    "officina.html",
+    "workshop.html",
 ]
 
 _extracted_registry: dict[str, Path] = {}

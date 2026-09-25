@@ -31,7 +31,7 @@ ASSETS = UI / "assets"
 
 HEADER = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
 SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
-OFFICINA = (UI / "officina.html").read_text(encoding="utf-8")
+WORKSHOP = (UI / "workshop.html").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 
 CASSETTI = ("cervello", "mani", "memoria")
@@ -56,16 +56,16 @@ def test_ogni_cassetto_ha_nome_e_sottotitolo(lingua: str, cassetto: str) -> None
     """
     d = _i18n(lingua)
     assert d["nav"][cassetto].strip(), f"{lingua}: nav.{cassetto} vuoto"
-    sub = d["officina"]["sub"][cassetto]
+    sub = d["workshop"]["sub"][cassetto]
     assert sub.strip(), f"{lingua}: officina.sub.{cassetto} vuoto"
     # Una soprascritta che e' anche il sottotitolo vuol dire che qualcuno ha
     # riempito la riga per far passare il banco.
-    assert sub != d["officina"]["eyebrow"]
+    assert sub != d["workshop"]["eyebrow"]
 
 
 @pytest.mark.parametrize("lingua", LINGUE)
 def test_la_soprascritta_e_il_pill_esistono(lingua: str) -> None:
-    d = _i18n(lingua)["officina"]
+    d = _i18n(lingua)["workshop"]
     assert d["eyebrow"].strip()
     assert d["casaPill"].strip()
 
@@ -78,7 +78,7 @@ def test_i_sottotitoli_dicono_cose_diverse() -> None:
     spazio.
     """
     for lingua in LINGUE:
-        subs = _i18n(lingua)["officina"]["sub"]
+        subs = _i18n(lingua)["workshop"]["sub"]
         assert len(set(subs.values())) == len(CASSETTI), f"{lingua}: sottotitoli ripetuti"
 
 
@@ -155,7 +155,7 @@ def test_il_cambio_lingua_rifa_anche_i_cassetti() -> None:
 
 
 def _voci_dock() -> list[re.Match]:
-    return list(re.finditer(r'<div class="dock-item[^"]*"([^>]*)>(.*?)</div>', OFFICINA))
+    return list(re.finditer(r'<div class="dock-item[^"]*"([^>]*)>(.*?)</div>', WORKSHOP))
 
 
 @pytest.mark.parametrize("modo", ("chat", "cervello", "mani", "memoria"))
@@ -326,7 +326,7 @@ def test_un_gruppo_sta_in_un_cassetto_solo() -> None:
 @pytest.mark.parametrize("lingua", LINGUE)
 def test_le_soprascritte_nuove_sono_tradotte(lingua: str) -> None:
     """I cinque gruppi che il ritaglio ha creato hanno un nome vero."""
-    gruppi = _i18n(lingua)["officina"]["gruppi"]
+    gruppi = _i18n(lingua)["workshop"]["gruppi"]
     for chiave in ("chiPensa", "parametri", "quantoRicorda", "dream", "giardiniere"):
         assert gruppi.get(chiave, "").strip(), f"{lingua}: officina.gruppi.{chiave} manca"
 
@@ -375,8 +375,8 @@ def test_il_taglio_fine_e_arrivato() -> None:
 def test_la_console_ha_il_suo_mount() -> None:
     """Senza mount `setMode` esce in silenzio — e' il difetto da cui e' nato
     questo file, ripetuto su un'altra vista."""
-    assert 'id="title-chat"' in OFFICINA, "la vista chat non ha un mount per il titolo"
-    testa = OFFICINA.split('id="view-chat"', 1)[1]
+    assert 'id="title-chat"' in WORKSHOP, "la vista chat non ha un mount per il titolo"
+    testa = WORKSHOP.split('id="view-chat"', 1)[1]
     mount = testa.index('id="title-chat"')
     area = testa.index('id="chat-area"')
     assert mount < area, "il mount non sta in cima alla vista: il titolo finirebbe sotto la chat"
@@ -440,7 +440,7 @@ def test_il_pill_e_definito_una_volta_sola() -> None:
     due resta indietro.
     """
     assert "function pillCasa()" in HEADER, "il pill non ha piu' una definizione sua"
-    assert HEADER.count("i18n.t('officina.casaPill')") == 1, (
+    assert HEADER.count("i18n.t('workshop.casaPill')") == 1, (
         "la stringa del pill compare piu' di una volta: e' tornata a essere copiata"
     )
 
@@ -468,7 +468,7 @@ def test_una_intestazione_col_pill_si_rifa_intera() -> None:
     La prima versione di questa intestazione riassegnava il solo `title` al
     cambio lingua. Il resto della voce restava quello costruito **al
     caricamento del file**, quando le traduzioni non ci sono ancora — e nel
-    bottone c'era scritto, per esteso, `officina.casaPill`.
+    bottone c'era scritto, per esteso, `workshop.casaPill`.
 
     Perche' solo li'. Ogni intestazione dell'officina ha azioni con una
     stringa dentro, ma quella stringa e' quasi sempre un `title=`, cioe' un

@@ -27,7 +27,7 @@ ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "a
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 DRAG_JS = ASSETS / "shared" / "mascot-drag.js"
 FOGLI = {
-    "officina": ASSETS / "mobile-style.css",
+    "workshop": ASSETS / "mobile-style.css",
     "casa": ASSETS / "home-style.css",
 }
 
@@ -109,7 +109,7 @@ def test_no_stylesheet_spells_the_ratio_out_again() -> None:
     e i suoi ancoraggi stanno in un foglio solo, quello dell'officina, che la
     casa carica. La casa non ne dichiara nessuno: se ne ricomparisse uno li',
     sarebbe un secondo posto dove Jenny si ancora — cioe' di nuovo due Jenny."""
-    ancoraggi = _anchors(FOGLI["officina"].read_text(encoding="utf-8"))
+    ancoraggi = _anchors(FOGLI["workshop"].read_text(encoding="utf-8"))
     # Un bordo solo dal 24/09/2026 (Jenny sta sempre a destra): due ancoraggi,
     # al dock e fuori.
     assert len(ancoraggi) >= 2, (
@@ -169,9 +169,9 @@ def test_both_shells_answer_the_tap() -> None:
     src = (ASSETS / "shared" / "jenny-mascot.js").read_text(encoding="utf-8")
     assert re.search(r"onTap:.*'out'", src), "la mascotte non gira piu' lo stato al tocco"
     assert "isOut:" in src and "setOut:" in src, "la mascotte non dichiara piu' lo stato"
-    officina = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
-    assert "class JennyCompanion extends JennyMascot" in officina
-    assert "bindMascotDrag" not in officina, "l'officina lega di nuovo la fisica per conto suo"
+    workshop = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
+    assert "class JennyCompanion extends JennyMascot" in workshop
+    assert "bindMascotDrag" not in workshop, "l'officina lega di nuovo la fisica per conto suo"
     casa = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     assert "new JennyMascot(" in casa
     assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"

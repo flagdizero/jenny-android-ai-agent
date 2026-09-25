@@ -25,7 +25,7 @@ from support import css_levels
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 CASA_CSS = ASSETS / "home-style.css"
-OFFICINA_CSS = ASSETS / "mobile-style.css"
+WORKSHOP_CSS = ASSETS / "mobile-style.css"
 
 _ART = ("jenny-body-front", "jenny-face-front", "jenny-side.webp", "jenny-side-talk")
 
@@ -99,7 +99,7 @@ def test_she_does_not_sway_against_the_edge() -> None:
     addosso: e' il CSS a dover chiedere anche `.out`. Mezza Jenny che oscilla
     contro il bordo somiglia a un guasto della pagina (la casa l'aveva gia'
     corretto per se'; adesso vale in tutte e due)."""
-    css = OFFICINA_CSS.read_text(encoding="utf-8")
+    css = WORKSHOP_CSS.read_text(encoding="utf-8")
     dondoli = [
         selettori.strip().splitlines()[-1]
         for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css)
@@ -121,7 +121,7 @@ def test_she_is_on_top_of_everything_in_the_workshop() -> None:
     lei restano solo `<dialog>` e toast, che vivono nel top layer, e le
     eccezioni qui sotto, ciascuna col suo perche'.
     """
-    css = OFFICINA_CSS.read_text(encoding="utf-8")
+    css = WORKSHOP_CSS.read_text(encoding="utf-8")
     livelli = css_levels.levels(css)
     suoi = [z for sel, z in livelli if sel == ".jenny-duo"]
     assert len(suoi) == 1, suoi
@@ -166,7 +166,7 @@ def test_a_short_screen_hides_her_only_where_the_dock_goes() -> None:
     senza motivo (revisione del 25/09/2026). E nessun `!important` per
     nasconderla: le regole vincono per ordine, e il commento che diceva il
     contrario era falso."""
-    css = OFFICINA_CSS.read_text(encoding="utf-8")
+    css = WORKSHOP_CSS.read_text(encoding="utf-8")
     corti = [
         (sel, corpo) for sel, corpo, ctx in css_levels.rules(css)
         if any("max-height: 500px" in at for at in ctx) and "jenny" in sel

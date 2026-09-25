@@ -71,10 +71,10 @@ def test_a_parse_error_falls_back_to_escaped_text() -> None:
 def test_both_chats_use_the_shared_function() -> None:
     """Una copia sola: nessuna delle due chat se ne riscrive una sua."""
     casa = (ASSETS / "home-chat.js").read_text(encoding="utf-8")
-    officina = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
+    workshop = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
     assert "import { renderMarkdown } from './shared/markdown.js';" in casa
     assert "function renderMarkdown" not in casa
-    assert "from './shared/markdown.js';" in officina
-    body = function(officina, "renderMarkdown")
+    assert "from './shared/markdown.js';" in workshop
+    body = function(workshop, "renderMarkdown")
     assert "initMarked();" in body and "renderSafeMarkdown(text)" in body
     assert "DOMPurify" not in body, "la regola di sicurezza sta in shared/markdown.js"

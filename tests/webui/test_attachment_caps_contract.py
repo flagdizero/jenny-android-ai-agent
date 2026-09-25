@@ -139,18 +139,18 @@ def test_nothing_is_dropped_without_saying_so() -> None:
 def test_both_shells_listen_to_the_refusal() -> None:
     assets = ROOT / "jenny" / "templates" / "ui" / "assets"
     casa = (assets / "home-app.js").read_text(encoding="utf-8")
-    officina = (assets / "mobile-chat.js").read_text(encoding="utf-8")
+    workshop = (assets / "mobile-chat.js").read_text(encoding="utf-8")
     assert "onReject = (reason) =>" in casa, "la casa non ascolta i rifiuti locali"
-    assert "imageHandler.onReject = (reason) =>" in officina, "l'officina non li ascolta"
+    assert "imageHandler.onReject = (reason) =>" in workshop, "l'officina non li ascolta"
 
 
 def test_the_officina_hook_comes_after_the_handler_exists() -> None:
     """Un aggancio scritto prima del `new ImageHandler()` è un TypeError al
     caricamento: la chat non parte affatto, e `node --check` non lo vede."""
-    officina = (ROOT / "jenny" / "templates" / "ui" / "assets"
+    workshop = (ROOT / "jenny" / "templates" / "ui" / "assets"
                 / "mobile-chat.js").read_text(encoding="utf-8")
-    born = officina.index("this.imageHandler = new ImageHandler();")
-    hooked = officina.index("this.imageHandler.onReject")
+    born = workshop.index("this.imageHandler = new ImageHandler();")
+    hooked = workshop.index("this.imageHandler.onReject")
     assert born < hooked, "onReject viene agganciato prima che il gestore esista"
 
 

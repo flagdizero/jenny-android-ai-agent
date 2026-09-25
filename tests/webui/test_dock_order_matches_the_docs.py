@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OFFICINA_HTML = ROOT / "jenny" / "templates" / "ui" / "officina.html"
+WORKSHOP_HTML = ROOT / "jenny" / "templates" / "ui" / "workshop.html"
 TOUR_DOC = ROOT / "docs" / "using" / "webui-tour.md"
 
 # ``onboarding`` è il sesto slot, nascosto dopo il primo avvio: la pagina lo
@@ -42,7 +42,7 @@ def _dom_order() -> list[str]:
     silenzio lo slot scritto al contrario — è successo con ``chat``, e il test
     accusava il documento invece di sé stesso.
     """
-    html = OFFICINA_HTML.read_text("utf-8")
+    html = WORKSHOP_HTML.read_text("utf-8")
     modes: list[str] = []
     for tag in re.findall(r"<div\b[^>]*>", html):
         classes = re.search(r'class="([^"]*)"', tag)

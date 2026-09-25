@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 APP_JS = ASSETS / "mobile-app.js"
-OFFICINA = ROOT / "jenny" / "templates" / "ui" / "officina.html"
+WORKSHOP = ROOT / "jenny" / "templates" / "ui" / "workshop.html"
 
 
 def _src(nome: str) -> str:
@@ -98,7 +98,7 @@ def test_every_drawer_in_the_table_is_a_dock_voice_and_the_other_way_round() -> 
     voce del dock senza cassetto disegna la schermata intera — cioe' il difetto
     da cui questo giro parte."""
     tabella = set(_cassetti())
-    html = OFFICINA.read_text(encoding="utf-8")
+    html = WORKSHOP.read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     voci = [m for m in re.findall(r'data-mode="([a-z]+)"', nav) if m != "onboarding"]
 
@@ -140,7 +140,7 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     assert fabbriche, "le fabbriche dei controller non si trovano piu'"
     modi = set(re.findall(r"(\w+):\s", fabbriche.group(1)))
 
-    html = OFFICINA.read_text(encoding="utf-8")
+    html = WORKSHOP.read_text(encoding="utf-8")
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     sul_dock = set(re.findall(r'data-mode="([a-z]+)"', nav))
 
@@ -237,14 +237,14 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
     manda a sfogliare qui: «si sfoglia in officina. Vive pero' su questo
     telefono — di un telefono perso non salva niente».
     """
-    officina = _src("mobile-settings.js")
+    workshop = _src("mobile-settings.js")
     for flow in ("runExportFlow", "runImportFlow"):
-        assert flow not in officina, (
+        assert flow not in workshop, (
             f"l'officina rifa' «{flow}», che la casa ha gia': due posti che "
             f"scrivono lo stesso file"
         )
     for bottone in ("btn-backup-export", "btn-backup-import"):
-        assert bottone not in officina, f"{bottone} e' tornato in officina"
+        assert bottone not in workshop, f"{bottone} e' tornato in officina"
 
     # E la casa ce li ha davvero: se un giorno sparissero di la', questo banco
     # starebbe difendendo un buco invece di un confine.
@@ -256,7 +256,7 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
 
     # Quel che resta di qua: la storia locale, con le sue tre manopole.
     for pezzo in ("btn-snapshot-create", "snapshot-retention", "runSnapshotRestore"):
-        assert pezzo in officina, f"la storia locale ha perso {pezzo}"
+        assert pezzo in workshop, f"la storia locale ha perso {pezzo}"
     assert "runSnapshotRestore" not in casa, (
         "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
     )
@@ -271,9 +271,9 @@ def test_choosing_the_model_lives_in_the_casa() -> None:
     c'e'. Sono due verbi diversi sullo stesso oggetto — ma un catalogo di qua
     sarebbe la copia, non il secondo verbo.
     """
-    officina = _src("mobile-settings.js")
+    workshop = _src("mobile-settings.js")
     for pezzo in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
-        assert pezzo not in officina, f"«{pezzo}» e' tornato in officina"
+        assert pezzo not in workshop, f"«{pezzo}» e' tornato in officina"
 
     casa = _casa("home-model.js")
     assert "getProviderModels" in casa, "la casa non chiede piu' l'elenco dei modelli"
@@ -283,7 +283,7 @@ def test_choosing_the_model_lives_in_the_casa() -> None:
     # E l'anagrafica resta **solo** di qua: la casa sostituisce una chiave, non
     # compila un endpoint.
     for campo in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
-        assert campo in officina, f"l'anagrafica ha perso {campo}"
+        assert campo in workshop, f"l'anagrafica ha perso {campo}"
         assert campo not in casa, f"la casa ha preso {campo}: quello ha bisogno di un paragrafo"
 
 
@@ -344,7 +344,7 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
                 f"{js.name} importa di nuovo una vista che non c'e'"
             )
 
-    html = OFFICINA.read_text(encoding="utf-8")
+    html = WORKSHOP.read_text(encoding="utf-8")
     for nodo in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
                  'id="drawer-files"', 'id="wiki-feedback-dialog"'):
         assert nodo not in html, f"{nodo} e' tornato in officina.html"
@@ -370,11 +370,11 @@ def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
     tutti i vendor e vive in `test_vendor_contract.py`. Qui resta la parte che
     era davvero dell'officina, ed e' l'altra meta' del difetto originale:
     **niente si carica all'avvio**. KaTeX stava in due `<script defer>` dentro
-    `officina.html`, cioe' 275 kB piu' il CSS a ogni partenza anche solo per
+    `workshop.html`, cioe' 275 kB piu' il CSS a ogni partenza anche solo per
     aprire la chat. Adesso e' pigro come mermaid, e questo banco tiene la porta
     chiusa.
     """
-    html = OFFICINA.read_text(encoding="utf-8")
+    html = WORKSHOP.read_text(encoding="utf-8")
     for pesante in ("katex", "mermaid", "d3.min.js"):
         assert pesante not in html, (
             f"officina.html carica {pesante} all'avvio: si carica quando serve, "

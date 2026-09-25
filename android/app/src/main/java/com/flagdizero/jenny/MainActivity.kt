@@ -975,7 +975,7 @@ class MainActivity : AppCompatActivity() {
      * Il path è uno dei **documenti-guscio** della WebUI?
      *
      * Le interfacce sono due — la casa (`index.html`, cioè quel che
-     * [GATEWAY_PATH] serve) e l'officina (`officina.html`) — e si passa
+     * [GATEWAY_PATH] serve) e l'officina (`workshop.html`) — e si passa
      * dall'una all'altra con un caricamento di pagina. Senza questo elenco
      * quella navigazione veniva bloccata dalla rete di sicurezza qui sotto e
      * le due porte non si aprivano: misurato sul Titan 2 il 18/09/2026, con
@@ -992,7 +992,7 @@ class MainActivity : AppCompatActivity() {
         return path == GATEWAY_PATH ||
             path == base ||
             path == "$base/index.html" ||
-            path == "$base/officina.html"
+            path == "$base/workshop.html"
     }
 
     /**

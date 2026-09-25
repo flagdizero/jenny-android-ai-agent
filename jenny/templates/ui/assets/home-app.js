@@ -1642,8 +1642,8 @@ class HomeApp {
      dice comunque a voce alta dove sei finito, che e' il motivo per cui questo
      buco costa poco. */
   _openInWorkshop(turnId) {
-    const target = turnId ? `/html-mobile/officina.html#turn=${encodeURIComponent(turnId)}`
-                          : '/html-mobile/officina.html';
+    const target = turnId ? `/html-mobile/workshop.html#turn=${encodeURIComponent(turnId)}`
+                          : '/html-mobile/workshop.html';
     api.navigate(target);
   }
 

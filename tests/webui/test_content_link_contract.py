@@ -179,7 +179,7 @@ def test_the_shell_calls_the_spa_pages_internal_only_by_exact_path() -> None:
     """Il prefisso non basta: ``/html-mobile/www.google.com`` lo soddisferebbe.
 
     I documenti-guscio sono due — la casa (``index.html``) e l'officina
-    (``officina.html``) — e l'elenco vive in ``isShellDocument``. Quel che non
+    (``workshop.html``) — e l'elenco vive in ``isShellDocument``. Quel che non
     deve cambiare e' **come** si confrontano: per uguaglianza, uno per uno. Un
     ``startsWith`` sotto il gateway riaprirebbe il buco per intero.
     """
@@ -193,7 +193,7 @@ def test_the_shell_calls_the_spa_pages_internal_only_by_exact_path() -> None:
     assert "startsWith" not in code, "un confronto per prefisso riapre il buco"
     assert "contains" not in code, "un confronto per sottostringa riapre il buco"
     # I due gusci, per nome: se uno sparisce, la sua porta smette di aprirsi.
-    assert "index.html" in code and "officina.html" in code
+    assert "index.html" in code and "workshop.html" in code
     # E il predicato usato dal WebViewClient deve passare di qui, non altrove.
     caller = re.search(
         r"private fun isInternalGatewayUrl\(uri: Uri\): Boolean \{(.*?)\n    \}", kotlin, re.S

@@ -154,7 +154,7 @@ def test_il_monospazio_viene_dal_token_e_non_da_un_nome_di_carattere() -> None:
 # Il criterio della tavola, che questi banchi tengono fermo: **in cassetto quel
 # che si legge, l'amministrazione dietro un tocco.**
 
-OFFICINA_HTML = (ROOT / "jenny" / "templates" / "ui" / "officina.html").read_text(encoding="utf-8")
+WORKSHOP_HTML = (ROOT / "jenny" / "templates" / "ui" / "workshop.html").read_text(encoding="utf-8")
 
 
 def test_la_storia_in_cassetto_e_una_riga() -> None:
@@ -170,8 +170,8 @@ def test_il_dettaglio_vive_nel_pannello() -> None:
     corpo = _corpo("_apriStoria")
     for roba in ("snapshot-list", "snapshot-retention", "btn-snapshot-create"):
         assert roba in corpo, f"«{roba}» non è nel pannello: allora è sparito davvero"
-    assert 'id="drawer-storia"' in OFFICINA_HTML, "il pannello non esiste nel documento"
-    assert 'id="drawer-storia-body"' in OFFICINA_HTML
+    assert 'id="drawer-storia"' in WORKSHOP_HTML, "il pannello non esiste nel documento"
+    assert 'id="drawer-storia-body"' in WORKSHOP_HTML
 
 
 def test_il_corpo_del_pannello_si_disegna_all_apertura() -> None:
@@ -269,7 +269,7 @@ def test_telegram_in_cassetto_e_una_riga() -> None:
     assert "settings-telegram-widget" not in SETTINGS, (
         "il widget è ancora montato nel cassetto invece che nel pannello"
     )
-    assert 'id="drawer-telegram-body"' in OFFICINA_HTML
+    assert 'id="drawer-telegram-body"' in WORKSHOP_HTML
 
 
 def test_il_widget_si_monta_all_apertura_del_pannello() -> None:
@@ -397,7 +397,7 @@ def test_i_comandi_dell_host_stanno_nel_pannello() -> None:
     riga = _corpo("_renderSshHost")
     for cmd in ("ssh-generate", "ssh-verify", "ssh-edit", "ssh-delete"):
         assert cmd not in riga, f"«{cmd}» è rimasto nella riga"
-    assert 'id="drawer-ssh-host"' in OFFICINA_HTML
+    assert 'id="drawer-ssh-host"' in WORKSHOP_HTML
 
 
 def test_il_cablaggio_dei_comandi_guarda_dentro_il_pannello() -> None:
@@ -630,10 +630,10 @@ def test_le_parole_della_pastiglia_non_restano_orfane() -> None:
         (ASSETS / nome).read_text(encoding="utf-8")
         for nome in ("mobile-header.js", "mobile-settings.js", "mobile-app.js")
     )
-    assert "officina.stato" not in sorgenti
+    assert "workshop.stato" not in sorgenti
     for lingua in ("it", "en"):
         d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
-        assert "stato" not in d["officina"], f"{lingua}: le parole della pastiglia sono ancora li'"
+        assert "stato" not in d["workshop"], f"{lingua}: le parole della pastiglia sono ancora li'"
 
 
 def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
@@ -649,13 +649,13 @@ def test_i_cassetti_non_hanno_piu_il_bottone_aggiorna() -> None:
 def test_il_cassetto_dice_dove_sta_quel_che_non_ci_sta() -> None:
     """Un cassetto che si chiama «Cervello» sembra il posto dove cercare Dream:
     è l'errore che il giro dei cassetti ha già fatto una volta."""
-    assert "officina.rimando.dreamInMemoria" in SETTINGS
+    assert "workshop.rimando.dreamInMemoria" in SETTINGS
     assert ".settings-rimando {" in CSS
     import json
 
     for lingua in ("it", "en"):
         d = json.loads((ASSETS / "i18n" / f"{lingua}.json").read_text(encoding="utf-8"))
-        assert d["officina"]["rimando"]["dreamInMemoria"].strip()
+        assert d["workshop"]["rimando"]["dreamInMemoria"].strip()
 
 
 def test_un_lavoro_periodico_e_una_riga() -> None:
@@ -708,8 +708,8 @@ def test_il_riepilogo_delle_skill_non_resta_a_caricamento_per_sempre() -> None:
 
 
 def test_il_pannello_delle_skill_esiste_e_si_disegna_all_apertura() -> None:
-    assert 'id="drawer-skill"' in OFFICINA_HTML
-    assert 'id="drawer-skill-body"' in OFFICINA_HTML
+    assert 'id="drawer-skill"' in WORKSHOP_HTML
+    assert 'id="drawer-skill-body"' in WORKSHOP_HTML
     assert "skill: this._apriSkill" in SETTINGS, "niente collega la riga al pannello"
     corpo = _corpo("_apriSkill")
     # Il pannello vive fuori da `contentEl`: cercarlo lì scrive nel vuoto.

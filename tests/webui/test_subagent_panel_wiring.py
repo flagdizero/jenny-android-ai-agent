@@ -19,7 +19,7 @@ from support import css_levels
 UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
 DIALOG_JS = UI_DIR / "assets" / "shared" / "dialog.js"
-OFFICINA_HTML = UI_DIR / "officina.html"
+WORKSHOP_HTML = UI_DIR / "workshop.html"
 CSS = UI_DIR / "assets" / "mobile-style.css"
 
 
@@ -114,7 +114,7 @@ def test_the_detail_modal_reuses_the_shared_dialog() -> None:
     for node_id in ("oc-detail-dialog", "oc-detail-title", "oc-detail-body",
                     "oc-detail-actions", "oc-detail-close"):
         assert f'id="{node_id}"' in dialog, node_id
-    assert 'id="oc-detail-dialog"' not in OFFICINA_HTML.read_text(encoding="utf-8"), (
+    assert 'id="oc-detail-dialog"' not in WORKSHOP_HTML.read_text(encoding="utf-8"), (
         "due copie dello stesso markup: la seconda è quella che resterà indietro"
     )
 

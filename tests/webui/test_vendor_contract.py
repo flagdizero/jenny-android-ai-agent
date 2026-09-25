@@ -127,13 +127,13 @@ def test_the_heavy_ones_are_fetched_on_demand() -> None:
     """Quanto pesa nel pacchetto e quanto pesa **all'avvio** sono due domande
     diverse, e la seconda e' quella che si sente.
 
-    KaTeX stava in due `<script defer>` dentro `officina.html`: 275 kB di codice
+    KaTeX stava in due `<script defer>` dentro `workshop.html`: 275 kB di codice
     piu' il foglio di stile a ogni singola partenza, anche solo per aprire la
     chat — per una cosa che compare in un messaggio su cento. Mermaid invece e'
     sempre stato pigro. Adesso lo sono tutte e due, e nessuno dei due guscia le
     nomina.
     """
-    for shell in ("officina.html", "index.html"):
+    for shell in ("workshop.html", "index.html"):
         html = (ASSETS.parent / shell).read_text(encoding="utf-8")
         for pesante in ("katex", "mermaid", "d3"):
             assert f"vendor/{pesante}" not in html, (

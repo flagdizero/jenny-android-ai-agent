@@ -122,7 +122,7 @@ def test_the_preference_is_per_conversation() -> None:
 
 def test_the_switch_sits_in_the_chip_row() -> None:
     """Nel popover Info sessione c'era già, e non contava come «si vede»."""
-    html = (UI / "officina.html").read_text(encoding="utf-8")
+    html = (UI / "workshop.html").read_text(encoding="utf-8")
     row = re.search(r'<div class="compose-scope">(.*?)</div>\s*<div id="input-row"',
                     html, re.S)
     assert row, "riga .compose-scope non trovata"

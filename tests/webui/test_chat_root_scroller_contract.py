@@ -29,7 +29,7 @@ CHAT_JS = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
 PAGER_JS = (ASSETS / "shared" / "history-pager.js").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 SELECTION_JS = (ASSETS / "shared" / "selection.js").read_text(encoding="utf-8")
-OFFICINA_HTML = (UI / "officina.html").read_text(encoding="utf-8")
+WORKSHOP_HTML = (UI / "workshop.html").read_text(encoding="utf-8")
 
 _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input",
          "link", "meta", "param", "source", "track", "wbr"}
@@ -79,7 +79,7 @@ class _Ancestry(HTMLParser):
 
 def _parsed() -> _Ancestry:
     parser = _Ancestry()
-    parser.feed(OFFICINA_HTML)
+    parser.feed(WORKSHOP_HTML)
     return parser
 
 

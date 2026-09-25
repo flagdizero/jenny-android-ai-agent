@@ -105,7 +105,7 @@ def test_officina_html_carries_the_same_csp(tmp_path):
     una violazione costa di piu' e si spiega di meno. Il confronto ora e' su
     `_SHELL_DOCUMENTS`, e questo test e' cio' che impedisce di tornare indietro.
     """
-    assert _csp(tmp_path, "officina.html") == _csp(tmp_path, "index.html")
+    assert _csp(tmp_path, "workshop.html") == _csp(tmp_path, "index.html")
 
 
 def test_only_shell_documents_get_the_csp(tmp_path):

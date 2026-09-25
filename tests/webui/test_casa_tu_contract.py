@@ -630,24 +630,24 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
     """
     flusso = (ASSETS / "shared" / "update-flow.js").read_text(encoding="utf-8")
     casa = (ASSETS / "home-updates.js").read_text(encoding="utf-8")
-    officina = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+    workshop = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 
     assert "update-flow.js" in casa, "la casa non usa piu' il flusso condiviso"
-    assert "update-flow.js" not in officina, (
+    assert "update-flow.js" not in workshop, (
         "l'officina ha ripreso il giro degli aggiornamenti: e' in casa"
     )
     for pezzo in ("btn-update-install", "btn-update-check", "_renderUpdateCard"):
-        assert pezzo not in officina, f"«{pezzo}» e' tornato in officina"
+        assert pezzo not in workshop, f"«{pezzo}» e' tornato in officina"
 
     # Le rotte si chiamano da un posto solo.
-    for vista, sorgente in (("la casa", casa), ("l'officina", officina)):
+    for vista, sorgente in (("la casa", casa), ("l'workshop", workshop)):
         rotte = re.findall(r"/api/updates/\w+", sorgente)
         assert not rotte, f"{vista} parla da sola con {sorted(set(rotte))}"
     assert re.findall(r"/api/updates/\w+", flusso), "il flusso non chiama piu' nessuna rotta"
 
     # E la tabella delle fasi resta una.
     assert flusso.count("phaseDownloading") == 1
-    assert "phaseDownloading" not in casa and "phaseDownloading" not in officina
+    assert "phaseDownloading" not in casa and "phaseDownloading" not in workshop
 
 
 def test_the_backup_row_carries_the_date_that_did_not_exist() -> None:

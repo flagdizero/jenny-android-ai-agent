@@ -283,9 +283,9 @@ export class SettingsController {
        storia degli snapshot: qui si costruisce **solo** quel che si vede. */
     const sezioni = {
       // Cervello
-      chiPensa: () => this._gruppo('chiPensa', i18n.t('officina.gruppi.chiPensa'), this._renderChiPensa(d)),
+      chiPensa: () => this._gruppo('chiPensa', i18n.t('workshop.gruppi.chiPensa'), this._renderChiPensa(d)),
       marche: () => this._gruppo('marche', i18n.t('settings.brands'), this._renderMarche(d)),
-      parametri: () => this._gruppo('parametri', i18n.t('officina.gruppi.parametri'), this._renderParametri(d)),
+      parametri: () => this._gruppo('parametri', i18n.t('workshop.gruppi.parametri'), this._renderParametri(d)),
       battery: () => this._renderBatterySection(d),
       system: () => this._gruppo('system', i18n.t('settings.system'), this._renderSystem(d)),
       // Mani
@@ -293,13 +293,13 @@ export class SettingsController {
       posizione: () => this._gruppo('posizione', i18n.t('settings.location.section'), this._renderLocation(d)),
       ssh: () => this._gruppo('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._gruppo('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
-      skill: () => this._gruppo('skill', i18n.t('officina.gruppi.skill'), this._renderSkill()),
+      skill: () => this._gruppo('skill', i18n.t('workshop.gruppi.skill'), this._renderSkill()),
       scheduling: () => this._gruppo('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
-      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('officina.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
-      dream: () => this._gruppo('dream', i18n.t('officina.gruppi.dream'), this._renderDream(d)),
-      workers: () => this._gruppo('workers', i18n.t('officina.gruppi.giardiniere'), this._renderWorkers(d)),
-      file: () => this._gruppo('file', i18n.t('officina.gruppi.file'), this._renderFile()),
+      quantoRicorda: () => this._gruppo('quantoRicorda', i18n.t('workshop.gruppi.quantoRicorda'), this._renderQuantoRicorda(d)),
+      dream: () => this._gruppo('dream', i18n.t('workshop.gruppi.dream'), this._renderDream(d)),
+      workers: () => this._gruppo('workers', i18n.t('workshop.gruppi.giardiniere'), this._renderWorkers(d)),
+      file: () => this._gruppo('file', i18n.t('workshop.gruppi.file'), this._renderFile()),
       backup: () => this._gruppo('backup', i18n.t('backup.snapshotHistory'), this._renderBackup()),
     };
     const cassetto = CASSETTI[this._cassetto];
@@ -439,7 +439,7 @@ export class SettingsController {
          cassetto che si chiama «Cervello» sembra il posto dove cercare
          Dream — ed e' esattamente l'errore che il giro dei cassetti ha
          fatto una volta. */
-      + `<p class="settings-rimando">${i18n.t('officina.rimando.dreamInMemoria')}</p>`,
+      + `<p class="settings-rimando">${i18n.t('workshop.rimando.dreamInMemoria')}</p>`,
     );
   }
 
@@ -1812,7 +1812,7 @@ export class SettingsController {
    */
   _renderFile() {
     return `
-      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('officina.file.desc')}</p>
+      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('workshop.file.desc')}</p>
       <div class="ws-esploratore" id="settings-file-esploratore">
         <div class="ws-barra">
           <div class="ws-breadcrumb" data-ws-crumb></div>
