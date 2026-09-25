@@ -825,19 +825,14 @@ body {
    che questa riga non può mantenere. */
 .scope-menu-item.is-unopenable { color: var(--text-faint); cursor: default; }
 .scope-menu-item.is-unopenable:hover { background: transparent; }
-/* L'interruttore sta nella stessa riga del chip e ha la stessa transizione e lo
-   stesso `scale(0.98)` al tocco: e' nato dopo questo blocco e ne era rimasto
-   fuori. Il rimpicciolimento e' la parte che conta — le transizioni le azzera
-   comunque la regola `*` della sezione «Reduced Motion» (a meta' del foglio,
-   subito dopo l'input bar), il `transform` di uno stato `:active` no, perche'
-   non e' ne' un'animazione ne' una durata. */
+/* Le tre pillole della riga del composer senza transizioni a movimento
+   ridotto. Il rimpicciolimento al tocco, che era qui solo per loro, lo spegne
+   per tutti i bottoni il blocco in fondo al foglio («Movimento ridotto: il
+   tocco non rimpicciolisce»). */
 @media (prefers-reduced-motion: reduce) {
   .scope-chip { transition: none; }
-  .scope-chip:active { transform: none; }
   .write-switch { transition: none; }
-  .write-switch:active { transform: none; }
   .commands-chip { transition: none; }
-  .commands-chip:active { transform: none; }
   .scope-menu-item { transition: none; }
 }
 
@@ -6205,4 +6200,35 @@ body {
 .diagramma svg {
   display: block;
   height: auto;
+}
+
+
+/* ── Movimento ridotto: il tocco non rimpicciolisce ────────────────────────
+   La regola `*` della sezione «Reduced Motion» azzera durate e animazioni, ma
+   un `transform` su `:active` non e' ne' l'una ne' l'altra: il bottone
+   rimpiccioliva lo stesso, a scatto. Fino al 25/09/2026 lo spegnevano solo le
+   tre pillole del composer e le altre venti no, quindi la stessa preferenza
+   valeva per meta' dei bottoni (revisione, voce bassa). Adesso vale per tutti,
+   come dicevano le pillole: il rimpicciolimento e' la parte che quella
+   preferenza chiede di togliere. Il riscontro al tocco resta a fondo, colore
+   e opacita' (v. `.ibtn:active` sotto `hover: none`).
+   **Sta in fondo al foglio apposta**: a pari specificita' vince chi viene
+   dopo, e deve venire dopo ogni regola che rimpicciolisce. Un bottone nuovo
+   con `scale()` al tocco va aggiunto qui — lo chiede
+   `test_reduced_motion_stops_every_press_from_shrinking`. */
+@media (prefers-reduced-motion: reduce) {
+  .ibtn:active,
+  .scope-chip:active, .write-switch:active, .commands-chip:active,
+  .scope-menu-del:active,
+  .input-action:active,
+  .compose-drawer:active, .compose-send:active,
+  .drawer-close:active, .file-preview-close:active, .session-info-close:active,
+  .ws-item:active,
+  .chat-code-copy:active,
+  .ws-save-btn:active,
+  .launcher-row:active,
+  .oc-btn-cancel:active, .oc-btn-confirm:active,
+  .settings-btn-add:active,
+  .onboarding-btn:active, .onboarding-btn:not(:disabled):active,
+  .btn-icon:active { transform: none; }
 }

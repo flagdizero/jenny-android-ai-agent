@@ -28,6 +28,8 @@ import json
 import re
 from pathlib import Path
 
+from support import css_levels
+
 UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 ASSETS = UI / "assets"
 SWITCH = ASSETS / "shared" / "write-switch.js"
@@ -168,18 +170,24 @@ def test_reduced_motion_covers_the_switch_too() -> None:
     quella preferenza chiede di togliere.
     """
     css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
-    blocks = re.findall(
-        r"@media \(prefers-reduced-motion: reduce\) \{(.*?)^\}", css, re.S | re.M
-    )
-    assert blocks, "blocco prefers-reduced-motion non trovato"
-    covered = "\n".join(blocks)
-    assert re.search(r"\.write-switch:active \{[^}]*transform:\s*none", covered), (
+    # Dal 25/09/2026 il rimpicciolimento lo spegne per tutti un blocco solo, in
+    # fondo al foglio, che raggruppa i selettori: si leggono le regole intere
+    # (v. anche `test_reduced_motion_contract.py`).
+    spenti = {
+        " ".join(s.split())
+        for selettori, corpo, ctx in css_levels.rules(css)
+        if any("prefers-reduced-motion: reduce" in at for at in ctx)
+        and "transform: none" in corpo
+        for s in selettori.split(",")
+    }
+    assert spenti, "blocco prefers-reduced-motion non trovato"
+    assert ".write-switch:active" in spenti, (
         "il tocco rimpicciolisce l'interruttore anche a movimento ridotto"
     )
     # I fratelli nella stessa riga restano coperti. Il chip dei comandi ne era
     # rimasto fuori come l'interruttore prima di lui (pulizia 3.10).
-    assert re.search(r"\.scope-chip:active \{[^}]*transform:\s*none", covered)
-    assert re.search(r"\.commands-chip:active \{[^}]*transform:\s*none", covered), (
+    assert ".scope-chip:active" in spenti
+    assert ".commands-chip:active" in spenti, (
         "il tocco rimpicciolisce il chip dei comandi anche a movimento ridotto"
     )
 
