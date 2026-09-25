@@ -446,13 +446,19 @@ function molla(asse, bersaglio) {
 }
 
 /* Il disco, ridotto a una variabile. `letto` e' cio' che il file contiene,
-   `scritture` cio' che ci finisce; `rotto` fa fallire la lettura, `mkdir` conta
-   le cartelle create. */
-let letto = null, rotto = false;
+   `scritture` cio' che ci finisce; `rotto` fa fallire la lettura con quello
+   stato HTTP (come fa `api.readWorkspaceFile`, che lo appende all'errore),
+   `letture` le conta, `mkdir` conta le cartelle create. */
+let letto = null, rotto = 0, letture = 0;
 const scritture = [], cartelle = [];
 const api = {
   readWorkspaceFile() {
-    if (rotto) return Promise.reject(new Error('404'));
+    letture += 1;
+    if (rotto) {
+      const err = new Error(`Workspace read failed: ${rotto}`);
+      err.status = rotto;
+      return Promise.reject(err);
+    }
     return Promise.resolve({ content: letto });
   },
   createWorkspaceFolder(p) { cartelle.push(p); return Promise.resolve(); },
@@ -518,7 +524,7 @@ def _run_gesti(script: str) -> None:
             "\n".join(
                 "  " + _member(src, n)
                 for n in ("_onZoom", "_trascina", "_inquadra", "_molla",
-                          "_leggiSpilli", "_salvaSpilli")
+                          "_caricaSpilli", "_leggiSpilli", "_salvaSpilli")
             ),
         )
     )
@@ -877,21 +883,84 @@ assert.deepEqual(Object.keys(JSON.parse(scritture[0][1]).piante), ['Monstera.md'
 
 def test_no_arrangement_yet_is_not_a_failure() -> None:
     """Il file non esiste la prima volta, ed è il caso normale: 404. Qualunque
-    altro inciampo — file illeggibile, JSON di un'altra versione — finisce nello
-    stesso posto **di proposito**: una disposizione perduta è un peccato, una
-    mappa che non si disegna è un guasto, e fra i due non c'è partita."""
+    altro inciampo — file illeggibile, JSON di un'altra versione — torna null
+    anche lui **di proposito**: una disposizione che non si vede è un peccato,
+    una mappa che non si disegna è un guasto, e fra i due non c'è partita."""
     _run_gesti("""
-rotto = true;
+rotto = 404;
 assert.equal(await new Mappa('piante')._leggiSpilli(), null,
   'un file che non c\\'e\\' ancora viene preso per un guasto');
 
-rotto = false; letto = '{ questo non e' + String.fromCharCode(39) + ' json';
+rotto = 500;
+assert.equal(await new Mappa('piante')._leggiSpilli(), null,
+  'una lettura fallita fa saltare il disegno invece di essere ignorata');
+
+rotto = 0; letto = '{ questo non e' + String.fromCharCode(39) + ' json';
 assert.equal(await new Mappa('piante')._leggiSpilli(), null,
   'un file rotto fa saltare il disegno invece di essere ignorato');
 
 letto = JSON.stringify({ altro: { a: [1, 2] } });
 assert.equal(await new Mappa('piante')._leggiSpilli(), null,
   'un quaderno senza spilli non torna null');
+""")
+
+
+def test_a_read_that_failed_never_writes_over_the_other_notebooks() -> None:
+    """Solo il 404 vale «nessuno spillo». Una lettura fallita per altro — la
+    rete, un 500 — diventava `{}` in cache come il 404, e il primo
+    trascinamento dopo riscriveva il file con quel vuoto: **le disposizioni di
+    tutti gli altri quaderni cancellate** per un inciampo di un momento."""
+    _run_gesti("""
+for (const [come, prepara] of [
+  ['una lettura fallita', () => { rotto = 500; }],
+  ['un JSON rotto', () => { rotto = 0; letto = '{ rotto'; }],
+  ['un JSON che non e\\u2019 un oggetto', () => { rotto = 0; letto = '[1, 2]'; }],
+]) {
+  prepara();
+  scritture.length = 0;
+  const m = new Mappa('piante');
+  await m._leggiSpilli();
+  const d = { id: 'a', x: 5, y: 5 };
+  const t = m._trascina([d]);
+  t.gestori.start({ active: 0 }, d);
+  t.gestori.end({ active: 0 }, d);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(scritture, [], come + ': il file e\\u2019 stato riscritto senza averlo letto');
+}
+""")
+
+
+def test_a_read_that_failed_is_tried_again() -> None:
+    """Non messa in cache, una lettura fallita si ritenta: al disegno dopo, o
+    al trascinamento, che se ci riesce scrive sopra il file vero."""
+    _run_gesti("""
+rotto = 500;
+const m = new Mappa('piante');
+assert.equal(await m._leggiSpilli(), null);
+rotto = 0;
+letto = JSON.stringify({ viaggi: { 'Kyoto.md': [1, 2] } });
+const d = { id: 'a', x: 5, y: 5 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.end({ active: 0 }, d);
+await new Promise((r) => setTimeout(r, 0));
+assert.equal(letture, 2, 'la lettura fallita e\\u2019 rimasta in cache');
+assert.deepEqual(JSON.parse(scritture[0][1]).viaggi, { 'Kyoto.md': [1, 2] },
+  'il salvataggio dopo il ritento ha perso gli altri quaderni');
+""")
+
+
+def test_a_file_that_is_not_there_yet_is_written_from_scratch() -> None:
+    _run_gesti("""
+rotto = 404;
+const m = new Mappa('piante');
+assert.equal(await m._leggiSpilli(), null);
+const d = { id: 'a', x: 5, y: 5 };
+const t = m._trascina([d]);
+t.gestori.start({ active: 0 }, d);
+t.gestori.end({ active: 0 }, d);
+await new Promise((r) => setTimeout(r, 0));
+assert.deepEqual(JSON.parse(scritture[0][1]), { piante: { a: [5, 5] } });
 """)
 
 

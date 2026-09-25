@@ -492,24 +492,46 @@ export class CasaMap {
       .strength((d) => (ancora(d) == null ? 0.06 : FORZA_ANCORA));
   }
 
+  /** Porta il file degli spilli nella cache. Vero se la cache e' buona.
+   *
+   *  **Solo un 404 vale «nessuno spillo»**: il file non c'e' ancora, ed e' il
+   *  caso normale la prima volta. Ogni altro inciampo — la rete, un file
+   *  illeggibile, un JSON di un'altra versione — non si mette in cache: fino al
+   *  25/09/2026 diventava `{}` come il 404, e il primo trascinamento dopo
+   *  riscriveva il file con quel vuoto, **cancellando le disposizioni di tutti
+   *  gli altri quaderni**. Non in cache vuol dire anche che al prossimo disegno
+   *  si riprova.
+   */
+  async _caricaSpilli() {
+    if (this._spilli) return true;
+    try {
+      const r = await api.readWorkspaceFile(FILE_SPILLI);
+      const dati = JSON.parse(r?.content || '{}');
+      if (!dati || typeof dati !== 'object' || Array.isArray(dati)) {
+        throw new Error('map layout is not an object');
+      }
+      this._spilli = dati;
+    } catch (err) {
+      if (err?.status === 404) {
+        this._spilli = {};
+        return true;
+      }
+      console.warn('casa.map: pin layout unreadable, left untouched', err);
+      return false;
+    }
+    return true;
+  }
+
   /** Gli spilli di questo quaderno, o null se non ce ne sono.
    *
-   *  Il file puo' non esistere — e' il caso normale, la prima volta — e un 404
-   *  non e' un guasto: si torna null e la mappa parte a mani libere. Qualunque
-   *  altro inciampo (file illeggibile, JSON rotto da un'altra versione) finisce
-   *  nello stesso posto **di proposito**: una disposizione perduta e' un
-   *  peccato, una mappa che non si disegna e' un guasto, e fra i due non c'e'
-   *  partita.
+   *  Una lettura non riuscita torna null anche lei, **di proposito**: una
+   *  disposizione che non si vede per un giro e' un peccato, una mappa che non
+   *  si disegna e' un guasto, e fra i due non c'e' partita. Quel che la lettura
+   *  fallita non fa piu' e' autorizzare una scrittura (v. `_caricaSpilli`).
    */
   async _leggiSpilli() {
     if (!this._quaderno) return null;
-    if (this._spilli) return this._spilli[this._quaderno] || null;
-    try {
-      const r = await api.readWorkspaceFile(FILE_SPILLI);
-      this._spilli = JSON.parse(r?.content || '{}') || {};
-    } catch (err) {
-      this._spilli = {};
-    }
+    if (!(await this._caricaSpilli())) return null;
     return this._spilli[this._quaderno] || null;
   }
 
@@ -522,12 +544,18 @@ export class CasaMap {
    *  orfano e viene buttato allo stesso giro — la disposizione di quella pagina
    *  si perde, ed e' il prezzo di una chiave che e' il percorso.
    *
-   *  Gli altri quaderni nel file restano intatti: sono chiavi diverse, e
-   *  riscrivere solo la propria e' anche quel che rende innocuo un secondo
-   *  disegno aperto altrove.
+   *  Gli altri quaderni nel file restano intatti **perche' il file si e' letto
+   *  davvero**: si riscrive l'intero file con la propria chiave cambiata, e le
+   *  altre vengono dalla cache. Se la lettura non e' riuscita non si scrive
+   *  niente — una cache vuota riscritta su disco cancellerebbe le disposizioni
+   *  di tutti gli altri quaderni. Due mappe aperte insieme non esistono (la
+   *  stanza e' una), ma una scrittura venuta da fuori nel frattempo si perde:
+   *  il file si rilegge solo al primo disegno.
    */
   async _salvaSpilli(nodes) {
-    if (!this._quaderno) return;
+    const quaderno = this._quaderno;
+    if (!quaderno) return;
+    if (!(await this._caricaSpilli())) return;
     const miei = {};
     for (const n of nodes) {
       if (n.ax === null || n.ax === undefined) continue;
@@ -536,7 +564,7 @@ export class CasaMap {
          salvare la seconda farebbe scivolare la disposizione a ogni apertura. */
       miei[n.id] = [Math.round(n.ax), Math.round(n.ay)];
     }
-    const tutti = { ...(this._spilli || {}), [this._quaderno]: miei };
+    const tutti = { ...this._spilli, [quaderno]: miei };
     this._spilli = tutti;
     const testo = JSON.stringify(tutti);
     try {
@@ -551,7 +579,7 @@ export class CasaMap {
         await api.createWorkspaceFolder('.jenny');
         await rpc.writeWorkspaceFile(FILE_SPILLI, testo);
       } catch (err2) {
-        console.warn('casa.map: spilli non salvati', err2);
+        console.warn('casa.map: pin layout not saved', err2);
       }
     }
   }
@@ -567,12 +595,12 @@ export class CasaMap {
    *  un motivo. Con lo spillo una nuvola stretta si apre a mano una volta e poi
    *  si legge.
    *
-   *  Lo spillo e' l'`end` che **non** rilascia `fx`/`fy`: le forze continuano a
-   *  tirare gli altri, e questo sta fermo. Dura quanto il disegno — i nodi
-   *  nascono da `toSimulation` a ogni `_render`, quindi una mappa ridisegnata
-   *  riparte senza spilli. Ricordarli sarebbe una terza decisione (dove, con
-   *  che chiave, e cosa succede quando una pagina cambia nome) e va chiesta a
-   *  parte.
+   *  Lo spillo e' una **molla**, non un chiodo: all'`end` il punto dove il dito
+   *  ha lasciato il pallino diventa la sua ancora (`ax`/`ay`) e `fx`/`fy` si
+   *  rilasciano, quindi le forze lo toccano ancora ma lo richiamano li' (v.
+   *  `_molla`). E dura piu' del disegno: all'`end` gli spilli si scrivono nel
+   *  workspace (`_salvaSpilli`, chiave il quaderno e poi il percorso della
+   *  pagina) e il disegno dopo li rilegge prima di far partire la fisica.
    *
    *  **`clickDistance` e' la parte che si rompe per prima**, ed e' anche il
    *  motivo per cui il numero ha un commento suo (v. `SOGLIA_TOCCO`): sotto la
