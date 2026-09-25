@@ -41,15 +41,22 @@ import { currentTheme, themeTokens } from './theme.js';
  *  Chi chiama deve gia' avere il segreto: `api.getSecret()` qui e' letto e non
  *  atteso, perche' un `await` in mezzo alla costruzione di un nodo e' il modo
  *  in cui una cornice finisce attaccata a una pagina che non c'e' piu'.
+ *
+ *  `overlay` dice all'app che sta nel velo a tutto schermo e non in una
+ *  pagina della casa: li' nessuno ascolta lo scorrimento laterale, e il kit
+ *  non deve prenderselo (con `esclusivo` l'app perderebbe il dito a ogni
+ *  gesto di lato, per niente). Il default e' la pagina, cosi' la casa non
+ *  deve dire niente.
  */
-export function cornicePerApp(slug) {
+export function cornicePerApp(slug, { overlay = false } = {}) {
   const t = currentTheme();
   const lang = document.documentElement.lang || 'it';
   const src = `/apps/${encodeURIComponent(slug)}/index.html`
     + `?token=${encodeURIComponent(api.getSecret())}`
     + `&theme=${encodeURIComponent(t.scheme)}&lang=${encodeURIComponent(lang)}`
     + `&accent=${encodeURIComponent(t.accent)}&onAccent=${encodeURIComponent(t.onAccent)}`
-    + `&tokens=${encodeURIComponent(themeTokens())}`;
+    + `&tokens=${encodeURIComponent(themeTokens())}`
+    + (overlay ? '&overlay=1' : '');
   const iframe = document.createElement('iframe');
   iframe.setAttribute('sandbox', 'allow-scripts');
   iframe.src = src;
@@ -204,7 +211,7 @@ export class AppsActions {
       return;
     }
 
-    this._montaVelo(slug, app, cornicePerApp(slug));
+    this._montaVelo(slug, app, cornicePerApp(slug, { overlay: true }));
   }
 
   /* Il velo sopra tutto con la testata e la *iframe* dentro: è lo stesso per

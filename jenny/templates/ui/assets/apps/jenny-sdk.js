@@ -282,7 +282,10 @@
       onAnnulla: () => manda({ fase: 'annulla' }),
     });
   }
-  armaScorrimento();
+  /* Solo in una pagina della casa. Nel velo a tutto schermo (`overlay=1`,
+     v. `cornicePerApp`) lo scorrimento laterale non lo ascolta nessuno, e
+     prenderselo in esclusiva toglieva il dito all'app a ogni gesto di lato. */
+  if (qs.get('overlay') !== '1') armaScorrimento();
 
   window.jenny = { slug, theme, lang, accent: null, action, discuss, navigate, back };
   applyTokens(qs.get('tokens'));
