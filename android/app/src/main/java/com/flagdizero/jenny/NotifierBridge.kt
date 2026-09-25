@@ -416,7 +416,8 @@ class NotifierBridge(context: Context) {
          *  I tre chiamanti sono quindi i tre modi in cui la chat arriva a
          *  schermo: il tap sull'alert (``onNewIntent`` e il suo gemello in
          *  ``onCreate`` per l'activity morta), il cambio vista dentro la SPA
-         *  (``JennyNative.chatOpened``, da ``ChatController.activate``) e il
+         *  (``JennyNative.chatOpened``: in officina da ``ChatController.activate``,
+         *  in casa quando la pagina della chat torna a schermo) e il
          *  rientro in primo piano a chat **già** attiva (``onResume``, dietro
          *  la domanda ``CHAT_ON_SCREEN_JS`` — che è ciò che lo distingue
          *  dall'``onResume`` liscio di allora).

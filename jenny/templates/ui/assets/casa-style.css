@@ -2125,7 +2125,7 @@ body.casa {
 /* `display: flex` qui sopra scavalca `[hidden]`, che e' a specificita' zero:
    senza questa riga la riga della chiave si vede anche quando non c'e'
    nessuna marca da guardare. La casa quella trappola l'ha gia' pagata due
-   volte — v. `.casa-back[hidden]` e `.casa-version[hidden]`. */
+   volte — v. `.casa-back[hidden]` e `.casa-empty[hidden]`. */
 .casa-key[hidden] { display: none; }
 
 .casa-key-label { flex: none; font-size: 13px; }
