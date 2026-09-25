@@ -10,6 +10,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.Profile
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -36,7 +37,8 @@ import java.util.concurrent.atomic.AtomicReference
  * **Invariante che regge tutto: ogni tocco della WebView passa dal main thread**
  * ([handler], o [MainHop] per i salti che aspettano l'esito).
  * Creazione, `loadUrl`, letture di `url`/`title`, `evaluateJavascript`,
- * `destroy`. Non è pignoleria: la WebView pretende il main thread e lo verifica
+ * `destroy`, e le API del profilo (`ProfileStore` e `Profile` sono
+ * `@UiThread`). Non è pignoleria: la WebView pretende il main thread e lo verifica
  * lei stessa (`checkThread`), quindi un accessore che legge lo stato dal thread
  * chiamante non dà un dato sbagliato, fa crashare l'app.
  *
@@ -84,11 +86,26 @@ class JennyBrowserBridge(context: Context) {
             "0.0.0.0" to 8, "10.0.0.0" to 8, "100.64.0.0" to 10, "127.0.0.0" to 8,
             "169.254.0.0" to 16, "172.16.0.0" to 12, "192.168.0.0" to 16,
         )
+
+        /**
+         * Vero dopo il primo tentativo, in questo processo, di buttare il
+         * profilo lasciato su disco. Una volta sola perché dopo il primo
+         * `getOrCreateProfile` il profilo è «caricato in memoria» e
+         * `deleteProfile` solleva sempre, fino alla morte del processo. Solo
+         * main thread.
+         */
+        private var leftoverProfileHandled = false
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private val appContext = context.applicationContext
     private var webView: WebView? = null
+
+    // Il profilo separato agganciato alla WebView di questa sessione, o `null`
+    // se non c'e' (WebView senza MULTI_PROFILE, aggancio fallito, sessione
+    // chiusa). Scritto solo dal main thread; @Volatile perche' `isIsolated`
+    // lo legge dal thread di Python.
+    @Volatile private var profile: Profile? = null
 
     private val generation = AtomicInteger(0)
     private val loading = AtomicBoolean(false)
@@ -195,18 +212,77 @@ class JennyBrowserBridge(context: Context) {
             webViewClient = sessionClient()
         }
         // Incognito: cookie e storage separati dal barattolo globale che usa
-        // web_fetch, e buttati alla chiusura. Verificato supportato sul Titan 2
-        // (WebView 143) il 29/08; dove non c'è, la sessione resta sul profilo
-        // di default e lo diciamo a Python invece di fingere isolamento.
+        // web_fetch, e svuotati alla chiusura ([wipeProfileOnMain]). Verificato
+        // supportato sul Titan 2 (WebView 143) il 29/08; dove non c'è, la
+        // sessione resta sul profilo di default e lo diciamo a Python invece di
+        // fingere isolamento.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
             try {
-                val p = ProfileStore.getInstance().getOrCreateProfile(PROFILE_NAME)
+                val store = ProfileStore.getInstance()
+                discardLeftoverProfileOnMain(store)
+                val p = store.getOrCreateProfile(PROFILE_NAME)
                 WebViewCompat.setProfile(wv, p.name)
+                profile = p
             } catch (e: Exception) {
-                Log.e(TAG, "profilo non agganciato: ${e.message}")
+                Log.e(TAG, "Browser profile not attached", e)
             }
         }
         webView = wv
+    }
+
+    /**
+     * Butta il profilo rimasto su disco da un processo precedente, **prima**
+     * che questo processo lo carichi.
+     *
+     * È l'unico momento in cui `deleteProfile` può riuscire: la documentazione
+     * di `ProfileStore` lo fa sollevare sia con WebView vive sul profilo, sia
+     * con un profilo già caricato in memoria da `getOrCreateProfile` — cioè
+     * sempre, dopo la prima sessione. Senza questo passaggio un processo
+     * ucciso prima di `browser_close` (o un APK vecchio, dove la cancellazione
+     * non riusciva mai) lascerebbe cookie e login alla sessione successiva.
+     */
+    private fun discardLeftoverProfileOnMain(store: ProfileStore) {
+        if (leftoverProfileHandled) return
+        leftoverProfileHandled = true
+        try {
+            if (store.deleteProfile(PROFILE_NAME)) {
+                Log.i(TAG, "Discarded browser profile left by a previous process")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not discard leftover browser profile", e)
+        }
+    }
+
+    /**
+     * Svuota il profilo della sessione: cookie e storage web (la cache HTTP
+     * la svuota [close] dalla WebView, prima di distruggerla). Main thread,
+     * **dopo** `destroy()` della WebView.
+     *
+     * Non basta `deleteProfile`: è `@UiThread` (chiamato dal thread di Python
+     * solleva) e, anche sul main, rifiuta un profilo già caricato in memoria —
+     * che dopo `getOrCreateProfile` lo è fino alla morte del processo. Il
+     * `catch` muto che c'era prima inghiottiva proprio questo, e cookie e
+     * login sopravvivevano a `browser_close`. Qui si svuota quello che il
+     * profilo espone, e la cancellazione si tenta lo stesso: se una WebView
+     * futura la permette, tanto meglio; se no lo si scrive nel log.
+     */
+    private fun wipeProfileOnMain(p: Profile) {
+        try {
+            p.cookieManager.removeAllCookies(null)
+            p.cookieManager.flush()
+            p.webStorage.deleteAllData()
+        } catch (e: Exception) {
+            Log.e(TAG, "Browser profile wipe failed", e)
+        }
+        try {
+            ProfileStore.getInstance().deleteProfile(PROFILE_NAME)
+        } catch (e: IllegalStateException) {
+            // Il caso atteso nello stesso processo: il profilo resta caricato
+            // (vuoto) e si butta dal disco all'avvio del prossimo processo.
+            Log.i(TAG, "Browser profile stays loaded until process exit (wiped): ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Browser profile delete failed", e)
+        }
     }
 
     private fun sessionClient(): WebViewClient = object : WebViewClient() {
@@ -270,21 +346,37 @@ class JennyBrowserBridge(context: Context) {
         }
     }
 
-    /** Distrugge la sessione e butta il profilo (cookie inclusi). */
+    /**
+     * Distrugge la sessione e ne svuota il profilo (cookie, storage, cache).
+     *
+     * Tutto il lavoro sulla WebView e sul profilo sta nel salto sul main: le
+     * API di `ProfileStore` e `Profile` sono `@UiThread`. Un tetto scaduto
+     * non annulla il blocco, che resta in coda e gira appena il main si
+     * libera: la pulizia arriva in ritardo, non si perde. Lo stato di questo
+     * lato (verdetti, recinto, avvisi) si butta subito comunque.
+     */
     fun close(): String {
-        // Il tetto scaduto non ferma la chiusura: il resto (verdetti, recinto,
-        // profilo) si butta comunque.
         MainHop.call(10_000L, Unit, TAG) {
-            webView?.stopLoading()
-            webView?.destroy()
+            val wv = webView
             webView = null
+            val p = profile
+            profile = null
+            // La cache si svuota dalla WebView, quindi prima di distruggerla;
+            // cookie e storage dal profilo, dopo: `deleteProfile` rifiuta un
+            // profilo con WebView vive. Il `finally` tiene la distruzione
+            // anche se uno dei due passi prima solleva: la WebView non e' piu'
+            // in `webView`, e senza `destroy` resterebbe viva e irraggiungibile.
+            try {
+                wv?.stopLoading()
+                if (p != null) wv?.clearCache(true)
+            } finally {
+                wv?.destroy()
+            }
+            if (p != null) wipeProfileOnMain(p)
         }
         hostVerdicts.clear()
         scopeDomain.set(null)
         lastBlocked.set(null)
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-            try { ProfileStore.getInstance().deleteProfile(PROFILE_NAME) } catch (_: Exception) {}
-        }
         return """{"ok":true}"""
     }
 
