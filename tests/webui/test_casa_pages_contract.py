@@ -99,7 +99,7 @@ def test_d3_arrives_with_the_map_and_not_with_the_house() -> None:
     `import` statico li farebbe pagare a chiunque apra la chat.
     """
     app = APP_JS.read_text(encoding="utf-8")
-    assert "await import('./casa-map.js')" in app, (
+    assert "import('./casa-map.js')" in app, (
         "la mappa non si carica piu' su richiesta"
     )
     assert not re.search(r"(?m)^import .*casa-map\.js", app), (

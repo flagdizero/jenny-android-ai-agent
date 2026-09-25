@@ -1068,15 +1068,28 @@ class CasaApp {
 
   /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
      sulla linguetta e non con l'avvio della casa. `import()` dinamico e non
-     statico: e' la differenza fra pagarla chi la apre e pagarla tutti. */
+     statico: e' la differenza fra pagarla chi la apre e pagarla tutti.
+
+     **La promessa, non la mappa, e' quella che si ricorda**: due tocchi sulla
+     linguetta prima che il modulo arrivasse trovavano tutti e due `this.map`
+     vuota, e nascevano due `CasaMap` sullo stesso SVG — due simulazioni che
+     si contendevano i nodi. Un import fallito si dimentica, cosi' il tocco
+     dopo riprova. */
   async _drawMap(data, quaderno) {
-    if (!this.map) {
-      const { CasaMap } = await import('./casa-map.js');
+    this._mappaPronta ||= import('./casa-map.js').then(({ CasaMap }) => {
       this.map = new CasaMap({
         onOpenPage: (path, label) => this.openPage(path, label),
       });
+      return this.map;
+    });
+    let map;
+    try {
+      map = await this._mappaPronta;
+    } catch (err) {
+      this._mappaPronta = null;
+      throw err;
     }
-    await this.map.draw(data, quaderno);
+    await map.draw(data, quaderno);
   }
 
   /* La conversazione e' cambiata: la fila la dice col nome e il pallino — lo
