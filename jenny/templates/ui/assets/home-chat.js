@@ -40,6 +40,7 @@ import { HistoryPager } from './shared/history-pager.js';
 import { renderRich } from './shared/rich-content.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
+import { contentLinkTarget, openOutsideWebView } from './shared/content-link.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -119,10 +120,7 @@ export class HomeChat {
        tre pagine di storia. Come in officina, e per la stessa ragione — la CSP
        del guscio e' `script-src 'self'`, quindi niente `onclick` scritto nel
        markup. */
-    this.el.addEventListener('click', (e) => {
-      const btn = e.target.closest('.home-copy');
-      if (btn && this.el.contains(btn)) this._copy(btn.closest('.home-msg'));
-    });
+    this.el.addEventListener('click', (e) => this._onClick(e));
 
     /* La pagina precedente: stessa macchina dell'officina
        (`shared/history-pager.js`), appigli diversi. Qui il filo e' il proprio
@@ -150,6 +148,45 @@ export class HomeChat {
        cambio. L'officina lo lega una volta sola dal suo `setupInfiniteScroll`,
        per la stessa ragione. */
     this.pager.bindInfiniteScroll();
+  }
+
+  /* Un tocco nel filo. **I link vengono prima di tutto**, e sono tutti
+     intercettati: il markdown di Jenny finisce in `innerHTML`, e un
+     `[x](workshop.html)` lasciato navigare ricaricava la casa senza il `#bs=`
+     — de-autenticata, API e websocket morti fino a che l'app non veniva
+     uccisa. La regola e' quella dell'officina, in `shared/content-link.js`.
+     `defaultPrevented` e' il segno di un `<a>` che ha gia' un padrone: oggi
+     in casa non ce n'e', ma il primo che arrivera' non deve prendersi anche
+     l'avviso del link inerte (e' successo in officina). */
+  _onClick(e) {
+    const link = e.target.closest('a[href]');
+    if (link && this.el.contains(link)) {
+      if (!e.defaultPrevented) this._openLink(e, link);
+      return;
+    }
+    const btn = e.target.closest('.home-copy');
+    if (btn && this.el.contains(btn)) this._copy(btn.closest('.home-msg'));
+  }
+
+  /* Tre esiti, e in nessuno la pagina naviga: l'ancora scorre il filo, un'altra
+     origine si apre fuori dalla WebView, il resto lo dice. */
+  _openLink(e, a) {
+    e.preventDefault();
+    const target = contentLinkTarget(a.getAttribute('href'), window.location);
+    if (target?.kind === 'hash') {
+      let anchor = null;
+      try {
+        anchor = target.id ? this.el.querySelector(`#${CSS.escape(target.id)}`) : null;
+      } catch (_) { anchor = null; }
+      if (anchor) anchor.scrollIntoView({ block: 'start' });
+      else showToast(i18n.t('common.linkNotOpenable'), 'info');
+      return;
+    }
+    if (target?.kind === 'external') {
+      if (!openOutsideWebView(target.href)) showToast(i18n.t('common.linkNotOpenable'), 'error');
+      return;
+    }
+    showToast(i18n.t('common.linkNotOpenable'), 'info');
   }
 
   /* La guardia contro la pagina che arriva dopo un cambio di conversazione.

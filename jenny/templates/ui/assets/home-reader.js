@@ -33,6 +33,7 @@ import { escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { renderRich } from './shared/rich-content.js';
+import { contentLinkTarget, openOutsideWebView } from './shared/content-link.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
  *
@@ -60,16 +61,23 @@ export function resolveRelativePage(currentPath, href) {
  *  Tre uscite, e la terza e' la piu' importante: `null` vuol dire «non da qui»,
  *  e chi chiama lo deve **dire**, non ignorare.
  *
+ *  Un indirizzo assoluto lo decide la regola dei due gusci
+ *  (`shared/content-link.js`), e non basta che cominci per `http`: un link
+ *  all'origine del gateway (`http://127.0.0.1:<porta>/html-mobile/workshop.html`)
+ *  passava per esterno, e `window.open` lo caricava **dentro** la WebView —
+ *  la casa ricaricata senza `#bs=`, cioe' de-autenticata.
+ *
  *  @returns `{kind:'page', path}` | `{kind:'external', href}` |
  *           `{kind:'hash', id}` | `null`
  */
-export function linkTarget({ href, wikilink, notebook, currentPath }) {
+export function linkTarget({ href, wikilink, notebook, currentPath, here = globalThis.location }) {
   const raw = String(href || '');
   if (!raw) return null;
   if (raw.startsWith('#')) return { kind: 'hash', id: raw.slice(1) };
 
-  if (/^(https?:)\/\//i.test(raw)) return { kind: 'external', href: raw };
-  if (/^(mailto:|tel:)/i.test(raw)) return { kind: 'external', href: raw };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//')) {
+    return contentLinkTarget(raw, here);
+  }
 
   /* I wikilink il renderer li scrive come `?wiki=<name>&page=<path>`. Un
      wikilink verso un **altro** quaderno non si apre da qui: in casa una
@@ -326,12 +334,7 @@ export class HomeReader {
       /* Fuori dalla WebView: `window.open` non apre una finestra (la WebView
          non le supporta), la richiesta ricade su `shouldOverrideUrlLoading` e
          il guscio nativo apre una scheda di Chrome. */
-      try {
-        window.open(target.href, '_blank', 'noopener');
-      } catch (err) {
-        console.warn('home.reader: external link not opened', err);
-        showToast(i18n.t('common.linkNotOpenable'), 'error');
-      }
+      if (!openOutsideWebView(target.href)) showToast(i18n.t('common.linkNotOpenable'), 'error');
       return;
     }
     this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));

@@ -155,18 +155,24 @@ def test_the_chat_anchors_skipped_by_that_guard_are_wired_elsewhere() -> None:
 
 
 def test_no_chat_link_branch_can_reach_a_navigation() -> None:
-    """Ancora interna → scroll, origine diversa → fuori dalla WebView, resto → inerte."""
+    """Ancora interna → scroll, origine diversa → fuori dalla WebView, resto → inerte.
+
+    La classificazione vive in ``shared/content-link.js`` dal 26/09/2026, e la
+    misura ``test_content_link_client.py`` in node; qui resta la forma del
+    ramo dell'officina che la usa."""
     body = _method(_chat(), "_handleContentLink")
     _assert_prevented_first(body, "_handleContentLink")
     code = _strip_comments(body)
-    assert "startsWith('#')" in code and "_scrollToChatAnchor" in code, (
+    assert "contentLinkTarget(" in code, "la regola dei link e' quella condivisa fra i due gusci"
+    assert "'hash'" in code and "_scrollToChatAnchor" in code, (
         "l'ancora interna deve diventare uno scroll, non una entry di history"
     )
-    assert "url.origin !== window.location.origin" in code, (
+    assert "openOutsideWebView(" in code
+    assert "common.linkNotOpenable" in code, "il ramo inerte deve dirlo, non tacere"
+    shared = _strip_comments((ASSETS / "shared" / "content-link.js").read_text(encoding="utf-8"))
+    assert "url.origin !== origin" in shared, (
         "senza il confronto di origine un href relativo passerebbe per link esterno e ricaricherebbe la SPA"
     )
-    assert "_openOutsideWebView" in code
-    assert "common.linkNotOpenable" in code, "il ramo inerte deve dirlo, non tacere"
 
 
 def test_both_locales_carry_the_inert_link_message() -> None:

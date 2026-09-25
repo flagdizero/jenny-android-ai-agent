@@ -10,6 +10,7 @@ import { scopeChip } from './shared/scope-chip.js';
 import { writeSwitch } from './shared/write-switch.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
+import { contentLinkTarget, openOutsideWebView } from './shared/content-link.js';
 /* Formule e diagrammi dentro una bolla appena disegnata.
  *
  *  Era `renderKaTeX`, e chiamava KaTeX per conto proprio. Il 21/09/2026 le
@@ -457,17 +458,15 @@ export class ChatController {
         WebView, che è quel che fa già il guscio nativo per i link esterni;
       - tutto il resto — href relativi (che risolvono sull'origine del gateway),
         stessa origine, schemi non navigabili — → inerte, con un avviso, perché
-        aprirlo dentro la WebView significherebbe perdere la SPA. */
+        aprirlo dentro la WebView significherebbe perdere la SPA.
+      La regola vive in `shared/content-link.js` dal 26/09/2026: la casa la
+      applica identica, e una regola scritta due volte diverge. */
   _handleContentLink(e, a) {
     e.preventDefault();
-    const raw = a.getAttribute('href') || '';
-    if (raw.startsWith('#')) { this._scrollToChatAnchor(raw.slice(1)); return; }
-    let url = null;
-    try { url = new URL(raw, window.location.href); } catch (_) { url = null; }
-    const scheme = url?.protocol || '';
-    const isWeb = scheme === 'http:' || scheme === 'https:';
-    if ((isWeb && url.origin !== window.location.origin) || scheme === 'mailto:' || scheme === 'tel:') {
-      this._openOutsideWebView(url.href);
+    const target = contentLinkTarget(a.getAttribute('href'), window.location);
+    if (target?.kind === 'hash') { this._scrollToChatAnchor(target.id); return; }
+    if (target?.kind === 'external') {
+      if (!openOutsideWebView(target.href)) showToast(i18n.t('common.linkNotOpenable'), 'error');
       return;
     }
     showToast(i18n.t('common.linkNotOpenable'), 'info');
@@ -484,21 +483,6 @@ export class ChatController {
     } catch (_) { target = null; }
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else showToast(i18n.t('common.linkNotOpenable'), 'info');
-  }
-
-  /** Apre un URL fuori dalla WebView. `window.open` qui non apre una finestra:
-      la WebView non supporta le finestre multiple, quindi la richiesta ricade su
-      `shouldOverrideUrlLoading`, che per un'origine non-gateway apre una Chrome
-      Custom Tab (MainActivity#openExternalUrl) e lascia la SPA dov'è. Il bridge
-      JennyNative oggi non espone un metodo per gli URL esterni: se ne verrà
-      aggiunto uno, va provato qui per primo. */
-  _openOutsideWebView(href) {
-    try {
-      window.open(href, '_blank', 'noopener');
-    } catch (err) {
-      console.warn('Could not open external link:', err);
-      showToast(i18n.t('common.linkNotOpenable'), 'error');
-    }
   }
 
   /** Overlay fullscreen per un'immagine: tap-per-zoom, tap sullo sfondo / Esc per chiudere. */

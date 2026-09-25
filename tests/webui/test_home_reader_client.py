@@ -19,6 +19,7 @@ from support.js_harness import function, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 READER_JS = ASSETS / "home-reader.js"
+CONTENT_LINK_JS = ASSETS / "shared" / "content-link.js"
 
 
 pytestmark = requires_node
@@ -28,6 +29,10 @@ def _run(script: str) -> None:
     src = READER_JS.read_text(encoding="utf-8")
     harness = (
         "import assert from 'node:assert/strict';\n"
+        # La regola degli indirizzi assoluti e' dei due gusci: si importa vera.
+        f"const {{ contentLinkTarget }} = await import('{CONTENT_LINK_JS.as_uri()}');\n"
+        "globalThis.location = { href: 'http://127.0.0.1:18790/html-mobile/index.html',"
+        " origin: 'http://127.0.0.1:18790' };\n"
         + function(src, "resolveRelativePage")
         + "\n"
         + function(src, "linkTarget")
@@ -87,6 +92,20 @@ def test_the_web_goes_out_of_the_webview() -> None:
         linkTarget({ href: 'mailto:a@b.c', notebook: 'orto', currentPath: 'i.md' }).kind,
         'external',
       );
+    """)
+
+
+def test_a_link_to_the_gateway_is_not_the_web() -> None:
+    """Cominciare per ``http`` non basta a essere fuori. Un indirizzo assoluto
+    all'origine del gateway passava per esterno, e ``window.open`` lo caricava
+    **dentro** la WebView: la casa ricaricata senza ``#bs=``, de-autenticata."""
+    _run("""
+      for (const href of ['http://127.0.0.1:18790/html-mobile/workshop.html',
+                          'http://127.0.0.1:18790/html-mobile/?mode=chat',
+                          '//127.0.0.1:18790/html-mobile/index.html',
+                          'javascript:alert(1)']) {
+        assert.equal(linkTarget({ href, notebook: 'orto', currentPath: 'i.md' }), null, href);
+      }
     """)
 
 
