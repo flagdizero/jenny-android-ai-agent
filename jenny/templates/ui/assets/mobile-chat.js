@@ -1192,9 +1192,17 @@ export class ChatController {
 
   async _openFileInWorkspace(filePath) {
     try {
-      window.mobileApp.switchMode('workspace');
-      await window.mobileApp.controllers.workspace.ready;
-      await window.mobileApp.controllers.workspace.openFile(filePath);
+      /* Serve il controller, non la sua vista: a portare in `workspace` ci
+         pensa `openFile` (via `_enterEditorView`) solo quando c'e' davvero un
+         editor da mostrare — un'immagine apre la lightbox sopra la chat, un
+         binario l'app di sistema. Qui c'era uno `switchMode('workspace')`
+         fatto *prima*: con l'editor ancora chiuso `activate()` rimandava in
+         Memoria da dentro lo stesso `switchMode`, la entry della chat veniva
+         riscritta come Memoria e `AppState` restava su `workspace`. */
+      const workspace = window.mobileApp.ensureController('workspace');
+      if (!workspace) return;  // ensureController ha gia' avvisato l'utente
+      await workspace.ready;
+      await workspace.openFile(filePath);
     } catch (err) {
       console.error('Failed to open file in workspace:', err);
       showToast(i18n.t('chat.couldNotOpen', { path: filePath }), 'error');

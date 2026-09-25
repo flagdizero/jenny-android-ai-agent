@@ -240,7 +240,17 @@ export class WorkspaceController {
    *  lecita: si torna da dove si viene. */
   activate() {
     if (this.viewMode !== 'editor') {
-      window.mobileApp?.navigateBack('memoria');
+      /* Dopo, non adesso: `activate()` gira *dentro* `switchMode`, e un
+         `navigateBack` sincrono ci annida un secondo `switchMode` — che
+         riscrive la entry corrente, e poi il primo, finendo, scrive
+         `AppState = workspace` e impila la sua entry sopra Memoria. Finito
+         il primo, si controlla che nessuno abbia aperto un file nel
+         frattempo e che la vista sia ancora questa. */
+      queueMicrotask(() => {
+        const app = window.mobileApp;
+        if (this.viewMode === 'editor' || app?.currentMode !== 'workspace') return;
+        app.navigateBack('memoria');
+      });
       return;
     }
     this.showEditorView();
