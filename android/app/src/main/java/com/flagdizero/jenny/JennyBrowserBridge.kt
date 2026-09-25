@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.webkit.JavascriptInterface
+import android.webkit.ServiceWorkerClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -152,6 +154,13 @@ class JennyBrowserBridge(context: Context) {
             .bufferedReader().use { it.readText() }
     }
 
+    // La guardia di rete lato pagina: v. installNetworkGuardOnMain. Stesso
+    // motivo di R.raw qui sopra.
+    private val networkGuardJs: String by lazy {
+        appContext.resources.openRawResource(R.raw.browser_network_guard)
+            .bufferedReader().use { it.readText() }
+    }
+
     /** Dominio registrabile, per confronto di perimetro. Euristica, v. sopra. */
     private fun registrable(host: String): String {
         val labels = host.lowercase().trimEnd('.').split('.')
@@ -229,11 +238,105 @@ class JennyBrowserBridge(context: Context) {
                 val p = store.getOrCreateProfile(PROFILE_NAME)
                 WebViewCompat.setProfile(wv, p.name)
                 profile = p
+                guardServiceWorkersOnMain(p)
             } catch (e: Exception) {
                 Log.e(TAG, "Browser profile not attached", e)
             }
         }
+        installNetworkGuardOnMain(wv)
         webView = wv
+    }
+
+    /**
+     * La domanda che la guardia lato pagina fa prima di aprire un WebSocket (o
+     * un WebTransport): questo host sta dentro la rete del telefono? È lo
+     * **stesso** verdetto, con la stessa cache, di `shouldInterceptRequest`.
+     *
+     * Visibile a ogni pagina che la sessione apre, ed è voluto: dice soltanto
+     * «bloccato o irrisolvibile» di un nome che la pagina ha già in mano, cioè
+     * quel che una `fetch` verso quel nome le direbbe comunque. Gira sul thread
+     * JavaBridge, quindi il DNS qui è permesso (mai dal main).
+     */
+    private inner class NetworkGuard {
+        @JavascriptInterface
+        fun blocked(host: String): Boolean {
+            val h = host.trim().removePrefix("[").removeSuffix("]")
+            if (h.isEmpty()) return true
+            val verdict = isBlockedHost(h)
+            if (verdict) Log.w(TAG, "connessione diretta bloccata (WebSocket/WebTransport): $h")
+            return verdict
+        }
+    }
+
+    /**
+     * Le connessioni che `shouldInterceptRequest` non vede: WebSocket,
+     * WebTransport, WebRTC. Chromium le apre fuori dal percorso delle richieste
+     * HTTP, quindi il filtro sugli indirizzi privati non le fermava — una
+     * pagina visitata dall'agente poteva parlare coi servizi della LAN su
+     * `ws://192.168.x.y`.
+     *
+     * Rimedio parziale e dichiarato come tale: uno script iniettato a inizio
+     * documento (`res/raw/browser_network_guard.js`) avvolge i costruttori nei
+     * frame della pagina. Non copre i Worker né un frame in cui lo script non
+     * arriva — v. il commento in testa allo script e `.agent/security.md`.
+     * Senza `DOCUMENT_START_SCRIPT` la guardia non c'è, e lo si scrive nel log
+     * invece di fingere.
+     */
+    private fun installNetworkGuardOnMain(wv: WebView) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            Log.w(TAG, "No DOCUMENT_START_SCRIPT: WebSocket/WebRTC to the LAN stay unguarded")
+            return
+        }
+        try {
+            wv.addJavascriptInterface(NetworkGuard(), "JennyBrowserGuard")
+            WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs, setOf("*"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Browser network guard not installed", e)
+        }
+    }
+
+    /**
+     * Le richieste fatte da un service worker non passano dal [WebViewClient]
+     * della WebView ma dal `ServiceWorkerClient` del profilo: senza questo, una
+     * pagina che registra un worker aveva un secondo modo di arrivare in LAN,
+     * via HTTP stavolta. Sul profilo **separato** della sessione, e solo lì: il
+     * controller del profilo di default è quello della SPA e di `web_fetch`.
+     * Senza profilo separato (MULTI_PROFILE assente o aggancio fallito) il buco
+     * resta, ed è scritto in `.agent/security.md`.
+     */
+    private fun guardServiceWorkersOnMain(p: Profile) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
+            Log.w(TAG, "No SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST: service worker requests unguarded")
+            return
+        }
+        try {
+            p.serviceWorkerController.setServiceWorkerClient(object : ServiceWorkerClient() {
+                override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? =
+                    blockedResponseFor(request.url, isMainFrame = false)
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Browser service worker guard not installed", e)
+        }
+    }
+
+    /**
+     * Il verdetto sulle richieste HTTP, in un posto solo: la pagina
+     * ([sessionClient]) e i suoi service worker ([guardServiceWorkersOnMain]).
+     * `null` vuol dire «lascia passare». Gira su un thread di lavoro: qui il
+     * DNS si può risolvere.
+     */
+    private fun blockedResponseFor(uri: Uri, isMainFrame: Boolean): WebResourceResponse? {
+        val scheme = (uri.scheme ?: "").lowercase()
+        if (scheme != "http" && scheme != "https") {
+            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+        }
+        val host = uri.host ?: return null
+        if (isBlockedHost(host)) {
+            Log.w(TAG, "richiesta bloccata: $uri")
+            if (isMainFrame) lastBlocked.set(uri.toString())
+            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+        }
+        return null
     }
 
     /**
@@ -311,23 +414,16 @@ class JennyBrowserBridge(context: Context) {
             return false
         }
 
-        // Gira su un thread di lavoro: qui il DNS si può risolvere, ed è l'unico
-        // punto che vede *ogni* richiesta, main frame compreso.
+        // Gira su un thread di lavoro: qui il DNS si può risolvere. Vede ogni
+        // richiesta **HTTP** della pagina, main frame compreso — non le
+        // connessioni WebSocket/WebTransport/WebRTC, che Chromium apre fuori da
+        // questo percorso (le copre, in parte, installNetworkGuardOnMain), né
+        // quelle dei service worker (guardServiceWorkersOnMain).
         override fun shouldInterceptRequest(
             view: WebView?, request: WebResourceRequest?
         ): WebResourceResponse? {
             val uri = request?.url ?: return null
-            val scheme = (uri.scheme ?: "").lowercase()
-            if (scheme != "http" && scheme != "https") {
-                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-            }
-            val host = uri.host ?: return null
-            if (isBlockedHost(host)) {
-                Log.w(TAG, "richiesta bloccata: $uri")
-                if (request.isForMainFrame) lastBlocked.set(uri.toString())
-                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-            }
-            return null
+            return blockedResponseFor(uri, request.isForMainFrame)
         }
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {

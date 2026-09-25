@@ -137,6 +137,42 @@ nomi.
 
 **Rule**: Do not add direct `httpx.get` / `requests.get` calls in tools. Route through the existing web fetch utilities or replicate the `validate_url_target` check.
 
+### The agent browser's WebView: what its guard sees, and what it does not
+
+The `browser_*` session (`JennyBrowserBridge`) is the one place where Python never sees the
+address — the model clicks, Chromium navigates — so the SSRF check lives in Kotlin:
+`isBlockedHost` (same networks as `_BLOCKED_NETWORKS`, DNS failure = blocked) behind three hooks.
+
+- **HTTP from the page** — `shouldInterceptRequest`. It sees every *HTTP* request, main frame
+  included. Its comment used to say "every request", and that was false:
+- **WebSocket, WebSocketStream, WebTransport, WebRTC** never reach `shouldInterceptRequest`, so
+  until Sept 2026 a visited page could talk to `ws://192.168.x.y`. Now
+  `res/raw/browser_network_guard.js`, registered with `addDocumentStartJavaScript` (all
+  origins), wraps those constructors in the page's frames before any page script runs: the URL
+  constructors ask `JennyBrowserGuard.blocked(host)` — the same `isBlockedHost` verdict and cache
+  — and throw `SecurityError`; `RTCPeerConnection` is simply disabled (the agent has no use for
+  it, and ICE is exactly how a page reaches and enumerates the LAN).
+- **Service workers** fetch through the profile's `ServiceWorkerClient`, not the WebView's
+  client — a second way into the LAN, over HTTP. The session's **separate profile** gets a client
+  that applies the same verdict. Only that profile: the default one is the SPA's and `web_fetch`'s.
+
+What this does **not** cover — known, accepted, and not to be described as closed:
+
+- **Workers** (`new Worker(blob)`): document-start scripts do not run there, so `WebSocket` inside a
+  worker is the native one. A frame the script is not injected into (a freshly created
+  `about:blank` child) can hand back the original constructors. The guard stops an ordinary page,
+  not one written against it.
+- **DNS rebinding**: the verdict is cached per host and Chromium resolves the name again when it
+  connects. Same time-of-check/time-of-use gap as the HTTP path.
+- **Degraded WebViews**: without `DOCUMENT_START_SCRIPT` there is no page-side guard, without
+  `MULTI_PROFILE` (or if attaching the profile failed) no service-worker guard. Both are logged.
+- **`web_fetch` / search** (`AgenticSearchBridge`) have none of the three hooks: Python validates
+  the URL before loading and the final URL after (`android_web.py`), but redirects, sub-resources
+  and page scripts are unfiltered in between — the comment there says so already.
+
+**Rule**: do not add a second list of blocked networks in JS; the page-side guard asks the native
+verdict. Fixed by `tests/security/test_browser_guards_direct_connections.py`.
+
 ### Jenny Apps server SSRF policy (intentionally more permissive)
 
 Jenny App `http` actions use a **distinct, deliberately more permissive** policy, `validate_app_server_target` (`security/network.py`), backed by `_APP_SERVER_BLOCKED_NETWORKS`. Unlike `validate_url_target`, it **allows RFC1918 private ranges** (`10/8`, `172.16/12`, `192.168/16`), IPv6 ULA (`fc00::/7`) **and CGNAT (`100.64.0.0/10`)** **by design**: an app server is a user-declared LAN *or tailnet* device, reachable at a `server.baseUrl` that the user sees and approves in the manifest. Loopback (`127.0.0.0/8`, `::1`), link-local / cloud metadata (`169.254.0.0/16`) and `0.0.0.0/8` remain blocked. Redirects are never followed, so a server cannot bounce the proxy to a blocked address.
