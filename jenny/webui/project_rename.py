@@ -91,7 +91,7 @@ def rename_project(
         try:
             invalidate_session(key)
         except Exception:  # noqa: BLE001 — una cache non sgomberata non ferma il rinomino
-            logger.opt(exception=True).warning("Cache di sessione non sgomberata per {}", key)
+            logger.opt(exception=True).warning("Session cache not cleared for {}", key)
 
     root.rename(target)
 
@@ -110,7 +110,7 @@ def rename_project(
                 target.rename(root)
             except OSError as exc:
                 logger.opt(exception=True).error(
-                    "Rinomino di {} non disfatto: la cartella resta {}", name, new_name
+                    "Rename of {} not undone: the folder stays {}", name, new_name
                 )
                 raise ProjectRenameError(
                     f"the conversation could not follow ({perche}), and the folder "
@@ -120,8 +120,10 @@ def rename_project(
         if a_meta:
             # A meta' strada e scritto nel giornale: il prossimo avvio finisce il
             # lavoro. La cartella resta col nome nuovo, che e' la direzione giusta.
-            logger.warning("Rinomino {} -> {}: chat a meta', la finira' l'avvio", name, new_name)
+            logger.warning(
+                "Rename {} -> {}: chat moved halfway, startup will finish it", name, new_name
+            )
 
     refresh_wiki_registry(wikis_dir, scripts_dir)
-    logger.info("Quaderno rinominato: {} -> {} (chat: {})", name, new_name, chat_mossa)
+    logger.info("Notebook renamed: {} -> {} (chat moved: {})", name, new_name, chat_mossa)
     return {"name": name, "new_name": new_name, "chat_moved": chat_mossa}

@@ -561,12 +561,12 @@ def _quaderno_valido(ref: Any) -> None:
 
     if not isinstance(ref, str) or not ref.startswith(PROJECT_SESSION_PREFIX):
         raise ValueError(
-            f"una pagina conversazione vuole un quaderno ({PROJECT_SESSION_PREFIX}<nome>), "
-            f"non {ref!r}"
+            f"a conversation page needs a notebook ({PROJECT_SESSION_PREFIX}<name>), "
+            f"not {ref!r}"
         )
     nome = ref[len(PROJECT_SESSION_PREFIX):]
     if not is_valid_project_name(nome):
-        raise ValueError(f"nome di quaderno non valido: {nome!r}")
+        raise ValueError(f"invalid notebook name: {nome!r}")
 
 
 class SchermataConfig(Base):
@@ -590,8 +590,8 @@ class SchermataConfig(Base):
             specie = data.get("kind")
             if specie is not None and specie not in SPECIE_SCHERMATA:
                 raise ValueError(
-                    f"specie di schermata sconosciuta: {specie!r} "
-                    f"(le sole sono {', '.join(SPECIE_SCHERMATA)})"
+                    f"unknown page kind: {specie!r} "
+                    f"(the only ones are {', '.join(SPECIE_SCHERMATA)})"
                 )
             if specie == "conversazione":
                 _quaderno_valido(data.get("ref"))

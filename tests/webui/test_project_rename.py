@@ -84,6 +84,20 @@ def test_after_a_rename_no_trace_carries_the_old_name(workspace) -> None:
     assert pending_project_renames(workspace) == [], "il giornale e' rimasto aperto"
 
 
+def test_the_rename_logs_in_english(workspace) -> None:
+    """AGENTS.md: log in inglese (Q6 della revisione profonda)."""
+    from loguru import logger
+
+    righe: list[str] = []
+    sink = logger.add(lambda m: righe.append(m.record["message"]), level="DEBUG")
+    try:
+        _quaderno(workspace, VECCHIO)
+        _rinomina(workspace)
+    finally:
+        logger.remove(sink)
+    assert f"Notebook renamed: {VECCHIO} -> {NUOVO} (chat moved: True)" in righe
+
+
 def test_a_notebook_without_a_conversation_just_moves_its_folder(workspace) -> None:
     """Un quaderno appena creato non ha ancora chat: non c'e' niente da seguire,
     e questo non e' un rifiuto (`follow_renamed_project` lo sarebbe)."""
