@@ -1,6 +1,10 @@
 # Seconda revisione di `feat/la-casa`: il piano delle nove correzioni
 
-Stato: **piano**, 25/09/2026. Nessuna voce ancora fatta.
+Stato: **fatto**, 25/09/2026 — tutte le voci, più la decima decisa lungo la strada; suite
+verde su 3.14 (10.957) e 3.11 (10.947), build `d80229c` installata sul Titan 2. Gli esiti,
+con quel che le prove sul telefono hanno cambiato del quadro, stanno in fondo
+(«Esito, voce per voce»): **la voce 2 era un falso positivo**, e la 1 è più stretta di
+come era scritta.
 
 La seconda revisione (`/code-review` high, 25/09) ha riletto soprattutto gli otto commit
 di correzione della prima (`41c7d20`..`359f205`) e ne ha tirato fuori nove voci: due
@@ -187,6 +191,56 @@ quel che l'agente dice.
 
 ## Domande aperte
 
-- **I job cron di un quaderno cancellato.** Oggi restano, e al primo scatto ricreano una
-  sessione sotto un nome libero. Cancellarli insieme al quaderno? Disabilitarli? Fuori da
-  questo giro finché non si decide.
+- ~~**I job cron di un quaderno cancellato.** Cancellarli insieme al quaderno?
+  Disabilitarli?~~ **Disabilitarli**, deciso dall'utente il 25/09/2026 (voce 10). Ma v.
+  sotto: la domanda poggiava sul falso positivo della voce 2.
+- **Tenere o togliere `00ab172`?** Spostare e spegnere job che portano la chiave di un
+  quaderno protegge uno stato che dal 22/08/2026 non si può creare (v. voce 2). È codice
+  innocuo e provato, ma è superficie in più (un campo obbligatorio di `CommandContext`, due
+  metodi del servizio). Da decidere con l'utente.
+
+## Esito, voce per voce
+
+| # | Commit | Esito |
+|---|--------|-------|
+| 1+9 | `92d79d5` | Fatto. `AgentLoop.busy_session_keys()` = turni ∪ origini dei subagent vivi ∪ passate del giardiniere; `GatewayContainer._busy_session_keys()` provato. |
+| 2+10 | `00ab172` | Fatto, ma **la voce 2 era un falso positivo**: v. sotto. |
+| 5 | `1789307` | Fatto, con la regola più stretta del previsto: valgono come `*` solo i valori *identici* a un `*/n`. |
+| 3+4 | `1c41a2e` | Fatto. |
+| 6 | `bd6addb` | Fatto. |
+| 7 | `c64f1f5` | Fatto, e provato sul telefono. |
+| 8 | `d80229c` | Fatto; la quarta differenza voluta rispetto a croniter. |
+
+**Voce 1, cosa hanno mostrato le prove (25/09, quaderni usa-e-getta `prova-rev*`, poi
+cancellati).** Il rinomino è rifiutato con `conflict` per tutta la vita del lavoro e
+passa solo dopo l'annuncio del subagent; il nome vecchio resta pulito (tre giri: subagent
+da 100 s, da 90 s, da 6 min). Ma **in nessuno dei tre la parte nuova è servita**: un turno
+che lancia un subagent lo aspetta (`loop.py::_drain_pending`, tetto di 300 s), e anche
+scaduto il tetto il turno è rimasto vivo fino alla fine del subagent (RUN 373 s). Il rifiuto
+è quindi venuto dalla guardia sui turni. Un subagent che sopravvive al suo turno sul
+telefono non si è visto; la parte «subagent» resta una difesa, provata dai test. La parte
+«giardiniere» è reale — la passata gira sotto `gardener:` e scrive nella cartella — e non
+è stata provata sul telefono (servirebbe un diario con delta in un quaderno di prova).
+
+**Voce 2, il falso positivo.** Il tool cron rifiuta add/list/remove dentro una
+conversazione di progetto dal 22/08/2026 (`f24f3dd`, `agent/tools/cron.py::_PROJECT_REFUSAL`),
+e `add_job` non ha altri chiamanti: un job con `project:<nome>` non si può creare. La
+revisione non aveva guardato il tool; se n'è accorta la prova sul telefono, dove Jenny ha
+risposto «da una conversazione di progetto non si può schedulare». Sul telefono nessun job
+porta la chiave di un quaderno. Quindi anche la voce 10, che ne dipendeva, protegge uno
+stato che oggi non nasce (v. «Domande aperte»).
+
+**Voce 5, perché più stretta.** La prima stesura contava come `*` qualunque passo
+regolare che coprisse il ciclo, e così `0 9,21 * * *` (passo 12 sfasato di 9) diventava «a
+ripetizione», e `0 1-23/2` non teneva comunque il ritmo. La regola finale è «gli stessi
+valori di un `*/n`»: parte dal minimo del ciclo e lo copre. `9-17`, `9,21`, `1-23/2`
+restano a orario fisso, come in Vixie. Riferimento minuto per minuto con le grafie per
+esteso: 4.300 partenze, nessuna differenza.
+
+**Voce 7, la prova.** La stessa sonda usa-e-getta della prima revisione (11 s di main
+thread occupato): dopo lo scatto `webView=false`, dove prima restava una WebView viva con
+`url=null`. La build vera reinstallata dopo non contiene la sonda.
+
+**Voce 8, un inciampo.** L'esempio della revisione (`0 9 1 1 * 2080`) era sbagliato: a sei
+campi il sesto è il secondo. Il difetto c'è nella forma a sette campi
+(`0 9 1 1 * 0 2080`: prima «no run before 2076», ora il 2080).
