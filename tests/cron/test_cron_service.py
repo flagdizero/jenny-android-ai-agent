@@ -4,7 +4,7 @@ import json
 import time
 
 import pytest
-from support.aio import wait_until
+from support.aio import settle_tasks, wait_until
 from support.cron import disable_job
 
 from jenny.cron.service import CronJobSkippedError, CronService
@@ -15,21 +15,13 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 _wait_until = functools.partial(wait_until, timeout=1.0)
 
 
-async def _settle(*, ignore: set[asyncio.Task] | None = None, timeout: float = 1.0) -> None:
-    """Cede il controllo finché non resta nessun task pendente oltre a *ignore*.
-
-    Non conta i giri di loop. Un ``for _ in range(N): await asyncio.sleep(0)``
-    non fa passare il *tempo*, solo il controllo: quanti giri servano dipende da
-    quante volte la catena di callback rimbalza, e un task che attraversa
-    ``asyncio.to_thread`` può non essere finito dopo N giri qualunque.
-    """
-    ignore = (ignore or set()) | {asyncio.current_task()}
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        pending = {t for t in asyncio.all_tasks() if t not in ignore and not t.done()}
-        if not pending:
-            return
-        await asyncio.wait(pending, timeout=max(0.0, deadline - time.monotonic()))
+def _other_tasks(*ignore: asyncio.Task) -> set[asyncio.Task]:
+    """I task del loop, tolti quello corrente e *ignore*: da dare a
+    :func:`support.aio.settle_tasks`, che li rilegge a ogni giro e alla
+    scadenza fallisce — un'attesa che scade in silenzio, prima di asserzioni
+    negative, le farebbe passare anche con il lavoro ancora in volo."""
+    skip = {asyncio.current_task(), *ignore}
+    return {t for t in asyncio.all_tasks() if t not in skip}
 
 
 def _bound_chat(chat_id: str = "chat-1") -> dict[str, str]:
@@ -921,7 +913,7 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
         assert inflight_task.cancelling() == 0
 
         # E in più: nessun task pendente resta a poter cancellare più tardi.
-        await _settle(ignore={inflight_task})
+        await settle_tasks(lambda: _other_tasks(inflight_task), timeout=1.0)
 
         assert inflight_task.cancelling() == 0
         assert service._timer_task is inflight_task
