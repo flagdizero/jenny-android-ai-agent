@@ -153,3 +153,5 @@ Prove sul telefono (build `48d2e18`, installata alle 19:51):
 Da notare: nel turno principale Jenny dice che `browser_open`/`browser_close` non sono nel
 suo registro e li usa attraverso un subagent. Non è in questo registro: da capire se è
 voluto.
+
+**Fase 2, D2 eseguita (25/09/2026)**, ramo `rename/english` da `48d2e18`: 11 commit per area; 2.331 nomi della mappa (2.269 identificatori più 61 chiavi i18n), 66 file rinominati (20 moduli della casa e `casa-style.css` → `home-*`, `officina.html` → `workshop.html`, `gesto-orizzontale.js` → `horizontal-swipe.js`, 2 moduli Python, 42 test); persistiti con migrazione (`casa` → `home` nel `config.json`, config v3; chiavi `jenny-mascotte-*`, temi `fumetto`/`pietra`, cassetti in `mobile-last-mode`) e rotta/RPC/`postMessage` in inglese. Residuo misurato col dizionario di `conventions/`: 0 identificatori italiani in JS, CSS, HTML e Kotlin (a `48d2e18` erano 383, 209 e 72, di cui 76, 136 e 53 già prima del ramo); in Python 3 su 5.112 (erano 23), apposta (i nomi della migrazione: `_migrate_casa_to_home`, `_CASA_KINDS`, `_CASA_FIXED_IDS`).

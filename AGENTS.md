@@ -100,7 +100,7 @@ See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelin
 - Line length: 100.
 - Linting: `ruff` with rules E, F, I, N, W (E501 ignored).
 - pytest with `asyncio_mode = "auto"`.
-- Language convention: docstrings/comments in Italian for new code; inherited upstream code keeps English — do not translate existing text. Identifiers, log messages and commit-facing strings: English. User-facing WebUI strings are localized via i18n JSON files (`jenny/templates/ui/assets/i18n/{it,en}.json`), not hardcoded.
+- Language convention: docstrings/comments in Italian for new code; inherited upstream code keeps English — do not translate existing text. Identifiers, log messages and commit-facing strings: English. User-facing WebUI strings are localized via i18n JSON files (`jenny/templates/ui/assets/i18n/{it,en}.json`), not hardcoded. "Identifiers" includes the WebUI's vocabulary — CSS classes, element ids, `data-*` attributes, i18n keys — and file names; the two shells are the home (`index.html`, `home-*.js`) and the workshop (`workshop.html`, `mobile-*.js`), and the home's own pages are `HomePages` while a notebook's pages are `NotebookPages`. A name that is persisted or on the wire (`config.json`, `localStorage`, an `/api/` field, an RPC, a `postMessage` type) does not change without a migration: see `Config._migrate_casa_to_home` and `RENAMED_KEYS` in `shared/mascot.js`.
 
 ## Verification Commands
 
