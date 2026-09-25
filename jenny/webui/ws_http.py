@@ -275,9 +275,9 @@ class GatewayHTTPHandler:
             log=self._log,
         )
 
-        from jenny.webui.casa_routes import CasaRoutes
+        from jenny.webui.home_routes import HomeRoutes
 
-        self.casa_routes = CasaRoutes(
+        self.home_routes = HomeRoutes(
             check_api_token=self.check_api_secret,
             log=self._log,
         )
@@ -578,9 +578,9 @@ class GatewayHTTPHandler:
         if backup_response is not None:
             return backup_response
 
-        casa_response = await self.casa_routes.dispatch(request, got)
-        if casa_response is not None:
-            return casa_response
+        home_response = await self.home_routes.dispatch(request, got)
+        if home_response is not None:
+            return home_response
 
         # Stato della programmazione (delegato a CronRoutes)
         cron_response = await self.cron_routes.dispatch(request, got)

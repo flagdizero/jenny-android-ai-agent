@@ -17,7 +17,7 @@ The home is a row of pages, and their names run along the top of the screen: the
 
 The home always opens on **Jenny**. Beside the four you can keep up to eight pages of your own: press and hold a mini-app in the drawer, or a notebook in **Notebooks**, and choose **Add as a page**. A mini-app that opens outside Jenny, or one that is broken, shows that row greyed out with the reason. A notebook page is a shortcut, not a second chat: landing on it switches the one conversation to that notebook.
 
-Every page can be moved, the four fixed ones included: press and hold a name at the top, drag the names into the order you want, and tap **Done**. The pages you added carry a **×** to remove them; the fixed four cannot be removed. Back leaves that mode without saving. The order and the pages you added are stored in `config.json` — see [`casa` in Configuration](../reference/configuration.md#casa).
+Every page can be moved, the four fixed ones included: press and hold a name at the top, drag the names into the order you want, and tap **Done**. The pages you added carry a **×** to remove them; the fixed four cannot be removed. Back leaves that mode without saving. The order and the pages you added are stored in `config.json` — see [`home` in Configuration](../reference/configuration.md#home).
 
 ### The conversation
 

@@ -101,7 +101,7 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
         assert marker in body, f"livello mancante nell'elenco: {marker}"
         positions.append(body.index(marker))
     assert positions == sorted(positions), (
-        "i livelli non sono in ordine di sovrapposizione reale (vedi z-index in mobile-style.css)"
+        "i livelli non sono in order di sovrapposizione reale (vedi z-index in mobile-style.css)"
     )
 
     css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")

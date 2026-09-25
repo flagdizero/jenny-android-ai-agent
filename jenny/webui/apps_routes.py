@@ -135,7 +135,7 @@ class AppsRoutes:
         from jenny.webui.apps_api import delete_app
 
         try:
-            esito = delete_app(self._get_workspace_root(), slug)
+            outcome = delete_app(self._get_workspace_root(), slug)
         except ValueError:
             return http_error(400, "invalid app slug")
         except FileNotFoundError:
@@ -143,10 +143,10 @@ class AppsRoutes:
         except Exception as e:
             self._log.warning("app delete {} failed: {}", slug, e)
             return http_error(500, "internal error")
-        from jenny.webui.casa_pages import detach_pages_quietly
+        from jenny.webui.home_pages import detach_pages_quietly
 
         await detach_pages_quietly("app", slug, log=self._log)
-        return http_json_response(esito)
+        return http_json_response(outcome)
 
     def _resolve_view_app(self, raw_slug: str) -> tuple[str, str] | Response:
         """``(slug, base_url)`` per una vista esterna, o il ``Response`` d'errore."""

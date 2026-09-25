@@ -66,14 +66,14 @@ class MobileApp {
        `/api/settings` e tre copie dello stesso stato — con due che invecchiano
        mentre guardi la terza. La fabbrica li serve tutti dalla stessa
        istanza, creata alla prima apertura. */
-    const impostazioni = () => (this._impostazioni ||= new SettingsController());
+    const settings = () => (this._settings ||= new SettingsController());
     this.controllerFactories = {
       chat:      () => new ChatController(),
       workspace: () => new WorkspaceController(),
-      settings:  impostazioni,
-      cervello:  impostazioni,
-      mani:      impostazioni,
-      memoria:   impostazioni,
+      settings:  settings,
+      cervello:  settings,
+      mani:      settings,
+      memoria:   settings,
       onboarding: () => new OnboardingController(),
     };
     this.controllers = {};

@@ -1,7 +1,7 @@
 """Le pagine della casa: l'elenco vive nel file di configurazione.
 
-Si legge con ``GET /api/casa/schermate`` e si scrive col comando RPC
-``casa.schermate.set`` (fino al 25/09/2026 una GET col JSON nell'indirizzo, contro
+Si legge con ``GET /api/home/pages`` e si scrive col comando RPC
+``home.pages.set`` (fino al 25/09/2026 una GET col JSON nell'indirizzo, contro
 ``.agent/design.md``: v. D4 in ``.agent/revisione-profonda.md``).
 
 La casa e' un launcher e di lato alla chat ci sono le pagine che l'utente ha
@@ -38,7 +38,7 @@ import pytest
 from websockets.http11 import Headers
 from websockets.http11 import Request as WsRequest
 
-from jenny.config.schema import MAX_SCHERMATE
+from jenny.config.schema import MAX_PAGES
 from jenny.webui.commands import CommandError, dispatch_command
 from jenny.webui.ws_http import GatewayHTTPHandler
 
@@ -52,33 +52,33 @@ def _richiesta(path: str, token: str | None = _AUTH_SECRET) -> WsRequest:
     return WsRequest(path=path, headers=Headers())
 
 
-def _ordine_semplice(schermate: list) -> list:
+def _ordine_semplice(pages: list) -> list:
     """L'ordine piu' semplice: le fisse, poi le pagine. Per i casi che provano
     le schermate e non l'ordine (quello ha i suoi, in fondo)."""
-    ids = [r.get("id") for r in schermate if isinstance(r, dict)]
-    return ["app", "chat", "quaderni", "impostazioni", *ids]
+    ids = [r.get("id") for r in pages if isinstance(r, dict)]
+    return ["app", "chat", "notebooks", "settings", *ids]
 
 
-async def _salva(env, schermate: list, ordine=None) -> dict:
+async def _salva(env, pages: list, order=None) -> dict:
     """Il comando RPC, per la stessa strada del client (``dispatch_command``)."""
-    if ordine is None:
-        ordine = _ordine_semplice(schermate)
-    params = {"schermate": schermate, "ordine": ordine}
-    return await dispatch_command(env.ctx, "casa.schermate.set", params)
+    if order is None:
+        order = _ordine_semplice(pages)
+    params = {"pages": pages, "order": order}
+    return await dispatch_command(env.ctx, "home.pages.set", params)
 
 
 async def _rifiuto(env, params: dict) -> str:
     """Un salvataggio rifiutato come ``bad_request``: ne torna il messaggio."""
     with pytest.raises(CommandError) as err:
-        await dispatch_command(env.ctx, "casa.schermate.set", params)
+        await dispatch_command(env.ctx, "home.pages.set", params)
     assert err.value.code == "bad_request", err.value.message
     return err.value.message
 
 
-async def _rifiuta(env, schermate: list, ordine=None) -> str:
-    if ordine is None:
-        ordine = _ordine_semplice(schermate)
-    return await _rifiuto(env, {"schermate": schermate, "ordine": ordine})
+async def _rifiuta(env, pages: list, order=None) -> str:
+    if order is None:
+        order = _ordine_semplice(pages)
+    return await _rifiuto(env, {"pages": pages, "order": order})
 
 
 @pytest.fixture()
@@ -125,36 +125,36 @@ def _corpo(response) -> dict:
 
 async def _dispatch(env, path: str, token: str | None = _AUTH_SECRET):
     req = _richiesta(path, token=token)
-    return await env.handler.casa_routes.dispatch(req, req.path.split("?")[0])
+    return await env.handler.home_routes.dispatch(req, req.path.split("?")[0])
 
 
 # ── Il confine ──────────────────────────────────────────────────────────────
 
 
 async def test_unauthorized_without_token(env) -> None:
-    risposta = await _dispatch(env, "/api/casa/schermate", token=None)
+    risposta = await _dispatch(env, "/api/home/pages", token=None)
     assert risposta.status_code == 401
 
 
 async def test_an_unknown_casa_path_is_not_ours(env) -> None:
-    assert await _dispatch(env, "/api/casa/qualcosaltro") is None
+    assert await _dispatch(env, "/api/home/qualcosaltro") is None
 
 
 async def test_the_old_write_route_is_gone(env) -> None:
     """La GET che scriveva ``config.json`` non c'e' piu': non e' nostra, e il
     file non cambia."""
-    ordine = ["app", "chat", "quaderni", "impostazioni", "p1"]
+    order = ["app", "chat", "notebooks", "settings", "p1"]
     v = urllib.parse.quote(json.dumps({
-        "schermate": [{"id": "p1", "kind": "app", "ref": "orto"}], "ordine": ordine,
+        "pages": [{"id": "p1", "kind": "app", "ref": "orto"}], "order": order,
     }))
-    assert await _dispatch(env, f"/api/casa/schermate/set?v={v}") is None
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+    assert await _dispatch(env, f"/api/home/pages/set?v={v}") is None
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 def test_the_write_is_a_registered_command() -> None:
-    from jenny.webui.commands import COMMANDS, casa_schermate_set
+    from jenny.webui.commands import COMMANDS, home_pages_set
 
-    assert COMMANDS["casa.schermate.set"] is casa_schermate_set
+    assert COMMANDS["home.pages.set"] is home_pages_set
 
 
 # ── L'elenco ────────────────────────────────────────────────────────────────
@@ -162,8 +162,8 @@ def test_the_write_is_a_registered_command() -> None:
 
 async def test_a_fresh_install_has_no_pages(env) -> None:
     """Zero pagine, non una d'esempio: la chat da sola e' la casa."""
-    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
-    assert corpo["schermate"] == []
+    corpo = _corpo(await _dispatch(env, "/api/home/pages"))
+    assert corpo["pages"] == []
 
 
 async def test_the_cap_travels_with_the_list(env) -> None:
@@ -173,16 +173,16 @@ async def test_the_cap_travels_with_the_list(env) -> None:
     di qui perche' una seconda copia nel client divergerebbe, e la differenza
     si scoprirebbe solo quando un salvataggio viene rifiutato.
     """
-    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
-    assert corpo["max"] == MAX_SCHERMATE
+    corpo = _corpo(await _dispatch(env, "/api/home/pages"))
+    assert corpo["max"] == MAX_PAGES
     # Il cassetto non c'e', e resta fuori: ce l'hai gia' accanto a dove scrivi.
     # La conversazione era fuori anche lei (22/09/2026: «la chat e' una sola, una
     # pagina del genere non avrebbe contenuto proprio») ed e' rientrata il
     # 23/09 in un'altra forma — non una seconda chat, una scorciatoia che cambia
     # quella che c'e'. V. `.agent/pagine-conversazione-plan.md`.
     # Le stanze sono uscite il 23/09/2026: posti dove si va, non dove si sta.
-    assert "drawer" not in corpo["specie"]
-    assert set(corpo["specie"]) == {"app", "conversazione"}
+    assert "drawer" not in corpo["kinds"]
+    assert set(corpo["kinds"]) == {"app", "conversation"}
 
 
 # ── La scrittura ────────────────────────────────────────────────────────────
@@ -191,14 +191,14 @@ async def test_the_cap_travels_with_the_list(env) -> None:
 async def test_saving_a_page_and_reading_it_back(env) -> None:
     pagine = [{"id": "p1", "kind": "app", "ref": "orto"}]
     esito = await _salva(env, pagine)
-    assert esito == {"ok": True, "schermate": pagine, "ordine": _ordine_semplice(pagine)}
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == pagine
+    assert esito == {"ok": True, "pages": pagine, "order": _ordine_semplice(pagine)}
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pagine
 
 
 async def test_the_write_lands_in_the_config_file(env) -> None:
     await _salva(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
     su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
-    assert su_disco["casa"]["schermate"] == [
+    assert su_disco["home"]["pages"] == [
         {"id": "p1", "kind": "app", "ref": "orto"}
     ]
 
@@ -232,7 +232,7 @@ async def test_the_whole_list_replaces_the_old_one(env) -> None:
         {"id": "b", "kind": "app", "ref": "spesa"},
     ])
     await _salva(env, [{"id": "b", "kind": "app", "ref": "spesa"}])
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == [
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == [
         {"id": "b", "kind": "app", "ref": "spesa"}
     ]
 
@@ -252,13 +252,13 @@ async def test_a_room_is_no_longer_a_kind(env) -> None:
     """Uscita il 23/09/2026. Il file vecchio la perde in silenzio (v.
     `tests/config/test_casa_pages_config.py`); chi prova a scriverne una
     nuova se la vede rifiutare, con il nome della specie nel messaggio."""
-    messaggio = await _rifiuta(env, [{"id": "p1", "kind": "stanza", "ref": "backup"}])
-    assert "stanza" in messaggio
+    messaggio = await _rifiuta(env, [{"id": "p1", "kind": "room", "ref": "backup"}])
+    assert "room" in messaggio
 
 
 async def test_over_the_cap_is_a_bad_request_not_internal(env) -> None:
     troppe = [
-        {"id": f"p{i}", "kind": "app", "ref": "x"} for i in range(MAX_SCHERMATE + 1)
+        {"id": f"p{i}", "kind": "app", "ref": "x"} for i in range(MAX_PAGES + 1)
     ]
     assert "too many pages" in await _rifiuta(env, troppe)
 
@@ -274,12 +274,12 @@ async def test_two_pages_with_the_same_id_are_refused(env) -> None:
 async def test_junk_is_refused_before_it_reaches_the_file(env) -> None:
     for params in (
         {},
-        {"schermate": "nonjson", "ordine": ["app", "chat", "quaderni", "impostazioni"]},
-        {"schermate": {"non": "lista"}, "ordine": ["app", "chat", "quaderni", "impostazioni"]},
-        {"schermate": ["non un oggetto"], "ordine": ["app", "chat", "quaderni", "impostazioni"]},
+        {"pages": "nonjson", "order": ["app", "chat", "notebooks", "settings"]},
+        {"pages": {"non": "lista"}, "order": ["app", "chat", "notebooks", "settings"]},
+        {"pages": ["non un oggetto"], "order": ["app", "chat", "notebooks", "settings"]},
     ):
         await _rifiuto(env, params)
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
@@ -292,7 +292,7 @@ async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
     """
     pagine = [{"id": "p1", "kind": "app", "ref": "app-che-non-esiste"}]
     await _salva(env, pagine)
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == pagine
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == pagine
 
 
 # ── Le pagine conversazione (23/09/2026) ────────────────────────────────────
@@ -303,11 +303,11 @@ async def test_a_page_pointing_at_nothing_is_kept(env) -> None:
 
 
 async def test_a_notebook_can_be_a_page(env) -> None:
-    pagine = [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}]
+    pagine = [{"id": "p1", "kind": "conversation", "ref": "project:piante"}]
     assert (await _salva(env, pagine))["ok"] is True
-    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
-    assert corpo["schermate"] == pagine
-    assert "conversazione" in corpo["specie"]
+    corpo = _corpo(await _dispatch(env, "/api/home/pages"))
+    assert corpo["pages"] == pagine
+    assert "conversation" in corpo["kinds"]
 
 
 async def test_a_conversation_page_must_point_at_a_notebook(env) -> None:
@@ -319,8 +319,8 @@ async def test_a_conversation_page_must_point_at_a_notebook(env) -> None:
     rifiuto che lo dice, che trovarsi una pagina che non risponde.
     """
     for ref in ("piante", "websocket:default", "project:", "project:..su", "project:a/b"):
-        await _rifiuta(env, [{"id": "p1", "kind": "conversazione", "ref": ref}])
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+        await _rifiuta(env, [{"id": "p1", "kind": "conversation", "ref": ref}])
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 async def test_the_notebook_rule_does_not_leak_onto_apps(env) -> None:
@@ -337,7 +337,7 @@ async def test_the_notebook_rule_does_not_leak_onto_apps(env) -> None:
 
 
 def _pagine_su_disco(env) -> list[dict]:
-    return json.loads(env.config_path.read_text(encoding="utf-8"))["casa"]["schermate"]
+    return json.loads(env.config_path.read_text(encoding="utf-8"))["home"]["pages"]
 
 
 async def _con_pagine(env, pagine: list[dict]) -> None:
@@ -349,7 +349,7 @@ async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:
     await _con_pagine(env, [
         {"id": "p1", "kind": "app", "ref": "orto"},
         {"id": "p2", "kind": "app", "ref": "lampo"},
-        {"id": "p3", "kind": "conversazione", "ref": "project:orto"},
+        {"id": "p3", "kind": "conversation", "ref": "project:orto"},
     ])
     req = _richiesta("/api/webui/apps/orto/delete")
     risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
@@ -377,7 +377,7 @@ async def test_deleting_a_notebook_takes_its_page(env, monkeypatch) -> None:
 
     monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
     await _con_pagine(env, [
-        {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
+        {"id": "p1", "kind": "conversation", "ref": "project:piante"},
         {"id": "p2", "kind": "app", "ref": "piante"},
     ])
     ctx = SimpleNamespace(
@@ -399,7 +399,7 @@ async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch
         raise modulo.ProjectDeleteError("no project named piante")
 
     monkeypatch.setattr(modulo, "delete_project", _rifiuta)
-    await _con_pagine(env, [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}])
+    await _con_pagine(env, [{"id": "p1", "kind": "conversation", "ref": "project:piante"}])
     ctx = SimpleNamespace(
         get_workspace_root=lambda: env.workspace,
         invalidate_session=lambda k: None,
@@ -414,23 +414,23 @@ async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch
 async def test_nothing_to_take_means_no_write(env) -> None:
     """Se la cosa non aveva pagine il file non si riscrive: niente backup
     ruotato per un'operazione che in casa non ha cambiato niente."""
-    from jenny.webui.casa_pages import stacca_pagine_di
+    from jenny.webui.home_pages import detach_pages_of
 
     await _con_pagine(env, [{"id": "p1", "kind": "app", "ref": "lampo"}])
     prima = env.config_path.stat().st_mtime_ns
-    assert await stacca_pagine_di("app", "orto") == 0
+    assert await detach_pages_of("app", "orto") == 0
     assert env.config_path.stat().st_mtime_ns == prima
 
 
 async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeypatch) -> None:
     """La cancellazione e' gia' avvenuta e non si disfa: un guaio con la
     pagina non deve diventare un 500 su un'operazione riuscita."""
-    from jenny.webui import casa_pages
+    from jenny.webui import home_pages
 
     async def _rotto(kind, ref):
         raise RuntimeError("disco pieno")
 
-    monkeypatch.setattr(casa_pages, "stacca_pagine_di", _rotto)
+    monkeypatch.setattr(home_pages, "detach_pages_of", _rotto)
     (env.workspace / "apps" / "orto").mkdir(parents=True)
     req = _richiesta("/api/webui/apps/orto/delete")
     risposta = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
@@ -441,13 +441,13 @@ async def test_a_delete_does_not_reach_across_kinds(env) -> None:
     """E' la specie, non il nome, a dire di chi e' una pagina: un'app che si
     chiama come il quaderno resta. Fino al 25/09/2026 lo schema lasciava a una
     pagina app anche un `ref` a forma di quaderno; ora non piu' (v. sotto)."""
-    from jenny.webui.casa_pages import stacca_pagine_di
+    from jenny.webui.home_pages import detach_pages_of
 
     await _con_pagine(env, [
-        {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
+        {"id": "p1", "kind": "conversation", "ref": "project:piante"},
         {"id": "p2", "kind": "app", "ref": "piante"},
     ])
-    assert await stacca_pagine_di("conversazione", "project:piante") == 1
+    assert await detach_pages_of("conversation", "project:piante") == 1
     assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
 
 
@@ -466,7 +466,7 @@ async def test_a_delete_does_not_reach_across_kinds(env) -> None:
 )
 async def test_an_app_page_needs_a_slug_and_a_plain_id(env, riga) -> None:
     await _rifiuta(env, [riga])
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 # ── L'ordine (23/09/2026) ───────────────────────────────────────────────────
@@ -476,56 +476,56 @@ async def test_an_app_page_needs_a_slug_and_a_plain_id(env, riga) -> None:
 # solo quello; l'ordine che arriva dev'essere **esatto** — la tolleranza e' del
 # file, non di chi scrive.
 
-FISSE = ["app", "chat", "quaderni", "impostazioni"]
+FIXED_PAGES = ["app", "chat", "notebooks", "settings"]
 
 
 async def test_a_fresh_install_reads_the_default_order(env) -> None:
-    corpo = _corpo(await _dispatch(env, "/api/casa/schermate"))
-    assert corpo["ordine"] == FISSE
-    assert corpo["fisse"] == FISSE
+    corpo = _corpo(await _dispatch(env, "/api/home/pages"))
+    assert corpo["order"] == FIXED_PAGES
+    assert corpo["fixed"] == FIXED_PAGES
 
 
 async def test_the_order_is_saved_and_read_back(env) -> None:
     todo = {"id": "p1", "kind": "app", "ref": "todo"}
-    ordine = ["p1", "app", "chat", "quaderni", "impostazioni"]
-    corpo = await _salva(env, [todo], ordine)
-    assert corpo["ordine"] == ordine
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == ordine
+    order = ["p1", "app", "chat", "notebooks", "settings"]
+    corpo = await _salva(env, [todo], order)
+    assert corpo["order"] == order
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["order"] == order
     su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
-    assert su_disco["casa"]["ordine"] == ordine
+    assert su_disco["home"]["order"] == order
 
 
 async def test_moving_a_page_alone_is_a_write(env) -> None:
     """Stesse schermate, ordine nuovo: e' un cambiamento, e si scrive."""
-    await _salva(env, [], FISSE)
-    spostato = ["chat", "app", "quaderni", "impostazioni"]
+    await _salva(env, [], FIXED_PAGES)
+    spostato = ["chat", "app", "notebooks", "settings"]
     await _salva(env, [], spostato)
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["ordine"] == spostato
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["order"] == spostato
 
 
 async def test_pages_without_an_order_are_refused(env) -> None:
     """Le sole schermate, com'erano prima del 23/09, non bastano: rifiuto, e il
     file non cambia."""
-    await _rifiuto(env, {"schermate": [{"id": "p1", "kind": "app", "ref": "todo"}]})
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+    await _rifiuto(env, {"pages": [{"id": "p1", "kind": "app", "ref": "todo"}]})
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 @pytest.mark.parametrize(
-    "ordine",
+    "order",
     [
-        ["app", "chat", "quaderni"],  # manca una fissa
-        ["app", "chat", "quaderni", "impostazioni", "chat"],  # doppione
-        ["app", "chat", "quaderni", "impostazioni", "p9"],  # id che non c'e'
-        ["app", "chat", "quaderni", "impostazioni"],  # manca la schermata
+        ["app", "chat", "notebooks"],  # manca una fissa
+        ["app", "chat", "notebooks", "settings", "chat"],  # doppione
+        ["app", "chat", "notebooks", "settings", "p9"],  # id che non c'e'
+        ["app", "chat", "notebooks", "settings"],  # manca la schermata
         "app,chat",
-        ["app", "chat", "quaderni", 4],
+        ["app", "chat", "notebooks", 4],
     ],
     ids=["missing-fixed", "duplicate", "unknown", "missing-page", "not-a-list", "not-strings"],
 )
-async def test_a_crooked_order_is_refused_and_nothing_is_written(env, ordine) -> None:
+async def test_a_crooked_order_is_refused_and_nothing_is_written(env, order) -> None:
     todo = {"id": "p1", "kind": "app", "ref": "todo"}
-    await _rifiuta(env, [todo], ordine)
-    assert _corpo(await _dispatch(env, "/api/casa/schermate"))["schermate"] == []
+    await _rifiuta(env, [todo], order)
+    assert _corpo(await _dispatch(env, "/api/home/pages"))["pages"] == []
 
 
 async def test_a_page_cannot_take_a_fixed_page_id(env) -> None:
@@ -533,14 +533,14 @@ async def test_a_page_cannot_take_a_fixed_page_id(env) -> None:
 
 
 async def test_an_object_without_pages_is_refused(env) -> None:
-    await _rifiuto(env, {"ordine": FISSE})
+    await _rifiuto(env, {"order": FIXED_PAGES})
 
 
 async def test_deleting_an_app_takes_its_id_out_of_the_order(env) -> None:
-    from jenny.webui.casa_pages import stacca_pagine_di
+    from jenny.webui.home_pages import detach_pages_of
 
     todo = {"id": "p1", "kind": "app", "ref": "todo"}
-    await _salva(env, [todo], ["p1", "app", "chat", "quaderni", "impostazioni"])
-    assert await stacca_pagine_di("app", "todo") == 1
+    await _salva(env, [todo], ["p1", "app", "chat", "notebooks", "settings"])
+    assert await detach_pages_of("app", "todo") == 1
     su_disco = json.loads(env.config_path.read_text(encoding="utf-8"))
-    assert su_disco["casa"]["ordine"] == FISSE
+    assert su_disco["home"]["order"] == FIXED_PAGES

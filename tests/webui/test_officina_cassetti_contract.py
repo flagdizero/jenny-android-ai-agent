@@ -144,8 +144,8 @@ def test_the_views_that_left_the_dock_are_still_reachable() -> None:
     nav = html[html.index('<nav class="dock"'):html.index("</nav>")]
     sul_dock = set(re.findall(r'data-mode="([a-z]+)"', nav))
 
-    impostazioni = _src("mobile-settings.js")
-    porte = set(re.findall(r'data-porta="([a-z]+)"', impostazioni))
+    settings = _src("mobile-settings.js")
+    porte = set(re.findall(r'data-porta="([a-z]+)"', settings))
     # Una vista si raggiunge anche da un gesto scritto nel codice, non solo da
     # una riga su cui si preme. Il file aperto e' cosi' dal 21/09/2026:
     # l'esploratore e' una scheda di Memoria, e ad aprirlo e' il tocco su un
@@ -188,9 +188,9 @@ def test_the_three_drawers_share_one_screen_and_one_fetch() -> None:
     """Tre istanze vorrebbero dire tre `/api/settings` e due copie dello stesso
     stato che invecchiano mentre guardi la terza."""
     app = _src("mobile-app.js")
-    assert "const impostazioni = () => (this._impostazioni ||= new SettingsController());" in app
+    assert "const settings = () => (this._settings ||= new SettingsController());" in app
     for modo in ("settings", "cervello", "mani", "memoria"):
-        assert re.search(rf"{modo}:\s+impostazioni,", app), f"«{modo}» non condivide il controller"
+        assert re.search(rf"{modo}:\s+settings,", app), f"«{modo}» non condivide il controller"
     # E il cassetto va detto **prima** di activate(), o il primo frame mostra
     # quello di prima.
     i = app.index("next.setCassetto?.(")

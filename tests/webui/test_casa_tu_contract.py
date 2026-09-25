@@ -49,11 +49,11 @@ def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
     """
     html = INDEX.read_text(encoding="utf-8")
     assert 'id="casa-door"' not in html, "l'avatar e' tornato in testa"
-    pagina = html.split('data-pagina="impostazioni"', 1)[1]
+    pagina = html.split('data-pagina="settings"', 1)[1]
     assert '<section class="casa-tu" id="casa-tu">' in pagina, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
     assert "this.door" not in app
-    assert "this.pagine.registra('impostazioni', { accendi: () => this._apriImpostazioni() });" in app
+    assert "this.pagine.registra('settings', { accendi: () => this._apriImpostazioni() });" in app
     tu_parole = json.loads((I18N / "it.json").read_text(encoding="utf-8"))["casa"]["tu"]
     assert "avatar" not in tu_parole["workshopHint"], "il suggerimento parla di un bottone che non c'e'"
 
@@ -157,10 +157,10 @@ def test_the_back_chain_lands_somewhere_real() -> None:
     stessa: una stanza che rimanda a se' e' un tasto Indietro che non fa
     niente, ed e' peggio di un tasto che non c'e'."""
     catena = _rooms_in_back_chain()
-    # `impostazioni` non e' una stanza, e' la **pagina** da cui si aprono le
+    # `settings` non e' una stanza, e' la **pagina** da cui si aprono le
     # stanze delle impostazioni: Indietro ci torna sopra (`goBackOneRoom`).
-    stanze = set(catena) | {"chat", "impostazioni"}
-    assert "target === 'impostazioni'" in _app(), "Indietro non sa tornare alla pagina Impostazioni"
+    stanze = set(catena) | {"chat", "settings"}
+    assert "target === 'settings'" in _app(), "Indietro non sa tornare alla pagina Impostazioni"
     for da, a in catena.items():
         assert a in stanze, f"{da} torna a {a}, che non e' una stanza"
         assert da != a, f"{da} torna in se' stessa"
@@ -384,8 +384,8 @@ def test_the_settings_page_does_not_borrow_a_name_the_chat_already_uses() -> Non
     )
     assert len(stanze) == 4, f"le quattro stanze non si trovano piu' ({len(stanze)})"
     delle_stanze = set()
-    for stanza in stanze:
-        for valore in re.findall(r'class="([^"]+)"', stanza):
+    for room in stanze:
+        for valore in re.findall(r'class="([^"]+)"', room):
             delle_stanze |= set(valore.split())
 
     in_comune = della_chat & delle_stanze
@@ -582,8 +582,8 @@ def test_nothing_that_starts_hidden_is_shown_by_its_own_class() -> None:
     assert stanze, "le stanze non si trovano piu'"
 
     guasti = []
-    for stanza in stanze:
-        for tag in re.findall(r"<[a-z]+[^>]*\bhidden\b[^>]*>", stanza):
+    for room in stanze:
+        for tag in re.findall(r"<[a-z]+[^>]*\bhidden\b[^>]*>", room):
             classi = re.search(r'class="([^"]+)"', tag)
             if not classi:
                 continue

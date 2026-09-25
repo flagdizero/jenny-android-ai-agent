@@ -2,7 +2,7 @@
 
 Modulo neutro, senza trasporto: lo importano il comando RPC (``commands.py``, le
 cancellazioni e il rinomino di un quaderno) e le rotte HTTP (``apps_routes.py``,
-la cancellazione di un'app). Prima queste funzioni stavano in ``casa_routes``, e
+la cancellazione di un'app). Prima queste funzioni stavano in ``home_routes``, e
 il modulo dei comandi — che di trasporti non sa niente — doveva importarle da un
 modulo di rotte HTTP; l'involucro «stacca senza fallire» era scritto due volte.
 """
@@ -13,11 +13,11 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.config.schema import Config, ordine_normale
+from jenny.config.schema import Config, normalize_order
 
 
-async def stacca_pagine_di(kind: str, ref: str) -> int:
-    """Toglie da ``casa.schermate`` le pagine che puntano a (*kind*, *ref*).
+async def detach_pages_of(kind: str, ref: str) -> int:
+    """Toglie da ``home.pages`` le pagine che puntano a (*kind*, *ref*).
 
     La chiamano le due cancellazioni — un'app, un quaderno — **dopo** aver
     cancellato: la cancellazione e' I/O lento e fuori dal lucchetto ci deve
@@ -25,7 +25,7 @@ async def stacca_pagine_di(kind: str, ref: str) -> int:
 
     **Non contraddice** la regola per cui il server non toglie una pagina da
     se' quando il suo contenuto sparisce (v. la testata di
-    ``tests/webui/test_casa_schermate_routes.py``). Li' la cosa se ne va per
+    ``tests/webui/test_home_pages_routes.py``). Li' la cosa se ne va per
     altre strade e nessuno ha deciso niente sulla pagina; qui l'utente ha
     **cancellato la cosa** dalla sua scheda, e la pagina e' della cosa. Tenerla
     vorrebbe dire una pagina verso il nulla, lasciata li' apposta.
@@ -34,27 +34,27 @@ async def stacca_pagine_di(kind: str, ref: str) -> int:
     """
     from jenny.config import store
 
-    tolte = 0
+    removed = 0
 
-    def _applica(config: Config) -> bool:
-        nonlocal tolte
-        prima = list(config.casa.schermate)
-        dopo = [s for s in prima if not (s.kind == kind and s.ref == ref)]
-        tolte = len(prima) - len(dopo)
-        if not tolte:
+    def _apply(config: Config) -> bool:
+        nonlocal removed
+        before = list(config.home.pages)
+        after = [s for s in before if not (s.kind == kind and s.ref == ref)]
+        removed = len(before) - len(after)
+        if not removed:
             return False
-        config.casa.schermate = dopo
+        config.home.pages = after
         # L'id staccato esce anche dall'ordine: lo farebbe la prossima lettura,
         # ma un file che dice il vero non deve aspettare quella.
-        config.casa.ordine = ordine_normale(config.casa.ordine, [s.id for s in dopo])
+        config.home.order = normalize_order(config.home.order, [s.id for s in after])
         return True
 
-    await store.mutate(_applica)
-    return tolte
+    await store.mutate(_apply)
+    return removed
 
 
 async def detach_pages_quietly(kind: str, ref: str, *, log: Any = logger) -> None:
-    """:func:`stacca_pagine_di` dopo una cancellazione gia' riuscita, senza fallire.
+    """:func:`detach_pages_of` dopo una cancellazione gia' riuscita, senza fallire.
 
     La cancellazione e' gia' avvenuta e non si disfa: un errore qui non deve
     diventare un 500 (o un ``internal``) su un'operazione riuscita. Resta una
@@ -65,31 +65,31 @@ async def detach_pages_quietly(kind: str, ref: str, *, log: Any = logger) -> Non
     ``opt()`` che li' non esiste farebbe proprio l'errore da evitare.
     """
     try:
-        await stacca_pagine_di(kind, ref)
+        await detach_pages_of(kind, ref)
     except Exception as exc:  # noqa: BLE001 — v. docstring
         log.warning("Page of deleted {} {} not removed: {}", kind, ref, exc)
 
 
-async def rinomina_pagine_di(kind: str, ref: str, nuovo_ref: str) -> int:
-    """Le pagine di (*kind*, *ref*) seguono la cosa sotto *nuovo_ref*.
+async def rename_pages_of(kind: str, ref: str, new_ref: str) -> int:
+    """Le pagine di (*kind*, *ref*) seguono la cosa sotto *new_ref*.
 
-    Il gemello di :func:`stacca_pagine_di`, per il rinomino di un quaderno: la
+    Il gemello di :func:`detach_pages_of`, per il rinomino di un quaderno: la
     pagina salva ``project:<nome>``, e senza questo un rinomino la lascerebbe
     puntata a un nome che non esiste piu'. Stesso ordine: dopo, fuori dal
     lucchetto per tutto quel che e' lento. Torna quante ne ha spostate.
     """
     from jenny.config import store
 
-    spostate = 0
+    moved = 0
 
-    def _applica(config: Config) -> bool:
-        nonlocal spostate
-        spostate = 0
-        for s in config.casa.schermate:
+    def _apply(config: Config) -> bool:
+        nonlocal moved
+        moved = 0
+        for s in config.home.pages:
             if s.kind == kind and s.ref == ref:
-                s.ref = nuovo_ref
-                spostate += 1
-        return spostate > 0
+                s.ref = new_ref
+                moved += 1
+        return moved > 0
 
-    await store.mutate(_applica)
-    return spostate
+    await store.mutate(_apply)
+    return moved

@@ -73,10 +73,10 @@ export const rpc = {
   },
 
   /** Salva le pagine della casa: l'elenco intero e l'ordine di tutte. Lo chiama
-   *  `api.salvaPagine`, gemella della lettura `api.getSchermate`
-   *  (v. `webui/commands.py::casa_schermate_set`). */
-  saveCasaPages(schermate, ordine) {
-    return wsManager.request('casa.schermate.set', { schermate, ordine });
+   *  `api.savePages`, gemella della lettura `api.getPages`
+   *  (v. `webui/commands.py::home_pages_set`). */
+  saveHomePages(pages, order) {
+    return wsManager.request('home.pages.set', { pages, order });
   },
 
 };

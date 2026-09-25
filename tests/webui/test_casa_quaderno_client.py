@@ -119,7 +119,7 @@ def test_the_rows_are_the_app_sheets_rows_in_the_same_order() -> None:
     _run(
         "scheda.mostra('piante');\n"
         "assert.deepEqual(righe().map((r) => r.azione), ['open', 'pin', 'rename', 'delete']);\n"
-        "assert.deepEqual(chiamate[0], ['stato', 'conversazione', 'project:piante']);\n"
+        "assert.deepEqual(chiamate[0], ['stato', 'conversation', 'project:piante']);\n"
         "assert.equal(document.getElementById('casa-quaderno-sheet').open, true);\n",
         rinomina=True,
     )
@@ -167,8 +167,8 @@ def test_the_name_in_the_title_is_text_not_markup() -> None:
     ("azione", "attesa"),
     [
         ("open", ["apri", "piante"]),
-        ("pin", ["appendi", "conversazione", "project:piante"]),
-        ("unpin", ["stacca", "conversazione", "project:piante"]),
+        ("pin", ["appendi", "conversation", "project:piante"]),
+        ("unpin", ["stacca", "conversation", "project:piante"]),
         ("rename", ["rinomina", "piante"]),
         ("delete", ["elimina", "piante"]),
     ],
@@ -211,7 +211,7 @@ def _run_seguito(corpo: str, *, confermato: bool, corrente: str | None) -> None:
           }}
           /* La chat cambia dove sta: passare dalla regola delle pagine, dalla
              pagina Quaderni, porterebbe alla pagina chat. */
-          async mostraConversazione(k) {{ storia.push(['conversazione', k]); }}
+          async mostraConversazione(k) {{ storia.push(['conversation', k]); }}
           async switchConversation(k) {{ storia.push(['dirottata', k]); }}
           portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
           {metodo}
@@ -236,8 +236,8 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
     """Restare in una chat che non esiste piu' vorrebbe dire scrivere a vuoto."""
     _run_seguito(
         "await g.deleteNotebook('piante');\n"
-        "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'conversazione', 'tendina', 'pagine', 'avviso']);\n"
-        "assert.deepEqual(storia[1], ['conversazione', null]);\n",
+        "assert.deepEqual(storia.map((x) => x[0]), ['chiede', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
+        "assert.deepEqual(storia[1], ['conversation', null]);\n",
         confermato=True,
         corrente="project:piante",
     )
@@ -246,7 +246,7 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
 def test_deleting_another_notebook_leaves_you_where_you_are() -> None:
     _run_seguito(
         "await g.deleteNotebook('piante');\n"
-        "assert.ok(!storia.some((x) => x[0] === 'conversazione'), 'ti ha spostato');\n"
+        "assert.ok(!storia.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
         "assert.ok(storia.some((x) => x[0] === 'pagine'), 'le pagine non sono state rilette');\n"
         "assert.ok(storia.some((x) => x[0] === 'tendina'), 'la tendina non si e ridisegnata');\n",
         confermato=True,
@@ -336,7 +336,7 @@ def _run_rinomina(
             this._drafts = new Map();
             this.input = {{ value: '' }};
           }}
-          async mostraConversazione(k) {{ storia.push(['conversazione', k]); }}
+          async mostraConversazione(k) {{ storia.push(['conversation', k]); }}
           async switchConversation(k) {{ storia.push(['dirottata', k]); }}
           portaPagine() {{ return {{ ricarica: async () => storia.push(['pagine']) }}; }}
           {metodo}
@@ -354,15 +354,15 @@ def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -
         "assert.deepEqual(storia[0], ['chiede', 'viaggio'], 'la domanda non parte dal nome attuale');\n"
         "assert.deepEqual(storia[1], ['rpc', 'viaggio', 'viaggi']);\n"
         "assert.ok(storia.some((x) => x[0] === 'pagina0' && x[2] === 'project:viaggi'));\n"
-        "assert.ok(storia.some((x) => x[0] === 'conversazione' && x[1] === 'project:viaggi'),\n"
+        "assert.ok(storia.some((x) => x[0] === 'conversation' && x[1] === 'project:viaggi'),\n"
         "  'eri nel quaderno e non ci sei rimasta');\n"
         "assert.ok(storia.some((x) => x[0] === 'tendina'));\n"
         "assert.ok(storia.some((x) => x[0] === 'pagine'));\n"
         # La tendina rilegge prima del cambio: il titolo chiede alla sua cache
         # quante pagine ha il quaderno, e sul telefono la pastiglia perdeva il
         # numero (23/09/2026).
-        "const ordine = storia.map((x) => x[0]);\n"
-        "assert.ok(ordine.indexOf('tendina') < ordine.indexOf('conversazione'),\n"
+        "const order = storia.map((x) => x[0]);\n"
+        "assert.ok(order.indexOf('tendina') < order.indexOf('conversation'),\n"
         "  'la tendina rilegge dopo il cambio: la pastiglia perde il numero');\n",
         scritto=" viaggi ",
         corrente="project:viaggio",
@@ -372,7 +372,7 @@ def test_renaming_the_notebook_you_are_in_keeps_you_there_under_the_new_name() -
 def test_renaming_another_notebook_leaves_you_where_you_are() -> None:
     _run_rinomina(
         "await g.renameNotebook('viaggio');\n"
-        "assert.ok(!storia.some((x) => x[0] === 'conversazione'), 'ti ha spostato');\n"
+        "assert.ok(!storia.some((x) => x[0] === 'conversation'), 'ti ha spostato');\n"
         "assert.ok(storia.some((x) => x[0] === 'pagine'));\n",
         scritto="viaggi",
         corrente=None,

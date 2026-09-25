@@ -455,7 +455,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         )
 
     try:
-        esito = await asyncio.to_thread(
+        outcome = await asyncio.to_thread(
             delete_project,
             wikis_dir=_wikis_dir(ctx),
             scripts_dir=_skill_scripts_dir(ctx),
@@ -470,10 +470,10 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
     # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
     # cancellato: la pagina verso il nulla la toglie l'utente.
-    from jenny.webui.casa_pages import detach_pages_quietly
+    from jenny.webui.home_pages import detach_pages_quietly
 
-    await detach_pages_quietly("conversazione", project_session_key(name))
-    return esito
+    await detach_pages_quietly("conversation", project_session_key(name))
+    return outcome
 
 
 async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -501,15 +501,15 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     # Qui, sul loop, e non nel thread: quel che e' in volo lo sa il loop. Resta
     # una finestra fra questa domanda e il ``rename`` — millisecondi, contro i
     # secondi o i minuti di un turno, di un subagent o di una passata.
-    in_volo = set(ctx.busy_session_keys())
-    if project_session_key(name) in in_volo or project_session_key(new_name) in in_volo:
+    in_flight = set(ctx.busy_session_keys())
+    if project_session_key(name) in in_flight or project_session_key(new_name) in in_flight:
         raise CommandError(
             "conflict",
             "Jenny is still working in this notebook: rename it when she has finished",
         )
 
     try:
-        esito = await asyncio.to_thread(
+        outcome = await asyncio.to_thread(
             rename_project,
             wikis_dir=_wikis_dir(ctx),
             scripts_dir=_skill_scripts_dir(ctx),
@@ -523,89 +523,89 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     except OSError as exc:
         raise CommandError("bad_request", str(exc)) from exc
 
-    from jenny.webui.casa_pages import rinomina_pagine_di
+    from jenny.webui.home_pages import rename_pages_of
 
     try:
-        await rinomina_pagine_di(
-            "conversazione", project_session_key(name), project_session_key(new_name)
+        await rename_pages_of(
+            "conversation", project_session_key(name), project_session_key(new_name)
         )
     except Exception:  # noqa: BLE001 — il rinomino e' gia' riuscito
         logger.opt(exception=True).warning("Pages of renamed notebook {} not followed", name)
-    return esito
+    return outcome
 
 
-def _casa_pages_from(params: Mapping[str, Any]) -> tuple[list[Any], list[str]]:
+def _home_pages_from(params: Mapping[str, Any]) -> tuple[list[Any], list[str]]:
     """Le pagine e l'ordine richiesti, validati **tutti** prima di scrivere.
 
     Validare fuori da ``store.mutate``: li' dentro si tiene un lock per tutta la
     durata della callback, e un errore alzato dentro lo attraverserebbe come un
     ``internal`` invece di arrivare come ``bad_request``.
     """
-    from jenny.config.schema import MAX_SCHERMATE, PAGINE_FISSE, SchermataConfig
+    from jenny.config.schema import FIXED_PAGES, MAX_PAGES, HomePageConfig
 
-    righe = params.get("schermate")
-    if not isinstance(righe, list):
-        raise CommandError("bad_request", "schermate must be a list")
+    rows = params.get("pages")
+    if not isinstance(rows, list):
+        raise CommandError("bad_request", "pages must be a list")
     try:
-        schermate = [SchermataConfig(**riga) for riga in righe]
+        pages = [HomePageConfig(**row) for row in rows]
     except (TypeError, ValueError) as exc:
         # ``TypeError``: una riga che non e' un oggetto. ``ValueError`` (anche la
         # ``ValidationError`` dello schema): una specie o un riferimento storti.
         # Il messaggio viaggia nella risposta, perche' chi l'ha mandata sappia
         # quale riga era sbagliata.
         raise CommandError("bad_request", str(exc)) from exc
-    if len(schermate) > MAX_SCHERMATE:
-        raise CommandError("bad_request", f"too many pages (max {MAX_SCHERMATE})")
-    identificativi = [s.id for s in schermate]
-    if len(set(identificativi)) != len(identificativi):
+    if len(pages) > MAX_PAGES:
+        raise CommandError("bad_request", f"too many pages (max {MAX_PAGES})")
+    identifiers = [s.id for s in pages]
+    if len(set(identifiers)) != len(identifiers):
         raise CommandError("bad_request", "duplicate page id")
-    riservati = sorted(set(identificativi) & set(PAGINE_FISSE))
-    if riservati:
-        raise CommandError("bad_request", f"reserved page id: {', '.join(riservati)}")
-    ordine = params.get("ordine")
-    attesi = [*PAGINE_FISSE, *identificativi]
+    reserved = sorted(set(identifiers) & set(FIXED_PAGES))
+    if reserved:
+        raise CommandError("bad_request", f"reserved page id: {', '.join(reserved)}")
+    order = params.get("order")
+    expected = [*FIXED_PAGES, *identifiers]
     if (
-        not isinstance(ordine, list)
-        or not all(isinstance(v, str) for v in ordine)
-        or sorted(ordine) != sorted(attesi)
+        not isinstance(order, list)
+        or not all(isinstance(v, str) for v in order)
+        or sorted(order) != sorted(expected)
     ):
         raise CommandError(
-            "bad_request", "ordine must list every fixed page and every page id, once each"
+            "bad_request", "order must list every fixed page and every page id, once each"
         )
-    return schermate, ordine
+    return pages, order
 
 
-async def casa_schermate_set(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+async def home_pages_set(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Salva le pagine della casa: l'elenco intero **e** l'ordine di tutte.
 
-    Fino al 25/09/2026 era una GET (``/api/casa/schermate/set?v=<json>``) che
+    Fino al 25/09/2026 era una GET (``/api/casa/schermate/set?v=<json>``, il nome di allora) che
     scriveva ``config.json`` col JSON nell'indirizzo — contro la regola di
     ``.agent/design.md``, per cui ``/api/`` e' per letture e parametri corti.
-    La lettura resta ``GET /api/casa/schermate``.
+    La lettura resta ``GET /api/home/pages``.
 
     Aggiungere, togliere e spostare sono la stessa scrittura: mandare l'elenco
     completo toglie di mezzo il caso in cui due scritture parziali si
     incrociano lasciando un ordine che nessuno ha chiesto. L'ordine che arriva
     deve essere **esattamente** le fisse piu' le schermate, ognuna una volta: la
-    tolleranza di ``ordine_normale`` e' per il file, non per chi scrive.
+    tolleranza di ``normalize_order`` e' per il file, non per chi scrive.
     """
     from jenny.config import store
-    from jenny.config.schema import Config, ordine_normale
+    from jenny.config.schema import Config, normalize_order
 
-    schermate, ordine = _casa_pages_from(params)
-    ordine_dopo = ordine_normale(ordine, [s.id for s in schermate])
-    dopo = [s.model_dump() for s in schermate]
+    pages, order = _home_pages_from(params)
+    order_after = normalize_order(order, [s.id for s in pages])
+    after = [s.model_dump() for s in pages]
 
-    def _applica(config: Config) -> bool:
-        prima = [s.model_dump() for s in config.casa.schermate]
-        if prima == dopo and config.casa.ordine == ordine_dopo:
+    def _apply(config: Config) -> bool:
+        before = [s.model_dump() for s in config.home.pages]
+        if before == after and config.home.order == order_after:
             return False
-        config.casa.schermate = list(schermate)
-        config.casa.ordine = list(ordine_dopo)
+        config.home.pages = list(pages)
+        config.home.order = list(order_after)
         return True
 
-    await store.mutate(_applica)
-    return {"ok": True, "schermate": dopo, "ordine": list(ordine_dopo)}
+    await store.mutate(_apply)
+    return {"ok": True, "pages": after, "order": list(order_after)}
 
 
 COMMANDS: dict[str, Command] = {
@@ -615,7 +615,7 @@ COMMANDS: dict[str, Command] = {
     "project.create": project_create,
     "project.delete": project_delete,
     "project.rename": project_rename,
-    "casa.schermate.set": casa_schermate_set,
+    "home.pages.set": home_pages_set,
 }
 
 

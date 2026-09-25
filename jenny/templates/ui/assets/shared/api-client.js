@@ -609,29 +609,29 @@ class ApiClient {
 
   /* ── Le pagine della casa ────────────────────────────────────────────── */
 
-  /** `{schermate, ordine, fisse, max, specie}`. Il tetto arriva dal server e non se lo tiene
+  /** `{pages, order, fixed, max, kinds}`. Il tetto arriva dal server e non se lo tiene
    *  scritto il client: due copie di quel numero divergerebbero, e la seconda
    *  si scoprirebbe solo quando un salvataggio viene rifiutato. */
-  async getSchermate() {
-    const res = await this._fetch('/api/casa/schermate');
+  async getPages() {
+    const res = await this._fetch('/api/home/pages');
     if (!res.ok) throw new Error(`Pages read failed: ${res.status}`);
     return res.json();
   }
 
   /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{ok,
-   *  schermate, ordine}` torna com'e' stato salvato. L'ordine deve nominare
+   *  pages, order}` torna com'e' stato salvato. L'ordine deve nominare
    *  ogni pagina una volta sola, o il server lo rifiuta (`bad_request`) e qui
    *  si lancia l'errore, con il suo `code`.
    *
-   *  Resta qui perche' e' la gemella di `getSchermate`, ma la scrittura viaggia
-   *  sul WebSocket (`rpc.saveCasaPages`): `/api/` e' per letture e parametri
+   *  Resta qui perche' e' la gemella di `getPages`, ma la scrittura viaggia
+   *  sul WebSocket (`rpc.saveHomePages`): `/api/` e' per letture e parametri
    *  corti (`.agent/design.md`), e fino al 25/09/2026 questa era una GET col
    *  JSON nell'indirizzo. Import **dinamico**: `ws-manager.js` importa questo
    *  modulo, e uno statico chiuderebbe il cerchio al caricamento. */
-  async salvaPagine(schermate, ordine) {
+  async savePages(pages, order) {
     const { rpc } = await import('./rpc-client.js');
-    const body = await rpc.saveCasaPages(schermate, ordine);
-    return { ok: body.ok, schermate: body.schermate, ordine: body.ordine };
+    const body = await rpc.saveHomePages(pages, order);
+    return { ok: body.ok, pages: body.pages, order: body.order };
   }
 
   /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui

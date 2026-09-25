@@ -25,7 +25,7 @@ const MARGINE_IN_VISTA = 24;
 
 export class CasaFila {
   /** @param el        il contenitore (`#casa-fila`)
-   *  @param pagine    la pista: `voci`, `indice`, `vaiA`, `salva`, `schermate`
+   *  @param pagine    la pista: `voci`, `indice`, `vaiA`, `salva`, `pages`
    *  @param nomeChat  `() => ({nome, colore})`: la pagina chat si chiama come
    *                   la conversazione che mostra — «Jenny», o il quaderno
    *  @param onCambia  chiamata quando la modalita' ordina si apre o si chiude */
@@ -56,7 +56,7 @@ export class CasaFila {
    *  sola cosa che lega il nome alla stanza in cui sei. */
   colore(voce) {
     if (voce?.kind === 'chat') return this._nomeChat().colore || null;
-    if (voce?.kind === 'conversazione') return dotColor(this.nome(voce));
+    if (voce?.kind === 'conversation') return dotColor(this.nome(voce));
     return null;
   }
 
@@ -155,9 +155,9 @@ export class CasaFila {
     const bozza = this._bozza;
     if (salva) {
       if (this._salvando) return false;
-      const restano = this.pagine.schermate.filter((s) => bozza.includes(s.id));
+      const restano = this.pagine.pages.filter((s) => bozza.includes(s.id));
       const prima = this.pagine.voci.map((v) => v.id);
-      const uguale = restano.length === this.pagine.schermate.length
+      const uguale = restano.length === this.pagine.pages.length
         && prima.join() === bozza.join();
       if (!uguale) {
         this._salvando = true;
@@ -192,7 +192,7 @@ export class CasaFila {
 
   /** Toglie dalla bozza una pagina aggiunta. Le fisse non si tolgono. */
   togli(id) {
-    if (!this.ordinando || this.pagine.fisse.includes(id)) return;
+    if (!this.ordinando || this.pagine.fixed.includes(id)) return;
     this._bozza = this._bozza.filter((x) => x !== id);
     this.disegna();
   }

@@ -112,7 +112,7 @@ class CasaUpdates {
 }
 
 const giorno = 86400000;
-function stanza(version) {
+function room(version) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   brindisi.length = 0;
   const s = new CasaUpdates({});
@@ -191,10 +191,10 @@ def test_the_dot_says_the_mechanism() -> None:
     questa distinzione un manifest irraggiungibile da un mese mostra la stessa
     schermata di chi e' aggiornato davvero."""
     _run_js("""
-      stanza({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() });
+      room({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() });
       assert.ok(pallino().includes('is-ok'), pallino());
 
-      stanza({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() - 30 * giorno });
+      room({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() - 30 * giorno });
       assert.ok(pallino().includes('is-warn'), pallino());
       const dette = righe();
       assert.equal(dette.length, 2, 'la riga che spiega il guasto non c e');
@@ -224,7 +224,7 @@ def test_the_row_carries_the_version_and_where_it_is_going() -> None:
 
 def test_the_install_button_exists_only_when_there_is_something_to_install() -> None:
     _run_js("""
-      const s = stanza({ current: '0.11.0', update_available: false,
+      const s = room({ current: '0.11.0', update_available: false,
                          last_check: Date.now(), last_success: Date.now() });
       assert.equal(nodi['casa-update-install'].hidden, true);
       assert.equal(nodi['casa-update-notes'].hidden, true, 'un link alle note che non ci sono');
@@ -244,7 +244,7 @@ def test_a_critical_update_does_not_read_like_an_ordinary_one() -> None:
     una correzione che conviene installare subito, e deve leggersi diversamente
     gia' da qui."""
     _run_js("""
-      const normale = stanza({ current: '0.11.0', latest: '0.12.0', update_available: true,
+      const normale = room({ current: '0.11.0', latest: '0.12.0', update_available: true,
                                last_check: Date.now(), last_success: Date.now() });
       const parole = nodi['casa-update-headline'].textContent;
       assert.equal(nodi['casa-update-install'].classList.contains('is-critical'), false);
@@ -261,7 +261,7 @@ def test_the_progress_block_is_not_there_before_you_press() -> None:
     """Prima di premere il bottone non c'e' niente da raccontare, e un
     riquadro vuoto sembrerebbe qualcosa che e' andato storto."""
     _run_js("""
-      const s = stanza({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() });
+      const s = room({ current: '0.11.0', last_check: Date.now(), last_success: Date.now() });
       assert.equal(nodi['casa-update-progress'].hidden, true);
 
       /* Durante: la nota dice cosa aspettarsi, la fase dice a che punto e', e
@@ -293,7 +293,7 @@ def test_leaving_stops_the_polling_and_invalidates_the_generation() -> None:
     """La guardia di generazione ferma le continuazioni; il timer va spento
     comunque, o terrebbe sveglia una stanza che non c'e' piu'."""
     _run_js("""
-      const s = stanza({ current: '0.11.0' });
+      const s = room({ current: '0.11.0' });
       s.flow.state = { busy: true, noteKey: null, phase: 'downloading', progress: 5, detail: '' };
       s.flow._schedulePoll(0);
       assert.ok(s.flow._timer, 'il polling non e partito');
@@ -311,10 +311,10 @@ def test_not_knowing_the_version_is_said_and_not_masked() -> None:
     rassicurazione inventata. Non sapere e' uno stato normale del primo
     secondo, e si dice."""
     _run_js("""
-      stanza(null);
+      room(null);
       assert.equal(nodi['casa-update-headline'].textContent, i18n.t('casa.updates.unknown'));
 
-      stanza({ current: '0.11.0' });
+      room({ current: '0.11.0' });
       assert.ok(nodi['casa-update-headline'].textContent.includes('0.11.0'));
       assert.ok(!nodi['casa-update-headline'].textContent.includes('{'),
         'il segnaposto e rimasto dentro');

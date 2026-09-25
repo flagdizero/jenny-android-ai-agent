@@ -273,16 +273,16 @@ class App {
        banco (`test_casa_pista_client.py`). */
     const app = this;
     this.pagine = {
-      ordine: ['app', 'chat', 'quaderni', 'impostazioni'],
+      order: ['app', 'chat', 'notebooks', 'settings'],
       indice: 1,
       conversazioneCasa: null,
-      get indiceChat() { return this.ordine.indexOf('chat'); },
-      get corrente() { return this.ordine[this.indice]; },
-      indiceDi(id) { return this.ordine.indexOf(id); },
+      get indiceChat() { return this.order.indexOf('chat'); },
+      get corrente() { return this.order[this.indice]; },
+      indiceDi(id) { return this.order.indexOf(id); },
       vaiA(i) {
         this.indice = i;
-        app.fatti.push('pagina:' + this.ordine[i]);
-        if (this.ordine[i] === 'impostazioni') app.accensione = app._apriImpostazioni();
+        app.fatti.push('pagina:' + this.order[i]);
+        if (this.order[i] === 'settings') app.accensione = app._apriImpostazioni();
       },
       vaiAId(id) { this.vaiA(this.indiceDi(id)); },
       apriConversazione: (k) => this.mostraConversazione(k),
@@ -611,7 +611,7 @@ def test_back_from_any_page_lands_on_the_chat_wherever_it_sits() -> None:
     prima casella. E sulla chat Indietro e' la porta di casa, come sempre."""
     _run_js("""
       const app = casa();
-      app.pagine.ordine = ['quaderni', 'app', 'impostazioni', 'chat'];
+      app.pagine.order = ['notebooks', 'app', 'settings', 'chat'];
       app.pagine.indice = 0;
       app.handleHardwareBack();
       assert.equal(app.pagine.corrente, 'chat');
@@ -879,9 +879,9 @@ def test_settings_is_a_page_and_back_from_it_is_the_chat() -> None:
     _run_js("""
       const app = casa();
       await app.switchConversation(projectKey('orto'));
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       assert.equal(app.view, 'chat', 'le impostazioni sono ancora una stanza');
-      assert.equal(app.pagine.corrente, 'impostazioni');
+      assert.equal(app.pagine.corrente, 'settings');
       assert.ok(app.fatti.includes('tu aperta'), 'la pagina non e\u2019 stata caricata');
       app.handleHardwareBack();
       assert.equal(app.pagine.corrente, 'chat');
@@ -901,10 +901,10 @@ def test_the_eyelet_names_where_you_land() -> None:
     _run_js("""
       const app = casa();
       await app.switchConversation(projectKey('orto'));
-      const dice = (stanza) => { app._setView(stanza); return app.backLabel.textContent; };
+      const dice = (room) => { app._setView(room); return app.backLabel.textContent; };
       assert.equal(dice('pages'), i18n.t('casa.back.chat'));
       assert.equal(dice('reader'), i18n.t('casa.back.pages'), 'dal lettore si torna alle pagine');
-      assert.equal(dice('jenny'), i18n.t('casa.back.impostazioni'), 'da lei si torna alle impostazioni');
+      assert.equal(dice('jenny'), i18n.t('casa.back.settings'), 'da lei si torna alle impostazioni');
       assert.notEqual(i18n.t('casa.back.pages'), i18n.t('casa.back.chat'),
                       'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
     """)
@@ -934,12 +934,12 @@ def test_the_settings_payload_is_asked_once_for_both_rooms() -> None:
     peso."""
     _run_js("""
       const app = casa();
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       await app.openJenny();
       app._setView('chat');
       app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 1, 'il payload viene chiesto piu\u2019 di una volta');
       assert.deepEqual(app.versioniDate, [{ current: '0.11.0' }, { current: '0.11.0' }]);
@@ -954,13 +954,13 @@ def test_a_settings_call_that_failed_is_tried_again() -> None:
     _run_js("""
       const app = casa();
       settingsPayload = null;
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.flottanti, [null], 'senza risposta la finestra resta sconosciuta');
 
       settingsPayload = { version: { current: '0.12.0' }, floating: { available: true } };
       app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 2, 'il guscio si e\u2019 ricordato del fallimento');
       /* Anche il giro andato male passa dalla stanza: le dice «non lo so», e
@@ -980,7 +980,7 @@ def test_her_room_hangs_off_you_and_jenny() -> None:
       assert.equal(app.nameEl.textContent, i18n.t('casa.jenny.title'), 'la testa non dice dove sei');
       app.handleHardwareBack();
       assert.equal(app.view, 'chat');
-      assert.equal(app.pagine.corrente, 'impostazioni');
+      assert.equal(app.pagine.corrente, 'settings');
       app.handleHardwareBack();
       assert.equal(app.pagine.corrente, 'chat');
     """)
@@ -1000,7 +1000,7 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
 
       app.goBackOneRoom();
       assert.equal(app.view, 'chat', 'da li si torna alle impostazioni');
-      assert.equal(app.pagine.corrente, 'impostazioni');
+      assert.equal(app.pagine.corrente, 'settings');
       assert.ok(app.fatti.includes('aggiornamenti chiusa'), 'il polling resta vivo');
 
       /* E anche uscendo da un'altra parte: il guscio non sa da dove vieni. */
@@ -1025,7 +1025,7 @@ def test_a_page_without_a_composer_puts_jenny_on_the_floor() -> None:
       app._posaJenny();
       assert.equal(document.documentElement.style.props['--casa-composer-h'], FLOOR_NO_COMPOSER + 'px');
       assert.ok(!app.fatti.includes('pavimento rimisurato'));
-      app._voce = { id: 'q1', kind: 'conversazione', ref: 'project:piante' };
+      app._voce = { id: 'q1', kind: 'conversation', ref: 'project:piante' };
       app._posaJenny();
       assert.ok(app.fatti.includes('pavimento rimisurato'), 'una pagina quaderno ha il suo composer');
     """)
@@ -1197,10 +1197,10 @@ def test_the_row_asks_for_the_app_names_once_and_only_the_light_list() -> None:
         loadJennyApps: () => { chieste.push('jenny'); return Promise.resolve(); },
         ensureLoaded: () => chieste.push('tutto'),
       });
-      app.pagine.schermate = [{ id: 'q1', kind: 'conversazione', ref: 'project:piante' }];
+      app.pagine.pages = [{ id: 'q1', kind: 'conversation', ref: 'project:piante' }];
       app._chiediNomiApp();
       assert.deepEqual(chieste, [], 'senza app appese ha letto un elenco');
-      app.pagine.schermate.push({ id: 'p1', kind: 'app', ref: 'todo' });
+      app.pagine.pages.push({ id: 'p1', kind: 'app', ref: 'todo' });
       app._chiediNomiApp();
       app._chiediNomiApp();
       await new Promise((r) => setTimeout(r, 0));
@@ -1288,7 +1288,7 @@ _SPARITA = """
       const fuoco = [];
       app.fuoco = { rimetti: () => { fuoco.push('rimesso'); return true; } };
       app.input.blur = () => fuoco.push('tolto');
-      const QUADERNO = { id: 'q1', kind: 'conversazione', ref: 'project:piante' };
+      const QUADERNO = { id: 'q1', kind: 'conversation', ref: 'project:piante' };
 """
 
 
@@ -1456,14 +1456,14 @@ def test_a_saved_name_reaches_the_row_and_the_cache() -> None:
     _run_js("""
       const app = casa();
       settingsPayload = { agent: { bot_name: 'Ada' }, floating: null };
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.nomi, ['Ada']);
       app._keepName('Vera');
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(app._nomeChat().nome, 'Vera', 'la fila dice ancora il nome vecchio');
       app.pagine.vaiA(app.pagine.indiceChat);
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.equal(settingsCalls, 1);
       assert.deepEqual(app.nomi, ['Ada', 'Vera'], 'la cache ha rimesso il nome vecchio');
@@ -1477,7 +1477,7 @@ def test_settings_that_could_not_be_read_do_not_say_an_empty_name() -> None:
     _run_js("""
       const app = casa();
       settingsPayload = null;
-      app.pagine.vaiAId('impostazioni');
+      app.pagine.vaiAId('settings');
       await app.accensione;
       assert.deepEqual(app.nomi, [null]);
     """)

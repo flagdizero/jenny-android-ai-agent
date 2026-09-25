@@ -255,6 +255,10 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     # le dava per configurabili. Ogni file le porta, perche' il dump scriveva
     # anche i default.
     "wiki.extensions",
+    # Il blocco delle pagine della casa prima del rinomino in inglese del
+    # 25/09/2026: ``casa: {schermate, ordine}``. Lo traduce in ``home`` lo schema
+    # (``Config._migrate_casa_to_home``); qui smette di esistere nel file.
+    "casa",
 })
 
 

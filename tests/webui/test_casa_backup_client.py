@@ -89,7 +89,7 @@ class CasaBackup {
 
 const avvisi = [];
 const giorno = 86400000;
-function stanza(backup) {
+function room(backup) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   esitoExport = true;
   esitoImport = true;
@@ -133,7 +133,7 @@ def test_never_having_made_one_is_said_out_loud() -> None:
       assert.equal(backupValue(null), i18n.t('casa.backup.never'));
       assert.equal(backupValue({ last_export_at: 0 }), i18n.t('casa.backup.never'));
 
-      const s = stanza(null);
+      const s = room(null);
       assert.equal(nodi['casa-backup-when'].textContent, i18n.t('casa.backup.neverLong'));
       assert.ok(nodi['casa-backup-when'].classList.contains('is-warn'),
         'mai fatto non si distingue da un backup di ieri');
@@ -154,7 +154,7 @@ def test_the_row_says_when_like_a_person_would() -> None:
       assert.ok(!backupValue({ last_export_at: treGiorni }).includes('1970'),
         backupValue({ last_export_at: treGiorni }));
 
-      const s = stanza({ last_export_at: adesso });
+      const s = room({ last_export_at: adesso });
       assert.ok(nodi['casa-backup-when'].textContent.includes('oggi alle '));
       assert.equal(nodi['casa-backup-when'].classList.contains('is-warn'), false);
     """)
@@ -164,7 +164,7 @@ def test_a_cancelled_export_does_not_move_the_row() -> None:
     """Fra il container cifrato e il file su disco c'e' una schermata di
     sistema che si puo' annullare."""
     _run_js("""
-      const s = stanza(null);
+      const s = room(null);
       esitoExport = false;
       await s.runExport();
 
@@ -179,7 +179,7 @@ def test_a_finished_export_moves_the_row_at_once() -> None:
     """Senza, la data comparirebbe solo alla prossima apertura della pagina —
     cioe' proprio dopo il gesto con cui l'hai fatta."""
     _run_js("""
-      const s = stanza(null);
+      const s = room(null);
       await s.runExport();
 
       assert.notEqual(s.value(), i18n.t('casa.backup.never'));
@@ -193,7 +193,7 @@ def test_a_second_tap_while_exporting_does_nothing() -> None:
     deve nemmeno sembrare premibile, o si preme due volte e si aprono due
     dialoghi della passphrase."""
     _run_js("""
-      const s = stanza(null);
+      const s = room(null);
       const primo = s.runExport();               // non atteso: e' ancora in volo
       assert.equal(nodi['casa-backup-export'].disabled, true, 'si puo premere di nuovo');
       await s.runExport();                       // il secondo tocco
@@ -228,12 +228,12 @@ def test_the_local_history_is_told_apart_from_a_backup() -> None:
     rimette a posto una cosa cancellata per sbaglio. Ma vive su questo
     telefono, quindi di un telefono perso non salva niente."""
     _run_js("""
-      stanza({ snapshots_enabled: true });
+      room({ snapshots_enabled: true });
       const accesa = nodi['casa-backup-snapshots'].textContent;
       assert.equal(accesa, i18n.t('casa.backup.snapshots'));
       assert.ok(accesa.length > 40, 'la frase non spiega niente');
 
-      stanza({ snapshots_enabled: false });
+      room({ snapshots_enabled: false });
       assert.equal(nodi['casa-backup-snapshots'].textContent,
                    i18n.t('casa.backup.snapshotsOff'));
       assert.notEqual(i18n.t('casa.backup.snapshots'), i18n.t('casa.backup.snapshotsOff'),

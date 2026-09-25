@@ -95,14 +95,14 @@ def rename_project(
 
     root.rename(target)
 
-    chat_mossa = False
+    chat_moved = False
     if describe_project_traces(workspace, old_key).exists:
-        chat_mossa, perche = follow_renamed_project(workspace, old_key, new_key)
+        chat_moved, why = follow_renamed_project(workspace, old_key, new_key)
         # A meta' strada si riconosce dal **giornale**, non dalla frase del
         # motivo: la voce resta aperta solo quando qualcosa si e' gia' mosso, ed
         # e' quella che il prossimo avvio porta a termine.
         a_meta = (old_key, new_key) in pending_project_renames(workspace)
-        if not chat_mossa and not a_meta:
+        if not chat_moved and not a_meta:
             # Un rifiuto pulito: niente si e' mosso nella chat, e la cartella
             # torna al suo nome. Lasciarla rinominata vorrebbe dire una chat
             # orfana che il prossimo turno proverebbe a inseguire per id.
@@ -113,10 +113,10 @@ def rename_project(
                     "Rename of {} not undone: the folder stays {}", name, new_name
                 )
                 raise ProjectRenameError(
-                    f"the conversation could not follow ({perche}), and the folder "
+                    f"the conversation could not follow ({why}), and the folder "
                     f"stayed as {new_name}"
                 ) from exc
-            raise ProjectRenameError(f"the conversation could not follow: {perche}")
+            raise ProjectRenameError(f"the conversation could not follow: {why}")
         if a_meta:
             # A meta' strada e scritto nel giornale: il prossimo avvio finisce il
             # lavoro. La cartella resta col nome nuovo, che e' la direzione giusta.
@@ -125,5 +125,5 @@ def rename_project(
             )
 
     refresh_wiki_registry(wikis_dir, scripts_dir)
-    logger.info("Notebook renamed: {} -> {} (chat moved: {})", name, new_name, chat_mossa)
-    return {"name": name, "new_name": new_name, "chat_moved": chat_mossa}
+    logger.info("Notebook renamed: {} -> {} (chat moved: {})", name, new_name, chat_moved)
+    return {"name": name, "new_name": new_name, "chat_moved": chat_moved}

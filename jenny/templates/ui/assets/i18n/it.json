@@ -917,7 +917,7 @@
     "back": {
       "chat": "torna alla chat",
       "pages": "torna alle pagine",
-      "impostazioni": "Impostazioni"
+      "settings": "Impostazioni"
     },
     "tu": {
       "workshopHint": "osserva, regola, ripara"
@@ -1057,8 +1057,8 @@
     "fila": {
       "label": "Pagine di casa",
       "app": "App",
-      "quaderni": "Quaderni",
-      "impostazioni": "Impostazioni",
+      "notebooks": "Quaderni",
+      "settings": "Impostazioni",
       "ordinaAiuto": "Trascina per spostare · × per togliere",
       "fatto": "Fatto",
       "sposta": "Sposta {nome}: frecce sinistra e destra",

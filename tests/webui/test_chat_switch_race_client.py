@@ -245,7 +245,7 @@ def test_the_overtaken_switch_loses_even_when_it_answers_last() -> None:
       assert.equal(sessionManager.currentScope?.project_path, '/w/projects/bordi',
                    'il campo condiviso è quel che legge il popover Info sessione');
       assert.equal(chat.historyCursor, 'b-1',
-                   'il cursore di paginazione è dell\\'altra conversazione');
+                   'il cursore di paginazione è dell\\'altra conversation');
     """)
 
 
@@ -351,7 +351,7 @@ def test_a_page_of_old_history_is_not_pasted_onto_another_conversation() -> None
       pending('websocket:default').resolve(thread(null, 'vecchio della personale'));
       await more;
       assert.equal(chat.rendered.includes('vecchio della personale'), false,
-                   'una pagina di un\\'altra conversazione è stata incollata in cima');
+                   'una pagina di un\\'altra conversation è stata incollata in cima');
       assert.equal(chat.isLoadingHistory, false,
                    'il finally deve sbloccare la paginazione anche uscendo prima');
 

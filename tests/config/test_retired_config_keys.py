@@ -89,14 +89,14 @@ def test_a_truly_unknown_key_beside_them_still_warns(tmp_path, retired) -> None:
 
 
 async def test_the_first_boot_rewrites_the_file_without_them(tmp_path, retired) -> None:
-    """Versione 1 → 2: una scrittura sola, e le chiavi ritirate non ci sono piu'."""
+    """Una versione indietro: una scrittura sola, e le chiavi ritirate non ci sono piu'."""
     path = tmp_path / "config.json"
     _write(path, {**_LEGACY, "somethingFromTheFuture": {"keep": "me"}})
 
     assert await persist_schema_migrations(config_path=path) is True
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["configVersion"] == CURRENT_CONFIG_VERSION == 2
+    assert written["configVersion"] == CURRENT_CONFIG_VERSION == 3
     assert "gone" not in written["agents"]["defaults"]
     assert "old_name" not in written["wiki"]
     # Quel che era vicino resta: i valori dell'utente e la chiave del futuro.

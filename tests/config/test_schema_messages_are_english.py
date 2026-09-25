@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import pytest
 
-from jenny.config.schema import SchermataConfig
+from jenny.config.schema import HomePageConfig
 
 
 @pytest.mark.parametrize(
     ("riga", "atteso"),
     [
-        ({"id": "p1", "kind": "stanza", "ref": "x"}, "unknown page kind: 'stanza'"),
-        ({"id": "p1", "kind": "conversazione", "ref": "piante"}, "needs a notebook"),
-        ({"id": "p1", "kind": "conversazione", "ref": "project:a/b"}, "invalid notebook name"),
+        ({"id": "p1", "kind": "room", "ref": "x"}, "unknown page kind: 'room'"),
+        ({"id": "p1", "kind": "conversation", "ref": "piante"}, "needs a notebook"),
+        ({"id": "p1", "kind": "conversation", "ref": "project:a/b"}, "invalid notebook name"),
     ],
 )
 def test_a_refused_page_says_why_in_english(riga, atteso) -> None:
     with pytest.raises(ValueError, match=atteso):
-        SchermataConfig(**riga)
+        HomePageConfig(**riga)

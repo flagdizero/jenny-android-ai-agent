@@ -42,7 +42,7 @@ export class SchedaQuaderno {
   /** Le righe per il quaderno *nome*, nell'ordine della scheda di un'app. */
   righe(nome) {
     const chiave = projectKey(nome);
-    const stato = this.guscio.pagine?.()?.stato('conversazione', chiave) || null;
+    const stato = this.guscio.pagine?.()?.stato('conversation', chiave) || null;
     const righe = [{ icon: 'ti-message', label: i18n.t('apps.open'), action: 'open' }];
     if (stato === 'appesa') {
       righe.push({ icon: 'ti-pinned-off', label: i18n.t('apps.unpinPage'), action: 'unpin' });
@@ -99,8 +99,8 @@ export class SchedaQuaderno {
     const chiave = projectKey(nome);
     const pagine = this.guscio.pagine?.();
     if (azione === 'open') return this.guscio.apri(nome);
-    if (azione === 'pin') return pagine?.appendi('conversazione', chiave);
-    if (azione === 'unpin') return pagine?.stacca('conversazione', chiave);
+    if (azione === 'pin') return pagine?.appendi('conversation', chiave);
+    if (azione === 'unpin') return pagine?.stacca('conversation', chiave);
     if (azione === 'rename') return this.guscio.rinomina?.(nome);
     if (azione === 'delete') return this.guscio.elimina(nome);
     return undefined;

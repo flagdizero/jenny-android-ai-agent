@@ -112,17 +112,17 @@ def _run(corpo: str) -> None:
             /* La pista finta: le voci come le da' quella vera, e cosa le si chiede. */
             const chieste = [];
             const pagine = {
-              fisse: ['app', 'chat', 'quaderni', 'impostazioni'],
-              schermate: [{ id: 'p1', kind: 'app', ref: 'todo' },
-                          { id: 'q1', kind: 'conversazione', ref: 'project:piante' }],
-              ordine: ['app', 'chat', 'p1', 'q1', 'quaderni', 'impostazioni'],
+              fixed: ['app', 'chat', 'notebooks', 'settings'],
+              pages: [{ id: 'p1', kind: 'app', ref: 'todo' },
+                          { id: 'q1', kind: 'conversation', ref: 'project:piante' }],
+              order: ['app', 'chat', 'p1', 'q1', 'notebooks', 'settings'],
               indice: 1,
               get voci() {
-                return this.ordine.map((id) => this.fisse.includes(id)
+                return this.order.map((id) => this.fixed.includes(id)
                   ? { id, kind: id === 'app' ? 'cassetto' : id, fissa: true }
-                  : { ...this.schermate.find((s) => s.id === id), fissa: false });
+                  : { ...this.pages.find((s) => s.id === id), fissa: false });
               },
-              nomeDi: (s) => (s.kind === 'conversazione' ? s.ref.split(':')[1] : s.ref),
+              nomeDi: (s) => (s.kind === 'conversation' ? s.ref.split(':')[1] : s.ref),
               vaiA(i) { chieste.push(['vaiA', i]); this.indice = i; },
               /* Come la vera: l'elenco salvato, o `false` se il server ha
                  rifiutato (l'avviso lo da' lei). `inAttesa` tiene la
@@ -132,7 +132,7 @@ def _run(corpo: str) -> None:
               async salva(s, o) {
                 chieste.push(['salva', s.map((x) => x.id), o]);
                 if (this.inAttesa) await this.inAttesa;
-                return this.rifiuta ? false : { schermate: s, ordine: o };
+                return this.rifiuta ? false : { pages: s, order: o };
               },
             };
             let nomeChat = { nome: 'Jenny', colore: null };
@@ -172,7 +172,7 @@ def test_every_page_has_its_name_in_order() -> None:
     le aggiunte col loro."""
     _run("""
       assert.deepEqual(nomi(), [
-        'casa.fila.app', 'Jenny', 'todo', 'piante', 'casa.fila.quaderni', 'casa.fila.impostazioni',
+        'casa.fila.app', 'Jenny', 'todo', 'piante', 'casa.fila.notebooks', 'casa.fila.settings',
       ]);
     """)
 
@@ -187,7 +187,7 @@ def test_the_page_you_are_on_is_the_big_one_and_says_so() -> None:
       assert.equal(voci()[0].attrs['aria-selected'], 'false');
       pagine.indice = 4;
       fila.disegna();
-      assert.equal(voci().find((b) => b.classList.contains('is-on')).dataset.id, 'quaderni');
+      assert.equal(voci().find((b) => b.classList.contains('is-on')).dataset.id, 'notebooks');
     """)
 
 
@@ -248,7 +248,7 @@ def test_holding_a_name_opens_the_moving_mode() -> None:
       assert.equal(fila.ordinando, true);
       assert.deepEqual(cambi, [true]);
       assert.ok(el.classList.contains('is-ordina'));
-      assert.deepEqual(pastiglie().map((p) => p.dataset.id), pagine.ordine);
+      assert.deepEqual(pastiglie().map((p) => p.dataset.id), pagine.order);
     """)
 
 
@@ -261,7 +261,7 @@ def test_only_added_pages_have_the_cross() -> None:
         .filter((p) => p.children.some((c) => c.className === 'casa-ordina-togli'))
         .map((p) => p.dataset.id);
       assert.deepEqual(conCroce, ['p1', 'q1']);
-      fila.togli('impostazioni');
+      fila.togli('settings');
       assert.equal(pastiglie().length, 6, 'una pagina fissa si e tolta');
     """)
 
@@ -275,7 +275,7 @@ def test_done_writes_the_new_order_once() -> None:
       assert.deepEqual(chieste, [], 'ha scritto prima di Fatto');
       await fila.chiudiOrdina({ salva: true });
       assert.deepEqual(chieste, [
-        ['salva', ['p1'], ['p1', 'app', 'chat', 'quaderni', 'impostazioni']],
+        ['salva', ['p1'], ['p1', 'app', 'chat', 'notebooks', 'settings']],
       ]);
       assert.equal(fila.ordinando, false);
       assert.deepEqual(cambi, [true, false]);
@@ -321,7 +321,7 @@ def test_a_second_done_while_the_first_is_writing_does_nothing() -> None:
 def test_back_leaves_everything_as_it_was() -> None:
     _run("""
       fila.apriOrdina();
-      fila.sposta('impostazioni', 0);
+      fila.sposta('settings', 0);
       fila.togli('p1');
       await fila.chiudiOrdina();
       assert.deepEqual(chieste, []);

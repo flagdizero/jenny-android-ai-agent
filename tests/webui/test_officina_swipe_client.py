@@ -234,14 +234,14 @@ function scorri(da, verso, { corto = false } = {}) {
 
 def _harness() -> str:
     app = APP_JS.read_text(encoding="utf-8")
-    impostazioni = SETTINGS_JS.read_text(encoding="utf-8")
+    settings = SETTINGS_JS.read_text(encoding="utf-8")
     gesto = GESTO_JS.read_text(encoding="utf-8")
-    vista_di = re.search(r"^export const VISTA_DI = .*$", impostazioni, re.M)
+    vista_di = re.search(r"^export const VISTA_DI = .*$", settings, re.M)
     assert vista_di, "VISTA_DI non trovata"
     return (
         _HARNESS.replace("__MODI__", json.dumps(MODI))
         .replace("__VISTA_DI__", vista_di.group(0).replace("export ", ""))
-        .replace("__ELEMENTO_VISTA__", _funzione(impostazioni, "elementoVista"))
+        .replace("__ELEMENTO_VISTA__", _funzione(settings, "elementoVista"))
         .replace("__VISIBLE_MODES__", _metodo(app, "_visibleModes"))
         .replace("__SOGLIA_ASSE__", _costante(gesto, "SOGLIA_ASSE"))
         .replace("__VELOCITA__", _costante(gesto, "VELOCITA_CONFERMA"))

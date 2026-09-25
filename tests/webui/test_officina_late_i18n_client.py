@@ -38,7 +38,7 @@ const i18n = {
 def test_the_header_actions_are_translated_after_load() -> None:
     funzioni = "\n".join(
         function(HEADER, nome)
-        for nome in ("pillCasa", "cassetto", "consolle", "fileAperto", "impostazioni")
+        for nome in ("pillCasa", "cassetto", "consolle", "fileAperto", "settings")
     )
     out = run_js(
         _I18N

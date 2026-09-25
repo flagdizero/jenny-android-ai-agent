@@ -35,11 +35,11 @@ def test_the_notebooks_are_a_page_of_the_home() -> None:
     Quaderni della pista (`.agent/pagine-in-alto-plan.md`). Il pannello si
     disegna dentro il suo pannello, e si rilegge quando ci arrivi."""
     html = INDEX.read_text(encoding="utf-8")
-    pagina = html.split('data-pagina="quaderni"', 1)[1].split('data-pagina="impostazioni"', 1)[0]
+    pagina = html.split('data-pagina="notebooks"', 1)[1].split('data-pagina="settings"', 1)[0]
     assert 'id="casa-quaderni"' in pagina, "la pagina Quaderni non ha dove disegnarsi"
     app = APP_JS.read_text(encoding="utf-8")
     assert "new WhoPanel(document.getElementById('casa-quaderni')" in app
-    assert "this.pagine.registra('quaderni', { accendi: () => this.who.mostra() });" in app
+    assert "this.pagine.registra('notebooks', { accendi: () => this.who.mostra() });" in app
 
 
 def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
@@ -47,7 +47,7 @@ def test_a_new_notebook_is_a_round_button_that_does_not_scroll() -> None:
     scorre: e' tutto il motivo per cui ha preso il posto della riga. Si vede
     anche con zero quaderni — e' li' che serve di piu' — e crea come prima."""
     html = INDEX.read_text(encoding="utf-8")
-    pagina = html.split('data-pagina="quaderni"', 1)[1].split('data-pagina="impostazioni"', 1)[0]
+    pagina = html.split('data-pagina="notebooks"', 1)[1].split('data-pagina="settings"', 1)[0]
     assert 'id="casa-quaderni-nuovo"' in pagina, "la pagina Quaderni non ha il +"
     elenco = pagina.split('id="casa-quaderni"', 1)[1].split("</div>", 1)[0]
     assert "casa-quaderni-nuovo" not in elenco, "il + e' finito dentro l'elenco che scorre"

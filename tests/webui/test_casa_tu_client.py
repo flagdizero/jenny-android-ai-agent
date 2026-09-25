@@ -118,7 +118,7 @@ class CasaTu {
   __SAY_JENNY__
 }
 
-function stanza() {
+function room() {
   for (const k of Object.keys(nodi)) delete nodi[k];
   acceso = 'chanel';
   applicati.length = 0;
@@ -175,7 +175,7 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
     acceso — la striscia sarebbe sette volte la stessa immagine.
     """
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.open();
       assert.equal(tu.themesEl.children.length, THEMES.length);
       THEMES.forEach((tema, i) => {
@@ -197,7 +197,7 @@ def test_the_strip_shows_every_theme_with_its_own_colours() -> None:
 
 def test_the_ring_marks_exactly_the_one_that_is_on() -> None:
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       acceso = 'kyoto';
       tu.open();
       const accese = tu.themesEl.children.filter((c) => c.classList.contains('is-on'));
@@ -215,7 +215,7 @@ def test_picking_a_theme_moves_the_ring_without_redrawing_the_strip() -> None:
     """Ridisegnare butterebbe via lo scorrimento di lato: chi ha appena scelto
     il settimo si ritroverebbe riportato al primo."""
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.open();
       const prima = [...tu.themesEl.children];
       tu.pickTheme('y2k');
@@ -243,7 +243,7 @@ def test_the_name_and_the_phrase_follow_the_theme_that_is_on() -> None:
     """Il nome non si traduce — «Jenny Kyoto» e' un nome — ma la frase che lo
     racconta si', ed e' quella dell'officina: gia' tradotta, e una sola."""
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.open();
       assert.equal(tu.themeValue.textContent, THEMES.find((t) => t.id === 'chanel').label);
       assert.equal(tu.themeDesc.textContent, i18n.t('themes.chanel.desc'));
@@ -261,7 +261,7 @@ def test_the_words_come_back_when_the_language_changes() -> None:
     """Cambiata la lingua, la stanza si ridice: l'etichetta, la scheda
     dell'officina e la frase del tema."""
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.open();
       tu.themeLabel.textContent = '';
       tu.workshopName.textContent = '';
@@ -308,7 +308,7 @@ def test_the_version_rides_on_the_row_that_opens_the_updates() -> None:
     vuota, non «versione {version}» con la graffa dentro.
     """
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.sayUpdates('');
       assert.equal(nodi['casa-updates-value'].textContent, '',
         'una versione che non si sa e\u2019 finita a schermo');
@@ -325,7 +325,7 @@ def test_the_row_that_leads_to_her_says_how_she_is_now() -> None:
     un'impostazione. Il valore lo compone la stanza di lei; qui si misura che
     arrivi a schermo, e che svuotarlo non lasci a mezz'aria quello di prima."""
     _run_js("""
-      const tu = stanza();
+      const tu = room();
       tu.sayJenny('piccola \u00b7 flottante');
       assert.equal(tu.jennyValue.textContent, 'piccola \u00b7 flottante');
       tu.sayJenny(undefined);

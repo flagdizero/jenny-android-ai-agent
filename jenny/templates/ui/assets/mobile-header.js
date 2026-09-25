@@ -85,7 +85,7 @@ function fileAperto() {
   };
 }
 
-function impostazioni() {
+function settings() {
   return {
     title: i18n.t('nav.settings'),
     actions: [{ icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' }],
@@ -105,7 +105,7 @@ export class ViewTitleController {
       /* Qui c'era anche `apps`, la scheda uscita il 21/09/2026 col suo
          «mostra app nascoste»: nessun modo la raggiunge piu'. */
       workspace: fileAperto(),
-      settings: impostazioni(),
+      settings: settings(),
       /* I tre cassetti. Stessa vista e stesso mount (`title-settings`, via
          `VISTA_DI`), titolo e sottotitolo diversi.
 
@@ -125,7 +125,7 @@ export class ViewTitleController {
        riassegnare `title` lasciava quella com'era al caricamento del file. */
     this.modeConfigs.chat = consolle();
     this.modeConfigs.workspace = fileAperto();
-    this.modeConfigs.settings = impostazioni();
+    this.modeConfigs.settings = settings();
     /* I tre cassetti hanno tre stringhe a testa (soprascritta, nome,
        sottotitolo) piu' il pill: si ricostruiscono interi invece di
        riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */

@@ -86,16 +86,16 @@ const DEFAULT_BOT_NAME = 'Jenny';
    sapere quali nomi esistono, `goBackOneRoom` per percorrerla e l'occhiello
    per scriverci sopra dove porta. Aggiungere una stanza e' una riga qui.
 
-   `impostazioni` non e' una stanza: e' la **pagina** Impostazioni, dal
+   `settings` non e' una stanza: e' la **pagina** Impostazioni, dal
    23/09/2026, e le stanze che si aprono da li' ci tornano sopra — la vista
    torna `chat`, e la pista va su quella pagina (v. `goBackOneRoom`). */
 const BACK_TO = {
   pages: 'chat',
   reader: 'pages',
-  jenny: 'impostazioni',
-  model: 'impostazioni',
-  updates: 'impostazioni',
-  backup: 'impostazioni',
+  jenny: 'settings',
+  model: 'settings',
+  updates: 'settings',
+  backup: 'settings',
 };
 
 /* I fogli che stanno sopra le pagine, nel top layer (`showModal()`): quelli
@@ -316,8 +316,8 @@ class CasaApp {
       accendi: () => this.launcher.open(),
       spegni: () => this.launcher.close(),
     });
-    this.pagine.registra('quaderni', { accendi: () => this.who.mostra() });
-    this.pagine.registra('impostazioni', { accendi: () => this._apriImpostazioni() });
+    this.pagine.registra('notebooks', { accendi: () => this.who.mostra() });
+    this.pagine.registra('settings', { accendi: () => this._apriImpostazioni() });
     /* La fila **non** si disegna qui: le traduzioni non ci sono ancora
        (arrivano in `init`, dopo il bootstrap) e i nomi delle pagine fisse
        uscivano come chiavi grezze — «casa.fila.app» — per il tempo di un giro.
@@ -858,9 +858,9 @@ class CasaApp {
     }
     const target = BACK_TO[this.view];
     if (!target) return false;
-    if (target === 'impostazioni') {
+    if (target === 'settings') {
       this._setView('chat');
-      this.pagine.vaiAId('impostazioni', { animato: false });
+      this.pagine.vaiAId('settings', { animato: false });
       return true;
     }
     this._setView(target);
@@ -910,7 +910,7 @@ class CasaApp {
      legge quando lo apri. Una volta sola, e solo se c'e' un'app appesa. */
   _chiediNomiApp() {
     if (this._nomiAppChiesti) return;
-    if (!this.pagine?.schermate?.some((s) => s.kind === 'app')) return;
+    if (!this.pagine?.pages?.some((s) => s.kind === 'app')) return;
     this._nomiAppChiesti = true;
     const fonte = this.appsSource();
     if (fonte.jennyApps?.length) return;
@@ -919,7 +919,7 @@ class CasaApp {
 
   /* Le pagine su cui si scrive: la chat, e una pagina quaderno che la ospita. */
   _haComposer(voce) {
-    return voce?.kind === 'chat' || voce?.kind === 'conversazione';
+    return voce?.kind === 'chat' || voce?.kind === 'conversation';
   }
 
   /* Dove appoggia i piedi Jenny: sul composer dove c'e', al pavimento delle

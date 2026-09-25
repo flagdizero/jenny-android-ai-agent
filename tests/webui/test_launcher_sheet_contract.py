@@ -656,7 +656,7 @@ def test_the_dock_is_a_console_and_three_faculties() -> None:
     app = _src("mobile-app.js")
     # Un controller solo per i tre cassetti: tre istanze vorrebbero dire tre
     # `/api/settings` e due copie che invecchiano mentre guardi la terza.
-    assert "this._impostazioni ||= new SettingsController()" in app
+    assert "this._settings ||= new SettingsController()" in app
 
 
 def test_the_sheet_itself_shows_no_focus_ring() -> None:
@@ -757,10 +757,10 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     che è la riga da cui dipende tutto il ragionamento qui sopra.
     """
     officina = (ROOT / "jenny/templates/ui/officina.html").read_text(encoding="utf-8")
-    impostazioni = _src("mobile-settings.js")
+    settings = _src("mobile-settings.js")
 
     # La porta se n'è andata, e non deve tornare in un altro gruppo a caso.
-    assert "'launcher'" not in _senza_commenti_js(impostazioni), (
+    assert "'launcher'" not in _senza_commenti_js(settings), (
         "il cassetto delle app è tornato a essere una riga dentro un cassetto"
     )
 
@@ -801,7 +801,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     assert 'data-pagina="app"' in casa, "la casa non ha piu' la pagina App"
     pagina_app = casa.split('data-pagina="app"', 1)[1].split('data-pagina="chat"', 1)[0]
     assert 'id="launcher-list"' in pagina_app, "la pagina App non contiene il cassetto"
-    assert re.search(r"export const FISSE = \['app',", _src("casa-pagine.js")), (
+    assert re.search(r"export const FIXED_PAGES = \['app',", _src("casa-pagine.js")), (
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
     assert "new LauncherController(this, { incorporato: true })" in _src("casa-app.js")

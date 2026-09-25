@@ -142,7 +142,7 @@ class CasaModel {
 
 /* Un payload della forma di `/api/settings`, con dentro solo cio' che questa
    stanza legge. */
-function impostazioni(providers, attivo, modello, extra) {
+function settings(providers, attivo, modello, extra) {
   return {
     providers,
     default_provider: attivo,
@@ -152,7 +152,7 @@ function impostazioni(providers, attivo, modello, extra) {
 }
 
 const passati = [];
-async function stanza(dati, catalogo) {
+async function room(dati, catalogo) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   cataloghi = catalogo || {};
   chiesti.length = 0;
@@ -284,9 +284,9 @@ def test_tapping_a_tile_does_not_change_who_answers() -> None:
     cambiasse anche chi risponde, lo cambierebbe prima di scegliere — e con un
     modello che appartiene all'altra marca."""
     _run_js("""
-      const dati = impostazioni(
+      const dati = settings(
         [{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'llama-3.3-70b');
-      const s = await stanza(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] },
+      const s = await room(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] },
                                      anthropic: { status: 'available', models: [{ id: 'claude-x' }] } });
       s.pickProvider('anthropic');
       await new Promise((r) => setImmediate(r));
@@ -304,13 +304,13 @@ def test_picking_a_model_saves_the_provider_with_it() -> None:
     """Modello e provider in **una** chiamata: fra due, per un istante, la
     config avrebbe un modello che il provider attivo non conosce."""
     _run_js("""
-      const dati = impostazioni(
+      const dati = settings(
         [{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'llama-3.3-70b');
-      const s = await stanza(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] },
+      const s = await room(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] },
                                      anthropic: { status: 'available', models: [{ id: 'claude-x' }] } });
       s.pickProvider('anthropic');
       await new Promise((r) => setImmediate(r));
-      ultimoPayload = impostazioni(dati.providers, 'anthropic', 'claude-x');
+      ultimoPayload = settings(dati.providers, 'anthropic', 'claude-x');
       await s.pickModel('claude-x');
 
       assert.equal(salvataggi.length, 1, 'due chiamate invece di una: ' + JSON.stringify(salvataggi));
@@ -325,8 +325,8 @@ def test_a_model_that_did_not_save_leaves_the_room_as_it_was() -> None:
     """Il fallimento si dice, e non si finge: la riga resta su chi risponde
     davvero."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq' }], 'groq', 'llama-3.3-70b');
-      const s = await stanza(dati, { groq: { status: 'available', models: [{ id: 'altro' }] } });
+      const dati = settings([{ name: 'groq' }], 'groq', 'llama-3.3-70b');
+      const s = await room(dati, { groq: { status: 'available', models: [{ id: 'altro' }] } });
       salvataggioRotto = true;
       await s.pickModel('altro');
 
@@ -344,14 +344,14 @@ def test_the_model_in_use_shows_even_when_the_provider_does_not_list_it() -> Non
     """Un id battuto a mano in officina, o un elenco che non e' arrivato: in
     tutti e due i casi la stanza deve dire **chi risponde adesso**."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq' }], 'groq', 'un-id-a-mano');
-      const s = await stanza(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] } });
+      const dati = settings([{ name: 'groq' }], 'groq', 'un-id-a-mano');
+      const s = await room(dati, { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] } });
       assert.deepEqual(modelliAVideo(), ['un-id-a-mano', 'llama-3.3-70b'],
         'il modello in uso non e in cima');
       assert.deepEqual(acceso(), ['un-id-a-mano']);
 
       /* E anche quando l'elenco non arriva affatto. */
-      const vuota = await stanza(dati, {});
+      const vuota = await room(dati, {});
       assert.deepEqual(modelliAVideo(), ['un-id-a-mano']);
     """)
 
@@ -361,9 +361,9 @@ def test_the_current_model_is_only_ticked_under_its_own_provider() -> None:
     OpenAI e su un gateway che lo rivende. Spuntarlo sotto quella che **non**
     risponde direbbe che e' attivo mentre non lo e'."""
     _run_js("""
-      const dati = impostazioni(
+      const dati = settings(
         [{ name: 'openai' }, { name: 'openrouter' }], 'openai', 'gpt-4o');
-      const s = await stanza(dati, {
+      const s = await room(dati, {
         openai: { status: 'available', models: [{ id: 'gpt-4o' }] },
         openrouter: { status: 'available', models: [{ id: 'gpt-4o' }] },
       });
@@ -380,8 +380,8 @@ def test_the_catalogue_is_asked_once_per_provider() -> None:
     """L'elenco lo va a chiedere al provider vero, e passa dalla rete: un
     ridisegno non e' una ragione per rifarlo."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'm');
-      const s = await stanza(dati, { groq: { status: 'available', models: [] },
+      const dati = settings([{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'm');
+      const s = await room(dati, { groq: { status: 'available', models: [] },
                                      anthropic: { status: 'available', models: [] } });
       s.pickProvider('anthropic');
       await new Promise((r) => setImmediate(r));
@@ -404,7 +404,7 @@ def test_a_catalogue_that_arrives_late_does_not_paint_over_the_one_you_read() ->
     _run_js("""
       let sbloccaGroq;
       const attesa = new Promise((r) => { sbloccaGroq = r; });
-      const dati = impostazioni([{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'm');
+      const dati = settings([{ name: 'groq' }, { name: 'anthropic' }], 'groq', 'm');
       cataloghi = {};
       for (const k of Object.keys(nodi)) delete nodi[k];
       chiesti.length = 0;
@@ -432,15 +432,15 @@ def test_an_empty_list_says_why() -> None:
     """I quattro stati del server hanno una frase ciascuno, nella lingua del
     telefono: `message` e' diagnostica in inglese."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq' }], 'groq', '');
-      await stanza(dati, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
+      const dati = settings([{ name: 'groq' }], 'groq', '');
+      await room(dati, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
       assert.equal(nodi['casa-models-note'].textContent, i18n.t('casa.model.needsKey'));
       assert.equal(nodi['casa-models-note'].hidden, false);
 
-      await stanza(dati, { groq: { status: 'missing_api_base', models: [] } });
+      await room(dati, { groq: { status: 'missing_api_base', models: [] } });
       assert.equal(nodi['casa-models-note'].textContent, i18n.t('casa.model.needsBase'));
 
-      await stanza(dati, { groq: { status: 'available', models: [{ id: 'x' }] } });
+      await room(dati, { groq: { status: 'available', models: [{ id: 'x' }] } });
       assert.equal(nodi['casa-models-note'].hidden, true, 'una nota sopra un elenco che c e');
     """)
 
@@ -453,14 +453,14 @@ def test_the_key_field_starts_empty_and_the_hint_comes_from_the_server() -> None
     suggerimento offuscato, e il campo parte vuoto — un salvataggio senza
     riscriverla persisterebbe la maschera."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
-      const s = await stanza(dati, { groq: { status: 'available', models: [] } });
+      const dati = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
+      const s = await room(dati, { groq: { status: 'available', models: [] } });
       assert.equal(nodi['casa-key-hint'].textContent, 'gsk_...4f2a');
       assert.equal(nodi['casa-key-input'].value, '', 'il campo e partito con dentro qualcosa');
       assert.equal(nodi['casa-key-btn'].textContent, i18n.t('casa.model.keyChange'));
 
-      const senza = impostazioni([{ name: 'groq', api_key_hint: '' }], 'groq', 'm');
-      const s2 = await stanza(senza, { groq: { status: 'available', models: [] } });
+      const senza = settings([{ name: 'groq', api_key_hint: '' }], 'groq', 'm');
+      const s2 = await room(senza, { groq: { status: 'available', models: [] } });
       assert.equal(nodi['casa-key-hint'].textContent, i18n.t('casa.model.keyNone'));
       assert.equal(nodi['casa-key-btn'].textContent, i18n.t('casa.model.keyAdd'));
     """)
@@ -469,8 +469,8 @@ def test_the_key_field_starts_empty_and_the_hint_comes_from_the_server() -> None
 def test_saving_an_empty_key_does_nothing() -> None:
     """Sarebbe il modo piu' silenzioso di cancellare la chiave buona."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
-      const s = await stanza(dati, { groq: { status: 'available', models: [] } });
+      const dati = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
+      const s = await room(dati, { groq: { status: 'available', models: [] } });
       nodi['casa-key-input'].value = '   ';
       await s.saveKey();
       assert.deepEqual(salvataggi, [], 'una chiave vuota e arrivata al server');
@@ -481,11 +481,11 @@ def test_a_new_key_makes_the_catalogue_be_asked_again() -> None:
     """Una chiave appena messa puo' essere **esattamente** la ragione per cui
     l'elenco era vuoto."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq', api_key_hint: '' }], 'groq', '');
-      const s = await stanza(dati, { groq: { status: 'not_configured', models: [] } });
+      const dati = settings([{ name: 'groq', api_key_hint: '' }], 'groq', '');
+      const s = await room(dati, { groq: { status: 'not_configured', models: [] } });
       assert.deepEqual(chiesti, ['groq']);
 
-      ultimoPayload = impostazioni([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', '');
+      ultimoPayload = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', '');
       cataloghi = { groq: { status: 'available', models: [{ id: 'llama-3.3-70b' }] } };
       nodi['casa-key-input'].value = 'gsk_una_chiave_vera';
       await s.saveKey();
@@ -503,11 +503,11 @@ def test_a_change_that_needs_a_restart_says_so() -> None:
     """Alcuni cambi valgono dal turno dopo, altri no. Il payload lo dice, e la
     stanza lo scrive invece di lasciarlo indovinare."""
     _run_js("""
-      const dati = impostazioni([{ name: 'groq' }], 'groq', 'm');
-      const s = await stanza(dati, { groq: { status: 'available', models: [{ id: 'altro' }] } });
+      const dati = settings([{ name: 'groq' }], 'groq', 'm');
+      const s = await room(dati, { groq: { status: 'available', models: [{ id: 'altro' }] } });
       assert.equal(nodi['casa-model-restart'].hidden, true);
 
-      ultimoPayload = impostazioni(dati.providers, 'groq', 'altro', { requires_restart: true });
+      ultimoPayload = settings(dati.providers, 'groq', 'altro', { requires_restart: true });
       await s.pickModel('altro');
       assert.equal(nodi['casa-model-restart'].hidden, false);
       assert.equal(nodi['casa-model-restart'].textContent, i18n.t('casa.model.restart'));
@@ -520,9 +520,9 @@ def test_the_list_is_titled_with_the_brand_you_are_reading() -> None:
     *guardando*. E' l'unica frase che dice di chi sono le righe che stai per
     toccare, quindi sbagliarla e' peggio che non averla."""
     _run_js("""
-      const dati = impostazioni(
+      const dati = settings(
         [{ name: 'opencode_go' }, { name: 'anthropic' }], 'opencode_go', 'grok-code-fast-1');
-      const s = await stanza(dati, { opencode_go: { status: 'available', models: [] },
+      const s = await room(dati, { opencode_go: { status: 'available', models: [] },
                                      anthropic: { status: 'available', models: [] } });
       assert.equal(nodi['casa-models-label'].textContent,
         i18n.t('casa.model.models', { provider: getProviderBrand('opencode_go').label }));
@@ -545,9 +545,9 @@ def test_the_brand_that_answers_carries_a_mark_and_not_only_a_ring() -> None:
     risponde porta un segno — e un anello d'accento da solo non basta, perche'
     dove l'accento e' il testo quell'anello e' il fondo della pastiglia."""
     _run_js("""
-      const dati = impostazioni(
+      const dati = settings(
         [{ name: 'opencode_go' }, { name: 'anthropic' }], 'opencode_go', 'm');
-      const s = await stanza(dati, { opencode_go: { status: 'available', models: [] },
+      const s = await room(dati, { opencode_go: { status: 'available', models: [] },
                                      anthropic: { status: 'available', models: [] } });
       const segni = () => nodi['casa-providers'].children.map(
         (t) => t.children.some((c) => String(c.className).includes('ti-check')));

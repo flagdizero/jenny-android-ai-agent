@@ -247,15 +247,15 @@ def config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _pagine(config: Path) -> list[dict]:
-    return json.loads(config.read_text(encoding="utf-8"))["casa"]["schermate"]
+    return json.loads(config.read_text(encoding="utf-8"))["home"]["pages"]
 
 
 async def _con_pagine(pagine: list[dict]) -> None:
     from jenny.config import store
-    from jenny.config.schema import SchermataConfig
+    from jenny.config.schema import HomePageConfig
 
     def _metti(c):
-        c.casa.schermate = [SchermataConfig(**p) for p in pagine]
+        c.home.pages = [HomePageConfig(**p) for p in pagine]
         return True
 
     await store.mutate(_metti)
@@ -267,9 +267,9 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
 
     monkeypatch.setattr(modulo, "rename_project", lambda **kw: {"new_name": kw["new_name"]})
     await _con_pagine([
-        {"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"},
+        {"id": "q1", "kind": "conversation", "ref": f"project:{VECCHIO}"},
         {"id": "a1", "kind": "app", "ref": VECCHIO},
-        {"id": "q2", "kind": "conversazione", "ref": "project:altro"},
+        {"id": "q2", "kind": "conversation", "ref": "project:altro"},
     ])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
@@ -291,7 +291,7 @@ async def test_a_refused_rename_leaves_the_pages_alone(workspace, config, monkey
         raise modulo.ProjectRenameError("a folder named viaggi already exists")
 
     monkeypatch.setattr(modulo, "rename_project", _rifiuta)
-    await _con_pagine([{"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"}])
+    await _con_pagine([{"id": "q1", "kind": "conversation", "ref": f"project:{VECCHIO}"}])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
                           busy_session_keys=lambda: ())
     with pytest.raises(CommandError):

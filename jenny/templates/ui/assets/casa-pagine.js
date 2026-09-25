@@ -6,7 +6,7 @@
  *  ha aggiunto. **Tutte si spostano**, la chat compresa: dal 23/09/2026 la chat
  *  non e' piu' la pagina 0, e nessun indice qui dentro vuol dire «la chat» da
  *  solo (v. `.agent/pagine-in-alto-plan.md`). Dove sta ogni pagina lo dice
- *  `ordine`, che il gateway salva accanto alle `schermate`.
+ *  `order`, che il gateway salva accanto alle `pages`.
  *
  *  **Che cosa muove.** Una pista in fila orizzontale, un pannello per pagina,
  *  e un `translateX`. Non e' la stessa risposta visiva del carosello
@@ -39,30 +39,30 @@ import { projectNameOf } from './shared/conversation-list.js';
 const OLTRE_IL_CAPO = 0.06;
 
 /** Le pagine che ci sono sempre, nell'ordine di chi non ha mai spostato
- *  niente. E' la copia di `PAGINE_FISSE` dello schema, e serve solo finche' il
+ *  niente. E' la copia di `FIXED_PAGES` dello schema, e serve solo finche' il
  *  server non ha risposto: la risposta porta le sue, e vincono quelle. */
-export const FISSE = ['app', 'chat', 'quaderni', 'impostazioni'];
+export const FIXED_PAGES = ['app', 'chat', 'notebooks', 'settings'];
 
 /** La specie di una pagina fissa. Il cassetto non si chiama `app` qui dentro:
  *  `app` e' gia' la specie di una **Jenny App** appesa, e due cose diverse con
  *  lo stesso nome si confondono al primo `if`. */
-const SPECIE_FISSA = { app: 'cassetto', chat: 'chat', quaderni: 'quaderni', impostazioni: 'impostazioni' };
+const FIXED_KINDS = { app: 'cassetto', chat: 'chat', notebooks: 'notebooks', settings: 'settings' };
 
 /** L'ordine reso coerente con le pagine che ci sono. La stessa regola di
- *  `ordine_normale` nello schema, per quando il server non l'ha detta (una
+ *  `normalize_order` nello schema, per quando il server non l'ha detta (una
  *  lettura fallita, un gateway vecchio): mai un ordine che perde una pagina. */
-export function ordineNormale(ordine, schermate, fisse = FISSE) {
-  const ids = schermate.map((s) => s.id);
-  const validi = new Set([...fisse, ...ids]);
+export function normalizeOrder(order, pages, fixed = FIXED_PAGES) {
+  const ids = pages.map((s) => s.id);
+  const validi = new Set([...fixed, ...ids]);
   const visti = [];
-  for (const v of Array.isArray(ordine) ? ordine : []) {
+  for (const v of Array.isArray(order) ? order : []) {
     if (typeof v === 'string' && validi.has(v) && !visti.includes(v)) visti.push(v);
   }
   if (!visti.length) {
-    const i = fisse.indexOf('chat') + 1;
-    return [...fisse.slice(0, i), ...ids, ...fisse.slice(i)];
+    const i = fixed.indexOf('chat') + 1;
+    return [...fixed.slice(0, i), ...ids, ...fixed.slice(i)];
   }
-  for (const f of fisse) if (!visti.includes(f)) visti.push(f);
+  for (const f of fixed) if (!visti.includes(f)) visti.push(f);
   const mancanti = ids.filter((id) => !visti.includes(id));
   const dopo = visti.indexOf('chat') + 1;
   return [...visti.slice(0, dopo), ...mancanti, ...visti.slice(dopo)];
@@ -75,10 +75,10 @@ export class CasaPagine {
     this.app = app;
     this.pista = document.getElementById('casa-pista');
     /** Le pagine aggiunte, come le ha salvate il server. */
-    this.schermate = [];
-    this.fisse = [...FISSE];
+    this.pages = [];
+    this.fixed = [...FIXED_PAGES];
     /** Dove sta ogni pagina: gli id delle fisse e delle schermate. */
-    this.ordine = ordineNormale([], [], this.fisse);
+    this.order = normalizeOrder([], [], this.fixed);
     this.indice = this.indiceChat;
     this._tetto = 8;
     /** Chi accende e spegne una pagina fissa: `{accendi, spegni}` per id. */
@@ -103,37 +103,37 @@ export class CasaPagine {
 
   /** Quante caselle ha la pista. */
   get quante() {
-    return this.ordine.length;
+    return this.order.length;
   }
 
   /** Dove sta la chat adesso. */
   get indiceChat() {
-    return Math.max(0, this.ordine.indexOf('chat'));
+    return Math.max(0, this.order.indexOf('chat'));
   }
 
   /** Dove sta la pagina `id`, o -1. */
   indiceDi(id) {
-    return this.ordine.indexOf(id);
+    return this.order.indexOf(id);
   }
 
   /** Se il tetto e' pieno non si puo' aggiungere: lo chiedono le schede. */
   get pienoZeppo() {
-    return this.schermate.length >= this._tetto;
+    return this.pages.length >= this._tetto;
   }
 
   /** Cosa c'e' nella casella `i`: `{id, kind, fissa}`, piu' il `ref` di una
    *  schermata. `null` fuori dalla pista. */
   voce(i) {
-    const id = this.ordine[i];
+    const id = this.order[i];
     if (id === undefined) return null;
-    if (this.fisse.includes(id)) return { id, kind: SPECIE_FISSA[id] || id, fissa: true };
-    const s = this.schermate.find((x) => x.id === id);
+    if (this.fixed.includes(id)) return { id, kind: FIXED_KINDS[id] || id, fissa: true };
+    const s = this.pages.find((x) => x.id === id);
     return s ? { ...s, fissa: false } : null;
   }
 
   /** Tutte le voci, in ordine: la fila le disegna, la modalita' ordina le sposta. */
   get voci() {
-    return this.ordine.map((_, i) => this.voce(i)).filter(Boolean);
+    return this.order.map((_, i) => this.voce(i)).filter(Boolean);
   }
 
   /** Una pagina fissa dice come accendersi quando la guardi e spegnersi
@@ -142,7 +142,7 @@ export class CasaPagine {
     this._ganci[id] = ganci;
     /* Se la si sta gia' guardando, si accende adesso: il `vaiA` che ci ha
        portato qui e' passato quando il gancio non c'era ancora. */
-    if (this.ordine[this.indice] === id) this._accendiFissa(id);
+    if (this.order[this.indice] === id) this._accendiFissa(id);
   }
 
   /** Legge l'elenco dal server e disegna. Non alza: una casa che non apre
@@ -150,7 +150,7 @@ export class CasaPagine {
    *  sole quattro. */
   async carica() {
     try {
-      this._prendi(await api.getSchermate());
+      this._prendi(await api.getPages());
     } catch {
       this._prendi(null);
     }
@@ -159,10 +159,10 @@ export class CasaPagine {
   }
 
   _prendi(dati) {
-    this.schermate = Array.isArray(dati?.schermate) ? dati.schermate : [];
-    if (Array.isArray(dati?.fisse) && dati.fisse.includes('chat')) this.fisse = dati.fisse;
+    this.pages = Array.isArray(dati?.pages) ? dati.pages : [];
+    if (Array.isArray(dati?.fixed) && dati.fixed.includes('chat')) this.fixed = dati.fixed;
     if (Number.isFinite(dati?.max)) this._tetto = dati.max;
-    this.ordine = ordineNormale(dati?.ordine, this.schermate, this.fisse);
+    this.order = normalizeOrder(dati?.order, this.pages, this.fixed);
   }
 
   /** Salva tutto — aggiungere, togliere e spostare sono la stessa scrittura,
@@ -177,18 +177,18 @@ export class CasaPagine {
    *  e nessuno lo prendeva: «Fatto» in modalita' ordina perdeva l'ordine in
    *  silenzio, «Metti/Togli pagina» non diceva niente. Chi ha qualcosa da
    *  tenere da parte (la bozza dell'ordine) la tiene finche' non torna vero. */
-  async salva(schermate, ordine) {
-    const dove = this.ordine[this.indice];
+  async salva(pages, order) {
+    const dove = this.order[this.indice];
     let salvate;
     try {
-      salvate = await api.salvaPagine(schermate, ordineNormale(ordine, schermate, this.fisse));
+      salvate = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
     } catch (err) {
       console.warn('casa.pagine: pages not saved', err);
       showToast(i18n.t('casa.pagine.salvaFallito'), 'error');
       return false;
     }
-    this.schermate = salvate.schermate || [];
-    this.ordine = ordineNormale(salvate.ordine, this.schermate, this.fisse);
+    this.pages = salvate.pages || [];
+    this.order = normalizeOrder(salvate.order, this.pages, this.fixed);
     this._disegna();
     const ancora = this.indiceDi(dove);
     this.vaiA(ancora >= 0 ? ancora : this.indiceChat, { animato: false });
@@ -211,7 +211,7 @@ export class CasaPagine {
        cambia conversazione subito, e la fila deve gia' leggere quella nuova. */
     const chiave = this.conversazioneDi(bersaglio);
     if (chiave) this.app?.trasloco?.arriva(this.pannelloDi(bersaglio), chiave);
-    if (voce?.kind === 'conversazione') this._controllaQuaderno(this.pannelloDi(bersaglio), voce);
+    if (voce?.kind === 'conversation') this._controllaQuaderno(this.pannelloDi(bersaglio), voce);
     this.app?.onPaginaCambiata?.(bersaglio, voce);
   }
 
@@ -229,19 +229,19 @@ export class CasaPagine {
   conversazioneDi(i) {
     const voce = this.voce(i);
     if (voce?.kind === 'chat') return this.conversazioneCasa;
-    return voce?.kind === 'conversazione' ? voce.ref : null;
+    return voce?.kind === 'conversation' ? voce.ref : null;
   }
 
   /** Il pannello della casella `i`. */
   pannelloDi(i) {
-    const id = this.ordine[i];
+    const id = this.order[i];
     return id === undefined ? null : this._pannelloPer(id);
   }
 
   _pannelloPer(id) {
     if (!this.pista) return null;
     const figli = Array.from(this.pista.children);
-    if (this.fisse.includes(id)) return figli.find((c) => c.dataset?.pagina === id) || null;
+    if (this.fixed.includes(id)) return figli.find((c) => c.dataset?.pagina === id) || null;
     return figli.find((c) => c.dataset?.id === id) || null;
   }
 
@@ -261,7 +261,7 @@ export class CasaPagine {
    */
   apriConversazione(chiave) {
     const qui = this.voce(this.indice);
-    if (qui?.kind === 'conversazione' && chiave === qui.ref) {
+    if (qui?.kind === 'conversation' && chiave === qui.ref) {
       return this.app?.mostraConversazione?.(chiave);
     }
     this.conversazioneCasa = chiave;
@@ -278,7 +278,7 @@ export class CasaPagine {
 
   /** E' gia' una pagina? */
   appesa(kind, ref) {
-    return this.schermate.some((s) => s.kind === kind && s.ref === ref);
+    return this.pages.some((s) => s.kind === kind && s.ref === ref);
   }
 
   /** La appende e ci porta sopra. `false` se c'era gia' o se il tetto e' pieno.
@@ -293,13 +293,13 @@ export class CasaPagine {
   async appendi(kind, ref) {
     if (this.appesa(kind, ref) || this.pienoZeppo) return false;
     const id = `p${Date.now().toString(36)}`;
-    const aggiunte = this.ordine
-      .map((x, i) => (this.fisse.includes(x) ? -1 : i))
+    const aggiunte = this.order
+      .map((x, i) => (this.fixed.includes(x) ? -1 : i))
       .filter((i) => i >= 0);
     const dopo = aggiunte.length ? Math.max(...aggiunte) : this.indiceChat;
-    const ordine = [...this.ordine];
-    ordine.splice(dopo + 1, 0, id);
-    if (!(await this.salva([...this.schermate, { id, kind, ref }], ordine))) return false;
+    const order = [...this.order];
+    order.splice(dopo + 1, 0, id);
+    if (!(await this.salva([...this.pages, { id, kind, ref }], order))) return false;
     this.vaiAId(id);
     return true;
   }
@@ -307,11 +307,11 @@ export class CasaPagine {
   /** La stacca. Niente conferma: una pagina si rimette con una pressione, e
    *  una domanda per un gesto annullabile e' solo un tocco in piu' ogni volta. */
   async stacca(kind, ref) {
-    const via = this.schermate.find((s) => s.kind === kind && s.ref === ref);
+    const via = this.pages.find((s) => s.kind === kind && s.ref === ref);
     if (!via) return false;
     const salvate = await this.salva(
-      this.schermate.filter((s) => s !== via),
-      this.ordine.filter((id) => id !== via.id),
+      this.pages.filter((s) => s !== via),
+      this.order.filter((id) => id !== via.id),
     );
     return Boolean(salvate);
   }
@@ -333,11 +333,11 @@ export class CasaPagine {
   async ricarica() {
     let dati;
     try {
-      dati = await api.getSchermate();
+      dati = await api.getPages();
     } catch {
       return;
     }
-    const dove = this.ordine[this.indice];
+    const dove = this.order[this.indice];
     this._prendi(dati);
     this._disegna();
     const ancora = this.indiceDi(dove);
@@ -365,10 +365,10 @@ export class CasaPagine {
       this.app?.trasloco?.riportaACasa(vecchio, casa);
       vecchio.remove();
     }
-    this.ordine.forEach((id, i) => {
+    this.order.forEach((id, i) => {
       let pannello = this._pannelloPer(id);
       if (!pannello) {
-        const s = this.schermate.find((x) => x.id === id);
+        const s = this.pages.find((x) => x.id === id);
         if (!s) return;
         pannello = document.createElement('div');
         pannello.className = 'casa-pagina';
@@ -406,13 +406,13 @@ export class CasaPagine {
       if (pannello === corrente) this._riempi(pannello);
       else this._svuota(pannello);
     }
-    const id = this.ordine[indice];
+    const id = this.order[indice];
     if (this._accesa && this._accesa !== id) {
       const prima = this._accesa;
       this._accesa = null;
       this._ganci[prima]?.spegni?.();
     }
-    if (this.fisse.includes(id) && this._accesa !== id) this._accendiFissa(id);
+    if (this.fixed.includes(id) && this._accesa !== id) this._accendiFissa(id);
   }
 
   _accendiFissa(id) {
@@ -427,9 +427,9 @@ export class CasaPagine {
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
     /* Una pagina conversazione non si riempie: ci arriva la chat, e la porta
        il trasloco da `vaiA`. */
-    if (pannello.dataset.kind === 'conversazione') return;
+    if (pannello.dataset.kind === 'conversation') return;
     if (pannello.dataset.pieno) return;
-    const schermata = this.schermate.find((x) => x.id === pannello.dataset.id);
+    const schermata = this.pages.find((x) => x.id === pannello.dataset.id);
     if (!schermata) return;
     /* Un segno **per tentativo**, non un flag condiviso.
        Un dito veloce fra due pagine fa: riempi → svuota → riempi. Il primo
@@ -491,8 +491,8 @@ export class CasaPagine {
   _svuota(pannello) {
     /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
        mentre guardi un'app. Spenta resta comunque — una foto non gira. */
-    if (pannello.dataset.kind === 'conversazione') {
-      const s = this.schermate.find((x) => x.id === pannello.dataset.id);
+    if (pannello.dataset.kind === 'conversation') {
+      const s = this.pages.find((x) => x.id === pannello.dataset.id);
       this.app?.trasloco?.fotoSeServe(pannello, s?.ref);
       return;
     }
@@ -760,7 +760,7 @@ export class CasaPagine {
    */
   nomeDi(schermata) {
     if (!schermata) return '';
-    if (schermata.kind === 'conversazione') return projectNameOf(schermata.ref) || schermata.ref;
+    if (schermata.kind === 'conversation') return projectNameOf(schermata.ref) || schermata.ref;
     return this.app?.nomeApp?.(schermata.ref) || schermata.ref;
   }
 }

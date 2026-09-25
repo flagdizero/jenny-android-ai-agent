@@ -914,7 +914,7 @@
     "back": {
       "chat": "back to the chat",
       "pages": "back to the pages",
-      "impostazioni": "Settings"
+      "settings": "Settings"
     },
     "tu": {
       "workshopHint": "watch, tune, repair"
@@ -1054,8 +1054,8 @@
     "fila": {
       "label": "Home pages",
       "app": "Apps",
-      "quaderni": "Notebooks",
-      "impostazioni": "Settings",
+      "notebooks": "Notebooks",
+      "settings": "Settings",
       "ordinaAiuto": "Drag to move · × to remove",
       "fatto": "Done",
       "sposta": "Move {nome}: left and right arrows",

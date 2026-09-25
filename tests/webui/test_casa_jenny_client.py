@@ -178,7 +178,7 @@ const nomiDetti = [];
 /* `disco` e' quel che il file delle regole contiene: `undefined` = non c'e'
    (404). `rotta` e' l'altro caso, quello che conta: la lettura non e' arrivata
    affatto. Si passano alla costruzione perche' la stanza legge all'apertura. */
-function stanza(floating, disco, rotta) {
+function room(floating, disco, rotta) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   visibile = true;
   taglia = 'sm';
@@ -274,7 +274,7 @@ def test_the_room_reads_the_preferences_that_are_live() -> None:
     """Il valore non e' una copia tenuta a mano: lo compone leggendo le stesse
     preferenze che disegnano lei."""
     _run_js("""
-      const lei = stanza({ available: true, enabled: true, active: true });
+      const lei = room({ available: true, enabled: true, active: true });
       assert.equal(lei.value(), jennyValue({ visible: true, size: 'sm', floating: true }));
       lei.pickSize('lg');
       assert.equal(lei.value(), jennyValue({ visible: true, size: 'lg', floating: true }));
@@ -299,7 +299,7 @@ def test_the_sizes_offered_are_the_ones_the_art_has() -> None:
 
 def test_picking_a_size_marks_exactly_one() -> None:
     _run_js("""
-      const lei = stanza({ available: true });
+      const lei = room({ available: true });
       assert.equal(lei.sizeEl.children.length, SIZES.length);
       lei.pickSize('md');
       const accese = lei.sizeEl.children.filter((b) => b.classList.contains('is-on'));
@@ -318,7 +318,7 @@ def test_the_row_is_not_there_where_the_window_cannot_exist() -> None:
     """Fuori da Android `available` e' falso: un interruttore che non fa niente
     e' peggio di una riga che manca."""
     _run_js("""
-      const lei = stanza({ available: false, enabled: false });
+      const lei = room({ available: false, enabled: false });
       assert.equal(lei.floatingRow.hidden, true);
       assert.equal(lei.floatingNote.hidden, true, 'la spiegazione di una cosa che non c\\u2019e\\u2019');
 
@@ -333,7 +333,7 @@ def test_a_window_android_refused_says_so_instead_of_bouncing_back() -> None:
     l'interruttore tornasse indietro da solo, chi l'ha toccato lo vedrebbe
     rifiutarsi senza dire perche'."""
     _run_js("""
-      const lei = stanza({ available: true, enabled: true, active: false });
+      const lei = room({ available: true, enabled: true, active: false });
       assert.equal(lei.floatingBtn.classList.contains('is-on'), true,
                    'l\\u2019interruttore e\\u2019 rimbalzato su spento');
       assert.equal(lei.floatingNote.textContent, i18n.t('settings.floatingBlocked'));
@@ -348,7 +348,7 @@ def test_the_switch_moves_before_the_server_answers_and_takes_its_word_after() -
     la verita' resta quella del server — qui accende, e il server risponde che
     Android non l'ha lasciata aprire."""
     _run_js("""
-      const lei = stanza({ available: true, enabled: false, active: false });
+      const lei = room({ available: true, enabled: false, active: false });
       /* Il server risponde il **contrario** dell'ipotesi: il permesso c'e' e
          la finestra e' su. Con una risposta uguale a quel che la stanza aveva
          gia' indovinato, buttarla via non si vedrebbe da nessuna parte. */
@@ -369,7 +369,7 @@ def test_a_call_that_failed_puts_the_switch_back() -> None:
     """Un interruttore acceso su una finestra che nessuno ha acceso sarebbe una
     bugia che dura fino al prossimo avvio."""
     _run_js("""
-      const lei = stanza({ available: true, enabled: false, active: false });
+      const lei = room({ available: true, enabled: false, active: false });
       errore = new Error('gateway giu');
       await lei.toggleFloating();
       assert.equal(lei.floatingBtn.classList.contains('is-on'), false);
@@ -385,12 +385,12 @@ def test_the_house_hears_what_the_switch_ended_up_as() -> None:
     telefono il 25/09). Si dice lo stato finale — quello del server, o quello
     rimesso a posto se la chiamata e' fallita — non l'ipotesi ottimista."""
     _run_js("""
-      const lei = stanza({ available: true, enabled: false, active: false });
+      const lei = room({ available: true, enabled: false, active: false });
       risposta = { floating: { available: true, enabled: true, active: true } };
       await lei.toggleFloating();
       assert.deepEqual(flottanti.at(-1), { available: true, enabled: true, active: true });
 
-      const lui = stanza({ available: true, enabled: false, active: false });
+      const lui = room({ available: true, enabled: false, active: false });
       errore = new Error('gateway giu');
       await lui.toggleFloating();
       assert.equal(flottanti.at(-1).enabled, false, 'una chiamata fallita non ha acceso niente');
@@ -399,7 +399,7 @@ def test_the_house_hears_what_the_switch_ended_up_as() -> None:
 
 def test_the_words_come_back_when_the_language_changes() -> None:
     _run_js("""
-      const lei = stanza({ available: true, enabled: false, active: false });
+      const lei = room({ available: true, enabled: false, active: false });
       lei.visibleLabel.textContent = '';
       lei.sizeLabel.textContent = '';
       lei.floatingLabel.textContent = '';
@@ -421,7 +421,7 @@ def test_what_is_on_disk_lands_in_the_box() -> None:
     """E «Salva» non c'e' finche' non c'e' niente da salvare: un bottone acceso
     su un campo che nessuno ha toccato invita a toccarlo per vedere cosa fa."""
     _run_js("""
-      const lei = stanza({ available: false }, 'Chiamami per nome.\\n');
+      const lei = room({ available: false }, 'Chiamami per nome.\\n');
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(lei.rulesEl.value, 'Chiamami per nome.');
       assert.equal(lei.rulesSave.hidden, true);
@@ -436,7 +436,7 @@ def test_no_rules_yet_is_not_an_error() -> None:
     """404 vuol dire «non ne ha ancora scritte», ed e' lo stato normale del
     primo giorno."""
     _run_js("""
-      const lei = stanza({ available: false });
+      const lei = room({ available: false });
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(lei.rulesEl.value, '');
       assert.equal(lei.rulesSave.hidden, true);
@@ -454,7 +454,7 @@ def test_a_reading_that_failed_cannot_wipe_what_is_there() -> None:
     uno spazio battuto per sbaglio manderebbe una casella vuota sopra le regole
     che ci sono. «Salva» resta via finche' non si sa cosa c'e'."""
     _run_js("""
-      const lei = stanza({ available: false }, undefined, true);
+      const lei = room({ available: false }, undefined, true);
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(lei.rulesEl.value, '');
       lei.rulesEl.value = ' ';
@@ -465,7 +465,7 @@ def test_a_reading_that_failed_cannot_wipe_what_is_there() -> None:
 
 def test_saving_sends_the_trimmed_text_and_remembers_it() -> None:
     _run_js("""
-      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      const lei = room({ available: false }, 'Chiamami per nome.');
       await new Promise((r) => setTimeout(r, 0));
       lei.rulesEl.value = '  Dammi del tu.  ';
       lei._markRules();
@@ -481,7 +481,7 @@ def test_a_save_that_failed_keeps_the_button_and_says_so() -> None:
     """Sparire il bottone dopo un salvataggio fallito vorrebbe dire dire che e'
     andata bene."""
     _run_js("""
-      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      const lei = room({ available: false }, 'Chiamami per nome.');
       await new Promise((r) => setTimeout(r, 0));
       lei.rulesEl.value = 'Dammi del tu.';
       lei._markRules();
@@ -497,7 +497,7 @@ def test_reopening_the_room_does_not_overwrite_what_you_are_writing() -> None:
     """Stessa regola della bozza della chat, un attimo piu' tardi: il testo
     vivo vince sempre su quello vecchio."""
     _run_js("""
-      const lei = stanza({ available: false }, 'Chiamami per nome.');
+      const lei = room({ available: false }, 'Chiamami per nome.');
       await new Promise((r) => setTimeout(r, 0));
       lei.rulesEl.value = 'Sto ancora scrivendo';
       lei.open();
@@ -527,7 +527,7 @@ def test_the_save_button_only_shows_when_there_is_something_to_save() -> None:
     toccarlo per vedere cosa fa — e un nome vuoto non e' qualcosa da salvare:
     il server ripiegherebbe su «Jenny» senza dirlo."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       assert.equal(nodi['casa-nome-save'].hidden, true, 'nascosto finche\u2019 non si sa il nome');
 
       lei.setName('Ada');
@@ -548,7 +548,7 @@ def test_a_name_being_typed_is_never_overwritten() -> None:
     """Stesso patto delle regole: la risposta del server arriva quando arriva,
     e non deve mai riscrivere quel che la persona sta scrivendo."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       nodi['casa-nome'].value = 'Vera';
       lei.setName('Jenny');
       assert.equal(nodi['casa-nome'].value, 'Vera', 'la risposta ha scritto sopra');
@@ -560,7 +560,7 @@ def test_saving_the_name_goes_through_the_settings_call() -> None:
     Il server la gestisce gia\u2019, e un secondo percorso di scrittura per un
     campo solo sarebbe un secondo posto da tenere allineato."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       lei.setName('Jenny');
       nodi['casa-nome'].value = 'Ada';
       await lei.saveNome();
@@ -573,7 +573,7 @@ def test_a_refused_save_says_so_and_keeps_the_button() -> None:
     """Se il salvataggio non e\u2019 andato, dirlo e lasciare il bottone: un
     bottone che sparisce dopo un errore racconta che il nome e\u2019 cambiato."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       lei.setName('Jenny');
       nodi['casa-nome'].value = 'Ada';
       nodi['casa-nome'].listeners.input[0]();
@@ -590,7 +590,7 @@ def test_a_saved_name_is_told_to_the_shell() -> None:
     appena e' salvato, o direbbero il nome vecchio fino al riavvio. Un
     salvataggio rifiutato non dice niente."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       lei.setName('Jenny');
       nodi['casa-nome'].value = 'Ada';
       nomeRotto = true;
@@ -607,7 +607,7 @@ def test_a_name_that_could_not_be_read_is_not_an_empty_name() -> None:
     compariva al primo tasto, confrontando quel che scrivi con un nome vuoto
     che nessuno ha mai scelto."""
     _run_js("""
-      const lei = stanza();
+      const lei = room();
       lei.setName(null);
       nodi['casa-nome'].value = 'Ada';
       nodi['casa-nome'].listeners.input[0]();

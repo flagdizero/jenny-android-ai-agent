@@ -398,7 +398,7 @@ The floating mascot: Jenny above your other apps. Tap her and a text field opens
 
 She hides herself whenever Jenny's own UI is in the foreground: this app is the phone's launcher, and the home screen already has a mascot in it. The window lives inside the gateway service and is destroyed with it, so it can never sit there with no agent behind it. See [Android permissions](android-permissions.md#requested-permissions) for what the overlay permission does and does not allow.
 
-## casa
+## home
 
 The home screen's pages. The home is a row of pages you swipe between, the way any launcher works, and their names run along the top of the screen: the page you are on is written large, the others small. Tap a name to jump to it, or swipe sideways. Four pages are always there — **Apps** (the app drawer), **Jenny** (the conversation), **Notebooks** and **Settings** — and the home always opens on Jenny. Beside them you can keep pages of your own: press and hold a mini-app in the drawer or a notebook in Notebooks and choose *Add as a page* (a mini-app that opens outside Jenny, or a broken one, cannot be a page).
 
@@ -406,10 +406,12 @@ Every page can be moved, the four fixed ones included: press and hold a name at 
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `casa.schermate` | list | `[]` | The pages you added. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversazione` (a notebook's chat, `ref` is `project:<name>`). At most 8, the ids must differ, and none may be one of the fixed page ids below. Pages of kind `stanza` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
-| `casa.ordine` | list | `[]` | Where each page sits, left to right: the fixed ids `app`, `chat`, `quaderni`, `impostazioni` and the `id` of each page you added. Empty means you never moved anything, and reads as `app, chat, <your pages>, quaderni, impostazioni`. |
+| `home.pages` | list | `[]` | The pages you added. Each entry is `{"id": "...", "kind": "...", "ref": "..."}`. `kind` is `app` (a Jenny App, `ref` is its slug) or `conversation` (a notebook's chat, `ref` is `project:<name>`). At most 8, the ids must differ, and none may be one of the fixed page ids below. Pages of kind `room` (a room of the home) existed briefly and were retired: a file that still has one loads normally and simply loses that page, instead of failing validation. |
+| `home.order` | list | `[]` | Where each page sits, left to right: the fixed ids `app`, `chat`, `notebooks`, `settings` and the `id` of each page you added. Empty means you never moved anything, and reads as `app, chat, <your pages>, notebooks, settings`. |
 
-`casa.ordine` is **tidied on every read, never rejected**: ids that match nothing and repeats are dropped, a fixed page that is missing comes back at the end, and a page of yours that is missing goes right after the chat. A config file that fails validation falls back to the backup and then to the defaults — losing providers and keys over a page order would be the wrong trade. Writes from the app are stricter: an order that does not list every fixed page and every page of yours exactly once is refused.
+Until 0.11 this block was called `casa`, with Italian names inside (`schermate`, `ordine`, the kind `conversazione`, the fixed ids `quaderni` and `impostazioni`). A file that still has it loads with everything translated, and the old block is dropped the first time the file is written.
+
+`home.order` is **tidied on every read, never rejected**: ids that match nothing and repeats are dropped, a fixed page that is missing comes back at the end, and a page of yours that is missing goes right after the chat. A config file that fails validation falls back to the backup and then to the defaults — losing providers and keys over a page order would be the wrong trade. Writes from the app are stricter: an order that does not list every fixed page and every page of yours exactly once is refused.
 
 A **conversation page is a shortcut, not a second chat.** The home has exactly one chat — one thread, one composer, one connection. Landing on a notebook's page switches that chat to the notebook, and the swipe dresses the switch up as a page: while you drag, the page coming in shows the notebook as you last left it. A notebook you have not opened since the app started has nothing to show yet, so the first time it slides in empty and fills as you arrive. Only notebooks can be pinned — the personal conversation already has its page — and the name must be one the gateway would open.
 

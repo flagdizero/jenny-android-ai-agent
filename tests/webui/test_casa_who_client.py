@@ -359,7 +359,7 @@ def test_a_notebook_row_is_a_command() -> None:
     _run_js("""
       const panel = await open(ELENCO);
       const aperte = righeDi(panel).filter((r) => !String(r.className).includes('is-blocked'));
-      assert.equal(aperte.length, 4, 'la personale piu\\' i tre quaderni');
+      assert.equal(aperte.length, 4, 'la personale piu\\' i tre notebooks');
       for (const riga of aperte) {
         assert.equal(riga.tag, 'button', 'una riga ha smesso di essere un comando');
       }
@@ -435,7 +435,7 @@ def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
       panel._currentProject = () => 'sparito';
       panel.render();
       const spunte = walk(panel._body).filter((n) => String(n.className).includes('ti-check'));
-      assert.equal(spunte.length, 0, 'la spunta e\\' finita su una conversazione che non e\\' tua');
+      assert.equal(spunte.length, 0, 'la spunta e\\' finita su una conversation che non e\\' tua');
     """)
 
 
@@ -601,9 +601,9 @@ def test_a_folder_that_does_not_open_cannot_be_held() -> None:
 def test_every_openable_notebook_can_be_held() -> None:
     _run_js(
         "const panel = await open(ELENCO);\n"
-        "const quaderni = righeDi(panel).filter((r) => !String(r.className).includes('is-personal'));\n"
-        "assert.equal(quaderni.length, 3);\n"
-        "assert.ok(quaderni.every((q) => premute.some((p) => p.el === q)));\n"
+        "const notebooks = righeDi(panel).filter((r) => !String(r.className).includes('is-personal'));\n"
+        "assert.equal(notebooks.length, 3);\n"
+        "assert.ok(notebooks.every((q) => premute.some((p) => p.el === q)));\n"
     )
 
 
