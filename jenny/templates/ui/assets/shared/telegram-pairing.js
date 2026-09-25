@@ -16,12 +16,15 @@ const POLL_MS = 2500;
 export class TelegramPairingWidget {
   /**
    * @param {HTMLElement} container dove renderizzare
-   * @param {{mode?: 'onboarding'|'settings', onPaired?: Function}} opts
+   * @param {{mode?: 'onboarding'|'settings', onPaired?: Function, onStatus?: Function}} opts
+   *   `onStatus(status)` a ogni stato nuovo che il widget disegna: serve a chi
+   *   ne mostra un riassunto fuori dal widget (la riga in cassetto).
    */
   constructor(container, opts = {}) {
     this.el = container;
     this.mode = opts.mode || 'settings';
     this.onPaired = opts.onPaired || null;
+    this.onStatus = opts.onStatus || null;
     this.status = null;
     this._pollTimer = null;
     this._busy = false;
@@ -65,6 +68,9 @@ export class TelegramPairingWidget {
     this._stopPolling();
     const s = this.status;
     if (!s) return;
+    /* Ogni cambio di stato passa di qui — lettura, accoppiamento, token,
+       interruttore, disaccoppia — quindi e' qui che lo si racconta. */
+    this.onStatus?.(s);
     if (s.configured && !s.enabled) {
       this._renderDisabled();
     } else if (s.paired) {

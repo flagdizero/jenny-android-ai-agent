@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 import pytest
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -284,7 +284,44 @@ def test_la_riga_telegram_si_legge_senza_il_widget() -> None:
     """La riga deve dire qualcosa **prima** che il pannello esista."""
     corpo = _corpo("_caricaRiepilogoTelegram")
     assert "getTelegramStatus" in corpo, "la riga aspetta il widget per sapere cosa dire"
-    assert "telegramSummary" in corpo
+    assert "_scriviRiepilogoTelegram(" in corpo
+    assert "telegramSummary" in _corpo("_scriviRiepilogoTelegram")
+
+
+@requires_node
+def test_la_riga_telegram_segue_il_widget() -> None:
+    """Accoppiato dal pannello, la riga in cassetto restava su «non collegato»:
+    si leggeva una volta sola, al disegno. Ora ogni stato che il widget disegna
+    arriva anche alla riga. Widget e pannello veri, in node."""
+    tg = (ASSETS / "shared" / "telegram-pairing.js").read_text(encoding="utf-8")
+    out = run_js(
+        "import assert from 'node:assert/strict';\n"
+        "const i18n = { t: (k, p) => k + (p ? ' ' + JSON.stringify(p) : '') };\n"
+        f"{function(tg, 'telegramSummary')}\n"
+        "class TelegramPairingWidget {\n"
+        f"{member(tg, 'constructor')}\n"
+        f"{member(tg, 'render')}\n"
+        "  _stopPolling() {} _startPolling() {}\n"
+        "  _renderDisabled() {} _renderPaired() {} _renderPairing() {} _renderTokenForm() {}\n"
+        "}\n"
+        "const riga = { textContent: 'settings.telegram.summaryNotPaired' };\n"
+        "globalThis.document = { getElementById: () => ({}) };\n"
+        "class C {\n"
+        "  constructor() { this.contentEl = { querySelector: () => riga }; }\n"
+        f"{member(SETTINGS, '_apriTelegram')}\n"
+        f"{member(SETTINGS, '_scriviRiepilogoTelegram')}\n"
+        "}\n"
+        """
+const c = new C();
+TelegramPairingWidget.prototype.refresh = function () {};
+c._apriTelegram();
+c._tgWidget.status = { enabled: true, configured: true, paired: true, paired_username: 'io' };
+c._tgWidget.render();
+assert.equal(riga.textContent, 'settings.telegram.summaryPaired {"who":"@io"}');
+console.log('ok');
+"""
+    )
+    assert out.strip() == "ok"
 
 
 def test_il_riassunto_telegram_copre_tutti_gli_stati() -> None:

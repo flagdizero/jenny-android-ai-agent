@@ -727,7 +727,12 @@ export class SettingsController {
     const corpo = document.getElementById('drawer-telegram-body');
     if (!corpo) return;
     if (this._tgWidget) this._tgWidget.destroy();
-    this._tgWidget = new TelegramPairingWidget(corpo, { mode: 'settings' });
+    /* La riga in cassetto, sotto il pannello, segue il widget: si leggeva una
+       volta al disegno e dopo un accoppiamento restava su «non collegato». */
+    this._tgWidget = new TelegramPairingWidget(corpo, {
+      mode: 'settings',
+      onStatus: (stato) => this._scriviRiepilogoTelegram(stato),
+    });
     this._tgWidget.refresh();
   }
 
@@ -742,6 +747,10 @@ export class SettingsController {
       stato = null;
     }
     if (this._stale(gen)) return;
+    this._scriviRiepilogoTelegram(stato);
+  }
+
+  _scriviRiepilogoTelegram(stato) {
     const el = this.contentEl?.querySelector('#riepilogo-telegram');
     if (el) el.textContent = telegramSummary(stato);
   }
