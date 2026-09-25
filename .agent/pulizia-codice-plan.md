@@ -678,6 +678,22 @@ produzione che fa diventare rosso un test migrato.
     d'aiuto del menu «Nuovo», la freccina del gruppo tool, il conteggio
     «dopo 4 retries».
 
+
+**Dopo la revisione (25/09, mattina), i quattro punti da decidere:**
+- `Location` malformato: **non era un difetto**. Nel client vero httpx lo
+  scarta prima e solleva `RemoteProtocolError` (un `httpx.HTTPError`), che i
+  quattro chiamanti catturano. Nessuna modifica di produzione, solo un test che
+  lo fissa (`991a130`).
+- `browser_open` che rispondeva «ok» senza pagina: corretto (`ec53f0f`).
+- Regex delle Jenny App: corrette (`84f1d6b`). Era più grave di come l'aveva
+  valutato la revisione: la stessa regex protegge i nomi delle collezioni, e
+  `notes\n` sarebbe diventato un file con l'a capo nel nome.
+- Elenco delle Jenny App fuori ordine / svuotato da una rilettura fallita:
+  corretto (`805d18d`).
+
+Build da albero pulito installata alle 10:25; `browser_open` e l'elenco delle
+app provati sul telefono.
+
 ---
 
 ## Fuori dal piano, deciso
