@@ -252,7 +252,13 @@ export function osservaGestoOrizzontale(elemento, {
   const larghezza = () => elemento.clientWidth || window.innerWidth;
 
   const giu = (e) => {
+    /* Un dito che scende mentre il gesto era gia' nostro — il secondo di un
+       pizzico, di solito — lo chiude. Qui c'era un `azzera()` nudo: il gesto
+       spariva senza `onAnnulla`, e il guscio restava con la vista (o la pista)
+       ferma a meta', dove l'aveva lasciata l'ultimo `onTrascina`. */
+    const eraOrizzontale = orizzontale;
     azzera();
+    if (eraOrizzontale) onAnnulla?.();
     if (e.touches.length !== 1) return;
     if (testoSelezionato()) return;
     if (puoIniziare && puoIniziare() === false) return;

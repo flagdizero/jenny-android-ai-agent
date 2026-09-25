@@ -371,3 +371,35 @@ lancia('touchmove', { target: riga, touches: [dito(302, 180)] });
 assert.equal(filo.style.overflowY, 'scroll');
 """
     )
+
+
+def test_a_second_finger_mid_swipe_cancels_it_out_loud() -> None:
+    """M19: un secondo dito che scende a scorrimento gia' orizzontale arriva
+    come ``touchstart`` con due tocchi. Lo azzerava senza ``onAnnulla``, e il
+    guscio restava con la vista (o la pista) ferma a meta'."""
+    _run_js(
+        """
+const { visto } = osserva();
+const b = dentro('DIV');
+scorri(b, { fine: false });
+assert.equal(visto[0], 'inizio');
+lancia('touchstart', { target: b, touches: [dito(150), dito(200)] });
+assert.equal(visto.at(-1), 'annulla', 'il gesto e\\' sparito senza onAnnulla');
+// E il rilascio dopo non chiude un gesto che non c'e' piu'.
+lancia('touchend', { target: b, changedTouches: [dito(150)] });
+assert.equal(visto.filter((v) => Array.isArray(v) && v[0] === 'fine').length, 0);
+"""
+    )
+
+
+def test_a_new_touch_before_the_axis_is_decided_is_silent() -> None:
+    """``onAnnulla`` arriva solo se l'asse era stato deciso."""
+    _run_js(
+        """
+const { visto } = osserva();
+const b = dentro('DIV');
+lancia('touchstart', { target: b, touches: [dito(300)] });
+lancia('touchstart', { target: b, touches: [dito(300), dito(200)] });
+assert.deepEqual(visto, []);
+"""
+    )
