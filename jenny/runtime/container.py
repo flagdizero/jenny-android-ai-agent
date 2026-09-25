@@ -406,6 +406,11 @@ class GatewayContainer:
             # e' servita anche prima che ``build`` arrivi in fondo, e ``self.cron``
             # nasce ``None``.
             get_cron_service=lambda: self.cron,
+            # I turni in volo, per i comandi della WebUI che non devono spostare
+            # una sessione sotto le mani di chi ci sta scrivendo (``project.rename``).
+            get_active_session_keys=lambda: (
+                self._agent.active_session_keys() if self._agent is not None else ()
+            ),
             # Telegram ci legge lo stato del turno: e' l'unico segnale di
             # inizio/fine che arriva a un canale che non riceve ne' progress
             # ne' turn_end.

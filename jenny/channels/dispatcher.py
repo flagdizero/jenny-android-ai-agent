@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -60,6 +60,7 @@ class WebSocketDispatcher:
         ui_query: Any | None = None,
         get_subagent_manager: Callable[[], Any | None] | None = None,
         get_cron_service: Callable[[], Any | None] | None = None,
+        get_active_session_keys: Callable[[], Collection[str]] | None = None,
         runtime_events: Any | None = None,
     ):
         self.config = config
@@ -68,6 +69,7 @@ class WebSocketDispatcher:
         self._snapshot_service = snapshot_service
         self._get_subagent_manager = get_subagent_manager
         self._get_cron_service = get_cron_service
+        self._get_active_session_keys = get_active_session_keys
         self._webui_runtime_model_name = webui_runtime_model_name
         self._onboarding_event = onboarding_event
         self._on_settings_changed = on_settings_changed
@@ -111,6 +113,7 @@ class WebSocketDispatcher:
             snapshot_service=self._snapshot_service,
             get_subagent_manager=self._get_subagent_manager,
             get_cron_service=self._get_cron_service,
+            get_active_session_keys=self._get_active_session_keys,
             logger=logger,
             onboarding_event=self._onboarding_event,
             on_settings_changed=self._on_settings_changed,

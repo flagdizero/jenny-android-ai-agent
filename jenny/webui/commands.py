@@ -21,7 +21,7 @@ trasportare contenuto: framed, UTF-8, autenticato all'handshake.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -77,6 +77,12 @@ class CommandContext:
     # sessione viva, e il primo salvataggio riscriverebbe il file appena tolto —
     # cioe' l'orfano, di nuovo. Meglio un TypeError all'avvio.
     invalidate_session: Callable[[str], None]
+    # Le sessioni con un turno in volo adesso (``AgentLoop.active_session_keys``).
+    # ``project.rename`` le rifiuta: sgomberare la cache non ferma un turno che la
+    # sessione ce l'ha gia' in mano, e a fine turno la salverebbe sotto il nome
+    # vecchio — una chat senza cartella accanto a quella spostata. Obbligatorio
+    # per la stessa ragione di ``invalidate_session``.
+    active_session_keys: Callable[[], Collection[str]]
 
 
 Command = Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -460,6 +466,16 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", "invalid new name")
 
     _require_wiki_enabled()
+
+    # Qui, sul loop, e non nel thread: l'elenco dei turni in volo e' del loop.
+    # Resta una finestra fra questa domanda e il ``rename`` — millisecondi, contro
+    # i secondi o i minuti di un turno che scrive.
+    in_volo = set(ctx.active_session_keys())
+    if project_session_key(name) in in_volo or project_session_key(new_name) in in_volo:
+        raise CommandError(
+            "conflict",
+            "Jenny is still working in this notebook: rename it when she has finished",
+        )
 
     try:
         esito = await asyncio.to_thread(

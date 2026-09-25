@@ -38,3 +38,22 @@ def test_websocket_section_without_enabled_key_defaults_to_disabled():
     dispatcher = WebSocketDispatcher(config, MessageBus())
 
     assert "websocket" not in dispatcher.channels
+
+
+def test_the_webui_commands_see_the_turns_in_flight():
+    """``project.rename`` rifiuta una sessione con un turno in volo: il getter deve
+    arrivare dal dispatcher fino al contesto dei comandi, e senza agente vale
+    «nessun turno»."""
+    config = Config.model_validate(
+        {"websocket": {"enabled": True, "websocketRequiresToken": False}}
+    )
+
+    wired = WebSocketDispatcher(
+        config, MessageBus(), get_active_session_keys=lambda: ("project:viaggio",)
+    )
+    bare = WebSocketDispatcher(config, MessageBus())
+
+    assert wired.channels["websocket"].gateway.commands.active_session_keys() == (
+        "project:viaggio",
+    )
+    assert tuple(bare.channels["websocket"].gateway.commands.active_session_keys()) == ()

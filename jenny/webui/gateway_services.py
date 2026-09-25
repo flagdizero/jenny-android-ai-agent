@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -62,6 +63,9 @@ def build_gateway_services(
     # Getter late-binding del ``CronService``, come quello sopra: il pannello
     # della programmazione lo risolve a ogni chiamata.
     get_cron_service: Callable[[], Any | None] | None = None,
+    # Le sessioni con un turno in volo, late-binding come i due sopra: l'agente
+    # puo' nascere dopo il gateway. Senza agente nessun turno e' in volo.
+    get_active_session_keys: Callable[[], Collection[str]] | None = None,
     logger: Any = default_logger,
     onboarding_event: Any | None = None,
     on_settings_changed: Callable[[], None] | None = None,
@@ -118,6 +122,7 @@ def build_gateway_services(
             invalidate_session=lambda key: (
                 session_manager.invalidate(key) if session_manager is not None else None
             ),
+            active_session_keys=get_active_session_keys or (lambda: ()),
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,

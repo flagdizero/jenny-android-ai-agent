@@ -257,7 +257,8 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
         {"id": "a1", "kind": "app", "ref": f"project:{VECCHIO}"},
         {"id": "q2", "kind": "conversazione", "ref": "project:altro"},
     ])
-    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
+                          active_session_keys=lambda: ())
     await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
 
     assert [(p["id"], p["ref"]) for p in _pagine(config)] == [
@@ -277,7 +278,8 @@ async def test_a_refused_rename_leaves_the_pages_alone(workspace, config, monkey
 
     monkeypatch.setattr(modulo, "rename_project", _rifiuta)
     await _con_pagine([{"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"}])
-    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
+                          active_session_keys=lambda: ())
     with pytest.raises(CommandError):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
     assert _pagine(config)[0]["ref"] == f"project:{VECCHIO}"
@@ -287,9 +289,34 @@ async def test_the_command_refuses_a_bad_name_before_any_thread(workspace, confi
     from jenny.webui import commands
     from jenny.webui.commands import CommandError
 
-    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
+                          active_session_keys=lambda: ())
     with pytest.raises(CommandError, match="invalid new name"):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": "Ricerca ETF"})
+
+
+@pytest.mark.parametrize("in_volo", [f"project:{VECCHIO}", f"project:{NUOVO}"])
+async def test_the_command_refuses_while_a_turn_is_running_there(
+    workspace, config, monkeypatch, in_volo
+) -> None:
+    """Un turno in volo ha la sessione in mano: sgomberare la cache non lo ferma,
+    e a fine turno la salverebbe sotto il nome vecchio — una chat senza cartella
+    accanto a quella spostata. Si rifiuta **prima** di toccare qualunque cosa."""
+    from jenny.webui import commands
+    from jenny.webui import project_rename as modulo
+    from jenny.webui.commands import CommandError
+
+    toccato: list[str] = []
+    monkeypatch.setattr(modulo, "rename_project", lambda **kw: toccato.append("rename"))
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: workspace,
+        invalidate_session=lambda k: toccato.append(k),
+        active_session_keys=lambda: (in_volo, "unified:default"),
+    )
+    with pytest.raises(CommandError) as err:
+        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+    assert err.value.code == "conflict"
+    assert toccato == []
 
 
 def test_the_command_is_registered() -> None:
