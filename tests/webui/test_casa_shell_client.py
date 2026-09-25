@@ -1,17 +1,20 @@
-"""Il guscio della casa, pezzi piccoli: i pacchetti Android e la mappa.
+"""Il guscio della casa, pezzi piccoli.
 
-**Un pacchetto installato o rimosso arriva alla pagina App.** Il guscio nativo chiama `window.mobileApp.onPackageChanged(kind, pkg)` a ogni
-broadcast di sistema. In casa il metodo era vuoto (il cassetto era «una tavola
-del giro dopo»), e quando il cassetto e' diventato la pagina App nessuno l'ha
-collegato: con Jenny come launcher, un'app appena presa dal Play Store non si
-trovava fino al riavvio.
+**Un pacchetto installato o rimosso arriva alla pagina App.** Il guscio nativo
+chiama `window.mobileApp.onPackageChanged(kind, pkg)` a ogni broadcast di
+sistema. In casa il metodo era vuoto (il cassetto era «una tavola del giro
+dopo»), e quando il cassetto e' diventato la pagina App nessuno l'ha collegato:
+con Jenny come launcher, un'app appena presa dal Play Store non si trovava fino
+al riavvio.
 
 **La mappa nasce una volta sola**, anche se la sua linguetta si tocca due volte
-prima che il modulo (e D3) sia arrivato.
+prima che il modulo (e D3) sia arrivato. E poi: la domanda pubblica «c'e'
+un'app aperta?», e il primo disegno della fila dopo le traduzioni.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from support.js_harness import member, requires_node, run_js
@@ -132,3 +135,21 @@ def test_the_open_app_question_has_a_public_answer() -> None:
     assert "_openApp" not in APP_JS.read_text(encoding="utf-8"), (
         "la casa legge di nuovo il campo privato delle azioni"
     )
+
+
+def test_the_row_is_first_drawn_once_the_words_have_arrived() -> None:
+    """Il costruttore disegnava la fila prima di `i18n.load`: i nomi delle
+    pagine fisse uscivano come chiavi grezze («casa.fila.app») per il tempo
+    del bootstrap. Il primo disegno spetta a `_applyTranslations`, che `init`
+    chiama dopo aver caricato le parole.
+
+    Sul sorgente, perche' la domanda e' *quando* si disegna nel costruttore e
+    in `init`, che nessun banco puo' eseguire interi."""
+    src = APP_JS.read_text(encoding="utf-8")
+    costruttore = member(src, "constructor", prefixes=())
+    assert not re.search(r"this\.fila\??\.disegna\(\)", costruttore), (
+        "la fila si disegna prima che le traduzioni siano arrivate"
+    )
+    init = member(src, "init", prefixes=("async ",))
+    assert init.index("await i18n.load(") < init.index("this._applyTranslations()")
+    assert "this.fila?.disegna();" in member(src, "_applyTranslations")

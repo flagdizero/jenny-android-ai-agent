@@ -317,7 +317,10 @@ class CasaApp {
     });
     this.pagine.registra('quaderni', { accendi: () => this.who.mostra() });
     this.pagine.registra('impostazioni', { accendi: () => this._apriImpostazioni() });
-    this.fila.disegna();
+    /* La fila **non** si disegna qui: le traduzioni non ci sono ancora
+       (arrivano in `init`, dopo il bootstrap) e i nomi delle pagine fisse
+       uscivano come chiavi grezze — «casa.fila.app» — per il tempo di un giro.
+       La disegna `_applyTranslations`, appena le parole sono arrivate. */
 
     window.mobileApp = this;
     this.init();
