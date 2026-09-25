@@ -34,6 +34,8 @@ import json
 import re
 from pathlib import Path
 
+from support.js_harness import member, requires_node, run_js
+
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 ONBOARDING_JS = ASSETS / "mobile-onboarding.js"
@@ -211,7 +213,8 @@ def test_the_wizard_is_only_the_first_run() -> None:
     )
 
 
-def test_from_the_first_run_there_is_no_way_out(  ) -> None:
+@requires_node
+def test_from_the_first_run_there_is_no_way_out() -> None:
     """Dal wizard del primo avvio non si esce col back, e ora e' senza
     eccezioni: sotto non c'e' niente, e una Jenny senza provider portata in chat
     non puo' fare niente.
@@ -222,6 +225,27 @@ def test_from_the_first_run_there_is_no_way_out(  ) -> None:
     prometteva un'uscita a chi leggeva.
     """
     source = _onboarding()
+    # Eseguito, non letto: `handleBack()` vero a ogni step, e ogni volta la
+    # pressione e' consumata. Cercare `return false;` nel sorgente lasciava
+    # passare un `return this.step !== 0;` — l'uscita dal wizard senza provider.
+    run_js(
+        "import assert from 'node:assert/strict';\n"
+        "class W {\n"
+        "  _goToStep0() { this.step = 0; }\n"
+        "  _goBackToStep1() { this.step = 1; }\n"
+        f"{member(source, 'handleBack')}\n"
+        "}\n"
+        """
+for (const [step, saving, dopo] of [[0, false, 0], [1, false, 0], [2, false, 1],
+                                    [3, false, 3], [2, true, 2]]) {
+  const w = new W();
+  w.step = step;
+  w.saving = saving;
+  assert.equal(w.handleBack(), true, `step ${step}: la pressione esce dal wizard`);
+  assert.equal(w.step, dopo, `step ${step}: finito sullo step ${w.step}`);
+}
+"""
+    )
     back = _method(source, "handleBack")
     assert "_rerun" not in back, "il ramo dell'uscita e' tornato senza la strada che lo accendeva"
     assert "return false;" not in back, (
