@@ -1023,6 +1023,27 @@ export class SettingsController {
    *  la conseguenza: Dream smette di scrivere.
    */
   _misuraTetto(m, label, key) {
+    const { misura, resto, pct, oltre } = this._statoTetto(m, label, key);
+    return `<div class="settings-budget">
+      <div class="settings-riga">
+        <span class="settings-label">${escapeHtml(label)}</span>
+        <span class="settings-riepilogo-valore" data-measure-value="${label}">${escapeHtml(misura)}</span>
+      </div>
+      <div class="settings-meter${oltre ? ' is-over' : ''}" data-meter="${label}">
+        <span style="width:${pct}%"></span>
+      </div>
+      <div class="settings-budget-measure" data-measure="${label}">${escapeHtml(resto)}</div>
+    </div>`;
+  }
+
+  /** Quel che si dice di un tetto — la misura, quanto ne resta, la barra —
+   *  calcolato in un posto solo.
+   *
+   *  Lo leggono il disegno (`_misuraTetto`) e il ridisegno dopo un
+   *  salvataggio (`_repaintWorkerDerived`). Quando i conti erano due, il
+   *  secondo scriveva la misura nella riga di «quanto resta»: dopo un
+   *  salvataggio la misura compariva due volte e «restano N» spariva. */
+  _statoTetto(m, label, key) {
     const tetto = m[key]?.value || 0;
     const file = (m.files || []).find(f => f.label === label);
     const chars = file && file.readable !== false && file.exists ? file.chars : null;
@@ -1031,16 +1052,7 @@ export class SettingsController {
     const resto = oltre
       ? i18n.t('settings.memory.headroomOver', { over: chars - tetto })
       : (tetto > 0 && chars != null ? i18n.t('settings.memory.headroom', { left: tetto - chars }) : '');
-    return `<div class="settings-budget">
-      <div class="settings-riga">
-        <span class="settings-label">${escapeHtml(label)}</span>
-        <span class="settings-riepilogo-valore">${escapeHtml(this._budgetMeasure(m, label, key))}</span>
-      </div>
-      <div class="settings-meter${oltre ? ' is-over' : ''}" data-meter="${label}">
-        <span style="width:${pct}%"></span>
-      </div>
-      <div class="settings-budget-measure" data-measure="${label}">${escapeHtml(resto)}</div>
-    </div>`;
+    return { misura: this._budgetMeasure(m, label, key), resto, pct, oltre };
   }
 
   /** Il pannello dei tetti: i tre campi, con il loro range dal server. */
@@ -1083,8 +1095,8 @@ export class SettingsController {
       ${this._renderReviewState(m.review_state)}`;
   }
 
-  /* La frase sotto la barra. In un metodo suo perché la scrive anche
-     `_repaintWorkerDerived`, e due copie divergerebbero al primo cambio. */
+  /* La misura accanto al nome del file. In un metodo suo perché passa da
+     `_statoTetto`, che serve sia il disegno sia il ridisegno. */
   _budgetMeasure(m, label, key) {
     const budget = m[key]?.value || 0;
     const file = (m.files || []).find(f => f.label === label);
@@ -1240,19 +1252,17 @@ export class SettingsController {
       ['USER.md', 'user_budget_chars'],
       ['SOUL.md', 'soul_budget_chars'],
     ]) {
-      const budget = memory[key]?.value || 0;
-      const file = (memory.files || []).find(f => f.label === label);
-      const chars = file ? file.chars : null;
+      const { misura, resto, pct, oltre } = this._statoTetto(memory, label, key);
       const meter = this.contentEl.querySelector(`[data-meter="${label}"]`);
       if (meter) {
-        const pct = budget > 0 && chars != null
-          ? Math.min(100, Math.round((chars / budget) * 100)) : 0;
-        meter.classList.toggle('is-over', budget > 0 && chars != null && chars > budget);
+        meter.classList.toggle('is-over', oltre);
         const fill = meter.querySelector('span');
         if (fill) fill.style.width = `${pct}%`;
       }
+      const value = this.contentEl.querySelector(`[data-measure-value="${label}"]`);
+      if (value) value.textContent = misura;
       const measure = this.contentEl.querySelector(`[data-measure="${label}"]`);
-      if (measure) measure.textContent = this._budgetMeasure(memory, label, key);
+      if (measure) measure.textContent = resto;
     }
   }
 

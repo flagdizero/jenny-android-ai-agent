@@ -408,7 +408,8 @@ def test_la_misura_dice_quanto_resta_non_solo_quanto_misura() -> None:
     E sopra il tetto la frase cambia del tutto, perché cambia la conseguenza:
     Dream smette di scrivere.
     """
-    corpo = _corpo("_misuraTetto")
+    corpo = _corpo("_statoTetto")
+    assert "_statoTetto(" in _corpo("_misuraTetto")
     assert "settings.memory.headroom" in corpo
     assert "headroomOver" in corpo, "sopra il tetto non si dice cosa succede"
     import json

@@ -140,6 +140,7 @@ _MEMBERS = (
     # cassetto i tetti ora si **leggono** (`_misuraTetto`) e i campi stanno
     # nel pannello «Cambia i tetti»: cambia chi disegna, non cosa si salva.
     "_misuraTetto",
+    "_statoTetto",
     "_numberField",
 )
 
@@ -406,3 +407,45 @@ console.log(JSON.stringify({
     )
     assert '"on":"every 30min"' in out
     assert '"off":""' in out
+
+
+def test_after_a_save_the_measure_and_the_headroom_stay_in_their_rows(tmp_path) -> None:
+    """Regressione di ``013f93c``: dopo un salvataggio ``_repaintWorkerDerived``
+    scriveva la misura nella riga di «quanto resta», che quindi compariva due
+    volte mentre «restano N» spariva. Il ridisegno deve dire le stesse cose
+    del disegno."""
+    out = _run(
+        """
+import assert from 'node:assert/strict';
+import { Screen, makeEl } from './harness.mjs';
+
+/* Il disegno vero: si legge dall'HTML di _misuraTetto cosa sta in quale riga. */
+const screen0 = new Screen({});
+const html = screen0._misuraTetto(screen0.data.memory, 'MEMORY.md', 'memory_budget_chars');
+const cella = (attr) => html.match(new RegExp(attr + '="MEMORY.md"[^>]*>([^<]*)<'))[1];
+const primaValore = cella('data-measure-value');
+const primaResto = cella('data-measure');
+assert.match(primaValore, /ofBudget/);
+assert.match(primaResto, /headroom/);
+
+const valore = makeEl({ textContent: primaValore });
+const resto = makeEl({ textContent: primaResto });
+const fill = { style: {} };
+const meter = makeEl({
+  classList: { toggle() {} },
+  querySelector: () => fill,
+});
+const screen = new Screen({
+  '[data-measure-value="MEMORY.md"]': valore,
+  '[data-measure="MEMORY.md"]': resto,
+  '[data-meter="MEMORY.md"]': meter,
+});
+await screen._saveWorkerParams('memory', { memory_budget_chars: '3000' });
+assert.equal(valore.textContent, primaValore, 'la misura non e\\' piu\\' al suo posto');
+assert.equal(resto.textContent, primaResto, '«quanto resta» e\\' stato sostituito');
+assert.notEqual(resto.textContent, valore.textContent, 'la misura compare due volte');
+console.log('ok');
+""",
+        tmp_path,
+    )
+    assert out.strip() == "ok"
