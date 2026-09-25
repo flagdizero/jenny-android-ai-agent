@@ -1,5 +1,6 @@
 {
 "generated_with":"croniter 6.2.4",
+"tz_data_verified":["2026b","2026c","2026d"],
 "cases":[
 {
 "expr":"* 14 16 * *",

@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import zoneinfo
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -76,11 +77,35 @@ def _rome(*args) -> datetime:
 # ── La stessa lingua di croniter ────────────────────────────────────────────
 
 
-def test_every_recorded_croniter_answer_is_reproduced() -> None:
-    data = json.loads(SAMPLES.read_text(encoding="utf-8"))
-    assert len(data["cases"]) == 1500
+def _tz_data_version() -> str:
+    """La versione IANA dei dati che ``ZoneInfo`` sta leggendo davvero.
+
+    ``zoneinfo`` cerca prima nelle cartelle di sistema (``TZPATH``) e solo poi
+    nel pacchetto ``tzdata``: sulla stessa macchina due interpreti possono
+    leggere dati diversi, e la CI legge quelli della sua immagine.
+    """
+    for base in zoneinfo.TZPATH:
+        root = Path(base)
+        if not (root / "Europe" / "Rome").is_file():
+            continue
+        if (root / "+VERSION").is_file():  # macOS
+            return (root / "+VERSION").read_text(encoding="utf-8").strip()
+        if (root / "tzdata.zi").is_file():  # Linux: "# version 2026c"
+            with (root / "tzdata.zi").open(encoding="utf-8", errors="replace") as fh:
+                first = fh.readline()
+            if first.startswith("# version "):
+                return first.removeprefix("# version ").split("-")[0].strip()
+        return f"sconosciuta ({root})"
+    try:
+        import tzdata
+    except ImportError:
+        return "sconosciuta"
+    return tzdata.IANA_VERSION
+
+
+def _reproduce(cases: list[dict]) -> list[tuple]:
     wrong = []
-    for case in data["cases"]:
+    for case in cases:
         base = datetime.fromisoformat(case["base"]).astimezone(_tz(case["tz"]))
         if case["next"] == "error":
             try:
@@ -92,6 +117,47 @@ def test_every_recorded_croniter_answer_is_reproduced() -> None:
         got = [int(d.timestamp()) for d in _chain(case["expr"], base, len(case["next"]))]
         if got != case["next"]:
             wrong.append((case["expr"], case["tz"], case["base"], case["next"], got))
+    return wrong
+
+
+def _is_fixed(tz: str) -> bool:
+    return tz == "UTC" or tz[0] in "+-"
+
+
+def test_every_recorded_croniter_answer_on_a_fixed_offset_is_reproduced() -> None:
+    """UTC e fusi a scarto fisso: nessuna tabella di fusi in mezzo, vale ovunque."""
+    data = json.loads(SAMPLES.read_text(encoding="utf-8"))
+    assert len(data["cases"]) == 1500
+    fixed = [c for c in data["cases"] if _is_fixed(c["tz"])]
+    assert len(fixed) > 400, "i casi a scarto fisso sono spariti dai campioni"
+    wrong = _reproduce(fixed)
+    assert not wrong, wrong[:5]
+
+
+def test_every_recorded_croniter_answer_in_a_named_zone_is_reproduced() -> None:
+    """I fusi con un nome dipendono dalla versione dei dati IANA.
+
+    I campioni sono stati verificati con le versioni in ``tz_data_verified``;
+    ``America/Santiago`` cambia regole spesso, e un'altra versione può spostare
+    un istante senza che ``cronexpr`` sbagli niente. Con una versione
+    verificata la prova è stretta; con un'altra, una differenza **salta**
+    dicendolo invece di fallire: i campioni non si rigenerano senza croniter,
+    e un rosso che dipende dall'immagine della CI non dice niente del codice.
+    """
+    data = json.loads(SAMPLES.read_text(encoding="utf-8"))
+    named = [c for c in data["cases"] if not _is_fixed(c["tz"])]
+    wrong = _reproduce(named)
+    if not wrong:
+        return
+    version = _tz_data_version()
+    verified = data["tz_data_verified"]
+    if version not in verified:
+        pytest.skip(
+            f"dati dei fusi {version}, campioni verificati con {verified}: "
+            f"{len(wrong)} casi in fusi con nome danno altri istanti (es. {wrong[0]}). "
+            "Può essere un cambio di regole IANA e non un difetto di cronexpr: "
+            "confrontare con croniter su questa versione prima di toccare il codice."
+        )
     assert not wrong, wrong[:5]
 
 
