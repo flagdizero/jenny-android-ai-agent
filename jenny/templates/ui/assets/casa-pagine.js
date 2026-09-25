@@ -396,6 +396,13 @@ export class CasaPagine {
   _accendiSolo(indice) {
     if (!this.pista) return;
     const corrente = this.pannelloDi(indice);
+    /* Fuori schermo non vuol dire fuori portata: senza `inert` il Tab della
+       tastiera fisica, e chi legge lo schermo, finivano nelle pagine accanto —
+       un campo di ricerca, un interruttore delle impostazioni — che si
+       attivavano senza vederle. Vale per tutti i pannelli, fissi compresi. */
+    for (const pannello of Array.from(this.pista.children)) {
+      pannello.inert = pannello !== corrente;
+    }
     for (const pannello of this._pannelli()) {
       if (pannello === corrente) this._riempi(pannello);
       else this._svuota(pannello);

@@ -1346,6 +1346,22 @@ def test_unpinning_saves_the_rest() -> None:
     )
 
 
+def test_only_the_page_on_screen_can_be_reached() -> None:
+    """Le pagine accanto sono fuori schermo ma nel documento: il Tab della
+    tastiera fisica e chi legge lo schermo ci finivano dentro. Tutte `inert`
+    tranne quella che si guarda, fisse comprese."""
+    _run(
+        "const raggiungibili = () => pista.children.filter((p) => !p.inert);\n"
+        "assert.deepEqual(raggiungibili(), [pannelloChat]);\n"
+        "pagine.vaiAId('impostazioni');\n"
+        "assert.deepEqual(raggiungibili(), [pannelloImpostazioni]);\n"
+        "pagine.vaiAId('p1');\n"
+        "assert.deepEqual(raggiungibili(), [pagine.pannelloDi(I('p1'))]);\n"
+        "assert.equal(pannelloChat.inert, true);\n",
+        UNA,
+    )
+
+
 def test_a_refused_write_says_so_and_changes_nothing() -> None:
     """Un salvataggio rifiutato saliva a chi chiamava, e nessuno lo prendeva:
     «Metti come pagina» e «Togli» fallivano in silenzio. Ora lo dice un
