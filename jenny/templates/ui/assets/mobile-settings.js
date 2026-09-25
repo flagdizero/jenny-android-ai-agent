@@ -25,13 +25,6 @@ import { runSnapshotRestore } from './shared/backup-flow.js';
 // parsimonioso al più affamato.
 const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
 
-/* Quante righe mostra la scheda «I file veri» prima di contare il resto.
-   Non e' estetica: alla radice di un workspace vissuto ci sono decine di voci,
-   e un elenco lungo dentro una scheda rifa' esattamente il difetto che questo
-   giro ha tolto dalla storia locale — duecento righe che rispondono a una
-   domanda che nessuno ha fatto. Quel che avanza si conta in una riga, e il
-   gestore file e' li' sotto. */
-
 /* I quattro cassetti dell'officina, e cosa contiene ognuno.
  *
  * **Una tabella e non undici `if`.** Prima le sezioni erano un elenco dentro
@@ -399,11 +392,6 @@ export class SettingsController {
     </div>`;
   }
 
-  /* Le viste che prima erano sul dock. Senza queste righe il passaggio a
-     quattro voci le lascerebbe vive e irraggiungibili — che e' il modo piu'
-     silenzioso di perdere una schermata. Spariranno una alla volta, quando il
-     cassetto che le ospita avra' la sua riga vera (workspace dentro Memoria,
-     app dentro Mani). */
   /** Un gruppo: una soprascritta fuori, e sotto una scheda **aperta**.
    *
    *  Era una fisarmonica — testa cliccabile, chevron, corpo chiuso di
@@ -471,9 +459,9 @@ export class SettingsController {
     const power = (d && d.power) || {};
     const current = power.keep_awake || 'turns';
     const modes = power.modes || KEEP_AWAKE_CHOICES;
-    /* A segmenti e non a tendina. Il criterio e' gia' scritto nel codice (v.
-       `_renderLanguage`): a segmenti quando le voci stanno in riga, a tendina
-       quando non ci stanno. Tre voci ci stanno — ma solo accorciate: «Solo
+    /* A segmenti e non a tendina. Il criterio: a segmenti quando le voci
+       stanno in riga, a tendina quando non ci stanno. Tre voci ci stanno — ma
+       solo accorciate: «Solo
        mentre lavora (consigliato)» in un terzo di 590 px non entra. Il testo
        lungo, «(consigliato)» compreso, resta nel `title` di ogni bottone,
        quindi la raccomandazione non si perde: cambia dove si legge. */

@@ -613,25 +613,6 @@ export class LauncherController {
   }
 
 
-  /** La riga «Gestisci» (6.1, D4): il foglio lancia, la scheda gestisce.
-   *
-   *  `switchMode('apps')` chiude già il foglio da sé (1.5), e da lì si passa
-   *  sempre: verificato con un tocco vero. La chiusura esplicita qui **non è**
-   *  quindi la correzione di un difetto osservato — è la guardia sull'unico
-   *  modo in cui quella catena si spezza: `switchMode` esce subito se il modo
-   *  richiesto è già quello corrente, e allora il foglio resterebbe aperto
-   *  sopra la scheda che avrebbe dovuto mostrare — un overlay orfano, cioè
-   *  precisamente ciò che 6.1 chiede di escludere.
-   *
-   *  Oggi quel caso non si raggiunge: il pulsante che apre il foglio sta in
-   *  `#input-bar`, che vive dentro `#view-chat`, quindi il modo corrente
-   *  all'apertura è sempre `chat`. È una coincidenza di *dove sta un pulsante*,
-   *  però, non una proprietà del cassetto — e il piano stesso lascia aperta la
-   *  possibilità di aprirlo da altrove (v. la decisione sul dock). Chiudere
-   *  prima costa una riga ed è idempotente: quando la catena normale funziona,
-   *  la chiusura dentro `switchMode` diventa un giro a vuoto.
-   */
-
   /** «Riprova» dell'avviso di 6.2.
    *
    *  Il pulsante si spegne finché non arriva una risposta: senza, un tocco su

@@ -120,7 +120,6 @@ class MobileApp {
 
     // Load i18n and update sidebar
     i18n.load(i18n.locale).then(() => {
-      this._updateSidebarTitles();
       this._applyStaticTranslations();
       this.header._refreshTitles();
       // Il chip dello scope scrive il proprio testo da JS, quindi
@@ -285,20 +284,6 @@ class MobileApp {
     this._initKeyboardShortcuts();
 
     console.log('Mobile app initialized');
-  }
-
-  _updateSidebarTitles() {
-    const titleMap = {
-      'chat': 'nav.chat',
-      'workspace': 'nav.workspace',
-      'apps': 'nav.apps',
-      'settings': 'nav.settings',
-      'onboarding': 'nav.onboarding',
-    };
-    document.querySelectorAll('.dock-item[data-mode]').forEach(item => {
-      const key = titleMap[item.dataset.mode];
-      if (key) item.title = i18n.t(key);
-    });
   }
 
   _applyStaticTranslations() {
@@ -614,7 +599,7 @@ class MobileApp {
     // comunque scriverebbe nella entry corrente una vista che non è a schermo.
     if (this.currentMode !== 'chat') return;
     this._navPos = 0;
-    this.replaceNav(this._navStateFor('chat', null, null));
+    this.replaceNav(this._navStateFor('chat'));
   }
 
   /* La chat è la vista a schermo? Lo chiede il guscio nativo al rientro in
@@ -639,7 +624,7 @@ class MobileApp {
     this.switchMode('chat', false);
     if (this.currentMode !== 'chat') return false;
     this._navPos = 0;
-    this.replaceNav(this._navStateFor('chat', null, null));
+    this.replaceNav(this._navStateFor('chat'));
     return true;
   }
 
@@ -656,7 +641,7 @@ class MobileApp {
     }
     if (!fallbackMode || fallbackMode === this.currentMode) return;
     this.switchMode(fallbackMode, false);
-    this.replaceNav(this._navStateFor(fallbackMode, null, null));
+    this.replaceNav(this._navStateFor(fallbackMode));
   }
 
   // Un'app di sistema è stata installata o disinstallata (kind: 'added' |
@@ -795,13 +780,13 @@ class MobileApp {
        ha modo di sapere quale vista è a schermo (le viste si mostrano con un
        `display` inline, non con una classe che risalga). Gancio generale, non
        un caso speciale: la prima cosa che ne ha bisogno è la mascotte, v.
-       `:root.mode-apps .jenny-duo` in mobile-style.css.
+       `:root.mode-chat .jenny-duo` in mobile-style.css.
 
        **Va scritta qui, accanto al `display`, e non in fondo al metodo.** Sta
        piu' in basso fino al 22/09/2026, cioe' *dopo* `activate()`, e per la
        chat quella distanza e' un difetto: il suo scroller **e' il documento**,
-       e il documento scorre solo sotto `:root.mode-chat`
-       (`mobile-style.css:1617`). Entrando in chat, `activate()` misurava e
+       e il documento scorre solo sotto `:root.mode-chat { overflow-y: auto }`
+       (mobile-style.css). Entrando in chat, `activate()` misurava e
        correggeva lo scroll di una pagina che in quell'istante non era ancora
        scorrevole; poi la classe arrivava e la posizione era quella sbagliata.
        Si vedeva a intermittenza, e in due modi che sembravano scollegati: la
@@ -859,10 +844,6 @@ class MobileApp {
       .filter(el => el.style.display !== 'none' && !el.classList.contains('nav-disabled'))
       .map(el => el.dataset.mode);
   }
-
-  // Walk up from `target` to `boundary` looking for a horizontally scrollable
-  // ancestor that can still scroll in the gesture direction. If found, the
-  // gesture belongs to that scroller (native scroll), not to tab navigation.
 
   // Global horizontal swipe on the content area to move between dock tabs.
   // The current view follows the finger (damped) as an affordance; on release
