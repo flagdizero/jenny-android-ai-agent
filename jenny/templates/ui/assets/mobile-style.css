@@ -2820,18 +2820,23 @@ body {
 .app-frame-overlay iframe { flex: 1; width: 100%; border: 0; background: transparent; }
 /* Fascia d'errore di un sub-frame che non ha caricato. Sta *sotto* l'header e
    sopra l'iframe: il riquadro bianco resta visibile (è l'informazione che
-   l'utente sta già guardando), ma smette di essere l'unica cosa che dice. */
+   l'utente sta già guardando), ma smette di essere l'unica cosa che dice.
+   I colori vengono dai token del tema: `--danger`, `--danger-bg` e `--code-bg`,
+   che c'erano scritti prima, non li definisce nessuno, e valevano sempre i
+   ripieghi fissi — lo stesso rosso e lo stesso grigio in tutti e sette i temi.
+   Il fondo e' l'errore del tema al 12%, la stessa dose del ripiego di prima;
+   il codice ha il fondo del codice in linea della chat (`--surface-2`). */
 .app-frame-error {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 10px 14px;
-  background: var(--danger-bg, rgba(220, 80, 80, 0.12));
+  background: color-mix(in srgb, var(--error) 12%, transparent);
   border-bottom: 1px solid var(--border);
   color: var(--text); font-size: 13px; line-height: 1.4;
 }
-.app-frame-error i { flex: none; margin-top: 1px; color: var(--danger, #d85050); }
+.app-frame-error i { flex: none; margin-top: 1px; color: var(--error); }
 .app-frame-error code {
   font-size: 12px; word-break: break-all;
-  background: var(--code-bg, rgba(127, 127, 127, 0.14));
+  background: var(--surface-2);
   padding: 1px 4px; border-radius: 3px;
 }
 
@@ -4293,12 +4298,14 @@ body {
   color: var(--text-muted);
 }
 
+/* L'errore del tema, non un rosso fisso: `--danger` non lo definisce
+   nessuno, e qui valeva sempre il ripiego #e5484d. */
 .settings-notice-strong {
-  border-left-color: var(--danger, #e5484d);
+  border-left-color: var(--error);
 }
 
 .settings-notice-strong i {
-  color: var(--danger, #e5484d);
+  color: var(--error);
 }
 
 .settings-notice-path {
