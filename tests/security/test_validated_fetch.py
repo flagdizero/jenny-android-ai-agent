@@ -164,3 +164,21 @@ async def test_the_body_cap_is_enforced_while_reading() -> None:
         async with open_validated_stream(client, "https://pub.example/a", validate=_allow_public) as (resp, _):
             with pytest.raises(ValueError, match="too big"):
                 await read_capped(resp, 10, "too big")
+
+
+
+async def test_a_malformed_location_is_an_http_error_every_caller_catches() -> None:
+    """Un ``Location`` scritto male (``http://[::1``) non arriva al nostro
+    ``join``: httpx lo scarta già costruendo la richiesta di redirect e solleva
+    ``RemoteProtocolError``, che è un ``httpx.HTTPError``. I quattro chiamanti
+    (manifest, APK, ``download_file``, immagini remote) catturano proprio
+    quello. Da solo, ``httpx.URL.join`` solleverebbe ``InvalidURL``, che non
+    catturerebbe nessuno: se httpx smettesse di intercettarlo prima, questo
+    test se ne accorge."""
+    seen: list[str] = []
+    client = _client({"https://pub.example/a": _redirect("http://[::1")}, seen)
+    async with client:
+        with pytest.raises(httpx.HTTPError):
+            async with open_validated_stream(client, "https://pub.example/a", validate=_allow_public):
+                pass
+    assert seen == ["https://pub.example/a"]
