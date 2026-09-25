@@ -1,7 +1,7 @@
 /** View Title Controller — in-content view headings and actions.
  *
  * Replaces the old fixed 40px header: each view owns a `.view-title-mount`
- * (index.html) where the big scrolling-style title and its action buttons
+ * (officina.html) where the big scrolling-style title and its action buttons
  * are rendered. Only onboarding has no mount: la chat ne ha uno dal
  * 21/09/2026 — v. `chat` in `modeConfigs`.
  */
@@ -52,10 +52,10 @@ function cassetto(nome) {
 
 /** L'intestazione della Console — la chat dell'officina.
  *
- *  E' quella della casa, con le due differenze volute: niente soprascritta (la
- *  vista sta gia' dentro l'officina, e dirglielo di nuovo non aggiunge niente)
- *  e il nome e' «Console», la stessa stringa che la barra in fondo mostra gia'
- *  — una parola sola per due posti, cosi' non possono divergere.
+ *  Quella di un cassetto senza soprascritta ne' sottotitolo (la vista sta gia'
+ *  dentro l'officina, e dirglielo di nuovo non aggiunge niente), e il nome e'
+ *  «Console», la stessa stringa della voce del dock (`nav.console` in
+ *  officina.html) — una parola sola per due posti, cosi' non possono divergere.
  *
  *  Come `cassetto`, e' una funzione perche' si ricostruisce intera a ogni
  *  cambio di lingua: riassegnare il solo titolo lasciava il pill con la
@@ -65,6 +65,30 @@ function consolle() {
   return {
     title: i18n.t('nav.console'),
     actions: [pillCasa()],
+  };
+}
+
+/* Le due viste rimaste fuori dai cassetti. Funzioni per la stessa ragione di
+   `consolle`: nel costruttore `i18n.load()` non e' ancora tornato, e i titoli
+   delle azioni (che sono tooltip ed etichetta per il lettore di schermo)
+   restavano le chiavi grezze — `_refreshTitles` riscriveva solo `title`. */
+
+/* Questa vista e' **un file aperto**, da quando l'esploratore e' una scheda
+   di Memoria. «Aggiorna» qui non aggiornava gia' niente (il ramo usciva subito
+   in modalita' editor) e «nuovo» crea file nella cartella che si sta
+   guardando, che ora si guarda altrove: il bottone e' andato accanto alle
+   briciole, dentro la scheda. Resta la freccia indietro. */
+function fileAperto() {
+  return {
+    title: i18n.t('nav.workspace'),
+    actions: [{ icon: 'ti-arrow-left', title: i18n.t('header.back'), action: 'ws-back' }],
+  };
+}
+
+function impostazioni() {
+  return {
+    title: i18n.t('nav.settings'),
+    actions: [{ icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' }],
   };
 }
 
@@ -78,29 +102,10 @@ export class ViewTitleController {
          dal bordo dello schermo: nessun titolo, e nessuna via verso casa che
          non passasse da un altro cassetto. V. `consolle()`. */
       chat: consolle(),
-      apps: {
-        title: i18n.t('nav.apps'),
-        actions: [
-          { icon: 'ti-eye-off', title: i18n.t('header.showHiddenApps'), action: 'toggle-hidden' }
-        ]
-      },
-      /* Questa vista e' **un file aperto**, da quando l'esploratore e' una
-         scheda di Memoria. «Aggiorna» qui non aggiornava gia' niente (il ramo
-         usciva subito in modalita' editor) e «nuovo» crea file nella cartella
-         che si sta guardando, che ora si guarda altrove: il bottone e' andato
-         accanto alle briciole, dentro la scheda. Resta la freccia indietro. */
-      workspace: {
-        title: i18n.t('nav.workspace'),
-        actions: [
-          { icon: 'ti-arrow-left', title: i18n.t('header.back'), action: 'ws-back' },
-        ]
-      },
-      settings: {
-        title: i18n.t('nav.settings'),
-        actions: [
-          { icon: 'ti-refresh', title: i18n.t('header.refresh'), action: 'refresh' }
-        ]
-      },
+      /* Qui c'era anche `apps`, la scheda uscita il 21/09/2026 col suo
+         «mostra app nascoste»: nessun modo la raggiunge piu'. */
+      workspace: fileAperto(),
+      settings: impostazioni(),
       /* I tre cassetti. Stessa vista e stesso mount (`title-settings`, via
          `VISTA_DI`), titolo e sottotitolo diversi.
 
@@ -119,9 +124,8 @@ export class ViewTitleController {
     /* Intera, non il solo titolo: il pill porta una parola visibile, e
        riassegnare `title` lasciava quella com'era al caricamento del file. */
     this.modeConfigs.chat = consolle();
-    this.modeConfigs.apps.title = i18n.t('nav.apps');
-    this.modeConfigs.workspace.title = i18n.t('nav.workspace');
-    this.modeConfigs.settings.title = i18n.t('nav.settings');
+    this.modeConfigs.workspace = fileAperto();
+    this.modeConfigs.settings = impostazioni();
     /* I tre cassetti hanno tre stringhe a testa (soprascritta, nome,
        sottotitolo) piu' il pill: si ricostruiscono interi invece di
        riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */

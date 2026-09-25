@@ -58,7 +58,6 @@ export class JennyCompanion extends JennyMascot {
   _buildDom() {
     this.scrim = document.createElement('button');
     this.scrim.className = 'jenny-scrim';
-    this.scrim.setAttribute('aria-label', i18n.t('jenny.closeMinichat'));
     this.scrim.addEventListener('click', () => this._setOut(false));
 
     this.mc = document.createElement('div');
@@ -69,10 +68,9 @@ export class JennyCompanion extends JennyMascot {
       <div class="jenny-mc-think">…</div>
       <form class="jenny-mc-ask compose-row">
         <div class="compose-pill">
-          <input class="jenny-mc-input" type="text" placeholder="${i18n.t('jenny.askHere')}"
-                 autocomplete="off" aria-label="${i18n.t('jenny.askJenny')}">
+          <input class="jenny-mc-input" type="text" autocomplete="off">
         </div>
-        <button class="jenny-mc-send compose-send" type="submit" aria-label="${i18n.t('jenny.send')}" disabled>
+        <button class="jenny-mc-send compose-send" type="submit" disabled>
           <i class="ti ti-arrow-up"></i>
         </button>
       </form>`;
@@ -92,12 +90,21 @@ export class JennyCompanion extends JennyMascot {
       this.sendBtn.disabled = !this.input.value.trim();
     });
 
-    // Stesso placeholder (e stessa lingua) della chat vera.
-    const syncPlaceholder = () => {
+    /* Le parole si scrivono adesso e di nuovo quando arrivano le traduzioni:
+       questo costruttore gira prima di `i18n.load()` (v. il costruttore di
+       MobileApp), e fino ad allora `i18n.t` torna le chiavi grezze. Prima si
+       rileggeva solo il placeholder, e scrim, campo e invio restavano con
+       «jenny.send» come etichetta per il lettore di schermo. */
+    const traduci = () => {
+      this.scrim.setAttribute('aria-label', i18n.t('jenny.closeMinichat'));
+      this.input.setAttribute('aria-label', i18n.t('jenny.askJenny'));
+      this.sendBtn.setAttribute('aria-label', i18n.t('jenny.send'));
+      // Stesso placeholder (e stessa lingua) della chat vera.
       const t = i18n.t('chat.placeholder');
-      if (t && t !== 'chat.placeholder') this.input.placeholder = t;
+      this.input.placeholder = t && t !== 'chat.placeholder' ? t : i18n.t('jenny.askHere');
     };
-    i18n.load(i18n.locale).then(syncPlaceholder).catch(() => {});
+    traduci();
+    i18n.load(i18n.locale).then(traduci).catch(() => {});
   }
 
   /* ── Modalità vista ── */

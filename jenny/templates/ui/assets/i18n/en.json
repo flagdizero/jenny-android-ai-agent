@@ -593,8 +593,7 @@
   },
   "header": {
     "back": "Back",
-    "refresh": "Refresh",
-    "showHiddenApps": "Show hidden apps"
+    "refresh": "Refresh"
   },
   "jenny": {
     "closeMinichat": "Close minichat",

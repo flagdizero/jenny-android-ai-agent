@@ -593,8 +593,7 @@
   },
   "header": {
     "back": "Indietro",
-    "refresh": "Aggiorna",
-    "showHiddenApps": "Mostra app nascoste"
+    "refresh": "Aggiorna"
   },
   "jenny": {
     "closeMinichat": "Chiudi la minichat",
