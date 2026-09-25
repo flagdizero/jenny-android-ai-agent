@@ -335,10 +335,27 @@ async def test_deleting_a_notebook_takes_its_page(env, monkeypatch) -> None:
         {"id": "p1", "kind": "conversazione", "ref": "project:piante"},
         {"id": "p2", "kind": "app", "ref": "piante"},
     ])
-    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None,
+                          get_cron_service=lambda: None)
     await commands.project_delete(ctx, {"name": "piante"})
 
     assert [p["id"] for p in _pagine_su_disco(env)] == ["p2"]
+
+
+async def test_deleting_a_notebook_turns_its_cron_jobs_off(env, monkeypatch) -> None:
+    """Deciso il 25/09/2026: spenti, non cancellati. Al primo scatto un job rimasto
+    acceso ricreerebbe una chat sotto un nome ormai libero."""
+    from jenny.webui import commands
+    from jenny.webui import project_delete as modulo
+
+    monkeypatch.setattr(modulo, "delete_project", lambda **kw: {"name": kw["name"]})
+    spenti: list[str] = []
+    cron = SimpleNamespace(disable_session_jobs=lambda key: spenti.append(key) or 1)
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None,
+                          get_cron_service=lambda: cron)
+    await commands.project_delete(ctx, {"name": "piante"})
+
+    assert spenti == ["project:piante"]
 
 
 async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch) -> None:
@@ -351,7 +368,8 @@ async def test_a_refused_notebook_delete_leaves_the_pages_alone(env, monkeypatch
 
     monkeypatch.setattr(modulo, "delete_project", _rifiuta)
     await _con_pagine(env, [{"id": "p1", "kind": "conversazione", "ref": "project:piante"}])
-    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None)
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace, invalidate_session=lambda k: None,
+                          get_cron_service=lambda: None)
     with pytest.raises(CommandError):
         await commands.project_delete(ctx, {"name": "piante"})
 

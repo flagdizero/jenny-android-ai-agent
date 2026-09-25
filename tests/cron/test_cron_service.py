@@ -938,3 +938,72 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
         next_run = j["state"]["nextRunAtMs"]
         assert next_run is not None
         assert next_run > now_ms, f"Job '{j['name']}' next_run should be in the future"
+
+
+# ── I job che seguono un quaderno (seconda revisione, 25/09/2026) ───────────
+#
+# Un job creato dentro un quaderno porta la sua chiave in ``session_key`` e in
+# ``origin_chat_id``. Senza questi due metodi il rinomino lo lasciava sul nome
+# vecchio e la cancellazione lo lasciava acceso: al primo scatto, in entrambi i
+# casi, una sessione nuova sotto un nome senza cartella.
+
+
+def _add_project_job(service: CronService, name: str, key: str) -> CronJob:
+    return service.add_job(
+        name=name,
+        schedule=CronSchedule(kind="every", every_ms=3_600_000),
+        message="controlla",
+        session_key=key,
+        origin_channel="websocket",
+        origin_chat_id=key,
+    )
+
+
+@pytest.mark.parametrize("running", [True, False])
+async def test_a_renamed_notebook_takes_its_jobs_along(tmp_path, running) -> None:
+    """Avviato salva ``jobs.json``, fermo accoda al giornale: si prova su tutti e due."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    if running:
+        await service.start()
+    try:
+        mio = _add_project_job(service, "mio", "project:viaggio")
+        altro = _add_project_job(service, "altro", "project:orto")
+
+        assert service.retarget_session("project:viaggio", "project:viaggi") == 1
+
+        riletto = CronService(tmp_path / "cron" / "jobs.json")
+        jobs = {j.id: j for j in riletto.list_jobs(include_disabled=True)}
+        assert (jobs[mio.id].payload.session_key, jobs[mio.id].payload.origin_chat_id) == (
+            "project:viaggi", "project:viaggi",
+        )
+        assert jobs[altro.id].payload.session_key == "project:orto"
+    finally:
+        if running:
+            service.stop()
+
+
+async def test_a_deleted_notebook_leaves_its_jobs_off_with_the_reason(tmp_path) -> None:
+    """Spenti, non cancellati: il testo che l'utente aveva affidato resta, col motivo."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    await service.start()
+    try:
+        mio = _add_project_job(service, "mio", "project:viaggio")
+        altro = _add_project_job(service, "altro", "project:orto")
+
+        assert service.disable_session_jobs("project:viaggio") == 1
+
+        jobs = {j.id: j for j in service.list_jobs(include_disabled=True)}
+        spento = jobs[mio.id]
+        assert spento.enabled is False and spento.state.next_run_at_ms is None
+        assert spento.state.last_error == "the notebook this job belonged to was deleted"
+        assert spento.payload.message == "controlla"
+        assert jobs[altro.id].enabled is True
+    finally:
+        service.stop()
+
+
+def test_nothing_to_follow_touches_nothing(tmp_path) -> None:
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    assert service.retarget_session("project:viaggio", "project:viaggi") == 0
+    assert service.disable_session_jobs("project:viaggio") == 0
+    assert not (tmp_path / "cron" / "action.jsonl").exists()

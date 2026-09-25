@@ -18,7 +18,7 @@ from jenny.webui.commands import CommandContext, CommandError
 
 
 def _ctx(tmp_path: Path) -> CommandContext:
-    return CommandContext(get_workspace_root=lambda: tmp_path, invalidate_session=lambda _key: None, busy_session_keys=lambda: ())
+    return CommandContext(get_workspace_root=lambda: tmp_path, invalidate_session=lambda _key: None, busy_session_keys=lambda: (), get_cron_service=lambda: None)
 
 
 # ---------------------------------------------------------------------------

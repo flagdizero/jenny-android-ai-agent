@@ -258,7 +258,7 @@ async def test_a_pinned_notebook_page_follows_the_new_name(workspace, config, mo
         {"id": "q2", "kind": "conversazione", "ref": "project:altro"},
     ])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          busy_session_keys=lambda: ())
+                          busy_session_keys=lambda: (), get_cron_service=lambda: None)
     await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
 
     assert [(p["id"], p["ref"]) for p in _pagine(config)] == [
@@ -279,7 +279,7 @@ async def test_a_refused_rename_leaves_the_pages_alone(workspace, config, monkey
     monkeypatch.setattr(modulo, "rename_project", _rifiuta)
     await _con_pagine([{"id": "q1", "kind": "conversazione", "ref": f"project:{VECCHIO}"}])
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          busy_session_keys=lambda: ())
+                          busy_session_keys=lambda: (), get_cron_service=lambda: None)
     with pytest.raises(CommandError):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
     assert _pagine(config)[0]["ref"] == f"project:{VECCHIO}"
@@ -290,7 +290,7 @@ async def test_the_command_refuses_a_bad_name_before_any_thread(workspace, confi
     from jenny.webui.commands import CommandError
 
     ctx = SimpleNamespace(get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
-                          busy_session_keys=lambda: ())
+                          busy_session_keys=lambda: (), get_cron_service=lambda: None)
     with pytest.raises(CommandError, match="invalid new name"):
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": "Ricerca ETF"})
 
@@ -317,6 +317,35 @@ async def test_the_command_refuses_while_a_turn_is_running_there(
         await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
     assert err.value.code == "conflict"
     assert toccato == []
+
+
+async def test_the_notebooks_cron_jobs_follow_a_rename_and_only_a_rename(
+    workspace, config, monkeypatch
+) -> None:
+    """Un job creato nel quaderno porta la sua chiave: a rinomino riuscito passa al
+    nome nuovo, a rinomino rifiutato non si tocca."""
+    from jenny.webui import commands
+    from jenny.webui import project_rename as modulo
+    from jenny.webui.commands import CommandError
+
+    spostati: list[tuple[str, str]] = []
+    cron = SimpleNamespace(retarget_session=lambda old, new: spostati.append((old, new)) or 1)
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: workspace, invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (), get_cron_service=lambda: cron,
+    )
+
+    def _rifiuta(**kw):
+        raise modulo.ProjectRenameError("a folder named viaggi already exists")
+
+    monkeypatch.setattr(modulo, "rename_project", _rifiuta)
+    with pytest.raises(CommandError):
+        await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+    assert spostati == []
+
+    monkeypatch.setattr(modulo, "rename_project", lambda **kw: {"new_name": kw["new_name"]})
+    await commands.project_rename(ctx, {"name": VECCHIO, "new_name": NUOVO})
+    assert spostati == [(f"project:{VECCHIO}", f"project:{NUOVO}")]
 
 
 def test_the_command_is_registered() -> None:

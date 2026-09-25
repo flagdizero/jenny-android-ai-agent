@@ -1223,6 +1223,80 @@ class CronService:
         logger.info("Cron: added job '{}' ({})", name, job.id)
         return job
 
+    # -- i job che seguono una conversazione di progetto -------------------------
+
+    _DELETED_NOTEBOOK_REASON = "the notebook this job belonged to was deleted"
+
+    def retarget_session(self, old_key: str, new_key: str) -> int:
+        """I job legati a *old_key* passano a *new_key*. Torna quanti.
+
+        Un job creato dentro un quaderno salva la sua chiave (``session_key``) e
+        la chat d'origine (``origin_chat_id``), entrambe ``project:<nome>``. Il
+        rinomino del quaderno sposta cartella e chat ma non il job, che al primo
+        scatto ricreerebbe sessione e trascrizione sotto il nome vecchio, senza
+        cartella. Lo chiama ``project.rename`` a rinomino riuscito.
+        """
+
+        def _sposta(job: CronJob) -> None:
+            if job.payload.session_key == old_key:
+                job.payload.session_key = new_key
+            if job.payload.origin_chat_id == old_key:
+                job.payload.origin_chat_id = new_key
+
+        return self._rewrite_session_jobs(old_key, _sposta, "retargeted to " + new_key)
+
+    def disable_session_jobs(self, session_key: str) -> int:
+        """Spegne i job legati a *session_key*, dicendo perche'. Torna quanti.
+
+        Per un quaderno cancellato: al primo scatto il suo job ricreerebbe una
+        sessione sotto un nome ormai libero, che il prossimo quaderno con quel
+        nome si riprenderebbe. Spento e non cancellato (deciso il 25/09/2026): il
+        job resta nell'elenco con il motivo, e il testo che l'utente gli aveva
+        affidato non sparisce senza che l'abbia chiesto.
+        """
+
+        def _spegni(job: CronJob) -> None:
+            job.enabled = False
+            job.state.next_run_at_ms = None
+            job.state.last_status = "error"
+            job.state.last_error = self._DELETED_NOTEBOOK_REASON
+
+        return self._rewrite_session_jobs(session_key, _spegni, "disabled")
+
+    def _rewrite_session_jobs(
+        self, session_key: str, change: Callable[[CronJob], None], what: str
+    ) -> int:
+        """Applica *change* ai job di agente legati a *session_key*, e li salva.
+
+        Salva come ``add_job``: a servizio avviato ``jobs.json``, a servizio fermo
+        il giornale, dove ogni riga che non e' ``del`` e' un upsert del job intero.
+        """
+        store = self._load_store()
+        if store is None:
+            raise self._corrupt_store_error()
+        toccati = [
+            job for job in store.jobs
+            if job.payload.kind == "agent_turn"
+            and session_key in (job.payload.session_key, job.payload.origin_chat_id)
+        ]
+        if not toccati:
+            return 0
+        now = _now_ms()
+        for job in toccati:
+            change(job)
+            job.updated_at_ms = max(job.updated_at_ms, now)
+        if self._running:
+            self._save_store()
+            self._arm_timer()
+        else:
+            for job in toccati:
+                self._append_action("add", asdict(job))
+        logger.info(
+            "Cron: {} job(s) of {} {}: {}",
+            len(toccati), session_key, what, ", ".join(j.id for j in toccati),
+        )
+        return len(toccati)
+
     def register_system_job(self, job: CronJob) -> CronJob:
         """Register an internal system job (idempotent on restart)."""
         store = self._load_store()
