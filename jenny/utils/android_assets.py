@@ -706,6 +706,49 @@ def retire_withdrawn_templates(dest: Path) -> list[str]:
     return rewritten
 
 
+#: I suffissi del codice della WebUI: gli stessi che ``ws_http`` serve dai byte
+#: canonici del package. Solo questi si ritirano da ``ui/``.
+_UI_CODE_SUFFIXES = (".html", ".js", ".css")
+
+
+def retire_withdrawn_ui_files(ui_dir: Path) -> list[str]:
+    """Toglie da ``workspace/ui`` il codice della WebUI che il package non spedisce piu'.
+
+    ``extract_package_dir`` scrive i file del manifest e non cancella mai niente:
+    un file rinominato o tolto restava sul disco con il nome vecchio, e il
+    gateway lo serviva ancora, perche' ``_serve_static`` ricade sul disco per
+    tutto cio' che il manifest non conosce. Misurato sul Titan 2 il 25/09/2026,
+    dopo il rinomino in inglese: ``officina.html`` e i ``casa-*.js`` erano ancora
+    li', e ``/html-mobile/officina.html`` rispondeva con l'officina di prima
+    sopra i moduli di adesso.
+
+    Il perimetro e' stretto di proposito: solo HTML, JS e CSS, cioe' codice
+    nostro che fuori dal manifest non ha motivo di esistere; font, immagini e
+    qualunque altra cosa restano. Un symlink non si segue e non si toglie.
+    ``ui/`` non e' una cartella dell'utente (``workspace_files`` la nasconde),
+    quindi non c'e' niente di suo da salvare.
+    """
+    if not ui_dir.is_dir():
+        return []
+    shipped = set(_UI_MANIFEST)
+    removed: list[str] = []
+    for path in sorted(ui_dir.rglob("*")):
+        if path.suffix not in _UI_CODE_SUFFIXES or path.is_symlink() or not path.is_file():
+            continue
+        rel = path.relative_to(ui_dir).as_posix()
+        if rel in shipped:
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            logger.opt(exception=True).warning("Withdrawn UI file not removed: {}", rel)
+            continue
+        removed.append(rel)
+    if removed:
+        logger.info("Removed {} withdrawn UI files: {}", len(removed), ", ".join(removed))
+    return removed
+
+
 _JENNY_SRC_KEY = "jenny_src"
 
 

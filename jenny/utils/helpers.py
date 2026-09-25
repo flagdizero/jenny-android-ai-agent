@@ -804,6 +804,14 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     # Extract UI assets into workspace/ui/
     n_ui = extract_package_dir("jenny.templates.ui", workspace / "ui")
     added.append(f"ui/ ({n_ui} files)")
+    # Il codice che il package non spedisce piu' (un file rinominato lascia la
+    # copia col nome vecchio, e il gateway la servirebbe ancora).
+    from jenny.utils.android_assets import retire_withdrawn_ui_files
+
+    try:
+        retire_withdrawn_ui_files(workspace / "ui")
+    except Exception:  # noqa: BLE001 — una pulizia mancata non ferma la sync
+        logger.opt(exception=True).error("Could not remove withdrawn UI files")
 
     # Extract skills/ into workspace/skills
     skills_dest = workspace / "skills"
