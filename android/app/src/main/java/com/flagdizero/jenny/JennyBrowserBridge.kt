@@ -52,6 +52,11 @@ class JennyBrowserBridge(context: Context) {
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
 
+        /** Il cancello di [open]: chi fa partire la pagina e chi ci rinuncia. */
+        private const val GATE_OPEN = 0
+        private const val GATE_LOADING = 1
+        private const val GATE_ABANDONED = 2
+
         /**
          * Le stesse reti di ``jenny/security/network.py::_BLOCKED_NETWORKS``.
          *
@@ -363,15 +368,28 @@ class JennyBrowserBridge(context: Context) {
         // entro il tetto, nessuna pagina e' partita: dirlo, invece di
         // aspettare un caricamento che non c'e' e rispondere "ok" con indirizzo
         // e titolo vuoti.
+        //
+        // Ma un tetto scaduto non ferma il blocco: resta in coda sul main e
+        // gira dopo. Se allora caricasse, la pagina partirebbe dopo che l'agente
+        // ha sentito "non e' partita", e senza recinto — `scopeDomain` e' gia'
+        // `null` e nessuno lo rimette. Il cancello decide **una volta**, per
+        // tutti e due i thread, se il caricamento c'e': il main lo prende prima
+        // di `loadUrl`, questo thread lo chiude prima di dire di no. Chi arriva
+        // secondo si adegua.
+        val gate = AtomicInteger(GATE_OPEN)
         val started = MainHop.call(10_000L, false, TAG) {
             ensureWebViewOnMain()
             val wv = webView ?: return@call false
+            if (!gate.compareAndSet(GATE_OPEN, GATE_LOADING)) return@call false
             loading.set(true)
             lastError.set(null)
             wv.loadUrl(url)
             true
         }
-        if (!started) {
+        // Un "no" che non riesce a chiudere il cancello vuol dire che il blocco
+        // l'ha gia' passato (il tetto e' scaduto a meta' strada): la pagina sta
+        // partendo, e la si aspetta come le altre.
+        if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
             openInFlight.set(false)
             return """{"error":"il browser non si e' aperto: la pagina non e' partita"}"""
         }
