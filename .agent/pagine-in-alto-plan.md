@@ -33,7 +33,7 @@ Oggi la casa ha tre porte nascoste e un indicatore che non si capisce:
 
 L'utente ha scelto una sola struttura (un mockup fuori dal repo, pagina «Quattro pagine»; quel che conta e' scritto qui):
 
-- **L'intestazione è la fila dei nomi delle pagine.** Quella dove sei è grande, in serif; le altre sono piccole, maiuscole e spaziate. Un tocco su un nome ti porta lì, e il gesto di lato resta.
+- **L'intestazione è la fila dei nomi delle pagine.** ~~Quella dove sei è grande, in serif; le altre sono piccole, maiuscole e spaziate.~~ Dal 26/09/2026 sono tutte piccole, maiuscole e spaziate, e quella dove sei è chiara con la riga d'accento sotto (v. «Ritocco del 26/09/2026» in fondo). Un tocco su un nome ti porta lì, e il gesto di lato resta.
 - **Quattro pagine di base: App · Jenny · Quaderni · Impostazioni.** App è il cassetto, Quaderni è la tendina, Impostazioni è «Tu e Jenny». Si parte da Jenny.
 - **L'utente decide le pagine, come gli spazi del Mac:**
   - le aggiunge dalla pressione lunga «Metti come pagina», che esiste già;
@@ -99,7 +99,7 @@ In `casa_routes.py`:
   - I nomi delle fisse vengono dall'i18n.
   - Per `chat` c'è «Jenny», o il nome del quaderno col pallino e il taglio con «…», con una `max-width` perché le altre restino visibili.
   - Per le app appese c'è `nomeDi`.
-- **Quella attiva è grande.** Il passaggio si anima su `transform: scale` e non su `font-size`, che fa scattare il layout. La voce attiva resta sempre in vista, e l'eccesso sfuma a destra con una `mask-image`.
+- ~~**Quella attiva è grande.** Il passaggio si anima su `transform: scale` e non su `font-size`, che fa scattare il layout.~~ Superato il 26/09/2026: la voce attiva ha lo stesso carattere e la stessa taglia delle altre (v. in fondo). La voce attiva resta sempre in vista, e l'eccesso sfuma a destra con una `mask-image`.
 - **I gesti:**
   - il tocco chiama `vaiA`;
   - la pressione lunga (`shared/longpress.js`, 600 ms, con la guardia `dataset.longpress`) apre la modalità ordina.
@@ -252,3 +252,34 @@ l'ho tolta e rimessa per provare la ×.
   e' finita la pastiglia; TalkBack non l'ho provato.
 - `casa-who.js` non ha piu' la forma a tendina. Se un giorno servisse di nuovo
   un elenco a comparsa, e' da rifare, non da riaccendere.
+
+## Ritocco del 26/09/2026: la voce accesa non cambia più carattere
+
+> «il fatto che la pagina selezionata cambia font non mi piace» — l'utente, 26/09/2026.
+
+La voce accesa passava da Inter maiuscolo 11,5px al serif del tema a 28px:
+due caratteri, due casse e due taglie nella stessa fila. E siccome la sua
+larghezza cambiava, a ogni cambio di pagina le altre voci scivolavano di lato.
+(Il `transform: scale` previsto al punto 3 non era mai stato scritto: il
+cambio era su `font-size`, cioè proprio quello che il punto 3 voleva evitare.)
+
+Fra tre proposte disegnate (tutte in maiuscoletto; tutte in serif alla stessa
+taglia; tutte in serif con l'attiva più grande) l'utente ha scelto la prima:
+
+- **tutte le voci nello stesso stile**, piccolo, maiuscolo e spaziato;
+- **quella dove sei** ha `--heading` al posto di `--text-muted` e una riga
+  d'accento di 2px **sotto la parola**, non sul bordo del bottone da 40px;
+- lo spazio e l'ombra della riga ci sono su **tutte** le voci, trasparenti:
+  accenderne una non sposta niente, e la fila sta ferma;
+- il pallino resta di 7px anche sulla voce accesa;
+- `max-width: 62%` resta, per i nomi lunghi delle pagine conversazione.
+
+Solo CSS (`home-style.css`) e commenti: la fila non ha cambiato né classi né
+struttura, e i test di `test_home_strip_client.py` guardano solo chi ha `is-on`.
+
+«Jenny» così perde l'unico serif che aveva nell'intestazione. È voluto.
+
+**Resta aperto:** il secondo problema segnalato lo stesso giorno. Aprire un
+quaderno rinomina la voce «Jenny» col nome del quaderno (`_chatName()` in
+`home-app.js`), e questo non torna: la fila è una mappa di posti, e un posto
+non cambia nome a seconda di cosa ci guardi dentro. È da decidere.

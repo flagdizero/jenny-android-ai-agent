@@ -41,10 +41,13 @@ body.home {
 
 /* ── La fila delle pagine ──
    I nomi delle pagine al posto di titolo, ingranaggio, cassetto e pallini
-   (v. `.agent/pagine-in-alto-plan.md`): quello dove sei e' grande, nel
-   carattere del titolo di prima; gli altri piccoli, maiuscoli e spaziati come
-   l'occhiello che c'era sopra. Costa **una** riga di intestazione, dove prima
-   ce n'erano due in alto e una striscia in basso. */
+   (v. `.agent/pagine-in-alto-plan.md`): tutti piccoli, maiuscoli e spaziati
+   come l'occhiello che c'era sopra, e quello dove sei si distingue solo per
+   il colore e la riga d'accento sotto. Fino al 26/09/2026 era grande, nel
+   carattere del titolo: due caratteri nella stessa fila, e a ogni cambio di
+   pagina le altre voci scivolavano di lato. Con una sola taglia le larghezze
+   non cambiano, e la fila sta ferma. Costa **una** riga di intestazione, dove
+   prima ce n'erano due in alto e una striscia in basso. */
 
 .home-strip {
   flex: none;
@@ -94,7 +97,7 @@ body.home {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  /* 40px: il bersaglio e' alto quanto la voce grande, anche per le piccole. */
+  /* 40px: il bersaglio del dito, piu' alto del testo che porta. */
   min-height: 40px;
   padding: 0;
   border: 0;
@@ -116,17 +119,21 @@ body.home {
      arriva a 64 caratteri, e senza un tetto la fila mostrerebbe solo lui. */
   max-width: 62%;
   color: var(--heading);
-  font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
+/* La riga d'accento sta sotto la parola, non sul bordo del bottone: quello e'
+   alto 40px per il dito, e la riga finirebbe staccata dal testo. Lo spazio e
+   l'ombra ci sono su tutte le voci, trasparenti: accenderne una non sposta
+   niente. */
 .home-strip-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-bottom: 4px;
+  box-shadow: inset 0 -2px 0 transparent;
+}
+.home-strip-entry.is-on .home-strip-name {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .home-strip-dot {
@@ -135,11 +142,6 @@ body.home {
   height: 7px;
   border-radius: 999px;
 }
-.home-strip-entry.is-on .home-strip-dot {
-  width: 10px;
-  height: 10px;
-}
-
 .home-strip-entry:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;

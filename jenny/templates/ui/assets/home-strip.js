@@ -4,7 +4,9 @@
  *  il titolo «Jenny ⌄» con la sua tendina, l'ingranaggio verso «Tu e Jenny», il
  *  bottone del cassetto e la striscia dei pallini. I pallini dicevano quante
  *  pagine c'erano, non che cosa: qui ci sono i nomi, e **quello dove sei e'
- *  grande**. Toccare un nome ci va; il gesto di lato resta.
+ *  acceso** — stesso carattere e stessa taglia degli altri, cambia il colore e
+ *  c'e' la riga d'accento (v. `home-style.css`). Toccare un nome ci va; il
+ *  gesto di lato resta.
  *
  *  **Tenere premuto un nome apre la modalita' ordina**: le pagine diventano
  *  pastiglie che si trascinano, quelle aggiunte hanno la × per toglierle, e
