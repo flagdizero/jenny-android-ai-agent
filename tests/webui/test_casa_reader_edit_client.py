@@ -30,7 +30,9 @@ APP_JS = ASSETS / "casa-app.js"
 
 pytestmark = requires_node
 
-_MEMBERS = ("isDirty", "startEdit", "cancelEdit", "blurEditor", "askCancel", "save", "_onConflict")
+_MEMBERS = (
+    "isDirty", "startEdit", "cancelEdit", "blurEditor", "askCancel", "save", "_save", "_onConflict",
+)
 
 
 def _member(source: str, name: str) -> str:
@@ -245,3 +247,23 @@ def test_the_leave_guard_lives_in_the_single_chokepoint() -> None:
     # E nessun altro la chiede: una seconda guardia altrove e' una guardia che
     # puo' divergere da questa.
     assert src.count("isDirty()") == 1, "isDirty chiesto in piu' di un posto"
+
+
+def test_a_second_tap_on_save_while_the_first_writes_does_nothing() -> None:
+    """Due tocchi, due scritture con lo stesso `base`: la seconda trovava sul
+    disco il testo della prima e tornava `conflict` su una pagina che nessun
+    altro aveva toccato."""
+    _run("""
+      const r = new Lettore();
+      r.startEdit();
+      r.editEl.value = 'nuovo';
+      const primo = r.save();
+      const secondo = r.save();
+      await Promise.all([primo, secondo]);
+      assert.equal(spedite.length, 1, 'due tocchi su Salva, due scritture');
+      /* Finito il primo, Salva torna a funzionare. */
+      r.startEdit();
+      r.editEl.value = 'ancora';
+      await r.save();
+      assert.equal(spedite.length, 2);
+    """)

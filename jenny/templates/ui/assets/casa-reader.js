@@ -189,16 +189,30 @@ export class CasaReader {
    *
    *  Non si fida di quel che ha appena scritto: il reso lo fa il server, ed e'
    *  lui che deve dire com'e' venuta — un titolo nuovo, un wikilink che adesso
-   *  risolve, un frontmatter rotto. */
+   *  risolve, un frontmatter rotto.
+   *
+   *  Un secondo tocco su Salva mentre il primo sta scrivendo non fa niente:
+   *  partiva una seconda scrittura con lo stesso `base`, e il server — che nel
+   *  frattempo aveva gia' il testo nuovo — rispondeva `conflict` su una pagina
+   *  che nessun altro aveva toccato. */
   async save() {
-    if (!this.editing) return;
+    if (!this.editing || this._saving) return;
+    this._saving = true;
+    try {
+      await this._save();
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _save() {
     const content = this.editEl.value;
     const notebook = this.notebook;
     const path = this.path;
     try {
       await rpc.writePage(notebook, path, content, this.raw);
     } catch (err) {
-      console.warn('casa.reader: salvataggio fallito', err?.code || '(no code)', err);
+      console.warn('casa.reader: save failed', err?.code || '(no code)', err);
       if (err?.code === 'conflict') {
         await this._onConflict();
         return;

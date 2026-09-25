@@ -130,10 +130,20 @@ export class CasaAudit {
     if (this.commentEl) this.commentEl.placeholder = i18n.t('casa.audit.placeholder');
   }
 
-  /** Apre il foglio sul testo scelto. */
+  /** Apre il foglio sul testo scelto.
+   *
+   *  L'ancora si controlla **qui**, non solo all'invio: un testo scelto a
+   *  cavallo di un grassetto, o ripetuto nella pagina, non si puo' ancorare,
+   *  e scoprirlo dopo aver scritto il commento vuol dire buttarlo via. Lo si
+   *  dice subito, e il foglio non si apre. */
   open() {
     const selected = String(document.getSelection() || '');
     if (!selected.trim()) return;
+    const spot = offsetsIn(this.reader?.raw, selected);
+    if (!spot.ok) {
+      showToast(i18n.t(`casa.audit.${spot.reason}`), 'error');
+      return;
+    }
     this._selected = selected;
     if (this.quoteEl) this.quoteEl.textContent = selected;
     if (this.commentEl) this.commentEl.value = '';
@@ -145,7 +155,20 @@ export class CasaAudit {
     this.commentEl?.focus();
   }
 
+  /* Un secondo tocco su Invia mentre il primo sta andando non fa niente: ogni
+     invio crea un file, e due tocchi facevano due segnalazioni uguali — e due
+     messaggi in chat. */
   async send() {
+    if (this._sending) return;
+    this._sending = true;
+    try {
+      await this._send();
+    } finally {
+      this._sending = false;
+    }
+  }
+
+  async _send() {
     const comment = (this.commentEl?.value || '').trim();
     if (!comment) {
       showToast(i18n.t('casa.audit.needComment'), 'info');
@@ -166,7 +189,7 @@ export class CasaAudit {
         comment,
       });
     } catch (err) {
-      console.warn('casa.audit: invio fallito', err);
+      console.warn('casa.audit: report not filed', err);
       showToast(i18n.t('casa.audit.failed'), 'error');
       return;
     }

@@ -281,3 +281,90 @@ def test_a_report_that_did_not_leave_without_a_draft_is_left_alone() -> None:
       assert.ok(c.input.value.includes('non va'), c.input.value);
       assert.ok(!c.input.value.endsWith('\\n'), c.input.value);
     """)
+
+
+# ── Il foglio: quando si apre, e un invio solo ──────────────────────────────
+
+_FOGLIO = """
+import assert from 'node:assert/strict';
+
+const avvisi = [];
+function showToast(t, tipo) { avvisi.push([t, tipo]); }
+const i18n = { t: (k) => k };
+let scelto = '';
+const document = {
+  getSelection: () => ({ toString: () => scelto, removeAllRanges() {} }),
+};
+/* `/api/audit/create`: ricorda gli invii, e risponde quando il caso lo lascia. */
+const inviati = [];
+let lascia = null;
+const api = {
+  createAudit(dati) {
+    inviati.push(dati);
+    return new Promise((r) => { lascia = () => r({ id: 'a' + inviati.length }); });
+  },
+};
+__OFFSETS__
+
+class Foglio {
+  constructor(raw) {
+    this.reader = { raw, notebook: 'orto', path: 'semina.md', title: 'Semina', editing: false };
+    this.dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+    this.quoteEl = { textContent: '' };
+    this.commentEl = { value: '', focus() {} };
+    this._selected = '';
+    this.depositate = [];
+    this.onFiled = (s) => this.depositate.push(s);
+  }
+  refresh() {}
+  __OPEN__
+  __SEND__
+  __SEND_BODY__
+}
+"""
+
+
+def _run_foglio(script: str) -> None:
+    src = AUDIT_JS.read_text(encoding="utf-8")
+    harness = (
+        _FOGLIO.replace("__OFFSETS__", function(src, "offsetsIn"))
+        .replace("__OPEN__", member(src, "open", prefixes=()))
+        .replace("__SEND__", _member(src, "send"))
+        .replace("__SEND_BODY__", _member(src, "_send"))
+    )
+    run_js(harness + "\n" + script)
+
+
+def test_an_anchor_that_cannot_hold_is_said_before_the_comment_is_written() -> None:
+    """Il controllo stava solo all'invio: chi sceglieva una frase ripetuta, o
+    a cavallo di un grassetto, scriveva il commento e poi se lo vedeva
+    rifiutare. Ora il foglio non si apre, e l'avviso dice perche'."""
+    _run_foglio("""
+      const f = new Foglio('legare a giugno. E poi: legare a giugno.');
+      scelto = 'legare a giugno';
+      f.open();
+      assert.equal(f.dialog.open, false, 'il foglio si e\\u2019 aperto su un\\u2019ancora ambigua');
+      assert.deepEqual(avvisi, [['casa.audit.ambiguous', 'error']]);
+      scelto = 'E poi';
+      f.open();
+      assert.equal(f.dialog.open, true);
+      assert.equal(f._selected, 'E poi');
+    """)
+
+
+def test_a_second_tap_on_send_files_one_report() -> None:
+    """Ogni invio crea un file: due tocchi facevano due segnalazioni uguali, e
+    due messaggi in chat."""
+    _run_foglio("""
+      const f = new Foglio('legare a giugno.');
+      scelto = 'legare a giugno';
+      f.open();
+      f.commentEl.value = 'e\\u2019 marzo';
+      const primo = f.send();
+      const secondo = f.send();
+      await Promise.resolve();
+      lascia();
+      await Promise.all([primo, secondo]);
+      assert.equal(inviati.length, 1, 'due tocchi su Invia, due segnalazioni');
+      assert.equal(f.depositate.length, 1);
+    """)
