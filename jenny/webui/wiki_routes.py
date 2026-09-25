@@ -315,13 +315,15 @@ class WikiRoutes:
             # impedisce di raggiungere i fratelli raw/ audit/ log/.
             containment_root = wiki_dir
 
-        if not full.is_file():
-            return http_error(404, "file not found")
-
+        # Il contenimento **prima** dell'esistenza: nell'ordine inverso un 404
+        # contro un 403 diceva a chi chiede se un file fuori dalla wiki c'e'.
         # Anche un errore di risoluzione (un loop di symlink) e' un 403: fino al
         # 24/09/2026 usciva come 500, perche' qui si catturava solo ValueError.
         if not is_path_within(full, containment_root):
             return http_error(403, "path escapes wiki root")
+
+        if not full.is_file():
+            return http_error(404, "file not found")
 
         try:
             size = full.stat().st_size

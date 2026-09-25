@@ -177,6 +177,26 @@ async def test_a_symlink_out_of_the_pages_dir_is_refused_by_containment(
     assert response.status_code == 403, response.status_code
 
 
+async def test_containment_answers_the_same_whether_the_file_exists_or_not(
+    handler, due_progetti
+) -> None:
+    """Un link fuori dalla ``wiki/`` e' un 403 **anche** se punta al nulla.
+
+    Nell'ordine di prima — esiste? poi contenuto? — un bersaglio mancante dava
+    404 e uno presente 403: la risposta diceva a chi chiede se un file fuori
+    dalla wiki c'e'.
+    """
+    pages = due_progetti / "wikis" / "etf" / "wiki"
+    fuori = due_progetti / "wikis" / "etf" / "raw"
+    (pages / "c-e.md").symlink_to(fuori / "appunti.md")
+    (pages / "non-c-e.md").symlink_to(fuori / "mai-scritto.md")
+
+    presente = await _call(handler, "/api/page", wiki="etf", page="c-e.md")
+    assente = await _call(handler, "/api/page", wiki="etf", page="non-c-e.md")
+
+    assert (presente.status_code, assente.status_code) == (403, 403)
+
+
 # ── l'asimmetria, messa a verbale ─────────────────────────────────────────
 
 
