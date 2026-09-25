@@ -4,8 +4,9 @@
  *  colonna dell'operatore, alla riga del grafo, c'e' un trattino: il grafo non
  *  resta di la'. Questa e' la sua stanza nuova.
  *
- *  **Disegnato, non portato.** `mobile-graph.js` sono 943 righe, e quasi tutte
- *  sono cose che in casa non esistono: la vista home dove i nodi sono le wiki,
+ *  **Disegnato, non portato.** Il grafo dell'officina (`mobile-graph.js`, 943
+ *  righe, uscito dal repo col ramo della casa) era fatto quasi tutto di
+ *  cose che in casa non esistono: la vista home dove i nodi sono le wiki,
  *  la legenda, il pannello di un nodo, il pescaggio da `window.mobileApp`, la
  *  cronologia di navigazione della SPA. Quel che si riusa e' cio' che vale la
  *  pena riusare — la fisica a forze di D3, e `shared/wiki-search.js`, che e'
@@ -289,7 +290,8 @@ export class CasaMap {
     /* Contatore di generazione: chi esce dalla pagina mentre i 280 kB stanno
        arrivando deve poter dire alla continuazione che non e' piu' il suo
        turno. Il token da solo non basta — e' cieco all'uscita dalla stanza,
-       ed e' la stessa ragione per cui `mobile-graph.js` ne ha due. */
+       ed e' la stessa ragione per cui il vecchio grafo dell'officina ne aveva
+       due. */
     this._gen = 0;
     this._drawn = null;
     /* Vero appena l'utente ha messo le mani sulla mappa: spostata, avvicinata

@@ -1,5 +1,6 @@
-"""Outbound dispatcher: possiede i canali (WebSocket + Telegram) e smista
-i messaggi outbound del bus al canale indicato da ``msg.channel``."""
+"""Outbound dispatcher: possiede i canali (WebSocket, Telegram, la tendina delle
+notifiche e il fumetto della mascotte flottante) e smista i messaggi outbound del
+bus al canale indicato da ``msg.channel``."""
 
 from __future__ import annotations
 

@@ -607,9 +607,6 @@ class ApiClient {
     return this._backupPost('/api/backup/export', { passphrase });
   }
 
-  /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui
-     prepara il container cifrato in staging, e se quel file finisca su disco
-     lo decide il picker SAF, che risponde solo di qua. */
   /* ── Le pagine della casa ────────────────────────────────────────────── */
 
   /** `{schermate, ordine, fisse, max, specie}`. Il tetto arriva dal server e non se lo tiene
@@ -637,6 +634,9 @@ class ApiClient {
     return { ok: body.ok, schermate: body.schermate, ordine: body.ordine };
   }
 
+  /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui
+     prepara il container cifrato in staging, e se quel file finisca su disco
+     lo decide il picker SAF, che risponde solo di qua. */
   async noteBackupExported() {
     const res = await this._fetch('/api/backup/exported');
     if (!res.ok) throw new Error(`Backup record failed: ${res.status}`);

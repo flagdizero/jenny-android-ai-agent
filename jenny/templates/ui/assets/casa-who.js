@@ -37,7 +37,7 @@ export class WhoPanel {
    *  @param personalName funzione che da' il nome della conversazione
    *         personale. **Non** si legge dalla testa: la testa delle stanze
    *         porta il nome del quaderno aperto, e leggerlo di li' farebbe dire
-   *         alla riga personale «piante».
+   *         alla riga personale il nome di un quaderno.
    *  @param currentProject funzione che da' il nome del quaderno aperto, o
    *         `null` se sei nella conversazione personale. E' cio' che decide
    *         dove sta la spunta.

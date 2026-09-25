@@ -164,7 +164,7 @@ def test_every_recorded_croniter_answer_in_a_named_zone_is_reproduced() -> None:
 @pytest.mark.parametrize(
     ("expr", "base", "expected"),
     [
-        # I quattro job cron che vivono sul telefono (25/09/2026).
+        # Le forme di tutti i giorni: giornaliero, serale, settimanale.
         ("0 8 * * *", (2026, 9, 25, 10, 17), [(2026, 9, 26, 8, 0), (2026, 9, 27, 8, 0)]),
         ("0 20 * * *", (2026, 9, 25, 10, 17), [(2026, 9, 25, 20, 0), (2026, 9, 26, 20, 0)]),
         ("0 7 * * *", (2026, 9, 25, 7, 0), [(2026, 9, 26, 7, 0), (2026, 9, 27, 7, 0)]),

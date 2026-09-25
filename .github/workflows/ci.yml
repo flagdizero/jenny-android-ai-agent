@@ -73,14 +73,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
-      # jsdom: oggi NESSUNA suite lo richiede. L'unica che lo usava,
-      # tests/webui/test_graph_search_contract.py, guidava `mobile-graph.js`,
-      # uscito con il grafo dell'officina; ora guida `casa-pages.js` su un DOM
-      # finto e le basta node. Queste due righe sono residue e si possono
-      # togliere insieme a questo commento (il guard che ne chiedeva la
-      # presenza in test_node_is_available.py e' gia' stato tolto).
-      - run: npm install --no-save jsdom
-      - run: echo "NODE_PATH=$PWD/node_modules" >> "$GITHUB_ENV"
       # CI validates the Android code path on a host runner; Android is the only supported runtime target.
       - run: pip install -e .
       - run: pip install ruff pytest pytest-asyncio
