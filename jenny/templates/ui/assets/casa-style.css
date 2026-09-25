@@ -213,9 +213,9 @@ body.casa {
   font-size: 16px;
 }
 
-/* Sollevata. Sta sopra le altre **senza** `z-index` — quello di Jenny resta
-   l'unico del foglio: un elemento trasformato si dipinge dopo i fratelli che
-   non lo sono. */
+/* Sollevata. Sta sopra le altre **senza** `z-index` — questo foglio non ne
+   dichiara nessuno (v. `.casa-shell .jenny-duo`): un elemento trasformato si
+   dipinge dopo i fratelli che non lo sono. */
 .casa-ordina-pastiglia.is-sollevata {
   border-color: var(--accent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
@@ -854,7 +854,7 @@ body.casa {
    di `shared/jenny-mascot.js`, e il suo stile — ancoraggi, specchio del lato
    sinistro, volo, respiro, dondolio del pensa — e' quello di mobile-style.css,
    che la casa carica. Qui c'e' **solo quel che fra i due gusci cambia**: il
-   pavimento, e il livello nel documento della casa.
+   pavimento.
 
    **I piedi appoggiano sulla riga del composer**, che fa da pavimento.
    Il numero non e' a occhio: l'arte e' un quadrato con margini trasparenti, e
@@ -868,12 +868,16 @@ body.casa {
    che sta sempre li' — la riga di lavoro e la striscia degli allegati
    compaiono e spariscono, e Jenny non deve saltellare quando lo fanno.
 
-   Il livello e' l'unico `z-index` di questo foglio (v. il banco
-   `test_she_is_on_top_of_everything_in_the_house`): tutto il resto della casa
-   le sta sotto. */
+   **Il livello non e' qui.** E' quello di `.jenny-duo` in mobile-style.css,
+   lo stesso dell'officina (D3, 25/09/2026: «Jenny sempre sopra», anche a
+   mini-app e immagini). Qui c'era `z-index: 5`: bastava contro la casa, che
+   di livelli non ne ha, ma la mini-app (110) e la lightbox (allora 1000) —
+   che arrivano da mobile-style.css — le passavano davanti. Questo foglio non
+   dichiara nessuno `z-index`, e il banco
+   `test_she_is_on_top_of_everything_in_the_house` guarda anche le regole
+   dell'altro foglio che toccano il DOM della casa. */
 .casa-shell .jenny-duo {
   bottom: calc(var(--casa-composer-h, 64px) - var(--jenny-size) * 0.1224);
-  z-index: 5;
 }
 
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
@@ -926,7 +930,7 @@ body.casa {
 /* Il + tondo della pagina Quaderni: la sola cosa accesa della pagina, come il
    tasto che manda nella chat. Sta nel pannello e non nell'elenco, quindi non
    scorre. Niente `z-index`: e' posizionato e viene dopo l'elenco, quindi gli
-   sta sopra da se', e quello di Jenny resta l'unico del foglio. */
+   sta sopra da se', e questo foglio resta senza livelli. */
 .casa-quaderni-nuovo {
   position: absolute;
   right: 18px;
@@ -1103,10 +1107,10 @@ body.casa {
    (tavola `Pagine`). Dal 23/09/2026 la chat e' una pagina fra le altre, e si
    sposta come loro.
 
-   **Niente `z-index` qui dentro.** Quello di Jenny e' l'unico del foglio e
-   deve restarlo: la mascotte sta sopra la chat, sopra un'app e sopra tutto,
-   e la sovrapposizione fra i pannelli si ottiene con l'ordine del DOM. C'e'
-   un banco che li conta. */
+   **Niente `z-index` qui dentro.** Questo foglio non ne dichiara, e deve
+   restare cosi': la mascotte sta sopra la chat, sopra un'app e sopra tutto
+   col livello che le da' mobile-style.css, e la sovrapposizione fra i
+   pannelli si ottiene con l'ordine del DOM. C'e' un banco che li conta. */
 /* **L'involucro ritaglia, la pista si muove — e non possono essere lo stesso
    elemento.** Misurato sul telefono il 22/09/2026: con `overflow: hidden`
    sulla pista, che porta anche il `transform`, un `<iframe>` dentro una pagina
@@ -1177,7 +1181,7 @@ body.casa {
 
 /* La foto della chat: da sola in una pagina che la chat non abita, o **sopra**
    la chat vera finche' questa non ha finito di leggere la conversazione nuova.
-   Niente `z-index` — quello di Jenny resta l'unico del foglio: la foto e'
+   Niente `z-index` — questo foglio non ne dichiara: la foto e'
    sempre l'ultimo figlio posizionato del pannello, e dentro la chat non c'e'
    niente che ne porti uno, quindi si dipinge sopra da se'. */
 .casa-chat.casa-foto {
@@ -1830,8 +1834,8 @@ body.casa {
 
 /* `casa-card` e non `casa-block`: quel nome e' **gia' preso**, ed e' la bolla
    di un messaggio (`casa-chat.js`, `.casa-msg .casa-block`). Chiamando cosi'
-   le schede, le loro regole — sfondo, bordo, e lo `z-index` qui sotto — sono
-   atterrate su ogni riga della conversazione: i messaggi sono diventati
+   le schede, le loro regole — sfondo, bordo, e lo `z-index` che allora
+   avevano — sono atterrate su ogni riga della conversazione: i messaggi sono diventati
    schede e Jenny e' finita **dietro la chat**. Visto sul telefono, 19/09/2026.
 
    **Le schede erano passate davanti a lei, ed era sbagliato** (corretto il

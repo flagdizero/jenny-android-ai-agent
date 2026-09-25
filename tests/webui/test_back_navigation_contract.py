@@ -78,11 +78,20 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
     context). Con la minichat aperta sopra una mini-app, il back chiudeva l'app
     *sotto* e a schermo non cambiava niente. L'ordine asserito qui è ora quello
     misurato sul CSS.
+
+    **Lightbox e minichat sono l'unica coppia fuori ordine, e non per sbaglio.**
+    Con D3 (25/09/2026, «Jenny sempre sopra», anche alle immagini) la lightbox è
+    scesa da 1000 a 115, sotto di lei: la minichat (121) le starebbe sopra. Le
+    due però non stanno mai aperte insieme — sopra una lightbox lei non prende
+    tocchi, e mentre la minichat è aperta il suo scrim (119) copre la chat e
+    un'immagine non si apre — quindi fra loro l'ordine della catena non si vede.
+    Il banco controlla quelle due condizioni invece di fingere che l'ordine lo
+    decidano i numeri.
     """
     body = _method(_app(), "_overlayLayers")
     layers = [
         "dialog[open]",                  # top layer: showModal() sta sopra ogni z-index
-        ".image-lightbox",               # z-index 1000
+        ".image-lightbox",               # z-index 115 (v. sotto: mai con la minichat)
         ".jenny-mc.open",                # minichat, z-index 121
         ".app-frame-overlay",            # mini-app, z-index 110
         "this.drawer.activeDrawer",      # drawer
@@ -93,6 +102,24 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
         positions.append(body.index(marker))
     assert positions == sorted(positions), (
         "i livelli non sono in ordine di sovrapposizione reale (vedi z-index in mobile-style.css)"
+    )
+
+    css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
+    z = {
+        nome: int(re.search(rf"\n{re.escape(nome)} \{{[^}}]*?z-index: (\d+);", css).group(1))
+        for nome in (".image-lightbox", ".jenny-scrim", ".jenny-mc")
+    }
+    frame = re.search(r"\.app-frame-overlay \{[^}]*?z-index: (\d+);", css)
+    assert frame, "livello della mini-app non trovato"
+    # La lightbox sta sopra la mini-app e sotto lo scrim della minichat.
+    assert int(frame.group(1)) < z[".image-lightbox"] < z[".jenny-scrim"] < z[".jenny-mc"], z
+    # Le due condizioni che tengono lightbox e minichat separate.
+    assert ":root:has(.image-lightbox) .jenny-duo { pointer-events: none; }" in css, (
+        "sopra una lightbox lei aprirebbe la minichat: due livelli insieme, fuori ordine"
+    )
+    scrim_aperto = re.search(r"\n\.jenny-scrim\.open \{([^}]*)\}", css)
+    assert scrim_aperto and "pointer-events: auto" in scrim_aperto.group(1), (
+        "con la minichat aperta un'immagine della chat si aprirebbe da sotto lo scrim"
     )
 
 

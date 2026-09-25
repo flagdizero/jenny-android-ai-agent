@@ -664,9 +664,11 @@ def test_the_panel_is_positioned_so_the_empty_state_stays_put() -> None:
 
 
 def test_the_track_adds_no_z_index() -> None:
-    """Quello di Jenny resta l'unico: lei sta sopra la chat e sopra un'app."""
+    """Il foglio della casa non dichiara livelli — nemmeno quello di Jenny, che
+    sta in `.jenny-duo` di mobile-style.css (D3): lei sta sopra la chat e sopra
+    un'app, e i pannelli si sovrappongono con l'ordine del DOM."""
     css = (ASSETS / "casa-style.css").read_text(encoding="utf-8")
-    assert len([r for r in css.splitlines() if r.strip().startswith("z-index:")]) == 1
+    assert not [r for r in css.splitlines() if r.strip().startswith("z-index:")]
 
 
 # ── I pallini se ne sono andati (23/09/2026) ────────────────────────────────

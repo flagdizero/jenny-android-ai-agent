@@ -583,21 +583,31 @@ def test_the_margin_rounds_away_from_the_gesture_zone() -> None:
     assert "Math.round(px / dpr)" not in body
 
 
-def test_the_mascot_goes_under_the_scrim_with_the_sheet_open() -> None:
-    """La mascotte vive dentro `#app`, che il foglio rende `inert` — ma `inert`
-    toglie fuoco e tocchi, non l'impilamento: a z-index 120 resterebbe dipinta
-    sopra il foglio (100) e lo scrim (99), sulle righe. Difetto visto sul Titan
-    2, non sull'emulatore, dove le due cose non si sovrapponevano.
+def test_the_mascot_stays_on_top_of_the_sheet_and_lets_taps_through() -> None:
+    """Col cassetto aperto lei resta **sopra** foglio e scrim (D3, 25/09/2026:
+    «Jenny sempre sopra»), e il dito le passa attraverso.
+
+    Fino a D3 qui si asseriva il contrario: `launcher-open` su `<html>` la
+    faceva scendere a 98, sotto lo scrim, perche' a 120 restava dipinta sulle
+    righe — visto sul Titan 2 e chiamato difetto. La decisione dell'utente e'
+    che lo stesso sprite non sta sopra in una stanza e sotto in un'altra.
+    Quel che resta vero e serve: lei vive dentro la radice che il foglio rende
+    `inert`, e un nodo inerte non e' bersaglio del tocco — la riga sotto di lei
+    si tocca lo stesso (misurato con `elementFromPoint` in Chrome headless).
     """
     js = _method(_src("mobile-launcher.js"), "_setBackgroundInert")
-    assert "classList.toggle('launcher-open', on)" in js, (
-        "il segno che fa scendere la mascotte deve seguire l'inerzia dello sfondo"
+    assert "shell.inert = on" in js, "senza inerzia lei ruberebbe i tocchi alle righe"
+    assert "launcher-open" not in re.sub(r"/\*.*?\*/", "", js, flags=re.S), (
+        "il segno che la faceva scendere sotto lo scrim e' tornato"
     )
     css = _src("mobile-style.css")
-    assert ":root.launcher-open .jenny-duo { z-index: 98; }" in css
-    # 98 deve stare *sotto* lo scrim, o la correzione non serve a niente.
-    scrim = re.search(r"\.launcher-scrim\s*\{([^}]*)\}", css)
-    assert scrim and "z-index: 99" in scrim.group(1)
+    assert ".launcher-open .jenny-duo" not in css, "col cassetto aperto lei torna sotto lo scrim"
+    # Il suo livello supera quello di foglio e scrim.
+    lei = re.search(r"\n\.jenny-duo \{[^}]*?z-index: (\d+);", css)
+    foglio = re.search(r"\.launcher-sheet\s*\{[^}]*?z-index: (\d+);", css)
+    scrim = re.search(r"\.launcher-scrim\s*\{[^}]*?z-index: (\d+);", css)
+    assert lei and foglio and scrim
+    assert int(lei.group(1)) > max(int(foglio.group(1)), int(scrim.group(1)))
 
 
 def test_the_app_drawer_keeps_a_handle_after_the_dock_shrank() -> None:

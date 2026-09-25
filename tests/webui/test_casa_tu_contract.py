@@ -14,6 +14,8 @@ import json
 import re
 from pathlib import Path
 
+from support import css_levels
+
 from jenny.utils.android_assets import _UI_MANIFEST
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -275,44 +277,68 @@ def _rule(css: str, selector: str) -> str:
 
 
 def test_she_is_on_top_of_everything_in_the_house() -> None:
-    """Lo sprite di Jenny e' **l'unico** `z-index` del foglio della casa.
+    """Nella casa niente le sta sopra, da **nessuno** dei due fogli che carica.
 
-    Non e' un dettaglio di stile: e' l'invariante che tiene. Finche' nessun
-    altro ne dichiara uno, lei sta sopra qualunque cosa la pagina metta —
-    comprese le stanze che non esistono ancora. Il difetto nasce nel momento
-    in cui qualcuno ne aggiunge un secondo, ed e' quel che e' successo: per un
-    giro le schede delle impostazioni le sono passate davanti, lasciandola
-    tagliata a meta' mentre in chat e fra le pagine resta in cima. «Vedo jenny
-    dietro i menu», dall'uso, il 19/09/2026 — e prima ancora, con lo stesso
-    numero preso da un nome sbagliato, «Jenny dietro la chat».
+    Non e' un dettaglio di stile: e' l'invariante che tiene. Per un giro le
+    schede delle impostazioni le sono passate davanti, lasciandola tagliata a
+    meta' mentre in chat e fra le pagine resta in cima. «Vedo jenny dietro i
+    menu», dall'uso, il 19/09/2026 — e prima ancora, con lo stesso numero preso
+    da un nome sbagliato, «Jenny dietro la chat».
 
-    Il difetto che quel numero voleva risolvere resta risolto dall'altra
+    **Questo banco guardava un foglio solo, e il difetto stava nell'altro.** La
+    casa carica anche `mobile-style.css`, e il JS che condivide con l'officina
+    ci costruisce dentro la mini-app (`.app-frame-overlay`, 110) e la lightbox
+    (`.image-lightbox`, allora 1000): col suo 5, lei finiva sotto tutte e due.
+    Misurato con `elementFromPoint` dalla revisione del 25/09/2026; la
+    decisione dell'utente (D3) e' «Jenny sempre sopra», anche a mini-app e
+    immagini. Adesso il suo livello e' quello di `.jenny-duo` nel foglio
+    dell'officina, lo stesso nelle due interfacce, e qui si controlla ogni
+    `z-index` di quel foglio che puo' colpire il DOM della casa. Sopra di lei
+    restano solo `<dialog>` e toast, che vivono nel top layer.
+
+    Il difetto che le schede volevano risolvere resta risolto dall'altra
     meta': il fondo delle stanze e' alto quanto lei, quindi l'ultima riga si
     porta sopra di lei **scorrendo**, come fa la chat con l'ultimo messaggio.
     """
-    css = CSS.read_text(encoding="utf-8")
-    livelli = []
-    for selettori, corpo in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        m = re.search(r"z-index:\s*(-?\d+)", corpo)
-        if not m:
-            continue
-        nomi = [s.strip().splitlines()[-1].strip() for s in selettori.split(",") if s.strip()]
-        livelli.append((int(m.group(1)), nomi))
+    casa = CSS.read_text(encoding="utf-8")
+    temi = TEMI.read_text(encoding="utf-8")
 
-    # Lo sprite e' `.jenny-duo`, lo stesso dell'officina (shared/jenny-mascot.js):
-    # in casa ha una regola sola, quella del pavimento, e il livello sta li'.
-    sprite = ".casa-shell .jenny-duo"
-    suoi = [z for z, nomi in livelli if sprite in nomi]
-    assert len(suoi) == 1, f"lo sprite non ha piu' esattamente un livello suo: {suoi}"
-    altri = [(z, nomi) for z, nomi in livelli if sprite not in nomi]
-    assert not altri, (
-        f"qualcun altro dichiara un livello: {altri}. Se serve davvero, deve "
-        f"stare **sotto** il suo ({suoi[0]}) — e va scritto perche'"
+    # La casa non dichiara livelli: nemmeno il suo, che sta nell'altro foglio.
+    assert not css_levels.levels(casa), (
+        f"casa-style.css dichiara dei livelli: {css_levels.levels(casa)}. Il livello "
+        f"di Jenny e' quello di `.jenny-duo` in mobile-style.css; qualunque altro "
+        f"deve stare sotto il suo, e va scritto perche'"
     )
+
+    suoi = [z for sel, z in css_levels.levels(temi) if sel == ".jenny-duo"]
+    assert len(suoi) == 1, f"lo sprite non ha piu' esattamente un livello suo: {suoi}"
+    lei = suoi[0]
+    # Nessuna regola la abbassa in un caso particolare (era `:root.launcher-open
+    # .jenny-duo { z-index: 98 }`, sotto lo scrim del cassetto).
+    ritocchi = [
+        (sel, z) for sel, z in css_levels.levels(temi + casa)
+        if "jenny-duo" in css_levels.key_names(sel) and sel != ".jenny-duo"
+    ]
+    assert not ritocchi, f"qualcuno cambia il suo livello in un caso: {ritocchi}"
+
+    parole = css_levels.casa_vocabulary()
+    sopra = [
+        (sel, z) for sel, z in css_levels.levels(temi)
+        if z >= lei
+        and sel != ".jenny-duo"
+        and all(nome in parole for nome in css_levels.key_names(sel))
+    ]
+    assert not sopra, (
+        f"regole di mobile-style.css che nella casa le passano davanti: {sopra}. "
+        f"Il suo livello e' {lei}: una cosa che la casa puo' mostrare sta sotto"
+    )
+    # Il banco morde: mini-app e lightbox sono davvero parole della casa.
+    for nome in ("app-frame-overlay", "image-lightbox", "jenny-duo"):
+        assert nome in parole, f"{nome} non risulta piu' nel DOM della casa"
 
     # E il fondo che le lascia il posto: e' quello che rende superfluo
     # coprirla, quindi toglierlo riaprirebbe il difetto per cui era nata.
-    scroll = _rule(css, ".casa-tu-scroll")
+    scroll = _rule(casa, ".casa-tu-scroll")
     assert "--jenny-art-h" in scroll, (
         "il fondo delle stanze non e' piu' alto quanto lei: l'ultima riga non "
         "si puo' piu' portare sopra di lei scorrendo"

@@ -652,13 +652,11 @@ export class LauncherController {
       || document.querySelector('.casa-shell');
     if (shell) shell.inert = on;
     /* `inert` toglie fuoco e tocchi, **non** l'impilamento: la mascotte vive
-       dentro `#app` (v. `JennyCompanion._buildDom`) ma a z-index 120, sopra
-       foglio (100) e scrim (99), e resterebbe *dipinta* sulle righe. Visto sul
-       telefono, non sull'emulatore, dove non capitava di sovrapporsi.
-       Il segno sta su `<html>` perché la mascotte è dentro lo sfondo che si sta
-       oscurando: sotto lo scrim è il posto giusto, non nascosta — sparire di
-       colpo sarebbe più brusco che essere velata come il resto della chat. */
-    document.documentElement.classList.toggle('launcher-open', on);
+       dentro la radice (v. `JennyCompanion._buildDom`) a z-index 120, e resta
+       dipinta sopra foglio (100) e scrim (99). E' voluto (D3, 25/09/2026:
+       «Jenny sempre sopra»): fino ad allora qui si metteva `launcher-open` su
+       `<html>` per farla scendere sotto lo scrim. I tocchi non li ruba, perche'
+       un nodo inerte si lascia attraversare e il dito arriva alla riga. */
   }
 
   /** Aggancia la sorgente dei dati (D5) alla prima apertura, e ci resta.

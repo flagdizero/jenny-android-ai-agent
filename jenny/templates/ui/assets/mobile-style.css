@@ -501,8 +501,11 @@ body {
    (`.chat-tool-header`, `.tool-events-header`): inline-flex, fondo `--overlay`,
    bordo da mezzo pixel. Nessun valore nuovo.
    La tendina prende le righe da `.oc-sheet-action` e si apre verso l'ALTO: sotto ci sono solo composer e
-   dock. Vive sopra la mascotte (z-index 120) perché il tap sul chip non deve
-   finire dietro Jenny. */
+   dock. Il suo `z-index` la alza sul resto della riga del composer, **non**
+   sulla mascotte: `.chat-bottom` (sticky, `z-index: 6`) apre un contesto di
+   impilamento, e 121 vale solo li' dentro. Jenny (120, nel contesto della
+   pagina) le sta sopra, come sopra a tutto (D3); in pratica non si toccano —
+   il chip e la tendina stanno a sinistra, lei sul bordo destro. */
 .compose-scope {
   position: relative;
   z-index: 121;
@@ -2428,11 +2431,17 @@ body {
   cursor: pointer;
 }
 
-/* Lightbox: overlay fullscreen aperto al tap su un'immagine di chat. */
+/* Lightbox: overlay fullscreen aperto al tap su un'immagine di chat.
+   Il livello sta **sotto Jenny** (D3, 25/09/2026: «Jenny sempre sopra», anche
+   alle immagini) e sopra la mini-app (110), che e' l'ordine della catena di
+   Indietro (`MobileApp._overlayLayers`). Era 1000, cioe' sopra di lei in tutte
+   e due le interfacce. Sopra di lei restano solo `<dialog>` e toast, che
+   vivono nel top layer e non dipendono da nessun numero. Mentre c'e' una
+   lightbox lei non prende tocchi: v. `:root:has(.image-lightbox) .jenny-duo`. */
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 115;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2833,13 +2842,15 @@ body {
 
    L'entrata NON usa l'easing elastico dei drawer: quello supera la posizione di
    riposo, e su un foglio ancorato a `bottom: 0` l'oltrepasso è una fessura di
-   sfondo sotto il foglio. */
-/* Col cassetto aperto la mascotte scende sotto lo scrim: sta dentro `#app`,
-   cioè dentro lo sfondo che si sta oscurando, e a 120 resterebbe dipinta sopra
-   le righe del foglio (difetto visto sul telefono). 98 = subito sotto lo scrim.
-   Nota: sopra l'overlay di una mini-app (110) la mascotte galleggia comunque —
-   difetto preesistente a questo lavoro, non toccato qui. */
-:root.launcher-open .jenny-duo { z-index: 98; }
+   sfondo sotto il foglio.
+
+   Col cassetto aperto la mascotte resta **sopra** foglio e scrim, come sopra
+   ogni altra cosa (D3, 25/09/2026). Qui scendeva a 98, sotto lo scrim, perche'
+   dipinta sulle righe sembrava un difetto; la decisione dell'utente e' che lo
+   stesso sprite non sta sopra in una stanza e sotto in un'altra. I tocchi non
+   li ruba: vive dentro `#app`, che il foglio rende `inert`
+   (`LauncherController._setBackgroundInert`), e un nodo inerte si lascia
+   attraversare — il dito arriva alla riga che ha sotto. */
 
 /* Il foglio riceve il fuoco all'apertura, ma solo come àncora: `tabindex="-1"`
    lo tiene fuori dal giro di Tab, quindi da tastiera non ci si arriva mai e
@@ -5832,7 +5843,13 @@ body {
      mano li farebbe diventare due.
      **Questa e' anche la Jenny della casa** (shared/jenny-mascot.js, lo stesso
      sprite), che carica questo foglio: la' si cambia solo il pavimento — il
-     `bottom` qui sotto — in `.casa-shell .jenny-duo` di casa-style.css. */
+     `bottom` qui sotto — in `.casa-shell .jenny-duo` di casa-style.css.
+     **Il livello e' uno per le due interfacce** (D3, 25/09/2026: «Jenny sempre
+     sopra»): 120 sta sopra la mini-app (110) e la lightbox (115), e sopra di
+     lei ci sono solo la sua minichat (121) e il top layer (`<dialog>`, toast),
+     che nessun numero scavalca. Un livello nuovo sopra il suo lo fermano
+     `test_she_is_on_top_of_everything_in_the_house` e
+     `test_she_is_on_top_of_everything_in_the_workshop`. */
   right: calc(var(--jenny-size) * var(--jenny-dock) * -1);
   /* Fissa per tutti gli stati: appena sopra la barra di input (dock +
      altezza #input-bar, riga dello scope inclusa). Non deve mai cambiare in Y. */
@@ -5852,6 +5869,15 @@ body {
   transform: translateZ(0);
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
 }
+/* Sopra una lightbox lei si vede ma non si tocca. La lightbox si chiude
+   toccando dovunque, e un tocco che finisse su di lei aprirebbe la minichat
+   sopra l'immagine: in officina un livello in piu' in mezzo alla catena di
+   Indietro, in casa un cambio di posa al posto della chiusura. Cosi' le due
+   cose non stanno mai aperte insieme — mentre la minichat e' aperta lo scrim
+   (119) copre la chat e un'immagine non si apre — e l'ordine fra loro in
+   `MobileApp._overlayLayers` non e' una domanda che si pone. Stessa forma del
+   cassetto, dove lei resta sopra e il dito le passa attraverso. */
+:root:has(.image-lightbox) .jenny-duo { pointer-events: none; }
 .jenny-duo.dragging { cursor: grabbing; transition: none; }
 .jenny-duo:active { filter: brightness(0.92); }
 .jenny-duo:focus { outline: none; }

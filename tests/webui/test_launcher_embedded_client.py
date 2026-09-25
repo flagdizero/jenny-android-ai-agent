@@ -169,14 +169,13 @@ def test_a_sheet_above_takes_the_keys_back() -> None:
 
 
 def test_a_page_leaves_the_rest_of_the_home_alone() -> None:
-    """Niente sfondo inerte, niente segno su `<html>`, e il fuoco dov'e': una
-    pagina non copre niente, e spostare il fuoco farebbe scorrere la vetrina
-    della pista mentre la pagina sta ancora entrando."""
+    """Niente sfondo inerte e il fuoco dov'e': una pagina non copre niente, e
+    spostare il fuoco farebbe scorrere la vetrina della pista mentre la pagina
+    sta ancora entrando."""
     _run("""
       const c = new LauncherController(app, { incorporato: true });
       c.open();
       assert.notEqual(guscio.inert, true, 'la casa e diventata inerte sotto una pagina');
-      assert.ok(!html.classList.contains('launcher-open'));
       assert.equal(foglio.focalizzato, undefined, 'il fuoco e saltato sulla pagina');
     """)
 
@@ -210,7 +209,6 @@ def test_the_workshop_sheet_is_still_a_sheet() -> None:
       c.open();
       assert.equal(c.isOpen(), true);
       assert.equal(guscio.inert, true);
-      assert.ok(html.classList.contains('launcher-open'));
       assert.ok((testa.ascolto.pointerdown || []).length > 0, 'il foglio non si trascina piu');
       c.close();
       assert.equal(c.isOpen(), false);

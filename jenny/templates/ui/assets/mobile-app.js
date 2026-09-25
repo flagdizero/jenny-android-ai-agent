@@ -414,11 +414,14 @@ class MobileApp {
      è uno, e i quattro consumatori lo percorrono.
 
      L'ordine è quello di sovrapposizione reale (z-index in mobile-style.css:
-     .app-frame-overlay 110 · .jenny-scrim 119 · .jenny-duo 120 · .jenny-mc 121
-     · .image-lightbox 1000; `.app` non crea stacking context). La minichat
-     copre la mini-app, quindi va consumata *prima*: l'ordine opposto chiudeva
-     l'app che stava sotto lasciando a schermo la minichat, cioè una pressione
-     senza alcun cambiamento visibile.
+     .app-frame-overlay 110 · .image-lightbox 115 · .jenny-scrim 119 ·
+     .jenny-duo 120 · .jenny-mc 121; `.app` non crea stacking context). La
+     minichat copre la mini-app, quindi va consumata *prima*: l'ordine opposto
+     chiudeva l'app che stava sotto lasciando a schermo la minichat, cioè una
+     pressione senza alcun cambiamento visibile. Lightbox e minichat non stanno
+     mai aperte insieme (D3: Jenny sta sopra la lightbox ma non prende tocchi,
+     e lo scrim della minichat copre le immagini), quindi fra loro due l'ordine
+     non conta.
 
      Ogni livello espone:
        present()  test di presenza, senza effetti collaterali;
