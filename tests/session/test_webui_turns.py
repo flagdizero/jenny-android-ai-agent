@@ -239,17 +239,28 @@ async def test_turn_completed_reads_the_mood_and_publishes_the_frame(tmp_path):
     provider.chat_with_retry.assert_not_called()
 
 
-async def test_no_token_usage_is_recorded(tmp_path, monkeypatch):
-    """La fonte ``mascot`` resta per lo storico, ma nessuno ci scrive piu'."""
-    recorded: list = []
-    monkeypatch.setattr(
-        "jenny.agent.token_usage.record_token_usage",
-        lambda *a, **kw: recorded.append(kw),
-    )
+async def test_no_token_usage_is_recorded(tmp_path):
+    """La fonte ``mascot`` resta per lo storico, ma nessuno ci scrive piu'.
+
+    Si guarda il file dei token, non una funzione sostituita: un
+    ``monkeypatch`` su ``jenny.agent.token_usage.record_token_usage`` non vede
+    chi l'ha importata per nome (``from … import record_token_usage``), e il
+    test restava verde con il file scritto.
+    """
+    from jenny.agent.token_usage import token_usage_state_path
+    from jenny.config.paths import set_workspace_dir
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    set_workspace_dir(workspace)  # ripristinato dalla fixture di tests/conftest.py
+    usage_file = token_usage_state_path()
+    assert workspace in usage_file.parents
+
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
-    assert recorded == []
+    assert bus.publish_outbound.await_count == 2, "l'umore non e' partito: prova vuota"
+    assert not usage_file.exists()
 
 
 @pytest.mark.parametrize("reply", ["Promemoria impostato.", "Buongiorno ☀️ oggi piove"])
