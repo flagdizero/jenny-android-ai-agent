@@ -27,6 +27,7 @@ non dimostra:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from support.js_harness import member, requires_node, run_js
@@ -55,6 +56,7 @@ _VERI = (
     "_resetToExplorerAt",
     "showExplorerView",
     "_handleNewAction",
+    "_esploratoreASchermo",
 )
 
 _HARNESS = """
@@ -87,6 +89,9 @@ function nodo(sotto = {}) {
   return {
     innerHTML: '', style: {}, figli: [], ascolti: {},
     textContent: '',
+    /* Nel documento finche' la scheda non si ridisegna: allora il banco lo
+       mette a false, come fa il DOM vero con i nodi buttati. */
+    isConnected: true,
     appendChild(c) { this.figli.push(c); },
     querySelector(sel) { return sotto[sel] ?? null; },
     addEventListener(ev, cb) { (this.ascolti[ev] ||= []).push(cb); },
@@ -403,3 +408,48 @@ await Promise.all([vecchia, nuova]);
 assert.deepEqual(c.tessere.slice(-1), ['file:dentro-b.md'],
   'la risposta della cartella lasciata ha riempito quella aperta');
 """)
+
+
+def test_a_redrawn_card_does_not_eat_back() -> None:
+    """Cartelle aperte in Memoria, poi Cervello: la scheda si ridisegna e la
+    griglia di prima resta in mano al gestore, staccata. Risalire li' dentro
+    era una pressione spesa su una griglia che nessuno vede."""
+    _run_js("""
+const { c, griglia } = await apri([voce('progetti', 'directory')]);
+await c.navigateTo('progetti/casa');
+griglia.isConnected = false;
+const prima = chiamate.length;
+assert.equal(c.handleCardBack(), false, 'Indietro mangiato da una griglia staccata');
+assert.equal(c.currentDir, 'progetti/casa');
+assert.equal(chiamate.length, prima, 'letta una cartella per una griglia staccata');
+""")
+
+
+def test_only_the_drawer_with_the_files_card_hands_back_to_it() -> None:
+    """``SettingsController.handleBack`` gira la pressione al gestore file solo
+    nel cassetto che ha la scheda «I file veri»."""
+    settings = SETTINGS_JS.read_text(encoding="utf-8")
+    cassetti = re.search(r"(?ms)^export const CASSETTI = \{.*?^\};$", settings)
+    assert cassetti, "CASSETTI non trovata"
+    back = member(settings, "handleBack")
+    run_js(
+        "import assert from 'node:assert/strict';\n"
+        + cassetti.group(0).replace("export ", "")
+        + """
+let girate = 0;
+globalThis.window = { mobileApp: { controllers: { workspace: {
+  handleCardBack: () => { girate++; return true; },
+} } } };
+class C {
+  constructor(cassetto) { this._cassetto = cassetto; }
+"""
+        + back
+        + """
+}
+assert.equal(new C('cervello').handleBack(), false);
+assert.equal(new C('mani').handleBack(), false);
+assert.equal(girate, 0, 'la pressione e\\' andata al gestore file fuori da Memoria');
+assert.equal(new C('memoria').handleBack(), true);
+assert.equal(girate, 1);
+"""
+    )

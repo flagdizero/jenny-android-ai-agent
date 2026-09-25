@@ -522,7 +522,12 @@ def test_the_drawers_only_sub_screen_is_the_folder_you_are_in() -> None:
     settings = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
     back = _method(settings, "handleBack")
     codice = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", back, flags=re.S)).strip()
-    assert codice.count("return") == 1, "il cassetto decide da se' invece di girare la domanda"
+    ritorni = re.findall(r"return\b[^;]*;", codice)
+    assert sum("handleCardBack" in r for r in ritorni) == 1
+    assert all(r == "return false;" or "handleCardBack" in r for r in ritorni), (
+        "il cassetto decide da se' invece di girare la domanda: l'unico altro "
+        "ritorno ammesso e' il `false` dei cassetti senza gestore file"
+    )
     assert "?? false" in codice, (
         "senza gestore file agganciato la pressione deve proseguire la catena"
     )

@@ -254,7 +254,13 @@ export class SettingsController {
        file veri». Dentro una sottocartella Indietro risale di un livello,
        perche' uscire dal cassetto buttando via tre livelli di cammino in una
        pressione e' il difetto che la catena di `handleHardwareBack` esiste
-       per evitare. Alla radice non consuma niente e si esce, come prima. */
+       per evitare. Alla radice non consuma niente e si esce, come prima.
+
+       Solo se la scheda sta nel cassetto a schermo: in Cervello e in Mani il
+       gestore file non c'e', e girargli la pressione la faceva spendere a
+       risalire cartelle invisibili lasciate aperte in Memoria. */
+    const sezioni = CASSETTI[this._cassetto]?.sezioni;
+    if (sezioni && !sezioni.includes('file')) return false;
     return window.mobileApp?.controllers?.workspace?.handleCardBack?.() ?? false;
   }
 

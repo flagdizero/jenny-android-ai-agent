@@ -278,7 +278,18 @@ export class WorkspaceController {
     this.currentDir = '';
     // Se la scheda non e' a schermo non c'e' niente da ridisegnare: la
     // cartella e' gia' tornata alla radice, e `mount()` legge di li'.
-    if (this.gridEl) this.navigateTo('');
+    if (this._esploratoreASchermo()) this.navigateTo('');
+  }
+
+  /** La griglia che `mount()` ha agganciato e' ancora nel documento?
+   *
+   *  Non basta che il riferimento ci sia: `SettingsController.render()`
+   *  riscrive la schermata a ogni cambio di cassetto, e i nodi di prima
+   *  restano in mano nostra, staccati. Contro quelli un «risali di una
+   *  cartella» ridisegnava una griglia che nessuno vede — e in Cervello o in
+   *  Mani Indietro sembrava non fare niente. */
+  _esploratoreASchermo() {
+    return !!this.gridEl?.isConnected;
   }
 
   /* Tasto Indietro hardware, invocato dalla shell prima di toccare la history.
@@ -297,6 +308,7 @@ export class WorkspaceController {
    *  profondita', e tutto il cammino fatto sparirebbe in un colpo. */
   handleCardBack() {
     if (this.viewMode === 'editor' || !this.currentDir) return false;
+    if (!this._esploratoreASchermo()) return false;
     this.navigateTo(parentPath(this.currentDir));
     return true;
   }
@@ -383,8 +395,9 @@ export class WorkspaceController {
     this._syncHeaderBack();
     // Chiuso l'editor si passa di qui anche quando la scheda non e' ancora
     // stata ridisegnata: la cartella e' registrata, il disegno lo fara'
-    // `mount()`. Andare avanti a DOM staccato riempirebbe nodi gia' buttati.
-    if (!this.gridEl) return;
+    // `mount()`. Andare avanti a DOM staccato riempirebbe nodi gia' buttati:
+    // e staccati sono anche quelli della scheda di prima, non solo il null.
+    if (!this._esploratoreASchermo()) return;
 
     this.renderBreadcrumb(dirPath);
 
