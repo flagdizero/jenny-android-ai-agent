@@ -378,6 +378,11 @@ class JennyBrowserBridge(context: Context) {
         // secondo si adegua.
         val gate = AtomicInteger(GATE_OPEN)
         val started = MainHop.call(10_000L, false, TAG) {
+            // Gia' abbandonato: niente WebView da costruire per una pagina che non
+            // partira'. Il `compareAndSet` qui sotto resta quello che decide;
+            // questa riga risparmia solo il lavoro (visto con la sonda sul
+            // telefono il 25/09: restava una WebView viva, `url=null`).
+            if (gate.get() == GATE_ABANDONED) return@call false
             ensureWebViewOnMain()
             val wv = webView ?: return@call false
             if (!gate.compareAndSet(GATE_OPEN, GATE_LOADING)) return@call false

@@ -61,6 +61,17 @@ def test_a_timed_out_open_cannot_load_its_page_later() -> None:
     )
 
 
+def test_an_abandoned_open_builds_no_webview() -> None:
+    """Il blocco in ritardo trova il cancello gia' chiuso: esce prima di costruire
+    una WebView che non servira' (con la sonda del 25/09 ne restava una viva,
+    ``url=null``, fino a ``browser_close``)."""
+    body = _open_body()
+    block = body.split("MainHop.call(10_000L, false, TAG)", 1)[1].split("\n        }\n", 1)[0]
+    skip = "if (gate.get() == GATE_ABANDONED) return@call false"
+    assert skip in block
+    assert block.index(skip) < block.index("ensureWebViewOnMain()")
+
+
 def test_a_missing_webview_counts_as_not_started() -> None:
     body = _open_body()
     assert "webView ?: return@call false" in body, (
