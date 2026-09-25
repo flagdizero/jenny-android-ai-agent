@@ -15,9 +15,11 @@ chiamata senza cancello fallisce qui invece che sul telefono di qualcuno.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+from support.kotlin import strip_comments
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ANDROID_SRC = REPO_ROOT / "android/app/src/main/java/com/flagdizero/jenny"
@@ -35,13 +37,31 @@ def _kotlin_sources() -> list[Path]:
     return sorted(ANDROID_SRC.rglob("*.kt"))
 
 
+def _enclosing_function(code: str, at: int) -> str:
+    """Il codice dall'ultima ``fun`` prima di *at* fino ad *at*.
+
+    L'ultima dichiarazione prima della chiamata è la funzione che la contiene
+    (nessuna ``fun`` locale in mezzo, in questi sorgenti): un cancello in
+    un'altra funzione del file non conta.
+    """
+    starts = [m.start() for m in re.finditer(r"\bfun\s+\w+\s*\(", code[:at])]
+    return code[starts[-1] if starts else 0 : at]
+
+
 def test_every_enable_call_sits_behind_the_debuggable_gate() -> None:
-    """Chi abilita il debugging deve anche controllare di essere in debug."""
-    unguarded = [
-        path.name
-        for path in _kotlin_sources()
-        if ENABLE_CALL in path.read_text("utf-8") and GATE not in path.read_text("utf-8")
-    ]
+    """Chi abilita il debugging deve anche controllare di essere in debug.
+
+    Il controllo si cerca nel **codice** della stessa funzione, **prima** della
+    chiamata: la KDoc sopra nomina ``FLAG_DEBUGGABLE`` per spiegare il
+    cancello, e cercarlo nel file intero faceva passare anche un cancello
+    tolto con la spiegazione rimasta.
+    """
+    unguarded = []
+    for path in _kotlin_sources():
+        code = strip_comments(path.read_text("utf-8"))
+        for m in re.finditer(re.escape(ENABLE_CALL), code):
+            if GATE not in _enclosing_function(code, m.start()):
+                unguarded.append(path.name)
 
     assert not unguarded, (
         f"{ENABLE_CALL} senza controllo su {GATE} in: {', '.join(unguarded)}. "
@@ -56,7 +76,7 @@ def test_the_call_is_still_there_for_debug_builds() -> None:
     cioè misurando l'assenza della feature invece della sua protezione.
     """
     sources = _kotlin_sources()
-    enabling = [p.name for p in sources if ENABLE_CALL in p.read_text("utf-8")]
+    enabling = [p.name for p in sources if ENABLE_CALL in strip_comments(p.read_text("utf-8"))]
 
     assert enabling, (
         f"nessun file abilita più {ENABLE_CALL}: se la rimozione è voluta, "
