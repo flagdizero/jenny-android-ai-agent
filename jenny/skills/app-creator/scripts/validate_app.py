@@ -12,9 +12,9 @@ import re
 import sys
 from pathlib import Path
 
-SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-ACTION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-COLLECTION_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
+ACTION_NAME_RE = re.compile(r"\A[a-z][a-z0-9_]*\Z")
+COLLECTION_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
 PLACEHOLDER_RE = re.compile(r"\{([^}]+)\}")
 STORAGE_OPS = {"append", "set", "update", "delete", "query"}
 HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
