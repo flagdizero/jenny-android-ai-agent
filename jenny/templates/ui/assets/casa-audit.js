@@ -72,11 +72,17 @@ export function offsetsIn(raw, selected) {
  *      segnalazione quando ha finito. Senza, corregge e il file resta aperto
  *      per sempre. E' l'unico pezzo di vocabolario del file che passa, e passa
  *      fra parentesi.
+ *
+ *  I segnaposto li riempie `i18n.t`, che sostituisce con una funzione: un
+ *  `.replace(stringa, testo)` interpreta `$$`, `$&` e `$'` dentro il testo, e
+ *  una formula citata (`$$E = mc^2$$`) arrivava a Jenny storpiata. Una passata
+ *  sola, anche: un titolo che contiene «{quote}» resta com'e'.
  */
 export function messaggioSegnalazione({ title, quote, comment, id }) {
-  const testa = i18n.t('casa.audit.msgHead')
-    .replace('{page}', String(title || ''))
-    .replace('{quote}', String(quote || '').trim());
+  const testa = i18n.t('casa.audit.msgHead', {
+    page: String(title || ''),
+    quote: String(quote || '').trim(),
+  });
   const coda = id ? `\n(${i18n.t('casa.audit.msgRef')} ${id})` : '';
   return `${testa}\n${String(comment || '').trim()}${coda}`;
 }

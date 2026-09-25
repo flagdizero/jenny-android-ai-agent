@@ -17,12 +17,13 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import function, locale, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "casa-audit.js"
 APP_JS = ASSETS / "casa-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
+I18N_JS = ASSETS / "shared" / "i18n.js"
 
 
 pytestmark = requires_node
@@ -138,11 +139,13 @@ def _member(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const parole = {
-  'casa.audit.msgHead': 'In «{page}», dove dice «{quote}»:',
-  'casa.audit.msgRef': 'segnalazione',
+/* Le frasi vere e il `t` vero: i segnaposto li riempie lui, ed e' proprio il
+   modo in cui li riempie che il banco deve misurare. */
+const i18n = {
+  locale: 'it',
+  translations: { it: { casa: { audit: __AUDIT_WORDS__ } } },
+  __T__
 };
-const i18n = { t: (k) => parole[k] ?? k };
 
 __MESSAGGIO__
 
@@ -162,8 +165,11 @@ class Casa {
 
 
 def _run_app(script: str) -> None:
+    parole = locale("it")["casa"]["audit"]
     harness = (
         _HARNESS
+        .replace("__AUDIT_WORDS__", json.dumps(parole, ensure_ascii=False))
+        .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__MESSAGGIO__", function(AUDIT_JS.read_text(encoding="utf-8"),
                                             "messaggioSegnalazione"))
         .replace("__PORTA__", _member(APP_JS.read_text(encoding="utf-8"), "_portaInChat"))
@@ -188,6 +194,18 @@ def test_the_message_carries_the_page_the_quote_and_the_id() -> None:
       assert.ok(m.includes('legare a giugno'), m);
       assert.ok(m.includes("e\\' marzo"), m);
       assert.ok(m.includes('20260922-143012-a1b2'), m);
+    """)
+
+
+def test_a_quoted_formula_reaches_jenny_as_it_was_written() -> None:
+    """`String.replace(stringa, testo)` legge `$$`, `$&` e `$'` nel testo come
+    comandi: una formula citata arrivava a Jenny storpiata — `$$` diventava `$`,
+    `$&` il segnaposto stesso, `$'` il resto della frase."""
+    _run_app("""
+      const quote = "$$E = mc^2$$ e $& e $' e $1";
+      const m = messaggioSegnalazione({ title: 'Fisica $&', quote, comment: 'c', id: 'x' });
+      assert.ok(m.includes(quote), m);
+      assert.ok(m.includes('«Fisica $&»'), m);
     """)
 
 
