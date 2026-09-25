@@ -13,6 +13,8 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -295,6 +297,110 @@ class TestCicloDiVita:
         old = browser._BROWSER_LOCK
         browser.reset_browser_state()
         assert browser._BROWSER_LOCK is not old
+
+
+class TestChiusuraFuoriDalLoop:
+    """``close`` in Kotlin aspetta il main thread fino a 10 s: mai sul loop.
+
+    Chiamata sul thread del loop, fermava il gateway intero (chat, cron) proprio
+    nei casi — fermo scaduto, turno annullato — in cui Android e' gia' lento.
+    """
+
+    class _Registra(FakeBridge):
+        def close(self):
+            self.close_thread = threading.get_ident()
+            return super().close()
+
+    async def _assert_off_loop(self, holder):
+        b = holder["bridge"]
+        assert b.closed == 1
+        assert b.close_thread != threading.get_ident()
+        assert browser._BROWSER_INSTANCE is None
+
+    async def test_browser_close(self, monkeypatch):
+        holder = _install(monkeypatch, self._Registra)
+        await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
+        await _tool(BrowserCloseTool).execute()
+        await self._assert_off_loop(holder)
+
+    async def test_dopo_un_fermo_scaduto(self, monkeypatch):
+        class Lenta(self._Registra):
+            def snapshot(self, *a):
+                time.sleep(0.4)
+                return "{}"
+
+        holder = _install(monkeypatch, Lenta)
+        out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=-9.9)
+        assert "error" in out
+        await self._assert_off_loop(holder)
+
+    async def test_dopo_un_eccezione(self, monkeypatch):
+        class Esplode(self._Registra):
+            def snapshot(self, *a):
+                raise RuntimeError("renderer morto")
+
+        holder = _install(monkeypatch, Esplode)
+        await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=1)
+        await self._assert_off_loop(holder)
+
+    async def test_dopo_un_annullamento(self, monkeypatch):
+        entered = threading.Event()
+
+        class Appesa(self._Registra):
+            def snapshot(self, *a):
+                entered.set()
+                time.sleep(0.3)
+                return "{}"
+
+        holder = _install(monkeypatch, Appesa)
+        task = asyncio.create_task(
+            browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
+        )
+        await asyncio.to_thread(entered.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await self._assert_off_loop(holder)
+
+    async def test_per_inattivita(self, monkeypatch):
+        monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
+        holder = _install(monkeypatch, self._Registra)
+        await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0.1)
+        await asyncio.sleep(0.35)
+        await self._assert_off_loop(holder)
+
+    async def test_il_loop_resta_libero_mentre_si_chiude(self, monkeypatch):
+        class ChiusuraLenta(FakeBridge):
+            def close(self):
+                time.sleep(0.3)
+                return super().close()
+
+        _install(monkeypatch, ChiusuraLenta)
+        await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
+        ticks = 0
+
+        async def orologio():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        clock = asyncio.create_task(orologio())
+        await _tool(BrowserCloseTool).execute()
+        clock.cancel()
+        assert ticks >= 5, "il loop e' rimasto fermo durante la chiusura"
+
+    async def test_browser_close_aspetta_la_chiamata_in_volo(self, monkeypatch):
+        """Senza lucchetto la chiusura strappava la WebView a una chiamata in corso."""
+        holder = _install(monkeypatch)
+        await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
+        async with browser._BROWSER_LOCK:
+            closing = asyncio.create_task(_tool(BrowserCloseTool).execute())
+            await asyncio.sleep(0.05)
+            assert holder["bridge"].closed == 0
+            assert not closing.done()
+        await closing
+        assert holder["bridge"].closed == 1
 
 
 class TestConcorrenza:

@@ -151,21 +151,55 @@ async def _watch_idle(idle_s: int) -> None:
             if time.monotonic() - _LAST_USE < idle_s:
                 continue
             logger.info("Browser session closed after {:.0f}s idle", idle_for)
-            destroy_browser()
+            await _destroy_browser_async()
             return
 
 
-def destroy_browser() -> None:
-    """Chiude la sessione e butta il profilo (cookie inclusi), se c'e'."""
+def _detach_browser() -> Any:
+    """Stacca la sessione dallo stato del modulo e la restituisce (o ``None``).
+
+    Istantaneo e sul thread del loop: da qui in poi nessuno la vede piu', anche
+    se la chiusura vera (``close`` in Kotlin) deve ancora girare.
+    """
     global _BROWSER_INSTANCE
     _LAST_INDEX.clear()
-    if _BROWSER_INSTANCE is not None:
-        try:
-            _BROWSER_INSTANCE.close()
-        except Exception:
-            logger.opt(exception=True).debug("Chiusura sessione browser fallita")
-        finally:
-            _BROWSER_INSTANCE = None
+    bridge, _BROWSER_INSTANCE = _BROWSER_INSTANCE, None
+    return bridge
+
+
+def _close_bridge(bridge: Any) -> None:
+    """Chiude una sessione gia' staccata. Bloccante: fino a 10 s in Kotlin."""
+    if bridge is None:
+        return
+    try:
+        bridge.close()
+    except Exception:
+        logger.opt(exception=True).warning("Browser session close failed")
+
+
+def destroy_browser() -> None:
+    """Chiude la sessione e ne svuota il profilo (cookie inclusi), se c'e'.
+
+    **Bloccante** (``close`` in Kotlin aspetta il main thread fino a 10 s): dal
+    loop si usa ``_destroy_browser_async``. Resta sincrona per chi non ha un
+    loop sotto.
+    """
+    _close_bridge(_detach_browser())
+
+
+async def _destroy_browser_async() -> None:
+    """``destroy_browser`` senza fermare il loop del gateway. Col lucchetto preso.
+
+    La sessione si stacca subito, sul loop; la chiusura bloccante gira in un
+    thread. Chiamata sul thread del loop, ``close`` teneva fermo il gateway —
+    chat, cron, tutto — fino ai 10 s del suo tetto, proprio nei casi (fermo
+    scaduto, turno annullato) in cui il main thread di Android e' gia' in
+    difficolta'. Se l'attesa viene annullata a sua volta, la chiusura nel
+    thread arriva comunque in fondo: la sessione e' gia' staccata.
+    """
+    bridge = _detach_browser()
+    if bridge is not None:
+        await asyncio.to_thread(_close_bridge, bridge)
 
 
 def _decode(raw: Any) -> dict[str, Any]:
@@ -212,15 +246,15 @@ async def _call(
             _LAST_USE = time.monotonic()
         except asyncio.CancelledError:
             logger.warning("browser.{} annullato", method)
-            destroy_browser()
+            await _destroy_browser_async()
             raise
         except asyncio.TimeoutError:
             logger.error("browser.{} timed out after {}s", method, timeout + 10)
-            destroy_browser()
+            await _destroy_browser_async()
             return {"error": f"browser_{method} non ha risposto entro {timeout + 10}s"}
         except Exception as exc:
             logger.exception("browser.{} failed", method)
-            destroy_browser()
+            await _destroy_browser_async()
             return {"error": f"browser_{method} fallito: {exc}"}
     return _decode(raw)
 
@@ -547,7 +581,11 @@ class BrowserCloseTool(_BrowserToolBase):
     )
 
     async def execute(self, **kwargs: Any) -> Any:
-        destroy_browser()
+        # Col lucchetto, come ogni altro accesso alla sessione: senza, la
+        # chiusura strappava la WebView a una chiamata in volo (``_call`` lo
+        # tiene per tutta la sua durata). E fuori dal loop, perche' blocca.
+        async with _BROWSER_LOCK:
+            await _destroy_browser_async()
         return "Sessione chiusa."
 
 
