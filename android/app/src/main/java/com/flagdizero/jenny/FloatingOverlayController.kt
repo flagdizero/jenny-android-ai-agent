@@ -654,12 +654,31 @@ object FloatingOverlayController {
         return enabled && canDrawOverlays(ctx)
     }
 
-    /** Smonta tutto. Chiamata da `GatewayService.onDestroy`. */
+    /**
+     * Smonta le finestre. Chiamata da `GatewayService.onDestroy`.
+     *
+     * **Smonta, e non dimentica.** Metteva anche `enabled = false`, e l'unico
+     * che lo rimette a `true` è Python (`apply_floating_config`), che gira
+     * all'avvio del gateway o a un cambio d'impostazione. Ma il service può
+     * morire e rinascere con il thread del gateway ancora vivo — `startGateway`
+     * allora non rilancia niente, e Python non ripassa mai di lì: la mascotte
+     * spariva fino al prossimo riavvio dell'app, con l'interruttore che diceva
+     * «accesa». Ora il voler-la-vedere resta a Python, e a tenerla giù mentre il
+     * service non c'è è [applyVisibility], che guarda `GatewayService.isRunning`;
+     * a rimetterla su, [onServiceStarted].
+     */
     fun teardown() {
-        main.post {
-            enabled = false
-            detach()
-        }
+        main.post { detach() }
+    }
+
+    /**
+     * Il service è (ri)nato: la mascotte torna se Python la vuole. Chiamata da
+     * `GatewayService.onCreate`, dopo `startGateway`. Se il processo è nuovo
+     * [enabled] è ancora `false` e non succede niente: sarà Python, all'avvio
+     * del gateway, a dire la sua.
+     */
+    fun onServiceStarted() {
+        main.post { applyVisibility() }
     }
 
     /**
@@ -822,7 +841,11 @@ object FloatingOverlayController {
 
     private fun applyVisibility(): Boolean {
         val ctx = appContext ?: return false
-        val wanted = enabled && !MainActivity.isInForeground
+        // Il service è la condizione che teardown() toglieva spegnendo
+        // [enabled]: senza di lui la finestra raccoglierebbe domande per un
+        // gateway che il sistema sta smontando. Tenerla qui invece che nel
+        // flag è ciò che permette di ricordarsi che Python la vuole.
+        val wanted = enabled && GatewayService.isRunning && !MainActivity.isInForeground
         if (!wanted) {
             if (root != null) detach()
             return enabled
