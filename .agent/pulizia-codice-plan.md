@@ -694,6 +694,24 @@ produzione che fa diventare rosso un test migrato.
 Build da albero pulito installata alle 10:25; `browser_open` e l'elenco delle
 app provati sul telefono.
 
+
+**Le piccolezze della revisione (25/09), tutte chiuse, un commit ciascuna,
+test prima quando c'era un comportamento da provare:**
+- il menu «Nuovo» del Workspace non eredita più il testo d'aiuto (`bee2edb`);
+- le freccine delle testate: erano due, non una — anche quella del
+  ragionamento — ora tenui a 11px, confrontato nel browser e visto sulla
+  build vera (`8701552`);
+- «dopo 4 retries» → «dopo 4 attempts» nel log e nel messaggio di attesa
+  (`31e6e4e`);
+- i quattro `I18N_DIR` inutilizzati nei test (`f7af0d6`);
+- `CronDispatcher` usa `utils.clock.now_ms` (`76b9cb4`);
+- due commenti stantii (`eb3a132`);
+- `MainHop`: invece di ridimensionare la KDoc, anche il ramo sul posto ora
+  cattura e torna il fallback (`c905f47`).
+
+Build da albero pulito installata alle 12:07; `browser_open` provato sul
+telefono.
+
 ---
 
 ## Fuori dal piano, deciso
