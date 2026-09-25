@@ -576,8 +576,15 @@ body.casa {
    schermo (Titan 2, 20/09/2026).
    Adesso il margine ce l'ha solo chi le finisce davvero addosso, e a dirlo e'
    `shared/jenny-gap.js`, che misura i due rettangoli invece di indovinare. */
+/* `max-width` non e' il tetto di prima: e' la colonna, e serve lo stesso.
+   Con `flex-start` il messaggio si fa largo quanto il suo contenuto, e un
+   `<pre>` non va a capo — la sua riga piu' lunga allargava tutta la risposta
+   oltre il filo, e il filo prendeva una barra di scorrimento orizzontale
+   (Titan 2, testo al 110%: 538,8 px in 534, 25/09/2026). Col messaggio fermo
+   alla colonna e' il `<pre>` a scorrere dentro di se', come nei quaderni. */
 .casa-msg-jenny {
   align-self: flex-start;
+  max-width: 100%;
 }
 
 /* Il messaggio e' nell'angolo di Jenny. Il valore non e' scritto qui: lo
@@ -690,7 +697,15 @@ body.casa {
   border-left: 2px solid var(--border);
   color: var(--text-muted);
 }
-.casa-block table { border-collapse: collapse; font-size: 13px; }
+/* Una tabella non si stringe sotto il proprio contenuto: senza `display:block`
+   deborda dal messaggio come faceva il `<pre>`, e scorre il filo invece di lei. */
+.casa-block table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
 .casa-block th, .casa-block td {
   padding: 4px 8px;
   border: 1px solid var(--border);
