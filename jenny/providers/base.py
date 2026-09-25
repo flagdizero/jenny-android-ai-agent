@@ -808,13 +808,13 @@ class LLMProvider(ABC):
 
             if not persistent and attempt > len(delays):
                 logger.warning(
-                    "LLM request failed after {} retries, giving up: {}",
+                    "LLM request failed after {} attempts, giving up: {}",
                     attempt,
                     (response.content or "")[:120].lower(),
                 )
                 if on_retry_wait:
                     await on_retry_wait(
-                        f"Model request failed after {attempt} retries, giving up."
+                        f"Model request failed after {attempt} attempts, giving up."
                     )
                 break
 
