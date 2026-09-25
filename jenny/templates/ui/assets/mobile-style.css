@@ -5962,14 +5962,17 @@ body {
   transition: opacity 0.25s, visibility 0s linear 0s;
 }
 /* Nascosta per preferenza (mascotte non visibile) o onboarding, v. setMode()
-   in mobile-jenny.js: !important come nel media-query landscape sotto,
-   così vince anche su .open. */
-.jenny-scrim.hidden-mode { display: none !important; }
+   in mobile-jenny.js. Senza `!important`: `.jenny-scrim.open` non tocca
+   `display` (apre con opacita' e visibilita'), quindi non c'e' niente da
+   battere. Qui c'era scritto che serviva a vincere su `.open`. */
+.jenny-scrim.hidden-mode { display: none; }
 
 /* Minichat: campo centrato in basso, fumetto solo sopra la sua testa. */
 .jenny-mc { position: absolute; inset: 0; z-index: 121; pointer-events: none; display: none; }
 .jenny-mc.open { display: block; }
-.jenny-mc.hidden-mode { display: none !important; }
+/* Stessa specificita' di `.open` e scritta dopo: vince per ordine, senza
+   `!important`. Tenerla sotto. */
+.jenny-mc.hidden-mode { display: none; }
 .jenny-mc-bubble {
   display: none;
   position: absolute;
@@ -6051,9 +6054,14 @@ body {
 @keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 @keyframes jenny-pop { from { opacity: 0; transform: translateY(6px) scale(0.94); } to { opacity: 1; transform: none; } }
 
-/* In landscape basso il dock sparisce: niente spazio nemmeno per lei. */
+/* In landscape basso il dock dell'officina sparisce (v. il `@media
+   (max-height: 500px)` dopo `.dock`): niente spazio nemmeno per lei.
+   **Solo nell'officina**, la cui radice e' `.app`: la casa il dock non ce
+   l'ha, e la stessa altezza la faceva sparire anche li' senza motivo.
+   Senza `!important`: (0,2,0) e scritta dopo `.jenny-mc.open`, vince per
+   ordine. */
 @media (max-height: 500px) {
-  .jenny-duo, .jenny-scrim, .jenny-mc { display: none !important; }
+  .app .jenny-duo, .app .jenny-scrim, .app .jenny-mc { display: none; }
 }
 
 /* ── Telegram pairing (onboarding step 4 + sezione impostazioni) ── */

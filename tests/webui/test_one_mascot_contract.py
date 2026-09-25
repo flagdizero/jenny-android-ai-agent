@@ -158,3 +158,25 @@ def test_she_is_on_top_of_everything_in_the_workshop() -> None:
         r":root:has\(\.image-lightbox\) \.jenny-duo \{ pointer-events: none; \}", css
     ), "sopra la lightbox lei ruberebbe il tocco che la chiude"
 
+
+
+def test_a_short_screen_hides_her_only_where_the_dock_goes() -> None:
+    """Sotto i 500 px d'altezza l'officina toglie il dock, e lei con lui. La
+    casa il dock non ce l'ha: la regola valeva anche li', e la nascondeva
+    senza motivo (revisione del 25/09/2026). E nessun `!important` per
+    nasconderla: le regole vincono per ordine, e il commento che diceva il
+    contrario era falso."""
+    css = OFFICINA_CSS.read_text(encoding="utf-8")
+    corti = [
+        (sel, corpo) for sel, corpo, ctx in css_levels.rules(css)
+        if any("max-height: 500px" in at for at in ctx) and "jenny" in sel
+    ]
+    assert corti, "la regola che la nasconde a schermo basso non si trova piu'"
+    for sel, _ in corti:
+        for s in sel.split(","):
+            assert s.strip().startswith(".app "), f"a schermo basso la nasconde anche in casa: {s}"
+    nascoste = [
+        corpo for sel, corpo, _ in css_levels.rules(css)
+        if "jenny" in sel and "display: none" in corpo
+    ]
+    assert nascoste and not [c for c in nascoste if "!important" in c], nascoste
