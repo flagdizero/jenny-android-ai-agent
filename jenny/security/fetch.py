@@ -62,7 +62,6 @@ async def open_validated_stream(
     esce dal ``with`` senza leggere il corpo, e la connessione si chiude.
     """
     check = validate or network.validate_url_target
-    extra = {"headers": headers} if headers is not None else {}
     current = url
     for _ in range(MAX_REDIRECTS + 1):
         if https_only and not current.lower().startswith("https://"):
@@ -70,7 +69,10 @@ async def open_validated_stream(
         ok, error = check(current)
         if not ok:
             raise ValueError(f"URL blocked: {error}")
-        async with client.stream("GET", current, **extra) as response:
+        # ``headers=None`` e' il default di ``httpx``: passarlo sempre e' lo stesso
+        # che ometterlo, e il tipo resta leggibile (``**extra`` era un dict che
+        # pyright confrontava con ogni parametro di ``stream``).
+        async with client.stream("GET", current, headers=headers) as response:
             if response.is_redirect:
                 location = response.headers.get("location")
                 if not location:
