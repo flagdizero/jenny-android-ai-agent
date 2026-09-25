@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from support.agent import make_loop
+from support.aio import wait_until
 from support.runner import make_spec
 
 from jenny.agent.turn_types import TurnOutcome
@@ -683,10 +684,9 @@ async def test_cron_turn_deferred_while_session_active(tmp_path):
     )
     await loop.bus.publish_inbound(msg)
 
-    for _ in range(20):
-        if loop._cron_turns.deferred_queues.get(session_key):
-            break
-        await asyncio.sleep(0.05)
+    await wait_until(
+        lambda: loop._cron_turns.deferred_queues.get(session_key), timeout=1.0, interval=0.05
+    )
 
     loop.stop()
     await asyncio.wait_for(run_task, timeout=2)

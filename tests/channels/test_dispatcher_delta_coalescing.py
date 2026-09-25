@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.aio import wait_until
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -345,10 +346,11 @@ class TestProgressFiltering:
 
         task = asyncio.create_task(manager._dispatch_outbound())
         try:
-            for _ in range(30):
-                if manager.channels["websocket"]._send_mock.await_count >= 1:
-                    break
-                await asyncio.sleep(0.05)
+            await wait_until(
+                lambda: manager.channels["websocket"]._send_mock.await_count >= 1,
+                timeout=1.5,
+                interval=0.05,
+            )
         finally:
             task.cancel()
             try:
@@ -372,10 +374,11 @@ class TestProgressFiltering:
 
         task = asyncio.create_task(manager._dispatch_outbound())
         try:
-            for _ in range(30):
-                if manager.channels["websocket"]._send_mock.await_count >= 1:
-                    break
-                await asyncio.sleep(0.05)
+            await wait_until(
+                lambda: manager.channels["websocket"]._send_mock.await_count >= 1,
+                timeout=1.5,
+                interval=0.05,
+            )
         finally:
             task.cancel()
             try:
@@ -417,10 +420,11 @@ class TestRetryWaitFiltering:
 
         task = asyncio.create_task(manager._dispatch_outbound())
         try:
-            for _ in range(30):
-                if manager.channels["websocket"]._send_mock.await_count >= 1:
-                    break
-                await asyncio.sleep(0.05)
+            await wait_until(
+                lambda: manager.channels["websocket"]._send_mock.await_count >= 1,
+                timeout=1.5,
+                interval=0.05,
+            )
         finally:
             task.cancel()
             try:

@@ -62,6 +62,18 @@ async def settle_tasks(
         await asyncio.wait(pending, timeout=remaining)
 
 
+def other_tasks(*ignore: asyncio.Task) -> set[asyncio.Task]:
+    """I task vivi del loop, tolti quello corrente e *ignore*.
+
+    Da dare a :func:`settle_tasks` quando il codice sotto prova lancia un
+    ``create_task`` senza tenerne il manico: ``all_tasks()`` è l'unico modo di
+    nominarli. Va chiamata dentro il loop, ed è quello che ``settle_tasks`` fa
+    a ogni giro.
+    """
+    skip = {asyncio.current_task(), *ignore}
+    return {t for t in asyncio.all_tasks() if t not in skip}
+
+
 def queue_idle(queue: asyncio.Queue) -> bool:
     """La coda è vuota **e** chi la consuma è di nuovo fermo ad aspettare.
 

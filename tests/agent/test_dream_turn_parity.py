@@ -12,13 +12,13 @@ diversamente di proposito (il cron scrive nel log).
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from support.aio import other_tasks, settle_tasks
 
 from jenny.agent.memory import DREAM_HISTORY_HEADER
 from jenny.agent.tools.file_state import FileStates
@@ -153,16 +153,7 @@ def _config_from_memory(monkeypatch: pytest.MonkeyPatch):
 
 
 async def _drain(timeout: float = 30.0) -> None:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    current = asyncio.current_task()
-    while True:
-        pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
-        if not pending:
-            return
-        remaining = deadline - loop.time()
-        assert remaining > 0, f"task ancora in volo dopo {timeout}s: {pending}"
-        await asyncio.wait(pending, timeout=remaining)
+    await settle_tasks(other_tasks, timeout=timeout)
 
 
 async def _via_command(tmp: Path, scenario: dict[str, Any]) -> tuple[_Memory, list[str]]:

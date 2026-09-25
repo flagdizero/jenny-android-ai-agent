@@ -14,6 +14,8 @@ from contextlib import suppress
 from typing import Any
 from unittest.mock import MagicMock
 
+from support.aio import wait_until
+
 import jenny.channels.ws_sender as ws_sender
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -45,12 +47,12 @@ async def test_pump_survives_poison_message_and_delivers_next() -> None:
             OutboundMessage(channel="websocket", chat_id="chat-1", content="good")
         )
 
-        for _ in range(200):
-            if "good" in delivered:
-                break
-            await asyncio.sleep(0.005)
-
-        assert "good" in delivered, "il pump non ha consegnato il messaggio dopo il veleno"
+        await wait_until(
+            lambda: "good" in delivered,
+            timeout=1.0,
+            interval=0.005,
+            msg="il pump non ha consegnato il messaggio dopo il veleno",
+        )
         assert not task.done(), "il pump è morto invece di continuare"
     finally:
         task.cancel()

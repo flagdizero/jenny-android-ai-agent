@@ -4,7 +4,7 @@ import json
 import time
 
 import pytest
-from support.aio import settle_tasks, wait_until
+from support.aio import other_tasks, settle_tasks, wait_until
 from support.cron import disable_job
 
 from jenny.cron.service import CronJobSkippedError, CronService
@@ -13,15 +13,6 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 
 # La scadenza di questo file: un secondo.
 _wait_until = functools.partial(wait_until, timeout=1.0)
-
-
-def _other_tasks(*ignore: asyncio.Task) -> set[asyncio.Task]:
-    """I task del loop, tolti quello corrente e *ignore*: da dare a
-    :func:`support.aio.settle_tasks`, che li rilegge a ogni giro e alla
-    scadenza fallisce — un'attesa che scade in silenzio, prima di asserzioni
-    negative, le farebbe passare anche con il lavoro ancora in volo."""
-    skip = {asyncio.current_task(), *ignore}
-    return {t for t in asyncio.all_tasks() if t not in skip}
 
 
 def _bound_chat(chat_id: str = "chat-1") -> dict[str, str]:
@@ -913,7 +904,7 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
         assert inflight_task.cancelling() == 0
 
         # E in più: nessun task pendente resta a poter cancellare più tardi.
-        await settle_tasks(lambda: _other_tasks(inflight_task), timeout=1.0)
+        await settle_tasks(lambda: other_tasks(inflight_task), timeout=1.0)
 
         assert inflight_task.cancelling() == 0
         assert service._timer_task is inflight_task

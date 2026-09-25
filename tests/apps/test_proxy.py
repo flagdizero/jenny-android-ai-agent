@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from support.aio import wait_until
 
 from jenny.apps import proxy as proxy_mod
 from jenny.apps.proxy import COOKIE_NAME, AppViewProxy, AppViewProxyError
@@ -275,11 +276,12 @@ async def test_idle_timeout_actually_closes_the_listener(monkeypatch):
     # `wait_closed()` ha davvero qualcosa da aspettare.
     _, idle_writer = await asyncio.open_connection("127.0.0.1", port)
     try:
-        for _ in range(100):
-            await asyncio.sleep(0.05)
-            if p._server is None:
-                break
-        assert p._server is None, "il reaper non ha portato a termine la chiusura"
+        await wait_until(
+            lambda: p._server is None,
+            timeout=5.0,
+            interval=0.05,
+            msg="il reaper non ha portato a termine la chiusura",
+        )
         assert p._conns == set(), "le connessioni non sono state cancellate"
         with pytest.raises((ConnectionRefusedError, OSError)):
             await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), timeout=5)

@@ -14,11 +14,11 @@ memoria non sarebbe più un comando e finirebbe al modello come messaggio.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from support.aio import other_tasks, settle_tasks
 
 from jenny.agent.memory import MemoryStore
 from jenny.bus.events import InboundMessage
@@ -133,16 +133,7 @@ async def _drain(timeout: float = 30.0) -> None:
     un difetto, e lo dice invece di lasciare fallire un ``assert ([])`` tre righe
     più in là.
     """
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    current = asyncio.current_task()
-    while True:
-        pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
-        if not pending:
-            return
-        remaining = deadline - loop.time()
-        assert remaining > 0, f"task ancora in volo dopo {timeout}s: {pending}"
-        await asyncio.wait(pending, timeout=remaining)
+    await settle_tasks(other_tasks, timeout=timeout)
 
 
 def _config_path(workspace: Path) -> Path:
