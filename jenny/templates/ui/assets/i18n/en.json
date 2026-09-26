@@ -734,7 +734,9 @@
       "noNext": "no next run",
       "runs": "Recent runs",
       "noRuns": "No runs recorded.",
-      "text": "Reminder text"
+      "text": "Reminder text",
+      "paused": "paused",
+      "pausedSince": "Paused since {when}: it does not run until you resume it."
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",
@@ -753,7 +755,20 @@
       "orphans": "Entries with no task",
       "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
     },
-    "byHerself": "When she acts on her own"
+    "byHerself": "When she acts on her own",
+    "action": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Delete",
+      "removeConfirm": "Delete “{name}”? It will not come back: if you need it again, ask Jenny.",
+      "done": {
+        "pause": "Paused.",
+        "resume": "Resumed.",
+        "remove": "Deleted."
+      },
+      "expired": "It was a one-time reminder and its time has passed: it can only be deleted.",
+      "failed": "I couldn't do it. Try again in a moment."
+    }
   },
   "onboarding": {
     "selectFormat": "Choose your provider format",

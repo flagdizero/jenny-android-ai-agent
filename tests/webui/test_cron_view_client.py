@@ -578,3 +578,23 @@ def test_counting_survives_a_payload_without_jobs() -> None:
     assert data["counts"] == {"system": 0, "user": 0}, (
         "senza lavori i conteggi sono zero, non un'eccezione"
     )
+
+
+def test_the_row_carries_the_actions_the_server_allows_and_the_pause() -> None:
+    """La lista dei gesti viene dal server e passa intatta: il client non la
+    ricalcola. Un payload di una versione vecchia, senza ``actions``, non offre
+    niente invece di rompersi."""
+    paused = (_job("acqua", "user", effective="disabled", next_ms="null")[:-2]
+              + ", actions: ['resume', 'remove'], paused_at_ms: NOW - 3_600_000 }")
+    legacy = _job("vecchio", "user")
+    out = _run_js(f"""
+      const view = buildCronView({_payload(jobs=paused + ', ' + legacy)}, {{ tr }});
+      const byId = Object.fromEntries(view.rows.map((r) => [r.id, r]));
+      console.log(JSON.stringify({{
+        acqua: [byId.acqua.actions, byId.acqua.pausedAtMs === NOW - 3_600_000],
+        vecchio: [byId.vecchio.actions, byId.vecchio.pausedAtMs],
+      }}));
+    """)
+    visto = json.loads(out)
+    assert visto["acqua"] == [["resume", "remove"], True]
+    assert visto["vecchio"] == [[], None]

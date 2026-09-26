@@ -2462,7 +2462,9 @@ export class SettingsController {
     if (row.kind === 'system') badges.push(i18n.t('cron.job.protected'));
     if (row.monitor) badges.push(i18n.t('cron.job.monitor'));
     if (row.oneShot) badges.push(i18n.t('cron.job.oneShot'));
-    if (row.health === 'off') badges.push(i18n.t('cron.job.disabled'));
+    // In pausa e' uno «spento» che torna: si dice per quel che e'.
+    if (row.pausedAtMs) badges.push(i18n.t('cron.job.paused'));
+    else if (row.health === 'off') badges.push(i18n.t('cron.job.disabled'));
     if (row.health === 'inert') badges.push(i18n.t('cron.job.inert'));
     const badgeHtml = badges
       .map(b => `<span class="cron-badge">${escapeHtml(b)}</span>`).join('');
@@ -2528,8 +2530,13 @@ export class SettingsController {
      la stessa modale. `detailDialog` ha una sola istanza (`#oc-detail-dialog`) e
      si rifiuta di aprirsi se è già aperta, quindi un secondo livello job→run non
      esisterebbe comunque — meglio progettarlo piatto che scoprirlo dopo. */
-  _showCronJobDialog(row) {
+  async _showCronJobDialog(row) {
     const parts = [];
+    if (row.pausedAtMs) {
+      parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.pausedSince', {
+        when: new Date(row.pausedAtMs).toLocaleString(i18n.locale),
+      }))}</p>`);
+    }
     if (row.purpose) parts.push(`<p class="oc-detail-lead">${escapeHtml(row.purpose)}</p>`);
     if (row.message) {
       parts.push(`<div class="settings-subheading">${i18n.t('cron.job.text')}</div>
@@ -2548,7 +2555,38 @@ export class SettingsController {
     } else {
       parts.push(`<div class="settings-empty-state">${i18n.t('cron.job.noRuns')}</div>`);
     }
-    detailDialog({ title: row.name, bodyHtml: parts.join('') });
+    /* I gesti in fondo al dettaglio: quelli che il server ha detto possibili
+       (`row.actions`). «Riprendi» e' il principale; la modale e' una sola,
+       quindi la conferma di «Elimina» si apre dopo, quando questa e' chiusa. */
+    const actions = row.actions.map((id) => ({
+      id,
+      label: i18n.t(`cron.action.${id}`),
+      variant: id === 'resume' ? 'primary' : undefined,
+    }));
+    const choice = await detailDialog({ title: row.name, bodyHtml: parts.join(''), actions });
+    if (choice) await this._runCronAction(row, choice);
+  }
+
+  /** Pausa, ripresa, eliminazione. La pausa non chiede: si annulla con un
+   *  tocco. L'eliminazione si': un job tolto non torna, se non chiedendolo di
+   *  nuovo a Jenny. */
+  async _runCronAction(row, action) {
+    if (!['pause', 'resume', 'remove'].includes(action)) return;
+    if (action === 'remove') {
+      const ok = await confirmDialog(
+        i18n.t('cron.action.removeConfirm', { name: row.name }),
+        i18n.t('cron.action.remove'),
+      );
+      if (!ok) return;
+    }
+    try {
+      await api.cronJobAction(row.id, action);
+      showToast(i18n.t(`cron.action.done.${action}`), 'success');
+    } catch (err) {
+      console.warn('cron action failed', action, err);
+      showToast(i18n.t(err?.status === 409 ? 'cron.action.expired' : 'cron.action.failed'), 'error');
+    }
+    await this._loadCron();
   }
 
   /* I controlli di HEARTBEAT.md. Il blocco esiste solo per il job `heartbeat`, e

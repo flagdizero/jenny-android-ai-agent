@@ -283,6 +283,11 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
         error: run.error,
       })),
       heartbeat: heartbeatView(job.heartbeat),
+      /* Cosa l'officina puo' farne: la lista la decide il server (`_job_actions`
+         in `webui/cron_api.py`), con la stessa regola che poi applica. Il client
+         non la ricalcola: un bottone che il server rifiuterebbe non compare. */
+      actions: Array.isArray(job.actions) ? job.actions : [],
+      pausedAtMs: job.paused_at_ms ?? null,
     };
   });
   /* I conteggi vengono dal payload e descrivono **tutti** i lavori: con un

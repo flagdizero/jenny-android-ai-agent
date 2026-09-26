@@ -65,7 +65,9 @@ A few smaller things worth knowing:
 
 - A reminder job cannot schedule further jobs from inside its own execution — this only matters if you ask Jenny to "set up a reminder that then sets another reminder" in one step.
 - The job's default name is just the first 30 characters of your reminder's message, unless you give it something more memorable.
-- You can list and remove reminders by asking — there is no dedicated screen for this; it's entirely conversational (e.g. "what reminders do I have?", "remove job xyz").
+- You can list and remove reminders by asking (e.g. "what reminders do I have?", "remove job xyz"). You create them only by asking.
+- In the workshop, **Hands → When she acts on her own** lists them too, and tapping one opens its detail with **Pause** and **Delete**. On a paused one the buttons are **Resume** and **Delete**. Pausing needs no confirmation because resuming undoes it. Deleting asks first. A resumed reminder counts from the moment you resume it and does not catch up on the runs it missed: an hourly one runs an hour later, a daily 8:00 one at the next 8:00. A one-time reminder whose time passed while it was paused can only be deleted, because resuming it would fire it at once, late. System jobs have no buttons, since their switch lives in their own settings. There is no "run now": that would start an agent turn, which costs tokens and may message you.
+- Jenny still sees a paused reminder when she lists them, marked as paused, so she won't set it up again thinking it's gone.
 
 ### Two modes: one that always speaks, one that speaks only if it has to
 

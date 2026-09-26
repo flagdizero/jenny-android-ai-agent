@@ -734,7 +734,9 @@
       "noNext": "nessuna scadenza",
       "runs": "Ultime esecuzioni",
       "noRuns": "Nessuna esecuzione registrata.",
-      "text": "Testo del promemoria"
+      "text": "Testo del promemoria",
+      "paused": "in pausa",
+      "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi."
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
@@ -753,7 +755,20 @@
       "orphans": "Voci senza task",
       "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
     },
-    "byHerself": "Quando agisce da sola"
+    "byHerself": "Quando agisce da sola",
+    "action": {
+      "pause": "Metti in pausa",
+      "resume": "Riprendi",
+      "remove": "Elimina",
+      "removeConfirm": "Eliminare «{name}»? Non torna più: se ti serve di nuovo, chiedilo a Jenny.",
+      "done": {
+        "pause": "Messo in pausa.",
+        "resume": "Ripreso.",
+        "remove": "Eliminato."
+      },
+      "expired": "Era un promemoria per una volta sola e la sua ora è passata: si può solo eliminare.",
+      "failed": "Non ci sono riuscita. Riprova fra poco."
+    }
   },
   "onboarding": {
     "selectFormat": "Scegli il formato del provider",

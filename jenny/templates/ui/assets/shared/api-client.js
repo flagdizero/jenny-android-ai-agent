@@ -158,6 +158,19 @@ class ApiClient {
     return res.json();
   }
 
+  /* Pausa, ripresa o eliminazione di un job dell'utente (`pause` | `resume` |
+     `remove`). L'errore porta `status`: 409 vuol dire un promemoria singolo la
+     cui ora e' passata durante la pausa, che si puo' solo eliminare. */
+  async cronJobAction(jobId, action) {
+    const res = await this._fetch(`/api/webui/cron/${encodeURIComponent(jobId)}/${action}`);
+    if (!res.ok) {
+      const err = new Error((await res.text().catch(() => '')) || `Cron ${action} failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
   async getAndroidApps() {
     const res = await this._fetch('/api/webui/android-apps');
     if (!res.ok) throw new Error(`Android apps failed: ${res.status}`);
