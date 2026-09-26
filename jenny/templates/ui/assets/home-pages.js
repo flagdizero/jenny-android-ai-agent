@@ -90,6 +90,12 @@ export class HomePages {
      *  questa non sta nell'elenco salvato. Parte da quella che la chat mostra
      *  all'avvio, cioe' la personale. */
     this.homeConversation = app?.currentKey?.() || null;
+    /** Il quaderno aperto nella pagina Quaderni, o `null`: allora la pagina
+     *  mostra l'elenco. Dal 26/09/2026 un quaderno si apre **li'**, dove l'hai
+     *  toccato, e non piu' nella pagina chat: la pagina chat e' sempre la
+     *  conversazione personale, e la fila non la rinomina piu'. Non si salva:
+     *  dopo un riavvio i Quaderni ripartono dall'elenco. */
+    this.notebooksConversation = null;
 
     if (this.track) {
       /* Si parte sulla chat anche prima che il server abbia detto l'ordine:
@@ -229,6 +235,7 @@ export class HomePages {
   conversationOf(i) {
     const entry = this.entry(i);
     if (entry?.kind === 'chat') return this.homeConversation;
+    if (entry?.kind === 'notebooks') return this.notebooksConversation;
     return entry?.kind === 'conversation' ? entry.ref : null;
   }
 
@@ -249,12 +256,17 @@ export class HomePages {
    *
    *  **Una pagina conversazione mostra solo il suo quaderno**: e' l'invariante
    *  di tutto il disegno. Quindi se la conversazione chiesta non e' quella
-   *  della pagina in cui sei, la si apre nella pagina chat, e ci si va. Le
-   *  strade che cambiano conversazione sono gia' cinque (i Quaderni, nuovo
+   *  della pagina in cui sei, si apre **nel suo posto**, e ci si va:
+   *  - la conversazione personale nella pagina chat;
+   *  - un quaderno nella pagina Quaderni (v. `notebooksConversation`).
+   *  Le strade che cambiano conversazione sono gia' cinque (i Quaderni, nuovo
    *  quaderno, Home, Indietro, un avviso) e la sesta arrivera'.
    *
-   *  Dalla pagina chat si apre li', anche un quaderno che ha una pagina sua:
-   *  deciso dall'utente il 23/09/2026 — «fai come ora, non scorrere».
+   *  Fino al 26/09/2026 un quaderno si apriva nella pagina chat, che prendeva
+   *  il suo nome nella fila: una pagina che cambia nome a seconda di cosa ci
+   *  guardi dentro, e «Jenny» spariva dal menu (v.
+   *  `.agent/pagine-in-alto-plan.md`). La regola del 23/09 — «dalla pagina
+   *  chat si apre li', non scorrere» — e' caduta con lei.
    *
    *  Torna la promessa del cambio, e non per scrupolo: chi chiama ci manda
    *  subito dopo un messaggio, e deve finire nella conversazione giusta.
@@ -264,10 +276,42 @@ export class HomePages {
     if (here?.kind === 'conversation' && key === here.ref) {
       return this.app?.showConversation?.(key);
     }
-    this.homeConversation = key;
-    if (here?.kind === 'chat') return this.app?.showConversation?.(key);
-    this.goTo(this.chatIndex);
+    const notebooks = this.indexOf('notebooks');
+    if (!projectNameOf(key) || notebooks < 0) {
+      this.homeConversation = key;
+      if (here?.kind === 'chat') return this.app?.showConversation?.(key);
+      this.goTo(this.chatIndex);
+      return this.app?.chatMove?.read;
+    }
+    this.notebooksConversation = key;
+    this._markNotebooks();
+    /* Anche se ci sei gia': il `goTo` e' quello che porta la chat nel
+       pannello, e il trasloco sa che se e' gia' li' non deve fare niente. */
+    this.goTo(notebooks);
     return this.app?.chatMove?.read;
+  }
+
+  /** Chiude il quaderno aperto nei Quaderni: torna l'elenco. Vero se c'era
+   *  qualcosa da chiudere.
+   *
+   *  La chat torna a casa **con la conversazione della pagina chat**, e non
+   *  con quella del quaderno: la pagina chat e' fuori schermo, il cambio non
+   *  si vede, e scorrendo li' dopo non c'e' niente da rileggere. E senza foto
+   *  nel pannello dei Quaderni: sotto adesso c'e' di nuovo l'elenco. */
+  closeNotebook() {
+    if (!this.notebooksConversation) return false;
+    this.notebooksConversation = null;
+    this._markNotebooks();
+    const panel = this._panelFor('notebooks');
+    this.app?.chatMove?.leaves?.(panel, this._panelFor('chat'), this.homeConversation);
+    if (this.order[this.index] === 'notebooks') this.app?.onPageChanged?.(this.index, this.entry(this.index));
+    return true;
+  }
+
+  /** Il pannello dei Quaderni sa se sta mostrando l'elenco o un quaderno: il
+   *  foglio nasconde l'uno quando c'e' l'altro. */
+  _markNotebooks() {
+    this._panelFor('notebooks')?.toggleAttribute?.('data-open', Boolean(this.notebooksConversation));
   }
 
   /* ── Appendere e staccare ───────────────────────────────────────────── */
@@ -316,12 +360,13 @@ export class HomePages {
     return Boolean(saved);
   }
 
-  /** Un quaderno ha cambiato nome: la pagina chat lo segue, se era il suo.
-   *  Le pagine appese le ha gia' rinominate il gateway; la conversazione della
-   *  pagina chat non sta nell'elenco salvato, e senza questa resterebbe
-   *  puntata a un nome che non c'e' piu'. */
+  /** Un quaderno ha cambiato nome: la pagina chat e i Quaderni lo seguono, se
+   *  era il loro. Le pagine appese le ha gia' rinominate il gateway; le
+   *  conversazioni di queste due pagine non stanno nell'elenco salvato, e
+   *  senza questa resterebbero puntate a un nome che non c'e' piu'. */
   renameConversation(oldKey, newKey) {
     if (this.homeConversation === oldKey) this.homeConversation = newKey;
+    if (this.notebooksConversation === oldKey) this.notebooksConversation = newKey;
   }
 
   /** Rilegge dal server **senza** spostarti.

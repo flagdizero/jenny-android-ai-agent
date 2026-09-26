@@ -71,6 +71,13 @@ function createEl(id, cls) {
       return c;
     },
     append(...cs) { for (const c of cs) this.appendChild(c); },
+    /* Gli attributi senza valore (`data-open` dei Quaderni): quali ci sono. */
+    flags: new Set(),
+    toggleAttribute(name, on) {
+      if (on) this.flags.add(name);
+      else this.flags.delete(name);
+      return on;
+    },
     /* `<dialog>`: `showModal` e `close` sono quel che serve, piu' `open`. */
     open: false,
     showModal() { this.open = true; },
@@ -284,6 +291,7 @@ def _script(body: str, pages: list[dict], view: str = "chat") -> str:
               bringBackHome(v, c) {
                 moves.push({ fa: 'home', v, c, attached: track.children.includes(v) });
               },
+              leaves(p, h, k) { moves.push({ fa: 'lascia', p, h, k }); return Promise.resolve(); },
             };
             const arrivals = () => moves.filter((x) => x.fa === 'arriva');
             const PERSONAL = 'websocket:default';
@@ -1227,14 +1235,93 @@ def test_a_notebook_page_is_named_after_its_notebook() -> None:
 # ── Da fuori: i Quaderni, Home, un avviso ────────────────────────────────────
 
 
-def test_from_the_chat_page_a_notebook_opens_right_there() -> None:
-    """Anche se ha una pagina sua. «Fai come ora, non scorrere» — l'utente, 23/09."""
+def test_a_notebook_opens_inside_the_notebooks_page() -> None:
+    """Dove l'hai toccato, anche se ha una pagina sua, e anche dalla pagina chat.
+
+    Fino al 26/09/2026 si apriva nella pagina chat («fai come ora, non
+    scorrere», 23/09), e la pagina chat prendeva il suo nome nella fila: una
+    pagina che si rinomina a seconda di cosa ci guardi dentro. Ora la pagina
+    chat resta la conversazione personale, e il quaderno ci arriva col
+    trasloco, nel pannello dei Quaderni.
+    """
     _run(
+        "moves.length = 0;\n"
         "const r = await homePages.openConversation('project:piante');\n"
-        "assert.deepEqual(shown, ['project:piante']);\n"
-        "assert.equal(homePages.index, CHAT(), 'e scorso alla pagina del quaderno');\n"
-        "assert.equal(homePages.homeConversation, 'project:piante');\n"
-        "assert.equal(r, 'mostrata', 'la promessa del cambio non torna a chi chiama');\n",
+        "assert.equal(homePages.index, I('notebooks'), 'il quaderno non e\u2019 nei Quaderni');\n"
+        "assert.equal(homePages.notebooksConversation, 'project:piante');\n"
+        "assert.equal(homePages.homeConversation, PERSONAL, 'la pagina chat ha preso il quaderno');\n"
+        "assert.deepEqual(shown, [], 'la chat e\u2019 cambiata dove non c\u2019era');\n"
+        "const a = arrivals();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].p, notebooksPanel);\n"
+        "assert.equal(a[0].k, 'project:piante');\n"
+        "assert.ok(notebooksPanel.flags.has('data-open'), 'l\u2019elenco resta sopra la chat');\n"
+        "assert.equal(r, 'letto', 'chi chiama non aspetta la lettura');\n",
+        MIXED,
+    )
+
+
+def test_the_personal_conversation_opens_on_the_chat_page() -> None:
+    """Dai Quaderni, con un quaderno aperto: la personale ha il suo posto, e il
+    quaderno resta aperto dov'era."""
+    _run(
+        "await homePages.openConversation('project:piante');\n"
+        "moves.length = 0;\n"
+        "await homePages.openConversation(PERSONAL);\n"
+        "assert.equal(homePages.index, CHAT());\n"
+        "assert.equal(homePages.notebooksConversation, 'project:piante', 'aprire la personale ha chiuso il quaderno');\n"
+        "const a = arrivals();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].p, chatPanel);\n"
+        "assert.equal(a[0].k, PERSONAL);\n",
+        MIXED,
+    )
+
+
+def test_coming_back_to_the_notebooks_brings_the_open_notebook() -> None:
+    """Il quaderno aperto resta aperto quando scorri via: tornando, la chat
+    torna nel pannello con la sua conversazione. Senza un quaderno aperto i
+    Quaderni sono l'elenco, e il trasloco non si chiama."""
+    _run(
+        "moves.length = 0;\n"
+        "homePages.goTo(I('notebooks'));\n"
+        "assert.equal(arrivals().length, 0, 'l\u2019elenco ha chiamato il trasloco');\n"
+        "await homePages.openConversation('project:piante');\n"
+        "homePages.goTo(CHAT());\n"
+        "moves.length = 0;\n"
+        "homePages.goTo(I('notebooks'));\n"
+        "const a = arrivals();\n"
+        "assert.equal(a.length, 1);\n"
+        "assert.equal(a[0].p, notebooksPanel);\n"
+        "assert.equal(a[0].k, 'project:piante');\n",
+        MIXED,
+    )
+
+
+def test_closing_a_notebook_brings_back_the_list() -> None:
+    """La chat torna a casa con la conversazione di casa, senza foto sopra
+    l'elenco (lo fa `leaves`, che ha il suo banco nel trasloco)."""
+    _run(
+        "await homePages.openConversation('project:piante');\n"
+        "moves.length = 0;\n"
+        "assert.equal(homePages.closeNotebook(), true);\n"
+        "assert.equal(homePages.notebooksConversation, null);\n"
+        "assert.ok(!notebooksPanel.flags.has('data-open'), 'l\u2019elenco resta nascosto');\n"
+        "const l = moves.filter((x) => x.fa === 'lascia');\n"
+        "assert.equal(l.length, 1);\n"
+        "assert.equal(l[0].p, notebooksPanel);\n"
+        "assert.equal(l[0].h, chatPanel);\n"
+        "assert.equal(l[0].k, PERSONAL);\n"
+        "assert.equal(homePages.closeNotebook(), false, 'un elenco si e\u2019 chiuso due volte');\n",
+        MIXED,
+    )
+
+
+def test_a_renamed_notebook_stays_open_in_the_notebooks() -> None:
+    _run(
+        "await homePages.openConversation('project:piante');\n"
+        "homePages.renameConversation('project:piante', 'project:erbe');\n"
+        "assert.equal(homePages.notebooksConversation, 'project:erbe');\n",
         MIXED,
     )
 

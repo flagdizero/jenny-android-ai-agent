@@ -340,3 +340,71 @@ che JENNY resti sempre la conversazione personale. Se si fa, anche
 `home-ui-query.js` deve cambiare: oggi per la pista riporta l'id della pagina,
 e una chat di quaderno sotto NOTEBOOKS gli farebbe dire «l'elenco dei
 quaderni».
+
+## Ritocco del 26/09/2026, terzo: un quaderno si apre nei Quaderni
+
+> «quando seleziono un quaderno jenny si trasforma nel quaderno anche nel
+> menu. è logicamente sbagliatissimo» — l'utente, 26/09/2026.
+
+Chiude il «resta aperto» delle due sezioni sopra. Aprire un quaderno cambiava
+la conversazione della pagina chat, e la fila scriveva il nome del quaderno al
+posto di JENNY: una pagina che si rinominava a seconda di cosa ci guardavi
+dentro, e la conversazione personale spariva dal menu. Fra le proposte
+disegnate (JENNY con un'etichetta del quaderno; il quaderno come pagina di
+passaggio; il percorso nella fila) l'utente ha scelto la N3, **il quaderno
+dentro i Quaderni**:
+
+- **JENNY è sempre la conversazione personale.** `_chatName()` restituisce il
+  nome di lei e basta.
+- **Un quaderno si apre nella pagina Quaderni**, dove l'hai toccato: l'elenco e
+  il + si fanno da parte (`data-open` sul pannello) e ci arriva la chat, spostata
+  dal trasloco come nelle pagine conversazione. È `HomePages.notebooksConversation`,
+  letto da `conversationOf`: nessun meccanismo nuovo. Non si salva, e dopo un
+  riavvio i Quaderni ripartono dall'elenco.
+- **Dove si apre una conversazione** (`openConversation`): la personale sempre
+  nella pagina chat, un quaderno nei Quaderni, e la pagina fissata di un
+  quaderno resta la sua. La regola del 23/09 («dalla pagina chat si apre lì,
+  non scorrere») è caduta con la pagina chat che si rinominava.
+- **Nella fila**, con un quaderno aperto nei Quaderni, c'è il percorso al
+  posto dei nomi: `‹ QUADERNI › ● piante`, con le classi e l'altezza del
+  percorso delle stanze e la riga nel colore del quaderno. La prima versione
+  teneva la fila e colorava soltanto la riga sotto QUADERNI; l'utente, sul
+  telefono: «in questa situazione doveva esserci scritto notebooks → piante».
+  Scorrendo su un'altra pagina torna la fila, e il quaderno resta aperto.
+- **Chat e pagine sono due viste dello stesso posto**, con lo stesso percorso
+  e un interruttore `Chat | Pagine 31` a destra, nello stesso punto nelle due:
+  nella fila della chat (lo disegna `home-strip.js`) e nell'intestazione delle
+  pagine (`#home-view-switch`). Prima si andava alle pagine da una pastiglia in
+  basso e si tornava da «Parlane» in alto — «per andare alle pagine la pill sta
+  vicino alla chat e per tornare alla chat la pill sta in alto», l'utente — e
+  le due intestazioni erano uguali senza niente che dicesse la vista. Scelto fra
+  due tavole (una pastiglia che si scambia; l'interruttore). «Parlane» resta
+  solo nel lettore.
+- **La pastiglia in basso** («● piante · 31») c'è ormai solo nelle pagine
+  fissate su un quaderno, che in alto hanno la fila. Nei Quaderni la barra dove
+  scrivi torna larga: con un nome lungo la scritta del campo andava a capo.
+- **Si esce in tre modi**, tutti verso l'elenco: la freccia o QUADERNI del
+  percorso, e Indietro. La × che la prima versione aveva nella pastiglia se n'è
+  andata con la pastiglia. Il vecchio ultimo gradino di Indietro («dalla pagina
+  chat, esci dal quaderno») non c'è più.
+- **Chiudere** (`closeNotebook`) riporta la chat nella pagina chat con la
+  conversazione personale, subito, fuori schermo, e **senza foto** sopra
+  l'elenco (`ChatMove.leaves`). Il negativo del quaderno resta: riaprendolo, la
+  foto che copre la lettura è quella di com'era.
+- **Dalla stanza delle pagine** la radice QUADERNI del percorso porta
+  all'elenco e chiude il quaderno; la freccia torna alla sua chat (deciso con
+  l'utente).
+- **«Cosa vedi?»** dice `home:notebook` per i Quaderni con un quaderno aperto,
+  e non `home:notebooks`: Jenny non deve credere di guardare l'elenco.
+
+**Il prezzo, accettato:** scorrere fra JENNY e i Quaderni con un quaderno
+aperto cambia conversazione a ogni passaggio, come già le pagine fissate. La
+foto copre la lettura; un quaderno mai aperto dall'avvio entra vuoto per un
+attimo.
+
+Provato sul Titan 2, release firmata: apertura dall'elenco, JENNY ⇄ QUADERNI
+con la conversazione giusta a ogni lato, l'interruttore nei due versi (stesso
+punto, stesso percorso), il tocco su QUADERNI, Indietro
+(la prima pressione la prende la tastiera a schermo, che l'apertura mostra: è
+Android, e fa lo stesso nella chat di JENNY), la radice del percorso dalla
+stanza delle pagine.

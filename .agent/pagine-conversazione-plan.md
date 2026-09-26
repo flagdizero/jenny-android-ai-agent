@@ -333,3 +333,15 @@ difende.
   `conversazioneCasa` evidentemente personale. Il percorso più probabile
   (quaderno-c dal titolo della pagina 0 → pagina del quaderno → Indietro) si
   comporta come deve.
+
+---
+
+## Aggiunta del 26/09/2026: i Quaderni usano lo stesso trasloco
+
+La pagina fissa Quaderni è diventata una pagina che può ospitare la chat: con
+un quaderno aperto (`HomePages.notebooksConversation`) `conversationOf` le dà
+quella conversazione, e il trasloco la tratta come una pagina conversazione —
+foto uscendo, chat sotto la foto entrando. La differenza è che si chiude:
+`closeNotebook` rimanda la chat a casa senza lasciare una foto sopra l'elenco
+(`ChatMove.leaves`). Perché: v. «Ritocco del 26/09/2026, terzo» in
+`pagine-in-alto-plan.md`.

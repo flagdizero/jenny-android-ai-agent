@@ -182,6 +182,29 @@ export class ChatMove {
     this._outOfPlace = home;
   }
 
+  /** `panel` smette di essere una pagina di chat — un quaderno chiuso nei
+   *  Quaderni, e sotto torna l'elenco. La chat torna a casa e prende `key`,
+   *  la conversazione di casa; e in `panel` **non resta una foto**, a
+   *  differenza di un arrivo qualunque, o coprirebbe l'elenco.
+   *
+   *  Il negativo invece si tiene: riaprendo lo stesso quaderno, la sua foto
+   *  e' quella di com'era. */
+  leaves(panel, home, key) {
+    removeSnapshot(panel);
+    if (!this.chat || !home || this.chat.parentElement !== panel) return Promise.resolve();
+    if (this._reliable) this._negatives.set(this._currentKey?.(), this._negative());
+    /* Senza una conversazione di casa `arrives` non muoverebbe niente, e la
+       chat resterebbe sopra l'elenco: si riporta a casa com'e'. */
+    if (!key) {
+      this.bringBackHome(panel, home);
+      return Promise.resolve();
+    }
+    /* «Fuori posto» e' il segno con cui `arrives` salta la foto della pagina
+       lasciata (il suo passo 1): qui e' proprio quel che serve. */
+    this._outOfPlace = panel;
+    return this.arrives(home, key);
+  }
+
   /* ── La foto ─────────────────────────────────────────────────────────── */
 
   /** Il negativo: la chat com'e' adesso, resa inerte.

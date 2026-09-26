@@ -168,6 +168,18 @@ class HomeApp {
        delle pagine del quaderno, che dal 23/09/2026 sta nella barra dove
        scrivi, al posto che era del bottone del cassetto. */
     this.pagesBtn = document.getElementById('home-notebook-pages-open');
+    /* La pastiglia intera, col nome e il pallino del quaderno: c'e' solo nelle
+       pagine fissate su un quaderno. */
+    this.pagesPill = document.getElementById('home-notebook-pill');
+    this.pagesName = document.getElementById('home-notebook-name');
+    this.pagesDot = document.getElementById('home-notebook-dot');
+    /* L'interruttore Chat | Pagine nell'intestazione delle pagine del quaderno
+       (quello della chat del quaderno lo disegna la fila). */
+    this.viewSwitch = document.getElementById('home-view-switch');
+    this.viewChat = document.getElementById('home-view-chat');
+    this.viewChatLabel = document.getElementById('home-view-chat-label');
+    this.viewPagesLabel = document.getElementById('home-view-pages-label');
+    this.viewPagesCount = document.getElementById('home-view-pages-count');
     this.pagesCount = document.getElementById('home-notebook-pages-count');
     this.backBtn = document.getElementById('home-back');
     /* Il percorso della riga: la radice (di che posto e' la stanza) e i
@@ -318,6 +330,8 @@ class HomeApp {
     this.strip = new HomeStrip(document.getElementById('home-strip'), {
       homePages: this.homePages,
       chatName: () => this._chatName(),
+      pageCount: (notebook) => this.pageCountOf(notebook),
+      onPages: () => this.openPages(),
       onChange: (open) => this._onSort(open),
     });
     /* Le tre pagine fisse che non sono la chat: cosa fanno quando le guardi. */
@@ -398,6 +412,7 @@ class HomeApp {
       this._autosize();
     };
     this.pagesBtn?.addEventListener('click', () => this.openPages());
+    this.viewChat?.addEventListener('click', () => this._setView('chat'));
     /* Il + tondo della pagina Quaderni: un quaderno nuovo, e ci si entra. */
     this.newNotebook = document.getElementById('home-notebooks-new');
     this.newNotebook?.addEventListener('click', () => this.createNotebook());
@@ -650,6 +665,7 @@ class HomeApp {
     if (this.homePages?.homeConversation === key) {
       this.homePages.homeConversation = sessionManager.personalKey;
     }
+    if (this.homePages?.notebooksConversation === key) this.homePages.closeNotebook();
     if (sessionManager.currentKey === key) {
       await this.showConversation(this.homePages?.homeConversation || null);
     }
@@ -904,6 +920,9 @@ class HomeApp {
    *  tornare a casa, non uscire dall'app. */
   goBackOneRoom() {
     if (this.view === 'chat') {
+      /* Un quaderno aperto nei Quaderni e' un gradino: prima si torna
+         all'elenco, poi alla chat. */
+      if (this._entry?.kind === 'notebooks' && this.homePages?.closeNotebook()) return true;
       if (!this.homePages || this.homePages.index === this.homePages.chatIndex) return false;
       this.homePages.goTo(this.homePages.chatIndex);
       return true;
@@ -971,6 +990,7 @@ class HomeApp {
 
   /* Le pagine su cui si scrive: la chat, e una pagina quaderno che la ospita. */
   _haComposer(entry) {
+    if (entry?.kind === 'notebooks') return Boolean(this.homePages?.notebooksConversation);
     return entry?.kind === 'chat' || entry?.kind === 'conversation';
   }
 
@@ -987,15 +1007,15 @@ class HomeApp {
     document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
   }
 
-  /** Il nome della pagina chat nella fila: «Jenny», o il quaderno che mostra,
-   *  col suo pallino. E' la conversazione **della pagina chat**, non quella a
-   *  schermo: su una pagina quaderno la chat e' in prestito, e il nome che la
-   *  fila scrive sulla pagina chat resta quello a cui tornerai. */
+  /** Il nome della pagina chat nella fila: il nome di lei, e basta.
+   *
+   *  Fino al 26/09/2026 era anche il quaderno che la chat mostrava, col suo
+   *  pallino: una pagina che cambiava nome a seconda di cosa ci guardavi
+   *  dentro, e la conversazione personale spariva dal menu. Oggi un quaderno si
+   *  apre nei Quaderni (v. `HomePages.openConversation`), e la pagina chat e'
+   *  sempre la conversazione personale. */
   _chatName() {
-    const notebook = projectNameOf(this.homePages?.homeConversation || sessionManager.currentKey);
-    return notebook
-      ? { name: notebook, color: dotColor(notebook) }
-      : { name: this._personalName, color: null };
+    return { name: this._personalName, color: null };
   }
 
   /** La modalita' ordina si apre o si chiude: la pagina sotto si spegne, e la
@@ -1101,9 +1121,12 @@ class HomeApp {
     /* «Parlane» riporta a parlare **di questo quaderno**: vale dalle sue
        pagine e dal lettore, e in nessun altro posto — non nelle stanze delle
        impostazioni, dove non c'e' niente di cui parlare. */
-    const inNotebook = this.view === 'pages' || this.view === 'reader';
     const notebook = projectNameOf(sessionManager.currentKey);
-    if (this.talkBtn) this.talkBtn.hidden = !inNotebook;
+    /* Dal 26/09/2026 solo dal lettore: dalle pagine alla chat si torna
+       dall'interruttore Chat | Pagine, nello stesso punto in cui dalla chat si
+       va alle pagine. */
+    if (this.talkBtn) this.talkBtn.hidden = this.view !== 'reader';
+    if (this.viewSwitch) this.viewSwitch.hidden = this.view !== 'pages';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
     if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing;
@@ -1111,7 +1134,7 @@ class HomeApp {
        `selectionchange` non e' garantito quando i nodi selezionati spariscono:
        la barra va chiusa qui, o resterebbe accesa sopra un'altra stanza. */
     this.audit?.refresh();
-    if (this.pagesBtn) this.pagesBtn.hidden = !notebook;
+    this._applyPill(notebook);
     if (this.view === 'pages') this._setHeadTitle(notebook);
     if (this.view === 'jenny') this._setHeadTitle(i18n.t('home.jenny.title'));
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
@@ -1138,6 +1161,16 @@ class HomeApp {
     else this.headEl?.style.removeProperty('--path-line');
   }
 
+  /* La pastiglia del quaderno nella barra dove scrivi: nome e pallino. Solo
+     nelle pagine fissate su un quaderno — nei Quaderni il nome lo dice il
+     percorso in alto, e alle pagine si va dall'interruttore accanto. */
+  _applyPill(notebook) {
+    if (this.pagesPill) this.pagesPill.hidden = !notebook || this._entry?.kind === 'notebooks';
+    if (!notebook) return;
+    if (this.pagesName) this.pagesName.textContent = notebook;
+    this._paintDot(this.pagesDot, dotColor(notebook));
+  }
+
   _paintDot(el, color) {
     if (!el) return;
     el.hidden = !color;
@@ -1147,10 +1180,12 @@ class HomeApp {
   /** Il tocco sulla radice del percorso: porta al posto di cui la stanza e'.
    *  Dal lettore e dalle stanze delle impostazioni e' anche dove porta la
    *  freccia; dalle pagine no — la freccia torna alla chat del quaderno, da
-   *  cui le hai aperte, e la radice alla pagina Quaderni. */
+   *  cui le hai aperte, e la radice **all'elenco** dei Quaderni: il quaderno
+   *  aperto li' si chiude (deciso con l'utente il 26/09/2026). */
   goToPathRoot() {
     if (this.view !== 'pages') return this.goBackOneRoom();
     if (!this._setView('chat', () => this.goToPathRoot())) return true;
+    this.homePages?.closeNotebook();
     this.homePages?.goToId('notebooks', { animated: false });
     return true;
   }
@@ -1212,16 +1247,41 @@ class HomeApp {
      essere passati in un altro quaderno, e scrivere li' il conteggio di quello
      di prima sarebbe un numero sbagliato su una stanza giusta. */
   _updatePagesCount(notebook) {
-    if (!this.pagesCount) return;
-    this.pagesCount.textContent = '';
+    this._pageCount = { notebook, count: null };
+    this._paintPageCount();
     if (!notebook) return;
     this.who.pagesOf(notebook).then((count) => {
       if (projectNameOf(sessionManager.currentKey) !== notebook) return;
       if (count === null) return;
-      this.pagesCount.textContent = i18n.t(
-        count === 1 ? 'home.notebookPages.countOne' : 'home.notebookPages.countMany', { count },
-      );
+      this._pageCount = { notebook, count };
+      this._paintPageCount();
     }).catch((err) => console.warn('home.pages: page count not read', err));
+  }
+
+  /** Quante pagine ha il quaderno `notebook`, se lo si sa: lo chiede la fila
+   *  per il suo interruttore. `null` e' «non lo so». */
+  pageCountOf(notebook) {
+    const known = this._pageCount;
+    return known?.notebook === notebook && Number.isFinite(known.count) ? known.count : null;
+  }
+
+  /* Il conteggio in tutti e tre i posti che lo mostrano: la pastiglia delle
+     pagine fissate («● piante · 26»), l'interruttore delle pagine e quello
+     della fila. Solo il numero: la parola «pagine» la dice l'etichetta, per chi
+     non vede il libro. */
+  _paintPageCount() {
+    const notebook = this._pageCount?.notebook || null;
+    const count = notebook ? this.pageCountOf(notebook) : null;
+    const known = count !== null;
+    if (this.pagesCount) this.pagesCount.textContent = known ? `· ${count}` : '';
+    if (this.viewPagesCount) this.viewPagesCount.textContent = known ? String(count) : '';
+    if (notebook) {
+      const words = known
+        ? `, ${i18n.t(count === 1 ? 'home.notebookPages.countOne' : 'home.notebookPages.countMany', { count })}`
+        : '';
+      this.pagesBtn?.setAttribute('aria-label', `${i18n.t('home.notebookPages.open')}: ${notebook}${words}`);
+    }
+    this.strip?.draw();
   }
 
   /* Il turno che stava girando nella conversazione lasciata non si chiudera'
@@ -1365,12 +1425,13 @@ class HomeApp {
    */
   handleHardwareBack() {
     if (this._closeOverlays()) return;
-    /* Poi le stanze, una per pressione: lettore, pagine, chat. Solo quando la
-       casa e' tornata alla conversazione Indietro vale come «esci dal
-       quaderno» — altrimenti dalle pagine un tocco solo farebbe sparire due
-       cose, la stanza e la stanza che la conteneva. */
-    if (this.goBackOneRoom()) return;
-    if (projectNameOf(sessionManager.currentKey)) this.switchConversation(null);
+    /* Poi le stanze, una per pressione: lettore, pagine, il quaderno aperto
+       nei Quaderni, la pagina in cui sei. Una per pressione: dalle pagine un
+       tocco solo non deve far sparire due cose, la stanza e il quaderno che la
+       conteneva. Fino al 26/09/2026 c'era un ultimo gradino — dalla pagina
+       chat, «esci dal quaderno» — che non c'e' piu': la pagina chat un
+       quaderno non lo mostra mai. */
+    this.goBackOneRoom();
   }
 
   /** Chiude cio' che sta sopra le pagine. Vero se c'era qualcosa. Uno strato
@@ -1851,6 +1912,9 @@ class HomeApp {
     /* Nel lettore «Parlane» e' solo icona (v. il foglio): il nome lo porta
        l'etichetta, sempre, cosi' non dipende dalla stanza. */
     this.talkBtn?.setAttribute('aria-label', i18n.t('home.notebookPages.talk'));
+    if (this.viewChatLabel) this.viewChatLabel.textContent = i18n.t('home.notebookPages.chat');
+    if (this.viewPagesLabel) this.viewPagesLabel.textContent = i18n.t('home.notebookPages.tabList');
+    this.viewSwitch?.setAttribute('aria-label', i18n.t('home.notebookPages.view'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('home.reader.edit'));
     this.reader?.applyTranslations();
@@ -1861,7 +1925,6 @@ class HomeApp {
     this.backupRoom?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.you?.sayJenny(this.jennyRoom?.value());
-    if (this.pagesBtn) this.pagesBtn.setAttribute('aria-label', i18n.t('home.notebookPages.open'));
     this.newNotebook?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));
     this.pages?.applyTranslations();
     // La pagina Quaderni ha le sue righe gia' disegnate: vanno riscritte.

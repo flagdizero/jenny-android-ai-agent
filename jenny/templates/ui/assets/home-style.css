@@ -75,6 +75,18 @@ body.home {
 }
 .home-strip-names::-webkit-scrollbar { display: none; }
 
+/* La fila con un quaderno aperto nei Quaderni: il percorso, come nelle stanze
+   (v. `.home-head` e `.home-path` qui sotto). Stessi margini della riga delle
+   stanze — la freccia sta a 4 px dal bordo, non a 18 — cosi' passando dal
+   quaderno alle sue pagine non si sposta niente. */
+.home-strip:has(.home-strip-path) { padding: 10px 12px 6px 4px; }
+.home-strip-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 /* Dal lato in cui qualcosa non ci sta, la fila sfuma: un nome tagliato di
    netto sul bordo sembra un difetto, uno che svanisce dice «di qua ce n'e'
    ancora». */
@@ -133,7 +145,9 @@ body.home {
   box-shadow: inset 0 -2px 0 transparent;
 }
 .home-strip-entry.is-on .home-strip-name {
-  box-shadow: inset 0 -2px 0 var(--accent);
+  /* I Quaderni, con un quaderno aperto, prendono il suo colore: e' la sola
+     cosa della fila che dice in quale sei (la scrive `home-strip.js`). */
+  box-shadow: inset 0 -2px 0 var(--strip-line, var(--accent));
 }
 
 .home-strip-dot {
@@ -361,6 +375,52 @@ body.home {
 /* Come `.home-back[hidden]` qui sotto: il `display` dell'autore scavalca il
    `[hidden]` del browser, e il pallino resterebbe fuori dai quaderni. */
 .home-path-dot[hidden] { display: none; }
+
+/* ── L'interruttore Chat | Pagine ──
+   Chat e pagine di un quaderno sono due viste dello stesso posto: stessa
+   intestazione, e un interruttore a destra che dice quale guardi e porta
+   all'altra con un tocco. E' nello stesso punto nelle due viste — nella fila
+   della chat del quaderno (lo disegna `home-strip.js`) e nell'intestazione
+   delle pagine — cosi' la strada si trova dove l'hai lasciata. Prima si andava
+   alle pagine da una pastiglia in basso e si tornava da «Parlane» in alto. */
+.home-view-switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--overlay);
+}
+.home-view-switch[hidden] { display: none; }
+
+.home-view-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-view-seg.is-on {
+  background: var(--surface);
+  color: var(--heading);
+  font-weight: 600;
+}
+.home-view-count {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.home-view-count:empty { display: none; }
 
 /* ── Il filo ── */
 
@@ -607,24 +667,59 @@ body.home {
    pastiglie abitavano la stessa barra in testa; scesa nel composer, altezza,
    bordo e fondo di la' li riscriveva questa regola, e restavano solo da
    leggere. */
-.home-composer .home-notebook-pages-open {
-  flex: none;
+/* Dal 26/09/2026 porta anche il nome del quaderno, col pallino, e c'e' solo
+   nelle pagine fissate (nei Quaderni la strada per le pagine sta in alto). Il
+   nome cede per primo — fino a meta' riga, poi «…» — perche' il campo dove
+   scrivi resti largo. */
+.home-composer .home-notebook-pill {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 46%;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: var(--overlay);
+}
+.home-composer .home-notebook-pill[hidden] { display: none; }
+
+.home-composer .home-notebook-pages-open {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   height: 40px;
   padding: 0 12px;
   border: none;
   border-radius: var(--radius-pill);
-  background: var(--overlay);
+  background: none;
   color: var(--text);
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
 }
-.home-composer .home-notebook-pages-open[hidden] { display: none; }
 .home-composer .home-notebook-pages-open:active { filter: brightness(0.94); }
+
+.home-notebook-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.home-notebook-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.home-notebook-count {
+  flex: none;
+  color: var(--text-muted);
+}
+.home-notebook-count:empty { display: none; }
 
 .home-send {
   flex: none;
@@ -1049,6 +1144,13 @@ body.home {
 }
 
 .home-notebooks-new:active { filter: brightness(0.92); }
+
+/* Un quaderno aperto dentro i Quaderni: l'elenco e il + si fanno da parte, e
+   il pannello e' della chat che ci ha portato il trasloco. `display:none` e non
+   `hidden` sugli elementi: l'elenco lo ridisegna `home-who.js`, e un
+   attributo messo da qui gli sfuggirebbe al primo giro. */
+.home-page[data-page='notebooks'][data-open] .home-notebooks,
+.home-page[data-page='notebooks'][data-open] .home-notebooks-new { display: none; }
 
 /* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
    vestito da bottone — il pannello e' una lista, non una pulsantiera — e tiene

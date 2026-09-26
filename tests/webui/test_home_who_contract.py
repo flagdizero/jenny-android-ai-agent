@@ -79,10 +79,16 @@ def test_the_old_dropdown_left_nothing_behind() -> None:
 def test_back_leaves_the_notebook_only_after_the_overlays() -> None:
     """Una pressione, una cosa sola. Chiudere la scheda di un quaderno *e*
     uscire dal quaderno con lo stesso tasto farebbe sparire due cose per un
-    gesto — e la seconda senza che nessuno l'abbia chiesta."""
-    body = _member(APP_JS.read_text(encoding="utf-8"), "handleHardwareBack")
+    gesto — e la seconda senza che nessuno l'abbia chiesta.
+
+    Dal 26/09/2026 il quaderno si chiude un gradino piu' in la', dentro
+    `goBackOneRoom` (un quaderno aperto nei Quaderni torna all'elenco): qui
+    resta l'ordine, gli strati prima di tutto."""
+    src = APP_JS.read_text(encoding="utf-8")
+    body = _member(src, "handleHardwareBack")
     assert "if (this._closeOverlays()) return;" in body, "gli strati non hanno più la precedenza"
-    assert "projectNameOf" in body, "Indietro non riporta più a casa da un quaderno"
+    assert body.index("_closeOverlays") < body.index("goBackOneRoom"), "le stanze prima degli strati"
+    assert "closeNotebook()" in _member(src, "goBackOneRoom"), "Indietro non chiude più un quaderno"
 
 
 def test_a_switch_releases_the_turn_that_was_running() -> None:

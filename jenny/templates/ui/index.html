@@ -44,7 +44,7 @@
 <main class="home-shell" data-view="chat" data-page="chat">
 
   <!-- ── La fila delle pagine ─────────────────────────────────────────────
-       I nomi delle pagine, quella dove sei grande: prende il posto del titolo
+       I nomi delle pagine, quella dove sei accesa: prende il posto del titolo
        «Jenny ⌄», dell'ingranaggio, del bottone del cassetto e dei pallini
        (v. `.agent/pagine-in-alto-plan.md`). La disegna `home-strip.js`; c'e'
        solo nella conversazione e nelle sue pagine di lato, le stanze hanno
@@ -85,7 +85,22 @@
       </nav>
     </div>
     <div class="home-actions">
-      <!-- Dalle pagine: torna a parlarne. -->
+      <!-- Nelle pagine di un quaderno: l'interruttore fra la sua chat e le sue
+           pagine, lo stesso che la fila mostra nella chat del quaderno e nello
+           stesso punto. Chat e pagine sono due viste dello stesso posto, e il
+           percorso a sinistra e' lo stesso nelle due: la vista la dice lui. -->
+      <div class="home-view-switch" id="home-view-switch" role="group" hidden>
+        <button class="home-view-seg" id="home-view-chat" type="button" aria-pressed="false">
+          <i class="ti ti-message" aria-hidden="true"></i>
+          <span id="home-view-chat-label"></span>
+        </button>
+        <button class="home-view-seg is-on" id="home-view-pages" type="button" aria-pressed="true">
+          <i class="ti ti-book" aria-hidden="true"></i>
+          <span id="home-view-pages-label"></span>
+          <span class="home-view-count" id="home-view-pages-count"></span>
+        </button>
+      </div>
+      <!-- Dal lettore: torna a parlarne. -->
       <button class="home-talk" id="home-talk" type="button" hidden>
         <i class="ti ti-message" aria-hidden="true"></i>
         <span id="home-talk-label"></span>
@@ -175,14 +190,22 @@
       <div class="home-pending" id="home-pending" hidden></div>
 
       <div class="home-composer">
-        <!-- Le pagine del quaderno in cui sei. Stava in testa, accanto al titolo;
-             la testa e' diventata la fila delle pagine, e la pastiglia e' scesa
-             qui, al posto che era del bottone del cassetto — il cassetto oggi e'
-             la pagina App. Compare solo dentro un quaderno. -->
-        <button class="home-notebook-pages-open" id="home-notebook-pages-open" type="button" hidden>
-          <i class="ti ti-book" aria-hidden="true"></i>
-          <span id="home-notebook-pages-count"></span>
-        </button>
+        <!-- Il quaderno in cui sei, e le sue pagine. Stava in testa, accanto al
+             titolo; la testa e' diventata la fila delle pagine, e la pastiglia e'
+             scesa qui, al posto che era del bottone del cassetto — il cassetto
+             oggi e' la pagina App. Compare solo dentro un quaderno.
+             Dal 26/09/2026 porta **il nome**, col pallino. Resta **solo nelle
+             pagine fissate** su un quaderno: nei Quaderni il nome lo dice il
+             percorso in alto, e alle pagine si va dall'interruttore Chat | Pagine
+             accanto (v. `home-strip.js`) — la strada fra chat e pagine sta in
+             alto, nello stesso punto nei due versi. -->
+        <div class="home-notebook-pill" id="home-notebook-pill" hidden>
+          <button class="home-notebook-pages-open" id="home-notebook-pages-open" type="button">
+            <span class="home-notebook-dot" id="home-notebook-dot" aria-hidden="true"></span>
+            <span class="home-notebook-name" id="home-notebook-name"></span>
+            <span class="home-notebook-count" id="home-notebook-pages-count"></span>
+          </button>
+        </div>
         <label class="home-field">
           <textarea class="home-input" id="home-input" rows="1" enterkeyhint="send" autocomplete="off"></textarea>
           <button class="home-attach" id="home-attach" type="button" aria-label="Allega">
@@ -196,7 +219,11 @@
       </div>
     </div>
     <!-- La pagina Quaderni: «Con chi parli», che era la tendina del titolo. La
-         disegna `home-who.js` qui dentro invece che in un `<dialog>`. -->
+         disegna `home-who.js` qui dentro invece che in un `<dialog>`.
+         Dal 26/09/2026 e' anche **il posto in cui un quaderno si apre**: con un
+         quaderno aperto il pannello porta `data-open`, l'elenco e il + si
+         nascondono, e ci arriva la chat — la stessa, spostata dal trasloco
+         (`home-move.js`), come nelle pagine conversazione. -->
     <div class="home-page" data-page="notebooks">
       <div class="home-notebooks" id="home-notebooks"></div>
       <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.

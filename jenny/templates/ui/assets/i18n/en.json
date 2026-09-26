@@ -914,7 +914,8 @@
     "back": {
       "chat": "back to the chat",
       "pages": "back to the pages",
-      "settings": "back to Settings"
+      "settings": "back to Settings",
+      "notebooks": "back to the notebooks"
     },
     "path": {
       "label": "Where you are"
@@ -957,6 +958,8 @@
     },
     "notebookPages": {
       "open": "Notebook pages",
+      "chat": "Chat",
+      "view": "Notebook view",
       "countOne": "1 page",
       "countMany": "{count} pages",
       "talk": "Talk about it",

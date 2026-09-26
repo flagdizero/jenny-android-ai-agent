@@ -917,7 +917,8 @@
     "back": {
       "chat": "torna alla chat",
       "pages": "torna alle pagine",
-      "settings": "torna alle Impostazioni"
+      "settings": "torna alle Impostazioni",
+      "notebooks": "torna ai quaderni"
     },
     "path": {
       "label": "Dove sei"
@@ -960,6 +961,8 @@
     },
     "notebookPages": {
       "open": "Pagine del quaderno",
+      "chat": "Chat",
+      "view": "Vista del quaderno",
       "countOne": "1 pagina",
       "countMany": "{count} pagine",
       "talk": "Parlane",

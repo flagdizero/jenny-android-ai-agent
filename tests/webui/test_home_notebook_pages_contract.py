@@ -356,7 +356,10 @@ def test_everything_the_shell_hides_by_attribute_can_actually_be_hidden() -> Non
     css = CSS.read_text(encoding="utf-8")
 
     assert ".home-actions [hidden]" in css, "la fila dei comandi ha perso la sua regola"
-    strip = re.search(r'<div class="home-actions">(.*?)</div>', html, re.S)
+    # Fino a `</header>` e non al primo `</div>`: la fila dei comandi e' l'ultima
+    # cosa dell'intestazione, e dal 26/09/2026 contiene un `<div>` suo (Chat |
+    # Pagine) che fermava il ritaglio a meta', lasciando fuori «Parlane».
+    strip = re.search(r'<div class="home-actions">(.*?)</header>', html, re.S)
     assert strip, "la fila dei comandi non esiste piu'"
 
     fields = dict(re.findall(r"this\.(\w+) = document\.getElementById\('([\w-]+)'\)", app))

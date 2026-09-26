@@ -464,6 +464,46 @@ def test_giving_back_from_a_panel_that_does_not_hold_it_does_nothing() -> None:
     )
 
 
+def test_leaving_a_panel_leaves_no_photo_over_what_is_underneath() -> None:
+    """Un quaderno chiuso nei Quaderni: sotto torna l'elenco, e una foto della
+    chat lo coprirebbe. La chat torna a casa e prende la conversazione di casa.
+    (26/09/2026)"""
+    _run(
+        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
+        "a = t.leaves(p1, p0, 'A');\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.equal(snapshotOf(p1), null, 'l\u2019elenco e\u2019 coperto da una foto');\n"
+        "reads[1].finish(); await a;\n"
+        "assert.deepEqual(changes, ['B', 'A']);\n"
+        "assert.equal(snapshotOf(p0), null);\n"
+    )
+
+
+def test_leaving_keeps_the_negative_for_the_next_visit() -> None:
+    """Riaprendo lo stesso quaderno, la foto che copre la lettura e' quella di
+    com'era, non uno scheletro vuoto."""
+    _run(
+        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
+        "a = t.leaves(p1, p0, 'A'); reads[1].finish(); await a;\n"
+        "a = t.arrives(p1, 'B');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p1)), ['B1', 'B2', 'B3']);\n"
+        "reads[2].finish(); await a;\n"
+    )
+
+
+def test_leaving_a_panel_the_chat_is_not_in_only_clears_its_photo() -> None:
+    _run(
+        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
+        "await t.arrives(p0, 'A').then(() => {});\n"
+        "reads[1].finish();\n"
+        "assert.ok(snapshotOf(p1), 'la pagina lasciata non ha la sua foto');\n"
+        "await t.leaves(p1, p0, 'A');\n"
+        "assert.equal(snapshotOf(p1), null);\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.deepEqual(changes, ['B', 'A'], 'ha cambiato conversazione per niente');\n"
+    )
+
+
 def test_after_coming_home_out_of_place_page_zero_keeps_its_own_photo() -> None:
     """**Trovato rileggendo, dopo il giro sul telefono del 23/09/2026.**
 

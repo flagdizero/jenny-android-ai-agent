@@ -10,7 +10,8 @@
  *    le stanze delle impostazioni): `view` e' il suo nome, l'HTML e' il suo;
  *  - altrimenti la **pagina** della pista a schermo — la chat, un quaderno, il
  *    cassetto delle app, i Quaderni, le Impostazioni, un'app appesa: `view` e'
- *    il suo id, l'HTML il suo pannello.
+ *    il suo id, l'HTML il suo pannello. I Quaderni con un quaderno aperto
+ *    dicono `notebook`: li' dentro c'e' la chat di quel quaderno.
  *  Il prefisso `home:` dice a Jenny in che guscio e' l'utente: le stesse
  *  parole («chat», «settings») nell'officina sono un'altra schermata.
  *
@@ -58,6 +59,9 @@ export class HomeUiQuery extends UiQueryResponder {
       container = document.getElementById(ROOM_ELEMENTS[room] || '');
     } else {
       name = entry?.id || 'chat';
+      /* I Quaderni con un quaderno aperto sono una chat, non l'elenco: dirlo
+         «notebooks» farebbe credere a Jenny di guardare la lista. */
+      if (entry?.kind === 'notebooks' && pages?.notebooksConversation) name = 'notebook';
       container = pages?.panelOf?.(index) || null;
     }
     const payload = {
