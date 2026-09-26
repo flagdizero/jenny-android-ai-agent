@@ -411,14 +411,23 @@ body.home {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* La vista in cui sei, accesa col colore del tema: e' la stessa pastiglia
+   piena di «Manda» e di «Parlane», cioe' la cosa accesa della riga. Con il
+   fondo della superficie si distingueva appena dall'altra. */
 .home-view-seg.is-on {
-  background: var(--surface);
-  color: var(--heading);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 .home-view-count {
   color: var(--text-muted);
   font-weight: 500;
+}
+/* Sul fondo acceso il grigio del numero non si legge: prende il colore della
+   parola, un po' piu' tenue. */
+.home-view-seg.is-on .home-view-count {
+  color: var(--on-accent);
+  opacity: 0.75;
 }
 .home-view-count:empty { display: none; }
 
