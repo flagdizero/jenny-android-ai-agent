@@ -150,8 +150,9 @@ export class SettingsController {
     this._gen = 0;
     /* Posizione di lettura. Vive nel controller e non in localStorage: il
        contenitore che scorre è lo stesso che `render()` riscrive per intero,
-       quindi qualunque salvataggio riportava in cima una pagina lunga. */
-    this._scrollTop = 0;
+       quindi qualunque salvataggio riportava in cima una pagina lunga.
+       **Una per cassetto** (v. il getter `_scrollTop`). */
+    this._scrollTops = {};
     /* Vero mentre *noi* stiamo scrivendo `scrollTop`, e vero finché il
        contenuto asincrono di un `render()` non è ancora atterrato. Vedi
        `_restoreScrollTop()`. */
@@ -183,6 +184,13 @@ export class SettingsController {
        batteria compresi, ricreati da capo). `this.ready = this.loadSettings()`
        non risolverebbe: `switchMode` chiama `activate()` comunque. */
   }
+
+  /* La posizione di lettura del cassetto a schermo. Cervello, Mani e Memoria
+     condividono questo controller e lo stesso contenitore: con una posizione
+     sola, passare da Cervello (letto fino in fondo) a Mani apriva Mani a meta'
+     pagina, alla quota di Cervello. Visto sul Titan 2 in tutti e tre. */
+  get _scrollTop() { return this._scrollTops[this._drawer ?? ''] || 0; }
+  set _scrollTop(value) { this._scrollTops[this._drawer ?? ''] = value; }
 
   showLoading() { this.loadingEl?.classList.add('active'); }
   hideLoading() { this.loadingEl?.classList.remove('active'); }
@@ -340,7 +348,10 @@ export class SettingsController {
      `_restorePending` è la clausola di rispetto: se nel frattempo l'utente ha
      scorso di suo, un fetch in ritardo non lo strattona più. */
   _restoreScrollTop() {
-    if (!this.contentEl || !this._restorePending || !this._scrollTop) return;
+    /* Anche a zero: un cassetto mai scorso va aperto in cima, e il contenitore,
+       riscritto con `innerHTML`, terrebbe altrimenti la quota del cassetto di
+       prima quanto basta la pagina nuova. */
+    if (!this.contentEl || !this._restorePending) return;
     this._restoringScroll = true;
     this.contentEl.scrollTop = this._scrollTop;
     requestAnimationFrame(() => {
