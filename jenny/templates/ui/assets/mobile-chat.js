@@ -3624,9 +3624,13 @@ export class ChatController {
 
       const editorLink = previewEl.querySelector('.file-preview-action');
       if (editorLink) {
+        /* L'editor apre dalla radice del workspace, mentre `filePath` e' com'e'
+           scritto in chat: in un quaderno relativo al progetto, e spesso alla
+           sua `wiki/`. Il server risolve e rimanda il percorso dal workspace. */
+        const openPath = data.workspace_path || filePath;
         editorLink.addEventListener('click', async (e) => {
           e.preventDefault();
-          await this._openFileInWorkspace(filePath);
+          await this._openFileInWorkspace(openPath);
         });
       }
     } catch (err) {

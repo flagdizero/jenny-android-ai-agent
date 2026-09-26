@@ -584,6 +584,7 @@ class GatewayHTTPHandler:
             payload = file_preview_payload(
                 path,
                 scope=self.workspaces.scope_for_session_key(core_key),
+                workspace_root=get_workspace_path(),
             )
         except WebUIFilePreviewError as e:
             return _http_error(e.status, e.message)

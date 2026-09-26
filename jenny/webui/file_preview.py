@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlparse
 
 from jenny.security.workspace_access import WorkspaceScope
 from jenny.security.workspace_policy import WorkspaceBoundaryError, resolve_allowed_path
+from jenny.utils.wiki_paths import is_wiki_root
 
 MAX_FILE_PREVIEW_BYTES = 384 * 1024
 
@@ -27,8 +28,13 @@ def file_preview_payload(
     *,
     scope: WorkspaceScope,
     max_bytes: int = MAX_FILE_PREVIEW_BYTES,
+    workspace_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Return a text preview for a file inside the session workspace."""
+    """Return a text preview for a file inside the session workspace.
+
+    *workspace_root*, se passato, aggiunge ``workspace_path``: il percorso dal
+    workspace, che e' quello con cui l'officina apre il file nell'editor.
+    """
 
     path = _clean_preview_path(raw_path)
     if not path:
@@ -37,21 +43,13 @@ def file_preview_payload(
         raise WebUIFilePreviewError(400, "path is too long")
 
     try:
-        resolved = resolve_allowed_path(
-            path,
-            workspace=scope.project_path,
-            allowed_root=scope.project_path,
-            strict=True,
-        )
+        resolved = _resolve_preview_file(path, scope.project_path)
     except FileNotFoundError as e:
         raise WebUIFilePreviewError(404, "file not found") from e
     except WorkspaceBoundaryError as e:
         raise WebUIFilePreviewError(403, "file is outside the current workspace") from e
     except OSError as e:
         raise WebUIFilePreviewError(400, "invalid path") from e
-
-    if not resolved.is_file():
-        raise WebUIFilePreviewError(404, "file not found")
 
     try:
         with open(resolved, "rb") as f:
@@ -70,7 +68,7 @@ def file_preview_payload(
         content = preview_bytes.decode("utf-8", errors="replace")
 
     display_path = _display_path(resolved, scope.project_path)
-    return {
+    payload: dict[str, Any] = {
         "path": str(resolved),
         "display_path": display_path,
         "project_path": str(scope.project_path),
@@ -79,6 +77,40 @@ def file_preview_payload(
         "size": resolved.stat().st_size,
         "truncated": truncated,
     }
+    if workspace_root is not None:
+        try:
+            payload["workspace_path"] = resolved.relative_to(workspace_root.resolve()).as_posix()
+        except ValueError:
+            pass
+    return payload
+
+
+def _resolve_preview_file(path: str, project: Path) -> Path:
+    """Il file da mostrare, dentro *project*.
+
+    **In un quaderno si riprova sotto ``wiki/``.** Le pagine stanno in
+    ``wikis/<nome>/wiki/``, e nella chat del quaderno Jenny le nomina da li':
+    ``entities/Pothos.md``, non ``wiki/entities/Pothos.md``. Cercato dalla
+    radice del progetto quel percorso non esiste, e l'anteprima rispondeva 404
+    («Failed to load» sul Titan 2, 26/09/2026). Un file che esiste davvero alla
+    radice vince; il confine resta *project* in entrambi i tentativi.
+    """
+    try:
+        found = resolve_allowed_path(path, workspace=project, allowed_root=project, strict=True)
+    except FileNotFoundError:
+        found = None
+    if found is not None and found.is_file():
+        return found
+    if is_wiki_root(project):
+        try:
+            in_wiki = resolve_allowed_path(
+                path, workspace=project / "wiki", allowed_root=project, strict=True
+            )
+        except FileNotFoundError:
+            in_wiki = None
+        if in_wiki is not None and in_wiki.is_file():
+            return in_wiki
+    raise FileNotFoundError(path)
 
 
 def _clean_preview_path(raw_path: str | None) -> str:

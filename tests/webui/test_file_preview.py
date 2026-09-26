@@ -155,3 +155,59 @@ def test_clean_preview_path_strips_query_and_fragment() -> None:
 )
 def test_language_for_path(name: str, expected: str) -> None:
     assert _language_for_path(Path(name)) == expected
+
+
+# ---------------------------------------------------------------------------
+# Un quaderno: i percorsi delle pagine partono da ``wiki/``
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def notebook(tmp_path: Path):
+    """``wikis/piante`` con una pagina sotto ``wiki/entities/``, come sul telefono."""
+    root = tmp_path / "wikis" / "piante"
+    (root / "wiki" / "entities").mkdir(parents=True)
+    (root / "wiki" / "entities" / "Pothos.md").write_text("# Pothos\n", encoding="utf-8")
+    return root
+
+
+def test_a_notebook_page_path_is_found_under_wiki(notebook, tmp_path: Path) -> None:
+    """Nella chat di piante Jenny scrive ``entities/Pothos.md``: il percorso di
+    una pagina, relativo a ``wiki/``. L'anteprima lo cercava dalla radice del
+    progetto e rispondeva 404 («Failed to load» sul Titan 2, 26/09/2026)."""
+    scope = default_workspace_scope(notebook, restrict_to_workspace=True)
+
+    payload = file_preview_payload("entities/Pothos.md", scope=scope, workspace_root=tmp_path)
+
+    assert payload["content"] == "# Pothos\n"
+    assert payload["display_path"] == "wiki/entities/Pothos.md"
+    # «Apri nell'editor» apre dal workspace: gli serve il percorso da li'.
+    assert payload["workspace_path"] == "wikis/piante/wiki/entities/Pothos.md"
+
+
+def test_a_file_at_the_project_root_wins_over_wiki(notebook) -> None:
+    (notebook / "entities").mkdir()
+    (notebook / "entities" / "Pothos.md").write_text("fuori da wiki\n", encoding="utf-8")
+    scope = default_workspace_scope(notebook, restrict_to_workspace=True)
+
+    assert file_preview_payload("entities/Pothos.md", scope=scope)["content"] == "fuori da wiki\n"
+
+
+def test_outside_a_notebook_there_is_no_wiki_fallback(tmp_path: Path) -> None:
+    folder = tmp_path / "progetto"
+    (folder / "altro" / "entities").mkdir(parents=True)
+    (folder / "altro" / "entities" / "x.md").write_text("x", encoding="utf-8")
+    scope = default_workspace_scope(folder, restrict_to_workspace=True)
+
+    with pytest.raises(WebUIFilePreviewError) as exc:
+        file_preview_payload("entities/x.md", scope=scope)
+    assert exc.value.status == 404
+
+
+def test_the_wiki_fallback_does_not_leave_the_project(notebook, tmp_path: Path) -> None:
+    (tmp_path / "wikis" / "segreto.md").write_text("no", encoding="utf-8")
+    scope = default_workspace_scope(notebook, restrict_to_workspace=True)
+
+    with pytest.raises(WebUIFilePreviewError) as exc:
+        file_preview_payload("../../segreto.md", scope=scope)
+    assert exc.value.status in (403, 404)
