@@ -64,7 +64,10 @@ function makeEl(tag) {
     value: '',
     placeholder: '',
     hidden: false,
-    style: {},
+    style: {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+    },
     attrs: {},
     setAttribute(k, v) { this.attrs[k] = v; },
     blur() {},
@@ -184,7 +187,13 @@ class App {
     this.pagesBtn = makeEl('button');
     this.pagesCount = makeEl('span');
     this.backBtn = makeEl('button');
-    this.backLabel = makeEl('span');
+    /* Il percorso della riga: la radice, i pallini, la riga d'accento. */
+    this.headEl = makeEl('header');
+    this.pathEl = makeEl('nav');
+    this.pathRoot = makeEl('button');
+    this.pathRootName = makeEl('span');
+    this.pathRootDot = makeEl('span');
+    this.headDot = makeEl('span');
     this.talkBtn = makeEl('button');
     this.talkLabel = makeEl('span');
     /* Le due stanze nuove sono moduli loro, coi loro banchi: qui interessa
@@ -327,6 +336,9 @@ class App {
   __SET_VIEW__
   __APPLY_HEAD__
   __APPLY_BACK_LABEL__
+  __APPLY_PATH__
+  __PAINT_DOT__
+  __GO_TO_PATH_ROOT__
   __UPDATE_PAGES_COUNT__
   __SET_HEAD_TITLE__
   __ON_PAGE__
@@ -401,6 +413,9 @@ def _harness() -> str:
         .replace("__OPEN_UPDATES__", member(src, "openUpdates"))
         .replace("__ASK_SETTINGS__", member(src, "_askSettings"))
         .replace("__APPLY_BACK_LABEL__", member(src, "_applyBackLabel"))
+        .replace("__APPLY_PATH__", member(src, "_applyPath"))
+        .replace("__PAINT_DOT__", member(src, "_paintDot"))
+        .replace("__GO_TO_PATH_ROOT__", member(src, "goToPathRoot"))
         .replace("__SET_VIEW__", member(src, "_setView"))
         .replace("__APPLY_HEAD__", member(src, "_applyHead"))
         .replace("__UPDATE_PAGES_COUNT__", member(src, "_updatePagesCount"))
@@ -900,24 +915,86 @@ def test_settings_is_a_page_and_back_from_it_is_the_chat() -> None:
     """)
 
 
-def test_the_eyelet_names_where_you_land() -> None:
-    """L'occhiello dice dove si atterra, e le stanze non atterrano tutte nello
-    stesso posto.
+def test_the_back_arrow_names_where_you_land() -> None:
+    """L'etichetta della freccia dice dove si atterra, e le stanze non
+    atterrano tutte nello stesso posto.
 
     Era una frase sola — «torna alla chat» — scritta in `_applyTranslations` e
     buona per tutte: vera dalle pagine, falsa dal lettore, che torna alle
     pagine. Con quattro stanze la parola giusta la decide la stessa tabella che
-    decide il salto.
+    decide il salto. Dal 26/09/2026 la freccia e' solo icona, e la frase e' la
+    sua `aria-label`: chi non vede la freccia la sente.
     """
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      const dice = (room) => { app._setView(room); return app.backLabel.textContent; };
+      const dice = (room) => { app._setView(room); return app.backBtn.attrs['aria-label']; };
       assert.equal(dice('pages'), i18n.t('home.back.chat'));
       assert.equal(dice('reader'), i18n.t('home.back.pages'), 'dal lettore si torna alle pagine');
       assert.equal(dice('jenny'), i18n.t('home.back.settings'), 'da lei si torna alle impostazioni');
       assert.notEqual(i18n.t('home.back.pages'), i18n.t('home.back.chat'),
                       'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
+    """)
+
+
+def test_the_path_says_whose_place_each_room_is() -> None:
+    """La radice del percorso dice **di che posto** e' la stanza: le pagine
+    sono dei Quaderni, il lettore del quaderno, le altre stanze delle
+    Impostazioni. E il quaderno porta il suo pallino e il suo colore sulla
+    riga d'accento, lo stesso della sua riga nei Quaderni."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('orto'));
+      const color = dotColor('orto');
+
+      app._setView('pages');
+      assert.equal(app.pathRootName.textContent, i18n.t('home.strip.notebooks'));
+      assert.equal(app.nameEl.textContent, 'orto');
+      assert.equal(app.pathRootDot.hidden, true, 'la radice «Quaderni» non e\u2019 un quaderno');
+      assert.equal(app.headDot.hidden, false, 'il quaderno, dove sei, non ha il pallino');
+      assert.equal(app.headDot.style.background, color);
+      assert.equal(app.headEl.style['--path-line'], color, 'la riga d\u2019accento non e\u2019 del quaderno');
+
+      app._setView('reader');
+      assert.equal(app.pathRootName.textContent, 'orto', 'il lettore non dice di che quaderno e\u2019');
+      assert.equal(app.pathRootDot.hidden, false);
+      assert.equal(app.pathRootDot.style.background, color);
+      assert.equal(app.headDot.hidden, true, 'la pagina letta ha preso il pallino del quaderno');
+      assert.equal(app.headEl.style['--path-line'], color);
+
+      app._setView('chat');
+      app._setView('updates');
+      assert.equal(app.pathRootName.textContent, i18n.t('home.strip.settings'));
+      assert.equal(app.pathRootDot.hidden, true);
+      assert.equal(app.headDot.hidden, true);
+      assert.equal(app.headEl.style['--path-line'], undefined,
+                   'il colore del quaderno e\u2019 rimasto sulla stanza delle impostazioni');
+    """)
+
+
+def test_the_path_root_leads_to_its_place() -> None:
+    """Un tocco sulla radice porta al posto di cui la stanza e'. Dal lettore e
+    dalle stanze delle impostazioni e' dove porta anche la freccia; dalle
+    pagine no: la freccia torna alla chat del quaderno, la radice ai
+    Quaderni."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('pages');
+      app._setView('reader');
+      app.goToPathRoot();
+      assert.equal(app.view, 'pages', 'dal lettore la radice non riporta alle pagine');
+
+      app.goToPathRoot();
+      assert.equal(app.view, 'chat');
+      assert.equal(app.homePages.index, app.homePages.indexOf('notebooks'),
+                   'dalle pagine la radice non porta alla pagina Quaderni');
+      assert.equal(sessionManager.currentKey, 'project:orto', 'la radice ha cambiato conversazione');
+
+      app._setView('updates');
+      app.goToPathRoot();
+      assert.equal(app.view, 'chat');
+      assert.equal(app.homePages.index, app.homePages.indexOf('settings'));
     """)
 
 

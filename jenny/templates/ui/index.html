@@ -54,21 +54,35 @@
 
   <!-- L'intestazione delle stanze — le pagine di un quaderno, il lettore, le
        stanze delle impostazioni. Nella conversazione non c'e': li' la fila dice
-       gia' dove sei. Qui dice dove sei **e da dove si torna**: l'occhiello e'
-       la via d'uscita, e i comandi a destra cambiano con la stanza.
+       gia' dove sei. Qui dice dove sei **e da dove si torna**, e dal 26/09/2026
+       lo dice **nella lingua della fila e alla sua altezza**: una riga sola,
+       freccia, percorso («SETTINGS › UPDATES») e i comandi della stanza a
+       destra. Prima era un occhiello e un titolo in serif, cioe' un'altra
+       intestazione: entrando in una stanza cambiavano carattere e altezza, e
+       il contenuto scendeva di 14 px.
 
        Il titolo non apre piu' niente, quindi non e' piu' un bottone: la tendina
        delle conversazioni e' diventata la pagina Quaderni. -->
   <header class="home-head">
     <div class="home-title">
-      <!-- Un bottone a parte e non l'occhiello travestito: quello e' una
-           parola, questo e' un comando, e un <div> con un gestore sopra e' un
-           comando che la tastiera non trova. -->
+      <!-- La freccia torna dove si e' venuti (`BACK_TO`); la frase «torna
+           a…» e' la sua etichetta per chi non la vede. -->
       <button class="home-back" id="home-back" type="button">
         <i class="ti ti-chevron-left" aria-hidden="true"></i>
-        <span id="home-back-label"></span>
       </button>
-      <h1><span class="home-head-name" id="home-head-name"></span></h1>
+      <!-- Il percorso: la radice dice di che posto e' la stanza e ci porta
+           (Impostazioni, Quaderni, il quaderno); l'ultimo e' dove sei. -->
+      <nav class="home-path" id="home-path">
+        <button class="home-path-root" id="home-path-root" type="button">
+          <span class="home-path-dot" id="home-path-root-dot" aria-hidden="true" hidden></span>
+          <span class="home-path-name" id="home-path-root-name"></span>
+        </button>
+        <span class="home-path-sep" aria-hidden="true">›</span>
+        <h1 class="home-path-here">
+          <span class="home-path-dot" id="home-head-dot" aria-hidden="true" hidden></span>
+          <span class="home-head-name home-path-name" id="home-head-name"></span>
+        </h1>
+      </nav>
     </div>
     <div class="home-actions">
       <!-- Dalle pagine: torna a parlarne. -->

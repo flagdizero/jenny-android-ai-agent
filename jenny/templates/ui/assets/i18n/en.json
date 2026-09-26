@@ -914,7 +914,10 @@
     "back": {
       "chat": "back to the chat",
       "pages": "back to the pages",
-      "settings": "Settings"
+      "settings": "back to Settings"
+    },
+    "path": {
+      "label": "Where you are"
     },
     "you": {
       "workshopHint": "watch, tune, repair"

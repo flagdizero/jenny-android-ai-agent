@@ -85,8 +85,8 @@ const DEFAULT_BOT_NAME = 'Jenny';
 
 /* Le stanze oltre la conversazione, e dove si atterra premendo Indietro una
    volta. La catena e' lineare e sta **in un posto solo**: `_setView` la usa per
-   sapere quali nomi esistono, `goBackOneRoom` per percorrerla e l'occhiello
-   per scriverci sopra dove porta. Aggiungere una stanza e' una riga qui.
+   sapere quali nomi esistono, `goBackOneRoom` per percorrerla e la freccia
+   per dire, a chi non la vede, dove porta. Aggiungere una stanza e' una riga qui.
 
    `settings` non e' una stanza: e' la **pagina** Impostazioni, dal
    23/09/2026, e le stanze che si aprono da li' ci tornano sopra — la vista
@@ -170,7 +170,14 @@ class HomeApp {
     this.pagesBtn = document.getElementById('home-notebook-pages-open');
     this.pagesCount = document.getElementById('home-notebook-pages-count');
     this.backBtn = document.getElementById('home-back');
-    this.backLabel = document.getElementById('home-back-label');
+    /* Il percorso della riga: la radice (di che posto e' la stanza) e i
+       pallini del quaderno, quando la stanza e' sua. */
+    this.headEl = document.querySelector('.home-head');
+    this.pathEl = document.getElementById('home-path');
+    this.pathRoot = document.getElementById('home-path-root');
+    this.pathRootName = document.getElementById('home-path-root-name');
+    this.pathRootDot = document.getElementById('home-path-root-dot');
+    this.headDot = document.getElementById('home-head-dot');
     this.talkBtn = document.getElementById('home-talk');
     this.editBtn = document.getElementById('home-edit');
     this.talkLabel = document.getElementById('home-talk-label');
@@ -398,6 +405,7 @@ class HomeApp {
        da dove stai guardando — in alto a sinistra se leggi l'intestazione, in
        basso a destra col pollice. */
     this.backBtn?.addEventListener('click', () => this.goBackOneRoom());
+    this.pathRoot?.addEventListener('click', () => this.goToPathRoot());
     this.talkBtn?.addEventListener('click', () => this._setView('chat'));
     this.editBtn?.addEventListener('click', () => this.reader.startEdit());
 
@@ -1031,9 +1039,9 @@ class HomeApp {
     if (view === this.view) return true;
     /* Uscire dal lettore con modifiche non salvate chiede conferma, e la
        guardia sta **qui** e non sui bottoni. Le strade per uscire sono gia'
-       quattro — l'occhiello, l'Indietro del telefono, «Parlane», un cambio di
-       conversazione — e una guardia per strada e' una guardia che la quinta
-       strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
+       cinque — la freccia, la radice del percorso, l'Indietro del telefono,
+       «Parlane», un cambio di conversazione — e una guardia per strada e' una
+       guardia che la sesta strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
        il controllo sul buffer sporco valeva «solo se non esiste una seconda
        strada» e le strade erano tre. */
     if (this.view === 'reader' && this.reader?.isDirty()) {
@@ -1109,16 +1117,51 @@ class HomeApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
+    this._applyPath(notebook);
     this._applyBackLabel();
   }
 
-  /* L'occhiello dice **dove si atterra**, non «indietro». Con tre stanze la
-     differenza non si vedeva; con quattro, «torna alla chat» sopra il lettore
-     era falso — di li' si torna alle pagine. La frase la sceglie la stessa
-     tabella che decide il salto, quindi le due non possono divergere. */
+  /* La radice del percorso, e il colore del quaderno quando la stanza e' sua.
+     La radice dice **di che posto** e' la stanza, non da dove si e' venuti
+     (quello lo sa la freccia): le pagine sono dei Quaderni, il lettore e' del
+     quaderno, le altre stanze delle Impostazioni. */
+  _applyPath(notebook) {
+    const color = notebook ? dotColor(notebook) : null;
+    const own = this.view === 'pages' || this.view === 'reader';
+    let root = i18n.t('home.strip.settings');
+    if (this.view === 'pages') root = i18n.t('home.strip.notebooks');
+    if (this.view === 'reader') root = notebook || '';
+    if (this.pathRootName) this.pathRootName.textContent = root;
+    this._paintDot(this.pathRootDot, this.view === 'reader' ? color : null);
+    this._paintDot(this.headDot, this.view === 'pages' ? color : null);
+    if (own && color) this.headEl?.style.setProperty('--path-line', color);
+    else this.headEl?.style.removeProperty('--path-line');
+  }
+
+  _paintDot(el, color) {
+    if (!el) return;
+    el.hidden = !color;
+    el.style.background = color || '';
+  }
+
+  /** Il tocco sulla radice del percorso: porta al posto di cui la stanza e'.
+   *  Dal lettore e dalle stanze delle impostazioni e' anche dove porta la
+   *  freccia; dalle pagine no — la freccia torna alla chat del quaderno, da
+   *  cui le hai aperte, e la radice alla pagina Quaderni. */
+  goToPathRoot() {
+    if (this.view !== 'pages') return this.goBackOneRoom();
+    if (!this._setView('chat', () => this.goToPathRoot())) return true;
+    this.homePages?.goToId('notebooks', { animated: false });
+    return true;
+  }
+
+  /* L'etichetta della freccia dice **dove si atterra**, non «indietro». Con
+     tre stanze la differenza non si vedeva; con quattro, «torna alla chat»
+     sopra il lettore era falso — di li' si torna alle pagine. La frase la
+     sceglie la stessa tabella che decide il salto, quindi le due non possono
+     divergere. Fino al 26/09/2026 era scritta a schermo, come occhiello. */
   _applyBackLabel() {
-    if (!this.backLabel) return;
-    this.backLabel.textContent = i18n.t(`home.back.${BACK_TO[this.view] || 'chat'}`);
+    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${BACK_TO[this.view] || 'chat'}`));
   }
 
   /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
@@ -1805,6 +1848,10 @@ class HomeApp {
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
     if (this.talkLabel) this.talkLabel.textContent = i18n.t('home.notebookPages.talk');
+    /* Nel lettore «Parlane» e' solo icona (v. il foglio): il nome lo porta
+       l'etichetta, sempre, cosi' non dipende dalla stanza. */
+    this.talkBtn?.setAttribute('aria-label', i18n.t('home.notebookPages.talk'));
+    this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('home.reader.edit'));
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();

@@ -283,3 +283,60 @@ struttura, e i test di `test_home_strip_client.py` guardano solo chi ha `is-on`.
 quaderno rinomina la voce «Jenny» col nome del quaderno (`_chatName()` in
 `home-app.js`), e questo non torna: la fila è una mappa di posti, e un posto
 non cambia nome a seconda di cosa ci guardi dentro. È da decidere.
+
+## Ritocco del 26/09/2026, secondo: le stanze parlano la lingua della fila
+
+> «Questa pagina e quelle interne non sono coerenti» — l'utente, 26/09/2026,
+> guardando le pagine di un quaderno dopo il ritocco della fila.
+
+Dopo la fila in maiuscoletto, le stanze (pagine del quaderno, lettore,
+Jenny, Model, Updates, Backup) avevano ancora l'intestazione di prima: un
+occhiello a parole («‹ BACK TO THE CHAT», «‹ BACK TO THE PAGES»,
+«‹ SETTINGS»: tre grammatiche) e sotto un titolo in serif da 26px. Entrando
+in una stanza cambiavano carattere e altezza, il contenuto scendeva di 14px,
+e nel lettore il titolo della pagina compariva due volte, uno sull'altro.
+
+Disegnate due strade: la fila che resta anche nelle stanze, con una riga di
+stanza sotto (circa 48px in più), e la fila che **diventa il percorso**.
+L'utente ha scelto la seconda, perché occupa meno spazio in verticale:
+
+- **una riga sola, alta quanto la fila** (10 + 40 + 6 px): freccia, percorso,
+  comandi della stanza a destra;
+- **il percorso nella tipografia della fila**: la radice spenta, «›», dove sei
+  acceso con la riga d'accento. La radice dice **di che posto** è la stanza e
+  ci porta con un tocco: `SETTINGS › UPDATES`, `NOTEBOOKS › ● quaderno`,
+  `● quaderno › pagina`. Il pallino e la riga prendono il colore del quaderno
+  (`dotColor`, lo stesso della sua riga nei Quaderni);
+- **la freccia resta dov'era nel senso**: segue `BACK_TO`. Dalle pagine torna
+  alla chat del quaderno, mentre la radice porta alla pagina Quaderni: la
+  freccia dice da dove sei venuto, il percorso dove sta la stanza. La frase
+  «torna a…» è rimasta, come `aria-label` della freccia;
+- **il serif resta ai contenuti**: il titolo della pagina nel lettore sì,
+  l'intestazione no. La regola ora è una sola: serif per i contenuti,
+  maiuscoletto per la navigazione;
+- nel lettore «Parlane» perde la parola e resta la pastiglia piena, solo icona:
+  accanto al percorso e alla matita la riga non basterebbe;
+- «Pages | Map» non si tocca: è un interruttore di vista, non un posto.
+
+Due difetti visti sul telefono alla prima build e corretti nella seconda:
+
+1. la radice era tagliata («NOTEBO…», «PIAN…») con mezzo schermo libero. Un
+   `max-width: 45%` misurato su un percorso largo quanto il suo contenuto: ora
+   cede con `flex-shrink`;
+2. il pallino e la «›» stavano 2px sotto la riga del testo, perché il nome ha
+   sotto i 4px della riga d'accento. Lo stesso scarto c'era nella fila dal
+   ritocco di prima (il pallino di un quaderno), e l'ha avuto la stessa
+   correzione.
+
+Provato sul Titan 2, release firmata: Updates, Jenny, le pagine e il lettore di
+un quaderno, la radice dal lettore (torna alle pagine) e dalle pagine (va ai
+Quaderni). In ogni stanza il contenuto parte alla stessa altezza di una pagina
+della fila.
+
+**Resta aperto, come prima:** aprire un quaderno rinomina ancora la voce
+«Jenny» nella fila. La proposta sul tavolo è che la chat di un quaderno viva
+sotto NOTEBOOKS (lo stesso posto in cui il percorso mette già le sue pagine), e
+che JENNY resti sempre la conversazione personale. Se si fa, anche
+`home-ui-query.js` deve cambiare: oggi per la pista riporta l'id della pagina,
+e una chat di quaderno sotto NOTEBOOKS gli farebbe dire «l'elenco dei
+quaderni».

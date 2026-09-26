@@ -917,7 +917,10 @@
     "back": {
       "chat": "torna alla chat",
       "pages": "torna alle pagine",
-      "settings": "Impostazioni"
+      "settings": "torna alle Impostazioni"
+    },
+    "path": {
+      "label": "Dove sei"
     },
     "you": {
       "workshopHint": "osserva, regola, ripara"

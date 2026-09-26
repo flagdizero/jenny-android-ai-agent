@@ -141,6 +141,9 @@ body.home {
   width: 7px;
   height: 7px;
   border-radius: 999px;
+  /* Alla meta' del testo, non della scatola: il nome ha sotto i 4 px della
+     riga d'accento (v. `.home-strip-name`). */
+  margin-bottom: 4px;
 }
 .home-strip-entry:focus-visible {
   outline: 1px solid var(--accent);
@@ -254,33 +257,110 @@ body.home {
 
 /* ── L'intestazione delle stanze ── */
 
+/* Alta quanto la fila, al pixel: 10 sopra, 40 di riga, 6 sotto. Entrare in
+   una stanza e uscirne non fa piu' scendere e risalire il contenuto. */
 .home-head {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px 6px;
+  gap: 10px;
+  padding: 10px 12px 6px 4px;
 }
 
 /* Il titolo cede, i comandi no. Un nome di quaderno arriva a 64 caratteri:
    senza `min-width: 0` una scatola flex non si stringe sotto il proprio
    contenuto, e quel nome spingerebbe «Parlane» fuori dallo schermo. */
 .home-title {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.home-title h1 {
+/* ── Il percorso ──
+   Le voci hanno la tipografia delle voci della fila (v. `.home-strip-entry`),
+   e quella dove sei la sua riga d'accento: e' la stessa lingua, un livello
+   sotto. La riga prende il colore del quaderno quando la stanza e' sua
+   (`--path-line`, la scrive `_applyHead`). */
+.home-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-path-root,
+.home-path-here {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
   margin: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* La radice cede per prima: di un nome lungo si deve leggere dove sei. Con
+   `flex-shrink` e non con un `max-width` in percentuale: il percorso e' largo
+   quanto il suo contenuto, e una percentuale di quello tagliava «NOTEBOOKS»
+   anche con mezzo schermo libero — visto sul telefono il 26/09/2026. */
+.home-path-root {
+  flex: 0 4 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-path-root:active { color: var(--text); }
+
+.home-path-here {
+  flex: 0 1 auto;
+  color: var(--heading);
+}
+
+.home-path-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-display, 'Inter'), system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 26px;
-  line-height: 1.1;
-  color: var(--heading);
+  padding-bottom: 4px;
+  box-shadow: inset 0 -2px 0 transparent;
 }
+.home-path-here .home-path-name {
+  box-shadow: inset 0 -2px 0 var(--path-line, var(--accent));
+}
+
+.home-path-sep {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* Il nome ha sotto 4 px per la riga d'accento, che ne alzano il centro di 2:
+   la freccia di mezzo e il pallino vanno alzati d'altrettanto, o stanno
+   sotto la riga del testo. */
+.home-path-sep,
+.home-path-dot { margin-bottom: 4px; }
+
+.home-path-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+/* Come `.home-back[hidden]` qui sotto: il `display` dell'autore scavalca il
+   `[hidden]` del browser, e il pallino resterebbe fuori dai quaderni. */
+.home-path-dot[hidden] { display: none; }
 
 /* ── Il filo ── */
 
@@ -1303,23 +1383,38 @@ body.home {
 
 .home-edit:active { color: var(--text); }
 
-/* L'occhiello, quando e' un comando. Sta dove stava la parola, e ne ha il peso:
-   e' una via d'uscita, non un bottone che si contende l'occhio col titolo. */
+/* La freccia del ritorno: solo l'icona, in apertura della riga, col peso
+   delle voci spente. Fino al 26/09/2026 era un occhiello a parole sopra il
+   titolo («‹ TORNA ALLA CHAT»); la frase e' rimasta come sua etichetta. */
 .home-back {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  margin: 0 0 2px -4px;
-  padding: 2px 4px;
+  justify-content: center;
+  width: 36px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
   border: none;
   background: none;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 18px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* Nel lettore i comandi sono due, e accanto al percorso la riga non
+   basterebbe: «Parlane» resta la pastiglia piena ma perde la parola. Il nome
+   lo porta `aria-label`. Per id e non per classe: `.home-shell[data-view=…]
+   .home-…` e' la forma con cui questo foglio **accende una stanza**, e il
+   banco delle stanze la legge cosi'. */
+.home-shell[data-view='reader'] #home-talk {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+.home-shell[data-view='reader'] #home-talk-label { display: none; }
 
 /* Serve, e non e' ridondante: `[hidden]` e' una regola del foglio del
    browser, e il `display` messo qui sopra la scavalca comunque — il foglio
