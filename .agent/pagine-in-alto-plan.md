@@ -314,7 +314,8 @@ L'utente ha scelto la seconda, perché occupa meno spazio in verticale:
 - **il serif resta ai contenuti**: il titolo della pagina nel lettore sì,
   l'intestazione no. La regola ora è una sola: serif per i contenuti,
   maiuscoletto per la navigazione;
-- nel lettore «Parlane» perde la parola e resta la pastiglia piena, solo icona:
+- ~~nel lettore «Parlane» perde la parola e resta la pastiglia piena, solo icona~~
+  (superato lo stesso giorno: v. il terzo ritocco, «Modifica»):
   accanto al percorso e alla matita la riga non basterebbe;
 - «Pages | Map» non si tocca: è un interruttore di vista, non un posto.
 
@@ -378,8 +379,15 @@ dentro i Quaderni**:
   basso e si tornava da «Parlane» in alto — «per andare alle pagine la pill sta
   vicino alla chat e per tornare alla chat la pill sta in alto», l'utente — e
   le due intestazioni erano uguali senza niente che dicesse la vista. Scelto fra
-  due tavole (una pastiglia che si scambia; l'interruttore). «Parlane» resta
-  solo nel lettore.
+  due tavole (una pastiglia che si scambia; l'interruttore).
+- **Nel lettore** l'interruttore non c'è: lì non sei né nella chat né
+  nell'elenco, e all'elenco riporta la freccia. Il comando è **Modifica**,
+  una pastiglia piena nel colore del tema con la sua parola, nello stesso punto
+  e con lo stesso peso della voce accesa dell'interruttore («fai il tasto
+  modifica con la stessa logica del tasto chat, quindi arancione a pill»).
+  «Parlane» non c'è più in nessuna stanza. La radice del percorso sta intera
+  fino a metà riga, e a tagliarsi è il titolo della pagina: prima il quaderno
+  finiva ridotto a «● P».
 - **La pastiglia in basso** («● piante · 31») c'è ormai solo nelle pagine
   fissate su un quaderno, che in alto hanno la fila. Nei Quaderni la barra dove
   scrivi torna larga: con un nome lungo la scritta del campo andava a capo.
