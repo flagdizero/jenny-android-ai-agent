@@ -138,6 +138,7 @@ class HomeModel {
   __PAINT_MODELS__
   __SAY_MODELS__
   __SAY_RESTART__
+  __SYNC_KEY_SAVE__
 }
 
 /* Un payload della forma di `/api/settings`, con dentro solo cio' che questa
@@ -223,6 +224,7 @@ def _harness() -> str:
         .replace("__PAINT_MODELS__", member(src, "_paintModels"))
         .replace("__SAY_MODELS__", member(src, "_sayModels"))
         .replace("__SAY_RESTART__", member(src, "_sayRestart"))
+        .replace("__SYNC_KEY_SAVE__", member(src, "_syncKeySave"))
     )
 
 
@@ -577,4 +579,37 @@ def test_the_word_that_does_not_distinguish_a_brand_falls() -> None:
          intera invece di perdere una parola dal mezzo. */
       assert.equal(shortBrand('Anthropic Compatible Systems'), 'Anthropic Compatible Systems');
       assert.deepEqual(tileNames([{ name: 'anthropic' }]), ['Anthropic']);
+    """)
+
+
+def test_save_stays_off_until_there_is_a_key_to_save() -> None:
+    """Salvare la stringa vuota non fa niente (v. sopra), ma il bottone
+    invitava a farlo: sul telefono si toccava Salva e non succedeva nulla,
+    senza un perche'. Spento finche' il campo e' vuoto, non lascia sbagliare."""
+    _run_js("""
+      const data = settings([{ name: 'groq', api_key_hint: 'gsk_...4f2a' }], 'groq', 'm');
+      const s = await room(data, { groq: { status: 'available', models: [] } });
+      const input = nodi['home-key-input'];
+      const save = nodi['home-key-save'];
+      const type = (v) => { input.value = v; for (const fn of input.listeners.input || []) fn(); };
+
+      s.toggleKeyEdit();
+      assert.equal(nodi['home-key-edit'].hidden, false);
+      assert.equal(save.disabled, true, 'Salva acceso su un campo vuoto');
+
+      type('gsk_');
+      assert.equal(save.disabled, false, 'Salva spento con una chiave scritta');
+
+      type('   ');
+      assert.equal(save.disabled, true, 'solo spazi non sono una chiave');
+
+      type('gsk_una_chiave_vera');
+      lastPayload = data;
+      await s.saveKey();
+      assert.equal(input.value, '');
+      assert.equal(save.disabled, true, 'dopo il salvataggio il campo e vuoto e Salva deve spegnersi');
+
+      s.toggleKeyEdit();
+      s.toggleKeyEdit();
+      assert.equal(save.disabled, true, 'riaperto vuoto, Salva spento');
     """)

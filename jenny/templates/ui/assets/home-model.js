@@ -112,6 +112,7 @@ export class HomeModel {
     });
     this.keyBtn?.addEventListener('click', () => this.toggleKeyEdit());
     this.keySave?.addEventListener('click', () => this.saveKey());
+    this.keyInput?.addEventListener('input', () => this._syncKeySave());
   }
 
   /** La stanza si apre. I dati sono gia' arrivati: li porta chi la apre. */
@@ -190,6 +191,17 @@ export class HomeModel {
     this.keyEdit.hidden = open;
     if (!open) this.keyInput?.focus();
     else if (this.keyInput) this.keyInput.value = '';
+    this._syncKeySave();
+  }
+
+  /** Salva si accende solo quando c'e' una chiave da salvare.
+   *
+   *  La stringa vuota `saveKey` non la manda (sarebbe il modo piu' silenzioso
+   *  di cancellare la chiave buona), ma il bottone acceso invitava a provarci:
+   *  sul telefono il tocco non faceva niente e non diceva perche'. Spento, non
+   *  lascia nemmeno sbagliare. Il controllo in `saveKey` resta. */
+  _syncKeySave() {
+    if (this.keySave) this.keySave.disabled = !(this.keyInput?.value || '').trim();
   }
 
   /** Salva la chiave che hai incollato. Vuota non salva niente: sarebbe il
@@ -202,6 +214,7 @@ export class HomeModel {
       const payload = await api.updateProvider({ name: provider, api_key: key });
       if (this.keyInput) this.keyInput.value = '';
       if (this.keyEdit) this.keyEdit.hidden = true;
+      this._syncKeySave();
       this._apply(payload);
       /* Il catalogo si richiede: una chiave nuova puo' essere esattamente la
          ragione per cui l'elenco era vuoto. */
