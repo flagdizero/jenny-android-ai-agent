@@ -31,6 +31,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from jenny.session.keys import webui_transcript_key
 from jenny.session.manager import SessionManager
 
 # Tetto sul file di sessione che si accetta di contare per una conferma. Oltre,
@@ -61,7 +62,7 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
     from jenny.config.paths import get_webui_dir
 
     stem = SessionManager.safe_key(session_key)
-    webui_stem = SessionManager.safe_key(f"websocket:{session_key}")
+    webui_stem = SessionManager.safe_key(webui_transcript_key(session_key))
     webui = get_webui_dir()
     return [
         workspace / "sessions" / f"{stem}.jsonl",

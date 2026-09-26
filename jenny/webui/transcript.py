@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import re
 from typing import Any, Callable, NamedTuple
 
 from jenny.session.history_meta import is_synthetic_history_row
@@ -54,6 +55,10 @@ WEBUI_TRANSCRIPT_SCHEMA_VERSION = 3
 _WEBUI_FORK_MARKER_EVENT = "fork_marker"
 _DEFAULT_TRANSCRIPT_PAGE_LIMIT = 160
 _MAX_TRANSCRIPT_PAGE_LIMIT = 1000
+
+# La testa di ``templates/agent/subagent_announce.md``, invariata dalla prima
+# versione (01/08/2026): ``[Subagent '<label>' <esito>]``, una riga vuota, ``Task:``.
+_LEGACY_SUBAGENT_RETURN_RE = re.compile(r"\A\[Subagent '[^'\n]*' [^\]\n]+\]\n\nTask: ")
 # Tetto sui record grezzi caricati in una pagina, indipendente da quello sui
 # messaggi: è il costo reale della lettura, che il limite in messaggi non
 # esprime. Dimensionato sopra il fabbisogno di una pagina piena scritta col
@@ -341,6 +346,16 @@ def _session_user_event(
         return None
     content = message.get("content")
     text = content if isinstance(content, str) else ""
+    # Il rientro di un subagent registrato prima del 05/09/2026, quando il loop
+    # non lo marcava ancora con ``injected_event``: per ``is_synthetic_history_row``
+    # e' una riga ``user`` come le altre. Da qui passano sia la storia ricostruita
+    # sia il riempimento dei turni senza bolla — e il turno d'annuncio, nella
+    # trascrizione, e' proprio un turno senza bolla: senza questo controllo il
+    # prompt d'annuncio («Summarize this naturally…») tornava a schermo come un
+    # messaggio dell'utente. Il riconoscimento resta qui, nella sola resa della
+    # chat, e non allarga ``is_synthetic_history_row``, che decide anche per Dream.
+    if _LEGACY_SUBAGENT_RETURN_RE.match(text):
+        return None
     media = message.get("media")
     chat_id = session_key.split(":", 1)[1] if ":" in session_key else session_key
     return _build_user_transcript_event(

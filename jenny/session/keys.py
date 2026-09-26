@@ -26,6 +26,8 @@ __all__ = [
     "session_key_for_channel",
     "session_kind",
     "subagent_session_key",
+    "webui_chat_id",
+    "webui_transcript_key",
 ]
 
 UNIFIED_SESSION_KEY = "unified:default"
@@ -278,6 +280,37 @@ def project_session_key(project_id: str) -> str:
     lato che la scrive e quello che la classifica non possono divergere.
     """
     return f"{PROJECT_SESSION_PREFIX}{project_id}"
+
+
+def webui_chat_id(key: str) -> str:
+    """Il ``chat_id`` di una conversazione della WebUI, dalla chiave che usa il client.
+
+    Il client indirizza le conversazioni in due forme (``shared/session-manager.js``):
+    ``websocket:default`` per quella personale e ``project:<nome>`` per un progetto.
+    Il ``chat_id`` e' cio' che viaggia nei frame e con cui si registra il turno
+    in corso: ``default`` nel primo caso, la chiave intera nel secondo — lo
+    stesso calcolo di ``chatIdOf`` in ``shared/ws-manager.js``.
+    """
+    prefix = f"{WEBUI_CHANNEL}:"
+    if key.startswith(prefix):
+        return key[len(prefix):]
+    return key
+
+
+def webui_transcript_key(key: str) -> str:
+    """La chiave con cui sta su disco la trascrizione WebUI di una conversazione.
+
+    Chi scrive la trascrizione la registra sotto ``websocket:<chat_id>``
+    (``webui/transcript_recorder.py``), e per un progetto il ``chat_id`` e'
+    ``project:<nome>``: il file e' ``websocket_project_<nome>.jsonl``. La forma
+    con cui il client *chiede* un progetto invece e' ``project:<nome>``, senza
+    canale. Fino al 26/09/2026 la route del thread cercava proprio quella, non
+    trovava niente e ripiegava sulla storia ricostruita dalla sessione: le chat
+    dei quaderni si aprivano senza tool ne' ragionamento, e con i vecchi rientri
+    dei subagent disegnati come messaggi dell'utente. Chi legge o sposta quei file
+    passa di qui, cosi' la forma sta in un punto solo.
+    """
+    return f"{WEBUI_CHANNEL}:{webui_chat_id(key)}"
 
 
 def normalize_user_session_key(key: str) -> str:

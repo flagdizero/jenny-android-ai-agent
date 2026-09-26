@@ -63,7 +63,12 @@ from jenny.channels.http_utils import (
 )
 from jenny.config.paths import get_workspace_path
 from jenny.security.workspace_policy import is_path_within
-from jenny.session.keys import UNIFIED_SESSION_KEY, is_project_session_key
+from jenny.session.keys import (
+    UNIFIED_SESSION_KEY,
+    is_project_session_key,
+    webui_chat_id,
+    webui_transcript_key,
+)
 from jenny.session.webui_turns import websocket_turn_wall_started_at
 from jenny.webui.android_apps_api import (
     launch_android_app,
@@ -534,7 +539,11 @@ class GatewayHTTPHandler:
                 return _http_error(400, "invalid limit")
         before = _query_first(query, "before")
         data = build_webui_thread_response(
-            decoded_key,
+            # La trascrizione sta sotto ``websocket:<chat_id>``, anche per un
+            # progetto che il client chiede come ``project:<nome>``: v.
+            # ``webui_transcript_key``. La sessione invece si legge con
+            # ``core_key``, qui sopra.
+            webui_transcript_key(decoded_key),
             augment_user_media=self.media.augment_transcript_media,
             augment_assistant_media=self.media.augment_transcript_media,
             augment_assistant_text=lambda text: self.media.rewrite_local_markdown_images(
@@ -550,8 +559,13 @@ class GatewayHTTPHandler:
         )
         if data is None:
             return _http_error(404, "webui thread not found")
+        # Il client non legge ``sessionKey``, ma la risposta resta indirizzata con
+        # la chiave che ha chiesto.
+        data["sessionKey"] = decoded_key
         data["workspace_scope"] = scope.payload()
-        started_at = websocket_turn_wall_started_at("default")
+        # Il turno in corso e' della conversazione aperta: per un quaderno il
+        # ``chat_id`` e' ``project:<nome>``, non ``default``.
+        started_at = websocket_turn_wall_started_at(webui_chat_id(decoded_key))
         if started_at is not None:
             data["run_started_at"] = started_at
         return _http_json_response(data)

@@ -1075,14 +1075,14 @@ def read_recent_user_messages(
     (``_split_transcript_turns``), quindi la sua presenza *è* la prova che
     esistono messaggi più vecchi.
     """
-    from jenny.session.keys import WEBUI_CHANNEL, project_session_key
+    from jenny.session.keys import project_session_key, webui_transcript_key
     from jenny.webui.transcript_store import (
         webui_transcript_path,
         webui_transcript_segments_dir,
     )
 
     try:
-        key = f"{WEBUI_CHANNEL}:{project_session_key(name)}"
+        key = webui_transcript_key(project_session_key(name))
         path = webui_transcript_path(key)
         rotated = any(webui_transcript_segments_dir(key).glob("*.jsonl"))
     except Exception:  # noqa: BLE001 — senza transcript il controllo salta, non rompe
