@@ -55,8 +55,16 @@ export function sanitizeGroup(group) {
   return GROUPS.includes(group) ? group : 'other';
 }
 
-/** Il nome da scrivere: il titolo del frontmatter se c'e', se no il file. */
+/** Il nome da scrivere: il titolo del frontmatter se c'e', se no il file.
+ *
+ *  **Tranne l'indice.** `wiki/index.md` entra nell'elenco apposta (e' il nodo
+ *  centrale della mappa, e la ricerca lo deve trovare: v. `iter_page_files` in
+ *  `webui/wiki.py`), ma di solito porta come titolo il nome del quaderno — che
+ *  e' anche il titolo della sua pagina principale. Sul telefono viaggio-pazzo
+ *  mostrava cosi' due righe «Viaggio Pazzo» identiche, e due nodi uguali nella
+ *  mappa. L'indice si chiama per quello che e'. */
 export function labelOf(node) {
+  if (node.path === 'index.md') return i18n.t('home.notebookPages.index');
   return node.title || node.label || node.id || '';
 }
 
@@ -126,10 +134,20 @@ export class NotebookPages {
     this.queryEl?.addEventListener('input', () => this._applySearch());
     this.tabListEl?.addEventListener('click', () => this.showTab('list'));
     this.tabMapEl?.addEventListener('click', () => this.showTab('map'));
-    this.listEl?.addEventListener('click', (e) => {
-      const row = e.target.closest('[data-page]');
-      if (row) this._onOpenPage?.(row.dataset.page, row.dataset.label || '');
-    });
+    this.listEl?.addEventListener('click', (e) => this._onListClick(e));
+  }
+
+  /** Un tocco nell'elenco apre la riga toccata, e **solo** una riga.
+   *
+   *  Cercava `closest('[data-page]')`, che non si ferma all'elenco: il guscio
+   *  (`main.home-shell`) porta anche lui un `data-page` — la pagina accesa della
+   *  casa. Un tocco sullo spazio vuoto sotto le righe risaliva fino li' e apriva
+   *  il lettore sulla «pagina» `chat`: «Non sono riuscita ad aprire questa
+   *  pagina», con la matita pronta a modificare il niente. Visto sul Titan 2. */
+  _onListClick(e) {
+    const row = e.target?.closest?.('.home-notebook-page');
+    if (!row || !this.listEl?.contains(row)) return;
+    this._onOpenPage?.(row.dataset.page, row.dataset.label || '');
   }
 
   /** Le parole della stanza. Il campo di ricerca riusa il segnaposto del grafo
@@ -138,8 +156,10 @@ export class NotebookPages {
     if (this.tabListEl) this.tabListEl.textContent = i18n.t('home.notebookPages.tabList');
     if (this.tabMapEl) this.tabMapEl.textContent = i18n.t('home.notebookPages.tabMap');
     if (this.queryEl) this.queryEl.placeholder = i18n.t('graph.searchPlaceholder');
-    /* Le righe gia' a schermo portano l'etichetta del gruppo: cambiata la
-       lingua, si ridisegnano invece di restare nella precedente. */
+    /* Le righe gia' a schermo portano l'etichetta del gruppo (e l'indice il suo
+       nome, v. `labelOf`): cambiata la lingua, si ridisegnano invece di restare
+       nella precedente. */
+    if (this.data) this.rows = orderPages(this.data.nodes);
     if (this.rows.length) this._render();
   }
 

@@ -141,7 +141,11 @@ export function toSimulation(data) {
     index,
     id: node.id,
     path: node.path,
-    label: node.title || node.label || node.id,
+    // L'indice col suo nome e non col titolo del quaderno: v. `labelOf` in
+    // `home-notebook-pages.js`, che fa la stessa scelta per l'elenco.
+    label: node.path === 'index.md'
+      ? i18n.t('home.notebookPages.index')
+      : node.title || node.label || node.id,
     group: node.group || 'other',
     degree: node.degree || 0,
   }));

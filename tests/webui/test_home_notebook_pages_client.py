@@ -72,6 +72,7 @@ function makeEl(tag) {
     setAttribute(k, v) { el.attrs[k] = v; },
     addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
     closest() { return null; },
+    contains(other) { return other === el || el.children.includes(other); },
     appendChild(child) {
       if (child.isFragment) { el.children.push(...child.children); child.children = []; }
       else el.children.push(child);
@@ -162,6 +163,7 @@ class Pages {
   __RENDER__
   __ROW__
   __APPLY_SEARCH__
+  __ON_LIST_CLICK__
 }
 
 function homePages() {
@@ -217,6 +219,7 @@ def _harness() -> str:
         .replace("__RENDER__", member(src, "_render"))
         .replace("__ROW__", member(src, "_row"))
         .replace("__APPLY_SEARCH__", member(src, "_applySearch"))
+        .replace("__ON_LIST_CLICK__", member(src, "_onListClick"))
     )
 
 
@@ -231,7 +234,7 @@ def test_the_rows_are_grouped_and_alphabetical_inside() -> None:
     """Le cose prima delle idee, i riassunti in fondo; dentro, in ordine."""
     _run("""
       const rows = orderPages(WITH_GROUPS.nodes);
-      assert.deepEqual(rows.map((r) => r.label), ['annaffi', 'orto', 'zucche', 'index']);
+      assert.deepEqual(rows.map((r) => r.label), ['annaffi', 'orto', 'zucche', 'Indice del quaderno']);
       assert.deepEqual(
         rows.map((r) => r.group),
         ['entities', 'entities', 'concepts', 'other'],
@@ -245,7 +248,7 @@ def test_every_row_keeps_the_index_the_server_gave_it() -> None:
     _run("""
       const rows = orderPages(WITH_GROUPS.nodes);
       const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.index]));
-      assert.deepEqual(byLabel, { zucche: 0, orto: 1, index: 2, annaffi: 3 });
+      assert.deepEqual(byLabel, { zucche: 0, orto: 1, 'Indice del quaderno': 2, annaffi: 3 });
     """)
 
 
@@ -262,7 +265,7 @@ def test_the_search_lights_the_row_the_server_meant() -> None:
       reply = WITH_GROUPS;
       await p.load('orto');
       assert.deepEqual(p.listEl.children.map((r) => r.dataset.label),
-                       ['annaffi', 'orto', 'zucche', 'index']);
+                       ['annaffi', 'orto', 'zucche', 'Indice del quaderno']);
 
       mask = new Uint8Array([1, 0, 0, 0]);
       p.queryEl.value = 'zuc';
@@ -455,4 +458,61 @@ def test_a_new_notebook_comes_back_to_the_list() -> None:
       await p.load('diario');
       assert.equal(p._tab, 'list');
       assert.equal(p.listEl.hidden, false);
+    """)
+
+
+# ── Il tocco, e l'indice col suo nome ───────────────────────────────────────
+
+
+def test_a_tap_on_the_empty_list_opens_nothing() -> None:
+    """Il guscio porta anch'esso un `data-page` (la pagina accesa della casa):
+    un tocco sotto l'ultima riga risaliva fino a lui e apriva il lettore sulla
+    «pagina» `chat`. Il target finto risponde come il DOM vero: nessuna riga
+    sopra di lui, ma un antenato con `data-page`."""
+    _run("""
+      const p = homePages();
+      reply = FLAT;
+      await p.load('patreon');
+      const shell = { dataset: { page: 'chat' } };
+      const emptySpace = { closest: (sel) => (sel === '[data-page]' ? shell : null) };
+      p._onListClick({ target: emptySpace });
+      assert.deepEqual(p.opened, []);
+    """)
+
+
+def test_a_tap_on_a_row_opens_that_page() -> None:
+    _run("""
+      const p = homePages();
+      reply = FLAT;
+      await p.load('patreon');
+      const row = p.listEl.children[1];
+      const onTheName = { closest: (sel) => (sel === '.home-notebook-page' ? row : null) };
+      p._onListClick({ target: onTheName });
+      assert.deepEqual(p.opened, [['uno.md', 'uno']]);
+    """)
+
+
+def test_a_row_outside_the_list_is_not_opened() -> None:
+    """Una `.home-notebook-page` che non sta in questo elenco non e' sua."""
+    _run("""
+      const p = homePages();
+      reply = FLAT;
+      await p.load('patreon');
+      const stranger = { dataset: { page: 'altro.md', label: 'altro' } };
+      p._onListClick({ target: { closest: () => stranger } });
+      assert.deepEqual(p.opened, []);
+    """)
+
+
+def test_the_index_is_named_for_what_it_is() -> None:
+    """Su viaggio-pazzo `index.md` e la pagina principale hanno lo stesso titolo
+    nel frontmatter, e l'elenco mostrava due righe «Viaggio Pazzo»."""
+    _run("""
+      const rows = orderPages([
+        { id: 'i', path: 'index.md', title: 'Viaggio Pazzo', group: 'other' },
+        { id: 'v', path: 'viaggio-pazzo.md', title: 'Viaggio Pazzo', group: 'other' },
+      ]);
+      assert.deepEqual(rows.map((r) => r.label).sort(), ['Indice del quaderno', 'Viaggio Pazzo']);
+      // Solo l'indice della radice: una pagina che si chiama index altrove resta sua.
+      assert.equal(labelOf({ path: 'concepts/index.md', title: 'Indice analitico' }), 'Indice analitico');
     """)

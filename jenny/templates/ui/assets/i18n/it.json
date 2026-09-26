@@ -967,6 +967,7 @@
       "countMany": "{count} pagine",
       "tabList": "Pagine",
       "tabMap": "Mappa",
+      "index": "Indice del quaderno",
       "loading": "Sto guardando…",
       "none": "Questo quaderno non ha ancora pagine. Scrivono io e te, parlandone.",
       "noMatch": "Nessuna pagina con queste parole.",

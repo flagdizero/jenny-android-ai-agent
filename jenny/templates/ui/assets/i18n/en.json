@@ -964,6 +964,7 @@
       "countMany": "{count} pages",
       "tabList": "Pages",
       "tabMap": "Map",
+      "index": "Notebook index",
       "loading": "Looking…",
       "none": "This notebook has no pages yet. We write them by talking.",
       "noMatch": "No page with those words.",
