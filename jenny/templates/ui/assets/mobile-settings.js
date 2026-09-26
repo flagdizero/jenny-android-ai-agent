@@ -1125,11 +1125,13 @@ export class SettingsController {
      che Dream sta girando senza consolidare niente. */
   _renderReviewState(state) {
     if (!state) return '';
-    const lines = [i18n.t('settings.memory.sinceReview', { runs: state.runs_since_review })];
-    if (state.stuck_runs) lines.push(i18n.t('settings.memory.stuckRuns', { runs: state.stuck_runs }));
-    if (state.nothing_new_runs) {
-      lines.push(i18n.t('settings.memory.nothingNewRuns', { runs: state.nothing_new_runs }));
-    }
+    /* Con un run solo la frase ha la sua chiave (`…One`): «1 runs since the
+       last review pass» si leggeva cosi', sul telefono. Stessa forma di
+       `countOne` / `countMany`. */
+    const runs = (key, n) => i18n.t(`settings.memory.${key}${n === 1 ? 'One' : ''}`, { runs: n });
+    const lines = [runs('sinceReview', state.runs_since_review)];
+    if (state.stuck_runs) lines.push(runs('stuckRuns', state.stuck_runs));
+    if (state.nothing_new_runs) lines.push(runs('nothingNewRuns', state.nothing_new_runs));
     return this._hint(lines.map(escapeHtml).join('<br>'));
   }
 
