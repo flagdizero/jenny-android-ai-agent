@@ -19,7 +19,13 @@ import { OnboardingController } from './mobile-onboarding.js';
 import { JennyCompanion } from './mobile-jenny.js';
 import { UiQueryResponder } from './mobile-ui-query.js';
 import { keyboard } from './shared/keyboard.js';
-import { hasSelection, exposeSelectionState, forwardTapsThroughChrome } from './shared/selection.js';
+import {
+  hasSelection,
+  exposeSelectionState,
+  forwardTapsThroughChrome,
+  clearSelection,
+  releaseSelectionOnBlur,
+} from './shared/selection.js';
 import { watchHorizontalSwipe, elastic } from './shared/horizontal-swipe.js';
 import './shared/theme.js';
 
@@ -200,6 +206,7 @@ class MobileApp {
        fermo sulla chrome (v. .agent/chat-selection-root-plan.md, pagina C).
        Il tap che così finirebbe sotto viene riconsegnato al bersaglio vero. */
     exposeSelectionState();
+    releaseSelectionOnBlur();
     forwardTapsThroughChrome(['.chat-bottom', '.dock']);
 
     // Determine initial mode
@@ -586,6 +593,8 @@ class MobileApp {
   }
 
   goHome() {
+    // Prima di cambiare vista: v. `releaseSelectionOnBlur`.
+    clearSelection();
     this._dismissAllOverlays();
     // Gli overlay non sono tutto: le sezioni hanno un sotto-stato che
     // sopravvive al cambio vista (l'editor del workspace resta montato e

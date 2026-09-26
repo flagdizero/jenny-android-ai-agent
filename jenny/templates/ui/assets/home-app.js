@@ -61,6 +61,7 @@ import { api } from './shared/api-client.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { rpc } from './shared/rpc-client.js';
+import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
 import { sessionManager } from './shared/session-manager.js';
 import { wsManager } from './shared/ws-manager.js';
@@ -370,6 +371,9 @@ class HomeApp {
        prima vorrebbe dire scriverci dentro le chiavi grezze. */
     await i18n.load(i18n.locale);
     this._applyTranslations();
+
+    // La barra di selezione che riappariva al rientro: v. `releaseSelectionOnBlur`.
+    releaseSelectionOnBlur();
 
     /* Quel che apparteneva alla conversazione lasciata scade qui. Il `turn_end`
        del turno in volo arrivera' a una chat che non guardiamo piu' e verra'
@@ -1391,6 +1395,8 @@ class HomeApp {
    *  della conversazione.
    */
   goHome() {
+    // Prima di cambiare vista: v. `releaseSelectionOnBlur`.
+    clearSelection();
     this._closeAllOverlays();
     /* Con l'editor modificato `_setView` chiede, e il resto di Home aspetta la
        risposta: cambiare conversazione sotto la conferma lasciava, con un no,

@@ -45,6 +45,31 @@ export function onSelectionChange(fn) {
   return () => document.removeEventListener('selectionchange', handler);
 }
 
+/** Chiude la selezione di testo, ovunque sia nella pagina. */
+export function clearSelection() {
+  document.getSelection()?.removeAllRanges();
+}
+
+/* ── La selezione non sopravvive all'uscita dalla finestra ───────────────────
+   Quando la finestra perde il fuoco (un'altra app davanti, il selettore file,
+   Impostazioni) Chromium nasconde la barra Copia/Condividi ma si tiene il fatto
+   che *c'e'* una selezione, e al rientro la rimostra
+   (`restoreSelectionPopupsIfNecessary`). Nel frattempo la pagina, nascosta e
+   senza fotogrammi, ha spostato o tolto il DOM sotto quella selezione: `goHome`
+   cambia vista e conversazione, il rientro rimette il fuoco nel composer. Il
+   lato nativo non lo sa — i limiti della selezione gli arrivano solo coi
+   fotogrammi — e la barra riappariva sopra il composer senza niente di
+   evidenziato. Visto sul Titan 2 in casa e in officina, a ogni ritorno con Home
+   o dal selettore file.
+
+   `blur` arriva mentre la vista e' ancora visibile: un fotogramma con la
+   selezione chiusa fa in tempo a partire, e al rientro non c'e' niente da
+   ripristinare. Torna la funzione che stacca il listener. */
+export function releaseSelectionOnBlur(win = window) {
+  win.addEventListener('blur', clearSelection);
+  return () => win.removeEventListener('blur', clearSelection);
+}
+
 /* ── La chrome esce dal hit-test finché c'è una selezione ───────────────────
    Al tocco di un manico Chromium ri-deriva l'estremo *fermo* della selezione
    con un hit-test dalle sue coordinate di schermo (`OnDragBegin` →
