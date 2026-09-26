@@ -166,17 +166,28 @@ export class SettingsController {
     /* La posizione va letta *mentre* la vista è visibile: `switchMode` mette il
        display:none sulla view prima di chiamare `deactivate()`, e un
        contenitore senza box legge scrollTop 0 — salvare lì avrebbe riportato in
-       cima a ogni rientro invece di evitarlo. */
+       cima a ogni rientro invece di evitarlo.
+       Finché un ripristino aspetta i blocchi in ritardo (`_restorePending`), uno
+       `scroll` non e' una lettura: un blocco che rimpiazza il suo segnaposto
+       accorcia la pagina per un istante, Blink clampa, e l'evento arriva a flag
+       gia' abbassato. Leggerlo come «ha scorso l'utente» annullava il ripristino
+       e salvava la quota clampata: in fondo a Mani, dietro la lista dei job che
+       atterra per ultima, si tornava a meta' pagina (Titan 2, 26/09/2026). Chi
+       scorre davvero lo dice il gesto: v. i listener subito sotto. */
     this.contentEl?.addEventListener('scroll', () => {
       // Un ripristino non è una lettura: la sua assegnazione torna clampata
       // dalla pagina ancora corta e qui riscriverebbe `_scrollTop` col valore
       // sbagliato, distruggendo proprio ciò che stava ripristinando.
       if (this._restoringScroll) return;
-      // Ha scorso l'utente: da qui in poi nessun contenuto in ritardo ha più il
-      // diritto di riportarlo dov'era prima del re-render.
-      this._restorePending = false;
+      if (this._restorePending) return;
       if (this.contentEl.clientHeight) this._scrollTop = this.contentEl.scrollTop;
     }, { passive: true });
+    /* Ha toccato l'utente: da qui in poi nessun contenuto in ritardo ha più il
+       diritto di riportarlo dov'era prima del re-render. Dito, rotella,
+       puntatore o tasto (il Titan ha la tastiera fisica). */
+    for (const type of ['touchstart', 'wheel', 'pointerdown', 'keydown']) {
+      this.contentEl?.addEventListener(type, () => { this._restorePending = false; }, { passive: true });
+    }
     /* Niente `loadSettings()` qui. Il costruttore gira dentro `switchMode`,
        che subito dopo chiama `activate()` — e `activate()` carica. Risultato:
        due GET /api/settings e due render completi alla prima apertura, con il
