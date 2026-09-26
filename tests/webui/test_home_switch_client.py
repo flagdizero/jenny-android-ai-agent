@@ -144,6 +144,9 @@ const moveLayoutKey = async (from, to) => {
   return true;
 };
 const showToast = () => {};
+/* `goHome` chiude la selezione prima di cambiare vista (shared/selection.js). */
+let selectionsCleared = 0;
+const clearSelection = () => { selectionsCleared += 1; };
 /* La conferma di buttare le modifiche del lettore: risponde quando il caso
    chiama `reply`, come una modale vera. */
 let reply = null;

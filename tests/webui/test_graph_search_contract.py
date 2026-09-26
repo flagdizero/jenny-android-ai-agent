@@ -94,8 +94,10 @@ const rows = () => pages.listEl.children;
 const shown = () => rows().filter((r) => !r.hidden).map((r) => r.dataset.label);
 const type = (text) => { pages.queryEl.value = text; pages._applySearch(); };
 
+// `index.md` si chiama per quel che e' (v. `labelOf`): qui l'i18n finto
+// restituisce la chiave, che cade nello stesso posto di «Home».
 assert.deepEqual(rows().map((r) => r.dataset.label),
-  ['CPU sveglia', 'Doze mode', 'Home', 'Lavori ricorrenti', 'Vita della batteria'],
+  ['CPU sveglia', 'Doze mode', 'home.notebookPages.index', 'Lavori ricorrenti', 'Vita della batteria'],
   'ordine a schermo per titolo');
 assert.deepEqual(rows().map((r) => r.dataset.node), ['4', '2', '3', '1', '0'],
   'ogni riga porta la posizione che il server le ha dato');
