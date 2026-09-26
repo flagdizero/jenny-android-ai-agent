@@ -3653,14 +3653,18 @@ export class ChatController {
         if (match.index > lastIdx) {
           frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
         }
+        // Il percorso si fissa qui: `match` e' la variabile del `while`, e al
+        // momento del clic vale gia' `null` (fine del ciclo). Leggerla dal
+        // gestore rompeva ogni link con un TypeError.
+        const path = match[1];
         const link = document.createElement('a');
         link.className = 'chat-file-path-link';
-        link.textContent = match[1];
+        link.textContent = path;
         link.href = '#';
         link.addEventListener('click', (e) => {
           e.preventDefault();
           const msgEl = link.closest('.chat-msg');
-          if (msgEl) this._renderFilePreview(match[1], msgEl);
+          if (msgEl) this._renderFilePreview(path, msgEl);
         });
         frag.appendChild(link);
         lastIdx = match.index + match[0].length;
