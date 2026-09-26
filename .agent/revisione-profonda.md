@@ -202,3 +202,17 @@ nuovo, vista esterna Telecomando, casa ↔ officina, selettore del ripristino ap
 nativo; nessun «Native command refused» nel log. Non provati sul telefono: `ui_view` dalla casa
 (servirebbe un messaggio vero in chat), il resync dopo una caduta, la mascotte flottante (spenta
 sul telefono), la tastiera Bluetooth, la guardia WebSocket del browser, l'avviso OTA.
+
+**Le prove che mancavano (26/09/2026, 10:40-10:59, build `e3521bd8`).** `ui_view` dalla casa:
+Jenny descrive lo schermo (`home:chat`) in 12 s. Resync: connessione tagliata a metà turno con
+una regola `iptables` REJECT di 4 s sulla porta 18790 (`ss -K` qui non chiude i socket) — «Connection
+lost, retrying», riconnessione su una porta nuova, risposta completa (30/30) e Ferma rilasciato.
+Guardia del browser: su un tester WebSocket pubblico, `ws://192.168.1.1/` →
+«connessione diretta bloccata (WebSocket/WebTransport)» nel log; il modello però ha letto il
+prefisso «Jenny:» del messaggio d'errore come un possibile tentativo di injection. Mascotte
+flottante: accesa, `am stopservice` a gateway vivo, sparisce e torna dopo 30 s con la sveglia
+(«Floating mascot attached»); poi rispenta. Notifiche: la risposta con Jenny in secondo piano
+lascia l'avviso, tornare alla chat lo toglie (`chatOpened` dal canale nuovo). OTA: fingerprint
+finta nelle preferenze → «system update detected since last run», e torna quella vera. Tastiera:
+non simulabile; l'APK dichiara `keyboard|keyboardHidden|navigation|layoutDirection`
+(`configChanges=0x40003ff4`).
