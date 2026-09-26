@@ -451,6 +451,30 @@ def test_list_excludes_disabled_jobs(tmp_path) -> None:
     assert result == "No scheduled jobs."
 
 
+async def test_list_shows_a_job_paused_from_the_workshop(tmp_path) -> None:
+    """Un job in pausa non e' sparito: se Jenny non lo vedesse ne creerebbe un
+    doppione, credendo di doverlo rifare. La riga le dice dove si riprende."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    service._running = True
+    tool = CronTool(service)
+    try:
+        job = service.add_job(
+            name="Acqua",
+            schedule=CronSchedule(kind="every", every_ms=3_600_000),
+            message="bevi",
+            **_bound_chat(),
+        )
+        service.set_paused(job.id, True)
+
+        result = tool._list_jobs()
+    finally:
+        service.stop()
+
+    assert "Acqua" in result
+    assert "Paused by the user from the workshop" in result
+    assert "Next run" not in result
+
+
 # -- lo stato per-controllo dell'heartbeat --
 
 

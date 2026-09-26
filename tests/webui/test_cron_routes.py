@@ -161,3 +161,95 @@ def test_the_payload_is_built_off_the_event_loop(workspace, monkeypatch):
 
     assert response.status_code == 200
     assert seen, "il payload e' stato costruito sul loop del gateway"
+
+
+# ── pausa, ripresa, eliminazione dall'officina ──────────────────────────────
+
+from jenny.cron.service import CronService  # noqa: E402
+from jenny.cron.types import CronJob, CronPayload, CronSchedule  # noqa: E402
+
+_BOUND = {"session_key": "websocket:chat-1", "origin_channel": "websocket", "origin_chat_id": "chat-1"}
+
+
+@pytest.fixture()
+def service(tmp_path: Path) -> CronService:
+    # Fermo: le scritture passano dal giornale delle azioni, e il timer non parte.
+    return CronService(tmp_path / "cron" / "jobs.json")
+
+
+def _job(service: CronService, **kwargs) -> str:
+    schedule = kwargs.pop("schedule", CronSchedule(kind="every", every_ms=3_600_000))
+    return service.add_job("gocce", schedule, "ricordamelo", **_BOUND, **kwargs).id
+
+
+def _act(handler, job_id: str, action: str, *, token=AUTH_SECRET):
+    response = _dispatch(handler, f"/api/webui/cron/{job_id}/{action}", token=token)
+    body = json.loads(response.body.decode("utf-8")) if response.status_code == 200 else None
+    return response.status_code, body
+
+
+def test_an_action_without_a_token_is_refused(workspace, service):
+    handler = _make_handler(workspace, get_cron_service=lambda: service)
+    job_id = _job(service)
+
+    status, _ = _act(handler, job_id, "pause", token=None)
+
+    assert status == 401
+    assert service.get_job(job_id).paused_at_ms is None
+
+
+def test_an_action_without_a_service_is_unavailable(workspace):
+    handler = _make_handler(workspace, get_cron_service=lambda: None)
+
+    assert _act(handler, "abc12345", "pause")[0] == 503
+
+
+def test_pause_resume_and_remove_go_through_the_service(workspace, service):
+    handler = _make_handler(workspace, get_cron_service=lambda: service)
+    job_id = _job(service)
+
+    assert _act(handler, job_id, "pause") == (200, {"result": "paused"})
+    assert service.get_job(job_id).paused_at_ms is not None
+    assert _act(handler, job_id, "pause") == (200, {"result": "unchanged"})
+    assert _act(handler, job_id, "resume") == (200, {"result": "resumed"})
+    assert service.get_job(job_id).enabled is True
+    assert _act(handler, job_id, "remove") == (200, {"result": "removed"})
+    assert service.get_job(job_id) is None
+
+
+def test_the_service_s_refusals_become_status_codes(workspace, service):
+    import time
+
+    handler = _make_handler(workspace, get_cron_service=lambda: service)
+    service.register_system_job(CronJob(
+        id="dream", name="dream",
+        schedule=CronSchedule(kind="every", every_ms=7_200_000),
+        payload=CronPayload(kind="system_event"),
+    ))
+    at = int(time.time() * 1000) + 300
+    one_shot = _job(service, schedule=CronSchedule(kind="at", at_ms=at))
+    service.set_paused(one_shot, True)
+    time.sleep(0.4)
+
+    assert _act(handler, "dream", "pause")[0] == 403
+    assert _act(handler, "dream", "remove")[0] == 403
+    assert _act(handler, "nessuno1", "pause")[0] == 404
+    assert _act(handler, one_shot, "resume")[0] == 409
+
+
+def test_an_id_that_is_not_an_id_is_refused_before_the_service(workspace):
+    called = MagicMock()
+    handler = _make_handler(workspace, get_cron_service=lambda: called)
+
+    for bad in ("..", "a%2Fb", "x" * 65):
+        assert _act(handler, bad, "pause")[0] in (400, 404), bad
+    assert not called.method_calls
+
+
+def test_run_now_is_still_not_a_route(workspace, service):
+    """Il pannello resta senza «esegui adesso»: accoda un turno d'agente, cioe'
+    spende token e puo' consegnare un messaggio. V. il cappello di cron_routes."""
+    handler = _make_handler(workspace, get_cron_service=lambda: service)
+    job_id = _job(service)
+
+    assert _dispatch(handler, f"/api/webui/cron/{job_id}/run") is None

@@ -72,6 +72,8 @@ def _as_saved(job: dict[str, Any], *, mode: str) -> dict[str, Any]:
     expected = copy.deepcopy(job)
     expected["payload"]["mode"] = mode
     expected["state"] = {**expected["state"], **_COULD_NOT_CHECK_DEFAULTS}
+    # La pausa dall'officina (26/09/2026): un job scritto prima non e' in pausa.
+    expected["pausedAtMs"] = None
     return expected
 
 

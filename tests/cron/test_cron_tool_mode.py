@@ -28,7 +28,9 @@ class _RecordingCronService:
         self.added.append(kwargs)
         return CronJob(id="job-1", name=kwargs.get("name", "x"))
 
-    def list_jobs(self) -> list[CronJob]:
+    def list_jobs(self, include_disabled: bool = False) -> list[CronJob]:
+        # La firma del servizio vero: l'elenco del tool chiede anche i job in
+        # pausa, e li filtra da se'.
         return list(self._jobs)
 
     def get_job(self, _job_id: str) -> None:

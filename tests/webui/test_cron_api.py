@@ -448,3 +448,64 @@ def test_a_stopped_scheduler_is_reported(cron, tmp_path):
     payload = webui_cron_payload(cron, config=_config(tmp_path))
 
     assert payload["service_running"] is False
+
+
+# ── pausa ed eliminazione dall'officina ─────────────────────────────────────
+
+_BOUND = {"session_key": "websocket:chat-1", "origin_channel": "websocket", "origin_chat_id": "chat-1"}
+
+
+def _row(cron, tmp_path, job_id):
+    payload = webui_cron_payload(cron, config=_config(tmp_path))
+    return next(j for j in payload["jobs"] if j["id"] == job_id)
+
+
+def test_an_active_user_job_can_be_paused_or_removed(cron, tmp_path):
+    job = cron.add_job("gocce", CronSchedule(kind="every", every_ms=60_000), _PILLS, **_BOUND)
+
+    row = _row(cron, tmp_path, job.id)
+
+    assert row["actions"] == ["pause", "remove"]
+    assert row["paused_at_ms"] is None
+
+
+def test_a_paused_job_says_since_when_and_can_be_resumed(cron, tmp_path):
+    job = cron.add_job("gocce", CronSchedule(kind="every", every_ms=60_000), _PILLS, **_BOUND)
+    cron.set_paused(job.id, True)
+
+    row = _row(cron, tmp_path, job.id)
+
+    assert row["actions"] == ["resume", "remove"]
+    assert row["paused_at_ms"] is not None
+    assert row["effective"] == "disabled"
+
+
+def test_a_one_shot_that_expired_while_paused_can_only_be_removed(cron, tmp_path):
+    """La regola e' quella di ``set_paused``: riprenderlo lo farebbe scattare
+    subito, in ritardo. Il pannello non offre un bottone che il server rifiuta."""
+    import time
+
+    at = int(time.time() * 1000) + 60_000
+    job = cron.add_job("dentista", CronSchedule(kind="at", at_ms=at), "vai", **_BOUND)
+    cron.set_paused(job.id, True)
+
+    # Il pannello guardato dopo la scadenza.
+    payload = webui_cron_payload(cron, config=_config(tmp_path), now_ms=at + 1_000)
+    row = next(j for j in payload["jobs"] if j["id"] == job.id)
+    assert row["actions"] == ["remove"]
+    assert _row(cron, tmp_path, job.id)["actions"] == ["resume", "remove"]
+
+
+def test_a_finished_or_unroutable_user_job_can_only_be_removed(cron, tmp_path):
+    job = cron.add_job("gocce", CronSchedule(kind="every", every_ms=60_000), _PILLS)
+
+    row = _row(cron, tmp_path, job.id)
+
+    assert row["enabled"] is False and row["paused_at_ms"] is None
+    assert row["actions"] == ["remove"]
+
+
+def test_a_system_job_offers_no_action(cron, tmp_path):
+    cron.register_system_job(_system("gardener"))
+
+    assert _row(cron, tmp_path, "gardener")["actions"] == []

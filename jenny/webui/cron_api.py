@@ -34,6 +34,7 @@ from loguru import logger
 
 from jenny.cron.heartbeat_tasks import parse_heartbeat_tasks
 from jenny.cron.purposes import system_job_purpose
+from jenny.cron.service import next_run_on_resume
 from jenny.cron.types import CronJob
 from jenny.utils.clock import now_ms as _now_ms
 
@@ -210,7 +211,26 @@ def _effective(job: CronJob, *, config: Any, heartbeat: dict[str, Any] | None) -
     return "active"
 
 
-def _job_payload(job: CronJob, *, config: Any, workspace: Path, default_tz: str) -> dict[str, Any]:
+def _job_actions(job: CronJob, now_ms: int) -> list[str]:
+    """Cosa l'officina puo' fare di questo job: le route di ``cron_routes``.
+
+    Solo i job dell'utente: un job di sistema ha il suo interruttore in config,
+    e il servizio lo rifiuterebbe comunque (``protected``). «Riprendi» solo se
+    ``set_paused`` lo accetterebbe; un job spento senza pausa — un ``at`` gia'
+    eseguito, un job senza sessione — si puo' solo togliere.
+    """
+    if _job_kind(job) != "user":
+        return []
+    if job.paused_at_ms is not None:
+        return ["resume", "remove"] if next_run_on_resume(job, now_ms) is not None else ["remove"]
+    if job.enabled:
+        return ["pause", "remove"]
+    return ["remove"]
+
+
+def _job_payload(
+    job: CronJob, *, config: Any, workspace: Path, default_tz: str, now_ms: int
+) -> dict[str, Any]:
     kind = _job_kind(job)
     heartbeat = _heartbeat_block(job, workspace) if job.id == "heartbeat" else None
     message = job.payload.message or ""
@@ -222,6 +242,8 @@ def _job_payload(job: CronJob, *, config: Any, workspace: Path, default_tz: str)
         "protected": kind == "system",
         "enabled": job.enabled,
         "effective": _effective(job, config=config, heartbeat=heartbeat),
+        "paused_at_ms": job.paused_at_ms,
+        "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
         "one_shot": job.delete_after_run,
         # Il testo del promemoria e' contenuto dell'utente: l'anteprima
@@ -286,7 +308,7 @@ def webui_cron_payload(
 
     status = cron.status()
     jobs = [
-        _job_payload(job, config=cfg, workspace=workspace, default_tz=default_tz)
+        _job_payload(job, config=cfg, workspace=workspace, default_tz=default_tz, now_ms=stamp)
         # ``include_disabled=True`` e non il default: un job disabilitato e' la
         # prima cosa che si viene a cercare qui, e senza di lui «l'ho disabilitato
         # o l'ho cancellato?» resta senza risposta.

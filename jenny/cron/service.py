@@ -172,6 +172,18 @@ def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     return None
 
 
+def next_run_on_resume(job: CronJob, now_ms: int) -> int | None:
+    """Quando ripartirebbe *job* se lo riprendessi adesso; ``None`` = non puo'.
+
+    Da adesso e senza recupero: e' ``_compute_next_run``, non
+    ``_next_run_with_catch_up``. Un ``at`` scaduto durante la pausa torna
+    ``None``. Pubblica perche' la stessa domanda la fa il pannello
+    (``webui/cron_api.py``) per decidere se offrire «Riprendi»: una regola sola,
+    cosi' il bottone non compare dove il server poi rifiuterebbe.
+    """
+    return _compute_next_run(job.schedule, now_ms)
+
+
 def _next_run_with_catch_up(schedule: CronSchedule, now_ms: int) -> int | None:
     """``_compute_next_run``, ma un one-shot già scaduto non si perde.
 
@@ -419,6 +431,7 @@ class CronService:
                 created_at_ms=j.get("createdAtMs", 0),
                 updated_at_ms=j.get("updatedAtMs", 0),
                 delete_after_run=j.get("deleteAfterRun", False),
+                paused_at_ms=j.get("pausedAtMs"),
             )
             jobs.append(job)
         return jobs, version
@@ -669,6 +682,7 @@ class CronService:
                     "createdAtMs": j.created_at_ms,
                     "updatedAtMs": j.updated_at_ms,
                     "deleteAfterRun": j.delete_after_run,
+                    "pausedAtMs": j.paused_at_ms,
                 }
                 for j in self._store.jobs
             ]
@@ -1308,6 +1322,59 @@ class CronService:
             return "removed"
 
         return "not_found"
+
+    def set_paused(
+        self, job_id: str, paused: bool
+    ) -> Literal["paused", "resumed", "unchanged", "expired", "protected", "not_found"]:
+        """Mette in pausa un job dell'utente, o lo riprende.
+
+        La chiama la route dell'officina (``webui/cron_routes.py``), sullo stesso
+        servizio che usa il tool ``cron``: e' lo stesso imbuto di scrittura, non
+        un secondo scrittore. Stessa protezione di :meth:`remove_job` — un
+        ``system_event`` non e' dell'utente — e stesso modo di persistere:
+        ``jobs.json`` se il servizio gira, il giornale delle azioni se e' fermo.
+
+        - Pausa: spento, senza prossima esecuzione, con ``paused_at_ms``. Un job
+          gia' spento per un'altra ragione (``at`` eseguito, job senza sessione)
+          non si mette in pausa: ``unchanged``.
+        - Ripresa: la prossima esecuzione si conta **da adesso**, senza recupero
+          (``_compute_next_run``, non ``_next_run_with_catch_up``). Un «ogni ora»
+          ripreso dopo tre ore riparte fra un'ora; un ``at`` scaduto durante la
+          pausa torna ``expired`` e resta in pausa, perche' riprenderlo lo farebbe
+          scattare subito, in ritardo.
+        """
+        store = self._load_store()
+        job = next((j for j in store.jobs if j.id == job_id), None) if store else None
+        if job is None:
+            return "not_found"
+        if job.payload.kind == "system_event":
+            logger.info("Cron: refused to pause/resume protected system job {}", job_id)
+            return "protected"
+        now = _now_ms()
+        if paused:
+            if job.paused_at_ms is not None or not job.enabled:
+                return "unchanged"
+            job.enabled = False
+            job.state.next_run_at_ms = None
+            job.paused_at_ms = now
+        else:
+            if job.paused_at_ms is None:
+                return "unchanged"
+            next_run = next_run_on_resume(job, now)
+            if next_run is None:
+                return "expired"
+            job.enabled = True
+            job.paused_at_ms = None
+            job.state.next_run_at_ms = next_run
+        job.updated_at_ms = now
+        if self._running:
+            self._save_store()
+            self._arm_timer()
+        else:
+            # Il giornale tratta come upsert tutto cio' che non e' ``del``.
+            self._append_action("add", asdict(job))
+        logger.info("Cron: {} job '{}' ({})", "paused" if paused else "resumed", job.name, job.id)
+        return "paused" if paused else "resumed"
 
     def retire_system_job(self, job_id: str) -> bool:
         """Toglie un job di sistema che **questa versione non sa piu' eseguire**.

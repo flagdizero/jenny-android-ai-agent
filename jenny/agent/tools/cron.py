@@ -419,7 +419,13 @@ class CronTool(Tool, ContextAware):
         return system_job_purpose(job.id)
 
     def _list_jobs(self) -> str:
-        jobs = self._cron.list_jobs()
+        # I job spenti restano fuori (un ``at`` eseguito, un job senza sessione),
+        # tranne quelli **in pausa**: l'utente li ha fermati dall'officina e
+        # torneranno. Senza, Jenny non li vedrebbe e ne creerebbe un doppione.
+        jobs = [
+            j for j in self._cron.list_jobs(include_disabled=True)
+            if j.enabled or j.paused_at_ms is not None
+        ]
         if not jobs:
             return "No scheduled jobs."
         lines = []
@@ -437,6 +443,13 @@ class CronTool(Tool, ContextAware):
             if j.payload.kind == "system_event":
                 parts.append(f"  Purpose: {self._system_job_purpose(j)}")
                 parts.append("  Protected: visible for inspection, but cannot be removed.")
+            if j.paused_at_ms is not None:
+                since = self._format_timestamp(j.paused_at_ms, self._display_timezone(j.schedule))
+                parts.append(
+                    f"  Paused by the user from the workshop since {since}: it does not run "
+                    "until they resume it there (Workshop > Hands). Do not recreate it; "
+                    "remove it only if they ask to drop it for good."
+                )
             parts.extend(self._format_state(j.state, j.schedule))
             lines.append("\n".join(parts))
         return "Scheduled jobs:\n" + "\n".join(lines)

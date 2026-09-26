@@ -203,6 +203,13 @@ class CronJob:
     created_at_ms: int = 0
     updated_at_ms: int = 0
     delete_after_run: bool = False
+    # Quando l'utente l'ha messo in pausa dall'officina; ``None`` se non lo e'.
+    # **E' la sola cosa che distingue la pausa** dagli altri due modi in cui un
+    # job e' ``enabled = False``: un ``at`` gia' eseguito e un job senza sessione
+    # a cui consegnare. Senza, «Riprendi» su un promemoria concluso lo rifarebbe
+    # partire. Assente negli store scritti prima del 26/09/2026: vale «non in
+    # pausa», e una versione vecchia che non lo conosce lascia il job spento.
+    paused_at_ms: int | None = None
 
     @classmethod
     def from_dict(cls, kwargs: dict):
