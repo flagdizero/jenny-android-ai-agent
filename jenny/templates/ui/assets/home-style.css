@@ -323,12 +323,17 @@ body.home {
   white-space: nowrap;
 }
 
-/* La radice cede per prima: di un nome lungo si deve leggere dove sei. Con
-   `flex-shrink` e non con un `max-width` in percentuale: il percorso e' largo
-   quanto il suo contenuto, e una percentuale di quello tagliava «NOTEBOOKS»
-   anche con mezzo schermo libero — visto sul telefono il 26/09/2026. */
+/* La radice sta intera, e cede per ultima: e' il posto di cui la stanza fa
+   parte — il quaderno, nel lettore — e un «● P…» non dice piu' quale. A
+   tagliarsi e' dove sei, che la pagina sotto ripete comunque per esteso (il
+   titolo del lettore). Visto sul telefono il 26/09/2026: la radice cedeva per
+   prima e del quaderno restava una lettera.
+   Il tetto in percentuale funziona perche' il percorso ha `flex: 1`, cioe' una
+   larghezza sua: senza, una percentuale del contenuto tagliava «NOTEBOOKS»
+   con mezzo schermo libero (lo stesso giorno, prima prova). */
 .home-path-root {
-  flex: 0 4 auto;
+  flex: 0 0 auto;
+  max-width: 55%;
   padding: 0;
   border: none;
   background: none;
@@ -672,10 +677,9 @@ body.home {
    che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
    questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
    il campo, cosi' la riga resta allineata.
-   Tutta qui. Stava a meta' con «Parlane» (`.home-talk`), di quando le due
-   pastiglie abitavano la stessa barra in testa; scesa nel composer, altezza,
-   bordo e fondo di la' li riscriveva questa regola, e restavano solo da
-   leggere. */
+   Tutta qui. Stava a meta' con «Parlane», di quando le due pastiglie
+   abitavano la stessa barra in testa; scesa nel composer, altezza, bordo e
+   fondo di la' li riscriveva questa regola, e restavano solo da leggere. */
 /* Dal 26/09/2026 porta anche il nome del quaderno, col pallino, e c'e' solo
    nelle pagine fissate (nei Quaderni la strada per le pagine sta in alto). Il
    nome cede per primo — fino a meta' riga, poi «…» — perche' il campo dove
@@ -1450,49 +1454,32 @@ body.home {
 
 .home-actions [hidden] { display: none; }
 
-/* La via del ritorno: una pastiglia piena, perche' il ritorno non e' una
-   scelta fra pari, e' l'uscita — la tavola la disegna cosi'. */
-.home-talk {
+/* «Modifica», il comando del lettore: la pastiglia piena nel colore del
+   tema, come la voce accesa dell'interruttore Chat | Pagine nelle altre due
+   viste — nello stesso punto, a destra, e con lo stesso peso. E' la sola cosa
+   accesa della riga. Fino al 26/09/2026 era una matita spenta accanto a
+   «Parlane»; l'utente, guardando il lettore: «fai il tasto modifica con la
+   stessa logica del tasto chat, quindi arancione a pill». */
+.home-edit {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 36px;
-  padding: 0 12px;
-  border: 1px solid transparent;
+  padding: 0 14px 0 12px;
+  border: none;
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--on-accent);
   font-family: inherit;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.home-edit .ti { font-size: 15px; }
 
-.home-talk:active { filter: brightness(0.94); }
-
-/* «Modifica»: solo l'icona, e senza pastiglia. Accanto a «Parlane» — che e' la
-   pastiglia piena, cioe' l'uscita — due pastiglie si contenderebbero l'occhio
-   e nessuna delle due direbbe piu' qual e' quella principale. Alta quanto
-   «Parlane» (36 px), cosi' la barra resta allineata. (Qui si citava la porta
-   di «Tu e Jenny» come comando-icona gemello: dal 23/09/2026 «Tu e Jenny» e'
-   una pagina e quella porta non c'e' piu'.) */
-.home-edit {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-muted);
-  font-size: 19px;
-  cursor: pointer;
-}
-
-.home-edit:active { color: var(--text); }
+.home-edit:active { filter: brightness(0.94); }
 
 /* La freccia del ritorno: solo l'icona, in apertura della riga, col peso
    delle voci spente. Fino al 26/09/2026 era un occhiello a parole sopra il
@@ -1514,18 +1501,6 @@ body.home {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* Nel lettore i comandi sono due, e accanto al percorso la riga non
-   basterebbe: «Parlane» resta la pastiglia piena ma perde la parola. Il nome
-   lo porta `aria-label`. Per id e non per classe: `.home-shell[data-view=…]
-   .home-…` e' la forma con cui questo foglio **accende una stanza**, e il
-   banco delle stanze la legge cosi'. */
-.home-shell[data-view='reader'] #home-talk {
-  width: 36px;
-  padding: 0;
-  justify-content: center;
-}
-.home-shell[data-view='reader'] #home-talk-label { display: none; }
 
 /* Serve, e non e' ridondante: `[hidden]` e' una regola del foglio del
    browser, e il `display` messo qui sopra la scavalca comunque — il foglio

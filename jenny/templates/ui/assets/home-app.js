@@ -190,9 +190,8 @@ class HomeApp {
     this.pathRootName = document.getElementById('home-path-root-name');
     this.pathRootDot = document.getElementById('home-path-root-dot');
     this.headDot = document.getElementById('home-head-dot');
-    this.talkBtn = document.getElementById('home-talk');
     this.editBtn = document.getElementById('home-edit');
-    this.talkLabel = document.getElementById('home-talk-label');
+    this.editLabel = document.getElementById('home-edit-label');
 
     /* «Tu e Jenny»: le impostazioni di chi la usa, cioe' la pagina
        Impostazioni. La porta dell'officina vive li' dentro, in fondo: la apre
@@ -421,7 +420,6 @@ class HomeApp {
        basso a destra col pollice. */
     this.backBtn?.addEventListener('click', () => this.goBackOneRoom());
     this.pathRoot?.addEventListener('click', () => this.goToPathRoot());
-    this.talkBtn?.addEventListener('click', () => this._setView('chat'));
     this.editBtn?.addEventListener('click', () => this.reader.startEdit());
 
     sessionManager.init();
@@ -861,8 +859,8 @@ class HomeApp {
   /** Segnalata una cosa: si atterra nella chat del quaderno, col messaggio
    *  gia' partito.
    *
-   *  **Non e' una funzione nuova, e' una giunzione.** «Parlane» porta gia' in
-   *  questa stanza; `_send()` legge gia' dalla casella e disegna la bolla; e la
+   *  **Non e' una funzione nuova, e' una giunzione.** «Chat» dell'interruttore
+   *  porta gia' in questa stanza; `_send()` legge gia' dalla casella e disegna la bolla; e la
    *  sessione corrente, dal lettore, **e' gia' quella del quaderno** — ci sei
    *  dentro. Qui si mettono in fila tre cose che esistevano separate.
    *
@@ -1060,8 +1058,8 @@ class HomeApp {
     /* Uscire dal lettore con modifiche non salvate chiede conferma, e la
        guardia sta **qui** e non sui bottoni. Le strade per uscire sono gia'
        cinque — la freccia, la radice del percorso, l'Indietro del telefono,
-       «Parlane», un cambio di conversazione — e una guardia per strada e' una
-       guardia che la sesta strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
+       l'interruttore Chat | Pagine, un cambio di conversazione — e una
+       guardia per strada e' una guardia che la sesta strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
        il controllo sul buffer sporco valeva «solo se non esiste una seconda
        strada» e le strade erano tre. */
     if (this.view === 'reader' && this.reader?.isDirty()) {
@@ -1118,14 +1116,12 @@ class HomeApp {
      decide solo per le stanze; la pastiglia delle pagine del quaderno, che sta
      nella barra dove scrivi, vale invece ovunque la barra si veda. */
   _applyHead() {
-    /* «Parlane» riporta a parlare **di questo quaderno**: vale dalle sue
-       pagine e dal lettore, e in nessun altro posto — non nelle stanze delle
-       impostazioni, dove non c'e' niente di cui parlare. */
     const notebook = projectNameOf(sessionManager.currentKey);
-    /* Dal 26/09/2026 solo dal lettore: dalle pagine alla chat si torna
-       dall'interruttore Chat | Pagine, nello stesso punto in cui dalla chat si
-       va alle pagine. */
-    if (this.talkBtn) this.talkBtn.hidden = this.view !== 'reader';
+    /* L'interruttore Chat | Pagine nelle pagine, e in nessun altro posto: nel
+       lettore il comando e' «Modifica», e all'elenco riporta la freccia; nelle
+       stanze delle impostazioni non c'e' un quaderno. Dalla chat si va alle
+       pagine e si torna nello stesso punto. Ha preso il posto di «Parlane» il
+       26/09/2026. */
     if (this.viewSwitch) this.viewSwitch.hidden = this.view !== 'pages';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
@@ -1908,15 +1904,11 @@ class HomeApp {
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
-    if (this.talkLabel) this.talkLabel.textContent = i18n.t('home.notebookPages.talk');
-    /* Nel lettore «Parlane» e' solo icona (v. il foglio): il nome lo porta
-       l'etichetta, sempre, cosi' non dipende dalla stanza. */
-    this.talkBtn?.setAttribute('aria-label', i18n.t('home.notebookPages.talk'));
     if (this.viewChatLabel) this.viewChatLabel.textContent = i18n.t('home.notebookPages.chat');
     if (this.viewPagesLabel) this.viewPagesLabel.textContent = i18n.t('home.notebookPages.tabList');
     this.viewSwitch?.setAttribute('aria-label', i18n.t('home.notebookPages.view'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
-    if (this.editBtn) this.editBtn.setAttribute('aria-label', i18n.t('home.reader.edit'));
+    if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();
     this.you?.applyTranslations();

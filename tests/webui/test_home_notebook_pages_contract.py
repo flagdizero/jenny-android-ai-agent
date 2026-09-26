@@ -123,14 +123,20 @@ def test_every_new_asset_is_in_the_manifest() -> None:
 # ── L'intestazione che cambia stanza ────────────────────────────────────────
 
 
-def test_the_two_ways_out_of_the_pages_do_the_same_thing() -> None:
-    """La tavola disegna l'occhiello in alto a sinistra e la pastiglia in
-    basso a destra, e fanno la stessa cosa: si esce da dove stai guardando."""
+def test_the_way_to_the_chat_is_where_the_way_to_the_pages_was() -> None:
+    """Dalla chat del quaderno si va alle pagine dall'interruttore Chat |
+    Pagine in alto a destra, e dalle pagine e dal lettore si torna dallo stesso
+    interruttore, nello stesso punto. Fino al 26/09/2026 si andava da una
+    pastiglia in basso e si tornava da «Parlane» in alto: due strade in due
+    posti. La freccia, a sinistra, resta. Nel lettore l'interruttore non c'e':
+    li' il comando e' «Modifica»."""
     html = INDEX.read_text(encoding="utf-8")
-    assert 'id="home-back"' in html and 'id="home-talk"' in html
+    assert 'id="home-back"' in html and 'id="home-view-switch"' in html
+    assert 'id="home-talk"' not in html, "«Parlane» e' tornato accanto all'interruttore"
     app = APP_JS.read_text(encoding="utf-8")
     assert "this.backBtn?.addEventListener" in app
-    assert "this.talkBtn?.addEventListener" in app
+    assert "this.viewChat?.addEventListener('click', () => this._setView('chat'))" in app
+
 
 
 def test_the_rooms_have_a_head_and_the_conversation_has_the_row() -> None:
@@ -154,7 +160,7 @@ def test_the_rooms_speak_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["home"]["notebookPages"]
-        for key in ("open", "countOne", "countMany", "talk",
+        for key in ("open", "countOne", "countMany", "chat", "view",
                     "tabList", "tabMap", "loading", "none", "noMatch", "failed"):
             assert section.get(key, "").strip(), f"home.notebookPages.{key} manca in {locale}.json"
         assert data["home"]["map"]["noLinks"].strip()

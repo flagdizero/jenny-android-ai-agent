@@ -87,8 +87,10 @@
     <div class="home-actions">
       <!-- Nelle pagine di un quaderno: l'interruttore fra la sua chat e le sue
            pagine, lo stesso che la fila mostra nella chat del quaderno e nello
-           stesso punto. Chat e pagine sono due viste dello stesso posto, e il
-           percorso a sinistra e' lo stesso nelle due: la vista la dice lui. -->
+           stesso punto. Chat e pagine sono due viste dello stesso posto.
+           Nel lettore non c'e': li' il comando e' «Modifica», e all'elenco
+           delle pagine riporta la freccia. Ha preso il posto di «Parlane», che
+           fino al 26/09/2026 era la strada per la chat da qui. -->
       <div class="home-view-switch" id="home-view-switch" role="group" hidden>
         <button class="home-view-seg" id="home-view-chat" type="button" aria-pressed="false">
           <i class="ti ti-message" aria-hidden="true"></i>
@@ -100,16 +102,12 @@
           <span class="home-view-count" id="home-view-pages-count"></span>
         </button>
       </div>
-      <!-- Dal lettore: torna a parlarne. -->
-      <button class="home-talk" id="home-talk" type="button" hidden>
-        <i class="ti ti-message" aria-hidden="true"></i>
-        <span id="home-talk-label"></span>
-      </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
       <button class="home-edit" id="home-edit" type="button" hidden>
         <i class="ti ti-pencil" aria-hidden="true"></i>
+        <span id="home-edit-label"></span>
       </button>
     </div>
   </header>

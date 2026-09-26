@@ -202,8 +202,6 @@ class App {
     this.pathRootName = makeEl('span');
     this.pathRootDot = makeEl('span');
     this.headDot = makeEl('span');
-    this.talkBtn = makeEl('button');
-    this.talkLabel = makeEl('span');
     /* Le due stanze nuove sono moduli loro, coi loro banchi: qui interessa
        che il guscio le apra, e cosa ci mette dentro di quel che sa. */
     this.versions = [];
@@ -1079,26 +1077,24 @@ def test_the_path_root_leads_to_its_place() -> None:
     """)
 
 
-def test_talking_about_it_belongs_to_a_notebook() -> None:
+def test_the_way_back_to_the_chat_belongs_to_a_notebook() -> None:
     """«Parlane» riporta a parlare *di questo quaderno*: nelle stanze delle
     impostazioni non c'e' niente di cui parlare, e il bottone non ci va.
 
     Era `hidden = inChat`, che con tre stanze diceva la stessa cosa. Dal
-    26/09/2026 e' solo del lettore: dalle pagine alla chat si torna
-    dall'interruttore Chat | Pagine, nello stesso punto in cui dalla chat si va
-    alle pagine.
+    26/09/2026 «Parlane» non c'e' piu': la strada per la chat e' l'interruttore
+    Chat | Pagine, nelle pagine e nel lettore, nello stesso punto in cui dalla
+    chat si va alle pagine.
     """
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('pages');
-      assert.equal(app.talkBtn.hidden, true, 'nelle pagine due strade per la stessa chat');
       assert.equal(app.viewSwitch.hidden, false, 'dalle pagine non si torna alla chat');
       app._setView('reader');
-      assert.equal(app.talkBtn.hidden, false, 'dal lettore non si torna a parlarne');
-      assert.equal(app.viewSwitch.hidden, true, 'l\\u2019interruttore nel lettore');
+      assert.equal(app.viewSwitch.hidden, true, 'nel lettore c\\u2019e\\u2019 l\\u2019interruttore: li\\u2019 il comando e\\u2019 «Modifica»');
       app._setView('jenny');
-      assert.equal(app.talkBtn.hidden, true, '«Parlane» in mezzo alle impostazioni');
+      assert.equal(app.viewSwitch.hidden, true, 'l\\u2019interruttore in mezzo alle impostazioni');
       assert.equal(app.nameEl.textContent, i18n.t('home.jenny.title'), 'la testa non dice dove sei');
     """)
 
