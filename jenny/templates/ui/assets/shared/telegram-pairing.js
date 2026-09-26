@@ -10,6 +10,7 @@ import { api } from './api-client.js';
 import { escapeHtml, showToast } from './utils.js';
 import { i18n } from './i18n.js';
 import { batteryExemptionHtml, wireBatteryExemption } from './battery-exemption.js';
+import { confirmDialog } from './dialog.js';
 
 const POLL_MS = 2500;
 
@@ -270,8 +271,21 @@ export class TelegramPairingWidget {
     });
   }
 
+  /* Scollegare chiede conferma. Il token resta, ma da quel momento Jenny non
+     risponde su Telegram e non ci manda avvisi finche' qualcuno non manda al
+     bot il codice nuovo — e niente lo segnala. Era l'unica azione distruttiva
+     dell'officina senza conferma (audit sul Titan 2, 26/09/2026). La domanda
+     viene prima di `_busy`: un secondo tocco a dialogo aperto e' gia' un
+     «annulla» per `confirmDialog`, e un no non deve lasciare il widget bloccato. */
   async _unpair() {
     if (this._busy) return;
+    const s = this.status || {};
+    const who = s.paired_username ? `@${s.paired_username}` : i18n.t('settings.telegram.aChat');
+    const ok = await confirmDialog(
+      i18n.t('settings.telegram.unpairConfirm', { who }),
+      i18n.t('settings.telegram.unpair'),
+    );
+    if (!ok || this._busy) return;
     this._busy = true;
     try {
       this.status = await api.unpairTelegram();

@@ -446,6 +446,7 @@
       "paired": "Paired with {who}",
       "aChat": "a chat",
       "unpair": "Unpair",
+      "unpairConfirm": "Unpair Jenny from {who}? From then on she does not answer on Telegram and sends you no alerts. The token is kept: to pair again, send the bot the new code. For a pause, the “Channel active” switch is enough.",
       "disabled": "Telegram channel disabled",
       "batteryHint": "For instant replies even when the phone is not charging, exempt Jenny from battery optimization.",
       "batteryButton": "Exempt from battery",

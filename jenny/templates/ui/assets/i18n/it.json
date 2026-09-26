@@ -446,6 +446,7 @@
       "paired": "Collegato a {who}",
       "aChat": "una chat",
       "unpair": "Scollega",
+      "unpairConfirm": "Scollegare Jenny da {who}? Da quel momento su Telegram non risponde più e non ti manda avvisi. Il token resta: per ricollegarla basta mandare al bot il codice nuovo. Per una pausa basta l'interruttore «Canale attivo».",
       "disabled": "Canale Telegram disattivato",
       "batteryHint": "Per risposte immediate anche a telefono non in carica, esenta Jenny dall'ottimizzazione batteria.",
       "batteryButton": "Esenta dalla batteria",
