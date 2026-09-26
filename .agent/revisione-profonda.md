@@ -170,3 +170,35 @@ risponde coi campi nuovi, `/api/casa/schermate` è 404. Sullo schermo: la fila i
 cinque pagine nell'ordine di prima, il tema scelto rimasto (Kyoto, che non cambiava nome),
 Impostazioni → Workshop apre `workshop.html` (la `MainActivity` lo lascia passare) e la pillola
 «Jenny» riporta alla casa. Nessun errore JS o Python nel log dopo l'installazione.
+
+**Controllo finale (26/09/2026).** Cinque revisori in sola lettura su `main...HEAD` (persistenza,
+concorrenza, sicurezza, architettura WebUI, Android), con attenzione ai ~90 commit più vecchi
+che la revisione profonda non aveva coperto; ogni voce seria riverificata a mano. Due falsi
+positivi scartati (i job cron di un quaderno: il tool è chiuso nei progetti; di nuovo). Corretto:
+- **rotture del rinomino** (`5645f882`): tre riepiloghi dell'officina fermi su «Caricamento…»
+  (`id="riepilogo-…"` contro `#summary-…`), il bottone dei tetti morto (`tetti` contro `caps`) —
+  un test fissava proprio il valore rotto —, gli ultimi `riprova`;
+- **Python** (6 commit): le righe di Dream nel blocco delle regole di `SOUL.md` salvate invece che
+  cancellate, un lock sulle scritture, le regole fuori dal budget di Dream; la sessione del
+  browser chiusa al riavvio del gateway; nessun file di sessione risorto sotto il vecchio nome di
+  un quaderno; la segnalazione della casa via RPC `audit.create` invece di una GET;
+- **casa** (9 commit): link verso il gateway che de-autenticavano la casa; form vietati nel
+  markdown; la casa risponde a `ui_query`; resync dopo una riconnessione; impostazioni rilette a
+  ogni apertura; niente lavoro quadratico nella storia e un render per fotogramma; la mappa segue
+  rinomino e cancellazione; `is-critical` ha uno stile; CSS morto;
+- **ponte nativo e token** (6 commit): `JennyNative` diviso in letture innocue
+  (`addJavascriptInterface`) e comandi solo per il frame principale dell'origine del gateway
+  (`addWebMessageListener`); navigazioni esterne verso la WebUI rifiutate (Fetch-Metadata) e
+  pagine delle app sempre a origine opaca; un token per app limitato alle sue route al posto del
+  segreto del gateway; la mascotte flottante torna quando il service viene ricreato;
+  `configChanges`, WebView distrutta e `pendingExportPath` salvato; il browser dell'agente filtra
+  anche WebSocket, WebRTC e service worker (limiti scritti in `security.md`).
+
+Suite su `e3521bd8`: 3.11 11.457 passati; 3.14 11.466 passati e uno instabile sotto carico
+(`test_runner_injections`, verde da solo tre volte su tre, file non toccato). Sul telefono (build
+`e3521bd8`, 26/09 09:41): casa autenticata, app Todo come pagina e a tutto schermo (lettura e una
+scrittura rimessa com'era) col token per app, cronologia d'uso del cassetto letta dal canale
+nuovo, vista esterna Telecomando, casa ↔ officina, selettore del ripristino aperto da un comando
+nativo; nessun «Native command refused» nel log. Non provati sul telefono: `ui_view` dalla casa
+(servirebbe un messaggio vero in chat), il resync dopo una caduta, la mascotte flottante (spenta
+sul telefono), la tastiera Bluetooth, la guardia WebSocket del browser, l'avviso OTA.
