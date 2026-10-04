@@ -84,6 +84,14 @@ def test_a_research_wiki_stays_without_a_board(tmp_path) -> None:
     assert BoardPass(root, ws).reason() is None
 
 
+def test_a_research_shaped_notebook_with_a_journal_gets_a_board(tmp_path) -> None:
+    """Le pagine in ``concepts/`` non fanno di un quaderno vissuto un archivio."""
+    ws, root = _notebook(tmp_path)
+    (root / "wiki" / "concepts").mkdir()
+    (root / "raw" / "journal" / "20261002.md").write_text("- Ginkgo arrivato.\n")
+    assert BoardPass(root, ws).reason() == "migrate"
+
+
 def test_a_drawer_with_unchanged_pages_is_not_rewritten(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     _seed_board(root)

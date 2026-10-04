@@ -189,7 +189,7 @@ In the notebook's conversation, the board takes the place of the map (`wiki/inde
 
 After its pass over the wiki, the [gardener](./gardener.md) makes a second pass over the board, in the same run: it applies your corrections to the wiki, puts new pages into drawers, rewrites only the drawers whose pages changed, takes dated reminders from new journal lines, and makes proposals. See [The board pass](./gardener.md#the-board-pass).
 
-What it cannot do is enforced by the code, not left to the prompt: it has no tool to move, add or remove a card, to touch your sections, threads or skeleton, or to take a page out of a drawer, and any write of Jenny's that would change something of yours is refused. Research wikis — the ones with `concepts/` or `entities/` folders — get no board.
+What it cannot do is enforced by the code, not left to the prompt: it has no tool to move, add or remove a card, to touch your sections, threads or skeleton, or to take a page out of a drawer, and any write of Jenny's that would change something of yours is refused. Research wikis — the ones with `concepts/` or `entities/` folders and no journal — get no board; a notebook you keep a journal in gets one whatever its folders look like.
 
 ## Where it is stored
 
