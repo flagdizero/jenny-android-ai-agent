@@ -393,3 +393,24 @@ async def test_the_first_board_keeps_the_skeleton_the_user_chose(tmp_path) -> No
     )
     assert out.startswith("Board proposed")
     assert read_board(root)["suggestions"][0]["skeleton"] == ["Semina", "Raccolto"]
+
+
+async def test_the_proposal_hands_back_the_pages_of_each_drawer(tmp_path) -> None:
+    """I cassetti si scrivono da quel che torna la proposta, non rileggendo le
+    pagine una a una: su un quaderno grande le letture vecchie escono dal
+    contesto e il modello ricomincia da capo."""
+    ws, root = _notebook(tmp_path)
+    (root / "wiki" / "ginkgo.md").write_text("# ginkgo\n\n" + "Foglia a ventaglio. " * 400)
+    bp = BoardPass(root, ws)
+    state = bp.build_state()
+    assert "Do not read the pages first" in bp.build_prompt(state)
+    out = await _tools(state)["board_propose_board"].execute(
+        skeleton=["Vaso"],
+        cards=[{"title": "Acero", "pages": ["travaso-acero.md"]},
+               {"title": "Ginkgo", "pages": ["ginkgo.md"]}],
+        text="Ecco.",
+    )
+    assert "### `acero` — Acero" in out
+    assert PAGES["travaso-acero.md"].strip().splitlines()[0] in out
+    assert "_(cut here)_" in out
+    assert len(out) < 12000

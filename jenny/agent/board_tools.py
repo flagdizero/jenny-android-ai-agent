@@ -18,6 +18,7 @@ uno stato (:class:`BoardPassState`) condiviso, per un quaderno solo.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -547,7 +548,42 @@ class BoardProposeBoardTool(_BoardTool):
         st.suggestions.append("sg-board")
         ids = ", ".join(f"`{s['id']}` ({s['title']})" for s in specs)
         return (f"Board proposed with {len(specs)} cards: {ids}. Now write each drawer with "
-                "board_write_summary, using these ids.")
+                "board_write_summary, using these ids. The pages of each drawer follow: write "
+                "from them, and use read_file only for a page that is cut or not shown here.\n\n"
+                + _proposal_pages(st.root, specs))
+
+
+# Quanto delle pagine torna con la proposta. Senza, il modello legge le pagine
+# una a una per scrivere i cassetti, e su un quaderno grande le letture vecchie
+# escono dal contesto prima che abbia finito: le rilegge, all'infinito (visto il
+# 04/10/2026 su un quaderno di 44 pagine, 130 letture e nessun cassetto).
+_PROPOSAL_PAGE_CHARS = 2500
+_PROPOSAL_CARD_CHARS = 8000
+_PROPOSAL_TOTAL_CHARS = 30000
+
+
+def _proposal_pages(root: Path, specs: list[dict[str, Any]]) -> str:
+    """Il testo delle pagine di ogni scheda proposta, dentro un tetto."""
+    blocks = []
+    total = 0
+    for spec in specs:
+        parts = [f"### `{spec['id']}` — {spec['title']}"]
+        used = 0
+        for page in spec["pages"]:
+            room = min(_PROPOSAL_PAGE_CHARS, _PROPOSAL_CARD_CHARS - used,
+                       _PROPOSAL_TOTAL_CHARS - total)
+            if room <= 200:
+                parts.append(f"`{page}` — _(not shown: over the budget)_")
+                continue
+            body = _page_text(root, page)
+            cut = body[:room]
+            note = "\n_(cut here)_" if len(body) > room else ""
+            fence = "`" * max(4, max((len(m) for m in re.findall(r"`+", cut)), default=0) + 1)
+            parts.append(f"`{page}`\n\n{fence}markdown\n{cut}\n{fence}{note}")
+            used += len(cut)
+            total += len(cut)
+        blocks.append("\n\n".join(parts))
+    return "\n\n".join(blocks)
 
 
 def build_board_tools(state: BoardPassState) -> list[Tool]:

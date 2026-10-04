@@ -25,7 +25,9 @@ You may write only in `{{ project_path }}/wiki/`, and only to apply a correction
 {% if migration %}
 ### 0. This notebook has no board yet
 
-Group its pages by subject and propose the first board with `board_propose_board`, once:
+Group its pages by subject and propose the first board with `board_propose_board`, once.
+**Do not read the pages first**: the opening lines of every page are listed below, and they
+are enough to group them. Propose straight away:
 
 - **the skeleton**: the drawer sections every card will have, in order, three to six of them,
   named for this notebook (for plants: *Pot and repotting, Water, Feeding, Light, History*; for an
@@ -35,7 +37,8 @@ Group its pages by subject and propose the first board with `board_propose_board
   off the board, and that is fine — it remains searchable.
 
 Then write the drawer of **every** card you proposed, with `board_write_summary` and the ids the
-proposal returned, so that the board is complete the moment the user accepts it. If you find dated
+proposal returned, so that the board is complete the moment the user accepts it. The proposal
+returns the text of each drawer's pages: write from that, and never read the same page twice. If you find dated
 plans in the pages (an unchecked `[ ]` with a date, "around March"), add them with
 `board_add_reminder` on the right card.
 {% endif %}
