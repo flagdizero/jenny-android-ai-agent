@@ -124,6 +124,53 @@ def find_raw_secrets(node, path, errors):
             find_raw_secrets(item, f"{path}[{i}]", errors)
 
 
+SECTION_OPS = {"<", "<=", ">", ">=", "==", "!="}
+
+
+def validate_section(section, actions, errors):
+    """The optional compact view an app shows inside a drawer of a notebook board.
+
+    Mirrors ``_parse_section`` in ``jenny/apps/manifest.py``: a section the
+    gateway would refuse makes the app broken there, so it is an error here.
+    """
+    if section is None:
+        return
+    where = "app.json: section"
+    if not isinstance(section, dict):
+        errors.append(f"{where} must be an object")
+        return
+    params = section.get("params") or {}
+    if not isinstance(params, dict):
+        errors.append(f"{where}.params must map parameter names to objects")
+        params = {}
+    value = section.get("value")
+    if not isinstance(value, dict):
+        errors.append(f"{where}.value is required (collection and field)")
+        return
+    if not isinstance(value.get("collection"), str) or not COLLECTION_RE.match(value["collection"]):
+        errors.append(f"{where}.value.collection must be a collection name")
+    if not isinstance(value.get("field"), str) or not value["field"]:
+        errors.append(f"{where}.value.field is required")
+    for key, val in (value.get("where") or {}).items():
+        if isinstance(val, str) and val.startswith("$") and val[1:] not in params:
+            errors.append(f"{where}.value.where.{key}: {val} is not a declared param")
+    status = section.get("status") or {}
+    stale = status.get("stale_after_minutes") if isinstance(status, dict) else None
+    if stale is not None and (isinstance(stale, bool) or not isinstance(stale, int) or stale < 1):
+        errors.append(f"{where}.status.stale_after_minutes must be a positive integer")
+    alarm = status.get("alarm") if isinstance(status, dict) else None
+    if alarm is not None and (not isinstance(alarm, dict) or alarm.get("op") not in SECTION_OPS):
+        errors.append(f"{where}.status.alarm must be {{field, op, value}}")
+    names = {a.get("name") for a in actions if isinstance(a, dict)}
+    verbs = section.get("verbs") or []
+    if not isinstance(verbs, list) or len(verbs) > 2:
+        errors.append(f"{where}.verbs must be a list of at most two action names")
+    else:
+        for verb in verbs:
+            if verb not in names:
+                errors.append(f"{where}.verbs: {verb!r} is not an action of this app")
+
+
 def validate_app(app_dir):
     app_dir = Path(app_dir)
     errors, warnings = [], []
@@ -199,6 +246,8 @@ def validate_app(app_dir):
                     "view.kind 'external' with an https baseUrl: the loopback proxy is only "
                     "needed to get around the cleartext policy — frame the URL directly"
                 )
+
+    validate_section(manifest.get("section"), manifest.get("actions") or [], errors)
 
     index_path = app_dir / "app" / "index.html"
     if external_view:

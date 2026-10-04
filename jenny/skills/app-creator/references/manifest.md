@@ -150,6 +150,36 @@ Constraints:
 - the server must be reachable from the phone when the app is opened (LAN, or Tailscale — the
   SSRF policy allows both). If it is not, say so rather than adding a "ping" action to check.
 
+## Drawer section (`section`, optional)
+
+A notebook's board has cards, and each card opens a **drawer** about one subject. An app whose
+data is about a subject can show a compact view inside that drawer — a value with its time and
+source, a status, a small trend — and stay in the Apps page as well. Declare it with `section`:
+
+```json
+"section": {
+  "params": { "sensor": { "type": "string" } },
+  "value": { "collection": "readings", "where": { "sensor": "$sensor" },
+             "latest": "ts", "field": "moisture", "unit": "%", "label": "Soil moisture" },
+  "status": { "stale_after_minutes": 120, "alarm": { "field": "moisture", "op": "<", "value": 20 } },
+  "trend": { "days": 7 },
+  "verbs": ["refresh"]
+}
+```
+
+- `params` — what the user is asked when attaching the section to a drawer; the same app can sit in
+  two drawers with two different sensors. Use them in `where` as `$name`.
+- `value` — the record shown is the latest one of `collection` (by `latest`, default `ts`) that
+  matches `where`; `field` is the number or word displayed.
+- `status` — the data counts as **stale** past `stale_after_minutes`, and in **alarm** when the
+  condition holds. Either lights the card's red corner on the board.
+- `trend` — up to 31 days of `field`, one point per day.
+- `verbs` — at most two of this app's actions, shown as buttons in the drawer.
+
+The section only **reads** the app's data: keep it fresh with the app's own cron job. When the
+status changes, Jenny writes one journal line in the notebook — the readings themselves never go
+into the wiki.
+
 ## Complete example
 
 ```json

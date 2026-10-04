@@ -30,6 +30,10 @@ SYSTEM_JOB_PURPOSES: dict[str, str] = {
         "and promotes what it learns."
     ),
     "heartbeat": "Heartbeat: checks HEARTBEAT.md for tasks you left for Jenny.",
+    "reminders": (
+        "Notebook clock: tells you when a reminder on a notebook's board is due, and notes "
+        "when a mini app in a drawer changes state."
+    ),
     "update_check": (
         "Update check: looks for a newer Jenny app release and tells you once per version."
     ),

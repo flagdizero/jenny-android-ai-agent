@@ -1280,6 +1280,15 @@
         "missing": "This app is gone.",
         "broken": "This app is broken: open it from the Apps page to see why.",
         "no_section": "This app has no view for drawers."
+      },
+      "event": {
+        "ok": "back to normal",
+        "alarm": "in alarm",
+        "stale": "stalled",
+        "empty": "without data",
+        "missing": "gone",
+        "broken": "broken",
+        "no_section": "without a view"
       }
     },
     "section": {

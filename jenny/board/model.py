@@ -605,6 +605,10 @@ def normalize_reminders(raw: Any) -> dict[str, Any]:
     return _keep_unknown(data, {"version": REMINDERS_VERSION, "reminders": items})
 
 
+def _without(mapping: Mapping[str, Any], key: str) -> dict[str, Any]:
+    return {k: v for k, v in mapping.items() if k != key}
+
+
 def reminder_violations(
     before: Mapping[str, Any], after: Mapping[str, Any]
 ) -> list[str]:
@@ -622,7 +626,10 @@ def reminder_violations(
         if other is None:
             problems.append(f"reminder {rem['id']} removed")
             continue
-        if rem.get("by") == USER and other != rem:
+        # ``notifiedAt`` lo scrive l'orologio del quaderno (il job ``reminders``)
+        # anche sulle attese dell'utente: e' il timbro di un avviso partito, non
+        # una modifica dell'attesa.
+        if rem.get("by") == USER and _without(other, "notifiedAt") != _without(rem, "notifiedAt"):
             problems.append(f"reminder {rem['id']} belongs to the user")
             continue
         if rem.get("pos") != other.get("pos") or rem.get("by") != other.get("by"):

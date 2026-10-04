@@ -400,6 +400,8 @@ class CronDispatcher:
                 return await self._run_heartbeat(agent, job)
             if job.id == "update_check":
                 return await self._run_update_check(agent)
+            if job.id == "reminders":
+                return await self._run_reminders(agent)
         elif is_bound_cron_job(job):
             return await run_bound_cron_job(job, agent=agent, cron=self._cron)
 
@@ -735,6 +737,27 @@ class CronDispatcher:
                 store.get_last_dream_cursor(),
             )
         return turn.advanced, turn.refused
+
+    async def _run_reminders(self, agent: "CronCapableAgent") -> str | None:
+        """L'orologio dei quaderni: le attese delle bacheche, e gli eventi delle app.
+
+        Il cancello e' ``wiki.enabled``, letto da disco come gli altri: il job
+        registrato da un avvio con la wiki accesa resta nello store del cron
+        anche dopo che e' stata spenta. Il lavoro sta in ``jenny/board/clock.py``.
+        """
+        from jenny.board.clock import run_reminders
+        from jenny.config.loader import load_config
+
+        config = load_config()
+        if not config.wiki.enabled:
+            logger.debug("Reminders: wiki disabled")
+            return None
+        return await run_reminders(
+            agent,
+            self._config.workspace_path,
+            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            timezone_name=config.agents.defaults.timezone or None,
+        )
 
     async def _run_update_check(self, agent: "CronCapableAgent") -> str | None:
         """Update check: annuncia una versione nuova UNA volta sola, poi tace.

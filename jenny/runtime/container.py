@@ -518,6 +518,22 @@ class GatewayContainer:
                 payload=CronPayload(kind="system_event"),
             ))
 
+        # L'orologio dei quaderni: le attese delle bacheche e gli eventi delle
+        # sezioni mini app, un giro all'ora su tutti i quaderni. Registrato con
+        # la wiki accesa; a farlo tacere quando la wiki si spegne e' il cancello
+        # in ``CronDispatcher._run_reminders``, letto da disco.
+        if config.wiki.enabled:
+            self.cron.register_system_job(CronJob(
+                id="reminders",
+                name="reminders",
+                schedule=CronSchedule(
+                    kind="every",
+                    every_ms=3600 * 1000,
+                    tz=config.agents.defaults.timezone,
+                ),
+                payload=CronPayload(kind="system_event"),
+            ))
+
         # Register the update-check system job (idempotent on restart). È l'unico
         # percorso periodico che tocca la rete senza che l'utente abbia chiesto
         # niente, quindi con la sezione spenta il job non viene registrato — ma

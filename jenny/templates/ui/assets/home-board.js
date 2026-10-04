@@ -76,7 +76,11 @@ export function whenLabel(when, locale = i18n.locale) {
  *  parametri, e la frase si compone qui. */
 export function sinceText(row) {
   const key = `board.since.kind.${row?.kind}`;
-  const text = i18n.t(key, row || {});
+  const params = { ...(row || {}) };
+  /* Lo stato di un'app arriva come parola chiave (`alarm`, `stale`…): la
+     frase la dice nella lingua di chi guarda. */
+  if (row?.kind === 'app_event') params.state = i18n.t(`board.app.event.${row.state}`);
+  const text = i18n.t(key, params);
   return text === key ? i18n.t('board.since.kind.other') : text;
 }
 

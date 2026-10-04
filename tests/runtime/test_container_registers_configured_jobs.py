@@ -84,6 +84,15 @@ _CONDITIONAL_JOBS = [
         111 * 1000,
         id="heartbeat",
     ),
+    # L'orologio dei quaderni non ha un intervallo suo: un giro all'ora e'
+    # la forma del lavoro (le attese sono a giorno o a mese). Lo accende la wiki.
+    pytest.param(
+        "reminders",
+        lambda c, on: setattr(c.wiki, "enabled", on),
+        lambda c: None,
+        60 * _MINUTE_MS,
+        id="reminders",
+    ),
     pytest.param(
         "update_check",
         lambda c, on: setattr(c.updates, "enabled", on),
@@ -130,7 +139,7 @@ def test_a_disabled_job_is_not_registered(
     assert others <= set(jobs), f"spegnere {job_id} ha portato via anche {others - set(jobs)}"
 
 
-def test_by_default_all_four_periodic_jobs_are_registered(workspace: Path) -> None:
+def test_by_default_all_periodic_jobs_are_registered(workspace: Path) -> None:
     """I default di produzione, non solo i valori iniettati.
 
     Il container non è l'unico modo di spegnere un lavoro: se un domani un

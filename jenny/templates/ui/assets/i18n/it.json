@@ -1280,6 +1280,15 @@
         "missing": "Questa app non c'è più.",
         "broken": "Questa app è rotta: aprila dalla sezione App per vedere perché.",
         "no_section": "Questa app non ha una vista per i cassetti."
+      },
+      "event": {
+        "ok": "tornato a posto",
+        "alarm": "in allarme",
+        "stale": "fermo",
+        "empty": "senza dati",
+        "missing": "sparito",
+        "broken": "rotto",
+        "no_section": "senza vista"
       }
     },
     "section": {

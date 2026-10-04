@@ -142,6 +142,77 @@ def app_section_view(
     }
 
 
+def app_field_value(
+    workspace: Path,
+    slug: str,
+    params: Mapping[str, Any],
+    field_name: str,
+    *,
+    now: datetime | None = None,
+) -> tuple[Any, bool]:
+    """L'ultimo valore di *field_name* nei dati di un'app, e se è fresco.
+
+    La collezione, i filtri e la soglia di freschezza sono quelli della vista
+    compatta del manifest: un'attesa a condizione guarda gli stessi record che
+    la sezione mostra. Un'app senza vista compatta, o senza dati, dà
+    ``(None, False)``: una condizione che non si può valutare non scatta.
+    """
+    from jenny.apps.manifest import find_app
+    from jenny.apps.storage import StorageError, read_collection
+
+    app = find_app(workspace, slug)
+    if app is None or app.manifest is None or app.manifest.section is None:
+        return None, False
+    section = app.manifest.section
+    filters = {
+        key: params.get(val[1:]) if isinstance(val, str) and val.startswith("$") else val
+        for key, val in section.where.items()
+    }
+    try:
+        records = [
+            r for r in read_collection(app.dir, section.collection)
+            if all(r.get(k) == v for k, v in filters.items())
+        ]
+    except (StorageError, OSError):
+        return None, False
+    if not records:
+        return None, False
+    latest = max(records, key=lambda r: str(r.get(section.latest, "")))
+    at = _record_time(latest)
+    current = now or datetime.now(timezone.utc)
+    fresh = at is not None and (
+        not section.stale_after_minutes
+        or current - at <= timedelta(minutes=section.stale_after_minutes)
+    )
+    return latest.get(field_name), fresh
+
+
+def journal_event(
+    project_root: Path, card_title: str, view: Mapping[str, Any], *,
+    timezone_name: str | None = None,
+) -> str:
+    """Una riga di diario per un cambio di stato di una sezione mini app.
+
+    La scrive il codice, ed è ``[inferred]``: è un'osservazione della macchina,
+    non qualcosa che l'utente ha detto, quindi non potrà mai giustificare una
+    pagina più forte di ``open``.
+    """
+    from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_entry
+    from jenny.utils.helpers import safe_zoneinfo
+    from jenny.utils.wiki_paths import journal_page_name, wiki_journal_dir
+
+    tz = safe_zoneinfo(timezone_name) if timezone_name else None
+    stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    value = view.get("value")
+    reading = f", {view.get('label')} {value}{view.get('unit') or ''}" if value is not None else ""
+    since = f", last data {view.get('at')}" if view.get("at") else ""
+    text = f"{view.get('name') or view.get('slug')} on {card_title}: {view.get('state')}{reading}{since}"
+    page = wiki_journal_dir(project_root) / journal_page_name(stamp.date())
+    number = append_journal_entry(page, stamp.date(),
+                                  f"- {stamp:%H:%M} — {INFERRED_MARKER} {text[:400]}\n")
+    return f"{page.relative_to(project_root).as_posix()}:{number}"
+
+
 def section_resolver(
     workspace: Path, project_root: Path
 ) -> Callable[[Mapping[str, Any], Mapping[str, Any]], dict[str, Any]]:
