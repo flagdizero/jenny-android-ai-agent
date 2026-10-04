@@ -12,6 +12,8 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 
 ## What is on the board
 
+<p align="center"><img src="../img/notebook-board.png" alt="A notebook's board: six polaroid cards, a sticky note for a dated reminder, two red threads, the envelope with one proposal, and the Since you last looked row" width="300"></p>
+
 | Thing | What it is |
 |---|---|
 | **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. |
@@ -47,6 +49,8 @@ No signal means nothing needs you.
 A thread is always visible as a thin line with no words on it; its label — the reason two cards are tied, in a few words, such as *seeds taken from it* — appears when you press and hold either card. A drawer also lists its card's threads, and tapping one opens the card at the other end; the **×** beside it removes the thread, and Jenny will not propose that thread again. A board has at most **8** threads: twenty threads would be the graph the board replaced. Jenny adds threads only by proposing them.
 
 ## The drawer
+
+<p align="center"><img src="../img/notebook-drawer.png" alt="The drawer of the card Acero: its brief, the next reminder as a sticky note, and a section with a correction waiting, with links to its two source pages" width="300"></p>
 
 Tap a card and its drawer opens. From the top:
 

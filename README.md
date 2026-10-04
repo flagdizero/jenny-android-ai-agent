@@ -34,7 +34,7 @@ hardware and keep the whole loop offline.
   <img src="docs/img/hero-chat.png"  alt="Jenny reading back data from a mini-app she wrote herself, in chat" width="200">
   <img src="docs/img/apps.png"       alt="A mini-app the AI agent wrote on request: a meal log for a cat"   width="200">
   <img src="docs/img/themes.png"     alt="Settings, with the theme picker and Synthwave '84 selected"         width="200">
-  <img src="docs/img/wiki-graph.png" alt="Graph view of a wiki the agent wrote and cross-linked itself"       width="200">
+  <img src="docs/img/notebook-board.png" alt="A notebook's board: one card per subject, written from the wiki the agent keeps" width="200">
 </p>
 
 ---
@@ -80,8 +80,9 @@ device, so switching provider doesn't cost you your memory.
 
 **📚 It builds you a wiki.** Feed it articles, notes, PDFs or web pages and ask it to compile
 them: you get cross-linked Markdown pages — concepts and entities, joined by `[[wikilinks]]` —
-browsable from the notebook they belong to, with a graph view of how they connect (that's the fourth screenshot
-above). Driven entirely from chat through a built-in `llm-wiki` skill: create one, ingest a
+behind the notebook they belong to. The notebook opens on its **board**: one card per subject,
+each with a drawer summarising the pages it comes from, plus the reminders and threads that
+matter now (that's the fourth screenshot above). Driven entirely from chat through a built-in `llm-wiki` skill: create one, ingest a
 source, compile, ask it questions, run a lint pass for dead links and orphan pages. It does
 **not** update itself — every step is a request you make, or a job you schedule. Multiple wikis
 live side by side as plain files in the workspace, so they're editable and backed up like
