@@ -1,0 +1,132 @@
+"""La bacheca nel contesto di Jenny, a ogni turno di un quaderno.
+
+Fino alla bacheca il blocco di progetto iniettava ``wiki/index.md`` (la mappa),
+entro duemila caratteri; oltre, il modello vedeva la testa della mappa e basta.
+Con la bacheca il blocco dice **cosa conta adesso**: una riga per scheda —
+titolo, «in breve», l'attesa più vicina, il segnale — e quante pagine stanno
+fuori bacheca. Sta nel tetto anche con dodici schede, perché la bacheca ha un
+tetto suo.
+
+Il **cassetto completo** di una scheda entra solo quando la conversazione la
+nomina, e non nel prompt di sistema ma nel contesto del turno (accanto all'ora):
+il prompt di sistema è il prefisso in cache, e una sezione che dipendesse dal
+messaggio lo romperebbe a ogni turno.
+
+``wiki/index.md`` resta: per la ricerca, per l'ordine in cui le pagine entrano
+nel blocco, e per i quaderni che una bacheca non ce l'hanno (le wiki di ricerca).
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any
+
+from jenny.board import model
+from jenny.board.store import read_board, read_card_summary, read_reminders
+from jenny.utils.wiki_paths import iter_wiki_pages
+
+# Il tetto del blocco. È lo stesso numero della mappa che sostituisce
+# (``_PROJECT_MAP_MAX_CHARS`` in ``jenny/agent/context.py``): il blocco si paga a
+# ogni turno, e la bacheca non deve costare più di quel che costava la mappa.
+BOARD_BLOCK_MAX_CHARS = 2000
+
+# Il tetto di un cassetto nel contesto del turno.
+DRAWER_MAX_CHARS = 2500
+
+# Quanti cassetti al più entrano in un turno, se il messaggio nomina più schede.
+MAX_DRAWERS_PER_TURN = 2
+
+
+def _when(rem: Mapping[str, Any]) -> str:
+    when = rem.get("when") or {}
+    if when.get("kind") == "date":
+        day = str(when.get("date", ""))
+        return day[:7] if when.get("precision") == "month" else day
+    return f"when {when.get('field')} {when.get('op')} {when.get('value')}"
+
+
+def board_block(
+    root: Path, *, alert: Callable[[Mapping[str, Any]], bool] | None = None
+) -> str:
+    """Il blocco della bacheca per il prompt, o ``""`` se il quaderno non ne ha una con schede."""
+    board = read_board(root)
+    if board is None or not board["cards"]:
+        return ""
+    reminders = read_reminders(root)
+    titles = dict(iter_wiki_pages(root / "wiki"))
+    owners = model.page_owners(board)
+    offboard = sum(1 for p in titles if p not in owners)
+    lines: list[str] = []
+    for card in board["cards"]:
+        summary = read_card_summary(root, card["id"]) or {}
+        tags: list[str] = []
+        problem = alert is not None and any(
+            alert(s) for s in card.get("userSections") or [] if s.get("kind") == "app"
+        )
+        if problem:
+            tags.append("[PROBLEM: a mini app in its drawer is in alarm or stalled]")
+        nxt = model.next_reminder(reminders, card["id"])
+        if nxt is not None:
+            soon = " — coming up" if model.reminder_is_soon(nxt) else ""
+            tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+        brief = summary.get("brief") or ""
+        lines.append((card["title"], " ".join(brief.split()), " ".join(tags)))
+    footer = (
+        f"Off the board: {offboard} page(s) — they exist under `wiki/`, and grep finds them."
+        if offboard else ""
+    )
+    fixed = sum(len(t) + len(tag) + 8 for t, _b, tag in lines) + len(footer) + 2
+    room = max(0, BOARD_BLOCK_MAX_CHARS - fixed)
+    share = room // max(1, len(lines))
+    rows = []
+    for title, brief, tag in lines:
+        cut = brief if len(brief) <= share else brief[: max(0, share - 1)].rstrip() + "…"
+        text = f"- **{title}**" + (f" — {cut}" if cut else "") + (f" {tag}" if tag else "")
+        rows.append(text)
+    out = "\n".join(rows)
+    if footer:
+        out += "\n" + footer
+    return out[:BOARD_BLOCK_MAX_CHARS]
+
+
+def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
+    """Le schede che il messaggio nomina, per titolo, nell'ordine della bacheca."""
+    board = read_board(root)
+    if board is None or not message:
+        return []
+    text = message.casefold()
+    out = []
+    for card in board["cards"]:
+        title = card["title"].casefold().strip()
+        if title and re.search(rf"(?<!\w){re.escape(title)}(?!\w)", text):
+            out.append(card)
+    return out[:MAX_DRAWERS_PER_TURN]
+
+
+def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
+    """Il cassetto di una scheda come testo per il contesto del turno."""
+    summary = read_card_summary(root, card["id"]) or {}
+    reminders = read_reminders(root)
+    parts = [f"Drawer of the card «{card['title']}» (written from the wiki pages it cites):"]
+    if summary.get("brief"):
+        parts.append(summary["brief"])
+    for section in summary.get("sections") or []:
+        sources = ", ".join(f"[[{Path(s).stem}]]" for s in section.get("sources") or [])
+        parts.append(f"- {section['title']}: {section['text']} ({sources})")
+    for section in card.get("userSections") or []:
+        if section.get("kind") == "note":
+            parts.append(f"- The user's note: {section.get('text')}")
+    for rem in model.open_reminders(reminders):
+        if rem.get("card") == card["id"]:
+            parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
+    pages = ", ".join(f"[[{Path(p).stem}]]" for p in card.get("pages") or [])
+    if pages:
+        parts.append(f"Its pages: {pages}")
+    return "\n".join(parts)[:DRAWER_MAX_CHARS]
+
+
+def turn_lines(root: Path, message: str) -> list[str]:
+    """Le righe da aggiungere al contesto del turno: i cassetti delle schede nominate."""
+    return [drawer_text(root, card) for card in named_cards(root, message)]

@@ -100,6 +100,36 @@ _WIKIS_BLOCK_LEAD = (
 _CRON_TOOL_NAME = "cron"
 
 
+def _read_project_board(root: Path) -> str:
+    """Il blocco della bacheca del quaderno *root*, o ``""``. Mai un'eccezione.
+
+    Una bacheca illeggibile non deve togliere il prompt a un turno: si torna
+    alla mappa, che e' quel che c'era prima della bacheca.
+    """
+    try:
+        from jenny.board.context_block import board_block
+        from jenny.board.sections import alert_probe
+        from jenny.config.paths import get_workspace_path
+
+        return board_block(root, alert=alert_probe(get_workspace_path()))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: the board of {} is unreadable: {}", root, exc)
+        return ""
+
+
+def _board_turn_lines(root: Path, message: Any) -> list[str]:
+    """I cassetti delle schede che il messaggio nomina, per il contesto del turno."""
+    if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
+        return []
+    try:
+        from jenny.board.context_block import turn_lines
+
+        return turn_lines(root, message)
+    except Exception as exc:  # noqa: BLE001 — un cassetto in meno, non un turno in meno
+        logger.warning("turn context: drawers of {} not read: {}", root, exc)
+        return []
+
+
 class _ProjectPages(NamedTuple):
     """Le pagine iniettate, **con quante sono su quante**. T3.6.
 
@@ -1101,9 +1131,17 @@ class ContextBuilder:
         template *dichiarano* (dall'AST) con quelli che i due chiamanti passano, e
         cade se uno resta senza cibo — su entrambi i prompt.
         """
-        project_map = self._read_project_map(root)
+        project_board = _read_project_board(root)
+        # **La bacheca prende il posto della mappa** nel blocco: e' piccola,
+        # curata, e dice cosa conta adesso. La mappa si legge comunque (le
+        # pagine entrano nel suo ordine, v. ``_read_project_pages``), ma non si
+        # inietta piu' quando c'e' una bacheca con delle schede.
+        project_map = "" if project_board else self._read_project_map(root)
         project_pages = self._read_project_pages(root)
         return {
+            # La bacheca del quaderno: una riga per scheda, il suo «in breve»,
+            # l'attesa piu' vicina, il segnale (``jenny/board/context_block.py``).
+            "project_board": project_board,
             # T3, il gradino 1 di P4: la mappa del progetto entra **d'ufficio**,
             # non su richiesta. Il giro di wiki parte pagato, e la differenza si
             # vede alla prima domanda di una sessione nuova: senza, l'agente
@@ -1491,6 +1529,11 @@ class ContextBuilder:
         ]
         if current_runtime_lines:
             extra.extend(line for line in current_runtime_lines if line)
+        # In un quaderno, il cassetto della scheda di cui si parla: qui e non nel
+        # prompt di sistema, che e' il prefisso in cache e non deve dipendere
+        # dal messaggio.
+        if current_role == "user":
+            extra.extend(_board_turn_lines(root, current_message))
         runtime_ctx = self._build_runtime_context(
             channel,
             chat_id,
