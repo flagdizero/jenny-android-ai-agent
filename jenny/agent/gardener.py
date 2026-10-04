@@ -277,6 +277,10 @@ class GardenerOutcome:
     """La mappa prima e dopo, in caratteri. È il numero che questa passata esiste
     per muovere, quindi è il numero che va detto a chi l'ha chiesta."""
 
+    board: str = ""
+    """Com'e' andata la passata della bacheca che segue quella della wiki
+    (``done``, ``incomplete``, ``failed``, ``skipped``), o ``""`` se non e' partita."""
+
     # Quante passate di fila non hanno registrato niente, **questa compresa**.
     # Zero su una passata che ha committato (la serie si azzera) e su una che non
     # ha mai chiamato il provider (non c'è niente da contare). Chi lo legge è chi
@@ -1384,7 +1388,18 @@ async def run_gardener(
         return GardenerOutcome(status="already_running")
     _PASSES_IN_FLIGHT.add(store.name)
     try:
-        return await _run_pass(agent, store, delta)
+        # Il delta si legge qui e non dentro ``_run_pass``: la passata della
+        # bacheca, dopo, estrae le attese dalle **stesse** righe che la passata
+        # della wiki ha promosso.
+        if delta is None:
+            delta = store.read_delta()
+        outcome = await _run_pass(agent, store, delta)
+        if outcome.status in ("failed", "aborted_user_active"):
+            # Il provider e' caduto, o l'utente e' tornato: la bacheca aspetta
+            # la passata dopo, come le righe che la wiki non ha letto.
+            return outcome
+        board = await _board_pass(agent, store, delta, after=outcome)
+        return replace(outcome, board=board) if board else outcome
     finally:
         # **Su ogni uscita, eccezioni comprese.** È la stessa forma del
         # ``try``/``finally`` che garantisce ``_prune_sessions`` qui sotto, e per
@@ -1698,6 +1713,62 @@ async def _run_pass(
         ))
     finally:
         _prune_sessions(agent, session_key)
+
+
+async def _board_pass(
+    agent: Any, store: GardenerStore, delta: JournalDelta, *, after: GardenerOutcome
+) -> str:
+    """La seconda meta' della passata: la bacheca del quaderno, se c'e' lavoro.
+
+    Gira dopo la wiki perche' ne legge il risultato — le pagine nuove da mettere
+    nei cassetti, quelle cambiate da riassumere — e con le stesse righe di
+    diario, da cui estrae le attese. Il modulo e' ``jenny/agent/board_pass.py``;
+    qui c'e' solo l'aggancio, con le stesse guardie di scrittura della passata
+    della wiki (cedere il passo all'utente, la provenienza delle pagine).
+
+    Torna lo stato della passata della bacheca, o ``""`` se non e' partita.
+    """
+    from jenny.agent.board_pass import board_needs_pass
+
+    if not board_needs_pass(store.root, store.workspace, delta.line_count):
+        return ""
+    # **La bacheca non fa cadere la wiki.** La passata della wiki ha gia' il suo
+    # esito, e i chiamanti (il cron, ``/gardener``) leggono quello: un guasto qui
+    # si dice nel log e nello stato della bacheca, non diventa un'eccezione al
+    # posto di un esito a lavoro fatto.
+    try:
+        return await _run_board(agent, store, delta, after)
+    except Exception:  # noqa: BLE001
+        logger.exception("gardener: the board pass over {} failed", store.name)
+        return "failed"
+
+
+async def _run_board(
+    agent: Any, store: GardenerStore, delta: JournalDelta, after: GardenerOutcome
+) -> str:
+    from jenny.agent.board_pass import run_board_pass
+
+    if after.status == "skipped_no_delta":
+        # La wiki non e' girata, quindi nessuno ha fatto l'istantanea: la
+        # bacheca puo' scrivere pagine (le correzioni), e la rete va tesa qui.
+        await _checkpoint(agent)
+    aborted: list[str] = []
+    session_key = f"{store.session_key()}-board"
+    try:
+        outcome = await run_board_pass(
+            agent,
+            store,
+            journal=store._render_delta(delta) if delta.files else "",
+            journal_lines=delta.line_count,
+            session_key=session_key,
+            write_guard=_compose_write_guards(
+                _yield_to_user_guard(agent, store.name, aborted),
+                _provenance_guard(store.root.resolve(), (store.root / "wiki").resolve()),
+            ),
+        )
+    finally:
+        _prune_sessions(agent, session_key)
+    return outcome.status
 
 
 def _timezone_of(agent: Any) -> str | None:

@@ -40,6 +40,7 @@ _SYSTEM_PROMPT_TEMPLATES = [
     "agent/max_iterations_message.md", "agent/consolidator_archive.md",
     "agent/dream.md", "agent/dream_project.md", "agent/dream_review.md",
     "agent/gardener.md",
+    "agent/board_pass.md",
     "agent/scheduling.md",
     "agent/project.md",
     "agent/readonly.md", "agent/project_init.md", "agent/tidy.md",

@@ -28,14 +28,22 @@ def page_membership(
         return None
     owners = model.page_owners(board)
     titles = {c["id"]: c["title"] for c in board["cards"]}
+    from jenny.webui.wiki import resolve_wikilink
+
+    pages_dir = project_root / "wiki"
     links: dict[str, Any] = {}
     for wiki, target in _HREF_RE.findall(html):
         if unquote(wiki) != notebook:
             continue
-        rel = unquote(target)
-        if rel in links:
+        # La chiave e' il bersaglio **come sta nel link** (e' quel che il lettore
+        # ha in mano); l'appartenenza si cerca sulla pagina vera, perche' un
+        # ``[[vasi-settembre]]`` non risolto dal renderer arriva senza ``.md``.
+        key = unquote(target)
+        if key in links:
             continue
+        resolved = resolve_wikilink(project_root, key)
+        rel = resolved.relative_to(pages_dir).as_posix() if resolved else key
         card = owners.get(rel)
-        links[rel] = {"card": card, "title": titles[card]} if card else None
+        links[key] = {"card": card, "title": titles[card]} if card else None
     own = owners.get(page)
     return {"card": own, "cardTitle": titles.get(own or "", ""), "links": links}

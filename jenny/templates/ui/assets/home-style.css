@@ -1854,9 +1854,13 @@ body.home {
 .home-board-postit-text { font-size: 2.6cqw; line-height: 1.1; font-weight: 700; overflow: hidden; }
 .home-board-postit-when { font-size: 2.3cqw; line-height: 1.1; }
 
+/* La busta sta in basso a **sinistra**: a destra c'e' Jenny, che sporge dal
+   bordo e si prende i tocchi di quell'angolo. Il posto e' suo, e la busta lo
+   lascia libero (v. anche `_SLOTS` in `jenny/board/model.py`, che non mette
+   schede in quell'angolo). */
 .home-board-envelope {
   position: absolute;
-  right: 3%;
+  left: 3%;
   bottom: 4%;
   width: 13cqw;
   aspect-ratio: 1.45;
@@ -1864,7 +1868,7 @@ body.home {
   border: none;
   background: var(--board-envelope);
   box-shadow: 0 4px 9px rgba(0, 0, 0, 0.45);
-  transform: rotate(-4deg);
+  transform: rotate(4deg);
   cursor: pointer;
 }
 .home-board-envelope::before {
@@ -2134,10 +2138,6 @@ body.home {
   .home-drawer-section { grid-template-columns: minmax(0, 1fr); }
 }
 .home-drawer-section-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 6px;
   margin: 0;
   padding-top: 3px;
   color: var(--text-muted);
@@ -2146,8 +2146,16 @@ body.home {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.home-drawer-fresh { width: 6px; height: 6px; flex: none; margin-top: 4px; border-radius: 50%; background: var(--board-new); }
-.home-drawer-owner { font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+.home-drawer-fresh {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 6px 1px 0;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--board-new);
+}
+.home-drawer-owner { margin-left: 6px; font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
 .home-drawer-text { margin: 0; line-height: 1.5; white-space: pre-line; }
 .home-drawer-text.is-mine { font-style: italic; }
 .home-drawer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 7px; }

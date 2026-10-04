@@ -155,8 +155,12 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
     taken = {c["id"] for c in board["cards"]}
     stamp = model.now_iso()
 
-    def new_card(title: str, glyph: str, pages: list[str]) -> dict[str, Any]:
-        card_id = model.unique_id(model.slugify(title), taken)
+    def new_card(title: str, glyph: str, pages: list[str], wanted: str = "") -> dict[str, Any]:
+        # L'id proposto, se c'e' ed e' libero: la passata che propone la prima
+        # bacheca scrive gia' i cassetti con quegli id, e accettare non deve
+        # lasciarli orfani.
+        base = wanted if model.is_valid_id(wanted) else model.slugify(title)
+        card_id = model.unique_id(base, taken)
         taken.add(card_id)
         x, y = model.free_slot(board, reminders)
         card = {
@@ -179,7 +183,8 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
         for spec in (suggestion.get("cards") or [])[:model.MAX_INITIAL_CARDS]:
             if isinstance(spec, Mapping) and model.items_on_board(board, reminders) < model.MAX_ITEMS:
                 new_card(str(spec.get("title") or ""), str(spec.get("glyph") or ""),
-                         [p for p in spec.get("pages") or [] if isinstance(p, str)])
+                         [p for p in spec.get("pages") or [] if isinstance(p, str)],
+                         str(spec.get("id") or ""))
         model.add_since(board, "board_created", cards=len(board["cards"]))
     elif kind == "add_card":
         if model.is_full(board, reminders):

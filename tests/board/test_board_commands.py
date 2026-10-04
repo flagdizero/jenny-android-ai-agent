@@ -96,6 +96,8 @@ def test_page_membership_classifies_links(notebook: Path) -> None:
         '<a class="wikilink" href="/?wiki=piante&page=dormienza.md">b</a>'
         '<a class="wikilink" href="/?wiki=piante&page=rinvaso-monstera.md">c</a>'
         '<a class="wikilink" href="/?wiki=altro&page=x.md">d</a>'
+        # Un wikilink che il renderer non ha risolto arriva col nome nudo.
+        '<a class="wikilink" href="/?wiki=piante&page=irrigazione-acero">e</a>'
     )
     info = page_membership(notebook, "piante", "travaso-acero.md", html)
     assert info["card"] == "acero"
@@ -103,6 +105,7 @@ def test_page_membership_classifies_links(notebook: Path) -> None:
         "vasi-settembre.md": {"card": "acero", "title": "Acero"},
         "dormienza.md": None,
         "rinvaso-monstera.md": {"card": "monstera", "title": "Monstera"},
+        "irrigazione-acero": {"card": "acero", "title": "Acero"},
     }
 
 

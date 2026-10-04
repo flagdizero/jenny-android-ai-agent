@@ -106,6 +106,22 @@ WHEN_KINDS = ("date", "condition")
 PRECISIONS = ("day", "month")
 CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
 
+# I glifi che una scheda puo' portare: icone del set della casa (Tabler 3.19),
+# verificate nel suo foglio. Un elenco chiuso e non un campo libero, perche' il
+# glifo lo sceglie il modello, e un nome che non esiste non disegna niente.
+GLYPHS = (
+    "leaf", "plant", "plant-2", "flower", "tree", "trees", "temperature", "droplet", "sun",
+    "cloud-rain", "home", "home-2", "car", "bike", "plane", "truck", "book", "books",
+    "notebook", "pencil", "coin", "wallet", "cash", "credit-card", "receipt", "building-bank",
+    "chart-line", "user", "users", "friends", "baby-carriage", "map-pin", "world", "mountain",
+    "beach", "tent", "tool", "hammer", "briefcase", "building", "school", "heart", "pill",
+    "stethoscope", "music", "camera", "palette", "cpu", "device-mobile", "wifi", "router",
+    "server", "code", "bug", "bulb", "bolt", "flame", "snowflake", "moon", "star", "flask",
+    "calendar", "shopping-cart", "package", "gift", "key", "bed", "sofa", "dog", "cat", "paw",
+    "fish", "run", "barbell", "ball-football", "pizza", "coffee", "chef-hat", "cake", "bread",
+    "apple", "carrot",
+)
+
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 # Il glifo di una scheda è il nome di un'icona del set della casa (Tabler):
 # validato come forma, non contro l'elenco — un nome che non esiste non disegna
@@ -417,8 +433,9 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
 
 # Le caselle candidate per un oggetto nuovo, in percentuale. Una griglia larga e
 # non casuale: la bacheca deve sembrare disposta da qualcuno, e due aperture
-# della stessa bacheca devono dare lo stesso posto.
-_SLOTS = [(x, y) for y in (5, 37, 62) for x in (4, 27, 50, 73)]
+# della stessa bacheca devono dare lo stesso posto. L'angolo in basso a sinistra
+# manca: e' della busta (a destra c'e' Jenny).
+_SLOTS = [(x, y) for y in (5, 37) for x in (4, 27, 50, 73)] + [(27, 62), (50, 62), (73, 60)]
 
 
 def free_slot(

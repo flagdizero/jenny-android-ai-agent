@@ -284,10 +284,23 @@ def pick_project(
             # docstring del modulo): questo apre un file in più, e lo apre solo per
             # i progetti che sono già arrivati fin qui e non hanno niente da
             # promuovere.
-            if not store.map_needs_pruning(state):
+            if store.map_needs_pruning(state):
+                candidates.append(
+                    GardenerPick(store=store, delta=delta, reason="map",
+                                 last_run_at=state.last_run_at, last_touch=state.last_touch)
+                )
+                continue
+            # **La terza ragione: la bacheca.** Una prima bacheca da proporre,
+            # cassetti con le pagine cambiate, una correzione fatta dal cassetto,
+            # una pagina chiesta in bacheca. La domanda e' la stessa che si fa la
+            # passata (``board_pass.board_needs_pass``), freno compreso, e sta
+            # per ultima perche' apre piu' file di tutte.
+            from jenny.agent.board_pass import board_needs_pass
+
+            if not board_needs_pass(store.root, store.workspace):
                 continue
             candidates.append(
-                GardenerPick(store=store, delta=delta, reason="map",
+                GardenerPick(store=store, delta=delta, reason="board",
                              last_run_at=state.last_run_at, last_touch=state.last_touch)
             )
             continue
