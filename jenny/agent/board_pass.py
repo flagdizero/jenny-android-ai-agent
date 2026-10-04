@@ -323,7 +323,15 @@ class BoardPass:
             parts.append(self._section("Corrections waiting", "\n\n".join(blocks)))
         orphans = self.orphans()
         if orphans:
-            rows = [f"- `{p}` — {self.titles[p]}{' **(new)**' if p in new else ''}"
+            # Le anteprime contano: una pagina fuori bacheca che l'utente apre
+            # spesso e' una pagina che la bacheca sta trascurando.
+            previews = board.get("previews") or {}
+
+            def seen(p: str) -> str:
+                n = previews.get(p)
+                return f" (the user opened it {n} times in preview)" if isinstance(n, int) and n > 1 else ""
+
+            rows = [f"- `{p}` — {self.titles[p]}{' **(new)**' if p in new else ''}{seen(p)}"
                     for p in orphans[:200]]
             parts.append(self._section("Pages off the board", "\n".join(rows)))
         if state.stale:

@@ -551,13 +551,15 @@ class BoardProposeBoardTool(_BoardTool):
 
 
 def build_board_tools(state: BoardPassState) -> list[Tool]:
+    # ``parameters`` lo inietta ``@tool_parameters``, e il type checker non lo
+    # vede: per lui queste classi restano astratte.
     tools: list[Tool] = [
-        BoardAssignPageTool(state),
-        BoardWriteSummaryTool(state),
-        BoardAddReminderTool(state),
-        BoardSuggestTool(state),
-        BoardResolveCorrectionTool(state),
+        BoardAssignPageTool(state),  # pyright: ignore[reportAbstractUsage]
+        BoardWriteSummaryTool(state),  # pyright: ignore[reportAbstractUsage]
+        BoardAddReminderTool(state),  # pyright: ignore[reportAbstractUsage]
+        BoardSuggestTool(state),  # pyright: ignore[reportAbstractUsage]
+        BoardResolveCorrectionTool(state),  # pyright: ignore[reportAbstractUsage]
     ]
     if state.migration:
-        tools.append(BoardProposeBoardTool(state))
+        tools.append(BoardProposeBoardTool(state))  # pyright: ignore[reportAbstractUsage]
     return tools

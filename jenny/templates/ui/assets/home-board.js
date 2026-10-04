@@ -721,6 +721,9 @@ export class HomeBoard {
       showToast(i18n.t('home.reader.failed'), 'error');
       return;
     }
+    /* Contata: le pagine aperte spesso in anteprima sono quelle che la bacheca
+       trascura, e la passata dopo lo legge. Un conto perso non e' un guasto. */
+    rpc.board('preview', this.notebook, { page: path }).catch(() => {});
     const tmp = document.createElement('div');
     tmp.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(page.html || '') : '';
     tmp.querySelector('h1')?.remove();

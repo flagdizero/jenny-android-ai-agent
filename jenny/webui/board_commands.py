@@ -302,22 +302,11 @@ async def board_connection_remove(
 
 async def board_offboard_want(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """«Voglio vederla in bacheca»: una proposta al contrario, per la passata dopo."""
-    from jenny.board.view import wiki_titles
-
     root = _project(ctx, params)
-    page = params.get("page")
-    titles = await _run(wiki_titles, root)
-    if isinstance(page, str) and page not in titles and ".." not in page:
-        # Il lettore ha in mano il bersaglio del link com'e' scritto
-        # (``[[dormienza]]``, senza ``.md``): si risolve come lo risolve
-        # ``/api/page``, e si registra la pagina vera.
-        from jenny.webui.wiki import resolve_wikilink
-
-        resolved = await _run(resolve_wikilink, root, page)
-        if resolved is not None:
-            page = resolved.relative_to(root / "wiki").as_posix()
-    if not isinstance(page, str) or page not in titles:
-        raise CommandError("not_found", "page not found")
+    # Il lettore ha in mano il bersaglio del link com'e' scritto
+    # (``[[dormienza]]``, senza ``.md``): si risolve come lo risolve
+    # ``/api/page``, e si registra la pagina vera.
+    page = await _resolve_page(root, params.get("page"))
     origin = params.get("from")
 
     def apply(board: dict[str, Any]) -> bool | None:
@@ -331,6 +320,42 @@ async def board_offboard_want(ctx: CommandContext, params: Mapping[str, Any]) ->
 
     await _run(mutate_board, root, apply)
     return {"ok": True}
+
+
+async def board_preview(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Conta un'anteprima di una pagina fuori bacheca.
+
+    Le pagine aperte spesso in anteprima sono proprio quelle che la bacheca sta
+    trascurando: il conto lo legge la passata della bacheca (e il lint), non
+    l'interfaccia.
+    """
+    root = _project(ctx, params)
+    page = await _resolve_page(root, params.get("page"))
+
+    def apply(board: dict[str, Any]) -> None:
+        previews = dict(board.get("previews") or {})
+        previews[page] = int(previews.get(page) or 0) + 1
+        board["previews"] = previews
+
+    if (root / "board" / "board.json").exists():
+        await _run(mutate_board, root, apply)
+    return {"ok": True}
+
+
+async def _resolve_page(root: Path, page: Any) -> str:
+    """Il percorso vero di una pagina, anche da un bersaglio di link senza ``.md``."""
+    from jenny.board.view import wiki_titles
+
+    titles = await _run(wiki_titles, root)
+    if isinstance(page, str) and page not in titles and ".." not in page:
+        from jenny.webui.wiki import resolve_wikilink
+
+        resolved = await _run(resolve_wikilink, root, page)
+        if resolved is not None:
+            page = resolved.relative_to(root / "wiki").as_posix()
+    if not isinstance(page, str) or page not in titles:
+        raise CommandError("not_found", "page not found")
+    return page
 
 
 # ── Le correzioni ────────────────────────────────────────────────────────────
@@ -629,6 +654,7 @@ BOARD_COMMANDS = {
     "board.suggestion.respond": board_suggestion_respond,
     "board.connection.remove": board_connection_remove,
     "board.offboard.want": board_offboard_want,
+    "board.preview": board_preview,
     "board.fix": board_fix,
     "board.section.add": board_section_add,
     "board.section.update": board_section_update,

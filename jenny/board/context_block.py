@@ -89,7 +89,7 @@ def board_block(
     titles = dict(iter_wiki_pages(root / "wiki"))
     owners = model.page_owners(board)
     offboard = sum(1 for p in titles if p not in owners)
-    lines: list[str] = []
+    lines: list[tuple[str, str, str]] = []
     for card in board["cards"]:
         summary = read_card_summary(root, card["id"]) or {}
         tags: list[str] = []

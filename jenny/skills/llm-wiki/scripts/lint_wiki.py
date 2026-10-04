@@ -1877,6 +1877,9 @@ def lint(root: str) -> int:
             print("    open questions live, and it is the only part nothing else carries.)")
             issues += 1
 
+    # ── Pass 19: la bacheca ──────────────────────────────────────────────────
+    issues += lint_board(root_path)
+
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")
     if issues == 0:
@@ -1885,6 +1888,111 @@ def lint(root: str) -> int:
         print(f"⚠️  {issues} issue(s) found — review above and fix before next ingest")
 
     return EXIT_OK if issues == 0 else EXIT_ISSUES
+
+
+# Il tetto dei fili di una bacheca: copia di ``MAX_CONNECTIONS`` in
+# ``jenny/board/model.py`` (questo script non importa ``jenny``); un test li
+# tiene uguali, come per ``MAP_MAX_CHARS``.
+BOARD_MAX_CONNECTIONS = 8
+
+
+def board_fingerprint(texts) -> str:
+    """L'impronta delle pagine di un cassetto. **Copia** di
+    ``jenny/board/model.py::fingerprint``: un test le confronta."""
+    h = hashlib.sha1()
+    for path, text in sorted(texts):
+        h.update(path.encode("utf-8"))
+        h.update(b"\0")
+        h.update(text.encode("utf-8"))
+        h.update(b"\0")
+    return "sha1:" + h.hexdigest()
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def lint_board(root_path: Path, today: str | None = None) -> int:
+    """Il controllo della bacheca di un quaderno (``board/``). Torna i problemi trovati.
+
+    La bacheca e' la faccia del quaderno: i cassetti sono riassunti scritti
+    dalle pagine, e un riassunto che non corrisponde piu' alle sue pagine dice
+    una cosa falsa a ogni apertura. Quel che si controlla:
+
+    - **fronte stantio**: un cassetto la cui impronta non e' piu' quella delle
+      sue pagine (la passata della bacheca lo riscrivera', ma fino ad allora mente);
+    - **fonte mancante**: una sezione che cita una pagina che non esiste piu';
+    - **pagine sparite** da un cassetto, **fili** oltre il tetto o verso schede
+      che non ci sono, **attese scadute** ancora aperte;
+    - e, come misura e non come problema, quante pagine stanno fuori bacheca e
+      quali sono state aperte piu' spesso in anteprima.
+    """
+    board = _read_json(root_path / "board" / "board.json")
+    if not isinstance(board, dict):
+        return 0
+    from datetime import date as _date
+
+    day = today or _date.today().isoformat()
+    wiki_dir = root_path / "wiki"
+    issues = 0
+    print("\n📌 Board:")
+    cards = [c for c in board.get("cards") or [] if isinstance(c, dict) and c.get("id")]
+    ids = {c["id"] for c in cards}
+    owned: set[str] = set()
+    for card in cards:
+        pages = [p for p in card.get("pages") or [] if isinstance(p, str)]
+        owned.update(pages)
+        gone = [p for p in pages if not (wiki_dir / p).is_file()]
+        if gone:
+            print(f"🟡 card `{card['id']}` lists pages that no longer exist: {', '.join(gone)}")
+            issues += 1
+        summary = _read_json(root_path / "board" / "cards" / f"{card['id']}.json")
+        if not isinstance(summary, dict):
+            continue
+        texts = [(p, read_md(wiki_dir / p)) for p in pages if (wiki_dir / p).is_file()]
+        if summary.get("fingerprint") and summary["fingerprint"] != board_fingerprint(texts):
+            print(f"🟡 stale drawer: `{card['id']}` was written from pages that have changed since")
+            issues += 1
+        for section in summary.get("sections") or []:
+            missing = [s for s in section.get("sources") or [] if not (wiki_dir / s).is_file()]
+            if missing:
+                print(f"🔴 drawer `{card['id']}`, section «{section.get('title')}» cites "
+                      f"missing pages: {', '.join(missing)}")
+                issues += 1
+    connections = [c for c in board.get("connections") or [] if isinstance(c, dict)]
+    if len(connections) > BOARD_MAX_CONNECTIONS:
+        print(f"🟡 {len(connections)} threads, over the ceiling of {BOARD_MAX_CONNECTIONS}")
+        issues += 1
+    dangling = [c for c in connections if c.get("a") not in ids or c.get("b") not in ids]
+    if dangling:
+        print(f"🟡 {len(dangling)} thread(s) tie a card that is no longer on the board")
+        issues += 1
+    reminders = _read_json(root_path / "board" / "reminders.json") or {}
+    overdue = [
+        r for r in reminders.get("reminders") or []
+        if isinstance(r, dict) and r.get("state", "open") == "open"
+        and (r.get("when") or {}).get("kind") == "date"
+        and str((r.get("when") or {}).get("date", "9999")) < day
+    ]
+    if overdue:
+        print(f"🟡 {len(overdue)} reminder(s) past their date and still open: "
+              + ", ".join(str(r.get("text")) for r in overdue[:5]))
+        issues += 1
+    all_pages = {
+        f.relative_to(wiki_dir).as_posix() for f in wiki_dir.rglob("*.md")
+        if f.name != "index.md" and not any(part.startswith(".") for part in f.parts)
+    }
+    off = sorted(all_pages - owned)
+    print(f"   {len(cards)} cards, {len(off)} of {len(all_pages)} pages off the board")
+    previews = board.get("previews") or {}
+    top = sorted(((n, p) for p, n in previews.items() if p in off and isinstance(n, int)),
+                 reverse=True)[:3]
+    if top:
+        print("   opened most in preview: " + ", ".join(f"{p} ({n})" for n, p in top))
+    return issues
 
 
 def lint_workspace(wikis_dir_path: str, fix: bool = False) -> int:

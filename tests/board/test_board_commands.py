@@ -303,3 +303,10 @@ async def test_a_condition_reminder_from_a_drawer(ctx, notebook: Path) -> None:
     })
     rem = read_reminders(notebook)["reminders"][0]
     assert rem["when"]["kind"] == "condition" and rem["when"]["value"] == 30
+
+
+async def test_previews_are_counted_by_real_page(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    for _ in range(2):
+        await dispatch_command(ctx, "board.preview", {"wiki": "piante", "page": "dormienza"})
+    assert read_board(notebook)["previews"] == {"dormienza.md": 2}
