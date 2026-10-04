@@ -192,10 +192,15 @@ export class BoardDrawer {
       const threads = el('div', 'home-drawer-threads');
       threads.appendChild(el('h4', 'home-drawer-h4', i18n.t('board.drawer.threads')));
       for (const c of d.connections) {
+        const line = el('div', 'home-drawer-thread-line');
         const row = button('home-drawer-thread', '', () => this.onOpenCard?.(c.to, c.title));
         row.append(el('span', 'home-drawer-thread-mark', '—'), el('span', 'home-drawer-thread-to', c.title),
           el('span', 'home-drawer-thread-why', c.label));
-        threads.appendChild(row);
+        /* Un filo lo toglie l'utente, sempre; Jenny mai (propone). */
+        const cut = button('home-drawer-link is-cut', '×', () => this._cutThread(c));
+        cut.setAttribute('aria-label', i18n.t('board.drawer.threadRemove', { card: c.title }));
+        line.append(row, cut);
+        threads.appendChild(line);
       }
       root.appendChild(threads);
     }
@@ -327,6 +332,10 @@ export class BoardDrawer {
       const v = section.view || {};
       h3.append(v.name || section.app, el('span', 'home-drawer-owner', i18n.t('board.section.kind.app')));
       body.appendChild(this._appView(v));
+      if (v.field && (v.state === 'ok' || v.state === 'alarm' || v.state === 'stale')) {
+        tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
+          () => this._addCondition(section, v)));
+      }
       for (const verb of v.verbs || []) {
         tools.appendChild(button('home-drawer-link', verb, () => this._verb(section, verb)));
       }
@@ -389,6 +398,51 @@ export class BoardDrawer {
       return;
     }
     await this.reload();
+  }
+
+  async _cutThread(conn) {
+    if (!(await confirmDialog(i18n.t('board.drawer.threadRemoveConfirm', { card: conn.title })))) return;
+    await this._write('connection.remove', { a: this.card, b: conn.to });
+  }
+
+  /** «Avvisami quando…»: un'attesa a condizione sul dato di una mini app. La
+   *  controlla l'orologio del quaderno ogni ora, sul dato fresco. */
+  _addCondition(section, view) {
+    const form = el('form', 'home-board-form');
+    const what = el('input', 'home-board-input');
+    what.value = i18n.t('board.app.remindDefault', { app: view.name || section.app });
+    what.setAttribute('aria-label', i18n.t('board.section.reminderWhat'));
+    const row = el('div', 'home-board-row');
+    const op = el('select', 'home-board-input is-op');
+    for (const [value, key] of [['<', 'below'], ['>', 'above']]) {
+      const option = el('option', '', i18n.t(`board.app.${key}`, { label: view.label || view.field }));
+      option.value = value;
+      op.appendChild(option);
+    }
+    const value = el('input', 'home-board-input is-value');
+    value.type = 'number';
+    value.step = 'any';
+    value.setAttribute('aria-label', i18n.t('board.app.threshold'));
+    if (typeof view.value === 'number') value.value = String(view.value);
+    row.append(op, value);
+    const actions = el('div', 'home-board-actions');
+    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    save.type = 'submit';
+    actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
+    form.append(what, row, actions);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!what.value.trim() || value.value === '') return;
+      this.sheet.close();
+      await this._write('section.add', {
+        card: this.card, kind: 'reminder', text: what.value,
+        when: {
+          kind: 'condition', app: section.app, params: section.params || {},
+          field: view.field, op: op.value, value: Number(value.value),
+        },
+      });
+    });
+    this.sheet.open(i18n.t('board.app.remindWhen'), form);
   }
 
   async _remove(section) {

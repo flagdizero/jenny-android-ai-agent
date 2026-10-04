@@ -259,6 +259,9 @@ async def test_offboard_want_only_for_real_pages(ctx, notebook: Path) -> None:
         "wiki": "piante", "page": "dormienza.md", "from": "acero",
     })
     assert read_board(notebook)["offboardWants"][0]["page"] == "dormienza.md"
+    # Il lettore manda il bersaglio del link com'e' scritto, senza ``.md``.
+    await dispatch_command(ctx, "board.offboard.want", {"wiki": "piante", "page": "ginkgo"})
+    assert read_board(notebook)["offboardWants"][1]["page"] == "ginkgo.md"
     with pytest.raises(CommandError) as exc:
         await dispatch_command(ctx, "board.offboard.want", {"wiki": "piante", "page": "../x"})
     assert exc.value.code == "not_found"
@@ -280,3 +283,23 @@ async def test_setup_records_the_users_skeleton_and_reminder_wish(ctx, notebook:
     assert board["skeleton"] == ["Vaso e travaso", "Acqua", "Storia"]
     assert board["remindHint"] == "i travasi e le concimazioni"
     assert board["cards"] == []
+
+
+async def test_a_removed_thread_is_a_no_to_that_thread(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    await dispatch_command(ctx, "board.connection.remove", {"wiki": "piante", "a": "monstera", "b": "acero"})
+    board = read_board(notebook)
+    assert board["connections"] == []
+    subjects = {d["subject"] for d in board["declined"] if d["kind"] == "add_connection"}
+    assert subjects == {"Acero — Monstera", "Monstera — Acero"}
+
+
+async def test_a_condition_reminder_from_a_drawer(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    await dispatch_command(ctx, "board.section.add", {
+        "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Annaffia",
+        "when": {"kind": "condition", "app": "waterbot", "params": {"sensor": "albinella"},
+                 "field": "moisture", "op": "<", "value": 30},
+    })
+    rem = read_reminders(notebook)["reminders"][0]
+    assert rem["when"]["kind"] == "condition" and rem["when"]["value"] == 30

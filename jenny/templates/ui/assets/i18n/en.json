@@ -1260,7 +1260,9 @@
       "fixSend": "Send to Jenny",
       "fixPending": "Your correction · report on “{page}”, I'm working it in",
       "fixDone": "Applied to the wiki",
-      "fixFailed": "I couldn't send the correction."
+      "fixFailed": "I couldn't send the correction.",
+      "threadRemove": "Remove the thread to {card}",
+      "threadRemoveConfirm": "Remove the thread to {card}? Jenny will not propose it again."
     },
     "reminder": {
       "done": "Done"
@@ -1289,7 +1291,12 @@
         "missing": "gone",
         "broken": "broken",
         "no_section": "without a view"
-      }
+      },
+      "remindWhen": "Remind me when…",
+      "remindDefault": "Check {app}",
+      "below": "{label} drops below",
+      "above": "{label} rises above",
+      "threshold": "Threshold"
     },
     "section": {
       "add": "+ Add a section",

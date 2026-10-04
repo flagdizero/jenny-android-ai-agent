@@ -248,7 +248,19 @@ def test_month_precision_is_due_at_the_start_of_the_month():
 
 
 def test_free_slot_avoids_what_is_already_there():
+    """La disposizione della bacheca di prova (sei schede e due post-it): la
+    scheda nuova non deve coprire niente, ne' la busta ne' Jenny."""
     board = model.empty_board()
-    board["cards"] = [model._normalize_card(_card("a", pos={"x": 4, "y": 5}))]
-    slot = model.free_slot(board)
-    assert slot != (4, 5)
+    spots = [(5, 6), (47, 4), (76, 9), (35, 59), (64, 56)]
+    board["cards"] = [model._normalize_card(_card(f"c{i}", pos={"x": x, "y": y}))
+                      for i, (x, y) in enumerate(spots)]
+    reminders = model.normalize_reminders({"reminders": [
+        {"id": "r1", "card": "c0", "text": "a", "when": {"kind": "date", "date": "2027-03-01"},
+         "pos": {"x": 25, "y": 37}},
+    ]})
+    x, y = model.free_slot(board, reminders)
+    rect = (x, y, x + model.CARD_BOX[0], y + model.CARD_BOX[1])
+    # Al piu' una striscia sul bordo di un post-it: niente che si copre davvero.
+    assert sum(model._overlap(rect, b) for b in model._boxes(board, reminders)) < 100
+    for corner in model._RESERVED:
+        assert model._overlap(rect, corner) == 0

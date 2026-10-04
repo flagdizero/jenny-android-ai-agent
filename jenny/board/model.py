@@ -431,32 +431,69 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
     return items_on_board(board, reminders) >= MAX_ITEMS
 
 
-# Le caselle candidate per un oggetto nuovo, in percentuale. Una griglia larga e
-# non casuale: la bacheca deve sembrare disposta da qualcuno, e due aperture
-# della stessa bacheca devono dare lo stesso posto. L'angolo in basso a sinistra
-# manca: e' della busta (a destra c'e' Jenny).
-_SLOTS = [(x, y) for y in (5, 37) for x in (4, 27, 50, 73)] + [(27, 62), (50, 62), (73, 60)]
+# L'ingombro degli oggetti, in percentuale della bacheca. La larghezza viene dal
+# CSS (una polaroid e' il 19% della larghezza, un post-it il 14%); l'altezza
+# dipende dalla forma dello schermo, e qui si prende quella del quadrato basso
+# del Titan 2 (590x~400 px di bacheca), il caso in cui gli oggetti sono piu' alti
+# in proporzione: su uno schermo piu' alto avanza spazio, non ne manca.
+CARD_BOX = (20.0, 40.0)
+NOTE_BOX = (15.0, 23.0)
+
+# Gli angoli che non sono della bacheca: in basso a sinistra la busta, in basso
+# a destra Jenny, che sporge dal bordo e si prende i tocchi.
+_RESERVED = ((0.0, 76.0, 20.0, 100.0), (80.0, 62.0, 100.0, 100.0))
+
+
+def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> list[tuple[float, float, float, float]]:
+    out = []
+    for card in board.get("cards") or []:
+        x, y = float(card["pos"]["x"]), float(card["pos"]["y"])
+        out.append((x, y, x + CARD_BOX[0], y + CARD_BOX[1]))
+    cards = {c["id"] for c in board.get("cards") or []}
+    for rem in open_reminders(reminders or {}):
+        pos = rem.get("pos")
+        if rem.get("card") in cards and isinstance(pos, Mapping):
+            x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
+            out.append((x, y, x + NOTE_BOX[0], y + NOTE_BOX[1]))
+    return out
+
+
+def _overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    return w * h if w > 0 and h > 0 else 0.0
 
 
 def free_slot(
-    board: Mapping[str, Any], reminders: Mapping[str, Any] | None = None
+    board: Mapping[str, Any],
+    reminders: Mapping[str, Any] | None = None,
+    *,
+    box: tuple[float, float] = CARD_BOX,
+    near: tuple[float, float] | None = None,
+    extra: list[tuple[float, float, float, float]] | None = None,
 ) -> tuple[float, float]:
-    """La casella più lontana da tutto quel che c'è già."""
-    taken: list[tuple[float, float]] = [
-        (c["pos"]["x"], c["pos"]["y"]) for c in board.get("cards") or []
-    ]
-    for rem in open_reminders(reminders or {}):
-        pos = rem.get("pos")
-        if isinstance(pos, Mapping):
-            taken.append((float(pos.get("x", 0)), float(pos.get("y", 0))))
-    if not taken:
-        return _SLOTS[0]
+    """Il posto per un oggetto nuovo: quello che copre di meno quel che c'e' gia'.
 
-    def distance(slot: tuple[float, float]) -> float:
-        return min((slot[0] - x) ** 2 + (slot[1] - y) ** 2 for x, y in taken)
-
-    best = max(_SLOTS, key=distance)
-    return float(best[0]), float(best[1])
+    Si provano le caselle di una griglia fitta, si scartano gli angoli che non
+    sono della bacheca, e vince la casella con la sovrapposizione minore; a
+    parita', la piu' vicina a *near* (il soggetto di un post-it) o, senza, la
+    prima in ordine di lettura. Deterministico: due aperture della stessa
+    bacheca danno lo stesso posto.
+    """
+    taken = _boxes(board, reminders) + list(extra or [])
+    best: tuple[float, float, float] | None = None
+    best_pos = (2.0, 3.0)
+    for y in range(3, int(100 - box[1]) + 1, 4):
+        for x in range(2, int(100 - box[0]) + 1, 4):
+            rect = (float(x), float(y), x + box[0], y + box[1])
+            if any(_overlap(rect, r) for r in _RESERVED):
+                continue
+            cost = sum(_overlap(rect, t) for t in taken)
+            dist = (x - near[0]) ** 2 + (y - near[1]) ** 2 if near else y * 100 + x
+            key = (cost, dist, 0.0)
+            if best is None or key < best:
+                best, best_pos = key, (float(x), float(y))
+    return best_pos
 
 
 def add_since(board: dict[str, Any], kind: str, **params: Any) -> None:

@@ -103,6 +103,7 @@ def app_section_view(
     base.update({
         "unit": section.unit,
         "label": section.label or section.field,
+        "field": section.field,
         "verbs": section.verbs,
         "params": dict(params),
     })

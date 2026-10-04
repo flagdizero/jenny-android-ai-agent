@@ -858,7 +858,14 @@ class HomeApp {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook || !path) return;
     this._readerCard = card || null;
-    if (card && card === this.drawer.card) this._cardTitle = this.drawer.title;
+    /* Il nome del cassetto da cui viene la pagina, per il percorso: quello del
+       cassetto aperto se e' lui, se no quello che la bacheca conosce (una
+       pagina aperta dalla ricerca puo' stare in un cassetto mai aperto). */
+    if (card) {
+      this._cardTitle = (card === this.drawer.card && this.drawer.title)
+        || this.board.data?.cards?.find((c) => c.id === card)?.title
+        || '';
+    }
     if (!this._setView('reader')) return;
     this._setHeadTitle(label || '');
     this._applyHead();
@@ -1705,7 +1712,7 @@ class HomeApp {
        chiude prima loro. Visto sul telefono il 23/09/2026, quando mancavano:
        Indietro chiudeva il cassetto sotto e lasciava il foglio aperto sopra
        la chat, Delete compreso. */
-    for (const id of LONG_PRESS_SHEETS) {
+    for (const id of [...LONG_PRESS_SHEETS, BOARD_SHEET]) {
       const sheet = document.getElementById(id);
       if (sheet?.open) {
         sheet.close();

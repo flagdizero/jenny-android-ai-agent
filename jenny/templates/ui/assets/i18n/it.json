@@ -1260,7 +1260,9 @@
       "fixSend": "Invia a Jenny",
       "fixPending": "Tua correzione · segnalazione su «{page}», la sto integrando",
       "fixDone": "Integrata nella wiki",
-      "fixFailed": "Non sono riuscita a mandare la correzione."
+      "fixFailed": "Non sono riuscita a mandare la correzione.",
+      "threadRemove": "Togli il filo con {card}",
+      "threadRemoveConfirm": "Togliere il filo con {card}? Jenny non lo riproporrà."
     },
     "reminder": {
       "done": "Fatto"
@@ -1289,7 +1291,12 @@
         "missing": "sparito",
         "broken": "rotto",
         "no_section": "senza vista"
-      }
+      },
+      "remindWhen": "Avvisami quando…",
+      "remindDefault": "Controlla {app}",
+      "below": "{label} scende sotto",
+      "above": "{label} sale sopra",
+      "threshold": "Soglia"
     },
     "section": {
       "add": "+ Aggiungi sezione",

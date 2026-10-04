@@ -49,6 +49,7 @@ Loading is designed to never raise: `load_app()` (`jenny/apps/manifest.py`) alwa
 | `server` | no | `{"baseUrl": "http://..."}` (or `https://`) — required if any action has `kind: "http"`, or if `view.kind` is `"external"`. Do **not** add an `auth` block: it is rejected at load time (see [below](#serverauth-is-rejected-not-implemented)). |
 | `actions` | no | Array of actions (see below). May be omitted or empty: an app whose only job is to draw a screen has nothing agent-facing to declare. Names must be unique. |
 | `view` | no | `{"kind": "external"}` — the app's screen is the UI of its own `server.baseUrl`, served through a loopback proxy (`jenny/apps/proxy.py`), instead of `app/index.html`. `"external"` is the only accepted kind. |
+| `section` | no | A compact view of the app's data for a card's drawer on a notebook [board](../using/board.md). See [Drawer section](#drawer-section-section) below. |
 
 The folder name itself is the slug and must match `^[a-z0-9]+(-[a-z0-9]+)*$`, **max 32 characters** (`MAX_SLUG_LEN` in `manifest.py`) — a folder that doesn't match is loaded as broken with `"folder name '<slug>' is not a valid slug"`.
 
@@ -103,6 +104,31 @@ Full example (a folder named `piante`):
   ]
 }
 ```
+
+### Drawer section (`section`)
+
+An optional block that lets the app's data appear in a drawer of a notebook's [board](../using/board.md). It is parsed by `_parse_section` in `jenny/apps/manifest.py`, and a malformed block makes the app broken with a readable error, like any other manifest defect.
+
+```json
+"section": {
+  "params": { "sensor": { "type": "string" } },
+  "value": { "collection": "readings", "where": { "sensor": "$sensor" },
+             "latest": "ts", "field": "moisture", "unit": "%", "label": "Soil moisture" },
+  "status": { "stale_after_minutes": 120, "alarm": { "field": "moisture", "op": "<", "value": 20 } },
+  "trend": { "days": 7 },
+  "verbs": ["refresh"]
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `params` | no | What the user is asked when attaching the section to a drawer; referenced in `value.where` as `$name`. Every `$name` used there must be declared here. |
+| `value` | yes | `collection` and `field` are required. The record shown is the latest of `collection` by `latest` (default `ts`) among those matching `where`; `unit` and `label` are optional display strings. |
+| `status` | no | `stale_after_minutes` (a positive integer) and `alarm` (`{field, op, value}`). Stale data or a holding alarm lights the card's red corner. |
+| `trend` | no | `days`, 0–31: one point per day of `field`. |
+| `verbs` | no | At most two of this app's own action names, shown as buttons. |
+
+The section only reads the app's `data/`; it never calls the app. When its state changes, the gateway writes one `[inferred]` journal line in the notebook. The same block is documented for the model in `jenny/skills/app-creator/references/manifest.md`.
 
 ## Storage: JSONL collections
 

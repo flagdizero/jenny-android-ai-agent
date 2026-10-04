@@ -47,6 +47,37 @@ def _when(rem: Mapping[str, Any]) -> str:
     return f"when {when.get('field')} {when.get('op')} {when.get('value')}"
 
 
+# Le intestazioni della sezione «aperto» della mappa, nelle lingue in cui il
+# giardiniere la scrive: e' li' che mette le contraddizioni che non deve
+# risolvere da solo, e con la bacheca la mappa non entra piu' a ogni turno.
+_OPEN_HEADING = re.compile(
+    r"^#{1,4}\s*(open|open questions|aperto|aperti|aperta|aperte|da decidere|"
+    r"questioni aperte|domande aperte)\b",
+    re.IGNORECASE,
+)
+OPEN_MAX_CHARS = 400
+
+
+def open_questions(root: Path) -> str:
+    """La sezione «Open» di ``wiki/index.md``, corta, o ``""``."""
+    try:
+        text = (root / "wiki" / "index.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+    out: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            if inside:
+                break
+            inside = bool(_OPEN_HEADING.match(line.strip()))
+            continue
+        if inside and line.strip():
+            out.append(line.strip())
+    joined = " ".join(out)
+    return joined if len(joined) <= OPEN_MAX_CHARS else joined[: OPEN_MAX_CHARS - 1] + "…"
+
+
 def board_block(
     root: Path, *, alert: Callable[[Mapping[str, Any]], bool] | None = None
 ) -> str:
@@ -77,6 +108,9 @@ def board_block(
         f"Off the board: {offboard} page(s) — they exist under `wiki/`, and grep finds them."
         if offboard else ""
     )
+    pending = open_questions(root)
+    if pending:
+        footer = (footer + "\n" if footer else "") + f"Open in the map: {pending}"
     fixed = sum(len(t) + len(tag) + 8 for t, _b, tag in lines) + len(footer) + 2
     room = max(0, BOARD_BLOCK_MAX_CHARS - fixed)
     share = room // max(1, len(lines))

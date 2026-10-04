@@ -78,15 +78,21 @@ def card_signal(
     return None
 
 
-def _note_pos(card: Mapping[str, Any], index: int) -> dict[str, Any]:
-    """Il posto di un post-it che non ne ha uno: accanto alla sua scheda.
+def _note_pos(
+    board: Mapping[str, Any],
+    reminders: Mapping[str, Any],
+    card: Mapping[str, Any],
+    placed: list[tuple[float, float, float, float]],
+) -> dict[str, Any]:
+    """Il posto di un post-it che non ne ha uno: il posto libero piu' vicino al suo soggetto.
 
-    Calcolato e non salvato: le attese nate prima di avere un posto (o scritte a
-    mano) compaiono vicino al loro soggetto, e restano dove sono finché qualcuno
-    non le sposta.
+    Calcolato e non salvato: le attese nate senza un posto (quelle della
+    passata, quelle dell'utente) compaiono vicino alla loro scheda senza coprire
+    niente, e restano dove sono finché qualcuno non le sposta.
     """
-    x = min(86.0, card["pos"]["x"] + 19 + 3 * index)
-    y = min(84.0, card["pos"]["y"] + 28 + 4 * index)
+    near = (float(card["pos"]["x"]) + 12, float(card["pos"]["y"]) + 30)
+    x, y = model.free_slot(board, reminders, box=model.NOTE_BOX, near=near, extra=placed)
+    placed.append((x, y, x + model.NOTE_BOX[0], y + model.NOTE_BOX[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
 
@@ -130,19 +136,17 @@ def build_board_view(
             "signal": card_signal(card, summary, reminders, today=today, alert=alert),
         })
     notes: list[dict[str, Any]] = []
-    per_card: dict[str, int] = {}
+    placed: list[tuple[float, float, float, float]] = []
     for rem in model.open_reminders(reminders):
         card = on_board.get(rem.get("card", ""))
         if card is None:
             continue
-        index = per_card.get(card["id"], 0)
-        per_card[card["id"]] = index + 1
         notes.append({
             "id": rem["id"],
             "card": card["id"],
             "text": rem["text"],
             "when": rem["when"],
-            "pos": rem.get("pos") or _note_pos(card, index),
+            "pos": rem.get("pos") or _note_pos(board, reminders, card, placed),
         })
     last_seen = _stamp(board.get("lastSeen"))
     since = [row for row in board.get("since") or [] if _stamp(row.get("at")) > last_seen]

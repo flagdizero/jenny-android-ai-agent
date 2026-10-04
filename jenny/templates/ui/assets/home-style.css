@@ -1725,8 +1725,6 @@ body.home {
   background-color: var(--board-bg);
   background-image: radial-gradient(var(--board-grain) 1px, transparent 1.3px);
   background-size: 9px 9px;
-  /* Jenny sta sul bordo basso: lo spazio sotto e' suo. */
-  margin-bottom: calc(var(--jenny-away-floor) - 40px);
 }
 .home-board-canvas[hidden] { display: none; }
 
@@ -2182,7 +2180,7 @@ body.home {
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.home-drawer-link.is-fix { margin-left: auto; }
+.home-drawer-link.is-fix { margin-left: 4px; }
 .home-drawer-link.is-move { text-decoration: none; }
 .home-drawer-tag { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
 .home-drawer-tag.is-done { color: var(--board-done); }
@@ -2239,6 +2237,11 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-drawer-thread-line { display: flex; align-items: baseline; gap: 10px; }
+.home-drawer-link.is-cut { text-decoration: none; font-size: 15px; }
+.home-board-row { display: flex; gap: 8px; }
+.home-board-input.is-op { flex: 1; }
+.home-board-input.is-value { width: 90px; flex: none; }
 .home-drawer-thread-mark { color: var(--board-thread); }
 .home-drawer-thread-to { font-weight: 500; }
 .home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }

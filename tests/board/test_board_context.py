@@ -81,3 +81,17 @@ def test_naming_a_card_brings_its_drawer_into_the_turn(tmp_path) -> None:
     )
     assert "Drawer of the card «Pianta 0»" in str(messages[-1]["content"])
     assert "Drawer of the card" not in messages[0]["content"], "il cassetto nel prefisso in cache"
+
+
+def test_the_open_questions_of_the_map_still_reach_the_turn(tmp_path) -> None:
+    """Con la bacheca la mappa non entra piu' a ogni turno, ma la sua sezione
+    «Open» si': e' li' che il giardiniere lascia le domande per l'utente."""
+    root = _notebook(tmp_path)
+    (root / "wiki" / "index.md").write_text(
+        "# Piante\n\n## Aperto\n\n- [[travaso-acero]] dice marzo, [[dormienza]] dice febbraio.\n"
+        "\n## Pagine\n\n- [[travaso-acero]]\n"
+    )
+    _cards(root, 1, brief="In vaso 14.")
+    block = board_block(root)
+    assert "Open in the map: - [[travaso-acero]] dice marzo" in block
+    assert "## Pagine" not in block

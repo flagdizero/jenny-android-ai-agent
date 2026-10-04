@@ -95,16 +95,17 @@ Monitor mode only makes sense on a repeating schedule, so **it cannot be combine
 
 ### Protected system jobs
 
-When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`**, **`heartbeat`**, and — when they are on — the [gardener](gardener.md) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the heartbeat's and the update check's are in `config.json`.
+When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`**, **`heartbeat`**, and — when they are on — the [gardener](gardener.md), the notebook clock (`reminders`) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the heartbeat's, the notebook clock's and the update check's are in `config.json`.
 
 | Job | Runs | Config | What it costs you |
 |---|---|---|---|
 | `dream` | every **2 hours** | `agents.defaults.dream.enabled` (default on), `agents.defaults.dream.intervalH` (default `2`) | One agent run — a real turn against your provider, several calls if it uses tools — whenever there is new conversation to consolidate. Takes a snapshot first, so a bad run is undoable. |
 | `heartbeat` | every **30 minutes** | `gateway.heartbeat.enabled` (default on), `gateway.heartbeat.intervalS` (default `1800`) | Nothing when `## Active Tasks` is empty; one real turn when it isn't. See below. |
 | `gardener` | every **30 minutes** (how often it *looks*) | `agents.defaults.gardener.enabled` (default on), `agents.defaults.gardener.intervalMin` (default `30`) | Nothing when no notebook has new journal lines, or none has been quiet long enough; otherwise one pass on that notebook, which is a real turn against your provider. See [The gardener](gardener.md). |
+| `reminders` | every **hour** | registered when `wiki.enabled` is on (default on) | Nothing in an hour when no notebook reminder is due; one real turn per reminder announced. See [Notebook reminders](#notebook-reminders). |
 | `update_check` | every **24 hours** | `updates.enabled` (default on), `updates.checkIntervalH` (default `24`) | One small HTTP request to the update manifest; a real turn only on the day a new version is first announced in chat (`updates.notifyInChat`). See [Updates](webui-tour.md#updates). |
 
-`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md); `heartbeat` is described next.
+`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md); `reminders` in [Notebook reminders](#notebook-reminders) below; `heartbeat` is described next.
 
 ### If the reminder list itself gets damaged
 
@@ -117,6 +118,12 @@ That notice matters more here than it does for settings. A reminder that has sto
 The workshop's **Hands → When she acts on her own** is where you check the outcome: it lists your reminders and the heartbeat, and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → When she acts on her own](../reference/settings.md#when-she-acts-on-her-own).
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
+
+### Notebook reminders
+
+A [notebook](projects.md) refuses the `cron` tool — reminders and scheduled jobs belong to the personal chat. A notebook has dated reminders of its own instead, on its [board](board.md): the ones you add in a card's drawer, and the ones the [gardener](gardener.md) takes from the notebook's journal when a line plans something with a date. They are stored in the notebook's `board/reminders.json`, not in the reminder list above, and they show as yellow sticky notes on the board.
+
+The protected system job **`reminders`** — the notebook clock — runs every hour over every notebook. A dated reminder is announced from **09:00** in your time zone on its day (on the first of the month when only the month is known), once, in a silent turn that must say what is due and why, taken from the page the reminder points to. The message arrives in the personal chat like any other proactive message, with the notifications described below. The same hourly round notes when a mini-app section in a drawer changes state. See [Reminders and the notebook clock](board.md#reminders-and-the-notebook-clock).
 
 ## Heartbeat: a periodic checklist
 
@@ -212,6 +219,7 @@ None of the proactive messages above are guaranteed to make a sound — whether 
 ## Related pages
 
 - [Memory and Dream](memory.md) — what the `dream` system job (visible in your reminders list) actually does.
+- [Notebook board](board.md) — a notebook's own reminders, and the `reminders` job that announces them.
 - [Telegram bridge](telegram.md) — how proactive deliveries (Heartbeat, reminders, monitors) reach a paired Telegram chat.
 - [Troubleshooting](troubleshooting.md) — what to check when a reminder never arrives, and how to tell a silent monitor apart from a broken one.
 - [Slash commands](slash-commands.md) — full reference for `/goal`, `/stop`, and the rest.

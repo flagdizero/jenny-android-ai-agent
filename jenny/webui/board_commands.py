@@ -286,6 +286,14 @@ async def board_connection_remove(
         if len(kept) == len(board["connections"]):
             return False
         board["connections"] = kept
+        # Togliere un filo e' un «no» a quel filo: la passata non lo ripropone.
+        # Nei due versi, perche' la proposta lo scrive nell'ordine in cui la fa.
+        titles = [model.card_by_id(board, cid) for cid in sorted(pair)]
+        if all(titles):
+            a, b = (t["title"] for t in titles if t)
+            for subject in (f"{a} — {b}", f"{b} — {a}"):
+                board["declined"].append({"kind": "add_connection", "subject": subject,
+                                          "at": model.now_iso(), "pagesAtDecline": 0})
         return None
 
     await _run(mutate_board, root, apply)
@@ -298,7 +306,17 @@ async def board_offboard_want(ctx: CommandContext, params: Mapping[str, Any]) ->
 
     root = _project(ctx, params)
     page = params.get("page")
-    if not isinstance(page, str) or page not in await _run(wiki_titles, root):
+    titles = await _run(wiki_titles, root)
+    if isinstance(page, str) and page not in titles and ".." not in page:
+        # Il lettore ha in mano il bersaglio del link com'e' scritto
+        # (``[[dormienza]]``, senza ``.md``): si risolve come lo risolve
+        # ``/api/page``, e si registra la pagina vera.
+        from jenny.webui.wiki import resolve_wikilink
+
+        resolved = await _run(resolve_wikilink, root, page)
+        if resolved is not None:
+            page = resolved.relative_to(root / "wiki").as_posix()
+    if not isinstance(page, str) or page not in titles:
         raise CommandError("not_found", "page not found")
     origin = params.get("from")
 

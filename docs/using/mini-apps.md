@@ -27,7 +27,7 @@ Every app is a folder under `workspace/apps/<slug>/`:
 
 | Path | Contents |
 |---|---|
-| `app.json` | The manifest: name, icon, an optional external server, and the (optional) list of typed actions. |
+| `app.json` | The manifest: name, icon, an optional external server, the (optional) list of typed actions, and an optional drawer view (`section`, see below). |
 | `AGENT.md` | Context for Jenny about the app — what it's for, preferences, thresholds. Not part of the technical contract, just briefing notes. |
 | `app/index.html` | The UI. HTML and JavaScript only — there is no per-app Python. Only this `app/` folder is served over the web; the manifest, `AGENT.md`, and `data/` are never reachable by URL. |
 | `data/` | JSONL collections that hold the app's data, shared between the app and Jenny. |
@@ -44,6 +44,12 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 
 - **Jenny → app**: always possible, whether or not the app is open on screen.
 - **App → Jenny**: never on its own. The app can only hand off to chat through an explicit user action, `jenny.discuss()`, which switches you to the chat view with the app's context pre-filled. Jenny's replies always land in chat — they are never rendered inside the app itself. The app stays a deterministic screen; the thinking happens in one place only.
+
+## Apps in a notebook's drawers
+
+An app whose data is about a subject — a soil-moisture sensor for the monstera, say — can also show that data inside a card's drawer on a notebook's [board](board.md), and stay in the app drawer as well. It does so by declaring an optional `section` block in `app.json`: which collection and field to show, the parameters to ask for when attaching it (which sensor), when the data counts as stale, an alarm threshold, a trend of up to 31 days, and up to two of its actions as buttons. Ask Jenny for it when you create or edit the app; the `app-creator` skill knows the format.
+
+In the drawer, **+ Add a section → Mini app** lists only the apps that declare one. The section shows the latest value with its time and source, and lights the card's red corner when the value is in alarm or the data has stalled. It only reads what the app stored — the app's own cron job keeps it fresh — and the readings never go into the wiki: only a change of state is written to the notebook's journal, as one line. See [Notebook board → Mini app](board.md#mini-app).
 
 ## What an app can and cannot do
 
@@ -97,5 +103,6 @@ Long-press an app's row in the app drawer and choose **Delete**. If you had pinn
 ## See also
 
 - [Skills](skills.md) — the chat-only counterpart to apps.
+- [Notebook board](board.md) — the drawers an app's `section` view appears in.
 - [Backup and restore](backup.md) — apps and their data are included in both encrypted backups and local snapshots.
 - [Tool reference](../reference/tools.md) — how app-generated tools fit alongside Jenny's built-in tools.
