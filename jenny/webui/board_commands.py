@@ -574,7 +574,38 @@ async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
+async def board_setup(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """La nascita guidata: lo scheletro dei cassetti, e cosa ricordare.
+
+    Le due risposte che seguono «di cosa parla questo quaderno» quando lo crei.
+    Lo scheletro scelto dall'utente e' suo: la prima passata della bacheca lo
+    usa invece di proporne uno. Una risposta vuota lascia decidere a Jenny.
+    """
+    root = _project(ctx, params)
+    raw = params.get("skeleton") or []
+    if isinstance(raw, str):
+        raw = [part for part in raw.replace(";", ",").split(",")]
+    if not isinstance(raw, list):
+        raise CommandError("bad_request", "skeleton must be a list")
+    skeleton = [s for s in (model.clean_text(x, model.MAX_TITLE) for x in raw) if s]
+    skeleton = list(dict.fromkeys(skeleton))[:model.MAX_SKELETON]
+    remind = model.clean_text(params.get("remind"), model.MAX_TEXT)
+
+    def apply(board: dict[str, Any]) -> bool | None:
+        if not skeleton and not remind:
+            return False
+        if skeleton and not board["cards"]:
+            board["skeleton"] = skeleton
+        if remind:
+            board["remindHint"] = remind
+        return None
+
+    await _run(mutate_board, root, apply)
+    return {"ok": True, "skeleton": skeleton, "remind": remind}
+
+
 BOARD_COMMANDS = {
+    "board.setup": board_setup,
     "board.seen": board_seen,
     "board.move": board_move,
     "board.suggestion.respond": board_suggestion_respond,

@@ -278,7 +278,19 @@ class BoardPass:
             full=full,
             glyphs=", ".join(model.GLYPHS),
         )]
+        hint = str(board.get("remindHint") or "")
+        if hint:
+            parts.append(self._section(
+                "What the user wants to be reminded of",
+                f"When they created this notebook they said: «{hint}». Extract reminders for "
+                "that kind of thing first.",
+            ))
         if state.migration:
+            if board["skeleton"]:
+                parts.append(self._section(
+                    "The skeleton the user chose",
+                    ", ".join(board["skeleton"]) + "\n\nUse it as it is: it is theirs.",
+                ))
             parts.append(self._migration_pages())
             return "\n\n---\n\n".join(parts)
 

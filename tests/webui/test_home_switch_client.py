@@ -136,7 +136,11 @@ let writtenName = null;
 let confirmDelete = true;
 const promptDialog = () => Promise.resolve(writtenName);
 const deleteProjectFlow = () => Promise.resolve(confirmDelete);
-const rpc = { renameProject: () => Promise.resolve() };
+const boardSetups = [];
+const rpc = {
+  renameProject: () => Promise.resolve(),
+  board: (method, wiki, params) => { boardSetups.push([method, wiki, params]); return Promise.resolve({}); },
+};
 /* La disposizione della mappa (`shared/map-layout.js`): il finto segna chi
    sposta cosa, e sa anche fallire — un rinomino riuscito resta riuscito. */
 const layoutMoves = [];
@@ -361,6 +365,7 @@ class App {
   __APPLY_TRANSLATIONS__
   __APPLY_CONVERSATION_TEXTS__
   __CREATE_NOTEBOOK__
+  __GUIDE_NEW_BOARD__
   __OPEN_BOARD__
   __OPEN_CARD__
   __BACK_TARGET__
@@ -450,6 +455,7 @@ def _harness() -> str:
         .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
         .replace("__APPLY_CONVERSATION_TEXTS__", member(src, "_applyConversationTexts"))
         .replace("__CREATE_NOTEBOOK__", member(src, "createNotebook"))
+        .replace("__GUIDE_NEW_BOARD__", member(src, "_guideNewBoard"))
         .replace("__OPEN_BOARD__", member(src, "openBoard", prefixes=("async ",)))
         .replace("__OPEN_CARD__", member(src, "openCard", prefixes=("async ",)))
         .replace("__BACK_TARGET__", member(src, "_backTarget"))
@@ -787,6 +793,19 @@ def test_a_notebook_created_is_a_notebook_you_are_in() -> None:
                        'i nomi già noti non vengono dal pannello');
       assert.ok(app.actions.includes('elenco da rileggere'), 'la cache è rimasta vecchia');
       assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.ok(app.actions.includes('bacheca:orto'), 'il quaderno nuovo non si apre sulla bacheca');
+      // Le due domande della nascita, saltate: niente da scrivere.
+      assert.deepEqual(boardSetups, []);
+    """)
+
+
+def test_a_new_notebook_keeps_the_skeleton_the_user_wrote() -> None:
+    _run_js("""
+      const app = home();
+      createOutcome = 'orto';
+      writtenName = 'Semina, Raccolto';
+      await app.createNotebook();
+      assert.deepEqual(boardSetups, [['setup', 'orto', { skeleton: 'Semina, Raccolto', remind: 'Semina, Raccolto' }]]);
     """)
 
 

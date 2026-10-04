@@ -363,3 +363,25 @@ def test_glyphs_are_known_icon_names() -> None:
            / "@tabler" / "icons-webfont@3.19.0" / "dist" / "tabler-icons.min.css").read_text()
     for name in model.GLYPHS:
         assert f".ti-{name}:before" in css, name
+
+
+async def test_the_first_board_keeps_the_skeleton_the_user_chose(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+
+    def setup(board):
+        board["skeleton"] = ["Semina", "Raccolto"]
+        board["remindHint"] = "le semine"
+
+    mutate_board(root, setup)
+    bp = BoardPass(root, ws)
+    assert bp.is_migrating()
+    state = bp.build_state()
+    prompt = bp.build_prompt(state)
+    assert "The skeleton the user chose" in prompt and "«le semine»" in prompt
+    out = await _tools(state)["board_propose_board"].execute(
+        skeleton=["Altro", "Ancora"],
+        cards=[{"title": "Acero", "pages": ["travaso-acero.md"]}],
+        text="Ecco la bacheca.",
+    )
+    assert out.startswith("Board proposed")
+    assert read_board(root)["suggestions"][0]["skeleton"] == ["Semina", "Raccolto"]

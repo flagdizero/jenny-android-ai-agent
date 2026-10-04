@@ -1175,8 +1175,8 @@
     "offboard": "fuori bacheca",
     "empty": {
       "title": "La bacheca è vuota.",
-      "hint": "Raccontami di una cosa di questo quaderno in chat, per esempio:",
-      "example": "ho un acero in vaso 14, lo voglio travasare",
+      "hint": "Raccontami di qualcosa di questo quaderno, in chat. Comincia da qui:",
+      "example": "Ti racconto una cosa di questo quaderno: ",
       "proposed": "Ti ho preparato una bacheca: è nella busta."
     },
     "since": {
@@ -1327,6 +1327,13 @@
         "photo": "Un'immagine, per esempio com'era",
         "other": "Descrivila e la preparo io"
       }
+    },
+    "birth": {
+      "skeleton": "Di cosa vuoi tenere traccia, per ogni cosa di «{name}»?",
+      "skeletonPlaceholder": "Per esempio: Vaso e travaso, Acqua, Nutrimento, Esposizione, Storia",
+      "skeletonHint": "Sono le sezioni di ogni cassetto, separate da virgole. Lascia vuoto e le propongo io quando il quaderno avrà qualche pagina.",
+      "remind": "Cosa vuoi che ti ricordi?",
+      "remindPlaceholder": "Per esempio: i travasi e le concimazioni"
     }
   }
 }

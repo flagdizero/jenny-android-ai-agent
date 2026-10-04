@@ -1175,8 +1175,8 @@
     "offboard": "not on the board",
     "empty": {
       "title": "The board is empty.",
-      "hint": "Tell me about something in this notebook in the chat, for example:",
-      "example": "I have a maple in a size 14 pot, I want to repot it",
+      "hint": "Tell me about something in this notebook, in the chat. Start from here:",
+      "example": "Let me tell you about something in this notebook: ",
       "proposed": "I've prepared a board for you: it's in the envelope."
     },
     "since": {
@@ -1327,6 +1327,13 @@
         "photo": "A picture, for example how it was",
         "other": "Describe it and I'll build it"
       }
+    },
+    "birth": {
+      "skeleton": "What do you want to keep track of, for each thing in “{name}”?",
+      "skeletonPlaceholder": "For example: Pot and repotting, Water, Feeding, Light, History",
+      "skeletonHint": "These are the sections of every drawer, separated by commas. Leave it empty and I'll propose them once the notebook has a few pages.",
+      "remind": "What do you want me to remind you of?",
+      "remindPlaceholder": "For example: repotting and feeding"
     }
   }
 }

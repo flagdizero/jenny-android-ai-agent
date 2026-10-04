@@ -644,7 +644,32 @@ class HomeApp {
     });
     if (!name) return;
     this.who.invalidate();              // l'elenco su disco e' cambiato
+    /* La nascita guidata: dopo «di cosa parla», due domande che si possono
+       saltare — cosa tenere d'occhio per ogni cosa (lo scheletro dei
+       cassetti) e cosa ricordare. Poi il quaderno si apre sulla sua bacheca,
+       vuota: il vuoto e' il tutorial. */
+    await this._guideNewBoard(name);
     await this.switchConversation(projectKey(name));
+    await this.openBoard();
+  }
+
+  /** Le due domande della nascita di un quaderno. Una risposta vuota lascia
+   *  decidere a Jenny, quando il quaderno avra' qualche pagina. */
+  async _guideNewBoard(name) {
+    const skeleton = await promptDialog(i18n.t('board.birth.skeleton', { name }), {
+      placeholder: i18n.t('board.birth.skeletonPlaceholder'),
+      hint: i18n.t('board.birth.skeletonHint'),
+    });
+    if (skeleton === null) return;
+    const remind = await promptDialog(i18n.t('board.birth.remind'), {
+      placeholder: i18n.t('board.birth.remindPlaceholder'),
+    });
+    if (!skeleton.trim() && !(remind || '').trim()) return;
+    try {
+      await rpc.board('setup', name, { skeleton: skeleton.trim(), remind: (remind || '').trim() });
+    } catch (err) {
+      console.warn('home.board: setup failed', err);
+    }
   }
 
   /** La scheda di un quaderno, nata al primo uso. */

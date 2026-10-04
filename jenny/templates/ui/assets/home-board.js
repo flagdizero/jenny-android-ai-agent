@@ -230,7 +230,7 @@ export class HomeBoard {
     const example = document.createElement('button');
     example.type = 'button';
     example.className = 'home-board-empty-example';
-    example.textContent = `«${i18n.t('board.empty.example')}»`;
+    example.textContent = `«${i18n.t('board.empty.example').trim()}…»`;
     example.addEventListener('click', () => this.onAskJenny?.(i18n.t('board.empty.example')));
     this.emptyEl.append(hint, example);
   }
