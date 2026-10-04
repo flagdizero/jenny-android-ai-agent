@@ -28,7 +28,7 @@ const spy = (obj, name, label) => {
 };
 spy(app.strip, 'draw', 'strip');
 spy(app.who, 'render', 'who');
-spy(app.pages, 'applyTranslations', 'pages');
+spy(app.board, 'applyTranslations', 'pages');
 spy(app.modelRoom, '_paint', 'modelRoom');
 spy(app.updatesRoom, '_paint', 'updatesRoom');
 spy(app.backupRoom, '_paint', 'backupRoom');
@@ -56,11 +56,11 @@ assert.deepEqual(
 """)
 
 
-def test_back_from_the_notebook_pages_draws_the_strip_at_most_once() -> None:
+def test_back_from_the_notebook_board_draws_the_strip_at_most_once() -> None:
     run_home(_HEAD + """
 await app.switchConversation('project:orto');
 await tick(30);
-await app.openPages();
+await app.openBoard();
 await tick(30);
 reset();
 app.goBackOneRoom();

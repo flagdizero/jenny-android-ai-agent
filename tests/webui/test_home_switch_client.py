@@ -248,12 +248,25 @@ class App {
     this.view = 'chat';
     this._jennyWasOut = true;
     this._jennyInChat = true;
-    this.map = null;
     this._measureFloor = () => this.actions.push('pavimento rimisurato');
-    this.pages = {
+    /* La bacheca, il cassetto e il loro foglio: moduli loro, coi loro banchi.
+       Qui interessa che il guscio li apra e li chiuda. */
+    this.board = {
       applyTranslations: () => {},
-      load: (name) => { this.actions.push('pagine:' + name); return Promise.resolve(); },
+      load: (name) => { this.actions.push('bacheca:' + name); return Promise.resolve(); },
     };
+    this.drawer = {
+      card: null,
+      title: '',
+      applyTranslations: () => {},
+      load: (name, card) => {
+        this.drawer.card = card;
+        this.actions.push('cassetto:' + name + '/' + card);
+        return Promise.resolve(card);
+      },
+    };
+    this.boardSheet = { close: () => {} };
+    this._readerCard = null;
     this.files = { count: 0 };
     this._personalName = 'Jenny';
     this._settingsGen = 0;
@@ -348,7 +361,10 @@ class App {
   __APPLY_TRANSLATIONS__
   __APPLY_CONVERSATION_TEXTS__
   __CREATE_NOTEBOOK__
-  __OPEN_PAGES__
+  __OPEN_BOARD__
+  __OPEN_CARD__
+  __BACK_TARGET__
+  __ASK_IN_NOTEBOOK__
   __GO_BACK_ONE_ROOM__
   __OPEN_SETTINGS__
   __PAINT_SETTINGS__
@@ -434,7 +450,10 @@ def _harness() -> str:
         .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
         .replace("__APPLY_CONVERSATION_TEXTS__", member(src, "_applyConversationTexts"))
         .replace("__CREATE_NOTEBOOK__", member(src, "createNotebook"))
-        .replace("__OPEN_PAGES__", member(src, "openPages"))
+        .replace("__OPEN_BOARD__", member(src, "openBoard", prefixes=("async ",)))
+        .replace("__OPEN_CARD__", member(src, "openCard", prefixes=("async ",)))
+        .replace("__BACK_TARGET__", member(src, "_backTarget"))
+        .replace("__ASK_IN_NOTEBOOK__", member(src, "_askInNotebook"))
         .replace("__GO_BACK_ONE_ROOM__", member(src, "goBackOneRoom"))
         .replace("__OPEN_SETTINGS__", member(src, "_openSettings"))
         .replace("__PAINT_SETTINGS__", member(src, "_paintSettings"))
@@ -478,6 +497,7 @@ def _harness() -> str:
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__SHEETS__", _const_block_scalar(src, "LONG_PRESS_SHEETS") + "\n"
                  + _const_block_scalar(src, "REPORT_SHEET") + "\n"
+                 + _const_block_scalar(src, "BOARD_SHEET") + "\n"
                  + _const_block_scalar(src, "SHARED_DIALOGS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
@@ -801,9 +821,9 @@ def test_back_peels_one_room_at_a_time() -> None:
       app.shell.attrs['data-view'] = 'reader';
 
       app.handleHardwareBack();
-      assert.equal(app.view, 'pages', 'dal lettore non si torna alle pagine');
+      assert.equal(app.view, 'board', 'dal lettore non si torna alla bacheca');
       app.handleHardwareBack();
-      assert.equal(app.view, 'chat', 'dalle pagine non si torna alla chat');
+      assert.equal(app.view, 'chat', 'dalla bacheca non si torna alla chat');
       assert.equal(app.homePages.notebooksConversation, 'project:orto', 'e non si chiude il quaderno');
       app.handleHardwareBack();
       assert.equal(app.homePages.notebooksConversation, null, 'e adesso si chiude');
@@ -816,11 +836,11 @@ def test_a_panel_over_the_pages_still_closes_first() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
     """ + _SHEET + """
       app.handleHardwareBack();
       assert.equal(sheet.open, false, 'il foglio non si e\\u2019 chiuso');
-      assert.equal(app.view, 'pages', 'la stanza se n\\u2019e\\u2019 andata insieme a lui');
+      assert.equal(app.view, 'board', 'la stanza se n\\u2019e\\u2019 andata insieme a lui');
     """)
 
 
@@ -834,14 +854,14 @@ def test_leaving_the_chat_puts_jenny_away_and_coming_back_restores_her() -> None
       const app = home();
       await app.switchConversation(projectKey('orto'));
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(app._jennyOut, false, 'nelle pagine non si e\\u2019 messa via');
       app._setView('chat');
       assert.equal(app._jennyOut, true, 'tornando non e\\u2019 uscita');
 
       // Ora messa via a mano, dentro la chat.
       app._jennyOut = false;
-      app._setView('pages');
+      app._setView('board');
       app._setView('chat');
       assert.equal(app._jennyOut, false, 'la stanza ha disfatto una scelta dell\\u2019utente');
     """)
@@ -856,7 +876,7 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
       await app.switchConversation(projectKey('orto'));
       app.actions.length = 0;
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(
         document.documentElement.style.props['--home-composer-h'],
         FLOOR_NO_COMPOSER + 'px',
@@ -907,15 +927,17 @@ def test_the_pill_lives_only_on_a_pinned_notebook_page() -> None:
     """)
 
 
-def test_the_count_reaches_the_switch_too() -> None:
-    """Lo stesso numero nei tre posti che lo mostrano: la pastiglia, l'interruttore
-    delle pagine, e la fila, che lo chiede con `pageCountOf`."""
+def test_the_count_stays_off_the_board_switch() -> None:
+    """La pastiglia porta il numero delle pagine; l'interruttore no: porta alla
+    bacheca, e un conteggio di pagine li' accanto si leggerebbe come un
+    conteggio di schede."""
     _run_js("""
       const app = home();
       app.pageCounts = { orto: 34 };
       await app.switchConversation(projectKey('orto'));
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.viewPagesCount.textContent, '34');
+      assert.equal(app.viewPagesCount.textContent, '');
+      assert.equal(app.pagesCount.textContent, '· 34');
       assert.equal(app.pageCountOf('orto'), 34);
       assert.equal(app.pageCountOf('erbe'), null, 'il numero di un altro quaderno');
     """)
@@ -969,7 +991,7 @@ def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
       app.openChat();
       assert.equal(app.view, 'chat');
       assert.equal(app.shell.attrs['data-view'], 'chat');
@@ -1011,10 +1033,10 @@ def test_the_back_arrow_names_where_you_land() -> None:
       const app = home();
       await app.switchConversation(projectKey('orto'));
       const dice = (room) => { app._setView(room); return app.backBtn.attrs['aria-label']; };
-      assert.equal(dice('pages'), i18n.t('home.back.chat'));
-      assert.equal(dice('reader'), i18n.t('home.back.pages'), 'dal lettore si torna alle pagine');
+      assert.equal(dice('board'), i18n.t('home.back.chat'));
+      assert.equal(dice('reader'), i18n.t('home.back.board'), 'dal lettore si torna alle pagine');
       assert.equal(dice('jenny'), i18n.t('home.back.settings'), 'da lei si torna alle impostazioni');
-      assert.notEqual(i18n.t('home.back.pages'), i18n.t('home.back.chat'),
+      assert.notEqual(i18n.t('home.back.board'), i18n.t('home.back.chat'),
                       'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
     """)
 
@@ -1029,7 +1051,7 @@ def test_the_path_says_whose_place_each_room_is() -> None:
       await app.switchConversation(projectKey('orto'));
       const color = dotColor('orto');
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(app.pathRootName.textContent, i18n.t('home.strip.notebooks'));
       assert.equal(app.nameEl.textContent, 'orto');
       assert.equal(app.pathRootDot.hidden, true, 'la radice «Quaderni» non e\u2019 un quaderno');
@@ -1062,10 +1084,10 @@ def test_the_path_root_leads_to_its_place() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
       app._setView('reader');
       app.goToPathRoot();
-      assert.equal(app.view, 'pages', 'dal lettore la radice non riporta alle pagine');
+      assert.equal(app.view, 'board', 'dal lettore la radice non riporta alle pagine');
 
       app.homePages.notebooksConversation = projectKey('orto');
       app.actions.length = 0;
@@ -1096,8 +1118,8 @@ def test_the_way_back_to_the_chat_belongs_to_a_notebook() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
-      assert.equal(app.viewSwitch.hidden, false, 'dalle pagine non si torna alla chat');
+      app._setView('board');
+      assert.equal(app.viewSwitch.hidden, false, 'dalla bacheca non si torna alla chat');
       app._setView('reader');
       assert.equal(app.viewSwitch.hidden, true, 'nel lettore c\\u2019e\\u2019 l\\u2019interruttore: li\\u2019 il comando e\\u2019 «Modifica»');
       app._setView('jenny');
@@ -1563,48 +1585,15 @@ def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
     """)
 
 
-def test_a_renamed_notebook_takes_its_map_layout_along() -> None:
-    """Gli spilli della mappa hanno per chiave il nome del quaderno: rinominato,
-    il quaderno perdeva la sua disposizione. La chiave si sposta, e la mappa
-    dimentica la copia letta — o il primo trascinamento riscriverebbe il file
-    con la chiave vecchia."""
+def test_a_rename_moves_nothing_but_the_notebook() -> None:
+    """La bacheca sta dentro la cartella del quaderno: il rinomino la porta con
+    se', e il guscio non ha piu' una disposizione da spostare a mano (la mappa
+    teneva i suoi spilli in un file del workspace, per nome)."""
     _run_js(_NOTEBOOKS + """
-      let forgot = 0;
-      app.map = { forgetPins: () => { forgot += 1; } };
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), true);
-      assert.deepEqual(layoutMoves, [['piante', 'orto']]);
-      assert.equal(forgot, 1, 'la mappa riscriverebbe la chiave vecchia dalla sua cache');
-    """)
-
-
-def test_a_layout_that_cannot_move_does_not_fail_the_rename() -> None:
-    _run_js(_NOTEBOOKS + """
-      console.warn = () => {};
-      layoutFails = true;
       writtenName = 'orto';
       assert.equal(await app.renameNotebook('piante'), true);
       assert.equal(sessionManager.currentKey, 'project:orto');
-    """)
-
-
-def test_a_refused_rename_moves_no_layout() -> None:
-    _run_js(_NOTEBOOKS + """
-      rpc.renameProject = () => Promise.reject(Object.assign(new Error('x'), { code: 'name_taken' }));
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), false);
       assert.deepEqual(layoutMoves, []);
-    """)
-
-
-def test_a_deleted_notebook_makes_the_map_forget_its_copy() -> None:
-    """La chiave nel file la toglie `deleteProjectFlow`; la mappa, se c'e',
-    butta la copia letta, o la rimetterebbe al primo trascinamento."""
-    _run_js(_NOTEBOOKS + """
-      let forgot = 0;
-      app.map = { forgetPins: () => { forgot += 1; } };
-      assert.equal(await app.deleteNotebook('piante'), true);
-      assert.equal(forgot, 1);
     """)
 
 
@@ -1744,7 +1733,7 @@ _DIRTY_READER = """
         applyTranslations() {},
         editing: true,
       };
-      app._setView('pages');
+      app._setView('board');
       app._setView('reader');
       app.actions.length = 0;
 """
@@ -1801,11 +1790,11 @@ def test_a_page_title_that_arrives_after_back_does_not_take_the_head() -> None:
         load: () => new Promise((r) => { arrives = r; }),
         isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
       };
-      app._setView('pages');
+      app._setView('board');
       const open = app.openPage('semina.md', 'Semina');
       assert.equal(app.nameEl.textContent, 'Semina');
       app.handleHardwareBack();
-      assert.equal(app.view, 'pages');
+      assert.equal(app.view, 'board');
       assert.equal(app.nameEl.textContent, 'orto');
       arrives('Semina di marzo');
       await open;
@@ -1821,7 +1810,7 @@ def test_a_page_title_that_arrives_in_the_reader_is_written() -> None:
         load: async () => 'Semina di marzo',
         isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
       };
-      app._setView('pages');
+      app._setView('board');
       await app.openPage('semina.md', 'Semina');
       assert.equal(app.nameEl.textContent, 'Semina di marzo');
     """)
@@ -1835,7 +1824,7 @@ def test_a_title_from_a_save_after_leaving_the_reader_is_dropped() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
       app._readerTitle('Semina di marzo');
       assert.equal(app.nameEl.textContent, 'orto');
     """)

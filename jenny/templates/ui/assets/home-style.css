@@ -1393,7 +1393,6 @@ body.home {
    L'attributo e' scritto anche nell'HTML, non solo dal JS: senza, il primo
    frame mostrerebbe tutte e tre le stanze impilate. */
 
-.home-notebook-pages,
 .home-reader,
 .home-jenny-room,
 .home-model-room,
@@ -1405,7 +1404,6 @@ body.home {
   flex-direction: column;
 }
 
-.home-shell[data-view='pages'] .home-notebook-pages,
 .home-shell[data-view='reader'] .home-reader,
 .home-shell[data-view='jenny'] .home-jenny-room,
 .home-shell[data-view='model'] .home-model-room,
@@ -1621,11 +1619,9 @@ body.home {
 .home-back:active { color: var(--text); }
 
 
-/* ── Le pagine di un quaderno ── */
-
-/* Le linguette delle pagine e le taglie della mascotte: la stessa fila di
-   pulsanti, perché è il modo in cui la casa dice «una fra queste». */
-.home-tabs, .home-seg {
+/* Le taglie della mascotte: una fila di pulsanti, il modo in cui la casa dice
+   «una fra queste». */
+.home-seg {
   display: flex;
   gap: 3px;
   padding: 3px;
@@ -1633,12 +1629,7 @@ body.home {
   background: var(--overlay);
 }
 
-.home-tabs {
-  flex: none;
-  margin: 2px 18px 8px;
-}
-
-.home-tab, .home-seg-btn {
+.home-seg-btn {
   flex: 1;
   height: 30px;
   border: none;
@@ -1650,190 +1641,630 @@ body.home {
   cursor: pointer;
 }
 
-.home-tab.is-on, .home-seg-btn.is-on {
+.home-seg-btn.is-on {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
 }
 
-/* La pastiglia e' un `<div>`: il campo la copre tutta, lente
-   compresa, cosi' un tocco ovunque ci scrive — che era l'unica cosa per cui
-   c'era la `<label>`, e la `<label>` vuota toglieva al campo il nome. */
-.home-search {
-  flex: none;
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  height: 38px;
-  margin: 0 18px 6px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text-muted);
+/* ── La bacheca di un quaderno ──
+   **Niente `z-index`, come in tutta la casa**: il solo livello e' quello di
+   Jenny. Chi sta sopra a chi lo decide l'ordine nel DOM, e lo tiene il JS
+   (`home-board.js`): le schede, poi la busta, poi i fili, poi le etichette; la
+   scheda trascinata o sollevata si sposta in fondo al suo gruppo.
+   Cornice fissa: la bacheca sta in una schermata, niente tela infinita, niente
+   pan e pinch. Le misure degli oggetti sono in `cqw` della tela, cosi' sul
+   quadrato del Titan 2 e su un telefono alto la bacheca ha la stessa forma.
+   I colori del materiale (carta, post-it, filo, sughero) sono token per tema
+   in mobile-style.css: qui c'e' solo la forma. */
+
+.home-board,
+.home-board-drawer {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
 }
 
-.home-search > .ti {
+.home-shell[data-view='board'] .home-board,
+.home-shell[data-view='drawer'] .home-board-drawer { display: flex; }
+
+.home-board-tool {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-board-tool[hidden] { display: none; }
+.home-board-tool[aria-pressed='true'] { color: var(--text); background: var(--overlay); }
+
+.home-board-since {
+  flex: none;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-since[hidden] { display: none; }
+.home-board-since b { color: var(--text); font-weight: 500; }
+.home-board-since-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--board-new);
+}
+.home-board-since-chev { margin-left: auto; opacity: 0.6; }
+
+.home-board-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background-color: var(--board-bg);
+  background-image: radial-gradient(var(--board-grain) 1px, transparent 1.3px);
+  background-size: 9px 9px;
+  /* Jenny sta sul bordo basso: lo spazio sotto e' suo. */
+  margin-bottom: calc(var(--jenny-away-floor) - 40px);
+}
+.home-board-canvas[hidden] { display: none; }
+
+.home-board-threads {
   position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.home-board-threads line { stroke: var(--board-thread); stroke-linecap: round; transition: opacity 0.18s; }
+.home-board-threads line.is-rest { stroke-width: 1.7; opacity: 0.7; }
+.home-board-threads line.is-on { stroke-width: 2.4; opacity: 1; }
+.home-board-threads line.is-off { stroke-width: 1.5; opacity: 0.12; }
+
+.home-board-thread-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border: 1px solid var(--board-thread);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
   pointer-events: none;
 }
 
-.home-search[hidden] { display: none; }
-
-/* Il campo toglie il suo anello (`outline: none` qui sotto): il fuoco lo dice
-   la pastiglia, come il composer. Prima non lo diceva nessuno. */
-.home-search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
-
-.home-search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0 12px 0 34px;
-  border: none;
-  background: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
+.home-board-item {
+  position: absolute;
+  transform: rotate(var(--tilt, 0deg));
+  transition: opacity 0.18s, transform 0.18s, box-shadow 0.18s;
+  touch-action: none;
+  cursor: grab;
+}
+.home-board-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.home-board-item.is-dragging {
+  transition: none;
+  cursor: grabbing;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.55);
+}
+.home-board-item.is-lifted { transform: rotate(var(--tilt, 0deg)) scale(1.05); }
+.home-board-canvas.is-focus .home-board-item:not(.is-lifted):not(.is-linked) { opacity: 0.32; }
+.home-board-item.is-appearing { animation: home-board-appear 0.5s ease-out; }
+@keyframes home-board-appear {
+  from { transform: rotate(var(--tilt, 0deg)) scale(0.6); opacity: 0; }
 }
 
-.home-search-input::placeholder { color: var(--text-faint); }
+.home-board-pin {
+  position: absolute;
+  top: -1.1cqw;
+  left: 50%;
+  width: 2.5cqw;
+  height: 2.5cqw;
+  margin-left: -1.25cqw;
+  border-radius: 50%;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset -2px -2px 0 rgba(0, 0, 0, 0.18);
+}
+.home-board-pin.is-jenny { background: var(--board-pin-jenny); }
+.home-board-pin.is-user { background: var(--board-pin-user); }
 
-.home-notebook-page-list {
+.home-board-polaroid {
+  width: 19cqw;
+  padding: 1.1cqw 1.1cqw 0;
+  background: var(--board-paper);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.home-board-photo {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 9cqw;
+}
+.home-board-initial { font-family: var(--font-display); font-size: 8cqw; }
+
+.home-board-label {
+  padding: 0.9cqw 0.2cqw 1.3cqw;
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 3cqw;
+  line-height: 1.05;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.home-board-sig-dot {
+  position: absolute;
+  top: 1.2cqw;
+  right: 1.2cqw;
+  width: 2.1cqw;
+  height: 2.1cqw;
+  border-radius: 50%;
+  background: var(--board-new);
+  box-shadow: 0 0 0 0.5cqw rgba(255, 255, 255, 0.85);
+}
+.home-board-sig-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5.2cqw;
+  height: 5.2cqw;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.home-board-sig-corner.is-soon { background: var(--board-soon); }
+.home-board-sig-corner.is-alert { background: var(--board-alert); }
+
+.home-board-postit {
+  width: 14cqw;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4cqw;
+  padding: 1.6cqw 1.3cqw;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  font-family: var(--font-hand);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-board-postit-text { font-size: 2.6cqw; line-height: 1.1; font-weight: 700; overflow: hidden; }
+.home-board-postit-when { font-size: 2.3cqw; line-height: 1.1; }
+
+.home-board-envelope {
+  position: absolute;
+  right: 3%;
+  bottom: 4%;
+  width: 13cqw;
+  aspect-ratio: 1.45;
+  padding: 0;
+  border: none;
+  background: var(--board-envelope);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.45);
+  transform: rotate(-4deg);
+  cursor: pointer;
+}
+.home-board-envelope::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 62%;
+  background: var(--board-envelope-flap);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.home-board-envelope-count {
+  position: absolute;
+  top: -1.4cqw;
+  right: -1.4cqw;
+  min-width: 4cqw;
+  height: 4cqw;
+  display: grid;
+  place-items: center;
+  padding: 0 1cqw;
+  border-radius: 999px;
+  background: var(--board-pin-user);
+  color: #fff;
+  font-size: 2.3cqw;
+  font-weight: 600;
+}
+.home-board-envelope.is-empty { opacity: 0.45; }
+.home-board-envelope.is-empty .home-board-envelope-count { display: none; }
+
+.home-board-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0 18px 8px;
+  padding: 6px 0 var(--jenny-away-floor);
 }
-
-.home-notebook-page-list[hidden] { display: none; }
-
-/* Una riga e' un comando, come nel pannello: stesso azzeramento del vestito di
-   serie, stesso bersaglio alto abbastanza per un pollice. */
-.home-notebook-page {
+.home-board-list[hidden] { display: none; }
+.home-board-list-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   width: 100%;
-  min-height: 42px;
-  padding: 0;
+  padding: 11px 18px;
   border: none;
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: none;
   color: var(--text);
-  font-family: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-list-name { font-weight: 500; }
+.home-board-list-next { color: var(--text-muted); font-size: 13px; }
+.home-board-list-sig { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.home-board-list-sig.is-alert { color: var(--board-alert); }
+.home-board-list-envelope { color: var(--text-muted); }
+
+.home-board-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 32px var(--jenny-away-floor);
+}
+.home-board-empty[hidden] { display: none; }
+.home-board-empty p { margin: 0; }
+.home-board-empty-title { font-family: var(--font-display); font-size: 19px; }
+.home-board-empty-hint { color: var(--text-muted); }
+.home-board-empty-example {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-style: italic;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   text-align: left;
   cursor: pointer;
 }
 
-.home-notebook-page[hidden] { display: none; }
-.home-notebook-page:active { background: var(--overlay); }
+/* ── Il foglio della bacheca ── */
 
-.home-notebook-page-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.home-notebook-page-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-notebook-page-group {
-  flex: none;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-/* I tre colori dei gruppi. Tre e non quattro: v. `GROUPS` in home-notebook-pages.js —
-   `summaries/` da `/api/graph` non esce.
-
-   **Non sono gli stessi tre della legenda del grafo, e la ragione e' misurata.**
-   Di la' `concepts` e' `--accent` ed `entities` e' `--error`: su sei temi quei
-   due colori distano 26 in kyoto e 58 in pietra (distanza RGB) — cioe' due
-   pallini identici a occhio, in un elenco dove il pallino dovrebbe dividere. La
-   sola coppia che si separa **in tutti e sei** e' `--error` / `--ok`, che non
-   scende mai sotto 101; `--accent` e `--ok` addirittura coincidono (distanza 0)
-   in chanel e fumetto.
-
-   Quindi qui `concepts` prendeva `--ok`, e `entities` restava `--error`.
-   Dal 26/09/2026 nessuno dei due: un'entita' non e' un errore, e in Y2K il
-   verde di `--ok` stava a 1,7:1 sul fondo. La
-   coppia e' `--group-concepts`/`--group-entities` (in `mobile-style.css`),
-   scelta per separarsi in tutti e sette i temi — lo misura il banco. Il
-   grafo dell'officina ha lo stesso scontro e non l'ho toccato — la' la legenda
-   mette la pastiglia accanto alla parola, quindi si decodifica lo stesso, e
-   cambiare i colori di un altro guscio non e' lavoro di questo giro. */
-.home-group-concepts { background: var(--group-concepts); }
-.home-group-entities { background: var(--group-entities); }
-.home-group-other { background: var(--text-faint); }
-
-.home-notebook-pages-note,
-.home-map-note {
-  flex: none;
-  padding: 10px 18px;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
-}
-
-.home-notebook-pages-note[hidden],
-.home-map-note[hidden] { display: none; }
-
-/* ── La mappa ── */
-
-.home-map {
-  flex: 1;
-  min-height: 0;
+.home-board-sheet-inner {
   display: flex;
   flex-direction: column;
-  margin: 0 12px 8px;
+  gap: 12px;
+  max-height: 78dvh;
+  overflow-y: auto;
+  padding: 10px 20px 20px;
+}
+.home-board-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.home-board-sheet-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+}
+.home-board-sheet-body { display: flex; flex-direction: column; gap: 12px; }
+.home-board-sheet-body p { margin: 0; line-height: 1.5; }
+.home-board-muted { color: var(--text-muted); font-size: 13px; }
+
+.home-board-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.home-board-btn {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-board-btn.is-primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 500;
+}
+.home-board-btn:disabled { opacity: 0.5; }
+
+.home-board-proposals { display: flex; flex-direction: column; gap: 12px; }
+.home-board-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.home-board-proposal-who {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.home-map[hidden] { display: none; }
+.home-board-since-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.home-board-since-list li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.home-board-since-list li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--board-new);
+}
 
-.home-map-svg {
-  flex: 1;
-  min-height: 0;
+.home-board-search-input,
+.home-board-input {
   width: 100%;
-  touch-action: none;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+/* Il fuoco cambia spessore, non solo colore: in Fumetto il bordo e' gia'
+   quello dell'anello. */
+.home-board-search-input:focus,
+.home-board-input:focus,
+.home-drawer-fix-area:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+}
+.home-board-results { display: flex; flex-direction: column; }
+.home-board-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-result-badge { margin-left: auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.home-board-result-badge.is-in { color: var(--text); font-family: var(--font-hand); font-weight: 700; font-size: 13px; }
+
+.home-board-menu { display: flex; flex-direction: column; }
+.home-board-menu-row {
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-menu-row.is-new { display: block; color: var(--text-muted); }
+.home-board-menu-name { font-weight: 500; }
+.home-board-menu-hint { color: var(--text-muted); font-size: 13px; }
+.home-board-form { display: flex; flex-direction: column; gap: 10px; }
+.home-board-check { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+
+/* ── Il cassetto ── */
+
+.home-board-drawer {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.home-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  container-type: inline-size;
+  padding: 14px 20px var(--jenny-away-floor);
+}
+.home-drawer-note { margin: 0; padding: 24px 20px; color: var(--text-muted); }
+.home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
+.home-drawer-meta { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-brief { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
+.home-drawer-alert {
+  padding: 6px 10px;
+  border-left: 3px solid var(--board-alert);
+  background: color-mix(in srgb, var(--board-alert) 10%, transparent);
+  font-size: 13px;
+}
+.home-drawer-next {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  font-family: var(--font-hand);
+  transform: rotate(-1deg);
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.35);
+}
+.home-drawer-next-key { font-family: var(--font-sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; }
+.home-drawer-next-text { font-weight: 700; font-size: 16px; }
+.home-drawer-next .home-drawer-link { color: inherit; }
+
+.home-drawer-sections { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.home-drawer-section {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+@container (max-width: 440px) {
+  .home-drawer-section { grid-template-columns: minmax(0, 1fr); }
+}
+.home-drawer-section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-drawer-fresh { width: 6px; height: 6px; flex: none; margin-top: 4px; border-radius: 50%; background: var(--board-new); }
+.home-drawer-owner { font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+.home-drawer-text { margin: 0; line-height: 1.5; white-space: pre-line; }
+.home-drawer-text.is-mine { font-style: italic; }
+.home-drawer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 7px; }
+.home-drawer-actions { display: flex; gap: 8px; margin-left: auto; }
+.home-drawer-hint { color: var(--text-muted); font-size: 12px; }
+.home-drawer-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.home-drawer-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.home-drawer-link.is-fix { margin-left: auto; }
+.home-drawer-link.is-move { text-decoration: none; }
+.home-drawer-tag { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-tag.is-done { color: var(--board-done); }
+.home-drawer-fix-area {
+  width: 100%;
+  min-height: 74px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+}
+.home-drawer-app { display: flex; flex-direction: column; gap: 4px; }
+.home-drawer-app-value { display: flex; align-items: baseline; gap: 10px; }
+.home-drawer-app-label { color: var(--text-muted); font-size: 13px; }
+.home-drawer-app-number { font-size: 18px; font-weight: 500; }
+.home-drawer-app-sign { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-app-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--board-done); }
+.home-drawer-app-sign.is-alarm .home-drawer-app-dot,
+.home-drawer-app-sign.is-stale .home-drawer-app-dot { background: var(--board-alert); }
+.home-drawer-app-sign.is-empty .home-drawer-app-dot { background: var(--text-faint); }
+.home-drawer-spark polyline { fill: none; stroke: var(--text-muted); stroke-width: 1.4; }
+.home-drawer-photo { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }
+.home-drawer-add {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.home-drawer-h4 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-drawer-thread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-drawer-thread-mark { color: var(--board-thread); }
+.home-drawer-thread-to { font-weight: 500; }
+.home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }
+.home-drawer-pages { display: flex; flex-direction: column; gap: 6px; }
+.home-drawer-pages summary { color: var(--text-muted); font-size: 13px; cursor: pointer; }
+.home-drawer-pages .home-drawer-chip { align-self: flex-start; margin: 3px 0; }
+.home-drawer-foot { margin: 0; color: var(--text-muted); font-size: 12px; }
+
+/* ── I tre tipi di link del lettore ──
+   Normale: stesso cassetto. Con l'etichetta: apre un altro cassetto. A
+   puntini, attenuato: fuori bacheca, solo anteprima. */
+.home-reader-body a.home-link-drawer { text-decoration: underline; text-underline-offset: 3px; }
+.home-link-chip {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 11px;
+  text-decoration: none;
+  vertical-align: 1px;
+}
+.home-reader-body a.home-link-offboard {
+  color: var(--text-muted);
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
 }
 
-.home-map-edges line {
-  stroke: var(--border-strong);
-  stroke-width: 1;
-}
-
-/* Il raggio lo scrive il JS (dice quanti collegamenti ha la pagina); il colore
-   lo scrive il gruppo, con le stesse classi dei pallini dell'elenco.
-   Il `fill` qui e' il ripiego, lo stesso grigio di `other`: la mappa prende il
-   gruppo cosi' come arriva (`node.group || 'other'` in home-map.js, senza la
-   `sanitizeGroup` dell'elenco), e una cartella che i tre colori non prevedono
-   — `sources/`, per dire — restava col nero di default di SVG, invisibile nel
-   tema scuro. Le tre regole sotto vincono per specificita'. */
-.home-map-node { cursor: pointer; fill: var(--text-faint); }
-
-.home-map-nodes .home-group-concepts { fill: var(--group-concepts); }
-.home-map-nodes .home-group-entities { fill: var(--group-entities); }
-.home-map-nodes .home-group-other { fill: var(--text-faint); }
-
-.home-map-labels text {
-  fill: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 9px;
-  text-anchor: middle;
-  /* Il bersaglio e' il pallino: un'etichetta che intercetta il tocco fa
-     mancare la pagina accanto. */
-  pointer-events: none;
+@media (prefers-reduced-motion: reduce) {
+  .home-board-item,
+  .home-board-item.is-appearing { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */

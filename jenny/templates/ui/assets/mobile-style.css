@@ -65,15 +65,6 @@
   --glint:         #fff1cf;
   --glow:          rgba(200, 169, 106, 0.55);
   --meta:          #c8a96a;
-  /* I due gruppi delle pagine di un quaderno (il pallino dell'elenco, il nodo
-     della mappa): una coppia di tinte **sue**, non due stati. Erano `--ok` ed
-     `--error`, cioe' «riuscito» e «sbagliato»: ogni entita' aveva il pallino
-     di un errore, e in Y2K il verde dei concetti stava a 1,7:1 sul fondo.
-     Blu e oro, piu' scuri nei tre temi chiari: sopra
-     3:1 su ogni fondo (e' un segno, non una parola), lontani fra loro e dal
-     grigio di «altro». Il banco e' in `test_notebook_groups_contract.py`. */
-  --group-concepts: #6aa9e8;
-  --group-entities: #c8a96a;
   --bubble-user-bg: #f4f1ea;
   --bubble-user-text: #141414;
   --bubble-user-border: none;
@@ -113,6 +104,27 @@
   --font-sans:     'Inter', system-ui, sans-serif;
   --font-display:  'Tenor Sans', var(--font-sans);
   --font-mono:     'Fira Code', monospace;
+  /* La bacheca dei quaderni: colori di **materiale**, non di interfaccia —
+     il sughero, la carta delle polaroid, il giallo dei post-it, il rosso dei
+     fili e delle puntine. Scuri qui; i temi chiari li schiariscono in fondo
+     al blocco dei temi. La mano delle etichette e' Comic Neue, l'unico
+     carattere scritto a mano che la casa porta gia' con se'. */
+  --board-bg:          #1b1815;
+  --board-grain:       rgba(255, 238, 214, 0.06);
+  --board-paper:       #f2eee5;
+  --board-ink:         #29251f;
+  --board-postit:      #e8d26a;
+  --board-postit-ink:  #3a321c;
+  --board-thread:      #c4473c;
+  --board-new:         #5b97e0;
+  --board-soon:        #e6c341;
+  --board-alert:       #d9533f;
+  --board-done:        #8cc58a;
+  --board-pin-jenny:   #8f8b84;
+  --board-pin-user:    #cf4a3e;
+  --board-envelope:    #e7dfcd;
+  --board-envelope-flap: #d4c8ae;
+  --font-hand:     'Comic Neue', var(--font-sans);
 }
 
 [data-theme="chanel"] {
@@ -264,8 +276,6 @@
   --glint:         #ff4fa3;
   --glow:          transparent;
   --meta:          #6842ff;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: #1b1820;
   --bubble-user-text: #faf6ef;
   --bubble-user-border: none;
@@ -303,8 +313,6 @@
   --glint:         #f56ab5;
   --glow:          rgba(245, 106, 181, 0.35);
   --meta:          #785a8e;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: linear-gradient(180deg, #ffa7dd, #f56ab5);
   --bubble-user-text: #46245a;
   --bubble-user-border: 1px solid #ffffff;
@@ -341,8 +349,6 @@
   --glint:         #d2ab78;
   --glow:          transparent;
   --meta:          #656057;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: #37332c;
   --bubble-user-text: #f4f1ec;
   --bubble-user-border: none;
@@ -358,6 +364,21 @@
      chanel e fumetto: l'accento *è* il testo, cioè il fondo della scheda.
    Il conto lo rifà un banco (`test_home_you_contract.py`), quindi ritoccare la
    tinta di un tema lo dice invece di lasciarlo scoprire a chi guarda. */
+/* La bacheca nei temi chiari: un sughero chiaro, e il filo piu' scuro perche'
+   si legga sulla carta. Synthwave tinge il filo del suo rosa. */
+[data-theme="comic"],
+[data-theme="y2k"],
+[data-theme="stone"] {
+  --board-bg:      #d9cfbf;
+  --board-grain:   rgba(80, 60, 30, 0.10);
+  --board-paper:   #fffdf8;
+  --board-thread:  #a8352b;
+  --board-done:    #3f8a3c;
+}
+[data-theme="synthwave"] { --board-thread: #f92aad; }
+[data-theme="kyoto"] { --board-bg: #241f1a; --board-thread: #a94f3b; }
+[data-theme="sticker"] { --board-bg: #1d1724; }
+
 [data-theme="synthwave"],
 [data-theme="kyoto"],
 [data-theme="y2k"] {

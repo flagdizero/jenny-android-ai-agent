@@ -286,6 +286,18 @@ class GatewayHTTPHandler:
             json_safe=_json_safe,
         )
 
+        from jenny.webui.board_routes import BoardRoutes
+
+        # La bacheca di un quaderno: stesso cancello della wiki (token, wiki
+        # accesa, quaderno che esiste), per questo i due controlli si prendono
+        # in prestito da ``WikiRoutes`` invece di essere ricopiati.
+        self.board_routes = BoardRoutes(
+            check_api_token=self.check_api_secret,
+            get_workspace_root=lambda: self._get_workspace_root(),
+            check_wiki_enabled=lambda: self.wiki_routes._check_wiki_enabled(),
+            get_wikis_dir=lambda: self.wiki_routes._get_wikis_dir(),
+        )
+
         from jenny.webui.workspace_routes import WorkspaceRoutes
 
         self.workspace_routes = WorkspaceRoutes(
@@ -655,6 +667,10 @@ class GatewayHTTPHandler:
         subagent_response = await self.subagent_routes.dispatch(request, got)
         if subagent_response is not None:
             return subagent_response
+
+        board_response = await self.board_routes.dispatch(request, got)
+        if board_response is not None:
+            return board_response
 
         # Wiki + audit routes (delegated to WikiRoutes)
         wiki_response = await self.wiki_routes.dispatch(request, got)

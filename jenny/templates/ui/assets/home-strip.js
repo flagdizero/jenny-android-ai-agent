@@ -153,8 +153,8 @@ export class HomeStrip {
     this.el.replaceChildren(row);
   }
 
-  /* L'interruttore della chat del quaderno: «Chat» acceso, «Pagine» porta
-     alle pagine. Le classi sono quelle di `#home-view-switch`. */
+  /* L'interruttore della chat del quaderno: «Chat» acceso, «Bacheca» porta
+     alla bacheca. Le classi sono quelle di `#home-view-switch`. */
   _viewSwitch(notebook) {
     const group = document.createElement('div');
     group.className = 'home-view-switch';
@@ -174,16 +174,11 @@ export class HomeStrip {
       return b;
     };
     const chat = seg(i18n.t('home.notebookPages.chat'), 'ti-message', true);
-    const pages = seg(i18n.t('home.notebookPages.tabList'), 'ti-book', false);
-    const count = this._pageCount(notebook);
-    if (count !== null && count !== undefined) {
-      const n = document.createElement('span');
-      n.className = 'home-view-count';
-      n.textContent = String(count);
-      pages.appendChild(n);
-    }
-    pages.addEventListener('click', () => this._onPages?.());
-    group.append(chat, pages);
+    /* «Bacheca», senza numero: la porta e' alla faccia del quaderno, e un
+       conteggio di pagine li' accanto si leggerebbe come un conteggio di schede. */
+    const board = seg(i18n.t('board.tab'), 'ti-layout-board', false);
+    board.addEventListener('click', () => this._onPages?.());
+    group.append(chat, board);
     return group;
   }
 

@@ -980,9 +980,10 @@
     "workshop": "Workshop",
     "back": {
       "chat": "back to the chat",
-      "pages": "back to the pages",
       "settings": "back to Settings",
-      "notebooks": "back to the notebooks"
+      "notebooks": "back to the notebooks",
+      "board": "back to the board",
+      "drawer": "back to the drawer"
     },
     "path": {
       "label": "Where you are"
@@ -1014,18 +1015,11 @@
       "newNotebook": "New notebook"
     },
     "notebookPages": {
-      "open": "Notebook pages",
+      "open": "Notebook board",
       "chat": "Chat",
       "view": "Notebook view",
       "countOne": "1 page",
-      "countMany": "{count} pages",
-      "tabList": "Pages",
-      "tabMap": "Map",
-      "index": "Notebook index",
-      "loading": "Looking…",
-      "none": "This notebook has no pages yet. We write them by talking.",
-      "noMatch": "No page with those words.",
-      "failed": "I could not read this notebook’s pages."
+      "countMany": "{count} pages"
     },
     "reader": {
       "failed": "I could not open this page.",
@@ -1036,10 +1030,6 @@
       "saveFailed": "I couldn't save this page.",
       "conflict": "Jenny changed this page while you were editing it. Reload it? What you wrote here will be lost.",
       "discardConfirm": "Leave without saving? Your changes to this page will be lost."
-    },
-    "map": {
-      "noLinks": "The pages do not point to each other yet: the map appears once they start to.",
-      "failed": "I could not load the map."
     },
     "model": {
       "title": "Who answers",
@@ -1174,6 +1164,160 @@
       "llm-wiki": "The wiki is your second brain: use it to ingest articles, notes and research. Jenny compiles and links the pages for you, and you can ask her questions about what's inside.",
       "skill-creator": "If Jenny doesn't yet know how to do something you need often, you can ask her to learn a new skill: explain what you want and she'll build the instructions herself to do it next time.",
       "ssh": "Commands on the remote machines you registered in Settings → Workshop → Hands → SSH: Jenny can check a service, read a log, update a server or move a file. She can only reach hosts you declared yourself, and long commands keep running even with the phone asleep."
+    }
+  },
+  "board": {
+    "tab": "Board",
+    "failed": "I couldn't read this notebook's board.",
+    "listView": "List view",
+    "moveFailed": "I couldn't move it: putting it back where it was.",
+    "noThreads": "This card has no threads.",
+    "offboard": "not on the board",
+    "empty": {
+      "title": "The board is empty.",
+      "hint": "Tell me about something in this notebook in the chat, for example:",
+      "example": "I have a maple in a size 14 pot, I want to repot it",
+      "proposed": "I've prepared a board for you: it's in the envelope."
+    },
+    "since": {
+      "row": "Since you last looked · {count} new",
+      "title": "Since you last looked",
+      "note": "Every line is written by code, not by the model: it tells what was actually done.",
+      "envelopeOne": "There is 1 proposal in the envelope.",
+      "envelopeMany": "There are {count} proposals in the envelope.",
+      "kind": {
+        "board_created": "The board was born, with {cards} cards.",
+        "card_added": "{title} has a place on the board.",
+        "card_removed": "{title} was put away: its pages stay, and search finds them.",
+        "connection_added": "A new thread between two cards.",
+        "page_attached": "A page went into a drawer.",
+        "section_added": "A mini app went into a drawer.",
+        "sections_regenerated": "{title}: {count} drawer sections rewritten.",
+        "pages_assigned": "{count} new pages went into drawers.",
+        "reminders_added": "{count} new reminders taken from the journal.",
+        "suggestions_added": "{count} new proposals in the envelope.",
+        "corrections_applied": "{count} corrections applied to the wiki.",
+        "reminder_due": "It's time: {text}.",
+        "app_event": "{title}: {app} is {state}.",
+        "other": "Something changed on the board."
+      }
+    },
+    "signal": {
+      "new": "new",
+      "soon": "coming up",
+      "alert": "problem"
+    },
+    "envelope": {
+      "label": "Jenny's proposals: {count}",
+      "title": "Jenny's proposals",
+      "emptyTitle": "The envelope is empty",
+      "empty": "When the board should change shape, the proposal arrives here. Two at a time at most.",
+      "from": "Jenny",
+      "keep": "Keep it",
+      "putAway": "Put it away",
+      "later": "Later",
+      "no": "No",
+      "yes": "Yes",
+      "full": "The board is full: take something off first.",
+      "failed": "I couldn't do it.",
+      "kind": {
+        "initial_board": "I've prepared this notebook's board. Does it look right?",
+        "add_card": "Shall I make room on the board for {subject}?",
+        "remove_card": "Shall I put {subject} away? Its pages stay.",
+        "add_connection": "Shall I tie {subject} with a thread?",
+        "attach_page": "Shall I put this page in the {subject} drawer?",
+        "add_section": "Shall I add a mini app to the {subject} drawer?"
+      }
+    },
+    "search": {
+      "title": "Search the notebook",
+      "placeholder": "Search the notebook",
+      "none": "Nothing with these words.",
+      "card": "card"
+    },
+    "preview": {
+      "notOnBoard": "This page isn't on the board: I use it for my own work. If you need it here, tell me.",
+      "close": "Close",
+      "want": "I want it on the board",
+      "wanted": "I'll see to it on the next pass."
+    },
+    "drawer": {
+      "loading": "Looking…",
+      "failed": "I couldn't open this drawer.",
+      "today": "today at {time}",
+      "yesterday": "yesterday at {time}",
+      "pagesOne": "Drawer · 1 wiki page",
+      "pagesMany": "Drawer · {count} wiki pages",
+      "updated": "updated {when}",
+      "noSummary": "I haven't written this drawer yet: I'll do it on the next pass.",
+      "threads": "Threads",
+      "allPages": "The pages ({count})",
+      "foot": "Jenny writes the summary from the wiki. To change it, correct it: the correction goes to the right page and comes back here.",
+      "next": "Next up",
+      "fix": "Correct",
+      "fixLabel": "Correction",
+      "fixTarget": "Goes as a report on “{page}”.",
+      "fixSend": "Send to Jenny",
+      "fixPending": "Your correction · report on “{page}”, I'm working it in",
+      "fixDone": "Applied to the wiki",
+      "fixFailed": "I couldn't send the correction."
+    },
+    "reminder": {
+      "done": "Done"
+    },
+    "app": {
+      "open": "Open the app",
+      "source": "source: {app}",
+      "alert": {
+        "alarm": "Live data from {app}, not from the wiki: it's in alarm.",
+        "stale": "Live data from {app}, not from the wiki: nothing new is coming in."
+      },
+      "state": {
+        "ok": "updated {when}",
+        "alarm": "in alarm · {when}",
+        "stale": "stalled since {when}",
+        "empty": "no data yet",
+        "missing": "This app is gone.",
+        "broken": "This app is broken: open it from the Apps page to see why.",
+        "no_section": "This app has no view for drawers."
+      }
+    },
+    "section": {
+      "add": "+ Add a section",
+      "addTitle": "Add a section to {card}",
+      "remove": "Remove",
+      "removeConfirm": "Remove this section? The wiki does not change.",
+      "edit": "Edit",
+      "yours": "yours",
+      "moveUp": "Move up",
+      "failed": "I couldn't save it.",
+      "save": "Save",
+      "noteIntegrated": "✓ in the wiki",
+      "notePending": "waiting",
+      "notePrompt": "Something to remember",
+      "notePlaceholder": "For example: it stays on the south windowsill only in winter.",
+      "reminderWhat": "What?",
+      "reminderWhen": "When?",
+      "reminderMonth": "Month only",
+      "noApps": "No installed app has a view for drawers.",
+      "newApp": "Make a new one…",
+      "newAppPrompt": "In the {card} drawer I'd like a mini app that ",
+      "appParam": "{app}: {name}?",
+      "otherPrompt": "In the {card} drawer I'd like a section that ",
+      "kind": {
+        "note": "Note",
+        "reminder": "Reminder",
+        "app": "Mini app",
+        "photo": "Photo",
+        "other": "Other"
+      },
+      "hint": {
+        "note": "Something to remember, in your words",
+        "reminder": "Something to do, with a date",
+        "app": "Data that updates by itself",
+        "photo": "A picture, for example how it was",
+        "other": "Describe it and I'll build it"
+      }
     }
   }
 }

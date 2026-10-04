@@ -294,6 +294,55 @@ class ApiClient {
     return rpc.createAudit({ wiki, target, selStart, selEnd, comment });
   }
 
+  /** La bacheca di un quaderno, gia' risolta dal server: schede coi loro
+   *  segnali, post-it delle attese, fili, busta, «dall'ultima volta». */
+  async getBoard(wiki) {
+    const res = await this._fetch(`/api/board?wiki=${encodeURIComponent(wiki)}`);
+    if (!res.ok) {
+      const err = new Error(`Board failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  /** Il cassetto di una scheda: riassunto per sezioni, sezioni dell'utente,
+   *  attese, fili, correzioni in corso. */
+  async getBoardCard(wiki, card) {
+    const params = new URLSearchParams({ wiki, card });
+    const res = await this._fetch(`/api/board/card?${params}`);
+    if (!res.ok) {
+      const err = new Error(`Board card failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  /** Una foto di una sezione, come `blob:`: un `<img src>` non porterebbe il
+   *  token, quindi la si chiede da qui e se ne fa un indirizzo locale. */
+  async getBoardPhotoUrl(wiki, path) {
+    const params = new URLSearchParams({ wiki, path });
+    const res = await this._fetch(`/api/board/photo?${params}`);
+    if (!res.ok) throw new Error(`Board photo failed: ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  }
+
+  /** Esegue un'azione di una Jenny App da fuori della sua cornice: i verbi di
+   *  una sezione mini app nel cassetto. Il segreto della SPA vale anche sulle
+   *  rotte delle app (`check_app_secret`). */
+  async runAppAction(slug, name, params = {}) {
+    const url = `/api/apps/${encodeURIComponent(slug)}/actions/${encodeURIComponent(name)}`
+      + `?params=${encodeURIComponent(JSON.stringify(params))}`;
+    const res = await this._fetch(url);
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* corpo non JSON */ }
+    if (!res.ok || (data && data.ok === false)) {
+      throw new Error((data && data.error) || `${name}: HTTP ${res.status}`);
+    }
+    return data;
+  }
+
   async getPage({ wiki, page } = {}) {
     const params = new URLSearchParams();
     if (wiki) params.set('wiki', wiki);

@@ -438,13 +438,13 @@ def test_the_notebook_did_not_disappear_with_it() -> None:
     stanza e demolirla, e senza questo banco i due sopra sarebbero soddisfatti
     anche da un prodotto che non sa piu' aprire un quaderno.
 
-    La casa ne ha tre pezzi — l'elenco, la mappa e il lettore — e le route del
-    server che li nutrono non si sono toccate.
+    La casa ne ha tre pezzi — la bacheca, il cassetto di una scheda e il
+    lettore — e le route del server che li nutrono.
     """
-    for name in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
+    for name in ("home-board.js", "home-board-drawer.js", "home-reader.js"):
         assert (ASSETS / name).exists(), f"{name} manca: il quaderno non si apre da nessuna parte"
     home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    for node in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
+    for node in ('id="home-board"', 'id="home-board-drawer"', 'id="home-reader"'):
         assert node in home, f"{node} manca dalla casa"
 
 

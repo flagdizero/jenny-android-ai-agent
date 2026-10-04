@@ -432,6 +432,17 @@ correlate a reply to.
 | `telegram.save` | `token` | Save the Telegram bot token (checked with `getMe`) and restart the channel. |
 | `ssh.host.save` | `alias`, `host`, `port`, `username`, `auth`, `password`, `description`, `job_log_dir` | Create or update an SSH host. A missing `password` keeps the saved one. |
 | `onboarding.save` | `provider_name`, `format`, `api_key`, `api_base`, `model`, `bot_name`, `bot_icon`, `locale` | The first-run setup: save the provider with its API key, the model and Jenny's name, then wake the agent that was waiting for it and write the welcome message into the conversation. Replies `{status, chat_id, welcome_message}`. A missing provider or model is `bad_request` and nothing is saved. |
+| `board.seen` | `wiki`, `card` | Record that the user looked: the notebook's board (no `card`), or one card's drawer. Drives the "since you last looked" row and the blue dots. A notebook without a board is a no-op. |
+| `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`) or a reminder's sticky note (`kind: note`) to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
+| `board.suggestion.respond` | `wiki`, `id`, `answer` | Answer one of Jenny's proposals in the envelope with `yes`, `no` or `later`. `yes` applies it (a card placed in a free spot, a thread, a page attached…); `no` is remembered for that subject and kind; `later` defers it for a few passes. A full board refuses a new card with `conflict`. |
+| `board.connection.remove` | `wiki`, `a`, `b` | Remove the thread between two cards. Only the user removes threads. |
+| `board.offboard.want` | `wiki`, `page`, `from` | "I want to see it on the board": a page that is in no drawer is flagged for the next board pass, which attaches it to a drawer or proposes a card. |
+| `board.fix` | `wiki`, `card`, `section`, `text` | Correct a drawer section. Nothing on the board is written: the correction becomes an audit (`source: board`) on the first page the section comes from, the board pass applies it to the wiki and the summary is rewritten from there. Replies `{id, path, target}`. |
+| `board.section.add` | `wiki`, `card`, `kind`, … | Add a section to a drawer: `note` (`text`, also journaled as a `[said]` line), `reminder` (`text`, `when`), `app` (`app`, `params`) or `photo` (`mime`, base64 `data`, `caption`; saved under `raw/photos/`). Replies `{id}`. |
+| `board.section.update` | `wiki`, `card`, `id`, `text`, `when` | Edit a note (a new journal line: the journal is append-only) or a reminder. |
+| `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder. |
+| `board.section.reorder` | `wiki`, `card`, `order` | Reorder the sections the user added (`order` is their ids). |
+| `board.reminder.done` | `wiki`, `id` | Mark a reminder done: it leaves the board and becomes a journal line. |
 
 **Authorization is the handshake's, not the frame's.** Only a connection that presented
 `token_issue_secret` at handshake time may run a command, even if `websocket_requires_token`

@@ -31,7 +31,7 @@ capita a ogni turno.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -278,21 +278,35 @@ class JournalAppendTool(Tool):
         page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
         try:
-            page.parent.mkdir(parents=True, exist_ok=True)
-            fresh = not page.exists()
-            # Append in `a`, e non "leggi-modifica-riscrivi": il contratto
-            # append-only vale anche contro se stessi, e una riscrittura potrebbe
-            # perdere quel che un altro scrittore ha appeso nel frattempo.
-            with page.open("a", encoding="utf-8") as fh:
-                if fresh:
-                    fh.write(f"# {day.isoformat()}\n\n")
-                fh.write(entry)
+            append_journal_entry(page, day, entry)
         except OSError as exc:
             logger.warning("journal_append on {} failed: {}", page, exc)
             return f"Could not append to the journal: {exc}"
 
         logger.info("journal_append: {} <- {}", page.name, line[:60])
         return f"Appended to {page.parent.name}/{page.name}: {entry.strip()}"
+
+
+def append_journal_entry(page: Path, day: date, entry: str) -> int:
+    """Appende *entry* (una riga già formata) alla pagina di diario *page*.
+
+    Restituisce il numero di righe fisiche del file dopo l'aggiunta, cioè il
+    numero della riga appena scritta contato come lo conta il cursore del
+    giardiniere: chi scrive una riga per conto dell'utente (una nota della
+    bacheca) ci lega «quando questa riga è stata letta».
+
+    Append in ``a``, e non "leggi-modifica-riscrivi": il contratto append-only
+    vale anche contro se stessi, e una riscrittura potrebbe perdere quel che un
+    altro scrittore ha appeso nel frattempo.
+    """
+    page.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not page.exists()
+    with page.open("a", encoding="utf-8") as fh:
+        if fresh:
+            fh.write(f"# {day.isoformat()}\n\n")
+        fh.write(entry)
+    with page.open(encoding="utf-8") as fh:
+        return sum(1 for _ in fh)
 
 
 TOOLS = [JournalAppendTool]

@@ -27,7 +27,8 @@
 import { ActivityLine } from './home-activity.js';
 import { SubagentChip } from './home-subagents.js';
 import { HomeChat } from './home-chat.js';
-import { NotebookPages } from './home-notebook-pages.js';
+import { HomeBoard, HomeBoardSheet } from './home-board.js';
+import { BoardDrawer } from './home-board-drawer.js';
 import { HomeReader } from './home-reader.js';
 import { HomeAudit, reportMessage } from './home-audit.js';
 import { HomeJenny } from './home-jenny.js';
@@ -54,7 +55,6 @@ import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
 import { createProjectFlow } from './shared/project-create.js';
 import { deleteProjectFlow } from './shared/project-delete.js';
-import { moveLayoutKey } from './shared/map-layout.js';
 import { showToast } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { isFirstRun } from './shared/first-run.js';
@@ -98,8 +98,14 @@ const FLOOR_NO_COMPOSER = 66;
    23/09/2026, e le stanze che si aprono da li' ci tornano sopra — la vista
    torna `chat`, e la pista va su quella pagina (v. `goBackOneRoom`). */
 const BACK_TO = {
-  pages: 'chat',
-  reader: 'pages',
+  /* La bacheca del quaderno, il cassetto di una scheda, e una pagina. Il
+     lettore torna al cassetto da cui l'hai aperta (profondita' massima uno: da
+     un cassetto apri una pagina, e «indietro» porta sempre al cassetto); aperta
+     dalla ricerca senza un cassetto, torna alla bacheca. Quale dei due lo dice
+     `_backTarget`, questa tabella dice il caso comune. */
+  board: 'chat',
+  drawer: 'board',
+  reader: 'drawer',
   jenny: 'settings',
   model: 'settings',
   updates: 'settings',
@@ -112,6 +118,9 @@ const BACK_TO = {
    qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
    due elenchi separati divergevano al primo foglio nuovo. */
 const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet'];
+/* Il foglio della bacheca: «dall'ultima volta», la busta, la ricerca,
+   l'anteprima di una pagina, «aggiungi sezione». */
+const BOARD_SHEET = 'home-board-sheet';
 const REPORT_SHEET = 'home-audit-dialog';
 
 /* I dialoghi condivisi con l'officina (`shared/dialog.js`): «Elimina
@@ -235,22 +244,35 @@ class HomeApp {
       onExported: () => this.you.sayBackup(this.backupRoom.value()),
     });
 
-    /* Le altre due stanze. La mappa non si importa: si carica al primo tocco
-       sulla sua linguetta insieme ai 280 kB di D3 (v. `home-map.js`), e un
-       `import` statico la pagherebbe a ogni avvio della casa. */
-    this.pages = new NotebookPages({
-      onOpenPage: (path, label) => this.openPage(path, label),
-      onNeedMap: (data, _rows, notebook) => this._drawMap(data, notebook),
+    /* Le stanze di un quaderno: la bacheca, il cassetto di una scheda, e una
+       pagina. Un solo foglio dal basso, che le prime due si dividono. */
+    this.boardSheet = new HomeBoardSheet();
+    this.board = new HomeBoard({
+      sheet: this.boardSheet,
+      onOpenCard: (card, title) => this.openCard(card, title),
+      onOpenPage: (path, label, card) => this.openPage(path, label, card),
+      onAskJenny: (text) => this._askInNotebook(text),
     });
+    this.drawer = new BoardDrawer({
+      sheet: this.boardSheet,
+      onOpenCard: (card, title) => this.openCard(card, title),
+      onOpenPage: (path, label, card) => this.openPage(path, label, card),
+      onAskJenny: (text) => this._askInNotebook(text),
+      onOpenApp: (slug) => this.appsActions().openApp(slug),
+    });
+    /* Da quale cassetto e' stata aperta la pagina nel lettore, o `null` se
+       dalla ricerca: «indietro» torna li'. */
+    this._readerCard = null;
     this.reader = new HomeReader();
     this.reader.onTitle = (title) => this._readerTitle(title);
+    this.reader.onOpenDrawer = (card, title) => this.openCard(card, title);
+    this.reader.onPreview = (path, from) => this.board.preview(path, from);
     this.audit = new HomeAudit(this.reader);
     this.audit.onFiled = (report) => this._bringToChat(report);
     /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
        barra della selezione, che con l'editor aperto non ha piu' senso: li' il
        gesto e' un altro. */
     this.reader.onEditing = () => { this._applyHead(); this.audit.refresh(); };
-    this.map = null;
 
     /** Quale stanza e' a schermo: `chat` o una delle chiavi di `BACK_TO`. */
     this.view = 'chat';
@@ -347,7 +369,7 @@ class HomeApp {
       homePages: this.homePages,
       chatName: () => this._chatName(),
       pageCount: (notebook) => this.pageCountOf(notebook),
-      onPages: () => this.openPages(),
+      onPages: () => this.openBoard(),
       onChange: (open) => this._onSort(open),
     });
     /* Le tre pagine fisse che non sono la chat: cosa fanno quando le guardi. */
@@ -442,7 +464,16 @@ class HomeApp {
       this.input.value = text;
       this._autosize();
     };
-    this.pagesBtn?.addEventListener('click', () => this.openPages());
+    this.pagesBtn?.addEventListener('click', () => this.openBoard());
+    /* I due comandi della bacheca in testa: la lente, l'unica porta verso
+       tutto, e l'elenco al posto della bacheca. */
+    this.boardSearchBtn = document.getElementById('home-board-search-open');
+    this.boardListBtn = document.getElementById('home-board-list-toggle');
+    this.boardSearchBtn?.addEventListener('click', () => this.board.openSearch());
+    this.boardListBtn?.addEventListener('click', () => {
+      const on = this.board.toggleList();
+      this.boardListBtn.setAttribute('aria-pressed', String(on));
+    });
     this.viewChat?.addEventListener('click', () => this._setView('chat'));
     /* Il + tondo della pagina Quaderni: un quaderno nuovo, e ci si entra. */
     this.newNotebook = document.getElementById('home-notebooks-new');
@@ -668,12 +699,8 @@ class HomeApp {
       showToast(i18n.t(key, parameters), 'error');
       return false;
     }
-    /* La disposizione della mappa ha per chiave il nome: la si sposta, e la
-       mappa dimentica quel che aveva letto, o il suo primo trascinamento
-       riscriverebbe il file con la chiave vecchia. Di cortesia: un errore
-       qui non disfa un rinomino riuscito (v. `shared/map-layout.js`). */
-    await moveLayoutKey(name, newName);
-    this.map?.forgetPins();
+    /* La bacheca sta dentro la cartella del quaderno: il rinomino la porta con
+       se', e non c'e' niente da spostare a mano. */
     const oldKey = projectKey(name);
     const newKey = projectKey(newName);
     this.homePages.renameConversation(oldKey, newKey);
@@ -742,9 +769,6 @@ class HomeApp {
    */
   async deleteNotebook(name) {
     if (!(await deleteProjectFlow(name))) return false;
-    /* La chiave della sua mappa l'ha tolta dal file `deleteProjectFlow`; la
-       mappa, se c'e', dimentica la copia che aveva letto. */
-    this.map?.forgetPins();
     const key = projectKey(name);
     /* Come nel rinomino, **senza portarti alla chat**: si cancella dalla
        pagina Quaderni, e li' si resta. La pagina chat che mostrava il
@@ -774,22 +798,64 @@ class HomeApp {
    *  uscire anche dal quaderno.
    */
 
-  /** Le pagine del quaderno in cui sei. Dalla chat personale non c'e' nulla da
-   *  aprire, e infatti la pastiglia li' non compare. */
-  async openPages() {
+  /** La bacheca del quaderno in cui sei. Dalla chat personale non c'e' nulla da
+   *  aprire, e infatti la pastiglia li' non compare.
+   *
+   *  **Un quaderno si apre sulla bacheca, non sulle pagine**: l'elenco delle
+   *  pagine e la mappa a grafo sono usciti dalla casa, e la wiki si raggiunge
+   *  da un cassetto o dalla ricerca. */
+  async openBoard() {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook) return;
-    this._setView('pages');
-    await this.pages.load(notebook);
+    if (!this._setView('board')) return;
+    await this.board.load(notebook);
   }
 
-  /** Una pagina del quaderno, letta. */
-  async openPage(path, label) {
+  /** Il cassetto di una scheda. */
+  async openCard(card, title) {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (!notebook || !card) return;
+    this.boardSheet.close();
+    if (!this._setView('drawer')) return;
+    this._cardTitle = title || '';
+    this._setHeadTitle(title || '');
+    const loaded = await this.drawer.load(notebook, card);
+    if (loaded && this.view === 'drawer') {
+      this._cardTitle = loaded;
+      this._setHeadTitle(loaded);
+      this._applyPath(notebook);
+    }
+  }
+
+  /** Una pagina del quaderno, letta. *card* e' il cassetto da cui la si apre:
+   *  «indietro» torna li'. */
+  async openPage(path, label, card = null) {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook || !path) return;
-    this._setView('reader');
+    this._readerCard = card || null;
+    if (card && card === this.drawer.card) this._cardTitle = this.drawer.title;
+    if (!this._setView('reader')) return;
     this._setHeadTitle(label || '');
+    this._applyHead();
     this._readerTitle(await this.reader.load(notebook, path, label));
+  }
+
+  /* Dove torna la freccia da questa stanza. Il lettore torna al cassetto da cui
+     l'hai aperto; senza un cassetto (dalla ricerca), alla bacheca. */
+  _backTarget(view = this.view) {
+    if (view === 'reader' && !this._readerCard) return 'board';
+    return BACK_TO[view];
+  }
+
+  /* «Altro…» e l'esempio della bacheca vuota: una frase gia' scritta, nella
+     chat del quaderno, da mandare tu. */
+  _askInNotebook(text) {
+    this.boardSheet.close();
+    this._setView('chat', () => this._askInNotebook(text));
+    if (!this.input) return;
+    this.input.value = text;
+    this.input.dispatchEvent(new Event('input', { bubbles: true }));
+    this.input.focus();
   }
 
   /* Il titolo di una pagina arriva dopo una lettura — l'apertura, un
@@ -1049,8 +1115,16 @@ class HomeApp {
       this.homePages.goTo(this.homePages.chatIndex);
       return true;
     }
-    const target = BACK_TO[this.view];
+    const target = this._backTarget();
     if (!target) return false;
+    if (target === 'drawer' && this._readerCard) {
+      this.openCard(this._readerCard, this._cardTitle);
+      return true;
+    }
+    if (target === 'board') {
+      this.openBoard();
+      return true;
+    }
     if (target === 'settings') {
       this._setView('chat');
       /* Le stanze si aprono dalla pagina Impostazioni, e la pista di solito
@@ -1200,7 +1274,7 @@ class HomeApp {
    *  tasto: da pagina, e' vivo mentre la guardi — anche sotto una scheda aperta
    *  sopra, o sotto una app che ha lanciato. */
   hasOverlayAbove() {
-    for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET]) {
+    for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET, BOARD_SHEET]) {
       if (document.getElementById(id)?.open) return true;
     }
     /* La minichat anche: il cassetto non deve prendersi i tasti scritti nel
@@ -1241,8 +1315,8 @@ class HomeApp {
        intanto e' andata avanti per conto suo. */
     if (view !== 'updates') this.updatesRoom?.close();
 
+    if (view !== 'board' && view !== 'drawer') this.boardSheet?.close();
     if (view === 'chat') {
-      this.map?.stop();
       this._measureFloor?.();
       /* **Non** `_applyConversation`: la conversazione non e' cambiata, e
          quello rifaceva le traduzioni di tutta la casa e ridisegnava fila e
@@ -1283,7 +1357,9 @@ class HomeApp {
        stanze delle impostazioni non c'e' un quaderno. Dalla chat si va alle
        pagine e si torna nello stesso punto. Ha preso il posto di «Parlane» il
        26/09/2026. */
-    if (this.viewSwitch) this.viewSwitch.hidden = this.view !== 'pages';
+    if (this.viewSwitch) this.viewSwitch.hidden = this.view !== 'board';
+    if (this.boardSearchBtn) this.boardSearchBtn.hidden = this.view !== 'board';
+    if (this.boardListBtn) this.boardListBtn.hidden = this.view !== 'board';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
     if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing;
@@ -1292,7 +1368,8 @@ class HomeApp {
        la barra va chiusa qui, o resterebbe accesa sopra un'altra stanza. */
     this.audit?.refresh();
     this._applyPill(notebook);
-    if (this.view === 'pages') this._setHeadTitle(notebook);
+    if (this.view === 'board') this._setHeadTitle(notebook);
+    if (this.view === 'drawer' && this._cardTitle) this._setHeadTitle(this._cardTitle);
     if (this.view === 'jenny') {
       this._setHeadTitle(i18n.t('home.jenny.title', { name: this._personalName || DEFAULT_BOT_NAME }));
     }
@@ -1309,13 +1386,16 @@ class HomeApp {
      quaderno, le altre stanze delle Impostazioni. */
   _applyPath(notebook) {
     const color = notebook ? dotColor(notebook) : null;
-    const own = this.view === 'pages' || this.view === 'reader';
+    const own = ['board', 'drawer', 'reader'].includes(this.view);
     let root = i18n.t('home.strip.settings');
-    if (this.view === 'pages') root = i18n.t('home.strip.notebooks');
-    if (this.view === 'reader') root = notebook || '';
+    if (this.view === 'board') root = i18n.t('home.strip.notebooks');
+    if (this.view === 'drawer') root = notebook || '';
+    /* Il percorso della pagina dice da quale cassetto viene: «Acero › travaso
+       acero». Sei sempre a un tocco dal riassunto e a due dalla bacheca. */
+    if (this.view === 'reader') root = this._readerCard ? this._cardTitle || notebook || '' : notebook || '';
     if (this.pathRootName) this.pathRootName.textContent = root;
-    this._paintDot(this.pathRootDot, this.view === 'reader' ? color : null);
-    this._paintDot(this.headDot, this.view === 'pages' ? color : null);
+    this._paintDot(this.pathRootDot, this.view === 'drawer' || this.view === 'reader' ? color : null);
+    this._paintDot(this.headDot, this.view === 'board' ? color : null);
     if (own && color) this.headEl?.style.setProperty('--path-line', color);
     else this.headEl?.style.removeProperty('--path-line');
   }
@@ -1342,7 +1422,13 @@ class HomeApp {
    *  cui le hai aperte, e la radice **all'elenco** dei Quaderni: il quaderno
    *  aperto li' si chiude (deciso con l'utente il 26/09/2026). */
   goToPathRoot() {
-    if (this.view !== 'pages') return this.goBackOneRoom();
+    if (this.view === 'reader' && this._readerCard) return this.goBackOneRoom();
+    if (this.view === 'reader' || this.view === 'drawer') {
+      if (this.view === 'reader' && !this._setView('board', () => this.goToPathRoot())) return true;
+      this.openBoard();
+      return true;
+    }
+    if (this.view !== 'board') return this.goBackOneRoom();
     if (!this._setView('chat', () => this.goToPathRoot())) return true;
     this.homePages?.closeNotebook();
     this.homePages?.goToId('notebooks', { animated: false });
@@ -1355,33 +1441,7 @@ class HomeApp {
      sceglie la stessa tabella che decide il salto, quindi le due non possono
      divergere. Fino al 26/09/2026 era scritta a schermo, come occhiello. */
   _applyBackLabel() {
-    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${BACK_TO[this.view] || 'chat'}`));
-  }
-
-  /* La mappa costa 280 kB di D3, quindi il suo modulo arriva col primo tocco
-     sulla linguetta e non con l'avvio della casa. `import()` dinamico e non
-     statico: e' la differenza fra pagarla chi la apre e pagarla tutti.
-
-     **La promessa, non la mappa, e' quella che si ricorda**: due tocchi sulla
-     linguetta prima che il modulo arrivasse trovavano tutti e due `this.map`
-     vuota, e nascevano due `HomeMap` sullo stesso SVG — due simulazioni che
-     si contendevano i nodi. Un import fallito si dimentica, cosi' il tocco
-     dopo riprova. */
-  async _drawMap(data, notebook) {
-    this._mapReady ||= import('./home-map.js').then(({ HomeMap }) => {
-      this.map = new HomeMap({
-        onOpenPage: (path, label) => this.openPage(path, label),
-      });
-      return this.map;
-    });
-    let map;
-    try {
-      map = await this._mapReady;
-    } catch (err) {
-      this._mapReady = null;
-      throw err;
-    }
-    await map.draw(data, notebook);
+    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backTarget() || 'chat'}`));
   }
 
   /* La conversazione e' cambiata: la fila la dice col nome e il pallino — lo
@@ -1435,7 +1495,8 @@ class HomeApp {
     const count = notebook ? this.pageCountOf(notebook) : null;
     const known = count !== null;
     if (this.pagesCount) this.pagesCount.textContent = known ? `· ${count}` : '';
-    if (this.viewPagesCount) this.viewPagesCount.textContent = known ? String(count) : '';
+    /* L'interruttore porta alla bacheca: niente numero di pagine accanto. */
+    if (this.viewPagesCount) this.viewPagesCount.textContent = '';
     this._labelPagesButton();
     this.strip?.draw();
   }
@@ -2111,7 +2172,9 @@ class HomeApp {
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
     if (this.viewChatLabel) this.viewChatLabel.textContent = i18n.t('home.notebookPages.chat');
-    if (this.viewPagesLabel) this.viewPagesLabel.textContent = i18n.t('home.notebookPages.tabList');
+    if (this.viewPagesLabel) this.viewPagesLabel.textContent = i18n.t('board.tab');
+    this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
+    this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
     this.viewSwitch?.setAttribute('aria-label', i18n.t('home.notebookPages.view'));
     this._labelPagesButton();
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
@@ -2125,7 +2188,8 @@ class HomeApp {
     this.jennyRoom?.applyTranslations();
     this.you?.sayJenny(this.jennyRoom?.value());
     this.newNotebook?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));
-    this.pages?.applyTranslations();
+    this.board?.applyTranslations();
+    this.drawer?.applyTranslations();
     // La pagina Quaderni ha le sue righe gia' disegnate: vanno riscritte.
     this.who?.render();
     this.strip?.draw();

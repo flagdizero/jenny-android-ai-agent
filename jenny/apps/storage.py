@@ -90,6 +90,17 @@ def _read_records(path: Path) -> list[dict]:
     return records
 
 
+def read_collection(app_dir: Path, collection: str) -> list[dict]:
+    """I record di una collezione, nell'ordine in cui sono stati scritti.
+
+    Lettura pubblica e senza lock, per chi guarda i dati di un'app senza
+    passare da un'azione: la sezione compatta della bacheca
+    (``jenny/board/sections.py``). Le scritture sono append di righe intere, e
+    una riga a metà si salta come una corrotta.
+    """
+    return _read_records(_collection_path(app_dir, collection))
+
+
 def _check_size(path: Path, max_bytes: int) -> None:
     if path.is_file() and path.stat().st_size >= max_bytes:
         raise StorageError(

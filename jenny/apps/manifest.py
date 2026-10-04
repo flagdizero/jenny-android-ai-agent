@@ -34,6 +34,11 @@ MAX_SLUG_LEN = 32
 # cleartext dell'APK rifiuta un iframe verso un ``http://`` non-loopback, quindi
 # "incornicia il mio server" non era esprimibile in nessun modo.
 VIEW_KINDS = {"external"}
+# Gli operatori di un allarme della sezione compatta. Gli stessi delle attese a
+# condizione della bacheca (``jenny/board/model.py::CONDITION_OPS``).
+SECTION_OPS = {"<", "<=", ">", ">=", "==", "!="}
+SECTION_PARAM_RE = re.compile(r"\A[a-z][a-zA-Z0-9_]*\Z")
+MAX_SECTION_TREND_DAYS = 31
 
 
 @dataclass
@@ -62,6 +67,36 @@ class AppManifest:
     # "external" quando lo schermo dell'app *e'* il suo server, non
     # ``app/index.html``. None per un'app normale. V. VIEW_KINDS.
     view_kind: str | None = None
+    # La vista compatta con cui l'app sta in un cassetto della bacheca. None per
+    # un'app che non ne dichiara una: si apre solo dalla sezione App.
+    section: "AppSection | None" = None
+
+
+@dataclass
+class AppSection:
+    """La vista compatta di un'app dentro il cassetto di un soggetto.
+
+    Un valore (l'ultimo record di una collezione, filtrato dai parametri della
+    sezione), uno stato (vecchio oltre una soglia, o in allarme), un andamento
+    sugli ultimi giorni, e al più due azioni. **Solo lettura dei dati**: la
+    sezione non chiama l'app, legge quel che il suo cron le ha lasciato.
+
+    *params* sono i parametri che la sezione chiede quando la si aggancia a un
+    cassetto (``{"sensor": {"type": "string"}}``): la stessa app sta nel cassetto
+    di due piante con due sensori diversi. Nei filtri si scrivono ``$nome``.
+    """
+
+    collection: str
+    field: str
+    params: dict = field(default_factory=dict)
+    where: dict = field(default_factory=dict)
+    latest: str = "ts"
+    unit: str = ""
+    label: str = ""
+    stale_after_minutes: int | None = None
+    alarm: dict | None = None
+    trend_days: int = 0
+    verbs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -228,6 +263,8 @@ def _parse_manifest(data: object) -> AppManifest:
         if view_kind == "external" and base_url is None:
             raise ValueError("app.json: view.kind 'external' requires a 'server.baseUrl'")
 
+    section = _parse_section(data.get("section"), [a.name for a in actions])
+
     icon = data.get("icon")
     return AppManifest(
         name=data["name"].strip(),
@@ -237,6 +274,88 @@ def _parse_manifest(data: object) -> AppManifest:
         server_auth=server_auth,
         actions=actions,
         view_kind=view_kind,
+        section=section,
+    )
+
+
+def _parse_section(raw: object, action_names: list[str]) -> AppSection | None:
+    """Il blocco ``section`` del manifest; solleva ``ValueError`` leggibile.
+
+    Una sezione dichiarata male rende l'app rotta con un errore che si legge,
+    come ogni altro difetto del manifest: non fa cadere il gateway, e non fa
+    comparire nel cassetto una sezione che non sa disegnarsi.
+    """
+    if raw is None:
+        return None
+    where_ = "app.json: section"
+    if not isinstance(raw, dict):
+        raise ValueError(f"{where_} must be an object")
+    params = raw.get("params") or {}
+    if not isinstance(params, dict) or not all(
+        isinstance(k, str) and SECTION_PARAM_RE.match(k) and isinstance(v, dict)
+        for k, v in params.items()
+    ):
+        raise ValueError(f"{where_}.params must map parameter names to objects")
+    value = raw.get("value")
+    if not isinstance(value, dict):
+        raise ValueError(f"{where_}.value is required (collection and field)")
+    collection = value.get("collection")
+    if not isinstance(collection, str) or not COLLECTION_RE.match(collection):
+        raise ValueError(f"{where_}.value.collection must be a collection name")
+    fld = value.get("field")
+    if not isinstance(fld, str) or not fld:
+        raise ValueError(f"{where_}.value.field is required")
+    filters = value.get("where") or {}
+    if not isinstance(filters, dict):
+        raise ValueError(f"{where_}.value.where must be an object")
+    for key, val in filters.items():
+        if isinstance(val, str) and val.startswith("$") and val[1:] not in params:
+            raise ValueError(f"{where_}.value.where.{key}: {val} is not a declared param")
+    latest = value.get("latest", "ts")
+    if not isinstance(latest, str) or not latest:
+        raise ValueError(f"{where_}.value.latest must be a field name")
+    status = raw.get("status") or {}
+    if not isinstance(status, dict):
+        raise ValueError(f"{where_}.status must be an object")
+    stale = status.get("stale_after_minutes")
+    if stale is not None and (isinstance(stale, bool) or not isinstance(stale, int) or stale < 1):
+        raise ValueError(f"{where_}.status.stale_after_minutes must be a positive integer")
+    alarm = status.get("alarm")
+    if alarm is not None:
+        if (
+            not isinstance(alarm, dict)
+            or not isinstance(alarm.get("field"), str)
+            or alarm.get("op") not in SECTION_OPS
+            or isinstance(alarm.get("value"), bool)
+            or not isinstance(alarm.get("value"), (int, float, str))
+        ):
+            raise ValueError(
+                f"{where_}.status.alarm must be {{field, op, value}} with op in {sorted(SECTION_OPS)}"
+            )
+    trend = raw.get("trend") or {}
+    if not isinstance(trend, dict):
+        raise ValueError(f"{where_}.trend must be an object")
+    days = trend.get("days", 0)
+    if isinstance(days, bool) or not isinstance(days, int) or not 0 <= days <= MAX_SECTION_TREND_DAYS:
+        raise ValueError(f"{where_}.trend.days must be between 0 and {MAX_SECTION_TREND_DAYS}")
+    verbs = raw.get("verbs") or []
+    if not isinstance(verbs, list) or len(verbs) > 2:
+        raise ValueError(f"{where_}.verbs must be a list of at most two action names")
+    for verb in verbs:
+        if verb not in action_names:
+            raise ValueError(f"{where_}.verbs: {verb!r} is not an action of this app")
+    return AppSection(
+        collection=collection,
+        field=fld,
+        params=params,
+        where=filters,
+        latest=latest,
+        unit=value.get("unit") if isinstance(value.get("unit"), str) else "",
+        label=value.get("label") if isinstance(value.get("label"), str) else "",
+        stale_after_minutes=stale,
+        alarm=alarm,
+        trend_days=days,
+        verbs=list(verbs),
     )
 
 

@@ -10,7 +10,7 @@
      servono davvero. KaTeX, Mermaid e D3 in casa ci sono, ma **a richiesta**:
      i primi due li carica `shared/rich-content.js` quando un messaggio o una
      pagina contengono davvero una formula o un diagramma, il terzo
-     `home-map.js` al primo tocco sulla mappa. La differenza non e' estetica —
+     le Jenny App che disegnano un grafico. La differenza non e' estetica —
      e' il tempo che passa fra il tocco sull'icona e la prima riga leggibile.
 
      Vale la stessa CSP dell'officina (`script-src 'self'`, v. _SHELL_DOCUMENTS
@@ -85,23 +85,30 @@
       </nav>
     </div>
     <div class="home-actions">
-      <!-- Nelle pagine di un quaderno: l'interruttore fra la sua chat e le sue
-           pagine, lo stesso che la fila mostra nella chat del quaderno e nello
-           stesso punto. Chat e pagine sono due viste dello stesso posto.
-           Nel lettore non c'e': li' il comando e' «Modifica», e all'elenco
-           delle pagine riporta la freccia. Ha preso il posto di «Parlane», che
-           fino al 26/09/2026 era la strada per la chat da qui. -->
+      <!-- Nella bacheca di un quaderno: l'interruttore fra la sua chat e la sua
+           bacheca, lo stesso che la fila mostra nella chat del quaderno e nello
+           stesso punto. Chat e bacheca sono due viste dello stesso posto. -->
       <div class="home-view-switch" id="home-view-switch" role="group" hidden>
         <button class="home-view-seg" id="home-view-chat" type="button" aria-pressed="false">
           <i class="ti ti-message" aria-hidden="true"></i>
           <span id="home-view-chat-label"></span>
         </button>
         <button class="home-view-seg is-on" id="home-view-pages" type="button" aria-pressed="true">
-          <i class="ti ti-book" aria-hidden="true"></i>
+          <i class="ti ti-layout-board" aria-hidden="true"></i>
           <span id="home-view-pages-label"></span>
           <span class="home-view-count" id="home-view-pages-count"></span>
         </button>
       </div>
+      <!-- La lente e' l'unica porta verso tutta la wiki, comprese le pagine che
+           non stanno in nessun cassetto; l'elenco mostra le stesse schede in
+           fila, per chi non ama le bacheche e per lo screen reader. -->
+      <button class="home-board-tool" id="home-board-search-open" type="button" hidden>
+        <i class="ti ti-search" aria-hidden="true"></i>
+      </button>
+      <button class="home-board-tool" id="home-board-list-toggle" type="button"
+              aria-pressed="false" hidden>
+        <i class="ti ti-list" aria-hidden="true"></i>
+      </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
@@ -123,7 +130,7 @@
        scelta: sono cromatura del guscio, e duplicarle in ogni pannello
        vorrebbe dire tenerne N allineate.
 
-       Le stanze (`home-notebook-pages`, `home-reader`, …) restano sorelle della pista
+       Le stanze (`home-board`, `home-board-drawer`, `home-reader`, …) restano sorelle della pista
        e le passano sopra: entrare in una stanza copre le pagine, non le
        sposta. -->
   <div class="home-showcase">
@@ -328,42 +335,22 @@
     </div>
   </div>
 
-  <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────
-       Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e
-       questa e' quella cosa: due linguette sopra la stessa risposta del
-       server — `/api/graph` porta nodi, archi e indice full-text insieme. -->
-  <section class="home-notebook-pages" id="home-notebook-pages">
-    <div class="home-tabs" role="tablist">
-      <button class="home-tab is-on" id="home-tab-list" type="button"
-              role="tab" aria-selected="true" aria-controls="home-notebook-page-list"></button>
-      <button class="home-tab" id="home-tab-map" type="button"
-              role="tab" aria-selected="false" aria-controls="home-map"></button>
+  <!-- ── La seconda stanza: la bacheca di un quaderno ─────────────────────
+       Un quaderno si apre sulla bacheca, non sulle pagine: poche schede curate,
+       i post-it delle attese, i fili, la busta con le proposte di Jenny. La
+       wiki sta dietro, e ci si arriva da un cassetto o dalla lente. -->
+  <section class="home-board" id="home-board">
+    <button class="home-board-since" id="home-board-since" type="button" hidden></button>
+    <div class="home-board-canvas" id="home-board-canvas">
+      <svg class="home-board-threads" id="home-board-threads" aria-hidden="true"></svg>
     </div>
-
-    <!-- Anche qui un `<div>`: la `<label>` vuota (c'era solo la lente) dava al
-         campo un nome vuoto, e il segnaposto tradotto non arrivava a TalkBack.
-         Il campo copre tutta la pastiglia, lente compresa, e il tocco resta. -->
-    <div class="home-search">
-      <i class="ti ti-search" aria-hidden="true"></i>
-      <input class="home-search-input" id="home-notebook-pages-q" type="search"
-             autocomplete="off" autocapitalize="none" spellcheck="false">
-    </div>
-
-    <!-- La nota sta **prima** dell'elenco: l'elenco e' `flex: 1`, quindi da
-         vuoto si prende tutta l'altezza e spingerebbe «nessuna pagina con
-         queste parole» sul bordo inferiore, dove sembra un piede di pagina
-         invece che la risposta alla ricerca appena fatta. -->
-    <div class="home-notebook-pages-note" id="home-notebook-pages-note" hidden></div>
-
-    <div class="home-notebook-page-list" id="home-notebook-page-list" role="tabpanel"
-         aria-labelledby="home-tab-list"></div>
-
-    <div class="home-map" id="home-map" role="tabpanel"
-         aria-labelledby="home-tab-map" hidden>
-      <svg class="home-map-svg" id="home-map-svg" aria-hidden="true"></svg>
-      <div class="home-map-note" id="home-map-note" hidden></div>
-    </div>
+    <div class="home-board-list" id="home-board-list" role="list" hidden></div>
+    <div class="home-board-empty" id="home-board-empty" hidden></div>
   </section>
+
+  <!-- Il cassetto di una scheda: il riassunto per sezioni, scritto da Jenny
+       dalla wiki, e le sezioni che aggiungi tu. -->
+  <section class="home-board-drawer" id="home-board-drawer"></section>
 
   <!-- ── La terza stanza: una pagina ──────────────────────────────────────
        L'HTML lo rende gia' il server (`/api/page`); qui si sanifica e si
@@ -398,6 +385,17 @@
     </div>
   </section>
 
+
+  <!-- Il foglio della bacheca, uno per tutto quel che sale dal basso:
+       «dall'ultima volta», la busta, la ricerca, l'anteprima di una pagina fuori
+       bacheca, «aggiungi sezione». -->
+  <dialog class="oc-sheet home-board-sheet" id="home-board-sheet">
+    <div class="oc-sheet-inner home-board-sheet-inner">
+      <span class="home-board-grip" aria-hidden="true"></span>
+      <h2 class="home-board-sheet-title" id="home-board-sheet-title"></h2>
+      <div class="home-board-sheet-body" id="home-board-sheet-body"></div>
+    </div>
+  </dialog>
 
   <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
        mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico

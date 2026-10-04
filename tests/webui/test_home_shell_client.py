@@ -60,64 +60,6 @@ def test_a_package_change_before_the_apps_page_ever_opened_builds_nothing() -> N
     """)
 
 
-# ── La mappa, nata una volta sola ────────────────────────────────────────────
-
-
-def _run_map(script: str) -> None:
-    """`_drawMap` col suo `import()` sostituito da un caricatore finto che
-    risponde quando il caso lo lascia: l'import vero non si puo' fare da qui."""
-    src = APP_JS.read_text(encoding="utf-8")
-    method = member(src, "_drawMap", prefixes=("async ",))
-    assert "import('./home-map.js')" in method
-    method = method.replace("import('./home-map.js')", "loadMap()")
-    harness = (
-        "import assert from 'node:assert/strict';\n"
-        "let nate = 0, draws = 0, release = null, broken = false;\n"
-        "class HomeMap {\n"
-        "  constructor() { nate += 1; }\n"
-        "  async draw() { draws += 1; }\n"
-        "}\n"
-        "function loadMap() {\n"
-        "  return new Promise((r, no) => { release = () => (broken ? no(new Error('rete')) : r({ HomeMap })); });\n"
-        "}\n"
-        "class App {\n  constructor() { this.map = null; }\n  openPage() {}\n  "
-        + method
-        + "\n}\n"
-    )
-    run_js(harness + script)
-
-
-def test_two_taps_before_the_module_arrives_make_one_map() -> None:
-    """Due `HomeMap` sullo stesso SVG sono due simulazioni che si contendono
-    i nodi: il secondo tocco arrivato prima del modulo ne faceva nascere
-    un'altra."""
-    _run_map("""
-      const app = new App();
-      const a = app._drawMap({}, 'orto');
-      const b = app._drawMap({}, 'orto');
-      release();
-      await Promise.all([a, b]);
-      assert.equal(nate, 1, 'due mappe per due tocchi');
-      assert.equal(draws, 2);
-      assert.ok(app.map instanceof HomeMap);
-    """)
-
-
-def test_a_module_that_failed_to_load_is_tried_again() -> None:
-    _run_map("""
-      const app = new App();
-      broken = true;
-      const a = app._drawMap({}, 'orto');
-      release();
-      await assert.rejects(a);
-      broken = false;
-      const b = app._drawMap({}, 'orto');
-      release();
-      await b;
-      assert.equal(nate, 1, 'dopo un import fallito la mappa non nasce piu\\u2019');
-    """)
-
-
 def test_the_open_app_question_has_a_public_answer() -> None:
     """La casa chiede ad `AppsActions` se c'e' una mini-app aperta: prima lo
     leggeva dal suo campo privato `_openApp`."""

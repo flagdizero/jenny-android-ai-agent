@@ -980,9 +980,10 @@
     "workshop": "Officina",
     "back": {
       "chat": "torna alla chat",
-      "pages": "torna alle pagine",
       "settings": "torna alle Impostazioni",
-      "notebooks": "torna ai quaderni"
+      "notebooks": "torna ai quaderni",
+      "board": "torna alla bacheca",
+      "drawer": "torna al cassetto"
     },
     "path": {
       "label": "Dove sei"
@@ -1014,18 +1015,11 @@
       "newNotebook": "Nuovo quaderno"
     },
     "notebookPages": {
-      "open": "Pagine del quaderno",
+      "open": "Bacheca del quaderno",
       "chat": "Chat",
       "view": "Vista del quaderno",
       "countOne": "1 pagina",
-      "countMany": "{count} pagine",
-      "tabList": "Pagine",
-      "tabMap": "Mappa",
-      "index": "Indice del quaderno",
-      "loading": "Sto guardando…",
-      "none": "Questo quaderno non ha ancora pagine. Scrivono io e te, parlandone.",
-      "noMatch": "Nessuna pagina con queste parole.",
-      "failed": "Non sono riuscita a leggere le pagine di questo quaderno."
+      "countMany": "{count} pagine"
     },
     "reader": {
       "failed": "Non sono riuscita ad aprire questa pagina.",
@@ -1036,10 +1030,6 @@
       "saveFailed": "Non sono riuscita a salvare questa pagina.",
       "conflict": "Jenny ha cambiato questa pagina mentre la modificavi. La ricarico? Quel che hai scritto qui si perde.",
       "discardConfirm": "Esci senza salvare? Le modifiche a questa pagina si perdono."
-    },
-    "map": {
-      "noLinks": "Le pagine non si rimandano ancora l’una all’altra: la mappa compare quando cominciano a farlo.",
-      "failed": "Non sono riuscita a caricare la mappa."
     },
     "model": {
       "title": "Chi risponde",
@@ -1174,6 +1164,160 @@
       "llm-wiki": "La wiki è il tuo secondo cervello: usala per fare ingest di articoli, note e ricerche. Jenny compila e collega le pagine per te, e puoi farle domande sui contenuti raccolti.",
       "skill-creator": "Se Jenny non sa ancora fare qualcosa che ti serve spesso, puoi chiederle di imparare una nuova skill: le spieghi cosa vuoi e lei si costruisce da sola le istruzioni per farlo la prossima volta.",
       "ssh": "Comandi sulle macchine remote che hai registrato in Impostazioni → Officina → Mani → SSH: Jenny può controllare un servizio, leggere un log, aggiornare un server o scambiare un file. Raggiunge solo gli host che hai dichiarato tu, e i comandi lunghi restano in corso anche a telefono spento."
+    }
+  },
+  "board": {
+    "tab": "Bacheca",
+    "failed": "Non sono riuscita a leggere la bacheca di questo quaderno.",
+    "listView": "Vista elenco",
+    "moveFailed": "Non sono riuscita a spostarla: la rimetto dov'era.",
+    "noThreads": "Questa scheda non ha fili.",
+    "offboard": "fuori bacheca",
+    "empty": {
+      "title": "La bacheca è vuota.",
+      "hint": "Raccontami di una cosa di questo quaderno in chat, per esempio:",
+      "example": "ho un acero in vaso 14, lo voglio travasare",
+      "proposed": "Ti ho preparato una bacheca: è nella busta."
+    },
+    "since": {
+      "row": "Dall'ultima volta · {count} novità",
+      "title": "Dall'ultima volta",
+      "note": "Ogni riga la scrive il codice, non il modello: racconta quello che è stato fatto davvero.",
+      "envelopeOne": "Nella busta c'è 1 proposta.",
+      "envelopeMany": "Nella busta ci sono {count} proposte.",
+      "kind": {
+        "board_created": "La bacheca è nata, con {cards} schede.",
+        "card_added": "{title} ha un posto in bacheca.",
+        "card_removed": "{title} è stata messa via: le sue pagine restano, e la ritrovi con la ricerca.",
+        "connection_added": "Un filo nuovo fra due schede.",
+        "page_attached": "Una pagina è entrata in un cassetto.",
+        "section_added": "Una mini app è entrata in un cassetto.",
+        "sections_regenerated": "{title}: riscritte {count} sezioni del cassetto.",
+        "pages_assigned": "{count} pagine nuove sono entrate nei cassetti.",
+        "reminders_added": "{count} promemoria nuovi presi dal diario.",
+        "suggestions_added": "{count} proposte nuove nella busta.",
+        "corrections_applied": "{count} correzioni integrate nella wiki.",
+        "reminder_due": "È il momento: {text}.",
+        "app_event": "{title}: {app} è {state}.",
+        "other": "Qualcosa è cambiato in bacheca."
+      }
+    },
+    "signal": {
+      "new": "novità",
+      "soon": "attesa vicina",
+      "alert": "problema"
+    },
+    "envelope": {
+      "label": "Proposte di Jenny: {count}",
+      "title": "Proposte di Jenny",
+      "emptyTitle": "La busta è vuota",
+      "empty": "Quando la bacheca dovrebbe cambiare forma, la proposta arriva qui. Al massimo due per volta.",
+      "from": "Jenny",
+      "keep": "Lasciala",
+      "putAway": "Mettila via",
+      "later": "Più avanti",
+      "no": "No",
+      "yes": "Sì",
+      "full": "La bacheca è piena: prima togli qualcosa.",
+      "failed": "Non sono riuscita a farlo.",
+      "kind": {
+        "initial_board": "Ho preparato la bacheca di questo quaderno. Va bene così?",
+        "add_card": "Faccio un posto in bacheca a {subject}?",
+        "remove_card": "Metto via {subject}? Le sue pagine restano.",
+        "add_connection": "Lego {subject} con un filo?",
+        "attach_page": "Metto questa pagina nel cassetto di {subject}?",
+        "add_section": "Aggiungo una mini app al cassetto di {subject}?"
+      }
+    },
+    "search": {
+      "title": "Cerca nel quaderno",
+      "placeholder": "Cerca nel quaderno",
+      "none": "Niente con queste parole.",
+      "card": "scheda"
+    },
+    "preview": {
+      "notOnBoard": "Questa pagina non è in bacheca: la uso io per lavorare. Se ti serve qui, dimmelo.",
+      "close": "Chiudi",
+      "want": "Voglio vederla in bacheca",
+      "wanted": "Ci penso alla prossima passata."
+    },
+    "drawer": {
+      "loading": "Sto guardando…",
+      "failed": "Non sono riuscita ad aprire questo cassetto.",
+      "today": "oggi alle {time}",
+      "yesterday": "ieri alle {time}",
+      "pagesOne": "Cassetto · 1 pagina della wiki",
+      "pagesMany": "Cassetto · {count} pagine della wiki",
+      "updated": "aggiornato {when}",
+      "noSummary": "Non ho ancora scritto questo cassetto: lo faccio alla prossima passata.",
+      "threads": "Fili",
+      "allPages": "Le pagine ({count})",
+      "foot": "Il riassunto lo scrive Jenny dalla wiki. Per cambiarlo, correggi: la correzione va nella pagina giusta e torna qui.",
+      "next": "Prossima cosa",
+      "fix": "Correggi",
+      "fixLabel": "Correzione",
+      "fixTarget": "Va come segnalazione su «{page}».",
+      "fixSend": "Invia a Jenny",
+      "fixPending": "Tua correzione · segnalazione su «{page}», la sto integrando",
+      "fixDone": "Integrata nella wiki",
+      "fixFailed": "Non sono riuscita a mandare la correzione."
+    },
+    "reminder": {
+      "done": "Fatto"
+    },
+    "app": {
+      "open": "Apri l'app",
+      "source": "fonte: {app}",
+      "alert": {
+        "alarm": "Dato live di {app}, non della wiki: è in allarme.",
+        "stale": "Dato live di {app}, non della wiki: non arriva niente di nuovo."
+      },
+      "state": {
+        "ok": "aggiornato {when}",
+        "alarm": "in allarme · {when}",
+        "stale": "fermo da {when}",
+        "empty": "ancora nessun dato",
+        "missing": "Questa app non c'è più.",
+        "broken": "Questa app è rotta: aprila dalla sezione App per vedere perché.",
+        "no_section": "Questa app non ha una vista per i cassetti."
+      }
+    },
+    "section": {
+      "add": "+ Aggiungi sezione",
+      "addTitle": "Aggiungi una sezione a {card}",
+      "remove": "Togli",
+      "removeConfirm": "Togliere questa sezione? La wiki non cambia.",
+      "edit": "Modifica",
+      "yours": "tua",
+      "moveUp": "Sposta su",
+      "failed": "Non sono riuscita a salvarla.",
+      "save": "Salva",
+      "noteIntegrated": "✓ nella wiki",
+      "notePending": "in attesa",
+      "notePrompt": "Una cosa da ricordare",
+      "notePlaceholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno.",
+      "reminderWhat": "Cosa?",
+      "reminderWhen": "Quando?",
+      "reminderMonth": "Solo il mese",
+      "noApps": "Nessuna app installata ha una vista per i cassetti.",
+      "newApp": "Creane una nuova…",
+      "newAppPrompt": "Nel cassetto {card} vorrei una mini app che ",
+      "appParam": "{app}: {name}?",
+      "otherPrompt": "Nel cassetto {card} vorrei una sezione che ",
+      "kind": {
+        "note": "Nota",
+        "reminder": "Promemoria",
+        "app": "Mini app",
+        "photo": "Foto",
+        "other": "Altro"
+      },
+      "hint": {
+        "note": "Una cosa da ricordare, scritta da te",
+        "reminder": "Una cosa da fare, con una data",
+        "app": "Dati che si aggiornano da soli",
+        "photo": "Un'immagine, per esempio com'era",
+        "other": "Descrivila e la preparo io"
+      }
     }
   }
 }

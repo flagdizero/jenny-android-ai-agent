@@ -26,6 +26,10 @@ from loguru import logger
 _RETIRED_FILES: tuple[str, ...] = (
     "memory/WIKI.md",  # la rubrica compilata da Atlas
     "memory/.atlas_state.json",  # il suo fingerprint
+    # Gli spilli della mappa a grafo dei quaderni, uscita dalla casa con la
+    # bacheca (ottobre 2026): la bacheca tiene le sue posizioni dentro la
+    # cartella del quaderno, e questo file non lo legge piu' nessuno.
+    ".jenny/map-layout.json",
 )
 
 # Pattern ``glob`` relativi al workspace, per i file coniati per esecuzione.

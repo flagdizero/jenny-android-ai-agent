@@ -233,9 +233,10 @@ def test_the_path_of_an_open_notebook_leads_back_to_the_list() -> None:
     """)
 
 
-def test_the_open_notebook_has_the_chat_and_pages_switch_on_chat() -> None:
-    """A destra del percorso, lo stesso interruttore delle pagine del quaderno:
-    «Chat» acceso, «Pagine» col numero porta alle pagine."""
+def test_the_open_notebook_has_the_chat_and_board_switch_on_chat() -> None:
+    """A destra del percorso, lo stesso interruttore della bacheca del quaderno:
+    «Chat» acceso, «Bacheca» — senza numero: un conteggio di pagine li' accanto
+    si leggerebbe come un conteggio di schede — porta alla bacheca."""
     _run("""
       homePages.notebooksConversation = 'project:piante';
       homePages.index = 4;
@@ -246,7 +247,7 @@ def test_the_open_notebook_has_the_chat_and_pages_switch_on_chat() -> None:
       const [chat, pages] = sw.children;
       assert.equal(chat.attrs['aria-pressed'], 'true');
       assert.equal(pages.attrs['aria-pressed'], 'false');
-      assert.equal(pages.children[2].textContent, '31');
+      assert.equal(pages.children.length, 2, 'la bacheca non porta un numero');
       fire(chat, 'click');
       assert.deepEqual(requested, [], '«Chat» da dentro la chat ha fatto qualcosa');
       fire(pages, 'click');

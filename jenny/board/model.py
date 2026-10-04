@@ -690,3 +690,28 @@ def normalize_card_summary(raw: Any, card_id: str) -> dict[str, Any] | None:
         "brief": clean_block(raw.get("brief"), MAX_TEXT),
         "sections": sections,
     })
+
+
+def compare(left: Any, op: str, right: Any) -> bool:
+    """``left op right`` per le condizioni delle attese e gli allarmi delle app.
+
+    Numeri contro numeri; altrimenti solo uguaglianza e disuguaglianza, sulle
+    stringhe. Un confronto che non ha senso (un numero contro una parola, un
+    valore assente) è **falso**: una condizione che non si può valutare non
+    scatta.
+    """
+    if left is None or right is None or op not in CONDITION_OPS:
+        return False
+    numeric = (int, float)
+    if isinstance(left, numeric) and isinstance(right, numeric) and not (
+        isinstance(left, bool) or isinstance(right, bool)
+    ):
+        a, b = float(left), float(right)
+        return {
+            "<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b, "==": a == b, "!=": a != b,
+        }[op]
+    if op == "==":
+        return str(left) == str(right)
+    if op == "!=":
+        return str(left) != str(right)
+    return False

@@ -108,6 +108,32 @@ export function linkTarget({ href, wikilink, notebook, currentPath, here = globa
   return rel ? { kind: 'page', path: rel } : null;
 }
 
+/** Un link di pagina visto attraverso la bacheca: i tre tipi del lettore.
+ *
+ *  I file non cambiano — i `[[link]]` restano come Jenny li ha scritti — ma
+ *  chi legge non deve impantanarsi nella wiki: da un cassetto si apre una
+ *  pagina, e da li'
+ *  - una pagina **dello stesso cassetto** si apre al posto di quella corrente
+ *    (profondita' massima uno: «indietro» porta sempre al cassetto);
+ *  - una pagina **di un altro cassetto** apre quel cassetto, non la pagina;
+ *  - una pagina **fuori bacheca** si guarda in anteprima, e basta.
+ *
+ *  *board* e' l'appartenenza che `/api/page` manda con la pagina; senza (un
+ *  quaderno che non ha una bacheca) il link resta un link.
+ *
+ *  @returns `{kind:'page', path}` | `{kind:'drawer', card, title}` |
+ *           `{kind:'offboard', path}`
+ */
+export function classifyBoardLink(target, board) {
+  if (!target || target.kind !== 'page' || !board) return target;
+  const links = board.links || {};
+  if (!Object.hasOwn(links, target.path)) return target;
+  const owner = links[target.path];
+  if (!owner) return { kind: 'offboard', path: target.path };
+  if (owner.card === board.card) return target;
+  return { kind: 'drawer', card: owner.card, title: owner.title };
+}
+
 export class HomeReader {
   constructor() {
     this.el = document.getElementById('home-reader');
@@ -122,6 +148,11 @@ export class HomeReader {
     /** Il markdown sorgente della pagina a schermo: e' quel che l'editor apre,
      *  ed e' il `base` che il salvataggio manda al server. */
     this.raw = '';
+    /** L'appartenenza alla bacheca della pagina a schermo e dei suoi link. */
+    this.board = null;
+    /** Chi apre un cassetto o un'anteprima quando un link lo chiede. */
+    this.onOpenDrawer = null;
+    this.onPreview = null;
     this.editing = false;
     /** Chi disegna l'intestazione: entrare e uscire dall'editor cambia quali
      *  comandi valgono lassu'. */
@@ -268,8 +299,9 @@ export class HomeReader {
        pagina precedente non deve restare qui — «Modifica» aprirebbe un testo
        che non e' quello a schermo, e lo salverebbe sopra un'altra pagina. */
     this.raw = '';
+    this.board = null;
     this.bodyEl.innerHTML = '';
-    this._say('home.notebookPages.loading');
+    this._say('board.drawer.loading');
 
     let page;
     try {
@@ -287,7 +319,9 @@ export class HomeReader {
        salvataggio confronta. `/api/page` lo manda gia', quindi «Modifica» non
        costa una seconda richiesta. */
     this.raw = page.raw || '';
+    this.board = page.board || null;
     this.bodyEl.innerHTML = this._safeHtml(page.html, page.raw);
+    this._markBoardLinks();
     /* Diagrammi e formule, che il server lascia da rendere: marca i blocchi
        mermaid (`webui/wiki.py`) e il LaTeX lo lascia nel testo.
        **Non si aspetta**: la pagina e' gia' leggibile, e mermaid sono 3,3 MB —
@@ -314,6 +348,30 @@ export class HomeReader {
     return `<pre class="home-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
 
+  /* I link si vestono per quel che fanno: normale lo stesso cassetto, con
+     l'etichetta del cassetto se porta altrove, a puntini se porta fuori dalla
+     bacheca. La differenza si vede prima di toccare. */
+  _markBoardLinks() {
+    if (!this.board) return;
+    this.bodyEl.querySelectorAll('a').forEach((a) => {
+      const target = classifyBoardLink(linkTarget({
+        href: contentLinkHref(a),
+        wikilink: a.classList.contains('wikilink'),
+        notebook: this.notebook,
+        currentPath: this.path,
+      }), this.board);
+      if (target?.kind === 'drawer') {
+        a.classList.add('home-link-drawer');
+        const chip = document.createElement('span');
+        chip.className = 'home-link-chip';
+        chip.textContent = `▸ ${target.title}`;
+        a.appendChild(chip);
+      } else if (target?.kind === 'offboard') {
+        a.classList.add('home-link-offboard');
+      }
+    });
+  }
+
   _say(key) {
     this.bodyEl.innerHTML = '';
     const note = document.createElement('p');
@@ -328,12 +386,12 @@ export class HomeReader {
     const a = contentLinkOf(e.target);
     if (!a) return;
     e.preventDefault();
-    const target = linkTarget({
+    const target = classifyBoardLink(linkTarget({
       href: contentLinkHref(a),
       wikilink: a.classList.contains('wikilink'),
       notebook: this.notebook,
       currentPath: this.path,
-    });
+    }), this.board);
     if (!target) {
       showToast(i18n.t('common.linkNotOpenable'), 'info');
       return;
@@ -348,6 +406,14 @@ export class HomeReader {
          non le supporta), la richiesta ricade su `shouldOverrideUrlLoading` e
          il guscio nativo apre una scheda di Chrome. */
       if (!openOutsideWebView(target.href)) showToast(i18n.t('common.linkNotOpenable'), 'error');
+      return;
+    }
+    if (target.kind === 'drawer') {
+      this.onOpenDrawer?.(target.card, target.title);
+      return;
+    }
+    if (target.kind === 'offboard') {
+      this.onPreview?.(target.path, this.board?.card || null);
       return;
     }
     this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));

@@ -61,6 +61,13 @@ async function send(method, params, opts) {
 }
 
 export const rpc = {
+  /** Una scrittura della bacheca di un quaderno: i comandi `board.*`
+   *  (`jenny/webui/board_commands.py`). `wiki` e' il nome del quaderno; il
+   *  resto dei parametri dipende dal comando. */
+  board(method, wiki, params = {}) {
+    return send(`board.${method}`, { wiki, ...params });
+  },
+
   /** Salva un file di testo del workspace (tetto 1 MB, lato server).
    *
    *  `base`, facoltativo, e' il testo da cui l'editor e' partito: se il file su

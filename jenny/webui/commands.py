@@ -1369,6 +1369,13 @@ async def dispatch_command(
     traceback non deve mai raggiungere il client.
     """
     handler = COMMANDS.get(method)
+    if handler is None and method.startswith("board."):
+        # Le scritture della bacheca stanno in un modulo loro, che importa da
+        # questo: caricate qui, al primo uso, per non chiudere un cerchio
+        # d'import all'avvio.
+        from jenny.webui.board_commands import BOARD_COMMANDS
+
+        handler = BOARD_COMMANDS.get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
     try:

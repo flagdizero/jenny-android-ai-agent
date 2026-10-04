@@ -36,6 +36,14 @@ def list_apps_payload(workspace: Path) -> dict:
                     # non incornicia app/index.html, chiede l'URL del proxy e
                     # usa un sandbox diverso (v. openApp in mobile-apps.js).
                     "view_kind": app.manifest.view_kind,
+                    # La vista compatta per un cassetto della bacheca, se l'app
+                    # ne dichiara una: il menu «Aggiungi sezione» propone solo
+                    # queste, e chiede i parametri che la sezione vuole.
+                    "section": (
+                        {"params": app.manifest.section.params}
+                        if app.manifest.section is not None
+                        else None
+                    ),
                 }
             )
         else:

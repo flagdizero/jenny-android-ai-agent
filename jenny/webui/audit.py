@@ -23,7 +23,10 @@ from datetime import datetime
 
 _CONTEXT_CHARS = 80
 
-_VALID_SOURCES: tuple[str, ...] = ("obsidian-plugin", "web-viewer", "manual")
+# ``board``: una correzione fatta dal cassetto di una scheda (``jenny/board/
+# corrections.py``). Non e' ancorata a un punto del testo ma alla pagina intera,
+# perche' una riga di riassunto e' una sintesi, non un pezzo esatto di pagina.
+_VALID_SOURCES: tuple[str, ...] = ("obsidian-plugin", "web-viewer", "manual", "board")
 _VALID_STATUSES: tuple[str, ...] = ("open", "resolved")
 
 _ID_RE = re.compile(r"\A\d{8}-\d{6}-[0-9a-f]{4}\Z")
@@ -63,6 +66,11 @@ class AuditEntry:
     created: str
     status: str
     body: str = ""
+    # Chiavi in piu' nel frontmatter, dopo quelle dello schema. Le usa una
+    # correzione della bacheca per dire da quale scheda e sezione viene
+    # (``board_card``, ``board_section``); il lint controlla solo che quelle
+    # dello schema ci siano.
+    extra: dict | None = None
 
     def validate(self) -> None:
         """Basic validation. Raises ValueError on issues."""
@@ -148,6 +156,8 @@ def to_markdown(entry: AuditEntry) -> str:
         "created": entry.created,
         "status": entry.status,
     }
+    for key, value in (entry.extra or {}).items():
+        front.setdefault(key, value)
     import yaml
 
     yml = yaml.dump(
