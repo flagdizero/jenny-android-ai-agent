@@ -171,6 +171,22 @@ class TestOutcomeMessages:
 
         assert "no tokens spent" in text
 
+    def test_a_board_pass_on_an_empty_journal_does_not_claim_it_cost_nothing(self):
+        text = _format_gardener_outcome(
+            "viaggio", GardenerOutcome(status="skipped_no_delta", board="done")
+        )
+
+        assert "no tokens spent" not in text
+        assert "envelope" in text
+
+    def test_the_board_sentence_follows_the_wiki_one(self):
+        text = _format_gardener_outcome(
+            "viaggio", GardenerOutcome(status="written", lines=4, writes=2, board="failed")
+        )
+
+        assert text.startswith("The gardener read 4 journal lines")
+        assert text.endswith("the next pass retries.")
+
     def test_the_two_ways_of_writing_nothing_are_not_the_same_sentence(self):
         """«non c'era niente che meritasse una pagina» e «ho provato e sono stato
         bloccato» sono lo stesso silenzio visto da fuori e due fatti opposti: il

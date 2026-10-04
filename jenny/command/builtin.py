@@ -655,7 +655,37 @@ def _gardener_no_target() -> str:
 
 
 def _format_gardener_outcome(name: str, outcome: "GardenerOutcome") -> str:
-    """Messaggio utente per una passata.
+    """Messaggio utente per una passata: la wiki, poi la bacheca se e' girata.
+
+    La passata della bacheca gira anche a diario vuoto (una prima bacheca da
+    proporre, un cassetto stantio), quindi la frase «non c'era niente, nessun
+    token speso» sarebbe falsa proprio quando la bacheca ha lavorato: in quel
+    caso la wiki tace e parla solo la bacheca.
+    """
+    board = _gardener_board_line(name, outcome.board)
+    if not board:
+        return _format_wiki_outcome(name, outcome)
+    if outcome.status == "skipped_no_delta":
+        return f"Nothing new in {name}'s journal for the pages. {board}"
+    return f"{_format_wiki_outcome(name, outcome)} {board}"
+
+
+def _gardener_board_line(name: str, status: str) -> str:
+    """La frase della passata della bacheca, o ``""`` se non e' partita."""
+    if status == "done":
+        return (
+            f"Then it went over {name}'s board: anything it proposes, a first board "
+            "included, is waiting in the envelope."
+        )
+    if status == "incomplete":
+        return f"Then it started on {name}'s board but did not finish; the next pass retries."
+    if status == "failed":
+        return f"Then the board pass over {name} failed; the next pass retries."
+    return ""
+
+
+def _format_wiki_outcome(name: str, outcome: "GardenerOutcome") -> str:
+    """Messaggio utente per la passata della wiki.
 
     Gli esiti "non ho fatto niente" hanno frasi distinte, come per Dream: un
     comando che risponde "fatto" senza aver fatto niente è peggio di uno che dice
