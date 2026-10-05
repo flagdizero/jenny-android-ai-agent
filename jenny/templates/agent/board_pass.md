@@ -68,7 +68,9 @@ For each, call `board_write_summary` once:
 - When a section's pages did not change what it says, copy it as it was: the user sees a blue dot on
   every section whose text changed, and a dot that means nothing teaches them to ignore it.
 
-Write it from the pages, not from memory: every sentence must be backed by a page you cite.{% else %}No drawer needs rewriting.{% endif %}
+Write it from the pages, not from memory: every sentence must be backed by a page you cite. Never
+quote a live value (a micro app reading, a cron's last result): the drawer shows those itself, and
+a summary that carried them would need rewriting at every reading.{% else %}No drawer needs rewriting.{% endif %}
 
 ### 4. Reminders
 

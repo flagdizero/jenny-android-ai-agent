@@ -45,7 +45,20 @@ _PROJECT_REFUSAL = (
     "of the screen) and ask for it there; do not try another way of scheduling it from here."
 )
 
+# Un quaderno senza bacheca non ha un cassetto in cui mettere un cron: resta
+# la regola di prima, con la stessa indicazione di dove si fa.
+_NO_BOARD_REFUSAL = _PROJECT_REFUSAL
+
+_NOTEBOOK_NOTE = (
+    "In a notebook chat a job lives in the drawer of one card (`card`), runs inside this "
+    "notebook and delivers here; list and remove see only this notebook's jobs."
+)
+
 _CRON_PARAMETERS = tool_parameters_schema(
+    card=StringSchema(
+        "Only in a notebook chat, and required there for action='add': the card (title or id) "
+        "whose drawer this job belongs in — the user sees it there. If no card fits, ask."
+    ),
     action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
     name=StringSchema(
         "Optional short human-readable label for the job "
@@ -171,7 +184,8 @@ class CronTool(Tool, ContextAware):
             "mode='reminder' (default) always speaks when it fires; mode='monitor' is a recurring "
             "check that runs silently and speaks only when something changed or is worth "
             "reporting (needs every_seconds or cron_expr, never at). "
-            f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}."
+            f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}. "
+            + _NOTEBOOK_NOTE
         )
 
     def validate_params(self, params: dict[str, Any]) -> list[str]:
@@ -209,7 +223,8 @@ class CronTool(Tool, ContextAware):
         # personale a una conversazione di lavoro ("chi sei viaggia, dove altro
         # lavori no"), e ``remove`` la cancellerebbe da li' dentro.
         if is_project_session_key(self._session_key.get()):
-            return _PROJECT_REFUSAL
+            return await self._notebook(action, kwargs.get("card"), name, message,
+                                        every_seconds, cron_expr, tz, at, job_id, mode)
         # Seconda chiusura, e regola diversa: quella sopra dice *dove* si
         # programma, questa dice *se questo turno* puo' cambiare qualcosa. Vale
         # anche nella chat personale, ed e' la sola lettura del passo 4. Un job
@@ -227,6 +242,103 @@ class CronTool(Tool, ContextAware):
             return self._remove_job(job_id)
         return f"Unknown action: {action}"
 
+    # -- i cron del quaderno ---------------------------------------------------
+
+    def _notebook_root(self) -> Any:
+        from jenny.board.store import read_board
+        from jenny.security.workspace_access import current_workspace_scope
+        from jenny.utils.wiki_paths import is_wiki_root
+
+        scope = current_workspace_scope()
+        root = scope.write_root() if scope is not None else None
+        if root is None or not is_wiki_root(root):
+            return None
+        board = read_board(root)
+        return (root, board) if board is not None and board["cards"] else None
+
+    async def _notebook(self, action: str, card_ref: Any, name: str | None, message: str,
+                        every_seconds: int | None, cron_expr: str | None, tz: str | None,
+                        at: str | None, job_id: str | None, mode: str | None) -> str:
+        """Il cron in un quaderno: **nel cassetto di una scheda**, e solo di questo quaderno.
+
+        Chiuso finche' il quaderno non ha una bacheca (dove lo vedrebbe l'utente?).
+        Con la bacheca, ``add`` vuole la scheda: il job nasce legato a quaderno,
+        scheda e sezione, gira col recinto del quaderno e consegna nella sua chat;
+        la sezione ``cron`` nel cassetto lo mostra e lo toglie.
+        """
+        from jenny.board import model
+        from jenny.board.micro import find_card
+        from jenny.board.store import mutate_board
+
+        found = self._notebook_root()
+        if found is None:
+            return _NO_BOARD_REFUSAL
+        root, board = found
+        notebook = self._session_key.get()[len("project:"):]
+        mine = [j for j in self._cron.list_jobs(include_disabled=True)
+                if (j.payload.board or {}).get("notebook") == notebook
+                and (j.enabled or j.paused_at_ms is not None)]
+        if action == "list":
+            if not mine:
+                return "No scheduled jobs in this notebook."
+            return "Scheduled jobs in this notebook:\n" + "\n".join(
+                f"- {j.name} (id: {j.id}, {self._format_timing(j.schedule)}, in the drawer "
+                f"of `{(j.payload.board or {}).get('card')}`)" for j in mine)
+        if current_turn_is_readonly():
+            return READONLY_TOOL_REFUSAL
+        if action == "remove":
+            job = next((j for j in mine if j.id == job_id), None)
+            if job is None:
+                return f"No job `{job_id}` in this notebook (action='list' shows them)."
+            out = self._remove_job(job_id)
+            link = job.payload.board or {}
+
+            def drop(b: dict[str, Any]) -> bool | None:
+                card = model.card_by_id(b, str(link.get("card")))
+                if card is None:
+                    return False
+                keep = [x for x in card["userSections"] if x.get("id") != link.get("section")]
+                if len(keep) == len(card["userSections"]):
+                    return False
+                card["userSections"] = keep
+                return None
+
+            mutate_board(root, drop)
+            return out
+        if action != "add":
+            return f"Unknown action: {action}"
+        if self._in_cron_context.get():
+            return "Error: cannot schedule new jobs from within a cron job execution"
+        card = find_card(board, str(card_ref or ""))
+        if card is None:
+            titles = ", ".join(f"«{c['title']}»" for c in board["cards"])
+            return ("Say which card's drawer this job belongs in (`card`): the user will see it "
+                    f"there. Cards: {titles}. If none fits, ask the user.")
+        taken = {x["id"] for c in board["cards"] for x in c.get("userSections") or []}
+        section_id = model.unique_id("s-cron", taken)
+        link = {"notebook": notebook, "card": card["id"], "section": section_id}
+        out = self._add_job(name, message, every_seconds, cron_expr, tz, at, mode, board=link)
+        created = out.rsplit("(id: ", 1)
+        if not out.startswith("Created job") or len(created) != 2:
+            return out
+        new_id = created[1].rstrip(")")
+
+        def attach(b: dict[str, Any]) -> None:
+            target = model.card_by_id(b, card["id"])
+            if target is None:
+                raise ValueError("card gone")
+            target["userSections"].append({
+                "id": section_id, "kind": "cron", "job": new_id, "name": name or message[:30],
+                "by": "jenny-on-request", "created": model.now_iso(),
+            })
+
+        try:
+            mutate_board(root, attach)
+        except Exception:  # noqa: BLE001 — senza la sezione il job non avrebbe casa
+            self._cron.remove_job(new_id)
+            return "Error: the job could not be put in the drawer, so it was not created."
+        return f"{out} — it is in the drawer of «{card['title']}», and delivers in this notebook."
+
     def _add_job(
         self,
         name: str | None,
@@ -236,6 +348,8 @@ class CronTool(Tool, ContextAware):
         tz: str | None,
         at: str | None,
         mode: str | None = None,
+        *,
+        board: dict[str, Any] | None = None,
     ) -> str:
         if not message:
             return (
@@ -306,6 +420,7 @@ class CronTool(Tool, ContextAware):
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
                 origin_metadata=dict(self._origin_metadata.get() or {}),
+                board=board,
             )
         except ValueError as exc:
             # Il rifiuto del servizio (un'espressione che non si legge o non
@@ -440,6 +555,11 @@ class CronTool(Tool, ContextAware):
                 else ""
             )
             parts = [f"- {j.name} (id: {j.id}, {timing}{mode_note})"]
+            if j.payload.board:
+                parts.append(
+                    f"  In the notebook {j.payload.board.get('notebook')}, in the drawer of "
+                    f"`{j.payload.board.get('card')}`: it belongs there."
+                )
             if j.payload.kind == "system_event":
                 parts.append(f"  Purpose: {self._system_job_purpose(j)}")
                 parts.append("  Protected: visible for inspection, but cannot be removed.")

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
+from jenny.board.cron_link import last_message_text, link_alive, record_result
 from jenny.bus.events import InboundMessage
 from jenny.cron.could_not_check import (
     ESCALATE_AFTER_FAILURES,
@@ -32,6 +33,7 @@ from jenny.cron.types import (
 )
 from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
 from jenny.runtime.power import keep_awake
+from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.prompt_templates import render_template
 
@@ -195,10 +197,18 @@ async def _run_bound_cron_job(
         raise ValueError(f"cron job {job.id} is missing payload.session_key")
 
     monitor = job.payload.mode == "monitor"
+    board_link = job.payload.board
+    if board_link is not None and not link_alive(board_link):
+        # Il quaderno o la scheda non ci sono piu': il cron non ha piu' casa.
+        raise ValueError(f"notebook gone: {board_link.get('notebook')}/{board_link.get('card')}")
     # Un monitor gira in una sessione tutta sua: ``payload.session_key`` resta il
     # target di consegna e il valore registrato nella run record, ma non è più la
-    # sessione in cui il turno viene eseguito.
-    turn_session_key = monitor_session_key(job.id) if monitor else session_key
+    # sessione in cui il turno viene eseguito. Quella di un cron del quaderno
+    # porta il nome del quaderno, da cui il turno ricava il recinto.
+    if monitor and board_link is not None:
+        turn_session_key = notebook_cron_session_key(str(board_link["notebook"]), job.id)
+    else:
+        turn_session_key = monitor_session_key(job.id) if monitor else session_key
 
     # L'escalation si decide PRIMA del turno, perché è una riga di prompt: solo
     # il modello, dentro il turno, sa se il controllo è riuscito adesso, ed è
@@ -284,6 +294,17 @@ async def _run_bound_cron_job(
             cron_tool.reset_cron_context(cron_token)
 
     response = outcome.text
+
+    if board_link is not None:
+        said = response or ""
+        if monitor and outcome.spoke:
+            try:
+                said = last_message_text(agent.sessions.get_or_create(turn_session_key))
+            except Exception:  # noqa: BLE001 — l'esito nel cassetto e' una cortesia
+                said = ""
+            said = said or outcome.final_text
+        record_result(board_link, status="ok" if (outcome.spoke or not monitor) else "silent",
+                      text=said if (outcome.spoke or not monitor) else "", job_name=job.name)
 
     if monitor:
         _prune_monitor_session(agent, turn_session_key)

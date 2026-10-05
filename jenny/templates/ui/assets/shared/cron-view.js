@@ -266,6 +266,8 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       health: jobHealth(job),
       monitor: job.mode === 'monitor',
       oneShot: job.one_shot,
+      /* Un cron del quaderno dice dove sta: «piante › acero». */
+      place: job.board ? `${job.board.notebook} › ${job.board.card}` : null,
       messagePreview: job.message_preview,
       message: job.message,
       schedule: describeSchedule(job.schedule, { tr, locale, timeZone: tz }),

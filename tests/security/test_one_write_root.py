@@ -271,6 +271,75 @@ async def _root_ssh_transfer(env: Env) -> Path:
         ssh_mod.get_ssh_backend = original  # type: ignore[assignment]
 
 
+def _bind_project_chat(env: Env) -> Any:
+    from jenny.agent.tools.context import RequestContext, bind_request_context
+
+    return bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:palestra", session_key="project:palestra"))
+
+
+def _seed_board(env: Env) -> None:
+    from jenny.board.store import mutate_board
+
+    for d in (env.project, env.other):
+        mutate_board(d, lambda b: b["cards"].append(
+            {"id": "schede", "title": "Schede", "pages": [], "pos": {"x": 1, "y": 1}}))
+
+
+async def _root_micro_app(env: Env) -> Path:
+    """Destinazione fissa: la radice è quella sotto cui compare ``board/micro/``."""
+    from unittest.mock import patch
+
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.agent.tools.micro_app import MicroAppTool
+
+    _seed_board(env)
+    token = _bind_project_chat(env)
+    try:
+        with patch("jenny.config.paths.get_workspace_path", lambda: env.ws):
+            out = await MicroAppTool().execute(
+                action="draft", card="schede", title="Conta",
+                fields={"n": {"label": "Quante", "type": "number"}},
+                code="def run(ctx):\n    return {'n': 3}\n")
+    finally:
+        reset_request_context(token)
+    assert "Trial run OK" in out, out
+    created = [p.parents[1] for p in env.tmp.rglob("board/micro/.drafts")]
+    assert len(created) == 1, f"un solo `board/micro/` atteso, trovati {created}"
+    return created[0].parent
+
+
+async def _root_cron(env: Env) -> Path:
+    """Un cron del quaderno: la radice è quella la cui bacheca riceve la sezione."""
+    from types import SimpleNamespace
+
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.cron import CronTool
+    from jenny.board.store import read_board
+
+    _seed_board(env)
+
+    class _Cron:
+        def add_job(self, **kw: Any) -> Any:
+            return SimpleNamespace(id="j1", name="probe")
+
+        def list_jobs(self, include_disabled: bool = False) -> list[Any]:
+            return []
+
+        def remove_job(self, _id: str) -> str:
+            return "removed"
+
+    tool = CronTool(_Cron(), default_timezone="UTC")  # type: ignore[arg-type]
+    tool.set_context(RequestContext(channel="websocket", chat_id="project:palestra",
+                                    session_key="project:palestra"))
+    out = await tool.execute(action="add", card="schede", message="x", every_seconds=3600)
+    assert "Created job" in out, out
+    hits = [d for d in (env.project, env.other)
+            if any(s.get("kind") == "cron" for s in read_board(d)["cards"][0]["userSections"])]
+    assert len(hits) == 1, f"una sola bacheca deve ricevere il cron, trovate {hits}"
+    return hits[0]
+
+
 # Nome della superficie → sonda. Il MODULO è la chiave del controllo
 # strutturale qui sotto: una superficie nuova senza sonda fa fallire quello.
 _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
@@ -284,6 +353,8 @@ _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
     "download_file": ("download.py", _root_download),
     "journal_append": ("journal.py", _root_journal),
     "ssh_transfer (down)": ("ssh.py", _root_ssh_transfer),
+    "micro_app (draft)": ("micro_app.py", _root_micro_app),
+    "cron del quaderno (add)": ("cron.py", _root_cron),
 }
 
 

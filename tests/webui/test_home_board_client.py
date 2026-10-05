@@ -282,3 +282,122 @@ def test_the_pure_helpers_of_the_board() -> None:
         .replace("__SPARK__", function(drawer, "sparkline"))
     )
     assert run_js(script).strip().endswith("ok")
+
+
+_MICRO = {
+    "slug": "m-acerello", "micro": "m-acerello", "name": "Acerello", "label": "Umidità",
+    "unit": "%", "field": "moisture", "type": "number", "verbs": [], "params": {},
+    "value": 38, "at": "2026-10-05T12:00:00+00:00", "trend": [40, 39, 38],
+    "dataState": "ok", "extras": [{"field": "online", "label": "Sensore", "unit": "",
+                                   "type": "bool", "value": True}],
+    "source": "hub WaterBot", "every": 30, "net": [], "uses": ["waterbot-imh"],
+    "codeStatus": "ok", "lastRunAt": "", "nextRunAt": "", "lastError": "", "failures": 0,
+}
+
+
+def _run_micro(state: str, script: str, *, error: str = "") -> None:
+    board = json.loads(json.dumps(BOARD))
+    board["cards"][0]["auto"] = True
+    card = json.loads(json.dumps(CARD))
+    view = {**_MICRO, "state": state, "lastError": error}
+    card["userSections"] = [{"id": "s-micro", "kind": "micro", "micro": "m-acerello",
+                             "pending": state == "pending", "view": view}]
+    head = (
+        _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
+        + "for (const m of ['board.micro.keep', 'board.micro.discard', 'board.micro.run',"
+          " 'board.micro.pause']) rpcAnswers[m] = () => ({ ok: true });\n"
+    )
+    run_home(head + script)
+
+
+@requires_jsdom
+def test_a_micro_app_on_trial_is_kept_from_the_drawer() -> None:
+    _run_micro("pending", """
+      // Il segno ⟳ sulla polaroid: qualcosa gira da solo, ma non e' un segnale rosso.
+      const polaroid = document.querySelector('.home-board-polaroid[data-id="acero"]');
+      assert.ok(polaroid.querySelector('.home-board-auto'));
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      assert.match(drawer.textContent, /38%/);
+      assert.match(drawer.textContent, /waterbot-imh/);
+      assert.ok(drawer.querySelector('.home-drawer-app.is-pending'));
+      const keep = [...drawer.querySelectorAll('.home-board-btn.is-primary')]
+        .find((b) => /Tienila|Keep/.test(b.textContent));
+      keep.click();
+      await tick(40);
+      assert.equal(rpcs('board.micro.keep').at(-1).params.micro, 'm-acerello');
+    """)
+
+
+@requires_jsdom
+def test_a_broken_micro_app_asks_jenny_to_fix_it() -> None:
+    _run_micro("broken", """
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      assert.ok(drawer.querySelector('.home-drawer-alert'));
+      assert.ok(drawer.querySelector('.home-drawer-app.is-broken'));
+      const fix = [...drawer.querySelectorAll('.home-board-btn.is-primary')]
+        .find((b) => /sistemare|fix/i.test(b.textContent));
+      fix.click();
+      await tick(40);
+      assert.equal(app.view, 'chat');
+      assert.match(document.getElementById('home-input').value, /KeyError: 'soil'/);
+    """, error="Traceback...\nKeyError: 'soil'")
+
+
+@requires_jsdom
+def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
+    _run("""
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      document.querySelector('.home-drawer-add').click();
+      await tick(10);
+      const rows = [...document.querySelectorAll('.home-board-menu-row')];
+      const micro = rows.find((r) => /Micro app/.test(r.textContent));
+      assert.ok(micro, 'niente voce Micro app');
+      assert.ok(!rows.some((r) => /^Mini app/.test(r.querySelector('.home-board-menu-name')?.textContent || '')));
+      micro.click();
+      await tick(10);
+      const input = document.querySelector('.home-board-form .home-board-input');
+      input.value = "l'umidità di Acerello";
+      input.closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await tick(30);
+      assert.equal(app.view, 'chat');
+      assert.match(document.getElementById('home-input').value, /micro app .*umidità di Acerello/);
+    """)
+
+
+@requires_jsdom
+def test_a_notebook_cron_shows_in_its_drawer_and_pauses_there() -> None:
+    board = json.loads(json.dumps(BOARD))
+    card = json.loads(json.dumps(CARD))
+    card["userSections"] = [{
+        "id": "s-cron", "kind": "cron",
+        "job": {"id": "ab12cd34", "name": "Meteo", "message": "guarda il meteo e dimmi se annaffiare",
+                "mode": "monitor", "schedule": {"kind": "every", "every_ms": 86400000},
+                "nextRunAtMs": 1791172800000, "lastRunAtMs": None, "lastStatus": None,
+                "paused": False, "enabled": True},
+        "result": {"at": "2026-10-05T09:00:00+02:00", "status": "ok",
+                   "text": "Oggi piove: niente acqua.", "textAt": "2026-10-05T09:00:00+02:00"},
+    }]
+    head = (
+        _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
+        + "rpcAnswers['board.cron.pause'] = () => ({ ok: true });\n"
+    )
+    run_home(head + """
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      assert.match(drawer.textContent, /Meteo/);
+      assert.match(drawer.textContent, /Oggi piove: niente acqua\\./);
+      assert.match(drawer.textContent, /usa il modello|uses the model/);
+      const pause = [...drawer.querySelectorAll('.home-drawer-link')]
+        .find((b) => /^(Pausa|Pause)$/.test(b.textContent));
+      pause.click();
+      await tick(40);
+      const call = rpcs('board.cron.pause').at(-1);
+      assert.equal(call.params.job, 'ab12cd34');
+      assert.equal(call.params.paused, true);
+    """)

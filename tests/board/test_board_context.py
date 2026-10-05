@@ -95,3 +95,32 @@ def test_the_open_questions_of_the_map_still_reach_the_turn(tmp_path) -> None:
     block = board_block(root)
     assert "Open in the map: - [[travaso-acero]] dice marzo" in block
     assert "## Pagine" not in block
+
+
+def test_a_micro_app_and_a_cron_reach_the_block_and_the_drawer(tmp_path) -> None:
+    from jenny.board import micro as mc
+
+    root = _notebook(tmp_path)
+    _cards(root, 1, brief="In vaso 14.")
+    mc.write_micro(root, "m-acerello", {
+        "title": "Acerello", "fields": {"moisture": {"label": "Umidità", "unit": "%"}},
+    }, "def run(ctx):\n    return {'moisture': 38}\n", draft=False)
+    from datetime import datetime, timezone
+
+    mc.append_reading(mc.micro_dir(root, "m-acerello"), {"moisture": 38},
+                      now=datetime.now(timezone.utc))
+
+    def apply(board):
+        board["cards"][0]["userSections"] += [
+            {"id": "s-micro", "kind": "micro", "micro": "m-acerello"},
+            {"id": "s-cron", "kind": "cron", "job": "ab12cd34", "name": "Meteo"},
+        ]
+        board["cronResults"] = {"pianta-0/s-cron": {"at": "2026-10-05T09:00:00+02:00",
+                                                   "status": "ok", "text": "Oggi piove."}}
+
+    mutate_board(root, apply)
+    assert "[auto: Acerello 38% · cron Meteo]" in board_block(root)
+    drawer = turn_lines(root, "come sta pianta 0?")[0]
+    assert "Micro app «Acerello» (`m-acerello`, micro_app tool): Umidità 38%" in drawer
+    assert "board/micro/m-acerello/run.py" in drawer
+    assert "Notebook cron «Meteo»" in drawer and "Oggi piove." in drawer

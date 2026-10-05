@@ -249,6 +249,9 @@ def _job_payload(
         "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
         "one_shot": job.delete_after_run,
+        # Un cron del quaderno: dove sta (``{notebook, card, section}``), cosi'
+        # l'elenco dell'officina lo dice «piante › Acero». ``None`` per gli altri.
+        "board": job.payload.board,
         # Il testo del promemoria e' contenuto dell'utente: l'anteprima
         # nell'elenco, l'intero solo nel dettaglio. Per i job di sistema non c'e'
         # niente da mostrare — il container li registra senza messaggio e il

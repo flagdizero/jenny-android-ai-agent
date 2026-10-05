@@ -442,9 +442,14 @@ correlate a reply to.
 | `board.fix` | `wiki`, `card`, `section`, `text` | Correct a drawer section. Nothing on the board is written: the correction becomes an audit (`source: board`) on the first page the section comes from, the board pass applies it to the wiki and the summary is rewritten from there. Replies `{id, path, target}`. |
 | `board.section.add` | `wiki`, `card`, `kind`, … | Add a section to a drawer: `note` (`text`, also journaled as a `[said]` line), `reminder` (`text`, `when`), `app` (`app`, `params`) or `photo` (`mime`, base64 `data`, `caption`; saved under `raw/photos/`). Replies `{id}`. |
 | `board.section.update` | `wiki`, `card`, `id`, `text`, `when` | Edit a note (a new journal line: the journal is append-only) or a reminder. |
-| `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder. |
+| `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder, a micro app goes to `board/micro/.trash/` and loses its approval, a notebook cron is removed from the scheduler. |
 | `board.section.reorder` | `wiki`, `card`, `order` | Reorder the sections the user added (`order` is their ids). |
 | `board.reminder.done` | `wiki`, `id` | Mark a reminder done: it leaves the board and becomes a journal line. |
+| `board.micro.keep` | `wiki`, `micro` | Keep a micro app on trial: the draft becomes live and its code is approved (the hash is stored outside the workspace). Also re-approves code changed outside Jenny. |
+| `board.micro.discard` | `wiki`, `micro` | Throw a trial away; with no live version, its section goes too. |
+| `board.micro.run` | `wiki`, `micro` | Read a micro app now. Refused (`conflict`) when its code is not approved. |
+| `board.micro.pause` | `wiki`, `micro`, `paused` | Pause (`true`) or resume (`false`) a micro app. |
+| `board.cron.pause` | `wiki`, `job`, `paused` | Pause (`true`) or resume (`false`) a notebook cron from its drawer; only a job bound to this notebook. |
 
 **Authorization is the handshake's, not the frame's.** Only a connection that presented
 `token_issue_secret` at handshake time may run a command, even if `websocket_requires_token`

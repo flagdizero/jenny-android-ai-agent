@@ -47,7 +47,7 @@ Subfolders under `wiki/` are allowed, not required. Wikis that existed before th
 | Feeds long-term memory? | Yes — the [Dream](./memory.md) pipeline builds `MEMORY.md`, `USER.md`, `SOUL.md` from it | **Only `USER.md`.** It is archived into `memory/history.jsonl` under its own key, and Dream may take facts about *you* from it into `USER.md`, nothing else |
 | Remembers by | Dream, between conversations | Writing facts into its own folder, during the conversation |
 | Where writes may land | Anywhere in the workspace | **Only inside its own folder** |
-| Reminders, cron, scheduled jobs | Yes | Refused — Jenny tells you to switch to the personal chat. The notebook's own dated reminders live on its [board](./board.md) instead |
+| Reminders, cron, scheduled jobs | Yes | Only with a [board](./board.md): a job lands in the drawer of one card and delivers here (see [Notebook crons](./scheduling.md#notebook-crons)). Without a board it is refused, and Jenny points to the personal chat |
 | Mini-app data | Read and write | Read yes, change no (mini-apps and their data are personal) |
 | Prompt carries | Your profile, plus the [list of your wikis](./memory.md#how-jenny-knows-which-wikis-you-have) | Your profile, plus **this notebook's** board (or its map) and pages — not the list of the other wikis |
 

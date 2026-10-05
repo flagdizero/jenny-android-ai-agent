@@ -761,7 +761,8 @@
       "noRuns": "No runs recorded.",
       "text": "Reminder text",
       "paused": "paused",
-      "pausedSince": "Paused since {when}: it does not run until you resume it."
+      "pausedSince": "Paused since {when}: it does not run until you resume it.",
+      "inNotebook": "It lives in the drawer {place}: you find it there too."
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",
@@ -1199,13 +1200,17 @@
         "corrections_applied": "{count} corrections applied to the wiki.",
         "reminder_due": "It's time: {text}.",
         "app_event": "{title}: {app} is {state}.",
-        "other": "Something changed on the board."
+        "other": "Something changed on the board.",
+        "micro_kept": "{title}: the micro app {app} is in the drawer and runs on its own.",
+        "micro_fixed": "{title}: I fixed the micro app {app}.",
+        "cron_result": "{title}: {app} has something to tell you."
       }
     },
     "signal": {
       "new": "new",
       "soon": "coming up",
-      "alert": "problem"
+      "alert": "problem",
+      "auto": "something runs on its own"
     },
     "envelope": {
       "label": "Jenny's proposals: {count}",
@@ -1325,14 +1330,18 @@
         "reminder": "Reminder",
         "app": "Mini app",
         "photo": "Photo",
-        "other": "Other"
+        "other": "Other",
+        "micro": "Micro app",
+        "cron": "Cron"
       },
       "hint": {
         "note": "Something to remember, in your words",
         "reminder": "Something to do, with a date",
         "app": "Data that updates by itself",
         "photo": "A picture, for example how it was",
-        "other": "Describe it and I'll build it"
+        "other": "Describe it and I'll build it",
+        "micro": "A value Jenny reads for you, on its own",
+        "cron": "Something Jenny does on her own, on a schedule"
       }
     },
     "birth": {
@@ -1341,6 +1350,50 @@
       "skeletonHint": "These are the sections of every drawer, separated by commas. Leave it empty and I'll propose them once the notebook has a few pages.",
       "remind": "What do you want me to remind you of?",
       "remindPlaceholder": "For example: repotting and feeding"
+    },
+    "micro": {
+      "what": "What do you want to see?",
+      "whatPlaceholder": "For example: the soil moisture and whether the sensor is online",
+      "explain": "I write it and try it right away: the drawer shows the first real value, and you keep it if it is right.",
+      "prepare": "Make it",
+      "linkApp": "Or link one of your apps…",
+      "prompt": "In the {card} drawer I'd like a micro app that shows me {what}",
+      "trial": "On trial: this is the first value actually read. If it is right, keep it and from now on it updates itself.",
+      "reachSkill": "It uses your skill {skill}, which goes on the network by itself.",
+      "reachNet": "It connects to {hosts}.",
+      "keep": "Keep it",
+      "discard": "Discard",
+      "fix": "Ask Jenny to fix it",
+      "fixPrompt": "In the {card} drawer, the micro app {app} broke ({error}): fix it.",
+      "reapprove": "Approve again",
+      "resume": "Resume",
+      "pause": "Pause",
+      "runNow": "Read it now",
+      "change": "Change",
+      "changePrompt": "In the {card} drawer, in the micro app {app} I'd like ",
+      "every": "every {minutes} min",
+      "via": "from {what}",
+      "yes": "yes",
+      "no": "no",
+      "unreachable": "The last reading found no network or no device: it will try again by itself.",
+      "alertBroken": "The micro app {app} can no longer read: the value is the last good one.",
+      "state": {
+        "broken": "It broke: the value above is the last good one.",
+        "quarantined": "The last reading never stopped: it is on hold until we fix it.",
+        "unapproved": "The code changed outside Jenny: it will not run until you approve it again.",
+        "paused": "Paused."
+      }
+    },
+    "cron": {
+      "gone": "Cron",
+      "missing": "This cron is gone: you can remove it.",
+      "paused": "paused",
+      "next": "next {when}",
+      "costs": "Jenny does it (uses the model)",
+      "last": "Last result ({when}): {text}",
+      "quiet": "Last run {when}: nothing to tell you.",
+      "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
+      "prompt": "In the {card} drawer, every "
     }
   }
 }

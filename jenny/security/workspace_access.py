@@ -18,7 +18,11 @@ from jenny.config.runtime_env import (
     WORKSPACE_SANDBOX_PROVIDER_ENV,
 )
 from jenny.security.workspace_policy import _safe_expanduser
-from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+from jenny.session.keys import (
+    PROJECT_SESSION_PREFIX,
+    is_project_session_key,
+    notebook_of_cron_session,
+)
 
 WorkspaceAccessMode = Literal["restricted", "full"]
 WORKSPACE_SCOPE_METADATA_KEY = "workspace_scope"
@@ -255,8 +259,12 @@ class WorkspaceScopeResolver:
         """
         if channel != self.scoped_channel:
             return self.default()
+        notebook = notebook_of_cron_session(session_key) if session_key else None
         if session_key and is_project_session_key(session_key):
             scope = self.for_project(session_key)
+        elif notebook is not None:
+            # Il turno di un cron del quaderno: lo stesso recinto della sua chat.
+            scope = self.for_project(f"{PROJECT_SESSION_PREFIX}{notebook}")
         else:
             scope = resolve_effective_workspace_scope(
                 message_metadata=message_metadata,

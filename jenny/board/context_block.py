@@ -98,6 +98,9 @@ def board_block(
         )
         if problem:
             tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
+        auto = _auto_tag(root, board, card)
+        if auto:
+            tags.append(auto)
         nxt = model.next_reminder(reminders, card["id"])
         if nxt is not None:
             soon = " — coming up" if model.reminder_is_soon(nxt) else ""
@@ -125,6 +128,31 @@ def board_block(
     return out[:BOARD_BLOCK_MAX_CHARS]
 
 
+def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> str:
+    """``[auto: Acerello 38% · cron Meteo]``: cio' che nel cassetto gira da solo.
+
+    Solo i nomi e l'ultimo valore, dentro il tetto del blocco: il resto entra
+    col cassetto, quando la scheda viene nominata.
+    """
+    from jenny.board.micro import load_micro, read_readings
+
+    bits: list[str] = []
+    for section in card.get("userSections") or []:
+        if section.get("kind") == "micro" and section.get("pending") is not True:
+            micro = load_micro(root, str(section.get("micro")))
+            if micro is None:
+                continue
+            readings = read_readings(micro.dir)
+            primary = micro.spec["primary"]
+            value = readings[-1].get(primary) if readings else None
+            unit = micro.spec["fields"][primary].get("unit", "")
+            bits.append(f"{micro.spec['title']} {value}{unit}" if value is not None
+                        else micro.spec["title"])
+        elif section.get("kind") == "cron":
+            bits.append(f"cron {section.get('name') or section.get('job')}")
+    return f"[auto: {' · '.join(bits)}]" if bits else ""
+
+
 def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
     """Le schede che il messaggio nomina, per titolo, nell'ordine della bacheca."""
     board = read_board(root)
@@ -149,9 +177,18 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     for section in summary.get("sections") or []:
         sources = ", ".join(f"[[{Path(s).stem}]]" for s in section.get("sources") or [])
         parts.append(f"- {section['title']}: {section['text']} ({sources})")
+    results = (read_board(root) or {}).get("cronResults") or {}
     for section in card.get("userSections") or []:
         if section.get("kind") == "note":
             parts.append(f"- The user's note: {section.get('text')}")
+        elif section.get("kind") == "micro":
+            parts.append(_micro_line(root, section))
+        elif section.get("kind") == "cron":
+            last = results.get(f"{card['id']}/{section.get('id')}") or {}
+            said = f", last result {last.get('textAt') or last.get('at')}: {last['text']}" \
+                if last.get("text") else ""
+            parts.append(f"- Notebook cron «{section.get('name') or ''}» (`{section.get('job')}`, "
+                         f"cron action=list shows it){said}")
     for rem in model.open_reminders(reminders):
         if rem.get("card") == card["id"]:
             parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
@@ -159,6 +196,31 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     if pages:
         parts.append(f"Its pages: {pages}")
     return "\n".join(parts)[:DRAWER_MAX_CHARS]
+
+
+def _micro_line(root: Path, section: Mapping[str, Any]) -> str:
+    """Una micro app nel cassetto: valore, stato, e dove sta il codice (per ripararla)."""
+    from jenny.board.micro import load_micro, micro_dir, read_readings, read_state
+
+    mid = str(section.get("micro"))
+    pending = section.get("pending") is True
+    micro = load_micro(root, mid, draft=pending) or load_micro(root, mid)
+    if micro is None:
+        return f"- Micro app `{mid}`: missing"
+    readings = read_readings(micro_dir(root, mid))
+    last = readings[-1] if readings else {}
+    values = ", ".join(
+        f"{f['label']} {last.get(name)}{f.get('unit', '')}"
+        for name, f in micro.spec["fields"].items() if name in last
+    ) or "no reading yet"
+    state = read_state(micro.dir)
+    status = "on trial (the user keeps it from the drawer)" if pending else (
+        state.get("status") or "new")
+    error = state.get("lastError") or ""
+    tail = f"; last error: {error.strip().splitlines()[-1][:200]}" if error.strip() else ""
+    return (f"- Micro app «{micro.spec['title']}» (`{mid}`, micro_app tool): {values}"
+            f" at {last.get('ts', '—')}; {status}{tail}; code in "
+            f"board/micro/{mid}/run.py")
 
 
 def turn_lines(root: Path, message: str) -> list[str]:

@@ -131,6 +131,7 @@ def build_gateway_services(
             # l'agente differito, come faceva la rotta GET che ha sostituito.
             session_manager=session_manager,
             onboarding_event=onboarding_event,
+            get_cron_service=get_cron_service,
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,

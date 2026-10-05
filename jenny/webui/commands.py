@@ -110,6 +110,10 @@ class CommandContext:
     # l'evento l'onboarding salva e l'agente non parte fino al riavvio.
     session_manager: Any | None = None
     onboarding_event: Any | None = None
+    # Lo scheduler, per i cron del quaderno: togliere la sezione di un cron dal
+    # cassetto toglie il job, e la pausa passa da li'. Facoltativo come i ganci
+    # qui sopra; senza, quei comandi rispondono ``unavailable``.
+    get_cron_service: Callable[[], Any | None] | None = None
 
 
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]

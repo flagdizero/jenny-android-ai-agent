@@ -41,11 +41,27 @@ class BoardRoutes:
         get_workspace_root: Callable[[], Path],
         check_wiki_enabled: Callable[[], Response | None],
         get_wikis_dir: Callable[[], Path],
+        get_cron_service: Callable[[], Any | None] | None = None,
     ) -> None:
         self._check_api_token = check_api_token
         self._get_workspace_root = get_workspace_root
         self._check_wiki_enabled = check_wiki_enabled
         self._get_wikis_dir = get_wikis_dir
+        self._get_cron_service = get_cron_service
+
+    def _cron_jobs(self, notebook: str) -> dict[str, Any]:
+        """I job dello scheduler legati a questo quaderno, come li mostra un cassetto."""
+        from jenny.board.cron_link import job_snapshot
+
+        cron = self._get_cron_service() if self._get_cron_service is not None else None
+        if cron is None:
+            return {}
+        try:
+            jobs = cron.list_jobs(include_disabled=True)
+        except Exception:  # noqa: BLE001 — un cassetto senza job resta un cassetto
+            return {}
+        return {j.id: job_snapshot(j) for j in jobs
+                if (j.payload.board or {}).get("notebook") == notebook}
 
     async def dispatch(self, request: WsRequest, path: str) -> Response | None:
         if path == "/api/board":
@@ -101,12 +117,15 @@ class BoardRoutes:
             return http_error(400, "invalid card")
         workspace = self._get_workspace_root()
 
+        jobs = self._cron_jobs(root.name)
+
         def _build() -> dict[str, Any] | None:
             return build_card_view(
                 root,
                 card_id,
                 sections_resolver=section_resolver(workspace, root),
                 corrections=list_corrections(root, card_id),
+                cron_jobs=jobs,
             )
 
         payload = await asyncio.to_thread(_build)

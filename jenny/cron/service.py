@@ -102,6 +102,16 @@ def _load_session_key(raw: Any) -> str | None:
     return normalize_user_session_key(raw)
 
 
+def _load_board_link(raw: Any) -> dict[str, str] | None:
+    """Il legame di un cron del quaderno, o ``None``: tre stringhe, o niente."""
+    if not isinstance(raw, dict):
+        return None
+    link = {k: raw.get(k) for k in ("notebook", "card", "section")}
+    if not all(isinstance(v, str) and v for v in link.values()):
+        return None
+    return link  # type: ignore[return-value]
+
+
 def _parse_mode(raw: Any) -> Literal["reminder", "monitor"]:
     """Legge ``payload.mode`` **da disco** tollerando qualunque valore.
 
@@ -389,6 +399,7 @@ class CronService:
                     origin_channel=j["payload"].get("originChannel"),
                     origin_chat_id=j["payload"].get("originChatId"),
                     origin_metadata=j["payload"].get("originMetadata") or {},
+                    board=_load_board_link(j["payload"].get("board")),
                 ),
                 state=CronJobState(
                     next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
@@ -680,6 +691,9 @@ class CronService:
                         "originChannel": j.payload.origin_channel,
                         "originChatId": j.payload.origin_chat_id,
                         "originMetadata": j.payload.origin_metadata,
+                        # Solo per i cron del quaderno: uno store senza quaderni
+                        # resta identico a prima, byte per byte.
+                        **({"board": j.payload.board} if j.payload.board else {}),
                     },
                     "state": {
                         "nextRunAtMs": j.state.next_run_at_ms,
@@ -1260,6 +1274,7 @@ class CronService:
         origin_metadata: dict | None = None,
         *,
         mode: Literal["reminder", "monitor"] = "reminder",
+        board: dict | None = None,
     ) -> CronJob:
         """Add a new job.
 
@@ -1288,6 +1303,7 @@ class CronService:
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
                 origin_metadata=origin_metadata or {},
+                board=_load_board_link(board),
             ),
             state=CronJobState(next_run_at_ms=_next_run_with_catch_up(schedule, now)),
             created_at_ms=now,

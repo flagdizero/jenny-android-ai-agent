@@ -321,12 +321,21 @@ export class HomeBoard {
       sig.className = card.signal === 'new' ? 'home-board-sig-dot' : `home-board-sig-corner is-${card.signal}`;
       photo.appendChild(sig);
     }
+    /* Il segno ⟳: qualcosa in questo cassetto gira da solo (una micro app, un
+       cron). Un segno e non un segnale: in basso, e mai rosso. */
+    if (card.auto) {
+      const auto = document.createElement('i');
+      auto.className = 'ti ti-refresh home-board-auto';
+      auto.setAttribute('aria-hidden', 'true');
+      photo.appendChild(auto);
+    }
     const label = document.createElement('div');
     label.className = 'home-board-label';
     label.textContent = card.title;
     el.append(photo, label);
     const sigWord = card.signal ? `, ${i18n.t(`board.signal.${card.signal}`)}` : '';
-    el.setAttribute('aria-label', `${card.title}${sigWord}`);
+    const autoWord = card.auto ? `, ${i18n.t('board.signal.auto')}` : '';
+    el.setAttribute('aria-label', `${card.title}${sigWord}${autoWord}`);
     this._place(el, card);
     this._bind(el, card, 'card');
     return el;

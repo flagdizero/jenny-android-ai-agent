@@ -96,6 +96,11 @@ class CronPayload:
     origin_channel: str | None = None
     origin_chat_id: str | None = None
     origin_metadata: dict[str, Any] = field(default_factory=dict)
+    # Un cron del quaderno: ``{notebook, card, section}``. Il job sta nel cassetto
+    # di quella scheda, gira col recinto del quaderno e vi lascia il suo esito
+    # (v. ``jenny/agent/tools/cron.py`` e ``bound_runner``). ``None`` per i cron
+    # della chat personale.
+    board: dict[str, Any] | None = None
 
 
 @dataclass

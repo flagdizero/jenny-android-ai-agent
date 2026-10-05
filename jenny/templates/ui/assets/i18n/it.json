@@ -761,7 +761,8 @@
       "noRuns": "Nessuna esecuzione registrata.",
       "text": "Testo del promemoria",
       "paused": "in pausa",
-      "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi."
+      "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
+      "inNotebook": "Sta nel cassetto {place}: lo trovi anche lì."
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
@@ -1199,13 +1200,17 @@
         "corrections_applied": "{count} correzioni integrate nella wiki.",
         "reminder_due": "È il momento: {text}.",
         "app_event": "{title}: {app} è {state}.",
-        "other": "Qualcosa è cambiato in bacheca."
+        "other": "Qualcosa è cambiato in bacheca.",
+        "micro_kept": "{title}: la micro app {app} è nel cassetto e gira da sola.",
+        "micro_fixed": "{title}: ho sistemato la micro app {app}.",
+        "cron_result": "{title}: {app} ha qualcosa da dirti."
       }
     },
     "signal": {
       "new": "novità",
       "soon": "attesa vicina",
-      "alert": "problema"
+      "alert": "problema",
+      "auto": "qualcosa gira da solo"
     },
     "envelope": {
       "label": "Proposte di Jenny: {count}",
@@ -1325,14 +1330,18 @@
         "reminder": "Promemoria",
         "app": "Mini app",
         "photo": "Foto",
-        "other": "Altro"
+        "other": "Altro",
+        "micro": "Micro app",
+        "cron": "Cron"
       },
       "hint": {
         "note": "Una cosa da ricordare, scritta da te",
         "reminder": "Una cosa da fare, con una data",
         "app": "Dati che si aggiornano da soli",
         "photo": "Un'immagine, per esempio com'era",
-        "other": "Descrivila e la preparo io"
+        "other": "Descrivila e la preparo io",
+        "micro": "Un dato che Jenny legge per te, da solo",
+        "cron": "Una cosa che Jenny fa da sola, a orario"
       }
     },
     "birth": {
@@ -1341,6 +1350,50 @@
       "skeletonHint": "Sono le sezioni di ogni cassetto, separate da virgole. Lascia vuoto e le propongo io quando il quaderno avrà qualche pagina.",
       "remind": "Cosa vuoi che ti ricordi?",
       "remindPlaceholder": "Per esempio: i travasi e le concimazioni"
+    },
+    "micro": {
+      "what": "Cosa vuoi vedere?",
+      "whatPlaceholder": "Per esempio: l'umidità della terra e se il sensore è online",
+      "explain": "La scrivo io e la provo subito: nel cassetto vedi il primo valore vero, e la tieni se va bene.",
+      "prepare": "Preparala",
+      "linkApp": "Oppure collega una tua app…",
+      "prompt": "Nel cassetto {card} vorrei una micro app che mi mostri {what}",
+      "trial": "In prova: è il primo valore letto davvero. Se va bene, tienila e da qui in poi si aggiorna da sola.",
+      "reachSkill": "Usa la tua skill {skill}, che va in rete da sola.",
+      "reachNet": "Si collega a {hosts}.",
+      "keep": "Tienila",
+      "discard": "Scarta",
+      "fix": "Falla sistemare a Jenny",
+      "fixPrompt": "Nel cassetto {card}, la micro app {app} si è rotta ({error}): sistemala.",
+      "reapprove": "Riapprova",
+      "resume": "Riprendi",
+      "pause": "Pausa",
+      "runNow": "Rileggi adesso",
+      "change": "Cambia",
+      "changePrompt": "Nel cassetto {card}, nella micro app {app} vorrei ",
+      "every": "ogni {minutes} min",
+      "via": "da {what}",
+      "yes": "sì",
+      "no": "no",
+      "unreachable": "L'ultima lettura non ha trovato la rete o il dispositivo: riprova da sola.",
+      "alertBroken": "La micro app {app} non riesce più a leggere: il valore è l'ultimo buono.",
+      "state": {
+        "broken": "Si è rotta: il valore qui sopra è l'ultimo buono.",
+        "quarantined": "L'ultima lettura non si è più fermata: è ferma finché non la sistemiamo.",
+        "unapproved": "Il codice è cambiato fuori da Jenny: non gira finché non lo riapprovi.",
+        "paused": "In pausa."
+      }
+    },
+    "cron": {
+      "gone": "Cron",
+      "missing": "Questo cron non c'è più: si può togliere.",
+      "paused": "in pausa",
+      "next": "prossimo {when}",
+      "costs": "lo fa Jenny (usa il modello)",
+      "last": "Ultimo esito ({when}): {text}",
+      "quiet": "Ultimo giro {when}: niente da dirti.",
+      "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
+      "prompt": "Nel cassetto {card}, ogni "
     }
   }
 }

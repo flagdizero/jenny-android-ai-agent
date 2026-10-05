@@ -12,6 +12,7 @@ __all__ = [
     "GARDENER_SESSION_PREFIX",
     "HEARTBEAT_SESSION_KEY",
     "INTERNAL_SESSION_PREFIX",
+    "NOTEBOOK_CRON_SESSION_PREFIX",
     "PROJECT_SESSION_PREFIX",
     "SUBAGENT_SESSION_PREFIX",
     "UNIFIED_SESSION_KEY",
@@ -22,6 +23,8 @@ __all__ = [
     "is_project_session_key",
     "is_valid_project_name",
     "normalize_user_session_key",
+    "notebook_cron_session_key",
+    "notebook_of_cron_session",
     "project_session_key",
     "session_key_for_channel",
     "session_kind",
@@ -69,6 +72,26 @@ SUBAGENT_SESSION_PREFIX = "subagent:"
 
 # Prefisso dei run di un job cron (``cron:<job_id>``, v. ``cron/session_turns``).
 CRON_SESSION_PREFIX = "cron:"
+
+# Il run di un **cron del quaderno** (``cron:nb:<quaderno>/<job_id>``): resta una
+# sessione ``cron:`` — interna, fuori dagli elenchi — ma porta il nome del
+# quaderno, da cui lo scope del turno ricava il recinto (v.
+# ``WorkspaceScopeResolver.for_turn``): la cartella si deduce dalla chiave, come
+# per una chat di progetto, e non dai metadati.
+NOTEBOOK_CRON_SESSION_PREFIX = CRON_SESSION_PREFIX + "nb:"
+
+
+def notebook_cron_session_key(notebook: str, job_id: str) -> str:
+    return f"{NOTEBOOK_CRON_SESSION_PREFIX}{notebook}/{job_id}"
+
+
+def notebook_of_cron_session(key: str) -> str | None:
+    """Il quaderno di una sessione di cron del quaderno, o ``None``."""
+    if not key.startswith(NOTEBOOK_CRON_SESSION_PREFIX):
+        return None
+    name, _, job = key[len(NOTEBOOK_CRON_SESSION_PREFIX):].partition("/")
+    return name if name and job and is_valid_project_name(name) else None
+
 
 # Prefisso dei run di Dream (``dream:<timestamp>``, v. ``agent/memory``).
 DREAM_SESSION_PREFIX = "dream:"

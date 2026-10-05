@@ -867,3 +867,102 @@ def micro_field_value(root: Path, micro_id: str, field_name: str, *,
     current = now or datetime.now(timezone.utc)
     fresh = at is not None and current - at <= timedelta(minutes=micro.spec["staleAfter"])
     return last.get(field_name), fresh
+
+
+# ── la sezione nel cassetto ─────────────────────────────────────────────────
+
+
+def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
+    """Una scheda per id o per titolo (senza badare alle maiuscole)."""
+    ref = (ref or "").strip()
+    card = model.card_by_id(board, ref) if model.is_valid_id(ref) else None
+    if card is not None:
+        return card
+    low = ref.casefold()
+    matches = [c for c in board["cards"] if c["title"].casefold() == low]
+    return matches[0] if len(matches) == 1 else None
+
+
+def section_of(board: dict[str, Any], micro_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    for card in board["cards"]:
+        for section in card.get("userSections") or []:
+            if section.get("kind") == "micro" and section.get("micro") == micro_id:
+                return card, section
+    return None
+
+
+def set_section(root: Path, card_id: str, micro_id: str, *, pending: bool) -> str:
+    """Mette (o aggiorna) la sezione della micro app nel cassetto; torna il suo id.
+
+    Scrive **come l'utente**: la chiamano il tool ``micro_app`` (che esiste solo
+    nei turni dell'utente, quindi agisce su sua richiesta, e lo segna con
+    ``by: jenny-on-request``) e i comandi del cassetto.
+    """
+    from jenny.board.store import mutate_board
+
+    out: list[str] = []
+
+    def apply(board: dict[str, Any]) -> None:
+        found = section_of(board, micro_id)
+        if found is not None:
+            found[1]["pending"] = pending
+            out.append(found[1]["id"])
+            return
+        card = model.card_by_id(board, card_id)
+        if card is None:
+            raise MicroError(f"no card `{card_id}` on this board")
+        taken = {s["id"] for c in board["cards"] for s in c.get("userSections") or []}
+        sid = model.unique_id("s-micro", taken)
+        card["userSections"].append({
+            "id": sid, "kind": "micro", "micro": micro_id, "pending": pending,
+            "by": "jenny-on-request", "created": model.now_iso(),
+        })
+        out.append(sid)
+
+    mutate_board(root, apply)
+    return out[0]
+
+
+def drop_section(root: Path, micro_id: str) -> None:
+    from jenny.board.store import mutate_board
+
+    def apply(board: dict[str, Any]) -> bool | None:
+        touched = False
+        for card in board["cards"]:
+            keep = [s for s in card.get("userSections") or []
+                    if not (s.get("kind") == "micro" and s.get("micro") == micro_id)]
+            if len(keep) != len(card.get("userSections") or []):
+                card["userSections"] = keep
+                touched = True
+        return None if touched else False
+
+    mutate_board(root, apply)
+
+
+def keep(workspace: Path, root: Path, micro_id: str) -> Micro | None:
+    """[Tienilo]: la bozza diventa viva e approvata; senza bozza, si riapprova la viva."""
+    micro = promote_draft(root, micro_id) or load_micro(root, micro_id)
+    if micro is None:
+        return None
+    write_approval(workspace, root, micro)
+    unstick(root, micro_id)
+    found = None
+    from jenny.board.store import read_board
+
+    board = read_board(root)
+    if board is not None:
+        found = section_of(board, micro_id)
+    if found is not None:
+        set_section(root, found[0]["id"], micro_id, pending=False)
+    state = read_state(micro.dir)
+    if state.get("status") in ("unapproved", "quarantined", "broken", "error"):
+        state.update({"status": "ok", "failures": 0, "lastError": ""})
+        write_state(micro.dir, state)
+    return micro
+
+
+def remove(workspace: Path, root: Path, micro_id: str) -> None:
+    """Toglie la micro app: i file in ``.trash/``, l'approvazione cancellata."""
+    trash_micro(root, micro_id)
+    drop_approval(workspace, root, micro_id)
+    unstick(root, micro_id)

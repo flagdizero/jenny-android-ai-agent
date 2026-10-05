@@ -49,7 +49,7 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 
 An app whose data is about a subject — a soil-moisture sensor for the monstera, say — can also show that data inside a card's drawer on a notebook's [board](board.md), and stay in the app drawer as well. It does so by declaring an optional `section` block in `app.json`: which collection and field to show, the parameters to ask for when attaching it (which sensor), when the data counts as stale, an alarm threshold, a trend of up to 31 days, and up to two of its actions as buttons. Ask Jenny for it when you create or edit the app; the `app-creator` skill knows the format.
 
-In the drawer, **+ Add a section → Mini app** lists only the apps that declare one. The section shows the latest value with its time and source, and lights the card's red corner when the value is in alarm or the data has stalled. It only reads what the app stored — the app's own cron job keeps it fresh — and the readings never go into the wiki: only a change of state is written to the notebook's journal, as one line. See [Notebook board → Mini app](board.md#mini-app).
+In the drawer, **+ Add a section → Micro app → Or link one of your apps…** lists only the apps that declare one. The section shows the latest value with its time and source, and lights the card's red corner when the value is in alarm or the data has stalled. It only reads what the app stored — the app's own cron job keeps it fresh — and the readings never go into the wiki: only a change of state is written to the notebook's journal, as one line. See [Notebook board → Mini app](board.md#mini-app).
 
 ## What an app can and cannot do
 

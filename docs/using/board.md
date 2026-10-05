@@ -78,7 +78,9 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-**+ Add a section** offers five kinds. They are yours: Jenny does not add, change or remove them, and each one can be moved up or removed (removing a section never changes the wiki).
+**+ Add a section** offers six kinds: note, reminder, micro app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own, and each one can be moved up or removed (removing a section never changes the wiki). A micro app or a cron is the one exception to "on her own": Jenny puts it in the drawer **because you asked for it**, and it is marked as made on request.
+
+The rule behind micro apps and crons: **everything a notebook does by itself lives in the drawer of its card, where you can see it.** A micro app reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
 #### Note
 
@@ -88,9 +90,34 @@ Something to remember, in your words — *it stays on the south windowsill only 
 
 Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder becomes a sticky note on the board and the card's **Next up** when it is the nearest. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. Removing the section drops the reminder. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
 
+#### Micro app
+
+A small Python program attached to the drawer that reads **one thing** — a sensor, a price, a count — and keeps it fresh. It is not a [mini-app](./mini-apps.md): no screen, no grid, no manifest. It lives in the notebook, and you look at it rather than use it.
+
+**Micro app** asks *What do you want to see?*; your sentence goes to the notebook's chat, and Jenny writes the program there. She **runs it once before saving it**: the micro app appears in the drawer **on trial**, showing the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02* — together with what it will reach (the skill it uses, the hosts it connects to). **Keep it** makes it live; **Discard** throws it away. Nothing runs on its own until you tap Keep.
+
+Once kept, the notebook clock reads it every *N* minutes (at least 15, an hour by default) with **no model turn**, so a reading costs nothing. The section shows the value big, up to two more values as chips, a seven-day trend, and the signature *every 30 min · from waterbot-imh*; **⟳** reads it now, **Remind me when…** sets a reminder on its value, **Change** asks Jenny for a change in the chat, **Pause** stops it, **Remove** takes it away (its files go to `board/micro/.trash/`).
+
+When something goes wrong the last good value stays, greyed, with its age, and the section says who fixes it:
+
+| What happened | What you see |
+|---|---|
+| the device or the network did not answer | a note under the value; it tries again by itself, and this never counts as broken |
+| the program failed three times in a row | **It broke**, the card's red corner, and **Ask Jenny to fix it**, which opens the chat with the error already in the sentence |
+| a reading never stopped | it is put on hold until it is fixed |
+| the program was changed outside Jenny | it does not run until you **Approve again** |
+
+A fix by Jenny that shows the same things (same values, same units, same skill and hosts) runs at once, and a *since you last looked* row says so; a change to what you see goes back on trial.
+
+#### Cron
+
+A job Jenny does by herself on a schedule, attached to this card — *every morning look at the weather and tell me whether to water*, *every Monday look for new listings*. **Cron** opens the chat with *In the … drawer, every …* for you to finish; you can also just ask in the notebook's chat, and Jenny asks which card when it is not clear.
+
+The section shows what the job does, how often, its next run, its last result — *Last result (Monday 09:02): 3 new listings* — and **uses the model**, because every run is a real turn. A run that has something to say also delivers it in the notebook's chat, with the usual notification; a run with nothing to say only updates the section. **Pause**, **Change** and **Remove** are here; removing the section removes the job. Notebook crons are also listed in the workshop with their place, *piante › acero*. See [Notebook crons](./scheduling.md#notebook-crons).
+
 #### Mini app
 
-Live data from one of your [mini-apps](./mini-apps.md), for an app that declares a drawer view (a `section` block in its `app.json`). The list offers only those apps; when the app asks for parameters — which sensor, which plant — you are asked for them, so the same app can sit in two drawers showing two different things. **Make a new one…** takes you to the chat with a sentence ready to ask Jenny for one.
+**Or link one of your apps…**, at the bottom of the micro app sheet, attaches live data from one of your [mini-apps](./mini-apps.md), for an app that declares a drawer view (a `section` block in its `app.json`). The list offers only those apps; when the app asks for parameters — which sensor, which plant — you are asked for them, so the same app can sit in two drawers showing two different things. **Make a new one…** takes you to the chat with a sentence ready to ask Jenny for one.
 
 The section shows the app's latest value with its label and unit, its state, a signature — when the value was recorded and which app it comes from — a small trend line when the app declares one (one point per day, up to 31 days), up to two of the app's actions as buttons, and **Open the app**. States:
 
@@ -171,19 +198,19 @@ Every line is written by the code, from what was actually done, not by the model
 
 A notebook's reminders live in its own `board/reminders.json`, not in the [reminder list](./scheduling.md) of the personal chat. They come from two places: the ones you add in a drawer, and the ones the gardener takes from new journal lines — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, pointing at the page that explains why.
 
-An hourly system job, **`reminders`** — the notebook clock — reads every notebook's reminders:
+A system job, **`reminders`** — the notebook clock — runs **every 15 minutes** over every notebook. It first runs the micro apps that are due, then reads every notebook's reminders:
 
-- A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next hourly round.
+- A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next round.
 - The announcement is written by Jenny in a silent turn whose only way to reach you is a message, and it has to say **why**: what is due, the reason taken from the page the reminder points to, and a short question about when you will do it. It arrives in the personal chat like her other proactive messages (see [Android notifications](./scheduling.md#android-notifications)), and a *since you last looked* row is added on the board.
 - Each reminder is announced **once**. It stays on the board until you tap **Done** or remove its section.
 
-The reminder format also allows a trigger on a mini-app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value the app recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, and re-armed when it becomes false again. You set one from a mini-app section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
+The reminder format also allows a trigger on a micro app's or a mini-app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
 
-The same hourly round is the one that notices when a mini-app section changes state. The job is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing in an hour with nothing due.
+The same round is the one that notices when a micro app or mini-app section changes state. The job is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing in a round with nothing due: a micro app's reading never involves the model.
 
 ## What Jenny sees in a notebook with a board
 
-In the notebook's conversation, the board takes the place of the map (`wiki/index.md`) in the block Jenny gets on every turn: one line per card, with its brief, its nearest reminder, and a problem flag when a mini app in its drawer is in alarm or stalled, within **2,000 characters**, plus how many pages are off the board. When your message names a card, that card's whole drawer is added to that turn — up to two drawers per message. See [What Jenny actually sees](./projects.md#what-jenny-actually-sees-the-board-the-map-and-the-pages).
+In the notebook's conversation, the board takes the place of the map (`wiki/index.md`) in the block Jenny gets on every turn: one line per card, with its brief, what runs by itself in its drawer (*auto: Acerello 38 % · cron Weather*), its nearest reminder, and a problem flag when a micro app or mini app in its drawer is in alarm, stalled or broken, within **2,000 characters**, plus how many pages are off the board. When your message names a card, that card's whole drawer is added to that turn — up to two drawers per message. See [What Jenny actually sees](./projects.md#what-jenny-actually-sees-the-board-the-map-and-the-pages).
 
 ## What the gardener does to the board
 

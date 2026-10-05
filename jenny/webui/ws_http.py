@@ -296,6 +296,10 @@ class GatewayHTTPHandler:
             get_workspace_root=lambda: self._get_workspace_root(),
             check_wiki_enabled=lambda: self.wiki_routes._check_wiki_enabled(),
             get_wikis_dir=lambda: self.wiki_routes._get_wikis_dir(),
+            # Late-binding: il getter dello scheduler si assegna piu' sotto.
+            get_cron_service=lambda: (
+                self._get_cron_service() if getattr(self, "_get_cron_service", None) else None
+            ),
         )
 
         from jenny.webui.workspace_routes import WorkspaceRoutes

@@ -24,6 +24,7 @@ import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { whenLabel } from './home-board.js';
+import { describeSchedule } from './shared/cron-view.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -169,9 +170,12 @@ export class BoardDrawer {
     if (d.brief) root.appendChild(el('p', 'home-drawer-brief', d.brief));
     for (const s of d.userSections) {
       const state = s.view?.state;
-      if (s.kind === 'app' && (state === 'alarm' || state === 'stale')) {
+      if ((s.kind === 'app' || s.kind === 'micro') && (state === 'alarm' || state === 'stale')) {
         root.appendChild(el('div', 'home-drawer-alert',
           i18n.t(`board.app.alert.${state}`, { app: s.view.name || s.app })));
+      } else if (s.kind === 'micro' && state === 'broken') {
+        root.appendChild(el('div', 'home-drawer-alert',
+          i18n.t('board.micro.alertBroken', { app: s.view.name })));
       }
     }
     if (d.next) root.appendChild(this._next(d.next));
@@ -343,6 +347,83 @@ export class BoardDrawer {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app)));
       }
       tools.appendChild(remove);
+    } else if (section.kind === 'micro') {
+      const v = section.view || {};
+      if (v.state === 'missing') return null;
+      h3.append(v.name || section.micro, el('span', 'home-drawer-owner', i18n.t('board.section.kind.micro')));
+      body.appendChild(this._microView(section, v));
+      if (v.state === 'pending') {
+        tools.append(
+          button('home-board-btn is-primary', i18n.t('board.micro.keep'), () => this._micro('keep', v)),
+          button('home-board-btn', i18n.t('board.micro.discard'), () => this._micro('discard', v)),
+        );
+      } else {
+        if (v.state === 'broken' || v.state === 'quarantined') {
+          tools.appendChild(button('home-board-btn is-primary', i18n.t('board.micro.fix'),
+            () => this.onAskJenny?.(i18n.t('board.micro.fixPrompt', {
+              card: this.data.title, app: v.name, error: (v.lastError || '').split('\n').filter(Boolean).pop() || '',
+            }))));
+        } else if (v.state === 'unapproved') {
+          tools.appendChild(button('home-board-btn is-primary', i18n.t('board.micro.reapprove'),
+            () => this._micro('keep', v)));
+        } else if (v.state === 'paused') {
+          tools.appendChild(button('home-board-btn', i18n.t('board.micro.resume'),
+            () => this._micro('pause', v, { paused: false })));
+        } else {
+          const again = button('home-drawer-link is-icon', '', () => this._micro('run', v));
+          const icon = el('i', 'ti ti-refresh');
+          icon.setAttribute('aria-hidden', 'true');
+          again.appendChild(icon);
+          again.setAttribute('aria-label', i18n.t('board.micro.runNow'));
+          tools.appendChild(again);
+        }
+        if (v.field && v.type === 'number' && v.dataState !== 'empty') {
+          tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
+            () => this._addCondition(section, v)));
+        }
+        tools.appendChild(button('home-drawer-link', i18n.t('board.micro.change'),
+          () => this.onAskJenny?.(i18n.t('board.micro.changePrompt', { card: this.data.title, app: v.name }))));
+        if (v.state !== 'paused' && v.state !== 'unapproved') {
+          tools.appendChild(button('home-drawer-link', i18n.t('board.micro.pause'),
+            () => this._micro('pause', v, { paused: true })));
+        }
+        tools.appendChild(remove);
+      }
+    } else if (section.kind === 'cron') {
+      /* Un cron del quaderno: cosa fa, ogni quanto, l'ultimo esito, il prossimo
+         giro. Lavora Jenny, quindi costa: lo dice la firma. */
+      const job = section.job;
+      const result = section.result;
+      h3.append(job?.name || i18n.t('board.cron.gone'),
+        el('span', 'home-drawer-owner', i18n.t('board.section.kind.cron')));
+      if (!job) {
+        body.appendChild(el('p', 'home-drawer-hint', i18n.t('board.cron.missing')));
+        tools.appendChild(remove);
+      } else {
+        const tr = (key, vars) => i18n.t(key, vars);
+        const sign = [describeSchedule(job.schedule, { tr, locale: i18n.locale })];
+        if (job.paused) sign.push(i18n.t('board.cron.paused'));
+        else if (job.nextRunAtMs) {
+          sign.push(i18n.t('board.cron.next', { when: relativeStamp(new Date(job.nextRunAtMs).toISOString()) }));
+        }
+        sign.push(i18n.t('board.cron.costs'));
+        if (job.message) body.appendChild(el('p', 'home-drawer-text', job.message));
+        if (result?.text) {
+          body.appendChild(el('p', 'home-drawer-proof',
+            i18n.t('board.cron.last', { when: relativeStamp(result.textAt || result.at), text: result.text })));
+        } else if (result?.at) {
+          body.appendChild(el('p', 'home-drawer-hint',
+            i18n.t('board.cron.quiet', { when: relativeStamp(result.at) })));
+        }
+        body.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
+        tools.append(
+          button('home-drawer-link', i18n.t(job.paused ? 'board.micro.resume' : 'board.micro.pause'),
+            () => this._write('cron.pause', { job: job.id, paused: !job.paused })),
+          button('home-drawer-link', i18n.t('board.micro.change'),
+            () => this.onAskJenny?.(i18n.t('board.cron.changePrompt', { card: this.data.title, name: job.name }))),
+          remove,
+        );
+      }
     } else if (section.kind === 'photo') {
       h3.textContent = i18n.t('board.section.kind.photo');
       const img = el('img', 'home-drawer-photo');
@@ -389,6 +470,45 @@ export class BoardDrawer {
     return box;
   }
 
+  /** Una micro app: il valore come una mini app, piu' la firma di chi lo
+   *  legge — quando, ogni quanto, da dove — e, in prova, cosa toccherà. */
+  _microView(section, v) {
+    const shown = { ...v };
+    const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
+    if (v.state === 'pending' || codeDown) shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
+    const box = this._appView({ ...shown, name: v.source || v.name });
+    if (codeDown || v.state === 'pending') box.classList.add(`is-${v.state}`);
+    if (v.extras?.length) {
+      const chips = el('div', 'home-drawer-micro-extras');
+      for (const x of v.extras) {
+        const value = x.type === 'bool'
+          ? i18n.t(x.value ? 'board.micro.yes' : 'board.micro.no')
+          : (x.value === null || x.value === undefined ? '—' : `${x.value}${x.unit || ''}`);
+        chips.appendChild(el('span', 'home-drawer-tag', `${x.label}: ${value}`));
+      }
+      box.insertBefore(chips, box.children[1] || null);
+    }
+    const sign = [i18n.t('board.micro.every', { minutes: v.every })];
+    if (v.uses?.length) sign.push(i18n.t('board.micro.via', { what: v.uses[0] }));
+    else if (v.net?.length) sign.push(i18n.t('board.micro.via', { what: v.net[0] }));
+    box.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
+    if (v.state === 'pending') {
+      const reach = [];
+      if (v.uses?.length) reach.push(i18n.t('board.micro.reachSkill', { skill: v.uses[0] }));
+      if (v.net?.length) reach.push(i18n.t('board.micro.reachNet', { hosts: v.net.join(', ') }));
+      box.appendChild(el('p', 'home-drawer-proof', [i18n.t('board.micro.trial'), ...reach].join(' ')));
+    } else if (codeDown) {
+      box.appendChild(el('p', 'home-drawer-proof is-down', i18n.t(`board.micro.state.${v.state}`)));
+    } else if (v.codeStatus === 'unreachable') {
+      box.appendChild(el('p', 'home-drawer-hint', i18n.t('board.micro.unreachable')));
+    }
+    return box;
+  }
+
+  async _micro(action, v, extra = {}) {
+    await this._write(`micro.${action}`, { micro: v.micro, ...extra });
+  }
+
   async _verb(section, verb) {
     try {
       await api.runAppAction(section.app, verb, section.params || {});
@@ -410,7 +530,7 @@ export class BoardDrawer {
   _addCondition(section, view) {
     const form = el('form', 'home-board-form');
     const what = el('input', 'home-board-input');
-    what.value = i18n.t('board.app.remindDefault', { app: view.name || section.app });
+    what.value = i18n.t('board.app.remindDefault', { app: view.name || section.app || section.micro });
     what.setAttribute('aria-label', i18n.t('board.section.reminderWhat'));
     const row = el('div', 'home-board-row');
     const op = el('select', 'home-board-input is-op');
@@ -434,12 +554,12 @@ export class BoardDrawer {
       e.preventDefault();
       if (!what.value.trim() || value.value === '') return;
       this.sheet.close();
+      const source = section.kind === 'micro'
+        ? { micro: section.micro }
+        : { app: section.app, params: section.params || {} };
       await this._write('section.add', {
         card: this.card, kind: 'reminder', text: what.value,
-        when: {
-          kind: 'condition', app: section.app, params: section.params || {},
-          field: view.field, op: op.value, value: Number(value.value),
-        },
+        when: { kind: 'condition', ...source, field: view.field, op: op.value, value: Number(value.value) },
       });
     });
     this.sheet.open(i18n.t('board.app.remindWhen'), form);
@@ -487,7 +607,11 @@ export class BoardDrawer {
     const items = [
       ['note', 'ti-pencil', () => this._addNote()],
       ['reminder', 'ti-clock', () => this._addReminder()],
-      ['app', 'ti-apps', () => this._addApp()],
+      ['micro', 'ti-gauge', () => this._addMicro()],
+      ['cron', 'ti-repeat', () => {
+        this.sheet.close();
+        this.onAskJenny?.(i18n.t('board.cron.prompt', { card: this.data.title }));
+      }],
       ['photo', 'ti-photo', () => this._addPhoto()],
       ['other', 'ti-dots', () => {
         this.sheet.close();
@@ -543,6 +667,30 @@ export class BoardDrawer {
       });
     });
     this.sheet.open(i18n.t('board.section.kind.reminder'), form);
+    what.focus();
+  }
+
+  /** «Cosa vuoi vedere?»: una frase, e la micro app la scrive Jenny nella chat
+   *  del quaderno — la prova torna nel cassetto, e la tieni da qui. Collegare
+   *  una Jenny App che c'è già resta una riga sotto. */
+  _addMicro() {
+    const form = el('form', 'home-board-form');
+    const what = el('input', 'home-board-input');
+    what.placeholder = i18n.t('board.micro.whatPlaceholder');
+    what.setAttribute('aria-label', i18n.t('board.micro.what'));
+    const actions = el('div', 'home-board-actions');
+    const go = el('button', 'home-board-btn is-primary', i18n.t('board.micro.prepare'));
+    go.type = 'submit';
+    actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), go);
+    const link = button('home-board-menu-row is-new', i18n.t('board.micro.linkApp'), () => this._addApp());
+    form.append(el('p', 'home-board-muted', i18n.t('board.micro.explain')), what, actions, link);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!what.value.trim()) return;
+      this.sheet.close();
+      this.onAskJenny?.(i18n.t('board.micro.prompt', { card: this.data.title, what: what.value.trim() }));
+    });
+    this.sheet.open(i18n.t('board.micro.what'), form);
     what.focus();
   }
 

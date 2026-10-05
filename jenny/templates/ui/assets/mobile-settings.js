@@ -2953,6 +2953,9 @@ export class SettingsController {
       }))}</p>`);
     }
     if (row.purpose) parts.push(`<p class="oc-detail-lead">${escapeHtml(row.purpose)}</p>`);
+    if (row.place) {
+      parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.inNotebook', { place: row.place }))}</p>`);
+    }
     if (row.message) {
       parts.push(`<div class="settings-subheading">${i18n.t('cron.job.text')}</div>
         <p class="cron-detail-text">${escapeHtml(row.message)}</p>`);
