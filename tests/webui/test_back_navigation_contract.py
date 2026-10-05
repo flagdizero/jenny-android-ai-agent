@@ -93,8 +93,8 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
     body = _method(_app(), "_overlayLayers")
     layers = [
         "dialog[open]",                  # top layer: showModal() sta sopra ogni z-index
-        ".image-lightbox",               # z-index 115 (v. sotto: mai con la minichat)
-        ".jenny-mc.open",                # minichat, z-index 121
+        ".image-lightbox",               # z-index 115
+        "...(overApp ? [chatOver] : [])",  # la chat sopra una mini-app, 111
         ".app-frame-overlay",            # mini-app, z-index 110
         "this.drawer.activeDrawer",      # drawer
     ]
@@ -232,7 +232,10 @@ def test_the_layers_are_dismissed_through_public_entry_points() -> None:
     cleanup dei rispettivi proprietari (listener su ``document``, object URL,
     tastiera da abbassare). La shell parla solo con gli ingressi pubblici."""
     layers = _method(_app(), "_overlayLayers")
-    assert "this.jenny?.handleBack()" in layers
+    # La chat sopra la vista (05/10/2026) si chiude dal suo ingresso pubblico,
+    # dopo il popover della sessione: il ChatController ha il suo `handleBack`.
+    assert "this.closeChatOver()" in layers
+    assert "this.controllers?.chat?.handleBack()" in layers
     assert "this._appsActions?.handleBack()" in layers
     assert "this.drawer.closeAll()" in layers
     assert "_setOut(" not in _app(), "la shell non tocca lo stato interno della mascotte"
@@ -273,17 +276,10 @@ def test_the_two_dangerous_collaborators_of_the_chain_still_exist() -> None:
     # Il livello mini-app ha anche un `close` per Home: smonta e basta.
     assert "closeApp() {" in apps, "closeApp è il congedo che Home usa sul livello mini-app"
 
-    # La minichat e' dei due gusci dal 28/09/2026: il suo Indietro sta nel
-    # modulo condiviso, e l'officina lo eredita.
-    jenny = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
-    jenny_back = _method(jenny, "handleBack")
-    assert "return false;" in jenny_back, (
-        "a minichat chiusa il livello deve lasciar proseguire la catena"
-    )
-    assert "this._setOut(false)" in jenny_back, (
-        "la minichat si chiude dal proprio ingresso: scrim, tastiera e stato dell'arte inclusi"
-    )
-    assert "return true;" in jenny_back
+    # Il popover «Info sessione» della chat: senza, il livello della chat
+    # sopra la vista lo scavalcherebbe.
+    chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
+    assert "\n  handleBack() {" in chat, "la chat non ha piu' il suo Indietro"
 
 
 def test_the_lightbox_layer_and_its_owner_agree_on_class_and_handle() -> None:

@@ -369,7 +369,7 @@ class MobileApp {
     // Escape: stessa catena del tasto Indietro hardware. Sul Titan 2 la
     // tastiera fisica è sempre sotto le dita, quindi Esc *è* la scorciatoia
     // primaria: quando copriva solo drawer e dialog sembrava funzionare ed era
-    // inerte su mini-app, minichat, lightbox, sotto-stato di sezione e history.
+    // inerte su mini-app, lightbox, sotto-stato di sezione e history.
     keyboard.register('escape', () => {
       this.handleHardwareBack();
     });
@@ -435,14 +435,10 @@ class MobileApp {
      è uno, e i quattro consumatori lo percorrono.
 
      L'ordine è quello di sovrapposizione reale (z-index in mobile-style.css:
-     .app-frame-overlay 110 · .image-lightbox 115 · .jenny-scrim 119 ·
-     .jenny-duo 120 · .jenny-mc 121; `.app` non crea stacking context). La
-     minichat copre la mini-app, quindi va consumata *prima*: l'ordine opposto
-     chiudeva l'app che stava sotto lasciando a schermo la minichat, cioè una
-     pressione senza alcun cambiamento visibile. Lightbox e minichat non stanno
-     mai aperte insieme (D3: Jenny sta sopra la lightbox ma non prende tocchi,
-     e lo scrim della minichat copre le immagini), quindi fra loro due l'ordine
-     non conta.
+     .app-frame-overlay 110 · .image-lightbox 115 · .jenny-duo 120; `.app` non
+     crea stacking context). La chat aperta sopra una vista (05/10/2026, al
+     posto della minichat) ha un posto che dipende da cosa ha sotto: v.
+     `chatOver` qui sotto.
 
      Ogni livello espone:
        present()  test di presenza, senza effetti collaterali;
@@ -486,12 +482,6 @@ class MobileApp {
         },
       },
       ...(overApp ? [chatOver] : []),
-      {
-        // Minichat della mascotte.
-        name: 'minichat',
-        present: () => !!document.querySelector('.jenny-mc.open'),
-        dismiss: () => this.jenny?.handleBack() ?? false,
-      },
       {
         // Mini-app aperta: gestisce la propria navigazione interna e, all'ultimo
         // livello, si chiude. Home invece la smonta e basta. L'overlay resta nel
@@ -615,7 +605,7 @@ class MobileApp {
   // una casa che a ogni Home puo' aprirsi su una schermata diversa non e' una
   // casa. Chi vuole i file o le app li raggiunge da dentro, in un tocco.
   /* Smonta *tutti* i livelli, non un sottoinsieme scritto a mano: è così che
-     si perdevano lightbox e minichat, e i dialog venivano chiusi con close()
+     si perdevano lightbox e minichat (che non c'e' piu'), e i dialog venivano chiusi con close()
      diretto. Il ciclo interno serve ai livelli impilabili (più <dialog>); il
      tetto evita che un livello che rifiuta di chiudersi — il dialog di riavvio
      dopo un restore fa preventDefault apposta — mandi il chiamante in loop. */
