@@ -16,7 +16,9 @@ apribili sono rimaste inerti, e quella proprieta' ha un banco suo.
 
 Dal 05/10/2026 le righe sono copertine su mensole («la vetrina»), con la
 ricerca, l'ordine, l'archivio e la tastiera. Le promesse di prima valgono per
-le copertine una per una; quelle nuove hanno i loro banchi in fondo.
+le copertine una per una; quelle nuove hanno i loro banchi in fondo. Lo stesso
+giorno la conversazione personale e' uscita dalla pagina: e' gia' la voce
+«Jenny» della fila, e qui era un doppione.
 
 `home-who.js` si importa **vero** da una cartella temporanea, con accanto i
 suoi vicini: veri quelli puri (`conversation-list.js`, `spines.js`,
@@ -150,7 +152,6 @@ const LIST = {
 let history = [];
 let current = null;
 let active = true;
-let personal = 'Jenny';
 const search = makeEl('input');
 const searchClear = makeEl('button');
 const plate = makeEl('div');
@@ -159,7 +160,6 @@ async function open(payload) {
   history = [];
   net.next = payload;
   const panel = new WhoPanel(makeEl('div'), {
-    personalName: () => personal,
     currentProject: () => current,
     onPick: (name) => history.push('scelto:' + name),
     onHold: (name) => history.push('tenuto:' + name),
@@ -244,37 +244,24 @@ def _run(body: str) -> None:
 # ── Cosa si legge ───────────────────────────────────────────────────────────
 
 
-def test_the_page_opens_on_the_conversation_you_are_in() -> None:
-    """La prima copertina e' la casa, ed e' quella con la spunta."""
+def test_the_page_is_only_notebooks() -> None:
+    """La conversazione personale non e' una copertina: e' la voce «Jenny»
+    della fila in alto, a un tocco da qualunque pagina, e qui sarebbe un
+    doppione. Un tocco su una copertina apre sempre un quaderno."""
     _run("""
       const panel = await open(LIST);
-      const rows = readout(panel);
-      assert.equal(rows[0], 'mensola: In uso 3');
-      const first = covers(panel)[0];
-      assert.ok(hasClass(first, 'is-personal'));
-      assert.equal(nameOf(first), 'Jenny');
-      assert.ok(hasClass(first, 'is-current'));
-    """)
-
-
-def test_the_personal_cover_keeps_its_own_name() -> None:
-    """Il nome arriva dal guscio e non si legge dal titolo.
-
-    Lo leggeva di li', ed era giusto finche' nel titolo c'era sempre lo stesso
-    nome. Da quando il titolo porta il quaderno aperto, quella fonte farebbe
-    dire «piante» alla copertina della conversazione personale.
-    """
-    _run("""
-      personal = 'Qualcunaltra';
-      const panel = await open(LIST);
-      assert.equal(nameOf(covers(panel)[0]), 'Qualcunaltra');
+      assert.equal(readout(panel)[0], 'mensola: In uso 3');
+      assert.equal(covers(panel).length, 3, 'la pagina disegna qualcosa che non e\\' un quaderno');
+      assert.ok(!covers(panel).some((c) => nameOf(c) === 'Jenny' || hasClass(c, 'is-personal')));
+      for (const cover of covers(panel)) tap(cover);
+      assert.ok(history.every((h) => h !== 'scelto:null'), 'un tocco ha portato alla chat personale');
     """)
 
 
 def test_notebooks_come_down_from_the_most_recent() -> None:
     _run("""
       const panel = await open(LIST);
-      assert.deepEqual(onShelf(shelves(panel)[0]), ['Jenny', 'memory', 'etna', 'piante']);
+      assert.deepEqual(onShelf(shelves(panel)[0]), ['memory', 'etna', 'piante']);
     """)
 
 
@@ -293,7 +280,7 @@ def test_a_list_never_read_says_nothing_about_being_empty() -> None:
     """Aperto prima che la lettura torni: «sto leggendo», non «non ce n'e'»."""
     _run("""
       net.next = LIST;
-      const panel = new WhoPanel(makeEl('div'), { personalName: () => 'Jenny' });
+      const panel = new WhoPanel(makeEl('div'), {});
       panel.render();
       const rows = readout(panel).join(' | ');
       assert.ok(rows.includes('Caricamento'), rows);
@@ -318,7 +305,7 @@ def test_a_failed_read_keeps_the_notebooks_and_says_so_on_top() -> None:
       const firstShelf = rows.findIndex((r) => r.startsWith('['));
       assert.ok(broken !== -1, 'il guasto non si dichiara: ' + rows.join(' | '));
       assert.ok(broken < firstShelf, 'la nota del guasto sta sotto le copertine che spiega');
-      assert.equal(covers(panel).length, 4, 'un guasto ha cancellato i quaderni');
+      assert.equal(covers(panel).length, 3, 'un guasto ha cancellato i quaderni');
       assert.ok(hasClass(shelves(panel)[0], 'is-stale'), 'le copertine vecchie non si distinguono');
     """)
 
@@ -421,7 +408,7 @@ def test_a_notebook_cover_is_a_command() -> None:
     l'inerzia: e' stato rovesciato di proposito, non cancellato."""
     _run("""
       const panel = await open(LIST);
-      assert.equal(covers(panel).length, 4, 'la personale piu\\' i tre quaderni');
+      assert.equal(covers(panel).length, 3);
       for (const cover of covers(panel)) {
         assert.equal(cover.tag, 'button', 'una copertina ha smesso di essere un comando');
       }
@@ -438,26 +425,15 @@ def test_the_name_you_touch_is_the_name_that_comes_back() -> None:
     """)
 
 
-def test_the_personal_cover_takes_you_home() -> None:
-    """Senza, da dentro un quaderno la pagina saprebbe solo portarti altrove."""
-    _run("""
-      current = 'etna';
-      const panel = await open(LIST);
-      tap(covers(panel).find((c) => hasClass(c, 'is-personal')));
-      assert.deepEqual(history, ['scelto:null']);
-    """)
-
-
 def test_only_the_cover_you_are_on_carries_the_check() -> None:
-    """Una sola, e su quella giusta: la spunta dice dove sei, non cos'e' la
-    copertina personale."""
+    """Una sola, e su quella giusta; nessuna quando sei con Jenny, che nella
+    pagina non c'e'."""
     _run("""
       const checks = (p) => all(p._body).filter((n) => String(n.className).includes('ti-check'));
       const marked = (p) => covers(p).find((c) => hasClass(c, 'is-current'));
 
       let panel = await open(LIST);
-      assert.equal(checks(panel).length, 1);
-      assert.ok(hasClass(marked(panel), 'is-personal'));
+      assert.equal(checks(panel).length, 0, 'una spunta su un quaderno mentre sei con Jenny');
 
       current = 'etna';
       panel.render();
@@ -470,8 +446,8 @@ def test_only_the_cover_you_are_on_carries_the_check() -> None:
 
 def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
     """Sei dentro un quaderno che l'elenco non porta piu' (rinominato, o
-    cancellato da un'altra superficie): meglio nessuna spunta che una spunta
-    sulla casa, dove non sei."""
+    cancellato da un'altra superficie): nessuna spunta, piuttosto che una
+    su un quaderno dove non sei."""
     _run("""
       current = 'sparito';
       const panel = await open(LIST);
@@ -506,22 +482,6 @@ def test_a_cover_wears_the_same_cloth_as_the_notebooks_dot() -> None:
         assert.equal(cover.style['--cover'], dotColor(name));
         assert.equal(cover.style['--cover-ink'], `var(--spine-${spineOf(name)}-ink)`);
       }
-      const home = covers(panel)[0];
-      assert.equal(home.style['--cover'], undefined, 'la casa ha preso la tela di un quaderno');
-    """)
-
-
-def test_the_house_cover_carries_jennys_flower() -> None:
-    """Non è un colore assegnato a un nome: è il segno che Jenny ha già nel dock
-    e nella riga d'identità dell'officina. Per questo la copertina personale
-    non ha un'iniziale — non è un quaderno fra i quaderni."""
-    _run("""
-      const panel = await open(LIST);
-      const home = covers(panel)[0];
-      const flower = home.children.find((c) => hasClass(c, 'home-who-flower'));
-      assert.ok(flower, 'la casa ha perso il fiore');
-      assert.equal(flower.textContent, '✿');
-      assert.equal(flower.attrs['aria-hidden'], 'true');
     """)
 
 
@@ -556,7 +516,7 @@ def test_the_page_draws_a_new_notebook_only_on_an_empty_shelf() -> None:
       assert.equal(slots(await open(LIST)).length, 0);
       assert.equal(slots(await open('fail')).length, 0);
       const empty = await open({ dir: 'wikis', projects: [], unopenable: [] });
-      assert.deepEqual(readout(empty).slice(0, 2), ['mensola: In uso 0', '[Jenny, +]']);
+      assert.deepEqual(readout(empty).slice(0, 2), ['mensola: In uso 0', '[+]']);
       tap(slots(empty)[0]);
       assert.deepEqual(history, ['crea:undefined']);
     """)
@@ -650,19 +610,10 @@ def test_the_tap_after_a_hold_does_not_switch_conversation() -> None:
     """)
 
 
-def test_the_personal_cover_cannot_be_held() -> None:
-    """Non e' un quaderno: e' gia' la pagina 0, e non si cancella."""
-    _run("""
-      const panel = await open(LIST);
-      const home = covers(panel)[0];
-      assert.ok(!presses.some((p) => p.el === home), 'la copertina personale si puo tenere premuta');
-    """)
-
-
 def test_every_openable_notebook_can_be_held() -> None:
     _run("""
       const panel = await open(LIST);
-      const notebooks = covers(panel).filter((c) => !hasClass(c, 'is-personal'));
+      const notebooks = covers(panel);
       assert.equal(notebooks.length, 3);
       assert.ok(notebooks.every((q) => presses.some((p) => p.el === q)));
     """)
@@ -711,9 +662,9 @@ def test_a_redraw_keeps_where_you_had_scrolled() -> None:
 
 
 def test_searching_shows_only_the_notebooks_whose_name_matches() -> None:
-    """Le mensole lasciano il posto a «Risultati»: la casa non c'e' (non e' un
-    quaderno da cercare), la parte trovata e' segnata, e l'archivio e' dentro
-    — e' una ricerca, non un filtro della mensola che vedi."""
+    """Le mensole lasciano il posto a «Risultati»: la parte trovata e'
+    segnata, e l'archivio e' dentro — e' una ricerca, non un filtro della
+    mensola che vedi."""
     _run("""
       const old = { name: 'pietre', modified: NOW - 90 * DAY };
       const panel = await open({ ...LIST, projects: [...LIST.projects, old] });
@@ -759,10 +710,10 @@ def test_the_order_changes_but_the_colours_do_not() -> None:
     stessa — un colore che cambia con l'ordine non e' un'identita'."""
     _run("""
       const panel = await open(LIST);
-      const before = Object.fromEntries(covers(panel).slice(1).map((c) => [nameOf(c), c.style['--cover']]));
+      const before = Object.fromEntries(covers(panel).map((c) => [nameOf(c), c.style['--cover']]));
       tap(panel._body.querySelector('.home-who-sort'));
-      assert.deepEqual(onShelf(shelves(panel)[0]), ['Jenny', 'etna', 'memory', 'piante']);
-      for (const c of covers(panel).slice(1)) assert.equal(c.style['--cover'], before[nameOf(c)]);
+      assert.deepEqual(onShelf(shelves(panel)[0]), ['etna', 'memory', 'piante']);
+      for (const c of covers(panel)) assert.equal(c.style['--cover'], before[nameOf(c)]);
       assert.equal(panel._body.querySelector('.home-who-sort').textContent, 'A–Z');
     """)
 
@@ -796,19 +747,17 @@ def test_arrows_move_between_covers_and_shift_enter_opens_the_sheet() -> None:
     come nel cassetto; ⏎ da solo resta il clic del bottone."""
     _run("""
       const panel = await open(LIST);
-      const all4 = covers(panel);
-      all4[1].focus();
-      assert.ok(key(panel, all4[1], 'ArrowRight'));
-      assert.equal(document.activeElement, all4[2]);
-      key(panel, all4[2], 'ArrowLeft');
-      assert.equal(document.activeElement, all4[1]);
-      key(panel, all4[0], 'ArrowUp');
+      const [memory, etna] = covers(panel);
+      memory.focus();
+      assert.ok(key(panel, memory, 'ArrowRight'));
+      assert.equal(document.activeElement, etna);
+      key(panel, etna, 'ArrowLeft');
+      assert.equal(document.activeElement, memory);
+      key(panel, memory, 'ArrowUp');
       assert.equal(document.activeElement, search, '↑ dalla prima fila non torna alla ricerca');
-      assert.ok(key(panel, all4[2], 'Enter', { shiftKey: true }));
+      assert.ok(key(panel, etna, 'Enter', { shiftKey: true }));
       assert.deepEqual(history, ['tenuto:etna']);
-      key(panel, all4[0], 'Enter', { shiftKey: true });
-      assert.equal(history.length, 1, 'la casa ha aperto una scheda da quaderno');
-      assert.equal(key(panel, all4[1], 'Enter'), false, '⏎ non e\\' piu\\' il clic del bottone');
+      assert.equal(key(panel, etna, 'Enter'), false, '⏎ non e\\' piu\\' il clic del bottone');
     """)
 
 

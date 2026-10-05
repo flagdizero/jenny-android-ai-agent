@@ -1009,9 +1009,6 @@
     },
     "backHome": "Torna alla casa",
     "who": {
-      "title": "Con chi parli",
-      "personal": "personale",
-      "notebooks": "Quaderni",
       "none": "Non hai ancora nessun quaderno.",
       "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto.",
       "newNotebook": "Nuovo quaderno",

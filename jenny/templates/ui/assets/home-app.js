@@ -304,9 +304,8 @@ class HomeApp {
        una chiave di sessione — dice quale nome hai toccato, e la conversazione
        la apre questo guscio (e porta alla chat: `openConversation`). */
     this.who = new WhoPanel(document.getElementById('home-notebooks'), {
-      personalName: () => this._personalName,
       currentProject: () => projectNameOf(sessionManager.currentKey),
-      onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
+      onPick: (name) => this.switchConversation(projectKey(name)),
       onHold: (name) => this.notebookCard().show(name),
       /* Dal posto vuoto senza nome, da una ricerca a vuoto col nome cercato
          gia' scritto: e' il giro di sempre, solo con la prima risposta data. */
@@ -1019,8 +1018,8 @@ class HomeApp {
     if (data && gen === this._settingsGen) this._applyBotName(data.agent?.bot_name);
   }
 
-  /* Il nome della conversazione personale, dove lo si scrive: la fila e la
-     riga personale dei Quaderni. Vuoto vuol dire il ripiego, come sul server. */
+  /* Il nome della conversazione personale, dove lo si scrive: la fila. Vuoto
+     vuol dire il ripiego, come sul server. */
   _applyBotName(name) {
     const newName = (typeof name === 'string' && name.trim()) || DEFAULT_BOT_NAME;
     if (newName === this._personalName) return;
@@ -1032,7 +1031,6 @@ class HomeApp {
     this.you?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     if (this.view === 'jenny') this._applyHead();
-    this.who?.render();
     this._applyConversationTexts();
   }
 

@@ -1672,8 +1672,10 @@ def test_a_deletion_that_did_not_happen_moves_nothing() -> None:
 
 def test_the_personal_conversation_is_named_after_her() -> None:
     """La fila e i Quaderni dicevano «Jenny» comunque si chiamasse: il nome
-    era il testo fisso dell'intestazione. Ora e' `bot_name`, e i due che lo
-    scrivono si ridisegnano quando arriva."""
+    era il testo fisso dell'intestazione. Ora e' `bot_name`, e la fila che lo
+    scrive si ridisegna quando arriva. Dal 05/10/2026 i Quaderni non lo
+    scrivono piu' (la conversazione personale e' uscita dalla pagina): un nome
+    nuovo non li ridisegna per niente."""
     _run_js("""
       const app = home();
       let draws = 0, rows = 0;
@@ -1683,7 +1685,7 @@ def test_the_personal_conversation_is_named_after_her() -> None:
       await app._readName();
       assert.deepEqual(app._chatName(), { name: 'Ada', color: null });
       assert.equal(draws, 1, 'la fila dice ancora il nome di prima');
-      assert.equal(rows, 1, 'i Quaderni dicono ancora il nome di prima');
+      assert.equal(rows, 0, 'i Quaderni si ridisegnano per un nome che non portano');
     """)
 
 

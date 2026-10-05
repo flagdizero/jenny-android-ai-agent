@@ -135,23 +135,17 @@ def test_a_tapped_alert_lands_in_the_personal_conversation() -> None:
 def test_every_word_on_screen_comes_from_the_translations() -> None:
     """Nessun testo cablato: la regola di AGENTS.md non ha eccezioni, e questo
     è codice nuovo. Un `textContent` può ricevere solo una traduzione o un
-    dato (il nome di un quaderno, la sua data).
+    dato (il nome di un quaderno, la sua data, un numero).
 
-    L'unica eccezione è un **segno**, non una parola: il fiore di Jenny, che non
-    si traduce e che l'officina disegna identico (`chat-identity-flower`,
-    `dock-flower`). Tradurlo non vorrebbe dire niente; metterlo nei file di
-    lingua vorrebbe dire due posti da cui può divergere.
+    Fino al 05/10/2026 c'era un'eccezione, il fiore di Jenny sulla riga
+    personale: la riga è uscita dalla pagina, e il fiore con lei.
     """
     src = WHO_JS.read_text(encoding="utf-8")
     for line in src.splitlines():
         m = re.search(r"\.textContent\s*=\s*(.+);", line)
         if not m:
             continue
-        value = m.group(1)
-        if value == "'✿'":
-            continue
-        assert not re.match(r"^['\"`]", value), f"stringa cablata a schermo: {line.strip()}"
-    assert src.count("'✿'") == 1, "il fiore è un segno solo, in un punto solo"
+        assert not re.match(r"^['\"`]", m.group(1)), f"stringa cablata a schermo: {line.strip()}"
 
 
 def test_the_panel_speaks_both_languages() -> None:
@@ -159,7 +153,7 @@ def test_the_panel_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["home"]["who"]
-        for key in ("title", "personal", "notebooks", "none", "loadFailed", "search",
+        for key in ("none", "loadFailed", "search",
                     "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
                     "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
                     "pages", "pagesShort", "plateKeys", "newNotebook"):

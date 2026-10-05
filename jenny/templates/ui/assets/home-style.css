@@ -1448,29 +1448,6 @@ body.home {
   text-overflow: ellipsis;
 }
 
-/* La casa: niente tela, il fondo del tema col fiore di Jenny. */
-.home-who-cover.is-personal {
-  --cover: var(--surface);
-  --cover-ink: var(--text);
-  background-image: none;
-  border: 1px solid var(--border-strong);
-  border: var(--spine-edge);
-}
-.home-who-cover.is-personal::before {
-  background: color-mix(in srgb, var(--flower) 40%, transparent);
-  box-shadow: none;
-}
-.home-who-cover.is-personal .home-who-cover-name { font-weight: 600; }
-
-/* Il fiore di Jenny, al posto dell'iniziale. Non e' un colore assegnato a un
-   nome: e' il segno che ha nel dock e nella riga d'identita' dell'officina,
-   sulla stessa variabile di tema. */
-.home-who-flower {
-  font-family: inherit;
-  font-size: 40px;
-  color: var(--flower);
-}
-
 /* Dove sei: la spunta, in alto a destra, al posto del numero di pagine. */
 .home-who-check {
   position: absolute;

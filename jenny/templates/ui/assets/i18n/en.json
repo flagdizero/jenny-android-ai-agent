@@ -1009,9 +1009,6 @@
     },
     "backHome": "Back to the house",
     "who": {
-      "title": "Talking to",
-      "personal": "personal",
-      "notebooks": "Notebooks",
       "none": "No notebooks yet.",
       "loadFailed": "I could not read the list: what you see may be incomplete.",
       "newNotebook": "New notebook",

@@ -8,10 +8,16 @@
  *  **Dal 05/10/2026 e' una vetrina**: ogni quaderno e' una copertina sulla sua
  *  mensola, con la tela del suo nome (`shared/spines.js`), l'iniziale grande nel
  *  carattere del tema e il nome su due righe al massimo. In alto la ricerca,
- *  poi «In uso» con Jenny per prima, poi l'archivio — i quaderni fermi da piu'
- *  di un mese — e in fondo le cartelle che non si aprono. Scelto dall'utente
+ *  poi «In uso», poi l'archivio — i quaderni fermi da piu' di un mese — e in
+ *  fondo le cartelle che non si aprono. Scelto dall'utente
  *  fra cinque varianti di scaffale, tutte costruite sui token del tema: questa
  *  perche' i nomi si leggono senza toccare niente.
+ *
+ *  **La conversazione personale non c'e'.** Fino al 05/10/2026 era la prima
+ *  riga, poi la prima copertina; ma e' gia' la voce «Jenny» della fila in
+ *  alto, a un tocco da qualunque pagina, e qui era un doppione (deciso
+ *  dall'utente). La pagina e' dei quaderni: la spunta sta su quello in cui
+ *  sei, e su nessuno quando sei con Jenny.
  *
  *  **Un tocco cambia conversazione**, e la spunta e' su quella in cui sei. Per
  *  un giro non e' stato cosi' — le righe erano inerti e lo dichiaravano
@@ -52,15 +58,10 @@ export const ARCHIVE_AFTER_DAYS = 30;
 
 export class WhoPanel {
   /** @param contenitore dove si disegna: il pannello della pagina Quaderni.
-   *  @param personalName funzione che da' il nome della conversazione
-   *         personale. **Non** si legge dalla testa: la testa delle stanze
-   *         porta il nome del quaderno aperto, e leggerlo di li' farebbe dire
-   *         alla riga personale il nome di un quaderno.
    *  @param currentProject funzione che da' il nome del quaderno aperto, o
    *         `null` se sei nella conversazione personale. E' cio' che decide
    *         dove sta la spunta.
-   *  @param onPick chiamata col nome del quaderno toccato — `null` per la
-   *         conversazione personale.
+   *  @param onPick chiamata col nome del quaderno toccato.
    *  @param onHold chiamata col nome del quaderno **tenuto premuto**: apre la
    *         sua scheda (Apri · Metti come pagina · Rinomina · Elimina), come la
    *         pressione lunga su un'app nel cassetto. Una cosa si appende dal
@@ -74,10 +75,9 @@ export class WhoPanel {
    *         lettera premuta e' per la ricerca.
    */
   constructor(container, {
-    personalName, currentProject, onPick, onHold, onCreate,
+    currentProject, onPick, onHold, onCreate,
     search = null, searchClear = null, plate = null, active = null,
   } = {}) {
-    this._personalName = personalName;
     this._currentProject = currentProject || (() => null);
     this._onPick = onPick || null;
     this._onHold = onHold || null;
@@ -224,7 +224,6 @@ export class WhoPanel {
     body.appendChild(this._head(i18n.t('home.who.inUse'), inUse.length,
                                 { sortable: projects.length > 1 }));
     const shelf = this._shelf(stale);
-    shelf.appendChild(this._personalCover());
     for (const project of inUse) shelf.appendChild(this._cover(project));
     if (!projects.length) shelf.appendChild(this._slot());
     body.appendChild(shelf);
@@ -347,41 +346,10 @@ export class WhoPanel {
     return el;
   }
 
-  /* La casa: si torna sempre, e non ha una tela perche' non e' un quaderno
-     fra i quaderni. Ha il fiore, che e' il segno di Jenny e non un colore
-     assegnato: lo stesso `✿` del dock e della riga d'identita' in officina,
-     sulla stessa variabile di tema (`--flower`). */
-  _personalCover() {
-    const cover = this._command(this._currentProject() === null, () => this._pick(null));
-    cover.classList.add('is-personal');
-
-    const flower = document.createElement('span');
-    flower.className = 'home-who-cover-glyph home-who-flower';
-    flower.textContent = '✿';
-    flower.setAttribute('aria-hidden', 'true');
-    cover.appendChild(flower);
-
-    const name = document.createElement('span');
-    name.className = 'home-who-cover-name';
-    name.textContent = this._personalName();
-    cover.appendChild(name);
-
-    const kind = document.createElement('span');
-    kind.className = 'home-who-cover-meta';
-    kind.textContent = i18n.t('home.who.personal');
-    cover.appendChild(kind);
-
-    this._maybeCheck(cover);
-    return cover;
-  }
-
   _cover(item, { query = '', archived = false } = {}) {
     const cover = this._command(item.name === this._currentProject(), () => this._pick(item.name));
     cover.dataset.name = item.name;
     paintSpine(cover, item.name);
-    /* La pressione lunga solo sui quaderni: la copertina personale non e' un
-       quaderno — non si appende (ha gia' la sua pagina, la chat) e non si
-       cancella. */
     if (this._onHold) setupLongPress(cover, () => this._onHold(item.name));
 
     const age = ago(item.modified, (key, vars) => i18n.t(key, vars));
@@ -566,7 +534,7 @@ export class WhoPanel {
     if (!cover) return;
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
-      if (cover.dataset.name && this._onHold) this._onHold(cover.dataset.name);
+      this._onHold?.(cover.dataset.name);
       return;
     }
     const row = () => columnsOf(cover.parentElement);
@@ -587,7 +555,7 @@ export class WhoPanel {
     const plate = this._plate;
     if (!plate) return;
     const cover = target?.closest?.('.home-who-cover');
-    if (!cover || !cover.dataset.name || !cover.matches?.(':focus-visible')) {
+    if (!cover || !cover.matches?.(':focus-visible')) {
       plate.hidden = true;
       return;
     }
