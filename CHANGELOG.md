@@ -7,6 +7,21 @@ breaks something you rely on gets a new major number.
 Releases before 1.0 are described only on their
 [GitHub release pages](https://github.com/flagdizero/jenny-android-ai-agent/releases).
 
+## [Unreleased]
+
+### Home and workshop
+
+- **Jenny is the door to the chat.** Wherever the chat is not on screen, tapping the mascot
+  brings the real chat up full screen over what you are looking at, with the page still
+  visible beneath; tap her again or press Back to close it. She can see that page, so she can
+  explain a menu, a setting or a mini-app you have in front of you. On the chat page and the
+  Console a tap makes her wave. This replaces the one-turn minichat in both shells.
+- **A notebook always opens on its board**, from the Notebooks page and from a notebook
+  pinned as a page. Its chat is behind Jenny; the Chat | Board switch is gone.
+- A **pink dot** on Jenny says a reply arrived while her chat was closed.
+- The mascot can no longer be switched off: she is the way into the chat. Her size stays.
+- ui_view describes the board and the card drawer, which it used to send empty.
+
 ## [1.0.0] — 2026-10-02
 
 The first stable release. Over 800 changes since 0.11.0. The biggest one is a new home

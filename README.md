@@ -104,7 +104,8 @@ is what makes "alert me if the basil needs water" work end to end.
 
 **📱 It can be your Android launcher.** It declares `HOME` + `DEFAULT` + `LAUNCHER` and handles
 the Home gesture, listing and launching your installed apps from a panel inside the UI. Seven
-visual themes and a draggable mascot you can switch off. Judged purely as a launcher it would
+visual themes and a draggable mascot that is the door to the chat: tap her anywhere and the
+conversation comes up over what you are looking at. Judged purely as a launcher it would
 be a bad one — no widgets, folders or icon packs. The launcher part is the *how*, not the
 *what*. → [Launcher setup](https://jenny.flagdizero.com/docs/start/launcher-setup/)
 

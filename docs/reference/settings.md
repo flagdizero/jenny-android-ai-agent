@@ -59,7 +59,6 @@ There is no field for typing a model ID by hand on this page. You pick an ID fro
 | Control | Effect | Default |
 |---|---|---|
 | **Her name** | The name she introduces herself with (up to 40 characters). Saved with its own **Save** button. See the silent restart note above. | "Jenny" |
-| **Show mascot** | Switch the in-app mascot on or off. | On |
 | **Mascot size** | Small / Medium / Large: the side of her square, 120 / 160 / 210 px. | Small |
 | **Floating mascot** | Only on Android. Puts her in a window above other apps, where tapping her lets you talk and the answer comes in a bubble, in the same conversation. It needs Android's "Display over other apps" permission: if that is missing, the switch stays on and a note explains what to allow. Stored in `config.json` (`floating.enabled`). | Off |
 | **The rules you gave her** | Free text (up to 2,000 characters) that she reads every turn and never rewrites. Saved with its own **Save** button. | empty |

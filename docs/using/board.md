@@ -6,7 +6,7 @@ The board replaced the notebook's page list and its graph map. Both are gone fro
 
 ## Getting there
 
-Open a notebook from the **Notebooks** page: the header row reads **← Notebooks › name**, with a **Chat | Board** switch at the right. **Board** opens the board, **Chat** goes back to the conversation. On a notebook you pinned as a page of its own, the pill at the left of the composer (the notebook's name and its page count) opens the board too.
+Tap a notebook on the **Notebooks** page and it opens on its board, under the header row **← Notebooks › name**. A notebook you pinned as a page of its own opens its board as soon as you land on that page. The notebook's chat is behind Jenny: tap her and its conversation comes up full screen over the board, which stays visible beneath; tap her again, or press Back, to return to the board.
 
 Back from the board returns to the notebook's chat. Back from a drawer returns to the board, and back from a page returns to the drawer you opened it from — or to the board, if you opened it from search.
 

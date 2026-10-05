@@ -32,12 +32,11 @@ Because everything is plain Markdown under the workspace, wiki pages are files l
 
 ## Opening a notebook
 
-A wiki is reached through the conversation that belongs to it, not from a tab of
-its own. Open the **Notebooks** page and tap the notebook: it opens there, and its
-header row reads **← Notebooks › name**, with a **Chat | Board** switch at the
-right. Tap **Board** to open the notebook's [board](./board.md), and **Chat** to
-come back. A notebook you pinned as a page of its own has the same way in as a
-pill at the left of its composer, with the name and the page count.
+A wiki is reached through the notebook that belongs to it, not from a tab of
+its own. Open the **Notebooks** page and tap the notebook: it opens on its
+[board](./board.md), under the header row **← Notebooks › name**. A notebook you
+pinned as a page of its own opens its board when you land on that page. The
+notebook's chat is behind Jenny: tap her over the board to talk in it.
 
 The board is how you reach the pages now. Each card on it opens a **drawer** — a
 short summary of one subject with links to the pages it was written from — and

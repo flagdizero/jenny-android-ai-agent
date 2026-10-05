@@ -2,13 +2,13 @@
 
 Everything you say to Jenny normally lands in one continuous personal conversation. A **notebook** is the other kind: a separate conversation bound to one folder, which remembers what it is told by *writing it down* in that folder instead of by feeding Jenny's personal memory.
 
-In the home you switch between them on the **Notebooks** page: tap the personal row for the personal chat, or a notebook to open it there. In the workshop's Console you switch with the chip above the message box: it shows her name (*Jenny* unless you renamed her) when you are in the personal chat, and `wikis › <name>` when you are inside a notebook.
+In the home the personal chat is the **Jenny** page; a notebook opens from the **Notebooks** page on its board, and its chat is behind Jenny — tap her over the board. In the workshop's Console you switch with the chip above the message box: it shows her name (*Jenny* unless you renamed her) when you are in the personal chat, and `wikis › <name>` when you are inside a notebook.
 
 ## What a notebook is
 
 A notebook is a folder under `workspace/wikis/<name>/` — the same place [wikis](./wiki.md) live, because a notebook *is* a wiki. There is no separate `notebooks/` directory, and a notebook you create in the app is a wiki like any other.
 
-<p align="center"><img src="../img/notebook-board.png" alt="An open notebook on its board: polaroid cards with their pins and signals, a sticky note for a reminder, red threads and the envelope, under Notebooks › piante and the Chat | Board switch" width="300"></p>
+<p align="center"><img src="../img/notebook-board.png" alt="An open notebook on its board: polaroid cards with their pins and signals, a sticky note for a reminder, red threads and the envelope, under Notebooks › piante" width="300"></p>
 
 A freshly created notebook looks like this:
 
