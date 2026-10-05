@@ -101,7 +101,9 @@ def test_the_error_is_rendered_as_text_not_html() -> None:
 
 
 def test_the_icon_src_accepts_only_data_images() -> None:
-    body = _method(_src("mobile-launcher.js"), "_buildRow")
+    # L'icona si costruisce in `_buildIcon`, che usano sia la riga sia la
+    # tessera delle suggerite: una regola sola per due posti.
+    body = _method(_src("mobile-launcher.js"), "_buildIcon")
     assert "entry.icon.startsWith('data:image/')" in body, (
         "`src` accetta anche schemi che eseguono, e questo valore viene da fuori"
     )
@@ -359,10 +361,10 @@ def test_the_decorative_glyph_is_not_read_aloud() -> None:
     con un carattere di spazzatura — letto nell'albero di accessibilità della
     WebView, non dedotto. L'icona di una app Android non ha il problema: è una
     `<img alt="">`, che al nome non contribuisce."""
-    body = _method(_src("mobile-launcher.js"), "_buildRow")
-    assert "glyph.setAttribute('aria-hidden', 'true')" in body
+    source = _src("mobile-launcher.js")
+    assert "glyph.setAttribute('aria-hidden', 'true')" in _method(source, "_buildIcon")
     # Il glifo del server invece *porta* informazione: non si nasconde, si nomina.
-    assert "server.setAttribute('aria-label'" in body
+    assert "server.setAttribute('aria-label'" in _method(source, "_buildRow")
 
 
 # ── la rotella ──────────────────────────────────────────────────────────────
@@ -998,3 +1000,71 @@ def test_the_drawer_only_calls_methods_its_collaborators_have() -> None:
         f"{ghosts}. Il file resta valido, la suite verde, e il foglio si apre "
         f"vuoto al primo disegno."
     )
+
+
+# ── la griglia della pagina App (05/10/2026) ────────────────────────────────
+
+def _home_css_grid_columns() -> set[str]:
+    css = _src("home-style.css")
+    return set(re.findall(
+        r"#launcher-sheet \.launcher-(?:list|top)[^{]*\{[^}]*?"
+        r"grid-template-columns:\s*repeat\((\d+),", css, re.S))
+
+
+def test_the_grid_columns_are_the_same_number_in_js_and_css() -> None:
+    """↑↓ saltano di `GRID_COLS` voci: se il CSS ne mette in fila un numero
+    diverso, la selezione scende in diagonale e nessun test lo vede."""
+    js = _src("mobile-launcher.js")
+    m = re.search(r"const GRID_COLS = (\d+);", js)
+    assert m, "GRID_COLS non trovato"
+    assert _home_css_grid_columns() == {m.group(1)}, (
+        "lista e suggerite devono avere le colonne di GRID_COLS"
+    )
+
+
+def test_only_the_home_page_is_a_grid() -> None:
+    """L'officina resta un elenco: ogni passo a due dimensioni dipende da
+    `builtin`, e nessuna regola della griglia sta in mobile-style.css, che
+    l'officina carica."""
+    js = _src("mobile-launcher.js")
+    assert "this._builtin ? GRID_COLS : 1" in _method(js, "_onKeyDown")
+    assert "this._builtin ? GRID_COLS : 1" in _method(js, "_onWheel")
+    assert "this._builtin && inside && (e.key === 'ArrowLeft'" in _method(js, "_onKeyDown")
+    assert "if (this._builtin) this._renderTop(query)" in _method(js, "_renderList")
+    css = _src("mobile-style.css")
+    for cls in ("launcher-top", "launcher-tile", "kbd-nav", "is-glyph"):
+        assert cls not in css, f".{cls} non deve toccare il foglio dell'officina"
+
+
+def test_the_suggested_row_is_outside_the_listbox() -> None:
+    """Un'app suggerita sta anche nell'A–Z: due `option` per una cosa sola
+    darebbero a `aria-activedescendant` due id fra cui scegliere."""
+    home = (ROOT / "jenny/templates/ui/index.html").read_text(encoding="utf-8")
+    top = home.index('id="launcher-top"')
+    assert top < home.index('id="launcher-list"'), "le suggerite stanno sopra la griglia"
+    tag = re.search(r'<div[^>]*id="launcher-top"[^>]*>', home).group(0)
+    assert 'role="group"' in tag and " hidden" in tag
+    tile = _method(_src("mobile-launcher.js"), "_buildTile")
+    assert "createElement('button')" in tile
+    assert "'option'" not in tile
+    assert "#launcher-sheet .launcher-top:not([hidden])" in _src("home-style.css"), (
+        "una regola di classe con `display` riaccenderebbe la fila vuota"
+    )
+
+
+def test_the_suggestions_are_only_apps_you_opened() -> None:
+    body = _method(_src("mobile-launcher.js"), "_renderTop")
+    assert "count > 0" in body, "prima del primo avvio non ci sono abitudini da suggerire"
+    assert "query.trim() ? []" in body, "mentre si cerca la risposta e' la griglia"
+
+
+def test_the_grid_hides_text_without_hiding_it_from_talkback() -> None:
+    """Descrizione, tipo e guasto non si vedono nella cella, ma TalkBack li
+    deve leggere ancora: `display: none` li toglierebbe anche a lui."""
+    css = _src("home-style.css")
+    block = re.search(r"#launcher-sheet \.launcher-row-desc,\n#launcher-sheet "
+                      r"\.launcher-row-kind,\n#launcher-sheet \.launcher-row-server \{(.*?)\}",
+                      css, re.S)
+    assert block, "la regola che nasconde i testi secondari non c'e'"
+    assert "clip-path: inset(50%)" in block.group(1)
+    assert "display: none" not in block.group(1)

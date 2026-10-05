@@ -40,7 +40,8 @@ export function usageStore() {
 _FAKE_DOM = """
 function createEl(id) {
   const el = {
-    id, className: '', value: '', dataset: {}, style: {}, attrs: {}, children: [], listeners: {},
+    id, className: '', value: '', dataset: {}, attrs: {}, children: [], listeners: {},
+    style: { setProperty(k, v) { this[k] = v; } },
     hidden: false, tagName: 'DIV',
     get classList() {
       const e = this;
@@ -62,6 +63,10 @@ function createEl(id) {
     focus() { document.activeElement = this; this.focused = (this.focused || 0) + 1; },
     blur() { if (document.activeElement === this) document.activeElement = document.body; },
     scrollIntoView() {},
+    closest(sel) {
+      for (let x = this; x; x = x.parent) if (x.classList.contains(sel.slice(1))) return x;
+      return null;
+    },
   };
   return el;
 }
@@ -72,6 +77,9 @@ for (const id of ['launcher-sheet', 'launcher-list', 'launcher-search', 'launche
 }
 if (globalThis.WITH_SHEET) {
   for (const id of ['launcher-scrim', 'launcher-close', 'launcher-handle-row']) perId.set(id, createEl(id));
+} else {
+  // Le suggerite ci sono solo in casa.
+  perId.set('launcher-top', createEl('launcher-top'));
 }
 const sheet = perId.get('launcher-sheet');
 const find = perId.get('launcher-search');
@@ -101,7 +109,8 @@ function key(key) {
   for (const fn of docListeners.keydown || []) fn(e);
 }
 const source = {
-  addChangeListener() {}, ensureLoaded() {}, launcherEntries: () => [], listsFailed: () => false,
+  addChangeListener() {}, ensureLoaded() {}, launcherEntries: () => globalThis.ENTRIES || [],
+  listsFailed: () => false,
   isLoadingLists: () => false, retryFailedLists() {},
 };
 const app = { appsSource: () => source, appsActions: () => null };
@@ -120,7 +129,7 @@ def _run(body: str, *, with_sheet: bool = False) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "mobile-launcher.js", root / "mobile-launcher.js")
-        for name in ("launcher-rank.js", "type-ahead.js"):
+        for name in ("launcher-rank.js", "type-ahead.js", "spines.js"):
             shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
@@ -213,4 +222,98 @@ def test_the_workshop_sheet_is_still_a_sheet() -> None:
       c.close();
       assert.equal(c.isOpen(), false);
       assert.equal(shell.inert, false);
+    """, with_sheet=True)
+
+
+# ── la griglia (05/10/2026) ─────────────────────────────────────────────────
+
+_ENTRIES = """
+const names = ['Telefono', 'Browser', 'Meteo', 'Calendario', 'Messaggi', 'File', 'Galleria',
+               'Orologio', 'Spesa', 'Contatti', 'Mappe', 'Note'];
+globalThis.ENTRIES = names.map((name) => ({
+  key: 'android:' + name.toLowerCase(), kind: 'android', name, searchText: name,
+  description: '', problem: null, glyph: 'ti-apps', icon: null,
+}));
+const keys = (el) => el.children.map((c) => c.dataset.key);
+const top = document.getElementById('launcher-top');
+const list = document.getElementById('launcher-list');
+"""
+
+
+def test_the_grid_is_alphabetical_whatever_you_use_most() -> None:
+    """Della classifica d'uso si occupano le suggerite: la griglia, a campo
+    vuoto, sta ferma in ordine alfabetico e si impara a memoria."""
+    _run(_ENTRIES + """
+      const c = new LauncherController(app, { builtin: true });
+      c._usage.record('android:telefono');
+      c.open();
+      const sorted = [...names].sort((a, b) => a.localeCompare(b)).map((n) => 'android:' + n.toLowerCase());
+      assert.deepEqual(keys(list), sorted);
+    """)
+
+
+def test_the_suggestions_are_the_apps_you_open_most() -> None:
+    _run(_ENTRIES + """
+      const c = new LauncherController(app, { builtin: true });
+      c.open();
+      assert.equal(top.hidden, true, 'prima del primo avvio non ci sono abitudini');
+      c.close();
+      for (const n of ['meteo', 'meteo', 'spesa', 'file', 'mappe', 'note', 'orologio', 'browser']) {
+        c._usage.record('android:' + n);
+      }
+      c.open();
+      assert.equal(top.hidden, false);
+      assert.equal(top.children.length, 5, 'una fila sola');
+      assert.equal(top.children[0].dataset.key, 'android:meteo', 'la piu usata per prima');
+      find.value = 'tel';
+      c._onQueryChanged();
+      assert.equal(top.hidden, true, 'mentre si cerca la risposta e la griglia');
+    """)
+
+
+def test_a_suggested_tile_counts_as_a_launch() -> None:
+    _run(_ENTRIES + """
+      const c = new LauncherController(app, { builtin: true });
+      c._usage.record('android:spesa');
+      c.open();
+      const tile = top.children[0];
+      for (const fn of top.listeners.click) fn({ target: tile });
+      assert.equal(c._usage.get('android:spesa').count, 2);
+    """)
+
+
+def test_the_arrows_move_across_the_grid() -> None:
+    """Cinque colonne: ↓ cambia fila, → passa alla cella accanto, e l'anello
+    compare solo da quando la selezione si muove."""
+    _run(_ENTRIES + """
+      const c = new LauncherController(app, { builtin: true });
+      c.open();
+      const at = () => keys(list).indexOf(c._selectedKey);
+      assert.equal(at(), 0);
+      assert.equal(list.classList.contains('kbd-nav'), false, 'a riposo la prima app e cerchiata');
+      key('ArrowDown');
+      assert.equal(at(), 5);
+      assert.equal(list.classList.contains('kbd-nav'), true);
+      key('ArrowRight');
+      assert.equal(at(), 6);
+      key('ArrowUp');
+      assert.equal(at(), 1);
+      key('ArrowLeft');
+      assert.equal(at(), 0);
+      c.close();
+      c.open();
+      assert.equal(list.classList.contains('kbd-nav'), false, 'una visita nuova riparte senza anello');
+    """)
+
+
+def test_the_workshop_list_still_moves_one_row_at_a_time() -> None:
+    _run(_ENTRIES + """
+      const c = new LauncherController(app);
+      c.open();
+      const at = () => keys(list).indexOf(c._selectedKey);
+      const first = at();
+      key('ArrowDown');
+      assert.equal(at(), first + 1);
+      key('ArrowRight');
+      assert.equal(at(), first + 1, 'nell officina le frecce di lato sono del testo');
     """, with_sheet=True)

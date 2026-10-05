@@ -33,6 +33,7 @@ import { UsageRanking, rankEntries } from './shared/launcher-rank.js';
 import { usageStore } from './shared/launcher-usage-store.js';
 import { isTypeAheadKey } from './shared/type-ahead.js';
 import { setupLongPress } from './shared/longpress.js';
+import { paintSpine } from './shared/spines.js';
 
 /* Etichetta del tipo, a destra della riga. Chiavi proprie del cassetto e non
    quelle della scheda: lì i titoli sono intestazioni di sezione (plurali,
@@ -49,6 +50,21 @@ const KIND_LABEL_KEYS = {
    scorrendo, e non c'è un secondo ritmo da imparare. Con `deltaMode` a righe o
    a pagine il valore non si usa: lì l'unità è già un passo. */
 const WHEEL_PIXELS_PER_STEP = 24;
+
+/* ── La griglia della pagina App (05/10/2026) ─────────────────────────────
+   Nella casa il cassetto è una griglia di icone: le suggerite in cima, poi
+   tutte dalla A alla Z. Le colonne sono **le stesse** di `repeat(5, …)` in
+   home-style.css (`#launcher-sheet .launcher-list`): ↑↓ saltano di tante voci
+   quante ne sta in una fila, e una cifra diversa qui farebbe scendere la
+   selezione in diagonale. L'officina resta un elenco, e queste due non la
+   toccano. */
+const GRID_COLS = 5;
+/* Quante suggerite: una fila sola, cioè quanto le colonne. */
+const TOP_COUNT = GRID_COLS;
+/* La classifica senza storia: tutti a zero, e restano gli spareggi di
+   `rankEntries` — il nome nella lingua di chi guarda, poi la chiave. È l'A–Z
+   della griglia, con le stesse regole dell'ordine di sempre. */
+const NO_USAGE = { get: () => ({ count: 0, last: 0 }) };
 
 /* ── Geometria (passo 5) ───────────────────────────────────────────────────
    Le tre costanti qui sotto sono **forma**, non misure del dispositivo: quelle
@@ -78,8 +94,8 @@ const DRAG_CLOSE_RATIO = 0.3;
 export class LauncherController {
   /** @param {object} app istanza di MobileApp (per il ritorno del fuoco).
    *  @param {object} [opzioni]
-   *  @param {boolean} [opzioni.incorporato] il cassetto **e' una pagina** e non
-   *         un foglio: la pagina App della casa.
+   *  @param {boolean} [opzioni.builtin] il cassetto **e' una pagina** e non
+   *         un foglio: la pagina App della casa, disegnata a griglia.
    *         Niente velo, niente sfondo inerte, niente trascinamento per
    *         chiudere e niente geometria della tastiera — cose di un foglio che
    *         sale sopra la chat. «Aperto» vuol dire allora **la pagina che
@@ -97,6 +113,10 @@ export class LauncherController {
     this.clearBtn = document.getElementById('launcher-search-clear');
     this.statusEl = document.getElementById('launcher-status');
     this.retryBtn = document.getElementById('launcher-status-retry');
+    /* Le suggerite della pagina App: le app che usi di più, in una fila sopra
+       la griglia. C'è solo in casa — l'officina non ha il nodo, e tutto ciò
+       che lo tocca passa da `?.`. */
+    this.topEl = document.getElementById('launcher-top');
     /* Qui c'era `manageBtn`, la riga «Gestisci app e skill». Portava alla
        scheda «App», che dal 21/09/2026 non esiste piu': il cassetto e' l'unico
        posto, e disinstallare si fa col tocco lungo su una riga. */
@@ -205,6 +225,15 @@ export class LauncherController {
       if (row.dataset.longpress) { delete row.dataset.longpress; return; }
       this._activate(row.dataset.key);
     });
+    /* Le suggerite: stessa delega e stessa guardia della pressione lunga. Un
+       tocco qui è un avvio come un altro, e passa da `_activate` — quindi
+       conta nella classifica che le ha messe in fila. */
+    this.topEl?.addEventListener('click', (e) => {
+      const tile = e.target.closest?.('.launcher-tile');
+      if (!tile?.dataset.key) return;
+      if (tile.dataset.longpress) { delete tile.dataset.longpress; return; }
+      this._activate(tile.dataset.key);
+    });
 
     /* Il fuoco che entra in una riga *è* una selezione: chi arriva con Tab o
        col dito di TalkBack e poi preme ⏎ deve aprire quella riga, non quella
@@ -259,6 +288,7 @@ export class LauncherController {
     }
     this.clearBtn?.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
     this.list?.setAttribute('aria-label', i18n.t('launcher.resultsList'));
+    this.topEl?.setAttribute('aria-label', i18n.t('launcher.suggested'));
     const text = this.statusEl?.querySelector('.launcher-status-text');
     if (text) text.textContent = i18n.t('launcher.loadFailed');
     if (this.retryBtn) this.retryBtn.textContent = i18n.t('launcher.retry');
@@ -514,6 +544,9 @@ export class LauncherController {
        nessuna delle due sbagliata a guardare il DOM. */
     this._select(null);
     this._selectionPinned = false;
+    /* E senza l'anello: nella griglia la selezione si vede solo da quando la
+       si muove (v. `_moveSelection`), e una visita nuova non l'ha mossa. */
+    this.list?.classList.remove('kbd-nav');
     /* La geometria può essere cambiata mentre il foglio era chiuso — si è
        passati a tre pulsanti, si è ruotato lo schermo, la tastiera è su per il
        composer della chat. Si rilegge prima di mostrarlo, non dopo: il foglio
@@ -756,6 +789,7 @@ export class LauncherController {
     const query = this.search?.value || '';
     this._syncHeading(query);
     this._syncStatus();
+    if (this._builtin) this._renderTop(query);
     if (!this._entries.length) {
       this._rankedKeys = [];
       this._select(null);
@@ -774,7 +808,11 @@ export class LauncherController {
       this.list.replaceChildren(this._note(key));
       return;
     }
-    const ranked = rankEntries(this._entries, query, this._usage, i18n.locale);
+    /* Nella griglia, a campo vuoto, l'ordine è A–Z: di cosa usi di più si
+       occupano le suggerite, e una griglia che si rimescola a ogni avvio non
+       si impara mai a memoria. Appena si scrive torna la classifica di sempre. */
+    const usage = (this._builtin && !query.trim()) ? NO_USAGE : this._usage;
+    const ranked = rankEntries(this._entries, query, usage, i18n.locale);
     if (!ranked.length) {
       this._rankedKeys = [];
       this._select(null);
@@ -819,6 +857,54 @@ export class LauncherController {
     // `reveal` solo se si conserva: la lista è appena tornata in cima, e una
     // selezione conservata va riportata sotto gli occhi di chi l'aveva scelta.
     this._select(keep ? this._selectedKey : this._rankedKeys[0], keep);
+  }
+
+  /** Le suggerite della griglia: le app che apri di più, in una fila.
+   *
+   *  **Non sono voci della lista.** Un'app suggerita sta anche nell'A–Z, e un
+   *  `listbox` con la stessa voce due volte avrebbe due `option` per una cosa
+   *  sola e due id da dare ad `aria-activedescendant`. Qui sono bottoni veri
+   *  dentro un gruppo: si toccano e si raggiungono con Tab, mentre frecce e ⏎
+   *  restano della griglia.
+   *
+   *  Solo app già aperte: prima del primo avvio la fila non c'è, invece di
+   *  essere le prime cinque dell'alfabeto spacciate per abitudini. E non c'è
+   *  mentre si cerca, perché lì la risposta è la griglia stessa.
+   */
+  _renderTop(query) {
+    if (!this.topEl) return;
+    const top = query.trim() ? [] : rankEntries(this._entries, '', this._usage, i18n.locale)
+      .filter((entry) => this._usage.get(entry.key).count > 0)
+      .slice(0, TOP_COUNT);
+    this.topEl.hidden = !top.length;
+    this.topEl.replaceChildren(...top.map((entry) => this._tileFor(entry)));
+  }
+
+  /** La tessera di una suggerita, costruita una volta e tenuta accanto alla sua
+   *  riga: quando la riga si ricostruisce (nome, guasto, icona) il record è
+   *  nuovo, e la tessera si rifà con lei. Le icone base64 non si ridecodificano
+   *  a ogni ritorno sul campo vuoto. */
+  _tileFor(entry) {
+    const record = this._rows.get(entry.key);
+    if (!record.tile) record.tile = this._buildTile(entry);
+    return record.tile;
+  }
+
+  _buildTile(entry) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = entry.problem ? 'launcher-tile has-problem' : 'launcher-tile';
+    tile.dataset.key = entry.key;
+    // La scheda, come sulla cella: lo stesso gesto nello stesso posto.
+    setupLongPress(tile, () => this._actions?.detailEntry(entry));
+    tile.appendChild(this._buildIcon(entry, 'launcher-tile-icon'));
+    const name = document.createElement('span');
+    name.className = 'launcher-tile-name';
+    name.textContent = entry.name;
+    tile.appendChild(name);
+    // Il guasto per intero a chi resta sopra: a schermo e' solo un puntino.
+    if (entry.problem) tile.title = entry.problem;
+    return tile;
   }
 
   /** Un `listbox` promette che i suoi figli siano `option`, e nei tre stati
@@ -879,6 +965,9 @@ export class LauncherController {
        l'abbia chiesto. Ai capi ci si ferma. */
     const next = Math.min(keys.length - 1, Math.max(0, (current < 0 ? 0 : current + step)));
     this._selectionPinned = true;
+    /* Nella griglia l'anello compare da qui: chi muove la selezione vuole
+       vederla, chi guarda la pagina e basta no. */
+    if (this._builtin) this.list?.classList.add('kbd-nav');
     this._select(keys[next], true);
   }
 
@@ -905,7 +994,24 @@ export class LauncherController {
       // Le frecce nel campo muoverebbero il cursore fra un capo e l'altro del
       // testo: qui il testo è una riga sola e la lista è l'unica cosa lunga.
       e.preventDefault();
-      this._moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+      // Nella griglia ↑↓ cambiano fila: tante voci quante colonne.
+      const row = this._builtin ? GRID_COLS : 1;
+      this._moveSelection(e.key === 'ArrowDown' ? row : -row);
+      return;
+    }
+
+    /* ←→ solo nella griglia, dove una fila ha cinque voci. Si prendono anche
+       col fuoco nel campo: la parola cercata è corta, si corregge con ⌫, e
+       con ←→ al cursore la selezione resterebbe ferma su una fila di risultati
+       che ↑↓ non sanno percorrere. Nell'officina l'elenco ha una colonna sola
+       e ←→ restano al testo.
+       Solo col fuoco qui dentro o da nessuna parte: la fila delle pagine in
+       modalita' ordina usa ←→ sui suoi nomi (`home-strip.js`), e quei tasti
+       sono suoi. */
+    const inside = !active || active === document.body || this.sheet.contains(active);
+    if (this._builtin && inside && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      this._moveSelection(e.key === 'ArrowRight' ? 1 : -1);
       return;
     }
 
@@ -958,11 +1064,14 @@ export class LauncherController {
   _onWheel(e) {
     if (!this._ownsKeys() || !e.deltaY) return;
     e.preventDefault();
+    // Nella griglia un passo è una fila, come ↑↓: una cella per volta, con
+    // cinque per fila, la rotella non arriverebbe mai in fondo.
+    const row = this._builtin ? GRID_COLS : 1;
     // `deltaMode`: 0 = pixel, 1 = righe, 2 = pagine. Fuori dai pixel l'unità è
     // già un passo e non c'è niente da accumulare.
     if (e.deltaMode !== 0) {
       this._wheelAcc = 0;
-      this._moveSelection(Math.trunc(e.deltaY) || Math.sign(e.deltaY));
+      this._moveSelection((Math.trunc(e.deltaY) || Math.sign(e.deltaY)) * row);
       return;
     }
     // Un cambio di verso azzera il residuo: altrimenti la prima passata
@@ -973,7 +1082,7 @@ export class LauncherController {
     const steps = Math.trunc(this._wheelAcc / WHEEL_PIXELS_PER_STEP);
     if (!steps) return;
     this._wheelAcc -= steps * WHEEL_PIXELS_PER_STEP;
-    this._moveSelection(steps);
+    this._moveSelection(steps * row);
   }
 
   /** ⏎ / ⇧⏎ / Spazio: apre la voce selezionata, o la sua scheda. */
@@ -1045,6 +1154,41 @@ export class LauncherController {
     Promise.resolve(started).then((ok) => { if (ok !== false) this.close(); });
   }
 
+  /** L'icona di una voce, per la riga e per la tessera delle suggerite: una
+   *  costruzione sola, cosi' le due regole qui sotto non hanno due copie. */
+  _buildIcon(entry, className) {
+    const iconWrap = document.createElement('span');
+    iconWrap.className = className;
+    /* Le app Android hanno l'icona vera, che il gateway consegna come data URL
+       base64; skill e Jenny App un glifo Tabler. Il prefisso si controlla
+       perché `src` accetta anche schemi che eseguono, e questo valore ha fatto
+       un giro fuori dal nostro codice. */
+    if (entry.icon && entry.icon.startsWith('data:image/')) {
+      const img = document.createElement('img');
+      img.src = entry.icon;
+      img.alt = '';
+      iconWrap.appendChild(img);
+    } else {
+      const glyph = document.createElement('i');
+      glyph.className = `ti ${entry.glyph || 'ti-apps'}`;
+      /* Un glifo Tabler è un carattere della zona a uso privato dentro un
+         font: senza questo, il nome accessibile della riga comincia con
+         `` e TalkBack lo legge prima del nome. Misurato nell'albero di
+         accessibilità della WebView, dove la riga di una skill si annunciava
+         con un carattere di spazzatura davanti. L'icona di una app Android non
+         ha il problema perché è una `<img alt="">`, che non contribuisce. */
+      glyph.setAttribute('aria-hidden', 'true');
+      iconWrap.appendChild(glyph);
+      /* Un glifo non ha un colore suo: prende la tela del nome, la stessa
+         regola dei quaderni (`shared/spines.js`), nei colori del tema. Nella
+         griglia la tessera e' piena; nell'elenco dell'officina il CSS non
+         legge `--cover`, e non cambia niente. */
+      iconWrap.classList.add('is-glyph');
+      paintSpine(iconWrap, entry.name);
+    }
+    return iconWrap;
+  }
+
   /** Una riga. Costruita nel DOM, non concatenando HTML: i nomi delle app
    *  arrivano dal PackageManager e dai manifest, cioè da testo che non
    *  scriviamo noi. */
@@ -1085,30 +1229,7 @@ export class LauncherController {
     row.setAttribute('aria-selected', 'false');
     row.setAttribute('tabindex', '0');
 
-    const iconWrap = document.createElement('div');
-    iconWrap.className = 'launcher-row-icon';
-    /* Le app Android hanno l'icona vera, che il gateway consegna come data URL
-       base64; skill e Jenny App un glifo Tabler. Il prefisso si controlla
-       perché `src` accetta anche schemi che eseguono, e questo valore ha fatto
-       un giro fuori dal nostro codice. */
-    if (entry.icon && entry.icon.startsWith('data:image/')) {
-      const img = document.createElement('img');
-      img.src = entry.icon;
-      img.alt = '';
-      iconWrap.appendChild(img);
-    } else {
-      const glyph = document.createElement('i');
-      glyph.className = `ti ${entry.glyph || 'ti-apps'}`;
-      /* Un glifo Tabler è un carattere della zona a uso privato dentro un
-         font: senza questo, il nome accessibile della riga comincia con
-         `` e TalkBack lo legge prima del nome. Misurato nell'albero di
-         accessibilità della WebView, dove la riga di una skill si annunciava
-         con un carattere di spazzatura davanti. L'icona di una app Android non
-         ha il problema perché è una `<img alt="">`, che non contribuisce. */
-      glyph.setAttribute('aria-hidden', 'true');
-      iconWrap.appendChild(glyph);
-    }
-    row.appendChild(iconWrap);
+    row.appendChild(this._buildIcon(entry, 'launcher-row-icon'));
 
     const text = document.createElement('div');
     text.className = 'launcher-row-text';

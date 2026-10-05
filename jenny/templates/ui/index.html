@@ -162,6 +162,12 @@
         <div class="launcher-head">
           <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
         </div>
+        <!-- Le suggerite: le app che apri di piu', in una fila sopra la griglia.
+             Fuori dalla lista apposta — un'app suggerita sta anche nell'A–Z, e
+             un `listbox` non puo' avere due voci per una cosa sola. Le
+             disegna `mobile-launcher.js` (`_renderTop`); vuota si nasconde. -->
+        <div class="launcher-top" id="launcher-top" role="group"
+             aria-label="Suggerite" data-i18n-aria="launcher.suggested" hidden></div>
         <div class="launcher-list" id="launcher-list" role="listbox"
              aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
       </div>

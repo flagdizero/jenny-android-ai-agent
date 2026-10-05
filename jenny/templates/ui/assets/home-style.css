@@ -2930,6 +2930,176 @@ body.home {
   padding-bottom: calc(var(--jenny-away-floor) + var(--jenny-size) * var(--jenny-art-h));
 }
 
+/* ── La griglia delle app (05/10/2026) ──
+   Il cassetto «che chiunque abbia un Android sa gia' usare»: il campo a
+   pillola, le suggerite in una fila, una riga, poi tutte dalla A alla Z in
+   cinque colonne. Le celle sono le righe dell'officina (`.launcher-row`, stesso
+   `option`, stesso tocco lungo), vestite qui da cella: le regole stanno tutte
+   sotto `#launcher-sheet`, che esiste solo in casa, perche' mobile-style.css lo
+   carica anche l'officina e `.home-drawer` e' anche il cassetto della bacheca.
+   Le cinque colonne sono `GRID_COLS` in `mobile-launcher.js`: ↑↓ saltano di
+   tante voci, e le due cifre devono restare uguali. */
+
+/* `.home-drawer` porta anche la cornice del cassetto della bacheca (20 px di
+   lato, 16 fra i pezzi): qui si sommava a quella del campo e della griglia, e
+   su 432 px di altezza costava quasi una fila di icone. */
+#launcher-sheet { padding: 4px 0 0; gap: 0; }
+#launcher-sheet .launcher-head { display: none; }
+
+#launcher-sheet .launcher-search-row { padding: 6px 18px 10px; }
+#launcher-sheet .launcher-search-icon { left: 35px; font-size: 17px; color: var(--text-muted); }
+#launcher-sheet .launcher-search {
+  height: 48px;
+  padding: 0 48px 0 46px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 15px;
+}
+#launcher-sheet .launcher-search::placeholder { color: var(--text-muted); }
+#launcher-sheet .launcher-search:focus {
+  box-shadow: inset 0 0 0 1px var(--focus-ring), 0 0 0 1px var(--focus-ring);
+}
+#launcher-sheet .launcher-search-clear { right: 30px; width: 32px; height: 32px; }
+
+/* Le suggerite. `:not([hidden])` e non un `display` sulla classe: vuota la
+   fila si nasconde col solo attributo, e una regola di classe lo scavalcherebbe. */
+#launcher-sheet .launcher-top:not([hidden]) {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#launcher-sheet .launcher-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: start;
+  gap: 6px 4px;
+  padding-top: 10px;
+  padding-inline: 14px;
+  /* Senza barra: la sua larghezza la toglieva alla griglia e non alle
+     suggerite, e le colonne delle due non stavano piu' una sotto l'altra
+     (4 px di scarto all'ultima, visto su jenny_square). */
+  scrollbar-width: none;
+}
+#launcher-sheet .launcher-list::-webkit-scrollbar { display: none; }
+/* I tre stati vuoti sono una frase, non una cella. */
+#launcher-sheet .launcher-note { grid-column: 1 / -1; text-align: center; }
+
+#launcher-sheet .launcher-row,
+#launcher-sheet .launcher-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* Il tocco lungo apre la scheda: niente selezione del nome a meta' strada
+     (v. `.home-who-row`, stessa lezione). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#launcher-sheet .launcher-row:active,
+#launcher-sheet .launcher-tile:active { background: var(--overlay-strong); }
+
+/* La selezione di ⏎. Nella griglia si vede solo quando serve: dopo una
+   freccia o la rotella (`kbd-nav`, v. `_moveSelection`) o mentre si cerca —
+   a riposo la prima app dell'alfabeto non resta cerchiata. */
+#launcher-sheet .launcher-row.selected {
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+}
+#launcher-sheet .launcher-list.kbd-nav .launcher-row.selected,
+#launcher-sheet:has(.launcher-search:not(:placeholder-shown)) .launcher-row.selected,
+#launcher-sheet .launcher-row:focus-visible,
+#launcher-sheet .launcher-tile:focus-visible {
+  outline: none;
+  background: var(--overlay-strong);
+  box-shadow: inset 0 0 0 1.5px var(--focus-ring);
+}
+
+/* L'icona: quella vera delle app Android, che ha gia' la sua forma, e per le
+   Jenny App il glifo su una tessera piena nella tela del nome
+   (`paintSpine`, la stessa dei quaderni). */
+#launcher-sheet .launcher-row-icon,
+#launcher-sheet .launcher-tile-icon {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--text);
+}
+#launcher-sheet .launcher-row-icon img,
+#launcher-sheet .launcher-tile-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+}
+#launcher-sheet .is-glyph { background: var(--cover); color: var(--cover-ink); }
+#launcher-sheet .is-glyph i { font-size: 26px; }
+
+/* Un'app da riparare: un puntino, e basta. Il guasto per intero sta nella
+   scheda e, per chi non vede, nella riga nascosta qui sotto. */
+#launcher-sheet .launcher-row:has(.launcher-row-desc--problem) .launcher-row-icon::after,
+#launcher-sheet .launcher-tile.has-problem .launcher-tile-icon::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--error);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+#launcher-sheet .launcher-row-text { flex: none; width: 100%; align-items: center; gap: 0; }
+#launcher-sheet .launcher-row-name,
+#launcher-sheet .launcher-tile-name {
+  max-width: 100%;
+  font-size: 12px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Descrizione, tipo e nuvola non si vedono, ma si sentono: nascosti con il
+   ritaglio e non con `display: none`, TalkBack legge ancora «Meteo, Jenny App»
+   — o il guasto, che e' l'unica cosa che spiega il puntino. */
+#launcher-sheet .launcher-row-desc,
+#launcher-sheet .launcher-row-kind,
+#launcher-sheet .launcher-row-server {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .home-you-scroll {
   flex: 1;
   min-height: 0;
