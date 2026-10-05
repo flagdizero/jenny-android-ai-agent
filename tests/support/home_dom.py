@@ -11,6 +11,8 @@ costruisce la casa sul markup vero.
 Finti restano i confini: ``fetch`` (una tabella di rotte, piu' un gancio per
 fallire o rallentare una rotta), il ``WebSocket`` (ricorda cosa gli si manda,
 e ``frame()`` gli fa arrivare un frame), e ``showModal`` dove jsdom non l'ha.
+Gli script che la casa carica su richiesta (``ensureVendor``) arrivano dalla
+cartella della UI, come dall'APK.
 
 jsdom **non** e' una dipendenza del repo: senza, questi test si saltano con
 :data:`requires_jsdom`. Si trova con ``NODE_PATH`` (``require`` lo rispetta,
@@ -81,6 +83,30 @@ if (!w.HTMLDialogElement.prototype.showModal) {
 }
 w.matchMedia = w.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
 globalThis.matchMedia = w.matchMedia;
+
+/* Uno `<script src>` messo nella testa (`ensureVendor`) si carica dalla
+   cartella della UI: jsdom senza risorse non lo caricherebbe mai, e non
+   direbbe nemmeno di aver fallito. Un UMD si appoggia su `globalThis`, che qui
+   e' la finestra; un file che non c'e' e' un `onerror`, come nella WebView. */
+const appendToHead = w.document.head.appendChild.bind(w.document.head);
+w.document.head.appendChild = (el) => {
+  const src = el.tagName === 'SCRIPT' ? el.getAttribute('src') || '' : '';
+  const node = appendToHead(el);
+  if (src.startsWith('/html-mobile/')) {
+    setTimeout(() => {
+      let code;
+      try {
+        code = fs.readFileSync(UI + src.slice('/html-mobile'.length), 'utf8');
+      } catch {
+        el.onerror?.();
+        return;
+      }
+      new Function('window', 'self', 'globalThis', code)(w, w, w);
+      el.onload?.();
+    }, 0);
+  }
+  return node;
+};
 
 export const locales = {
   it: JSON.parse(fs.readFileSync(UI + '/assets/i18n/it.json', 'utf8')),

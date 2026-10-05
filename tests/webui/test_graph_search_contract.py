@@ -45,12 +45,15 @@ _PAGES = {
 }
 
 # Le dipendenze di ``home-board.js`` che non sono sotto prova: la rete, i
-# comandi, le traduzioni (la chiave basta) e i due aiuti di ``utils``.
+# comandi, le traduzioni (la chiave basta) e gli aiuti di ``utils``.
 _STUBS = {
     "api-client.js": "export const api = {};\n",
     "rpc-client.js": "export const rpc = {};\n",
     "i18n.js": "export const i18n = { locale: 'it', t: (k) => k };\n",
-    "utils.js": "export const escapeHtml = (s) => s; export const showToast = () => {};\n",
+    "utils.js": (
+        "export const escapeHtml = (s) => s; export const showToast = () => {};\n"
+        "export const ensureVendor = async () => {};\n"
+    ),
 }
 
 _HARNESS = r"""

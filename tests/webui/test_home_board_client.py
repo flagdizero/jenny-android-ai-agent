@@ -78,6 +78,8 @@ routes['/api/page'] = { wiki: 'orto', page: 'travaso-acero.md', title: 'travaso 
 for (const m of ['board.seen', 'board.move', 'board.fix', 'board.suggestion.respond']) {
   rpcAnswers[m] = () => ({ ok: true });
 }
+// Uno schermo touch, come il telefono: d3-zoom ascolta le dita solo dove ci sono.
+Object.defineProperty(navigator, 'maxTouchPoints', { value: 2, configurable: true });
 const app = await boot();
 await app.switchConversation('project:orto');
 await tick(30);
@@ -125,9 +127,9 @@ def test_a_notebook_opens_on_its_board() -> None:
       // a grandezza naturale finche' non lo sposti o lo ingrandisci.
       assert.equal(polaroids[0].style.left, '5cqw');
       assert.equal(polaroids[0].style.top, '6cqh');
-      assert.ok(wall.style.transform.endsWith("scale(1)"));
-      app.board.view = { x: -120, y: 40, s: 1.5 };
-      app.board._applyView();
+      assert.equal(wall.style.transform, 'translate(0px, 0px) scale(1)');
+      const B = app.board;
+      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-120, 40).scale(1.5));
       assert.equal(wall.style.transform, 'translate(-120px, 40px) scale(1.5)');
       app.board.resetView();
       assert.equal(wall.style.transform, 'translate(0px, 0px) scale(1)');
@@ -475,4 +477,202 @@ def test_the_centre_of_the_view_goes_with_an_accepted_card() -> None:
       const call = rpcs('board.suggestion.respond').at(-1);
       assert.equal(call.params.answer, 'yes');
       assert.ok(call.params.near && typeof call.params.near.x === 'number');
+    """)
+
+
+# La tela del muro con le misure del quadrato, che jsdom non ha: 400 x 400, e il
+# muro rifatto su quelle. Gli oggetti di ``BOARD`` stanno nello schermo
+# dell'origine, quindi il muro va da -400 a 800 per lato (uno schermo d'aria).
+_WALL = """
+const B = app.board;
+const C = $('home-board-canvas');
+for (const [k, v] of Object.entries({ clientWidth: 400, clientHeight: 400 })) {
+  Object.defineProperty(C, k, { value: v, configurable: true });
+}
+C.getBoundingClientRect = () => ({ left: 0, top: 0, right: 400, bottom: 400,
+  width: 400, height: 400, x: 0, y: 0 });
+B.render();
+const at = () => ({ x: B.view.x, y: B.view.y, k: B.view.k });
+const mouse = (target, type, x, y, extra = {}) => target.dispatchEvent(new window.MouseEvent(type, {
+  bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, ...extra }));
+const finger = (id, x, y) => ({ identifier: id, clientX: x, clientY: y });
+const touch = (target, type, touches, changed) => {
+  const e = new window.Event(type, { bubbles: true, cancelable: true });
+  Object.assign(e, { touches, changedTouches: changed });
+  target.dispatchEvent(e);
+};
+const pointer = (target, type, x, y) => {
+  const e = new window.Event(type, { bubbles: true });
+  Object.assign(e, { clientX: x, clientY: y, button: 0, pointerId: 1, isPrimary: true });
+  target.dispatchEvent(e);
+};
+const card = (id) => document.querySelector(`.home-board-polaroid[data-id="${id}"]`);
+"""
+
+
+def _run_wall(script: str) -> None:
+    _run(_WALL + script)
+
+
+@requires_jsdom
+def test_the_background_moves_the_wall_up_to_its_edge() -> None:
+    _run_wall("""
+      mouse(C, 'mousedown', 100, 100);
+      mouse(window, 'mousemove', 150, 80);
+      mouse(window, 'mouseup', 150, 80);
+      assert.deepEqual(at(), { x: 50, y: -20, k: 1 });
+      // Oltre lo schermo d'aria il muro non va: a sinistra si ferma a +400.
+      mouse(C, 'mousedown', 0, 0);
+      mouse(window, 'mousemove', 2000, 0);
+      mouse(window, 'mouseup', 2000, 0);
+      assert.equal(at().x, 400);
+      // Il mouse su una scheda e' della scheda: il muro non si muove.
+      const before = at();
+      mouse(card('acero'), 'mousedown', 30, 40);
+      mouse(window, 'mousemove', 90, 90);
+      mouse(window, 'mouseup', 90, 90);
+      assert.deepEqual(at(), before);
+    """)
+
+
+@requires_jsdom
+def test_a_double_tap_on_the_background_goes_back_to_the_origin() -> None:
+    _run_wall("""
+      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-200, 100).scale(1.5));
+      mouse(card('acero'), 'dblclick', 30, 40);
+      assert.deepEqual(at(), { x: -200, y: 100, k: 1.5 });
+      mouse(C, 'dblclick', 200, 200);
+      assert.deepEqual(at(), { x: 0, y: 0, k: 1 });
+    """)
+
+
+@requires_jsdom
+def test_the_wheel_moves_the_wall_and_ctrl_wheel_zooms_it() -> None:
+    _run_wall("""
+      const wheel = (extra) => C.dispatchEvent(new window.WheelEvent('wheel', {
+        bubbles: true, cancelable: true, clientX: 200, clientY: 200, ...extra }));
+      wheel({ deltaX: 30, deltaY: 10 });
+      assert.deepEqual(at(), { x: -30, y: -10, k: 1 });
+      // Ctrl+rotella (e la pinza del trackpad) ingrandisce, fino a 2,2 e non oltre.
+      for (let i = 0; i < 5; i++) wheel({ deltaY: -100, ctrlKey: true });
+      assert.equal(at().k, 2.2);
+      for (let i = 0; i < 20; i++) wheel({ deltaY: 100, ctrlKey: true });
+      assert.equal(at().k, 0.3);
+    """)
+
+
+@requires_jsdom
+def test_a_second_finger_turns_a_card_drag_into_a_pinch() -> None:
+    _run_wall("""
+      const el = card('acero');
+      pointer(el, 'pointerdown', 30, 40);
+      pointer(el, 'pointermove', 60, 70);
+      assert.ok(el.classList.contains('is-dragging'));
+      // Il secondo dito sul fondo: d3 prende tutte e due le dita, la scheda torna dov'era.
+      const one = finger(1, 60, 70);
+      touch(C, 'touchstart', [one, finger(2, 200, 200)], [finger(2, 200, 200)]);
+      assert.ok(!el.classList.contains('is-dragging'));
+      assert.equal(el.style.left, '5cqw');
+      assert.equal(el.style.top, '6cqh');
+      // Le dita si allargano: il muro si ingrandisce, e la scheda non segue piu' il dito.
+      touch(C, 'touchmove', [one, finger(2, 300, 300)], [finger(2, 300, 300)]);
+      assert.ok(at().k > 1.4, `k=${at().k}`);
+      pointer(el, 'pointermove', 90, 100);
+      assert.equal(el.style.left, '5cqw');
+      touch(C, 'touchend', [], [one, finger(2, 300, 300)]);
+      pointer(el, 'pointerup', 90, 100);
+      // Nessuno spostamento al server, e il tocco non apre il cassetto.
+      el.click();
+      await tick(20);
+      assert.equal(rpcs('board.move').length, 0);
+      assert.equal(app.view, 'board');
+    """)
+
+
+@requires_jsdom
+def test_a_second_finger_on_a_card_is_a_pinch_not_a_drag() -> None:
+    _run_wall("""
+      // Il primo dito sul fondo sposta il muro; il secondo cade su una scheda.
+      const one = finger(1, 300, 300);
+      touch(C, 'touchstart', [one], [one]);
+      const el = card('monstera');
+      const second = new window.Event('pointerdown', { bubbles: true });
+      Object.assign(second, { clientX: 200, clientY: 30, button: 0, pointerId: 2, isPrimary: false });
+      el.dispatchEvent(second);
+      touch(el, 'touchstart', [one, finger(2, 200, 30)], [finger(2, 200, 30)]);
+      // Non la trascina: le due dita sono una pinza.
+      pointer(el, 'pointermove', 150, 10);
+      assert.ok(!el.classList.contains('is-dragging'));
+      touch(el, 'touchmove', [one, finger(2, 100, 10)], [finger(2, 100, 10)]);
+      // L'ingrandimento e' quanto si sono allargate le dita.
+      const grew = Math.hypot(200, 290) / Math.hypot(100, 270);
+      assert.ok(Math.abs(at().k - grew) < 1e-9, `k=${at().k}`);
+      touch(C, 'touchend', [], [one, finger(2, 100, 10)]);
+      assert.equal(rpcs('board.move').length, 0);
+    """)
+
+
+@requires_jsdom
+def test_after_a_pinch_the_next_tap_on_the_card_opens_its_drawer() -> None:
+    _run_wall("""
+      const el = card('acero');
+      pointer(el, 'pointerdown', 30, 40);
+      const one = finger(1, 30, 40);
+      touch(C, 'touchstart', [one, finger(2, 200, 200)], [finger(2, 200, 200)]);
+      touch(C, 'touchend', [], [one, finger(2, 200, 200)]);
+      pointer(el, 'pointerup', 30, 40);
+      // La pinza non ha fatto partire nessun click: il tocco dopo e' un tocco.
+      pointer(el, 'pointerdown', 30, 40);
+      pointer(el, 'pointerup', 30, 40);
+      el.click();
+      await tick(30);
+      assert.equal(app.view, 'drawer');
+    """)
+
+
+@requires_jsdom
+def test_a_redraw_under_the_finger_lets_go_of_the_card() -> None:
+    _run_wall("""
+      pointer(card('acero'), 'pointerdown', 30, 40);
+      pointer(card('acero'), 'pointermove', 60, 70);
+      // La bacheca si ridisegna (un aggiornamento dal server) col dito ancora giu':
+      // quella scheda non c'e' piu', e la prossima si trascina.
+      B.render();
+      assert.equal(B._itemDrag, null);
+      const el = card('monstera');
+      pointer(el, 'pointerdown', 200, 30);
+      pointer(el, 'pointermove', 230, 60);
+      assert.ok(el.classList.contains('is-dragging'));
+    """)
+
+
+@requires_jsdom
+def test_a_card_carried_to_the_edge_scrolls_the_wall_and_stays_in_hand() -> None:
+    _run_wall("""
+      const el = card('acero');
+      pointer(el, 'pointerdown', 30, 40);
+      pointer(el, 'pointermove', 200, 200);
+      assert.equal(at().x, 0);
+      // Vicino al bordo destro il muro scorre sotto la scheda, che resta in mano.
+      pointer(el, 'pointermove', 390, 200);
+      pointer(el, 'pointermove', 392, 200);
+      assert.equal(at().x, -28);
+      assert.ok(el.classList.contains('is-dragging'));
+      pointer(el, 'pointerup', 392, 200);
+      await tick(20);
+      const move = rpcs('board.move').at(-1);
+      assert.ok(move, 'nessuno spostamento al server');
+      // Il dito e' andato di 362 px e il muro di 28: la scheda di 390 px, cioe' 97,5%.
+      assert.equal(move.params.x, 5 + 97.5);
+    """)
+
+
+@requires_jsdom
+def test_each_notebook_keeps_where_you_were_looking() -> None:
+    _run_wall("""
+      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
+      await B.load('altro');
+      assert.deepEqual(at(), { x: 0, y: 0, k: 1 });
+      await B.load('orto');
+      assert.deepEqual(at(), { x: -150, y: 60, k: 1.2 });
     """)

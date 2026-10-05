@@ -1970,9 +1970,9 @@ body.home {
    Jenny. Chi sta sopra a chi lo decide l'ordine nel DOM, e lo tiene il JS
    (`home-board.js`): le schede, poi la busta, poi i fili, poi le etichette; la
    scheda trascinata o sollevata si sposta in fondo al suo gruppo.
-   Cornice fissa: la bacheca sta in una schermata, niente tela infinita, niente
-   pan e pinch. Le misure degli oggetti sono in `cqw` della tela, cosi' sul
-   quadrato del Titan 2 e su un telefono alto la bacheca ha la stessa forma.
+   Il muro si sposta e si ingrandisce (d3-zoom, in `home-board.js`); le misure
+   degli oggetti sono in `cqw` della tela, cosi' sul quadrato del Titan 2 e su
+   un telefono alto la bacheca ha la stessa forma.
    I colori del materiale (carta, post-it, filo, sughero) sono token per tema
    in mobile-style.css: qui c'e' solo la forma. */
 
@@ -2046,7 +2046,7 @@ body.home {
 .home-board-canvas[hidden] { display: none; }
 /* Il muro: un punto d'origine che si sposta e si ingrandisce (lo trasforma
    `HomeBoard._applyView`). Gli oggetti dentro sono in percento dello schermo,
-   anche negativo. I gesti sono tutti nostri, quindi niente gesti del browser. */
+   anche negativo. I gesti li prende d3-zoom, quindi niente gesti del browser. */
 .home-board-canvas { touch-action: none; }
 .home-board-wall {
   position: absolute;

@@ -15,10 +15,11 @@
  *  - **un segnale per scheda, al massimo**: angolo rosso (un problema), angolo
  *    giallo (un'attesa vicina), puntino blu (novita' dall'ultima apertura).
  *
- *  **Cornice fissa**: niente tela infinita, niente pan e pinch. Le posizioni
- *  sono in percentuale, e le decide il server; il client le disegna, e quando
- *  sposti qualcosa lo dice al server (`board.move`) — mai a `localStorage`, che
- *  la WebView perde al kill.
+ *  **Il muro**: le posizioni sono in percento dello schermo, anche negative, e
+ *  le decide il server; il client le disegna, e quando sposti qualcosa lo dice
+ *  al server (`board.move`) — mai a `localStorage`, che la WebView perde al
+ *  kill. Spostare e ingrandire il muro e' di d3-zoom; un dito su una scheda e'
+ *  della scheda, finche' non ne arriva un secondo.
  *
  *  La bacheca e' anche **un elenco**: ogni oggetto e' un `role="button"`
  *  focalizzabile, e la vista elenco mostra le stesse schede in fila, per chi
@@ -28,7 +29,7 @@
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
-import { escapeHtml, showToast } from './shared/utils.js';
+import { ensureVendor, escapeHtml, showToast } from './shared/utils.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
@@ -86,15 +87,15 @@ export function sinceText(row) {
 
 /* Il muro, in percento dello schermo (come le posizioni): dall'origine fino a
    dieci schermi per lato, anche in negativo (`model.WALL_MAX`). Lo schermo
-   d'aria oltre l'oggetto piu' lontano, l'ingrandimento possibile, il doppio
-   tocco e lo slancio. L'ingombro degli oggetti e' `model.CARD_BOX`/`NOTE_BOX`. */
+   d'aria oltre l'oggetto piu' lontano e l'ingrandimento possibile. L'ingombro
+   degli oggetti e' `model.CARD_BOX`/`NOTE_BOX`. */
 const WALL_MAX = 1000;
 const AIR = 100;
-const ZOOM_MIN = 0.3;
-const ZOOM_MAX = 2.2;
-const DOUBLE_TAP_MS = 320;
-const GLIDE_DECAY = 0.92;
+const ZOOM_EXTENT = [0.3, 2.2];
 const ITEM_BOX = { card: [20, 40], note: [15, 23] };
+/* d3, che sposta e ingrandisce il muro: gia' spedito per le Jenny App, e
+   caricato alla prima bacheca aperta, non all'avvio della casa. */
+const D3_JS = '/html-mobile/assets/vendor/d3@7/d3.min.js';
 /* A quanti pixel dal bordo il muro comincia a scorrere sotto una scheda
    trascinata, e di quanto a ogni movimento. */
 const EDGE_SCROLL_PX = 36;
@@ -147,19 +148,20 @@ export class HomeBoard {
     this._token = 0;
     this._graph = null;
 
-    /** Dove si guarda il muro: lo spostamento in pixel e l'ingrandimento. Uno per
+    /** Dove si guarda il muro: lo spostamento in pixel e l'ingrandimento, una
+     *  `ZoomTransform` di d3 (`{x, y, k}`) che solo d3-zoom cambia. Una per
      *  quaderno, finche' la casa e' aperta: riaprire la bacheca torna li'. */
-    this.view = { x: 0, y: 0, s: 1 };
+    this.view = { x: 0, y: 0, k: 1 };
     this._views = new Map();
-    this._pointers = new Map();
-    this._gesture = null;
-    this._lastTap = 0;
-    this._pinched = false;
+    /** Il quaderno di cui `view` e' la vista. */
+    this._viewOf = null;
+    /** d3-zoom e la tela a cui e' legato, dalla prima bacheca aperta. */
+    this._zoom = null;
+    this._sel = null;
     /** Il trascinamento di una scheda in corso, con il modo di annullarlo. */
     this._itemDrag = null;
 
     this.sinceBtn?.addEventListener('click', () => this.openSince());
-    this._bindGestures();
     /* Il menu del browser sulla pressione lunga non deve mai comparire sopra
        una scheda. */
     this.canvas?.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -167,7 +169,10 @@ export class HomeBoard {
        la rotazione. Senza `ResizeObserver` (un banco senza layout) si
        ridisegnano solo quando la bacheca si ridisegna. */
     if (this.canvas && typeof ResizeObserver !== 'undefined') {
-      this._resize = new ResizeObserver(() => this.drawThreads());
+      this._resize = new ResizeObserver(() => {
+        this._fitExtent();
+        this.drawThreads();
+      });
       this._resize.observe(this.canvas);
     }
     document.fonts?.ready?.then(() => this.drawThreads());
@@ -179,12 +184,14 @@ export class HomeBoard {
     if (notebook !== this.notebook) {
       this._graph = null;
       this.focus = null;
-      if (this.notebook) this._views.set(this.notebook, { ...this.view });
-      this.view = { ...(this._views.get(notebook) || { x: 0, y: 0, s: 1 }) };
     }
     this.notebook = notebook;
     let data;
     try {
+      if (!this._zoom) {
+        await ensureVendor(D3_JS);
+        this._bindZoom();
+      }
       data = await api.getBoard(notebook);
     } catch (err) {
       if (token !== this._token) return;
@@ -197,6 +204,13 @@ export class HomeBoard {
     if (token !== this._token) return;
     this.data = data;
     this.render();
+    /* Il muro di un altro quaderno: si mette via la vista di quello, e si torna
+       dove si guardava questo (o all'origine). */
+    if (this._viewOf !== notebook) {
+      if (this._viewOf) this._views.set(this._viewOf, this.view);
+      this._viewOf = notebook;
+      this._lookAt(this._views.get(notebook) || window.d3.zoomIdentity);
+    }
     /* «L'ultima volta» e' adesso: la riga di novita' che hai appena visto non
        deve riaccendersi alla prossima apertura. */
     if (data.exists) {
@@ -209,6 +223,7 @@ export class HomeBoard {
     const data = this.data;
     this._clear();
     if (!data) return;
+    this._fitExtent();
     this._drawSince();
     if (!data.cards.length) {
       this._empty(data.suggestions.length ? 'board.empty.proposed' : 'board.empty.title');
@@ -222,8 +237,6 @@ export class HomeBoard {
     }
     for (const note of data.notes) this.wall.appendChild(this._postit(note));
     for (const card of data.cards) this.wall.appendChild(this._polaroid(card));
-    this._clampView();
-    this._applyView();
     this._drawEnvelope();
     /* I fili sopra le schede, e niente `z-index` (la casa ne ha uno solo, quello
        di Jenny): li mette sopra l'ordine nel DOM. */
@@ -246,20 +259,59 @@ export class HomeBoard {
   /* ── Il muro: spostare, ingrandire ── */
 
   _applyView() {
-    if (!this.wall) return;
     const v = this.view;
-    this.wall.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.s})`;
-    this.canvas?.style.setProperty('--board-zoom', String(v.s));
+    this.wall.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.k})`;
+  }
+
+  /** Lega d3-zoom alla tela, una volta. Un dito sul fondo sposta il muro, due lo
+   *  ingrandiscono e lo spostano come una mappa; Ctrl+rotella (e la pinza del
+   *  trackpad) ingrandisce, la rotella sola sposta. Un dito da solo su una
+   *  scheda e' della scheda (`_bind`); il secondo dito ne fa una pinza, e la
+   *  scheda torna dov'era. */
+  _bindZoom() {
+    if (this._zoom) return;
+    const { d3 } = window;
+    const onItem = (e) => e.target?.closest?.('.home-board-item, .home-board-envelope');
+    this._sel = d3.select(this.canvas);
+    this._zoom = d3.zoom()
+      .scaleExtent(ZOOM_EXTENT)
+      .filter((e) => (e.type === 'wheel'
+        ? e.ctrlKey
+        : !e.button && (e.touches?.length > 1 || !onItem(e))))
+      .on('start', (e) => {
+        /* Solo un gesto vero: lo scorrimento al bordo sotto una scheda
+           trascinata e' un gesto del codice, e non deve lasciarla. */
+        if (e.sourceEvent) this._itemDrag?.cancel();
+      })
+      .on('zoom', (e) => {
+        this.view = e.transform;
+        this._applyView();
+      });
+    this._sel.call(this._zoom)
+      /* Il doppio tocco (e il doppio clic) sul fondo torna all'origine. */
+      .on('dblclick.zoom', (e) => {
+        if (!onItem(e)) this.resetView();
+      });
+    /* Un tocco sul fondo spegne i fili accesi. */
+    this.canvas.addEventListener('click', (e) => {
+      if (!onItem(e) && this.focus) this.setFocus(null);
+    });
+    this.canvas.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      const k = this.view.k;
+      this._zoom.translateBy(this._sel, -e.deltaX / k, -e.deltaY / k);
+    }, { passive: false });
   }
 
   /** Il muro non si perde: si puo' andare fin dove c'e' qualcosa, piu' uno
    *  schermo d'aria per lato (e lo schermo dell'origine c'e' sempre). Piu'
-   *  piccolo della finestra, si centra. */
-  _clampView() {
-    const box = this.canvas?.getBoundingClientRect();
-    if (!box?.width || !this.data) return;
-    const W = box.width;
-    const H = box.height;
+   *  piccolo della finestra, d3 lo centra. In pixel del muro, quindi da rifare
+   *  quando la tela cambia misura o un oggetto si sposta. */
+  _fitExtent() {
+    const W = this.canvas?.clientWidth;
+    const H = this.canvas?.clientHeight;
+    if (!this._zoom || !W || !this.data) return;
     let x0 = 0, y0 = 0, x1 = 100, y1 = 100;
     const take = (pos, w, h) => {
       x0 = Math.min(x0, pos.x); y0 = Math.min(y0, pos.y);
@@ -267,16 +319,19 @@ export class HomeBoard {
     };
     for (const c of this.data.cards) take(c.pos, ITEM_BOX.card[0], ITEM_BOX.card[1]);
     for (const n of this.data.notes) take(n.pos, ITEM_BOX.note[0], ITEM_BOX.note[1]);
-    const s = this.view.s;
-    const left = ((x0 - AIR) / 100) * W * s;
-    const right = ((x1 + AIR) / 100) * W * s;
-    const top = ((y0 - AIR) / 100) * H * s;
-    const bottom = ((y1 + AIR) / 100) * H * s;
-    const fit = (pos, lo, hi, size) => (hi - lo <= size
-      ? (size - (hi + lo)) / 2
-      : Math.min(-lo, Math.max(size - hi, pos)));
-    this.view.x = fit(this.view.x, left, right, W);
-    this.view.y = fit(this.view.y, top, bottom, H);
+    this._zoom.translateExtent([
+      [((x0 - AIR) / 100) * W, ((y0 - AIR) / 100) * H],
+      [((x1 + AIR) / 100) * W, ((y1 + AIR) / 100) * H],
+    ]);
+    /* Un `translateExtent` nuovo non sposta niente da solo: uno spostamento
+       nullo rimette la vista dentro. */
+    this._zoom.translateBy(this._sel, 0, 0);
+  }
+
+  /** Porta il muro alla vista *t*, dentro i suoi bordi. */
+  _lookAt(t) {
+    this._zoom.transform(this._sel, t);
+    this._zoom.translateBy(this._sel, 0, 0);
   }
 
   /** Il punto del muro al centro della finestra, in coordinate del muro: e' li'
@@ -286,163 +341,19 @@ export class HomeBoard {
     if (!box?.width) return { x: 50, y: 50 };
     const v = this.view;
     return {
-      x: Math.round((((box.width / 2 - v.x) / v.s) / box.width) * 1000) / 10,
-      y: Math.round((((box.height / 2 - v.y) / v.s) / box.height) * 1000) / 10,
+      x: Math.round((((box.width / 2 - v.x) / v.k) / box.width) * 1000) / 10,
+      y: Math.round((((box.height / 2 - v.y) / v.k) / box.height) * 1000) / 10,
     };
   }
 
-  /** Torna all'origine, a grandezza naturale (doppio tocco sul fondo). */
+  /** Torna all'origine, a grandezza naturale. */
   resetView() {
-    this.view = { x: 0, y: 0, s: 1 };
-    this._applyView();
-    this.drawThreads();
-  }
-
-  /** Ingrandisce di *factor* tenendo fermo il punto (*cx*, *cy*) della finestra. */
-  _zoomAt(cx, cy, scale) {
-    const v = this.view;
-    const s = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
-    const wx = (cx - v.x) / v.s;
-    const wy = (cy - v.y) / v.s;
-    v.s = s;
-    v.x = cx - wx * s;
-    v.y = cy - wy * s;
-  }
-
-  /** Un dito sul fondo sposta il muro, due lo ingrandiscono attorno al punto fra
-   *  le dita; la rotella sposta, Ctrl+rotella (e la pinza del trackpad) ingrandisce.
-   *  Un dito su una scheda e' della scheda: la trascina (v. `_bind`). */
-  _bindGestures() {
-    const c = this.canvas;
-    if (!c) return;
-    const local = (e) => {
-      const b = c.getBoundingClientRect();
-      return { x: e.clientX - b.left, y: e.clientY - b.top };
-    };
-    const onItem = (e) => e.target?.closest?.('.home-board-item, .home-board-envelope');
-    c.addEventListener('pointerdown', (e) => {
-      const drag = this._itemDrag;
-      if (onItem(e) && !this._pointers.size && (!drag || drag.pointerId === e.pointerId)) {
-        return; // un dito su una scheda, da solo: la trascina
-      }
-      if (drag && drag.pointerId !== e.pointerId) {
-        /* Il primo dito era su una scheda e ne arriva un secondo: la scheda
-           torna dov'era, e i due dita diventano una pinza. */
-        const at = drag.point;
-        drag.cancel();
-        this._pointers.set(drag.pointerId, at);
-      }
-      this._pointers.set(e.pointerId, local(e));
-      cancelAnimationFrame(this._glide || 0);
-      this._startGesture();
-      capture(c, e.pointerId);
-    });
-    c.addEventListener('pointermove', (e) => {
-      if (!this._pointers.has(e.pointerId)) return;
-      this._pointers.set(e.pointerId, local(e));
-      this._moveGesture();
-    });
-    const up = (e) => {
-      if (!this._pointers.has(e.pointerId)) return;
-      const g = this._gesture;
-      this._pointers.delete(e.pointerId);
-      if (g && !g.moved && !this._pinched && this._pointers.size === 0) {
-        /* Un tocco sul fondo spegne i fili accesi; due di fila tornano all'origine. */
-        const now = Date.now();
-        if (now - this._lastTap < DOUBLE_TAP_MS) this.resetView();
-        else if (this.focus) this.setFocus(null);
-        this._lastTap = now;
-      } else if (g?.moved && !this._pinched && this._pointers.size === 0 && g.vx !== undefined) {
-        this._glideFrom(g.vx, g.vy);
-      }
-      /* Finche' c'e' un dito giu' dopo una pinza, quel dito non sposta niente:
-         le dita non si staccano mai insieme, e il secondo trascinerebbe il muro. */
-      if (this._pointers.size === 0) this._pinched = false;
-      this._startGesture();
-    };
-    c.addEventListener('pointerup', up);
-    c.addEventListener('pointercancel', up);
-    c.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      if (e.ctrlKey) {
-        const p = local(e);
-        this._zoomAt(p.x, p.y, this.view.s * Math.exp(-e.deltaY / 200));
-      } else {
-        this.view.x -= e.deltaX;
-        this.view.y -= e.deltaY;
-      }
-      this._clampView();
-      this._applyView();
-    }, { passive: false });
-  }
-
-  _startGesture() {
-    const pts = [...this._pointers.values()];
-    if (!pts.length) {
-      this._gesture = null;
-      return;
-    }
-    const mid = pts.length > 1
-      ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
-      : { ...pts[0] };
-    const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
-    if (pts.length > 1) this._pinched = true;
-    this._gesture = {
-      mid, dist, s: this.view.s, x: this.view.x, y: this.view.y,
-      moved: this._gesture?.moved && pts.length > 0, t: Date.now(), last: mid,
-    };
-  }
-
-  _moveGesture() {
-    const g = this._gesture;
-    if (!g) return;
-    const pts = [...this._pointers.values()];
-    if (this._pinched && pts.length < 2) return;
-    const mid = pts.length > 1
-      ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
-      : pts[0];
-    if (!g.moved && Math.hypot(mid.x - g.mid.x, mid.y - g.mid.y) < DRAG_THRESHOLD_PX
-      && pts.length < 2) return;
-    g.moved = true;
-    if (pts.length > 1 && g.dist) {
-      /* Solo zoom, attorno al punto dove le dita si sono posate: il muro non
-         segue le dita, che non stanno mai ferme. */
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      this.view = { x: g.x, y: g.y, s: g.s };
-      this._zoomAt(g.mid.x, g.mid.y, g.s * (dist / g.dist));
-    } else {
-      this.view.x = g.x + (mid.x - g.mid.x);
-      this.view.y = g.y + (mid.y - g.mid.y);
-    }
-    const now = Date.now();
-    const dt = Math.max(1, now - g.t);
-    g.vx = (mid.x - g.last.x) / dt;
-    g.vy = (mid.y - g.last.y) / dt;
-    g.t = now;
-    g.last = { ...mid };
-    this._clampView();
-    this._applyView();
-  }
-
-  /** Lo slancio dopo uno spostamento veloce, che si spegne da solo. */
-  _glideFrom(vx, vy) {
-    let x = vx * 16;
-    let y = vy * 16;
-    if (Math.hypot(x, y) < 2) return;
-    const step = () => {
-      x *= GLIDE_DECAY;
-      y *= GLIDE_DECAY;
-      this.view.x += x;
-      this.view.y += y;
-      this._clampView();
-      this._applyView();
-      if (Math.hypot(x, y) > 0.5) this._glide = requestAnimationFrame(step);
-    };
-    this._glide = requestAnimationFrame(step);
+    this._lookAt(window.d3.zoomIdentity);
   }
 
   _clear() {
     if (!this.canvas) return;
+    this._itemDrag?.cancel();
     for (const el of [...this.wall.children]) {
       if (el !== this.threads) el.remove();
     }
@@ -674,11 +585,25 @@ export class HomeBoard {
       const card = this.data?.cards.find((c) => c.id === cardId);
       this.onOpenCard?.(cardId, card?.title || '');
     };
+    /* La scheda torna dov'era e smette di seguire il dito: arriva una pinza,
+       il gesto si interrompe, o la bacheca si ridisegna sotto il dito. */
+    const drop = () => {
+      clearTimeout(timer);
+      if (moved) {
+        el.classList.remove('is-dragging');
+        el.style.left = `${item.pos.x}cqw`;
+        el.style.top = `${item.pos.y}cqh`;
+      }
+      el._suppress = true;
+      start = null;
+      moved = false;
+      this._itemDrag = null;
+    };
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== undefined && e.button !== 0) return;
       /* Un secondo dito mentre un altro e' gia' giu': e' una pinza, non un
-         trascinamento (la prende `_bindGestures`). */
-      if (this._pointers.size || this._itemDrag) return;
+         trascinamento (la prende d3-zoom, v. `_bindZoom`). */
+      if (e.isPrimary === false || this._itemDrag) return;
       const box = this.canvas.getBoundingClientRect();
       start = {
         px: e.clientX, py: e.clientY, x: item.pos.x, y: item.pos.y, w: box.width, h: box.height,
@@ -686,23 +611,7 @@ export class HomeBoard {
       };
       moved = false;
       longFired = false;
-      this._itemDrag = {
-        pointerId: e.pointerId,
-        point: { x: e.clientX - box.left, y: e.clientY - box.top },
-        /* La pinza arriva: la scheda torna dov'era e smette di seguire il dito. */
-        cancel: () => {
-          clearTimeout(timer);
-          if (moved) {
-            el.classList.remove('is-dragging');
-            el.style.left = `${item.pos.x}cqw`;
-            el.style.top = `${item.pos.y}cqh`;
-          }
-          el._suppress = true;
-          start = null;
-          moved = false;
-          this._itemDrag = null;
-        },
-      };
+      this._itemDrag = { cancel: drop };
       capture(el, e.pointerId);
       if (kind === 'card') {
         timer = setTimeout(() => {
@@ -720,24 +629,27 @@ export class HomeBoard {
       if (!moved) {
         moved = true;
         el.classList.add('is-dragging');
-        /* In cima a tutto mentre la porti, fili compresi: l'ultimo nel DOM. */
+        /* In cima a tutto mentre la porti, fili compresi: l'ultimo nel DOM.
+           Spostarla nel DOM le toglie il puntatore, e senza il dito andrebbe
+           al muro: lo si riprende subito. */
         this.wall.appendChild(el);
+        capture(el, e.pointerId);
         if (this.focus) this.setFocus(null);
       }
       /* Vicino al bordo della finestra il muro scorre da se', e la scheda va
          con lui: cosi' la porti su un altro schermo senza lasciarla. */
       const b = start.box;
       const edge = EDGE_SCROLL_PX;
-      if (e.clientX > b.right - edge) this.view.x -= EDGE_SCROLL_STEP;
-      else if (e.clientX < b.left + edge) this.view.x += EDGE_SCROLL_STEP;
-      if (e.clientY > b.bottom - edge) this.view.y -= EDGE_SCROLL_STEP;
-      else if (e.clientY < b.top + edge) this.view.y += EDGE_SCROLL_STEP;
-      this._applyView();
+      const step = (lo, hi, at) => (at > hi - edge ? -EDGE_SCROLL_STEP
+        : at < lo + edge ? EDGE_SCROLL_STEP : 0);
+      const ex = step(b.left, b.right, e.clientX);
+      const ey = step(b.top, b.bottom, e.clientY);
+      if (ex || ey) this._zoom.translateBy(this._sel, ex / this.view.k, ey / this.view.k);
       /* Il dito si muove in pixel dello schermo; la scheda in percento dello
          schermo *del muro*, che puo' essere ingrandito. */
-      const s = this.view.s;
-      const sdx = (dx - (this.view.x - start.vx)) / s;
-      const sdy = (dy - (this.view.y - start.vy)) / s;
+      const k = this.view.k;
+      const sdx = (dx - (this.view.x - start.vx)) / k;
+      const sdy = (dy - (this.view.y - start.vy)) / k;
       const w = (el.offsetWidth / start.w) * 100;
       const h = (el.offsetHeight / start.h) * 100;
       const x = Math.max(-WALL_MAX, Math.min(WALL_MAX - w, start.x + (sdx / start.w) * 100));
@@ -754,6 +666,7 @@ export class HomeBoard {
         el.classList.remove('is-dragging');
         item.pos = { ...el._next, by: 'user' };
         el.querySelector('.home-board-pin')?.classList.replace('is-jenny', 'is-user');
+        this._fitExtent();
         this.drawThreads();
         rpc.board('move', this.notebook, { kind, id: item.id, x: item.pos.x, y: item.pos.y })
           .catch((err) => {
@@ -768,10 +681,7 @@ export class HomeBoard {
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', () => {
-      clearTimeout(timer);
-      el.classList.remove('is-dragging');
-      start = null;
-      this._itemDrag = null;
+      if (start) drop();
     });
     el.addEventListener('click', () => {
       if (el._suppress) {
@@ -808,7 +718,7 @@ export class HomeBoard {
        tolti), cosi' si spostano e si ingrandiscono con le schede. */
     const box = this.wall.getBoundingClientRect();
     if (!this.canvas.getBoundingClientRect().width) return false;
-    const zoom = this.view.s || 1;
+    const zoom = this.view.k;
     const elOf = (id) => this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`);
     const self = this.focus ? elOf(this.focus) : null;
     if (this.focus && !self) this.focus = null;
