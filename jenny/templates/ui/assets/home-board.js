@@ -181,9 +181,16 @@ export class HomeBoard {
   /** Carica e disegna la bacheca di *notebook*. */
   async load(notebook) {
     const token = ++this._token;
+    /* Un altro quaderno: il muro di quello di prima si toglie **subito**. Restava
+       a schermo finche' la bacheca nuova non arrivava, e per quel momento
+       sembrava la sua. Lo stesso quaderno invece resta com'e' fino alla
+       risposta: ridisegnare da vuoto sarebbe un lampo per niente. */
     if (notebook !== this.notebook) {
       this._graph = null;
       this.focus = null;
+      this.data = null;
+      this._clear();
+      if (this.emptyEl) this.emptyEl.hidden = true;
     }
     this.notebook = notebook;
     let data;

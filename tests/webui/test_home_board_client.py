@@ -63,7 +63,7 @@ CARD = {
 
 _SETUP = """
 import assert from 'node:assert/strict';
-import { boot, tick, routes, sent, rpcAnswers, $ } from './boot.mjs';
+import { boot, tick, routes, sent, rpcAnswers, hooks, $ } from './boot.mjs';
 routes['/api/board'] = __BOARD__;
 routes['/api/board/card'] = __CARD__;
 routes['/api/page'] = { wiki: 'orto', page: 'travaso-acero.md', title: 'travaso acero',
@@ -677,4 +677,34 @@ def test_each_notebook_keeps_where_you_were_looking() -> None:
       assert.deepEqual(at(), { x: 0, y: 0, k: 1 });
       await B.load('orto');
       assert.deepEqual(at(), { x: -150, y: 60, k: 1.2 });
+    """)
+
+
+@requires_jsdom
+def test_another_notebook_does_not_show_the_old_wall_while_it_loads() -> None:
+    _run("""
+      assert.equal(document.querySelectorAll('.home-board-polaroid').length, 2);
+      // La bacheca dell'altro quaderno tarda: finche' non arriva, il muro
+      // dell'orto non deve restare a schermo come se fosse il suo.
+      let release;
+      const held = new Promise((r) => { release = r; });
+      hooks.fetch = async (u) => {
+        if (u.pathname === '/api/board' && u.searchParams.get('wiki') === 'altro') await held;
+      };
+      const loading = app.board.load('altro');
+      await tick(5);
+      assert.equal(document.querySelectorAll('.home-board-polaroid').length, 0);
+      assert.equal(document.querySelectorAll('.home-board-postit').length, 0);
+      assert.equal(document.querySelector('.home-board-envelope'), null);
+      assert.equal($('home-board-since').hidden, true);
+      assert.equal($('home-board-empty').hidden, true);
+      release();
+      await loading;
+      assert.equal(document.querySelectorAll('.home-board-polaroid').length, 2);
+      // Ricaricare lo **stesso** quaderno non lo spegne: resta finche' arriva.
+      hooks.fetch = async (u) => { if (u.pathname === '/api/board') await held; };
+      const again = app.board.load('altro');
+      await tick(5);
+      assert.equal(document.querySelectorAll('.home-board-polaroid').length, 2);
+      await again;
     """)
