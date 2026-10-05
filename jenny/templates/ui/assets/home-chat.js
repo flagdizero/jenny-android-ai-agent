@@ -144,8 +144,6 @@ export class HomeChat {
        serve quando una risposta si incolla altrove. `WeakMap` perche' la
        chiave e' il nodo, e una ricarica del filo li butta tutti. */
     this._source = new WeakMap();
-    /* La scheda di vetro di ogni risposta (v. `_replyOf`). */
-    this._replies = new WeakMap();
     /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
        nativo sa aprire non sta nell'URL firmato (v. `_openMediaFile`). */
     this._files = new WeakMap();
@@ -578,11 +576,11 @@ export class HomeChat {
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
-      this._replyOf(this._ensureTurn()).appendChild(block);
+      this._ensureTurn().appendChild(block);
       this._register(this.turnNode, msg.text);
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
-    if (msg.media_urls?.length) this._appendMedia(this._replyOf(this._ensureTurn()), msg.media_urls);
+    if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
     this._follow();
   }
 
@@ -756,10 +754,10 @@ export class HomeChat {
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);
       renderRich(block);
-      this._replyOf(node).appendChild(block);
+      node.appendChild(block);
       this._register(node, content);
     }
-    if (media?.length) this._appendMedia(this._replyOf(node), media);
+    if (media?.length) this._appendMedia(node, media);
     /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
        misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
     this._tailOf(node, latencyMs);
@@ -917,24 +915,6 @@ export class HomeChat {
     if (entry.url) window.open(entry.url, '_blank');
   }
 
-  /** La scheda di vetro di una risposta: blocchi e media ci stanno dentro, la
-   *  coda (`_tailOf`) le sta accanto, fuori (06/10/2026, Vetro 2).
-   *
-   *  Una per risposta, non una per blocco: un turno testo → strumento → testo
-   *  apre piu' blocchi, e una scheda ciascuno spezzerebbe una risposta sola in
-   *  tre. Nasce col primo blocco o media, quindi un turno in cui Jenny ha solo
-   *  lavorato resta senza scheda vuota. */
-  _replyOf(node) {
-    let reply = this._replies.get(node);
-    if (!reply) {
-      reply = document.createElement('div');
-      reply.className = 'home-reply';
-      node.appendChild(reply);
-      this._replies.set(node, reply);
-    }
-    return reply;
-  }
-
   /** La bolla dell'assistente del turno, creata al primo frame che la riempie. */
   _ensureTurn() {
     if (!this.turnNode) {
@@ -950,7 +930,7 @@ export class HomeChat {
     if (!this.blockNode) {
       this.blockNode = document.createElement('div');
       this.blockNode.className = 'home-block';
-      this._replyOf(this._ensureTurn()).appendChild(this.blockNode);
+      this._ensureTurn().appendChild(this.blockNode);
     }
     return this.blockNode;
   }

@@ -16,10 +16,10 @@ Releases before 1.0 are described only on their
   visible beneath, blurred; tap her again or press Back to close it. She can see that page, so she can
   explain a menu, a setting or a mini-app you have in front of you. On the chat page and the
   Console a tap makes her wave. This replaces the one-turn minichat in both shells.
-- **The chat is made of glass.** Jenny's replies sit in a translucent card and the field you
-  write in is translucent too, in every theme and each in its theme's style: over a page you
-  see its colours through them. Your own messages and the Send button keep their theme
-  colour. In Kyoto your messages now have rounded corners like the other themes.
+- **The field you write in is made of glass**, in every theme and each in its theme's style:
+  over a page you see its colours through it. Only your own messages have bubbles; Jenny's
+  replies run on the page, with the room they need. In Kyoto your messages now have rounded
+  corners like the other themes.
 - **A notebook always opens on its board**, from the Notebooks page and from a notebook
   pinned as a page. Its chat is behind Jenny; the Chat | Board switch is gone.
 - A **pink dot** on Jenny says a reply arrived while her chat was closed.

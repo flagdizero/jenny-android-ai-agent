@@ -411,29 +411,34 @@
   --chat-band: color-mix(in srgb, var(--bg) 97%, transparent);
 }
 
-/* Il vetro della chat (06/10/2026, Vetro 2): la scheda delle risposte di
-   Jenny e il campo dove scrivi. Ovunque, sulla pagina chat come sopra una
+/* Il vetro della chat (06/10/2026, Vetro 2): il campo dove scrivi, e in casa
+   la bolla del lavoro in corso. Ovunque, sulla pagina chat come sopra una
    pagina, con lo stesso codice: sopra il velo lascia passare la pagina
-   sfocata, sulla pagina chat e' una scheda leggera sul fondo del tema.
+   sfocata, sulla pagina chat e' una pastiglia leggera sul fondo del tema.
+
+   **Le risposte di Jenny non hanno scheda**, apposta: le bolle le hai solo tu,
+   e lei scrive sul fondo, come una pagina, perche' le sue risposte sono la
+   cosa lunga della chat e su uno schermo quadrato ogni margine e' una riga in
+   meno (provata sulla tela e tolta il 06/10/2026). Fino a quel giorno, in
+   officina, Fumetto e Sticker la scheda l'avevano: tolta anche li', perche'
+   la regola e' la stessa per tutti.
 
    **Solo trasparenza, mai `backdrop-filter`**: dietro c'e' gia' una pagina
    sfocata e ferma, quindi il vetro costa come un colore. E **niente ombre
-   sfumate fuori**: la scheda si allunga a ogni fotogramma mentre la risposta
-   arriva, e un'ombra sfumata andrebbe ridipinta ogni volta (lo stesso conto di
+   sfumate fuori**: la bolla del lavoro cresce mentre lavora, e un'ombra
+   sfumata andrebbe ridipinta ogni volta (lo stesso conto di
    `.launcher-row.selected`). Il riflesso e' interno e di 1 px; le ombre nette
    di Sticker e Fumetto non sfumano, e costano come un bordo.
 
    Ogni tema lo veste a modo suo: chiaro e sottile nei temi scuri, ciano in
    Synthwave, adesivo in Sticker, inchiostro in Fumetto, lucido in Y2K, brina
-   in Stone. `--radius-reply` e' lo specchio di `--radius-bubble`: l'angolo
-   piccolo sta dalla parte di chi parla. */
+   in Stone. */
 :root {
   --glass-bg: rgba(244, 241, 234, 0.07);
   --glass-border: 1px solid rgba(244, 241, 234, 0.14);
   --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --glass-field-bg: rgba(244, 241, 234, 0.09);
   --glass-field-border: 1px solid rgba(244, 241, 234, 0.2);
-  --radius-reply: 14px 14px 14px 4px;
 }
 [data-theme="synthwave"] {
   --glass-bg: rgba(242, 236, 255, 0.07);
@@ -454,7 +459,6 @@
   --glass-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
   --glass-field-bg: rgba(244, 239, 250, 0.09);
   --glass-field-border: 2px solid rgba(255, 255, 255, 0.55);
-  --radius-reply: 14px;
 }
 [data-theme="comic"] {
   --glass-bg: rgba(255, 255, 255, 0.62);
@@ -462,7 +466,6 @@
   --glass-shadow: 3px 3px 0 rgba(27, 24, 32, 0.85);
   --glass-field-bg: rgba(255, 255, 255, 0.72);
   --glass-field-border: 2px solid #1b1820;
-  --radius-reply: 12px 12px 12px 2px;
 }
 [data-theme="y2k"] {
   --glass-bg: rgba(255, 255, 255, 0.55);
@@ -470,7 +473,6 @@
   --glass-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7);
   --glass-field-bg: rgba(255, 255, 255, 0.65);
   --glass-field-border: 1px solid rgba(255, 255, 255, 0.95);
-  --radius-reply: 20px 20px 20px 6px;
 }
 [data-theme="stone"] {
   --glass-bg: rgba(244, 241, 236, 0.62);
@@ -478,7 +480,6 @@
   --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   --glass-field-bg: rgba(244, 241, 236, 0.72);
   --glass-field-border: 1px solid rgba(55, 51, 44, 0.18);
-  --radius-reply: 12px 12px 12px 3px;
 }
 
 [data-theme="synthwave"],
@@ -2951,21 +2952,6 @@ body {
   padding: 8px 12px;
   max-width: 84%;
   box-shadow: var(--bubble-user-shadow);
-}
-
-/* La scheda di vetro di una risposta di Jenny (06/10/2026, Vetro 2; i token
-   `--glass-*` stanno coi temi). Prima ce l'avevano solo Fumetto e Sticker, con
-   una regola ciascuno: ora e' di tutti, e ogni tema la veste dai token. Le
-   pillole del turno (pensiero, strumenti) e la riga di Copia restano fuori.
-   **Niente `overflow`, `contain`, ritagli** (la scheda contiene il testo che si
-   seleziona, e lo scroller e' il documento: v. `:root.mode-chat`) **e niente
-   ombre sfumate** (cresce a ogni fotogramma mentre la risposta arriva). */
-.chat-msg-ai .chat-content:not(:empty) {
-  padding: 8px 12px;
-  border: var(--glass-border);
-  border-radius: var(--radius-reply);
-  background: var(--glass-bg);
-  box-shadow: var(--glass-shadow);
 }
 
 /* Badge di provenienza (messaggi entrati da un altro canale, es. Telegram) */
@@ -6321,10 +6307,6 @@ body {
 }
 [data-theme="sticker"] .chat-msg-user .chat-content {
   transform: rotate(0.5deg) translateZ(0);
-}
-[data-theme="sticker"] .chat-msg-ai .chat-content:not(:empty) {
-  /* La scheda la vestono i token del vetro; qui resta l'adesivo storto. */
-  transform: rotate(-0.5deg) translateZ(0);
 }
 
 /* ══════════════════════════════════════════════════

@@ -6,9 +6,10 @@ chat vera sale a tutto schermo sopra la pagina (`#home-over` in casa,
 (`--chat-veil`) ed e' sfocata (`--chat-veil-blur`). Il velo deve lasciar
 leggere la chat sopra **anche** dove sotto passa il testo della pagina.
 
-Dal 06/10/2026 le risposte di Jenny stanno in una scheda di vetro e il campo e'
-di vetro (`--glass-*`), ovunque: sopra il velo e sulla pagina chat. Il vetro e'
-un altro strato traslucido, e il conto lo compone sopra il velo.
+Dal 06/10/2026 il campo dove scrivi e' di vetro (`--glass-*`), ovunque: sopra
+il velo e sulla pagina chat. Il vetro e' un altro strato traslucido, e il conto
+lo compone sopra il velo. Le risposte di Jenny no: stanno sul velo, e le conta
+il primo banco.
 
 Il caso peggiore contato qui: sotto il testo della chat c'e' un glifo della
 pagina, del colore del testo del tema, **non sfocato**. La sfocatura spalma il
@@ -54,11 +55,21 @@ def test_the_chat_reads_over_the_veil_in_every_theme() -> None:
     assert not low, f"la chat sopra il velo non si legge: {low}"
 
 
-def test_jennys_reply_reads_on_its_glass_over_the_veil_and_on_the_chat_page() -> None:
+def test_the_work_bubble_reads_on_its_glass() -> None:
     over = _low("text", "text", "chat-veil", "glass-bg")
-    assert not over, f"la scheda di Jenny sopra il velo non si legge: {over}"
+    assert not over, f"la bolla del lavoro sopra il velo non si legge: {over}"
     page = _low("text", "bg", "glass-bg")
-    assert not page, f"la scheda di Jenny sulla pagina chat non si legge: {page}"
+    assert not page, f"la bolla del lavoro sulla pagina chat non si legge: {page}"
+
+
+def test_jennys_replies_have_no_card() -> None:
+    """Le bolle le hai solo tu: lei scrive sul fondo, perche' le sue risposte
+    sono lunghe e lo schermo e' quadrato (06/10/2026)."""
+    css = re.sub(r"/\*.*?\*/", "", HOME_CSS.read_text(encoding="utf-8")
+                 + MOBILE_CSS.read_text(encoding="utf-8"), flags=re.S)
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        if re.search(r"\.chat-msg-ai \.chat-content|\.home-msg-jenny( \.home-block)?\s*$", selectors.strip()):
+            assert not re.search(r"\b(background|border|box-shadow)\s*:", body), selectors.strip()
 
 
 def test_what_you_type_reads_on_the_glass_field() -> None:

@@ -40,8 +40,6 @@ _METHODS = (
     "_resetTurn",
     "_turnEnd",
     "_ensureTurn",
-    "_ensureBlock",
-    "_replyOf",
 )
 
 
@@ -91,7 +89,6 @@ function makeChat() {
     el: makeNode(),
     _empty: false,
     _source: new WeakMap(),
-    _replies: new WeakMap(),
     _seconds: null,
     turnNode: null,
     blockNode: null,
@@ -331,43 +328,3 @@ def test_history_keeps_the_seconds() -> None:
     assert "msg.latencyMs" in member(src, "_buildTurns"), (
         "_buildTurns scarta i secondi: dopo una ricarica la coda resta muta"
     )
-
-
-# ── La scheda di vetro (06/10/2026) ──────────────────────────────────────────
-
-
-def test_the_answer_sits_in_its_glass_and_the_tail_outside() -> None:
-    """La scheda raccoglie il testo e i media; la coda (Copia, secondi) le sta
-    accanto, fuori: e' il confine fra una risposta e la dopo, non una sua riga."""
-    _run_js("""
-      const c = makeChat();
-      c._appendAssistant('una risposta', [], false, 4000);
-      const node = ultima(c);
-      assert.deepEqual(node.children.map((x) => x.className), ['home-reply', 'home-tail']);
-      const reply = node.children[0];
-      assert.equal(reply.children[0].className, 'home-block');
-      assert.equal(reply.children[0].innerHTML, 'una risposta');
-    """)
-
-
-def test_a_turn_in_several_segments_is_one_glass() -> None:
-    """Testo, strumento, testo: due blocchi, una scheda sola. Una scheda per
-    blocco spezzerebbe una risposta in pezzi che sembrano due messaggi."""
-    _run_js("""
-      const c = makeChat();
-      const first = c._ensureBlock();
-      c.blockNode = null;                // `stream_end`: il segmento si chiude
-      const second = c._ensureBlock();
-      const turn = c.turnNode;
-      const replies = turn.children.filter((x) => x.className === 'home-reply');
-      assert.equal(replies.length, 1);
-      assert.deepEqual(replies[0].children, [first, second]);
-    """)
-
-
-def test_a_turn_that_only_worked_has_no_empty_glass() -> None:
-    _run_js("""
-      const c = makeChat();
-      c._appendAssistant('', [], false, 4000);
-      assert.deepEqual(ultima(c).children, []);
-    """)

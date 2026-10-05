@@ -81,7 +81,6 @@ function makeChat() {
     _empty: true,
     _stick: true,
     _source: new WeakMap(),
-    _replies: new WeakMap(),
     _seconds: null,
     _batching: false,
     _follow() {},
@@ -106,7 +105,6 @@ function makeChat() {
     __TAIL__,
     __REGISTER__,
     __TEXT__,
-    __REPLY__,
   };
   return chat;
 }
@@ -114,9 +112,7 @@ function makeChat() {
 /* Quel che si legge nel filo, dall'alto verso il basso: una riga per bolla. */
 const readThread = (chat) => chat.el.children.map((n) => {
   if (String(n.className).includes('home-boundary')) return '---';
-  // La risposta di Jenny sta nella sua scheda (`.home-reply`), dal 06/10/2026.
-  const box = n.children.find((c) => c.className === 'home-reply') || n;
-  const block = box.children.find((c) => c.className === 'home-block');
+  const block = n.children.find((c) => c.className === 'home-block');
   const who = String(n.className).includes('home-msg-user') ? 'tu' : 'jenny';
   return who + ': ' + (block ? (block.textContent || block.innerHTML) : '');
 });
@@ -140,7 +136,6 @@ def _harness() -> str:
         .replace("__TAIL__", member(src, "_tailOf"))
         .replace("__REGISTER__", member(src, "_register"))
         .replace("__TEXT__", member(src, "_textOf"))
-        .replace("__REPLY__", member(src, "_replyOf"))
     )
 
 

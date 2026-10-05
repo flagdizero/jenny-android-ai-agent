@@ -941,23 +941,6 @@ body.home {
 
 .home-msg-jenny .home-block { color: var(--text); }
 
-/* La scheda di vetro di una risposta (06/10/2026, Vetro 2; v. `_replyOf` in
-   home-chat.js e i token `--glass-*` in mobile-style.css): blocchi e media
-   dentro, la coda fuori. Fondo, bordo e un riflesso interno, niente ombra
-   sfumata: la scheda cresce a ogni fotogramma mentre la risposta arriva. Nell'
-   angolo di Jenny la stringe gia' il `padding-right` del messaggio. */
-.home-reply {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 11px 14px;
-  border: var(--glass-border);
-  border-radius: var(--radius-reply);
-  background: var(--glass-bg);
-  box-shadow: var(--glass-shadow);
-}
-
 .home-block > :first-child { margin-top: 0; }
 .home-block > :last-child { margin-bottom: 0; }
 .home-block p { margin: 0 0 8px; }
