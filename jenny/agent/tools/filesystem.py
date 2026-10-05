@@ -28,7 +28,12 @@ from jenny.config.tool_schemas import (
     FileToolsConfig,  # noqa: F401 — re-export (def in config.tool_schemas)
 )
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
-from jenny.security.workspace_policy import ReadOnlyTurnError, _path_key, _safe_expanduser
+from jenny.security.workspace_policy import (
+    ReadOnlyTurnError,
+    _path_key,
+    _safe_expanduser,
+    refuse_board_write,
+)
 from jenny.utils.helpers import build_image_content_blocks, detect_image_mime
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import page_chars, wiki_page_rel
@@ -360,13 +365,17 @@ class _FsTool(Tool):
                 self._extra_write_allowed_files,
                 include_media_dir=False,
             )
-        return self._resolve_with_extra(
+        resolved = self._resolve_with_extra(
             path,
             self._extra_write_allowed_dirs,
             self._extra_write_allowed_files,
             include_media_dir=False,
             for_write=True,
         )
+        # La bacheca di un quaderno si scrive solo dai suoi imbuti (v.
+        # ``BoardWriteError``): qui passano write_file, edit_file e apply_patch.
+        refuse_board_write(resolved)
+        return resolved
 
     def _archive_departing(self, path: Path, text: str) -> None:
         """Salva le voci che questa scrittura sta per far sparire.

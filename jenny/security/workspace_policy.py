@@ -80,6 +80,50 @@ class _Unrestricted:
 UNRESTRICTED = _Unrestricted()
 
 
+class BoardWriteError(PermissionError):
+    """Sollevata quando uno strumento generico prova a scrivere nella bacheca.
+
+    ``<quaderno>/board/`` ha i suoi imbuti (``jenny.board.store``, gli
+    strumenti della bacheca, il tool delle micro app): sono loro a tenere il
+    lucchetto, il ``.bak``, la normalizzazione e il controllo di proprieta'
+    delle cose dell'utente. Una scrittura diretta li salterebbe tutti, e il
+    codice di una micro app riscritto a mano girerebbe senza approvazione.
+    """
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            "A notebook's board/ folder is written only through the board's own tools "
+            "(they keep what is the user's untouched). Do not write it with file tools "
+            "or python_exec, and do not look for another path: use the board or micro "
+            "app tools, or describe the change to the user."
+            + (f" ({detail})" if detail else "")
+        )
+
+
+BOARD_DIRNAME = "board"
+
+
+def is_board_path(path: str | Path) -> bool:
+    """True se *path* cade dentro la cartella ``board/`` di un quaderno.
+
+    Un quaderno si riconosce dalla sua ``wiki/`` accanto a ``board/``: il nome
+    della cartella dei quaderni e' configurabile, e un ``board/`` qualunque nel
+    workspace non e' una bacheca. Il percorso va gia' risolto (assoluto).
+    """
+    parts = Path(path).parts
+    # Anche la cartella stessa (``rmtree('<q>/board')``) e' una scrittura nella bacheca.
+    return any(
+        part == BOARD_DIRNAME and i > 0 and os.path.isdir(os.path.join(*parts[:i], "wiki"))
+        for i, part in enumerate(parts)
+    )
+
+
+def refuse_board_write(path: str | Path) -> None:
+    """Rifiuta una scrittura generica dentro la bacheca di un quaderno."""
+    if is_board_path(path):
+        raise BoardWriteError(f"refused write to {path}")
+
+
 def _resolve_path(path: str | Path, workspace: str | Path | None = None, *, strict: bool = False) -> Path:
     """Resolve *path*, interpreting relative paths against *workspace* when set."""
     candidate = _safe_expanduser(path)

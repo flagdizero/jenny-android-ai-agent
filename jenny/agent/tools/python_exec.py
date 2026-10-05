@@ -46,6 +46,7 @@ from jenny.agent.tools.schema import (
 )
 from jenny.config.paths import get_workspace_path
 from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in config.tool_schemas)
+from jenny.security.workspace_policy import refuse_board_write
 from jenny.utils.helpers import truncate_head_tail
 
 logger = logging.getLogger(__name__)
@@ -1531,11 +1532,15 @@ class PythonNamespace:
                 # Percorso dell'interprete (vedi `_runtime_path_prefixes`):
                 # passa invariato, così Chaquopy può estrarre e leggere i `.so`.
                 return str(file)
-            return resolve_allowed_path(
+            resolved = resolve_allowed_path(
                 str(file),
                 workspace=base or root,
                 allowed_root=root,
             )
+            if for_write:
+                # La bacheca di un quaderno ha i suoi imbuti (``BoardWriteError``).
+                refuse_board_write(resolved)
+            return resolved
 
     @staticmethod
     def _open_target(resolved: Any) -> Any:
@@ -1951,6 +1956,8 @@ class PythonNamespace:
                     workspace=anchor,
                     allowed_root=boundary,
                 )
+                if flags & _OS_OPEN_WRITE_FLAGS:
+                    refuse_board_write(resolved)
             return real_open(str(resolved), flags, mode)
 
         _workspace_open._jenny_real_open = real_open  # type: ignore[attr-defined]
@@ -2231,6 +2238,9 @@ class PythonNamespace:
                         return _real(*args, **kwargs)
                     raw = _default
                 resolved = self._guarded_os_path(raw, op=_op, boundary=boundary)
+                if _is_mutating(_op):
+                    with _path_guard_bypass():
+                        refuse_board_write(resolved)
                 return _real(resolved, *rest, **kwargs)
 
             self._install_os_wrapper(mod, name, _single, real)
@@ -2265,6 +2275,10 @@ class PythonNamespace:
                     return _real(*args, **kwargs)
                 src = self._guarded_os_path(raw_src, op=_op, boundary=boundary)
                 dst = self._guarded_os_path(raw_dst, op=_op, boundary=boundary)
+                if _is_mutating(_op):
+                    with _path_guard_bypass():
+                        refuse_board_write(src)
+                        refuse_board_write(dst)
                 return _real(src, dst, *rest, **kwargs)
 
             self._install_os_wrapper(mod, name, _two, real)
@@ -2299,6 +2313,8 @@ class PythonNamespace:
             if raw_src is None or raw_dst is None:
                 return real(*args, **kwargs)
             dst = self._guarded_os_path(raw_dst, op="os.symlink", boundary=boundary)
+            with _path_guard_bypass():
+                refuse_board_write(dst)
             target = self._normalize_path_arg(raw_src, op="os.symlink")
             base = boundary if os.path.isabs(target) else os.path.dirname(dst)
             self._guarded_os_path(target, op="os.symlink", boundary=boundary, base=base)
@@ -2375,6 +2391,7 @@ class PythonNamespace:
             self._reject_rmtree_callbacks(args, kwargs)
             target = self._guarded_os_path(path, op="shutil.rmtree", boundary=boundary)
             with _path_guard_bypass():
+                refuse_board_write(target)
                 return real(target, *args, **kwargs)
 
         _guarded_rmtree._jenny_real_fn = real  # type: ignore[attr-defined]

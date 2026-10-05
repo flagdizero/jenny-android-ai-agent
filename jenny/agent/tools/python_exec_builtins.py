@@ -182,7 +182,14 @@ def _register_builtin_functions(
         # ``wiki_audit``, che leggono. Bloccare la' avrebbe spento due letture
         # per chiudere una scrittura.
         _refuse_if_readonly(f"refused write to {path}")
-        return _enforce_path(path, for_write=True)
+        resolved = _enforce_path(path, for_write=True)
+        # La bacheca di un quaderno ha i suoi imbuti (``BoardWriteError``).
+        from jenny.agent.tools.python_exec import _path_guard_bypass
+        from jenny.security.workspace_policy import refuse_board_write
+
+        with _path_guard_bypass():
+            refuse_board_write(resolved)
+        return resolved
 
     # File I/O
     def read_file(path: str, encoding: str = "utf-8") -> str:
