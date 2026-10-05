@@ -86,3 +86,26 @@ assert.equal((await r._collect()).app, undefined);
         )
     )
     assert out.strip() == "ok"
+
+
+def test_with_the_chat_over_the_view_the_view_beneath_is_described() -> None:
+    """Dal 05/10/2026 la chat sale sopra Cervello, Mani, Memoria: Jenny deve
+    vedere il cassetto che l'utente ha davanti, senza l'`inert` che lo coprirebbe
+    come disabilitato, e sapere che la chat gli sta sopra."""
+    out = run_js(
+        _script(
+            """
+views['view-settings'].outerHTML = '<div id="view-settings" class="view view-beneath" inert="">cassetto</div>';
+AppState.currentMode = 'memory';
+window.mobileApp._chatOver = true;
+const p = await r._collect();
+assert.equal(p.view, 'memory');
+assert.equal(p.over, 'chat');
+assert.match(p.html, /cassetto/);
+assert.doesNotMatch(p.html, /inert/);
+window.mobileApp._chatOver = false;
+assert.equal((await r._collect()).over, undefined);
+"""
+        )
+    )
+    assert out.strip() == "ok"

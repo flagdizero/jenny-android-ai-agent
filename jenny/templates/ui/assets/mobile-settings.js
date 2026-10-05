@@ -231,6 +231,31 @@ export class SettingsController {
   /** true se nel frattempo si è usciti dalla sezione. */
   _stale(gen) { return gen !== this._gen; }
 
+  /** Rilegge le impostazioni e ridisegna **solo** se sono cambiate. La chiama
+   *  il guscio quando si chiude la chat aperta sopra il cassetto (05/10/2026):
+   *  Jenny puo' averne appena cambiata una, e il cassetto deve dirlo. Tiene la
+   *  posizione di scorrimento — un ridisegno che riporta in cima fa perdere il
+   *  punto di cui si parlava — e non mostra il caricamento: e' un controllo,
+   *  non un ingresso. */
+  async revalidate() {
+    const gen = this._gen;
+    let settings;
+    try {
+      settings = await api.getSettings();
+    } catch {
+      return;
+    }
+    if (this._stale(gen)) return;
+    const json = JSON.stringify(settings);
+    if (json === this._loadedJson) return;
+    const top = this.contentEl?.scrollTop ?? 0;
+    botName.set(settings?.agent?.bot_name);
+    this._loadedJson = json;
+    this.data = settings;
+    this.render();
+    if (this.contentEl) this.contentEl.scrollTop = top;
+  }
+
   async loadSettings() {
     const gen = this._gen;
     this.showLoading();
