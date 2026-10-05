@@ -459,9 +459,12 @@ body.home {
   flex-direction: column;
   gap: 9px;
   padding: 12px 14px;
-  border: 1px solid var(--border-strong);
+  /* Di vetro come la risposta che diventera' (06/10/2026). Il bordo e' quello
+     del vetro; i suoi stati (`is-done`, `is-failed`) ne cambiano il colore. */
+  border: var(--glass-border);
   border-radius: 18px 18px 18px 4px;
-  background: var(--surface);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   user-select: none;
   -webkit-user-select: none;
@@ -714,8 +717,11 @@ body.home {
   align-items: flex-end;
   gap: 8px;
   padding: 8px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  /* Nessun fondo suo e nessuna riga sopra (06/10/2026): la pastiglia di vetro
+     galleggia. Il filo scorre in uno scroller suo, sopra il composer e non
+     sotto, quindi un fondo pieno non coprirebbe niente; sopra il velo era una
+     lastra grigia in fondo allo schermo. */
+  background: transparent;
 }
 
 /* Il campo e la graffetta stanno nella stessa pastiglia: allegare e' una cosa
@@ -734,7 +740,6 @@ body.home {
      pastiglia e' un `<div>` e non piu' una `<label>`, e un tocco sul
      margine deve cadere ancora nel campo. */
   padding: 0 4px 0 0;
-  border: 1px solid var(--border);
   /* **Raggio fisso, non `--radius-pill`.** A una riga (40px) 20px e' esattamente
      meta' dell'altezza, quindi la forma e' la stessa capsula di prima; a tre
      righe il raggio non cresce e gli angoli restano 20px — un rettangolo
@@ -743,7 +748,11 @@ body.home {
      sul telefono appena il messaggio va a capo. Stessa scelta, stesso motivo e
      stesso conto di `.compose-pill` (meta' del `min-height`). */
   border-radius: 20px;
-  background: var(--surface);
+  /* Di vetro (v. `--glass-field-bg` in mobile-style.css): sopra il velo lascia
+     passare la pagina sfocata, sulla pagina chat e' una pastiglia leggera. */
+  border: var(--glass-field-border);
+  background: var(--glass-field-bg);
+  box-shadow: var(--glass-shadow);
 }
 
 /* Il fuoco del campo: bordo del colore dell'anello **e** piu' spesso (1px di
@@ -931,6 +940,23 @@ body.home {
 }
 
 .home-msg-jenny .home-block { color: var(--text); }
+
+/* La scheda di vetro di una risposta (06/10/2026, Vetro 2; v. `_replyOf` in
+   home-chat.js e i token `--glass-*` in mobile-style.css): blocchi e media
+   dentro, la coda fuori. Fondo, bordo e un riflesso interno, niente ombra
+   sfumata: la scheda cresce a ogni fotogramma mentre la risposta arriva. Nell'
+   angolo di Jenny la stringe gia' il `padding-right` del messaggio. */
+.home-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px 14px;
+  border: var(--glass-border);
+  border-radius: var(--radius-reply);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+}
 
 .home-block > :first-child { margin-top: 0; }
 .home-block > :last-child { margin-bottom: 0; }
@@ -1767,27 +1793,23 @@ body.home {
   animation: home-over-in 0.14s ease-out;
 }
 .home-over[hidden] { display: none; }
-/* Nel velo il composer non ha un fondo suo. Sulla pagina chat il suo `--bg`
-   e' lo stesso della pagina e non si vede; sopra il velo, piu' scuro, era una
-   lastra grigia piena in fondo allo schermo (05/10/2026, sul telefono). Qui il
-   filo scorre in uno scroller suo, sopra il composer e non sotto, quindi il
-   fondo pieno non copre niente. La pastiglia del campo resta, piu' leggera:
-   quel che scrivi si legge sul velo come il resto della chat. */
-.home-over .home-composer {
-  background: transparent;
-  border-top-color: transparent;
-}
-.home-over .home-field { background: color-mix(in srgb, var(--surface) 55%, transparent); }
+/* La coda di una risposta (Copia, secondi) sopra il velo sta fuori dalla
+   scheda, direttamente sulla pagina sfocata: nei suoi grigi discreti li'
+   non si legge (il conto e' in `test_chat_veil_contrast.py`), quindi prende il
+   colore del testo. Sulla pagina chat resta discreta. */
+.home-over .home-copy,
+.home-over .home-seconds { color: var(--text); }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
-/* Quel che sta sotto il velo, sfocato appena (v. `ChatOver.show`). La
-   transizione c'e' solo in entrata, insieme al velo che sfuma. */
+/* Quel che sta sotto il velo, sfocato (v. `ChatOver.show`; il raggio e il
+   perche' stanno con `--chat-veil-blur` in mobile-style.css). **Il filtro non
+   si anima**: a 18 px una transizione vorrebbe dire ricalcolare la sfocatura a
+   ogni fotogramma dell'entrata, ed e' la parte piu' cara di tutto il velo. Lo
+   scatto non si vede: lo copre il velo, che entra sfumando (06/10/2026). */
 .home-beneath {
-  filter: blur(var(--chat-veil-blur, 3px));
-  transition: filter 0.14s ease-out;
+  filter: blur(var(--chat-veil-blur, 18px)) saturate(1.4);
 }
 @media (prefers-reduced-motion: reduce) {
   .home-over { animation: none; }
-  .home-beneath { transition: none; }
 }
 
 /* La porta di un quaderno appeso alla fila: arrivandoci si apre la bacheca, e

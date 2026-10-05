@@ -42,6 +42,7 @@ _METHODS = (
     "_streamEnd",
     "_ensureBlock",
     "_ensureTurn",
+    "_replyOf",
     "_resetTurn",
 )
 
@@ -91,6 +92,7 @@ function makeChat() {
     turnNode: null, blockNode: null, buffer: '', turnId: null,
     _empty: false, _seconds: null, _frame: null, _batching: false,
     _shownKey: null, _reading: 0, _readGen: 0, _live: new WeakSet(), _anchor: null,
+    _replies: new WeakMap(),
     syncEmpty() {}, scrollToBottom() {}, _follow() {}, _tailOf() {}, _register() {},
     _appendUser(text, origin, media, toTop = false) {
       const n = makeNode(); n.className = 'home-msg home-msg-user'; n.innerHTML = text;

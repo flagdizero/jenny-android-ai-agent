@@ -204,7 +204,8 @@
   --bubble-user-text: #e5ddd0;
   --bubble-user-border: 1px solid #4a443b;
   --bubble-user-shadow: none;
-  --radius-bubble: 2px 14px 2px 14px;
+  /* La bolla tonda come negli altri temi (06/10/2026): gli angoli tagliati
+     `2px 14px 2px 14px` stonavano accanto alla scheda di vetro di Jenny. */
   --radius-seg:    2px;
 }
 
@@ -388,14 +389,97 @@
    e sul telefono si e' preferito tornare all'80%: la pagina sotto e' un
    riferimento, la chat e' quel che si legge.
    Il contrasto lo conta un banco (`test_chat_veil_contrast.py`), tema per
-   tema, come se sotto non ci fosse sfocatura: la sfocatura e' margine. */
+   tema, come se sotto non ci fosse sfocatura: la sfocatura e' margine.
+
+   Dal 06/10/2026 la sfocatura e' forte (18 px, con un po' di saturazione):
+   della pagina sotto restano i colori e le masse, non le forme. E' scelta
+   sulla tela «la chat sul vetro» (Vetro 2), insieme ai token del vetro qui
+   sotto. Costa poco perche' sfoca una cosa ferma: la pagina sotto e' inerte,
+   e il filtro non si anima (v. `.home-beneath`, `.view-beneath`). Se sul
+   telefono scatta, si scende 12 → 8 qui e basta. */
 :root {
   --chat-veil: rgba(8, 7, 10, 0.8);
-  --chat-veil-blur: 3px;
+  --chat-veil-blur: 18px;
+  /* Le barre ferme dell'officina sopra il velo (v. `:root.chat-over
+     #title-chat`): la tinta del velo, quasi opaca. */
+  --chat-band: rgba(8, 7, 10, 0.97);
 }
 [data-theme="comic"],
 [data-theme="y2k"],
-[data-theme="stone"] { --chat-veil: color-mix(in srgb, var(--bg) 80%, transparent); }
+[data-theme="stone"] {
+  --chat-veil: color-mix(in srgb, var(--bg) 80%, transparent);
+  --chat-band: color-mix(in srgb, var(--bg) 97%, transparent);
+}
+
+/* Il vetro della chat (06/10/2026, Vetro 2): la scheda delle risposte di
+   Jenny e il campo dove scrivi. Ovunque, sulla pagina chat come sopra una
+   pagina, con lo stesso codice: sopra il velo lascia passare la pagina
+   sfocata, sulla pagina chat e' una scheda leggera sul fondo del tema.
+
+   **Solo trasparenza, mai `backdrop-filter`**: dietro c'e' gia' una pagina
+   sfocata e ferma, quindi il vetro costa come un colore. E **niente ombre
+   sfumate fuori**: la scheda si allunga a ogni fotogramma mentre la risposta
+   arriva, e un'ombra sfumata andrebbe ridipinta ogni volta (lo stesso conto di
+   `.launcher-row.selected`). Il riflesso e' interno e di 1 px; le ombre nette
+   di Sticker e Fumetto non sfumano, e costano come un bordo.
+
+   Ogni tema lo veste a modo suo: chiaro e sottile nei temi scuri, ciano in
+   Synthwave, adesivo in Sticker, inchiostro in Fumetto, lucido in Y2K, brina
+   in Stone. `--radius-reply` e' lo specchio di `--radius-bubble`: l'angolo
+   piccolo sta dalla parte di chi parla. */
+:root {
+  --glass-bg: rgba(244, 241, 234, 0.07);
+  --glass-border: 1px solid rgba(244, 241, 234, 0.14);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-field-bg: rgba(244, 241, 234, 0.09);
+  --glass-field-border: 1px solid rgba(244, 241, 234, 0.2);
+  --radius-reply: 14px 14px 14px 4px;
+}
+[data-theme="synthwave"] {
+  --glass-bg: rgba(242, 236, 255, 0.07);
+  --glass-border: 1px solid rgba(3, 237, 249, 0.3);
+  --glass-field-bg: rgba(242, 236, 255, 0.08);
+  --glass-field-border: 1px solid rgba(3, 237, 249, 0.35);
+}
+[data-theme="kyoto"] {
+  --glass-bg: rgba(229, 221, 208, 0.06);
+  --glass-border: 1px solid rgba(229, 221, 208, 0.16);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --glass-field-bg: rgba(229, 221, 208, 0.07);
+  --glass-field-border: 1px solid rgba(229, 221, 208, 0.22);
+}
+[data-theme="sticker"] {
+  --glass-bg: rgba(244, 239, 250, 0.08);
+  --glass-border: 2px solid rgba(255, 255, 255, 0.55);
+  --glass-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+  --glass-field-bg: rgba(244, 239, 250, 0.09);
+  --glass-field-border: 2px solid rgba(255, 255, 255, 0.55);
+  --radius-reply: 14px;
+}
+[data-theme="comic"] {
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: 2px solid #1b1820;
+  --glass-shadow: 3px 3px 0 rgba(27, 24, 32, 0.85);
+  --glass-field-bg: rgba(255, 255, 255, 0.72);
+  --glass-field-border: 2px solid #1b1820;
+  --radius-reply: 12px 12px 12px 2px;
+}
+[data-theme="y2k"] {
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.95);
+  --glass-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7);
+  --glass-field-bg: rgba(255, 255, 255, 0.65);
+  --glass-field-border: 1px solid rgba(255, 255, 255, 0.95);
+  --radius-reply: 20px 20px 20px 6px;
+}
+[data-theme="stone"] {
+  --glass-bg: rgba(244, 241, 236, 0.62);
+  --glass-border: 1px solid rgba(55, 51, 44, 0.12);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --glass-field-bg: rgba(244, 241, 236, 0.72);
+  --glass-field-border: 1px solid rgba(55, 51, 44, 0.18);
+  --radius-reply: 12px 12px 12px 3px;
+}
 
 [data-theme="synthwave"],
 [data-theme="kyoto"],
@@ -1058,8 +1142,10 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  /* Di vetro (06/10/2026, v. `--glass-field-bg`), come `.home-field`. */
+  background: var(--glass-field-bg);
+  border: var(--glass-field-border);
+  box-shadow: var(--glass-shadow);
   /* Radius fisso = metà del min-height: a una riga è identico alla pillola,
      in multiriga i corner restano 25px (rettangolo arrotondato, stile WhatsApp). */
   border-radius: 25px;
@@ -1723,20 +1809,32 @@ body {
   user-select: none;
   -webkit-user-select: none;
 }
-/* Sotto il velo, sfocata appena — lei e non il velo: un `backdrop-filter` su
+/* Sotto il velo, sfocata — lei e non il velo: un `backdrop-filter` su
    `#view-chat` sarebbe una proprieta' in piu' sullo scroller dei manici, e
    andrebbe ricalcolato a ogni scorrere della chat; la vista sotto e' ferma.
-   Lo stesso per una mini-app sotto. */
+   Lo stesso per una mini-app sotto. Il filtro non si anima (v.
+   `.home-beneath`). */
 :root.chat-over .view-beneath,
 :root.chat-over-app .app-frame-overlay {
-  filter: blur(var(--chat-veil-blur));
-  transition: filter 0.14s ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  :root.chat-over .view-beneath,
-  :root.chat-over-app .app-frame-overlay { transition: none; }
+  filter: blur(var(--chat-veil-blur)) saturate(1.4);
 }
 :root.chat-over #view-chat { z-index: 30; background: var(--chat-veil); }
+/* Le barre ferme sopra il velo: la testata, il campo e il dock. Il testo della
+   chat ci scorre **sotto** (lo scroller e' il documento), quindi non possono
+   diventare trasparenti come in casa: sono una banda quasi opaca nella tinta
+   del velo (`--chat-band`), e la pagina sfocata non ci passa. Dentro la barra
+   del campo i fondi suoi si tolgono, o farebbero una lastra nella banda. */
+:root.chat-over #title-chat,
+:root.chat-over .chat-bottom,
+:root.chat-over .dock { background: var(--chat-band); }
+:root.chat-over #input-bar,
+:root.chat-over .subagents { background: transparent; }
+:root.chat-over .chat-bottom { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+/* La riga di Copia e dei secondi sta fuori dalla scheda, direttamente sul
+   velo: nei suoi grigi discreti li' non si legge, quindi prende il colore del
+   testo (come `.home-over .home-copy` in casa). */
+:root.chat-over .chat-msg-action,
+:root.chat-over .chat-meta { color: var(--text); }
 :root.chat-over .dock { z-index: 31; }
 :root.chat-over .drawer-backdrop { z-index: 32; }
 :root.chat-over .drawer { z-index: 33; }
@@ -2853,6 +2951,21 @@ body {
   padding: 8px 12px;
   max-width: 84%;
   box-shadow: var(--bubble-user-shadow);
+}
+
+/* La scheda di vetro di una risposta di Jenny (06/10/2026, Vetro 2; i token
+   `--glass-*` stanno coi temi). Prima ce l'avevano solo Fumetto e Sticker, con
+   una regola ciascuno: ora e' di tutti, e ogni tema la veste dai token. Le
+   pillole del turno (pensiero, strumenti) e la riga di Copia restano fuori.
+   **Niente `overflow`, `contain`, ritagli** (la scheda contiene il testo che si
+   seleziona, e lo scroller e' il documento: v. `:root.mode-chat`) **e niente
+   ombre sfumate** (cresce a ogni fotogramma mentre la risposta arriva). */
+.chat-msg-ai .chat-content:not(:empty) {
+  padding: 8px 12px;
+  border: var(--glass-border);
+  border-radius: var(--radius-reply);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
 }
 
 /* Badge di provenienza (messaggi entrati da un altro canale, es. Telegram) */
@@ -6186,16 +6299,6 @@ body {
   background-image: radial-gradient(rgba(27, 24, 32, 0.10) 1px, transparent 1.3px);
   background-size: 9px 9px;
 }
-[data-theme="comic"] .chat-msg-ai .chat-content:not(:empty) {
-  background: var(--surface);
-  border: 2px solid #1b1820;
-  border-radius: 12px 12px 12px 2px;
-  padding: 8px 12px;
-  box-shadow: 3px 3px 0 rgba(27, 24, 32, 0.15);
-}
-[data-theme="comic"] .compose-pill {
-  border: 2px solid #1b1820;
-}
 [data-theme="comic"] .view-title-text,
 [data-theme="comic"] .chat-identity-name {
   letter-spacing: .02em;
@@ -6210,10 +6313,6 @@ body {
   color: #ffffff;
   box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.6), 0 3px 8px rgba(245, 106, 181, 0.5);
 }
-[data-theme="y2k"] .compose-pill {
-  background: #ffffff;
-  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(245, 106, 181, 0.15);
-}
 
 /* — Sticker: adesivi die-cut (rotazioni ridotte a ±0.5° per il text rendering
      dei WebView Android; translateZ forza la layer promotion) — */
@@ -6224,12 +6323,8 @@ body {
   transform: rotate(0.5deg) translateZ(0);
 }
 [data-theme="sticker"] .chat-msg-ai .chat-content:not(:empty) {
-  background: var(--surface);
-  border: 2.5px solid #ffffff;
-  border-radius: 14px;
-  padding: 8px 12px;
+  /* La scheda la vestono i token del vetro; qui resta l'adesivo storto. */
   transform: rotate(-0.5deg) translateZ(0);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
 }
 
 /* ══════════════════════════════════════════════════

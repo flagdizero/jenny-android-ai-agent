@@ -3,8 +3,12 @@
 Dal 05/10/2026 Jenny e' la porta della chat: toccata dove la chat non c'e', la
 chat vera sale a tutto schermo sopra la pagina (`#home-over` in casa,
 `:root.chat-over` nell'officina), e la pagina resta visibile sotto un velo
-(`--chat-veil`) ed e' sfocata appena (`--chat-veil-blur`). Il velo deve lasciar
+(`--chat-veil`) ed e' sfocata (`--chat-veil-blur`). Il velo deve lasciar
 leggere la chat sopra **anche** dove sotto passa il testo della pagina.
+
+Dal 06/10/2026 le risposte di Jenny stanno in una scheda di vetro e il campo e'
+di vetro (`--glass-*`), ovunque: sopra il velo e sulla pagina chat. Il vetro e'
+un altro strato traslucido, e il conto lo compone sopra il velo.
 
 Il caso peggiore contato qui: sotto il testo della chat c'e' un glifo della
 pagina, del colore del testo del tema, **non sfocato**. La sfocatura spalma il
@@ -27,43 +31,59 @@ HOME_CSS = ASSETS / "home-style.css"
 AA = 4.5
 
 
-def _veil(value: str) -> str:
-    """Il velo come `rgba(…)`: `color-mix(in srgb, X P%, transparent)` e' X
-    con opacita' P (la miscela col trasparente si fa premoltiplicata)."""
-    m = re.fullmatch(r"color-mix\(in srgb,\s*(\S+)\s+([\d.]+)%,\s*transparent\)", value.strip())
-    if not m:
-        return value
-    r, g, b, _ = theme_tokens.rgba(m.group(1))
-    return f"rgba({r}, {g}, {b}, {float(m.group(2)) / 100})"
+#: Il segnaposto del campo: sparisce appena scrivi, e TalkBack lo legge come
+#: nome del campo, quindi basta che si veda (la soglia degli oggetti grafici).
+PLACEHOLDER = 3.0
 
 
-def test_the_chat_reads_over_the_veil_in_every_theme() -> None:
+def _low(fg: str, *grounds: str, floor: float = AA) -> list[str]:
+    """I temi in cui `fg` sulla pila `grounds` (nomi di token, dal basso) sta
+    sotto `floor`."""
     low = []
     for theme in theme_tokens.themes():
         v = theme_tokens.tokens(theme)
-        veil = _veil(v["chat-veil"])
-        # Il velo composto su un glifo della pagina sotto, poi il testo sopra.
-        ratio = theme_tokens.contrast(v["text"], veil, v["text"])
-        if ratio < AA:
+        ratio = theme_tokens.layered(v[fg], *(v[g] for g in grounds))
+        if ratio < floor:
             low.append(f"{theme}: {ratio:.2f}")
+    return low
+
+
+def test_the_chat_reads_over_the_veil_in_every_theme() -> None:
+    # Il velo composto su un glifo della pagina sotto, poi il testo sopra.
+    low = _low("text", "text", "chat-veil")
     assert not low, f"la chat sopra il velo non si legge: {low}"
+
+
+def test_jennys_reply_reads_on_its_glass_over_the_veil_and_on_the_chat_page() -> None:
+    over = _low("text", "text", "chat-veil", "glass-bg")
+    assert not over, f"la scheda di Jenny sopra il velo non si legge: {over}"
+    page = _low("text", "bg", "glass-bg")
+    assert not page, f"la scheda di Jenny sulla pagina chat non si legge: {page}"
+
+
+def test_what_you_type_reads_on_the_glass_field() -> None:
+    for grounds in (("text", "chat-veil", "glass-field-bg"), ("bg", "glass-field-bg")):
+        low = _low("text", *grounds)
+        assert not low, f"il campo di vetro su {grounds[:-1]} non si legge: {low}"
+        hint = _low("text-muted", *grounds, floor=PLACEHOLDER)
+        assert not hint, f"il segnaposto su {grounds[:-1]} non si vede: {hint}"
 
 
 def test_the_veil_still_lets_the_page_show_through() -> None:
     """Il velo non e' un muro: e' la pagina di cui stai parlando."""
     for theme in theme_tokens.themes():
-        alpha = theme_tokens.rgba(_veil(theme_tokens.tokens(theme)["chat-veil"]))[3]
+        alpha = theme_tokens.rgba(theme_tokens.tokens(theme)["chat-veil"])[3]
         assert alpha <= 0.8, f"{theme}: il velo al {alpha:.0%} copre la pagina sotto"
 
 
-def test_the_blur_is_light_and_on_the_page_not_on_the_veil() -> None:
+def test_the_blur_is_on_the_still_page_never_animated_never_on_the_veil() -> None:
     mobile = MOBILE_CSS.read_text(encoding="utf-8")
     home = HOME_CSS.read_text(encoding="utf-8")
     blur = re.search(r"--chat-veil-blur:\s*([\d.]+)px;", mobile)
     assert blur, "la sfocatura sotto il velo non c'e'"
-    # Leggera: oltre i 4 px la pagina diventa una macchia, e si perde il
-    # motivo per cui e' lasciata a vista.
-    assert 0 < float(blur.group(1)) <= 4, blur.group(0)
+    # Forte dal 06/10/2026 (della pagina restano colori e masse, Vetro 2), ma
+    # con un tetto: oltre i 24 px non si vede piu' differenza e il costo sale.
+    assert 0 < float(blur.group(1)) <= 24, blur.group(0)
     # Sfocata la pagina, ferma, e non il velo: un `backdrop-filter` sul velo
     # si ricalcola a ogni scorrere della chat, e nell'officina starebbe sullo
     # scroller dei manici di selezione.
@@ -71,11 +91,50 @@ def test_the_blur_is_light_and_on_the_page_not_on_the_veil() -> None:
     for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
         if re.search(r"home-over|chat-over|#view-chat", selectors):
             assert "backdrop-filter" not in body, f"{selectors.strip()}: v. la docstring"
-    assert re.search(
-        r":root\.chat-over \.view-beneath,\s*:root\.chat-over-app \.app-frame-overlay \{\s*"
-        r"filter: blur\(var\(--chat-veil-blur\)\);",
+    shop = re.search(
+        r":root\.chat-over \.view-beneath,\s*:root\.chat-over-app \.app-frame-overlay \{([^}]*)\}",
         mobile,
-    ), "nell'officina la vista sotto la chat non e' sfocata"
-    assert re.search(r"\.home-beneath \{\s*filter: blur\(var\(--chat-veil-blur", home), (
+    )
+    assert shop and re.search(r"filter: blur\(var\(--chat-veil-blur\)\)", shop.group(1)), (
+        "nell'officina la vista sotto la chat non e' sfocata"
+    )
+    house = re.search(r"\n\.home-beneath \{([^}]*)\}", home)
+    assert house and re.search(r"filter: blur\(var\(--chat-veil-blur", house.group(1)), (
         "in casa la pagina sotto la chat non e' sfocata"
     )
+    # Il filtro non si anima: a 18 px una transizione ricalcola la sfocatura a
+    # ogni fotogramma dell'entrata, ed e' la parte piu' cara del velo.
+    for rule in (shop.group(1), house.group(1)):
+        assert "transition" not in rule, rule
+
+
+def test_the_glass_never_blurs_what_is_behind_it() -> None:
+    """Il vetro e' trasparenza sopra una pagina gia' sfocata e ferma: un
+    `backdrop-filter` sulle schede o sul campo si ricalcolerebbe a ogni
+    fotogramma di scorrimento e di risposta in arrivo."""
+    css = re.sub(r"/\*.*?\*/", "", HOME_CSS.read_text(encoding="utf-8")
+                 + MOBILE_CSS.read_text(encoding="utf-8"), flags=re.S)
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        if "var(--glass-" in body:
+            assert "backdrop-filter" not in body, selectors.strip()
+
+
+def test_the_line_under_a_reply_reads_on_the_veil() -> None:
+    """Copia e i secondi stanno fuori dalla scheda, sul velo: li' i grigi
+    discreti della pagina chat non si leggono (sul caso peggiore stanno sotto
+    3,5 nei temi chiari), quindi sopra il velo prendono il colore del testo, che
+    il primo banco misura."""
+    home = HOME_CSS.read_text(encoding="utf-8")
+    mobile = MOBILE_CSS.read_text(encoding="utf-8")
+    assert re.search(r"\.home-over \.home-copy,\s*\.home-over \.home-seconds \{ color: var\(--text\); \}", home)
+    assert re.search(
+        r":root\.chat-over \.chat-msg-action,\s*:root\.chat-over \.chat-meta \{ color: var\(--text\); \}", mobile
+    )
+
+
+def test_the_workshop_bars_over_the_veil_hide_the_text_that_scrolls_under_them() -> None:
+    """Nell'officina il filo scorre sotto la testata e il campo: sopra il velo
+    sono una banda quasi opaca, perche' il testo sotto non traspaia."""
+    for theme in theme_tokens.themes():
+        alpha = theme_tokens.rgba(theme_tokens.tokens(theme)["chat-band"])[3]
+        assert alpha >= 0.9, f"{theme}: la banda al {alpha:.0%} lascia passare il testo"

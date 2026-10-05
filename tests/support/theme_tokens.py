@@ -12,6 +12,8 @@ che parla vince, e le `var(--x)` si risolvono fino in fondo.
 - :func:`contrast`: il rapporto WCAG fra un colore e il suo fondo; un colore
   semitrasparente si compone prima sul fondo, e il fondo semitrasparente su
   `--bg`, come lo vede l'occhio.
+- :func:`layered`: lo stesso, su una pila di fondi traslucidi (il velo, il
+  vetro).
 - :func:`stops`: i colori di un fondo, uno solo o le fermate di un gradiente.
 """
 
@@ -63,6 +65,12 @@ def tokens(theme: str, css: str | None = None) -> dict[str, str]:
 
 def rgba(color: str) -> tuple[float, float, float, float]:
     color = color.strip()
+    # `color-mix(in srgb, X P%, transparent)` e' X con opacita' P: la miscela
+    # col trasparente si fa premoltiplicata (il velo e il vetro della chat).
+    mix = re.fullmatch(r"color-mix\(in srgb,\s*(\S+)\s+([\d.]+)%,\s*transparent\)", color)
+    if mix:
+        r, g, b, a = rgba(mix.group(1))
+        return (r, g, b, a * float(mix.group(2)) / 100)
     if color.startswith("#"):
         h = color[1:]
         if len(h) == 3:
@@ -97,6 +105,21 @@ def _luminance(c: tuple) -> float:
         return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
 
     return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2])
+
+
+def layered(fg: str, *grounds: str) -> float:
+    """Il contrasto di `fg` sull'ultimo di una pila di fondi, dal piu' basso al
+    piu' alto: ognuno traslucido si compone su quello sotto, come lo vede
+    l'occhio. Il primo deve essere opaco."""
+    ground = rgba(grounds[0])
+    assert ground[3] == 1, f"il fondo piu' basso e' traslucido: {grounds[0]}"
+    for layer in grounds[1:]:
+        ground = _over(rgba(layer), ground)
+    ink = rgba(fg)
+    if ink[3] < 1:
+        ink = _over(ink, ground)
+    hi, lo = sorted((_luminance(ink), _luminance(ground)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
 
 
 def contrast(fg: str, bg: str, page: str) -> float:
