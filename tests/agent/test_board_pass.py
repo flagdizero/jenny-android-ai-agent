@@ -395,22 +395,81 @@ async def test_the_first_board_keeps_the_skeleton_the_user_chose(tmp_path) -> No
     assert read_board(root)["suggestions"][0]["skeleton"] == ["Semina", "Raccolto"]
 
 
-async def test_the_proposal_hands_back_the_pages_of_each_drawer(tmp_path) -> None:
-    """I cassetti si scrivono da quel che torna la proposta, non rileggendo le
-    pagine una a una: su un quaderno grande le letture vecchie escono dal
-    contesto e il modello ricomincia da capo."""
+async def test_the_proposal_hands_back_the_drawers_one_at_a_time(tmp_path) -> None:
+    """I cassetti si scrivono da quel che tornano gli strumenti, uno per volta.
+
+    Con le pagine di tutti i cassetti in un colpo solo, su un quaderno vero
+    quelle oltre il tetto arrivavano «non mostrate», il modello le leggeva una a
+    una e il contesto perdeva le prime mentre leggeva le ultime: 107 letture e
+    nessun cassetto sul Titan il 05/10. Qui ogni risposta porta un cassetto solo.
+    """
     ws, root = _notebook(tmp_path)
     (root / "wiki" / "ginkgo.md").write_text("# ginkgo\n\n" + "Foglia a ventaglio. " * 400)
     bp = BoardPass(root, ws)
     state = bp.build_state()
     assert "Do not read the pages first" in bp.build_prompt(state)
-    out = await _tools(state)["board_propose_board"].execute(
+    tools = _tools(state)
+    out = await tools["board_propose_board"].execute(
         skeleton=["Vaso"],
         cards=[{"title": "Acero", "pages": ["travaso-acero.md"]},
                {"title": "Ginkgo", "pages": ["ginkgo.md"]}],
         text="Ecco.",
     )
-    assert "### `acero` — Acero" in out
+    assert "### Next drawer: `acero` — Acero (1 more after this one)" in out
     assert PAGES["travaso-acero.md"].strip().splitlines()[0] in out
-    assert "_(cut here)_" in out
+    assert "Foglia a ventaglio" not in out
+
+    out = await tools["board_write_summary"].execute(
+        card="acero", brief="Vaso 20 a marzo.",
+        sections=[{"title": "Vaso", "text": "Dal 14 al 20.", "sources": ["travaso-acero.md"]}],
+    )
+    assert out.startswith("Drawer of `acero` written")
+    assert "### Next drawer: `ginkgo` — Ginkgo (the last one)" in out
+    assert "Foglia a ventaglio" in out and "_(cut here)_" in out
     assert len(out) < 12000
+
+    out = await tools["board_write_summary"].execute(
+        card="ginkgo", brief="Arrivato.",
+        sections=[{"title": "Vaso", "text": "Non registrato.", "sources": ["ginkgo.md"]}],
+    )
+    assert out.endswith("That was the last drawer.")
+    assert not state.queue
+
+
+async def test_a_refused_drawer_stays_next(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    state = BoardPass(root, ws).build_state()
+    tools = _tools(state)
+    await tools["board_propose_board"].execute(
+        skeleton=["Vaso"],
+        cards=[{"title": "Acero", "pages": ["travaso-acero.md"]},
+               {"title": "Ginkgo", "pages": ["ginkgo.md"]}],
+    )
+    out = await tools["board_write_summary"].execute(
+        card="acero", sections=[{"title": "Vaso", "text": "x", "sources": ["ginkgo.md"]}],
+    )
+    assert out.startswith("Refused")
+    assert state.queue[0][0] == "acero"
+
+
+async def test_drawers_to_rewrite_come_one_at_a_time(tmp_path) -> None:
+    """Accettata la prima bacheca, tutti i cassetti sono da scrivere: la stessa
+    catena vale per la passata che li riscrive, non solo per la proposta."""
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    (root / "wiki" / "monstera.md").write_text("# monstera\n\n" + "In soggiorno, luce filtrata. " * 300)
+    bp = BoardPass(root, ws)
+    state = bp.build_state()
+    assert [q[0] for q in state.queue] == ["acero", "monstera"]
+    prompt = bp.build_prompt(state)
+    assert "- `acero` — Acero\n- `monstera` — Monstera" in prompt
+    assert "### Next drawer: `acero` — Acero (1 more after this one)" in prompt
+    assert "luce filtrata" not in prompt
+
+    out = await _tools(state)["board_write_summary"].execute(
+        card="acero", brief="Vaso 20.",
+        sections=[{"title": "Vaso e travaso", "text": "Dal 14 al 20.",
+                   "sources": ["travaso-acero.md"]}],
+    )
+    assert "### Next drawer: `monstera` — Monstera (the last one)" in out
+    assert "luce filtrata" in out

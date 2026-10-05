@@ -36,19 +36,17 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.agent.board_tools import BoardPassState, build_board_tools
+from jenny.agent.board_tools import BoardPassState, build_board_tools, next_drawer
 from jenny.board import model
 from jenny.board.corrections import open_corrections
 from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
-# Quanto delle pagine di un cassetto entra nel prompt, e quanto in tutto. Un
-# cassetto è un indice: due righe per sezione si scrivono dalle prime righe di
-# ogni pagina, e una pagina oltre il tetto entra tagliata e lo dice.
+# Quanto di una pagina entra nel prompt per una correzione. Le pagine dei
+# cassetti hanno il loro tetto, ``board_tools.DRAWER_*``: arrivano un cassetto
+# alla volta (v. ``board_tools.next_drawer``).
 _PAGE_CHARS = 2500
-_CARD_CHARS = 9000
-_TOTAL_CHARS = 30000
 # Nella prima bacheca ogni pagina entra con la sua testa, per raggrupparle.
 _MIGRATION_PAGE_CHARS = 400
 _MIGRATION_TOTAL = 24000
@@ -244,6 +242,8 @@ class BoardPass:
             apps_with_section=self.apps_with_section(),
             fingerprints={c["id"]: self.card_fingerprint(c) for c in stale},
             migration=self.is_migrating(),
+            queue=[(c["id"], c["title"], [p for p in c.get("pages") or [] if p in self.titles])
+                   for c in stale],
         )
 
     def build_prompt(self, state: BoardPassState, journal: str = "") -> str:
@@ -349,36 +349,18 @@ class BoardPass:
         return "\n\n---\n\n".join(parts)
 
     def _stale_section(self, board: dict[str, Any], state: BoardPassState) -> str:
-        blocks = []
-        total = 0
-        for card in board["cards"]:
-            if card["id"] not in state.stale:
-                continue
-            old = read_card_summary(self.root, card["id"]) or {}
-            current = "\n".join(f"- **{s['title']}**: {s['text']} (from {', '.join(s['sources'])})"
-                                for s in old.get("sections") or []) or "_(never written)_"
-            pages = []
-            used = 0
-            for page in card["pages"]:
-                if page not in self.titles:
-                    continue
-                body = self.text(page)
-                room = min(_PAGE_CHARS, _CARD_CHARS - used, _TOTAL_CHARS - total)
-                if room <= 200:
-                    pages.append(f"`{page}` — _(not shown: over the budget of this prompt; "
-                                 "read it with read_file if you need it)_")
-                    continue
-                cut = body[:room]
-                note = "\n_(cut here)_" if len(body) > room else ""
-                fence = _fence(cut)
-                pages.append(f"`{page}`\n\n{fence}markdown\n{cut}\n{fence}{note}")
-                used += len(cut)
-                total += len(cut)
-            blocks.append(
-                f"### `{card['id']}` — {card['title']}\n\nThe drawer now:\n{current}\n\n"
-                + "\n\n".join(pages)
-            )
-        return self._section("Drawers to rewrite", "\n\n".join(blocks))
+        """I cassetti da riscrivere: l'elenco, e le pagine **del primo** soltanto.
+
+        Gli altri li consegna ``board_write_summary``, uno per volta: v. il
+        commento su ``board_tools.DRAWER_PAGE_CHARS``.
+        """
+        rows = [f"- `{card}` — {title}" for card, title, _ in state.queue]
+        return self._section(
+            "Drawers to rewrite",
+            "In this order, one at a time:\n\n" + "\n".join(rows)
+            + "\n\nThe first one is below; each drawer you write hands you the next.\n\n"
+            + next_drawer(state),
+        )
 
     def _migration_pages(self) -> str:
         rows = []

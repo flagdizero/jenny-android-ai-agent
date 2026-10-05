@@ -65,6 +65,9 @@ class BoardPassState:
     migration: bool = False
     proposed_cards: dict[str, list[str]] = field(default_factory=dict)
     proposed_skeleton: list[str] = field(default_factory=list)
+    # I cassetti ancora da scrivere, in ordine: ``(id, titolo, pagine)``. Si
+    # scrivono **uno alla volta** — v. :func:`next_drawer`.
+    queue: list[tuple[str, str, list[str]]] = field(default_factory=list)
 
     assigned: list[tuple[str, str]] = field(default_factory=list)
     summaries: dict[str, int] = field(default_factory=dict)
@@ -253,7 +256,13 @@ class BoardWriteSummaryTool(_BoardTool):
         rewritten = sum(1 for s in out if s["changed"] == stamp)
         st.summaries[card] = rewritten
         note = f" Skipped: {'; '.join(problems)}." if problems else ""
-        return f"Drawer of `{card}` written: {len(out)} sections, {rewritten} changed.{note}"
+        done = f"Drawer of `{card}` written: {len(out)} sections, {rewritten} changed.{note}"
+        queued = any(q[0] == card for q in st.queue)
+        st.queue = [q for q in st.queue if q[0] != card]
+        if not queued:
+            return done
+        following = next_drawer(st)
+        return f"{done}\n\n{following}" if following else f"{done} That was the last drawer."
 
 
 @tool_parameters(tool_parameters_schema(
@@ -545,45 +554,62 @@ class BoardProposeBoardTool(_BoardTool):
         mutate_board(st.root, apply, actor=model.JENNY)
         st.proposed_skeleton = sk
         st.proposed_cards = {s["id"]: s["pages"] for s in specs}
+        st.queue = [(s["id"], s["title"], list(s["pages"])) for s in specs]
         st.suggestions.append("sg-board")
         ids = ", ".join(f"`{s['id']}` ({s['title']})" for s in specs)
-        return (f"Board proposed with {len(specs)} cards: {ids}. Now write each drawer with "
-                "board_write_summary, using these ids. The pages of each drawer follow: write "
-                "from them, and use read_file only for a page that is cut or not shown here.\n\n"
-                + _proposal_pages(st.root, specs))
+        return (f"Board proposed with {len(specs)} cards: {ids}. Now write the drawers **one at "
+                "a time**, in this order, with board_write_summary: each drawer you write hands "
+                "you the pages of the next one. Write each from the pages shown with it, as soon "
+                "as you have them.\n\n" + next_drawer(st))
 
 
-# Quanto delle pagine torna con la proposta. Senza, il modello legge le pagine
-# una a una per scrivere i cassetti, e su un quaderno grande le letture vecchie
-# escono dal contesto prima che abbia finito: le rilegge, all'infinito (visto il
-# 04/10/2026 su un quaderno di 44 pagine, 130 letture e nessun cassetto).
-_PROPOSAL_PAGE_CHARS = 2500
-_PROPOSAL_CARD_CHARS = 8000
-_PROPOSAL_TOTAL_CHARS = 30000
+# Un cassetto alla volta. La proposta, e poi ogni cassetto scritto, consegnano
+# le pagine del cassetto **successivo** e di quello solo.
+#
+# Prima la proposta consegnava le pagine di tutti i cassetti insieme, dentro un
+# tetto comune di 30.000 caratteri: su un quaderno vero le pagine oltre il tetto
+# arrivavano come «non mostrata», il modello le leggeva una a una, e il contesto
+# — che il governor taglia dalla testa — le perdeva mentre leggeva le altre.
+# Visto il 04/10/2026 (44 pagine, 130 letture, nessun cassetto) e di nuovo il
+# 05/10 sul Titan (9 schede, 107 letture in 4 minuti, nessun cassetto, fermato
+# al giro 170 di 200). Con un cassetto per volta il contesto contiene un cassetto
+# solo, e quello che il taglio butta e' gia' scritto: non dipende da quanto e'
+# grande la finestra.
+DRAWER_PAGE_CHARS = 2500
+DRAWER_CARD_CHARS = 9000
 
 
-def _proposal_pages(root: Path, specs: list[dict[str, Any]]) -> str:
-    """Il testo delle pagine di ogni scheda proposta, dentro un tetto."""
-    blocks = []
-    total = 0
-    for spec in specs:
-        parts = [f"### `{spec['id']}` — {spec['title']}"]
-        used = 0
-        for page in spec["pages"]:
-            room = min(_PROPOSAL_PAGE_CHARS, _PROPOSAL_CARD_CHARS - used,
-                       _PROPOSAL_TOTAL_CHARS - total)
-            if room <= 200:
-                parts.append(f"`{page}` — _(not shown: over the budget)_")
-                continue
-            body = _page_text(root, page)
-            cut = body[:room]
-            note = "\n_(cut here)_" if len(body) > room else ""
-            fence = "`" * max(4, max((len(m) for m in re.findall(r"`+", cut)), default=0) + 1)
-            parts.append(f"`{page}`\n\n{fence}markdown\n{cut}\n{fence}{note}")
-            used += len(cut)
-            total += len(cut)
-        blocks.append("\n\n".join(parts))
-    return "\n\n".join(blocks)
+def drawer_pages(root: Path, pages: list[str]) -> str:
+    """Il testo delle pagine di un cassetto, dentro il tetto del cassetto."""
+    parts = []
+    used = 0
+    for page in pages:
+        room = min(DRAWER_PAGE_CHARS, DRAWER_CARD_CHARS - used)
+        if room <= 200:
+            parts.append(f"`{page}` — _(not shown: over the budget of this drawer; read it with "
+                         "read_file if you need it)_")
+            continue
+        body = _page_text(root, page)
+        cut = body[:room]
+        note = "\n_(cut here)_" if len(body) > room else ""
+        fence = "`" * max(4, max((len(m) for m in re.findall(r"`+", cut)), default=0) + 1)
+        parts.append(f"`{page}`\n\n{fence}markdown\n{cut}\n{fence}{note}")
+        used += len(cut)
+    return "\n\n".join(parts) or "_(no pages)_"
+
+
+def next_drawer(state: BoardPassState) -> str:
+    """Il prossimo cassetto da scrivere — com'e' adesso e le sue pagine — o ``""``."""
+    if not state.queue:
+        return ""
+    card, title, pages = state.queue[0]
+    after = len(state.queue) - 1
+    more = f"{after} more after this one" if after else "the last one"
+    old = read_card_summary(state.root, card) or {}
+    current = "\n".join(f"- **{s['title']}**: {s['text']} (from {', '.join(s['sources'])})"
+                        for s in old.get("sections") or []) or "_(never written)_"
+    return (f"### Next drawer: `{card}` — {title} ({more})\n\nThe drawer now:\n{current}\n\n"
+            + drawer_pages(state.root, pages))
 
 
 def build_board_tools(state: BoardPassState) -> list[Tool]:

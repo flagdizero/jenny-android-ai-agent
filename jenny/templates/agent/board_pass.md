@@ -37,9 +37,11 @@ are enough to group them. Propose straight away:
   off the board, and that is fine — it remains searchable.
 
 Then write the drawer of **every** card you proposed, with `board_write_summary` and the ids the
-proposal returned, so that the board is complete the moment the user accepts it. The proposal
-returns the text of each drawer's pages: write from that, and never read the same page twice. If you find dated
-plans in the pages (an unchecked `[ ]` with a date, "around March"), add them with
+proposal returned, so that the board is complete the moment the user accepts it. **One drawer at
+a time:** the proposal returns the pages of the first drawer only, and each drawer you write
+returns the pages of the next, until the last. Write each drawer as soon as its pages arrive, from
+those pages — do not read ahead, and do not read a page the tools have already shown you. If you
+find dated plans in the pages (an unchecked `[ ]` with a date, "around March"), add them with
 `board_add_reminder` on the right card.
 {% endif %}
 ### 1. The user first: corrections
@@ -59,7 +61,8 @@ leave it: it stays searchable, and several of them about the same new subject ar
 ### 3. Drawers to rewrite
 
 {% if stale %}The drawers listed below need rewriting because their pages changed (or they were never written).
-For each, call `board_write_summary` once:
+They come **one at a time**: the pages of the first are below, and each drawer you write returns
+the pages of the next. For each, call `board_write_summary` once, as soon as its pages arrive:
 
 - **brief**: one or two sentences — the state of this subject *now*;
 - **sections**: only the skeleton sections the pages have material for, spelled exactly as in
