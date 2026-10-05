@@ -1687,6 +1687,49 @@ body {
 :root.mode-chat .drawer-backdrop,
 :root.mode-chat .swipe-scrim { position: fixed; }
 
+/* ── La chat sopra una vista (05/10/2026) ─────────────────────────────────
+   Jenny e' la porta della chat: toccata fuori dalla Console, la chat sale a
+   tutto schermo sopra la vista (Cervello, Mani, Memoria, un file), e la vista
+   resta visibile sotto un velo — v. `MobileApp.openChatOver`.
+
+   **Lo scroller resta il documento.** `<html>` tiene `mode-chat`, quindi ogni
+   regola qui sopra vale tale e quale; `chat-over` aggiunge solo quel che
+   cambia: la vista sotto si fissa allo schermo (fuori dal flusso, inerte, non
+   selezionabile) e la chat prende il velo. Vietati qui `overflow`, `contain`,
+   `clip-path` e `mask` su `#view-chat` e sui suoi antenati: un antenato che
+   ritaglia riporta il difetto dei manici (`test_chat_root_scroller_contract`).
+   Una regola che deve valere solo nella Console si scrive
+   `:root.mode-chat:not(.chat-over)`.
+
+   I livelli: la vista sotto a 0, la chat a 30, il dock a 31 (il filo gli
+   scorre dietro), i drawer — aperti *dalla* chat, quelli di sotto si chiudono
+   — a 32-33. Sopra una mini-app tutto sale di 80: la chat le sta davanti
+   (110), e restano sopra la lightbox (115) e Jenny (120). */
+:root.chat-over .view-beneath {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--dock-height);
+  height: auto;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root.chat-over #view-chat { z-index: 30; background: var(--chat-veil); }
+:root.chat-over .dock { z-index: 31; }
+:root.chat-over .drawer-backdrop { z-index: 32; }
+:root.chat-over .drawer { z-index: 33; }
+:root.chat-over-app #view-chat { z-index: 111; }
+:root.chat-over-app .dock { z-index: 112; }
+:root.chat-over-app .drawer-backdrop { z-index: 113; }
+:root.chat-over-app .drawer,
+:root.chat-over-app .session-info-popover { z-index: 114; }
+/* Sopra una mini-app il cassetto delle app (99/100) finirebbe sotto la chat:
+   il suo bottone non si offre. */
+:root.chat-over-app #btn-launcher { display: none; }
+
 /* Finché c'è una selezione la chrome non partecipa al hit-test: è la
    condizione perché il motore ritrovi il testo sotto il composer o il dock
    (misurato sul telefono con un banco di gesti adb). Il tap che così finirebbe sotto

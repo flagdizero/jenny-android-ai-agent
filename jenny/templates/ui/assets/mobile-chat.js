@@ -638,7 +638,7 @@ export class ChatController {
     // `dialog[open]`, come faceva prima, lasciava scoperti lightbox, minichat,
     // mini-app e drawer: col composer coperto i caratteri finivano in un campo
     // invisibile.
-    if (window.mobileApp?.hasOverlayAbove()) return;
+    if (window.mobileApp?.hasOverlayAbove('chatOver')) return;
     // focus() sincrono dentro il keydown: Chromium (WebView) recapita l'inserimento
     // del carattere sull'elemento appena messo a fuoco, quindi il tasto non va perso.
     this.input.focus();

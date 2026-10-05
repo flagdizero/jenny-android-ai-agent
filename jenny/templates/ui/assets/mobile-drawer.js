@@ -111,7 +111,9 @@ export class DrawerManager extends EventTarget {
     if (!main) return;
     for (const child of main.children) {
       if (child === this.backdrop || child.classList.contains('drawer')) continue;
-      child.inert = on;
+      /* La vista sotto la chat aperta sopra di lei (05/10/2026) e' inerte per
+         conto suo: chiudere un drawer aperto dalla chat non la risveglia. */
+      child.inert = on || child.classList.contains('view-beneath');
     }
   }
 

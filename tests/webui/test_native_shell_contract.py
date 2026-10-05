@@ -436,8 +436,11 @@ def test_the_workshop_answer_is_its_chat_mode() -> None:
     li' non c'e' (collaudo del 27/09/2026)."""
     app_js = _app_js()
     answer = _method(app_js, "isChatOnScreen")
-    assert "this.currentMode === 'chat'" in answer
+    assert "this.chatVisible()" in answer
     assert "sessionManager.currentKey === sessionManager.personalKey" in answer
+    # La Console, o la chat aperta sopra una vista (05/10/2026): la chat c'e'.
+    visible = _method(app_js, "chatVisible")
+    assert "this.currentMode === 'chat'" in visible and "this._chatOver === true" in visible
     assert "this.currentMode = mode" in app_js
     assert "switchMode('chat'" in app_js
 

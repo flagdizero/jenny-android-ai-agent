@@ -339,7 +339,9 @@ def test_the_type_ahead_guard_consumes_the_layer_list() -> None:
     fisica finivano in un campo invisibile."""
     chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
     guard = re.sub(r"//.*", "", _method(chat, "_maybeTypeAheadFocus"))  # i commenti citano il prima
-    assert "window.mobileApp?.hasOverlayAbove()" in guard
+    # Dal 05/10/2026 la chat puo' essere lei stessa un livello (aperta sopra
+    # una vista): chiede cosa le sta sopra, non se c'e' lei.
+    assert "window.mobileApp?.hasOverlayAbove('chatOver')" in guard
     assert "dialog[open]" not in guard, "la guardia non riscrive i livelli per conto suo"
 
     api_body = _method(_app(), "hasOverlayAbove")
