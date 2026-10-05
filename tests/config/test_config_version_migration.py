@@ -196,3 +196,38 @@ async def test_persist_preserves_unknown_keys(tmp_path) -> None:
     await persist_schema_migrations(config_path=path)
     written = json.loads(path.read_text(encoding="utf-8"))
     assert written["somethingFromTheFuture"] == {"keep": "me"}
+
+
+# ── v4: la finestra di contesto da 64K a 128K ────────────────────────────────
+
+_NEW_WINDOW = AgentDefaults.model_fields["context_window_tokens"].default
+
+
+def test_the_old_context_window_default_moves_to_128k() -> None:
+    """Il caso reale del 05/10: il Titan aveva 65536 scritto nel file."""
+    assert _NEW_WINDOW == 131072
+    config = Config.model_validate({
+        "configVersion": 3, "agents": {"defaults": {"contextWindowTokens": 65536}},
+    })
+    assert config.agents.defaults.context_window_tokens == _NEW_WINDOW
+    assert config.config_version == CURRENT_CONFIG_VERSION
+
+
+def test_a_context_window_the_user_picked_stays() -> None:
+    legacy = Config.model_validate({
+        "configVersion": 3, "agents": {"defaults": {"contextWindowTokens": 262144}},
+    })
+    assert legacy.agents.defaults.context_window_tokens == 262144
+    stamped = Config.model_validate({
+        "configVersion": CURRENT_CONFIG_VERSION,
+        "agents": {"defaults": {"contextWindowTokens": 65536}},
+    })
+    assert stamped.agents.defaults.context_window_tokens == 65536
+
+
+def test_a_preset_window_is_a_choice_and_is_not_migrated() -> None:
+    config = Config.model_validate({
+        "configVersion": 3,
+        "modelPresets": {"piccolo": {"model": "m", "contextWindowTokens": 65536}},
+    })
+    assert config.model_presets["piccolo"].context_window_tokens == 65536

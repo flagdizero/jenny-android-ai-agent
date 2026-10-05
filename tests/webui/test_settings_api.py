@@ -185,7 +185,7 @@ async def test_update_context_window_rejects_unknown_values(
     save_config(Config(), config_path)
     monkeypatch.setattr(get_runtime_context(), "config_path", config_path)
 
-    with pytest.raises(WebUISettingsError, match="context_window_tokens must be 65536 or 262144"):
+    with pytest.raises(WebUISettingsError, match="context_window_tokens must be 65536 or 131072 or 262144"):
         await update_agent_settings({"context_window_tokens": ["128000"]})
 
 

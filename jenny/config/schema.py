@@ -319,7 +319,16 @@ class AgentDefaults(Base):
     # prima di dire qualcosa. 16384 lascia margine restando dentro la finestra
     # anche coi prompt più grossi osservati (~38k su 65536).
     max_tokens: int = 16384
-    context_window_tokens: int = 65536
+    # 128K dal 05/10/2026, prima 65536. Tolti i 16384 riservati alla risposta,
+    # 64K lasciavano ~48k di prompt, e un lavoro che legge molte pagine — la
+    # passata della bacheca su un quaderno di 33 — perdeva le prime mentre
+    # leggeva le ultime e ricominciava. Su un modello con una finestra più
+    # piccola non rompe niente: l'overflow si recupera da sé
+    # (``runner``: riprova con la finestra letta dall'errore del provider).
+    #
+    # Come ``max_concurrent_subagents``: alzare il default non raggiunge chi
+    # aggiorna, e lo sposta la migrazione v4 di ``Config._migrate_by_version``.
+    context_window_tokens: int = 131072
     context_block_limit: int | None = None
     temperature: float = 0.1
     # Esplicito invece di lasciare il default del provider: un reasoning model a
@@ -1054,7 +1063,7 @@ class ModelPresetConfig(Base):
 
 # Versione corrente dello schema del config. Alzala di uno ogni volta che
 # aggiungi un ramo a ``Config._migrate_by_version``, mai altrimenti.
-CURRENT_CONFIG_VERSION = 3
+CURRENT_CONFIG_VERSION = 4
 
 # Migrazioni gia annunciate in questo processo. Solo per il log: la migrazione
 # resta idempotente e rigira a ogni parse finche il file non viene riscritto (lo
@@ -1234,6 +1243,32 @@ class Config(BaseSettings):
         if version < 3 and 3 not in _ANNOUNCED_MIGRATIONS and "casa" in data:
             _ANNOUNCED_MIGRATIONS.add(3)
             logger.info("Config migration v3: the home block moves from 'casa' to 'home'")
+
+        # v4: ``contextWindowTokens`` passa da 65536 a 131072 (v. il commento sul
+        # campo). Solo il default di ``agents.defaults``: un preset in
+        # ``modelPresets`` e' scritto per un modello preciso, ed e' una scelta.
+        if version < 4:
+            agents = data.get("agents")
+            if isinstance(agents, dict):
+                defaults = agents.get("defaults")
+                if isinstance(defaults, dict):
+                    for key in ("contextWindowTokens", "context_window_tokens"):
+                        if defaults.get(key) == 65536:
+                            new_value = AgentDefaults.model_fields[
+                                "context_window_tokens"
+                            ].default
+                            if 4 not in _ANNOUNCED_MIGRATIONS:
+                                _ANNOUNCED_MIGRATIONS.add(4)
+                                logger.warning(
+                                    "Config migration v4: contextWindowTokens 65536 -> {} "
+                                    "(the old default made long reading jobs drop the "
+                                    "pages they had read; set it back explicitly to keep 64K)",
+                                    new_value,
+                                )
+                            defaults = {**defaults, key: new_value}
+                            agents = {**agents, "defaults": defaults}
+                            data = {**data, "agents": agents}
+                            break
         return data
 
     @model_validator(mode="before")

@@ -193,13 +193,13 @@ def test_context_window_change_is_applied(container_with_agent, monkeypatch) -> 
     """La finestra di contesto viaggia con lo switch e non la guardava nessuno."""
     container, agent = container_with_agent
     config = _config()
-    config.agents.defaults.context_window_tokens = 131072
+    config.agents.defaults.context_window_tokens = 262144
     _patch_reload(monkeypatch, config=config)
 
     container._on_settings_changed()
 
     agent._apply_provider_switch.assert_called_once()
-    assert agent._apply_provider_switch.call_args.args[2] == 131072
+    assert agent._apply_provider_switch.call_args.args[2] == 262144
 
 
 def test_a_failed_rebuild_leaves_the_fingerprint_alone(container_with_agent, monkeypatch) -> None:

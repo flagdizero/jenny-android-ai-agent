@@ -289,7 +289,7 @@ WELCOME_TEMPLATES: dict[str, str] = {
 
 # Tupla e non `set`: la UI ne fa un menu', e l'ordine di un `set` non e'
 # garantito fra due esecuzioni. Il controllo `in` costa uguale su due voci.
-_CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 262_144)
+_CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 131_072, 262_144)
 _ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Vocabolario accettato dal layer provider (``openai_compat_provider._build_kwargs``
 # normalizza "minimum" in "minimal"). La select della WebUI ne espone un

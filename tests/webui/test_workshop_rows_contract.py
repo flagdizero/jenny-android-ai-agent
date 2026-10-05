@@ -570,7 +570,7 @@ def test_the_context_window_finally_has_a_command() -> None:
         r for r in SETTINGS.splitlines()
         if not r.lstrip().startswith(("*", "//", "/*"))
     )
-    assert not re.search(r"\b(65536|262144)\b", code), (
+    assert not re.search(r"\b(65536|131072|262144)\b", code), (
         "un valore della finestra di contesto è scritto a mano nel client"
     )
     # E si salva: senza questa chiave il menù cambia e non succede niente.
