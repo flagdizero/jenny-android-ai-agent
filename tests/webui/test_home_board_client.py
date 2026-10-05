@@ -458,3 +458,21 @@ def test_the_drawer_draws_the_four_other_shapes() -> None:
       assert.equal(cells[0], 'MSCI World');
       assert.ok(drawer.querySelector('.home-drawer-micro-table td.is-num'));
     """)
+
+
+@requires_jsdom
+def test_the_centre_of_the_view_goes_with_an_accepted_card() -> None:
+    _run("""
+      const B = app.board;
+      const box = $('home-board-canvas').getBoundingClientRect();
+      // jsdom non ha layout: senza misure il centro e' quello dello schermo dell'origine.
+      assert.deepEqual(B.viewCenter(), box.width ? B.viewCenter() : { x: 50, y: 50 });
+      document.querySelector('.home-board-envelope').click();
+      await tick(20);
+      const yes = [...document.querySelectorAll('.home-board-proposal .home-board-btn.is-primary')][0];
+      yes.click();
+      await tick(40);
+      const call = rpcs('board.suggestion.respond').at(-1);
+      assert.equal(call.params.answer, 'yes');
+      assert.ok(call.params.near && typeof call.params.near.x === 'number');
+    """)

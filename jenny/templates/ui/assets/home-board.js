@@ -154,6 +154,9 @@ export class HomeBoard {
     this._pointers = new Map();
     this._gesture = null;
     this._lastTap = 0;
+    this._pinched = false;
+    /** Il trascinamento di una scheda in corso, con il modo di annullarlo. */
+    this._itemDrag = null;
 
     this.sinceBtn?.addEventListener('click', () => this.openSince());
     this._bindGestures();
@@ -276,6 +279,18 @@ export class HomeBoard {
     this.view.y = fit(this.view.y, top, bottom, H);
   }
 
+  /** Il punto del muro al centro della finestra, in coordinate del muro: e' li'
+   *  che nasce una scheda accettata dalla busta. */
+  viewCenter() {
+    const box = this.canvas?.getBoundingClientRect();
+    if (!box?.width) return { x: 50, y: 50 };
+    const v = this.view;
+    return {
+      x: Math.round((((box.width / 2 - v.x) / v.s) / box.width) * 1000) / 10,
+      y: Math.round((((box.height / 2 - v.y) / v.s) / box.height) * 1000) / 10,
+    };
+  }
+
   /** Torna all'origine, a grandezza naturale (doppio tocco sul fondo). */
   resetView() {
     this.view = { x: 0, y: 0, s: 1 };
@@ -306,7 +321,17 @@ export class HomeBoard {
     };
     const onItem = (e) => e.target?.closest?.('.home-board-item, .home-board-envelope');
     c.addEventListener('pointerdown', (e) => {
-      if (onItem(e)) return;
+      const drag = this._itemDrag;
+      if (onItem(e) && !this._pointers.size && (!drag || drag.pointerId === e.pointerId)) {
+        return; // un dito su una scheda, da solo: la trascina
+      }
+      if (drag && drag.pointerId !== e.pointerId) {
+        /* Il primo dito era su una scheda e ne arriva un secondo: la scheda
+           torna dov'era, e i due dita diventano una pinza. */
+        const at = drag.point;
+        drag.cancel();
+        this._pointers.set(drag.pointerId, at);
+      }
       this._pointers.set(e.pointerId, local(e));
       cancelAnimationFrame(this._glide || 0);
       this._startGesture();
@@ -321,15 +346,18 @@ export class HomeBoard {
       if (!this._pointers.has(e.pointerId)) return;
       const g = this._gesture;
       this._pointers.delete(e.pointerId);
-      if (g && !g.moved && this._pointers.size === 0) {
+      if (g && !g.moved && !this._pinched && this._pointers.size === 0) {
         /* Un tocco sul fondo spegne i fili accesi; due di fila tornano all'origine. */
         const now = Date.now();
         if (now - this._lastTap < DOUBLE_TAP_MS) this.resetView();
         else if (this.focus) this.setFocus(null);
         this._lastTap = now;
-      } else if (g?.moved && this._pointers.size === 0 && g.vx !== undefined) {
+      } else if (g?.moved && !this._pinched && this._pointers.size === 0 && g.vx !== undefined) {
         this._glideFrom(g.vx, g.vy);
       }
+      /* Finche' c'e' un dito giu' dopo una pinza, quel dito non sposta niente:
+         le dita non si staccano mai insieme, e il secondo trascinerebbe il muro. */
+      if (this._pointers.size === 0) this._pinched = false;
       this._startGesture();
     };
     c.addEventListener('pointerup', up);
@@ -358,6 +386,7 @@ export class HomeBoard {
       ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
       : { ...pts[0] };
     const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+    if (pts.length > 1) this._pinched = true;
     this._gesture = {
       mid, dist, s: this.view.s, x: this.view.x, y: this.view.y,
       moved: this._gesture?.moved && pts.length > 0, t: Date.now(), last: mid,
@@ -368,6 +397,7 @@ export class HomeBoard {
     const g = this._gesture;
     if (!g) return;
     const pts = [...this._pointers.values()];
+    if (this._pinched && pts.length < 2) return;
     const mid = pts.length > 1
       ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
       : pts[0];
@@ -375,11 +405,11 @@ export class HomeBoard {
       && pts.length < 2) return;
     g.moved = true;
     if (pts.length > 1 && g.dist) {
+      /* Solo zoom, attorno al punto dove le dita si sono posate: il muro non
+         segue le dita, che non stanno mai ferme. */
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       this.view = { x: g.x, y: g.y, s: g.s };
       this._zoomAt(g.mid.x, g.mid.y, g.s * (dist / g.dist));
-      this.view.x += mid.x - g.mid.x;
-      this.view.y += mid.y - g.mid.y;
     } else {
       this.view.x = g.x + (mid.x - g.mid.x);
       this.view.y = g.y + (mid.y - g.mid.y);
@@ -646,6 +676,9 @@ export class HomeBoard {
     };
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== undefined && e.button !== 0) return;
+      /* Un secondo dito mentre un altro e' gia' giu': e' una pinza, non un
+         trascinamento (la prende `_bindGestures`). */
+      if (this._pointers.size || this._itemDrag) return;
       const box = this.canvas.getBoundingClientRect();
       start = {
         px: e.clientX, py: e.clientY, x: item.pos.x, y: item.pos.y, w: box.width, h: box.height,
@@ -653,6 +686,23 @@ export class HomeBoard {
       };
       moved = false;
       longFired = false;
+      this._itemDrag = {
+        pointerId: e.pointerId,
+        point: { x: e.clientX - box.left, y: e.clientY - box.top },
+        /* La pinza arriva: la scheda torna dov'era e smette di seguire il dito. */
+        cancel: () => {
+          clearTimeout(timer);
+          if (moved) {
+            el.classList.remove('is-dragging');
+            el.style.left = `${item.pos.x}cqw`;
+            el.style.top = `${item.pos.y}cqh`;
+          }
+          el._suppress = true;
+          start = null;
+          moved = false;
+          this._itemDrag = null;
+        },
+      };
       capture(el, e.pointerId);
       if (kind === 'card') {
         timer = setTimeout(() => {
@@ -714,12 +764,14 @@ export class HomeBoard {
       }
       el._suppress = moved || longFired;
       start = null;
+      this._itemDrag = null;
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', () => {
       clearTimeout(timer);
       el.classList.remove('is-dragging');
       start = null;
+      this._itemDrag = null;
     });
     el.addEventListener('click', () => {
       if (el._suppress) {
@@ -843,7 +895,7 @@ export class HomeBoard {
   async _respond(s, answer, box) {
     box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
     try {
-      await rpc.board('suggestion.respond', this.notebook, { id: s.id, answer });
+      await rpc.board('suggestion.respond', this.notebook, { id: s.id, answer, near: this.viewCenter() });
     } catch (err) {
       console.warn('home.board: respond failed', err);
       showToast(i18n.t(err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed'), 'error');

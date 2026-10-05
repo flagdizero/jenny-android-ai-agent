@@ -148,8 +148,26 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
 # ── La busta ─────────────────────────────────────────────────────────────────
 
 
-def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[str, Any]) -> None:
-    """Applica una proposta accettata. Il posto lo sceglie il codice, non il modello."""
+def _near(params: Mapping[str, Any]) -> tuple[float, float] | None:
+    """Il punto del muro che l'utente sta guardando, se il client lo manda."""
+    raw = params.get("near")
+    if not isinstance(raw, Mapping):
+        return None
+    x, y = raw.get("x"), raw.get("y")
+    if isinstance(x, bool) or isinstance(y, bool) or not isinstance(x, (int, float)) \
+            or not isinstance(y, (int, float)):
+        return None
+    return (max(-model.WALL_MAX, min(model.WALL_MAX, float(x))),
+            max(-model.WALL_MAX, min(model.WALL_MAX, float(y))))
+
+
+def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[str, Any],
+            near: tuple[float, float] | None = None) -> None:
+    """Applica una proposta accettata. Il posto lo sceglie il codice, non il modello.
+
+    Con *near* — il centro di dove l'utente sta guardando il muro — le schede
+    nuove nascono li' vicino, e non nello schermo dell'origine.
+    """
     kind = suggestion["kind"]
     owners = model.page_owners(board)
     taken = {c["id"] for c in board["cards"]}
@@ -162,7 +180,9 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
         base = wanted if model.is_valid_id(wanted) else model.slugify(title)
         card_id = model.unique_id(base, taken)
         taken.add(card_id)
-        x, y = model.free_slot(board, reminders)
+        target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2) \
+            if near is not None else None
+        x, y = model.free_slot(board, reminders, near=target)
         card = {
             "id": card_id, "title": model.clean_text(title, model.MAX_TITLE) or card_id,
             "titleBy": model.JENNY,
@@ -254,7 +274,7 @@ async def board_suggestion_respond(
             raise CommandError("not_found", "suggestion not found")
         if answer == "yes":
             before = {c["id"] for c in board["cards"]}
-            _accept(board, suggestion, reminders)
+            _accept(board, suggestion, reminders, _near(params))
             removed.extend(before - {c["id"] for c in board["cards"]})
         elif answer == "no":
             board["declined"].append({

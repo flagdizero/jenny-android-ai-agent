@@ -461,6 +461,10 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
 # in proporzione: su uno schermo piu' alto avanza spazio, non ne manca.
 CARD_BOX = (20.0, 40.0)
 NOTE_BOX = (15.0, 23.0)
+# Quanto lontano da *near* si cerca un posto (in percento dello schermo): un
+# po' piu' di uno schermo per lato, cosi' su un muro affollato si trova sempre.
+NEAR_SPAN_X = 120.0
+NEAR_SPAN_Y = 100.0
 
 # Gli angoli del primo schermo che non sono della bacheca: in basso a sinistra la
 # busta, in basso a destra Jenny, che sporge dal bordo e si prende i tocchi. Stanno
@@ -506,6 +510,24 @@ def free_slot(
     """
     taken = _boxes(board, reminders) + list(extra or [])
     best: tuple[float, float, float] | None = None
+    if near is not None:
+        # **Vicino a dove si guarda** (o al soggetto di un post-it): una finestra
+        # attorno a *near*, ovunque sia sul muro. Gli angoli riservati qui non
+        # contano: sono angoli della finestra, non di un posto del muro.
+        cx, cy = float(near[0]), float(near[1])
+        xs = [x for x in range(int(cx - NEAR_SPAN_X), int(cx + NEAR_SPAN_X) + 1, 4)
+              if -WALL_MAX <= x <= WALL_MAX - box[0]]
+        ys = [y for y in range(int(cy - NEAR_SPAN_Y), int(cy + NEAR_SPAN_Y) + 1, 4)
+              if -WALL_MAX <= y <= WALL_MAX - box[1]]
+        best_pos = (xs[0] if xs else 0.0, ys[0] if ys else 0.0)
+        for y in ys:
+            for x in xs:
+                rect = (float(x), float(y), x + box[0], y + box[1])
+                cost = sum(_overlap(rect, t) for t in taken)
+                key = (cost, (x - cx) ** 2 + (y - cy) ** 2, 0.0)
+                if best is None or key < best:
+                    best, best_pos = key, (float(x), float(y))
+        return best_pos
     best_pos = (2.0, 3.0)
     # Il primo schermo, e sotto quanto serve: quando il primo e' pieno il muro
     # cresce verso il basso, che su un telefono e' la direzione in cui si scorre.
@@ -517,8 +539,7 @@ def free_slot(
             if any(_overlap(rect, r) for r in _RESERVED):
                 continue
             cost = sum(_overlap(rect, t) for t in taken)
-            dist = (x - near[0]) ** 2 + (y - near[1]) ** 2 if near else y * 100 + x
-            key = (cost, dist, 0.0)
+            key = (cost, float(y * 100 + x), 0.0)
             if best is None or key < best:
                 best, best_pos = key, (float(x), float(y))
     return best_pos

@@ -336,3 +336,30 @@ def test_a_full_first_screen_places_new_things_below() -> None:
     ]}
     x, y = model.free_slot(board, None)
     assert y >= 100, "con il primo schermo pieno il posto nuovo e' sotto"
+
+
+def test_a_new_thing_is_placed_near_where_the_user_looks() -> None:
+    board = {"cards": [{"id": "a", "pos": {"x": 0.0, "y": 0.0}}]}
+    x, y = model.free_slot(board, None, near=(-180.0, 250.0))
+    assert abs(x + 180) <= 4 and abs(y - 250) <= 4
+    # Occupato proprio li': il posto libero piu' vicino, non lo schermo dell'origine.
+    board["cards"].append({"id": "b", "pos": {"x": -180.0, "y": 250.0}})
+    x, y = model.free_slot(board, None, near=(-180.0, 250.0))
+    assert -320 <= x <= -40 and 140 <= y <= 360
+    assert (x, y) != (-180.0, 250.0)
+
+
+async def test_an_accepted_card_lands_near_the_view(ctx, notebook) -> None:
+    _seed(notebook)
+
+    def propose(board):
+        board["suggestions"].append({"id": "sg-ginkgo", "kind": "add_card", "subject": "Ginkgo",
+                                     "pages": ["ginkgo.md"], "text": "?"})
+
+    mutate_board(notebook, propose)
+    await dispatch_command(ctx, "board.suggestion.respond", {
+        "wiki": "piante", "id": "sg-ginkgo", "answer": "yes", "near": {"x": 300, "y": -150}})
+    from jenny.board.store import read_board as _rb
+
+    card = next(c for c in _rb(notebook)["cards"] if c["title"] == "Ginkgo")
+    assert 250 <= card["pos"]["x"] <= 320 and -200 <= card["pos"]["y"] <= -130
