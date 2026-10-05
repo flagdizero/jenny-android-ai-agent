@@ -20,7 +20,6 @@
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { dotColor } from './shared/spines.js';
-import { projectNameOf } from './shared/conversation-list.js';
 
 /** Quanto spazio lasciare accanto al nome acceso quando la fila lo riporta in
  *  vista: a filo del bordo sembrerebbe tagliato anche quando non lo e'. */
@@ -32,16 +31,11 @@ export class HomeStrip {
    *  @param chatName  `() => ({name, color})`: il nome della pagina chat, cioe'
    *                   di lei. Fino al 26/09/2026 era anche il quaderno che la
    *                   chat mostrava; ora un quaderno si apre nei Quaderni
-   *  @param pageCount `(notebook) => number|null`: quante pagine ha, per
-   *                   l'interruttore Chat | Pagine di un quaderno aperto
-   *  @param onPages   il tocco su «Pagine» dell'interruttore
    *  @param onChange  chiamata quando la modalita' ordina si apre o si chiude */
-  constructor(el, { homePages, chatName, pageCount, onPages, onChange } = {}) {
+  constructor(el, { homePages, chatName, onChange } = {}) {
     this.el = el;
     this.homePages = homePages;
     this._chatName = chatName || (() => ({ name: 'Jenny', color: null }));
-    this._pageCount = pageCount || (() => null);
-    this._onPages = onPages || null;
     this._onChange = onChange || null;
     /** In modalita' ordina: la bozza dell'ordine, finche' non si preme Fatto. */
     this._draft = null;
@@ -69,117 +63,10 @@ export class HomeStrip {
     return null;
   }
 
-  /** Il colore della riga d'accento di una voce, quando non e' quello di
-   *  sempre: i Quaderni con un quaderno aperto prendono il suo. Senza pallino
-   *  — la voce si chiama ancora «Quaderni», e un pallino accanto direbbe che
-   *  lo e' lei — ma la riga dice in quale sei. Il nome sta nella pastiglia in
-   *  fondo. */
-  line(entry) {
-    if (entry?.kind !== 'notebooks') return null;
-    const notebook = projectNameOf(this.homePages.notebooksConversation);
-    return notebook ? dotColor(notebook) : null;
-  }
-
   draw() {
     if (!this.el) return;
     if (this.sorting) this._drawSort();
-    else if (this._openNotebook()) this._drawPath(this._openNotebook());
     else this._drawNames();
-  }
-
-  /** Il quaderno aperto nei Quaderni, se i Quaderni sono la pagina a schermo. */
-  _openNotebook() {
-    const here = this.homePages.entries?.[this.homePages.index];
-    if (here?.kind !== 'notebooks') return null;
-    return projectNameOf(this.homePages.notebooksConversation) || null;
-  }
-
-  /* ── Il percorso, con un quaderno aperto ────────────────────────────────
-     La fila diventa `‹ QUADERNI › ● piante`: la stessa riga, alla stessa
-     altezza e con le stesse classi del percorso delle stanze (v. `.home-head`
-     in index.html), perche' un quaderno aperto e' un posto dentro i Quaderni
-     come le sue pagine sono un posto dentro lui. La freccia e la radice
-     tornano all'elenco; il gesto di lato porta ancora alle altre pagine, e
-     arrivati li' la fila torna la fila. Deciso con l'utente il 26/09/2026,
-     guardando il telefono: «in questa situazione doveva esserci scritto
-     notebooks → piante».
-
-     A destra l'interruttore Chat | Pagine, lo stesso che le pagine del
-     quaderno hanno nella loro intestazione e nello stesso punto (v.
-     `#home-view-switch` in index.html): chat e pagine sono due viste dello
-     stesso posto, e il percorso e' lo stesso nelle due. */
-  _drawPath(notebook) {
-    this.el.classList.remove('is-sort');
-    const color = dotColor(notebook);
-    const row = document.createElement('div');
-    row.className = 'home-strip-path';
-    row.style.setProperty('--path-line', color);
-
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'home-back';
-    back.setAttribute('aria-label', i18n.t('home.back.notebooks'));
-    back.innerHTML = '<i class="ti ti-chevron-left" aria-hidden="true"></i>';
-    back.addEventListener('click', () => this.homePages.closeNotebook());
-
-    const nav = document.createElement('nav');
-    nav.className = 'home-path';
-    nav.setAttribute('aria-label', i18n.t('home.path.label'));
-    const root = document.createElement('button');
-    root.type = 'button';
-    root.className = 'home-path-root';
-    const rootName = document.createElement('span');
-    rootName.className = 'home-path-name';
-    rootName.textContent = i18n.t('home.strip.notebooks');
-    root.appendChild(rootName);
-    root.addEventListener('click', () => this.homePages.closeNotebook());
-    const sep = document.createElement('span');
-    sep.className = 'home-path-sep';
-    sep.setAttribute('aria-hidden', 'true');
-    sep.textContent = '\u203a';
-    const here = document.createElement('span');
-    here.className = 'home-path-here';
-    here.setAttribute('aria-current', 'page');
-    const dot = document.createElement('span');
-    dot.className = 'home-path-dot';
-    dot.setAttribute('aria-hidden', 'true');
-    dot.style.background = color;
-    const name = document.createElement('span');
-    name.className = 'home-path-name';
-    name.textContent = notebook;
-    here.append(dot, name);
-    nav.append(root, sep, here);
-    row.append(back, nav, this._viewSwitch(notebook));
-    this.el.replaceChildren(row);
-  }
-
-  /* L'interruttore della chat del quaderno: «Chat» acceso, «Bacheca» porta
-     alla bacheca. Le classi sono quelle di `#home-view-switch`. */
-  _viewSwitch(notebook) {
-    const group = document.createElement('div');
-    group.className = 'home-view-switch';
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', i18n.t('home.notebookPages.view'));
-    const seg = (label, icon, on) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = on ? 'home-view-seg is-on' : 'home-view-seg';
-      b.setAttribute('aria-pressed', String(on));
-      const i = document.createElement('i');
-      i.className = `ti ${icon}`;
-      i.setAttribute('aria-hidden', 'true');
-      const text = document.createElement('span');
-      text.textContent = label;
-      b.append(i, text);
-      return b;
-    };
-    const chat = seg(i18n.t('home.notebookPages.chat'), 'ti-message', true);
-    /* «Bacheca», senza numero: la porta e' alla faccia del quaderno, e un
-       conteggio di pagine li' accanto si leggerebbe come un conteggio di schede. */
-    const board = seg(i18n.t('board.tab'), 'ti-layout-board', false);
-    board.addEventListener('click', () => this._onPages?.());
-    group.append(chat, board);
-    return group;
   }
 
   /* ── La fila ─────────────────────────────────────────────────────────── */
@@ -203,8 +90,6 @@ export class HomeStrip {
         b.classList.add('is-on');
         active = b;
       }
-      const line = this.line(entry);
-      if (line) b.style.setProperty('--strip-line', line);
       const color = this.color(entry);
       if (color) {
         const dot = document.createElement('span');
@@ -222,10 +107,6 @@ export class HomeStrip {
          porterebbe sopra. Stessa guardia di ogni pressione lunga della casa. */
       b.addEventListener('click', () => {
         if (b.dataset.longpress) { delete b.dataset.longpress; return; }
-        /* Il nome dove sei gia', toccato, riporta al capo di quella pagina: i
-           Quaderni con un quaderno aperto tornano all'elenco. */
-        if (i === this.homePages.index && entry.kind === 'notebooks'
-            && this.homePages.closeNotebook()) return;
         this.homePages.goTo(i);
       });
       setupLongPress(b, () => this.openSort());

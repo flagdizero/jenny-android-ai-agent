@@ -181,7 +181,9 @@ def test_both_shells_answer_the_tap() -> None:
     for name, text in (("l'officina", workshop), ("la minichat", minichat)):
         assert "bindMascotDrag" not in text, f"{name} lega di nuovo la fisica per conto suo"
     home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "new JennyWithMinichat(" in home
+    # Dal 05/10/2026 la casa usa la mascotte con la porta della chat, senza
+    # minichat (v. `HomeApp.openChatOver`).
+    assert "new JennyMascot(" in home and "chat: {" in home
     assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
 
 

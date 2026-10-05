@@ -1036,12 +1036,17 @@
     "back": {
       "chat": "back to the chat",
       "settings": "back to Settings",
-      "notebooks": "back to the notebooks",
       "board": "back to the board",
       "drawer": "back to the drawer"
     },
     "path": {
       "label": "Where you are"
+    },
+    "over": {
+      "label": "The chat, over the page"
+    },
+    "door": {
+      "open": "Open the board"
     },
     "you": {
       "workshopHint": "watch, tune, repair"
@@ -1081,13 +1086,6 @@
       "pages": "{count} pages",
       "pagesShort": "{count} p",
       "plateKeys": "⏎ open · ⇧⏎ sheet · ←→ choose"
-    },
-    "notebookPages": {
-      "open": "Notebook board",
-      "chat": "Chat",
-      "view": "Notebook view",
-      "countOne": "1 page",
-      "countMany": "{count} pages"
     },
     "reader": {
       "failed": "I could not open this page.",
@@ -1235,7 +1233,6 @@
     }
   },
   "board": {
-    "tab": "Board",
     "failed": "I couldn't read this notebook's board.",
     "listView": "List view",
     "moveFailed": "I couldn't move it: putting it back where it was.",

@@ -1,10 +1,10 @@
-/** Il trasloco della chat — una chat sola, che si sposta fra le pagine.
+/** Il trasloco della chat — una chat sola, che si sposta.
  *
- *  Una pagina «conversazione» non e' una seconda chat: e' una **scorciatoia**
- *  che cambia la conversazione dell'unica che c'e', travestita da pagina.
- *  La chat e' un elemento solo,
- *  preso per id dai suoi controller: non si copia, si sposta — come le stanze
- *  prestate — nella pagina che guardi.
+ *  La chat e' un elemento solo, preso per id dai suoi controller: non si
+ *  copia, si sposta. Dal 05/10/2026 i suoi posti sono due: la pagina chat, e
+ *  il velo sopra qualunque pagina, dove la porta Jenny (`lift`/`lower`). Fino
+ *  ad allora si spostava fra le pagine — la pagina chat, i Quaderni, le pagine
+ *  di un quaderno appeso — e ogni pagina era una conversazione.
  *
  *  **Il travestimento e' una foto.** Nelle pagine di chat che la chat non abita
  *  c'e' una copia statica di com'era l'ultima volta che l'hai vista. Scorrendo,
@@ -77,9 +77,6 @@ export class ChatMove {
        filo e' vuoto, o e' gia' quello nuovo: la foto della conversazione
        lasciata direbbe il falso, e resterebbe li' fino alla visita dopo. */
     this._reliable = true;
-    /** Il pannello in cui la chat e' stata riportata **senza** cambiarle
-     *  conversazione (v. `bringBackHome`), o `null`. */
-    this._outOfPlace = null;
     /** Fa scadere subito il tetto dell'arrivo in corso, o `null`. */
     this._expireCap = null;
   }
@@ -102,13 +99,8 @@ export class ChatMove {
     if (fromIndex && fromIndex !== panel) {
       const left = this._currentKey?.();
       if (this._reliable) this._negatives.set(left, this._negative());
-      /* ...tranne quando la chat li' era **fuori posto**: riportata a casa da
-         un ridisegno, mostrava ancora il quaderno da cui veniva. La pagina che
-         lascia ha gia' la foto giusta — la sua — e appenderci questa vorrebbe
-         dire far entrare il quaderno nella pagina chat, a meta' scorrimento. */
-      if (fromIndex !== this._outOfPlace) this._putSnapshot(fromIndex, left);
+      this._putSnapshot(fromIndex, left);
     }
-    this._outOfPlace = null;
 
     /* 2. La chat entra **sotto** la foto della pagina d'arrivo. Se la pagina
           una foto non ce l'ha — appena disegnata — gliene si da' una adesso,
@@ -151,7 +143,7 @@ export class ChatMove {
           e' ancora l'ultimo arrivo: un dito veloce fa A → B → A, e il «finito»
           di B non deve scoprire la chat sotto la foto di A.
           Il timer del tetto si spegne appena la lettura vince, e scade subito
-          se arriva un arrivo nuovo (qui sopra, e in `bringBackHome`): restava
+          se arriva un arrivo nuovo (qui sopra, e in `lift`/`lower`): restava
           vivo 600 ms per niente a ogni arrivo, e teneva sveglio chi lo
           aspettava. */
     let cap;
@@ -191,7 +183,6 @@ export class ChatMove {
       if (this._reliable) this._negatives.set(left, this._negative());
       this._putSnapshot(from, left);
     }
-    this._outOfPlace = null;
     if (left === key) {
       removeSnapshot(host);
       host.appendChild(this.chat);
@@ -207,8 +198,8 @@ export class ChatMove {
    *
    *  Se e' la conversazione di casa, li' non serve una foto: c'e' lei. Se e'
    *  un quaderno (era aperta sopra la bacheca) la pagina chat mostra la foto
-   *  della personale, finche' un arrivo non la rimette — come dopo un
-   *  `bringBackHome`. Il negativo della conversazione lasciata si tiene.
+   *  della personale, finche' un arrivo non la rimette. Il negativo della
+   *  conversazione lasciata si tiene.
    */
   lower(home) {
     if (!this.chat || !home) return;
@@ -243,55 +234,6 @@ export class ChatMove {
     /* Tornando alla personale la foto di casa e' di troppo: va via a lettura
        finita, come in un arrivo. */
     return this._changeUnder(atHome && key === homeKey ? home : null, key, mine);
-  }
-
-  /** Una pagina di chat che la chat non abita deve mostrare la sua foto.
-   *
-   *  Se la chat e' li' — parcheggiata mentre guardi un'app — resta lei: e' la
-   *  conversazione di quella pagina, e viva e' meglio che in foto. Se una foto
-   *  c'e' gia' non si ristampa: questo passa a ogni cambio di pagina.
-   */
-  snapshotIfNeeded(panel, key) {
-    if (!panel || !key) return;
-    if (this.chat && this.chat.parentElement === panel) return;
-    if (snapshotIn(panel)) return;
-    this._putSnapshot(panel, key);
-  }
-
-  /** Il pannello `old` sta per essere buttato: se la chat e' li', torna
-   *  nel pannello di casa **prima**. Senza, ridisegnare le pagine porterebbe
-   *  via la chat intera — filo, composer, bozza — insieme al pannello. */
-  bringBackHome(old, home) {
-    if (!this.chat || !home || this.chat.parentElement !== old) return;
-    this._arrivals += 1;  // un arrivo in volo verso `old` non tocca piu' niente
-    this._expireCap?.();
-    home.insertBefore(this.chat, snapshotIn(home));
-    /* La chat e' a casa ma con la conversazione di prima, sotto la foto di
-       casa: il prossimo arrivo lo deve sapere (v. il passo 1 di `arrives`). */
-    this._outOfPlace = home;
-  }
-
-  /** `panel` smette di essere una pagina di chat — un quaderno chiuso nei
-   *  Quaderni, e sotto torna l'elenco. La chat torna a casa e prende `key`,
-   *  la conversazione di casa; e in `panel` **non resta una foto**, a
-   *  differenza di un arrivo qualunque, o coprirebbe l'elenco.
-   *
-   *  Il negativo invece si tiene: riaprendo lo stesso quaderno, la sua foto
-   *  e' quella di com'era. */
-  leaves(panel, home, key) {
-    removeSnapshot(panel);
-    if (!this.chat || !home || this.chat.parentElement !== panel) return Promise.resolve();
-    if (this._reliable) this._negatives.set(this._currentKey?.(), this._negative());
-    /* Senza una conversazione di casa `arrives` non muoverebbe niente, e la
-       chat resterebbe sopra l'elenco: si riporta a casa com'e'. */
-    if (!key) {
-      this.bringBackHome(panel, home);
-      return Promise.resolve();
-    }
-    /* «Fuori posto» e' il segno con cui `arrives` salta la foto della pagina
-       lasciata (il suo passo 1): qui e' proprio quel che serve. */
-    this._outOfPlace = panel;
-    return this.arrives(home, key);
   }
 
   /* ── La foto ─────────────────────────────────────────────────────────── */

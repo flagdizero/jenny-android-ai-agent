@@ -232,6 +232,7 @@ _UI_MANIFEST = [
     "assets/home-reader.js",
     "assets/home-style.css",
     "assets/home-move.js",
+    "assets/home-over.js",
     "assets/home-you.js",
     "assets/home-updates.js",
     "assets/home-who.js",

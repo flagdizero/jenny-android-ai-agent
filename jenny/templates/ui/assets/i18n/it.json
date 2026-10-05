@@ -1036,12 +1036,17 @@
     "back": {
       "chat": "torna alla chat",
       "settings": "torna alle Impostazioni",
-      "notebooks": "torna ai quaderni",
       "board": "torna alla bacheca",
       "drawer": "torna al cassetto"
     },
     "path": {
       "label": "Dove sei"
+    },
+    "over": {
+      "label": "La chat, sopra la pagina"
+    },
+    "door": {
+      "open": "Apri la bacheca"
     },
     "you": {
       "workshopHint": "osserva, regola, ripara"
@@ -1081,13 +1086,6 @@
       "pages": "{count} pagine",
       "pagesShort": "{count} p",
       "plateKeys": "⏎ apri · ⇧⏎ scheda · ←→ scegli"
-    },
-    "notebookPages": {
-      "open": "Bacheca del quaderno",
-      "chat": "Chat",
-      "view": "Vista del quaderno",
-      "countOne": "1 pagina",
-      "countMany": "{count} pagine"
     },
     "reader": {
       "failed": "Non sono riuscita ad aprire questa pagina.",
@@ -1235,7 +1233,6 @@
     }
   },
   "board": {
-    "tab": "Bacheca",
     "failed": "Non sono riuscita a leggere la bacheca di questo quaderno.",
     "listView": "Vista elenco",
     "moveFailed": "Non sono riuscita a spostarla: la rimetto dov'era.",

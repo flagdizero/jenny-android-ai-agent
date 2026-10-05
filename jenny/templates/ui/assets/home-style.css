@@ -87,18 +87,6 @@ body.home {
 }
 .home-strip-names::-webkit-scrollbar { display: none; }
 
-/* La fila con un quaderno aperto nei Quaderni: il percorso, come nelle stanze
-   (v. `.home-head` e `.home-path` qui sotto). Stessi margini della riga delle
-   stanze — la freccia sta a 4 px dal bordo, non a 18 — cosi' passando dal
-   quaderno alle sue pagine non si sposta niente. */
-.home-strip:has(.home-strip-path) { padding: 10px 12px 6px 4px; }
-.home-strip-path {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
 /* Dal lato in cui qualcosa non ci sta, la fila sfuma: un nome tagliato di
    netto sul bordo sembra un difetto, uno che svanisce dice «di qua ce n'e'
    ancora». */
@@ -159,7 +147,7 @@ body.home {
 .home-strip-entry.is-on .home-strip-name {
   /* I Quaderni, con un quaderno aperto, prendono il suo colore: e' la sola
      cosa della fila che dice in quale sei (la scrive `home-strip.js`). */
-  box-shadow: inset 0 -2px 0 var(--strip-line, var(--accent));
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .home-strip-dot {
@@ -397,80 +385,6 @@ body.home {
 /* Come `.home-back[hidden]` qui sotto: il `display` dell'autore scavalca il
    `[hidden]` del browser, e il pallino resterebbe fuori dai quaderni. */
 .home-path-dot[hidden] { display: none; }
-
-/* ── L'interruttore Chat | Pagine ──
-   Chat e pagine di un quaderno sono due viste dello stesso posto: stessa
-   intestazione, e un interruttore a destra che dice quale guardi e porta
-   all'altra con un tocco. E' nello stesso punto nelle due viste — nella fila
-   della chat del quaderno (lo disegna `home-strip.js`) e nell'intestazione
-   delle pagine — cosi' la strada si trova dove l'hai lasciata. Prima si andava
-   alle pagine da una pastiglia in basso e si tornava da «Parlane» in alto. */
-.home-view-switch {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-}
-.home-view-switch[hidden] { display: none; }
-
-/* Su uno schermo stretto l'interruttore tiene le icone e il numero, e le
-   parole le dice solo a chi non vede: «Chat | Pagine 3» sono 172 px, che a
-   360 lasciavano al nome del quaderno una lettera. Nascoste alla
-   vista e non tolte — sono il nome dei due bottoni per TalkBack. Il Titan 2
-   (590 px) le vede ancora tutte. */
-@media (max-width: 480px) {
-  .home-view-seg { padding: 0 9px; }
-  .home-view-seg > span:not(.home-view-count) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-
-.home-view-seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 11px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-/* La vista in cui sei, accesa col colore del tema: e' la stessa pastiglia
-   piena di «Manda» e di «Parlane», cioe' la cosa accesa della riga. Con il
-   fondo della superficie si distingueva appena dall'altra. */
-.home-view-seg.is-on {
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 600;
-}
-.home-view-count {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-/* Sul fondo acceso il grigio del numero non si legge: prende il colore della
-   parola. Non piu' «un po' piu' tenue» con l'opacita': a 0,75 il numero
-   scendeva sotto 4,5:1 nei temi in cui `--on-accent` ci sta appena sopra.
-   Lo distingue dalla parola il peso, 500 contro 600. */
-.home-view-seg.is-on .home-view-count {
-  color: var(--on-accent);
-}
-.home-view-count:empty { display: none; }
 
 /* ── Il filo ── */
 
@@ -877,67 +791,6 @@ body.home {
 
 .home-input::placeholder { color: var(--text-faint); }
 
-/* La pastiglia delle pagine del quaderno, a sinistra del composer: il posto
-   che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
-   questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
-   il campo, cosi' la riga resta allineata.
-   Tutta qui. Stava a meta' con «Parlane», di quando le due pastiglie
-   abitavano la stessa barra in testa; scesa nel composer, altezza, bordo e
-   fondo di la' li riscriveva questa regola, e restavano solo da leggere. */
-/* Dal 26/09/2026 porta anche il nome del quaderno, col pallino, e c'e' solo
-   nelle pagine fissate (nei Quaderni la strada per le pagine sta in alto). Il
-   nome cede per primo — fino a meta' riga, poi «…» — perche' il campo dove
-   scrivi resti largo. */
-.home-composer .home-notebook-pill {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 46%;
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-}
-.home-composer .home-notebook-pill[hidden] { display: none; }
-
-.home-composer .home-notebook-pages-open {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 12px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.home-composer .home-notebook-pages-open:active { filter: brightness(0.94); }
-
-.home-notebook-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-.home-notebook-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.home-notebook-count {
-  flex: none;
-  color: var(--text-muted);
-}
-.home-notebook-count:empty { display: none; }
-
 .home-send {
   flex: none;
   width: 40px;
@@ -1308,10 +1161,6 @@ body.home {
 .home-shell {
   --jenny-floor: calc(var(--home-composer-h, 64px) - var(--jenny-size) * 0.1224);
 }
-
-/* Il campo della minichat, dove il composer non c'e': in basso a 12 px, sotto
-   i piedi di lei (`--jenny-away-floor`). */
-.home-shell .jenny-mc-ask { bottom: 12px; }
 
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
    un guasto si dice come si direbbe a voce, non con un pannello rosso. Sta nel
@@ -1744,16 +1593,6 @@ body.home {
 
 .home-notebooks-new:active { filter: brightness(0.92); }
 
-/* Un quaderno aperto dentro i Quaderni: l'elenco, la ricerca, la targhetta e
-   il + si fanno da parte, e il pannello e' della chat che ci ha portato il
-   trasloco. `display:none` e non `hidden` sugli elementi: l'elenco lo
-   ridisegna `home-who.js`, e un attributo messo da qui gli sfuggirebbe al
-   primo giro. */
-.home-page[data-page='notebooks'][data-open] .home-notebooks,
-.home-page[data-page='notebooks'][data-open] .home-who-search,
-.home-page[data-page='notebooks'][data-open] .home-who-plate,
-.home-page[data-page='notebooks'][data-open] .home-notebooks-new { display: none; }
-
 /* Le cartelle che non si aprono, in fondo: righe, non copertine. Una
    cartella che non si apre e' una cosa da sistemare, non una scelta — niente
    tela, la riga si smorza, e resta un `<div>`: il gateway rifiuterebbe quella
@@ -1912,6 +1751,63 @@ body.home {
   flex-direction: column;
   position: relative;
 }
+
+/* Il velo: la chat sopra la pagina (dal 05/10/2026, v. `HomeApp.openChatOver`).
+   A tutto schermo, e la chat dentro e' quella vera, identica alla pagina chat.
+   Il fondo e' trasparente quanto basta perche' sotto si legga ancora la
+   pagina di cui stai parlando: scuro nei temi scuri, del colore del tema in
+   quelli chiari (il token `--chat-veil` sta in mobile-style.css, coi
+   temi). Il livello lo dichiara l'altro foglio: questo non ne dichiara. */
+.home-over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--chat-veil, rgba(8, 7, 10, 0.8));
+  animation: home-over-in 0.14s ease-out;
+}
+.home-over[hidden] { display: none; }
+@keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .home-over { animation: none; }
+}
+
+/* La porta di un quaderno appeso alla fila: arrivandoci si apre la bacheca, e
+   la copertina e' quel che si vede scorrendo — il pallino, il nome, e un
+   bottone per chi la bacheca l'ha appena chiusa. */
+.home-door {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.home-door-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+}
+.home-door-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--heading);
+}
+.home-door-open {
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--overlay);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.home-door-open:active { filter: brightness(0.94); }
 
 /* La foto della chat: da sola in una pagina che la chat non abita, o **sopra**
    la chat vera finche' questa non ha finito di leggere la conversazione nuova.

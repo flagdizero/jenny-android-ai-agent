@@ -219,6 +219,9 @@ class Home {
     this.autosize = 0;
   }
   _setView(v) { this.view = v; }
+  /* Dal 05/10/2026 la chat del quaderno sale sopra il lettore: la stanza
+     resta, la chat le sta davanti. */
+  openChatOver() { this.chatOver = true; return true; }
   /* Come il vero: col filo giu' il messaggio non parte e resta nella casella. */
   _send() {
     if (this.wireDown) return false;
@@ -294,7 +297,8 @@ def test_filing_lands_in_the_chat_with_the_message_already_sent() -> None:
     _run_app("""
       const c = new Home();
       c._bringToChat({ title: 'Orto', quote: 'q', comment: 'non va', id: 'abc' });
-      assert.equal(c.view, 'chat');
+      assert.equal(c.chatOver, true, 'la chat del quaderno non e\u2019 salita');
+      assert.equal(c.view, 'reader', 'il lettore e\u2019 sparito da sotto la chat');
       assert.equal(sent.length, 1);
       assert.ok(sent[0].includes('non va'), sent[0]);
       sent.length = 0;

@@ -126,8 +126,6 @@ def _run(body: str) -> None:
               nameOf: (s) => (s.kind === 'conversation' ? s.ref.split(':')[1] : s.ref),
               goTo(i) { requested.push(['goTo', i]); this.index = i; },
               /* Il quaderno aperto nei Quaderni, e chi lo chiude. */
-              notebooksConversation: null,
-              closeNotebook() { requested.push(['chiudi']); this.notebooksConversation = null; return true; },
               /* Come la vera: l'elenco salvato, o `false` se il server ha
                  rifiutato (l'avviso lo da' lei). `pending` tiene la
                  scrittura sospesa finche' il caso non la lascia andare. */
@@ -142,12 +140,9 @@ def _run(body: str) -> None:
             let chatName = { name: 'Jenny', color: null };
             const changes = [];
             const el = createEl('div');
-            let pageCount = null;
             const strip = new HomeStrip(el, {
               homePages,
               chatName: () => chatName,
-              pageCount: () => pageCount,
-              onPages: () => requested.push(['pagine']),
               onChange: (open) => changes.push(open),
             });
             strip.draw();
@@ -198,74 +193,14 @@ def test_the_page_you_are_on_is_the_big_one_and_says_so() -> None:
     """)
 
 
-def test_a_notebook_open_in_the_notebooks_turns_the_row_into_its_path() -> None:
-    """`‹ QUADERNI › ● piante`, come nelle stanze: un quaderno aperto e' un
-    posto dentro i Quaderni. Fino al 26/09/2026 la pagina chat prendeva il nome
-    del quaderno al posto di «Jenny» (deciso il 23/09, poi rivisto)."""
+def test_the_row_is_always_the_row() -> None:
+    """Dal 05/10/2026 un quaderno non si apre piu' dentro i Quaderni: la fila
+    non diventa mai il percorso di un quaderno, ne' cambia colore."""
     _run("""
-      homePages.notebooksConversation = 'project:piante';
       homePages.index = 4;
-      strip.draw();
-      const row = el.children[0];
-      assert.equal(row.className, 'home-strip-path', 'la fila non e\u2019 diventata il percorso');
-      const [back, nav] = row.children;
-      assert.equal(back.attrs['aria-label'], 'home.back.notebooks');
-      const [root, sep, here] = nav.children;
-      assert.equal(root.children[0].textContent, 'home.strip.notebooks');
-      assert.equal(sep.textContent, '\u203a');
-      const [dot, name] = here.children;
-      assert.equal(name.textContent, 'piante');
-      assert.equal(dot.style.background, dotColor('piante'));
-    """)
-
-
-def test_the_path_of_an_open_notebook_leads_back_to_the_list() -> None:
-    """La freccia e la radice chiudono il quaderno: sotto c'e' l'elenco."""
-    _run("""
-      homePages.notebooksConversation = 'project:piante';
-      homePages.index = 4;
-      strip.draw();
-      const [back, nav] = el.children[0].children;
-      fire(back, 'click');
-      homePages.notebooksConversation = 'project:piante';
-      fire(nav.children[0], 'click');
-      assert.deepEqual(requested, [['chiudi'], ['chiudi']]);
-    """)
-
-
-def test_the_open_notebook_has_the_chat_and_board_switch_on_chat() -> None:
-    """A destra del percorso, lo stesso interruttore della bacheca del quaderno:
-    «Chat» acceso, «Bacheca» — senza numero: un conteggio di pagine li' accanto
-    si leggerebbe come un conteggio di schede — porta alla bacheca."""
-    _run("""
-      homePages.notebooksConversation = 'project:piante';
-      homePages.index = 4;
-      pageCount = 31;
-      strip.draw();
-      const sw = el.children[0].children[2];
-      assert.equal(sw.className, 'home-view-switch');
-      const [chat, pages] = sw.children;
-      assert.equal(chat.attrs['aria-pressed'], 'true');
-      assert.equal(pages.attrs['aria-pressed'], 'false');
-      assert.equal(pages.children.length, 2, 'la bacheca non porta un numero');
-      fire(chat, 'click');
-      assert.deepEqual(requested, [], '«Chat» da dentro la chat ha fatto qualcosa');
-      fire(pages, 'click');
-      assert.deepEqual(requested, [['pagine']]);
-    """)
-
-
-def test_on_another_page_the_row_is_the_row_even_with_a_notebook_open() -> None:
-    """Il quaderno resta aperto quando scorri via, ma la fila e' dei Quaderni
-    solo mentre li guardi."""
-    _run("""
-      homePages.notebooksConversation = 'project:piante';
-      homePages.index = 1;
       strip.draw();
       assert.equal(el.children[0].className, 'home-strip-names');
-      assert.equal(names()[1], 'Jenny');
-      assert.equal(entries()[4].style['--strip-line'], dotColor('piante'),
-                   'la riga dei Quaderni non ha il colore del quaderno aperto');
+      assert.equal(entries()[4].style['--strip-line'], undefined);
     """)
 
 

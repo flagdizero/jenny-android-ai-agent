@@ -292,7 +292,7 @@ def test_the_gap_is_measured_again_once_the_track_stops() -> None:
     misurare a scorrimento finito, o un messaggio arrivato mentre eri altrove
     resta dietro di lei fino al primo scorrimento del dito."""
     app = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    block = app.split("  onPageChanged(index, entry) {")[1].split("\n  }\n")[0]
+    block = app.split("  onPageChanged(index, entry, { animated = false } = {}) {")[1].split("\n  }\n")[0]
     assert "gap?.settleAfter(SLIDE_MS" in block, block
     pages = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
     assert "transform ${SLIDE_MS}ms" in pages, "la durata della pista non e' piu' SLIDE_MS"

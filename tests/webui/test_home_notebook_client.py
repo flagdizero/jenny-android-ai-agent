@@ -205,12 +205,20 @@ def _run_follow_up(body: str, *, confirmed: bool, current_key: str | None) -> No
         const projectKey = (n) => 'project:' + n;
         const sessionManager = {{ currentKey: {json.dumps(current_key)}, personalKey: 'websocket:default' }};
         const i18n = {{ t: (k) => k }};
+        const NOTEBOOK_ROOMS = ['board', 'drawer', 'reader'];
         function showToast(t) {{ history.push(['avviso', t]); }}
         class Shell {{
           constructor() {{
             this.who = {{ refresh: async () => history.push(['tendina']) }};
             this._drafts = new Map();
+            /* Si cancella dalla scheda dei Quaderni, ma un quaderno aperto e'
+               una bacheca (05/10/2026): da li' si esce. */
+            this.view = 'board';
+            /* La chat torna alla personale dietro la sua foto, senza farsi
+               vedere: e' il trasloco (banco suo). */
+            this.chatMove = {{ retune: async (home, k) => history.push(['conversation', k]) }};
           }}
+          _setView(v) {{ history.push(['stanza', v]); this.view = v; return true; }}
           /* La chat cambia dove sta: passare dalla regola delle pagine, dalla
              pagina Quaderni, porterebbe alla pagina chat. */
           async showConversation(k) {{ history.push(['conversation', k]); }}
@@ -238,8 +246,9 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
     """Restare in una chat che non esiste piu' vorrebbe dire scrivere a vuoto."""
     _run_follow_up(
         "await g.deleteNotebook('piante');\n"
-        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
-        "assert.deepEqual(history[1], ['conversation', null]);\n",
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'stanza', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
+        "assert.deepEqual(history[1], ['stanza', 'chat'], 'si resta sulla bacheca di un quaderno cancellato');\n"
+        "assert.deepEqual(history[2], ['conversation', 'websocket:default']);\n",
         confirmed=True,
         current_key="project:piante",
     )

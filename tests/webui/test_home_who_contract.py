@@ -83,14 +83,13 @@ def test_back_leaves_the_notebook_only_after_the_overlays() -> None:
     uscire dal quaderno con lo stesso tasto farebbe sparire due cose per un
     gesto — e la seconda senza che nessuno l'abbia chiesta.
 
-    Dal 26/09/2026 il quaderno si chiude un gradino piu' in la', dentro
-    `goBackOneRoom` (un quaderno aperto nei Quaderni torna all'elenco): qui
-    resta l'ordine, gli strati prima di tutto."""
+    Dal 05/10/2026 un quaderno si apre sulla sua bacheca, e Indietro ne esce
+    come da ogni stanza, dentro `goBackOneRoom`: qui resta l'ordine, gli
+    strati prima di tutto."""
     src = APP_JS.read_text(encoding="utf-8")
     body = _member(src, "handleHardwareBack")
     assert "if (this._closeOverlays()) return;" in body, "gli strati non hanno più la precedenza"
     assert body.index("_closeOverlays") < body.index("goBackOneRoom"), "le stanze prima degli strati"
-    assert "closeNotebook()" in _member(src, "goBackOneRoom"), "Indietro non chiude più un quaderno"
 
 
 def test_a_switch_releases_the_turn_that_was_running() -> None:
@@ -177,8 +176,7 @@ def test_the_notebooks_borrow_the_words_the_workshop_already_has() -> None:
 
 def test_the_search_and_the_plate_stay_out_of_the_list_that_scrolls() -> None:
     """Come il +: la ricerca resta in cima e la targhetta in fondo mentre le
-    mensole scorrono. E con un quaderno aperto dentro i Quaderni si fanno da
-    parte tutti e tre, o starebbero sopra la sua chat."""
+    mensole scorrono."""
     html = INDEX.read_text(encoding="utf-8")
     page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
     listed = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
@@ -186,10 +184,6 @@ def test_the_search_and_the_plate_stay_out_of_the_list_that_scrolls() -> None:
         assert el in page, f"{el} non e' nella pagina Quaderni"
         assert el not in listed, f"{el} e' finito dentro l'elenco che scorre"
     assert page.index('id="home-notebooks-search"') < page.index('id="home-notebooks"')
-    css = CSS.read_text(encoding="utf-8")
-    hidden = css.split("[data-open] .home-notebooks,", 1)[1].split("{", 1)[0]
-    for cls in (".home-who-search", ".home-who-plate", ".home-notebooks-new"):
-        assert cls in hidden, f"{cls} resta sopra la chat di un quaderno aperto"
     app = APP_JS.read_text(encoding="utf-8")
     for el in ("home-notebooks-search", "home-notebooks-search-clear", "home-notebooks-plate"):
         assert f"getElementById('{el}')" in app, f"il guscio non passa {el} al pannello"

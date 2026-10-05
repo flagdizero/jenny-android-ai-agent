@@ -623,14 +623,6 @@ def test_a_theme_chip_writes_its_name_in_the_page_ink() -> None:
     assert "var(--text-muted)" in _rule(css, ".home-themes")
 
 
-def test_the_lit_count_is_not_faded() -> None:
-    """Il numero sulla linguetta accesa: con l'opacita' 0,75 sopra, il suo
-    contrasto e' quello di `--on-accent` sbiadito, e nessun banco lo misura."""
-    body = _rule(CSS.read_text(encoding="utf-8"), ".home-view-seg.is-on .home-view-count")
-    assert "var(--on-accent)" in body
-    assert "opacity" not in body
-
-
 # ── «Chi risponde» ──────────────────────────────────────────────────────────
 
 

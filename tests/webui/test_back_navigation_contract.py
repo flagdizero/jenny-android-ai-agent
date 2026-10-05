@@ -568,16 +568,18 @@ def test_the_drawers_only_sub_screen_is_the_folder_you_are_in() -> None:
     )
 
 
-def test_the_house_closes_the_minichat_before_the_app_under_it() -> None:
-    """La minichat si apre anche sopra una mini-app aperta dal cassetto (lei e'
-    a 120, l'app a 110). Indietro deve chiudere prima lei: nell'ordine opposto
-    chiudeva l'app sotto e lasciava la minichat a schermo, cioe' una pressione
-    che non cambia quel che guardi. E' l'ordine che l'officina ha gia' nel suo
-    `_overlayLayers`."""
+def test_the_house_closes_the_chat_over_the_page_before_the_app_under_it() -> None:
+    """La chat sopra la pagina (dal 05/10/2026, al posto della minichat) si
+    apre anche sopra una mini-app aperta dal cassetto: lei a 112, l'app a 110.
+    Indietro deve chiudere prima lei: nell'ordine opposto chiuderebbe l'app
+    sotto e lascerebbe la chat a schermo, cioe' una pressione che non cambia
+    quel che guardi. E l'immagine ingrandita, che si apre *dalla* chat e le sta
+    davanti (115), si chiude prima ancora."""
     home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     overlays = _method(home, "_closeOverlays")
-    mini = overlays.find("this.jenny?.handleBack()")
+    lightbox = overlays.find("document.querySelector('.image-lightbox')")
+    over = overlays.find("if (this.chatOver) return this.closeChatOver();")
     app = overlays.find("this._appActions?.handleBack()")
-    assert mini != -1, "Indietro in casa non chiude piu' la minichat"
-    assert app != -1
-    assert mini < app, "in casa Indietro chiuderebbe l'app sotto la minichat"
+    assert over != -1, "Indietro in casa non chiude piu' la chat sopra la pagina"
+    assert app != -1 and lightbox != -1
+    assert lightbox < over < app, "l'ordine di Indietro non e' quello in cui stanno a schermo"

@@ -103,6 +103,14 @@ class UiViewTool(Tool, ContextAware):
         view = payload.get("view") or "unknown"
         drawer = payload.get("drawer")
         lines = [f"view: {view}" + (f" (drawer open: {drawer})" if drawer else "")]
+        # La chat aperta sopra la pagina (dal 05/10/2026 il tocco sulla
+        # mascotte la porta su): la vista descritta e' quella sotto, che
+        # l'utente vede in trasparenza ed e' di solito cio' di cui parla.
+        if payload.get("over") == "chat":
+            lines.append(
+                "your chat with the user is open full screen over this view; the user "
+                "still sees this view beneath it, and is probably asking about it."
+            )
 
         app = payload.get("app")
         if isinstance(app, dict):

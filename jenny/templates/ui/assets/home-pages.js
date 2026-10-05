@@ -32,6 +32,7 @@ import { showToast } from './shared/utils.js';
 import { watchHorizontalSwipe } from './shared/horizontal-swipe.js';
 import { frameForApp } from './shared/apps-actions.js';
 import { projectNameOf } from './shared/conversation-list.js';
+import { dotColor } from './shared/spines.js';
 
 /** Quanto la pista si lascia tirare oltre il capo, in frazione di schermo.
  *  Serve a dire «di la' non c'e' niente» col dito invece che con un blocco
@@ -91,17 +92,11 @@ export class HomePages {
     this._hooks = {};
     /** La pagina fissa accesa adesso, per spegnerla quando la lasci. */
     this._active = null;
-    /** La conversazione della pagina chat — la chat «libera», quella che
-     *  scegli dai Quaderni. Le pagine conversazione hanno la loro nel `ref`;
-     *  questa non sta nell'elenco salvato. Parte da quella che la chat mostra
-     *  all'avvio, cioe' la personale. */
+    /** La conversazione della pagina chat. Non sta nell'elenco salvato, e
+     *  parte da quella che la chat mostra all'avvio, cioe' la personale: dal
+     *  05/10/2026 un quaderno non si apre piu' in una pagina (v.
+     *  `openConversation`), quindi e' la personale quasi sempre. */
     this.homeConversation = app?.currentKey?.() || null;
-    /** Il quaderno aperto nella pagina Quaderni, o `null`: allora la pagina
-     *  mostra l'elenco. Dal 26/09/2026 un quaderno si apre **li'**, dove l'hai
-     *  toccato, e non piu' nella pagina chat: la pagina chat e' sempre la
-     *  conversazione personale, e la fila non la rinomina piu'. Non si salva:
-     *  dopo un riavvio i Quaderni ripartono dall'elenco. */
-    this.notebooksConversation = null;
 
     if (this.track) {
       /* Si parte sulla chat anche prima che il server abbia detto l'ordine:
@@ -259,7 +254,9 @@ export class HomePages {
     const key = this.conversationOf(target);
     if (key) this.app?.chatMove?.arrives(this.panelOf(target), key);
     if (entry?.kind === 'conversation') this._checkNotebook(this.panelOf(target), entry);
-    this.app?.onPageChanged?.(target, entry);
+    /* `animated` serve alla porta di un quaderno appeso: la bacheca si apre a
+       scorrimento finito, non sopra la pista che scorre ancora. */
+    this.app?.onPageChanged?.(target, entry, { animated });
   }
 
   /** Va alla pagina `id`. */
@@ -270,14 +267,13 @@ export class HomePages {
 
   /** Quale conversazione mostra la casella `i`, o `null` se non e' di chat.
    *
-   *  La chat ha la sua (`homeConversation`), una pagina conversazione il suo
-   *  quaderno; il resto nessuna — attraversarle non cambia la chat.
+   *  Solo la pagina chat ne ha una (`homeConversation`). Dal 05/10/2026 la
+   *  chat di un quaderno non abita piu' una pagina — ne' i Quaderni ne' una
+   *  pagina appesa: un quaderno si apre sulla sua bacheca, e la sua chat la
+   *  porta su Jenny, sopra la bacheca (v. `HomeApp.openChatOver`).
    */
   conversationOf(i) {
-    const entry = this.entry(i);
-    if (entry?.kind === 'chat') return this.homeConversation;
-    if (entry?.kind === 'notebooks') return this.notebooksConversation;
-    return entry?.kind === 'conversation' ? entry.ref : null;
+    return this.entry(i)?.kind === 'chat' ? this.homeConversation : null;
   }
 
   /** Il pannello della casella `i`. */
@@ -295,64 +291,22 @@ export class HomePages {
 
   /** Da fuori — i Quaderni, Home, un avviso — si chiede una conversazione.
    *
-   *  **Una pagina conversazione mostra solo il suo quaderno**: e' l'invariante
-   *  di tutto il disegno. Quindi se la conversazione chiesta non e' quella
-   *  della pagina in cui sei, si apre **nel suo posto**, e ci si va:
-   *  - la conversazione personale nella pagina chat;
-   *  - un quaderno nella pagina Quaderni (v. `notebooksConversation`).
-   *  Le strade che cambiano conversazione sono gia' cinque (i Quaderni, nuovo
-   *  quaderno, Home, Indietro, un avviso) e la sesta arrivera'.
-   *
-   *  Fino al 26/09/2026 un quaderno si apriva nella pagina chat, che prendeva
-   *  il suo nome nella fila: una pagina che cambia nome a seconda di cosa ci
-   *  guardi dentro, e «Jenny» spariva dal menu.
-   *  La regola del 23/09 — «dalla pagina
-   *  chat si apre li', non scorrere» — e' caduta con lei.
+   *  La personale si apre nella pagina chat, e ci si va. **Un quaderno si apre
+   *  sempre sulla sua bacheca** (dal 05/10/2026): la sua chat e' dietro Jenny,
+   *  sopra la bacheca. Fino ad allora si apriva nella pagina Quaderni, con un
+   *  interruttore Chat | Bacheca in alto; e prima ancora, fino al 26/09/2026,
+   *  nella pagina chat, che prendeva il suo nome nella fila.
    *
    *  Torna la promessa del cambio, e non per scrupolo: chi chiama ci manda
    *  subito dopo un messaggio, e deve finire nella conversazione giusta.
    */
   openConversation(key) {
-    const here = this.entry(this.index);
-    if (here?.kind === 'conversation' && key === here.ref) {
-      return this.app?.showConversation?.(key);
-    }
-    const notebooks = this.indexOf('notebooks');
-    if (!projectNameOf(key) || notebooks < 0) {
-      this.homeConversation = key;
-      if (here?.kind === 'chat') return this.app?.showConversation?.(key);
-      this.goTo(this.chatIndex);
-      return this.app?.chatMove?.read;
-    }
-    this.notebooksConversation = key;
-    this._markNotebooks();
-    /* Anche se ci sei gia': il `goTo` e' quello che porta la chat nel
-       pannello, e il trasloco sa che se e' gia' li' non deve fare niente. */
-    this.goTo(notebooks);
+    const notebook = projectNameOf(key);
+    if (notebook) return this.app?.openNotebook?.(notebook);
+    this.homeConversation = key;
+    if (this.entry(this.index)?.kind === 'chat') return this.app?.showConversation?.(key);
+    this.goTo(this.chatIndex);
     return this.app?.chatMove?.read;
-  }
-
-  /** Chiude il quaderno aperto nei Quaderni: torna l'elenco. Vero se c'era
-   *  qualcosa da chiudere.
-   *
-   *  La chat torna a casa **con la conversazione della pagina chat**, e non
-   *  con quella del quaderno: la pagina chat e' fuori schermo, il cambio non
-   *  si vede, e scorrendo li' dopo non c'e' niente da rileggere. E senza foto
-   *  nel pannello dei Quaderni: sotto adesso c'e' di nuovo l'elenco. */
-  closeNotebook() {
-    if (!this.notebooksConversation) return false;
-    this.notebooksConversation = null;
-    this._markNotebooks();
-    const panel = this._panelFor('notebooks');
-    this.app?.chatMove?.leaves?.(panel, this._panelFor('chat'), this.homeConversation);
-    if (this.order[this.index] === 'notebooks') this.app?.onPageChanged?.(this.index, this.entry(this.index));
-    return true;
-  }
-
-  /** Il pannello dei Quaderni sa se sta mostrando l'elenco o un quaderno: il
-   *  foglio nasconde l'uno quando c'e' l'altro. */
-  _markNotebooks() {
-    this._panelFor('notebooks')?.toggleAttribute?.('data-open', Boolean(this.notebooksConversation));
   }
 
   /* ── Appendere e staccare ───────────────────────────────────────────── */
@@ -409,7 +363,6 @@ export class HomePages {
    *  senza questa resterebbero puntate a un nome che non c'e' piu'. */
   renameConversation(oldKey, newKey) {
     if (this.homeConversation === oldKey) this.homeConversation = newKey;
-    if (this.notebooksConversation === oldKey) this.notebooksConversation = newKey;
   }
 
   /** Rilegge dal server **senza** spostarti.
@@ -444,13 +397,9 @@ export class HomePages {
    */
   _draw() {
     if (!this.track) return;
-    /* Prima di buttare un pannello, si riprende la chat se era parcheggiata li':
-       un `remove()` secco la porterebbe via insieme al pannello — cioe' filo,
-       composer e bozza (trovato il 23/09/2026, quando le pagine tenevano anche
-       le stanze del guscio e perdevano pure quelle). */
-    const home = this._panelFor('chat');
+    /* La chat non abita mai un pannello appeso (v. `conversationOf`): si
+       possono buttare senza riprendersi niente. */
     for (const oldValue of Array.from(this.track.children).filter((c) => c.dataset?.id)) {
-      this.app?.chatMove?.bringBackHome(oldValue, home);
       oldValue.remove();
     }
     this.order.forEach((id, i) => {
@@ -513,9 +462,13 @@ export class HomePages {
     /* `full` porta il **numero del tentativo**, non un `1`: qui basta che sia
        valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
-    /* Una pagina conversazione non si riempie: ci arriva la chat, e la porta
-       il trasloco da `goTo`. */
-    if (panel.dataset.kind === 'conversation') return;
+    /* Una pagina quaderno e' una porta: arrivandoci si apre la bacheca (v.
+       `HomeApp.onPageChanged`). Il pannello ha solo una copertina, quella che
+       si vede scorrendo, e un bottone per chi la bacheca l'ha chiusa. */
+    if (panel.dataset.kind === 'conversation') {
+      this._fillDoor(panel);
+      return;
+    }
     if (panel.dataset.full) return;
     const page = this.pages.find((x) => x.id === panel.dataset.id);
     if (!page) return;
@@ -583,15 +536,36 @@ export class HomePages {
     });
   }
 
+  /* La copertina della porta di un quaderno: il suo pallino, il suo nome, e
+     «Apri la bacheca». Fatta una volta: il nome di un quaderno rinominato lo
+     porta un ridisegno della pista, che rifa' il pannello. */
+  _fillDoor(panel) {
+    if (panel.querySelector?.('.home-door')) return;
+    const page = this.pages.find((x) => x.id === panel.dataset.id);
+    const name = projectNameOf(page?.ref);
+    if (!name) return;
+    const door = document.createElement('div');
+    door.className = 'home-door';
+    const dot = document.createElement('span');
+    dot.className = 'home-door-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.style.background = dotColor(name);
+    const title = document.createElement('span');
+    title.className = 'home-door-name';
+    title.textContent = name;
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'home-door-open';
+    open.textContent = i18n.t('home.door.open');
+    open.addEventListener('click', () => this.app?.openNotebook?.(name));
+    door.append(dot, title, open);
+    panel.appendChild(door);
+  }
+
   /** Spegne una pagina: la cornice dell'app se ne va, e con lei l'app viva. */
   _empty(panel) {
-    /* ...e non si svuota: tiene la sua foto, o la chat se e' parcheggiata li'
-       mentre guardi un'app. Spenta resta comunque — una foto non gira. */
-    if (panel.dataset.kind === 'conversation') {
-      const s = this.pages.find((x) => x.id === panel.dataset.id);
-      this.app?.chatMove?.snapshotIfNeeded(panel, s?.ref);
-      return;
-    }
+    // La copertina di una porta resta: non gira niente, dentro.
+    if (panel.dataset.kind === 'conversation') return;
     if (!panel.dataset.full) return;
     panel.textContent = '';
     panel.dataset.full = '';
@@ -700,6 +674,8 @@ export class HomePages {
   _canScroll() {
     // Fuori dalla chat comandano le stanze, non le pagine.
     if (this.app?.view && this.app.view !== 'chat') return false;
+    // Con la chat aperta sopra la pagina, la pagina sotto non si muove.
+    if (this.app?.chatOver) return false;
     // Mentre si spostano le pagine il dito e' della modalita' ordina.
     if (this.app?.strip?.sorting) return false;
     if (this.howMany < 2) return false;

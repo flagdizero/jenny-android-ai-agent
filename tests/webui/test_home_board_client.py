@@ -81,9 +81,8 @@ for (const m of ['board.seen', 'board.move', 'board.fix', 'board.suggestion.resp
 // Uno schermo touch, come il telefono: d3-zoom ascolta le dita solo dove ci sono.
 Object.defineProperty(navigator, 'maxTouchPoints', { value: 2, configurable: true });
 const app = await boot();
+// Un quaderno si apre sulla sua bacheca (05/10/2026).
 await app.switchConversation('project:orto');
-await tick(30);
-await app.openBoard();
 await tick(30);
 const rpcs = (method) => sent.filter((m) => m.type === 'rpc' && m.method === method);
 """
@@ -118,7 +117,8 @@ def test_a_notebook_opens_on_its_board() -> None:
       assert.equal(rpcs('board.seen').length, 1);
       // I comandi della bacheca in testa: la lente e l'elenco.
       assert.equal($('home-board-search-open').hidden, false);
-      assert.equal($('home-view-switch').hidden, false);
+      // L'interruttore Chat | Bacheca non c'e' piu': la chat la porta Jenny.
+      assert.equal($('home-view-switch'), null);
       // I fili si disegnano dopo le schede: niente z-index, l'ordine nel DOM.
       const wall = $('home-board-wall');
       assert.ok([...wall.children].indexOf($('home-board-threads'))
@@ -356,7 +356,9 @@ def test_a_broken_micro_app_asks_jenny_to_fix_it() -> None:
         .find((b) => /sistemare|fix/i.test(b.textContent));
       fix.click();
       await tick(40);
-      assert.equal(app.view, 'chat');
+      assert.equal(app.chatOver, true, 'la chat non e\u2019 salita sopra il cassetto');
+      assert.equal(app.view, 'drawer', 'il cassetto e\u2019 sparito da sotto la chat');
+      assert.equal($('home-chat').parentElement.id, 'home-over');
       assert.match(document.getElementById('home-input').value, /KeyError: 'soil'/);
     """, error="Traceback...\nKeyError: 'soil'")
 
@@ -378,7 +380,7 @@ def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
       input.value = "l'umidità di Acerello";
       input.closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
       await tick(30);
-      assert.equal(app.view, 'chat');
+      assert.equal(app.chatOver, true);
       assert.match(document.getElementById('home-input').value, /micro app .*umidità di Acerello/);
     """)
 

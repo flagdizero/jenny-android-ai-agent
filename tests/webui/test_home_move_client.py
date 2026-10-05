@@ -416,149 +416,11 @@ def test_a_notebook_never_seen_arrives_as_an_empty_chat() -> None:
     c'e' niente qui» sarebbe falso — c'e', solo non l'abbiamo ancora letto.
     """
     _run(
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "const f = snapshotOf(p2);\n"
+        "t.lift(over, 'C');\n"
+        "const f = snapshotOf(over);\n"
         "assert.ok(f, 'nessuna foto');\n"
         "assert.deepEqual(messagesOf(f), []);\n"
         "assert.ok(f.querySelector('.home-empty').hasAttribute('hidden'));\n"
-    )
-
-
-def test_a_photo_already_there_is_not_printed_again() -> None:
-    """Passa a ogni cambio di pagina: ristamparla a ogni giro costerebbe."""
-    _run(
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "const before = snapshotOf(p2);\n"
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "assert.equal(snapshotOf(p2), before);\n"
-    )
-
-
-def test_where_the_chat_is_parked_there_is_no_photo_over_it() -> None:
-    """Parcheggiata mentre guardi un'app, resta lei: viva e' meglio che in foto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.snapshotIfNeeded(p1, 'B');\n"
-        "assert.equal(snapshotOf(p1), null);\n"
-    )
-
-
-def test_a_panel_about_to_be_thrown_away_gives_the_chat_back_first() -> None:
-    """Ridisegnare le pagine non deve portare via la chat col pannello.
-
-    E torna **sotto** la foto della pagina 0, se c'e': cosi' non si vede la
-    conversazione sbagliata in quella pagina.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(p0.children[0], chat, 'la chat deve stare sotto la foto');\n"
-        "p1.remove();\n"
-        "assert.equal(document.getElementById('home-thread'), thread, 'la chat e andata via col pannello');\n"
-    )
-
-
-def test_giving_back_from_a_panel_that_does_not_hold_it_does_nothing() -> None:
-    _run(
-        "t.bringBackHome(p2, p0);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(p0.children.filter((c) => c === chat).length, 1);\n"
-    )
-
-
-def test_leaving_a_panel_leaves_no_photo_over_what_is_underneath() -> None:
-    """Un quaderno chiuso nei Quaderni: sotto torna l'elenco, e una foto della
-    chat lo coprirebbe. La chat torna a casa e prende la conversazione di casa.
-    (26/09/2026)"""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "a = t.leaves(p1, p0, 'A');\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(snapshotOf(p1), null, 'l\u2019elenco e\u2019 coperto da una foto');\n"
-        "reads[1].finish(); await a;\n"
-        "assert.deepEqual(changes, ['B', 'A']);\n"
-        "assert.equal(snapshotOf(p0), null);\n"
-    )
-
-
-def test_leaving_keeps_the_negative_for_the_next_visit() -> None:
-    """Riaprendo lo stesso quaderno, la foto che copre la lettura e' quella di
-    com'era, non uno scheletro vuoto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "a = t.leaves(p1, p0, 'A'); reads[1].finish(); await a;\n"
-        "a = t.arrives(p1, 'B');\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p1)), ['B1', 'B2', 'B3']);\n"
-        "reads[2].finish(); await a;\n"
-    )
-
-
-def test_leaving_a_panel_the_chat_is_not_in_only_clears_its_photo() -> None:
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "await t.arrives(p0, 'A').then(() => {});\n"
-        "reads[1].finish();\n"
-        "assert.ok(snapshotOf(p1), 'la pagina lasciata non ha la sua foto');\n"
-        "await t.leaves(p1, p0, 'A');\n"
-        "assert.equal(snapshotOf(p1), null);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.deepEqual(changes, ['B', 'A'], 'ha cambiato conversazione per niente');\n"
-    )
-
-
-def test_after_coming_home_out_of_place_page_zero_keeps_its_own_photo() -> None:
-    """**Trovato rileggendo, dopo il giro sul telefono del 23/09/2026.**
-
-    Sei sulla pagina di un quaderno e aggiungi o togli una pagina: il
-    ridisegno riporta la chat a casa **cosi' com'e'**, cioe' mostrando il
-    quaderno, sotto la foto della pagina 0. Subito dopo la pista torna sulla
-    pagina del quaderno, e la chat riparte da casa. Se a quel punto il trasloco
-    fotografasse la chat e appendesse la foto nella pagina che lascia, la
-    pagina 0 riceverebbe la foto **del quaderno**: la si vedrebbe entrare a
-    meta' scorrimento, e il trucco si vedrebbe.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
-        "t.bringBackHome(p1, p0);\n"            # il ridisegno
-        "await t.arrives(p2, 'B');\n"           # la pagina del quaderno, rifatta
-        "assert.equal(chat.parentElement, p2);\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2'],\n"
-        "  'la pagina 0 ha preso la foto del quaderno');\n"
-    )
-
-
-def test_coming_home_out_of_place_then_arriving_home_still_switches() -> None:
-    """E se dopo il ridisegno si torna proprio alla pagina 0, la chat cambia:
-    era a casa, ma con la conversazione sbagliata sotto la foto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "a = t.arrives(p0, 'A');\n"
-        "assert.ok(snapshotOf(p0), 'la chat sbagliata e scoperta durante la lettura');\n"
-        "reads[1].finish(); await a;\n"
-        "assert.deepEqual(changes, ['B', 'A']);\n"
-        "assert.equal(snapshotOf(p0), null);\n"
-        "assert.deepEqual(messagesOf(chat), ['A1', 'A2']);\n"
-    )
-
-
-def test_the_out_of_place_mark_lasts_one_arrival_only() -> None:
-    """Il segno vale per l'arrivo dopo il ridisegno, e poi si spegne.
-
-    Se restasse, la pagina 0 non aggiornerebbe piu' la sua foto: la
-    conversazione va avanti, e scorrendo entrerebbe quella di ieri.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "await t.arrives(p2, 'B');\n"                         # consuma il segno
-        "histories.A = ['A1', 'A2', 'A3 nuovo'];\n"
-        "a = t.arrives(p0, 'A'); reads[1].finish(); await a;\n"
-        "a = t.arrives(p2, 'B'); reads[2].finish(); await a;\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2', 'A3 nuovo'],\n"
-        "  'la pagina 0 ha smesso di aggiornare la sua foto');\n"
     )
 
 
@@ -583,8 +445,8 @@ def test_a_newer_arrival_expires_the_older_cover_timer() -> None:
         + "t.arrives(p1, 'B');\n"
         "t.arrives(p0, 'A');\n"
         "assert.equal(live.size, 1, 'il tetto dell\\u2019arrivo superato e\\u2019 ancora armato');\n"
-        "t.bringBackHome(p0, p1);\n"
-        "assert.equal(live.size, 0, 'riportata a casa, il tetto dell\\u2019arrivo in volo resta');\n"
+        "t.lower(p0);\n"
+        "assert.equal(live.size, 0, 'riabbassata, il tetto dell\\u2019arrivo in volo resta');\n"
     )
 
 

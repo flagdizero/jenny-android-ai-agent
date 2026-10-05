@@ -43,7 +43,7 @@ import { dotColor } from './shared/spines.js';
    qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
    che li ospitava e' stata cancellata. */
 import { JennyGap } from './shared/jenny-gap.js';
-import { JennyWithMinichat } from './shared/jenny-minichat.js';
+import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { HomePages, SLIDE_MS } from './home-pages.js';
 import { HomeStrip } from './home-strip.js';
@@ -51,6 +51,7 @@ import { HomeUiQuery } from './home-ui-query.js';
 import { ComposerFocus } from './home-focus.js';
 import { NotebookCard } from './home-notebook.js';
 import { ChatMove } from './home-move.js';
+import { ChatOver } from './home-over.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -79,11 +80,11 @@ const WIRE_GRACE_MS = 2_500;
 
 /* Dove appoggia i piedi Jenny fuori dalla chat, in px dal fondo. Nella chat il
    suo pavimento e' il composer e si misura (v. `_bindComposer`); nelle pagine
-   il composer non c'e', e lei sta dove la vuole la minichat, appena sopra il
-   suo campo — sempre, aperta o chiusa (dall'utente, 28/09/2026). La tavola la
-   disegnava a venti pixel, e con la minichat saltava su. E' lo stesso numero
-   di `--jenny-away-floor` in mobile-style.css, che i fondi delle stanze
-   leggono per lasciarle posto. */
+   il composer non c'e'. L'altezza e' quella che aveva quando sopra i suoi piedi
+   c'era il campo della minichat (dall'utente, 28/09/2026; la minichat non c'e'
+   piu' dal 05/10/2026, il posto le e' rimasto). E' lo stesso numero di
+   `--jenny-away-floor` in mobile-style.css, che i fondi delle stanze leggono
+   per lasciarle posto. */
 const FLOOR_NO_COMPOSER = 66;
 
 /* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
@@ -122,6 +123,10 @@ const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-ap
 /* Il foglio della bacheca: «dall'ultima volta», la busta, la ricerca,
    l'anteprima di una pagina, «aggiungi sezione». */
 const BOARD_SHEET = 'home-board-sheet';
+
+/* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
+   ogni altro posto quella personale (v. `_summonKey`). */
+const NOTEBOOK_ROOMS = ['board', 'drawer', 'reader'];
 const REPORT_SHEET = 'home-audit-dialog';
 
 /* I dialoghi condivisi con l'officina (`shared/dialog.js`): «Elimina
@@ -143,15 +148,23 @@ class HomeApp {
   constructor() {
     this.thread = document.getElementById('home-thread');
     this.chat = new HomeChat(this.thread);
-    /* Jenny con la sua minichat, che si apre dove la chat non e' a schermo:
-       le pagine senza composer e le stanze. La domanda passa dal composer
-       della casa (`_sendText`), quindi la bolla compare anche nel filo, e il
-       filo rende la risposta da se' anche fuori vista: niente da invalidare. */
-    this.jenny = new JennyWithMinichat(document.querySelector('.home-shell'), {
-      minichat: {
-        send: (text) => this._sendText(text),
-        placeholder: () => this.input?.placeholder || '',
+    /* Jenny e' la porta della chat (dal 05/10/2026): dove la chat non c'e' la
+       apre, sopra la pagina; dove e' aperta sopra la pagina la chiude; nella
+       pagina chat saluta. Prima apriva la minichat, una domanda a un turno. */
+    this.jenny = new JennyMascot(document.querySelector('.home-shell'), {
+      chat: {
+        isOpen: () => this.chatOver,
+        onScreen: () => !this.chatOver && this._jennyInChat,
+        open: () => this.openChatOver(),
+        close: () => this.closeChatOver(),
       },
+    });
+    /* Il velo in cui sale la chat. Un tocco sul suo fondo non lo chiude: Jenny
+       sobbalza, perche' e' lei che lo chiude. */
+    this.over = new ChatOver({
+      shell: document.querySelector('.home-shell'),
+      host: document.getElementById('home-over'),
+      onVeilTap: () => this.jenny.nudge(),
     });
     /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
@@ -178,7 +191,10 @@ class HomeApp {
       fetchSubagents: (sessionKey) => api.getSubagents({ sessionKey }),
       restartSubagent: (taskId, sessionKey) => api.restartSubagent(taskId, { sessionKey }),
       sendCommand: (text) => this._sendText(text),
-      openBoard: () => this.openBoard(),
+      openBoard: () => {
+        this.closeChatOver();
+        this.openBoard();
+      },
       onOpenInWorkshop: () => this._openInWorkshop(null, sessionManager.currentKey),
     });
     this.chat.claimsWork = (workId) => this.work.claims(workId);
@@ -195,23 +211,6 @@ class HomeApp {
     this.composer = this.input?.closest?.('.home-composer') || null;
     this.shell = document.querySelector('.home-shell');
 
-    /* I comandi dell'intestazione che cambiano con la stanza — e la pastiglia
-       delle pagine del quaderno, che dal 23/09/2026 sta nella barra dove
-       scrivi, al posto che era del bottone del cassetto. */
-    this.pagesBtn = document.getElementById('home-notebook-pages-open');
-    /* La pastiglia intera, col nome e il pallino del quaderno: c'e' solo nelle
-       pagine fissate su un quaderno. */
-    this.pagesPill = document.getElementById('home-notebook-pill');
-    this.pagesName = document.getElementById('home-notebook-name');
-    this.pagesDot = document.getElementById('home-notebook-dot');
-    /* L'interruttore Chat | Pagine nell'intestazione delle pagine del quaderno
-       (quello della chat del quaderno lo disegna la fila). */
-    this.viewSwitch = document.getElementById('home-view-switch');
-    this.viewChat = document.getElementById('home-view-chat');
-    this.viewChatLabel = document.getElementById('home-view-chat-label');
-    this.viewPagesLabel = document.getElementById('home-view-pages-label');
-    this.viewPagesCount = document.getElementById('home-view-pages-count');
-    this.pagesCount = document.getElementById('home-notebook-pages-count');
     this.backBtn = document.getElementById('home-back');
     /* Il percorso della riga: la radice (di che posto e' la stanza) e i
        pallini del quaderno, quando la stanza e' sua. */
@@ -317,7 +316,7 @@ class HomeApp {
        la apre questo guscio (e porta alla chat: `openConversation`). */
     this.who = new WhoPanel(document.getElementById('home-notebooks'), {
       currentProject: () => projectNameOf(sessionManager.currentKey),
-      onPick: (name) => this.switchConversation(projectKey(name)),
+      onPick: (name) => this.openNotebook(name),
       onHold: (name) => this.notebookCard().show(name),
       /* Dal posto vuoto senza nome, da una ricerca a vuoto col nome cercato
          gia' scritto: e' il giro di sempre, solo con la prima risposta data. */
@@ -325,11 +324,10 @@ class HomeApp {
       search: document.getElementById('home-notebooks-search'),
       searchClear: document.getElementById('home-notebooks-search-clear'),
       plate: document.getElementById('home-notebooks-plate'),
-      /* Una lettera e' per la ricerca solo con l'elenco a schermo: non con un
-         quaderno aperto dentro i Quaderni (li' c'e' la sua chat), non sotto
-         una stanza o un dialogo. */
+      /* Una lettera e' per la ricerca solo con l'elenco a schermo: non sotto
+         una stanza, la chat aperta sopra o un dialogo. */
       active: () => this.view === 'chat' && this._entry?.kind === 'notebooks'
-        && !this.homePages?.notebooksConversation && !document.querySelector('dialog[open]'),
+        && !this.chatOver && !document.querySelector('dialog[open]'),
     });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
@@ -383,6 +381,7 @@ class HomeApp {
          l'utente sia risalito. E la foto che e' appena entrata mostrava il
          fondo: arrivare altrove sarebbe il trucco che si vede. */
       atBottom: () => this.chat?.scrollToBottom(),
+      homeKey: () => sessionManager.personalKey,
     });
     this.homePages = new HomePages(this);
     this._apps = null;
@@ -391,8 +390,6 @@ class HomeApp {
     this.strip = new HomeStrip(document.getElementById('home-strip'), {
       homePages: this.homePages,
       chatName: () => this._chatName(),
-      pageCount: (notebook) => this.pageCountOf(notebook),
-      onPages: () => this.openBoard(),
       onChange: (open) => this._onSort(open),
     });
     /* Le tre pagine fisse che non sono la chat: cosa fanno quando le guardi. */
@@ -448,10 +445,16 @@ class HomeApp {
        sempre. In officina lo stesso evento serve alla stessa cosa
        (`mobile-jenny.js`, `_releaseTrackedTurn`). */
     sessionManager.addEventListener('chat:switch', () => this._releaseTurn());
-    /* E riporta nella conversazione. Le pagine parlano di *un* quaderno: dai
-       Quaderni si puo' saltare in un altro, e restare li' vorrebbe dire leggere
-       l'elenco di una stanza in cui non sei piu'. */
-    sessionManager.addEventListener('chat:switch', () => this._setView('chat'));
+    /* E porta fuori dalle stanze del quaderno lasciato: la bacheca, un
+       cassetto e il lettore parlano di *un* quaderno, e restarci dopo essere
+       passati a un altro vorrebbe dire leggere la bacheca di un posto in cui
+       non sei piu'. **Solo** da li', e mai con la chat aperta sopra: dal
+       05/10/2026 la chat cambia conversazione anche salendo sopra una pagina
+       (sopra le App diventa la personale), e quel cambio non deve chiudere
+       quel che le sta sotto — una stanza delle Impostazioni, la bacheca. */
+    sessionManager.addEventListener('chat:switch', () => {
+      if (!this.chatOver && NOTEBOOK_ROOMS.includes(this.view)) this._setView('chat');
+    });
     /* Chi lavora e' della conversazione: le bolle della vecchia spariscono, e
        quelle della nuova si leggono, perche' l'attach non rimanda lo snapshot. */
     sessionManager.addEventListener('chat:switch', () => {
@@ -489,7 +492,6 @@ class HomeApp {
       this.input.value = text;
       this._autosize();
     };
-    this.pagesBtn?.addEventListener('click', () => this.openBoard());
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');
@@ -499,7 +501,6 @@ class HomeApp {
       const on = this.board.toggleList();
       this.boardListBtn.setAttribute('aria-pressed', String(on));
     });
-    this.viewChat?.addEventListener('click', () => this._setView('chat'));
     /* Il + tondo della pagina Quaderni: un quaderno nuovo, e ci si entra. */
     this.newNotebook = document.getElementById('home-notebooks-new');
     this.newNotebook?.addEventListener('click', () => this.createNotebook());
@@ -675,8 +676,25 @@ class HomeApp {
        cassetti) e cosa ricordare. Poi il quaderno si apre sulla sua bacheca,
        vuota: il vuoto e' il tutorial. */
     await this._guideNewBoard(name);
-    await this.switchConversation(projectKey(name));
+    await this.openNotebook(name);
+  }
+
+  /** Apre un quaderno: **sempre sulla sua bacheca** (dal 05/10/2026).
+   *
+   *  La sua chat non ha piu' una pagina: e' dietro Jenny, che la porta sopra
+   *  la bacheca quando la tocchi. Qui la chat — a casa, dietro la bacheca —
+   *  passa alla conversazione del quaderno senza farsi vedere (`retune`), e la
+   *  pagina chat continua a mostrare la personale. Lo apre chi tocca un
+   *  quaderno nei Quaderni, la sua scheda, la porta di un quaderno appeso, un
+   *  quaderno appena nato, e chiunque chieda una conversazione `project:`.
+   */
+  async openNotebook(name) {
+    if (!name) return;
+    this._closeAllOverlays();
+    if (!this._setView('chat', () => this.openNotebook(name))) return;
+    const read = this.chatMove.retune(this.homePages?._panelFor?.('chat'), projectKey(name));
     await this.openBoard();
+    await read;
   }
 
   /** Le due domande della nascita di un quaderno. Una risposta vuota lascia
@@ -702,7 +720,7 @@ class HomeApp {
   notebookCard() {
     return (this._notebookCard ||= new NotebookCard({
       homePages: () => this.pagesPort(),
-      open: (name) => this.switchConversation(projectKey(name)),
+      open: (name) => this.openNotebook(name),
       delete: (name) => this.deleteNotebook(name),
       rename: (name) => this.renameNotebook(name),
     }));
@@ -829,9 +847,14 @@ class HomeApp {
     if (this.homePages?.homeConversation === key) {
       this.homePages.homeConversation = sessionManager.personalKey;
     }
-    if (this.homePages?.notebooksConversation === key) this.homePages.closeNotebook();
     if (sessionManager.currentKey === key) {
-      await this.showConversation(this.homePages?.homeConversation || null);
+      /* Dalla bacheca del quaderno cancellato si esce; la chat torna alla
+         personale dietro la sua foto, come quando la si riabbassa. */
+      if (NOTEBOOK_ROOMS.includes(this.view)) this._setView('chat');
+      await this.chatMove.retune(
+        this.homePages?._panelFor?.('chat'),
+        this.homePages?.homeConversation || sessionManager.personalKey,
+      );
     }
     this._drafts.delete(key);
     this._attachments?.delete(key);
@@ -906,14 +929,79 @@ class HomeApp {
   }
 
   /* «Altro…» e l'esempio della bacheca vuota: una frase gia' scritta, nella
-     chat del quaderno, da mandare tu. */
+     chat del quaderno, da mandare tu. La chat sale sopra la bacheca, come
+     quando tocchi Jenny. */
   _askInNotebook(text) {
     this.boardSheet.close();
-    this._setView('chat', () => this._askInNotebook(text));
-    if (!this.input) return;
-    this.input.value = text;
-    this.input.dispatchEvent(new Event('input', { bubbles: true }));
-    this.input.focus();
+    this.openChatOver({ prefill: text });
+  }
+
+  /* ── Il velo: la chat sopra la pagina ──
+   *
+   *  Dal 05/10/2026 Jenny e' la porta della conversazione: toccata dove la chat
+   *  non c'e', la chat vera sale a tutto schermo sopra la pagina, e la pagina
+   *  resta visibile in trasparenza. Sopra la bacheca, un cassetto o una pagina
+   *  di un quaderno e' la chat di quel quaderno; da ogni altro posto e' la
+   *  personale. Si chiude ritoccando Jenny o con Indietro.
+   */
+
+  /** La chat e' aperta sopra la pagina? */
+  get chatOver() {
+    return Boolean(this.over?.isOpen);
+  }
+
+  /* Quale conversazione porta su Jenny, da qui. */
+  _summonKey() {
+    return NOTEBOOK_ROOMS.includes(this.view) ? sessionManager.currentKey : sessionManager.personalKey;
+  }
+
+  /** Apre la chat sopra la pagina. *prefill* e' una frase gia' scritta nel
+   *  campo, da mandare tu. Vero se si e' aperta. */
+  openChatOver({ prefill = null } = {}) {
+    if (this.chatOver) return true;
+    /* Mentre si ordinano le pagine, o con una domanda aperta, il velo non
+       sale: lei sobbalza, e la cosa aperta resta quella. */
+    if (this.strip?.sorting || document.querySelector('dialog[open]')) {
+      this.jenny?.nudge?.();
+      return false;
+    }
+    if (!this.over?.host) return false;
+    const key = this._summonKey();
+    this.over.show();
+    this.jenny?.setExpanded?.(true);
+    this.chatMove.lift(this.over.host, key);
+    this.jenny?.setChatOnScreen?.(true);
+    this.jenny?.setOut?.(true);
+    this._measureFloor?.();
+    this.chat?.gap?.settleAfter?.(340);
+    if (prefill !== null && this.input) {
+      this.input.value = prefill;
+      this.input.dispatchEvent(new Event('input', { bubbles: true }));
+      /* Sincrono, dentro il tocco: e' l'unico modo perche' Android alzi la
+         tastiera. */
+      this.input.focus();
+    } else {
+      this.focus?.restore();
+    }
+    this._retryThread();
+    this._reportChatOnScreen();
+    return true;
+  }
+
+  /** Chiude la chat sopra la pagina: torna a casa, nella pagina chat, con la
+   *  conversazione che aveva. Vero se era aperta. */
+  closeChatOver() {
+    if (!this.chatOver) return false;
+    this.input?.blur();
+    this.chatMove.lower(this.homePages?._panelFor?.('chat'));
+    this.over.hide();
+    this.jenny?.setExpanded?.(false);
+    this.jenny?.setChatOnScreen?.(false);
+    this.jenny?.setOut?.(false);
+    /* Il pavimento torna quello della pagina sotto: il composer la' non c'e'. */
+    if (this.view === 'chat' && this._hasComposer(this._entry)) this._measureFloor?.();
+    else document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
+    return true;
   }
 
   /* Il titolo di una pagina arriva dopo una lettura — l'apertura, un
@@ -1126,7 +1214,8 @@ class HomeApp {
   _bringToChat(report) {
     if (!this.input) return;
     const draft = this.input.value;
-    this._setView('chat');
+    /* Dal lettore la chat e' gia' quella del quaderno: sale sopra la pagina. */
+    this.openChatOver();
     const message = reportMessage(report);
     this.input.value = message;
     const started = this._send();
@@ -1165,15 +1254,20 @@ class HomeApp {
    *  tornare a casa, non uscire dall'app. */
   goBackOneRoom() {
     if (this.view === 'chat') {
-      /* Un quaderno aperto nei Quaderni e' un gradino: prima si torna
-         all'elenco, poi alla chat. */
-      if (this._entry?.kind === 'notebooks' && this.homePages?.closeNotebook()) return true;
       if (!this.homePages || this.homePages.index === this.homePages.chatIndex) return false;
       this.homePages.goTo(this.homePages.chatIndex);
       return true;
     }
     const target = this._backTarget();
     if (!target) return false;
+    /* La bacheca aperta dalla porta di un quaderno appeso: tornando alla pista
+       ci si ritroverebbe sulla porta, che la riaprirebbe. Si torna alla chat,
+       come da qualunque pagina. */
+    if (target === 'chat' && this._entry?.kind === 'conversation') {
+      if (!this._setView('chat', () => this.goBackOneRoom())) return true;
+      this.homePages?.goTo(this.homePages.chatIndex, { animated: false });
+      return true;
+    }
     if (target === 'drawer' && this._readerCard) {
       this.openCard(this._readerCard, this._cardTitle);
       return true;
@@ -1196,8 +1290,9 @@ class HomeApp {
   }
 
   /** La pista ha cambiato casella: la fila dice dove sei. */
-  onPageChanged(index, entry) {
+  onPageChanged(index, entry, { animated = false } = {}) {
     this._entry = entry;
+    this._openDoor?.(index, entry, animated);
     /* Su quale pagina si e' lo dice un attributo, come per le stanze: cosi' la
        geometria resta nel CSS e qui c'e' solo il nome. */
     this.shell?.setAttribute('data-page', entry?.id || '');
@@ -1219,6 +1314,22 @@ class HomeApp {
     this._reportChatOnScreen();
   }
 
+  /* La pagina di un quaderno appeso e' una porta: arrivandoci si apre la sua
+     bacheca (dal 05/10/2026 un quaderno si apre sempre li'). A scorrimento
+     finito, non sopra la pista che scorre; e non se intanto sei andato
+     altrove, se e' salita la chat, o se il quaderno non c'e' piu'. */
+  _openDoor(index, entry, animated) {
+    clearTimeout(this._doorTimer);
+    if (entry?.kind !== 'conversation') return;
+    const name = projectNameOf(entry.ref);
+    if (!name) return;
+    this._doorTimer = setTimeout(() => {
+      if (this.homePages?.index !== index || this.view !== 'chat' || this.chatOver) return;
+      if (this.homePages?.goneHere?.()) return;
+      this.openNotebook(name);
+    }, animated ? SLIDE_MS : 0);
+  }
+
   /** Una pagina ha scoperto che la sua cosa non c'e' piu', o che c'e' di
    *  nuovo. Arriva **dopo** `onPageChanged` — il controllo e' una lettura
    *  di rete — e se la pagina e' quella a schermo il campo va tolto di mezzo:
@@ -1226,8 +1337,14 @@ class HomeApp {
    *  sarebbero andati a un quaderno cancellato. */
   onGoneChanged(panel) {
     if (!this.homePages || this.homePages.panelOf(this.homePages.index) !== panel) return;
-    if (this.homePages.goneHere()) this.input?.blur();
-    else this.focus?.restore();
+    if (this.homePages.goneHere()) {
+      this.input?.blur();
+      /* La porta di un quaderno sparito ha fatto in tempo ad aprire la sua
+         bacheca: si torna alla pagina, che dice che non c'e' piu'. */
+      if (this._entry?.kind === 'conversation' && NOTEBOOK_ROOMS.includes(this.view)) this._setView('chat');
+    } else {
+      this.focus?.restore();
+    }
   }
 
   /** La pista ha ridisegnato le sue pagine: un nome in piu', uno in meno, un
@@ -1252,10 +1369,10 @@ class HomeApp {
     source.loadJennyApps?.().then(() => this.strip?.draw()).catch(() => {});
   }
 
-  /* Le pagine su cui si scrive: la chat, e una pagina quaderno che la ospita. */
+  /* La pagina su cui si scrive: la chat. Dal 05/10/2026 l'unica — la chat di
+     un quaderno non abita piu' una pagina, la porta su Jenny. */
   _hasComposer(entry) {
-    if (entry?.kind === 'notebooks') return Boolean(this.homePages?.notebooksConversation);
-    return entry?.kind === 'chat' || entry?.kind === 'conversation';
+    return entry?.kind === 'chat';
   }
 
   /* Dove appoggia i piedi Jenny: sul composer dove c'e', al pavimento delle
@@ -1263,6 +1380,11 @@ class HomeApp {
      misurarlo lo stesso — sta nella pagina accanto, ancora alto quanto era —
      la terrebbe sospesa a mezz'aria sopra le righe. */
   _placeJenny() {
+    // Con la chat sopra la pagina il pavimento e' il suo composer.
+    if (this.chatOver) {
+      this._measureFloor?.();
+      return;
+    }
     if (this.view !== 'chat') return;
     if (this._hasComposer(this._entry)) {
       this._measureFloor?.();
@@ -1271,21 +1393,17 @@ class HomeApp {
     document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
   }
 
-  /* Dove sta Jenny, e se ha la minichat: la chat e' a schermo solo nella
-     stanza chat **e** su una pagina col composer. Fuori sta al bordo — lo dice
-     la tavola, che la disegna a `right:-56px` contro i `-30px` della chat — e un
-     tocco la fa uscire con la minichat. Tornando si rimette com'era quando hai
-     lasciato la chat, e non «fuori» d'ufficio: metterla via era una tua
-     decisione. Fino al 28/09/2026 questo valeva per le stanze e non per le
-     pagine App e Impostazioni, dove lei restava fuori senza niente da fare.
+  /* Dove sta Jenny: la chat e' a schermo solo nella stanza chat **e** sulla
+     pagina chat. Fuori sta al bordo — lo dice la tavola, che la disegna a
+     `right:-56px` contro i `-30px` della chat — e un tocco porta su la chat.
+     Tornando si rimette com'era quando hai lasciato la chat, e non «fuori»
+     d'ufficio: metterla via era una tua decisione. Con la chat aperta sopra la
+     pagina la mette il velo, e qui non si tocca niente.
      Al boot la pagina non c'e' ancora, ed e' la chat. */
   _syncJennyPlace() {
+    if (this.chatOver) return;
     const inChat = this.view === 'chat' && (!this._entry || this._hasComposer(this._entry));
-    if (inChat === this._jennyInChat) {
-      // Fra due posti che non sono la chat la minichat si chiude comunque.
-      if (!inChat) this.jenny.setChatOnScreen(false);
-      return;
-    }
+    if (inChat === this._jennyInChat) return;
     this._jennyInChat = inChat;
     if (inChat) {
       this.jenny.setChatOnScreen(true);
@@ -1321,6 +1439,9 @@ class HomeApp {
      strati della casa, qualunque `<dialog>` aperto — anche quelli condivisi di
      conferma — e l'immagine ingrandita, che non sono strati del cassetto. */
   _composerActive() {
+    /* Con la chat sopra la pagina il campo e' li', davanti a tutto il resto
+       della casa: lo coprono solo un foglio, un dialogo o l'immagine. */
+    if (this.chatOver) return !this._sheetOpen() && !document.querySelector('dialog[open], .image-lightbox');
     if (this.view !== 'chat' || !this._hasComposer(this._entry)) return false;
     if (this.homePages?.goneHere?.()) return false;
     if (this.hasOverlayAbove()) return false;
@@ -1334,10 +1455,19 @@ class HomeApp {
     for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET, BOARD_SHEET]) {
       if (document.getElementById(id)?.open) return true;
     }
-    /* La minichat anche: il cassetto non deve prendersi i tasti scritti nel
-       suo campo. */
+    /* La chat sopra la pagina anche: il cassetto non deve prendersi i tasti
+       scritti nel suo campo. */
     return Boolean(this._appActions?.isAppOpen()) || Boolean(this.strip?.sorting)
-      || Boolean(this.jenny?.minichatOpen);
+      || this.chatOver;
+  }
+
+  /* Un foglio della casa e' aperto: un dialogo condiviso, una scheda di una
+     pressione lunga, «Segnala», il foglio della bacheca. */
+  _sheetOpen() {
+    for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET, BOARD_SHEET]) {
+      if (document.getElementById(id)?.open) return true;
+    }
+    return false;
   }
 
   /* La stanza a schermo la dice un attributo su `.home-shell`, e il resto lo
@@ -1350,10 +1480,14 @@ class HomeApp {
   _setView(name, then = null) {
     const view = Object.hasOwn(BACK_TO, name) ? name : 'chat';
     if (view === this.view) return true;
+    /* Un cambio di stanza con la chat aperta sopra la pagina — un link nel
+       filo, «Apri la bacheca» di una bolla — e' un posto dove andare: la chat
+       ridiscende, o la stanza nuova si aprirebbe sotto di lei. */
+    if (this.chatOver) this.closeChatOver();
     /* Uscire dal lettore con modifiche non salvate chiede conferma, e la
        guardia sta **qui** e non sui bottoni. Le strade per uscire sono gia'
        cinque — la freccia, la radice del percorso, l'Indietro del telefono,
-       l'interruttore Chat | Pagine, un cambio di conversazione — e una
+       Jenny che porta su la chat, un cambio di conversazione — e una
        guardia per strada e' una guardia che la sesta strada non avra'. E' la lezione di `_closeEditor` nel gestore file, dove
        il controllo sul buffer sporco valeva «solo se non esiste una seconda
        strada» e le strade erano tre. */
@@ -1409,12 +1543,9 @@ class HomeApp {
      nella barra dove scrivi, vale invece ovunque la barra si veda. */
   _applyHead() {
     const notebook = projectNameOf(sessionManager.currentKey);
-    /* L'interruttore Chat | Pagine nelle pagine, e in nessun altro posto: nel
-       lettore il comando e' «Modifica», e all'elenco riporta la freccia; nelle
-       stanze delle impostazioni non c'e' un quaderno. Dalla chat si va alle
-       pagine e si torna nello stesso punto. Ha preso il posto di «Parlane» il
-       26/09/2026. */
-    if (this.viewSwitch) this.viewSwitch.hidden = this.view !== 'board';
+    /* La lente e l'elenco, solo sulla bacheca. L'interruttore Chat | Bacheca
+       che stava accanto non c'e' piu' dal 05/10/2026: la chat del quaderno la
+       porta su Jenny, sopra la bacheca. */
     if (this.boardSearchBtn) this.boardSearchBtn.hidden = this.view !== 'board';
     if (this.boardListBtn) this.boardListBtn.hidden = this.view !== 'board';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
@@ -1424,7 +1555,6 @@ class HomeApp {
        `selectionchange` non e' garantito quando i nodi selezionati spariscono:
        la barra va chiusa qui, o resterebbe accesa sopra un'altra stanza. */
     this.audit?.refresh();
-    this._applyPill(notebook);
     if (this.view === 'board') this._setHeadTitle(notebook);
     if (this.view === 'drawer' && this._cardTitle) this._setHeadTitle(this._cardTitle);
     if (this.view === 'jenny') {
@@ -1457,16 +1587,6 @@ class HomeApp {
     else this.headEl?.style.removeProperty('--path-line');
   }
 
-  /* La pastiglia del quaderno nella barra dove scrivi: nome e pallino. Solo
-     nelle pagine fissate su un quaderno — nei Quaderni il nome lo dice il
-     percorso in alto, e alle pagine si va dall'interruttore accanto. */
-  _applyPill(notebook) {
-    if (this.pagesPill) this.pagesPill.hidden = !notebook || this._entry?.kind === 'notebooks';
-    if (!notebook) return;
-    if (this.pagesName) this.pagesName.textContent = notebook;
-    this._paintDot(this.pagesDot, dotColor(notebook));
-  }
-
   _paintDot(el, color) {
     if (!el) return;
     el.hidden = !color;
@@ -1475,9 +1595,8 @@ class HomeApp {
 
   /** Il tocco sulla radice del percorso: porta al posto di cui la stanza e'.
    *  Dal lettore e dalle stanze delle impostazioni e' anche dove porta la
-   *  freccia; dalle pagine no — la freccia torna alla chat del quaderno, da
-   *  cui le hai aperte, e la radice **all'elenco** dei Quaderni: il quaderno
-   *  aperto li' si chiude (deciso con l'utente il 26/09/2026). */
+   *  freccia; dalla bacheca porta **all'elenco** dei Quaderni (deciso con
+   *  l'utente il 26/09/2026). */
   goToPathRoot() {
     if (this.view === 'reader' && this._readerCard) return this.goBackOneRoom();
     if (this.view === 'reader' || this.view === 'drawer') {
@@ -1487,7 +1606,6 @@ class HomeApp {
     }
     if (this.view !== 'board') return this.goBackOneRoom();
     if (!this._setView('chat', () => this.goToPathRoot())) return true;
-    this.homePages?.closeNotebook();
     this.homePages?.goToId('notebooks', { animated: false });
     return true;
   }
@@ -1501,74 +1619,15 @@ class HomeApp {
     this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backTarget() || 'chat'}`));
   }
 
-  /* La conversazione e' cambiata: la fila la dice col nome e il pallino — lo
-     stesso colore che ha la riga nei Quaderni, ed e' l'unica cosa che lega il
-     tocco alla stanza in cui sei finito — e i Quaderni spostano la spunta. */
+  /* La conversazione e' cambiata: le frasi del campo e del vuoto, la testa, e
+     i Quaderni spostano la spunta. */
   _applyConversation() {
-    const project = projectNameOf(sessionManager.currentKey);
     /* Solo le frasi che cambiano con la conversazione, non le traduzioni di
-       tutta la casa; e la fila una volta sola, dal conteggio delle pagine
-       (`_paintPageCount`), invece di tre. */
+       tutta la casa. */
     this._applyConversationTexts();
     this._applyHead();
-    this._updatePagesCount(project);
     this.who?.render();
     this._reportChatOnScreen();
-  }
-
-  /* Il numero sulla pastiglia. Arriva quando arriva — il conteggio sta nello
-     stesso elenco dei Quaderni — e fino ad allora la pastiglia c'e' con la sua
-     icona: un quaderno le pagine ce le ha comunque, e aspettare la cifra per
-     mostrare la porta vorrebbe dire nascondere la porta.
-
-     Il nome si ricontrolla al ritorno: fra la domanda e la risposta si puo'
-     essere passati in un altro quaderno, e scrivere li' il conteggio di quello
-     di prima sarebbe un numero sbagliato su una stanza giusta. */
-  _updatePagesCount(notebook) {
-    this._pageCount = { notebook, count: null };
-    this._paintPageCount();
-    if (!notebook) return;
-    this.who.pagesOf(notebook).then((count) => {
-      if (projectNameOf(sessionManager.currentKey) !== notebook) return;
-      if (count === null) return;
-      this._pageCount = { notebook, count };
-      this._paintPageCount();
-    }).catch((err) => console.warn('home.pages: page count not read', err));
-  }
-
-  /** Quante pagine ha il quaderno `notebook`, se lo si sa: lo chiede la fila
-   *  per il suo interruttore. `null` e' «non lo so». */
-  pageCountOf(notebook) {
-    const known = this._pageCount;
-    return known?.notebook === notebook && Number.isFinite(known.count) ? known.count : null;
-  }
-
-  /* Il conteggio in tutti e tre i posti che lo mostrano: la pastiglia delle
-     pagine fissate («● piante · 26»), l'interruttore delle pagine e quello
-     della fila. Solo il numero: la parola «pagine» la dice l'etichetta, per chi
-     non vede il libro. */
-  _paintPageCount() {
-    const notebook = this._pageCount?.notebook || null;
-    const count = notebook ? this.pageCountOf(notebook) : null;
-    const known = count !== null;
-    if (this.pagesCount) this.pagesCount.textContent = known ? `· ${count}` : '';
-    /* L'interruttore porta alla bacheca: niente numero di pagine accanto. */
-    if (this.viewPagesCount) this.viewPagesCount.textContent = '';
-    this._labelPagesButton();
-    this.strip?.draw();
-  }
-
-  /* L'etichetta del bottone delle pagine, per chi non vede il libro: il
-     quaderno e quante pagine ha. La rifa' anche `_applyTranslations`: scritta
-     solo dal conteggio, dopo un cambio di lingua restava nella precedente. */
-  _labelPagesButton() {
-    const notebook = this._pageCount?.notebook || null;
-    if (!notebook) return;
-    const count = this.pageCountOf(notebook);
-    const words = count !== null
-      ? `, ${i18n.t(count === 1 ? 'home.notebookPages.countOne' : 'home.notebookPages.countMany', { count })}`
-      : '';
-    this.pagesBtn?.setAttribute('aria-label', `${i18n.t('home.notebookPages.open')}: ${notebook}${words}`);
   }
 
   /* Il turno che stava girando nella conversazione lasciata non si chiudera'
@@ -1744,16 +1803,23 @@ class HomeApp {
         return true;
       }
     }
+    /* L'immagine ingrandita: si apre anche *dalla* chat sopra la pagina, e le
+       sta davanti (115 contro 112), quindi si chiude prima di lei. */
+    const lightbox = document.querySelector('.image-lightbox');
+    if (lightbox) {
+      if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
+      else lightbox.remove();
+      return true;
+    }
+    /* La chat sopra la pagina (dal 05/10/2026, al posto della minichat): sta
+       sopra le mini-app, perche' Jenny si apre anche li', quindi si chiude
+       prima dell'app che le sta sotto. */
+    if (this.chatOver) return this.closeChatOver();
     /* Poi un'app aperta a tutto schermo dal cassetto. Fino al 23/09/2026 la
        casa non la chiudeva mai: Indietro agiva su quel che c'era **sotto**, e
        l'app restava li'. Con la pagina App diventata la strada principale per
        aprirle, e' il livello che si incontra piu' spesso. `handleBack` e' dell'
-       app: una sua schermata interna torna indietro dentro di lei, prima.
-       **Prima dell'app, la minichat**: Jenny sta sopra le mini-app, e la sua
-       minichat si apre anche li'. Nell'ordine opposto Indietro chiudeva l'app
-       sotto e lasciava a schermo la minichat (lo stesso ordine dell'officina,
-       v. `mobile-app.js`). */
-    if (this.jenny?.handleBack()) return true;
+       app: una sua schermata interna torna indietro dentro di lei, prima. */
     if (this._appActions?.handleBack()) return true;
     /* La modalita' ordina: Indietro esce **senza salvare**. Salvare e' «Fatto». */
     if (this.strip?.sorting) {
@@ -1775,12 +1841,6 @@ class HomeApp {
     const sheet = document.getElementById(REPORT_SHEET);
     if (sheet?.open) {
       sheet.close();
-      return true;
-    }
-    const lightbox = document.querySelector('.image-lightbox');
-    if (lightbox) {
-      if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
-      else lightbox.remove();
       return true;
     }
     return false;
@@ -1837,6 +1897,10 @@ class HomeApp {
    *  dubbio un avviso resta, che e' la direzione d'errore giusta.
    */
   isChatOnScreen() {
+    if (sessionManager.currentKey !== sessionManager.personalKey) return false;
+    /* La chat sopra la pagina e' a schermo davanti a tutto, a parte un foglio
+       che le si apre sopra. */
+    if (this.chatOver) return !this._sheetOpen();
     return this.view === 'chat'
       && this._entry?.kind === 'chat'
       && sessionManager.currentKey === sessionManager.personalKey
@@ -1910,10 +1974,13 @@ class HomeApp {
          del bordo, e Jenny finirebbe mezza fuori schermo mentre leggi le
          pagine. Chi non ha un composer il suo pavimento se lo dichiara
          (v. `_setView`). */
-      if (this.view !== 'chat') return;
-      /* ...e solo sulle pagine che un composer ce l'hanno. Le altre il loro
-         pavimento lo dichiarano (v. `_placeJenny`). */
-      if (this._entry && !this._hasComposer(this._entry)) return;
+      if (!this.chatOver) {
+        if (this.view !== 'chat') return;
+        /* ...e solo sulle pagine che un composer ce l'hanno. Le altre il loro
+           pavimento lo dichiarano (v. `_placeJenny`). Con la chat sopra la
+           pagina il composer c'e' sempre. */
+        if (this._entry && !this._hasComposer(this._entry)) return;
+      }
       /* Il riferimento, non una ricerca per classe: le foto del trasloco sono
          copie della chat col loro composer, e una che sta prima nel documento
          veniva misurata al posto di quello vero. */
@@ -2016,9 +2083,8 @@ class HomeApp {
     return true;
   }
 
-  /* Manda e disegna la bolla. Il composer ci passa con i suoi allegati, la
-     minichat col solo testo: la domanda fatta a Jenny fuori dalla chat e' un
-     messaggio della conversazione come un altro, e nel filo deve esserci. */
+  /* Manda e disegna la bolla. Ci passano il composer, con i suoi allegati, e i
+     comandi delle bolle di lavoro (`sendCommand`). */
   _sendText(text, media = [], entries = []) {
     if (!wsManager.sendToChat(sessionManager.currentChatId, text, media)) {
       /* Socket chiuso: il messaggio non e' partito e non va disegnato. Una
@@ -2235,12 +2301,9 @@ class HomeApp {
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
-    if (this.viewChatLabel) this.viewChatLabel.textContent = i18n.t('home.notebookPages.chat');
-    if (this.viewPagesLabel) this.viewPagesLabel.textContent = i18n.t('board.tab');
     this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
     this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
-    this.viewSwitch?.setAttribute('aria-label', i18n.t('home.notebookPages.view'));
-    this._labelPagesButton();
+    this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
     this.reader?.applyTranslations();
