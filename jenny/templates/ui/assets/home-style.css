@@ -1767,6 +1767,17 @@ body.home {
   animation: home-over-in 0.14s ease-out;
 }
 .home-over[hidden] { display: none; }
+/* Nel velo il composer non ha un fondo suo. Sulla pagina chat il suo `--bg`
+   e' lo stesso della pagina e non si vede; sopra il velo, piu' scuro, era una
+   lastra grigia piena in fondo allo schermo (05/10/2026, sul telefono). Qui il
+   filo scorre in uno scroller suo, sopra il composer e non sotto, quindi il
+   fondo pieno non copre niente. La pastiglia del campo resta, piu' leggera:
+   quel che scrivi si legge sul velo come il resto della chat. */
+.home-over .home-composer {
+  background: transparent;
+  border-top-color: transparent;
+}
+.home-over .home-field { background: color-mix(in srgb, var(--surface) 55%, transparent); }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
 /* Quel che sta sotto il velo, sfocato appena (v. `ChatOver.show`). La
    transizione c'e' solo in entrata, insieme al velo che sfuma. */
