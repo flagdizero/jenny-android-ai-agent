@@ -235,7 +235,7 @@ def test_a_new_gesture_replaces_the_one_on_its_channel() -> None:
         j.hello();
         j.nudge();
         assert.equal(squash(j), 'nudge');
-        await sleep(480);
+        await sleep(560);
         assert.equal(squash(j), null, "il timer del saluto non ha tolto il sobbalzo, l'ha tolto il suo");
     """)
 
@@ -310,7 +310,7 @@ def test_the_nudge_comes_and_goes() -> None:
         const j = jenny();
         j.nudge();
         assert.equal(squash(j), 'nudge');
-        await sleep(500);
+        await sleep(560);
         assert.equal(squash(j), null, 'tolto a tempo, anche senza animationend');
     """)
 
@@ -327,4 +327,57 @@ def test_away_from_the_chat_she_ignores_sends_but_not_frames() -> None:
         assert.equal(j._agentState, 'talking');
         j.setChatOnScreen(true);
         assert.equal(j.mode, 'chat');
+    """)
+
+
+def test_she_leans_into_the_slide_but_not_after_a_flight() -> None:
+    """Uscendo dal bordo si sporge verso l'interno, tornando verso il bordo. A
+    fine volo e' gia' dove deve stare: niente inclinazione."""
+    _run("""
+        const j = jenny({ out: false });
+        j.setOut(true);
+        assert.equal(j.motion('lean'), 'go-in');
+        j.setOut(false);
+        assert.equal(j.motion('lean'), 'go-edge');
+        j._stopMotion('lean');
+        j.el.classList.add('flying');
+        j.setOut(true);
+        assert.equal(j.motion('lean'), null, "si e' sporta atterrando");
+        j.setOut(true);
+        assert.equal(j.motion('lean'), null);
+    """)
+
+
+def test_a_mood_arrives_with_its_reaction() -> None:
+    _run("""
+        const j = jenny();
+        j._applyMood('angry');
+        assert.equal(squash(j), 'angry');
+        j._applyMood('nope');
+        assert.equal(squash(j), 'angry', 'un umore che non esiste non reagisce');
+    """)
+
+
+def test_the_badge_makes_her_notice_once() -> None:
+    _run("""
+        const j = jenny();
+        j.setBadge(true, 'x');
+        assert.equal(squash(j), 'perk');
+        j._stopMotion('squash');
+        j.setBadge(true, 'x');
+        assert.equal(squash(j), null, 'il pallino era gia acceso');
+    """)
+
+
+def test_talking_stretches_on_each_syllable_and_snaps_the_gesture() -> None:
+    _run("""
+        const j = jenny();
+        const now = performance.now();
+        Object.assign(j._talk, { timer: 1, lastTextAt: now, switchAt: now + 10_000, open: false });
+        j._talkTick();
+        assert.equal(squash(j), 'syl', 'bocca aperta, nessuna sillaba');
+        assert.equal(j.motion('lean'), null, 'il gesto non e cambiato');
+        j._talk.switchAt = 0;
+        j._talkTick();
+        assert.equal(j.motion('lean'), 'gest');
     """)

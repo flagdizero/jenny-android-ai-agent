@@ -113,7 +113,15 @@ const WAVE = {
    Dall'utente del 05/10/2026, sui mockup «Il saluto di Jenny» e «Jenny in
    movimento»: squash and stretch su tutto, mai in diagonale. */
 const MOTIONS = {
-  lean: {},
+  lean: {
+    // Esce dal bordo (verso l'interno) o ci torna: si sporge nel verso in cui
+    // va, frena, si assesta. Una rotazione attorno ai piedi, non un taglio.
+    'go-in': 480,
+    'go-edge': 480,
+    // Il cambio di gesto nel parlato (braccia giu' / mano su): uno scatto
+    // invece del cambio di colpo.
+    gest: 300,
+  },
   squash: {
     // Si carica, salta alzando il braccio, saluta tre volte ondeggiando a tempo
     // col braccio, si assesta. Sostituisce mano alzata + occhi felici.
@@ -122,8 +130,20 @@ const MOTIONS = {
     // (pensa, parla) o non si vedrebbe (al bordo).
     hop: 1000,
     // «Sono qui, chiudi da me»: lo chiede il guscio quando tocchi il velo
-    // dietro la chat, che apposta non la chiude.
-    nudge: 450,
+    // dietro la chat, che apposta non la chiude. Si carica e si sporge verso
+    // di te.
+    nudge: 520,
+    // L'umore arriva con una reazione del corpo (i nomi sono quelli di
+    // MOOD_FACES): un saltello, un afflosciarsi, una pestata.
+    happy: 700,
+    sad: 1800,
+    angry: 650,
+    // Il pallino si accende e lei se ne accorge.
+    perk: 340,
+    // L'atterraggio a fine volo, quando le pose lasciano il posto al riposo.
+    land: 300,
+    // Una sillaba: ogni volta che apre la bocca si allunga di un niente.
+    syl: 260,
   },
 };
 /* Le variabili da cui il CSS legge la durata del gesto di ogni canale. */
@@ -455,7 +475,9 @@ export class JennyMascot {
   /** Il pallino «c'e' una risposta che non hai visto». *note* e' la frase che
    *  lo dice a chi non lo vede: la sceglie il guscio, che ha le traduzioni. */
   setBadge(on, note = '') {
+    const was = this.el.classList.contains('has-dot');
     this.el.classList.toggle('has-dot', Boolean(on));
+    if (on && !was) this._motion('squash', 'perk');
     this._labelNote = on ? note : '';
     this._paintLabel();
   }
@@ -537,6 +559,8 @@ export class JennyMascot {
     if (this._moodTimer) clearTimeout(this._moodTimer);
     this._moodTimer = setTimeout(() => this._clearMood(), MOOD_HOLD_MS);
     this._syncArt();
+    // La faccia arriva con la reazione del corpo; al bordo il CSS la tace.
+    this._motion('squash', mood);
   }
 
   _clearMood() {
@@ -598,9 +622,11 @@ export class JennyMascot {
     if (now >= this._talk.switchAt) {
       this._talk.animIdx = (this._talk.animIdx + 1) % TALK_BODIES.length;
       this._talk.switchAt = now + TALK_ANIM_SWITCH_MS;
+      this._motion('lean', 'gest');
     }
     this._setBody(TALK_BODIES[this._talk.animIdx]);
     this._setFace(FACE[this._talk.open ? 'talk' : 'normal']);
+    if (this._talk.open) this._motion('squash', 'syl');
   }
 
   /* Chiude il parlato e torna all'arte statica (idle/side/think). */
@@ -724,6 +750,10 @@ export class JennyMascot {
     this.el.classList.toggle('out', out);
     if (out && !was) this._slideUntil = performance.now() + SLIDE_MS;
     if (!out) this._stopGreet();
+    // Si sporge solo se scivola davvero: a fine volo (`flying`) e' gia' li'.
+    if (out !== was && !this.el.classList.contains('flying')) {
+      this._motion('lean', out ? 'go-in' : 'go-edge');
+    }
     this._syncArt();
     this._updateGestureExclusion();
   }

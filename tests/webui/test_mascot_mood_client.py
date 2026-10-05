@@ -78,6 +78,7 @@ _CONSTS = (
     "TALK_ANIM_SWITCH_MS",
     "TALK_QUIET_TO_THINK_MS",
     "MOTIONS",
+    "MOTION_VARS",
 )
 
 

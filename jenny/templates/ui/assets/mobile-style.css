@@ -6295,9 +6295,11 @@ body {
   -webkit-user-drag: none;
 }
 .jenny-duo.out { right: calc(var(--jenny-size) * var(--jenny-out) * -1); }
+/* Il respiro: si allunga del 3% e si stringe appena, coi piedi fermi.
+   Fino al 05/10/2026 saliva e scendeva di 4 px tutta intera. */
 .jenny-duo.out img {
-  animation: jenny-bob 3.4s ease-in-out infinite;
-  transform-origin: 50% 100%;
+  animation: jenny-breath 3.4s ease-in-out infinite;
+  transform-origin: 50% 88%;
 }
 .jenny-duo.dragging img { animation: none; }
 /* Il dondolio del pensa e' della Jenny venuta fuori: messa via mentre pensa,
@@ -6306,8 +6308,8 @@ body {
    cambiare stato), quindi e' qui che si decide, non in JS. Solo sull'arte di
    riposo: le pose del volo non ereditano gli stati (v. `.jenny-fly img`). */
 .jenny-duo.out.thinking .jenny-art-stack img {
-  animation: jenny-wobble 1.1s ease-in-out infinite;
-  transform-origin: 50% 90%;
+  animation: jenny-think 1.6s ease-in-out infinite;
+  transform-origin: 50% 88%;
 }
 /* TEMP: nessun movimento in Y tra stati finché l'allineamento non è confermato. */
 
@@ -6317,7 +6319,7 @@ body {
    Il corpo resta in flusso e dà l'altezza al duo, la faccia gli sta sopra in
    absolute. Da docked l'arte è cotta e la faccia si spegne (.off).
    La faccia si nasconde con `visibility` e MAI con `display`: sono due istanze
-   della stessa animazione (jenny-bob/jenny-wobble, sotto) e partono insieme
+   della stessa animazione (jenny-breath/jenny-think, sotto) e partono insieme
    solo se restano entrambe in layout — un display:none le sfaserebbe. */
 .jenny-art-stack, .jenny-rest { position: relative; }
 .jenny-art-stack img.jenny-face {
@@ -6369,7 +6371,38 @@ body {
   animation: jenny-hop var(--jenny-squash-ms) linear;
 }
 .jenny-duo[data-squash="nudge"] .jenny-squash {
-  animation: jenny-nudge var(--jenny-squash-ms) ease-in-out;
+  animation: jenny-nudge var(--jenny-squash-ms) linear;
+}
+/* Esce e rientra: si sporge nel verso in cui va. */
+.jenny-duo[data-lean="go-in"] .jenny-lean {
+  animation: jenny-go-in var(--jenny-lean-ms) ease-out;
+}
+.jenny-duo[data-lean="go-edge"] .jenny-lean {
+  animation: jenny-go-edge var(--jenny-lean-ms) ease-out;
+}
+/* Il parlato, l'umore e il pallino solo fuori: al bordo c'e' mezza Jenny, e
+   mezza Jenny che si deforma contro il bordo somiglia a un guasto della
+   pagina (lo stesso argomento del dondolio del pensa). */
+.jenny-duo.out[data-lean="gest"] .jenny-lean {
+  animation: jenny-gest var(--jenny-lean-ms) ease-out;
+}
+.jenny-duo.out[data-squash="syl"] .jenny-squash {
+  animation: jenny-syl var(--jenny-squash-ms) ease-out;
+}
+.jenny-duo.out[data-squash="happy"] .jenny-squash {
+  animation: jenny-happy var(--jenny-squash-ms) linear;
+}
+.jenny-duo.out[data-squash="sad"] .jenny-squash {
+  animation: jenny-sad var(--jenny-squash-ms) ease-in-out;
+}
+.jenny-duo.out[data-squash="angry"] .jenny-squash {
+  animation: jenny-angry var(--jenny-squash-ms) linear;
+}
+.jenny-duo.out[data-squash="perk"] .jenny-squash {
+  animation: jenny-perk var(--jenny-squash-ms) ease-out;
+}
+.jenny-duo[data-squash="land"] .jenny-squash {
+  animation: jenny-land var(--jenny-squash-ms) ease-out;
 }
 
 /* Il pallino «c'e' una risposta che non hai visto» (v. `setBadge`). Sta sulla
@@ -6387,7 +6420,11 @@ body {
   display: none;
   pointer-events: none;
 }
-.jenny-duo.has-dot .jenny-dot { display: block; }
+.jenny-duo.has-dot .jenny-dot {
+  display: block;
+  animation: jenny-dot-pop 0.42s cubic-bezier(0.3, 1.4, 0.5, 1),
+    jenny-dot-glow 2s ease-in-out 0.42s infinite;
+}
 .jenny-duo.flying .jenny-dot { display: none; }
 /* A movimento ridotto i gesti non si muovono. Il saluto resta, fermo: il
    braccio alzato per il tempo del saluto, e si legge lo stesso. */
@@ -6395,7 +6432,8 @@ body {
   .jenny-duo .jenny-lean,
   .jenny-duo .jenny-squash,
   .jenny-duo .jenny-rest,
-  .jenny-duo .jenny-wave > div { animation: none !important; }
+  .jenny-duo .jenny-wave > div,
+  .jenny-duo .jenny-dot { animation: none !important; }
   .jenny-duo.out[data-squash="greet"] .jenny-rest { visibility: hidden; }
   .jenny-duo.out[data-squash="greet"] .jenny-wave-b { opacity: 1; }
 }
@@ -6431,7 +6469,10 @@ body {
 /* Verso sinistra la posa di caduta si specchia in place (attorno al proprio centro). */
 .jenny-fly img.flip { transform: scaleX(-1); }
 
-@keyframes jenny-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes jenny-breath {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  45% { transform: translate(0px, 0px) rotate(0deg) scale(0.985, 1.03); }
+}
 /* Il saluto, 1500 ms: 0 · 120 carica · 420 atterra · 600/780/960/1140 il
    braccio · 1380 giu' · 1500. Il corpo si piega verso il braccio a ogni
    sventolata, e l'ondeggiare si spegne: e' questo che lo fa un saluto e non
@@ -6470,13 +6511,90 @@ body {
   80% { transform: translate(0px, 0px) rotate(0deg) scale(1.02, 0.98); animation-timing-function: ease-out; }
   100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
+/* «Chiudi da me»: si carica appena, si sporge verso di te, torna. */
 @keyframes jenny-nudge {
-  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
-  25% { transform: translate(-6px, 0px) rotate(0deg) scale(1, 1); }
-  60% { transform: translate(4px, 0px) rotate(0deg) scale(1, 1); }
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  22% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  48% { transform: translate(-6px, -4px) rotate(-3deg) scale(0.985, 1.02); animation-timing-function: ease-in-out; }
+  72% { transform: translate(1px, 0px) rotate(0.8deg) scale(1.01, 0.99); animation-timing-function: ease-out; }
   100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-@keyframes jenny-wobble { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+/* Verso l'interno la testa va avanti a sinistra (rotazione antioraria), verso
+   il bordo a destra. Frena con un piccolo schiacciamento. */
+@keyframes jenny-go-in {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(0px, 0px) rotate(-4deg) scale(0.985, 1.015); }
+  62% { transform: translate(0px, 0px) rotate(1.5deg) scale(1.02, 0.98); }
+  82% { transform: translate(0px, 0px) rotate(-0.5deg) scale(1, 1); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-go-edge {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(0px, 0px) rotate(4deg) scale(0.985, 1.015); }
+  62% { transform: translate(0px, 0px) rotate(-1.5deg) scale(1.02, 0.98); }
+  82% { transform: translate(0px, 0px) rotate(0.5deg) scale(1, 1); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-gest {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  30% { transform: translate(0px, 0px) rotate(0deg) scale(1.045, 0.95); }
+  65% { transform: translate(0px, 0px) rotate(0deg) scale(0.97, 1.035); }
+}
+@keyframes jenny-syl {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(0.988, 1.022); }
+}
+@keyframes jenny-happy {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  15% { transform: translate(0px, 0px) rotate(0deg) scale(1.06, 0.92); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  35% { transform: translate(0px, -12px) rotate(0deg) scale(0.95, 1.07); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  58% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.94); animation-timing-function: ease-out; }
+  78% { transform: translate(0px, 0px) rotate(0deg) scale(0.98, 1.02); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-sad {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  28% { transform: translate(0px, 1px) rotate(-1deg) scale(1.035, 0.955); }
+  72% { transform: translate(0px, 1px) rotate(-1deg) scale(1.035, 0.955); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-angry {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  12% { transform: translate(0px, -3px) rotate(0deg) scale(0.96, 1.06); }
+  22% { transform: translate(0px, 0px) rotate(0deg) scale(1.07, 0.92); }
+  34% { transform: translate(0px, 0px) rotate(-3deg) scale(1.04, 0.96); }
+  46% { transform: translate(0px, 0px) rotate(3deg) scale(1.02, 0.98); }
+  58% { transform: translate(0px, 0px) rotate(-2deg) scale(1, 1); }
+  70% { transform: translate(0px, 0px) rotate(1deg) scale(1.01, 0.99); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-perk {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  30% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); }
+  60% { transform: translate(0px, -3px) rotate(0deg) scale(0.98, 1.03); }
+}
+@keyframes jenny-land {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.95); }
+  70% { transform: translate(0px, 0px) rotate(0deg) scale(0.985, 1.015); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-dot-pop {
+  0% { transform: scale(0); } 60% { transform: scale(1.35); }
+  80% { transform: scale(0.9); } 100% { transform: scale(1); }
+}
+@keyframes jenny-dot-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--bg), 0 0 6px rgba(var(--accent-rgb), 0.5); }
+  50% { box-shadow: 0 0 0 2px var(--bg), 0 0 14px rgba(var(--accent-rgb), 0.95); }
+}
+/* Il pensa: ondeggia, e a ogni passaggio al centro si allunga un poco («mmh»).
+   Fino al 05/10/2026 era un pendolo rigido di 2,5 gradi in 1,1 s. */
+@keyframes jenny-think {
+  0%, 100% { transform: translate(0px, 0px) rotate(-2deg) scale(1.012, 0.988); }
+  25% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.016); }
+  50% { transform: translate(0px, 0px) rotate(2deg) scale(1.012, 0.988); }
+  75% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.016); }
+}
 @keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
 /* In landscape basso il dock dell'officina sparisce (v. il `@media

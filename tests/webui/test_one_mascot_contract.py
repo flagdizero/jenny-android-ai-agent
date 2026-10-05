@@ -154,7 +154,7 @@ def test_she_does_not_sway_against_the_edge() -> None:
     sways = [
         selectors.strip().splitlines()[-1]
         for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
-        if "jenny-wobble" in body and "@keyframes" not in selectors
+        if "jenny-think" in body and "@keyframes" not in selectors
     ]
     assert sways, "il pensa non dondola piu'"
     for sel in sways:
