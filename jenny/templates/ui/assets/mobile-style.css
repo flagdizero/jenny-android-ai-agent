@@ -6245,15 +6245,8 @@ body {
   animation: jenny-wobble 1.1s ease-in-out infinite;
   transform-origin: 50% 90%;
 }
-.jenny-duo.hidden-mode { display: none; }
 /* TEMP: nessun movimento in Y tra stati finché l'allineamento non è confermato. */
 
-/* Anti-flash: attributo impostato in bootstrap.js prima del render, per
-   evitare che la mascotte compaia un istante prima che mobile-jenny.js
-   applichi la preferenza "non visibile" (fonte di verità a runtime). */
-:root[data-mascot-hidden] .jenny-duo,
-:root[data-mascot-hidden] .jenny-scrim,
-:root[data-mascot-hidden] .jenny-mc { display: none; }
 
 /* Arte a due livelli: a mascotte intera il
    corpo (senza faccia) e la faccia sono due img impilate sullo stesso quadrato.
@@ -6360,14 +6353,12 @@ body {
    in mobile-jenny.js. Senza `!important`: `.jenny-scrim.open` non tocca
    `display` (apre con opacita' e visibilita'), quindi non c'e' niente da
    battere. Qui c'era scritto che serviva a vincere su `.open`. */
-.jenny-scrim.hidden-mode { display: none; }
 
 /* Minichat: campo centrato in basso, fumetto solo sopra la sua testa. */
 .jenny-mc { position: absolute; inset: 0; z-index: 121; pointer-events: none; display: none; }
 .jenny-mc.open { display: block; }
 /* Stessa specificita' di `.open` e scritta dopo: vince per ordine, senza
    `!important`. Tenerla sotto. */
-.jenny-mc.hidden-mode { display: none; }
 /* Il fumetto e' scuro: la superficie delle schede, col testo della chat e un
    bordo che lo stacca dallo scrim. Prima era `--accent` / `--on-accent`, nero
    su rosa in Synthwave; il 28/09/2026 l'utente l'aveva chiesto «bianco su rosa

@@ -193,7 +193,6 @@ def test_the_workshop_icon_buttons_carry_a_translated_name() -> None:
 
 _HOME_LABELLED = {
     "home-name": "home-name-label",
-    "home-jenny-visible": "home-jenny-visible-label",
     "home-jenny-floating": "home-jenny-floating-label",
 }
 

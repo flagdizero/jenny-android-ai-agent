@@ -47,9 +47,7 @@ def test_the_mascot_preferences_fall_back_to_their_defaults() -> None:
       """
         + f"const m = await import('{(ASSETS / 'shared' / 'mascot.js').as_uri()}');\n"
         """
-      assert.equal(m.mascotVisible(), true);
       assert.equal(m.mascotSize(), 'sm');
-      assert.equal(m.setMascotVisible(false), false);
       assert.equal(m.setMascotSize('lg'), 'lg');
     """
     )

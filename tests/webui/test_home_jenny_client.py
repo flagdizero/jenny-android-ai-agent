@@ -92,10 +92,7 @@ const document = {
 /* Le taglie sono vere; il resto delle preferenze no — stanno nel
    `localStorage`, che qui non c'e'. */
 __SIZES__
-let isVisible = true;
 let currentSize = 'sm';
-function mascotVisible() { return isVisible; }
-function setMascotVisible(on) { isVisible = on; return on; }
 function mascotSize() { return currentSize; }
 function setMascotSize(size) { currentSize = size; return size; }
 
@@ -160,7 +157,6 @@ class HomeJenny {
   __SET_FLOATING__
   __APPLY_TRANSLATIONS__
   __VALUE__
-  __TOGGLE_VISIBLE__
   __PICK_SIZE__
   __TOGGLE_FLOATING__
   __PAINT_SIZES__
@@ -182,7 +178,6 @@ const spokenNames = [];
    affatto. Si passano alla costruzione perche' la stanza legge all'apertura. */
 function room(floating, disk, broken) {
   for (const k of Object.keys(nodi)) delete nodi[k];
-  isVisible = true;
   currentSize = 'sm';
   reply = null;
   error = null;
@@ -227,7 +222,6 @@ def _harness() -> str:
         .replace("__SET_FLOATING__", member(src, "setFloating"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
         .replace("__VALUE__", member(src, "value"))
-        .replace("__TOGGLE_VISIBLE__", member(src, "toggleVisible"))
         .replace("__PICK_SIZE__", member(src, "pickSize"))
         .replace("__TOGGLE_FLOATING__", member(src, "toggleFloating"))
         .replace("__PAINT_SIZES__", member(src, "_paintSizes"))
@@ -248,26 +242,16 @@ def _run_js(script: str) -> None:
 # ── La riga che si legge senza entrare ──────────────────────────────────────
 
 
-def test_hidden_wins_over_the_size() -> None:
-    """Dire «media» di una mascotte che non si vede e' vero e inutile."""
+def test_the_window_adds_itself_to_the_size() -> None:
+    """La taglia, e la finestra flottante se c'e': sono due posti diversi.
+    «Nascosta» non c'e' piu' dal 05/10/2026 — Jenny e' la porta della chat."""
     _run_js("""
-      assert.equal(jennyValue({ visible: true, size: 'md', floating: false }),
-                   i18n.t('settings.mascotSizeMedium').toLowerCase());
-      assert.equal(jennyValue({ visible: false, size: 'md', floating: false }),
-                   i18n.t('home.jenny.hidden').toLowerCase());
-    """)
-
-
-def test_the_window_adds_itself_even_to_a_hidden_one() -> None:
-    """Sono due posti diversi: lei puo' stare sopra le altre app mentre dentro
-    la casa non c'e'."""
-    _run_js("""
-      const con = jennyValue({ visible: false, size: 'sm', floating: true });
-      assert.ok(con.includes(i18n.t('home.jenny.hidden').toLowerCase()));
+      const con = jennyValue({ size: 'sm', floating: true });
+      assert.ok(con.includes(i18n.t('settings.mascotSizeSmall').toLowerCase()));
       assert.ok(con.includes(i18n.t('home.jenny.floatingShort').toLowerCase()));
       assert.ok(con.includes('\\u00b7'), 'le due cose non sono separate: ' + con);
 
-      const without = jennyValue({ visible: true, size: 'sm', floating: false });
+      const without = jennyValue({ size: 'sm', floating: false });
       assert.ok(!without.includes('\\u00b7'), 'un separatore senza niente dopo: ' + without);
     """)
 
@@ -277,12 +261,10 @@ def test_the_room_reads_the_preferences_that_are_live() -> None:
     preferenze che disegnano lei."""
     _run_js("""
       const she = room({ available: true, enabled: true, active: true });
-      assert.equal(she.value(), jennyValue({ visible: true, size: 'sm', floating: true }));
+      assert.equal(she.value(), jennyValue({ size: 'sm', floating: true }));
       she.pickSize('lg');
-      assert.equal(she.value(), jennyValue({ visible: true, size: 'lg', floating: true }));
-      she.toggleVisible();
-      assert.equal(she.value(), jennyValue({ visible: false, size: 'lg', floating: true }));
-      assert.ok(changes >= 2, 'la riga di «Tu e Jenny» non viene avvisata');
+      assert.equal(she.value(), jennyValue({ size: 'lg', floating: true }));
+      assert.ok(changes >= 1, 'la riga di «Tu e Jenny» non viene avvisata');
     """)
 
 
@@ -375,7 +357,7 @@ def test_a_call_that_failed_puts_the_switch_back() -> None:
       error = new Error('gateway giu');
       await she.toggleFloating();
       assert.equal(she.floatingBtn.classList.contains('is-on'), false);
-      assert.equal(she.value(), jennyValue({ visible: true, size: 'sm', floating: false }));
+      assert.equal(she.value(), jennyValue({ size: 'sm', floating: false }));
     """)
 
 
@@ -402,12 +384,10 @@ def test_the_house_hears_what_the_switch_ended_up_as() -> None:
 def test_the_words_come_back_when_the_language_changes() -> None:
     _run_js("""
       const she = room({ available: true, enabled: false, active: false });
-      she.visibleLabel.textContent = '';
       she.sizeLabel.textContent = '';
       she.floatingLabel.textContent = '';
       for (const btn of she.sizeEl.children) btn.textContent = '';
       she.applyTranslations();
-      assert.equal(she.visibleLabel.textContent, i18n.t('settings.mascotVisible'));
       assert.equal(she.sizeLabel.textContent, i18n.t('settings.mascotSize'));
       assert.equal(she.floatingLabel.textContent, i18n.t('settings.floatingEnabled'));
       for (const btn of she.sizeEl.children) {

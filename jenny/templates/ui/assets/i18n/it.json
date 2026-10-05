@@ -209,7 +209,6 @@
     "cronRecoveredBackup": "I promemoria programmati sono stati recuperati dall'ultimo backup valido: all'avvio l'elenco dei job non era leggibile. Controlla che ci siano tutti.",
     "cronRecoveredEmpty": "L'elenco dei promemoria programmati non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita senza nessuno: quelli che avevi creato non suoneranno più e vanno ricreati. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
-    "mascotVisible": "Mostra la mascotte",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
     "mascotSizeMedium": "Media",
@@ -1054,7 +1053,6 @@
     },
     "jenny": {
       "title": "{name}",
-      "hidden": "nascosta",
       "floatingShort": "flottante",
       "name": "Come si chiama",
       "nameHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",

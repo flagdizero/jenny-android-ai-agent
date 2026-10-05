@@ -33,20 +33,13 @@
   var nav = navigator.language || '';
   document.documentElement.lang = nav.indexOf('it') === 0 ? 'it' : 'en';
 
-  // Mascotte: anti-flash come il tema. La verità a runtime resta in
-  // shared/mascot.js (localStorage + evento 'mascotchange'); qui solo
-  // l'attributo iniziale su <html> per evitare che lampeggi visibile prima
-  // che mobile-jenny.js applichi la preferenza "non visibile" (il lato non
-  // serve: la mascotte è creata da JS e posizionata prima del primo paint).
-  // Le chiavi si chiamavano `jenny-mascotte-*` fino al 25/09/2026: finche'
-  // shared/mascot.js non le ha copiate, qui si legge anche il nome vecchio.
-  var mascotVisible = read('jenny-mascot-visible') || read('jenny-mascotte-visible');
-  if (mascotVisible === '0') {
-    document.documentElement.setAttribute('data-mascot-hidden', '1');
-  }
-  // Taglia: stesso anti-flash. Il default CSS vale solo per 'sm', quindi senza
-  // questo chi ha scelto un'altra taglia vedrebbe Jenny comparire piccola e
-  // poi ridimensionarsi. Le misure sono duplicate da MASCOT_SIZES in
+  // Mascotte, taglia: anti-flash come il tema. Il default CSS vale solo per
+  // 'sm', quindi senza questo chi ha scelto un'altra taglia vedrebbe Jenny
+  // comparire piccola e poi ridimensionarsi. (Fino al 05/10/2026 qui si
+  // leggeva anche «non visibile»: la preferenza non c'e' piu', Jenny e' la
+  // porta della chat. La chiave si chiamava `jenny-mascotte-size` fino al
+  // 25/09/2026: finche' shared/mascot.js non l'ha copiata, si legge anche
+  // il nome vecchio.) Le misure sono duplicate da MASCOT_SIZES in
   // shared/mascot.js — qui non si possono importare moduli.
   var mascotSizes = { sm: '120px', md: '160px', lg: '210px' };
   var mascotSize = mascotSizes[read('jenny-mascot-size') || read('jenny-mascotte-size')];

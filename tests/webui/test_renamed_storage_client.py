@@ -48,21 +48,23 @@ def _run_mascot(seed: dict[str, str]) -> dict[str, str | None]:
             + " 'jenny-mascotte-visible', 'jenny-mascotte-size'];\n"
             + "console.log(JSON.stringify({"
             + " stored: Object.fromEntries(keys.map((k) => [k, localStorage.getItem(k)])),"
-            + " visible: m.mascotVisible(), size: m.mascotSize() }));\n",
+            + " size: m.mascotSize() }));\n",
             encoding="utf-8",
         )
         return json.loads(run_module(entry))
 
 
 def test_the_old_mascot_keys_move_to_the_new_names() -> None:
-    out = _run_mascot({"jenny-mascotte-visible": "0", "jenny-mascotte-size": "lg"})
+    """La taglia passa al nome nuovo. «Visibile», vecchio e nuovo, se ne va e
+    basta: dal 05/10/2026 Jenny c'e' sempre, ed e' la porta della chat."""
+    out = _run_mascot({"jenny-mascotte-visible": "0", "jenny-mascotte-size": "lg",
+                       "jenny-mascot-visible": "0"})
     assert out["stored"] == {
-        "jenny-mascot-visible": "0",
+        "jenny-mascot-visible": None,
         "jenny-mascot-size": "lg",
         "jenny-mascotte-visible": None,
         "jenny-mascotte-size": None,
     }
-    assert out["visible"] is False
     assert out["size"] == "lg"
 
 
@@ -76,11 +78,13 @@ def test_a_value_already_under_the_new_name_wins() -> None:
 def test_the_first_paint_reads_the_old_mascot_keys_too() -> None:
     """``bootstrap.js`` gira prima di ``mascot.js``: al primo avvio dopo
     l'aggiornamento la chiave nuova non c'e' ancora, e senza il nome vecchio la
-    mascotte nascosta lampeggerebbe visibile per un fotogramma."""
+    mascotte comparirebbe piccola e poi si ridimensionerebbe. La visibilita'
+    non si legge piu' (05/10/2026): Jenny c'e' sempre."""
     source = (ASSETS / "bootstrap.js").read_text(encoding="utf-8")
     # `read` e' la lettura protetta del file.
-    assert "read('jenny-mascotte-visible')" in source
     assert "read('jenny-mascotte-size')" in source
+    assert "visible" not in source, "il primo fotogramma legge ancora «visibile»"
+    assert "data-mascot-hidden" not in source
 
 
 def _migration(source: str) -> dict[str, str]:

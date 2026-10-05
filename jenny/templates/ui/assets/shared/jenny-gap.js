@@ -113,7 +113,7 @@ export class JennyGap {
 
   /** Ricalcola adesso. Da chiamare all'arrivo di un messaggio. */
   refresh() {
-    if (!this.thread || !this.mascot || this.mascot.classList?.contains('hidden-mode')) {
+    if (!this.thread || !this.mascot) {
       this._clean();
       return;
     }

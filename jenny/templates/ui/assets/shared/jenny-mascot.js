@@ -26,9 +26,7 @@ import { wsManager } from './ws-manager.js';
 import { sessionManager } from './session-manager.js';
 import { bindMascotDrag, buildFlyLayer } from './mascot-drag.js';
 import { botName } from './bot-name.js';
-import {
-  mascotVisible, applyMascotSize,
-} from './mascot.js';
+import { applyMascotSize } from './mascot.js';
 
 /* Arte "cotta" (faccia disegnata dentro, una sola img): serve al bordo, dove
    la mascotte sporge a metà e una faccia non si leggerebbe. */
@@ -177,20 +175,13 @@ export class JennyMascot {
     this._onChatClose = () => this._onWireClose();
     wsManager.addEventListener('chat:close', this._onChatClose);
 
-    // Preferenze mascotte (la stanza «Jenny» della casa): visibilità e
-    // taglia, v. shared/mascot.js.
+    // Preferenze mascotte (la stanza «Jenny» della casa): la taglia, v.
+    // shared/mascot.js.
     this._onMascotChange = () => this._applyMascotPrefs();
     window.addEventListener('mascotchange', this._onMascotChange);
 
     applyMascotSize();
     this._enterInitialState();
-
-    // Da qui in poi la visibilità è governata a runtime dalla classe
-    // hidden-mode su nodi creati da JS: rimuovi il ponte anti-flash
-    // impostato al boot da bootstrap.js, altrimenti :root[data-mascot-hidden]
-    // continuerebbe a forzare display:none anche dopo che l'utente riattiva
-    // la mascotte dalle Impostazioni.
-    document.documentElement.removeAttribute('data-mascot-hidden');
 
     // Android: escludi l'area di Jenny dalle gesture di sistema (v. sotto).
     this._onResize = () => this._updateGestureExclusion();
@@ -210,7 +201,6 @@ export class JennyMascot {
      L'officina, che ha altre viste, lo decide da `setMode`. */
   _enterInitialState() {
     this.el.classList.add('in-chat', 'out');
-    this._applyVisibility();
     this._syncArt();
   }
 
@@ -223,14 +213,6 @@ export class JennyMascot {
   _updateGestureExclusion() {
     const api = window.JennyNative;
     if (!api || typeof api.setGestureExclusion !== 'function') return;
-    if (this.el.classList.contains('hidden-mode')) {
-      try {
-        api.clearGestureExclusion?.();
-      } catch (_) {
-        /* bridge assente */
-      }
-      return;
-    }
     const r = this.el.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const m = 8; // margine di sicurezza (px CSS) attorno all'hitbox
@@ -550,19 +532,11 @@ export class JennyMascot {
 
   /* ── Preferenze ── */
 
-  /* Visibile o spenta (la stanza «Jenny» della casa, v. shared/mascot.js).
-     L'officina la spegne anche durante l'onboarding, e lo fa da `setMode`. */
-  _applyVisibility() {
-    this.el.classList.toggle('hidden-mode', !mascotVisible());
-    this._updateGestureExclusion();
-  }
-
-  /* Riallinea visibilità e arte quando l'utente cambia le preferenze dalla
+  /* Riallinea l'arte quando l'utente cambia le preferenze dalla
      stanza «Jenny» della casa (evento 'mascotchange'). Le img del volo
      hanno src fisso a creazione e non si ricablano più: da quando l'arte ha
      una sola variante, il loro path non dipende da nessuna preferenza. */
   _applyMascotPrefs() {
-    this._applyVisibility();
     if (!this._talk.timer) this._syncArt();
   }
 

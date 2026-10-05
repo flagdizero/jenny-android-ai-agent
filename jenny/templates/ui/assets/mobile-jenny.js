@@ -14,7 +14,6 @@
 import { AppState } from './shared/state.js';
 import { wsManager } from './shared/ws-manager.js';
 import { sessionManager } from './shared/session-manager.js';
-import { mascotVisible } from './shared/mascot.js';
 import { JennyWithMinichat } from './shared/jenny-minichat.js';
 
 export class JennyCompanion extends JennyWithMinichat {
@@ -48,19 +47,6 @@ export class JennyCompanion extends JennyWithMinichat {
     if (this._abortFlight) this._abortFlight();
     // Al primo giro `mode` è già quella del costruttore: niente da cambiare.
     if (!initial) this._placeChanged(mode);
-    // Nascosta per preferenza utente (la stanza «Jenny» della casa →
-    // visibile, v. shared/mascot.js).
-    const hidden = !mascotVisible();
-    this.el.classList.toggle('hidden-mode', hidden);
-    // Coerente col media-query landscape: nascondi anche gli overlay
-    // (minichat e scrim), non solo il duo, per evitare residui interattivi.
-    this.mc.classList.toggle('hidden-mode', hidden);
-    this.scrim.classList.toggle('hidden-mode', hidden);
-    if (hidden) {
-      this._updateGestureExclusion();
-      return;
-    }
-
     if (mode === 'chat') {
       // Presenza pura: all'angolo sopra la barra di input, senza minichat.
       this.el.classList.add('in-chat', 'out');
@@ -69,11 +55,5 @@ export class JennyCompanion extends JennyWithMinichat {
     }
     this._syncArt();
     this._updateGestureExclusion();
-  }
-
-  /* Le preferenze passano da `setMode`, che sa anche degli overlay della
-     minichat. */
-  _applyVisibility() {
-    this.setMode(this.mode, true);
   }
 }

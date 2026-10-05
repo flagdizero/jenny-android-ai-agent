@@ -209,7 +209,6 @@
     "cronRecoveredBackup": "Your scheduled reminders were restored from the last good backup: the job list could not be read at startup. Check that they are all there.",
     "cronRecoveredEmpty": "The scheduled reminder list could not be read and there was no usable backup, so Jenny started with none: the ones you had created will not fire again and need recreating. The unreadable file was kept aside:",
     "themeLabel": "Theme",
-    "mascotVisible": "Show mascot",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
     "mascotSizeMedium": "Medium",
@@ -1054,7 +1053,6 @@
     },
     "jenny": {
       "title": "{name}",
-      "hidden": "hidden",
       "floatingShort": "floating",
       "name": "Her name",
       "nameHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
