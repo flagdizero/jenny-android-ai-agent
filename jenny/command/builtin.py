@@ -7,12 +7,16 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.utils.helpers import build_status_content
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jenny.agent.dream_review import ReviewOutcome
     from jenny.agent.gardener import GardenerOutcome
 
@@ -608,7 +612,10 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
                     f"`{wikis_dir}/{target}/wiki/`, and there is nothing there."
                 )
             else:
-                content = _format_gardener_outcome(target, await run_gardener(loop, store))
+                outcome = await run_gardener(loop, store)
+                content = _format_gardener_outcome(
+                    target, outcome, absence=_gardener_board_absence(store.root)
+                )
         except Exception as e:
             content = f"The gardener failed: {e}"
         await loop.bus.publish_outbound(OutboundMessage(
@@ -654,20 +661,58 @@ def _gardener_no_target() -> str:
     return refusal(spec, UNIFIED_SESSION_KEY)
 
 
-def _format_gardener_outcome(name: str, outcome: "GardenerOutcome") -> str:
+def _format_gardener_outcome(name: str, outcome: "GardenerOutcome", *, absence: str = "") -> str:
     """Messaggio utente per una passata: la wiki, poi la bacheca se e' girata.
 
     La passata della bacheca gira anche a diario vuoto (una prima bacheca da
     proporre, un cassetto stantio), quindi la frase «non c'era niente, nessun
     token speso» sarebbe falsa proprio quando la bacheca ha lavorato: in quel
     caso la wiki tace e parla solo la bacheca.
+
+    *absence* e' il perche' il quaderno non ha bacheca, dopo la passata
+    (``board_absence``). Se la bacheca non e' girata **e** il quaderno non ne ha
+    una, si dice perche': il 05/10 un ``/gardener`` su un archivio di ricerca
+    ha risposto solo «niente di nuovo nel diario», e la domanda successiva,
+    «perche' la bacheca e' vuota?», e' finita in una causa inventata.
     """
-    board = _gardener_board_line(name, outcome.board)
+    board = _gardener_board_line(name, outcome.board) or _gardener_no_board_line(name, absence)
     if not board:
         return _format_wiki_outcome(name, outcome)
-    if outcome.status == "skipped_no_delta":
+    if outcome.status == "skipped_no_delta" and outcome.board:
         return f"Nothing new in {name}'s journal for the pages. {board}"
     return f"{_format_wiki_outcome(name, outcome)} {board}"
+
+
+def _gardener_board_absence(root: Path) -> str:
+    """``board_absence`` per la risposta di ``/gardener``, o ``""`` se non si sa dire."""
+    try:
+        from jenny.board.context_block import board_absence
+
+        return board_absence(root)
+    except Exception as exc:  # noqa: BLE001 — la risposta esce comunque, senza il perche'
+        logger.warning("gardener: cannot tell why {} has no board: {}", root.name, exc)
+        return ""
+
+
+def _gardener_no_board_line(name: str, absence: str) -> str:
+    """Perche' *name* resta senza bacheca, o ``""`` se ce l'ha (o non si sa)."""
+    if absence == "research":
+        return (
+            f"{name} has no board, on purpose: its pages are in concepts/ and entities/ and it "
+            "has no journal, so it counts as a research archive. Once the journal has a line, "
+            "the next pass proposes a first board."
+        )
+    if absence == "no_pages":
+        return f"{name} has no board because it has no pages yet."
+    if absence == "proposed":
+        return f"A first board for {name} is waiting in the envelope for you to accept."
+    if absence == "declined":
+        return f"{name} has no board because you turned down the first one proposed."
+    if absence == "later":
+        return f"{name}'s first board was postponed; a later pass proposes it again."
+    if absence == "next_pass":
+        return f"{name} has no board yet; a later pass proposes the first one."
+    return ""
 
 
 def _gardener_board_line(name: str, status: str) -> str:

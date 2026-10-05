@@ -179,6 +179,36 @@ class TestOutcomeMessages:
         assert "no tokens spent" not in text
         assert "envelope" in text
 
+    def test_a_research_archive_is_told_why_it_got_no_board(self):
+        """Il 05/10: «niente di nuovo nel diario» e basta, e la domanda dopo —
+        «perche' la bacheca e' vuota?» — e' finita in una causa inventata."""
+        text = _format_gardener_outcome(
+            "finanza", GardenerOutcome(status="skipped_no_delta"), absence="research"
+        )
+
+        assert text.startswith("Nothing new in finanza's journal")
+        assert "no tokens spent" in text
+        assert "research archive" in text
+        assert "proposes a first board" in text
+
+    def test_every_absence_says_something_specific(self):
+        lines = {
+            absence: _format_gardener_outcome(
+                "finanza", GardenerOutcome(status="skipped_no_delta"), absence=absence
+            )
+            for absence in ("research", "no_pages", "proposed", "declined", "later", "next_pass")
+        }
+
+        assert len(set(lines.values())) == len(lines)
+
+    def test_a_board_that_ran_speaks_for_itself(self):
+        text = _format_gardener_outcome(
+            "finanza", GardenerOutcome(status="skipped_no_delta", board="done"),
+            absence="proposed",
+        )
+
+        assert text.count("envelope") == 1
+
     def test_the_board_sentence_follows_the_wiki_one(self):
         text = _format_gardener_outcome(
             "viaggio", GardenerOutcome(status="written", lines=4, writes=2, board="failed")

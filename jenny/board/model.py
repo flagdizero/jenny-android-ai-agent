@@ -439,6 +439,28 @@ def page_owners(board: Mapping[str, Any]) -> dict[str, str]:
     return owners
 
 
+def first_board_hold(board: Mapping[str, Any]) -> str | None:
+    """Chi tiene ferma la prima bacheca di un quaderno senza schede, o ``None``.
+
+    ``"proposed"`` se la proposta aspetta gia' nella busta, ``"declined"`` se
+    l'utente l'ha rifiutata, ``"later"`` se ha detto «piu' avanti» e il rinvio
+    vale ancora. ``None`` vuol dire che niente la trattiene: la propone la
+    prossima passata. Ha senso solo su una bacheca senza schede — una con le
+    schede la sua prima l'ha gia' avuta.
+    """
+    if any(s.get("kind") == "initial_board" for s in board.get("suggestions") or []):
+        return "proposed"
+    if any(d.get("kind") == "initial_board" for d in board.get("declined") or []):
+        return "declined"
+    passes = int(board.get("passes") or 0)
+    if any(
+        x.get("kind") == "initial_board" and int(x.get("untilPass") or 0) > passes
+        for x in board.get("later") or []
+    ):
+        return "later"
+    return None
+
+
 def open_reminders(reminders: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [r for r in reminders.get("reminders") or [] if r.get("state") == "open"]
 

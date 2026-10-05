@@ -71,6 +71,27 @@ def wiki_journal_dir(wiki_root: Path) -> Path:
     return wiki_root / JOURNAL_DIRNAME
 
 
+def is_research_wiki(wiki_root: Path) -> bool:
+    """Se *wiki_root* e' un archivio di ricerca: la forma di ricerca
+    (``concepts/``/``entities/``) **e** nessuna pagina di diario.
+
+    La forma da sola non basta: un quaderno vissuto puo' avere le pagine
+    nelle cartelle di ricerca e un diario che il giardiniere legge ogni
+    giorno, ed e' proprio il quaderno che una bacheca deve avere. Il diario
+    e' il segno che ci si vive dentro; un archivio di ricerca senza diario
+    si apre con la ricerca, e la sua bacheca si decide piu' avanti.
+
+    Sta qui e non nella passata della bacheca perche' la domanda se la fanno in
+    tre — la passata, il blocco di progetto del prompt, la risposta di
+    ``/gardener`` — e tre copie sarebbero tre politiche.
+    """
+    pages = wiki_root / "wiki"
+    if not ((pages / "concepts").is_dir() or (pages / "entities").is_dir()):
+        return False
+    journal = wiki_journal_dir(wiki_root)
+    return not (journal.is_dir() and any(journal.glob("*.md")))
+
+
 def journal_page_name(day: "date") -> str:
     """Il nome della pagina di diario di *day*: ``AAAAMMGG.md``.
 

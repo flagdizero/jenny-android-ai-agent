@@ -41,7 +41,7 @@ from jenny.board import model
 from jenny.board.corrections import open_corrections
 from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
 from jenny.utils.prompt_templates import render_template
-from jenny.utils.wiki_paths import iter_wiki_pages, wiki_journal_dir
+from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
 # Quanto delle pagine di un cassetto entra nel prompt, e quanto in tutto. Un
 # cassetto è un indice: due righe per sezione si scrivono dalle prime righe di
@@ -111,20 +111,8 @@ class BoardPass:
     # -- inventario -------------------------------------------------------
 
     def is_research_wiki(self) -> bool:
-        """Una wiki di sola ricerca resta senza bacheca: la forma di ricerca
-        (``concepts/``/``entities/``) **e** nessuna pagina di diario.
-
-        La forma da sola non basta: un quaderno vissuto puo' avere le pagine
-        nelle cartelle di ricerca e un diario che il giardiniere legge ogni
-        giorno, ed e' proprio il quaderno che una bacheca deve avere. Il diario
-        e' il segno che ci si vive dentro; un archivio di ricerca senza diario
-        si apre con la ricerca, e la sua bacheca si decide piu' avanti.
-        """
-        pages = self.root / "wiki"
-        if not ((pages / "concepts").is_dir() or (pages / "entities").is_dir()):
-            return False
-        journal = wiki_journal_dir(self.root)
-        return not (journal.is_dir() and any(journal.glob("*.md")))
+        """Una wiki di sola ricerca resta senza bacheca: v. :func:`is_research_wiki`."""
+        return is_research_wiki(self.root)
 
     def owners(self) -> dict[str, str]:
         return model.page_owners(self.board) if self.board else {}
@@ -202,14 +190,7 @@ class BoardPass:
             return True
         if board["cards"]:
             return False
-        if any(s["kind"] == "initial_board" for s in board["suggestions"]):
-            return False
-        if any(d.get("kind") == "initial_board" for d in board["declined"]):
-            return False
-        return not any(
-            x.get("kind") == "initial_board" and int(x.get("untilPass") or 0) > board["passes"]
-            for x in board["later"]
-        )
+        return model.first_board_hold(board) is None
 
     def _rested(self, minutes: int) -> bool:
         last = model.parse_iso((self.board or {}).get("lastPassAt"))

@@ -128,3 +128,101 @@ def test_a_micro_app_and_a_cron_reach_the_block_and_the_drawer(tmp_path) -> None
     assert "Micro app «Acerello» (`m-acerello`, micro_app tool): Umidità 38%" in drawer
     assert "board/micro/m-acerello/run.py" in drawer
     assert "Notebook cron «Meteo»" in drawer and "Oggi piove." in drawer
+
+
+# ── Senza bacheca: il perche' arriva nel prompt ─────────────────────────────
+
+
+def _research_archive(tmp_path: Path) -> tuple[Path, Path]:
+    """La forma di ricerca senza diario: il caso che il 05/10 ha prodotto una causa inventata."""
+    ws = tmp_path / "workspace"
+    root = ws / "wikis" / "finanza"
+    (root / "wiki" / "concepts").mkdir(parents=True)
+    (root / "wiki" / "entities").mkdir()
+    (root / "wiki" / "index.md").write_text("# Finanza\n")
+    (root / "wiki" / "concepts" / "etf-basics.md").write_text("# ETF basics\n\nNo frontmatter.\n")
+    return ws, root
+
+
+def test_a_research_archive_says_why_it_has_no_board(tmp_path) -> None:
+    from jenny.agent.board_pass import BoardPass
+    from jenny.board.context_block import board_absence
+
+    ws, root = _research_archive(tmp_path)
+    assert board_absence(root) == "research"
+    # La stessa risposta della passata: nessuna bacheca da proporre.
+    assert BoardPass(root, ws).reason() is None
+
+
+def test_the_first_journal_line_turns_an_archive_into_a_notebook(tmp_path) -> None:
+    from jenny.agent.board_pass import BoardPass
+    from jenny.board.context_block import board_absence
+
+    ws, root = _research_archive(tmp_path)
+    (root / "raw" / "journal").mkdir(parents=True)
+    (root / "raw" / "journal" / "20261005.md").write_text("# 2026-10-05\n\n- 17:14 — una riga\n")
+    assert board_absence(root) == "next_pass"
+    assert BoardPass(root, ws).reason() == "migrate"
+
+
+def test_the_absence_follows_the_first_board_through_its_answers(tmp_path) -> None:
+    from jenny.board.context_block import board_absence
+
+    root = _notebook(tmp_path)
+    assert board_absence(root) == "next_pass"
+
+    mutate_board(root, lambda b: b["suggestions"].append({"id": "s-1", "kind": "initial_board"}))
+    assert board_absence(root) == "proposed"
+
+    def decline(board):
+        board["suggestions"] = []
+        board["declined"].append({"kind": "initial_board", "at": "2026-10-05T17:00:00+02:00"})
+
+    mutate_board(root, decline)
+    assert board_absence(root) == "declined"
+
+    def postpone(board):
+        board["declined"] = []
+        board["later"].append({"kind": "initial_board", "untilPass": board["passes"] + 3})
+
+    mutate_board(root, postpone)
+    assert board_absence(root) == "later"
+
+    _cards(root, 1, brief="In vaso 14.")
+    assert board_absence(root) == ""
+
+
+def test_a_notebook_without_pages_waits_for_them(tmp_path) -> None:
+    from jenny.board.context_block import board_absence
+
+    root = tmp_path / "wikis" / "vuoto"
+    (root / "wiki").mkdir(parents=True)
+    (root / "wiki" / "index.md").write_text("# Vuoto\n")
+    assert board_absence(root) == "no_pages"
+
+
+def test_the_prompt_tells_why_there_is_no_board_and_what_does_not_decide_it(tmp_path) -> None:
+    from jenny.utils.prompt_templates import render_template
+
+    ws, root = _research_archive(tmp_path)
+    fed = ContextBuilder(ws)._project_block_vars(root)
+    assert fed["project_board"] == ""
+    assert fed["project_board_absence"] == "research"
+
+    text = render_template("agent/project.md", project_path="wikis/finanza", **fed)
+    assert "This notebook has no board yet" in text
+    assert "research archive" in text
+    assert "not the pages' frontmatter" in text
+
+
+def test_a_board_with_cards_keeps_the_absence_out_of_the_prompt(tmp_path) -> None:
+    from jenny.utils.prompt_templates import render_template
+
+    root = _notebook(tmp_path)
+    _cards(root, 1, brief="In vaso 14.")
+    fed = ContextBuilder(tmp_path)._project_block_vars(root)
+    assert fed["project_board_absence"] == ""
+
+    text = render_template("agent/project.md", project_path="wikis/piante", **fed)
+    assert "This notebook opens on its **board**" in text
+    assert "has no board yet" not in text

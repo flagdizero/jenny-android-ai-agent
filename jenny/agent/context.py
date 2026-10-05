@@ -117,6 +117,21 @@ def _read_project_board(root: Path) -> str:
         return ""
 
 
+def _read_project_board_absence(root: Path) -> str:
+    """Perche' il quaderno *root* non ha bacheca, o ``""``. Mai un'eccezione.
+
+    V. ``jenny/board/context_block.py::board_absence``. Su un guasto si tace,
+    come prima che la sezione esistesse: meglio nessuna ragione che una falsa.
+    """
+    try:
+        from jenny.board.context_block import board_absence
+
+        return board_absence(root)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: cannot tell why {} has no board: {}", root, exc)
+        return ""
+
+
 def _board_turn_lines(root: Path, message: Any) -> list[str]:
     """I cassetti delle schede che il messaggio nomina, per il contesto del turno."""
     if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
@@ -1142,6 +1157,11 @@ class ContextBuilder:
             # La bacheca del quaderno: una riga per scheda, il suo «in breve»,
             # l'attesa piu' vicina, il segnale (``jenny/board/context_block.py``).
             "project_board": project_board,
+            # E quando non c'e', il perche': senza, il prompt taceva proprio nel
+            # caso in cui l'utente chiede «perche' la bacheca e' vuota?».
+            "project_board_absence": (
+                "" if project_board else _read_project_board_absence(root)
+            ),
             # T3, il gradino 1 di P4: la mappa del progetto entra **d'ufficio**,
             # non su richiesta. Il giro di wiki parte pagato, e la differenza si
             # vede alla prima domanda di una sessione nuova: senza, l'agente

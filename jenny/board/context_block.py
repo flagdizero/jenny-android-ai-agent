@@ -25,7 +25,7 @@ from typing import Any
 
 from jenny.board import model
 from jenny.board.store import read_board, read_card_summary, read_reminders
-from jenny.utils.wiki_paths import iter_wiki_pages
+from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
 # Il tetto del blocco. È lo stesso numero della mappa che sostituisce
 # (``_PROJECT_MAP_MAX_CHARS`` in ``jenny/agent/context.py``): il blocco si paga a
@@ -76,6 +76,36 @@ def open_questions(root: Path) -> str:
             out.append(line.strip())
     joined = " ".join(out)
     return joined if len(joined) <= OPEN_MAX_CHARS else joined[: OPEN_MAX_CHARS - 1] + "…"
+
+
+def board_absence(root: Path) -> str:
+    """Perche' il quaderno *root* non ha una bacheca da mostrare, o ``""`` se ce l'ha.
+
+    ``"research"`` (un archivio di ricerca: niente bacheca finche' non nasce un
+    diario), ``"no_pages"``, ``"proposed"``/``"declined"``/``"later"`` (v.
+    :func:`model.first_board_hold`), ``"next_pass"`` (niente la trattiene: la
+    propone il giardiniere).
+
+    **Esiste perche' senza bacheca il prompt taceva.** La sezione sulla bacheca
+    entrava solo con una bacheca con delle schede, quindi l'unica volta in cui
+    Jenny doveva spiegarne l'assenza era l'unica in cui non sapeva cosa fosse. Il
+    05/10 su un archivio di ricerca se n'e' inventata la causa — «manca il
+    frontmatter delle pagine» — e ha mandato due subagent a scriverlo su 33
+    pagine. Le domande sono quelle di ``BoardPass.reason``, nello stesso ordine,
+    e senza leggere i titoli delle pagine: si paga a ogni turno.
+    """
+    board = read_board(root)
+    if board is not None and board["cards"]:
+        return ""
+    if is_research_wiki(root):
+        return "research"
+    if not iter_wiki_pages(root / "wiki", titles=False):
+        return "no_pages"
+    if board is not None:
+        hold = model.first_board_hold(board)
+        if hold is not None:
+            return hold
+    return "next_pass"
 
 
 def board_block(
