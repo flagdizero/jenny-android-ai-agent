@@ -168,7 +168,11 @@ def test_both_shells_answer_the_tap() -> None:
     perche' usano quella, con sopra la stessa minichat: l'officina la estende,
     la casa la crea."""
     src = (ASSETS / "shared" / "jenny-mascot.js").read_text(encoding="utf-8")
-    assert re.search(r"onTap:.*'out'", src), "la mascotte non gira piu' lo stato al tocco"
+    assert re.search(r"onTap: \(\) => this\._onTap\(\)", src), "la mascotte non passa piu' il tocco"
+    # Dal 05/10/2026 il tocco e' la porta della chat (v. `_onTap`); senza
+    # adattatore resta il gesto di prima, che gira `out`.
+    tap = re.search(r"\n  _onTap\(\) \{(.*?)\n  \}\n", src, re.S)
+    assert tap and "this._setOut(!out)" in tap.group(1), "senza porta il tocco non la mette piu' via"
     assert "isOut:" in src and "setOut:" in src, "la mascotte non dichiara piu' lo stato"
     minichat = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
     assert "class JennyWithMinichat extends JennyMascot" in minichat

@@ -6253,6 +6253,36 @@ body {
 }
 .jenny-art-stack img.jenny-face.off { visibility: hidden; }
 
+/* Il saluto e il sobbalzo (v. `hello` e `nudge` in shared/jenny-mascot.js):
+   si muove lo stack, non le img, che hanno gia' il loro respiro (jenny-bob) e
+   non devono perderlo. Il saluto e' un saltello; il sobbalzo, quando tocchi il
+   velo dietro la chat, uno scatto di lato — «chiudi da me». */
+.jenny-duo.hello .jenny-art-stack { animation: jenny-hop 0.5s ease-out 2; }
+.jenny-duo.nudge .jenny-art-stack { animation: jenny-nudge 0.45s ease-in-out; }
+
+/* Il pallino «c'e' una risposta che non hai visto» (v. `setBadge`). Sta sulla
+   testa a sinistra, dove si vede sia al bordo (dove di lei sporge meta') sia
+   fuori; in volo sparisce con l'arte di riposo. Il colore e' quello del tema. */
+.jenny-dot {
+  position: absolute;
+  left: 30%;
+  top: 16%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(var(--accent-rgb), 0.8);
+  display: none;
+  pointer-events: none;
+}
+.jenny-duo.has-dot .jenny-dot { display: block; }
+.jenny-duo.flying .jenny-dot { display: none; }
+/* A movimento ridotto il saluto resta nella faccia e nella mano, senza salto. */
+@media (prefers-reduced-motion: reduce) {
+  .jenny-duo.hello .jenny-art-stack,
+  .jenny-duo.nudge .jenny-art-stack { animation: none; }
+}
+
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:
    hang/fall/ground/walk1/walk2, una sola visibile via .on) sostituisce
    l'art normale e vola via transform (rAF in JS). Tutta l'arte condivide
@@ -6478,6 +6508,8 @@ body {
 .jenny-mc.open[data-state="reply"] .jenny-mc-bubble { display: flex; animation: jenny-pop 0.22s ease-out; }
 
 @keyframes jenny-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes jenny-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+@keyframes jenny-nudge { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 60% { transform: translateX(4px); } }
 @keyframes jenny-wobble { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
 @keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 @keyframes jenny-pop { from { opacity: 0; transform: translateY(6px) scale(0.94); } to { opacity: 1; transform: none; } }

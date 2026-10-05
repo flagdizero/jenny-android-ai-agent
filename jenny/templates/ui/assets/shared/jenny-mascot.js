@@ -94,16 +94,38 @@ const TALK_QUIET_TO_THINK_MS = 1000; // silenzio testo -> torna a pensa
 const MOOD_FACES = ['happy', 'sad', 'angry'];
 const MOOD_HOLD_MS = 12000; // quanto dura una faccia prima di tornare a normale
 
+/* ── Il saluto ──
+   Toccata dove la chat e' gia' a schermo, Jenny saluta: la mano alzata e gli
+   occhi felici, per il tempo di un cenno. Decisione dell'utente del
+   05/10/2026, quando il tocco e' diventato la porta della chat: dove la chat
+   c'e' gia', il tocco non ha niente da aprire, e lei risponde lo stesso. */
+const HELLO_MS = 1400;
+/* Quanto dura il sobbalzo (v. `nudge`): la stessa cifra dell'animazione CSS,
+   cosi' la classe si toglie anche dove `animationend` non arriva. */
+const NUDGE_MS = 450;
+
 export class JennyMascot {
   /**
    * @param {HTMLElement} host  dove vive lo sprite (`#app` in officina,
    *   `.home-shell` in casa): e' il suo riferimento per `position: absolute`.
-   * @param {{mode?: string}} [opts]  la vista di partenza. Conta solo per
-   *   l'officina, che ne ha piu' d'una; qui e' sempre `chat`.
+   * @param {{mode?: string, chat?: object}} [opts]  `mode` e' la vista di
+   *   partenza (conta solo per l'officina, che ne ha piu' d'una). `chat` e' la
+   *   porta della conversazione, l'adattatore del guscio:
+   *   `{ isOpen(), onScreen(), canOpen?(), open({gesture}), close() }` —
+   *   `isOpen` vuol dire «la chat e' aperta SOPRA una pagina», `onScreen` «la
+   *   chat e' a schermo da se'» (la pagina chat, la Console). Senza, il tocco
+   *   la manda al bordo o la fa uscire, come prima del 05/10/2026.
    */
-  constructor(host, { mode = 'chat' } = {}) {
+  constructor(host, { mode = 'chat', chat = null } = {}) {
     this.host = host;
     this.mode = mode;
+    this._chat = chat;
+    // Il saluto in corso (v. `hello`): scadenza e timer.
+    this._helloUntil = 0;
+    this._helloTimer = null;
+    this._nudgeTimer = null;
+    // Cosa aggiungere al nome nell'etichetta (v. `setBadge`).
+    this._labelNote = '';
     this._agentState = 'idle';
     this._turnActive = false;
     // Turno chiesto dalla minichat e non ancora concluso (v. jenny-minichat.js).
@@ -229,8 +251,8 @@ export class JennyMascot {
     this.el.type = 'button';
     this.el.className = 'jenny-duo';
     // Il nome di lei, e resta giusto se la si rinomina a pagina aperta.
-    this.el.setAttribute('aria-label', botName.get());
-    this._offName = botName.onChange((name) => this.el?.setAttribute('aria-label', name));
+    this._paintLabel();
+    this._offName = botName.onChange(() => this._paintLabel());
     this.el.setAttribute('tabindex', '-1');
     // I due livelli (corpo e faccia) in un contenitore solo; il respiro resta
     // sulle img.
@@ -258,6 +280,13 @@ export class JennyMascot {
     const { fly, flyPose } = buildFlyLayer(this.el);
     this.fly = fly;
     this.flyPose = flyPose;
+
+    // Il pallino «c'e' una risposta» (v. `setBadge`): e' di lei, quindi sta
+    // dentro il suo bottone, e si vede al bordo come fuori.
+    const dot = document.createElement('span');
+    dot.className = 'jenny-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    this.el.appendChild(dot);
 
     this.host.appendChild(this.el);
   }
@@ -291,6 +320,7 @@ export class JennyMascot {
      mentre lei sta ancora pensando racconterebbe una cosa falsa. */
   _faceKey() {
     if (this._agentState === 'thinking') return 'thinking';
+    if (this._greeting?.()) return 'happy';
     return this._moodFace() || 'normal';
   }
 
@@ -310,8 +340,73 @@ export class JennyMascot {
       this._setFace(null);
       return;
     }
-    this._setBody(this._agentState === 'thinking' ? BODY.think : BODY.idle);
+    let body = BODY.idle;
+    if (this._agentState === 'thinking') body = BODY.think;
+    else if (this._greeting?.()) body = BODY.hand;
+    this._setBody(body);
     this._setFace(FACE[this._faceKey()]);
+  }
+
+  /* ── Saluto, sobbalzo, pallino ── */
+
+  /* Sta salutando? Solo a riposo: pensa e parla hanno la precedenza, e una
+     mano alzata in mezzo a una risposta direbbe una cosa che non sta facendo. */
+  _greeting(now = performance.now()) {
+    return this._agentState === 'idle' && now < this._helloUntil;
+  }
+
+  /** Il saluto: mano alzata e occhi felici per un cenno (v. HELLO_MS). Mentre
+   *  pensa o parla resta solo il saltello, senza cambiare faccia. */
+  hello() {
+    this._bounce('hello', HELLO_MS);
+    if (this._agentState !== 'idle' || this._talk.timer) return;
+    if (this._helloTimer) clearTimeout(this._helloTimer);
+    this._helloUntil = performance.now() + HELLO_MS;
+    this._syncArt();
+    this._helloTimer = setTimeout(() => {
+      this._helloTimer = null;
+      this._helloUntil = 0;
+      this._syncArt();
+    }, HELLO_MS);
+  }
+
+  /** Il sobbalzo: «sono qui, chiudi da me». Lo chiede il guscio quando tocchi
+   *  il velo dietro la chat, che apposta non la chiude. */
+  nudge() {
+    this._bounce('nudge', NUDGE_MS);
+  }
+
+  /* Una classe d'animazione per *ms*, riaccesa da capo se gia' c'era. Tolta a
+     tempo e non su `animationend`: con `prefers-reduced-motion` l'animazione
+     non parte, e la classe resterebbe addosso. */
+  _bounce(cls, ms) {
+    const timers = this._bounceTimers || (this._bounceTimers = {});
+    if (timers[cls]) clearTimeout(timers[cls]);
+    this.el.classList.remove(cls);
+    void this.el.offsetWidth; // riparte l'animazione
+    this.el.classList.add(cls);
+    timers[cls] = setTimeout(() => {
+      timers[cls] = null;
+      this.el.classList.remove(cls);
+    }, ms);
+  }
+
+  /** Il pallino «c'e' una risposta che non hai visto». *note* e' la frase che
+   *  lo dice a chi non lo vede: la sceglie il guscio, che ha le traduzioni. */
+  setBadge(on, note = '') {
+    this.el.classList.toggle('has-dot', Boolean(on));
+    this._labelNote = on ? note : '';
+    this._paintLabel();
+  }
+
+  /** La chat e' aperta sopra la pagina: lei e' il bottone che la chiude. */
+  setExpanded(open) {
+    this.el.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  _paintLabel() {
+    const name = botName.get();
+    this.el?.setAttribute('aria-label', this._labelNote ? `${name} · ${this._labelNote}` : name);
   }
 
   /* Stato logico dell'agente. In docked (chat senza out) lo stato 'thinking'
@@ -481,9 +576,9 @@ export class JennyMascot {
       fly: this.fly,
       flyPose: this.flyPose,
       isOut: () => this.el.classList.contains('out'),
-      setOut: (v) => this._setOut(v),
+      setOut: (v) => this._onGestureOut(v),
       onDragCommit: () => this._onDragCommit(),
-      onTap: () => this._setOut(!this.el.classList.contains('out')),
+      onTap: () => this._onTap(),
       onFlightEnd: () => {
         this._syncArt();
         this._updateGestureExclusion();
@@ -494,6 +589,69 @@ export class JennyMascot {
   /* Il trascinamento e' partito davvero. Qui non c'e' niente da chiudere; con
      la minichat, la minichat. */
   _onDragCommit() {}
+
+  /* ── La porta della chat ──
+     Dal 05/10/2026 il tocco su Jenny e' la porta della conversazione: dove la
+     chat non c'e' la apre, a tutto schermo sopra la pagina; dove e' aperta
+     sopra una pagina la chiude; dove e' a schermo da se' (la pagina chat, la
+     Console) lei saluta. Senza adattatore (`chat`) resta il gesto di prima:
+     il tocco la manda al bordo o la fa uscire. */
+  _onTap() {
+    const chat = this._chat;
+    const out = this.el.classList.contains('out');
+    if (!chat) {
+      this._setOut(!out);
+      return;
+    }
+    if (chat.isOpen()) {
+      chat.close();
+      return;
+    }
+    if (chat.onScreen()) {
+      if (!out) this._setOut(true);
+      this.hello();
+      return;
+    }
+    if (chat.canOpen?.() === false) {
+      this.hello();
+      return;
+    }
+    chat.open({ gesture: 'tap' });
+  }
+
+  /* Dove la fisica la vuole mettere a fine gesto: uno swipe verso l'interno
+     (o un volo che finisce fuori) e' «vieni», verso il bordo e' «vai via».
+     «Vieni» dove la chat non c'e' la apre, come il tocco; «vai via» con la
+     chat aperta sopra una pagina la chiude. Il resto e' solo dove sta lei. */
+  _onGestureOut(out) {
+    const chat = this._chat;
+    if (!chat) {
+      this._setOut(out);
+      return;
+    }
+    if (chat.isOpen()) {
+      if (out) this._setOut(true);
+      else chat.close();
+      return;
+    }
+    if (out && !chat.onScreen()) {
+      if (chat.canOpen?.() === false) {
+        this._setOut(false);
+        this.hello();
+        return;
+      }
+      chat.open({ gesture: 'swipe' });
+      return;
+    }
+    this._setOut(out);
+  }
+
+  /** La chat e' a schermo (`true`) o no. Fuori dalla chat lei non pensa per
+   *  gli invii — non ce ne sono — ma continua a seguire la conversazione: una
+   *  risposta che arriva mentre e' al bordo la fa parlare di lato. */
+  setChatOnScreen(on) {
+    this.mode = on ? 'chat' : 'away';
+  }
 
   /** Al bordo (`false`) o venuta fuori (`true`).
    *
