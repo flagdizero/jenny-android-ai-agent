@@ -28,15 +28,17 @@ export const IMPACT_SPEED = 1800;
 export const IMPACT_PERIOD_MS = 300;
 export const IMPACT_DECAY_MS = 120;
 export const IMPACT_MS = 600; // oltre, e' ferma
-/** La rialzata: carica le gambe, si tira su, si assesta. */
-export const GETUP_LOAD_MS = 110;
-export const GETUP_RISE_MS = 150;
-export const GETUP_SETTLE_MS = 120;
-export const GETUP_MS = 380; // GETUP_LOAD_MS + GETUP_RISE_MS + GETUP_SETTLE_MS
-/** Il passo: affonda quando cambia piede, si alza a meta'. Il periodo e' quello
- *  dell'alternanza walk1/walk2 di `mascot-drag.js`. */
+/** La ripartenza: carica le gambe **da ferma**, negli ultimi LOAD_MS a terra,
+ *  e si distende nel primo passo in BLEND_MS, mentre il passo entra. Niente
+ *  spostamento in su: alzarla mentre comincia a camminare si leggeva come un
+ *  saltellino (dall'utente, 06/10/2026). */
+export const LOAD_MS = 110;
+export const BLEND_MS = 150;
+/** Il passo: affonda quando cambia piede, si alza a meta', in una curva
+ *  continua. Il periodo e' quello dell'alternanza walk1/walk2 di
+ *  `mascot-drag.js`. */
 export const STEP_MS = 500;
-export const STEP_LIFT_PX = 3;
+export const STEP_LIFT_PX = 2;
 
 /** Dove poggiano i piedi, in frazioni del quadrato: e' il centro delle scale
  *  a terra, cosi' i piedi restano dove sono. */
@@ -69,27 +71,34 @@ export function impactSquash(vImpact, ms) {
   return { sx: 1 + f, sy: 1 - f, dy: 0 };
 }
 
-/** La rialzata, *ms* dopo la fine della pausa a terra. */
-export function getUp(ms) {
-  if (!(ms >= 0) || ms >= GETUP_MS) return IDENTITY;
-  if (ms < GETUP_LOAD_MS) {
-    const k = ms / GETUP_LOAD_MS;
-    return { sx: 1 + 0.06 * k, sy: 1 - 0.07 * k, dy: 0 };
-  }
-  if (ms < GETUP_LOAD_MS + GETUP_RISE_MS) {
-    const k = (ms - GETUP_LOAD_MS) / GETUP_RISE_MS;
-    return { sx: 1.06 - 0.1 * k, sy: 0.93 + 0.12 * k, dy: -4 * k };
-  }
-  const k = (ms - GETUP_LOAD_MS - GETUP_RISE_MS) / GETUP_SETTLE_MS;
-  return { sx: 0.96 + 0.04 * k, sy: 1.05 - 0.05 * k, dy: -4 * (1 - k) };
+/** Carica le gambe, *ms* dopo l'inizio della carica (a terra, ferma). */
+export function loadLegs(ms) {
+  const k = clamp(ms / LOAD_MS, 0, 1);
+  return { sx: 1 + 0.06 * k, sy: 1 - 0.07 * k, dy: 0 };
 }
 
 /** Il passo al tempo *now* (lo stesso orologio che sceglie walk1/walk2, cosi'
- *  l'affondo cade sul cambio di piede). */
+ *  l'affondo cade sul cambio di piede). *d* vale 1 al cambio di piede e 0 a
+ *  meta' passo: una curva continua, che torna su se stessa a ogni passo. */
 export function walkStep(now) {
   const p = (((now % STEP_MS) + STEP_MS) % STEP_MS) / STEP_MS;
-  const sy = 1 + 0.022 * Math.sin(Math.PI * p) - 0.035 * Math.exp(-p * 10);
-  return { sx: 1 - (sy - 1) * 0.6, sy, dy: -STEP_LIFT_PX * Math.sin(Math.PI * p) };
+  const d = (1 + Math.cos(2 * Math.PI * p)) / 2;
+  const sy = 1 + 0.02 * (1 - d) - 0.025 * d;
+  return { sx: 1 - (sy - 1) * 0.6, sy, dy: -STEP_LIFT_PX * (1 - d) };
+}
+
+/** I primi passi, *ms* dopo la ripartenza: dalla carica (`loadLegs` alla fine)
+ *  si distende, e il passo entra con lo stesso peso. Dopo BLEND_MS e' il passo
+ *  e basta. */
+export function walkStart(ms, now) {
+  const k = clamp(ms / BLEND_MS, 0, 1);
+  const e = 1 - (1 - k) * (1 - k);
+  const w = walkStep(now);
+  return {
+    sx: (1.06 - 0.06 * e) * (1 + (w.sx - 1) * e),
+    sy: (0.93 + 0.07 * e) * (1 + (w.sy - 1) * e),
+    dy: w.dy * e,
+  };
 }
 
 /** `{ sx, sy, dy }` come pezzo di `transform`, scalato attorno al punto che sta

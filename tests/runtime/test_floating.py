@@ -293,7 +293,9 @@ class TestSquashParity:
 
     SQUASH_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingSquash.kt"
     SQUASH_JS = REPO / "jenny/templates/ui/assets/shared/mascot-squash.js"
-    FUNCTIONS = ("heldStretch", "airStretch", "impactSquash", "getUp", "walkStep", "stretch")
+    FUNCTIONS = (
+        "heldStretch", "airStretch", "impactSquash", "loadLegs", "walkStep", "walkStart", "stretch",
+    )
 
     @staticmethod
     def _numbers(body: str) -> list[float]:
@@ -344,7 +346,7 @@ class TestSquashParity:
             kt = self._numbers(self._body(kt_src, name, kotlin=True))
             js = self._numbers(self._body(js_src, name, kotlin=False))
             assert kt == js, f"{name}: {kt} in Kotlin, {js} in JS"
-            assert kt or name == "walkStep", f"{name}: nessun numero confrontato"
+            assert kt, f"{name}: nessun numero confrontato"
 
 
 def test_the_floating_mascot_breathes_like_the_css():

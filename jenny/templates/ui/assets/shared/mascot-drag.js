@@ -23,8 +23,7 @@
 
 import { OUT_SHIFT_RATIO } from './mascot.js';
 import {
-  FEET, GETUP_MS as GETUP_SHAPE_MS, airStretch, aroundFeet, getUp, heldStretch, impactSquash,
-  walkStep,
+  FEET, LOAD_MS, airStretch, aroundFeet, heldStretch, impactSquash, loadLegs, walkStart,
 } from './mascot-squash.js';
 
 /* Tutta l'arte (riposo + pose di volo) vive sullo stesso canvas QUADRATO
@@ -433,11 +432,13 @@ export function bindMascotDrag(host) {
       return ` scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
     }
     if (key === 'ground') {
-      return aroundFeet(impactSquash(fs.impactV, now - fs.impactAt), (FEET.ground - PIVOT_Y) * fs.h);
+      // Gli ultimi LOAD_MS a terra carica le gambe, ferma, prima di ripartire.
+      const s = fs.phase === 'down' && now >= fs.downUntil - LOAD_MS
+        ? loadLegs(now - (fs.downUntil - LOAD_MS))
+        : impactSquash(fs.impactV, now - fs.impactAt);
+      return aroundFeet(s, (FEET.ground - PIVOT_Y) * fs.h);
     }
-    const since = now - fs.getupAt;
-    const s = since < GETUP_SHAPE_MS ? getUp(since) : walkStep(now);
-    return aroundFeet(s, (FEET.walk - PIVOT_Y) * fs.h);
+    return aroundFeet(walkStart(now - fs.getupAt, now), (FEET.walk - PIVOT_Y) * fs.h);
   };
 
   /* Il volo non inizia subito al pointerdown: il tap secco fa solo toggle

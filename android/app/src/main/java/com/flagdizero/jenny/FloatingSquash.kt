@@ -4,7 +4,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.sin
 
 /**
  * Lo schiaccia e allunga del volo della mascotte flottante.
@@ -44,15 +43,15 @@ object FloatingSquash {
     const val IMPACT_DECAY_MS = 120f
     const val IMPACT_MS = 600f
 
-    /** La rialzata: carica le gambe, si tira su, si assesta. */
-    const val GETUP_LOAD_MS = 110f
-    const val GETUP_RISE_MS = 150f
-    const val GETUP_SETTLE_MS = 120f
-    const val GETUP_MS = 380f
+    /** La ripartenza: carica le gambe da ferma negli ultimi [LOAD_MS] a terra,
+     *  e si distende nel primo passo in [BLEND_MS]. Niente spostamento in su:
+     *  alzarla mentre comincia a camminare si leggeva come un saltellino. */
+    const val LOAD_MS = 110f
+    const val BLEND_MS = 150f
 
-    /** Il passo: il periodo è quello dell'alternanza walk1/walk2. */
+    /** Il passo, una curva continua: il periodo è quello di walk1/walk2. */
     const val STEP_MS = 500f
-    const val STEP_LIFT_PX = 3f
+    const val STEP_LIFT_PX = 2f
 
     /** Dove poggiano i piedi, in frazioni del quadrato (`FEET` in JS). */
     const val FEET_GROUND = 0.92f
@@ -80,25 +79,31 @@ object FloatingSquash {
         return Shape(1f + f, 1f - f, 0f)
     }
 
-    /** La rialzata, *ms* dopo la fine della pausa a terra. */
-    fun getUp(ms: Float): Shape {
-        if (ms < 0f || ms >= GETUP_MS) return IDENTITY
-        if (ms < GETUP_LOAD_MS) {
-            val k = ms / GETUP_LOAD_MS
-            return Shape(1f + 0.06f * k, 1f - 0.07f * k, 0f)
-        }
-        if (ms < GETUP_LOAD_MS + GETUP_RISE_MS) {
-            val k = (ms - GETUP_LOAD_MS) / GETUP_RISE_MS
-            return Shape(1.06f - 0.1f * k, 0.93f + 0.12f * k, -4f * k)
-        }
-        val k = (ms - GETUP_LOAD_MS - GETUP_RISE_MS) / GETUP_SETTLE_MS
-        return Shape(0.96f + 0.04f * k, 1.05f - 0.05f * k, -4f * (1f - k))
+    /** Carica le gambe, *ms* dopo l'inizio della carica (a terra, ferma). */
+    fun loadLegs(ms: Float): Shape {
+        val k = (ms / LOAD_MS).coerceIn(0f, 1f)
+        return Shape(1f + 0.06f * k, 1f - 0.07f * k, 0f)
     }
 
-    /** Il passo al tempo *now*, lo stesso orologio che sceglie walk1/walk2. */
+    /** Il passo al tempo *now*, lo stesso orologio che sceglie walk1/walk2:
+     *  *d* vale 1 al cambio di piede e 0 a metà passo. */
     fun walkStep(now: Float): Shape {
         val p = (((now % STEP_MS) + STEP_MS) % STEP_MS) / STEP_MS
-        val sy = 1f + 0.022f * sin(PI.toFloat() * p) - 0.035f * exp(-p * 10f)
-        return Shape(1f - (sy - 1f) * 0.6f, sy, -STEP_LIFT_PX * sin(PI.toFloat() * p))
+        val d = (1f + cos(2f * PI.toFloat() * p)) / 2f
+        val sy = 1f + 0.02f * (1f - d) - 0.025f * d
+        return Shape(1f - (sy - 1f) * 0.6f, sy, -STEP_LIFT_PX * (1f - d))
+    }
+
+    /** I primi passi, *ms* dopo la ripartenza: dalla fine di [loadLegs] si
+     *  distende, e il passo entra con lo stesso peso. */
+    fun walkStart(ms: Float, now: Float): Shape {
+        val k = (ms / BLEND_MS).coerceIn(0f, 1f)
+        val e = 1f - (1f - k) * (1f - k)
+        val w = walkStep(now)
+        return Shape(
+            (1.06f - 0.06f * e) * (1f + (w.sx - 1f) * e),
+            (0.93f + 0.07f * e) * (1f + (w.sy - 1f) * e),
+            w.dy * e,
+        )
     }
 }

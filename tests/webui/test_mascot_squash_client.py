@@ -29,6 +29,9 @@ const volume = ({ sx, sy }, what) => {
   assert.ok(Math.abs(v - 1) <= 0.04, `${what}: volume ${v.toFixed(3)}`);
 };
 const stretchOf = ({ sx, sy }) => Math.max(Math.abs(sx - 1), Math.abs(sy - 1));
+const near = (a, b, what) => {
+  for (const k of ['sx', 'sy', 'dy']) assert.ok(Math.abs(a[k] - b[k]) < 1e-9, `${what}: ${k} ${a[k]} contro ${b[k]}`);
+};
 """
 
 
@@ -61,10 +64,9 @@ def test_up_or_down_stretches_the_same() -> None:
 def test_every_shape_comes_back_to_rest() -> None:
     _run("""
         const rest = { sx: 1, sy: 1, dy: 0 };
-        assert.equal(m.GETUP_MS, m.GETUP_LOAD_MS + m.GETUP_RISE_MS + m.GETUP_SETTLE_MS);
         assert.deepEqual(m.impactSquash(3000, m.IMPACT_MS), rest);
         assert.deepEqual(m.impactSquash(3000, -1), rest);
-        assert.deepEqual(m.getUp(m.GETUP_MS), rest);
+        assert.deepEqual(m.loadLegs(0), rest);
         assert.deepEqual(m.heldStretch(0), { sx: 1, sy: 1, dy: 0 });
         assert.deepEqual(m.airStretch(0), { sx: 1, sy: 1, dy: 0 });
         // Il tonfo si spegne prima della fine: niente scatto quando torna a 1.
@@ -80,20 +82,52 @@ def test_a_harder_landing_squashes_more() -> None:
     """)
 
 
-def test_get_up_and_walk_keep_volume_and_stay_small() -> None:
+def test_walking_keeps_volume_and_never_snaps() -> None:
+    """Il passo e' una curva continua: nessuno scatto fra due fotogrammi, anche
+    a cavallo del cambio di piede (la prima versione saltava del 3% li')."""
     _run("""
-        let prev = m.getUp(0);
-        for (const t of times) {
-          const g = m.getUp(t), w = m.walkStep(t);
-          volume(g, `rialzata a ${t}`); volume(w, `passo a ${t}`);
-          assert.ok(stretchOf(g) <= 0.08 && stretchOf(w) <= 0.04);
-          // Continua: nessun salto fra un fotogramma e il successivo.
-          assert.ok(Math.abs(g.sy - prev.sy) < 0.01, `salto a ${t} ms`);
-          prev = g;
+        let prev = m.walkStep(-5);
+        for (let t = 0; t <= 3 * m.STEP_MS; t += 5) {
+          const w = m.walkStep(t);
+          volume(w, `passo a ${t}`);
+          assert.ok(stretchOf(w) <= 0.03, `passo a ${t}: ${w.sy}`);
+          assert.ok(Math.abs(w.sy - prev.sy) < 0.002, `scatto a ${t} ms: ${prev.sy} -> ${w.sy}`);
+          assert.ok(Math.abs(w.dy - prev.dy) < 0.2, `salto a ${t} ms`);
+          assert.ok(w.dy <= 0 && w.dy >= -m.STEP_LIFT_PX);
+          prev = w;
         }
         // L'affondo cade sul cambio di piede, la punta a meta' passo.
         assert.ok(m.walkStep(0).sy < 1 && m.walkStep(m.STEP_MS / 2).sy > 1);
-        assert.ok(m.walkStep(m.STEP_MS / 2).dy < 0, 'a meta passo si alza');
+        assert.ok(Math.abs(m.walkStep(0).dy) < 1e-12, 'al cambio di piede e a terra');
+        assert.ok(Math.abs(m.walkStep(m.STEP_MS / 2).dy + m.STEP_LIFT_PX) < 1e-12, 'a meta passo si alza');
+    """)
+
+
+def test_setting_off_is_not_a_hop() -> None:
+    """La ripartenza: carica le gambe da ferma, poi si distende nel primo passo
+    riprendendo esattamente da dove la carica e' finita, e senza mai alzarsi
+    piu' del passo — alzarla mentre partiva si leggeva come un saltellino."""
+    _run("""
+        let prev = m.loadLegs(0);
+        for (let t = 0; t <= m.LOAD_MS; t += 5) {
+          const g = m.loadLegs(t);
+          volume(g, `carica a ${t}`);
+          assert.ok(g.dy === 0, 'caricando resta a terra');
+          assert.ok(Math.abs(g.sy - prev.sy) < 0.01);
+          prev = g;
+        }
+        for (const now of [0, 125, 250, 375]) {
+          near(m.walkStart(0, now), m.loadLegs(m.LOAD_MS), 'riparte da dove ha caricato');
+          let p = m.walkStart(0, now);
+          for (let t = 5; t <= 600; t += 5) {
+            const w = m.walkStart(t, now + t);
+            volume(w, `ripartenza a ${t}`);
+            assert.ok(w.dy >= -m.STEP_LIFT_PX && w.dy <= 0, `si e' alzata di ${-w.dy} px a ${t} ms`);
+            assert.ok(Math.abs(w.sy - p.sy) < 0.015, `scatto a ${t} ms`);
+            p = w;
+          }
+          near(m.walkStart(m.BLEND_MS + 50, now), m.walkStep(now), 'dopo la ripartenza e il passo');
+        }
     """)
 
 

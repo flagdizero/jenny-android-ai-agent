@@ -41,7 +41,7 @@ import kotlin.math.sin
  * Dal 05/10/2026, come in chat (`shared/mascot-squash.js`): ogni fotogramma
  * porta anche una [FloatingSquash.Shape], calcolata da velocità e tempi —
  * appesa si allunga, in aria si allunga in verticale, il tonfo la schiaccia,
- * la rialzata carica le gambe, il passo affonda. La fisica non la guarda: è
+ * prima di ripartire carica le gambe da ferma, il passo affonda. La fisica non la guarda: è
  * disegnata sopra. Con [squash] spento (animazioni di sistema disattivate) la
  * forma resta [FloatingSquash.IDENTITY].
  */
@@ -397,13 +397,20 @@ class FloatingFlight(
     /** La forma della posa *pose* al tempo *nowMs*: `shape` in mascot-drag.js. */
     private fun shape(pose: Pose, nowMs: Long): FloatingSquash.Shape = when (pose) {
         Pose.FALL -> FloatingSquash.airStretch(vy / density)
-        Pose.GROUND -> FloatingSquash.impactSquash(impactV, sinceMs(nowMs, impactAt))
-        else -> {
-            val since = sinceMs(nowMs, getupAt)
-            if (since < FloatingSquash.GETUP_MS) FloatingSquash.getUp(since)
-            // Il resto prima della conversione: un epoch in Float perde i millisecondi.
-            else FloatingSquash.walkStep((nowMs % FloatingSquash.STEP_MS.toLong()).toFloat())
+        Pose.GROUND -> {
+            // Gli ultimi LOAD_MS a terra carica le gambe, ferma, prima di ripartire.
+            val loadFrom = downUntil - FloatingSquash.LOAD_MS.toLong()
+            if (phase == Phase.DOWN && nowMs >= loadFrom) {
+                FloatingSquash.loadLegs((nowMs - loadFrom).toFloat())
+            } else {
+                FloatingSquash.impactSquash(impactV, sinceMs(nowMs, impactAt))
+            }
         }
+        // Il resto prima della conversione: un epoch in Float perde i millisecondi.
+        else -> FloatingSquash.walkStart(
+            sinceMs(nowMs, getupAt),
+            (nowMs % FloatingSquash.STEP_MS.toLong()).toFloat(),
+        )
     }
 
     /** Millisecondi da *at*, o infinito se non è mai successo. */
