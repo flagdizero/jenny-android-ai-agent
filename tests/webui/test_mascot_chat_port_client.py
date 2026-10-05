@@ -72,12 +72,17 @@ function jenny({ out = true, chat = null } = {}) {
     mode: 'chat', _chat: chat, _agentState: 'idle', _turnActive: false, _pendingTurn: false,
     _streamTurnId: null, _runSeen: false, _lastClosedTurnId: null,
     _mood: null, _moodUntil: 0, _moodTimer: null,
-    _helloUntil: 0, _helloTimer: null, _labelNote: '',
+    _motionNow: { lean: null, squash: null }, _motionTimers: { lean: null, squash: null },
+    _greetTimer: null, _slideUntil: 0,
+    _labelNote: '',
     _talk: { timer: null, animIdx: 0, open: false, lastTextAt: 0, switchAt: 0 },
     el: {
       classList: out ? classes('out') : classes(),
       setAttribute: (k, v) => { attrs[k] = v; },
       getAttribute: (k) => attrs[k] ?? null,
+      removeAttribute: (k) => { delete attrs[k]; },
+      style: { setProperty: (k, v) => { attrs[k] = v; } },
+      offsetWidth: 0,
     },
     img: img(), face: img(),
   });
@@ -99,6 +104,8 @@ function door({ isOpen = false, onScreen = false, canOpen } = {}) {
   return d;
 }
 const out = (j) => j.el.classList.contains('out');
+const squash = (j) => j.el.getAttribute('data-squash');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 """
 
 
@@ -134,30 +141,38 @@ def test_a_tap_on_the_open_chat_closes_it() -> None:
 
 
 def test_a_tap_where_the_chat_is_on_screen_says_hello() -> None:
-    """Fuori all'angolo: mano alzata e occhi felici, niente da aprire."""
+    """Fuori all'angolo: il saluto vero, niente da aprire. L'arte del saluto la
+    accende il CSS nel suo livello: corpo e faccia di riposo non cambiano."""
     _run("""
         const d = door({ onScreen: true });
         const j = jenny({ chat: d });
         j._onTap();
         assert.deepEqual(d.calls, []);
-        assert.ok(j.el.classList.has('hello'));
-        assert.match(j.face.src, /face-front-happy/);
-        assert.match(j.img.src, /body-front-hand/);
+        assert.equal(squash(j), 'greet');
+        assert.equal(j.el.getAttribute('--jenny-squash-ms'), '1500ms', 'la durata la scrive il JS');
+        j._syncArt();
+        assert.match(j.face.src, /face-front-normal/);
+        assert.match(j.img.src, /body-front-idle/);
     """)
 
 
 def test_a_tap_brings_her_out_from_the_edge_before_the_hello() -> None:
+    """Il saluto aspetta la fine dello scivolamento: un braccio alzato mentre e'
+    ancora mezza dietro il bordo non si vedrebbe."""
     _run("""
         const d = door({ onScreen: true });
         const j = jenny({ out: false, chat: d });
         j._onTap();
-        assert.ok(out(j), 'al bordo non si vedrebbe la faccia');
-        assert.match(j.face.src, /face-front-happy/);
+        assert.ok(out(j), 'al bordo non si vedrebbe');
+        assert.equal(squash(j), null, 'ha salutato mentre usciva');
+        await sleep(340);
+        assert.equal(squash(j), 'greet');
     """)
 
 
 def test_the_hello_does_not_beat_thinking() -> None:
-    """Pensa e parla hanno la precedenza: niente occhi felici in mezzo a un turno."""
+    """Pensa e parla hanno la precedenza: niente braccio alzato in mezzo a un
+    turno, resta il saltello."""
     _run("""
         const d = door({ onScreen: true });
         const j = jenny({ chat: d });
@@ -166,7 +181,19 @@ def test_the_hello_does_not_beat_thinking() -> None:
         j._syncArt();
         assert.match(j.face.src, /face-front-thinking/);
         assert.match(j.img.src, /body-front-think/);
-        assert.ok(j.el.classList.has('hello'), 'il saltello resta');
+        assert.equal(squash(j), 'hop', 'il saltello resta');
+    """)
+
+
+def test_at_the_edge_the_hello_is_a_hop() -> None:
+    """Dove la chat non si apre lo swipe la rimanda al bordo, e li' risponde:
+    di lato un braccio alzato non c'e', il saltello si'."""
+    _run("""
+        const d = door({ canOpen: false });
+        const j = jenny({ out: false, chat: d });
+        j._onGestureOut(true);
+        assert.equal(out(j), false);
+        assert.equal(squash(j), 'hop');
     """)
 
 
@@ -175,10 +202,41 @@ def test_the_hello_ends() -> None:
         const d = door({ onScreen: true });
         const j = jenny({ chat: d });
         j._onTap();
-        j._helloUntil = 0;  // il tempo e' passato
-        j._syncArt();
-        assert.match(j.face.src, /face-front-normal/);
-        assert.match(j.img.src, /body-front-idle/);
+        await sleep(1560);
+        assert.equal(squash(j), null, 'tolto a tempo, anche senza animationend');
+    """)
+
+
+def test_a_turn_that_starts_stops_the_hello() -> None:
+    """Un messaggio inviato a meta' saluto: il braccio non resta alzato sopra
+    il pensa."""
+    _run("""
+        const d = door({ onScreen: true });
+        const j = jenny({ chat: d });
+        j._onTap();
+        j._setAgentState('thinking');
+        assert.equal(squash(j), null);
+    """)
+
+
+def test_going_back_to_the_edge_stops_the_hello() -> None:
+    _run("""
+        const d = door({ onScreen: true });
+        const j = jenny({ chat: d });
+        j._onTap();
+        j._onGestureOut(false);
+        assert.equal(squash(j), null);
+    """)
+
+
+def test_a_new_gesture_replaces_the_one_on_its_channel() -> None:
+    _run("""
+        const j = jenny();
+        j.hello();
+        j.nudge();
+        assert.equal(squash(j), 'nudge');
+        await sleep(480);
+        assert.equal(squash(j), null, "il timer del saluto non ha tolto il sobbalzo, l'ha tolto il suo");
     """)
 
 
@@ -188,7 +246,7 @@ def test_where_the_chat_cannot_open_she_only_says_hello() -> None:
         const j = jenny({ chat: d });
         j._onTap();
         assert.deepEqual(d.calls, []);
-        assert.ok(j.el.classList.has('hello'));
+        assert.equal(squash(j), 'greet');
     """)
 
 
@@ -251,9 +309,9 @@ def test_the_nudge_comes_and_goes() -> None:
     _run("""
         const j = jenny();
         j.nudge();
-        assert.ok(j.el.classList.has('nudge'));
-        await new Promise((r) => setTimeout(r, 500));
-        assert.ok(!j.el.classList.has('nudge'), 'tolta a tempo, anche senza animationend');
+        assert.equal(squash(j), 'nudge');
+        await sleep(500);
+        assert.equal(squash(j), null, 'tolto a tempo, anche senza animationend');
     """)
 
 

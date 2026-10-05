@@ -94,15 +94,44 @@ const TALK_QUIET_TO_THINK_MS = 1000; // silenzio testo -> torna a pensa
 const MOOD_FACES = ['happy', 'sad', 'angry'];
 const MOOD_HOLD_MS = 12000; // quanto dura una faccia prima di tornare a normale
 
-/* ── Il saluto ──
-   Toccata dove la chat e' gia' a schermo, Jenny saluta: la mano alzata e gli
-   occhi felici, per il tempo di un cenno. Decisione dell'utente del
-   05/10/2026, quando il tocco e' diventato la porta della chat: dove la chat
-   c'e' gia', il tocco non ha niente da aprire, e lei risponde lo stesso. */
-const HELLO_MS = 1400;
-/* Quanto dura il sobbalzo (v. `nudge`): la stessa cifra dell'animazione CSS,
-   cosi' la classe si toglie anche dove `animationend` non arriva. */
-const NUDGE_MS = 450;
+/* Il saluto vero: i due fotogrammi col braccio alzato dell'onboarding, che
+   si alternano nel livello `.jenny-wave` (v. `_buildDom`). */
+const WAVE = {
+  a: '/html-mobile/assets/jenny-hello1.webp',
+  b: '/html-mobile/assets/jenny-hello2.webp',
+};
+
+/* ── I gesti ──
+   Un gesto e' un'animazione CSS a tempo, su uno di due livelli annidati:
+   `lean` e' l'inclinazione del moto (`.jenny-lean`), `squash` lo schiaccia e
+   allunga del corpo (`.jenny-squash`). Ognuno ne porta uno alla volta, e i
+   due si sommano perche' sono due elementi, non due animazioni sulla stessa
+   proprieta'. Il gesto sta in `data-lean`/`data-squash`; la durata e' **solo
+   qui**: `_motion` la scrive in `--jenny-<canale>-ms`, che il CSS legge, cosi'
+   il timer che toglie l'attributo e l'animazione non possono divergere.
+
+   Dall'utente del 05/10/2026, sui mockup «Il saluto di Jenny» e «Jenny in
+   movimento»: squash and stretch su tutto, mai in diagonale. */
+const MOTIONS = {
+  lean: {},
+  squash: {
+    // Si carica, salta alzando il braccio, saluta tre volte ondeggiando a tempo
+    // col braccio, si assesta. Sostituisce mano alzata + occhi felici.
+    greet: 1500,
+    // Il saltello: il saluto quando un braccio alzato direbbe una cosa falsa
+    // (pensa, parla) o non si vedrebbe (al bordo).
+    hop: 1000,
+    // «Sono qui, chiudi da me»: lo chiede il guscio quando tocchi il velo
+    // dietro la chat, che apposta non la chiude.
+    nudge: 450,
+  },
+};
+/* Le variabili da cui il CSS legge la durata del gesto di ogni canale. */
+const MOTION_VARS = { lean: '--jenny-lean-ms', squash: '--jenny-squash-ms' };
+/* Quanto dura lo scivolamento dal bordo (`transition: right` di
+   `.jenny-duo`): il saluto aspetta che lei sia fuori del tutto, perche' un
+   braccio alzato mentre e' ancora mezza dietro il bordo non si vedrebbe. */
+const SLIDE_MS = 300;
 
 export class JennyMascot {
   /**
@@ -120,10 +149,12 @@ export class JennyMascot {
     this.host = host;
     this.mode = mode;
     this._chat = chat;
-    // Il saluto in corso (v. `hello`): scadenza e timer.
-    this._helloUntil = 0;
-    this._helloTimer = null;
-    this._nudgeTimer = null;
+    // I gesti in corso, uno per canale (v. MOTIONS), e i timer che li tolgono.
+    this._motionNow = { lean: null, squash: null };
+    this._motionTimers = { lean: null, squash: null };
+    // Il saluto che aspetta la fine dello scivolamento (v. `hello`).
+    this._greetTimer = null;
+    this._slideUntil = 0;
     // Cosa aggiungere al nome nell'etichetta (v. `setBadge`).
     this._labelNote = '';
     this._agentState = 'idle';
@@ -156,7 +187,7 @@ export class JennyMascot {
     // una Jenny senza volto, peggio di una bocca in ritardo.
     for (const src of [
       ART.sideTalk, ...Object.values(BODY), ...Object.values(FACE),
-      SIDE_BODY, ...Object.values(SIDE_FACE),
+      SIDE_BODY, ...Object.values(SIDE_FACE), ...Object.values(WAVE),
     ]) {
       const im = new Image();
       im.src = src;
@@ -234,16 +265,25 @@ export class JennyMascot {
     this._paintLabel();
     this._offName = botName.onChange(() => this._paintLabel());
     this.el.setAttribute('tabindex', '-1');
-    // I due livelli (corpo e faccia) in un contenitore solo; il respiro resta
-    // sulle img.
+    /* Un livello per trasformazione (v. MOTIONS), dal piu' esterno:
+       l'inclinazione, lo schiaccia e allunga, l'arte. Nell'arte il riposo
+       (corpo e faccia) e il saluto sono due livelli fratelli: il saluto si
+       accende sopra senza toccare le img del riposo, che hanno il respiro e
+       non lo devono perdere. */
+    const lean = document.createElement('div');
+    lean.className = 'jenny-lean';
+    const squash = document.createElement('div');
+    squash.className = 'jenny-squash';
     const stack = document.createElement('div');
     stack.className = 'jenny-art-stack';
+    const rest = document.createElement('div');
+    rest.className = 'jenny-rest';
     const img = document.createElement('img');
     img.className = 'jenny-art';
     img.src = ART.side;
     img.alt = '';
     img.draggable = false;
-    stack.appendChild(img);
+    rest.appendChild(img);
     this.img = img;
     // La faccia nasce spenta: al primo render è al bordo, dove l'arte è cotta.
     const face = document.createElement('img');
@@ -251,9 +291,27 @@ export class JennyMascot {
     face.src = FACE.normal;
     face.alt = '';
     face.draggable = false;
-    stack.appendChild(face);
+    rest.appendChild(face);
     this.face = face;
-    this.el.appendChild(stack);
+    stack.appendChild(rest);
+    // I due fotogrammi del saluto, ciascuno nel suo contenitore: e' il
+    // contenitore che il CSS accende, l'img tiene il respiro come le altre.
+    const wave = document.createElement('div');
+    wave.className = 'jenny-wave';
+    for (const [key, src] of Object.entries(WAVE)) {
+      const frame = document.createElement('div');
+      frame.className = `jenny-wave-${key}`;
+      const im = document.createElement('img');
+      im.src = src;
+      im.alt = '';
+      im.draggable = false;
+      frame.appendChild(im);
+      wave.appendChild(frame);
+    }
+    stack.appendChild(wave);
+    squash.appendChild(stack);
+    lean.appendChild(squash);
+    this.el.appendChild(lean);
 
     // Layer del volo: le 5 pose impilate (stesso canvas condiviso, tutte
     // width:100%), visibili solo con .flying e una alla volta (.on, v. showEl).
@@ -300,7 +358,6 @@ export class JennyMascot {
      mentre lei sta ancora pensando racconterebbe una cosa falsa. */
   _faceKey() {
     if (this._agentState === 'thinking') return 'thinking';
-    if (this._greeting?.()) return 'happy';
     return this._moodFace() || 'normal';
   }
 
@@ -320,55 +377,79 @@ export class JennyMascot {
       this._setFace(null);
       return;
     }
-    let body = BODY.idle;
-    if (this._agentState === 'thinking') body = BODY.think;
-    else if (this._greeting?.()) body = BODY.hand;
-    this._setBody(body);
+    this._setBody(this._agentState === 'thinking' ? BODY.think : BODY.idle);
     this._setFace(FACE[this._faceKey()]);
   }
 
-  /* ── Saluto, sobbalzo, pallino ── */
+  /* ── Gesti: saluto, sobbalzo ── */
 
-  /* Sta salutando? Solo a riposo: pensa e parla hanno la precedenza, e una
-     mano alzata in mezzo a una risposta direbbe una cosa che non sta facendo. */
-  _greeting(now = performance.now()) {
-    return this._agentState === 'idle' && now < this._helloUntil;
-  }
-
-  /** Il saluto: mano alzata e occhi felici per un cenno (v. HELLO_MS). Mentre
-   *  pensa o parla resta solo il saltello, senza cambiare faccia. */
+  /** Il saluto (v. MOTIONS.squash.greet). Solo a riposo e fuori: mentre pensa
+   *  o parla un braccio alzato direbbe una cosa che non sta facendo, e al
+   *  bordo non si vedrebbe. Li' resta il saltello. Appena uscita dal bordo
+   *  aspetta che lo scivolamento finisca. */
   hello() {
-    this._bounce('hello', HELLO_MS);
-    if (this._agentState !== 'idle' || this._talk.timer) return;
-    if (this._helloTimer) clearTimeout(this._helloTimer);
-    this._helloUntil = performance.now() + HELLO_MS;
-    this._syncArt();
-    this._helloTimer = setTimeout(() => {
-      this._helloTimer = null;
-      this._helloUntil = 0;
-      this._syncArt();
-    }, HELLO_MS);
+    if (this._greetTimer) {
+      clearTimeout(this._greetTimer);
+      this._greetTimer = null;
+    }
+    const busy = this._agentState !== 'idle' || this._talk.timer;
+    if (busy || !this._layered()) {
+      this._motion('squash', 'hop');
+      return;
+    }
+    const wait = this._slideUntil - performance.now();
+    if (wait > 0) {
+      this._greetTimer = setTimeout(() => {
+        this._greetTimer = null;
+        this.hello();
+      }, wait);
+      return;
+    }
+    this._motion('squash', 'greet');
   }
 
   /** Il sobbalzo: «sono qui, chiudi da me». Lo chiede il guscio quando tocchi
    *  il velo dietro la chat, che apposta non la chiude. */
   nudge() {
-    this._bounce('nudge', NUDGE_MS);
+    this._motion('squash', 'nudge');
   }
 
-  /* Una classe d'animazione per *ms*, riaccesa da capo se gia' c'era. Tolta a
-     tempo e non su `animationend`: con `prefers-reduced-motion` l'animazione
-     non parte, e la classe resterebbe addosso. */
-  _bounce(cls, ms) {
-    const timers = this._bounceTimers || (this._bounceTimers = {});
-    if (timers[cls]) clearTimeout(timers[cls]);
-    this.el.classList.remove(cls);
-    void this.el.offsetWidth; // riparte l'animazione
-    this.el.classList.add(cls);
-    timers[cls] = setTimeout(() => {
-      timers[cls] = null;
-      this.el.classList.remove(cls);
-    }, ms);
+  /** Il gesto in corso su *channel*, o null. */
+  motion(channel) {
+    return this._motionNow[channel];
+  }
+
+  /* Un gesto su un canale, riacceso da capo se c'era gia', al posto di quello
+     che c'era. Tolto a tempo e non su `animationend`: con
+     `prefers-reduced-motion` l'animazione non parte, e l'attributo
+     resterebbe addosso. */
+  _motion(channel, name) {
+    const ms = MOTIONS[channel][name];
+    this._stopMotion(channel);
+    void this.el.offsetWidth; // riparte l'animazione anche se era la stessa
+    this.el.style.setProperty(MOTION_VARS[channel], `${ms}ms`);
+    this.el.setAttribute(`data-${channel}`, name);
+    this._motionNow[channel] = name;
+    this._motionTimers[channel] = setTimeout(() => this._stopMotion(channel), ms);
+  }
+
+  _stopMotion(channel) {
+    if (this._motionTimers[channel]) clearTimeout(this._motionTimers[channel]);
+    this._motionTimers[channel] = null;
+    if (!this._motionNow[channel]) return;
+    this._motionNow[channel] = null;
+    this.el.removeAttribute(`data-${channel}`);
+  }
+
+  /* Il saluto e' di Jenny a riposo e fuori: un turno che parte o il ritorno al
+     bordo lo fermano a meta', invece di lasciare il braccio alzato sopra il
+     pensa o contro il bordo. */
+  _stopGreet() {
+    if (this._greetTimer) {
+      clearTimeout(this._greetTimer);
+      this._greetTimer = null;
+    }
+    if (this.motion('squash') === 'greet') this._stopMotion('squash');
   }
 
   /** Il pallino «c'e' una risposta che non hai visto». *note* e' la frase che
@@ -408,7 +489,10 @@ export class JennyMascot {
     // risposta neutra non manderebbe niente e la vecchia faccia riapparirebbe a
     // parlato finito. Da qui in poi l'espressione la porta lo stato: `thinking`
     // ha la sua faccia, e non serve un timer per dargliela.
-    if (state !== 'idle') this._clearMood();
+    if (state !== 'idle') {
+      this._clearMood();
+      this._stopGreet();
+    }
     if (state === 'talking') {
       this.el.classList.remove('thinking');
     } else if (state === 'thinking') {
@@ -549,6 +633,13 @@ export class JennyMascot {
       flyPose: this.flyPose,
       isOut: () => this.el.classList.contains('out'),
       setOut: (v) => this._onGestureOut(v),
+      // Presa in mano, l'arte di riposo sparisce sotto le pose del volo: un
+      // gesto a meta' riapparirebbe all'atterraggio come un avanzo.
+      onDragCommit: () => {
+        this._stopGreet();
+        this._stopMotion('lean');
+        this._stopMotion('squash');
+      },
       onTap: () => this._onTap(),
       onFlightEnd: () => {
         this._syncArt();
@@ -629,7 +720,10 @@ export class JennyMascot {
   }
 
   _setOut(out) {
+    const was = this.el.classList.contains('out');
     this.el.classList.toggle('out', out);
+    if (out && !was) this._slideUntil = performance.now() + SLIDE_MS;
+    if (!out) this._stopGreet();
     this._syncArt();
     this._updateGestureExclusion();
   }

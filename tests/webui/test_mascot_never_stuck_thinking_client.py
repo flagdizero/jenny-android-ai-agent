@@ -72,7 +72,12 @@ function jenny() {
     _streamTurnId: null, _runSeen: false, _lastClosedTurnId: null,
     _mood: null, _moodUntil: 0, _moodTimer: null,
     _talk: { timer: null, animIdx: 0, open: false, lastTextAt: 0, switchAt: 0 },
-    el: { classList: classes('out') },
+    _motionNow: { lean: null, squash: null }, _motionTimers: { lean: null, squash: null },
+    _greetTimer: null,
+    el: {
+      classList: classes('out'), offsetWidth: 0, style: { setProperty() {} },
+      setAttribute() {}, removeAttribute() {},
+    },
   });
   j._syncArt = () => {};
   j._noteTalkActivity = () => { j._talk.lastTextAt = -1e9; };

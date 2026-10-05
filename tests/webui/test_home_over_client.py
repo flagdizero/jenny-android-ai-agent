@@ -139,7 +139,7 @@ tap();
 await tick(30);
 over().dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 assert.equal(app.chatOver, true, 'un tocco sul velo ha chiuso la chat');
-assert.ok(app.jenny.el.classList.contains('nudge'), 'lei non ha detto «chiudi da me»');
+assert.equal(app.jenny.motion('squash'), 'nudge', 'lei non ha detto «chiudi da me»');
 """)
 
 
@@ -148,7 +148,7 @@ def test_on_the_chat_page_a_tap_says_hello() -> None:
 tap();
 await tick(10);
 assert.equal(app.chatOver, false, 'la chat e\\u2019 salita sopra se stessa');
-assert.ok(app.jenny.el.classList.contains('hello'));
+assert.equal(app.jenny.motion('squash'), 'greet');
 """)
 
 

@@ -6319,7 +6319,7 @@ body {
    La faccia si nasconde con `visibility` e MAI con `display`: sono due istanze
    della stessa animazione (jenny-bob/jenny-wobble, sotto) e partono insieme
    solo se restano entrambe in layout — un display:none le sfaserebbe. */
-.jenny-art-stack { position: relative; }
+.jenny-art-stack, .jenny-rest { position: relative; }
 .jenny-art-stack img.jenny-face {
   position: absolute;
   left: 0;
@@ -6327,12 +6327,50 @@ body {
 }
 .jenny-art-stack img.jenny-face.off { visibility: hidden; }
 
-/* Il saluto e il sobbalzo (v. `hello` e `nudge` in shared/jenny-mascot.js):
-   si muove lo stack, non le img, che hanno gia' il loro respiro (jenny-bob) e
-   non devono perderlo. Il saluto e' un saltello; il sobbalzo, quando tocchi il
-   velo dietro la chat, uno scatto di lato — «chiudi da me». */
-.jenny-duo.hello .jenny-art-stack { animation: jenny-hop 0.5s ease-out 2; }
-.jenny-duo.nudge .jenny-art-stack { animation: jenny-nudge 0.45s ease-in-out; }
+/* ── I gesti (v. MOTIONS in shared/jenny-mascot.js) ──
+   Tre livelli annidati, una trasformazione ciascuno, cosi' si sommano invece
+   di sovrascriversi: `.jenny-lean` l'inclinazione del moto, `.jenny-squash`
+   lo schiaccia e allunga, e dentro l'arte, le cui img hanno il respiro.
+   L'origine e' dove l'arte poggia: i piedi stanno a 674/768 del quadrato in
+   tutte le pose frontali, hello1 e hello2 comprese.
+   Il gesto sta in `data-lean`/`data-squash` e la durata in
+   `--jenny-lean-ms`/`--jenny-squash-ms`, scritte dal JS: qui nessuna durata
+   e' un numero.
+   **Mai in diagonale, e la stessa lista in ogni fotogramma** (`translate
+   rotate scale`, in quest'ordine): una scala fuori dagli assi del disegno lo
+   storce, e due liste diverse il browser le interpola per matrice, che puo'
+   storcerlo lo stesso. Lo tiene `test_mascot_motion_contract.py`. */
+.jenny-lean, .jenny-squash { transform-origin: 50% 88%; }
+
+/* Il saluto: tre animazioni, una durata. Il corpo (carica, salto, dondolio a
+   tempo col braccio, assestamento) e i due fotogrammi, accesi a scatti sui
+   contenitori e mai sulle img. Al bordo no: li' l'arte e' di lato. */
+.jenny-wave, .jenny-wave > div {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.jenny-wave > div { opacity: 0; }
+.jenny-duo.out[data-squash="greet"] .jenny-squash {
+  animation: jenny-greet var(--jenny-squash-ms) linear both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-rest {
+  animation: jenny-greet-rest var(--jenny-squash-ms) step-end both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-wave-a {
+  animation: jenny-greet-a var(--jenny-squash-ms) step-end both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-wave-b {
+  animation: jenny-greet-b var(--jenny-squash-ms) step-end both;
+}
+/* Il saltello: il saluto quando il braccio non si puo' alzare (pensa, parla,
+   al bordo). Il sobbalzo, quando tocchi il velo dietro la chat: «chiudi da me». */
+.jenny-duo[data-squash="hop"] .jenny-squash {
+  animation: jenny-hop var(--jenny-squash-ms) linear;
+}
+.jenny-duo[data-squash="nudge"] .jenny-squash {
+  animation: jenny-nudge var(--jenny-squash-ms) ease-in-out;
+}
 
 /* Il pallino «c'e' una risposta che non hai visto» (v. `setBadge`). Sta sulla
    testa a sinistra, dove si vede sia al bordo (dove di lei sporge meta') sia
@@ -6351,10 +6389,15 @@ body {
 }
 .jenny-duo.has-dot .jenny-dot { display: block; }
 .jenny-duo.flying .jenny-dot { display: none; }
-/* A movimento ridotto il saluto resta nella faccia e nella mano, senza salto. */
+/* A movimento ridotto i gesti non si muovono. Il saluto resta, fermo: il
+   braccio alzato per il tempo del saluto, e si legge lo stesso. */
 @media (prefers-reduced-motion: reduce) {
-  .jenny-duo.hello .jenny-art-stack,
-  .jenny-duo.nudge .jenny-art-stack { animation: none; }
+  .jenny-duo .jenny-lean,
+  .jenny-duo .jenny-squash,
+  .jenny-duo .jenny-rest,
+  .jenny-duo .jenny-wave > div { animation: none !important; }
+  .jenny-duo.out[data-squash="greet"] .jenny-rest { visibility: hidden; }
+  .jenny-duo.out[data-squash="greet"] .jenny-wave-b { opacity: 1; }
 }
 
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:
@@ -6389,8 +6432,50 @@ body {
 .jenny-fly img.flip { transform: scaleX(-1); }
 
 @keyframes jenny-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes jenny-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
-@keyframes jenny-nudge { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 60% { transform: translateX(4px); } }
+/* Il saluto, 1500 ms: 0 · 120 carica · 420 atterra · 600/780/960/1140 il
+   braccio · 1380 giu' · 1500. Il corpo si piega verso il braccio a ogni
+   sventolata, e l'ondeggiare si spegne: e' questo che lo fa un saluto e non
+   un cambio di posa. */
+@keyframes jenny-greet {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  8% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.93); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  18% { transform: translate(0px, -14px) rotate(-1deg) scale(0.97, 1.05); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  28% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  31% { transform: translate(0px, 0px) rotate(0deg) scale(1.04, 0.95); animation-timing-function: ease-in-out; }
+  34% { transform: translate(0px, 0px) rotate(2.2deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  46% { transform: translate(0px, 0px) rotate(-2deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  58% { transform: translate(0px, 0px) rotate(1.6deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  70% { transform: translate(0px, 0px) rotate(-1.1deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  84% { transform: translate(0px, 0px) rotate(0.5deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  92% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  96% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.01); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-greet-rest { 0% { visibility: visible; } 8% { visibility: hidden; } 92% { visibility: visible; } }
+@keyframes jenny-greet-a {
+  0% { opacity: 0; } 8% { opacity: 1; } 28% { opacity: 0; } 40% { opacity: 1; }
+  52% { opacity: 0; } 64% { opacity: 1; } 76% { opacity: 0; } 100% { opacity: 0; }
+}
+@keyframes jenny-greet-b {
+  0% { opacity: 0; } 28% { opacity: 1; } 40% { opacity: 0; } 52% { opacity: 1; }
+  64% { opacity: 0; } 76% { opacity: 1; } 92% { opacity: 0; } 100% { opacity: 0; }
+}
+/* Due saltelli in 1000 ms, ciascuno con la sua carica e il suo atterraggio. */
+@keyframes jenny-hop {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  8% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  22% { transform: translate(0px, -10px) rotate(0deg) scale(0.98, 1.02); animation-timing-function: ease-in; }
+  42% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  58% { transform: translate(0px, -10px) rotate(0deg) scale(0.98, 1.02); animation-timing-function: ease-in; }
+  80% { transform: translate(0px, 0px) rotate(0deg) scale(1.02, 0.98); animation-timing-function: ease-out; }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-nudge {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(-6px, 0px) rotate(0deg) scale(1, 1); }
+  60% { transform: translate(4px, 0px) rotate(0deg) scale(1, 1); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
 @keyframes jenny-wobble { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
 @keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 

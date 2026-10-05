@@ -59,6 +59,10 @@ _METHODS = (
     "_noteTalkActivity",
     "_stopTalk",
     "_setAgentState",
+    "_stopGreet",
+    "motion",
+    "_motion",
+    "_stopMotion",
 )
 _CONSTS = (
     "ART",
@@ -73,6 +77,7 @@ _CONSTS = (
     "MOUTH_FRAME_MS",
     "TALK_ANIM_SWITCH_MS",
     "TALK_QUIET_TO_THINK_MS",
+    "MOTIONS",
 )
 
 
@@ -131,7 +136,14 @@ function imgStub(...classes) {{
 function makeMascot(...classes) {{
   const m = {{
     mode: 'chat',
-    el: {{ classList: classList(...classes) }},
+    el: {{
+      classList: classList(...classes), offsetWidth: 0, attrs: {{}},
+      style: {{ setProperty() {{}} }},
+      setAttribute(k, v) {{ this.attrs[k] = v; }},
+      removeAttribute(k) {{ delete this.attrs[k]; }},
+    }},
+    _motionNow: {{ lean: null, squash: null }}, _motionTimers: {{ lean: null, squash: null }},
+    _greetTimer: null,
     img: imgStub(),
     face: imgStub('off'),  // nasce spenta, come in _buildDom
     _mood: null, _moodUntil: 0, _moodTimer: null,
