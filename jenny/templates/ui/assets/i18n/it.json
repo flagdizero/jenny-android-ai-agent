@@ -628,6 +628,7 @@
     "refresh": "Aggiorna"
   },
   "jenny": {
+    "replyWaiting": "risposta nuova",
     "closeMinichat": "Chiudi la minichat",
     "askHere": "Chiedi qui...",
     "askJenny": "Chiedi a Jenny",

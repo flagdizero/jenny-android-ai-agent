@@ -52,6 +52,7 @@ import { ComposerFocus } from './home-focus.js';
 import { NotebookCard } from './home-notebook.js';
 import { ChatMove } from './home-move.js';
 import { ChatOver } from './home-over.js';
+import { UnseenReplies } from './shared/unseen-replies.js';
 import { AppsSource } from './shared/apps-source.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
@@ -67,7 +68,7 @@ import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
 import { sessionManager } from './shared/session-manager.js';
-import { wsManager } from './shared/ws-manager.js';
+import { chatIdOf, wsManager } from './shared/ws-manager.js';
 import './shared/theme.js';
 
 /* Quanto aspettare prima di dire che il filo e' interrotto. Il socket si riapre
@@ -165,6 +166,14 @@ class HomeApp {
       shell: document.querySelector('.home-shell'),
       host: document.getElementById('home-over'),
       onVeilTap: () => this.jenny.nudge(),
+    });
+    /* Il pallino su Jenny: una risposta arrivata mentre la sua chat non era a
+       schermo, nella conversazione che lei aprirebbe da qui. */
+    this.unseen = new UnseenReplies({
+      onScreen: (id) => id === sessionManager.currentChatId
+        && (this.chatOver || (this.view === 'chat' && (this._entry?.kind ?? 'chat') === 'chat')),
+      wanted: () => chatIdOf(this._summonKey()),
+      paint: (on) => this.jenny.setBadge(on, i18n.t('jenny.replyWaiting')),
     });
     /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
@@ -985,6 +994,7 @@ class HomeApp {
     }
     this._retryThread();
     this._reportChatOnScreen();
+    this.unseen?.refresh();
     return true;
   }
 
@@ -1001,6 +1011,7 @@ class HomeApp {
     /* Il pavimento torna quello della pagina sotto: il composer la' non c'e'. */
     if (this.view === 'chat' && this._hasComposer(this._entry)) this._measureFloor?.();
     else document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
+    this.unseen?.refresh();
     return true;
   }
 
@@ -1312,6 +1323,7 @@ class HomeApp {
     this.strip?.draw();
     this._applyHead();
     this._reportChatOnScreen();
+    this.unseen?.refresh();
   }
 
   /* La pagina di un quaderno appeso e' una porta: arrivandoci si apre la sua
@@ -1527,6 +1539,7 @@ class HomeApp {
     this._syncJennyPlace();
     this._applyHead();
     if (view === 'chat') this._reportChatOnScreen();
+    this.unseen?.refresh();
     return true;
   }
 

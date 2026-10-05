@@ -295,6 +295,7 @@ _UI_MANIFEST = [
     "assets/shared/jenny-gap.js",
     "assets/shared/jenny-mascot.js",
     "assets/shared/jenny-minichat.js",
+    "assets/shared/unseen-replies.js",
     "assets/shared/keyboard.js",
     "assets/shared/launcher-rank.js",
     "assets/shared/launcher-usage-store.js",

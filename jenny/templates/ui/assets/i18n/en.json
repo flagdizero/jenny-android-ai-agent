@@ -628,6 +628,7 @@
     "refresh": "Refresh"
   },
   "jenny": {
+    "replyWaiting": "new reply",
     "closeMinichat": "Close minichat",
     "askHere": "Ask here...",
     "askJenny": "Ask Jenny",
