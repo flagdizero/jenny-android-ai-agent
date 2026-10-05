@@ -646,7 +646,7 @@ def test_a_read_that_fails_leaves_the_chat_standing() -> None:
 def test_the_chat_lives_inside_a_page_panel() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     track = html.split('class="home-track"', 1)[1].split("</div>\n\n  <!--", 1)[0]
-    for piece in ("home-thread", "home-empty", "home-activity", "home-composer"):
+    for piece in ("home-thread", "home-empty", "home-composer"):
         assert piece in track, f"{piece} e' rimasto fuori dalla pista"
 
 
@@ -659,7 +659,7 @@ def test_one_rule_hides_the_track_not_six_pieces() -> None:
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert ".home-shell:not([data-view='chat']) .home-showcase { display: none; }" in css
-    for piece in ("home-thread", "home-composer", "home-activity"):
+    for piece in ("home-thread", "home-composer", "home-live"):
         assert f":not([data-view='chat']) .{piece}" not in css
 
 

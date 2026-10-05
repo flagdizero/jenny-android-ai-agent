@@ -614,6 +614,13 @@ def replay_transcript_to_ui_messages(
         lat = rec.get("latency_ms")
         if isinstance(lat, (int, float)) and lat >= 0:
             extra["latencyMs"] = int(lat)
+        work_id = rec.get("work_id")
+        if isinstance(work_id, str) and work_id:
+            # Il testo e' l'annuncio o il resoconto di un lavoro lungo (la bolla
+            # di lavoro della home): la cronologia della home ne tiene uno solo.
+            extra["workId"] = work_id
+            if rec.get("work_start"):
+                extra["workStart"] = True
         extra.update(_turn_fields(rec, "answer"))
         absorb_complete(extra, idx)
         if media:

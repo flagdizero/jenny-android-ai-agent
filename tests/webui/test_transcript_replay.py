@@ -267,3 +267,19 @@ def test_consecutive_proactive_answers_stay_distinct_messages() -> None:
     ]
     messages = replay_transcript_to_ui_messages(lines)
     assert [m["content"] for m in messages] == [f"avviso {i}" for i in range(4)]
+
+
+def test_the_text_of_a_long_work_keeps_its_id_and_its_role() -> None:
+    """La bolla di lavoro della home (05/10/2026): l'annuncio e il resoconto di
+    un ``/gardener`` portano l'id del lavoro, e l'annuncio dice di esserlo."""
+    lines = [
+        {"event": "message", "chat_id": "project:orto", "text": "Gardening orto...",
+         "work_id": "gardener-1", "work_start": True},
+        {"event": "message", "chat_id": "project:orto", "text": "The gardener read 2 lines.",
+         "work_id": "gardener-1"},
+        {"event": "message", "chat_id": "project:orto", "text": "altro"},
+    ]
+    start, report, other = replay_transcript_to_ui_messages(lines)
+    assert (start["workId"], start.get("workStart")) == ("gardener-1", True)
+    assert (report["workId"], report.get("workStart")) == ("gardener-1", None)
+    assert "workId" not in other

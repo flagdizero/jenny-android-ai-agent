@@ -2169,6 +2169,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         ephemeral: bool = False,
         tools: ToolRegistry | None = None,
         turn_token: TurnToken | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> TurnOutcome:
         """Process a single inbound message and return its outcome."""
         # Un surrogato UTF-16 isolato (un frame tagliato dentro un'emoji) diventa
@@ -2213,6 +2214,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 msg.metadata,
             ),
             on_progress=on_progress,
+            on_retry_wait=on_retry_wait,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
             pending_queue=pending_queue,
@@ -2534,6 +2536,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         persist_user_message: bool = True,
         visibility: TurnVisibility | None = None,
         metadata: dict[str, Any] | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> OutboundMessage | None:
         """Process a message directly and return the outbound payload.
 
@@ -2568,6 +2571,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             persist_user_message=persist_user_message,
             visibility=visibility,
             metadata=metadata,
+            on_retry_wait=on_retry_wait,
         )
         return outcome.message
 
@@ -2586,6 +2590,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         persist_user_message: bool = True,
         visibility: TurnVisibility | None = None,
         metadata: dict[str, Any] | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> TurnOutcome:
         """Come :meth:`process_direct`, ma restituisce l'esito intero del turno.
 
@@ -2595,6 +2600,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         ``process_direct`` non puo' dire ne se l'agente ha parlato col tool
         ``message`` ne cosa ha scritto come risposta finale — ed e' li che
         l'heartbeat dichiara i task che non ha potuto eseguire.
+
+        ``on_retry_wait`` riceve le righe d'attesa del retry del provider (v.
+        ``providers/retry_notice.py``). Senza, un turno interno le pubblica sul
+        canale interno, dove nessuno le legge; con, chi aspetta il lavoro — la
+        bolla di lavoro della home — sa che il modello sta riprovando.
         """
         metadata = dict(metadata or {})
         if not persist_user_message:
@@ -2623,6 +2633,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 }
                 if tools is not None:
                     kwargs["tools"] = tools
+                if on_retry_wait is not None:
+                    kwargs["on_retry_wait"] = on_retry_wait
                 return await self._process_message(
                     msg,
                     **kwargs,

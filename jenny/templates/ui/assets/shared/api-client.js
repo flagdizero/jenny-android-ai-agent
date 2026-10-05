@@ -767,6 +767,16 @@ class ApiClient {
     return res.json();
   }
 
+  // I lavori lunghi della conversazione (giardiniere, Dream): lo stesso payload
+  // del frame `work_status`, per la bolla di lavoro della casa quando si riapre
+  // a lavoro iniziato. `sessionKey` come sopra.
+  async getWork({ sessionKey } = {}) {
+    const qs = sessionKey ? `?session_key=${encodeURIComponent(sessionKey)}` : '';
+    const res = await this._fetch(`/api/work${qs}`);
+    if (!res.ok) throw new Error(`Work failed: ${res.status}`);
+    return res.json();
+  }
+
   // Il corpo di errore di queste route è testo semplice, non JSON: il messaggio
   // del manager è già scritto per essere mostrato all'utente, quindi lo si
   // propaga così com'è (409 = rilancio impossibile, 429 = niente slot liberi).

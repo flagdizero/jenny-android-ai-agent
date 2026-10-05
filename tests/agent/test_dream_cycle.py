@@ -232,7 +232,9 @@ class _ReviewSpy:
         self._status = status
         self.calls: list[dict[str, Any]] = []
 
-    async def __call__(self, agent, *, store, report, snapshotted, write_size_guard=None):
+    async def __call__(
+        self, agent, *, store, report, snapshotted, write_size_guard=None, reporter=None
+    ):
         self._memory.events.append(f"review:snapshotted={snapshotted}")
         self.calls.append({
             "agent": agent,

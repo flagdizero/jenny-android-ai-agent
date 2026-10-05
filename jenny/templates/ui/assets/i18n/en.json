@@ -901,14 +901,67 @@
     "wire": {
       "offline": "Connection lost, retrying"
     },
-    "subagents": {
-      "one": "Working · {label}",
-      "oneUnnamed": "An agent is working",
-      "oneStalled": "Stuck · {label}",
-      "stalled": "An agent is stuck",
-      "many": "{count} agents working",
-      "manyStalled": "{count} agents, one is stuck",
-      "openInWorkshop": "Press and hold to see them in the workshop"
+    "work": {
+      "title": {
+        "gardener": "Tidying the notebook",
+        "gardenerAuto": "Tidying the notebook on my own",
+        "dream": "Sorting my memories",
+        "helperOne": "A helper: {label}",
+        "helperUnnamed": "A helper at work",
+        "helpersMany": "{count} helpers at work"
+      },
+      "phase": {
+        "start": "Getting started",
+        "pages": "Writing the pages",
+        "board": "Setting up the board",
+        "review": "Rereading my memories",
+        "memory": "Updating my memory"
+      },
+      "doing": {
+        "think": "Thinking",
+        "read": "Reading",
+        "search": "Searching",
+        "write": "Writing",
+        "out": "Online",
+        "run": "Running code",
+        "delegate": "Asking for help",
+        "busy": "Working"
+      },
+      "writesOne": "1 written",
+      "writesMany": "{count} written",
+      "slow": "Taking longer than usual",
+      "retry": "The model isn't answering, retrying ({attempt} of {of})",
+      "autoNote": "If you write to me now I'll stop, and pick it up later.",
+      "done": "Done",
+      "failed": "I couldn't finish",
+      "helperFailed": "The helper stopped: {label}",
+      "helperFailedUnnamed": "The helper stopped",
+      "result": {
+        "pagesOne": "1 page updated.",
+        "pagesMany": "{count} pages updated.",
+        "boardProposed": "I've set up a board for you: it's in the envelope.",
+        "research": "This notebook is a study archive: the board comes once it has a journal.",
+        "nothing": "Nothing new to tidy.",
+        "alreadyRunning": "I'm already on it: one pass at a time.",
+        "dreamAdvanced": "I've sorted my memories.",
+        "dreamNothing": "Nothing new to remember.",
+        "dreamHeld": "I found nothing to add."
+      },
+      "why": {
+        "model": "The model didn't answer. What I had already written stays.",
+        "notAProject": "There's no notebook to tidy here.",
+        "error": "Something went wrong.",
+        "helperBudget": "It ran out of steps before finishing.",
+        "helperError": "It stopped because of an error."
+      },
+      "openBoard": "Open the board",
+      "retryAction": "Try again",
+      "inProgress": "In progress",
+      "step": "Step {at} of {of}",
+      "time": {
+        "now": "now",
+        "min": "{min} min"
+      }
     },
     "threadError": "I can't read the conversation.\nTry again shortly.",
     "origin": {

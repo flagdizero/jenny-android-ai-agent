@@ -435,7 +435,7 @@ class CronDispatcher:
         la selezione e poi si ritira con ``already_running``. Una lettura di file
         piccoli, e in cambio nessuna copia della guardia in due posti.
         """
-        from jenny.agent.gardener import run_gardener
+        from jenny.agent.gardener import report_gardener_outcome, run_gardener
         from jenny.agent.gardener_schedule import pick_project
         from jenny.config.loader import load_config
 
@@ -477,8 +477,36 @@ class CronDispatcher:
         # dopo. Così il prompt e il commit parlano della **stessa** lettura, e le
         # righe arrivate nel frattempo restano non lette invece di finire sotto un
         # cursore che le dichiara digerite.
-        outcome = await run_gardener(agent, pick.store, delta=pick.delta)
+        #
+        # **E chi e' dentro quel quaderno la vede lavorare.** La bolla di lavoro
+        # va alla chat del progetto: se nessuno ci e' collegato il frame non
+        # arriva a nessuno, ed e' giusto — nessuno sta aspettando. Se qualcuno
+        # c'e', la bolla gli dice anche perche' un suo messaggio la fermera'
+        # (``manual=False``: una passata automatica cede il passo all'utente).
+        reporter = self._gardener_reporter(agent, pick.store.name)
+        outcome = await run_gardener(agent, pick.store, delta=pick.delta, reporter=reporter)
+        if reporter is not None:
+            try:
+                report_gardener_outcome(reporter, outcome, pick.store.root)
+            except Exception as exc:  # noqa: BLE001 — la bolla non tocca l'esito
+                logger.debug("Gardener: work bubble not closed: {}", exc)
         return self._record_gardener_attempt(pick.store, outcome)
+
+    @staticmethod
+    def _gardener_reporter(agent: Any, name: str) -> Any:
+        """La bolla di lavoro di una passata automatica, o ``None`` senza bus."""
+        bus = getattr(agent, "bus", None)
+        if bus is None:
+            return None
+        from jenny.runtime.work_status import WorkReporter
+        from jenny.session.keys import project_session_key
+
+        reporter = WorkReporter(
+            bus, kind="gardener", chat_id=project_session_key(name),
+            phases=("pages", "board"), project=name, manual=False,
+        )
+        reporter.start()
+        return reporter
 
     def _record_gardener_attempt(
         self, store: "GardenerStore", outcome: "GardenerOutcome"

@@ -224,7 +224,7 @@ _UI_MANIFEST = [
     "assets/home-model.js",
     "assets/home-pages.js",
     "assets/home-strip.js",
-    "assets/home-subagents.js",
+    "assets/home-work.js",
     "assets/home-ui-query.js",
     "assets/home-focus.js",
     "assets/home-flower.js",

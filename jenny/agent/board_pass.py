@@ -429,8 +429,13 @@ async def run_board_pass(
     journal_lines: int = 0,
     session_key: str,
     write_guard: Any = None,
+    reporter: Any = None,
 ) -> BoardOutcome:
-    """Una passata della bacheca sul quaderno di *store* (un ``GardenerStore``)."""
+    """Una passata della bacheca sul quaderno di *store* (un ``GardenerStore``).
+
+    *reporter* e' il ``WorkReporter`` della bolla di lavoro, se qualcuno aspetta
+    la passata: riceve il progresso e i riprova del turno, al posto del silenzio.
+    """
     from jenny.agent.internal_run import internal_run_completed
     from jenny.session.turn_visibility import silent_progress
 
@@ -449,7 +454,8 @@ async def run_board_pass(
             session_key=session_key,
             ephemeral=True,
             tools=tools,
-            on_progress=silent_progress,
+            on_progress=reporter.on_progress if reporter is not None else silent_progress,
+            on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
         )
     except Exception as exc:  # noqa: BLE001 — l'esito viaggia nell'outcome
         logger.exception("board pass over {} failed: {}", store.name, exc)

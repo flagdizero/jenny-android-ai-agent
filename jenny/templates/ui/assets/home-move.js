@@ -218,10 +218,11 @@ export class ChatMove {
     copy.removeAttribute('id');
     for (const el of copy.querySelectorAll('[id]')) el.removeAttribute('id');
     for (const el of copy.querySelectorAll('[for]')) el.removeAttribute('for');
-    /* Quel che e' *di un momento* non va in foto: la riga di lavoro di Jenny,
-       lo stato della rete, gli allegati in partenza. Congelati, direbbero che
-       Jenny sta ancora pensando in una conversazione che hai lasciato. */
-    for (const sel of ['.home-activity', '.home-wire', '.home-pending']) {
+    /* Quel che e' *di un momento* non va in foto: le bolle di chi sta
+       lavorando (il posto vivo in fondo al filo), lo stato della rete, gli
+       allegati in partenza. Congelati, direbbero che Jenny sta ancora pensando
+       in una conversazione che hai lasciato. */
+    for (const sel of ['.home-live', '.home-wire', '.home-pending']) {
       for (const el of copy.querySelectorAll(sel)) el.setAttribute('hidden', '');
     }
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei

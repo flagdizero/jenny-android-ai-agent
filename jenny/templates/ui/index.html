@@ -189,14 +189,9 @@
         <div class="home-empty-text" id="home-empty-text"></div>
       </div>
 
-      <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
-           aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
-      <div class="home-activity" id="home-activity" hidden></div>
-
-      <!-- Gli agenti che lavorano per questa conversazione dopo che il turno e'
-           finito (`home-subagents.js`). Dice solo che lavorano: tocco lungo per
-           vederli in officina. Senza agenti non occupa spazio. -->
-      <div class="home-subagents" id="home-subagents" role="status" aria-live="polite" hidden></div>
+      <!-- Chi lavora — Jenny che scrive, il giardiniere, Dream, gli aiutanti — non
+           sta qui sotto: e' una bolla in fondo al filo, nel suo posto vivo
+           (`home-chat.js`, `home-work.js`). -->
 
       <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
            riconnessione). A filo funzionante non occupa spazio. -->

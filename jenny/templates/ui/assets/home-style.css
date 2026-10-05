@@ -520,31 +520,191 @@ body.home {
   white-space: pre-line;
 }
 
-/* ── La riga di lavoro ── */
+/* ── Chi lavora: le bolle in fondo al filo ── */
 
-/* Piccola, nel colore del fiore del tema: e' Jenny che lavora, e porta il suo
-   segno. Sta sotto la conversazione, sopra il composer, dove l'occhio va gia'
-   fra una domanda e la sua risposta.
-   Ogni movimento qui resta nel piano — lettere che salgono, puntini che
-   saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
-   sembrare arrivare da lontano. */
-.home-activity {
-  flex: none;
+/* Il posto vivo (`HomeChat.live`): sempre l'ultimo figlio del filo, e dentro le
+   bolle di chi sta lavorando adesso — il giardiniere, Dream, gli aiutanti — e,
+   per ultima, quella di Jenny che scrive. Vuoto non c'e': un figlio vuoto del
+   filo prenderebbe comunque il suo `gap`. */
+.home-live {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 18px 6px;
-  color: var(--flower);
-  font-size: 12.5px;
-  font-style: italic;
-  /* Il tocco lungo apre il turno in officina: qui il testo non si seleziona, o
-     la pressione lunga la intercetta la selezione del sistema. */
+  flex-direction: column;
+  gap: 10px;
+}
+.home-live[hidden] { display: none; }
+
+/* La bolla di lavoro (`home-work.js`). E' l'unica cosa del filo dalla parte di
+   Jenny che ha una scatola: un messaggio in arrivo, non ancora un messaggio. Si
+   apre a sinistra, come le sue risposte, con l'angolo basso schiacciato verso di
+   lei. Il tocco lungo apre l'officina, quindi il testo non si seleziona. */
+.home-work {
+  align-self: flex-start;
+  width: min(400px, 100%);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px 18px 18px 4px;
+  background: var(--surface);
+  color: var(--text);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+.home-work[hidden] { display: none; }
+.home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
+.home-work.is-failed { border-color: color-mix(in oklab, var(--error) 55%, var(--border-strong)); }
 
-.home-activity[hidden] { display: none; }
+/* Nell'angolo di Jenny la bolla si sposta, come quella dell'utente: e' una
+   scatola, e allungarla fin sotto di lei lascerebbe dentro solo il vuoto. */
+.home-work.is-under-jenny { margin-right: var(--jenny-gap, 39px); }
+
+.home-work-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.home-work-icon {
+  flex: none;
+  font-size: 20px;
+  color: var(--flower);
+  filter: drop-shadow(0 0 3px var(--glow));
+}
+.home-work.is-done .home-work-icon { color: var(--ok); filter: none; }
+.home-work.is-failed .home-work-icon { color: var(--error); filter: none; }
+.home-work-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--heading);
+}
+.home-work-time {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* La barra: un tratto per fase, o una barra che scorre quando le fasi non si
+   sanno. */
+.home-work-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.home-work-bar[hidden] { display: none; }
+.home-work-seg {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+}
+.home-work-seg.is-past { background: var(--ok); }
+.home-work-seg.is-now { background: var(--flower); box-shadow: 0 0 6px var(--glow); }
+.home-work-bar.is-sweep {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+/* Dopo `.is-sweep`, che ha la stessa specificita' e altrimenti la riaccenderebbe. */
+.home-work-bar.is-sweep[hidden] { display: none; }
+.home-work-sweep {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--flower);
+  animation: home-work-sweep 1.6s linear infinite;
+}
+@keyframes home-work-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(265%); }
+}
+
+.home-work-line {
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.home-work-line[hidden] { display: none; }
+
+/* Piu' aiutanti: una riga per ciascuno, il nome e cosa fa. */
+.home-work-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.home-work-rows[hidden] { display: none; }
+.home-work-row {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+.home-work-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-work-row-doing { flex: none; color: var(--text-muted); }
+
+/* «Ci metto piu' del solito»: una riga, nel colore dell'avviso, mai un allarme. */
+.home-work-slow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--warning);
+}
+.home-work-slow[hidden] { display: none; }
+
+.home-work-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.home-work-note[hidden] { display: none; }
+
+/* L'azione sola della bolla finita: Apri la bacheca, Riprova. */
+.home-work-action {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+.home-work-action[hidden] { display: none; }
+
+/* La bolla di Jenny che scrive (`home-activity.js`): la stessa pelle, ma una
+   riga sola — il fiore e la parola scelta male apposta, nel colore del fiore.
+   Ogni movimento qui resta nel piano — lettere che salgono, puntini che
+   saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
+   sembrare arrivare da lontano. */
+.home-work.home-typing {
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--flower);
+  font-size: 14px;
+  font-style: italic;
+}
 
 .home-activity-flower {
   flex: none;
@@ -611,44 +771,7 @@ body.home {
   .home-letter,
   .home-ellipsis-dot,
   .home-word.exits { animation: none; }
-  .home-activity { transition: none; }
-}
-
-/* ── Gli agenti al lavoro ── */
-
-/* Una pastiglia piccola sopra il composer, a sinistra come la riga di lavoro:
-   l'angolo di destra e' di Jenny. Nel colore del fiore, perche' e' lavoro suo
-   affidato ad altri; fermo, nel colore dell'avviso. Il tocco lungo apre
-   l'officina, quindi il testo non si seleziona. */
-.home-subagents {
-  flex: none;
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 32px - var(--jenny-gap, 39px));
-  margin: 0 16px 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-  color: var(--flower);
-  font-size: 12px;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.home-subagents[hidden] { display: none; }
-
-.home-subagents.is-stalled { color: var(--warning); }
-
-.home-subagents .ti { flex: none; font-size: 14px; }
-
-.home-subagents-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .home-work-sweep { animation: none; }
 }
 
 /* ── Lo stato del filo ── */

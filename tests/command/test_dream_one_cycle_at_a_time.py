@@ -158,7 +158,9 @@ class _ReviewSpy:
         self.calls = 0
         self.gate = gate
 
-    async def __call__(self, agent, *, store, report, snapshotted, write_size_guard=None):
+    async def __call__(
+        self, agent, *, store, report, snapshotted, write_size_guard=None, reporter=None
+    ):
         self.calls += 1
         if self.gate is not None:
             await self.gate.wait()

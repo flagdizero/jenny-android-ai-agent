@@ -25,7 +25,7 @@
  */
 
 import { ActivityLine } from './home-activity.js';
-import { SubagentChip } from './home-subagents.js';
+import { WorkBubbles } from './home-work.js';
 import { HomeChat } from './home-chat.js';
 import { HomeBoard, HomeBoardSheet } from './home-board.js';
 import { BoardDrawer } from './home-board-drawer.js';
@@ -159,16 +159,29 @@ class HomeApp {
        cosi' vale anche quando cambia taglia, quando la metti via sul bordo e
        quando la trascini dall'altra parte. */
     this.chat.gap = new JennyGap(this.thread, this.jenny.el);
-    this.activity = new ActivityLine(document.getElementById('home-activity'), {
+    /* **Chi lavora, in fondo al filo** (05/10/2026, `home-work.js`). La bolla
+       di Jenny che scrive e' l'ultima del posto vivo; sopra di lei quelle del
+       lavoro lungo (giardiniere, Dream) e degli aiutanti, che durano oltre la
+       fine del turno. Prima erano una riga piccola e un chip sotto la chat. */
+    const typing = document.createElement('div');
+    typing.className = 'home-work home-typing';
+    typing.hidden = true;
+    this.chat.live.appendChild(typing);
+    this.activity = new ActivityLine(typing, {
       onOpenInWorkshop: (turnId) => this._openInWorkshop(turnId, sessionManager.currentKey),
+      onChange: () => this.chat.liveChanged(),
     });
-    /* Gli agenti che lavorano per questa conversazione oltre la fine del turno:
-       la riga di lavoro si spegne col `turn_end`, il lavoro no. */
-    this.subagents = new SubagentChip(document.getElementById('home-subagents'), {
-      fetchSnapshot: (sessionKey) => api.getSubagents({ sessionKey }),
+    this.work = new WorkBubbles(this.chat.live, {
+      chat: this.chat,
       currentKey: () => sessionManager.currentKey,
+      fetchWork: (sessionKey) => api.getWork({ sessionKey }),
+      fetchSubagents: (sessionKey) => api.getSubagents({ sessionKey }),
+      restartSubagent: (taskId, sessionKey) => api.restartSubagent(taskId, { sessionKey }),
+      sendCommand: (text) => this._sendText(text),
+      openBoard: () => this.openBoard(),
       onOpenInWorkshop: () => this._openInWorkshop(null, sessionManager.currentKey),
     });
+    this.chat.claimsWork = (workId) => this.work.claims(workId);
     this.empty = document.getElementById('home-empty');
     this.emptyText = document.getElementById('home-empty-text');
     this.wire = document.getElementById('home-wire');
@@ -180,7 +193,6 @@ class HomeApp {
        mette nelle pagine delle foto della chat, e un `querySelector` per
        classe puo' rispondere con il composer di una foto (v. `_bindComposer`). */
     this.composer = this.input?.closest?.('.home-composer') || null;
-    this.activityEl = document.getElementById('home-activity');
     this.shell = document.querySelector('.home-shell');
 
     /* I comandi dell'intestazione che cambiano con la stanza — e la pastiglia
@@ -440,11 +452,12 @@ class HomeApp {
        Quaderni si puo' saltare in un altro, e restare li' vorrebbe dire leggere
        l'elenco di una stanza in cui non sei piu'. */
     sessionManager.addEventListener('chat:switch', () => this._setView('chat'));
-    /* Gli agenti sono della conversazione: quelli della vecchia spariscono, e
-       quelli della nuova si leggono, perche' l'attach non rimanda lo snapshot. */
+    /* Chi lavora e' della conversazione: le bolle della vecchia spariscono, e
+       quelle della nuova si leggono, perche' l'attach non rimanda lo snapshot. */
     sessionManager.addEventListener('chat:switch', () => {
-      this.subagents.clear();
-      this.subagents.load();
+      this.work.clear();
+      this.work.loadSubagents();
+      this.work.loadWork();
     });
 
     wsManager.addEventListener('chat:open', () => this._onWireOpen());
@@ -453,6 +466,7 @@ class HomeApp {
       this._readRunStatus(e.detail);
       this._readActivity(e.detail);
       this._readSubagents(e.detail);
+      this._readWork(e.detail);
       this.chat.handleFrame(e.detail);
     });
 
@@ -1926,7 +1940,7 @@ class HomeApp {
         measure();
         this.chat.keepBottom();
       });
-      for (const el of [this.composer, this.pending, this.activityEl, this.wire]) {
+      for (const el of [this.composer, this.pending, this.wire]) {
         if (el) observer.observe(el);
       }
     }
@@ -2091,7 +2105,13 @@ class HomeApp {
   /* Lo snapshot dei subagent, se e' della conversazione a schermo. */
   _readSubagents(msg) {
     if (msg?.event !== 'subagent_status' || !this._frameIsHere(msg)) return;
-    this.subagents.ingest(msg);
+    this.work.ingestSubagents(msg);
+  }
+
+  /* Lo stato di un lavoro lungo (giardiniere, Dream), se e' di questa chat. */
+  _readWork(msg) {
+    if (msg?.event !== 'work_status' || !this._frameIsHere(msg)) return;
+    this.work.ingestWork(msg);
   }
 
   /* `goal_status` dice se un turno sta girando: e' quel che trasforma il
@@ -2129,9 +2149,10 @@ class HomeApp {
    *  schermo puo' essere rimasto indietro. */
   _onWireOpen() {
     this._setWire(true);
-    /* Gli agenti si rileggono a ogni apertura, la prima compresa: le
+    /* Chi lavora si rilegge a ogni apertura, la prima compresa: le
        transizioni avvenute a socket chiuso non le ridice nessuno. */
-    this.subagents.load();
+    this.work.loadSubagents();
+    this.work.loadWork();
     /* Al boot le impostazioni non si leggevano, quindi non si sa se questo e'
        il primo avvio: il socket aperto dice che il gateway adesso c'e', e si
        richiede. Una volta sola — un secondo «non lo so» resta nella casa. */
@@ -2238,7 +2259,7 @@ class HomeApp {
     this.strip?.draw();
     if (this.files?.count) this._renderPending();
     if (this.wire && !this.wire.hidden) this.wire.textContent = i18n.t('home.wire.offline');
-    this.subagents?.applyTranslations();
+    this.work?.applyTranslations();
   }
 
 }

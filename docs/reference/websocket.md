@@ -188,7 +188,7 @@ Reasoning frames only flow when the channel's `showReasoning` is `true` (default
 
 `model_preset` is omitted when no named preset is active. The frame can also carry a `provider` field (the name of the active provider entry), present only when the gateway knows it. WebUI clients use this event to keep the displayed model badge in sync across slash commands, config reloads, and settings changes.
 
-**`subagent_status`** — snapshot of the background subagents, pushed on every state transition to the chat that spawned them, and scoped to that chat's session (a project chat sees its own subagents, the personal chat its own; work started by silent internal turns publishes nothing):
+**`subagent_status`** — snapshot of the background subagents, pushed on every state transition (and, at most every 5 seconds, at the end of an iteration, so `last_tool` and `elapsed_s` stay fresh) to the chat that spawned them, and scoped to that chat's session (a project chat sees its own subagents, the personal chat its own; work started by silent internal turns publishes nothing):
 
 ```json
 {
@@ -212,6 +212,28 @@ Reasoning frames only flow when the channel's `showReasoning` is `true` (default
 `state` is one of `running`, `done`, `failed`, `cancelled`, `stalled`; `recent` is newest-first and capped at 10 entries. `idle_s` is seconds since the last observed sign of progress — it is what distinguishes a subagent stuck for four minutes from one working for four minutes. `can_restart` reflects the cap on *automatic* restarts only: a human pressing Relaunch is never refused.
 
 The frame is a recomputable refresh hint — it is never persisted to the transcript and never retried, since the next snapshot replaces it. The same payload is served verbatim by `GET /api/subagents`, which is how the WebUI panel comes back after a page reload instead of waiting for the next transition; pass `?session_key=` (`websocket:default` or `project:<name>`) for the same per-chat scope the frame has. `POST`-style actions ride on GET like every other gateway route (see the transport constraint in [Write a mini-app](../contribute/write-a-mini-app.md)): `GET /api/subagents/<task_id>/restart` (always a manual relaunch) and `GET /api/subagents/<task_id>/cancel`.
+
+**`work_status`** — the state of a long piece of work that someone is waiting for in a chat: a gardener pass (`/gardener`, or an automatic pass on the notebook you have open) or a Dream cycle started with `/dream`. The home WebUI draws it as the *work bubble* at the bottom of the chat. It goes only to the connections subscribed to that `chat_id` (`project:<name>` for a notebook, `default` for the personal chat), so an automatic pass on a notebook nobody is looking at reaches nobody:
+
+```json
+{
+  "event": "work_status",
+  "chat_id": "project:orto",
+  "id": "gardener-3f9a1c2b7d4e",
+  "kind": "gardener",
+  "state": "running",
+  "manual": true,
+  "phases": ["pages", "board"],
+  "phase": "pages",
+  "writes": 3,
+  "retry": {"attempt": 2, "of": 3},
+  "started_at": 1791215890.9,
+  "updated_at": 1791215962.1,
+  "project": "orto"
+}
+```
+
+`kind` is `gardener` or `dream`; `state` is `running`, `done` or `failed`. `phases` are the steps of the work (`pages` and `board` for the gardener, `review` and `memory` for Dream — Dream learns whether it reviews only once it has started, so its first frame may have none). `writes` counts the page writes as they happen. `retry` is set while the provider is retrying a failed model call and clears when the model answers. `manual: false` marks an automatic gardener pass: a message in that notebook makes it stand down. A finished frame adds `ended_at` and an `outcome` of plain fields, never prose — for the gardener `status`, `writes`, `board`, `proposals` (proposals waiting in the board's envelope), `absence` (why the notebook has no board) and, when it failed, `reason`; for Dream `status` and `reviewed`. Updates for the same work are throttled to one every 2 seconds; transitions go out at once. Like `subagent_status` it is never persisted and never retried. `GET /api/work?session_key=` (`websocket:default` or `project:<name>`) serves `{"work": [...]}`, the same payloads for the work in progress and for work finished in the last minute, which is how the bubble comes back after a reload. The command's text replies — the immediate `Gardening <name>...` / `Dreaming...` and the final report — carry the same id as `work_id` on their `message` frame (and in the transcript), so a client that draws the bubble can skip them.
 
 `GET /api/subagents/<task_id>/digest` serves the condensed "what did it do" of one subagent, for the block the chat shows under its result: `{"task_id", "events", "count", "source"}`, up to 300 events. `source` says how complete it is — `"digest"` is the persisted, immutable one written when the subagent finished, `"live"` is a preview built from the running subagent's activity (it will change), and `"none"` means there is nothing to show (empty `events`, never a 404). Unlike `/activity`, it has no cursor.
 
@@ -493,7 +515,7 @@ All fields go under the top-level `websocket` object in `config.json`. These are
 | `sendProgress` | bool | `true` | Send interim progress text while a turn runs. With it off the client sees nothing until the turn produces its answer. |
 | `sendToolHints` | bool | `false` | Include one-line tool hints in that progress stream ("reading SOUL.md", "searching…"). Off by default: it is the noisiest of the four. With it off the hint text is dropped but the `tool_events` it carried (the tools that are starting) still arrive, as a `progress` message with no text, wherever `sendProgress` is on. |
 | `showReasoning` | bool | `true` | Forward `reasoning_delta` / `reasoning_end` frames when the provider exposes incremental reasoning. |
-| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
+| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `work_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
 
 ### Keep-alive
 
@@ -577,7 +599,7 @@ After a reconnect the connection is back on the personal chat only, so a client 
 
 ### Rules
 
-- A chat's frames (`message`, `user`, `delta`, `stream_end`, `reasoning_*`, `turn_end`, `goal_status`, `mascot_mood`, `file_edit`, `subagent_status`) carry the `chat_id` they belong to and go only to the connections subscribed to it.
+- A chat's frames (`message`, `user`, `delta`, `stream_end`, `reasoning_*`, `turn_end`, `goal_status`, `mascot_mood`, `file_edit`, `subagent_status`, `work_status`) carry the `chat_id` they belong to and go only to the connections subscribed to it.
 - Some frames carry no `chat_id`: `runtime_model_updated`, `app_data_changed` and `apps_list_changed` go to every connection; `error`, `rpc_result`, `ui_query` and `subagent_unwatched` go to one.
 - The personal chat cannot be left: proactive messages and the mascot's frames reach a connection there even while it is showing a project.
 - Errors (invalid envelope, unknown `type`, missing `content`, an impossible project name) are soft: the server replies with `{"event":"error","detail":"...","reason":"..."}` and keeps the connection open.

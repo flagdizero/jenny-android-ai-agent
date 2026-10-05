@@ -17,9 +17,11 @@
  *  **E il 02/10/2026 sono rientrati i subagent, ma solo per dire che ci sono.**
  *  Un turno non li aspetta piu': Jenny risponde «ci sto lavorando» e il turno
  *  finisce, mentre il lavoro va avanti per minuti. Senza un segno la
- *  conversazione sembrava ferma. Il segno e' un chip fuori dal filo
- *  (`home-subagents.js`) che dice quanti lavorano e se uno e' fermo; il resto
- *  — stato, strumenti, Ferma — resta in officina, e qui non si legge.
+ *  conversazione sembrava ferma. Il segno era un chip fuori dal filo; dal
+ *  05/10/2026 e' una bolla di lavoro **dentro** il filo, nel suo posto vivo in
+ *  fondo (`this.live`, `home-work.js`), insieme a quelle del giardiniere e di
+ *  Dream. Dice chi lavora, cosa fa e da quanto; il resto — strumenti, Ferma —
+ *  resta in officina, e qui non si legge.
  *
  *  **Le regole del filo non sono state inventate qui.** Sono quelle che
  *  `mobile-chat.js` ha imparato sbagliando, e che valgono identiche in casa
@@ -82,7 +84,11 @@ const HISTORY_PAGE_SIZE = 50;
    storia non le porta, quindi una rilettura della stessa le perde — ed e' il
    prezzo giusto: quel rifiuto l'hai gia' letto, e il messaggio e' tornato nel
    campo. */
-const THREAD_NODES = '.home-msg, .home-boundary, .home-note';
+/* I nodi del filo sono i suoi **figli**: le bolle di lavoro in corso stanno nel
+   posto vivo (`.home-live`, v. il costruttore) e hanno la loro vita — una
+   rilettura della storia non le tocca. Una bolla finita scende nel filo e da
+   li' e' un messaggio come gli altri. */
+const THREAD_NODES = ':scope > .home-msg, :scope > .home-msg-work, :scope > .home-boundary, :scope > .home-note';
 
 function mediaKind(entry) {
   if (entry.kind) return entry.kind;
@@ -151,6 +157,18 @@ export class HomeChat {
     this.onSendRejected = null;
     /* Chi rilegge il filo dopo un `session_boundary` (v. `_message`). */
     this.onSessionBoundary = null;
+    /* Chi sa dire se un testo con `work_id` racconta un lavoro che e' gia' una
+       bolla (`WorkBubbles.claims`): quel testo non si disegna due volte. */
+    this.claimsWork = null;
+
+    /* **Il posto vivo**, sempre l'ultimo figlio del filo: le bolle di chi sta
+       lavorando adesso (`home-work.js`) e, per ultima, quella di Jenny che
+       scrive (`home-activity.js`). I messaggi entrano sopra di lui, quindi chi
+       lavora resta sotto l'ultima cosa detta, come un messaggio in arrivo. */
+    this.live = document.createElement('div');
+    this.live.className = 'home-live';
+    this.live.hidden = true;
+    this.el.appendChild(this.live);
 
     /* **Uno `scroll` non e' sempre un gesto.** Quando una riga compare sotto il
        filo — gli allegati in attesa, la riga di lavoro — il contenitore si
@@ -385,8 +403,12 @@ export class HomeChat {
     const turns = [];
     let current = null;
     const flush = () => { if (current) turns.push(current); current = null; };
-
     for (const msg of messages) {
+      /* Di un lavoro lungo (`/gardener`, `/dream`) la storia tiene due testi:
+         l'annuncio («Gardening…») e il resoconto. L'annuncio non si mostra mai:
+         o il lavoro e' ancora in corso, e allora e' la bolla a dirlo, o e'
+         finito, e allora c'e' il resoconto. */
+      if (msg.workStart) continue;
       if (msg.session_boundary) {
         flush();
         turns.push({ boundary: true });
@@ -544,6 +566,9 @@ export class HomeChat {
     }
     // Un suggerimento di strumento e' esattamente cio' che la casa non mostra.
     if (msg.kind === 'tool_hint') return;
+    // L'annuncio o il resoconto di un lavoro che e' gia' una bolla: la bolla
+    // dice la stessa cosa, e meglio.
+    if (msg.work_id && this.claimsWork?.(msg.work_id)) return;
     if (msg.text) {
       if (this.buffer) this._streamEnd();
       const block = document.createElement('div');
@@ -912,6 +937,7 @@ export class HomeChat {
   _append(node, toTop = false) {
     if (toTop) this.el.insertBefore(node, this.el.firstChild);
     else if (this._anchor?.parentNode === this.el) this.el.insertBefore(node, this._anchor);
+    else if (this.live?.parentNode === this.el) this.el.insertBefore(node, this.live);
     else this.el.appendChild(node);
     /* Nato mentre una lettura era in volo: e' del presente, e la storia che
        arriva non lo butta (v. `_read`). La storia entra sempre in blocco
@@ -929,10 +955,30 @@ export class HomeChat {
     return node;
   }
 
-  /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. */
+  /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. Una
+   *  bolla di lavoro conta: una conversazione nuova in cui il giardiniere sta
+   *  lavorando non e' vuota. */
   syncEmpty() {
     const empty = document.getElementById('home-empty');
-    if (empty) empty.hidden = !this._empty;
+    if (empty) empty.hidden = !this._empty || this.live?.hidden === false;
+  }
+
+  /** Il posto vivo e' cambiato: una bolla e' comparsa, cresciuta, sparita.
+   *  Si nasconde da vuoto (un figlio vuoto del filo prenderebbe comunque il
+   *  suo `gap`), e il fondo si riaggancia solo se ci si era. */
+  liveChanged() {
+    this.live.hidden = ![...this.live.children].some((child) => !child.hidden);
+    this.syncEmpty();
+    this.gap?.refresh();
+    this._follow();
+  }
+
+  /** Una bolla di lavoro finita scende nel filo: da qui e' un messaggio come
+   *  gli altri, e quel che arriva dopo le va sotto. */
+  settle(node) {
+    node.classList.add('home-msg-work');
+    this._append(node);
+    this.liveChanged();
   }
 
   /* ── Scorrimento ── */

@@ -251,6 +251,17 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
         claim_dream_cycle,
         release_dream_cycle,
     )
+    from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_START
+    from jenny.runtime.work_status import WorkReporter
+
+    # La bolla di lavoro della home, come per ``/gardener``: le fasi le decide
+    # ``begin_dream_cycle``, che sola sa se tocca la revisione. Solo il ciclo
+    # chiesto a mano ha la bolla: quello del cron non lo aspetta nessuno.
+    reporter = WorkReporter(
+        loop.bus, kind="dream", chat_id=msg.chat_id, channel=msg.channel,
+        phases=(), manual=True,
+    )
+    work_meta = {OUTBOUND_META_WORK_ID: reporter.id}
 
     async def _dream_cycle():
         # Prologo ed epilogo del ciclo sono gli stessi del job cron, e stanno in
@@ -300,7 +311,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # rispettare uno spazio di cui non gli si dice la misura.
             cfg = load_config().agents.defaults.dream
             prologue = await begin_dream_cycle(
-                loop, store=store, cfg=cfg, take_snapshot=snapshot_cb,
+                loop, store=store, cfg=cfg, take_snapshot=snapshot_cb, reporter=reporter,
             )
             if prologue.review is not None:
                 review_note = _format_dream_review_note(prologue.review)
@@ -318,17 +329,27 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                 # Il turno è lo stesso del job cron (``run_dream_turn``): qui resta
                 # la frase da dire a chi ha lanciato il comando.
                 turn = await run_dream_turn(
-                    loop, store, prologue, take_snapshot=snapshot_cb,
+                    loop, store, prologue, take_snapshot=snapshot_cb, reporter=reporter,
                 )
                 advanced, refused = turn.advanced, turn.refused
                 elapsed = time.monotonic() - t0
+                # Non ha scritto (rifiuti, blocchi) o non si e' chiuso: per la
+                # bolla e' un lavoro non riuscito. Tutto il resto — anche
+                # «niente di nuovo» — e' un lavoro fatto.
+                failed = turn.outcome in (DreamOutcome.BLOCKED, DreamOutcome.INCOMPLETE)
+                reporter.finish(
+                    "failed" if failed else "done",
+                    status=turn.outcome.value,
+                    reviewed=prologue.review is not None,
+                    reason="model" if failed else None,
+                )
                 if turn.outcome is DreamOutcome.NO_INPUT:
                     await loop.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel, chat_id=msg.chat_id,
                         content=_prefix_review_note(
                             review_note, _format_dream_no_input_message()
                         ),
-                        metadata={"render_as": "text"},
+                        metadata={"render_as": "text", **work_meta},
                     ))
                     return
                 if turn.outcome is DreamOutcome.ADVANCED:
@@ -377,6 +398,8 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             content = _prefix_review_note(
                 review_note, f"Dream failed after {elapsed:.1f}s: {e}"
             )
+            if reporter.state == "running":
+                reporter.finish("failed", reason="error")
         finally:
             # La contabilita' dei token **non passa da qui**: la fa
             # ``TokenUsageHook.after_iteration`` sul turno stesso, che e' l'unico
@@ -391,7 +414,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             if pruned_keys:
                 loop.evict_pruned_sessions(pruned_keys)
         await loop.bus.publish_outbound(OutboundMessage(
-            channel=msg.channel, chat_id=msg.chat_id, content=content,
+            channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=work_meta,
         ))
 
     async def _run_dream():
@@ -410,6 +433,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     # risposta immediata al comando può dire la verità invece di promettere
     # "Dreaming..." a un ciclo che non partirà.
     if not claim_dream_cycle():
+        reporter.forget()
         return OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=DREAM_ALREADY_RUNNING,
         )
@@ -423,9 +447,12 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
         # Se il task non arriva nemmeno a esistere, il suo ``finally`` non girerà:
         # la presa va restituita qui o resta appesa a un ciclo che non c'è.
         release_dream_cycle()
+        reporter.forget()
         raise
+    reporter.start()
     return OutboundMessage(
         channel=msg.channel, chat_id=msg.chat_id, content="Dreaming...",
+        metadata={**work_meta, OUTBOUND_META_WORK_START: True},
     )
 
 
@@ -595,9 +622,22 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
         # ``journal_append`` fuori da un progetto.
         return _reply(msg, _gardener_no_target())
     target = ctx.key[len(PROJECT_SESSION_PREFIX):]
+    # La bolla di lavoro della home: compare adesso, cresce mentre la passata
+    # lavora, e alla fine diventa il resoconto (v. ``runtime/work_status.py``).
+    # I due testi qui sotto restano per chi la bolla non ce l'ha — l'officina,
+    # Telegram — e portano l'id del lavoro, cosi' la home non li disegna due
+    # volte.
+    from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_START
+    from jenny.runtime.work_status import WorkReporter
+
+    reporter = WorkReporter(
+        loop.bus, kind="gardener", chat_id=msg.chat_id, channel=msg.channel,
+        phases=("pages", "board"), project=target, manual=True,
+    )
+    reporter.start()
 
     async def _run():
-        from jenny.agent.gardener import GardenerStore, run_gardener
+        from jenny.agent.gardener import GardenerStore, report_gardener_outcome, run_gardener
         from jenny.config.loader import load_config
 
         try:
@@ -611,16 +651,22 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
                     f"`{target}` is not a project I can garden: I look for "
                     f"`{wikis_dir}/{target}/wiki/`, and there is nothing there."
                 )
+                reporter.finish("failed", reason="not_a_project")
             else:
-                outcome = await run_gardener(loop, store)
-                content = _format_gardener_outcome(
-                    target, outcome, absence=_gardener_board_absence(store.root)
+                # ``yield_to_user=False``: chi ha lanciato la passata puo'
+                # scriverle mentre lavora senza fermarla (v. ``run_gardener``).
+                outcome = await run_gardener(
+                    loop, store, reporter=reporter, yield_to_user=False
                 )
+                absence = _gardener_board_absence(store.root)
+                content = _format_gardener_outcome(target, outcome, absence=absence)
+                report_gardener_outcome(reporter, outcome, store.root, absence=absence)
         except Exception as e:
             content = f"The gardener failed: {e}"
+            reporter.finish("failed", reason="error")
         await loop.bus.publish_outbound(OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=content,
-            metadata={"render_as": "text"},
+            metadata={"render_as": "text", OUTBOUND_META_WORK_ID: reporter.id},
         ))
 
     # Tracciato dal loop (v. ``cmd_dream``): una passata che sta scrivendo
@@ -629,6 +675,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     return OutboundMessage(
         channel=msg.channel, chat_id=msg.chat_id,
         content=f"Gardening {target}...",
+        metadata={OUTBOUND_META_WORK_ID: reporter.id, OUTBOUND_META_WORK_START: True},
     )
 
 

@@ -190,6 +190,7 @@ async def run_dream_review(
     report: Sequence[FileBudget],
     snapshotted: bool,
     write_size_guard: WriteSizeGuard | None = None,
+    reporter: Any = None,
 ) -> ReviewOutcome:
     """Esegue un review pass sui file di memoria e restituisce l'esito.
 
@@ -228,7 +229,8 @@ async def run_dream_review(
             session_key=review_session_key(),
             ephemeral=True,
             tools=tools,
-            on_progress=silent_progress,
+            on_progress=reporter.on_progress if reporter is not None else silent_progress,
+            on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
         )
     except Exception:  # noqa: BLE001 — l'esito viaggia nell'outcome, non in un raise
         # Un review pass è un lavoro di manutenzione: farlo esplodere in faccia

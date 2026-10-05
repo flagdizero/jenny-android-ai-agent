@@ -155,8 +155,10 @@ export class JennyGap {
        colonna dove sta lei. L'ultima cosa scritta e' anche quella piu' in
        basso, quindi era la piu' coperta di tutte. Il *come* scansare cambia
        fra le due (la risposta stringe il testo, la bolla si sposta), e quello
-       lo dice il CSS; qui la regola e' una sola, ed e' geometrica. */
-    for (const msg of this.thread.querySelectorAll('.home-msg')) {
+       lo dice il CSS; qui la regola e' una sola, ed e' geometrica.
+       Contano anche le bolle di lavoro (`.home-work`, 05/10/2026): stanno in
+       fondo al filo, cioe' proprio dove lei e' piu' spesso. */
+    for (const msg of this.thread.querySelectorAll('.home-msg, .home-work')) {
       /* Il rettangolo va letto **senza** il margine che gli abbiamo messo noi,
          altrimenti un messaggio scansato si misura piu' stretto, esce dalla
          banda, e al giro dopo rientra: un'altalena a ogni ricalcolo. */

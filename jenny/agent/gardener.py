@@ -45,7 +45,7 @@ from collections.abc import Collection, Iterator
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -81,6 +81,9 @@ from jenny.utils.wiki_paths import (
     page_chars_if_over,
     wiki_journal_dir,
 )
+
+if TYPE_CHECKING:
+    from jenny.runtime.work_status import WorkReporter
 
 # Tetto sull'elenco delle pagine messo nel prompt. Serve al giardiniere per non
 # creare un doppione di una pagina che esiste, quindi è materiale di lavoro e non
@@ -1292,6 +1295,15 @@ def _yield_to_user_guard(agent: Any, name: str, aborted: list[str]) -> Any:
 
     *aborted* è la lista in cui si deposita il motivo: al primo rifiuto la passata
     è decisa, e i rifiuti successivi non devono raccontare una storia diversa.
+
+    **Solo sulle passate automatiche** (05/10/2026). ``/gardener`` gira con
+    ``yield_to_user=False`` e questo gancio non lo monta: chi lancia la passata a
+    mano e poi scrive nel quaderno — «a che punto sei?» — la fermava con la sua
+    stessa domanda. Il prezzo è quello che questo gancio evita: la passata non
+    tiene il lock della sessione del progetto (v. ``run_gardener``), quindi lei
+    e un turno dell'utente possono scrivere la wiki nello stesso momento. Lo si
+    accetta perché la passata l'ha chiesta l'utente e la sta guardando nella
+    bolla di lavoro; una passata automatica, che nessuno ha chiesto, cede ancora.
     """
     from jenny.session.keys import project_session_key
 
@@ -1319,7 +1331,12 @@ def _yield_to_user_guard(agent: Any, name: str, aborted: list[str]) -> Any:
 
 
 async def run_gardener(
-    agent: Any, store: GardenerStore, *, delta: JournalDelta | None = None
+    agent: Any,
+    store: GardenerStore,
+    *,
+    delta: JournalDelta | None = None,
+    reporter: WorkReporter | None = None,
+    yield_to_user: bool = True,
 ) -> GardenerOutcome:
     """Esegue una passata su un progetto e restituisce l'esito.
 
@@ -1380,6 +1397,18 @@ async def run_gardener(
     nessuna selezione davanti, quindi la sola lettura è questa. La lettura sta
     **dentro** la guardia di ``_PASSES_IN_FLIGHT``, come prima: rifiutare una
     passata concorrente non deve costare l'apertura dei diari.
+
+    **Chi aspetta la passata la vede lavorare** (05/10/2026): con un *reporter*
+    (``jenny/runtime/work_status.py``) la passata annuncia le sue due fasi
+    (``pages``, ``board``), conta le scritture mentre avvengono e dice quando il
+    modello sta riprovando — e' la bolla di lavoro della home. Aprire e chiudere
+    il lavoro resta del chiamante, che sa a chi raccontarlo e come.
+
+    **E una passata chiesta a mano non cede il passo** (``yield_to_user=False``):
+    chi lancia ``/gardener`` e poi chiede «a che punto sei?» la fermava con la
+    sua stessa domanda. Il prezzo e' scritto in ``_yield_to_user_guard``: senza
+    quella guardia la passata e un turno dell'utente sullo stesso quaderno possono
+    scrivere la wiki nello stesso momento — l'ha chiesto lui, ed e' li' a vederla.
     """
     if store.name in _PASSES_IN_FLIGHT:
         logger.warning(
@@ -1393,12 +1422,16 @@ async def run_gardener(
         # della wiki ha promosso.
         if delta is None:
             delta = store.read_delta()
-        outcome = await _run_pass(agent, store, delta)
+        outcome = await _run_pass(
+            agent, store, delta, reporter=reporter, yield_to_user=yield_to_user
+        )
         if outcome.status in ("failed", "aborted_user_active"):
             # Il provider e' caduto, o l'utente e' tornato: la bacheca aspetta
             # la passata dopo, come le righe che la wiki non ha letto.
             return outcome
-        board = await _board_pass(agent, store, delta, after=outcome)
+        board = await _board_pass(
+            agent, store, delta, after=outcome, reporter=reporter, yield_to_user=yield_to_user
+        )
         return replace(outcome, board=board) if board else outcome
     finally:
         # **Su ogni uscita, eccezioni comprese.** È la stessa forma del
@@ -1412,8 +1445,54 @@ async def run_gardener(
         _PASSES_IN_FLIGHT.discard(store.name)
 
 
+# Gli esiti della passata della wiki che vogliono dire «non e' finita»: la bolla
+# di lavoro li dice come un lavoro non riuscito, con il riprova. Gli altri sono un
+# lavoro fatto, anche quando non ha scritto niente — e' la bolla a dire cosa.
+_WORK_FAILED_STATUSES = ("failed", "incomplete")
+
+
+def report_gardener_outcome(
+    reporter: WorkReporter, outcome: GardenerOutcome, root: Path, *, absence: str = ""
+) -> None:
+    """Chiude la bolla di lavoro di una passata con i campi del suo esito.
+
+    Campi e non frasi: la bolla la scrive la home, nella lingua
+    dell'interfaccia. ``proposals`` sono le proposte che aspettano nella busta
+    dopo la passata, lette dalla bacheca stessa — e' il numero che decide se la
+    bolla offre «Apri la bacheca». *absence* e' il perche' il quaderno resta
+    senza bacheca (``jenny/board/context_block.py::board_absence``), se lo e'.
+
+    Sta qui e non in uno dei due chiamanti perche' sono due — ``/gardener`` e il
+    cron — e la stessa passata deve finire nella stessa bolla.
+    """
+    proposals = 0
+    try:
+        from jenny.board.store import read_board
+
+        board = read_board(root)
+        if board is not None:
+            proposals = len(board.get("suggestions") or [])
+    except Exception:  # noqa: BLE001 — una bacheca illeggibile non cambia l'esito
+        pass
+    state = "failed" if outcome.status in _WORK_FAILED_STATUSES else "done"
+    reporter.finish(
+        state,
+        status=outcome.status,
+        writes=outcome.writes,
+        board=outcome.board or None,
+        proposals=proposals,
+        absence=absence or None,
+        reason="model" if state == "failed" else None,
+    )
+
+
 async def _run_pass(
-    agent: Any, store: GardenerStore, delta: JournalDelta | None = None
+    agent: Any,
+    store: GardenerStore,
+    delta: JournalDelta | None = None,
+    *,
+    reporter: WorkReporter | None = None,
+    yield_to_user: bool = True,
 ) -> GardenerOutcome:
     """La passata vera, con la presa su ``_PASSES_IN_FLIGHT`` già ottenuta."""
 
@@ -1435,6 +1514,8 @@ async def _run_pass(
     # non parte non ha niente da proteggere, e uno snapshot per tick a vuoto
     # sarebbe una scansione del workspace ogni mezz'ora per niente.
     await _checkpoint(agent)
+    if reporter is not None:
+        reporter.enter("pages")
 
     t0 = time.monotonic()
     resp = None
@@ -1455,9 +1536,12 @@ async def _run_pass(
     aborted: list[str] = []
     tools = store.build_tools(
         write_guard=_compose_write_guards(
-            # Ordine: v. ``_compose_write_guards``. La cessione del passo prima.
-            _yield_to_user_guard(agent, store.name, aborted),
+            # Ordine: v. ``_compose_write_guards``. La cessione del passo prima;
+            # il contatore della bolla per ultimo, cosi' conta solo le scritture
+            # che le altre due hanno lasciato passare.
+            _yield_to_user_guard(agent, store.name, aborted) if yield_to_user else None,
             _provenance_guard(store.root.resolve(), (store.root / "wiki").resolve()),
+            reporter.write_observer if reporter is not None else None,
         )
     )
     # **Una volta sola, e messa da parte**: ``store.session_key()`` legge
@@ -1515,7 +1599,8 @@ async def _run_pass(
                 session_key=session_key,
                 ephemeral=True,
                 tools=tools,
-                on_progress=silent_progress,
+                on_progress=reporter.on_progress if reporter is not None else silent_progress,
+                on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
             )
         except Exception as exc:  # noqa: BLE001 — l'esito viaggia nell'outcome
             logger.exception("gardener: pass over {} failed", store.name)
@@ -1716,7 +1801,13 @@ async def _run_pass(
 
 
 async def _board_pass(
-    agent: Any, store: GardenerStore, delta: JournalDelta, *, after: GardenerOutcome
+    agent: Any,
+    store: GardenerStore,
+    delta: JournalDelta,
+    *,
+    after: GardenerOutcome,
+    reporter: WorkReporter | None = None,
+    yield_to_user: bool = True,
 ) -> str:
     """La seconda meta' della passata: la bacheca del quaderno, se c'e' lavoro.
 
@@ -1737,14 +1828,22 @@ async def _board_pass(
     # si dice nel log e nello stato della bacheca, non diventa un'eccezione al
     # posto di un esito a lavoro fatto.
     try:
-        return await _run_board(agent, store, delta, after)
+        return await _run_board(
+            agent, store, delta, after, reporter=reporter, yield_to_user=yield_to_user
+        )
     except Exception:  # noqa: BLE001
         logger.exception("gardener: the board pass over {} failed", store.name)
         return "failed"
 
 
 async def _run_board(
-    agent: Any, store: GardenerStore, delta: JournalDelta, after: GardenerOutcome
+    agent: Any,
+    store: GardenerStore,
+    delta: JournalDelta,
+    after: GardenerOutcome,
+    *,
+    reporter: WorkReporter | None = None,
+    yield_to_user: bool = True,
 ) -> str:
     from jenny.agent.board_pass import run_board_pass
 
@@ -1752,6 +1851,8 @@ async def _run_board(
         # La wiki non e' girata, quindi nessuno ha fatto l'istantanea: la
         # bacheca puo' scrivere pagine (le correzioni), e la rete va tesa qui.
         await _checkpoint(agent)
+    if reporter is not None:
+        reporter.enter("board")
     aborted: list[str] = []
     session_key = f"{store.session_key()}-board"
     try:
@@ -1762,9 +1863,11 @@ async def _run_board(
             journal_lines=delta.line_count,
             session_key=session_key,
             write_guard=_compose_write_guards(
-                _yield_to_user_guard(agent, store.name, aborted),
+                _yield_to_user_guard(agent, store.name, aborted) if yield_to_user else None,
                 _provenance_guard(store.root.resolve(), (store.root / "wiki").resolve()),
+                reporter.write_observer if reporter is not None else None,
             ),
+            reporter=reporter,
         )
     finally:
         _prune_sessions(agent, session_key)

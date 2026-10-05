@@ -217,7 +217,9 @@ def test_the_thread_keeps_its_bottom_when_the_rows_below_it_grow() -> None:
     body = block.group(1)
     # Per riferimento e non per classe (25/09/2026): le foto del trasloco
     # copiano la chat, e una ricerca per classe puo' trovare una copia.
-    for ref in ("this.composer", "this.pending", "this.activityEl", "this.wire"):
+    # La riga di lavoro non c'e' piu' (05/10/2026): chi lavora e' una bolla
+    # dentro il filo, e il fondo lo riaggancia ``HomeChat.liveChanged``.
+    for ref in ("this.composer", "this.pending", "this.wire"):
         assert ref in body, f"{ref} non è osservato: il filo perderà il fondo"
     assert "keepBottom()" in body, "l'osservatore misura e basta, non riaggancia il fondo"
 

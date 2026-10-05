@@ -512,6 +512,7 @@ async def begin_dream_cycle(
     store: "MemoryStore",
     cfg: "DreamConfig",
     take_snapshot: Callable[[], Awaitable[bool]] | None = None,
+    reporter: Any = None,
 ) -> DreamPrologue:
     """Tutto ciò che precede il turno incrementale di Dream, per entrambi i percorsi.
 
@@ -581,6 +582,9 @@ async def begin_dream_cycle(
     forced_at = store.get_review_forced_at_stuck()
     livelock_due = stuck > 0 and stuck % STUCK_FORCES_REVIEW == 0 and stuck != forced_at
     review_due = runs_since_review >= cfg.review_every_runs or livelock_due
+    if reporter is not None:
+        # La bolla di lavoro di ``/dream``: adesso si sa se c'e' la revisione.
+        reporter.set_phases(("review", "memory") if review_due else ("memory",))
     if not review_due:
         return DreamPrologue(
             report=report,
@@ -592,12 +596,19 @@ async def begin_dream_cycle(
         )
 
     snapshotted = await take_dream_snapshot(take_snapshot)
+    # Il reporter solo quando c'e': la revisione la sostituiscono dei doppi nei
+    # test, e un argomento in piu' che nessuno usa non deve romperli.
+    review_kwargs: dict[str, Any] = {}
+    if reporter is not None:
+        reporter.enter("review")
+        review_kwargs["reporter"] = reporter
     outcome = await dream_review.run_dream_review(
         agent,
         store=store,
         report=report,
         snapshotted=snapshotted,
         write_size_guard=guard,
+        **review_kwargs,
     )
     # Si azzera solo ``runs_since_review``: il review è avvenuto, la cadenza
     # periodica riparte. ``stuck`` resta dov'è, perché dice un'altra cosa — da
@@ -703,6 +714,7 @@ async def run_dream_turn(
     prologue: "DreamPrologue",
     *,
     take_snapshot: Callable[[], Awaitable[Any]] | None,
+    reporter: Any = None,
 ) -> DreamTurnResult:
     """Il turno incrementale di Dream, lo stesso per il cron e per ``/dream``.
 
@@ -732,7 +744,11 @@ async def run_dream_turn(
         # "pre_dream", cioè un secondo checkpoint che non è pre-niente. Copre
         # anche il secondo batch, che è lo stesso ciclo.
         await take_dream_snapshot(take_snapshot)
-    first = await _run_dream_batch(agent, store, prologue, result, before=prologue.report)
+    if reporter is not None:
+        reporter.enter("memory")
+    first = await _run_dream_batch(
+        agent, store, prologue, result, before=prologue.report, reporter=reporter
+    )
     # ``getattr`` con un default: i doppi dei test ritornano coppie nude, e un
     # batch che non dichiara un resto è un batch che basta da solo.
     rest_scope = getattr(result, "rest_scope", None)
@@ -758,7 +774,7 @@ async def run_dream_turn(
     if first.last_cursor is not None:
         store.set_last_dream_cursor(first.last_cursor)
     second = (
-        await _run_dream_batch(agent, store, prologue, rest, before=report)
+        await _run_dream_batch(agent, store, prologue, rest, before=report, reporter=reporter)
         if rest is not None else None
     )
     if second is not None and second.outcome is DreamOutcome.ADVANCED:
@@ -780,6 +796,7 @@ async def _run_dream_batch(
     batch: Any,
     *,
     before: Sequence["FileBudget"],
+    reporter: Any = None,
 ) -> DreamTurnResult:
     """Un batch: il turno LLM e il suo esito. **Non** scrive il cursore.
 
@@ -803,7 +820,8 @@ async def _run_dream_batch(
         session_key=MemoryStore.dream_session_key(),
         ephemeral=True,
         tools=dream_tools,
-        on_progress=silent_progress,
+        on_progress=reporter.on_progress if reporter is not None else silent_progress,
+        on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
     )
     advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
     # Il run ha scritto, ma il batch è atterrato? Sono due domande diverse e fino

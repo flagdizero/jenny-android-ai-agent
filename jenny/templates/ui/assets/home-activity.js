@@ -1,8 +1,11 @@
-/** La casa — la riga di lavoro.
+/** La casa — la bolla di Jenny che scrive.
  *
- *  Mentre Jenny lavora, sotto la conversazione compare una riga sola che dice
+ *  Mentre Jenny lavora, in fondo alla conversazione c'e' una bolla che dice
  *  cosa sta facendo, con una parola scelta male apposta: *elucubro*, *rovisto*,
- *  *scartabello*. Quando ha finito, sparisce.
+ *  *scartabello*. Quando ha finito, sparisce. Fino al 05/10/2026 era una riga
+ *  piccola sotto la chat; adesso e' l'ultima delle bolle di lavoro, nel posto
+ *  vivo del filo (`home-work.js`), con la stessa pelle delle altre. Il nome
+ *  della classe e' rimasto quello di prima: il comportamento e' lo stesso.
  *
  *  **La regola che la tiene onesta: non si mostra mai un verbo di una famiglia
  *  che non sta girando.** E' l'unica cosa che distingue questa riga da
@@ -29,7 +32,7 @@ import { Flower } from './home-flower.js';
    e' un dizionario, e perche' e' l'unico posto da aggiornare quando nasce uno
    strumento nuovo. Chi non e' in elenco non sparisce: cade sul vocabolario
    generico, che dice "mi do da fare" invece di mentire su cosa sta facendo. */
-const FAMILY_BY_TOOL = {
+export const FAMILY_BY_TOOL = {
   // Legge: guarda qualcosa che gia' esiste, senza toccarlo.
   read_file: 'read', list_dir: 'read', get_source: 'read', recall: 'read',
   recall_history: 'read', memory: 'read', ui_view: 'read', my: 'read',
@@ -76,8 +79,12 @@ function reducedMotion() {
 }
 
 export class ActivityLine {
-  constructor(el, { onOpenInWorkshop } = {}) {
+  /* `onChange` sa quando la bolla compare o sparisce: la chat ci ricalcola il
+     fondo e lo stato vuoto, perche' da quando la riga e' una bolla nel filo
+     (05/10/2026, `home-work.js`) la sua altezza e' quella del filo. */
+  constructor(el, { onOpenInWorkshop, onChange } = {}) {
     this.el = el;
+    this._onChange = onChange || null;
     this.family = null;
     this.lastWord = null;
     this.turnId = null;
@@ -172,7 +179,9 @@ export class ActivityLine {
   _paint() {
     this.flower.setMode(this.family);
     this._setWord(this._word());
+    const appeared = this.el.hidden;
     this.el.hidden = false;
+    if (appeared) this._onChange?.();
     this.flower.start();
     clearInterval(this._rotateTimer);
     this._rotateTimer = setInterval(() => {
@@ -238,9 +247,11 @@ export class ActivityLine {
     this._rotateTimer = null;
     this.family = null;
     this.lastWord = null;
+    const vanished = !this.el.hidden;
     this.el.hidden = true;
     this.words.replaceChildren();
     this.plain.textContent = '';
     this.flower.reset();
+    if (vanished) this._onChange?.();
   }
 }

@@ -136,6 +136,12 @@ _TRANSITION_HINTS = {
     "failed": "subagent failed",
 }
 
+# Al massimo uno snapshot di progresso ogni tanti secondi per task (v.
+# ``SubagentManager._publish_progress_snapshot``): le transizioni restano
+# immediate, il resto e' per la bolla di lavoro della home, a cui basta sapere
+# cosa sta facendo l'aiutante con qualche secondo di ritardo.
+PROGRESS_SNAPSHOT_EVERY_S = 5.0
+
 # Fase interna -> riga leggibile nel pannello. La fase e un identificatore del
 # runner ("awaiting_tools"), il pannello e testo per una persona; la mappa sta qui
 # perche e anche cio che rende **stabile** il summary, e il digest tiene solo le
@@ -424,11 +430,16 @@ class _SubagentHook(AgentHook):
         status: SubagentStatus | None = None,
         *,
         activity: SubagentActivityLog | None = None,
+        on_iteration: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self._task_id = task_id
         self._status = status
         self._activity = activity
+        # Chiamato a fine iterazione, dopo l'aggiornamento dello status: e' cosi'
+        # che la bolla di lavoro della home sa cosa sta facendo l'aiutante adesso
+        # e non solo quando cambia stato (v. ``_publish_progress_snapshot``).
+        self._on_iteration = on_iteration
         self._reasoning = _ThinkingSignal("thinking")
         # Il testo della risposta e un secondo segnale vivo, distinto dal
         # ragionamento: e il risultato che si sta formando. Stesso ``kind``
@@ -553,6 +564,11 @@ class _SubagentHook(AgentHook):
         # Fine iterazione = progresso osservabile: e uno dei due punti in cui il
         # watchdog di stallo viene disarmato (l'altro e il checkpoint).
         self._status.touch()
+        if self._on_iteration is not None:
+            try:
+                self._on_iteration()
+            except Exception:  # noqa: BLE001 — la telemetria non ferma il run
+                logger.debug("Subagent [{}] progress snapshot failed", self._task_id)
 
     # -- note dal manager ----------------------------------------------------
 
@@ -798,6 +814,9 @@ class SubagentManager:
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._task_statuses: dict[str, SubagentStatus] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
+        # task_id -> ultimo snapshot di progresso (monotonic): il freno di
+        # ``_publish_progress_snapshot``.
+        self._progress_published_at: dict[str, float] = {}
         # Subagent abbandonati da cancel_by_session (task che non muore entro
         # il grace) o superati da un rilancio: il loro announce tardivo va
         # soppresso, non deve iniettare un turno stale nella sessione.
@@ -1146,6 +1165,7 @@ class SubagentManager:
             # tutto cio che serve a ispezionare o rilanciare il subagent
             # svaniva nell'istante in cui finiva.
             final = self._task_statuses.pop(task_id, None)
+            self._progress_published_at.pop(task_id, None)
             self._repudiated_task_ids.discard(task_id)
             self._discard_injections(task_id)
             if session_key and (ids := self._session_tasks.get(session_key)):
@@ -1208,7 +1228,10 @@ class SubagentManager:
         origin_message_id = spec.origin_message_id
         workspace_scope = spec.workspace_scope
         logger.info("Subagent [{}] starting task: {}", task_id, label)
-        hook = _SubagentHook(task_id, status, activity=self.activity)
+        hook = _SubagentHook(
+            task_id, status, activity=self.activity,
+            on_iteration=lambda: self._publish_progress_snapshot(task_id, spec),
+        )
         # Primo evento del task, prima di qualunque I/O: la modale che si apre su
         # un subagent appena nato deve mostrare qualcosa, non una lista vuota.
         hook.note_phase(status.phase)
@@ -1934,6 +1957,22 @@ class SubagentManager:
             ))
         except Exception:  # noqa: BLE001 — la telemetria non uccide il subagent
             logger.exception("Failed to publish subagent status snapshot")
+
+    def _publish_progress_snapshot(self, task_id: str, spec: SubagentSpec) -> None:
+        """Lo snapshot anche fra una transizione e l'altra, ma non piu' di uno ogni tanto.
+
+        Fino al 05/10/2026 partiva solo sulle transizioni (partito, fermo,
+        finito): bastava al chip «al lavoro», non alla bolla di lavoro della home,
+        che dice *cosa* sta facendo l'aiutante (``last_tool``) e da quanto. Al
+        massimo uno ogni :data:`PROGRESS_SNAPSHOT_EVERY_S` per task: un aiutante
+        che fa venti chiamate al minuto non deve mandarne venti.
+        """
+        now = time.monotonic()
+        last = self._progress_published_at.get(task_id)
+        if last is not None and now - last < PROGRESS_SNAPSHOT_EVERY_S:
+            return
+        self._progress_published_at[task_id] = now
+        self._publish_status_snapshot(spec)
 
     def _publish_transition(self, spec: SubagentSpec, state: str, label: str) -> None:
         """Riga di progress + snapshot per una transizione di stato."""

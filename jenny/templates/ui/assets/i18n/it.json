@@ -901,14 +901,67 @@
     "wire": {
       "offline": "Filo interrotto, sto riprovando"
     },
-    "subagents": {
-      "one": "Al lavoro · {label}",
-      "oneUnnamed": "Un agente al lavoro",
-      "oneStalled": "Fermo · {label}",
-      "stalled": "Un agente è fermo",
-      "many": "{count} agenti al lavoro",
-      "manyStalled": "{count} agenti, uno è fermo",
-      "openInWorkshop": "Tieni premuto per vederli in officina"
+    "work": {
+      "title": {
+        "gardener": "Sistemo il quaderno",
+        "gardenerAuto": "Sistemo il quaderno da sola",
+        "dream": "Riordino i ricordi",
+        "helperOne": "Un aiutante: {label}",
+        "helperUnnamed": "Un aiutante al lavoro",
+        "helpersMany": "{count} aiutanti al lavoro"
+      },
+      "phase": {
+        "start": "Comincio",
+        "pages": "Scrivo le pagine",
+        "board": "Preparo la bacheca",
+        "review": "Rileggo i ricordi",
+        "memory": "Aggiorno la memoria"
+      },
+      "doing": {
+        "think": "Ragiona",
+        "read": "Legge",
+        "search": "Cerca",
+        "write": "Scrive",
+        "out": "È in rete",
+        "run": "Fa girare del codice",
+        "delegate": "Chiede aiuto",
+        "busy": "Lavora"
+      },
+      "writesOne": "1 scritta",
+      "writesMany": "{count} scritte",
+      "slow": "Ci metto più del solito",
+      "retry": "Il modello non risponde, riprovo ({attempt} di {of})",
+      "autoNote": "Se mi scrivi adesso mi fermo, e riprendo più tardi.",
+      "done": "Fatto",
+      "failed": "Non ci sono riuscita",
+      "helperFailed": "L'aiutante si è fermato: {label}",
+      "helperFailedUnnamed": "L'aiutante si è fermato",
+      "result": {
+        "pagesOne": "1 pagina aggiornata.",
+        "pagesMany": "{count} pagine aggiornate.",
+        "boardProposed": "Ti ho preparato la bacheca: è nella busta.",
+        "research": "Questo quaderno è un archivio di studio: la bacheca arriva quando c'è un diario.",
+        "nothing": "Niente di nuovo da sistemare.",
+        "alreadyRunning": "Ci sto già lavorando: una passata alla volta.",
+        "dreamAdvanced": "Ho riordinato i ricordi.",
+        "dreamNothing": "Niente di nuovo da ricordare.",
+        "dreamHeld": "Non ho trovato niente da aggiungere."
+      },
+      "why": {
+        "model": "Il modello non ha risposto. Quello che avevo già scritto resta.",
+        "notAProject": "Qui non c'è un quaderno da sistemare.",
+        "error": "Qualcosa è andato storto.",
+        "helperBudget": "Ha finito i passi prima di concludere.",
+        "helperError": "Si è fermato per un errore."
+      },
+      "openBoard": "Apri la bacheca",
+      "retryAction": "Riprova",
+      "inProgress": "In corso",
+      "step": "Passo {at} di {of}",
+      "time": {
+        "now": "ora",
+        "min": "{min} min"
+      }
     },
     "threadError": "Non riesco a leggere la conversazione.\nRiprova fra poco.",
     "origin": {

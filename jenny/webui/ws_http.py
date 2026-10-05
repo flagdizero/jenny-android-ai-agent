@@ -360,6 +360,12 @@ class GatewayHTTPHandler:
             log=self._log,
         )
 
+        from jenny.webui.work_routes import WorkRoutes
+
+        # La bolla di lavoro della home (giardiniere, Dream): lo snapshot per
+        # chi si ricollega a lavoro iniziato.
+        self.work_routes = WorkRoutes(check_api_token=self.check_api_secret, log=self._log)
+
     def _resolve_subagent_manager(self) -> Any | None:
         if self._get_subagent_manager is None:
             return None
@@ -671,6 +677,10 @@ class GatewayHTTPHandler:
         subagent_response = await self.subagent_routes.dispatch(request, got)
         if subagent_response is not None:
             return subagent_response
+
+        work_response = await self.work_routes.dispatch(request, got)
+        if work_response is not None:
+            return work_response
 
         board_response = await self.board_routes.dispatch(request, got)
         if board_response is not None:

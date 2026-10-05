@@ -145,7 +145,9 @@ class _ReviewSpy:
         self._demoted_ids = demoted_ids
         self._unresolved_refusals = unresolved_refusals
 
-    async def __call__(self, agent, *, store, report, snapshotted, write_size_guard=None):
+    async def __call__(
+        self, agent, *, store, report, snapshotted, write_size_guard=None, reporter=None
+    ):
         self.calls.append({
             "agent": agent,
             "report": report,
@@ -816,3 +818,58 @@ class TestTheManualRunHoldsAnUnconsolidatedBatch:
         again = memory.build_dream_prompt()
         assert again is not None
         assert "Preferisce le riunioni corte del mattino" in MemoryStore.dream_prompt_history(again[0])
+
+
+class TestTheWorkBubble:
+    """`/dream` a mano apre la bolla di lavoro della home e la chiude con l'esito.
+
+    Le fasi le decide il ciclo, che sola sa se tocca la revisione; il
+    resoconto di testo porta l'id del lavoro, cosi' la home non lo disegna due
+    volte.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_bubble_opens_and_closes_and_the_text_carries_its_id(
+        self, router, loop, memory
+    ):
+        from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_STATUS
+        from jenny.runtime import work_status
+
+        work_status.reset_registry()
+        frames: list = []
+        loop.bus.try_publish_outbound = lambda msg: frames.append(
+            msg.metadata[OUTBOUND_META_WORK_STATUS]
+        ) or True
+
+        await router.dispatch(_ctx(loop, "/dream"))
+        await _drain(loop)
+
+        assert frames, "la bolla non e' mai comparsa"
+        assert frames[0]["kind"] == "dream"
+        assert frames[0]["state"] == "running"
+        assert frames[-1]["state"] in ("done", "failed")
+        assert "status" in frames[-1]["outcome"]
+        assert loop.published[0].metadata[OUTBOUND_META_WORK_ID] == frames[0]["id"]
+        work_status.reset_registry()
+
+    @pytest.mark.asyncio
+    async def test_a_due_review_is_announced_before_the_memory_phase(
+        self, router, loop, memory, monkeypatch
+    ):
+        from jenny.bus.events import OUTBOUND_META_WORK_STATUS
+        from jenny.runtime import work_status
+
+        work_status.reset_registry()
+        _install_review(monkeypatch, _ReviewSpy())
+        memory.set_review_state(runs_since_review=12, stuck_runs=0)
+        frames: list = []
+        loop.bus.try_publish_outbound = lambda msg: frames.append(
+            msg.metadata[OUTBOUND_META_WORK_STATUS]
+        ) or True
+
+        await router.dispatch(_ctx(loop, "/dream"))
+        await _drain(loop)
+
+        assert ["review", "memory"] in [f["phases"] for f in frames]
+        assert "review" in [f["phase"] for f in frames]
+        work_status.reset_registry()

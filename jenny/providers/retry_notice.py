@@ -69,3 +69,18 @@ def localize(text: str, language: str | None) -> str:
         key = f"{name}.{fields.pop('kind')}" if name == "waiting" else name
         return table[key].format(**fields)
     return text
+
+
+def parse(text: str) -> tuple[str, dict[str, str]] | None:
+    """Quale riga d'attesa e' *text* (``waiting``/``stopped``/``gave_up``) e i suoi campi.
+
+    ``None`` per qualunque altro testo. Serve a chi la riga non la mostra ma la
+    legge: la bolla di lavoro della home (``jenny/runtime/work_status.py``) ne
+    tiene solo il tentativo. Gli stessi modelli di :func:`localize`, cosi' una
+    frase cambiata non smette di essere riconosciuta da uno dei due.
+    """
+    for name, pattern in _PATTERNS:
+        match = pattern.fullmatch(text.strip())
+        if match is not None:
+            return name, match.groupdict()
+    return None

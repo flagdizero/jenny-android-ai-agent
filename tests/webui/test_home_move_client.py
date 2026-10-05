@@ -126,7 +126,7 @@ track.append(p0, p1, p2);
 const chat = create('div', { id: 'home-chat', cls: 'home-chat' });
 const thread = create('div', { id: 'home-thread', cls: 'home-thread' });
 const empty = create('div', { id: 'home-empty', cls: 'home-empty' });
-const work = create('div', { id: 'home-activity', cls: 'home-activity' });
+const work = create('div', { cls: 'home-live' });
 const network = create('div', { id: 'home-wire', cls: 'home-wire' });
 const attachments = create('div', { id: 'home-pending', cls: 'home-pending' });
 const composer = create('div', { cls: 'home-composer' });
@@ -267,7 +267,7 @@ def test_what_belongs_to_a_moment_stays_out_of_the_photo() -> None:
         "field.value = 'mezza frase';\n"
         "t.arrives(p1, 'B');\n"
         "const snapshot = snapshotOf(p0);\n"
-        "for (const sel of ['.home-activity', '.home-wire', '.home-pending']) {\n"
+        "for (const sel of ['.home-live', '.home-wire', '.home-pending']) {\n"
         "  assert.ok(snapshot.querySelector(sel).hasAttribute('hidden'), sel);\n"
         "}\n"
         "assert.equal(snapshot.querySelector('textarea').value, '');\n"
