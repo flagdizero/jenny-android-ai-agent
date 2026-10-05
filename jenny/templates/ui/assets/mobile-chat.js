@@ -336,6 +336,20 @@ export class ChatController {
     this.chatArea.insertBefore(node, this.identityEl.nextSibling);
   }
 
+  /** Le parole che la chat scrive da JS, riscritte quando arrivano le
+   *  traduzioni: la riga d'identita' («online») e il chip dei comandi. Le
+   *  scrive al primo `activate()`, che puo' venire prima di `i18n.load()`, e
+   *  restavano le chiavi grezze. Fino al 05/10/2026 non si vedeva: la minichat
+   *  faceva partire il caricamento dal suo costruttore, prima di tutto il
+   *  resto, e le traduzioni arrivavano in tempo per caso. */
+  applyTranslations() {
+    if (this.identityLabel) {
+      const on = this.identityStatus?.classList.contains('on');
+      this.identityLabel.textContent = i18n.t(on ? 'chat.online' : 'chat.offline');
+    }
+    commandsChip.render();
+  }
+
   _setConnectionStatus(connected) {
     this._ensureIdentity();
     this.identityStatus.classList.toggle('on', connected);

@@ -64,3 +64,38 @@ console.log('ok');
 """
     )
     assert out.strip() == "ok"
+
+
+def test_the_chat_identity_and_commands_are_translated_after_load() -> None:
+    """La riga «Jenny · online» e il chip «Commands» la chat li scrive al primo
+    ``activate()``, che puo' venire prima delle traduzioni. Fino al 05/10/2026
+    le traduzioni arrivavano in tempo per caso (le chiedeva per prima la
+    minichat); senza di lei sul telefono restavano ``chat.online`` e
+    ``commands.label``. Ora il guscio, a traduzioni arrivate, le fa riscrivere."""
+    chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
+    app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
+    out = run_js(
+        _I18N
+        + "let chipRenders = 0;\nconst commandsChip = { render() { chipRenders += 1; } };\n"
+        + "class C {\n"
+        + member(chat, "applyTranslations")
+        + "\n}\n"
+        + """
+const c = new C();
+const on = new Set(['on']);
+c.identityStatus = { classList: { contains: (k) => on.has(k) } };
+c.identityLabel = { textContent: 'chat.online' };
+await i18n.load();
+c.applyTranslations();
+assert.equal(c.identityLabel.textContent, 'T:chat.online');
+assert.equal(chipRenders, 1);
+on.clear();
+c.applyTranslations();
+assert.equal(c.identityLabel.textContent, 'T:chat.offline');
+console.log('ok');
+"""
+    )
+    assert out.strip() == "ok"
+    load = app[app.index("i18n.load(i18n.locale).then(() => {"):]
+    load = load[: load.index("});")]
+    assert "this.controllers.chat?.applyTranslations?.();" in load

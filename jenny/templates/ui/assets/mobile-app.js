@@ -151,6 +151,8 @@ class MobileApp {
       // le chiavi grezze ("scope.change").
       scopeChip.render();
       writeSwitch.render();
+      // La riga d'identita' e il chip dei comandi, per la stessa ragione.
+      this.controllers.chat?.applyTranslations?.();
     });
 
     // Sidebar navigation
