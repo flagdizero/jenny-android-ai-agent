@@ -24,9 +24,13 @@ import { UiQueryResponder, requestFrameHtml } from './shared/ui-query.js';
 
 /* Le stanze della casa e il loro elemento. Sono le chiavi di `BACK_TO` in
    `home-app.js`; una stanza nuova senza riga qui manda a Jenny un HTML vuoto,
-   non un errore. */
+   non un errore — ed e' successo: fino al 05/10/2026 qui c'era ancora `pages`
+   (le pagine del quaderno, sparite con la bacheca) e mancavano la bacheca e il
+   cassetto, quindi «cosa vedi?» davanti alla bacheca tornava vuoto. Un
+   contratto ora tiene questa tabella allineata a `BACK_TO` e a `index.html`. */
 const ROOM_ELEMENTS = {
-  pages: 'home-notebook-pages',
+  board: 'home-board',
+  drawer: 'home-board-drawer',
   reader: 'home-reader',
   jenny: 'home-jenny-room',
   model: 'home-model-room',
