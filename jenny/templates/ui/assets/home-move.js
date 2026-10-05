@@ -57,12 +57,16 @@ export class ChatMove {
    *  @param currentKey `() => key`: la conversazione che la chat mostra
    *  @param atBottom       riporta il filo in fondo. Serve anche senza cambio:
    *                       un contenitore staccato e riattaccato perde lo scroll.
+   *  @param homeKey    `() => key`: la conversazione della pagina chat (la
+   *                       personale). Serve a `lower` e `retune`, per sapere
+   *                       quale foto mostrare li' quando la chat e' altrove.
    */
-  constructor({ chat, change, currentKey, atBottom } = {}) {
+  constructor({ chat, change, currentKey, atBottom, homeKey } = {}) {
     this.chat = chat || null;
     this._change = change;
     this._currentKey = currentKey;
     this._atBottom = atBottom;
+    this._homeKey = homeKey;
     /** Una foto per conversazione: il negativo, da cui si stampano le copie. */
     this._negatives = new Map();
     /** Un segno per arrivo: vince l'ultimo, sempre. */
@@ -120,6 +124,15 @@ export class ChatMove {
       return;
     }
 
+    return this._changeUnder(panel, key, mine);
+  }
+
+  /** Il cambio di conversazione, con la foto che copre la lettura: passi 3 e
+   *  4 di `arrives`, in comune con `lift` e `retune`. *panel* e' dove sta la
+   *  foto da togliere a lettura finita (`null`: nessuna). Cambia **subito**:
+   *  quando questa funzione arriva alla sua prima attesa, la conversazione
+   *  attuale e' gia' quella nuova. */
+  async _changeUnder(panel, key, mine) {
     /* 3. Il cambio. */
     let read;
     try {
@@ -152,8 +165,84 @@ export class ChatMove {
     clearTimeout(cap);
     if (this._expireCap === expire) this._expireCap = null;
     if (mine !== this._arrivals) return;
-    if (this.chat.parentElement === panel) removeSnapshot(panel);
+    if (panel && this.chat.parentElement === panel) removeSnapshot(panel);
     this._atBottom?.();
+  }
+
+  /* ── Il velo: la chat sopra la pagina ─────────────────────────────────
+     Dal 05/10/2026 Jenny e' la porta della chat: toccata dove la chat non
+     c'e', la chat vera sale sopra la pagina, dentro un velo (`#home-over`),
+     e ridiscende a casa quando si chiude. Sempre lei, mai una copia. */
+
+  /** La chat sale in *host* con la conversazione *key*.
+   *
+   *  La pagina che lascia tiene la sua foto, come in `arrives`. Se la
+   *  conversazione e' gia' quella — il caso comune: sopra la bacheca la chat
+   *  ha gia' la chiave del quaderno, sopra le App quella personale — non si
+   *  rilegge niente e nel velo non c'e' foto.
+   */
+  lift(host, key) {
+    if (!this.chat || !host || !key) return Promise.resolve();
+    const mine = ++this._arrivals;
+    this._expireCap?.();
+    const from = this.chat.parentElement;
+    const left = this._currentKey?.();
+    if (from && from !== host) {
+      if (this._reliable) this._negatives.set(left, this._negative());
+      this._putSnapshot(from, left);
+    }
+    this._outOfPlace = null;
+    if (left === key) {
+      removeSnapshot(host);
+      host.appendChild(this.chat);
+      this._atBottom?.();
+      return Promise.resolve();
+    }
+    this._putSnapshot(host, key);
+    host.insertBefore(this.chat, snapshotIn(host));
+    return this._changeUnder(host, key, mine);
+  }
+
+  /** La chat torna nella pagina chat (*home*) senza cambiare conversazione.
+   *
+   *  Se e' la conversazione di casa, li' non serve una foto: c'e' lei. Se e'
+   *  un quaderno (era aperta sopra la bacheca) la pagina chat mostra la foto
+   *  della personale, finche' un arrivo non la rimette — come dopo un
+   *  `bringBackHome`. Il negativo della conversazione lasciata si tiene.
+   */
+  lower(home) {
+    if (!this.chat || !home) return;
+    this._arrivals += 1; // una lettura in volo nel velo non tocca piu' niente
+    this._expireCap?.();
+    const host = this.chat.parentElement;
+    const key = this._currentKey?.();
+    if (this._reliable) this._negatives.set(key, this._negative());
+    if (host && host !== home) removeSnapshot(host);
+    home.insertBefore(this.chat, snapshotIn(home));
+    const homeKey = this._homeKey?.();
+    if (!homeKey || key === homeKey) removeSnapshot(home);
+    else if (!snapshotIn(home)) this._putSnapshot(home, homeKey);
+    this._atBottom?.();
+  }
+
+  /** Cambia conversazione **senza che si veda**: un quaderno si apre sulla
+   *  sua bacheca, e la chat — a casa, dietro la bacheca — deve gia' avere la
+   *  sua chiave quando Jenny la porta su. La pagina chat intanto mostra la
+   *  foto della personale. Cambia in modo sincrono: chi legge la conversazione
+   *  attuale subito dopo (`openBoard`) deve gia' sentirsi dire quella nuova.
+   */
+  retune(home, key) {
+    if (!this.chat || !key || this._currentKey?.() === key) return Promise.resolve();
+    const mine = ++this._arrivals;
+    this._expireCap?.();
+    const left = this._currentKey?.();
+    if (this._reliable) this._negatives.set(left, this._negative());
+    const homeKey = this._homeKey?.();
+    const atHome = Boolean(home) && this.chat.parentElement === home;
+    if (atHome && !snapshotIn(home)) this._putSnapshot(home, homeKey || left);
+    /* Tornando alla personale la foto di casa e' di troppo: va via a lettura
+       finita, come in un arrivo. */
+    return this._changeUnder(atHome && key === homeKey ? home : null, key, mine);
   }
 
   /** Una pagina di chat che la chat non abita deve mostrare la sua foto.

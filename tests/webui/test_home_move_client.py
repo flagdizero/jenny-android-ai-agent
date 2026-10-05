@@ -190,7 +190,10 @@ def _run(body: str) -> None:
                   change,
                   currentKey: () => current,
                   atBottom: () => { atBottom += 1; },
+                  homeKey: () => 'A',
                 });
+                const over = create('div', { cls: 'home-over' });
+                root.appendChild(over);
                 """
             )
             + body,
@@ -596,4 +599,102 @@ def test_a_read_that_ends_first_switches_the_cover_timer_off() -> None:
         "reads[0].finish();\n"
         "await arrivo;\n"
         "assert.equal(live.size, 0, 'la lettura ha vinto e il tetto e\\u2019 rimasto armato');\n"
+    )
+
+
+# ── Il velo: la chat sopra la pagina (05/10/2026) ──────────────────────────
+
+
+def test_lifting_with_the_same_conversation_moves_the_chat_and_reads_nothing() -> None:
+    """Il caso comune: sopra le App la chat ha gia' la personale."""
+    _run(
+        "await t.lift(over, 'A');\n"
+        "assert.equal(chat.parentElement, over);\n"
+        "assert.deepEqual(changes, [], 'niente da rileggere');\n"
+        "assert.equal(snapshotOf(over), null, 'nessuna foto nel velo');\n"
+        "assert.equal(document.getElementById('home-chat'), chat);\n"
+    )
+
+
+def test_lifting_leaves_a_photo_where_the_chat_was() -> None:
+    _run(
+        "t.lift(over, 'A');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+    )
+
+
+def test_lifting_into_another_conversation_covers_the_read() -> None:
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "assert.equal(current, 'B', 'il cambio e subito');\n"
+        "assert.ok(snapshotOf(over), 'la lettura si vedrebbe');\n"
+        "reads[0].finish();\n"
+        "await done;\n"
+        "assert.equal(snapshotOf(over), null);\n"
+        "assert.deepEqual(messagesOf(chat), ['B1', 'B2', 'B3']);\n"
+    )
+
+
+def test_lowering_the_home_conversation_leaves_no_photo_at_home() -> None:
+    _run(
+        "await t.lift(over, 'A');\n"
+        "t.lower(p0);\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.equal(snapshotOf(p0), null, 'a casa c e lei, non la sua foto');\n"
+    )
+
+
+def test_lowering_a_notebook_shows_the_personal_photo_at_home() -> None:
+    """Chiusa sopra la bacheca, la chat ha ancora il quaderno: la pagina chat
+    mostra la personale in foto finche' un arrivo non la rimette."""
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "reads[0].finish(); await done;\n"
+        "t.lower(p0);\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.equal(current, 'B', 'riabbassare non cambia conversazione');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+        "assert.equal(snapshotOf(over), null);\n"
+    )
+
+
+def test_a_read_still_running_when_lowered_touches_nothing() -> None:
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "t.lower(p0);\n"
+        "reads[0].finish(); await done;\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.ok(snapshotOf(p0), 'la lettura tardiva ha tolto la foto di casa');\n"
+    )
+
+
+def test_retune_switches_at_once_behind_the_personal_photo() -> None:
+    """Un quaderno si apre sulla bacheca: la chiave cambia subito, e la pagina
+    chat, se la vedi passando, mostra ancora la personale."""
+    _run(
+        "const done = t.retune(p0, 'B');\n"
+        "assert.equal(current, 'B', 'openBoard legge la chiave subito dopo');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+        "reads[0].finish(); await done;\n"
+        "assert.ok(snapshotOf(p0), 'la foto della personale resta');\n"
+        "assert.equal(chat.parentElement, p0);\n"
+    )
+
+
+def test_retune_back_home_drops_the_photo_when_read() -> None:
+    _run(
+        "let done = t.retune(p0, 'B');\n"
+        "reads[0].finish(); await done;\n"
+        "done = t.retune(p0, 'A');\n"
+        "reads[1].finish(); await done;\n"
+        "assert.equal(current, 'A');\n"
+        "assert.equal(snapshotOf(p0), null);\n"
+    )
+
+
+def test_retune_to_the_conversation_it_has_does_nothing() -> None:
+    _run(
+        "await t.retune(p0, 'A');\n"
+        "assert.deepEqual(changes, []);\n"
+        "assert.equal(snapshotOf(p0), null);\n"
     )
