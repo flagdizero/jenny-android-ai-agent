@@ -1,6 +1,5 @@
 package com.flagdizero.jenny
 
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
@@ -34,7 +33,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -56,7 +55,9 @@ import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 import java.io.File
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 
 /**
@@ -557,7 +558,7 @@ object FloatingOverlayController {
     private var waitingForReply = false
 
     /** Il respiro in corso (bob o wobble), o `null` se sta ferma. */
-    private var breath: ObjectAnimator? = null
+    private var breath: ValueAnimator? = null
 
     /** Sta scivolando verso un ancoraggio? Finché è vero il respiro aspetta:
      *  animano la stessa `translationY`, e insieme la fanno tremare. */
@@ -930,9 +931,8 @@ object FloatingOverlayController {
         sizePendingAfterFlight = false  // il montaggio dopo nasce già alla taglia giusta
         // Gli animator prima delle viste. Il respiro è `INFINITE` e resta
         // registrato presso l'AnimationHandler del main anche con la vista
-        // staccata: senza `cancel` chiede un fotogramma a ogni vsync finché il
-        // GC non raccoglie la colonna (l'ObjectAnimator la tiene solo
-        // debolmente, e solo allora si ferma da sé). `sliding` si
+        // staccata, e il suo listener tiene la colonna: senza `cancel` chiede un
+        // fotogramma a ogni vsync per sempre. `sliding` si
         // spegne prima: il `cancel` dello scivolamento chiama `onAnimationEnd`,
         // che altrimenti ricollocherebbe la colonna e farebbe ripartire il
         // respiro su viste che stanno per sparire.
@@ -2337,6 +2337,7 @@ object FloatingOverlayController {
         art.translationY = startTop
         art.rotation = 0f
         art.scaleX = 1f
+        art.scaleY = 1f
         art.setImageBitmap(sprite("jenny-hang"))
         art.visibility = View.VISIBLE
         main.post { if (flight != null) mascot.visibility = View.INVISIBLE }
@@ -2352,8 +2353,12 @@ object FloatingOverlayController {
             density = metrics.density,
             dockPivotY = dockY,
             dockPivotX = rightDock,
-            onFrame = { left, top, rot, pose, flip -> drawFlight(left, top, rot, pose, flip) },
+            onFrame = { left, top, rot, pose, flip, shape ->
+                drawFlight(left, top, rot, pose, flip, shape, size, metrics.density)
+            },
             onSettled = { endFlight(ctx) },
+            // Animazioni di sistema spente: il volo resta, la deformazione no.
+            squash = ValueAnimator.areAnimatorsEnabled(),
         ).also {
             it.grab(
                 startLeft + size * FloatingFlight.PIVOT_X,
@@ -2371,12 +2376,25 @@ object FloatingOverlayController {
         rotationDeg: Float,
         pose: FloatingFlight.Pose,
         flip: Boolean,
+        shape: FloatingSquash.Shape,
+        size: Int,
+        density: Float,
     ) {
         val art = flightArt ?: return
+        // Le scale stanno sugli assi del disegno: attorno alla mano appesa e in
+        // aria, attorno ai piedi a terra, così i piedi restano dove sono. La
+        // rotazione c'è solo appesa, attorno alla mano, e la View applica la
+        // scala prima della rotazione, come `rotate() scale()` in CSS.
+        art.pivotY = size * when (pose) {
+            FloatingFlight.Pose.GROUND -> FloatingSquash.FEET_GROUND
+            FloatingFlight.Pose.WALK1, FloatingFlight.Pose.WALK2 -> FloatingSquash.FEET_WALK
+            else -> FloatingFlight.PIVOT_Y
+        }
         art.translationX = left
-        art.translationY = top
+        art.translationY = top + shape.dy * density
         art.rotation = rotationDeg
-        art.scaleX = if (flip) -1f else 1f
+        art.scaleX = shape.sx * (if (flip) -1f else 1f)
+        art.scaleY = shape.sy
         val name = when (pose) {
             FloatingFlight.Pose.HANG -> "jenny-hang"
             FloatingFlight.Pose.FALL -> "jenny-fall"
@@ -2623,39 +2641,51 @@ object FloatingOverlayController {
         mascot.translationX = 0f
         mascot.translationY = 0f
         mascot.rotation = 0f
+        mascot.scaleX = 1f
+        mascot.scaleY = 1f
     }
 
     /**
-     * Il respiro: `jenny-bob` quando è fuori, `jenny-wobble` mentre pensa.
+     * Il respiro: `jenny-breath` quando è fuori, `jenny-think` mentre pensa
+     * (mobile-style.css), con gli stessi periodi — 3,4 s e 1,6 s per ciclo
+     * intero — e la stessa origine, dove l'arte poggia (88% del quadrato).
      *
-     * Stessi tempi e stesse origini del CSS. L'ampiezza però **non** si copia
-     * in pixel: là sono 4 px su uno sprite da 120, qui il lato è un altro, e un
-     * respiro copiato in pixel sarebbe un respiro più corto. Si porta il
-     * rapporto.
+     * Sono scale e rotazioni, non pixel, quindi valgono a ogni taglia. Le curve
+     * sono le sinusoidi che passano per i fotogrammi del CSS: il respiro si
+     * allunga fino a 0,985 × 1,03 a metà ciclo; il pensa ondeggia di ±2° e si
+     * allunga (0,99 × 1,016) a ogni passaggio al centro.
+     *
+     * Fino al 05/10/2026 era `jenny-bob` (4 px su e giù) e `jenny-wobble`, e il
+     * respiro durava il doppio del CSS: un `REVERSE` di 3,4 s fa un ciclo di 6,8.
+     *
+     * Con le animazioni di sistema spente sta ferma: un animatore infinito a
+     * durata zero si fermerebbe sul suo ultimo fotogramma, cioè inclinata.
      */
     private fun startBreathing() {
-        val ctx = appContext ?: return
         val mascot = column ?: return
         if (sliding || flight != null || !expanded) return
         stopBreathing()
-        if (waitingForReply) {
-            mascot.pivotX = mascot.width / 2f
-            mascot.pivotY = mascot.height * 0.9f
-            breath = ObjectAnimator.ofFloat(mascot, View.ROTATION, -2.5f, 2.5f).apply {
-                duration = 1_100
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                interpolator = AccelerateDecelerateInterpolator()
-                start()
-            }
-            return
-        }
-        val amplitude = -mascotSize(ctx) * (4f / 120f)
-        breath = ObjectAnimator.ofFloat(mascot, View.TRANSLATION_Y, 0f, amplitude).apply {
-            duration = 3_400
+        if (!ValueAnimator.areAnimatorsEnabled()) return
+        mascot.pivotX = mascot.width / 2f
+        mascot.pivotY = mascot.height * 0.88f
+        val thinking = waitingForReply
+        breath = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = if (thinking) 1_600 else 3_400
             repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
+            interpolator = LinearInterpolator()
+            addUpdateListener { a ->
+                val t = (a.animatedValue as Float).toDouble()
+                if (thinking) {
+                    val c2 = cos(4 * PI * t).toFloat()
+                    mascot.rotation = (-2 * cos(2 * PI * t)).toFloat()
+                    mascot.scaleX = 1.001f + 0.011f * c2
+                    mascot.scaleY = 1.002f - 0.014f * c2
+                } else {
+                    val k = ((1 - cos(2 * PI * t)) / 2).toFloat()
+                    mascot.scaleX = 1f - 0.015f * k
+                    mascot.scaleY = 1f + 0.03f * k
+                }
+            }
             start()
         }
     }
@@ -2667,6 +2697,8 @@ object FloatingOverlayController {
         column?.let {
             it.translationY = 0f
             it.rotation = 0f
+            it.scaleX = 1f
+            it.scaleY = 1f
         }
     }
 
