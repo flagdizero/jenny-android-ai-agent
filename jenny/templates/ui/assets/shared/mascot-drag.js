@@ -22,6 +22,10 @@
  */
 
 import { OUT_SHIFT_RATIO } from './mascot.js';
+import {
+  FEET, GETUP_MS as GETUP_SHAPE_MS, airStretch, aroundFeet, getUp, heldStretch, impactSquash,
+  walkStep,
+} from './mascot-squash.js';
 
 /* Tutta l'arte (riposo + pose di volo) vive sullo stesso canvas QUADRATO
    3000x3000, esportato cosi' com'e' da gen_pose_webp.py: scala e posizioni
@@ -87,6 +91,7 @@ export function buildFlyLayer(parent) {
  *   onDragCommit()     il trascinamento e' cominciato davvero
  *   onTap()            tocco secco, senza trascinamento
  *   onFlightEnd()      il volo e' finito: rimetti l'arte a posto
+ *   squash()           si deforma? (no con movimento ridotto; v. mascot-squash.js)
  */
 export function bindMascotDrag(host) {
   const isOut = host.isOut || (() => false);
@@ -94,6 +99,7 @@ export function bindMascotDrag(host) {
   const onDragCommit = host.onDragCommit || (() => {});
   const onTap = host.onTap || (() => {});
   const onFlightEnd = host.onFlightEnd || (() => {});
+  const squash = host.squash || (() => false);
 
   let startX = 0;
   let startY = 0;
@@ -119,6 +125,9 @@ export function bindMascotDrag(host) {
     px: 0, py: 0,
     w: 0, h: 0,
     onEl: null, // posa del layer di volo attualmente visibile (.on)
+    // Per lo schiaccia e allunga (v. mascot-squash.js): quando e a che
+    // velocita' ha toccato terra l'ultima volta, e quando si e' rialzata.
+    impactAt: -Infinity, impactV: 0, getupAt: -Infinity,
     raf: 0, last: 0, deadline: 0, after: null, snapT: 0,
   };
 
@@ -174,6 +183,8 @@ export function bindMascotDrag(host) {
     fs.grounded = false;
     fs.dir = 1;
     fs.onEl = null;
+    fs.impactAt = -Infinity;
+    fs.getupAt = -Infinity;
     Object.values(host.flyPose).forEach((im) => im.classList.remove('on', 'flip'));
     showEl(host.flyPose.hang);
     host.fly.style.transformOrigin = `${fs.w * PIVOT_X}px ${fs.h * PIVOT_Y}px`;
@@ -318,6 +329,9 @@ export function bindMascotDrag(host) {
     if (fs.phase === 'fall') {
       if (fs.y >= fs.y0) fs.grounded = true; // toccato terra: passa alla posa ground
       if (fs.vy > 0 && fs.y >= fs.y0) {
+        // Il tonfo: quanto si schiaccia lo decide la velocita' d'arrivo.
+        fs.impactAt = fs.last;
+        fs.impactV = fs.vy;
         fs.y = fs.y0;
         // tonfo quasi secco: al massimo un rimbalzino molto smorzato,
         // poi resta un attimo a terra prima di rialzarsi
@@ -354,7 +368,10 @@ export function bindMascotDrag(host) {
     if (!fs.active) return;
     const dt = Math.min(0.033, Math.max(0.001, (now - fs.last) / 1000));
     fs.last = now;
-    if (fs.phase === 'down' && now >= fs.downUntil) fs.phase = 'slide';
+    if (fs.phase === 'down' && now >= fs.downUntil) {
+      fs.phase = 'slide';
+      fs.getupAt = now;
+    }
     step(dt);
     // Toccato terra (fall -> down): da qui in poi si sa dov'è caduta, quindi
     // quanta strada ha davanti. Prima del disegno, perché settle() sposta la
@@ -368,8 +385,14 @@ export function bindMascotDrag(host) {
       // flip in mano: l'arte resta nel suo verso, solo la caduta si specchia)
       const deg = (fs.th * 180) / Math.PI;
       showEl(host.flyPose.hang);
-      host.fly.style.transform =
-        `translate(${tx}px, ${ty}px) rotate(${(-deg).toFixed(2)}deg)`;
+      // La scala viene dopo la rotazione: lungo il braccio, cioe' l'asse del
+      // disegno appeso, e attorno alla mano (l'origine del layer).
+      let t = `translate(${tx}px, ${ty}px) rotate(${(-deg).toFixed(2)}deg)`;
+      if (squash()) {
+        const { sx, sy } = heldStretch(Math.hypot(fs.vx, fs.vy));
+        t += ` scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+      }
+      host.fly.style.transform = t;
     } else {
       // posa di fase, dritta (niente swing): fall in caduta (flip in place
       // col verso del moto), ground a terra + rimbalzi, walk1/2 in cammino.
@@ -384,7 +407,7 @@ export function bindMascotDrag(host) {
       host.flyPose.walk1.classList.toggle('flip', fs.phase === 'slide' && fs.dir < 0);
       host.flyPose.walk2.classList.toggle('flip', fs.phase === 'slide' && fs.dir < 0);
       showEl(host.flyPose[key]);
-      host.fly.style.transform = `translate(${tx}px, ${ty}px)`;
+      host.fly.style.transform = `translate(${tx}px, ${ty}px)${squash() ? shape(key, now) : ''}`;
     }
 
     if (fs.phase === 'slide') {
@@ -399,6 +422,22 @@ export function bindMascotDrag(host) {
       return;
     }
     fs.raf = requestAnimationFrame(loop);
+  };
+
+  /* La deformazione della posa *key* al tempo *now*, sempre sugli assi del
+     disegno (v. mascot-squash.js). In aria attorno all'origine del layer, a
+     terra attorno ai piedi, cosi' i piedi restano dove sono. */
+  const shape = (key, now) => {
+    if (key === 'fall') {
+      const { sx, sy } = airStretch(fs.vy);
+      return ` scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+    }
+    if (key === 'ground') {
+      return aroundFeet(impactSquash(fs.impactV, now - fs.impactAt), (FEET.ground - PIVOT_Y) * fs.h);
+    }
+    const since = now - fs.getupAt;
+    const s = since < GETUP_SHAPE_MS ? getUp(since) : walkStep(now);
+    return aroundFeet(s, (FEET.walk - PIVOT_Y) * fs.h);
   };
 
   /* Il volo non inizia subito al pointerdown: il tap secco fa solo toggle

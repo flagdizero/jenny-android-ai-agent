@@ -302,6 +302,7 @@ _UI_MANIFEST = [
     "assets/shared/markdown.js",
     "assets/shared/native-bridge.js",
     "assets/shared/mascot-drag.js",
+    "assets/shared/mascot-squash.js",
     "assets/shared/mascot.js",
     "assets/shared/pinch-zoom.js",
     "assets/shared/project-create.js",

@@ -667,9 +667,14 @@ export class JennyMascot {
         this._stopMotion('squash');
       },
       onTap: () => this._onTap(),
+      // In volo la deformazione la calcola la fisica (v. mascot-squash.js);
+      // con movimento ridotto il volo resta, la deformazione no.
+      squash: () => !this._reducedMotion,
       onFlightEnd: () => {
         this._syncArt();
         this._updateGestureExclusion();
+        // Le pose lasciano il posto al riposo con un piccolo assestamento.
+        this._motion('squash', 'land');
       },
     });
   }
