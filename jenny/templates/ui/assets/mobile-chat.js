@@ -717,7 +717,7 @@ export class ChatController {
 
   /* Butta la vista renderizzata e forza il reload dello storico al prossimo
      activate() — usato quando la sessione cambia fuori da questa vista
-     (es. uno scambio nella minichat di Jenny). */
+     (fino al 05/10/2026: uno scambio nella minichat di Jenny). */
   invalidateHistory() {
     /* Le bolle in composizione muoiono con il DOM che le conteneva: i
        riferimenti vanno azzerati **qui**, o restano a puntare nodi staccati e
@@ -2303,7 +2303,7 @@ export class ChatController {
     });
     // Il pannello è della conversazione aperta: cambiandola, quel che mostrava
     // non è più di nessuno a schermo. `chat:switch` e non `invalidateHistory`,
-    // che scatta anche senza cambio (la minichat che chiude un turno).
+    // che scatta anche senza cambio.
     sessionManager.addEventListener('chat:switch', () => this._resetSubagentPanel());
     // Sopravvivere al reload è il caso comune, non l'eccezione: su Android il
     // processo della WebView muore e il frame WS di transizione è già passato.

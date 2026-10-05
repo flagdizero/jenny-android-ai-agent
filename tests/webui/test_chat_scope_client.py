@@ -34,7 +34,6 @@ from support.js_harness import requires_node, run_js
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
-MINICHAT_JS = ASSETS / "shared" / "jenny-minichat.js"
 SESSION_JS = ASSETS / "shared" / "session-manager.js"
 WS_JS = ASSETS / "shared" / "ws-manager.js"
 
@@ -308,7 +307,7 @@ def test_the_mascot_releases_its_turn_on_a_switch() -> None:
     pensare per sempre.
 
     Vale per tutti e due i gusci: l'ascolto e il rilascio stanno nella mascotte
-    condivisa, e l'officina ci aggiunge solo la minichat in volo."""
+    condivisa."""
     jenny = _read(JENNY_JS)
     assert "sessionManager.addEventListener('chat:switch'" in jenny
     assert "_releaseTrackedTurn()" in jenny
@@ -319,14 +318,7 @@ def test_the_mascot_releases_its_turn_on_a_switch() -> None:
     forget = re.search(r"\n  _forgetTurnState\(\) \{(.*?)\n  \}", jenny, re.S)
     assert forget, "_forgetTurnState non trovato"
     head = forget.group(1)
-    for field in ("_turnActive = false", "_pendingTurn = false", "_streamTurnId = null"):
+    for field in ("_turnActive = false", "_streamTurnId = null"):
         assert field in head, f"_forgetTurnState non azzera {field}"
 
-    companion = _read(MINICHAT_JS)
-    body = re.search(r"\n  _releaseTrackedTurn\(\) \{(.*?)\n  \}", companion, re.S)
-    assert body, "la minichat non si dimentica piu' al cambio di chat"
-    assert "this._resetReply();" in body.group(1)
-    assert "super._releaseTrackedTurn()" in body.group(1), (
-        "la minichat ha riscritto il rilascio invece di aggiungerci il suo"
-    )
     assert "chat:switch" in _read(SESSION_JS), "switchTo non annuncia il cambio"

@@ -404,8 +404,6 @@ def test_a_frame_while_another_turn_is_in_flight_is_dropped() -> None:
       const m = makeMascot('out');
       m._turnActive = true;
       assert.equal(m._acceptMood({ mood: 'happy' }), false);
-      m._turnActive = false; m._pendingTurn = true;
-      assert.equal(m._acceptMood({ mood: 'happy' }), false);
     """)
 
 

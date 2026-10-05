@@ -35,7 +35,6 @@ SURFACES = {
     "home-reader.js": r"\.innerHTML = this\._safeHtml\(",
     # Il fumetto della minichat, dal 28/09/2026: contiene tutta la risposta,
     # formattata come in chat, e quindi anche le sue formule e i suoi diagrammi.
-    "shared/jenny-minichat.js": r"\.innerHTML = renderMarkdown\(",
 }
 
 # La chiamata che disegna il resto, comunque si chiami localmente.

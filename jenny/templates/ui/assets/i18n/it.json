@@ -627,14 +627,7 @@
     "refresh": "Aggiorna"
   },
   "jenny": {
-    "replyWaiting": "risposta nuova",
-    "closeMinichat": "Chiudi la minichat",
-    "askHere": "Chiedi qui...",
-    "askJenny": "Chiedi a Jenny",
-    "send": "Invia",
-    "workingReply": "Ci sto ancora lavorando... la risposta arriva qui ✿",
-    "connectionError": "Non riesco a inviare: controlla la connessione.",
-    "busy": "Jenny sta rispondendo..."
+    "replyWaiting": "risposta nuova"
   },
   "themes": {
     "chanel": {

@@ -12,14 +12,16 @@
  *  preso le correzioni misurate sul telefono. **Fra i due gusci cambia solo il
  *  pavimento** — dove appoggia i piedi, cioe' `--jenny-floor`, che ciascun
  *  foglio di stile dichiara per se' (`:root` in mobile-style.css,
- *  `.home-shell` in home-style.css). Sopra ci sta la minichat
- *  (`shared/jenny-minichat.js`, sottoclasse), per i posti dove la chat non e' a
- *  schermo: le viste dell'officina e, dal 28/09/2026, le pagine e le stanze
- *  della casa, che prima non l'avevano perche' «in casa la chat e' lo schermo».
+ *  `.home-shell` in home-style.css).
  *
- *  Questa classe e' Jenny nella chat vera: presente all'angolo, segue la
- *  conversazione aperta, si prende e si lancia, e un tocco la manda al bordo o
- *  la fa tornare fuori.
+ *  Dal 05/10/2026 e' anche **la porta della chat** (v. `_onTap`): dove la chat
+ *  non e' a schermo il tocco la porta su, sopra la pagina; dove e' aperta sopra
+ *  la pagina la chiude; dove e' a schermo da se' lei saluta. Fino ad allora,
+ *  dove la chat non c'era, apriva la minichat (`shared/jenny-minichat.js`, una
+ *  sottoclasse con una domanda a un turno in un fumetto), che non c'e' piu'.
+ *
+ *  Per il resto e' Jenny nella chat vera: presente all'angolo, segue la
+ *  conversazione aperta, si prende e si lancia.
  */
 
 import { wsManager } from './ws-manager.js';
@@ -126,10 +128,6 @@ export class JennyMascot {
     this._labelNote = '';
     this._agentState = 'idle';
     this._turnActive = false;
-    // Turno chiesto dalla minichat e non ancora concluso (v. jenny-minichat.js).
-    // Sta qui e non nella sottoclasse perche' lo legge la guardia dell'umore,
-    // che resta la stessa con e senza minichat.
-    this._pendingTurn = false;
     // Id del turno che sta animando (v. `_trackedTurnMatches`): la mascotte ne
     // segue uno alla volta, e un turno estraneo non glielo deve togliere.
     this._streamTurnId = null;
@@ -435,7 +433,7 @@ export class JennyMascot {
 
   _acceptMood(msg) {
     if (!msg || !MOOD_FACES.includes(msg.mood)) return false;
-    if (this._turnActive || this._pendingTurn) return false;
+    if (this._turnActive) return false;
     const turnId = msg.turn_id || msg.turnId || null;
     if (turnId && this._lastClosedTurnId && turnId !== this._lastClosedTurnId) return false;
     return true;
@@ -551,7 +549,6 @@ export class JennyMascot {
       flyPose: this.flyPose,
       isOut: () => this.el.classList.contains('out'),
       setOut: (v) => this._onGestureOut(v),
-      onDragCommit: () => this._onDragCommit(),
       onTap: () => this._onTap(),
       onFlightEnd: () => {
         this._syncArt();
@@ -559,10 +556,6 @@ export class JennyMascot {
       },
     });
   }
-
-  /* Il trascinamento e' partito davvero. Qui non c'e' niente da chiudere; con
-     la minichat, la minichat. */
-  _onDragCommit() {}
 
   /* ── La porta della chat ──
      Dal 05/10/2026 il tocco su Jenny e' la porta della conversazione: dove la
@@ -637,13 +630,10 @@ export class JennyMascot {
 
   _setOut(out) {
     this.el.classList.toggle('out', out);
-    this._onOutChange(out);
     this._syncArt();
     this._updateGestureExclusion();
   }
 
-  /* Appiglio per chi ha qualcosa da aprire quando lei esce (la minichat). */
-  _onOutChange(_out) {}
 
   /* ── I frame della conversazione ── */
 
@@ -659,12 +649,6 @@ export class JennyMascot {
       this._onMoodFrame(msg);
       return;
     }
-    this._handleFrame(msg);
-  }
-
-  /* Dove va un frame della conversazione aperta. Qui sempre alla chat vera;
-     la minichat, fuori dalla chat, lo tiene per il suo fumetto. */
-  _handleFrame(msg) {
     this._handleChatStream(msg);
   }
 
@@ -718,7 +702,6 @@ export class JennyMascot {
 
   _forgetTurnState() {
     this._turnActive = false;
-    this._pendingTurn = false;
     this._streamTurnId = null;
     this._runSeen = false;
     this._setAgentState('idle');
@@ -754,29 +737,22 @@ export class JennyMascot {
     if (!turnId) return true;
     if (this._streamTurnId === null) {
       // Una chiusura non apre mai un tracciamento — chiuderebbe un turno che
-      // non abbiamo mai visto aprirsi — ma resta permissiva: una domanda della
-      // minichat il cui tracciamento e' stato lasciato a meta' (un cambio di
-      // vista a turno in corso) si chiude lo stesso, e ignorarne il `turn_end`
-      // lascerebbe `_pendingTurn` alzato per sempre.
+      // non abbiamo mai visto aprirsi — ma resta permissiva: un turno il cui
+      // tracciamento e' stato lasciato a meta' si chiude lo stesso.
       //
       // E si adotta solo **dentro** un turno. Fuori — la risposta di `/stop`
       // arrivata dopo il suo `idle`, un avviso proattivo — un id adottato non
       // si chiuderebbe mai, e da li' in poi ogni `turn_end` sarebbe «di un
       // altro». La chiusura di quel frame passa lo stesso, per la regola sopra.
       const closing = msg.event === 'turn_end' || msg.event === 'error';
-      if (!closing && (this._turnActive || this._pendingTurn)) this._streamTurnId = turnId;
+      if (!closing && this._turnActive) this._streamTurnId = turnId;
       return true;
     }
     return this._streamTurnId === turnId;
   }
 
-  /* *mine* lo passa chi ha già interrogato il tracciamento (la minichat, che
-     ci decide la sua guardia): chiederlo due volte non cambierebbe l'esito, ma
-     l'adozione del turno resta così in un punto solo. */
-  _handleChatStream(msg, mine = this._trackedTurnMatches(msg)) {
-    // Prima dello stato: chi mostra parole (il fumetto della minichat) passa
-    // da `talking`, e lo stato che il frame lascia deve venire per ultimo.
-    this._beforeChatState(msg);
+  _handleChatStream(msg) {
+    const mine = this._trackedTurnMatches(msg);
     switch (msg.event) {
       case 'delta':
         this._setAgentState('talking');
@@ -789,7 +765,6 @@ export class JennyMascot {
           if (this._isCommandReply(msg)) {
             // Parla, e poi il silenzio la porta a riposo (v. `_talkTick`).
             this._turnActive = false;
-            this._pendingTurn = false;
             this._streamTurnId = null;
           }
           this._setAgentState('talking');
@@ -820,7 +795,6 @@ export class JennyMascot {
              fatto ignorare ogni `turn_end` dopo, avvisi proattivi compresi,
              che un `idle` non lo mandano. */
           this._turnActive = false;
-          this._pendingTurn = false;
           this._streamTurnId = null;
           this._setAgentState('idle');
         }
@@ -834,18 +808,9 @@ export class JennyMascot {
         this._turnActive = false;
         this._noteTurnClosed(msg);
         this._streamTurnId = null;
-        // Un turno partito dalla minichat e concluso dopo essere passati nella
-        // sezione chat: il flag va chiuso anche qui, altrimenti resterebbe
-        // alzato per sempre (qui lo storico non serve invalidarlo, la chat è
-        // la vista attiva e riceve lo stream da sé).
-        this._pendingTurn = false;
         this._setAgentState('idle');
         if (msg.event === 'error') this._applyMood('sad'); // livello 0, gratis
         break;
     }
   }
-
-  /* Gancio per chi ha qualcosa da mostrare oltre allo stato: qui niente, la
-     mascotte della casa e quella in chat parlano solo col corpo. */
-  _beforeChatState(_msg) {}
 }

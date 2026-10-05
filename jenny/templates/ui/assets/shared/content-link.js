@@ -125,8 +125,8 @@ export function openOutsideWebView(href) {
  *  origine si apre fuori dalla WebView, il resto e' inerte e chi chiama lo
  *  dice con *say* (`'info'` o `'error'`), che e' qui per restare senza import.
  *
- *  Stava in `home-chat.js` (`_openLink`); dal 28/09/2026 lo usa anche il
- *  fumetto della minichat, e una terza copia della regola no. */
+ *  Stava in `home-chat.js` (`_openLink`); dal 28/09/2026 al 05/10/2026 lo
+ *  usava anche il fumetto della minichat, ed e' rimasto qui. */
 export function openContentLink(e, link, root, say) {
   e.preventDefault();
   const target = contentLinkTarget(contentLinkHref(link), window.location);

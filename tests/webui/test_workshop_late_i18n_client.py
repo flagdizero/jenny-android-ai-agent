@@ -22,8 +22,6 @@ from support.js_harness import ASSETS, function, member, requires_node, run_js
 pytestmark = requires_node
 
 HEADER = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
-# La minichat e' dei due gusci dal 28/09/2026: le sue etichette stanno li'.
-JENNY = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
 
 _I18N = """
 import assert from 'node:assert/strict';
@@ -62,45 +60,6 @@ for (const [mode, c] of Object.entries(h.modeConfigs)) {
 const raw = titles.filter(([, t]) => !String(t).startsWith('T:'));
 assert.deepEqual(raw, [], 'restano chiavi grezze: ' + JSON.stringify(raw));
 assert.equal(h.modeConfigs.apps, undefined, 'la scheda «App» non esiste piu\\'');
-console.log('ok');
-"""
-    )
-    assert out.strip() == "ok"
-
-
-def test_the_minichat_labels_are_translated_after_load() -> None:
-    out = run_js(
-        _I18N
-        + """
-function node() {
-  const n = {
-    attrs: {}, classList: { add() {} }, dataset: {}, placeholder: '',
-    setAttribute(k, v) { this.attrs[k] = v; },
-    addEventListener() {},
-    appendChild() {},
-    children: {},
-    querySelector(sel) { return (this.children[sel] ||= node()); },
-  };
-  return n;
-}
-globalThis.document = { createElement: () => node(), getElementById: () => null };
-class JennyMascot { _buildDom() {} }
-class J extends JennyMascot {
-  constructor() { super(); this.host = node(); this._adapter = { placeholder: () => '' }; }
-  _busy() { return false; }
-"""
-        + member(JENNY, "_buildDom")
-        + member(JENNY, "_syncPlaceholder")
-        + """
-  _setOut() {}
-}
-const j = new J();
-j._buildDom();
-await new Promise((r) => setTimeout(r, 0));
-assert.equal(j.scrim.attrs['aria-label'], 'T:jenny.closeMinichat');
-assert.equal(j.input.attrs['aria-label'], 'T:jenny.askJenny');
-assert.equal(j.sendBtn.attrs['aria-label'], 'T:jenny.send');
-assert.equal(j.input.placeholder, 'T:jenny.askHere');
 console.log('ok');
 """
     )

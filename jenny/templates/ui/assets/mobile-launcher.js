@@ -976,7 +976,7 @@ export class LauncherController {
   /** Il foglio ha diritto ai tasti adesso?
    *
    *  A foglio aperto, e solo se non c'è un livello **sopra** di lui: una
-   *  mini-app lanciata da qui, la scheda di una skill, la minichat. Il foglio
+   *  mini-app lanciata da qui, la scheda di una skill. Il foglio
    *  resta aperto sotto di loro (è quello che 1.7 e 3.7 hanno verificato), e
    *  senza questa guardia continuerebbe a rispondere a frecce e ⏎ da dietro un
    *  overlay — la stessa classe di difetto per cui la chat ha smesso di rubare

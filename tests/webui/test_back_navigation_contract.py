@@ -83,12 +83,8 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
 
     **Lightbox e minichat sono l'unica coppia fuori ordine, e non per sbaglio.**
     Con D3 (25/09/2026, «Jenny sempre sopra», anche alle immagini) la lightbox è
-    scesa da 1000 a 115, sotto di lei: la minichat (121) le starebbe sopra. Le
-    due però non stanno mai aperte insieme — sopra una lightbox lei non prende
-    tocchi, e mentre la minichat è aperta il suo scrim (119) copre la chat e
-    un'immagine non si apre — quindi fra loro l'ordine della catena non si vede.
-    Il banco controlla quelle due condizioni invece di fingere che l'ordine lo
-    decidano i numeri.
+    scesa da 1000 a 115, sotto di lei. Dal 05/10/2026 la chat aperta sopra una
+    mini-app (111) sta fra l'app e la lightbox, che si apre *dalla* chat.
     """
     body = _method(_app(), "_overlayLayers")
     layers = [
@@ -109,19 +105,15 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
     css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     z = {
         name: int(re.search(rf"\n{re.escape(name)} \{{[^}}]*?z-index: (\d+);", css).group(1))
-        for name in (".image-lightbox", ".jenny-scrim", ".jenny-mc")
+        for name in (".image-lightbox", ".jenny-duo")
     }
     frame = re.search(r"\.app-frame-overlay \{[^}]*?z-index: (\d+);", css)
     assert frame, "livello della mini-app non trovato"
-    # La lightbox sta sopra la mini-app e sotto lo scrim della minichat.
-    assert int(frame.group(1)) < z[".image-lightbox"] < z[".jenny-scrim"] < z[".jenny-mc"], z
-    # Le due condizioni che tengono lightbox e minichat separate.
+    over_app = int(re.search(r":root\.chat-over-app #view-chat \{ z-index: (\d+);", css).group(1))
+    # La chat sopra una mini-app sta fra l'app e la lightbox, e lei sopra tutto.
+    assert int(frame.group(1)) < over_app < z[".image-lightbox"] < z[".jenny-duo"], z
     assert ":root:has(.image-lightbox) .jenny-duo { pointer-events: none; }" in css, (
-        "sopra una lightbox lei aprirebbe la minichat: due livelli insieme, fuori ordine"
-    )
-    scrim_open = re.search(r"\n\.jenny-scrim\.open \{([^}]*)\}", css)
-    assert scrim_open and "pointer-events: auto" in scrim_open.group(1), (
-        "con la minichat aperta un'immagine della chat si aprirebbe da sotto lo scrim"
+        "sopra una lightbox un tocco su di lei aprirebbe o chiuderebbe la chat sotto l'immagine"
     )
 
 

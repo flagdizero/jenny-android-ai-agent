@@ -627,14 +627,7 @@
     "refresh": "Refresh"
   },
   "jenny": {
-    "replyWaiting": "new reply",
-    "closeMinichat": "Close minichat",
-    "askHere": "Ask here...",
-    "askJenny": "Ask Jenny",
-    "send": "Send",
-    "workingReply": "I'm still working on it… the answer will show up here ✿",
-    "connectionError": "Cannot send: check your connection.",
-    "busy": "Jenny is answering…"
+    "replyWaiting": "new reply"
   },
   "themes": {
     "chanel": {

@@ -320,10 +320,9 @@ object FloatingOverlayController {
     /** Oltre questo spostamento il gesto è un trascinamento e non un tap. */
     private const val DRAG_SLOP_DP = 8
 
-    /** Quanto si aspetta la risposta prima di dire che non arriva. Uguale al
-     *  `REPLY_TIMEOUT_MS` della minichat della WebUI: è lo stesso agente, con
-     *  gli stessi tempi, e due soglie diverse per la stessa attesa sarebbero
-     *  due verità diverse su quando Jenny è in ritardo. */
+    /** Quanto si aspetta la risposta prima di dire che non arriva. Era uguale
+     *  al `REPLY_TIMEOUT_MS` della minichat della WebUI (tolta il 05/10/2026,
+     *  ora la WebUI apre la chat vera): stesso agente, stessi tempi. */
     private const val REPLY_TIMEOUT_MS = 90_000L
 
     /** Ripiego se Python non ha ancora spinto la config. */

@@ -249,7 +249,8 @@ export class HomeChat {
 
   /* Tre esiti, e in nessuno la pagina naviga: l'ancora scorre il filo, un'altra
      origine si apre fuori dalla WebView, il resto lo dice. La regola e' in
-     `shared/content-link.js`, perche' la usa anche il fumetto della minichat. */
+     `shared/content-link.js` (ci stava anche per il fumetto della minichat,
+     tolta il 05/10/2026). */
   _openLink(e, a) {
     openContentLink(e, a, this.el, (type) => showToast(i18n.t('common.linkNotOpenable'), type));
   }
