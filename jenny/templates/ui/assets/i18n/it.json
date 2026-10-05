@@ -1382,7 +1382,9 @@
         "quarantined": "L'ultima lettura non si è più fermata: è ferma finché non la sistemiamo.",
         "unapproved": "Il codice è cambiato fuori da Jenny: non gira finché non lo riapprovi.",
         "paused": "In pausa."
-      }
+      },
+      "noRows": "Ancora nessuna riga.",
+      "moreRows": "e altre {count}"
     },
     "cron": {
       "gone": "Cron",

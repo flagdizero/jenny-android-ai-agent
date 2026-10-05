@@ -1382,7 +1382,9 @@
         "quarantined": "The last reading never stopped: it is on hold until we fix it.",
         "unapproved": "The code changed outside Jenny: it will not run until you approve it again.",
         "paused": "Paused."
-      }
+      },
+      "noRows": "No rows yet.",
+      "moreRows": "and {count} more"
     },
     "cron": {
       "gone": "Cron",

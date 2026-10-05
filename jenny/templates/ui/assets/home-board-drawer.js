@@ -377,7 +377,7 @@ export class BoardDrawer {
           again.setAttribute('aria-label', i18n.t('board.micro.runNow'));
           tools.appendChild(again);
         }
-        if (v.field && v.type === 'number' && v.dataState !== 'empty') {
+        if (v.field && (v.type === 'number' || v.type === 'rows') && v.dataState !== 'empty') {
           tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
             () => this._addCondition(section, v)));
         }
@@ -476,18 +476,25 @@ export class BoardDrawer {
     const shown = { ...v };
     const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
     if (v.state === 'pending' || codeDown) shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
-    const box = this._appView({ ...shown, name: v.source || v.name });
+    shown.name = v.source || v.name;
+    const shape = v.view || 'value';
+    /* Cinque forme, tutte disegnate qui: la micro app dice quale, mai come. */
+    const box = shape === 'value' ? this._appView(shown) : el('div', 'home-drawer-app');
     if (codeDown || v.state === 'pending') box.classList.add(`is-${v.state}`);
+    if (shape === 'progress') box.appendChild(this._microProgress(v));
+    if (shape === 'list') box.appendChild(this._microList(v));
+    if (shape === 'table') box.appendChild(this._microTable(v));
+    const chipsFirst = shape === 'chips';
     if (v.extras?.length) {
       const chips = el('div', 'home-drawer-micro-extras');
       for (const x of v.extras) {
-        const value = x.type === 'bool'
-          ? i18n.t(x.value ? 'board.micro.yes' : 'board.micro.no')
-          : (x.value === null || x.value === undefined ? '—' : `${x.value}${x.unit || ''}`);
-        chips.appendChild(el('span', 'home-drawer-tag', `${x.label}: ${value}`));
+        chips.appendChild(el('span', `home-drawer-tag${chipsFirst ? ' is-value' : ''}`,
+          `${x.label}: ${this._cell(x.value, x.type, x.unit)}`));
       }
-      box.insertBefore(chips, box.children[1] || null);
+      if (shape === 'value') box.insertBefore(chips, box.children[1] || null);
+      else box.appendChild(chips);
     }
+    if (shape !== 'value') box.appendChild(this._microSign(shown));
     const sign = [i18n.t('board.micro.every', { minutes: v.every })];
     if (v.uses?.length) sign.push(i18n.t('board.micro.via', { what: v.uses[0] }));
     else if (v.net?.length) sign.push(i18n.t('board.micro.via', { what: v.net[0] }));
@@ -503,6 +510,88 @@ export class BoardDrawer {
       box.appendChild(el('p', 'home-drawer-hint', i18n.t('board.micro.unreachable')));
     }
     return box;
+  }
+
+  _cell(value, type, unit = '') {
+    if (value === null || value === undefined) return '—';
+    if (type === 'bool') return i18n.t(value ? 'board.micro.yes' : 'board.micro.no');
+    if (type === 'number' && typeof value === 'number') {
+      return `${new Intl.NumberFormat(i18n.locale).format(value)}${unit || ''}`;
+    }
+    return `${value}${unit || ''}`;
+  }
+
+  /** Lo stato e la firma, come sotto il valore di una mini app. */
+  _microSign(v) {
+    const sign = el('div', `home-drawer-app-sign is-${v.state}`);
+    sign.appendChild(el('span', 'home-drawer-app-dot'));
+    const when = v.at ? relativeStamp(v.at) : '';
+    sign.appendChild(document.createTextNode(i18n.t(`board.app.state.${v.state}`, { when }) +
+      ` · ${i18n.t('board.app.source', { app: v.name || v.slug })}`));
+    return sign;
+  }
+
+  /** Un valore verso il suo obiettivo: «41.200 / 80.000 parole» e una barra. */
+  _microProgress(v) {
+    const wrap = el('div', 'home-drawer-progress');
+    const lo = Number(v.min) || 0;
+    const hi = Number(v.max);
+    const val = typeof v.value === 'number' ? v.value : lo;
+    const pct = Number.isFinite(hi) && hi > lo ? Math.max(0, Math.min(1, (val - lo) / (hi - lo))) : 0;
+    const head = el('div', 'home-drawer-app-value');
+    head.append(el('span', 'home-drawer-app-label', v.label || ''),
+      el('span', 'home-drawer-app-number',
+        `${this._cell(v.value, 'number')} / ${this._cell(hi, 'number')}${v.unit ? ` ${v.unit}` : ''}`));
+    const bar = el('div', 'home-drawer-progress-bar');
+    const fill = el('div', 'home-drawer-progress-fill');
+    fill.style.width = `${Math.round(pct * 100)}%`;
+    bar.appendChild(fill);
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuenow', String(Math.round(pct * 100)));
+    wrap.append(head, bar);
+    return wrap;
+  }
+
+  /** Righe: la prima colonna e' il titolo, le altre la riga sotto. */
+  _microList(v) {
+    const list = el('ul', 'home-drawer-micro-list');
+    const cols = v.columns || [];
+    const rows = v.rows || [];
+    if (!rows.length) list.appendChild(el('li', 'home-drawer-hint', i18n.t('board.micro.noRows')));
+    for (const row of rows.slice(0, 8)) {
+      const li = el('li', 'home-drawer-micro-row');
+      const [first, ...rest] = cols;
+      if (first) li.appendChild(el('span', 'home-drawer-micro-row-title', this._cell(row[first.field], first.type, first.unit)));
+      const sub = rest.map((c) => this._cell(row[c.field], c.type, c.unit)).filter((x) => x !== '—');
+      if (sub.length) li.appendChild(el('span', 'home-drawer-micro-row-sub', sub.join(' · ')));
+      list.appendChild(li);
+    }
+    if (rows.length > 8) list.appendChild(el('li', 'home-drawer-hint', i18n.t('board.micro.moreRows', { count: rows.length - 8 })));
+    return list;
+  }
+
+  /** Una tabella piccola: le colonne dichiarate, al piu' venti righe. */
+  _microTable(v) {
+    const table = el('table', 'home-drawer-micro-table');
+    const cols = v.columns || [];
+    const head = el('tr');
+    for (const c of cols) head.appendChild(el('th', c.type === 'number' ? 'is-num' : '', c.label));
+    table.appendChild(head);
+    for (const row of v.rows || []) {
+      const tr = el('tr');
+      for (const c of cols) {
+        tr.appendChild(el('td', c.type === 'number' ? 'is-num' : '', this._cell(row[c.field], c.type, c.unit)));
+      }
+      table.appendChild(tr);
+    }
+    if (!(v.rows || []).length) {
+      const tr = el('tr');
+      const td = el('td', 'home-drawer-hint', i18n.t('board.micro.noRows'));
+      td.colSpan = Math.max(1, cols.length);
+      tr.appendChild(td);
+      table.appendChild(tr);
+    }
+    return table;
   }
 
   async _micro(action, v, extra = {}) {

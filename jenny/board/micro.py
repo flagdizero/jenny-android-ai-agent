@@ -79,7 +79,21 @@ _COMPACT_AFTER = 200
 BROKEN_AFTER = 3
 _MAX_ERROR = 2000
 
-FIELD_TYPES = ("number", "bool", "text")
+FIELD_TYPES = ("number", "bool", "text", "rows")
+CELL_TYPES = ("number", "bool", "text")
+# Le forme che il cassetto sa disegnare. Niente HTML e niente iframe: la micro
+# app dice *quale* forma, il cassetto la disegna sempre allo stesso modo.
+#   value     un numero grande, con andamento e allarme (il default)
+#   chips     piu' valori alla pari
+#   progress  un valore verso un obiettivo (``max`` del campo)
+#   list      righe: la prima colonna e' il titolo, le altre la riga sotto
+#   table     poche colonne, poche righe
+VIEWS = ("value", "chips", "progress", "list", "table")
+MAX_ROWS = 20
+MAX_COLUMNS = 4
+# Le righe dell'ultima lettura: nello storico resta solo quante erano (per
+# l'andamento, gli eventi e le attese), le righe intere stanno qui.
+LATEST_FILE = "latest.json"
 STATUSES = ("ok", "unreachable", "error", "broken", "quarantined", "unapproved", "paused")
 
 _FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -129,8 +143,27 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
             num = _clean_number(spec.get(bound))
             if num is not None and ftype == "number":
                 entry[bound] = num
+        if ftype == "rows":
+            entry["columns"] = _normalize_columns(name, spec.get("columns"))
         fields[name] = entry
-    primary = raw.get("primary") if raw.get("primary") in fields else next(iter(fields))
+    rows_fields = [n for n, f in fields.items() if f["type"] == "rows"]
+    if len(rows_fields) > 1:
+        raise MicroError("at most one rows field (a list or a table) per micro app")
+    view = raw.get("view") if raw.get("view") in VIEWS else (
+        "list" if rows_fields else "value")
+    scalars = [n for n, f in fields.items() if f["type"] != "rows"]
+    if view in ("list", "table"):
+        if not rows_fields:
+            raise MicroError(f"view {view!r} needs a field of type rows, with its columns")
+        primary = rows_fields[0]
+    else:
+        if not scalars:
+            raise MicroError(f"view {view!r} needs at least one number, bool or text field")
+        primary = raw.get("primary") if raw.get("primary") in scalars else scalars[0]
+        if view == "progress" and (fields[primary]["type"] != "number"
+                                   or "max" not in fields[primary]):
+            raise MicroError("view 'progress' needs a number primary field with a max "
+                             "(the target)")
     try:
         every = int(raw.get("every") or DEFAULT_EVERY_MINUTES)
     except (TypeError, ValueError):
@@ -164,6 +197,7 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
         "every": every,
         "fields": fields,
         "primary": primary,
+        "view": view,
         "alarm": alarm,
         "staleAfter": max(every, stale),
         "net": sorted(set(net)),
@@ -175,6 +209,24 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
     return out
 
 
+def _normalize_columns(name: str, raw: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, dict) or not raw:
+        raise MicroError(f"`{name}` is rows: declare its columns, {{col: {{label, type}}}}")
+    if len(raw) > MAX_COLUMNS:
+        raise MicroError(f"`{name}`: at most {MAX_COLUMNS} columns")
+    cols: dict[str, dict[str, Any]] = {}
+    for col, spec in raw.items():
+        if not isinstance(col, str) or not _FIELD_RE.match(col):
+            raise MicroError(f"column {col!r}: lowercase letters, digits and _")
+        spec = spec if isinstance(spec, dict) else {}
+        cols[col] = {
+            "label": model.clean_text(spec.get("label"), model.MAX_TITLE) or col,
+            "type": spec.get("type") if spec.get("type") in CELL_TYPES else "text",
+            "unit": model.clean_text(spec.get("unit"), 12),
+        }
+    return cols
+
+
 def contract_of(spec: dict[str, Any]) -> str:
     """L'impronta di cio' che l'utente ha approvato **vedendolo**.
 
@@ -183,9 +235,12 @@ def contract_of(spec: dict[str, Any]) -> str:
     dell'utente del 05/10); se li cambia, serve un nuovo [Tienilo].
     """
     body = {
-        "fields": {k: {"type": v["type"], "unit": v.get("unit", "")}
+        "fields": {k: {"type": v["type"], "unit": v.get("unit", ""),
+                       "columns": {c: {"type": cv["type"], "unit": cv.get("unit", "")}
+                                   for c, cv in sorted((v.get("columns") or {}).items())}}
                    for k, v in sorted(spec["fields"].items())},
         "primary": spec["primary"],
+        "view": spec.get("view", "value"),
         "net": spec["net"],
         "uses": spec["uses"],
     }
@@ -349,9 +404,25 @@ def _compact(readings: list[dict[str, Any]], now: datetime) -> list[dict[str, An
     return [*daily.values(), *recent]
 
 
+def read_latest_rows(d: Path) -> dict[str, list[dict[str, Any]]]:
+    data = _read_json(d / LATEST_FILE)
+    rows = data.get("rows") if isinstance(data, dict) else None
+    return rows if isinstance(rows, dict) else {}
+
+
 def append_reading(d: Path, values: dict[str, Any], *, now: datetime) -> dict[str, Any]:
-    record = {"id": uuid.uuid4().hex[:12], "ts": now.isoformat(timespec="seconds"), **values}
+    """Una lettura: gli scalari nello storico, le righe (liste e tabelle) a parte.
+
+    Di un campo ``rows`` lo storico tiene **quante** erano: e' il numero su cui
+    vivono l'andamento, gli eventi e «avvisami quando…» («piu' di 0 annunci»).
+    """
+    stamp = now.isoformat(timespec="seconds")
+    rows = {k: v for k, v in values.items() if isinstance(v, list)}
+    scalars = {k: (len(v) if isinstance(v, list) else v) for k, v in values.items()}
+    record = {"id": uuid.uuid4().hex[:12], "ts": stamp, **scalars}
     d.mkdir(parents=True, exist_ok=True)
+    if rows:
+        _write_json(d / LATEST_FILE, {"ts": stamp, "rows": rows})
     path = d / READINGS_FILE
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -390,6 +461,8 @@ def validate_output(spec: dict[str, Any], out: Any) -> dict[str, Any]:
         elif fspec["type"] == "bool":
             if not isinstance(value, bool):
                 raise MicroError(f"`{name}` must be true or false, got {value!r}")
+        elif fspec["type"] == "rows":
+            value = _validate_rows(name, fspec["columns"], value)
         else:
             if not isinstance(value, str):
                 raise MicroError(f"`{name}` must be text, got {value!r}")
@@ -399,6 +472,38 @@ def validate_output(spec: dict[str, Any], out: Any) -> dict[str, Any]:
     if isinstance(source, str) and source.strip():
         values[SOURCE_FIELD] = source.strip()[:MAX_SOURCE]
     return values
+
+
+def _validate_rows(name: str, columns: dict[str, dict[str, Any]], value: Any) -> list[dict]:
+    if not isinstance(value, list):
+        raise MicroError(f"`{name}` must be a list of rows, got {type(value).__name__}")
+    if len(value) > MAX_ROWS:
+        raise MicroError(f"`{name}`: at most {MAX_ROWS} rows (return the most useful ones)")
+    out = []
+    for i, row in enumerate(value):
+        if not isinstance(row, dict):
+            raise MicroError(f"`{name}` row {i} must be a dict of its columns")
+        unknown = [k for k in row if k not in columns]
+        if unknown:
+            raise MicroError(f"`{name}` row {i} has undeclared columns: {', '.join(unknown)}")
+        clean: dict[str, Any] = {}
+        for col, cspec in columns.items():
+            cell = row.get(col)
+            if cell is None:
+                raise MicroError(f"`{name}` row {i} is missing `{col}`")
+            if cspec["type"] == "number":
+                if isinstance(cell, bool) or not isinstance(cell, (int, float)):
+                    raise MicroError(f"`{name}` row {i}: `{col}` must be a number")
+            elif cspec["type"] == "bool":
+                if not isinstance(cell, bool):
+                    raise MicroError(f"`{name}` row {i}: `{col}` must be true or false")
+            else:
+                if not isinstance(cell, str):
+                    raise MicroError(f"`{name}` row {i}: `{col}` must be text")
+                cell = cell[:MAX_TEXT_VALUE]
+            clean[col] = cell
+        out.append(clean)
+    return out
 
 
 # ── le approvazioni, fuori dal workspace ────────────────────────────────────
@@ -811,11 +916,20 @@ def micro_view(workspace: Path, root: Path, micro_id: str, *, pending: bool = Fa
         stale_after_minutes=spec["staleAfter"], trend_days=7, now=now,
     )
     record = view.pop("record", None) or {}
+    shape = spec.get("view", "value")
+    # I valori a chip: tutti gli scalari per la forma ``chips``, altrimenti al
+    # piu' due oltre al principale.
     extras = [
         {"field": name, "label": f["label"], "unit": f.get("unit", ""), "type": f["type"],
          "value": record.get(name)}
-        for name, f in spec["fields"].items() if name != primary
-    ][:2]
+        for name, f in spec["fields"].items()
+        if f["type"] != "rows" and (shape == "chips" or name != primary)
+    ][:MAX_FIELDS if shape == "chips" else 2]
+    rows: list[dict[str, Any]] = []
+    columns: list[dict[str, Any]] = []
+    if fspec["type"] == "rows":
+        rows = read_latest_rows(micro.dir).get(primary) or []
+        columns = [{"field": c, **cv} for c, cv in fspec["columns"].items()]
     code_state = str(state.get("status") or "")
     data_state = view["state"]
     if pending:
@@ -835,6 +949,11 @@ def micro_view(workspace: Path, root: Path, micro_id: str, *, pending: bool = Fa
         "unit": fspec.get("unit", ""),
         "field": primary,
         "type": fspec["type"],
+        "view": shape,
+        "rows": rows,
+        "columns": columns,
+        "min": fspec.get("min", 0),
+        "max": fspec.get("max"),
         "verbs": [],
         "params": {},
         **view,

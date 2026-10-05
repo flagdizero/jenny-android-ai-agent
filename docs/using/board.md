@@ -96,6 +96,18 @@ A small Python program attached to the drawer that reads **one thing** — a sen
 
 **Micro app** asks *What do you want to see?*; your sentence goes to the notebook's chat, and Jenny writes the program there. She **runs it once before saving it**: the micro app appears in the drawer **on trial**, showing the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02* — together with what it will reach (the skill it uses, the hosts it connects to). **Keep it** makes it live; **Discard** throws it away. Nothing runs on its own until you tap Keep.
 
+A micro app has no HTML of its own: it says which **shape** it wants, and the drawer draws it, always the same way.
+
+| Shape | For | Example |
+|---|---|---|
+| value (the default) | one number, big, with its trend and alarm | *Acerello 38 %* |
+| chips | several values side by side | *Temperature 18° · Rain 70 % · Wind 12 km/h* |
+| progress | a value towards a target (the field's `max`) | *41,200 / 80,000 words* and a bar |
+| list | rows: the first column is the title, the others the line below | new listings, *Two-room flat, via Roma · €180,000* |
+| table | a few columns (up to 4), a few rows (up to 20) | three funds: name, price, change |
+
+For a list or a table the drawer also counts the rows: that count is what the trend, **Remind me when…** (*when there is more than 0 new listings*) and the journal events work on; the rows themselves are kept only for the latest reading.
+
 Once kept, the notebook clock reads it every *N* minutes (at least 15, an hour by default) with **no model turn**, so a reading costs nothing. The section shows the value big, up to two more values as chips, a seven-day trend, and the signature *every 30 min · from waterbot-imh*; **⟳** reads it now, **Remind me when…** sets a reminder on its value, **Change** asks Jenny for a change in the chat, **Pause** stops it, **Remove** takes it away (its files go to `board/micro/.trash/`).
 
 When something goes wrong the last good value stays, greyed, with its age, and the section says who fixes it:

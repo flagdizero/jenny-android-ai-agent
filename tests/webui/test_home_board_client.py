@@ -401,3 +401,45 @@ def test_a_notebook_cron_shows_in_its_drawer_and_pauses_there() -> None:
       assert.equal(call.params.job, 'ab12cd34');
       assert.equal(call.params.paused, true);
     """)
+
+
+@requires_jsdom
+def test_the_drawer_draws_the_four_other_shapes() -> None:
+    base = {**_MICRO, "state": "ok", "extras": [], "uses": [], "net": []}
+    sections = [
+        {**base, "micro": "m-meteo", "name": "Meteo", "view": "chips", "extras": [
+            {"field": "temp", "label": "Temperatura", "unit": "°", "type": "number", "value": 18},
+            {"field": "pioggia", "label": "Pioggia", "unit": "%", "type": "number", "value": 70},
+        ]},
+        {**base, "micro": "m-parole", "name": "Romanzo", "view": "progress", "label": "Parole",
+         "unit": "parole", "value": 41200, "min": 0, "max": 80000},
+        {**base, "micro": "m-annunci", "name": "Annunci", "view": "list", "type": "rows",
+         "value": 2, "columns": [{"field": "titolo", "label": "Titolo", "type": "text", "unit": ""},
+                                 {"field": "prezzo", "label": "Prezzo", "type": "number",
+                                  "unit": " €"}],
+         "rows": [{"titolo": "Bilocale via Roma", "prezzo": 180000},
+                  {"titolo": "Trilocale Pigneto", "prezzo": 260000}]},
+        {**base, "micro": "m-etf", "name": "ETF", "view": "table", "type": "rows", "value": 1,
+         "columns": [{"field": "nome", "label": "Nome", "type": "text", "unit": ""},
+                     {"field": "prezzo", "label": "Prezzo", "type": "number", "unit": ""}],
+         "rows": [{"nome": "MSCI World", "prezzo": 104.2}]},
+    ]
+    board = json.loads(json.dumps(BOARD))
+    card = json.loads(json.dumps(CARD))
+    card["userSections"] = [{"id": f"s-{v['micro']}", "kind": "micro", "micro": v["micro"],
+                             "pending": False, "view": v} for v in sections]
+    head = _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
+    run_home(head + """
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      assert.match(drawer.textContent, /Temperatura: 18°/);
+      assert.match(drawer.textContent, /Pioggia: 70%/);
+      const bar = drawer.querySelector('.home-drawer-progress-fill');
+      assert.equal(bar.style.width, '52%');
+      const rows = [...drawer.querySelectorAll('.home-drawer-micro-row-title')].map((r) => r.textContent);
+      assert.deepEqual(rows, ['Bilocale via Roma', 'Trilocale Pigneto']);
+      const cells = [...drawer.querySelectorAll('.home-drawer-micro-table td')].map((c) => c.textContent);
+      assert.equal(cells[0], 'MSCI World');
+      assert.ok(drawer.querySelector('.home-drawer-micro-table td.is-num'));
+    """)

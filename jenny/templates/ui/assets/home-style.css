@@ -2217,6 +2217,18 @@ body.home {
 /* La micro app: i valori secondari a chip, la prova e il guasto. Con il codice
    fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'. */
 .home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-drawer-tag.is-value { font-size: 14px; color: var(--text); }
+.home-drawer-progress { display: flex; flex-direction: column; gap: 6px; }
+.home-drawer-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.home-drawer-progress-fill { height: 100%; background: var(--board-done); }
+.home-drawer-micro-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.home-drawer-micro-row { display: flex; flex-direction: column; gap: 1px; }
+.home-drawer-micro-row-title { font-size: 15px; color: var(--text); }
+.home-drawer-micro-row-sub { font-size: 12px; color: var(--text-muted); }
+.home-drawer-micro-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.home-drawer-micro-table th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 2px 8px 4px 0; }
+.home-drawer-micro-table td { padding: 3px 8px 3px 0; border-top: 1px solid var(--border); }
+.home-drawer-micro-table .is-num { text-align: right; }
 .home-drawer-proof { margin: 4px 0 0; font-size: 13px; color: var(--text); }
 .home-drawer-proof.is-down { color: var(--board-alert); }
 .home-drawer-app.is-broken .home-drawer-app-number,

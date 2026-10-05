@@ -176,3 +176,55 @@ def test_readings_are_compacted(tmp_path) -> None:
     compacted = kept[:-(len(kept) - mc.KEEP_DAYS - mc.KEEP_RECENT)] if len(kept) > 79 else kept
     days = [r["ts"][:10] for r in compacted[:10]]
     assert len(days) == len(set(days))
+
+
+ROWS_SPEC = {
+    "title": "Annunci", "view": "list",
+    "fields": {"annunci": {"label": "Annunci nuovi", "type": "rows", "columns": {
+        "titolo": {"label": "Titolo"}, "prezzo": {"label": "Prezzo", "type": "number", "unit": " €"},
+    }}},
+}
+
+
+async def test_a_list_keeps_its_rows_and_counts_them(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    code = ("def run(ctx):\n    return {'annunci': [\n"
+            "        {'titolo': 'Bilocale via Roma', 'prezzo': 180000},\n"
+            "        {'titolo': 'Trilocale Pigneto', 'prezzo': 260000}]}\n")
+    m = _live(ws, root, code, ROWS_SPEC)
+    assert m.spec["primary"] == "annunci" and m.spec["view"] == "list"
+    await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    view = mc.micro_view(ws, root, "m-acerello", now=NOW)
+    assert view["view"] == "list" and view["value"] == 2
+    assert view["rows"][0] == {"titolo": "Bilocale via Roma", "prezzo": 180000}
+    assert [c["field"] for c in view["columns"]] == ["titolo", "prezzo"]
+    # Nello storico resta il conteggio, non le righe: e' su quello che vivono le attese.
+    assert mc.read_readings(m.dir)[-1]["annunci"] == 2
+    assert mc.micro_field_value(root, "m-acerello", "annunci", now=NOW) == (2, True)
+
+
+@pytest.mark.parametrize("ret, why", [
+    ("{'annunci': 'tre'}", "must be a list of rows"),
+    ("{'annunci': [{'titolo': 'x'}]}", "missing `prezzo`"),
+    ("{'annunci': [{'titolo': 'x', 'prezzo': '1'}]}", "`prezzo` must be a number"),
+    ("{'annunci': [{'titolo': 'x', 'prezzo': 1, 'url': 'y'}]}", "undeclared columns"),
+])
+async def test_wrong_rows_are_an_error(tmp_path, ret, why) -> None:
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, f"def run(ctx):\n    return {ret}\n", ROWS_SPEC)
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "error" and why in state["lastError"]
+
+
+def test_shapes_have_their_rules() -> None:
+    with pytest.raises(mc.MicroError, match="needs a field of type rows"):
+        mc.normalize_spec({**SPEC, "view": "table"}, micro_id="m")
+    with pytest.raises(mc.MicroError, match="with a max"):
+        mc.normalize_spec({**SPEC, "view": "progress", "fields": {
+            "parole": {"label": "Parole", "type": "number"}}}, micro_id="m")
+    ok = mc.normalize_spec({**SPEC, "view": "progress", "fields": {
+        "parole": {"label": "Parole", "type": "number", "max": 80000}}}, micro_id="m")
+    assert ok["view"] == "progress"
+    # Cambiare forma cambia quello che l'utente vede: e' un altro contratto.
+    chips = mc.normalize_spec({**SPEC, "view": "chips"}, micro_id="m")
+    assert mc.contract_of(chips) != mc.contract_of(mc.normalize_spec(SPEC, micro_id="m"))

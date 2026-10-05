@@ -66,11 +66,21 @@ _PARAMETERS = tool_parameters_schema(
         "At most 6 KB."
     ),
     fields=ObjectSchema(
-        description="What run() returns: {name: {label, type: number|bool|text, unit?, min?, "
-        "max?}}, at most 8. A missing or out-of-range value is an error, never a value.",
+        description="What run() returns: {name: {label, type: number|bool|text|rows, unit?, "
+        "min?, max?}}, at most 8. A rows field is a list of dicts with declared `columns` "
+        "({col: {label, type: number|bool|text, unit?}}, at most 4 columns, 20 rows). A missing "
+        "or out-of-range value is an error, never a value.",
         additional_properties=True,
     ),
-    primary=StringSchema("The field shown big in the drawer."),
+    view=StringSchema(
+        "How the drawer draws it — no HTML, the drawer has five shapes: value (one big number "
+        "with trend and alarm, the default), chips (several values side by side), progress (a "
+        "number towards its `max`, e.g. words written), list (a rows field: first column is "
+        "the title, the others the line below — new listings, news), table (a rows field as a "
+        "small table — prices). For list and table the drawer also counts the rows.",
+        enum=["value", "chips", "progress", "list", "table"],
+    ),
+    primary=StringSchema("The field shown big in the drawer (value and progress)."),
     every=IntegerSchema(description="Minutes between readings: at least 15, default 60.",
                         minimum=15),
     alarm=ObjectSchema(
@@ -209,7 +219,7 @@ class MicroAppTool(Tool):
             return (f"Three tries on `{micro_id}` in a few minutes: stop here, tell the user "
                     "what is failing and ask how to go on.")
         spec = dict(base.spec) if base is not None else {}
-        for key in ("title", "fields", "primary", "every", "alarm", "net", "uses"):
+        for key in ("title", "fields", "view", "primary", "every", "alarm", "net", "uses"):
             if kw.get(key) not in (None, "", [], {}):
                 spec[key] = kw[key]
         spec["card"] = card["id"]
@@ -250,6 +260,11 @@ class MicroAppTool(Tool):
         parts = []
         for name, f in micro.spec["fields"].items():
             value = values.get(name)
+            if isinstance(value, list):
+                first = ", ".join(str(v) for v in (value[0].values() if value else []))
+                parts.append(f"{f['label']}: {len(value)} rows" + (f" (first: {first})"
+                                                                   if first else ""))
+                continue
             parts.append(f"{f['label']} {value}{f.get('unit') or ''}")
         source = values.get("_source")
         return "; ".join(parts) + (f" (source: {source})" if source else "")
