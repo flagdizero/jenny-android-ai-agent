@@ -94,10 +94,10 @@ def board_block(
         summary = read_card_summary(root, card["id"]) or {}
         tags: list[str] = []
         problem = alert is not None and any(
-            alert(s) for s in card.get("userSections") or [] if s.get("kind") == "app"
+            alert(s) for s in card.get("userSections") or [] if s.get("kind") in ("app", "micro")
         )
         if problem:
-            tags.append("[PROBLEM: a mini app in its drawer is in alarm or stalled]")
+            tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
         nxt = model.next_reminder(reminders, card["id"])
         if nxt is not None:
             soon = " — coming up" if model.reminder_is_soon(nxt) else ""

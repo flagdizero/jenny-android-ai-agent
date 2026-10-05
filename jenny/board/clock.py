@@ -1,8 +1,8 @@
 """L'orologio dei quaderni: il job di sistema ``reminders``.
 
 Un ``[ ]`` dentro una pagina non esiste finché qualcuno non la apre; un'attesa
-in ``reminders.json`` sì. Questo job gira ogni ora, legge le attese di tutti i
-quaderni e avvisa quando una arriva:
+in ``reminders.json`` sì. Questo job gira ogni quarto d'ora: fa girare le micro
+app dei cassetti, legge le attese di tutti i quaderni e avvisa quando una arriva:
 
 - **a data**: dalle nove del mattino del giorno dovuto (con ``precision:
   month`` il primo del mese: «verso marzo» si ricorda all'inizio di marzo, non
@@ -31,7 +31,8 @@ wiki; gli eventi sì.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, time
+from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,10 @@ from loguru import logger
 
 from jenny.board import model
 from jenny.board.store import mutate_board, mutate_reminders, read_board, read_reminders
+
+# Il passo dell'orologio: un quarto d'ora (decisione del 05/10/2026). E' anche
+# l'intervallo minimo di una micro app (``micro.MIN_EVERY_MINUTES``).
+CLOCK_EVERY_MS = 15 * 60 * 1000
 
 # L'ora da cui un'attesa a data diventa dovuta, nel fuso dell'utente.
 DUE_AT = time(9, 0)
@@ -82,33 +87,73 @@ def due_by_date(reminders: Mapping[str, Any], now: datetime) -> list[dict[str, A
     return out
 
 
-def _condition_value(workspace: Path, when: Mapping[str, Any]) -> tuple[Any, bool]:
-    """L'ultimo valore del campo di un'app per i parametri dati, e se è fresco."""
+def _condition_value(workspace: Path, when: Mapping[str, Any],
+                     root: Path | None = None) -> tuple[Any, bool]:
+    """L'ultimo valore del campo osservato (micro app o mini app), e se è fresco."""
+    if when.get("micro"):
+        if root is None:
+            return None, False
+        from jenny.board.micro import micro_field_value
+
+        return micro_field_value(root, str(when.get("micro")), str(when.get("field")))
     from jenny.board.sections import app_field_value
 
     return app_field_value(workspace, str(when.get("app")), when.get("params") or {},
                            str(when.get("field")))
 
 
+# Il freno degli annunci a condizione. Una condizione si riarma solo dopo due
+# controlli di fila in cui è falsa (un sensore che balla sulla soglia non
+# scatta a ogni giro), e fra due annunci della stessa attesa passano almeno
+# dodici ore: ogni annuncio è un turno del modello, cioè token.
+REARM_AFTER_FALSE = 2
+MIN_HOURS_BETWEEN_ANNOUNCES = 12
+
+
+@dataclass
+class ConditionPass:
+    fire: list[dict[str, Any]] = field(default_factory=list)
+    rearm: list[str] = field(default_factory=list)
+    # {id: falseStreak} da scrivere (0 per azzerare).
+    streaks: dict[str, int] = field(default_factory=dict)
+
+    def __iter__(self):
+        # ``fire, rearm = check_conditions(...)``: la forma di prima.
+        return iter((self.fire, self.rearm))
+
+
 def check_conditions(
-    workspace: Path, reminders: Mapping[str, Any]
-) -> tuple[list[dict[str, Any]], list[str]]:
+    workspace: Path, reminders: Mapping[str, Any], *,
+    root: Path | None = None, now: datetime | None = None,
+) -> ConditionPass:
     """Le attese a condizione diventate vere (da annunciare) e quelle da riarmare."""
-    fire: list[dict[str, Any]] = []
-    rearm: list[str] = []
+    out = ConditionPass()
+    current = now or datetime.now().astimezone()
     for rem in model.open_reminders(reminders):
         when = rem.get("when") or {}
         if when.get("kind") != "condition":
             continue
-        value, fresh = _condition_value(workspace, when)
+        value, fresh = _condition_value(workspace, when, root)
         if not fresh:
             continue
         holds = model.compare(value, str(when.get("op")), when.get("value"))
-        if holds and not rem.get("notifiedAt"):
-            fire.append({**rem, "observed": value})
-        elif not holds and rem.get("notifiedAt"):
-            rearm.append(rem["id"])
-    return fire, rearm
+        streak = int(rem.get("falseStreak") or 0)
+        if holds:
+            if streak:
+                out.streaks[rem["id"]] = 0
+            if rem.get("notifiedAt"):
+                continue
+            last = model.parse_iso(rem.get("lastAnnouncedAt"))
+            if last is not None and current - last < timedelta(hours=MIN_HOURS_BETWEEN_ANNOUNCES):
+                continue
+            out.fire.append({**rem, "observed": value})
+        elif rem.get("notifiedAt"):
+            if streak + 1 >= REARM_AFTER_FALSE:
+                out.rearm.append(rem["id"])
+                out.streaks[rem["id"]] = 0
+            else:
+                out.streaks[rem["id"]] = streak + 1
+    return out
 
 
 def _announce_prompt(notebook: str, root: Path, rem: Mapping[str, Any]) -> str:
@@ -154,8 +199,12 @@ async def _announce(agent: Any, notebook: str, root: Path, rem: Mapping[str, Any
         logger.debug("reminders: history not trimmed: {}", exc)
 
 
-def _stamp(root: Path, ids: list[str], *, at: str | None) -> None:
+def _stamp(root: Path, ids: list[str], *, at: str | None,
+           streaks: Mapping[str, int] | None = None) -> None:
+    """I timbri dell'orologio: ``notifiedAt`` (con *at*, o tolto se ``None``),
+    ``lastAnnouncedAt`` con l'avviso, e ``falseStreak``."""
     wanted = set(ids)
+    streaks = dict(streaks or {})
 
     def apply(rems: dict[str, Any]) -> bool | None:
         touched = False
@@ -165,7 +214,15 @@ def _stamp(root: Path, ids: list[str], *, at: str | None) -> None:
                     touched |= rem.pop("notifiedAt", None) is not None
                 else:
                     rem["notifiedAt"] = at
+                    rem["lastAnnouncedAt"] = at
                     touched = True
+            if rem["id"] in streaks:
+                value = streaks[rem["id"]]
+                if value:
+                    rem["falseStreak"] = value
+                    touched = True
+                else:
+                    touched |= rem.pop("falseStreak", None) is not None
         return None if touched else False
 
     mutate_reminders(root, apply, actor=model.JENNY)
@@ -178,7 +235,7 @@ def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None
     volta che una sezione si vede, si registra e basta — un'app agganciata
     stamattina non «va in allarme» per il solo fatto di essere nuova.
     """
-    from jenny.board.sections import app_section_view, journal_event
+    from jenny.board.sections import journal_event, section_view
 
     board = read_board(root)
     if board is None:
@@ -188,9 +245,9 @@ def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None
     events: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
     for card in board["cards"]:
         for section in card.get("userSections") or []:
-            if section.get("kind") != "app":
+            view = section_view(workspace, root, section)
+            if view is None:
                 continue
-            view = app_section_view(workspace, str(section["app"]), section.get("params") or {})
             key = f"{card['id']}/{section['id']}"
             state = str(view.get("state"))
             seen[key] = state
@@ -223,23 +280,32 @@ async def run_reminders(
     now: datetime | None = None,
 ) -> str | None:
     """Un giro dell'orologio su tutti i quaderni. Torna una riga per il log del cron."""
+    from jenny.board.micro import run_due_micros
     from jenny.utils.wiki_paths import discover_wiki_roots
 
     current = _local_now(timezone_name, now)
     announced = 0
     events = 0
+    produced = 0
     for name, root in sorted(discover_wiki_roots(workspace / wikis_dir_name).items()):
         if read_board(root) is None:
             continue
+        # **Prima chi produce, poi chi giudica**: le micro app scadute girano
+        # adesso, cosi' gli eventi e le attese a condizione leggono il dato fresco.
+        try:
+            produced += await run_due_micros(workspace, root)
+        except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
+            logger.exception("reminders: micro apps of {} not run", name)
         try:
             events += watch_app_sections(workspace, root, timezone_name=timezone_name)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: app sections of {} not checked", name)
         reminders = read_reminders(root)
         due = due_by_date(reminders, current)
-        fire, rearm = check_conditions(workspace, reminders)
-        if rearm:
-            _stamp(root, rearm, at=None)
+        conditions = check_conditions(workspace, reminders, root=root, now=current)
+        fire = conditions.fire
+        if conditions.rearm or conditions.streaks:
+            _stamp(root, conditions.rearm, at=None, streaks=conditions.streaks)
         for rem in [*due, *fire]:
             try:
                 await _announce(agent, name, root, rem)
@@ -252,6 +318,6 @@ async def run_reminders(
 
             mutate_board(root, apply, actor=model.JENNY)
             announced += 1
-    if not announced and not events:
+    if not announced and not events and not produced:
         return None
-    return f"reminders: {announced} announced, {events} app events"
+    return f"reminders: {announced} announced, {events} app events, {produced} micro runs"

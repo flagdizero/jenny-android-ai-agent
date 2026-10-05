@@ -123,8 +123,15 @@ def build_board_view(
         summary = read_card_summary(project_root, card["id"])
         alert = bool(alert_probe and any(
             alert_probe(section) for section in card.get("userSections") or []
-            if section.get("kind") == "app"
+            if section.get("kind") in ("app", "micro")
         ))
+        # Il segno ⟳: la scheda ha qualcosa che gira da solo (una micro app
+        # tenuta, un cron). E' un segno, non un segnale: non e' rosso.
+        auto = any(
+            (sec.get("kind") == "micro" and sec.get("pending") is not True)
+            or sec.get("kind") == "cron"
+            for sec in card.get("userSections") or []
+        )
         on_board[card["id"]] = card
         cards_out.append({
             "id": card["id"],
@@ -134,6 +141,7 @@ def build_board_view(
             "pinned": card.get("pinned", False),
             "pages": len(card.get("pages") or []),
             "signal": card_signal(card, summary, reminders, today=today, alert=alert),
+            "auto": auto,
         })
     notes: list[dict[str, Any]] = []
     placed: list[tuple[float, float, float, float]] = []
@@ -182,8 +190,13 @@ def build_card_view(
     sections_resolver: Callable[[Mapping[str, Any], Mapping[str, Any]], dict[str, Any]]
     | None = None,
     corrections: list[dict[str, Any]] | None = None,
+    cron_jobs: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """La risposta di ``GET /api/board/card``, o ``None`` se la scheda non c'è."""
+    """La risposta di ``GET /api/board/card``, o ``None`` se la scheda non c'è.
+
+    *cron_jobs* sono i job dello scheduler legati a questo quaderno (``{id:
+    istantanea}``): la sezione di un cron mostra il suo prossimo giro e l'esito.
+    """
     board = read_board(project_root)
     if board is None:
         return None
@@ -226,7 +239,12 @@ def build_card_view(
     for section in card.get("userSections") or []:
         resolved = dict(section)
         if sections_resolver is not None:
-            resolved.update(sections_resolver(section, {"reminders": reminders}))
+            resolved.update(sections_resolver(section, {
+                "reminders": reminders,
+                "card": card["id"],
+                "cronJobs": cron_jobs or {},
+                "cronResults": board.get("cronResults") or {},
+            }))
         user_sections.append(resolved)
     return {
         "id": card["id"],

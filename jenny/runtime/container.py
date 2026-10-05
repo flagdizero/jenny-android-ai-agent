@@ -518,17 +518,21 @@ class GatewayContainer:
                 payload=CronPayload(kind="system_event"),
             ))
 
-        # L'orologio dei quaderni: le attese delle bacheche e gli eventi delle
-        # sezioni mini app, un giro all'ora su tutti i quaderni. Registrato con
+        # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
+        # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
+        # i quaderni (il passo e' anche l'intervallo minimo di una micro app; un
+        # giro senza niente da fare legge due JSON per quaderno). Registrato con
         # la wiki accesa; a farlo tacere quando la wiki si spegne e' il cancello
         # in ``CronDispatcher._run_reminders``, letto da disco.
         if config.wiki.enabled:
+            from jenny.board.clock import CLOCK_EVERY_MS
+
             self.cron.register_system_job(CronJob(
                 id="reminders",
                 name="reminders",
                 schedule=CronSchedule(
                     kind="every",
-                    every_ms=3600 * 1000,
+                    every_ms=CLOCK_EVERY_MS,
                     tz=config.agents.defaults.timezone,
                 ),
                 payload=CronPayload(kind="system_event"),

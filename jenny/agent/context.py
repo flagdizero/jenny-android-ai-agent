@@ -111,7 +111,7 @@ def _read_project_board(root: Path) -> str:
         from jenny.board.sections import alert_probe
         from jenny.config.paths import get_workspace_path
 
-        return board_block(root, alert=alert_probe(get_workspace_path()))
+        return board_block(root, alert=alert_probe(get_workspace_path(), root))
     except Exception as exc:  # noqa: BLE001
         logger.warning("project block: the board of {} is unreadable: {}", root, exc)
         return ""

@@ -1,0 +1,178 @@
+"""Il motore delle micro app: contratto, approvazione per hash, guasti, letture."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from jenny.board import micro as mc
+
+NOW = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+
+SPEC = {
+    "title": "Acerello",
+    "card": "acero",
+    "every": 30,
+    "fields": {
+        "moisture": {"label": "Umidità", "unit": "%", "type": "number", "min": 0, "max": 100},
+        "online": {"label": "Sensore", "type": "bool"},
+    },
+    "primary": "moisture",
+    "alarm": {"field": "moisture", "op": "<", "value": 20},
+}
+
+
+def _notebook(tmp_path: Path) -> tuple[Path, Path]:
+    ws = tmp_path / "workspace"
+    root = ws / "wikis" / "piante"
+    (root / "wiki").mkdir(parents=True)
+    (root / "board").mkdir()
+    return ws, root
+
+
+def _live(ws: Path, root: Path, code: str, spec: dict | None = None) -> mc.Micro:
+    m = mc.write_micro(root, "m-acerello", spec or SPEC, code, draft=False)
+    mc.write_approval(ws, root, m)
+    return m
+
+
+GOOD = "def run(ctx):\n    return {'moisture': 38, 'online': True, '_source': 'hub, alle 14:01'}\n"
+
+
+async def test_a_good_run_writes_a_reading_and_the_view_reads_it(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, GOOD)
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "ok"
+    view = mc.micro_view(ws, root, "m-acerello", now=NOW)
+    assert (view["state"], view["value"], view["source"]) == ("ok", 38, "hub, alle 14:01")
+    assert view["extras"][0]["field"] == "online" and view["extras"][0]["value"] is True
+    # Non tocca di nuovo prima di trenta minuti.
+    assert await mc.run_micro(ws, root, "m-acerello", now=NOW + timedelta(minutes=10)) is None
+
+
+async def test_the_runtime_computes_the_alarm_not_the_code(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, "def run(ctx):\n    return {'moisture': 12, 'online': True}\n")
+    await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert mc.micro_view(ws, root, "m-acerello", now=NOW)["state"] == "alarm"
+
+
+@pytest.mark.parametrize("ret, why", [
+    ("{'moisture': None, 'online': True}", "did not return"),
+    ("{'moisture': 140, 'online': True}", "outside its range"),
+    ("{'moisture': '38', 'online': True}", "must be a number"),
+    ("{'moisture': 38}", "did not return `online`"),
+    ("{'moisture': 38, 'online': True, 'extra': 1}", "undeclared"),
+    ("[38]", "must return a dict"),
+])
+async def test_a_wrong_output_is_an_error_not_a_value(tmp_path, ret, why) -> None:
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, f"def run(ctx):\n    return {ret}\n")
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "error" and why in state["lastError"]
+    assert mc.read_readings(mc.micro_dir(root, "m-acerello")) == []
+
+
+async def test_three_code_errors_in_a_row_break_it_and_back_off(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, "def run(ctx):\n    raise KeyError('soil')\n")
+    t = NOW
+    for _ in range(3):
+        state = await mc.run_micro(ws, root, "m-acerello", now=t, force=True)
+        t += timedelta(hours=1)
+    assert state["status"] == "broken" and "KeyError" in state["lastError"]
+    spec = mc.load_micro(root, "m-acerello").spec
+    due = mc.next_run_at(spec, state)
+    assert due - mc.model.parse_iso(state["lastRunAt"]) == timedelta(minutes=30 * 8)
+
+
+async def test_the_network_down_is_not_a_broken_micro_app(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    code = "def run(ctx):\n    raise ConnectionError('hub down')\n"
+    _live(ws, root, code)
+    for i in range(4):
+        state = await mc.run_micro(ws, root, "m-acerello", now=NOW + timedelta(hours=i))
+    assert state["status"] == "unreachable" and int(state.get("failures") or 0) == 0
+
+
+async def test_code_changed_by_hand_does_not_run(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    m = _live(ws, root, GOOD)
+    (m.dir / "run.py").write_text(GOOD.replace("38", "99"), encoding="utf-8")
+    assert await mc.run_micro(ws, root, "m-acerello", now=NOW) is None
+    assert mc.micro_view(ws, root, "m-acerello", now=NOW)["state"] == "unapproved"
+    # L'approvazione sta fuori dal workspace.
+    assert not mc.approvals_path(ws).is_relative_to(ws)
+
+
+async def test_the_code_reads_but_cannot_write(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    (root / "wiki" / "acero.md").write_text("# acero\n\n38\n", encoding="utf-8")
+    code = (
+        "def run(ctx):\n"
+        f"    text = open({str(root / 'wiki' / 'acero.md')!r}).read()\n"
+        f"    open({str(root / 'wiki' / 'x.md')!r}, 'w').write('x')\n"
+        "    return {'moisture': 1, 'online': True}\n"
+    )
+    _live(ws, root, code)
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "error" and "read-only" in state["lastError"]
+    assert not (root / "wiki" / "x.md").exists()
+
+
+async def test_a_skill_module_is_importable_from_uses(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    scripts = ws / "skills" / "waterbot" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "probe_fake.py").write_text(
+        "def moisture(name):\n    return 41\n", encoding="utf-8")
+    code = ("from probe_fake import moisture\n"
+            "def run(ctx):\n    return {'moisture': moisture('Acerello'), 'online': True}\n")
+    _live(ws, root, code, {**SPEC, "uses": ["waterbot"]})
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "ok", state
+    assert mc.micro_view(ws, root, "m-acerello", now=NOW)["value"] == 41
+
+
+async def test_http_goes_only_to_declared_hosts(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    code = ("def run(ctx):\n    ctx.http.get_json('https://evil.example.com/x')\n"
+            "    return {'moisture': 1, 'online': True}\n")
+    _live(ws, root, code, {**SPEC, "net": ["hub.example.com"]})
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW)
+    assert state["status"] == "error" and "not in this micro app's net list" in state["lastError"]
+
+
+def test_the_contract_ignores_the_code_and_the_labels() -> None:
+    a = mc.normalize_spec(SPEC, micro_id="m-a")
+    b = mc.normalize_spec({**SPEC, "title": "Altro", "every": 60,
+                           "fields": {**SPEC["fields"],
+                                      "online": {"label": "Online?", "type": "bool"}}},
+                          micro_id="m-a")
+    assert mc.contract_of(a) == mc.contract_of(b)
+    c = mc.normalize_spec({**SPEC, "net": ["hub.example.com"]}, micro_id="m-a")
+    assert mc.contract_of(a) != mc.contract_of(c)
+
+
+def test_spec_rules() -> None:
+    assert mc.normalize_spec({**SPEC, "every": 1}, micro_id="m")["every"] == 15
+    with pytest.raises(mc.MicroError):
+        mc.normalize_spec({**SPEC, "fields": {}}, micro_id="m")
+    with pytest.raises(mc.MicroError):
+        mc.normalize_spec({**SPEC, "uses": ["a", "b"]}, micro_id="m")
+
+
+def test_readings_are_compacted(tmp_path) -> None:
+    d = tmp_path / "m"
+    for i in range(400):
+        mc.append_reading(d, {"moisture": i}, now=NOW - timedelta(hours=400 - i))
+    kept = mc.read_readings(d)
+    assert len(kept) <= mc._COMPACT_AFTER
+    assert kept[-1]["moisture"] == 399
+    # Prima delle ultime letture ne resta al piu' una al giorno.
+    compacted = kept[:-(len(kept) - mc.KEEP_DAYS - mc.KEEP_RECENT)] if len(kept) > 79 else kept
+    days = [r["ts"][:10] for r in compacted[:10]]
+    assert len(days) == len(set(days))

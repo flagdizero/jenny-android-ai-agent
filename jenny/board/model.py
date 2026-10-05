@@ -100,7 +100,10 @@ SUGGESTION_KINDS = (
     "attach_page",
     "add_section",
 )
-SECTION_KINDS = ("note", "reminder", "app", "photo")
+# ``micro`` e ``cron`` sono le cose che il quaderno fa da solo: una micro app
+# (un piccolo programma che legge un dato, girato dall'orologio) e un cron del
+# quaderno (un lavoro di Jenny a orario). Vivono nel cassetto della loro scheda.
+SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
 REMINDER_STATES = ("open", "done", "dropped")
 WHEN_KINDS = ("date", "condition")
 PRECISIONS = ("day", "month")
@@ -276,6 +279,16 @@ def _normalize_user_section(raw: Any) -> dict[str, Any] | None:
             return None
         known["path"] = path
         known["caption"] = clean_text(raw.get("caption"), MAX_TEXT)
+    elif kind == "micro":
+        if not is_valid_id(raw.get("micro")):
+            return None
+        known["micro"] = raw["micro"]
+        # In prova: Jenny l'ha scritta e letta una volta, e aspetta il [Tienilo].
+        known["pending"] = raw.get("pending") is True
+    elif kind == "cron":
+        if not is_valid_id(raw.get("job")):
+            return None
+        known["job"] = raw["job"]
     return _keep_unknown(raw, known)
 
 
@@ -586,11 +599,19 @@ def _normalize_when(raw: Any) -> dict[str, Any] | None:
             return None
         precision = raw.get("precision") if raw.get("precision") in PRECISIONS else "day"
         return _keep_unknown(raw, {"kind": "date", "date": day, "precision": precision})
-    app, fld, op = raw.get("app"), raw.get("field"), raw.get("op")
+    fld, op = raw.get("field"), raw.get("op")
     value = raw.get("value")
-    if not is_valid_id(app) or not isinstance(fld, str) or not fld or op not in CONDITION_OPS:
+    if not isinstance(fld, str) or not fld or op not in CONDITION_OPS:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    # La sorgente del dato: una micro app del quaderno, o una Jenny App.
+    if is_valid_id(raw.get("micro")):
+        return _keep_unknown(raw, {
+            "kind": "condition", "micro": raw["micro"], "field": fld, "op": op, "value": value,
+        })
+    app = raw.get("app")
+    if not is_valid_id(app):
         return None
     params = raw.get("params")
     return _keep_unknown(raw, {
@@ -642,8 +663,15 @@ def normalize_reminders(raw: Any) -> dict[str, Any]:
     return _keep_unknown(data, {"version": REMINDERS_VERSION, "reminders": items})
 
 
-def _without(mapping: Mapping[str, Any], key: str) -> dict[str, Any]:
-    return {k: v for k, v in mapping.items() if k != key}
+def _without(mapping: Mapping[str, Any], *keys: str) -> dict[str, Any]:
+    return {k: v for k, v in mapping.items() if k not in keys}
+
+
+# I timbri che l'orologio del quaderno scrive anche sulle attese dell'utente:
+# l'avviso partito, l'ultimo annuncio (il freno delle dodici ore) e quante volte
+# di fila la condizione e' risultata falsa (l'isteresi del riarmo). Non sono
+# modifiche dell'attesa.
+CLOCK_STAMPS = ("notifiedAt", "lastAnnouncedAt", "falseStreak")
 
 
 def reminder_violations(
@@ -663,10 +691,11 @@ def reminder_violations(
         if other is None:
             problems.append(f"reminder {rem['id']} removed")
             continue
-        # ``notifiedAt`` lo scrive l'orologio del quaderno (il job ``reminders``)
-        # anche sulle attese dell'utente: e' il timbro di un avviso partito, non
-        # una modifica dell'attesa.
-        if rem.get("by") == USER and _without(other, "notifiedAt") != _without(rem, "notifiedAt"):
+        # I timbri dell'orologio (``CLOCK_STAMPS``) li scrive il job ``reminders``
+        # anche sulle attese dell'utente: non sono una modifica dell'attesa.
+        if rem.get("by") == USER and (
+            _without(other, *CLOCK_STAMPS) != _without(rem, *CLOCK_STAMPS)
+        ):
             problems.append(f"reminder {rem['id']} belongs to the user")
             continue
         if rem.get("pos") != other.get("pos") or rem.get("by") != other.get("by"):

@@ -84,13 +84,13 @@ _CONDITIONAL_JOBS = [
         111 * 1000,
         id="heartbeat",
     ),
-    # L'orologio dei quaderni non ha un intervallo suo: un giro all'ora e'
-    # la forma del lavoro (le attese sono a giorno o a mese). Lo accende la wiki.
+    # L'orologio dei quaderni non ha un intervallo configurabile: un giro ogni
+    # quarto d'ora, che e' anche il passo minimo di una micro app. Lo accende la wiki.
     pytest.param(
         "reminders",
         lambda c, on: setattr(c.wiki, "enabled", on),
         lambda c: None,
-        60 * _MINUTE_MS,
+        15 * _MINUTE_MS,
         id="reminders",
     ),
     pytest.param(

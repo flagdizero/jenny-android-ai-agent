@@ -67,7 +67,7 @@ async def test_a_due_reminder_is_announced_once_with_its_why(tmp_path) -> None:
     agent = _Agent()
     now = datetime(2027, 3, 2, 10, 0, tzinfo=ROME)
     out = await run_reminders(agent, ws, now=now)
-    assert out == "reminders: 2 announced, 0 app events"
+    assert out == "reminders: 2 announced, 0 app events, 0 micro runs"
     assert len(agent.prompts) == 2
     travaso = next(p for p in agent.prompts if "r-travaso" in p)
     assert "Notebook: piante" in travaso
@@ -123,7 +123,18 @@ async def test_a_condition_fires_on_fresh_data_and_rearms(tmp_path) -> None:
     readings.write_text(readings.read_text() + json.dumps(
         {"sensor": "albinella", "moisture": 45, "ts": later}) + "\n")
     await run_reminders(agent, ws)
-    assert "notifiedAt" not in read_reminders(root)["reminders"][0]
+    rem = read_reminders(root)["reminders"][0]
+    assert rem["notifiedAt"] and rem["falseStreak"] == 1, "un solo controllo falso non riarma"
+    await run_reminders(agent, ws)
+    rem = read_reminders(root)["reminders"][0]
+    assert "notifiedAt" not in rem and "falseStreak" not in rem
+    assert rem["by"] == "user", "i timbri dell'orologio non cambiano di chi e' l'attesa"
+    # Torna sotto la soglia subito: dodici ore fra due annunci della stessa attesa.
+    latest = (datetime.now(timezone.utc) + timedelta(seconds=2)).isoformat(timespec="seconds")
+    readings.write_text(readings.read_text() + json.dumps(
+        {"sensor": "albinella", "moisture": 22, "ts": latest}) + "\n")
+    await run_reminders(agent, ws)
+    assert len(agent.prompts) == 1, "un sensore che balla sulla soglia non riannuncia"
 
 
 async def test_stale_data_never_fires_a_condition(tmp_path) -> None:

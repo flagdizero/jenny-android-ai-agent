@@ -107,39 +107,65 @@ def app_section_view(
         "verbs": section.verbs,
         "params": dict(params),
     })
+    view = records_view(
+        records, field_name=section.field, latest=section.latest, alarm=section.alarm,
+        stale_after_minutes=section.stale_after_minutes, trend_days=section.trend_days, now=now,
+    )
+    view.pop("record", None)
+    return {**base, **view}
+
+
+def records_view(
+    records: list[dict[str, Any]],
+    *,
+    field_name: str,
+    latest: str = "ts",
+    alarm: Mapping[str, Any] | None = None,
+    stale_after_minutes: int | None = None,
+    trend_days: int = 0,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Lo stato di una serie di letture: l'ultimo valore, l'allarme, il dato fermo, l'andamento.
+
+    **Un solo motore** per le sezioni mini app (i record di una collezione
+    dell'app) e per le micro app (le letture del loro ``readings.jsonl``): stessi
+    record ``{id, ts, ...}``, stessi stati, stesso andamento — cosi' la vista, gli
+    eventi di diario e le attese a condizione non sanno chi ha prodotto il dato.
+    ``record`` e' l'ultima lettura intera, per chi vuole anche gli altri campi.
+    """
     if not records:
-        return {**base, "state": "empty", "value": None, "at": "", "trend": []}
+        return {"state": "empty", "value": None, "at": "", "trend": [], "record": None}
 
     def order(record: Mapping[str, Any]) -> str:
-        return str(record.get(section.latest, ""))
+        return str(record.get(latest, ""))
 
-    latest = max(records, key=order)
-    value = latest.get(section.field)
-    at = _record_time(latest)
+    last = max(records, key=order)
+    value = last.get(field_name)
+    at = _record_time(last)
     current = now or datetime.now(timezone.utc)
     state = "ok"
-    if section.alarm and model.compare(value, section.alarm["op"], section.alarm["value"]):
+    if alarm and model.compare(value, alarm["op"], alarm["value"]):
         state = "alarm"
-    if section.stale_after_minutes and (
-        at is None or current - at > timedelta(minutes=section.stale_after_minutes)
+    if stale_after_minutes and (
+        at is None or current - at > timedelta(minutes=stale_after_minutes)
     ):
         state = "stale"
     trend: list[Any] = []
-    if section.trend_days:
-        since = current - timedelta(days=section.trend_days)
+    if trend_days:
+        since = current - timedelta(days=trend_days)
         daily: dict[str, Any] = {}
         for record in sorted(records, key=order):
             stamp = _record_time(record)
             if stamp is None or stamp < since:
                 continue
-            daily[stamp.date().isoformat()] = record.get(section.field)
+            daily[stamp.date().isoformat()] = record.get(field_name)
         trend = [v for v in daily.values() if isinstance(v, (int, float))][-_TREND_POINTS:]
     return {
-        **base,
         "state": state,
         "value": value,
         "at": at.isoformat(timespec="seconds") if at else "",
         "trend": trend,
+        "record": last,
     }
 
 
@@ -245,17 +271,47 @@ def section_resolver(
         if kind == "photo":
             path = project_root / str(section.get("path"))
             return {"exists": path.is_file()}
+        if kind == "micro":
+            from jenny.board.micro import micro_view
+
+            return {"view": micro_view(workspace, project_root, str(section.get("micro")),
+                                       pending=section.get("pending") is True)}
+        if kind == "cron":
+            jobs = ctx.get("cronJobs") or {}
+            results = ctx.get("cronResults") or {}
+            return {"job": jobs.get(str(section.get("job"))),
+                    "result": results.get(f"{ctx.get('card')}/{section.get('id')}")}
         return {}
 
     return resolve
 
 
-def alert_probe(workspace: Path) -> Callable[[Mapping[str, Any]], bool]:
-    """Se una sezione mini app deve accendere l'angolo rosso della sua scheda."""
+# Gli stati di una sezione che accendono l'angolo rosso della sua scheda: il
+# dato in allarme o fermo, e una micro app che non va piu'.
+ALERT_STATES = ("alarm", "stale", "broken", "unapproved", "quarantined")
+
+
+def section_view(workspace: Path, project_root: Path | None,
+                 section: Mapping[str, Any]) -> dict[str, Any] | None:
+    """La vista di una sezione che produce dati (mini app o micro app), o ``None``."""
+    kind = section.get("kind")
+    if kind == "app":
+        return app_section_view(workspace, str(section.get("app")), section.get("params") or {})
+    if kind == "micro" and project_root is not None and section.get("pending") is not True:
+        from jenny.board.micro import micro_view
+
+        return micro_view(workspace, project_root, str(section.get("micro")))
+    return None
+
+
+def alert_probe(
+    workspace: Path, project_root: Path | None = None
+) -> Callable[[Mapping[str, Any]], bool]:
+    """Se una sezione mini app o micro app deve accendere l'angolo rosso della sua scheda."""
 
     def probe(section: Mapping[str, Any]) -> bool:
-        view = app_section_view(workspace, str(section.get("app")), section.get("params") or {})
-        return view.get("state") in ("alarm", "stale")
+        view = section_view(workspace, project_root, section)
+        return bool(view) and view.get("state") in ALERT_STATES
 
     return probe
 
