@@ -121,10 +121,16 @@ def test_a_notebook_opens_on_its_board() -> None:
       const wall = $('home-board-wall');
       assert.ok([...wall.children].indexOf($('home-board-threads'))
         > [...wall.children].indexOf(polaroids[1]));
-      // Il muro: le posizioni in percento dello schermo, il muro almeno due schermi.
+      // Il muro: le posizioni in percento dello schermo, e lo schermo dell'origine
+      // a grandezza naturale finche' non lo sposti o lo ingrandisci.
       assert.equal(polaroids[0].style.left, '5cqw');
       assert.equal(polaroids[0].style.top, '6cqh');
-      assert.equal(wall.style.width, '200cqw');
+      assert.ok(wall.style.transform.endsWith("scale(1)"));
+      app.board.view = { x: -120, y: 40, s: 1.5 };
+      app.board._applyView();
+      assert.equal(wall.style.transform, 'translate(-120px, 40px) scale(1.5)');
+      app.board.resetView();
+      assert.equal(wall.style.transform, 'translate(0px, 0px) scale(1)');
       // La busta resta nella finestra, ferma, mentre il muro scorre.
       assert.equal(document.querySelector('.home-board-envelope').parentElement.id, 'home-board-canvas');
     """)

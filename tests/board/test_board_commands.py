@@ -318,12 +318,15 @@ def test_the_wall_takes_positions_past_the_first_screen(notebook) -> None:
 
     def far(board):
         board["cards"][0]["pos"] = {"x": 250.0, "y": 180.5, "by": "user"}
+        board["cards"][1]["pos"] = {"x": -140.0, "y": -60.0, "by": "user"}
 
     mutate_board(notebook, far)
     from jenny.board.store import read_board as _rb
 
-    assert _rb(notebook)["cards"][0]["pos"]["x"] == 250.0
-    assert _rb(notebook)["cards"][0]["pos"]["y"] == 180.5
+    cards = _rb(notebook)["cards"]
+    assert (cards[0]["pos"]["x"], cards[0]["pos"]["y"]) == (250.0, 180.5)
+    # L'origine e' al centro: si va anche a sinistra e in alto.
+    assert (cards[1]["pos"]["x"], cards[1]["pos"]["y"]) == (-140.0, -60.0)
 
 
 def test_a_full_first_screen_places_new_things_below() -> None:

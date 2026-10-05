@@ -342,12 +342,11 @@
   <section class="home-board" id="home-board">
     <button class="home-board-since" id="home-board-since" type="button" hidden></button>
     <div class="home-board-canvas" id="home-board-canvas">
-      <!-- Il muro si scorre: la tela e' la finestra (la busta resta ferma nel suo
-           angolo), il muro dentro cresce quando gli oggetti vanno piu' in la'. -->
-      <div class="home-board-scroll" id="home-board-scroll">
-        <div class="home-board-wall" id="home-board-wall">
-          <svg class="home-board-threads" id="home-board-threads" aria-hidden="true"></svg>
-        </div>
+      <!-- Il muro: la tela e' la finestra (la busta resta ferma nel suo angolo),
+           il muro dentro si sposta e si ingrandisce. Lo schermo dell'origine e'
+           quello di sempre; si va in tutte le direzioni. -->
+      <div class="home-board-wall" id="home-board-wall">
+        <svg class="home-board-threads" id="home-board-threads" aria-hidden="true"></svg>
       </div>
     </div>
     <div class="home-board-list" id="home-board-list" role="list" hidden></div>

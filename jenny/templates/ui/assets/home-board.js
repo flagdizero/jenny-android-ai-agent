@@ -84,22 +84,40 @@ export function sinceText(row) {
   return text === key ? i18n.t('board.since.kind.other') : text;
 }
 
-/* Il muro, in percento dello schermo (come le posizioni): almeno due schermi
-   per lato, al piu' dieci (`model.WALL_MAX`). L'ingombro degli oggetti e'
-   quello di `model.CARD_BOX`/`NOTE_BOX`. */
-const WALL_MIN = 200;
+/* Il muro, in percento dello schermo (come le posizioni): dall'origine fino a
+   dieci schermi per lato, anche in negativo (`model.WALL_MAX`). Lo schermo
+   d'aria oltre l'oggetto piu' lontano, l'ingrandimento possibile, il doppio
+   tocco e lo slancio. L'ingombro degli oggetti e' `model.CARD_BOX`/`NOTE_BOX`. */
 const WALL_MAX = 1000;
+const AIR = 100;
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2.2;
+const DOUBLE_TAP_MS = 320;
+const GLIDE_DECAY = 0.92;
 const ITEM_BOX = { card: [20, 40], note: [15, 23] };
 /* A quanti pixel dal bordo il muro comincia a scorrere sotto una scheda
    trascinata, e di quanto a ogni movimento. */
 const EDGE_SCROLL_PX = 36;
 const EDGE_SCROLL_STEP = 14;
 
-/** Dove sta il centro di una puntina, nelle coordinate del muro. */
-function pinCenter(el, box) {
+/** Il puntatore resta all'elemento anche fuori dai suoi bordi. Puo' rifiutare
+ *  (un puntatore gia' finito, un evento sintetico): il gesto va avanti lo stesso. */
+function capture(el, pointerId) {
+  try {
+    el.setPointerCapture?.(pointerId);
+  } catch {
+    /* niente: senza cattura il gesto funziona finche' il dito resta sopra */
+  }
+}
+
+/** Dove sta il centro di una puntina, nelle coordinate del muro (senza zoom). */
+function pinCenter(el, box, zoom = 1) {
   const pin = el.querySelector('.home-board-pin');
   const r = (pin || el).getBoundingClientRect();
-  return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 };
+  return {
+    x: (r.left - box.left + r.width / 2) / zoom,
+    y: (r.top - box.top + r.height / 2) / zoom,
+  };
 }
 
 export class HomeBoard {
@@ -112,7 +130,6 @@ export class HomeBoard {
   constructor({ onOpenCard, onOpenPage, onAskJenny, sheet } = {}) {
     this.el = document.getElementById('home-board');
     this.canvas = document.getElementById('home-board-canvas');
-    this.scroller = document.getElementById('home-board-scroll');
     this.wall = document.getElementById('home-board-wall');
     this.threads = document.getElementById('home-board-threads');
     this.sinceBtn = document.getElementById('home-board-since');
@@ -130,13 +147,18 @@ export class HomeBoard {
     this._token = 0;
     this._graph = null;
 
+    /** Dove si guarda il muro: lo spostamento in pixel e l'ingrandimento. Uno per
+     *  quaderno, finche' la casa e' aperta: riaprire la bacheca torna li'. */
+    this.view = { x: 0, y: 0, s: 1 };
+    this._views = new Map();
+    this._pointers = new Map();
+    this._gesture = null;
+    this._lastTap = 0;
+
     this.sinceBtn?.addEventListener('click', () => this.openSince());
-    /* Un tocco sul fondo spegne i fili accesi; il menu del browser sulla
-       pressione lunga non deve mai comparire sopra una scheda. */
-    this.canvas?.addEventListener('pointerdown', (e) => {
-      const bare = e.target === this.canvas || e.target === this.wall || e.target === this.scroller;
-      if (bare && this.focus) this.setFocus(null);
-    });
+    this._bindGestures();
+    /* Il menu del browser sulla pressione lunga non deve mai comparire sopra
+       una scheda. */
     this.canvas?.addEventListener('contextmenu', (e) => e.preventDefault());
     /* I fili si ridisegnano quando la tela cambia misura: la tastiera che sale,
        la rotazione. Senza `ResizeObserver` (un banco senza layout) si
@@ -154,6 +176,8 @@ export class HomeBoard {
     if (notebook !== this.notebook) {
       this._graph = null;
       this.focus = null;
+      if (this.notebook) this._views.set(this.notebook, { ...this.view });
+      this.view = { ...(this._views.get(notebook) || { x: 0, y: 0, s: 1 }) };
     }
     this.notebook = notebook;
     let data;
@@ -195,7 +219,8 @@ export class HomeBoard {
     }
     for (const note of data.notes) this.wall.appendChild(this._postit(note));
     for (const card of data.cards) this.wall.appendChild(this._polaroid(card));
-    this._sizeWall();
+    this._clampView();
+    this._applyView();
     this._drawEnvelope();
     /* I fili sopra le schede, e niente `z-index` (la casa ne ha uno solo, quello
        di Jenny): li mette sopra l'ordine nel DOM. */
@@ -215,30 +240,175 @@ export class HomeBoard {
     if (this.data) this.render();
   }
 
-  /** Il muro e' grande quanto serve: almeno due schermi per lato, e uno in piu'
-   *  oltre l'oggetto piu' lontano, cosi' c'e' sempre posto per spostarne uno.
-   *  Le unita' sono quelle delle posizioni: percento dello schermo. */
-  _sizeWall(extra = null) {
-    if (!this.wall || !this.data) return;
-    let right = 0;
-    let bottom = 0;
+  /* ── Il muro: spostare, ingrandire ── */
+
+  _applyView() {
+    if (!this.wall) return;
+    const v = this.view;
+    this.wall.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.s})`;
+    this.canvas?.style.setProperty('--board-zoom', String(v.s));
+  }
+
+  /** Il muro non si perde: si puo' andare fin dove c'e' qualcosa, piu' uno
+   *  schermo d'aria per lato (e lo schermo dell'origine c'e' sempre). Piu'
+   *  piccolo della finestra, si centra. */
+  _clampView() {
+    const box = this.canvas?.getBoundingClientRect();
+    if (!box?.width || !this.data) return;
+    const W = box.width;
+    const H = box.height;
+    let x0 = 0, y0 = 0, x1 = 100, y1 = 100;
     const take = (pos, w, h) => {
-      right = Math.max(right, pos.x + w);
-      bottom = Math.max(bottom, pos.y + h);
+      x0 = Math.min(x0, pos.x); y0 = Math.min(y0, pos.y);
+      x1 = Math.max(x1, pos.x + w); y1 = Math.max(y1, pos.y + h);
     };
     for (const c of this.data.cards) take(c.pos, ITEM_BOX.card[0], ITEM_BOX.card[1]);
     for (const n of this.data.notes) take(n.pos, ITEM_BOX.note[0], ITEM_BOX.note[1]);
-    if (extra) take(extra, ITEM_BOX.card[0], ITEM_BOX.card[1]);
-    const w = Math.min(WALL_MAX, Math.max(WALL_MIN, right + 100, this._wallW || 0));
-    const h = Math.min(WALL_MAX, Math.max(WALL_MIN, bottom + 100, this._wallH || 0));
-    if (extra) {
-      /* Mentre trascini il muro solo cresce: rimpicciolirlo sotto il dito
-         farebbe saltare quel che c'e' intorno. */
-      this._wallW = w;
-      this._wallH = h;
+    const s = this.view.s;
+    const left = ((x0 - AIR) / 100) * W * s;
+    const right = ((x1 + AIR) / 100) * W * s;
+    const top = ((y0 - AIR) / 100) * H * s;
+    const bottom = ((y1 + AIR) / 100) * H * s;
+    const fit = (pos, lo, hi, size) => (hi - lo <= size
+      ? (size - (hi + lo)) / 2
+      : Math.min(-lo, Math.max(size - hi, pos)));
+    this.view.x = fit(this.view.x, left, right, W);
+    this.view.y = fit(this.view.y, top, bottom, H);
+  }
+
+  /** Torna all'origine, a grandezza naturale (doppio tocco sul fondo). */
+  resetView() {
+    this.view = { x: 0, y: 0, s: 1 };
+    this._applyView();
+    this.drawThreads();
+  }
+
+  /** Ingrandisce di *factor* tenendo fermo il punto (*cx*, *cy*) della finestra. */
+  _zoomAt(cx, cy, scale) {
+    const v = this.view;
+    const s = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
+    const wx = (cx - v.x) / v.s;
+    const wy = (cy - v.y) / v.s;
+    v.s = s;
+    v.x = cx - wx * s;
+    v.y = cy - wy * s;
+  }
+
+  /** Un dito sul fondo sposta il muro, due lo ingrandiscono attorno al punto fra
+   *  le dita; la rotella sposta, Ctrl+rotella (e la pinza del trackpad) ingrandisce.
+   *  Un dito su una scheda e' della scheda: la trascina (v. `_bind`). */
+  _bindGestures() {
+    const c = this.canvas;
+    if (!c) return;
+    const local = (e) => {
+      const b = c.getBoundingClientRect();
+      return { x: e.clientX - b.left, y: e.clientY - b.top };
+    };
+    const onItem = (e) => e.target?.closest?.('.home-board-item, .home-board-envelope');
+    c.addEventListener('pointerdown', (e) => {
+      if (onItem(e)) return;
+      this._pointers.set(e.pointerId, local(e));
+      cancelAnimationFrame(this._glide || 0);
+      this._startGesture();
+      capture(c, e.pointerId);
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!this._pointers.has(e.pointerId)) return;
+      this._pointers.set(e.pointerId, local(e));
+      this._moveGesture();
+    });
+    const up = (e) => {
+      if (!this._pointers.has(e.pointerId)) return;
+      const g = this._gesture;
+      this._pointers.delete(e.pointerId);
+      if (g && !g.moved && this._pointers.size === 0) {
+        /* Un tocco sul fondo spegne i fili accesi; due di fila tornano all'origine. */
+        const now = Date.now();
+        if (now - this._lastTap < DOUBLE_TAP_MS) this.resetView();
+        else if (this.focus) this.setFocus(null);
+        this._lastTap = now;
+      } else if (g?.moved && this._pointers.size === 0 && g.vx !== undefined) {
+        this._glideFrom(g.vx, g.vy);
+      }
+      this._startGesture();
+    };
+    c.addEventListener('pointerup', up);
+    c.addEventListener('pointercancel', up);
+    c.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (e.ctrlKey) {
+        const p = local(e);
+        this._zoomAt(p.x, p.y, this.view.s * Math.exp(-e.deltaY / 200));
+      } else {
+        this.view.x -= e.deltaX;
+        this.view.y -= e.deltaY;
+      }
+      this._clampView();
+      this._applyView();
+    }, { passive: false });
+  }
+
+  _startGesture() {
+    const pts = [...this._pointers.values()];
+    if (!pts.length) {
+      this._gesture = null;
+      return;
     }
-    this.wall.style.width = `${w}cqw`;
-    this.wall.style.height = `${h}cqh`;
+    const mid = pts.length > 1
+      ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      : { ...pts[0] };
+    const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+    this._gesture = {
+      mid, dist, s: this.view.s, x: this.view.x, y: this.view.y,
+      moved: this._gesture?.moved && pts.length > 0, t: Date.now(), last: mid,
+    };
+  }
+
+  _moveGesture() {
+    const g = this._gesture;
+    if (!g) return;
+    const pts = [...this._pointers.values()];
+    const mid = pts.length > 1
+      ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      : pts[0];
+    if (!g.moved && Math.hypot(mid.x - g.mid.x, mid.y - g.mid.y) < DRAG_THRESHOLD_PX
+      && pts.length < 2) return;
+    g.moved = true;
+    if (pts.length > 1 && g.dist) {
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      this.view = { x: g.x, y: g.y, s: g.s };
+      this._zoomAt(g.mid.x, g.mid.y, g.s * (dist / g.dist));
+      this.view.x += mid.x - g.mid.x;
+      this.view.y += mid.y - g.mid.y;
+    } else {
+      this.view.x = g.x + (mid.x - g.mid.x);
+      this.view.y = g.y + (mid.y - g.mid.y);
+    }
+    const now = Date.now();
+    const dt = Math.max(1, now - g.t);
+    g.vx = (mid.x - g.last.x) / dt;
+    g.vy = (mid.y - g.last.y) / dt;
+    g.t = now;
+    g.last = { ...mid };
+    this._clampView();
+    this._applyView();
+  }
+
+  /** Lo slancio dopo uno spostamento veloce, che si spegne da solo. */
+  _glideFrom(vx, vy) {
+    let x = vx * 16;
+    let y = vy * 16;
+    if (Math.hypot(x, y) < 2) return;
+    const step = () => {
+      x *= GLIDE_DECAY;
+      y *= GLIDE_DECAY;
+      this.view.x += x;
+      this.view.y += y;
+      this._clampView();
+      this._applyView();
+      if (Math.hypot(x, y) > 0.5) this._glide = requestAnimationFrame(step);
+    };
+    this._glide = requestAnimationFrame(step);
   }
 
   _clear() {
@@ -247,8 +417,6 @@ export class HomeBoard {
       if (el !== this.threads) el.remove();
     }
     this.canvas.querySelector('.home-board-envelope')?.remove();
-    this._wallW = 0;
-    this._wallH = 0;
     if (this.threads) this.threads.innerHTML = '';
     if (this.listEl) {
       this.listEl.innerHTML = '';
@@ -481,11 +649,11 @@ export class HomeBoard {
       const box = this.canvas.getBoundingClientRect();
       start = {
         px: e.clientX, py: e.clientY, x: item.pos.x, y: item.pos.y, w: box.width, h: box.height,
-        sl: this.scroller?.scrollLeft || 0, st: this.scroller?.scrollTop || 0, box,
+        vx: this.view.x, vy: this.view.y, box,
       };
       moved = false;
       longFired = false;
-      el.setPointerCapture?.(e.pointerId);
+      capture(el, e.pointerId);
       if (kind === 'card') {
         timer = setTimeout(() => {
           longFired = true;
@@ -508,25 +676,25 @@ export class HomeBoard {
       }
       /* Vicino al bordo della finestra il muro scorre da se', e la scheda va
          con lui: cosi' la porti su un altro schermo senza lasciarla. */
-      const sc = this.scroller;
-      if (sc) {
-        const edge = EDGE_SCROLL_PX;
-        const b = start.box;
-        if (e.clientX > b.right - edge) sc.scrollLeft += EDGE_SCROLL_STEP;
-        else if (e.clientX < b.left + edge) sc.scrollLeft -= EDGE_SCROLL_STEP;
-        if (e.clientY > b.bottom - edge) sc.scrollTop += EDGE_SCROLL_STEP;
-        else if (e.clientY < b.top + edge) sc.scrollTop -= EDGE_SCROLL_STEP;
-      }
-      const sdx = dx + ((sc?.scrollLeft || 0) - start.sl);
-      const sdy = dy + ((sc?.scrollTop || 0) - start.st);
+      const b = start.box;
+      const edge = EDGE_SCROLL_PX;
+      if (e.clientX > b.right - edge) this.view.x -= EDGE_SCROLL_STEP;
+      else if (e.clientX < b.left + edge) this.view.x += EDGE_SCROLL_STEP;
+      if (e.clientY > b.bottom - edge) this.view.y -= EDGE_SCROLL_STEP;
+      else if (e.clientY < b.top + edge) this.view.y += EDGE_SCROLL_STEP;
+      this._applyView();
+      /* Il dito si muove in pixel dello schermo; la scheda in percento dello
+         schermo *del muro*, che puo' essere ingrandito. */
+      const s = this.view.s;
+      const sdx = (dx - (this.view.x - start.vx)) / s;
+      const sdy = (dy - (this.view.y - start.vy)) / s;
       const w = (el.offsetWidth / start.w) * 100;
       const h = (el.offsetHeight / start.h) * 100;
-      const x = Math.max(0, Math.min(WALL_MAX - w, start.x + (sdx / start.w) * 100));
-      const y = Math.max(1, Math.min(WALL_MAX - h, start.y + (sdy / start.h) * 100));
+      const x = Math.max(-WALL_MAX, Math.min(WALL_MAX - w, start.x + (sdx / start.w) * 100));
+      const y = Math.max(-WALL_MAX, Math.min(WALL_MAX - h, start.y + (sdy / start.h) * 100));
       el.style.left = `${x}cqw`;
       el.style.top = `${y}cqh`;
       el._next = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
-      this._sizeWall(el._next);
       this.drawThreads();
     });
     const end = () => {
@@ -584,10 +752,11 @@ export class HomeBoard {
     svg.innerHTML = '';
     this.wall.querySelectorAll('.home-board-thread-label').forEach((l) => l.remove());
     this.wall.querySelectorAll('.home-board-item').forEach((i) => i.classList.remove('is-lifted', 'is-linked'));
-    /* Le coordinate dei fili sono quelle del muro, che scorre con le schede. */
+    /* Le coordinate dei fili sono quelle del muro (origine e ingrandimento
+       tolti), cosi' si spostano e si ingrandiscono con le schede. */
     const box = this.wall.getBoundingClientRect();
-    if (!box.width) return false;
-    svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    if (!this.canvas.getBoundingClientRect().width) return false;
+    const zoom = this.view.s || 1;
     const elOf = (id) => this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`);
     const self = this.focus ? elOf(this.focus) : null;
     if (this.focus && !self) this.focus = null;
@@ -601,8 +770,8 @@ export class HomeBoard {
       const eb = elOf(conn.b);
       if (!ea || !eb) continue;
       const on = Boolean(this.focus) && (conn.a === this.focus || conn.b === this.focus);
-      const a = pinCenter(ea, box);
-      const b = pinCenter(eb, box);
+      const a = pinCenter(ea, box, zoom);
+      const b = pinCenter(eb, box, zoom);
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', a.x);
       line.setAttribute('y1', a.y);

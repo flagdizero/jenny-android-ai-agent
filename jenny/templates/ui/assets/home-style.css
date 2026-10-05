@@ -1726,28 +1726,27 @@ body.home {
   background-size: 9px 9px;
 }
 .home-board-canvas[hidden] { display: none; }
-/* La finestra sul muro: un dito sul fondo lo scorre, un dito su una scheda la
-   trascina (le schede hanno `touch-action: none`). */
-.home-board-scroll {
-  position: absolute;
-  inset: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
-  scrollbar-width: none;
-}
-.home-board-scroll::-webkit-scrollbar { display: none; }
+/* Il muro: un punto d'origine che si sposta e si ingrandisce (lo trasforma
+   `HomeBoard._applyView`). Gli oggetti dentro sono in percento dello schermo,
+   anche negativo. I gesti sono tutti nostri, quindi niente gesti del browser. */
+.home-board-canvas { touch-action: none; }
 .home-board-wall {
-  position: relative;
-  width: 200cqw;
-  height: 200cqh;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .home-board-threads {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
   pointer-events: none;
 }
 .home-board-threads line { stroke: var(--board-thread); stroke-linecap: round; transition: opacity 0.18s; }

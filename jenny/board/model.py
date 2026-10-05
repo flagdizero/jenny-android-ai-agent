@@ -46,12 +46,13 @@ ACTORS = (USER, JENNY)
 # Costanti e non manopole: sono la forma del prodotto, non una taratura per
 # installazione. Se una va tarata col telefono in mano, si cambia qui.
 
-# La bacheca e' un **muro che si scorre** (decisione dell'utente del 05/10/2026:
-# «molto grande e scrollabile, cosi' puoi aggiungere piu' cose»). Le posizioni
-# restano in percentuale dello *schermo* — ``x`` della larghezza, ``y`` dell'altezza
-# — ma non si fermano a 100: il primo schermo e' 0..100, il secondo 100..200, e
-# cosi' via fino a ``WALL_MAX``. Le bacheche di prima stanno tutte nel primo
-# schermo, dov'erano, senza migrazione.
+# La bacheca e' un **muro** che si sposta e si ingrandisce, con l'origine al
+# centro (decisioni dell'utente del 05/10/2026: «molto grande e scrollabile» e
+# «l'origine e' il punto centrale, cosi' scrollo in tutte le direzioni»). Le
+# posizioni restano in percentuale dello *schermo* — ``x`` della larghezza, ``y``
+# dell'altezza — ma vanno da ``-WALL_MAX`` a ``WALL_MAX``: lo schermo dell'origine
+# e' 0..100, quello a destra 100..200, quello a sinistra -100..0. Le bacheche di
+# prima stanno tutte nello schermo dell'origine, dov'erano, senza migrazione.
 WALL_MAX = 1000.0
 
 # Il tetto degli elementi sulla bacheca, schede più post-it. Era 12, quando la
@@ -247,8 +248,8 @@ def _normalize_pos(raw: Any, default_by: str = JENNY) -> dict[str, Any] | None:
     if not isinstance(raw, Mapping):
         return None
     known = {
-        "x": _clamp(raw.get("x"), 0, WALL_MAX, 0.0),
-        "y": _clamp(raw.get("y"), 0, WALL_MAX, 0.0),
+        "x": _clamp(raw.get("x"), -WALL_MAX, WALL_MAX, 0.0),
+        "y": _clamp(raw.get("y"), -WALL_MAX, WALL_MAX, 0.0),
         "by": _owner(raw.get("by"), default_by),
     }
     return _keep_unknown(raw, known)
