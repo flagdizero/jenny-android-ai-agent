@@ -380,14 +380,20 @@
 /* Il velo dietro la chat aperta sopra una pagina (dal 05/10/2026: Jenny e' la
    porta della chat, e la chat sale sopra quel che stai guardando — v.
    `.home-over` in home-style.css e `:root.chat-over` qui sotto). Deve lasciar
-   leggere la pagina sotto **e** la chat sopra: nei temi scuri e' un nero
-   all'80%, nei tre chiari lo sfondo del tema all'86% — un nero sotto testo
-   nero non si leggerebbe. Il contrasto lo conta un banco
-   (`test_chat_veil_contrast.py`), tema per tema. */
-:root { --chat-veil: rgba(8, 7, 10, 0.8); }
+   leggere la pagina sotto **e** la chat sopra: nei temi scuri e' un nero al
+   62%, nei tre chiari lo sfondo del tema al 72% — un nero sotto testo nero non
+   si leggerebbe. La pagina sotto e' anche sfocata appena
+   (`--chat-veil-blur`): resta riconoscibile, ma il suo testo non si confonde
+   con quello della chat, e cosi' il velo e' sceso dall'80/86% del primo giro.
+   Il contrasto lo conta un banco (`test_chat_veil_contrast.py`), tema per
+   tema, come se sotto non ci fosse sfocatura: la sfocatura e' margine. */
+:root {
+  --chat-veil: rgba(8, 7, 10, 0.62);
+  --chat-veil-blur: 3px;
+}
 [data-theme="comic"],
 [data-theme="y2k"],
-[data-theme="stone"] { --chat-veil: color-mix(in srgb, var(--bg) 86%, transparent); }
+[data-theme="stone"] { --chat-veil: color-mix(in srgb, var(--bg) 72%, transparent); }
 
 [data-theme="synthwave"],
 [data-theme="kyoto"],
@@ -1714,6 +1720,19 @@ body {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+/* Sotto il velo, sfocata appena — lei e non il velo: un `backdrop-filter` su
+   `#view-chat` sarebbe una proprieta' in piu' sullo scroller dei manici, e
+   andrebbe ricalcolato a ogni scorrere della chat; la vista sotto e' ferma.
+   Lo stesso per una mini-app sotto. */
+:root.chat-over .view-beneath,
+:root.chat-over-app .app-frame-overlay {
+  filter: blur(var(--chat-veil-blur));
+  transition: filter 0.14s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root.chat-over .view-beneath,
+  :root.chat-over-app .app-frame-overlay { transition: none; }
 }
 :root.chat-over #view-chat { z-index: 30; background: var(--chat-veil); }
 :root.chat-over .dock { z-index: 31; }

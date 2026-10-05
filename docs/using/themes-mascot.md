@@ -31,7 +31,7 @@ Your theme choice lives in the WebView's local storage on this specific device, 
 
 ## Mascot
 
-A small companion (Jenny, styled as "✿") follows the conversation from the corner of the screen, and she is **the door to the chat**. On the home's chat page, and in the workshop's Console, the chat is already there: a tap on her makes her wave, with happy eyes. Everywhere else — the home's other pages (Apps, Notebooks, Settings), the rooms opened from them, a notebook's board, a mini-app, and every view of the workshop except the Console — she lives docked at the edge: tap her, or swipe her inward from the edge, and **the real chat comes up full screen over what you are looking at**. The page stays visible beneath it, through a veil, but can't be touched; tap her again, or press Back, and the chat goes away and the page is where you left it.
+A small companion (Jenny, styled as "✿") follows the conversation from the corner of the screen, and she is **the door to the chat**. On the home's chat page, and in the workshop's Console, the chat is already there: a tap on her makes her wave, with happy eyes. Everywhere else — the home's other pages (Apps, Notebooks, Settings), the rooms opened from them, a notebook's board, a mini-app, and every view of the workshop except the Console — she lives docked at the edge: tap her, or swipe her inward from the edge, and **the real chat comes up full screen over what you are looking at**. The page stays visible beneath it, slightly blurred behind a veil so the chat stays readable, but can't be touched; tap her again, or press Back, and the chat goes away and the page is where you left it.
 
 A few things about that chat are worth knowing before you rely on it:
 

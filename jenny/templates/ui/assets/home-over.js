@@ -31,6 +31,8 @@ export class ChatOver {
     this._open = false;
     /** Gli elementi resi inerti da qui, e solo quelli. */
     this._inerted = [];
+    /** Gli elementi sfocati da qui (v. `show`). */
+    this._blurred = [];
     this.host?.addEventListener('click', (e) => {
       if (this._open && this._isVeil(e.target)) this._onVeilTap?.();
     });
@@ -60,6 +62,17 @@ export class ChatOver {
     const app = document.querySelector('.app-frame-overlay');
     if (app) under.push(app);
     for (const el of under) {
+      /* Sfocata appena (`.home-beneath`, 05/10/2026): si riconosce ancora la
+         pagina, ma il suo testo non si confonde con quello della chat, e il
+         velo puo' essere piu' leggero. Si sfoca la pagina e non il velo: un
+         `backdrop-filter` sul velo, che sfuma in entrata, comparirebbe solo a
+         fine dissolvenza, e andrebbe ricalcolato a ogni scorrere della chat;
+         la pagina sotto invece e' ferma. Non i dialoghi: uno che si aprisse
+         da li' sarebbe sfocato anche lui. */
+      if (el.tagName !== 'DIALOG') {
+        el.classList.add('home-beneath');
+        this._blurred.push(el);
+      }
       if (el.inert) continue;
       el.inert = true;
       this._inerted.push(el);
@@ -71,6 +84,8 @@ export class ChatOver {
     this._open = false;
     for (const el of this._inerted) el.inert = false;
     this._inerted = [];
+    for (const el of this._blurred) el.classList.remove('home-beneath');
+    this._blurred = [];
     if (this.host) this.host.hidden = true;
     this.shell?.removeAttribute('data-over');
   }

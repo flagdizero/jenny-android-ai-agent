@@ -1763,13 +1763,20 @@ body.home {
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--chat-veil, rgba(8, 7, 10, 0.8));
+  background: var(--chat-veil, rgba(8, 7, 10, 0.62));
   animation: home-over-in 0.14s ease-out;
 }
 .home-over[hidden] { display: none; }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
+/* Quel che sta sotto il velo, sfocato appena (v. `ChatOver.show`). La
+   transizione c'e' solo in entrata, insieme al velo che sfuma. */
+.home-beneath {
+  filter: blur(var(--chat-veil-blur, 3px));
+  transition: filter 0.14s ease-out;
+}
 @media (prefers-reduced-motion: reduce) {
   .home-over { animation: none; }
+  .home-beneath { transition: none; }
 }
 
 /* La porta di un quaderno appeso alla fila: arrivandoci si apre la bacheca, e

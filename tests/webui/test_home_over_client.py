@@ -47,6 +47,23 @@ assert.equal(document.querySelectorAll('#home-chat').length, 1, 'la chat e\\u201
 """)
 
 
+def test_the_page_under_is_blurred_and_comes_back_sharp() -> None:
+    run_home(_HEAD + """
+app.homePages.goToId('app', { animated: false });
+await tick(10);
+const blurred = () => Array.from(document.querySelectorAll('.home-beneath'));
+tap();
+await tick(30);
+assert.ok(blurred().includes(document.querySelector('.home-showcase')), 'la pagina sotto non e\\u2019 sfocata');
+assert.ok(!blurred().includes(over()), 'il velo sfoca la chat');
+assert.ok(!blurred().includes(app.jenny.el), 'Jenny e\\u2019 sfocata');
+assert.ok(!blurred().some((el) => el.tagName === 'DIALOG'), 'un dialogo aperto da sotto sarebbe sfocato');
+tap();
+await tick(10);
+assert.deepEqual(blurred(), [], 'la pagina e\\u2019 rimasta sfocata');
+""")
+
+
 def test_back_closes_it_and_the_chat_goes_home() -> None:
     run_home(_HEAD + """
 app.homePages.goToId('settings', { animated: false });
