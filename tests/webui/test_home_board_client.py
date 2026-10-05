@@ -433,8 +433,11 @@ def test_the_drawer_draws_the_four_other_shapes() -> None:
       await app.openCard('acero', 'Acero');
       await tick(40);
       const drawer = $('home-board-drawer');
-      assert.match(drawer.textContent, /Temperatura: 18°/);
-      assert.match(drawer.textContent, /Pioggia: 70%/);
+      const tiles = [...drawer.querySelectorAll('.home-drawer-tile')];
+      assert.equal(tiles.length, 2, 'chips: una piastrella per valore');
+      assert.equal(tiles[0].querySelector('.home-drawer-tile-label').textContent, 'Temperatura');
+      assert.equal(tiles[0].querySelector('.home-drawer-tile-value').textContent, '18°');
+      assert.equal(tiles[1].querySelector('.home-drawer-tile-value').textContent, '70%');
       const bar = drawer.querySelector('.home-drawer-progress-fill');
       assert.equal(bar.style.width, '52%');
       const rows = [...drawer.querySelectorAll('.home-drawer-micro-row-title')].map((r) => r.textContent);

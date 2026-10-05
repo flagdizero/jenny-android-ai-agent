@@ -228,3 +228,22 @@ def test_shapes_have_their_rules() -> None:
     # Cambiare forma cambia quello che l'utente vede: e' un altro contratto.
     chips = mc.normalize_spec({**SPEC, "view": "chips"}, micro_id="m")
     assert mc.contract_of(chips) != mc.contract_of(mc.normalize_spec(SPEC, micro_id="m"))
+
+
+@pytest.mark.parametrize("line", [
+    "H = {'CF-Access-Client-Secret': 'cfast_LvZajClsscVTjVjMZN1HjY'}",
+    "TOKEN = 'ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+    "h = {'Authorization': 'Bearer abcdefghijklmnopqrstuvwx'}",
+    "K = 'QWxhZGRpbjpvcGVuIHNlc2FtZQQWxhZGRpbjpvcGVuIHNlc2FtZQ'",
+])
+def test_a_credential_in_run_py_is_refused(tmp_path, line) -> None:
+    _ws, root = _notebook(tmp_path)
+    with pytest.raises(mc.MicroError, match="credential"):
+        mc.write_micro(root, "m-x", SPEC, f"{line}\n" + GOOD, draft=True)
+    assert mc.redact(line).count("<redacted>") >= 1
+
+
+def test_ordinary_code_is_not_a_credential() -> None:
+    code = ("HUB = 'https://imh.example.com/v1/streams/waterbot/devices'\n"
+            "DEVICE = 'wb-70123c'\n" + GOOD)
+    assert mc.find_secrets(code) == []

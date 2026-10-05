@@ -63,7 +63,8 @@ _PARAMETERS = tool_parameters_schema(
         "optional `_source` text saying where the value came from ('hub WaterBot, Acerello "
         "seen 14:01'). ctx.now (ISO), ctx.prev (last reading or None), ctx.http.get_json / "
         "get_text / post_json (only to hosts in `net`). It can read files but never write. "
-        "At most 6 KB."
+        "Never put a credential in it (refused): import the installed skill that holds it, "
+        "with `uses`. At most 6 KB."
     ),
     fields=ObjectSchema(
         description="What run() returns: {name: {label, type: number|bool|text|rows, unit?, "
@@ -331,7 +332,7 @@ class MicroAppTool(Tool):
             f"spec: {json.dumps(micro.spec, ensure_ascii=False)}\n"
             f"state: {json.dumps(state, ensure_ascii=False)}\n"
             f"file: {micro.dir.relative_to(root).as_posix()}/run.py\n\n"
-            f"```python\n{micro.code}\n```"
+            f"```python\n{mc.redact(micro.code)}\n```"
         )
 
 

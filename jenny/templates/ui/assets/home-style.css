@@ -2216,8 +2216,47 @@ body.home {
 .home-drawer-spark polyline { fill: none; stroke: var(--text-muted); stroke-width: 1.4; }
 /* La micro app: i valori secondari a chip, la prova e il guasto. Con il codice
    fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'. */
-.home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; }
-.home-drawer-tag.is-value { font-size: 14px; color: var(--text); }
+.home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
+.home-drawer-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.home-drawer-chip-label { color: var(--text-muted); }
+.home-drawer-chip-value { color: var(--text); font-weight: 500; }
+.home-drawer-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin: 2px 0 4px;
+}
+.home-drawer-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+.home-drawer-tile-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-drawer-tile-value { color: var(--text); font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.home-drawer-tile-value.is-yes, .home-drawer-chip-value.is-yes { color: var(--board-done); }
+.home-drawer-tile-value.is-no, .home-drawer-chip-value.is-no { color: var(--text-faint); }
 .home-drawer-progress { display: flex; flex-direction: column; gap: 6px; }
 .home-drawer-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
 .home-drawer-progress-fill { height: 100%; background: var(--board-done); }

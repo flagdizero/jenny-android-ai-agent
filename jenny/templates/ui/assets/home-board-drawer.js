@@ -463,7 +463,7 @@ export class BoardDrawer {
     sign.appendChild(el('span', 'home-drawer-app-dot'));
     const when = v.at ? relativeStamp(v.at) : '';
     sign.appendChild(document.createTextNode(i18n.t(`board.app.state.${v.state}`, { when }) +
-      ` · ${i18n.t('board.app.source', { app: v.name || v.slug })}`));
+      (v.hideSource ? '' : ` · ${i18n.t('board.app.source', { app: v.name || v.slug })}`)));
     box.appendChild(sign);
     const spark = sparkline(v.trend);
     if (spark) box.insertAdjacentHTML('beforeend', spark);
@@ -476,7 +476,10 @@ export class BoardDrawer {
     const shown = { ...v };
     const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
     if (v.state === 'pending' || codeDown) shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
-    shown.name = v.source || v.name;
+    /* La fonte la dice il codice (`_source`); senza, la firma «ogni N min · da …»
+       qui sotto basta, e «fonte: Acerello» ripeterebbe il titolo. */
+    shown.name = v.source;
+    shown.hideSource = !v.source;
     const shape = v.view || 'value';
     /* Cinque forme, tutte disegnate qui: la micro app dice quale, mai come. */
     const box = shape === 'value' ? this._appView(shown) : el('div', 'home-drawer-app');
@@ -484,12 +487,19 @@ export class BoardDrawer {
     if (shape === 'progress') box.appendChild(this._microProgress(v));
     if (shape === 'list') box.appendChild(this._microList(v));
     if (shape === 'table') box.appendChild(this._microTable(v));
-    const chipsFirst = shape === 'chips';
     if (v.extras?.length) {
-      const chips = el('div', 'home-drawer-micro-extras');
+      /* «chips»: una piastrella per valore, alla pari. Accanto a un valore
+         grande, invece, i secondari sono pastiglie piccole. */
+      const tiles = shape === 'chips';
+      const chips = el('div', tiles ? 'home-drawer-tiles' : 'home-drawer-micro-extras');
       for (const x of v.extras) {
-        chips.appendChild(el('span', `home-drawer-tag${chipsFirst ? ' is-value' : ''}`,
-          `${x.label}: ${this._cell(x.value, x.type, x.unit)}`));
+        const chip = el('div', tiles ? 'home-drawer-tile' : 'home-drawer-chip');
+        chip.appendChild(el('span', tiles ? 'home-drawer-tile-label' : 'home-drawer-chip-label', x.label));
+        const value = el('span', tiles ? 'home-drawer-tile-value' : 'home-drawer-chip-value',
+          this._cell(x.value, x.type, x.unit));
+        if (x.type === 'bool') value.classList.add(x.value ? 'is-yes' : 'is-no');
+        chip.appendChild(value);
+        chips.appendChild(chip);
       }
       if (shape === 'value') box.insertBefore(chips, box.children[1] || null);
       else box.appendChild(chips);
@@ -527,7 +537,7 @@ export class BoardDrawer {
     sign.appendChild(el('span', 'home-drawer-app-dot'));
     const when = v.at ? relativeStamp(v.at) : '';
     sign.appendChild(document.createTextNode(i18n.t(`board.app.state.${v.state}`, { when }) +
-      ` · ${i18n.t('board.app.source', { app: v.name || v.slug })}`));
+      (v.hideSource ? '' : ` · ${i18n.t('board.app.source', { app: v.name || v.slug })}`)));
     return sign;
   }
 

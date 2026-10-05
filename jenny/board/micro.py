@@ -309,9 +309,43 @@ def list_micros(root: Path) -> list[str]:
                   if p.is_dir() and not p.name.startswith(".") and model.is_valid_id(p.name))
 
 
+# Cio' che in un ``run.py`` ha l'aria di una credenziale. Una micro app non ne
+# porta mai: il quaderno finisce nei backup e negli snapshot, e il codice si
+# mostra nel cassetto e in chat. Chi ha un segreto e' una skill installata, che
+# la micro app importa con ``uses`` (visto il 05/10/2026: il token Cloudflare
+# dell'hub copiato a mano dentro run.py invece di usare la skill che lo aveva).
+_SECRET_PATTERNS = (
+    re.compile(r"cfast_[A-Za-z0-9]{8,}"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{16,}"),
+    re.compile(r"(?i)[\"']?[a-z0-9_-]*(secret|token|api[_-]?key|password|passwd|client[_-]?id)"
+               r"[a-z0-9_-]*[\"']?\s*[:=]\s*[\"'][^\"'\s]{12,}[\"']"),
+    re.compile(r"[\"'][A-Za-z0-9+/_=-]{40,}[\"']"),
+)
+
+
+def find_secrets(code: str) -> list[str]:
+    """I pezzi di *code* che sembrano credenziali (per il rifiuto e per mascherarli)."""
+    hits: list[str] = []
+    for pattern in _SECRET_PATTERNS:
+        hits += [m.group(0) for m in pattern.finditer(code)]
+    return hits
+
+
+def redact(code: str) -> str:
+    for hit in sorted(set(find_secrets(code)), key=len, reverse=True):
+        code = code.replace(hit, "<redacted>")
+    return code
+
+
 def write_micro(root: Path, micro_id: str, spec: dict[str, Any], code: str, *,
                 draft: bool) -> Micro:
     """Scrive spec e codice (bozza o viva). Lo chiama solo il tool ``micro_app``."""
+    if find_secrets(code):
+        raise MicroError(
+            "run.py contains what looks like a credential. A micro app never carries "
+            "secrets: import the installed skill that already holds them (`uses`, e.g. "
+            "uses=['waterbot-imh'] and `from imh_probe import ...`), and keep run.py to "
+            "reading and shaping the values.")
     if len(code.encode("utf-8")) > MAX_CODE_BYTES:
         raise MicroError(f"run.py is over {MAX_CODE_BYTES // 1024} KB: a micro app does one thing")
     if not re.search(r"^def run\(", code, re.MULTILINE):
