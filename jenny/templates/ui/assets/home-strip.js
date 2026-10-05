@@ -19,7 +19,7 @@
 
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
-import { dotColor } from './home-who.js';
+import { dotColor } from './shared/spines.js';
 import { projectNameOf } from './shared/conversation-list.js';
 
 /** Quanto spazio lasciare accanto al nome acceso quando la fila lo riporta in

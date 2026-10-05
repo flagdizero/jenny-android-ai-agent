@@ -385,6 +385,104 @@
   --accent-on-text: var(--accent);
 }
 
+/* ── Le tele dei quaderni ──
+   Ogni quaderno ha una tela, la stessa ovunque compaia: la copertina nei
+   Quaderni, il pallino della fila, la pastiglia, il percorso. Sei per tema,
+   scelte con `spineOf(nome)` in home-who.js, e **non vogliono dire niente
+   oltre l'identita'**: per questo stanno qui e non sono `--error` o
+   `--accent`, che un significato ce l'hanno.
+   Ogni tela ha il suo inchiostro, deciso col contrasto e non indovinato:
+   tutti sopra 4,5:1 sul nome a 14 px (il conto sta in
+   `test_home_who_contract.py`).
+   La finitura e' del tema: il filo intorno, l'ombra, gli angoli, il bagliore
+   di Synthwave, il lucido di Y2K, la storta degli adesivi. */
+:root {
+  --spine-1: #f4f1ea; --spine-1-ink: #17141c;
+  --spine-2: #c8a96a; --spine-2-ink: #17141c;
+  --spine-3: #8a8a8a; --spine-3-ink: #17141c;
+  --spine-4: #d9cbb0; --spine-4-ink: #17141c;
+  --spine-5: #6e6e6e; --spine-5-ink: #fbf8f2;
+  --spine-6: #b5aa94; --spine-6-ink: #17141c;
+  --spine-edge:   1px solid rgba(244, 241, 234, 0.32);
+  --spine-shadow: 0 0 0 transparent;
+  --spine-glow:   0px;
+  --spine-radius: 2px;
+  --spine-gloss:  none;
+  --spine-jitter: 0deg;
+  --shelf:        var(--border-strong);
+}
+[data-theme="synthwave"] {
+  --spine-1: #f92aad; --spine-1-ink: #17141c;
+  --spine-2: #03edf9; --spine-2-ink: #17141c;
+  --spine-3: #7b2ff7; --spine-3-ink: #fbf8f2;
+  --spine-4: #ff8a3d; --spine-4-ink: #17141c;
+  --spine-5: #2de2a6; --spine-5-ink: #17141c;
+  --spine-6: #ffd319; --spine-6-ink: #17141c;
+  --spine-edge:   1px solid rgba(255, 255, 255, 0.16);
+  --spine-glow:   14px;
+  --spine-radius: 3px;
+  --shelf:        var(--accent);
+}
+[data-theme="kyoto"] {
+  --spine-1: #a94f3b; --spine-1-ink: #fbf8f2;
+  --spine-2: #c08a3e; --spine-2-ink: #17141c;
+  --spine-3: #5f6b4e; --spine-3-ink: #fbf8f2;
+  --spine-4: #3e4a5c; --spine-4-ink: #fbf8f2;
+  --spine-5: #8a6a55; --spine-5-ink: #fbf8f2;
+  --spine-6: #e5ddd0; --spine-6-ink: #17141c;
+  --spine-edge:   0 solid transparent;
+  --spine-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  --spine-radius: 2px 9px 2px 9px;
+}
+[data-theme="sticker"] {
+  --spine-1: #a78bfa; --spine-1-ink: #17141c;
+  --spine-2: #ffd23f; --spine-2-ink: #17141c;
+  --spine-3: #5eead4; --spine-3-ink: #17141c;
+  --spine-4: #fb7185; --spine-4-ink: #17141c;
+  --spine-5: #60a5fa; --spine-5-ink: #17141c;
+  --spine-6: #f4effa; --spine-6-ink: #17141c;
+  --spine-edge:   2.5px solid #ffffff;
+  --spine-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+  --spine-radius: 8px;
+  --spine-jitter: 1deg;
+}
+[data-theme="comic"] {
+  --spine-1: #ffd23f; --spine-1-ink: #17141c;
+  --spine-2: #ef4444; --spine-2-ink: #17141c;
+  --spine-3: #3b82f6; --spine-3-ink: #17141c;
+  --spine-4: #9b87ff; --spine-4-ink: #17141c;
+  --spine-5: #22c55e; --spine-5-ink: #17141c;
+  --spine-6: #fb923c; --spine-6-ink: #17141c;
+  --spine-edge:   2px solid #1b1820;
+  --spine-shadow: 3px 3px 0 #1b1820;
+  --spine-radius: 3px;
+  --spine-jitter: 0.5deg;
+}
+[data-theme="y2k"] {
+  --spine-1: #f56ab5; --spine-1-ink: #17141c;
+  --spine-2: #b76bf0; --spine-2-ink: #17141c;
+  --spine-3: #7dd3fc; --spine-3-ink: #17141c;
+  --spine-4: #fda4af; --spine-4-ink: #17141c;
+  --spine-5: #c4b5fd; --spine-5-ink: #17141c;
+  --spine-6: #86efac; --spine-6-ink: #17141c;
+  --spine-edge:   2px solid #ffffff;
+  --spine-shadow: 0 4px 10px rgba(70, 36, 90, 0.22);
+  --spine-radius: 10px;
+  --spine-gloss:  linear-gradient(90deg, rgba(255, 255, 255, 0) 8%,
+                    rgba(255, 255, 255, 0.55) 24%, rgba(255, 255, 255, 0) 46%);
+}
+[data-theme="stone"] {
+  --spine-1: #7f6446; --spine-1-ink: #fbf8f2;
+  --spine-2: #a08a5c; --spine-2-ink: #17141c;
+  --spine-3: #5f6d62; --spine-3-ink: #fbf8f2;
+  --spine-4: #8a5d46; --spine-4-ink: #fbf8f2;
+  --spine-5: #4f5a66; --spine-5-ink: #fbf8f2;
+  --spine-6: #7d6b7f; --spine-6-ink: #fbf8f2;
+  --spine-edge:   1px solid #c2bbac;
+  --spine-shadow: 0 2px 4px rgba(55, 51, 44, 0.15);
+  --spine-radius: 2px;
+}
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

@@ -36,7 +36,8 @@ import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
 import { HomeBackup } from './home-backup.js';
 import { HomeYou } from './home-you.js';
-import { WhoPanel, dotColor } from './home-who.js';
+import { WhoPanel } from './home-who.js';
+import { dotColor } from './shared/spines.js';
 /* Il cassetto delle app, **preso dall'officina e non ricopiato**: e' lo stesso
    modulo per i due gusci. I dati e le azioni stanno in `shared/`, fuori da
    qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
@@ -307,6 +308,17 @@ class HomeApp {
       currentProject: () => projectNameOf(sessionManager.currentKey),
       onPick: (name) => this.switchConversation(name ? projectKey(name) : null),
       onHold: (name) => this.notebookCard().show(name),
+      /* Dal posto vuoto senza nome, da una ricerca a vuoto col nome cercato
+         gia' scritto: e' il giro di sempre, solo con la prima risposta data. */
+      onCreate: (name) => this.createNotebook(name),
+      search: document.getElementById('home-notebooks-search'),
+      searchClear: document.getElementById('home-notebooks-search-clear'),
+      plate: document.getElementById('home-notebooks-plate'),
+      /* Una lettera e' per la ricerca solo con l'elenco a schermo: non con un
+         quaderno aperto dentro i Quaderni (li' c'e' la sua chat), non sotto
+         una stanza o un dialogo. */
+      active: () => this.view === 'chat' && this._entry?.kind === 'notebooks'
+        && !this.homePages?.notebooksConversation && !document.querySelector('dialog[open]'),
     });
 
     /* Il selettore di allegati e' lo stesso dell'officina, con gli stessi tetti
@@ -637,10 +649,11 @@ class HomeApp {
    *  scope senza finire nella conversazione vorrebbe dire lasciare a meta' il
    *  gesto che l'utente ha cominciato.
    */
-  async createNotebook() {
+  async createNotebook(initial = '') {
     const name = await createProjectFlow({
       t: (key, vars) => i18n.t(key, vars),
       known: this.who.known,
+      initial: typeof initial === 'string' ? initial : '',
     });
     if (!name) return;
     this.who.invalidate();              // l'elenco su disco e' cambiato

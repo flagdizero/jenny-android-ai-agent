@@ -27,7 +27,7 @@ from support.js_harness import function, member, requires_node, run_js
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "home-app.js"
-WHO_JS = ASSETS / "home-who.js"
+SPINES_JS = ASSETS / "shared" / "spines.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -428,6 +428,14 @@ function home() {
 """
 
 
+def _spines() -> str:
+    """Il colore dei quaderni com'e' nel modulo foglia: `dotColor` e i due
+    conti da cui dipende, senza `export`, da incollare nello script."""
+    src = SPINES_JS.read_text(encoding="utf-8")
+    spines = re.search(r"(?m)^export const SPINES = \d+;$", src).group(0).removeprefix("export ")
+    return "\n".join([spines] + [function(src, n) for n in ("hashOf", "spineOf", "dotColor")])
+
+
 def _harness() -> str:
     src = APP_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
@@ -435,7 +443,7 @@ def _harness() -> str:
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__DOT_COLOR__", function(WHO_JS.read_text(encoding="utf-8"), "dotColor"))
+        .replace("__DOT_COLOR__", _spines())
         .replace("__SWITCH__", member(src, "switchConversation"))
         # Il corpo del cambio vive in `showConversation` dal 23/09/2026:
         # `switchConversation` decide solo **dove** (v. le pagine conversazione),

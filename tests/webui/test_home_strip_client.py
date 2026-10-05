@@ -109,7 +109,7 @@ def _run(body: str) -> None:
             """
             const { HomeStrip } = await import('./home-strip.js');
             const { presses } = await import('./shared/longpress.js');
-            const { dotColor } = await import('./home-who.js');
+            const { dotColor } = await import('./shared/spines.js');
             /* La pista finta: le voci come le da' quella vera, e cosa le si chiede. */
             const requested = [];
             const homePages = {
@@ -162,7 +162,7 @@ def _run(body: str) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "home-strip.js", root / "home-strip.js")
-        shutil.copy(ASSETS / "home-who.js", root / "home-who.js")
+        shutil.copy(ASSETS / "shared" / "spines.js", root / "shared" / "spines.js")
         shutil.copy(ASSETS / "shared" / "conversation-list.js", root / "shared" / "conversation-list.js")
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")

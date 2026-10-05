@@ -50,6 +50,7 @@ function createEl(id) {
     showModal() { this.open = true; },
     close() { this.open = false; },
     querySelectorAll() { return []; },
+    querySelector() { return null; },
     addEventListener() {},
   };
   if (id) elements.set(id, el);
@@ -105,6 +106,7 @@ def _run(body: str, *, state: str | None = "free", rename: bool = False) -> None
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "home-notebook.js", root / "home-notebook.js")
         shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
+        shutil.copy(ASSETS / "shared" / "spines.js", root / "shared" / "spines.js")
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"

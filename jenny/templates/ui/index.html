@@ -240,7 +240,30 @@
          nascondono, e ci arriva la chat — la stessa, spostata dal trasloco
          (`home-move.js`), come nelle pagine conversazione. -->
     <div class="home-page" data-page="notebooks">
+      <!-- La ricerca: fuori dall'elenco, come il +, perche' resti in cima
+           mentre le mensole scorrono. Una lettera premuta sulla pagina ci
+           arriva da sola (type-ahead, v. `home-who.js`), che ne traduce anche
+           le parole: la casa non ha una passata generica sui `data-i18n`.
+           Un `<div>` e non una `<label>`: una label che avvolge anche la ✕
+           darebbe al campo il nome del bottone, e non puo' contenerne uno (la
+           stessa regola del composer). La lente sta sopra il campo e lascia
+           passare il tocco, quindi tutta la striscia scrive. -->
+      <div class="home-who-search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input class="home-who-search-input" id="home-notebooks-search" type="search"
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+               enterkeyhint="search" placeholder="Cerca un quaderno…"
+               aria-label="Cerca un quaderno">
+        <button class="home-who-search-clear" id="home-notebooks-search-clear" type="button"
+                aria-label="Pulisci la ricerca" hidden>
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
       <div class="home-notebooks" id="home-notebooks"></div>
+      <!-- La targhetta: il nome intero della copertina che ha il fuoco, per chi
+           sceglie con le frecce. Muta per lo screen reader, che il nome lo
+           legge gia' dall'etichetta della copertina. -->
+      <div class="home-who-plate" id="home-notebooks-plate" aria-hidden="true" hidden></div>
       <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.
            Era una riga in fondo all'elenco, e con tanti quaderni finiva sotto il
            bordo. Fuori da `#home-notebooks` apposta: quello scorre, e il

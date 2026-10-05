@@ -20,7 +20,9 @@ INDEX = UI / "index.html"
 WHO_JS = UI / "assets" / "home-who.js"
 APP_JS = UI / "assets" / "home-app.js"
 CSS = UI / "assets" / "home-style.css"
+THEMES_CSS = UI / "assets" / "mobile-style.css"
 I18N = UI / "assets" / "i18n"
+THEMES = ("chanel", "synthwave", "kyoto", "sticker", "comic", "y2k", "stone")
 
 
 def _member(source: str, name: str) -> str:
@@ -157,7 +159,10 @@ def test_the_panel_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["home"]["who"]
-        for key in ("title", "personal", "notebooks", "none", "loadFailed"):
+        for key in ("title", "personal", "notebooks", "none", "loadFailed", "search",
+                    "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
+                    "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
+                    "pages", "pagesShort", "plateKeys", "newNotebook"):
             assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"
@@ -171,3 +176,89 @@ def test_the_notebooks_borrow_the_words_the_workshop_already_has() -> None:
     for key in ("scope.loading", "scope.unopenableSection", "scope.invalidName"):
         assert f"'{key}'" in src, f"{key} non è più quella dell'officina"
     assert "UNOPENABLE_HINT_KEYS" in src, "la mappa dei motivi non è più quella condivisa"
+
+
+# ── La vetrina (05/10/2026) ─────────────────────────────────────────────────
+
+
+def test_the_search_and_the_plate_stay_out_of_the_list_that_scrolls() -> None:
+    """Come il +: la ricerca resta in cima e la targhetta in fondo mentre le
+    mensole scorrono. E con un quaderno aperto dentro i Quaderni si fanno da
+    parte tutti e tre, o starebbero sopra la sua chat."""
+    html = INDEX.read_text(encoding="utf-8")
+    page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
+    listed = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
+    for el in ('id="home-notebooks-search"', 'id="home-notebooks-plate"'):
+        assert el in page, f"{el} non e' nella pagina Quaderni"
+        assert el not in listed, f"{el} e' finito dentro l'elenco che scorre"
+    assert page.index('id="home-notebooks-search"') < page.index('id="home-notebooks"')
+    css = CSS.read_text(encoding="utf-8")
+    hidden = css.split("[data-open] .home-notebooks,", 1)[1].split("{", 1)[0]
+    for cls in (".home-who-search", ".home-who-plate", ".home-notebooks-new"):
+        assert cls in hidden, f"{cls} resta sopra la chat di un quaderno aperto"
+    app = APP_JS.read_text(encoding="utf-8")
+    for el in ("home-notebooks-search", "home-notebooks-search-clear", "home-notebooks-plate"):
+        assert f"getElementById('{el}')" in app, f"il guscio non passa {el} al pannello"
+
+
+def _theme_blocks() -> dict[str, dict[str, str]]:
+    """Le tele per tema, come le vede il browser: `:root` (Chanel) sotto, il
+    blocco del tema sopra."""
+    css = THEMES_CSS.read_text(encoding="utf-8")
+    section = css.split("/* ── Le tele dei quaderni ──", 1)[1].split("/* ── Reset ── */", 1)[0]
+    blocks = dict(re.findall(r'(:root|\[data-theme="(?:\w+)"\])\s*\{([^}]*)\}', section))
+    root = dict(re.findall(r"--(spine-[\w-]+|shelf):\s*([^;]+);", blocks[":root"]))
+    out = {}
+    for theme in THEMES:
+        values = dict(root)
+        own = blocks.get(f'[data-theme="{theme}"]', "")
+        values.update(re.findall(r"--(spine-[\w-]+|shelf):\s*([^;]+);", own))
+        out[theme] = values
+    return out
+
+
+def _luminance(hex_color: str) -> float:
+    n = int(hex_color.lstrip("#"), 16)
+    channels = []
+    for v in ((n >> 16) & 255, (n >> 8) & 255, n & 255):
+        c = v / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    r, g, b = channels
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def test_every_theme_has_six_cloths_each_with_its_ink() -> None:
+    """Sei tele per tema, ognuna col suo inchiostro: `spineOf` sceglie fra
+    sei, e una tela che manca in un tema farebbe una copertina trasparente
+    proprio li'."""
+    spines = (UI / "assets" / "shared" / "spines.js").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^export const SPINES = 6;$", spines), "spineOf non sceglie piu' fra sei"
+    for theme, values in _theme_blocks().items():
+        for n in range(1, 7):
+            assert re.fullmatch(r"#[0-9a-f]{6}", values.get(f"spine-{n}", "")), f"{theme}: --spine-{n}"
+            assert values.get(f"spine-{n}-ink") in ("#17141c", "#fbf8f2"), f"{theme}: --spine-{n}-ink"
+
+
+def test_a_notebooks_name_reads_on_its_cloth_in_every_theme() -> None:
+    """Il nome sta a 14 px sulla tela: testo normale, quindi 4,5:1. Il conto
+    si rifa' qui, cosi' ritoccare la tinta di un tema lo dice invece di
+    lasciarlo scoprire a chi guarda."""
+    for theme, values in _theme_blocks().items():
+        for n in range(1, 7):
+            cloth, ink = _luminance(values[f"spine-{n}"]), _luminance(values[f"spine-{n}-ink"])
+            hi, lo = max(cloth, ink), min(cloth, ink)
+            ratio = (hi + 0.05) / (lo + 0.05)
+            assert ratio >= 4.5, f"{theme} --spine-{n}: {ratio:.2f}:1 sotto 4,5"
+
+
+def test_the_cover_wears_the_theme_finish_not_its_own() -> None:
+    """La copertina non decide filo, ombra, angoli, bagliore, lucido e storta:
+    li legge dal tema. Un valore scritto qui varrebbe per sette temi che non
+    si somigliano."""
+    css = CSS.read_text(encoding="utf-8")
+    cover = css.split("\n.home-who-cover {", 1)[1].split("}", 1)[0]
+    for token in ("--spine-edge", "--spine-radius", "--spine-shadow", "--spine-glow",
+                  "--spine-gloss", "--spine-jitter", "--cover", "--cover-ink"):
+        assert f"var({token}" in cover, f"la copertina non legge {token}"
+    shelf = css.split("\n.home-who-shelf {", 1)[1].split("}", 1)[0]
+    assert "var(--shelf)" in shelf, "il ripiano non e' piu' del tema"
