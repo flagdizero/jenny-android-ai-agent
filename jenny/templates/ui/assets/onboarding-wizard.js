@@ -15,11 +15,15 @@ import { BatteryExemptionCard } from './shared/battery-exemption.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 // Con l'autocorrezione accesa «http://» diventava «Http:/» e partiva cosi'.
 import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
+import { MOTIONS, MotionChannels } from './shared/mascot-motion.js';
 
 /* ── Mini Jenny sul footer ──
    Decorativa, fuori da #onboarding-content (che viene ri-renderizzato a ogni
-   step): cade dall'alto, atterra stordita, poi saluta. Stessi asset e stessa
-   logica a frame discreti della mascotte di mobile-jenny.js. */
+   step): cade dall'alto allungandosi, si schiaccia all'impatto, resta
+   stordita, si rialza caricando le gambe, poi saluta. I gesti sono quelli
+   della mascotte (shared/mascot-motion.js) e il saluto e' lo stesso, con gli
+   stessi due fotogrammi; l'arte di riposo qui e' quella cotta, faccia
+   compresa, in una img sola. */
 const JENNY_POSES = {
   fall: '/html-mobile/assets/jenny-fall.webp',
   ground: '/html-mobile/assets/jenny-ground.webp',
@@ -28,11 +32,11 @@ const JENNY_POSES = {
   idle: '/html-mobile/assets/jenny-idle.webp',
 };
 const GROUND_HOLD_MS = 800; // stordita a terra prima di rialzarsi
-const WAVE_FRAME_MS = 450; // alternanza hello1/hello2
-const WAVE_CYCLES = 3; // cicli di saluto all'ingresso
-const WAVE_REST_MS = 300; // braccio alzato un attimo prima dell'idle
 const REWAVE_EVERY_MS = 5000; // ogni tanto risaluta
-const REWAVE_CYCLES = 2;
+/* Nella rialzata la posa a terra lascia il posto a quella in piedi quando le
+   gambe sono cariche: il 35% del gesto, dove il keyframe `jenny-getup` passa
+   dallo schiacciamento all'allungo. */
+const GETUP_SWAP_MS = Math.round(MOTIONS.squash.getup * 0.35);
 
 /* Base URL di default per formato: mostrata come placeholder nello step 1 e
    usata davvero quando il campo resta vuoto (fetch modelli e salvataggio). */
@@ -72,6 +76,7 @@ export class OnboardingController {
     this._modelsToken = 0;
     this.jennyEl = null;
     this.jennyImg = null;
+    this._jennyMotions = null;
     this._jennyTimers = [];
   }
 
@@ -593,16 +598,7 @@ export class OnboardingController {
     if (!view) return;
     this._stopJenny();
 
-    if (!this.jennyEl) {
-      this.jennyEl = document.createElement('div');
-      this.jennyEl.className = 'onboarding-jenny';
-      this.jennyEl.setAttribute('aria-hidden', 'true');
-      this.jennyImg = document.createElement('img');
-      this.jennyImg.alt = '';
-      this.jennyImg.draggable = false;
-      this.jennyEl.appendChild(this.jennyImg);
-      view.appendChild(this.jennyEl);
-    }
+    if (!this.jennyEl) this._buildJenny(view);
 
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       this.jennyImg.src = JENNY_POSES.idle;
@@ -612,55 +608,70 @@ export class OnboardingController {
     // Precarica le pose: al primo swap non deve esserci un frame vuoto.
     Object.values(JENNY_POSES).forEach((src) => { new Image().src = src; });
 
-    // fall (caduta CSS) -> ground (stordita) -> saluto -> idle.
+    // Cade -> tonfo -> stordita -> si rialza -> saluta, e ogni tanto risaluta.
+    const m = this._jennyMotions;
     this.jennyImg.src = JENNY_POSES.fall;
-    this.jennyEl.classList.remove('dropping');
-    void this.jennyEl.offsetWidth; // riavvia l'animazione se era già corsa
-    this.jennyEl.classList.add('dropping');
-    this._onJennyLanded = () => {
+    m.play('squash', 'fall', () => {
       this.jennyImg.src = JENNY_POSES.ground;
+      m.play('squash', 'impact');
       this._jennyAfter(GROUND_HOLD_MS, () => {
-        this._jennyWave(WAVE_CYCLES, () => this._jennyRewaveLoop());
+        m.play('squash', 'getup', () => this._jennyGreet());
+        this._jennyAfter(GETUP_SWAP_MS, () => { this.jennyImg.src = JENNY_POSES.idle; });
       });
-    };
-    this.jennyEl.addEventListener('animationend', this._onJennyLanded, { once: true });
+    });
+  }
+
+  /* Lo stesso stack della mascotte: il livello dei gesti, il riposo (qui una
+     img sola, l'arte cotta) e i due fotogrammi del saluto nei loro
+     contenitori, che il CSS accende. */
+  _buildJenny(view) {
+    const el = document.createElement('div');
+    el.className = 'onboarding-jenny';
+    el.setAttribute('aria-hidden', 'true');
+    const squash = document.createElement('div');
+    squash.className = 'jenny-squash';
+    const stack = document.createElement('div');
+    stack.className = 'jenny-art-stack';
+    const rest = document.createElement('div');
+    rest.className = 'jenny-rest';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    rest.appendChild(img);
+    const wave = document.createElement('div');
+    wave.className = 'jenny-wave';
+    for (const [key, src] of [['a', JENNY_POSES.hello1], ['b', JENNY_POSES.hello2]]) {
+      const frame = document.createElement('div');
+      frame.className = `jenny-wave-${key}`;
+      const im = document.createElement('img');
+      im.src = src;
+      im.alt = '';
+      im.draggable = false;
+      frame.appendChild(im);
+      wave.appendChild(frame);
+    }
+    stack.append(rest, wave);
+    squash.appendChild(stack);
+    el.appendChild(squash);
+    view.appendChild(el);
+    this.jennyEl = el;
+    this.jennyImg = img;
+    this._jennyMotions = new MotionChannels(el);
+  }
+
+  _jennyGreet() {
+    this._jennyMotions.play('squash', 'greet', () => {
+      this._jennyAfter(REWAVE_EVERY_MS, () => this._jennyGreet());
+    });
   }
 
   _stopJenny() {
     this._jennyTimers.forEach(clearTimeout);
     this._jennyTimers = [];
-    if (this.jennyEl && this._onJennyLanded) {
-      this.jennyEl.removeEventListener('animationend', this._onJennyLanded);
-      this._onJennyLanded = null;
-    }
+    this._jennyMotions?.stopAll();
   }
 
   _jennyAfter(ms, fn) {
     this._jennyTimers.push(setTimeout(fn, ms));
-  }
-
-  /* Alterna hello1/hello2 per `cycles` cicli, resta col braccio alzato un
-     attimo, poi torna in idle e chiama `done`. */
-  _jennyWave(cycles, done) {
-    const frames = cycles * 2;
-    const tick = (i) => {
-      if (i >= frames) {
-        this.jennyImg.src = JENNY_POSES.hello2;
-        this._jennyAfter(WAVE_REST_MS, () => {
-          this.jennyImg.src = JENNY_POSES.idle;
-          if (done) done();
-        });
-        return;
-      }
-      this.jennyImg.src = i % 2 ? JENNY_POSES.hello2 : JENNY_POSES.hello1;
-      this._jennyAfter(WAVE_FRAME_MS, () => tick(i + 1));
-    };
-    tick(0);
-  }
-
-  _jennyRewaveLoop() {
-    this._jennyAfter(REWAVE_EVERY_MS, () => {
-      this._jennyWave(REWAVE_CYCLES, () => this._jennyRewaveLoop());
-    });
   }
 }

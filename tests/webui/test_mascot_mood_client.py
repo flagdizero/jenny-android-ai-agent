@@ -30,6 +30,7 @@ volte l'08/09/2026.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from jenny.utils.android_assets import _UI_MANIFEST
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
+MOTION_JS = ASSETS / "shared" / "mascot-motion.js"
 
 node = requires_node
 
@@ -77,8 +79,6 @@ _CONSTS = (
     "MOUTH_FRAME_MS",
     "TALK_ANIM_SWITCH_MS",
     "TALK_QUIET_TO_THINK_MS",
-    "MOTIONS",
-    "MOTION_VARS",
 )
 
 
@@ -108,6 +108,7 @@ def _harness() -> str:
     methods = "\n".join(_method(jenny, name) + "," for name in _METHODS)
     return f"""
 import assert from 'node:assert/strict';
+const {{ MotionChannels }} = await import({json.dumps(MOTION_JS.as_uri())});
 
 {consts}
 
@@ -143,7 +144,6 @@ function makeMascot(...classes) {{
       setAttribute(k, v) {{ this.attrs[k] = v; }},
       removeAttribute(k) {{ delete this.attrs[k]; }},
     }},
-    _motionNow: {{ lean: null, squash: null }}, _motionTimers: {{ lean: null, squash: null }},
     _greetTimer: null,
     img: imgStub(),
     face: imgStub('off'),  // nasce spenta, come in _buildDom
@@ -155,6 +155,7 @@ function makeMascot(...classes) {{
     states: [],
     {methods}
   }};
+  m._motions = new MotionChannels(m.el);
   return m;
 }}
 

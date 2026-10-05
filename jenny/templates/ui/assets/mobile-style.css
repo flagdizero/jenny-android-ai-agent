@@ -6111,14 +6111,24 @@ body {
   display: block;
 }
 
-/* Caduta dall'alto: parte sopra il viewport e accelera (gravità). */
-@keyframes onboarding-jenny-drop {
-  from { transform: translateX(-50%) translateY(-100vh); }
-  to { transform: translateX(-50%) translateY(0); }
+/* I suoi gesti (v. `_startJenny` in onboarding-wizard.js): sono nel catalogo
+   della mascotte, shared/mascot-motion.js, e il saluto e' lo stesso suo.
+   La caduta: lei scende dall'alto accelerando (gravita'), e intanto si allunga
+   sempre di piu'; al tonfo si schiaccia attorno ai piedi della posa a terra
+   (92% del quadrato) e rimbalza; si rialza caricando le gambe. */
+.onboarding-jenny[data-squash="fall"] {
+  animation: jenny-drop var(--jenny-squash-ms) cubic-bezier(0.55, 0, 1, 0.45) both;
 }
-
-.onboarding-jenny.dropping {
-  animation: onboarding-jenny-drop 650ms cubic-bezier(0.55, 0, 1, 0.45) both;
+.onboarding-jenny[data-squash="fall"] .jenny-squash {
+  animation: jenny-fall-stretch var(--jenny-squash-ms) cubic-bezier(0.55, 0, 1, 0.45) both;
+  transform-origin: 50% 50%;
+}
+.onboarding-jenny[data-squash="impact"] .jenny-squash {
+  animation: jenny-impact var(--jenny-squash-ms) ease-out;
+  transform-origin: 50% 92%;
+}
+.onboarding-jenny[data-squash="getup"] .jenny-squash {
+  animation: jenny-getup var(--jenny-squash-ms) ease-out;
 }
 
 /* Viewport bassi (Titan 2: 552px CSS, di cui ~496 per lo step): lo step più
@@ -6329,7 +6339,7 @@ body {
 }
 .jenny-art-stack img.jenny-face.off { visibility: hidden; }
 
-/* ── I gesti (v. MOTIONS in shared/jenny-mascot.js) ──
+/* ── I gesti (v. MOTIONS in shared/mascot-motion.js) ──
    Tre livelli annidati, una trasformazione ciascuno, cosi' si sommano invece
    di sovrascriversi: `.jenny-lean` l'inclinazione del moto, `.jenny-squash`
    lo schiaccia e allunga, e dentro l'arte, le cui img hanno il respiro.
@@ -6353,16 +6363,20 @@ body {
   pointer-events: none;
 }
 .jenny-wave > div { opacity: 0; }
-.jenny-duo.out[data-squash="greet"] .jenny-squash {
+.jenny-duo.out[data-squash="greet"] .jenny-squash,
+.onboarding-jenny[data-squash="greet"] .jenny-squash {
   animation: jenny-greet var(--jenny-squash-ms) linear both;
 }
-.jenny-duo.out[data-squash="greet"] .jenny-rest {
+.jenny-duo.out[data-squash="greet"] .jenny-rest,
+.onboarding-jenny[data-squash="greet"] .jenny-rest {
   animation: jenny-greet-rest var(--jenny-squash-ms) step-end both;
 }
-.jenny-duo.out[data-squash="greet"] .jenny-wave-a {
+.jenny-duo.out[data-squash="greet"] .jenny-wave-a,
+.onboarding-jenny[data-squash="greet"] .jenny-wave-a {
   animation: jenny-greet-a var(--jenny-squash-ms) step-end both;
 }
-.jenny-duo.out[data-squash="greet"] .jenny-wave-b {
+.jenny-duo.out[data-squash="greet"] .jenny-wave-b,
+.onboarding-jenny[data-squash="greet"] .jenny-wave-b {
   animation: jenny-greet-b var(--jenny-squash-ms) step-end both;
 }
 /* Il saltello: il saluto quando il braccio non si puo' alzare (pensa, parla,
@@ -6572,6 +6586,28 @@ body {
   0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
   30% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); }
   60% { transform: translate(0px, -3px) rotate(0deg) scale(0.98, 1.03); }
+}
+@keyframes jenny-drop {
+  from { transform: translate(-50%, -100vh) rotate(0deg) scale(1, 1); }
+  to { transform: translate(-50%, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-fall-stretch {
+  from { transform: translate(0px, 0px) rotate(0deg) scale(0.96, 1.05); }
+  to { transform: translate(0px, 0px) rotate(0deg) scale(0.93, 1.08); }
+}
+@keyframes jenny-impact {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1.14, 0.87); }
+  40% { transform: translate(0px, 0px) rotate(0deg) scale(0.94, 1.06); }
+  70% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+/* Il 35% e' il cambio di posa (GETUP_SWAP_MS in onboarding-wizard.js): da
+   schiacciata a terra ad allungata in piedi. */
+@keyframes jenny-getup {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(1.07, 0.92); }
+  70% { transform: translate(0px, -4px) rotate(0deg) scale(0.95, 1.06); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
 @keyframes jenny-land {
   0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }

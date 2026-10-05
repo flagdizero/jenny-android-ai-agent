@@ -29,6 +29,7 @@ import { sessionManager } from './session-manager.js';
 import { bindMascotDrag, buildFlyLayer } from './mascot-drag.js';
 import { botName } from './bot-name.js';
 import { applyMascotSize } from './mascot.js';
+import { MotionChannels } from './mascot-motion.js';
 
 /* Arte "cotta" (faccia disegnata dentro, una sola img): serve al bordo, dove
    la mascotte sporge a metà e una faccia non si leggerebbe. */
@@ -101,53 +102,8 @@ const WAVE = {
   b: '/html-mobile/assets/jenny-hello2.webp',
 };
 
-/* ── I gesti ──
-   Un gesto e' un'animazione CSS a tempo, su uno di due livelli annidati:
-   `lean` e' l'inclinazione del moto (`.jenny-lean`), `squash` lo schiaccia e
-   allunga del corpo (`.jenny-squash`). Ognuno ne porta uno alla volta, e i
-   due si sommano perche' sono due elementi, non due animazioni sulla stessa
-   proprieta'. Il gesto sta in `data-lean`/`data-squash`; la durata e' **solo
-   qui**: `_motion` la scrive in `--jenny-<canale>-ms`, che il CSS legge, cosi'
-   il timer che toglie l'attributo e l'animazione non possono divergere.
-
-   Dall'utente del 05/10/2026, sui mockup «Il saluto di Jenny» e «Jenny in
-   movimento»: squash and stretch su tutto, mai in diagonale. */
-const MOTIONS = {
-  lean: {
-    // Esce dal bordo (verso l'interno) o ci torna: si sporge nel verso in cui
-    // va, frena, si assesta. Una rotazione attorno ai piedi, non un taglio.
-    'go-in': 480,
-    'go-edge': 480,
-    // Il cambio di gesto nel parlato (braccia giu' / mano su): uno scatto
-    // invece del cambio di colpo.
-    gest: 300,
-  },
-  squash: {
-    // Si carica, salta alzando il braccio, saluta tre volte ondeggiando a tempo
-    // col braccio, si assesta. Sostituisce mano alzata + occhi felici.
-    greet: 1500,
-    // Il saltello: il saluto quando un braccio alzato direbbe una cosa falsa
-    // (pensa, parla) o non si vedrebbe (al bordo).
-    hop: 1000,
-    // «Sono qui, chiudi da me»: lo chiede il guscio quando tocchi il velo
-    // dietro la chat, che apposta non la chiude. Si carica e si sporge verso
-    // di te.
-    nudge: 520,
-    // L'umore arriva con una reazione del corpo (i nomi sono quelli di
-    // MOOD_FACES): un saltello, un afflosciarsi, una pestata.
-    happy: 700,
-    sad: 1800,
-    angry: 650,
-    // Il pallino si accende e lei se ne accorge.
-    perk: 340,
-    // L'atterraggio a fine volo, quando le pose lasciano il posto al riposo.
-    land: 300,
-    // Una sillaba: ogni volta che apre la bocca si allunga di un niente.
-    syl: 260,
-  },
-};
-/* Le variabili da cui il CSS legge la durata del gesto di ogni canale. */
-const MOTION_VARS = { lean: '--jenny-lean-ms', squash: '--jenny-squash-ms' };
+/* I gesti (v. shared/mascot-motion.js): il catalogo e l'imbuto sono
+   condivisi con la Jenny dell'onboarding. */
 /* Quanto dura lo scivolamento dal bordo (`transition: right` di
    `.jenny-duo`): il saluto aspetta che lei sia fuori del tutto, perche' un
    braccio alzato mentre e' ancora mezza dietro il bordo non si vedrebbe. */
@@ -169,9 +125,6 @@ export class JennyMascot {
     this.host = host;
     this.mode = mode;
     this._chat = chat;
-    // I gesti in corso, uno per canale (v. MOTIONS), e i timer che li tolgono.
-    this._motionNow = { lean: null, squash: null };
-    this._motionTimers = { lean: null, squash: null };
     // Il saluto che aspetta la fine dello scivolamento (v. `hello`).
     this._greetTimer = null;
     this._slideUntil = 0;
@@ -201,6 +154,8 @@ export class JennyMascot {
     this._lastClosedTurnId = null;
 
     this._buildDom();
+    // I gesti in corso, uno per canale (v. shared/mascot-motion.js).
+    this._motions = new MotionChannels(this.el);
     this._bindDrag();
 
     // Preload di tutto ciò che può comparire: un corpo senza la sua faccia è
@@ -285,7 +240,7 @@ export class JennyMascot {
     this._paintLabel();
     this._offName = botName.onChange(() => this._paintLabel());
     this.el.setAttribute('tabindex', '-1');
-    /* Un livello per trasformazione (v. MOTIONS), dal piu' esterno:
+    /* Un livello per trasformazione (v. shared/mascot-motion.js), dal piu' esterno:
        l'inclinazione, lo schiaccia e allunga, l'arte. Nell'arte il riposo
        (corpo e faccia) e il saluto sono due livelli fratelli: il saluto si
        accende sopra senza toccare le img del riposo, che hanno il respiro e
@@ -403,7 +358,7 @@ export class JennyMascot {
 
   /* ── Gesti: saluto, sobbalzo ── */
 
-  /** Il saluto (v. MOTIONS.squash.greet). Solo a riposo e fuori: mentre pensa
+  /** Il saluto (v. `greet` in shared/mascot-motion.js). Solo a riposo e fuori: mentre pensa
    *  o parla un braccio alzato direbbe una cosa che non sta facendo, e al
    *  bordo non si vedrebbe. Li' resta il saltello. Appena uscita dal bordo
    *  aspetta che lo scivolamento finisca. */
@@ -436,29 +391,15 @@ export class JennyMascot {
 
   /** Il gesto in corso su *channel*, o null. */
   motion(channel) {
-    return this._motionNow[channel];
+    return this._motions.now(channel);
   }
 
-  /* Un gesto su un canale, riacceso da capo se c'era gia', al posto di quello
-     che c'era. Tolto a tempo e non su `animationend`: con
-     `prefers-reduced-motion` l'animazione non parte, e l'attributo
-     resterebbe addosso. */
   _motion(channel, name) {
-    const ms = MOTIONS[channel][name];
-    this._stopMotion(channel);
-    void this.el.offsetWidth; // riparte l'animazione anche se era la stessa
-    this.el.style.setProperty(MOTION_VARS[channel], `${ms}ms`);
-    this.el.setAttribute(`data-${channel}`, name);
-    this._motionNow[channel] = name;
-    this._motionTimers[channel] = setTimeout(() => this._stopMotion(channel), ms);
+    this._motions.play(channel, name);
   }
 
   _stopMotion(channel) {
-    if (this._motionTimers[channel]) clearTimeout(this._motionTimers[channel]);
-    this._motionTimers[channel] = null;
-    if (!this._motionNow[channel]) return;
-    this._motionNow[channel] = null;
-    this.el.removeAttribute(`data-${channel}`);
+    this._motions.stop(channel);
   }
 
   /* Il saluto e' di Jenny a riposo e fuori: un turno che parte o il ritorno al
@@ -663,8 +604,7 @@ export class JennyMascot {
       // gesto a meta' riapparirebbe all'atterraggio come un avanzo.
       onDragCommit: () => {
         this._stopGreet();
-        this._stopMotion('lean');
-        this._stopMotion('squash');
+        this._motions.stopAll();
       },
       onTap: () => this._onTap(),
       // In volo la deformazione la calcola la fisica (v. mascot-squash.js);

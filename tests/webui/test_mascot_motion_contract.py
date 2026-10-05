@@ -11,7 +11,7 @@ mockup, e qui non devono poter tornare:
   interpola per matrice, e la matrice puo' introdurre il taglio;
 - **due durate**: il timer che toglie il gesto e l'animazione che lo disegna
   scritti in due posti divergono. La durata sta in `MOTIONS`
-  (``shared/jenny-mascot.js``) e il CSS la legge da `--jenny-<canale>-ms`.
+  (``shared/mascot-motion.js``) e il CSS la legge da `--jenny-<canale>-ms`.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 CSS = ASSETS / "mobile-style.css"
-MASCOT = ASSETS / "shared" / "jenny-mascot.js"
+MOTION = ASSETS / "shared" / "mascot-motion.js"
 DRAG = ASSETS / "shared" / "mascot-drag.js"
 
 CHANNEL_LIST = ["translate", "rotate", "scale"]
@@ -49,8 +49,8 @@ def _transforms(body: str) -> list[list[str]]:
 
 
 def _motions() -> dict[str, list[str]]:
-    src = MASCOT.read_text(encoding="utf-8")
-    block = re.search(r"const MOTIONS = \{(.*?)\n\};", src, re.S)
+    src = MOTION.read_text(encoding="utf-8")
+    block = re.search(r"export const MOTIONS = \{(.*?)\n\};", src, re.S)
     assert block, "MOTIONS non trovato"
     channels: dict[str, list[str]] = {}
     for m in re.finditer(r"\n  (\w+): \{(.*?)\},", block.group(1), re.S):
