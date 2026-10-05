@@ -70,7 +70,11 @@ def test_the_workshop_reads_her_name_where_it_names_her() -> None:
     assert "botName.onChange(() => this.render())" in chip
     mascot = _read("shared/jenny-mascot.js")
     assert "setAttribute('aria-label', 'Jenny')" not in mascot
-    assert "setAttribute('aria-label', botName.get())" in mascot
+    # Il nome lo scrive `_paintLabel` (dal 05/10/2026 ci aggiunge il pallino
+    # «risposta nuova»), e lo riscrive a ogni cambio di nome.
+    label = member(mascot, "_paintLabel")
+    assert "botName.get()" in label and "setAttribute('aria-label'" in label
+    assert "botName.onChange(() => this._paintLabel())" in mascot
     # Chi scrive il nome: la lettura d'avvio dell'officina e ogni lettura
     # delle impostazioni.
     assert "botName.set(bootSettings?.agent?.bot_name)" in _read("mobile-app.js")
