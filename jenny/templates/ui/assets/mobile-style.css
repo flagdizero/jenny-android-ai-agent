@@ -1630,6 +1630,11 @@ body {
    Quindi in chat scorre `html`, e nessun antenato del testo ritaglia.
    Solo in chat: senza `mode-chat` il guscio è quello fisso di sempre. */
 #view-chat { position: relative; flex-direction: column; height: 100%; }
+/* Le altre due viste, nel foglio e non piu' inline (05/10/2026): un `height`
+   inline vincerebbe sulla regola che, con la chat aperta sopra, le fissa allo
+   schermo (v. `:root.chat-over .view-beneath`). Stessa mossa che la chat ha
+   fatto il 22/09/2026. */
+#view-settings, #view-workspace { flex-direction: column; height: 100%; }
 
 :root.mode-chat { overflow-y: auto; overflow-x: hidden; }
 :root.mode-chat body { position: static; overflow: visible; }
