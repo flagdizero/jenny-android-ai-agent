@@ -114,15 +114,29 @@ def board_block(
     pending = open_questions(root)
     if pending:
         footer = (footer + "\n" if footer else "") + f"Open in the map: {pending}"
-    fixed = sum(len(t) + len(tag) + 8 for t, _b, tag in lines) + len(footer) + 2
-    room = max(0, BOARD_BLOCK_MAX_CHARS - fixed)
-    share = room // max(1, len(lines))
+    # Il muro tiene fino a 40 schede, il blocco resta di 2.000 caratteri: prima si
+    # accorciano i riassunti, poi le schede che non ci stanno diventano «e altre N»
+    # (il cassetto di una scheda entra comunque quando la si nomina). Il piede —
+    # le pagine fuori bacheca, le domande aperte — non si taglia mai.
+    budget = BOARD_BLOCK_MAX_CHARS - len(footer) - 2
+    heads = [f"- **{t}**" + (f" {tag}" if tag else "") for t, _b, tag in lines]
+    shown = len(lines)
+    more = ""
+    while shown and sum(len(h) + 1 for h in heads[:shown]) + len(more) > budget:
+        shown -= 1
+        more = f"- … and {len(lines) - shown} more card(s): their drawers come in when named."
+    room = max(0, budget - sum(len(h) + 4 for h in heads[:shown]) - len(more))
+    share = room // max(1, shown)
     rows = []
-    for title, brief, tag in lines:
+    for title, brief, tag in lines[:shown]:
         cut = brief if len(brief) <= share else brief[: max(0, share - 1)].rstrip() + "…"
+        if share < 8:
+            cut = ""
         text = f"- **{title}**" + (f" — {cut}" if cut else "") + (f" {tag}" if tag else "")
         rows.append(text)
-    out = "\n".join(rows)
+    if more:
+        rows.append(more)
+    out = "\n".join(rows)[:budget]
     if footer:
         out += "\n" + footer
     return out[:BOARD_BLOCK_MAX_CHARS]

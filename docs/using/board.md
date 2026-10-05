@@ -22,7 +22,7 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
 | **Since you last looked · N new** | A row at the top, shown only when something changed since you last opened the board, or proposals are waiting. See [Since you last looked](#since-you-last-looked). |
 
-The board is one fixed frame, not a canvas that scrolls: it holds at most **12 items**, cards and sticky notes together. Seven to nine is the comfortable number. Positions are stored as percentages of the frame, so the same board fits a square screen and a tall one.
+The board is a **wall that scrolls** in both directions. The first screen is where everything starts; drag a card past the edge and the wall grows that way, and when the first screen is full Jenny places new things below it. It holds at most **40 items**, cards and sticky notes together, and up to 16 threads. Positions are stored as percentages of the screen (the second screen starts at 100), so the same board fits a square screen and a tall one.
 
 Two buttons in the header work on the board: the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
 

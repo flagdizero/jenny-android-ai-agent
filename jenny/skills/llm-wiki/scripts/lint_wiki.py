@@ -1893,7 +1893,7 @@ def lint(root: str) -> int:
 # Il tetto dei fili di una bacheca: copia di ``MAX_CONNECTIONS`` in
 # ``jenny/board/model.py`` (questo script non importa ``jenny``); un test li
 # tiene uguali, come per ``MAP_MAX_CHARS``.
-BOARD_MAX_CONNECTIONS = 8
+BOARD_MAX_CONNECTIONS = 16
 
 
 def board_fingerprint(texts) -> str:

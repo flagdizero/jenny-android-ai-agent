@@ -118,9 +118,15 @@ def test_a_notebook_opens_on_its_board() -> None:
       assert.equal($('home-board-search-open').hidden, false);
       assert.equal($('home-view-switch').hidden, false);
       // I fili si disegnano dopo le schede: niente z-index, l'ordine nel DOM.
-      const canvas = $('home-board-canvas');
-      assert.ok([...canvas.children].indexOf($('home-board-threads'))
-        > [...canvas.children].indexOf(polaroids[1]));
+      const wall = $('home-board-wall');
+      assert.ok([...wall.children].indexOf($('home-board-threads'))
+        > [...wall.children].indexOf(polaroids[1]));
+      // Il muro: le posizioni in percento dello schermo, il muro almeno due schermi.
+      assert.equal(polaroids[0].style.left, '5cqw');
+      assert.equal(polaroids[0].style.top, '6cqh');
+      assert.equal(wall.style.width, '200cqw');
+      // La busta resta nella finestra, ferma, mentre il muro scorre.
+      assert.equal(document.querySelector('.home-board-envelope').parentElement.id, 'home-board-canvas');
     """)
 
 

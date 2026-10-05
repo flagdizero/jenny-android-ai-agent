@@ -310,3 +310,26 @@ async def test_previews_are_counted_by_real_page(ctx, notebook: Path) -> None:
     for _ in range(2):
         await dispatch_command(ctx, "board.preview", {"wiki": "piante", "page": "dormienza"})
     assert read_board(notebook)["previews"] == {"dormienza.md": 2}
+
+
+def test_the_wall_takes_positions_past_the_first_screen(notebook) -> None:
+    """La bacheca e' un muro che si scorre: una scheda sul terzo schermo resta li'."""
+    _seed(notebook)
+
+    def far(board):
+        board["cards"][0]["pos"] = {"x": 250.0, "y": 180.5, "by": "user"}
+
+    mutate_board(notebook, far)
+    from jenny.board.store import read_board as _rb
+
+    assert _rb(notebook)["cards"][0]["pos"]["x"] == 250.0
+    assert _rb(notebook)["cards"][0]["pos"]["y"] == 180.5
+
+
+def test_a_full_first_screen_places_new_things_below() -> None:
+    board = {"cards": [
+        {"id": f"c{i}", "pos": {"x": float(x), "y": float(y)}}
+        for i, (x, y) in enumerate((x, y) for y in range(0, 100, 30) for x in range(0, 100, 20))
+    ]}
+    x, y = model.free_slot(board, None)
+    assert y >= 100, "con il primo schermo pieno il posto nuovo e' sotto"

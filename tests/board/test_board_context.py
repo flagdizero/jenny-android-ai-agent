@@ -36,7 +36,7 @@ def _cards(root: Path, n: int, brief: str = "In vaso 14, sano. " * 20) -> None:
         ]})
 
 
-def test_twelve_cards_stay_under_the_ceiling(tmp_path) -> None:
+def test_a_full_wall_stays_under_the_ceiling(tmp_path) -> None:
     root = _notebook(tmp_path)
     _cards(root, model.MAX_ITEMS)
     mutate_reminders(root, lambda r: r["reminders"].append({
@@ -45,7 +45,11 @@ def test_twelve_cards_stay_under_the_ceiling(tmp_path) -> None:
     }))
     block = board_block(root, alert=lambda s: False)
     assert len(block) <= BOARD_BLOCK_MAX_CHARS
-    assert block.count("\n- **") + 1 == model.MAX_ITEMS
+    # Quaranta schede non ci stanno tutte coi riassunti: le ultime diventano «e altre N».
+    shown = block.count("- **Pianta ")
+    assert shown >= 12
+    if shown < model.MAX_ITEMS:
+        assert f"and {model.MAX_ITEMS - shown} more card(s)" in block
     assert "[next: Travaso nel vaso 20, 2027-03]" in block
     assert "Off the board: 1 page(s)" in block
 

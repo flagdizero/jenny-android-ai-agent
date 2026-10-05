@@ -1718,7 +1718,6 @@ body.home {
   min-height: 0;
   overflow: hidden;
   container-type: size;
-  touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -1727,6 +1726,22 @@ body.home {
   background-size: 9px 9px;
 }
 .home-board-canvas[hidden] { display: none; }
+/* La finestra sul muro: un dito sul fondo lo scorre, un dito su una scheda la
+   trascina (le schede hanno `touch-action: none`). */
+.home-board-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  scrollbar-width: none;
+}
+.home-board-scroll::-webkit-scrollbar { display: none; }
+.home-board-wall {
+  position: relative;
+  width: 200cqw;
+  height: 200cqh;
+}
 
 .home-board-threads {
   position: absolute;

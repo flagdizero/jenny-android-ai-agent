@@ -46,14 +46,23 @@ ACTORS = (USER, JENNY)
 # Costanti e non manopole: sono la forma del prodotto, non una taratura per
 # installazione. Se una va tarata col telefono in mano, si cambia qui.
 
-# Il tetto degli elementi sulla bacheca, schede più post-it. La bacheca sta in
-# una schermata sola (niente tela infinita): sul quadrato del Titan 2 dodici
-# oggetti ci stanno ancora senza coprirsi, e sette-nove sono l'ideale. Quando è
-# piena, Jenny propone di togliere prima di proporre di aggiungere.
-MAX_ITEMS = 12
+# La bacheca e' un **muro che si scorre** (decisione dell'utente del 05/10/2026:
+# «molto grande e scrollabile, cosi' puoi aggiungere piu' cose»). Le posizioni
+# restano in percentuale dello *schermo* — ``x`` della larghezza, ``y`` dell'altezza
+# — ma non si fermano a 100: il primo schermo e' 0..100, il secondo 100..200, e
+# cosi' via fino a ``WALL_MAX``. Le bacheche di prima stanno tutte nel primo
+# schermo, dov'erano, senza migrazione.
+WALL_MAX = 1000.0
 
-# Il tetto dei fili. Venti fili sono di nuovo il grafo che la bacheca sostituisce.
-MAX_CONNECTIONS = 8
+# Il tetto degli elementi sulla bacheca, schede più post-it. Era 12, quando la
+# bacheca stava in una schermata sola; sul muro c'e' posto, e il tetto resta solo
+# perche' il blocco per turno (una riga per scheda) ha un tetto suo. Quando è
+# piena, Jenny propone di togliere prima di proporre di aggiungere.
+MAX_ITEMS = 40
+
+# Il tetto dei fili. Con molte schede ne servono di piu', ma venti e oltre sono di
+# nuovo il grafo che la bacheca sostituisce.
+MAX_CONNECTIONS = 16
 
 # Quante proposte nuove può aggiungere una passata. Una busta che si riempie a
 # ogni passata è una busta che non si apre più.
@@ -238,8 +247,8 @@ def _normalize_pos(raw: Any, default_by: str = JENNY) -> dict[str, Any] | None:
     if not isinstance(raw, Mapping):
         return None
     known = {
-        "x": _clamp(raw.get("x"), 0, 100, 0.0),
-        "y": _clamp(raw.get("y"), 0, 100, 0.0),
+        "x": _clamp(raw.get("x"), 0, WALL_MAX, 0.0),
+        "y": _clamp(raw.get("y"), 0, WALL_MAX, 0.0),
         "by": _owner(raw.get("by"), default_by),
     }
     return _keep_unknown(raw, known)
@@ -452,8 +461,9 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
 CARD_BOX = (20.0, 40.0)
 NOTE_BOX = (15.0, 23.0)
 
-# Gli angoli che non sono della bacheca: in basso a sinistra la busta, in basso
-# a destra Jenny, che sporge dal bordo e si prende i tocchi.
+# Gli angoli del primo schermo che non sono della bacheca: in basso a sinistra la
+# busta, in basso a destra Jenny, che sporge dal bordo e si prende i tocchi. Stanno
+# fermi sullo schermo mentre il muro scorre, quindi contano solo li'.
 _RESERVED = ((0.0, 76.0, 20.0, 100.0), (80.0, 62.0, 100.0, 100.0))
 
 
@@ -496,7 +506,11 @@ def free_slot(
     taken = _boxes(board, reminders) + list(extra or [])
     best: tuple[float, float, float] | None = None
     best_pos = (2.0, 3.0)
-    for y in range(3, int(100 - box[1]) + 1, 4):
+    # Il primo schermo, e sotto quanto serve: quando il primo e' pieno il muro
+    # cresce verso il basso, che su un telefono e' la direzione in cui si scorre.
+    bottom = max([100.0, *(r[3] for r in taken)])
+    rows = min(WALL_MAX, bottom + box[1] + 8)
+    for y in range(3, int(rows - box[1]) + 1, 4):
         for x in range(2, int(100 - box[0]) + 1, 4):
             rect = (float(x), float(y), x + box[0], y + box[1])
             if any(_overlap(rect, r) for r in _RESERVED):
