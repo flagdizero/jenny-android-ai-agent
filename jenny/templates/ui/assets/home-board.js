@@ -34,6 +34,7 @@ import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
+import { metaText, renderBlock } from './home-board-blocks.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
 export const LONG_PRESS_MS = 450;
@@ -57,38 +58,6 @@ export function tintFor(id) {
 
 /** La data di un'attesa, come la scrive un post-it: «10 ott», «mar 2027».
  *  Una condizione si scrive per quello che misura: «umidita' < 30». */
-/** L'ora di una lettura sulla copertina: «14:02» oggi, «3 ott» prima. */
-export function coverTime(at, now = new Date()) {
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return '';
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString(i18n.locale, { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
-}
-
-/** Da quanto un dato e' fermo, corto: «3 h», «2 g». */
-export function coverAge(at, now = new Date()) {
-  const ms = now - new Date(at);
-  if (!Number.isFinite(ms) || ms < 0) return '';
-  const h = Math.floor(ms / 3600000);
-  if (h < 1) return i18n.t('board.cover.minutes', { count: Math.max(1, Math.floor(ms / 60000)) });
-  if (h < 48) return i18n.t('board.cover.hours', { count: h });
-  return i18n.t('board.cover.days', { count: Math.floor(h / 24) });
-}
-
-/** L'andamento sulla copertina: una linea sottile, nient'altro. */
-export function coverSpark(points) {
-  const pts = (points || []).filter((v) => typeof v === 'number');
-  if (pts.length < 2) return '';
-  const lo = Math.min(...pts);
-  const hi = Math.max(...pts);
-  const span = hi - lo || 1;
-  const step = 100 / (pts.length - 1);
-  const coords = pts.map((v, i) => `${(i * step).toFixed(1)},${(28 - ((v - lo) / span) * 24).toFixed(1)}`);
-  return `<svg class="home-board-cover-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${coords.join(' ')}"/></svg>`;
-}
-
 export function whenLabel(when, locale = i18n.locale) {
   if (!when) return '';
   if (when.kind === 'condition') return `${when.field} ${when.op} ${when.value}`;
@@ -127,6 +96,11 @@ export function sinceText(row) {
 const WALL_MAX = 1000;
 const AIR = 100;
 const ZOOM_EXTENT = [0.3, 2.2];
+/* La striscia: una riga e' il 3,55% della larghezza (`SLIP_ROWS` in
+   `jenny/board/model.py`, e `--slip-row` nel CSS). I suoi controlli si toccano da
+   quando una riga supera NEAR_ROW_PX pixel sullo schermo. */
+const SLIP_ROW = 0.0355;
+const NEAR_ROW_PX = 30;
 const ITEM_BOX = { card: [20, 40], note: [15, 23] };
 /* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
    schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
@@ -302,7 +276,10 @@ export class HomeBoard {
       return;
     }
     for (const note of data.notes) this.wall.appendChild(this._postit(note));
-    for (const card of data.cards) this.wall.appendChild(this._polaroid(card));
+    /* Una scheda-app con dati e' una striscia; le altre, polaroid. */
+    for (const card of data.cards) {
+      this.wall.appendChild(card.slip ? this._slip(card) : this._polaroid(card));
+    }
     this._drawEnvelope();
     /* I fili sopra le schede, e niente `z-index` (la casa ne ha uno solo, quello
        di Jenny): li mette sopra l'ordine nel DOM. */
@@ -328,6 +305,10 @@ export class HomeBoard {
   _applyView() {
     const v = this.view;
     this.wall.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.k})`;
+    /* «Da vicino»: i controlli delle strisce si toccano solo quando una riga
+       e' alta abbastanza per un dito; piu' lontano la striscia intera apre l'app. */
+    const rowPx = (this.canvas?.clientWidth || 0) * SLIP_ROW * v.k;
+    this.wall.classList.toggle('is-near', rowPx >= NEAR_ROW_PX);
   }
 
   /** Lega d3-zoom alla tela, una volta. Un dito sul fondo sposta il muro, due lo
@@ -481,7 +462,7 @@ export class HomeBoard {
    *  scheda appena nata o rimessa deve farsi vedere intera, non mezza sotto
    *  l'intestazione. Si sposta il muro quanto basta, con un margine. */
   reveal(id) {
-    const el = this.wall?.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`);
+    const el = this.wall?.querySelector(`.home-board-card[data-id="${CSS.escape(id)}"]`);
     const box = this.canvas?.getBoundingClientRect();
     if (!el || !box?.width || !this._zoom) return;
     const r = el.getBoundingClientRect();
@@ -504,7 +485,7 @@ export class HomeBoard {
     if (!this._zoom || !this.canvas || this.listView) return false;
     const box = this.canvas.getBoundingClientRect();
     if (!box?.width || !box?.height) return false;
-    const items = this.wall.querySelectorAll('.home-board-polaroid, .home-board-postit');
+    const items = this.wall.querySelectorAll('.home-board-card, .home-board-postit');
     if (!items.length) {
       this._lookAt(window.d3.zoomIdentity);
       return true;
@@ -651,7 +632,7 @@ export class HomeBoard {
 
   _polaroid(card) {
     const el = document.createElement('div');
-    el.className = `home-board-item home-board-polaroid${card.app ? ' is-app' : ''}`;
+    el.className = `home-board-item home-board-card home-board-polaroid${card.app ? ' is-app' : ''}`;
     el.setAttribute('role', 'button');
     el.tabIndex = 0;
     el.style.setProperty('--tilt', `${this._tilt(card.id)}deg`);
@@ -659,39 +640,8 @@ export class HomeBoard {
     const photo = document.createElement('div');
     photo.className = 'home-board-photo';
     photo.style.background = `linear-gradient(160deg, ${a}, ${b})`;
-    const cover = card.cover && card.cover.short ? card.cover : null;
-    if (cover) {
-      /* La copertina: il valore di un'app posata al posto della foto. Un
-         numero grande, il glifo piccolo in alto, l'andamento e l'ora in basso;
-         grigia e con l'eta' quando il dato e' fermo, e l'angolo rosso di
-         sempre quando e' in allarme (quello lo porta il segnale). */
-      photo.classList.add('has-cover', `is-${cover.state || 'ok'}`);
-      if (card.glyph || cover.icon) {
-        const mark = document.createElement('i');
-        mark.className = `ti ${card.glyph ? `ti-${card.glyph}` : cover.icon} home-board-cover-glyph`;
-        mark.setAttribute('aria-hidden', 'true');
-        photo.appendChild(mark);
-      }
-      const value = document.createElement('span');
-      value.className = 'home-board-cover-value';
-      value.textContent = cover.short;
-      value.style.setProperty('--len', String(cover.short.length + (cover.unit || '').length / 2));
-      if (cover.unit) {
-        const unit = document.createElement('small');
-        unit.textContent = cover.unit;
-        value.appendChild(unit);
-      }
-      photo.appendChild(value);
-      const spark = coverSpark(cover.trend);
-      if (spark) photo.insertAdjacentHTML('beforeend', spark);
-      if (cover.at) {
-        const when = document.createElement('span');
-        when.className = 'home-board-cover-at';
-        when.textContent = cover.state === 'stale' ? coverAge(cover.at) : coverTime(cover.at);
-        photo.appendChild(when);
-      }
-    } else if (card.glyph || card.app?.icon) {
-      /* Un'app ancora senza valore (senza dati, o senza riassunto) mostra la sua icona. */
+    if (card.glyph || card.app?.icon) {
+      /* Un'app senza dati (niente striscia) mostra la sua icona. */
       const icon = document.createElement('i');
       icon.className = `ti ${card.glyph ? `ti-${card.glyph}` : card.app.icon}`;
       icon.setAttribute('aria-hidden', 'true');
@@ -721,12 +671,77 @@ export class HomeBoard {
     el.append(photo, label);
     const sigWord = card.signal ? `, ${i18n.t(`board.signal.${card.signal}`)}` : '';
     const autoWord = card.auto ? `, ${i18n.t('board.signal.auto')}` : '';
-    const coverWord = cover ? `, ${cover.short}${cover.unit || ''}${cover.state === 'stale'
-      ? ` (${i18n.t('board.cover.stale')})` : ''}` : '';
-    el.setAttribute('aria-label', `${card.title}${coverWord}${sigWord}${autoWord}`);
+    el.setAttribute('aria-label', `${card.title}${sigWord}${autoWord}`);
     this._place(el, card);
     this._bind(el, card, 'card');
     return el;
+  }
+
+  /** Una scheda che **e'** un'app con dati: la sua striscia.
+   *
+   *  Carta larga due polaroid, alta la sua taglia (S/M/L/XL): l'intestazione con
+   *  l'icona, il nome e un dato a destra (quello dell'app, o il suo stato), e
+   *  sotto i blocchi, disegnati da `home-board-blocks.js`. Si tocca come una
+   *  polaroid (apre l'app), si porta e si tiene premuta allo stesso modo; i
+   *  controlli dentro si usano solo da vicino (`is-near` sul muro). */
+  _slip(card) {
+    const slip = card.slip;
+    const el = document.createElement('div');
+    el.className = `home-board-item home-board-card home-board-slip is-${slip.size} is-${slip.state || 'ok'}`;
+    /* Un gruppo, non un bottone: dentro ci sono controlli veri. Invio lo apre. */
+    el.setAttribute('role', 'group');
+    el.tabIndex = 0;
+    el.style.setProperty('--tilt', `${this._tilt(card.id) / 3}deg`);
+    const head = document.createElement('div');
+    head.className = 'home-board-slip-head';
+    const badge = document.createElement('span');
+    badge.className = 'home-board-slip-icon';
+    const [a, b] = tintFor(card.id);
+    badge.style.background = `linear-gradient(160deg, ${a}, ${b})`;
+    const icon = document.createElement('i');
+    icon.className = `ti ${slip.icon || card.app?.icon || 'ti-apps'}`;
+    icon.setAttribute('aria-hidden', 'true');
+    badge.appendChild(icon);
+    const name = document.createElement('span');
+    name.className = 'home-board-slip-name';
+    name.textContent = card.title;
+    const meta = document.createElement('span');
+    meta.className = 'home-board-slip-meta';
+    meta.textContent = metaText(slip);
+    head.append(badge, name, meta);
+    const body = document.createElement('div');
+    body.className = 'home-board-slip-body';
+    const ctx = { act: (req) => this._act(card, req) };
+    for (const b of slip.blocks || []) body.appendChild(renderBlock(b, ctx));
+    el.append(head, body);
+    if (card.signal && card.signal !== 'new') {
+      const sig = document.createElement('span');
+      sig.className = `home-board-sig-corner is-${card.signal}`;
+      el.appendChild(sig);
+    } else if (card.signal === 'new') {
+      const sig = document.createElement('span');
+      sig.className = 'home-board-sig-dot';
+      el.appendChild(sig);
+    }
+    const sigWord = card.signal ? `, ${i18n.t(`board.signal.${card.signal}`)}` : '';
+    el.setAttribute('aria-label', `${card.title}, ${meta.textContent}${sigWord}`);
+    this._place(el, card);
+    this._bind(el, card, 'card');
+    return el;
+  }
+
+  /** Un controllo di una striscia: l'azione dell'app, poi la bacheca si rilegge.
+   *  Se non va, l'avviso e la striscia torna com'era (si rilegge lo stesso). */
+  async _act(card, { action, params } = {}) {
+    const slug = card.app?.slug;
+    if (!slug || !action) return;
+    try {
+      await api.runAppAction(slug, action, params || {});
+    } catch (err) {
+      console.warn('home.board: strip action failed', err);
+      showToast(i18n.t('board.slip.failed'), 'error');
+    }
+    this.refreshApp(slug);
   }
 
   _postit(note) {
@@ -835,8 +850,13 @@ export class HomeBoard {
       moved = false;
       this._itemDrag = null;
     };
+    /* Un controllo di una striscia, da vicino: e' suo il tocco, non della
+       scheda (niente trascinamento, niente pressione lunga, niente apertura). */
+    const onControl = (e) => !!e.target?.closest?.('.home-board-control')
+      && this.wall.classList.contains('is-near');
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== undefined && e.button !== 0) return;
+      if (onControl(e)) return;
       /* Un secondo dito mentre un altro e' gia' giu': e' una pinza, non un
          trascinamento (la prende d3-zoom, v. `_bindZoom`). */
       if (e.isPrimary === false || this._itemDrag) return;
@@ -919,14 +939,16 @@ export class HomeBoard {
     el.addEventListener('pointercancel', () => {
       if (start) drop();
     });
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
       if (el._suppress) {
         el._suppress = false;
         return;
       }
+      if (onControl(e)) return;
       open();
     });
     el.addEventListener('keydown', (e) => {
+      if (e.target !== el) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         open();
@@ -1039,7 +1061,7 @@ export class HomeBoard {
         await this.load(this.notebook);
         const id = out?.card?.id;
         if (id) {
-          this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`)
+          this.wall.querySelector(`.home-board-card[data-id="${CSS.escape(id)}"]`)
             ?.classList.add('is-appearing');
           this.reveal(id);
         }
@@ -1199,7 +1221,7 @@ export class HomeBoard {
       }
       if (this.notebook === notebook) {
         await this.load(notebook);
-        this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(cardId)}"]`)
+        this.wall.querySelector(`.home-board-card[data-id="${CSS.escape(cardId)}"]`)
           ?.classList.add('is-appearing');
         this.reveal(cardId);
       }
@@ -1220,7 +1242,7 @@ export class HomeBoard {
     const box = this.wall.getBoundingClientRect();
     if (!this.canvas.getBoundingClientRect().width) return false;
     const zoom = this.view.k;
-    const elOf = (id) => this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`);
+    const elOf = (id) => this.wall.querySelector(`.home-board-card[data-id="${CSS.escape(id)}"]`);
     const self = this.focus ? elOf(this.focus) : null;
     if (this.focus && !self) this.focus = null;
     this.canvas.classList.toggle('is-focus', Boolean(this.focus));
@@ -1319,7 +1341,7 @@ export class HomeBoard {
     /* Una scheda appena accettata compare con un piccolo salto: e' nuova, e
        deve farsi trovare. */
     if (answer === 'yes') {
-      this.canvas.querySelector('.home-board-polaroid:last-of-type')?.classList.add('is-appearing');
+      this.canvas.querySelector('.home-board-card:last-of-type')?.classList.add('is-appearing');
     }
   }
 

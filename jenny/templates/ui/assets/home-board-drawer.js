@@ -25,6 +25,7 @@ import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { whenLabel } from './home-board.js';
 import { describeSchedule } from './shared/cron-view.js';
+import { renderBlock } from './home-board-blocks.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -350,16 +351,27 @@ export class BoardDrawer {
     } else if (section.kind === 'app') {
       const v = section.view || {};
       h3.append(v.name || section.app, el('span', 'home-drawer-owner', i18n.t('board.section.kind.app')));
-      /* Un'app col riassunto in una forma (chip, avanzamento, lista, tabella) o
-         con un lettore si disegna come una micro app: e' la stessa cosa. */
-      body.appendChild(v.view && (v.view !== 'value' || v.extras?.length || v.every)
-        ? this._microView(section, v, { app: true }) : this._appView(v));
+      if (section.slip?.blocks?.length) {
+        /* La striscia intera, coi blocchi della bacheca: stessi dati, stessi
+           controlli (qui sempre attivi), un solo modo di disegnarli. */
+        const slip = el('div', 'home-drawer-slip');
+        const ctx = { act: (req) => this._act(section, req) };
+        for (const b of section.slip.blocks) slip.appendChild(renderBlock(b, ctx));
+        body.appendChild(slip);
+      } else {
+        /* Un'app col riassunto in una forma (chip, avanzamento, lista, tabella) o
+           con un lettore si disegna come una micro app: e' la stessa cosa. */
+        body.appendChild(v.view && (v.view !== 'value' || v.extras?.length || v.every)
+          ? this._microView(section, v, { app: true }) : this._appView(v));
+      }
       if (v.field && (v.state === 'ok' || v.state === 'alarm' || v.state === 'stale')) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
           () => this._addCondition(section, v)));
       }
-      for (const verb of (v.verbs || []).slice(0, 2)) {
-        tools.appendChild(button('home-drawer-link', verb, () => this._verb(section, verb)));
+      if (!section.slip) {
+        for (const verb of (v.verbs || []).slice(0, 2)) {
+          tools.appendChild(button('home-drawer-link', verb, () => this._verb(section, verb)));
+        }
       }
       if (v.state === 'trashed') {
         /* L'app e' nel cestino, non sparita: si rimette da qui, e la sezione
@@ -369,7 +381,8 @@ export class BoardDrawer {
       } else if (v.state !== 'missing' && v.hasScreen !== false) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app)));
       }
-      tools.appendChild(remove);
+      /* L'app della scheda-app non si toglie dal suo cassetto: si toglie la scheda. */
+      if (!section.own) tools.appendChild(remove);
     } else if (section.kind === 'micro') {
       const v = section.view || {};
       if (v.state === 'missing') return null;
@@ -463,9 +476,11 @@ export class BoardDrawer {
     } else {
       return null;
     }
-    const up = button('home-drawer-link is-move', '↑', () => this._moveUp(section));
-    up.setAttribute('aria-label', i18n.t('board.section.moveUp'));
-    tools.appendChild(up);
+    if (!section.own) {
+      const up = button('home-drawer-link is-move', '↑', () => this._moveUp(section));
+      up.setAttribute('aria-label', i18n.t('board.section.moveUp'));
+      tools.appendChild(up);
+    }
     body.appendChild(tools);
     row.append(h3, body);
     return row;
@@ -646,6 +661,18 @@ export class BoardDrawer {
 
   async _micro(action, v, extra = {}) {
     await this._write(`micro.${action}`, { micro: v.micro, ...extra });
+  }
+
+  /** Un controllo della striscia nel cassetto: l'azione dell'app, poi si rilegge. */
+  async _act(section, { action, params } = {}) {
+    if (!action) return;
+    try {
+      await api.runAppAction(section.app, action, params || {});
+    } catch (err) {
+      console.warn('home.drawer: strip action failed', err);
+      showToast(i18n.t('board.slip.failed'), 'error');
+    }
+    await this.reload();
   }
 
   async _verb(section, verb) {

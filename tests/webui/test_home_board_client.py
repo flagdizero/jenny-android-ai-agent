@@ -1016,27 +1016,55 @@ def test_the_drawer_offers_rename_and_remove_at_the_bottom() -> None:
 
 # ── Le app sulla bacheca: la polaroid che e' un'app, il suo valore, il tocco ─
 
+_PF_SLIP = {
+    "size": "M", "name": "Portafoglio", "icon": "ti-chart-pie", "hasScreen": True,
+    "state": "stale", "at": "2026-10-01T12:00:00+00:00", "meta": None, "recordId": "t",
+    "blocks": [
+        {"kind": "value", "rows": 2, "value": 12430, "unit": "€", "label": "",
+         "delta": 14.9, "deltaUnit": "%", "trend": [11980, 12150, 12430]},
+        {"kind": "bars", "rows": 2, "unit": "€", "more": 1, "items": [
+            {"label": "VWCE", "value": 5827, "weight": 46.9, "target": 50},
+            {"label": "SWDA", "value": 4074, "weight": 32.8, "target": 30}]}],
+}
+_WB_SLIP = {
+    "size": "S", "name": "WaterBot", "icon": "ti-droplet", "hasScreen": False,
+    "state": "ok", "at": "2026-10-06T12:00:00+00:00", "meta": None, "recordId": "1",
+    "blocks": [{"kind": "value", "rows": 2, "value": 38, "unit": "%", "label": "Moisture",
+                "trend": [41, 40, 38]}],
+}
+_SPESA_SLIP = {
+    "size": "M", "name": "Spesa", "icon": "ti-shopping-cart", "hasScreen": True, "state": "ok",
+    "at": "2026-10-06T09:00:00+00:00", "meta": {"value": 3, "label": "da comprare"},
+    "recordId": "i1",
+    "blocks": [
+        {"kind": "checklist", "rows": 3, "more": 0, "toggle": "set_done", "doneField": "done",
+         "left": 3, "items": [{"id": "i1", "text": "Latte", "done": False},
+                              {"id": "i2", "text": "Uova", "done": False},
+                              {"id": "i3", "text": "Caffè", "done": True}]},
+        {"kind": "buttons", "rows": 1, "actions": [
+            {"action": "clear", "label": "Svuota", "params": {}}]}],
+}
+
 _COVER_BOARD = {
     **BOARD,
     "cards": [
         BOARD["cards"][0],
         {"id": "portafoglio", "title": "Portafoglio", "glyph": "", "pages": 0, "signal": None,
-         "pos": {"x": 30, "y": 40, "by": "user"}, "pinned": False,
+         "pos": {"x": 30, "y": 40, "by": "user"}, "pinned": False, "box": [40, 39],
          "app": {"slug": "etf", "params": {}, "hasScreen": True, "state": "live",
-                 "icon": "ti-chart-line"},
-         "cover": {"short": "12,4k", "unit": "€", "state": "stale",
-                   "at": "2026-10-01T12:00:00+00:00", "trend": [], "icon": "ti-chart-line"}},
+                 "icon": "ti-chart-line"}, "slip": _PF_SLIP},
         {"id": "waterbot", "title": "WaterBot", "glyph": "", "pages": 0, "signal": None,
-         "pos": {"x": 60, "y": 40, "by": "user"}, "pinned": False,
+         "pos": {"x": 60, "y": 40, "by": "user"}, "pinned": False, "box": [40, 29],
          "app": {"slug": "waterbot", "params": {"sensor": "acerello"}, "hasScreen": False,
-                 "state": "live", "icon": "ti-droplet"},
-         "cover": {"short": "38", "unit": "%", "state": "ok",
-                   "at": "2026-10-06T12:00:00+00:00", "trend": [41, 40, 38],
-                   "icon": "ti-droplet"}},
+                 "state": "live", "icon": "ti-droplet"}, "slip": _WB_SLIP},
         {"id": "orto-app", "title": "Orto", "glyph": "", "pages": 0, "signal": None,
          "pos": {"x": 60, "y": 70, "by": "user"}, "pinned": False,
          "app": {"slug": "orto", "params": {}, "hasScreen": True, "state": "live",
                  "icon": "ti-plant"}},
+        {"id": "spesa", "title": "Spesa", "glyph": "", "pages": 0, "signal": None,
+         "pos": {"x": 10, "y": 80, "by": "user"}, "pinned": False, "box": [40, 39],
+         "app": {"slug": "spesa", "params": {}, "hasScreen": True, "state": "live",
+                 "icon": "ti-shopping-cart"}, "slip": _SPESA_SLIP},
     ],
 }
 
@@ -1050,27 +1078,97 @@ def _run_covers(script: str) -> None:
 
 
 @requires_jsdom
-def test_an_app_card_has_its_value_in_place_of_the_photo() -> None:
+def test_an_app_with_data_is_a_strip_and_a_thing_keeps_its_photo() -> None:
     _run_covers("""
-      const card = (id) => document.querySelector(`.home-board-polaroid[data-id="${id}"]`);
-      // La scheda-soggetto tiene la sua foto: la foglia, nessun valore.
-      const acero = card('acero').querySelector('.home-board-photo');
-      assert.ok(!acero.classList.contains('has-cover'));
-      assert.ok(acero.querySelector('i.ti-leaf'));
-      assert.ok(!card('acero').classList.contains('is-app'));
-      // L'app: il suo valore e' l'icona della polaroid.
-      const water = card('waterbot').querySelector('.home-board-photo');
-      assert.ok(card('waterbot').classList.contains('is-app'));
-      assert.equal(water.querySelector('.home-board-cover-value').textContent, '38%');
-      assert.ok(water.querySelector('.home-board-cover-spark'), 'manca l\\'andamento');
-      assert.ok(water.querySelector('.home-board-cover-glyph.ti-droplet'));
-      assert.match(card('waterbot').getAttribute('aria-label'), /38%/);
-      // Fermo: grigio, e l'eta' al posto dell'ora.
-      const stale = card('portafoglio').querySelector('.home-board-photo');
-      assert.ok(stale.classList.contains('is-stale'));
-      assert.match(stale.querySelector('.home-board-cover-at').textContent, /ago|fa/);
-      // Ancora senza valore: l'icona dell'app.
+      const card = (id) => document.querySelector(`.home-board-card[data-id="${id}"]`);
+      // La scheda-soggetto tiene la sua foto: la foglia, nessuna striscia.
+      assert.ok(card('acero').classList.contains('home-board-polaroid'));
+      assert.ok(card('acero').querySelector('.home-board-photo i.ti-leaf'));
+      // Un'app con dati: una striscia della sua taglia, coi suoi blocchi.
+      const water = card('waterbot');
+      assert.ok(water.classList.contains('home-board-slip') && water.classList.contains('is-S'));
+      assert.equal(water.querySelector('.home-board-slip-name').textContent, 'WaterBot');
+      assert.match(water.querySelector('.is-value .home-board-block-big').textContent, /^38%$/);
+      assert.ok(water.querySelector('.is-value svg polyline'), "manca l'andamento");
+      // Il dato in alto: l'app non lo dichiara, quindi l'ora della lettura.
+      assert.match(water.querySelector('.home-board-slip-meta').textContent, /^at /);
+      assert.match(water.getAttribute('aria-label'), /^WaterBot, at /);
+      // Ferma: grigia, e l'eta' in alto; le barre col loro peso, e quante altre.
+      const pf = card('portafoglio');
+      assert.ok(pf.classList.contains('is-stale') && pf.classList.contains('is-M'));
+      assert.match(pf.querySelector('.home-board-slip-meta').textContent, /^stopped · .* ago$/);
+      assert.match(pf.querySelector('.home-board-block-delta').textContent, /^\\+14\\.9 %$/);
+      const rows = [...pf.querySelectorAll('.is-bars .home-board-block-row')];
+      assert.deepEqual(rows.map((r) => (r.children.length ? [...r.children].map((c) => c.textContent)
+        .filter(Boolean).join(' ') : r.textContent)), ['VWCE 5,827 €', 'and 2 more']);
+      // Un'app senza dati: una polaroid con la sua icona.
       assert.ok(card('orto-app').querySelector('.home-board-photo i.ti-plant'));
+      // Il dato in alto dichiarato dall'app.
+      assert.equal(card('spesa').querySelector('.home-board-slip-meta').textContent, '3 da comprare');
+    """)
+
+
+@requires_jsdom
+def test_the_drawer_of_an_app_card_opens_on_its_whole_strip() -> None:
+    card = json.loads(json.dumps(CARD))
+    card.update(id="spesa", title="Spesa")
+    card["userSections"] = [{"id": "@card", "kind": "app", "app": "spesa", "params": {},
+                             "own": True, "view": {"state": "ok", "name": "Spesa",
+                                                   "hasScreen": False},
+                             "slip": _SPESA_SLIP}]
+    head = (_SETUP.replace("__BOARD__", json.dumps(_COVER_BOARD))
+            .replace("__CARD__", json.dumps(card)))
+    run_home(head + _CARDS + """
+      const { calls } = await import('./boot.mjs');
+      routes['/api/apps/spesa/actions/set_done'] = { ok: true };
+      await app.openCard('spesa', 'Spesa');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      const slip = drawer.querySelector('.home-drawer-slip');
+      assert.ok(slip, 'manca la striscia nel cassetto');
+      assert.deepEqual([...slip.querySelectorAll('.is-checklist .home-board-block-cell')]
+        .map((c) => c.textContent), ['Latte', 'Uova', 'Caffè']);
+      // L'app della scheda non si toglie dal suo cassetto, ne' si sposta.
+      const own = slip.closest('.home-drawer-section');
+      assert.ok(![...own.querySelectorAll('button')].some((b) => b.textContent === 'Remove'));
+      assert.equal(own.querySelector('.is-move'), null);
+      // Nel cassetto i controlli sono sempre svegli.
+      slip.querySelector('.is-checklist input').click();
+      await tick(30);
+      assert.ok(calls.some((c) => c.startsWith('/api/apps/spesa/actions/set_done')));
+    """)
+
+
+@requires_jsdom
+def test_strip_controls_work_only_up_close() -> None:
+    _run_covers("""
+      const { calls } = await import('./boot.mjs');
+      routes['/api/apps/spesa/actions/set_done'] = { ok: true };
+      routes['/api/apps/spesa/actions/clear'] = { ok: true };
+      const opened = [];
+      app.appsSource().awaitJennyApps = async () => [{ slug: 'spesa' }];
+      app.appsActions().openApp = (slug) => opened.push(slug);
+      const spesa = () => document.querySelector('.home-board-card[data-id="spesa"]');
+      const box = () => spesa().querySelector('.is-checklist input');
+      const actions = () => calls.filter((c) => c.startsWith('/api/apps/spesa/actions/'));
+      // Da lontano: la spunta non agisce, e il tocco apre l'app.
+      $('home-board-wall').classList.remove('is-near');
+      box().click();
+      await tick(20);
+      assert.equal(actions().length, 0);
+      assert.equal(box().checked, false);
+      assert.deepEqual(opened, ['spesa']);
+      // Da vicino: spunta Latte (l'azione dichiarata, coi parametri giusti), e non apre.
+      $('home-board-wall').classList.add('is-near');
+      box().click();
+      await tick(20);
+      const call = decodeURIComponent(actions().at(-1));
+      assert.match(call, /set_done\\?params=/);
+      assert.deepEqual(JSON.parse(call.split('params=')[1]), { id: 'i1', done: true });
+      spesa().querySelector('.home-board-block-btn').click();
+      await tick(20);
+      assert.match(actions().at(-1), /\\/clear\\?params=%7B%7D$/);
+      assert.deepEqual(opened, ['spesa']);
     """)
 
 
@@ -1080,7 +1178,7 @@ def test_a_tap_on_an_app_card_opens_the_app() -> None:
       const opened = [];
       app.appsSource().awaitJennyApps = async () => [{ slug: 'etf' }, { slug: 'orto' }];
       app.appsActions().openApp = (slug) => opened.push(slug);
-      const card = (id) => document.querySelector(`.home-board-polaroid[data-id="${id}"]`);
+      const card = (id) => document.querySelector(`.home-board-card[data-id="${id}"]`);
       // Con lo schermo: si apre l'app, non il cassetto.
       card('portafoglio').click();
       await tick(20);

@@ -216,3 +216,18 @@ def test_the_board_block_names_the_app_of_a_card(notebook, waterbot, monkeypatch
     assert "WaterBot 38%" in drawer_text(notebook, card) or "moisture 38%" in drawer_text(
         notebook, card)
     assert "WaterBot 38%" in board_block(notebook)
+
+
+def test_the_drawer_of_an_app_card_starts_from_the_app(notebook, waterbot) -> None:
+    from jenny.board.sections import section_resolver
+    from jenny.board.view import build_card_view
+
+    mutate_board(notebook, lambda b: b["cards"].append({
+        "id": "wb", "title": "WaterBot", "pos": {"x": 1, "y": 1},
+        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}}))
+    view = build_card_view(notebook, "wb", sections_resolver=section_resolver(waterbot, notebook))
+    own = view["userSections"][0]
+    assert (own["id"], own["kind"], own["own"]) == ("@card", "app", True)
+    assert own["slip"]["blocks"][0]["value"] == 38
+    # Non e' una sezione dell'utente: la bacheca su disco non la conosce.
+    assert read_board(notebook)["cards"][0]["userSections"] == []

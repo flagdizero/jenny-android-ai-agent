@@ -221,9 +221,18 @@ def section_resolver(
             )
             return {"reminderData": rem}
         if kind == "app":
-            return {"view": app_section_view(
-                workspace, str(section.get("app")), section.get("params") or {}
-            )}
+            slug, params = str(section.get("app")), section.get("params") or {}
+            out: dict[str, Any] = {"view": app_section_view(workspace, slug, params)}
+            # La striscia intera: il cassetto disegna gli stessi blocchi della bacheca.
+            if out["view"].get("state") not in ("missing", "trashed", "broken", "no_section"):
+                from jenny.apps.manifest import find_app
+                from jenny.apps.slip_view import slip_view
+
+                app = find_app(workspace, slug)
+                slip = slip_view(workspace, app, params) if app is not None else {}
+                if slip:
+                    out["slip"] = slip
+            return out
         if kind == "photo":
             path = project_root / str(section.get("path"))
             return {"exists": path.is_file()}

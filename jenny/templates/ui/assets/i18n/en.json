@@ -1511,6 +1511,22 @@
       "minutes": "{count} min ago",
       "hours": "{count} h ago",
       "days": "{count} d ago"
+    },
+    "slip": {
+      "more": "and {count} more",
+      "empty": "no data yet",
+      "alarm": "in alarm",
+      "broken": "stopped reading",
+      "stoppedFor": "stopped · {age}",
+      "updatedAt": "at {time}",
+      "online": "online",
+      "offline": "offline",
+      "of": "of {max}",
+      "nothingAhead": "nothing coming",
+      "allDone": "all done",
+      "dec": "minus {label}",
+      "inc": "plus {label}",
+      "failed": "That didn't work: try from the app"
     }
   }
 }

@@ -56,7 +56,7 @@ def test_a_checklist_shows_what_is_left_first_and_how_many_more(tmp_path: Path) 
     assert [i["text"] for i in check["items"]] == ["Latte", "Uova", "Pane"]
     assert check["more"] == 2 and check["left"] == 4 and check["toggle"] == "set_done"
     assert check["items"][0]["id"] == "i1"
-    assert buttons["actions"] == [{"action": "clear", "label": "Clear the ticked"}]
+    assert buttons["actions"] == [{"action": "clear", "label": "Clear the ticked", "params": {}}]
 
 
 def test_a_reader_strip_follows_its_series(tmp_path: Path) -> None:
@@ -100,8 +100,9 @@ def test_portfolio_bars_and_numbers(tmp_path: Path) -> None:
     view = slip_view(tmp_path, _app(tmp_path, manifest, data), {}, now=NOW)
     value, bars = view["blocks"]
     assert (value["value"], value["delta"], value["deltaUnit"]) == (12430, 14.9, "%")
-    assert [r["label"] for r in bars["rows"]] == ["VWCE", "SWDA"] and bars["more"] == 1
-    assert bars["rows"][0]["weight"] == 46.9 and bars["rows"][0]["target"] == 50
+    assert bars["rows"] == 2
+    assert [r["label"] for r in bars["items"]] == ["VWCE", "SWDA"] and bars["more"] == 1
+    assert bars["items"][0]["weight"] == 46.9 and bars["items"][0]["target"] == 50
     assert view["size"] == "M"
 
 
@@ -122,8 +123,8 @@ def test_time_blocks_week_month_events(tmp_path: Path) -> None:
     assert view["size"] == "XL"
     assert [d["done"] for d in week["days"]] == [True, False, True, False, False, False, False]
     assert week["today"] == 3
-    assert [r["text"] for r in events["rows"]] == ["F24"] and events["more"] == 2
-    assert events["rows"][0]["days"] == 8
+    assert [r["text"] for r in events["items"]] == ["F24"] and events["more"] == 2
+    assert events["items"][0]["days"] == 8
     assert month["days"] == [1, 16, 30, 31] and month["alarm"] == [16] and month["today"] == 8
 
 
@@ -148,7 +149,8 @@ def test_controls_carry_what_they_need(tmp_path: Path) -> None:
     view = slip_view(tmp_path, _app(tmp_path, manifest, data), {}, now=NOW)
     switches, counter, note = view["blocks"]
     assert switches == {"kind": "switches", "rows": 1, "id": "st", "items": [
-        {"field": "luce", "label": "Luce balcone", "action": "set_luce", "on": True}]}
+        {"field": "luce", "label": "Luce balcone", "action": "set_luce", "on": True,
+         "withId": True}]}
     assert counter["items"] == [{"label": "Tu", "value": 20, "dec": "meno", "inc": "piu"}]
     assert note["text"] == "partita 3"
 

@@ -2277,51 +2277,268 @@ body.home {
   font-size: 9cqw;
 }
 .home-board-initial { font-family: var(--font-display); font-size: 8cqw; }
-/* La copertina: il valore di un'app al posto della foto. Tutto in cqw come la
-   polaroid, cosi' resta in proporzione sul quadrato e su un telefono alto. */
-.home-board-photo.has-cover { color: #fff; }
-.home-board-cover-value {
-  font-family: var(--font-display);
-  /* Grande quanto ci sta nella foto: «38 %» a tutta altezza, «12,4k €» piu'
-     piccolo ma intero (--len lo mette il JS: i caratteri, l'unita' a meta'). */
-  font-size: min(6.4cqw, calc(22cqw / var(--len, 1)));
+/* ── La striscia: la forma compatta di un'app (home-board-blocks.js) ──
+   Larga due polaroid, alta una di quattro taglie contate in righe (SLIP_ROWS in
+   jenny/board/model.py: S 2, M 4, L 6, XL 9). Tutto in cqw come la polaroid. Una
+   riga e' il 28 px del mockup sulla polaroid da 150: 3,55cqw. */
+.home-board-slip {
+  --slip-row: 3.55cqw;
+  --slip-pad-y: 1.52cqw;
+  --slip-pad-x: 1.77cqw;
+  --slip-head: 3.3cqw;
+  --slip-gap: 1cqw;
+  --slip-muted: color-mix(in srgb, var(--board-ink) 62%, var(--board-paper));
+  --slip-line: color-mix(in srgb, var(--board-ink) 16%, transparent);
+  --slip-up: color-mix(in srgb, var(--board-done) 55%, var(--board-ink));
+  width: 38cqw;
+  box-sizing: border-box;
+  padding: var(--slip-pad-y) var(--slip-pad-x);
+  background: var(--board-paper);
+  color: var(--board-ink);
+  box-shadow: 0 0.9cqw 1.8cqw rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--slip-gap);
+  overflow: hidden;
+  font-size: 1.65cqw;
+  line-height: 1.25;
+}
+.home-board-slip.is-S { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 2); }
+.home-board-slip.is-M { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 4); }
+.home-board-slip.is-L { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 6); }
+.home-board-slip.is-XL { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 9); }
+.home-board-slip-head {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  height: var(--slip-head);
+  flex: none;
+}
+.home-board-slip-icon {
+  width: 3cqw;
+  height: 3cqw;
+  border-radius: 0.8cqw;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1.9cqw;
+  flex: none;
+}
+.home-board-slip-name {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 2.28cqw;
   line-height: 1;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
-.home-board-cover-value small { font-size: 0.5em; margin-left: 0.3cqw; }
-.home-board-cover-glyph {
+.home-board-slip-meta {
+  margin-left: auto;
+  font-size: 1.52cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-slip-body { display: flex; flex-direction: column; gap: var(--slip-gap); min-height: 0; }
+.home-board-slip .home-board-sig-corner { top: 0; right: 0; }
+.home-board-slip .home-board-sig-dot { top: 1cqw; right: 1cqw; }
+
+/* Gli stati: ferma (grigia, con l'eta' in alto), allarme (angolo e numero rossi). */
+.home-board-slip.is-stale .home-board-slip-body { filter: grayscale(1); opacity: 0.72; }
+.home-board-slip.is-stale .home-board-slip-meta { color: var(--slip-muted); }
+.home-board-slip.is-alarm .home-board-slip-meta,
+.home-board-slip.is-alarm .is-value .home-board-block-big { color: var(--board-alert); }
+.home-board-slip.is-broken .home-board-slip-body { opacity: 0.6; }
+
+/* I blocchi: righe intere. */
+.home-board-block {
+  height: calc(var(--slip-row) * var(--slip-rows, 1));
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+}
+.home-board-block-label { font-size: 1.4cqw; color: var(--slip-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-block-strong { font-weight: 700; white-space: nowrap; }
+.home-board-block-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.home-board-block-big { font-family: var(--font-display); font-size: 4.8cqw; line-height: 1; white-space: nowrap; }
+.home-board-block-big small { font-size: 0.42em; margin-left: 0.5cqw; }
+.home-board-block-row {
+  height: var(--slip-row);
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  min-width: 0;
+}
+.home-board-block-row.is-more { color: var(--slip-muted); font-size: 1.4cqw; }
+.home-board-block .is-end { margin-left: auto; text-align: right; flex: none; }
+.home-board-block .is-key { min-width: 5.5cqw; }
+.home-board-block .is-alarm { color: var(--board-alert); }
+
+.home-board-block.is-value { display: flex; align-items: center; gap: 1.2cqw; }
+.home-board-block-delta { font-weight: 700; font-size: 1.65cqw; white-space: nowrap; }
+.home-board-block-delta.is-up { color: var(--slip-up); }
+.home-board-block-delta.is-down { color: var(--board-alert); }
+.home-board-block-spark { margin-left: auto; width: 9cqw; height: 3.8cqw; flex: none; overflow: visible; }
+.home-board-block-spark polyline,
+.home-board-block-chart polyline { fill: none; stroke: currentColor; stroke-width: 2; }
+.home-board-block-chart { width: 100%; height: 100%; overflow: visible; color: color-mix(in srgb, var(--board-new) 70%, var(--board-ink)); }
+.home-board-block-chart .is-band { fill: color-mix(in srgb, var(--board-alert) 18%, transparent); }
+
+.home-board-block.is-numbers { display: grid; grid-template-columns: repeat(var(--slip-cols, 3), minmax(0, 1fr)); gap: 1cqw; align-content: center; }
+.home-board-block-number { display: flex; flex-direction: column; gap: 0.2cqw; min-width: 0; }
+
+.home-board-block.is-status { display: flex; align-items: center; gap: 1cqw; }
+.home-board-block-pill {
+  font-size: 1.4cqw;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.35cqw 1.1cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-block-pill.is-ok { color: var(--slip-up); background: color-mix(in srgb, var(--board-done) 22%, transparent); }
+.home-board-block-pill.is-warn { color: color-mix(in srgb, var(--board-soon) 45%, var(--board-ink)); background: color-mix(in srgb, var(--board-soon) 28%, transparent); }
+.home-board-block-pill.is-alarm { color: var(--board-alert); background: color-mix(in srgb, var(--board-alert) 16%, transparent); }
+
+.home-board-block.is-progress { display: flex; flex-direction: column; justify-content: center; gap: 0.5cqw; }
+.home-board-block-line { display: flex; align-items: baseline; gap: 0.6cqw; font-size: 1.4cqw; }
+.home-board-block-bar {
+  position: relative;
+  flex: 1;
+  height: 0.9cqw;
+  border-radius: 0.45cqw;
+  background: var(--slip-line);
+}
+.home-board-block-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--board-ink); }
+.home-board-block-target {
   position: absolute;
-  top: 1.2cqw;
-  left: 1.2cqw;
-  font-size: 2.8cqw;
-  opacity: 0.85;
+  top: -0.4cqw;
+  width: 0.25cqw;
+  height: 1.7cqw;
+  background: var(--board-new);
 }
-.home-board-cover-spark {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: 4.2cqw;
-  width: 76%;
-  height: 3cqw;
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.75);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
+
+.home-board-block-row.is-check { cursor: pointer; }
+.home-board-block-row.is-check input,
+.home-board-block-row.is-switch input { margin: 0; width: 2.1cqw; height: 2.1cqw; accent-color: var(--board-ink); flex: none; }
+.home-board-block-row.is-done .home-board-block-cell { text-decoration: line-through; color: var(--slip-muted); }
+.home-board-block-row.is-switch input { margin-left: auto; }
+
+.home-board-block.is-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: var(--slip-row);
+  gap: 0 0.8cqw;
+  align-items: center;
 }
-.home-board-cover-at {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 1cqw;
-  text-align: center;
-  font-size: 1.9cqw;
-  opacity: 0.85;
+.home-board-block-btn,
+.home-board-block-round {
+  font: inherit;
+  font-size: 1.5cqw;
+  font-weight: 700;
+  color: var(--board-ink);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--board-ink) 30%, transparent);
+  border-radius: 999px;
+  height: calc(var(--slip-row) - 0.5cqw);
+  padding: 0 1cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
-/* Fermo: grigio, e l'eta' al posto dell'ora. Un dato vecchio non sembra mai fresco. */
-.home-board-photo.has-cover.is-stale { filter: grayscale(1) brightness(0.8); }
-.home-board-photo.has-cover.is-stale .home-board-cover-value { opacity: 0.7; }
-.home-board-photo.has-cover.is-trial .home-board-cover-value,
-.home-board-photo.has-cover.is-unapproved .home-board-cover-value { opacity: 0.6; }
+.home-board-block-btn.is-primary { background: var(--board-ink); color: var(--board-paper); border-color: var(--board-ink); }
+.home-board-block-round { width: calc(var(--slip-row) - 0.3cqw); padding: 0; flex: none; }
+
+.home-board-block.is-counter { display: flex; gap: 1.5cqw; align-items: center; }
+.home-board-block-counter { display: flex; align-items: center; gap: 1cqw; flex: 1; min-width: 0; }
+.home-board-block-counter-mid { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+.home-board-block-counter .home-board-block-big { font-size: 3.6cqw; }
+
+.home-board-block.is-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: center; }
+.home-board-block-day { display: flex; flex-direction: column; align-items: center; gap: 0.3cqw; }
+.home-board-block-dot {
+  width: 3.4cqw;
+  height: 3.4cqw;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.5cqw;
+  font-weight: 700;
+  box-sizing: border-box;
+  border: 0.25cqw solid transparent;
+}
+.home-board-block-day.is-done .home-board-block-dot { background: var(--board-new); color: #fff; }
+.home-board-block-day.is-today .home-board-block-dot { border-color: var(--board-ink); }
+
+.home-board-block.is-month { display: flex; flex-direction: column; gap: 0.3cqw; }
+.home-board-block-label.is-title { text-transform: capitalize; }
+.home-board-block-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.25cqw 0.4cqw; }
+.home-board-block-label.is-head { text-align: center; }
+.home-board-block-mday {
+  height: 2.55cqw;
+  display: grid;
+  place-items: center;
+  font-size: 1.35cqw;
+  border-radius: 0.6cqw;
+}
+.home-board-block-mday.is-marked { background: color-mix(in srgb, var(--board-soon) 55%, transparent); font-weight: 700; }
+.home-board-block-mday.is-alarm { background: var(--board-alert); color: #fff; font-weight: 700; }
+.home-board-block-mday.is-today { box-shadow: inset 0 0 0 0.25cqw var(--board-ink); }
+
+.home-board-block-note {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--slip-lines, 2);
+  overflow: hidden;
+  line-height: calc(var(--slip-row) * 0.75);
+}
+
+/* Nel cassetto la striscia e' a grandezza di lettura: le stesse righe, in px. */
+.home-drawer-slip {
+  --slip-row: 28px;
+  --slip-gap: 8px;
+  --slip-muted: color-mix(in srgb, var(--board-ink) 62%, var(--board-paper));
+  --slip-line: color-mix(in srgb, var(--board-ink) 16%, transparent);
+  --slip-up: color-mix(in srgb, var(--board-done) 55%, var(--board-ink));
+  display: flex;
+  flex-direction: column;
+  gap: var(--slip-gap);
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.home-drawer-slip .home-board-block-label { font-size: 11px; }
+.home-drawer-slip .home-board-block-big { font-size: 38px; }
+.home-drawer-slip .home-board-block-delta { font-size: 13px; }
+.home-drawer-slip .home-board-block-spark { width: 72px; height: 30px; }
+.home-drawer-slip .home-board-block-pill { font-size: 11px; padding: 3px 9px; }
+.home-drawer-slip .home-board-block-line { font-size: 11px; gap: 5px; }
+.home-drawer-slip .home-board-block-bar { height: 7px; border-radius: 4px; }
+.home-drawer-slip .home-board-block-target { top: -3px; width: 2px; height: 13px; }
+.home-drawer-slip .home-board-block .is-key { min-width: 44px; }
+.home-drawer-slip .home-board-block-row.is-check input,
+.home-drawer-slip .home-board-block-row.is-switch input { width: 18px; height: 18px; }
+.home-drawer-slip .home-board-block-btn,
+.home-drawer-slip .home-board-block-round { font-size: 12px; height: 26px; padding: 0 10px; }
+.home-drawer-slip .home-board-block-round { width: 30px; padding: 0; }
+.home-drawer-slip .home-board-block-counter .home-board-block-big { font-size: 28px; }
+.home-drawer-slip .home-board-block-dot { width: 26px; height: 26px; font-size: 12px; border-width: 2px; }
+.home-drawer-slip .home-board-block-mday { height: 20px; font-size: 11px; border-radius: 5px; }
+.home-drawer-slip .home-board-block-day.is-today .home-board-block-dot { border-color: var(--board-ink); }
+
+/* Da lontano i controlli dormono: il tocco va alla striscia, che apre l'app. */
+.home-board-wall:not(.is-near) .home-board-control { pointer-events: none; }
 
 .home-board-label {
   padding: 0.9cqw 0.2cqw 1.3cqw;

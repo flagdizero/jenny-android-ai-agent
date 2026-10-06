@@ -288,7 +288,12 @@ def build_card_view(
             })
     nxt = model.next_reminder(reminders, card_id)
     user_sections = []
-    for section in card.get("userSections") or []:
+    # Il cassetto di una scheda che **e'** un'app comincia dall'app: la sua
+    # striscia intera (la scheda senza schermo si apre qui, non altrove).
+    own = ([{"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
+             "params": card["app"].get("params") or {}, "own": True}]
+           if isinstance(card.get("app"), dict) else [])
+    for section in [*own, *(card.get("userSections") or [])]:
         resolved = dict(section)
         if sections_resolver is not None:
             resolved.update(sections_resolver(section, {

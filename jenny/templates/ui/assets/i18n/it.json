@@ -1511,6 +1511,22 @@
       "minutes": "{count} min fa",
       "hours": "{count} h fa",
       "days": "{count} g fa"
+    },
+    "slip": {
+      "more": "e altre {count}",
+      "empty": "ancora nessun dato",
+      "alarm": "in allarme",
+      "broken": "non legge più",
+      "stoppedFor": "ferma · {age}",
+      "updatedAt": "alle {time}",
+      "online": "online",
+      "offline": "offline",
+      "of": "di {max}",
+      "nothingAhead": "niente in arrivo",
+      "allDone": "tutto fatto",
+      "dec": "meno {label}",
+      "inc": "più {label}",
+      "failed": "Non è andata: riprova dall'app"
     }
   }
 }

@@ -104,6 +104,8 @@ def _harness_dir(tmp_path: Path) -> Path:
     assets = tmp_path / "assets"
     (assets / "shared").mkdir(parents=True)
     shutil.copy(ASSETS / "home-board.js", assets / "home-board.js")
+    # Le strisce: un modulo vero, che non tocca la ricerca (06/10/2026).
+    shutil.copy(ASSETS / "home-board-blocks.js", assets / "home-board-blocks.js")
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     for name, text in _STUBS.items():
         (assets / "shared" / name).write_text(text, encoding="utf-8")

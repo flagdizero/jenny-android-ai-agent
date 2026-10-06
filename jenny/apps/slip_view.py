@@ -159,14 +159,14 @@ def _b_bars(b, data):
     rows = [{"label": r.get(b["label"]), "value": r.get(b["value"]),
              "weight": _num(r.get(b["weight"])),
              "target": _num(r.get(b["target"])) if b.get("target") else None} for r in shown]
-    return {"rows": rows, "more": more, "unit": b["unit"]}
+    return {"items": rows, "more": more, "unit": b["unit"]}
 
 
 def _b_table(b, data):
     records = _newest_first(data.records(b["collection"], b["where"]))
     shown, more = _rows(records, b["max"])
     return {"columns": [{"field": k, **v} for k, v in b["columns"].items()],
-            "rows": [{k: r.get(k) for k in b["columns"]} for r in shown], "more": more}
+            "items": [{k: r.get(k) for k in b["columns"]} for r in shown], "more": more}
 
 
 def _b_events(b, data, today):
@@ -177,8 +177,8 @@ def _b_events(b, data, today):
             upcoming.append((day, r))
     upcoming.sort(key=lambda x: x[0])
     shown, more = _rows(upcoming, b["max"])
-    return {"rows": [{"date": d.isoformat(), "text": r.get(b["text"]),
-                      "days": (d - today).days} for d, r in shown], "more": more}
+    return {"items": [{"date": d.isoformat(), "text": r.get(b["text"]),
+                       "days": (d - today).days} for d, r in shown], "more": more}
 
 
 def _b_checklist(b, data):
@@ -192,22 +192,29 @@ def _b_checklist(b, data):
             "doneField": b["done"], "left": len(todo)}
 
 
-def _b_buttons(b, app):
+def _b_buttons(b, app, params):
     acts = {a.name: a for a in app.manifest.actions} if app.manifest else {}
     out = []
     for it in b["actions"]:
         act = acts.get(it["action"])
         label = it["label"] or (act.description if act else it["action"])
-        out.append({"action": it["action"], "label": label[:28]})
+        # Solo i parametri della posa che l'azione dichiara: gli altri farebbero
+        # rifiutare la chiamata («unknown params»).
+        sent = {k: v for k, v in params.items() if act is not None and k in (act.params or {})}
+        out.append({"action": it["action"], "label": label[:28], "params": sent})
     return {"actions": out}
 
 
-def _b_switches(b, data):
+def _b_switches(b, data, app):
     records = _newest_first(data.records(b["collection"], b["where"]))
     latest = records[0] if records else {}
+    acts = {a.name: a for a in app.manifest.actions} if app.manifest else {}
     return {"id": latest.get("id"), "items": [
         {"field": it["field"], "label": it["label"], "action": it["action"],
-         "on": latest.get(it["field"]) is True} for it in b["items"]]}
+         "on": latest.get(it["field"]) is True,
+         # L'id del record va solo a un'azione che lo vuole (set/update).
+         "withId": getattr(acts.get(it["action"]), "op", None) in ("set", "update")}
+        for it in b["items"]]}
 
 
 def _b_counter(b, latest):
@@ -293,9 +300,9 @@ def slip_view(workspace, app: LoadedApp, params: Mapping[str, Any], *,
             elif kind == "checklist":
                 payload = _b_checklist(b, data)
             elif kind == "buttons":
-                payload = _b_buttons(b, app)
+                payload = _b_buttons(b, app, params)
             elif kind == "switches":
-                payload = _b_switches(b, data)
+                payload = _b_switches(b, data, app)
             elif kind == "counter":
                 payload = _b_counter(b, latest)
             elif kind == "week":
