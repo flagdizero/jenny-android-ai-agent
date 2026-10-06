@@ -2295,7 +2295,8 @@ body.home {
   display: flex;
   flex-direction: column;
   gap: var(--slip-gap);
-  overflow: hidden;
+  /* Niente `overflow: hidden` qui: la puntina sporge sopra il foglio, e verrebbe
+     tagliata a meta'. Il taglio sta sul corpo (i blocchi non escono mai). */
   font-size: 1.65cqw;
   line-height: 1.25;
 }
@@ -2340,7 +2341,7 @@ body.home {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.home-board-slip-body { display: flex; flex-direction: column; gap: var(--slip-gap); min-height: 0; }
+.home-board-slip-body { display: flex; flex-direction: column; gap: var(--slip-gap); min-height: 0; overflow: hidden; }
 .home-board-slip .home-board-sig-corner { top: 0; right: 0; }
 .home-board-slip .home-board-sig-dot { top: 1cqw; right: 1cqw; }
 
