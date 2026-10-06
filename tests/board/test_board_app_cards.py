@@ -49,7 +49,7 @@ def waterbot(workspace_root: Path) -> Path:
     return workspace_root
 
 
-async def test_a_card_that_is_an_app_has_its_value_on_the_cover(ctx, notebook, waterbot) -> None:
+async def test_a_card_that_is_an_app_is_a_strip_of_its_size(ctx, notebook, waterbot) -> None:
     _seed(notebook)
     out = await dispatch_command(ctx, "board.card.add", {
         "wiki": "piante", "near": {"x": 150, "y": 50},
@@ -57,24 +57,49 @@ async def test_a_card_that_is_an_app_has_its_value_on_the_cover(ctx, notebook, w
     card_id = out["card"]["id"]
     card = model.card_by_id(read_board(notebook), card_id)
     assert card["app"] == {"slug": "waterbot", "params": {"sensor": "acerello"}}
-    assert card["title"] == "WaterBot"
+    # Il riassunto di prima (un valore) e' una striscia S, e la taglia sta sulla scheda.
+    assert card["title"] == "WaterBot" and card["size"] == "S"
     view = build_board_view(notebook, workspace=waterbot,
                             alert_probe=alert_probe(waterbot, notebook))
     shown = next(c for c in view["cards"] if c["id"] == card_id)
-    assert shown["cover"]["short"] == "38" and shown["cover"]["unit"] == "%"
-    assert shown["cover"]["state"] == "ok"
+    slip = shown["slip"]
+    assert slip["size"] == "S" and slip["state"] == "ok" and shown["box"] == list(
+        model.SLIP_BOX["S"])
+    assert slip["blocks"][0]["kind"] == "value" and slip["blocks"][0]["value"] == 38
+    assert slip["blocks"][0]["unit"] == "%"
     # Il tocco: senza schermo apre il cassetto, viva.
     assert shown["app"] == {"slug": "waterbot", "params": {"sensor": "acerello"},
                             "hasScreen": False, "state": "live", "icon": shown["app"]["icon"]}
     # La scheda-soggetto tiene la sua foto.
-    assert "cover" not in next(c for c in view["cards"] if c["id"] == "acero")
+    acero = next(c for c in view["cards"] if c["id"] == "acero")
+    assert "slip" not in acero and acero["box"] == list(model.CARD_BOX)
     # Una seconda scheda, sul sensore in allarme: l'angolo rosso.
     out = await dispatch_command(ctx, "board.card.add", {
         "wiki": "piante", "app": {"slug": "waterbot", "params": {"sensor": "monstera"}}})
     view = build_board_view(notebook, workspace=waterbot,
                             alert_probe=alert_probe(waterbot, notebook))
     red = next(c for c in view["cards"] if c["id"] == out["card"]["id"])
-    assert red["signal"] == "alert" and red["cover"]["state"] == "alarm"
+    assert red["signal"] == "alert" and red["slip"]["state"] == "alarm"
+
+
+def test_a_new_version_resizes_the_cards_that_show_it(notebook, waterbot) -> None:
+    from jenny.board.place import refresh_app_cards
+
+    mutate_board(notebook, lambda b: b["cards"].append({
+        "id": "wb", "title": "WaterBot", "pos": {"x": 1, "y": 1},
+        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}}))
+    assert refresh_app_cards(waterbot) == 1
+    assert read_board(notebook)["cards"][0]["size"] == "S"
+    manifest = waterbot / "apps" / "waterbot" / "app.json"
+    grown = json.loads(manifest.read_text())
+    grown["summary"] = {**WATERBOT["summary"], "blocks": [
+        {"kind": "value", "field": "moisture", "unit": "%"},
+        {"kind": "chart", "field": "moisture", "days": 7},
+        {"kind": "table", "columns": {"moisture": {"label": "%"}}, "max": 2}]}  # 2+2+2: L
+    manifest.write_text(json.dumps(grown))
+    assert refresh_app_cards(waterbot, "waterbot") == 1
+    assert read_board(notebook)["cards"][0]["size"] == "L"
+    assert refresh_app_cards(waterbot) == 0
 
 
 async def test_an_app_next_to_a_card_is_its_own_card_tied_by_a_thread(

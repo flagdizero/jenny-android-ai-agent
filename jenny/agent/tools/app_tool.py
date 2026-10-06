@@ -288,6 +288,15 @@ class AppTool(Tool):
                         "the reader has a `key`); ctx.now, ctx.prev, ctx.http (only the hosts in "
                         "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit.")
         drafts.promote_draft(workspace, slug)
+        # Le schede che la mostrano prendono la taglia della striscia nuova.
+        from jenny.board.place import refresh_app_cards
+
+        try:
+            refresh_app_cards(workspace, slug)
+        except Exception:  # noqa: BLE001 — una taglia da riallineare non ferma l'app
+            from loguru import logger
+
+            logger.opt(exception=True).warning("apps: cards of {} not resized", slug)
         reading = ""
         live = find_app(workspace, slug)
         if m.reader is not None and live is not None:

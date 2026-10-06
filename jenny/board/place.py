@@ -40,6 +40,18 @@ def tie(board: dict[str, Any], a: str, b: str, by: str = model.USER) -> bool:
     return True
 
 
+def app_size(workspace: Path | None, slug: str) -> str | None:
+    """La taglia della striscia di *slug* (S/M/L/XL), o ``None`` se l'app non ne ha:
+    allora la sua scheda e' una polaroid con l'icona."""
+    from jenny.apps.manifest import find_app
+
+    if workspace is None:
+        return None
+    app = find_app(workspace, slug)
+    section = app.manifest.section if app is not None and app.manifest is not None else None
+    return section.size if section is not None and section.blocks and section.size else None
+
+
 def app_title(workspace: Path | None, slug: str) -> str:
     from jenny.apps.manifest import find_app
 
@@ -69,6 +81,8 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
         ws = None
     params = dict(params or {})
     name = title or app_title(ws, slug)
+    size = app_size(ws, slug)
+    box = model.card_box({"size": size})
     reminders = read_reminders(root)
     done: dict[str, Any] = {}
 
@@ -85,16 +99,16 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
         taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
         card_id = model.unique_id(model.slugify(name), taken)
         if near is None and other is not None:
-            near = (other["pos"]["x"] + model.CARD_BOX[0] * 1.5,
-                    other["pos"]["y"] + model.CARD_BOX[1] / 2)
-        target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2) \
-            if near is not None else None
-        x, y = model.free_slot(board, reminders, near=target)
+            ow, oh = model.card_box(other)
+            near = (other["pos"]["x"] + ow + box[0] / 2, other["pos"]["y"] + oh / 2)
+        target = (near[0] - box[0] / 2, near[1] - box[1] / 2) if near is not None else None
+        x, y = model.free_slot(board, reminders, box=box, near=target)
         card = model.normalize_board({"cards": [{
             "id": card_id, "title": name, "titleBy": model.USER, "pages": [],
             "pos": {"x": x, "y": y, "by": model.USER}, "glyph": "",
             "userSections": [], "created": model.now_iso(),
             "app": {"slug": slug, "params": params},
+            **({"size": size} if size else {}),
         }]})["cards"][0]
         if by:
             card["appBy"] = by
@@ -107,3 +121,49 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
 
     mutate_board(root, apply)
     return str(done["where"])
+
+
+def refresh_app_cards(workspace: Path, slug: str | None = None) -> int:
+    """Riallinea la taglia delle schede-app al manifest della loro app. Torna quante.
+
+    La taglia sta sulla scheda (il posto libero la usa senza leggere le app), ma
+    viene dal manifest: quando Jenny cambia un'app, o all'avvio dopo un
+    aggiornamento, le schede che la mostrano prendono la taglia nuova. Senza
+    *slug*, tutte le app di tutti i quaderni.
+    """
+    from jenny.board.placements import _wikis_dirs
+    from jenny.utils.wiki_paths import discover_wiki_roots
+
+    sizes: dict[str, str | None] = {}
+    changed = 0
+    for wikis in _wikis_dirs(workspace):
+        for _name, root in sorted(discover_wiki_roots(wikis).items()):
+            from jenny.board.store import read_board
+
+            board = read_board(root)
+            if board is None:
+                continue
+            todo = []
+            for card in board["cards"]:
+                app = card.get("app")
+                if not isinstance(app, dict) or (slug is not None and app.get("slug") != slug):
+                    continue
+                want = sizes.setdefault(app["slug"], app_size(workspace, app["slug"]))
+                if card.get("size") != want:
+                    todo.append((card["id"], want))
+            if not todo:
+                continue
+
+            def apply(b: dict[str, Any], todo=todo) -> None:
+                for card_id, want in todo:
+                    card = model.card_by_id(b, card_id)
+                    if card is None:
+                        continue
+                    if want:
+                        card["size"] = want
+                    else:
+                        card.pop("size", None)
+
+            mutate_board(root, apply)
+            changed += len(todo)
+    return changed

@@ -443,7 +443,12 @@ export class HomeBoard {
       x0 = Math.min(x0, pos.x); y0 = Math.min(y0, pos.y);
       x1 = Math.max(x1, pos.x + w); y1 = Math.max(y1, pos.y + h);
     };
-    for (const c of this.data.cards) take(c.pos, ITEM_BOX.card[0], ITEM_BOX.card[1]);
+    /* L'ingombro lo dice il gateway (`box`: una polaroid o una striscia della
+       sua taglia); `ITEM_BOX` resta per una risposta di prima. */
+    for (const c of this.data.cards) {
+      const [w, h] = Array.isArray(c.box) ? c.box : ITEM_BOX.card;
+      take(c.pos, w, h);
+    }
     for (const n of this.data.notes) take(n.pos, ITEM_BOX.note[0], ITEM_BOX.note[1]);
     this._zoom.translateExtent([
       [((x0 - AIR) / 100) * W, ((y0 - AIR) / 100) * H],

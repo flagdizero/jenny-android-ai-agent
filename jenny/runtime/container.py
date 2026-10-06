@@ -371,6 +371,13 @@ class GatewayContainer:
             kept = promote_valid_drafts(self.config.workspace_path)
             if kept:
                 logger.info("Apps: {} left on trial are now apps: {}", len(kept), kept)
+            # Le schede-app prendono la taglia della loro striscia (la prima volta
+            # dopo l'aggiornamento: prima erano tutte polaroid).
+            from jenny.board.place import refresh_app_cards
+
+            resized = refresh_app_cards(self.config.workspace_path)
+            if resized:
+                logger.info("Apps: {} app cards took the size of their strip", resized)
         except Exception:
             logger.opt(exception=True).error(
                 "Preparazione delle app fallita; il gateway parte comunque")

@@ -122,6 +122,12 @@ class AppSection:
     type: str = ""
     # Le etichette e le unita' dei campi del lettore, per i chip.
     fields: dict = field(default_factory=dict)
+    # ── dal 06/10/2026: la striscia sulla bacheca (``jenny/apps/slip_spec.py``) ──
+    # I blocchi convalidati, il dato in alto, la taglia (S/M/L/XL). Le forme di
+    # prima arrivano qui tradotte in blocchi: la bacheca ne conosce una sola.
+    blocks: list = field(default_factory=list)
+    meta: dict | None = None
+    size: str = ""
 
 
 @dataclass
@@ -288,11 +294,17 @@ def _parse_manifest(data: object) -> AppManifest:
         if view_kind == "external" and base_url is None:
             raise ValueError("app.json: view.kind 'external' requires a 'server.baseUrl'")
 
-    reader, reader_key = _parse_reader(data.get("reader"), data.get("summary"), data["name"])
-    if data.get("summary") is not None:
-        section = _parse_summary(data.get("summary"), [a.name for a in actions], reader)
+    summary = _summary_with_blocks(data.get("summary"))
+    reader, reader_key = _parse_reader(data.get("reader"), summary, data["name"])
+    if summary is not None:
+        section = _parse_summary(summary, actions, reader)
     else:
         section = _parse_section(data.get("section"), [a.name for a in actions])
+    if section is not None and not section.blocks:
+        from jenny.apps.slip_spec import legacy_blocks
+
+        slip = legacy_blocks(section)
+        section.blocks, section.meta, section.size = slip.blocks, slip.meta, slip.size
 
     icon = data.get("icon")
     return AppManifest(
@@ -454,7 +466,37 @@ def _clean_columns(raw: object, where_: str) -> dict:
 SUMMARY_VIEWS = ("value", "chips", "progress", "list", "table")
 
 
-def _parse_summary(raw: object, action_names: list[str], reader: dict | None) -> AppSection:
+def _summary_with_blocks(raw: object) -> object:
+    """Un riassunto a blocchi non deve dichiarare la forma di prima: il campo
+    principale (per la chat, l'orologio, le attese) e' quello del primo blocco
+    che mostra un valore; senza, il riassunto conta i record."""
+    if not isinstance(raw, dict) or "blocks" not in raw:
+        return raw
+    from jenny.apps.slip_spec import first_value_field
+
+    out = dict(raw)
+    fld = out.get("field") or out.get("primary") or first_value_field(raw.get("blocks"))
+    if fld:
+        out.setdefault("primary", fld)
+        out.setdefault("field", fld)
+    else:
+        out.setdefault("aggregate", "count")
+    out.pop("view", None)
+    return out
+
+
+def _parse_summary(raw: object, actions: list[AppAction], reader: dict | None) -> AppSection:
+    section = _parse_summary_shape(raw, [a.name for a in actions], reader)
+    if isinstance(raw, dict) and "blocks" in raw:
+        from jenny.apps.slip_spec import parse_slip
+
+        slip = parse_slip(raw, actions=actions, reader=reader,
+                          collection=section.collection, params=section.params)
+        section.blocks, section.meta, section.size = slip.blocks, slip.meta, slip.size
+    return section
+
+
+def _parse_summary_shape(raw: object, action_names: list[str], reader: dict | None) -> AppSection:
     """Il blocco ``summary``: come l'app si riassume in un cassetto o in copertina.
 
     Con un lettore, il riassunto e' quello che il lettore legge: la forma, il

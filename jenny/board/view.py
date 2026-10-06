@@ -90,38 +90,46 @@ def _note_pos(
     passata, quelle dell'utente) compaiono vicino alla loro scheda senza coprire
     niente, e restano dove sono finché qualcuno non le sposta.
     """
-    near = (float(card["pos"]["x"]) + 12, float(card["pos"]["y"]) + 30)
+    w, h = model.card_box(card)
+    near = (float(card["pos"]["x"]) + w * 0.6, float(card["pos"]["y"]) + h * 0.75)
     x, y = model.free_slot(board, reminders, box=model.NOTE_BOX, near=near, extra=placed)
     placed.append((x, y, x + model.NOTE_BOX[0], y + model.NOTE_BOX[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
 
-def _cover(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
-    """L'app di una scheda-app e la sua copertina: il valore al posto della foto.
+def _app_card(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
+    """L'app di una scheda-app e la sua striscia.
 
-    Solo la scheda che **e'** un'app ha una copertina: una scheda-soggetto
-    («Acerello») tiene la sua foto, e un'app che c'entra con lei sta sulla sua
-    polaroid, legata da un filo. ``hasScreen`` dice al tocco se aprire lo
-    schermo dell'app o il cassetto.
+    Una scheda che **e'** un'app con dati si mostra come una **striscia**
+    (``jenny/apps/slip_view.py``): intestazione e blocchi, della sua taglia; una
+    senza dati resta una polaroid con l'icona dell'app. ``hasScreen`` dice al
+    tocco se aprire lo schermo dell'app o il cassetto; ``box`` e' l'ingombro della
+    taglia vera, cosi' zoom e posto libero misurano quel che si vede.
     """
-    from jenny.board.sections import cover_of, section_view
+    from jenny.apps.manifest import find_app
+    from jenny.apps.slip_view import slip_view
+    from jenny.board.sections import section_view
 
     if not isinstance(card.get("app"), dict):
         return {}
-    section = {"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
-               "params": card["app"].get("params") or {}}
+    slug = card["app"]["slug"]
+    params = card["app"].get("params") or {}
+    section = {"id": model.APP_CARD, "kind": "app", "app": slug, "params": params}
     view = section_view(workspace, None, section) or {}
     # ``live`` si apre; ``missing``, ``trashed`` e ``broken`` aprono il
     # cassetto, che dice cosa e' successo.
     state = view["state"] if view.get("state") in ("missing", "trashed", "broken") else "live"
     out: dict[str, Any] = {"app": {
-        "slug": card["app"]["slug"], "params": section["params"],
+        "slug": slug, "params": params,
         "hasScreen": bool(view.get("hasScreen")), "state": state,
         "icon": view.get("icon") or "",
     }}
-    cover = cover_of(view)
-    if cover is not None:
-        out["cover"] = cover
+    if state == "live":
+        app = find_app(workspace, slug)
+        slip = slip_view(workspace, app, params) if app is not None else {}
+        if slip:
+            out["slip"] = slip
+            out["box"] = list(model.SLIP_BOX[slip["size"]])
     return out
 
 
@@ -134,8 +142,8 @@ def build_board_view(
 ) -> dict[str, Any]:
     """La risposta di ``GET /api/board``.
 
-    Con *workspace*, una scheda che e' un'app porta anche la sua **copertina**
-    (il valore dell'app, al posto della foto).
+    Con *workspace*, una scheda che e' un'app porta anche la sua **striscia**
+    (``slip``: la forma compatta dell'app, coi suoi blocchi) e l'ingombro vero.
     """
     board = read_board(project_root)
     reminders = read_reminders(project_root)
@@ -180,11 +188,12 @@ def build_board_view(
             "title": card["title"],
             "glyph": card.get("glyph") or "",
             "pos": card["pos"],
+            "box": list(model.card_box(card)),
             "pinned": card.get("pinned", False),
             "pages": len(card.get("pages") or []),
             "signal": card_signal(card, summary, reminders, today=today, alert=alert),
             "auto": auto,
-            **(_cover(workspace, card) if workspace is not None else {}),
+            **(_app_card(workspace, card) if workspace is not None else {}),
         })
     notes: list[dict[str, Any]] = []
     placed: list[tuple[float, float, float, float]] = []

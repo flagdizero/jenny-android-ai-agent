@@ -353,6 +353,9 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
     for stamp in ("lastOpened", "created"):
         if isinstance(raw.get(stamp), str):
             known[stamp] = raw[stamp]
+    # La taglia della striscia, se la scheda e' un'app che ne ha una.
+    if raw.get("size") in SLIP_ROWS:
+        known["size"] = raw["size"]
     # La scheda-app: la polaroid *e'* un'app generale, con i parametri della posa.
     app = raw.get("app")
     if isinstance(app, Mapping) and isinstance(app.get("slug"), str) and _APP_SLUG_RE.match(
@@ -563,6 +566,21 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
 # in proporzione: su uno schermo piu' alto avanza spazio, non ne manca.
 CARD_BOX = (20.0, 40.0)
 NOTE_BOX = (15.0, 23.0)
+# La striscia: la forma compatta di un'app (``jenny/apps/slip_spec.py``). Larga
+# due polaroid, alta una di quattro taglie fisse, contate in righe di contenuto
+# (una riga = 3,55% della larghezza: il 28 px del mockup sulla polaroid da 150).
+# Le altezze sono ricavate come quella di ``CARD_BOX``: la striscia del CSS sul
+# Titan 2, piu' il margine che la polaroid ha (+6). Una taglia sola per app, dal
+# suo manifest: la bacheca non salta quando cambiano i dati.
+SLIP_ROWS = {"S": 2, "M": 4, "L": 6, "XL": 9}
+SLIP_BOX = {"S": (40.0, 29.0), "M": (40.0, 39.0), "L": (40.0, 50.0), "XL": (40.0, 66.0)}
+
+
+def card_box(card: Mapping[str, Any]) -> tuple[float, float]:
+    """L'ingombro di una scheda: la sua taglia di striscia, o la polaroid."""
+    return SLIP_BOX.get(str(card.get("size") or ""), CARD_BOX)
+
+
 # Quanto lontano da *near* si cerca un posto (in percento dello schermo): un
 # po' piu' di uno schermo per lato, cosi' su un muro affollato si trova sempre.
 NEAR_SPAN_X = 120.0
@@ -578,7 +596,8 @@ def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> lis
     out = []
     for card in board.get("cards") or []:
         x, y = float(card["pos"]["x"]), float(card["pos"]["y"])
-        out.append((x, y, x + CARD_BOX[0], y + CARD_BOX[1]))
+        w, h = card_box(card)
+        out.append((x, y, x + w, y + h))
     cards = {c["id"] for c in board.get("cards") or []}
     for rem in open_reminders(reminders or {}):
         pos = rem.get("pos")
@@ -678,6 +697,7 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "titleBy": card.get("titleBy"),
             "title": card.get("title") if card.get("titleBy") == USER else None,
             "app": card.get("app"),
+            "size": card.get("size"),
         }
     return {
         "cards": cards,
@@ -710,7 +730,7 @@ def ownership_violations(
         if other is None:
             continue
         for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
-                           "app"):
+                           "app", "size"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}

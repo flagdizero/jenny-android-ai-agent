@@ -23,7 +23,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.board import model, removed
-from jenny.board.place import app_title, tie
+from jenny.board.place import app_size, app_title, tie
 from jenny.board.store import (
     delete_card_summary,
     mutate_board,
@@ -371,16 +371,17 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
     taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
     stamp = model.now_iso()
 
-    def new_card(title: str, glyph: str, pages: list[str], wanted: str = "") -> dict[str, Any]:
+    def new_card(title: str, glyph: str, pages: list[str], wanted: str = "",
+                 size: str | None = None) -> dict[str, Any]:
         # L'id proposto, se c'e' ed e' libero: la passata che propone la prima
         # bacheca scrive gia' i cassetti con quegli id, e accettare non deve
         # lasciarli orfani.
         base = wanted if model.is_valid_id(wanted) else model.slugify(title)
         card_id = model.unique_id(base, taken)
         taken.add(card_id)
-        target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2) \
-            if near is not None else None
-        x, y = model.free_slot(board, reminders, near=target)
+        box = model.card_box({"size": size})
+        target = (near[0] - box[0] / 2, near[1] - box[1] / 2) if near is not None else None
+        x, y = model.free_slot(board, reminders, box=box, near=target)
         card = {
             "id": card_id, "title": model.clean_text(title, model.MAX_TITLE) or card_id,
             "titleBy": model.JENNY,
@@ -388,6 +389,8 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
             "pos": {"x": x, "y": y, "by": model.JENNY},
             "glyph": glyph, "userSections": [], "created": stamp,
         }
+        if size:
+            card["size"] = size
         owners.update({p: card_id for p in card["pages"]})
         board["cards"].append(card)
         return card
@@ -442,7 +445,7 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
         app = str(suggestion.get("app") or "")
         if model.is_valid_id(app):
             title = model.clean_text(suggestion.get("subject"), model.MAX_TITLE) or app
-            card = new_card(title, "", [])
+            card = new_card(title, "", [], size=app_size(workspace, app))
             card["titleBy"] = model.USER
             card["app"] = {"slug": app, "params": dict(suggestion.get("params") or {})}
             model.add_since(board, "card_added", card=card["id"], title=card["title"])
@@ -458,7 +461,7 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
         other = model.card_by_id(board, str(suggestion.get("card") or ""))
         app = suggestion.get("app")
         if other is not None and model.is_valid_id(app):
-            card = new_card(app_title(workspace, app), "", [])
+            card = new_card(app_title(workspace, app), "", [], size=app_size(workspace, app))
             card["titleBy"] = model.USER
             card["app"] = {"slug": app, "params": dict(suggestion.get("params") or {})}
             model.add_since(board, "card_added", card=card["id"], title=card["title"])
