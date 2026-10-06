@@ -259,9 +259,11 @@ def test_the_page_is_only_notebooks() -> None:
 
 
 def test_notebooks_come_down_from_the_most_recent() -> None:
+    """Dal 06/10/2026 in testa c'e' il quaderno con piu' pagine (la tessera
+    grande, in alto a sinistra); gli altri scendono dal piu' recente."""
     _run("""
       const panel = await open(LIST);
-      assert.deepEqual(onShelf(shelves(panel)[0]), ['memory', 'etna', 'piante']);
+      assert.deepEqual(onShelf(shelves(panel)[0]), ['piante', 'memory', 'etna']);
     """)
 
 
@@ -425,34 +427,27 @@ def test_the_name_you_touch_is_the_name_that_comes_back() -> None:
     """)
 
 
-def test_only_the_cover_you_are_on_carries_the_check() -> None:
-    """Una sola, e su quella giusta; nessuna quando sei con Jenny, che nella
-    pagina non c'e'."""
+def test_the_page_draws_no_check_and_tells_talkback_where_you_are() -> None:
+    """La spunta sul quaderno in cui sei e' stata tolta il 06/10/2026: sulla
+    pagina dei quaderni non diceva niente che servisse. Resta `aria-current`,
+    su una tessera sola e su quella giusta, per chi legge con TalkBack; su
+    nessuna quando sei con Jenny o in un quaderno che l'elenco non porta piu'."""
     _run("""
-      const checks = (p) => all(p._body).filter((n) => String(n.className).includes('ti-check'));
-      const marked = (p) => covers(p).find((c) => hasClass(c, 'is-current'));
+      const checks = (p) => all(p._body).filter((n) => String(n.className).includes('check'));
+      const marked = (p) => covers(p).filter((c) => c.attrs['aria-current'] === 'true');
 
       let panel = await open(LIST);
-      assert.equal(checks(panel).length, 0, 'una spunta su un quaderno mentre sei con Jenny');
+      assert.equal(marked(panel).length, 0, 'segnato un quaderno mentre sei con Jenny');
 
       current = 'etna';
       panel.render();
-      assert.equal(checks(panel).length, 1, 'due spunte: una delle due mente');
-      assert.equal(nameOf(marked(panel)), 'etna');
-      assert.equal(marked(panel).attrs['aria-current'], 'true',
-                   'la spunta e\\' decorativa: chi non la vede deve saperlo lo stesso');
-    """)
+      assert.equal(checks(panel).length, 0, 'la spunta e\\' tornata');
+      assert.deepEqual(marked(panel).map(nameOf), ['etna']);
 
-
-def test_a_notebook_that_is_gone_leaves_no_check_behind() -> None:
-    """Sei dentro un quaderno che l'elenco non porta piu' (rinominato, o
-    cancellato da un'altra superficie): nessuna spunta, piuttosto che una
-    su un quaderno dove non sei."""
-    _run("""
       current = 'sparito';
-      const panel = await open(LIST);
-      const checks = all(panel._body).filter((n) => String(n.className).includes('ti-check'));
-      assert.equal(checks.length, 0, 'la spunta e\\' finita su una conversazione che non e\\' tua');
+      panel.render();
+      assert.equal(marked(panel).length, 0, 'segnata una conversazione che non e\\' tua');
+      current = null;
     """)
 
 
@@ -747,17 +742,17 @@ def test_arrows_move_between_covers_and_shift_enter_opens_the_sheet() -> None:
     come nel cassetto; ⏎ da solo resta il clic del bottone."""
     _run("""
       const panel = await open(LIST);
-      const [memory, etna] = covers(panel);
-      memory.focus();
-      assert.ok(key(panel, memory, 'ArrowRight'));
-      assert.equal(document.activeElement, etna);
-      key(panel, etna, 'ArrowLeft');
-      assert.equal(document.activeElement, memory);
-      key(panel, memory, 'ArrowUp');
+      const [first, second] = covers(panel);
+      first.focus();
+      assert.ok(key(panel, first, 'ArrowRight'));
+      assert.equal(document.activeElement, second);
+      key(panel, second, 'ArrowLeft');
+      assert.equal(document.activeElement, first);
+      key(panel, first, 'ArrowUp');
       assert.equal(document.activeElement, search, '↑ dalla prima fila non torna alla ricerca');
-      assert.ok(key(panel, etna, 'Enter', { shiftKey: true }));
-      assert.deepEqual(history, ['tenuto:etna']);
-      assert.equal(key(panel, etna, 'Enter'), false, '⏎ non e\\' piu\\' il clic del bottone');
+      assert.ok(key(panel, second, 'Enter', { shiftKey: true }));
+      assert.deepEqual(history, ['tenuto:' + nameOf(second)]);
+      assert.equal(key(panel, second, 'Enter'), false, '⏎ non e\\' piu\\' il clic del bottone');
     """)
 
 
@@ -807,22 +802,21 @@ const part = (cover, cls) => cover.children.find((c) => hasClass(c, cls));
 """
 
 
-def test_the_most_recent_notebook_is_the_big_tile() -> None:
-    """La tessera grande e' il primo per data, non il piu' lungo: e' quello da
-    riprendere. Dice cos'e', le pagine per intero e quando, e «Riprendi» e'
-    una parola sulla tessera, non un secondo bottone."""
+def test_the_thickest_notebook_is_the_big_tile() -> None:
+    """La grandezza dice le pagine: la tessera grande e' il quaderno che ne ha
+    di piu', in testa. Per un giro era il piu' recente, con «Il più recente» e
+    «Riprendi»: tolti tutti e due il 06/10/2026 — l'utente si aspettava il
+    quaderno piu' lungo, e la tessera intera gia' apre."""
     _run(_SHELF + """
       const panel = await open(many);
-      const etf = coverOf(panel, 'etf');
-      assert.equal(covers(panel)[0], etf, 'la tessera grande non apre la mensola');
-      assert.equal(sizeOf(etf), 'hero');
-      assert.equal(part(etf, 'home-who-cover-kicker').textContent, 'Il più recente');
-      assert.match(part(etf, 'home-who-cover-meta').textContent, /^30 pagine · /);
-      const resume = part(etf, 'home-who-cover-resume');
-      assert.equal(resume.textContent, 'Riprendi');
-      assert.equal(resume.attrs['aria-hidden'], 'true');
-      assert.equal(resume.tag, 'span', 'un bottone dentro un bottone');
-      assert.match(etf.attrs['aria-label'], /^etf, 30 pagine, /);
+      const orto = coverOf(panel, 'orto');
+      assert.equal(covers(panel)[0], orto, 'la tessera grande non apre la mensola');
+      assert.equal(sizeOf(orto), 'hero');
+      assert.match(part(orto, 'home-who-cover-meta').textContent, /^41 pagine · /);
+      for (const gone of ['home-who-cover-kicker', 'home-who-cover-resume']) {
+        assert.ok(!covers(panel).some((c) => part(c, gone)), `${gone} e' tornato`);
+      }
+      assert.match(orto.attrs['aria-label'], /^orto, 41 pagine, /);
     """)
 
 
@@ -833,11 +827,11 @@ def test_the_thickest_notebooks_get_the_bigger_tiles() -> None:
     _run(_SHELF + """
       const panel = await open(many);
       assert.deepEqual(sizes(panel), {
-        etf: 'hero', umore: '', orto: 'tall', viaggi: 'wide', salute: 'tall', nuovo: '', muto: '',
+        orto: 'hero', etf: 'tall', umore: '', viaggi: 'wide', salute: 'tall', nuovo: '', muto: '',
       });
-      // L'ordine nel DOM resta quello per data: la griglia compatta, non riordina.
+      // Dietro la grande l'ordine resta quello per data.
       assert.deepEqual(onShelf(shelves(panel)[0]),
-                       ['etf', 'umore', 'orto', 'viaggi', 'salute', 'nuovo', 'muto']);
+                       ['orto', 'etf', 'umore', 'viaggi', 'salute', 'nuovo', 'muto']);
     """)
 
 
@@ -852,7 +846,7 @@ def test_a_small_tile_says_one_thing_and_a_big_one_says_both() -> None:
       assert.equal(meta('nuovo'), '0 p', 'zero pagine e\\' un numero, non un «non so»');
       assert.ok(!meta('muto').includes(' p'), 'pagine scritte senza saperle');
       assert.ok(meta('muto').length > 0, 'senza pagine la tessera non dice nemmeno quando');
-      assert.match(meta('orto'), /^41 p · /);
+      assert.match(meta('salute'), /^39 p · /);
     """)
 
 
@@ -860,7 +854,7 @@ def test_a_to_z_results_and_archive_are_plain_tiles() -> None:
     """In A–Z, nei risultati e in archivio conta la fila: tessere tutte uguali,
     nessuna «piu' recente» che non lo e'."""
     _run(_SHELF + """
-      const old = { name: 'ortaggi', modified: NOW - 90 * DAY, pages: 50 };
+      const old = { name: 'ortaggi', modified: NOW - 90 * DAY, pages: 60 };
       const panel = await open({ ...many, projects: [...many.projects, old] });
       assert.equal(sizeOf(coverOf(panel, 'ortaggi')), '', 'in archivio una tessera grande');
       assert.ok(hasClass(shelves(panel)[1], 'is-archive'));
@@ -909,8 +903,183 @@ def test_one_page_is_said_in_the_singular() -> None:
     sull'emulatore, sulla tessera grande, il 06/10/2026."""
     _run(_SHELF + """
       const one = { name: 'appena', modified: NOW, pages: 1 };
-      const panel = await open({ ...many, projects: [one, ...many.projects] });
+      const panel = await open({ ...many, projects: [one] });
       const cover = coverOf(panel, 'appena');
       assert.match(part(cover, 'home-who-cover-meta').textContent, /^1 pagina · /);
       assert.match(cover.attrs['aria-label'], /^appena, 1 pagina, /);
+    """)
+
+
+# ── Un rettangolo pieno (06/10/2026) ────────────────────────────────────────
+#
+# Visto sul Titan: con le misure decise solo dalle pagine la colonna di destra
+# restava vuota per due file. Le misure ora le sceglie `packBento`, sulle
+# colonne vere, perche' la griglia si chiuda.
+
+_PACK = """
+const { packBento, bentoOrder } = await import('./home-who.js');
+const SHAPE = { hero: [2, 2], tall: [1, 2], wide: [2, 1] };
+/* Mette le tessere come la griglia `dense`: ognuna nella prima cella libera
+   in cui sta. Dice quante file servono e se resta un buco. */
+function lay(items, sizes, columns) {
+  const taken = new Set();
+  let rows = 0;
+  for (const it of items) {
+    const [w, h] = SHAPE[sizes.get(it.name)] || [1, 1];
+    for (let at = 0; ; at += 1) {
+      const r = Math.floor(at / columns), c = at % columns;
+      if (c + w > columns) continue;
+      const cells = [];
+      for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) cells.push((r + y) * columns + c + x);
+      if (cells.some((k) => taken.has(k))) continue;
+      for (const k of cells) taken.add(k);
+      rows = Math.max(rows, r + h);
+      break;
+    }
+  }
+  return { rows, holes: rows * columns - taken.size };
+}
+const shelfOf = (n) => Array.from({ length: n }, (_, i) => ({ name: 'q' + i, pages: (i * 7) % 23 }));
+/* La larghezza delle griglie, a comando: 0 e' «non ancora a schermo». */
+let width = 0;
+{
+  const make = document.createElement;
+  document.createElement = (tag) => {
+    const el = make(tag);
+    Object.defineProperty(el, 'clientWidth', { get: () => width });
+    return el;
+  };
+}
+"""
+
+
+def test_the_bento_closes_into_a_full_rectangle() -> None:
+    """Per ogni numero di quaderni e di colonne in cui si puo', nessun buco e
+    l'ultima fila piena; la tessera grande e' sempre il primo, in alto a
+    sinistra."""
+    _run(_SHELF + _PACK + """
+      for (const columns of [2, 3, 4, 5]) {
+        for (let n = 2; n <= 24; n += 1) {
+          const items = shelfOf(n);
+          const packed = packBento(items, columns);
+          if (!packed) continue;
+          assert.equal(packed.get('q0'), 'hero', `${n} su ${columns}: la grande non e' il primo`);
+          const { holes } = lay(items, packed, columns);
+          assert.equal(holes, 0, `${n} quaderni su ${columns} colonne: ${holes} celle vuote`);
+        }
+      }
+      // Dove si puo', si deve potere: dal terzo quaderno in su, su quattro colonne.
+      for (let n = 3; n <= 24; n += 1) assert.ok(packBento(shelfOf(n), 4), `${n} su 4: rinuncia`);
+    """)
+
+
+def test_the_titan_shelf_has_no_empty_column() -> None:
+    """Il caso visto sul telefono: dieci quaderni su quattro colonne lasciavano
+    vuota la colonna di destra, e piante — la piu' lunga — era piccola in
+    fondo. Ora piante e' la grande in alto a sinistra, e i piu' lunghi dopo di
+    lei restano tessere grandi: alte se c'e' posto, larghe nell'ultima fila."""
+    _run(_SHELF + _PACK + """
+      const titan = [
+        { name: 'etf', pages: 30 }, { name: 'umore', pages: 6 }, { name: 'editoriale', pages: 18 },
+        { name: 'travel', pages: 3 }, { name: 'produttivita', pages: 11 }, { name: 'nomadismo', pages: 26 },
+        { name: 'allergie', pages: 39 }, { name: 'salute', pages: 10 }, { name: 'piante', pages: 41 },
+        { name: 'viaggio', pages: 7 },
+      ];
+      const shelf = bentoOrder(titan);
+      assert.equal(shelf[0].name, 'piante', 'la piu\\' lunga non e\\' in testa');
+      const packed = packBento(shelf, 4);
+      assert.deepEqual(lay(shelf, packed, 4), { rows: 4, holes: 0 });
+      assert.equal(packed.get('piante'), 'hero');
+      // Chi cade nell'ultima fila non puo' essere alto senza sporgere: si
+      // allarga invece. Ma i piu' lunghi dopo piante restano tessere grandi.
+      for (const name of ['allergie', 'etf']) {
+        assert.ok(['tall', 'wide'].includes(packed.get(name)), `${name}: ${packed.get(name)}`);
+      }
+    """)
+
+
+def test_plain_grids_widen_only_to_close_the_last_row() -> None:
+    """Archivio, A–Z e risultati non hanno la grande: si allarga solo quanto
+    basta a chiudere l'ultima fila, e un quaderno solo resta com'e'."""
+    _run(_SHELF + _PACK + """
+      const seven = shelfOf(7);
+      const packed = packBento(seven, 4, { hero: false });
+      assert.deepEqual(lay(seven, packed, 4), { rows: 2, holes: 0 });
+      assert.equal(packed.size, 1, 'allargate piu\\' tessere del necessario');
+      assert.equal(packBento(shelfOf(8), 4, { hero: false }).size, 0, 'una griglia gia\\' piena toccata');
+      assert.equal(packBento(shelfOf(1), 4, { hero: false }), null);
+    """)
+
+
+def test_the_panel_packs_on_the_columns_it_sees() -> None:
+    """Il pannello conta le colonne dalla larghezza della griglia, le impone
+    alla griglia e chiude il rettangolo su quelle: calcolo e griglia contano
+    lo stesso numero. Senza una larghezza (non ancora a schermo) restano i
+    desideri."""
+    _run(_SHELF + _PACK + """
+      width = 554;
+      const panel = await open(many);
+      const items = covers(panel).map((c) => ({ name: nameOf(c) }));
+      const shaped = new Map(covers(panel).map((c) => [nameOf(c), sizeOf(c)]).filter(([, s]) => s));
+      assert.equal(lay(items, shaped, 4).holes, 0, JSON.stringify([...shaped]));
+      assert.equal(shelves(panel)[0].style.gridTemplateColumns, 'repeat(4, minmax(0, 1fr))',
+                   'la griglia non ha le colonne del calcolo: possono tornare i buchi');
+      width = 0;
+      panel.render();
+      assert.deepEqual(sizes(panel), {
+        orto: 'hero', etf: 'tall', umore: '', viaggi: 'wide', salute: 'tall', nuovo: '', muto: '',
+      });
+    """)
+
+
+def test_a_rectangle_made_for_other_columns_is_made_again() -> None:
+    """Visto sul Titan il 06/10/2026: disegnato mentre la larghezza non era
+    ancora quella vera, il rettangolo era fatto per cinque colonne e mostrato
+    su quattro — piante piccola in fondo e una cella vuota. Quando il
+    contenitore cambia misura e le colonne non sono quelle del calcolo, si
+    rifa'; se sono le stesse, non si tocca."""
+    _run(_SHELF + _PACK + """
+      const watchers = [];
+      globalThis.ResizeObserver = class {
+        constructor(cb) { watchers.push(cb); }
+        observe() {}
+      };
+      width = 610;
+      const panel = await open(many);
+      assert.equal(watchers.length, 1, 'nessuno guarda la larghezza del contenitore');
+      const shaped = () => new Map(covers(panel).map((c) => [nameOf(c), sizeOf(c)]).filter(([, s]) => s));
+      const shown = () => covers(panel).map((c) => ({ name: nameOf(c) }));
+      assert.equal(lay(shown(), shaped(), 5).holes, 0);
+      width = 554;
+      watchers[0]();
+      assert.equal(lay(shown(), shaped(), 4).holes, 0, 'il rettangolo e\\' rimasto quello da cinque');
+      let redraws = 0;
+      const render = panel.render.bind(panel);
+      panel.render = () => { redraws += 1; render(); };
+      watchers[0]();
+      assert.equal(redraws, 0, 'ridisegnato senza che le colonne fossero cambiate');
+      delete globalThis.ResizeObserver;
+    """)
+
+
+def test_one_drawing_counts_its_columns_once() -> None:
+    """Sul Titan, il 06/10/2026, «In uso» e' uscita a cinque colonne e
+    l'archivio a quattro nello stesso disegno: fra le due misure era comparsa
+    la barra di scorrimento. Le griglie di un disegno hanno le stesse colonne,
+    e se poi la larghezza vera ne vuole altre, si ridisegna."""
+    _run(_SHELF + _PACK + """
+      const watchers = [];
+      globalThis.ResizeObserver = class {
+        constructor(cb) { watchers.push(cb); }
+        observe() {}
+      };
+      const old = [1, 2, 3].map((i) => ({ name: 'vecchio' + i, modified: NOW - 90 * DAY, pages: i }));
+      width = 610;
+      const panel = await open({ ...many, projects: [...many.projects, ...old] });
+      const cols = () => shelves(panel).map((s) => s.style.gridTemplateColumns);
+      assert.equal(new Set(cols()).size, 1, 'due griglie, due colonne: ' + cols().join(' / '));
+      width = 554;  // la barra di scorrimento e' comparsa
+      watchers[0]();
+      assert.deepEqual(cols(), ['repeat(4, minmax(0, 1fr))', 'repeat(4, minmax(0, 1fr))']);
+      delete globalThis.ResizeObserver;
     """)

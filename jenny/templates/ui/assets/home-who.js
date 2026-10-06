@@ -14,19 +14,22 @@
  *  perche' i nomi si leggono senza toccare niente.
  *
  *  **Dal 06/10/2026 la mensola «In uso» e' un bento**, scelto dall'utente fra
- *  dieci varianti: il quaderno piu' recente e' una tessera grande, due per due,
- *  con «Riprendi»; i due con piu' pagine sono alti e il terzo e' largo; gli
- *  altri sono tessere semplici, mai sotto i 104 px. Solo nell'ordine per data:
- *  in A–Z, nei risultati e in archivio le tessere sono tutte uguali, perche'
- *  li' conta la fila e una tessera grande la romperebbe.
+ *  dieci varianti. La grandezza dice le pagine: il quaderno che ne ha di piu'
+ *  e' la tessera grande, due per due, in alto a sinistra; i tre che lo
+ *  seguono sono tessere alte o larghe; gli altri, in ordine di data, sono
+ *  tessere semplici, mai sotto i 104 px. Per un giro la grande era il piu'
+ *  recente, con «Riprendi»: l'utente si aspettava il quaderno piu' lungo, e
+ *  «Riprendi» non serviva — la tessera intera gia' apre. La griglia chiude
+ *  sempre un rettangolo pieno quando si puo' (`packBento`), anche in A–Z, nei
+ *  risultati e in archivio, dove pero' non c'e' la grande: li' conta la fila.
  *
  *  **La conversazione personale non c'e'.** Fino al 05/10/2026 era la prima
  *  riga, poi la prima copertina; ma e' gia' la voce «Jenny» della fila in
  *  alto, a un tocco da qualunque pagina, e qui era un doppione (deciso
- *  dall'utente). La pagina e' dei quaderni: la spunta sta su quello in cui
- *  sei, e su nessuno quando sei con Jenny.
+ *  dall'utente). La pagina e' dei quaderni, e non segna in quale sei: la
+ *  spunta che lo faceva e' stata tolta il 06/10/2026 (lo sa solo TalkBack).
  *
- *  **Un tocco cambia conversazione**, e la spunta e' su quella in cui sei. Per
+ *  **Un tocco cambia conversazione.** Per
  *  un giro non e' stato cosi' — le righe erano inerti e lo dichiaravano
  *  — e quel giro e' finito: le righe sono diventate bottoni e il resto
  *  di questo file e' rimasto com'era, che era la previsione.
@@ -66,8 +69,8 @@ export const ARCHIVE_AFTER_DAYS = 30;
 export class WhoPanel {
   /** @param contenitore dove si disegna: il pannello della pagina Quaderni.
    *  @param currentProject funzione che da' il nome del quaderno aperto, o
-   *         `null` se sei nella conversazione personale. E' cio' che decide
-   *         dove sta la spunta.
+   *         `null` se sei nella conversazione personale. Decide quale
+   *         tessera porta `aria-current`.
    *  @param onPick chiamata col nome del quaderno toccato.
    *  @param onHold chiamata col nome del quaderno **tenuto premuto**: apre la
    *         sua scheda (Apri · Metti come pagina · Rinomina · Elimina), come la
@@ -118,6 +121,22 @@ export class WhoPanel {
     this._body?.addEventListener?.('focusin', (e) => this._showPlate(e.target));
     this._body?.addEventListener?.('focusout', () => this._showPlate(null));
     globalThis.document?.addEventListener?.('keydown', (e) => this._onTypeAhead(e));
+    /* Il bento e' calcolato sulle colonne, e le colonne sono quelle del
+       momento in cui si disegna: all'avvio, o mentre la pagina entra, la
+       larghezza puo' non essere ancora quella vera. Visto sul Titan il
+       06/10/2026: un rettangolo fatto per cinque colonne, mostrato su quattro,
+       con piante piccola in fondo e una cella vuota. Quindi si guarda la
+       larghezza del contenitore, e quando le colonne non sono piu' quelle del
+       calcolo il rettangolo si rifa'. */
+    const Observer = globalThis.ResizeObserver;
+    if (Observer && this._body) new Observer(() => this._repackIfStale()).observe(this._body);
+    else globalThis.addEventListener?.('resize', () => this._repackIfStale());
+  }
+
+  _repackIfStale() {
+    const shelf = this._body?.querySelector?.('.home-who-shelf');
+    const now = shelf ? columnsFor(shelf) : 0;
+    if (now && now !== this._packedFor) this.render();
   }
 
   /** I quaderni che il pannello conosce, per chi sta per crearne uno.
@@ -181,6 +200,7 @@ export class WhoPanel {
     const last = body.scrollTop;
     const sortHadFocus = Boolean(body.querySelector?.('.home-who-sort:focus'));
     body.innerHTML = '';
+    this._packedFor = 0;
     this._showPlate(null);
     this._syncSearch();
 
@@ -230,11 +250,12 @@ export class WhoPanel {
 
     body.appendChild(this._head(i18n.t('home.who.inUse'), inUse.length,
                                 { sortable: projects.length > 1 }));
-    const shelf = this._shelf(stale);
-    const sizes = this._sort === 'az' ? new Map() : bentoSizes(inUse);
-    for (const project of inUse) shelf.appendChild(this._cover(project, { size: sizes.get(project.name) }));
+    const shelf = body.appendChild(this._shelf(stale));
+    const hero = this._sort !== 'az';
+    const shown = hero ? bentoOrder(inUse) : inUse;
+    const sizes = this._sizes(shelf, shown, { hero });
+    for (const project of shown) shelf.appendChild(this._cover(project, { size: sizes.get(project.name) }));
     if (!projects.length) shelf.appendChild(this._slot());
-    body.appendChild(shelf);
     if (!projects.length && !stale) {
       body.appendChild(this._note(i18n.t('home.who.none')));
       body.appendChild(this._note(i18n.t('home.who.emptyHint')));
@@ -243,10 +264,10 @@ export class WhoPanel {
     if (archive.length) {
       body.appendChild(this._head(i18n.t('home.who.archive'), archive.length,
                                   { sub: i18n.t('home.who.archiveHint') }));
-      const old = this._shelf(stale);
+      const old = body.appendChild(this._shelf(stale));
       old.classList.add('is-archive');
-      for (const project of archive) old.appendChild(this._cover(project));
-      body.appendChild(old);
+      const sizes = this._sizes(old, archive, { hero: false });
+      for (const project of archive) old.appendChild(this._cover(project, { size: sizes.get(project.name) }));
     }
 
     this._drawBlocked(body);
@@ -270,11 +291,37 @@ export class WhoPanel {
     }
     body.appendChild(this._head(i18n.t('home.who.results'), hits.length));
     const cutoff = Date.now() / 1000 - ARCHIVE_AFTER_DAYS * 86400;
-    const shelf = this._shelf(stale);
+    const shelf = body.appendChild(this._shelf(stale));
+    const sizes = this._sizes(shelf, hits, { hero: false });
     for (const project of hits) {
-      shelf.appendChild(this._cover(project, { query: q, archived: project.modified && project.modified < cutoff }));
+      shelf.appendChild(this._cover(project, {
+        query: q, archived: project.modified && project.modified < cutoff, size: sizes.get(project.name),
+      }));
     }
-    body.appendChild(shelf);
+  }
+
+  /** Le misure delle tessere di una griglia gia' nella pagina: un rettangolo
+   *  pieno quando si puo' (`packBento`), altrimenti i desideri nudi.
+   *
+   *  **Le colonne le decide il JS e le impone alla griglia**, invece di
+   *  leggerle dal foglio di stile: cosi' il calcolo e la griglia non possono
+   *  piu' contare due numeri diversi. Visto sul Titan il 06/10/2026: un
+   *  rettangolo fatto per tre o cinque colonne, mostrato su quattro, con un
+   *  buco in fondo — letto in un momento in cui la larghezza non era quella
+   *  vera, e mai rifatto. Ora una larghezza sbagliata da' al massimo tessere
+   *  piu' larghe per un istante, mai un buco; e le colonne del calcolo restano
+   *  scritte, cosi' una larghezza che le cambia ridisegna (v. `_wire`). */
+  _sizes(shelf, list, { hero }) {
+    const wishes = hero ? bentoSizes(list) : new Map();
+    /* Una misura sola per tutto il disegno: «In uso» e l'archivio hanno la
+       stessa larghezza, e se fra l'una e l'altra compare la barra di
+       scorrimento la seconda misura direbbe un'altra cosa (sul Titan, cinque
+       colonne sopra e quattro sotto). */
+    const columns = this._packedFor || columnsFor(shelf);
+    if (!columns) return wishes;
+    this._packedFor = columns;
+    shelf.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+    return packBento(list, columns, { hero }) || wishes;
   }
 
   /* Le cartelle che ci sono e non si aprono, in fondo. **Si mostrano**: su un
@@ -384,13 +431,6 @@ export class WhoPanel {
     glyph.textContent = initialOf(item.name);
     cover.appendChild(glyph);
 
-    if (size === 'hero') {
-      const kicker = document.createElement('span');
-      kicker.className = 'home-who-cover-kicker';
-      kicker.textContent = i18n.t('home.who.latest');
-      cover.appendChild(kicker);
-    }
-
     cover.appendChild(this._name(item.name, query));
 
     /* Sulla tessera semplice c'e' posto per una cosa sola prima che la riga
@@ -403,15 +443,6 @@ export class WhoPanel {
     when.textContent = size ? [count, age].filter(Boolean).join(' · ') : (count || age);
     cover.appendChild(when);
 
-    if (size === 'hero') {
-      const resume = document.createElement('span');
-      resume.className = 'home-who-cover-resume';
-      resume.setAttribute('aria-hidden', 'true');
-      resume.textContent = i18n.t('home.who.resume');
-      cover.appendChild(resume);
-    }
-
-    this._maybeCheck(cover);
     return cover;
   }
 
@@ -473,17 +504,15 @@ export class WhoPanel {
     return row;
   }
 
-  /* Lo scheletro di una copertina che si puo' toccare. `aria-current` e non
-     solo la spunta: la spunta e' un'icona decorativa, e chi non la vede deve
-     comunque sapere su quale si trova. */
+  /* Lo scheletro di una tessera che si puo' toccare. Quella del quaderno in
+     cui sei lo dice solo a chi legge con TalkBack (`aria-current`): a schermo
+     c'era una spunta, tolta il 06/10/2026 — sulla pagina dei quaderni non
+     diceva niente che servisse. */
   _command(current, onPick) {
     const cover = document.createElement('button');
     cover.type = 'button';
     cover.className = 'home-who-cover';
-    if (current) {
-      cover.classList.add('is-current');
-      cover.setAttribute('aria-current', 'true');
-    }
+    if (current) cover.setAttribute('aria-current', 'true');
     /* Il tocco che segue una pressione lunga non e' un tocco: senza questa
        riga tenere premuto un quaderno aprirebbe la sua scheda **e** ci
        cambierebbe conversazione sotto. Stesso segno del cassetto. */
@@ -495,14 +524,6 @@ export class WhoPanel {
       onPick();
     });
     return cover;
-  }
-
-  _maybeCheck(cover) {
-    if (!cover.classList.contains('is-current')) return;
-    const check = document.createElement('i');
-    check.className = 'ti ti-check home-who-check';
-    check.setAttribute('aria-hidden', 'true');
-    cover.appendChild(check);
   }
 
   /* Il nome toccato va a chi ospita la pagina: lui cambia conversazione e
@@ -626,7 +647,20 @@ function pagesWord(count) {
   return i18n.t(count === 1 ? 'home.who.page' : 'home.who.pages', { count });
 }
 
-/** Le misure del bento per i quaderni «In uso», gia' in ordine di data: nome →
+/** L'ordine del bento: in testa il quaderno con piu' pagine, che sara' la
+ *  tessera grande in alto a sinistra, e dietro gli altri nell'ordine che
+ *  avevano (per data). A pari pagine vince il piu' recente; se nessuno ha
+ *  pagine, la testa resta il piu' recente. */
+export function bentoOrder(inUse) {
+  if (!inUse.length) return [];
+  let top = 0;
+  inUse.forEach((it, i) => {
+    if ((it.pages || 0) > (inUse[top].pages || 0)) top = i;
+  });
+  return [inUse[top], ...inUse.slice(0, top), ...inUse.slice(top + 1)];
+}
+
+/** Le misure del bento per una fila gia' in ordine (`bentoOrder`): nome →
  *  `hero` | `tall` | `wide`. Il primo e' la tessera grande; fra gli altri, i
  *  due con piu' pagine sono alti e il terzo e' largo (a pari pagine vince il
  *  piu' recente). Un quaderno senza pagine, o di cui non si sanno, resta
@@ -641,6 +675,101 @@ export function bentoSizes(inUse) {
   for (const it of thick.slice(0, 2)) sizes.set(it.name, 'tall');
   if (thick[2]) sizes.set(thick[2].name, 'wide');
   return sizes;
+}
+
+/** Le misure che chiudono la griglia in un rettangolo pieno, senza buchi e
+ *  con l'ultima fila completa: nome → `hero` | `tall` | `wide` (assente per la
+ *  tessera semplice), o `null` se con questi quaderni e queste colonne non si
+ *  puo' (uno solo su quattro colonne, per esempio).
+ *
+ *  Si riempie come fa la griglia con `dense`: ogni tessera, in ordine, nella
+ *  prima cella libera. Cosi' le misure scelte qui sono anche le posizioni che
+ *  il browser trovera'. Con *hero* il primo e' la tessera grande, in alto a
+ *  sinistra; poi ognuno prova prima la misura che desidera (`bentoSizes`: alti
+ *  i piu' lunghi) e, se non chiude, le altre. Si cerca prima il rettangolo
+ *  piu' vicino a quello desiderato; senza *hero* il piu' piccolo, cioe' si
+ *  allarga solo quanto serve a completare l'ultima fila. */
+export function packBento(items, columns, { hero = true } = {}) {
+  const n = items.length;
+  if (!n || columns < 2) return null;
+  const wishes = hero ? bentoSizes(items) : new Map();
+  const first = hero ? 4 : 1;
+  const least = first + (n - 1);
+  const most = (hero ? 4 : 2) + 2 * (n - 1);
+  const wanted = least + [...wishes.values()].filter((s) => s !== 'hero').length;
+  const totals = [];
+  for (let t = Math.ceil(least / columns) * columns; t <= most; t += columns) totals.push(t);
+  totals.sort((a, b) => Math.abs(a - wanted) - Math.abs(b - wanted) || a - b);
+  for (const total of totals) {
+    const sizes = fillRectangle(items, columns, total / columns, wishes, hero);
+    if (sizes) return sizes;
+  }
+  return null;
+}
+
+const SHAPES = { hero: [2, 2], tall: [1, 2], wide: [2, 1], '': [1, 1] };
+const TRIES = { tall: ['tall', 'wide', ''], wide: ['wide', 'tall', ''], '': ['', 'wide', 'tall'] };
+
+/* Una ricerca all'indietro, cella per cella: i quaderni sono decine, le misure
+   tre, e i conti delle celle libere tagliano quasi tutto. Il tetto di passi e'
+   una cintura: finito quello, «non si puo'», e la griglia resta com'era. */
+function fillRectangle(items, columns, rows, wishes, hero) {
+  const grid = new Array(columns * rows).fill(false);
+  const sizes = new Map();
+  let free = grid.length;
+  let budget = 20000;
+  const cells = (at, [w, h]) => {
+    const r = Math.floor(at / columns);
+    const c = at % columns;
+    if (c + w > columns || r + h > rows) return null;
+    const out = [];
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const k = (r + y) * columns + c + x;
+        if (grid[k]) return null;
+        out.push(k);
+      }
+    }
+    return out;
+  };
+  const step = (i, from) => {
+    if ((budget -= 1) < 0) return false;
+    const at = grid.indexOf(false, from);
+    if (i === items.length) return at === -1;
+    if (at === -1) return false;
+    const left = items.length - i;
+    const bigFirst = hero && i === 0;
+    if (free < left + (bigFirst ? 3 : 0) || free > 2 * left + (bigFirst ? 2 : 0)) return false;
+    const tries = bigFirst ? ['hero'] : TRIES[(wishes.get(items[i].name) || '').replace('hero', '')];
+    for (const size of tries) {
+      const taken = cells(at, SHAPES[size]);
+      if (!taken) continue;
+      for (const k of taken) grid[k] = true;
+      free -= taken.length;
+      if (size) sizes.set(items[i].name, size);
+      if (step(i + 1, at)) return true;
+      for (const k of taken) grid[k] = false;
+      free += taken.length;
+      sizes.delete(items[i].name);
+    }
+    return false;
+  };
+  return step(0, 0) ? sizes : null;
+}
+
+/** La tessera piu' stretta e lo spazio fra due tessere: gli stessi numeri di
+ *  `.home-who-shelf` (`minmax(112px, 1fr)`, `gap: 10px`), che il banco del
+ *  contratto tiene allineati. */
+export const TILE_MIN = 112;
+export const TILE_GAP = 10;
+
+/* Quante colonne ci stanno nella larghezza della griglia, con la regola di
+   `auto-fill`: tessere mai sotto `TILE_MIN`. 0 se la griglia non ha ancora
+   una larghezza (fuori dalla pagina, nascosta). */
+function columnsFor(shelf) {
+  const width = shelf.clientWidth || 0;
+  if (!width) return 0;
+  return Math.max(1, Math.floor((width + TILE_GAP) / (TILE_MIN + TILE_GAP)));
 }
 
 /* Quante colonne ha la mensola adesso: le decide il foglio di stile

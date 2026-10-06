@@ -155,7 +155,7 @@ def test_the_panel_speaks_both_languages() -> None:
         for key in ("none", "loadFailed", "search",
                     "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
                     "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
-                    "pages", "pagesShort", "plateKeys", "newNotebook", "latest", "resume", "page"):
+                    "pages", "pagesShort", "plateKeys", "newNotebook", "page"):
             assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"
@@ -273,3 +273,8 @@ def test_the_bento_keeps_every_tile_easy_to_touch() -> None:
     shelf = css.split("\n.home-who-shelf {", 1)[1].split("}", 1)[0]
     assert "minmax(112px, 1fr)" in shelf and "grid-auto-rows: 104px" in shelf
     assert "grid-auto-flow: dense" in shelf, "le tessere grandi lasciano buchi"
+    # Le colonne le conta il JS con gli stessi due numeri: se divergono, il
+    # rettangolo si calcola su una griglia che non e' quella a schermo.
+    src = WHO_JS.read_text(encoding="utf-8")
+    assert "export const TILE_MIN = 112;" in src and "export const TILE_GAP = 10;" in src
+    assert "gap: 10px" in shelf

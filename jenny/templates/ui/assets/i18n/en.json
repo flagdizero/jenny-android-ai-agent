@@ -1104,8 +1104,6 @@
       "pages": "{count} pages",
       "page": "{count} page",
       "pagesShort": "{count} p",
-      "latest": "Most recent",
-      "resume": "Resume",
       "plateKeys": "⏎ open · ⇧⏎ sheet · ←→ choose"
     },
     "reader": {

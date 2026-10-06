@@ -1421,17 +1421,12 @@ body.home {
 }
 .home-who-cover.is-tall { grid-row: span 2; }
 .home-who-cover.is-wide { grid-column: span 2; }
-/* La tessera grande: il quaderno piu' recente, due per due, con «Riprendi».
-   Si stacca dalle altre come dice il tema (`--hero-lift`), e in Synthwave col
-   doppio del bagliore. In griglia e non in colonna: in basso la riga e il
-   bottone stanno sulla stessa linea. */
+/* La tessera grande: il quaderno con piu' pagine, due per due. Si stacca
+   dalle altre come dice il tema (`--hero-lift`), e in Synthwave col doppio
+   del bagliore. */
 .home-who-cover.is-hero {
   grid-column: span 2;
   grid-row: span 2;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto 1fr auto;
-  column-gap: 10px;
   padding: 18px;
   box-shadow: var(--hero-lift),
     0 0 calc(var(--spine-glow) * 2) color-mix(in srgb, var(--cover, transparent) 45%, transparent);
@@ -1449,21 +1444,10 @@ body.home {
    riga di ricerca possono arrivarle addosso, ed e' inchiostro su inchiostro.
    L'alone del colore della tela le stacca (visto sull'emulatore il
    06/10/2026: «13 p · 2 days ago» sparito dentro la P). */
-.home-who-cover-kicker,
 .home-who-cover-name,
 .home-who-cover-meta {
   text-shadow: 0 0 2px var(--cover, var(--surface)), 0 0 4px var(--cover, var(--surface)),
     0 0 8px var(--cover, var(--surface));
-}
-.home-who-cover-kicker {
-  position: relative;
-  grid-column: 1 / -1;
-  margin-bottom: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  opacity: 0.8;
 }
 /* L'iniziale: un segno, sotto le parole, che esce in basso a destra. Sta
    sotto senza `z-index`: e' il primo figlio, e le parole, posizionate anche
@@ -1491,7 +1475,6 @@ body.home {
    tessera grande e' il titolo. */
 .home-who-cover-name {
   position: relative;
-  grid-column: 1 / -1;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1526,43 +1509,10 @@ body.home {
 .home-who-cover.is-tall .home-who-cover-meta { max-width: 100%; margin-top: 6px; }
 .home-who-cover.is-wide .home-who-cover-meta { max-width: calc(100% - 84px); }
 .home-who-cover.is-hero .home-who-cover-meta {
-  grid-row: 4;
-  align-self: center;
   max-width: none;
-  margin: 0;
   font-size: 12px;
   font-weight: 500;
   opacity: 0.85;
-}
-/* «Riprendi»: si legge, ma non e' un secondo bottone — la tessera intera lo
-   e', e un tocco ovunque fa la stessa cosa. Inchiostro e tela scambiati. */
-.home-who-cover-resume {
-  position: relative;
-  grid-row: 4;
-  grid-column: 2;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: var(--cover-ink, var(--text));
-  color: var(--cover, var(--surface));
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 34px;
-}
-
-/* Dove sei: la spunta, in alto a destra. */
-.home-who-check {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 14px;
 }
 
 /* Le forme degli stati: il posto vuoto quando non c'e' nessun quaderno, le
@@ -1689,6 +1639,11 @@ body.home {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Il posto della barra di scorrimento e' sempre tenuto: senza, la larghezza
+     cala di qualche pixel quando i quaderni riempiono la pagina, e sul Titan
+     — che sta proprio sul confine fra quattro e cinque colonne — la griglia
+     cambiava numero di colonne a meta' disegno (06/10/2026). */
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
@@ -2395,10 +2350,6 @@ body.home {
 .home-board-slip.is-alarm .home-board-slip-meta,
 .home-board-slip.is-alarm .is-value .home-board-block-big { color: var(--board-alert); }
 .home-board-slip.is-broken .home-board-slip-body { opacity: 0.6; }
-.home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
-.home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
-.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
 
 /* I blocchi: righe intere. */
 .home-board-block {
@@ -2434,6 +2385,10 @@ body.home {
 .home-board-block-chart { width: 100%; height: 100%; overflow: visible; color: color-mix(in srgb, var(--board-new) 70%, var(--board-ink)); }
 .home-board-block-chart .is-band { fill: color-mix(in srgb, var(--board-alert) 18%, transparent); }
 .home-board-block-flat { height: 50%; border-bottom: 0.25cqw dashed var(--slip-line); }
+.home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
+.home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
+.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
 
 .home-board-block.is-numbers { display: grid; grid-template-columns: repeat(var(--slip-cols, 3), minmax(0, 1fr)); gap: 1cqw; align-content: center; }
 .home-board-block-number { display: flex; flex-direction: column; gap: 0.2cqw; min-width: 0; }
