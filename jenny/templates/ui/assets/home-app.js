@@ -212,6 +212,9 @@ class HomeApp {
     this.emptyText = document.getElementById('home-empty-text');
     this.wire = document.getElementById('home-wire');
     this.input = document.getElementById('home-input');
+    this.overTitle = document.getElementById('home-over-title');
+    this.overName = document.getElementById('home-over-name');
+    this.overDot = document.getElementById('home-over-dot');
     this.send = document.getElementById('home-send');
     this.attach = document.getElementById('home-attach');
     this.pending = document.getElementById('home-pending');
@@ -2352,6 +2355,22 @@ class HomeApp {
         name: this._personalName || DEFAULT_BOT_NAME,
       });
     }
+    this._applyOverTitle();
+  }
+
+  /* Il titolo del velo: dove scrivi, nella lingua della fila. In un quaderno
+     il suo nome col pallino, e la riga del suo colore; nella chat di sempre il
+     nome di lei con la riga d'accento, com'e' nella fila quando ci sei. Segue
+     la conversazione e non il velo: se ne cambia una mentre e' aperto, la
+     riga dice gia' quella nuova. */
+  _applyOverTitle() {
+    if (!this.overName) return;
+    const notebook = projectNameOf(sessionManager.currentKey);
+    const color = notebook ? dotColor(notebook) : null;
+    this.overName.textContent = notebook || this._personalName || DEFAULT_BOT_NAME;
+    this._paintDot(this.overDot, color);
+    if (color) this.overTitle?.style.setProperty('--path-line', color);
+    else this.overTitle?.style.removeProperty('--path-line');
   }
 
   /** I nomi dei tre comandi della bacheca in testa, che sono solo icone. */

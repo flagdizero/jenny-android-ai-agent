@@ -607,7 +607,16 @@
        sempre lei, spostata e non copiata) sale qui dentro, a tutto schermo, e
        la pagina sotto resta visibile in trasparenza ma non si tocca. Si chiude
        ritoccando Jenny o con Indietro (v. `HomeApp.openChatOver`). -->
-  <div class="home-over" id="home-over" role="dialog" aria-modal="true" hidden></div>
+  <div class="home-over" id="home-over" role="dialog" aria-modal="true" hidden>
+    <!-- Il titolo del velo (06/10/2026): la fila delle pagine resta sotto,
+         sfocata, e senza questa riga non si sapeva piu' se si scriveva in un
+         quaderno o nella chat di sempre. E' un'etichetta, non un comando: il
+         velo si chiude da Jenny. La scrive `_applyOverTitle`. -->
+    <h2 class="home-over-title" id="home-over-title">
+      <span class="home-over-dot" id="home-over-dot" aria-hidden="true" hidden></span>
+      <span class="home-over-name" id="home-over-name"></span>
+    </h2>
+  </div>
 
 </main>
 

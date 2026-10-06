@@ -47,6 +47,8 @@ export class ChatOver {
   _isVeil(target) {
     if (!target) return false;
     if (target === this.host) return true;
+    /* Il titolo e' un'etichetta, non un comando: toccarlo e' toccare il velo. */
+    if (target.closest?.('.home-over-title')) return true;
     return target.id === 'home-chat' || target.id === 'home-thread';
   }
 

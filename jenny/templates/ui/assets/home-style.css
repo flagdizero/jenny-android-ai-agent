@@ -1784,6 +1784,48 @@ body.home {
 .home-over .home-copy,
 .home-over .home-seconds { color: var(--text); }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
+/* Il titolo del velo: dove scrivi (v. `HomeApp._applyOverTitle`). Ha la forma
+   della voce accesa della fila (`.home-strip-entry.is-on`) e la sua altezza,
+   10 + 40 + 6, cosi' aprendo il velo la chat comincia dove cominciava la
+   pagina: la fila sotto e' sfocata, e il titolo ne prende il posto. La riga
+   e' del colore del quaderno (`--path-line`), o d'accento nella chat di
+   sempre. */
+.home-over-title {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 10px 18px 6px;
+  box-sizing: content-box;
+  color: var(--heading);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.home-over-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-bottom: 4px;
+  box-shadow: inset 0 -2px 0 var(--path-line, var(--accent));
+}
+.home-over-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+}
+.home-over-dot[hidden] { display: none; }
 /* Quel che sta sotto il velo, sfocato (v. `ChatOver.show`; il raggio e il
    perche' stanno con `--chat-veil-blur` in mobile-style.css). **Il filtro non
    si anima**: a 18 px una transizione vorrebbe dire ricalcolare la sfocatura a

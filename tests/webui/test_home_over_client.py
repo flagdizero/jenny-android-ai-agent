@@ -143,6 +143,64 @@ assert.equal(app.jenny.motion('squash'), 'nudge', 'lei non ha detto «chiudi da 
 """)
 
 
+def test_the_title_says_the_notebook_with_its_colour() -> None:
+    """La fila delle pagine resta sotto il velo, sfocata: senza un titolo non
+    si sapeva se si scriveva in un quaderno o nella chat di sempre."""
+    run_home(_HEAD + """
+await app.switchConversation('project:orto');
+await tick(30);
+tap();
+await tick(30);
+const title = $('home-over-title');
+assert.equal(title.parentElement, over(), 'il titolo non sta nel velo');
+assert.equal(over().firstElementChild, title, 'il titolo non sta in cima');
+assert.equal($('home-over-name').textContent, 'orto');
+assert.equal($('home-over-dot').hidden, false, 'manca il pallino del quaderno');
+assert.ok($('home-over-dot').style.background.includes('--spine-'), 'il pallino non ha il colore del quaderno');
+assert.equal(title.style.getPropertyValue('--path-line'), $('home-over-dot').style.background);
+""")
+
+
+def test_the_title_of_the_everyday_chat_is_her_name() -> None:
+    run_home(_HEAD + """
+app.homePages.goToId('app', { animated: false });
+await tick(10);
+tap();
+await tick(30);
+assert.equal($('home-over-name').textContent, app._personalName);
+assert.equal($('home-over-dot').hidden, true, 'la chat di sempre ha un pallino');
+assert.equal($('home-over-title').style.getPropertyValue('--path-line'), '');
+""")
+
+
+def test_the_title_follows_the_conversation_from_a_notebook_back_to_hers() -> None:
+    run_home(_HEAD + """
+await app.switchConversation('project:orto');
+await tick(30);
+app.handleHardwareBack();
+await tick(10);
+app.homePages.goToId('app', { animated: false });
+await tick(10);
+tap();
+await tick(40);
+assert.equal(app.currentKey(), 'websocket:default');
+assert.equal($('home-over-name').textContent, app._personalName, 'il titolo dice ancora il quaderno');
+assert.equal($('home-over-dot').hidden, true);
+""")
+
+
+def test_a_tap_on_the_title_is_a_tap_on_the_veil() -> None:
+    run_home(_HEAD + """
+app.homePages.goToId('app', { animated: false });
+await tick(10);
+tap();
+await tick(30);
+$('home-over-name').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+assert.equal(app.chatOver, true, 'un tocco sul titolo ha chiuso la chat');
+assert.equal(app.jenny.motion('squash'), 'nudge', 'il titolo si comporta da comando');
+""")
+
+
 def test_on_the_chat_page_a_tap_says_hello() -> None:
     run_home(_HEAD + """
 tap();

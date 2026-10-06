@@ -376,6 +376,7 @@ class App {
   __OPEN_CHAT__
   __APPLY_TRANSLATIONS__
   __APPLY_CONVERSATION_TEXTS__
+  __APPLY_OVER_TITLE__
   __CREATE_NOTEBOOK__
   __GUIDE_NEW_BOARD__
   __OPEN_BOARD__
@@ -476,6 +477,7 @@ def _harness() -> str:
         .replace("__OPEN_CHAT__", member(src, "openChat"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
         .replace("__APPLY_CONVERSATION_TEXTS__", member(src, "_applyConversationTexts"))
+        .replace("__APPLY_OVER_TITLE__", member(src, "_applyOverTitle"))
         .replace("__CREATE_NOTEBOOK__", member(src, "createNotebook"))
         .replace("__GUIDE_NEW_BOARD__", member(src, "_guideNewBoard"))
         .replace("__OPEN_BOARD__", member(src, "openBoard", prefixes=("async ",)))
