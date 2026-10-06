@@ -3036,10 +3036,6 @@ body.home {
   outline: none;
 }
 
-.home-drawer .launcher-list {
-  padding-bottom: calc(var(--jenny-away-floor) + var(--jenny-size) * var(--jenny-art-h));
-}
-
 /* ── La griglia delle app (05/10/2026) ──
    Il cassetto «che chiunque abbia un Android sa gia' usare»: il campo a
    pillola, le suggerite in una fila, una riga, poi tutte dalla A alla Z in
@@ -3140,6 +3136,10 @@ body.home {
   gap: 6px 4px;
   padding-top: 10px;
   padding-inline: 14px;
+  /* A filo col fondo. Il posto per Jenny (pavimento + la sua altezza, ~154 px)
+     a griglia corta era solo un vuoto sotto l'ultima fila, che saliva a ogni
+     scorrimento; Jenny sta sopra a tutto e si sposta. */
+  padding-bottom: 0;
   /* Senza barra: la sua larghezza la toglieva alla griglia e non alle
      suggerite, e le colonne delle due non stavano piu' una sotto l'altra
      (4 px di scarto all'ultima, visto su jenny_square). */
