@@ -120,6 +120,9 @@ class AppToolsSyncer:
         self._bus = bus
         # slug -> ((app.json mtime_ns, approvata), [registered tool names])
         self._state: dict[str, tuple[object, list[str]]] = {}
+        # Le prove (``apps/.drafts``): non danno tool, ma la pagina App le
+        # mostra, quindi una prova nuova o scartata e' un cambio dell'elenco.
+        self._drafts: dict[str, int] | None = None
 
     def _manifest_mtimes(self) -> dict[str, object]:
         """Una firma per app: il manifest, e (dalla prova in poi) se è approvata.
@@ -145,11 +148,30 @@ class AppToolsSyncer:
             mtimes[entry.name] = (mtime, is_live(self._workspace, entry.name))
         return mtimes
 
+    def _draft_mtimes(self) -> dict[str, int]:
+        """Una firma per prova: la data del suo ``app.json``."""
+        drafts = self._workspace / "apps" / ".drafts"
+        out: dict[str, int] = {}
+        if not drafts.is_dir():
+            return out
+        for entry in drafts.iterdir():
+            try:
+                out[entry.name] = (entry / "app.json").stat().st_mtime_ns
+            except OSError:
+                continue
+        return out
+
     def sync(self, registry: Any) -> tuple[list[str], bool]:
-        """Diff apps against the registry; returns (tool names, changed)."""
+        """Diff apps against the registry; returns (tool names, changed).
+
+        *changed* is also true when a trial appeared, changed or went away:
+        it has no tools, but the App page lists it (and waits to be told).
+        """
         enabled, _, _ = _apps_runtime_config()
         current = self._manifest_mtimes() if enabled else {}
-        changed = False
+        drafts = self._draft_mtimes() if enabled else {}
+        changed = self._drafts is not None and drafts != self._drafts
+        self._drafts = drafts
 
         # Removed or changed apps: drop their tools first.
         for slug in list(self._state):

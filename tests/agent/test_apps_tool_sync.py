@@ -117,3 +117,25 @@ class TestSyncer:
         names, changed = AppToolsSyncer(tmp_path).sync(registry)
         assert names == []
         assert changed is False
+
+
+def test_a_new_trial_tells_the_app_page(tmp_path):
+    """Una prova nuova non da' tool, ma la pagina App la deve mostrare subito:
+    sul telefono Jenny diceva «fatta» e la griglia restava senza."""
+    _write_manifest(tmp_path)
+    registry = ToolRegistry()
+    syncer = AppToolsSyncer(tmp_path)
+    syncer.sync(registry)
+    assert syncer.sync(registry) == (["note_add_note"], False)
+    draft = tmp_path / "apps" / ".drafts" / "portfolio"
+    draft.mkdir(parents=True)
+    path = draft / "app.json"
+    path.write_text(json.dumps({"name": "Portafoglio", "description": "test"}), encoding="utf-8")
+    names, changed = syncer.sync(registry)
+    assert changed is True and names == ["note_add_note"]
+    assert syncer.sync(registry)[1] is False
+    _bump_mtime(path)
+    assert syncer.sync(registry)[1] is True
+    path.unlink()
+    path.parent.rmdir()
+    assert syncer.sync(registry)[1] is True
