@@ -3,8 +3,10 @@
 Dal 05/10/2026 il tocco su di lei apre la chat vera dove la chat non e' a
 schermo, la chiude dove e' aperta sopra una pagina, e dove la chat c'e' gia'
 (la pagina chat, la Console) lei saluta. Lo swipe verso l'interno e' come il
-tocco, quello verso il bordo «vai via». Senza adattatore resta il gesto di
-prima, e la minichat — che non lo passa — continua a funzionare.
+tocco; verso il bordo, dal 06/10/2026, un gesto non la manda piu' (lo tiene
+fermo la fisica, ``test_mascot_side_contract.py``), e la chat aperta non la
+chiude. Senza adattatore resta il gesto di prima, e la minichat — che non lo
+passa — continua a funzionare.
 
 In node, col modulo vero (``shared/jenny-mascot.js``) e i vicini finti: si
 chiamano ``_onTap`` e ``_onGestureOut``, le stesse funzioni che la fisica
@@ -261,12 +263,15 @@ def test_an_inward_swipe_opens_the_chat_like_a_tap() -> None:
     """)
 
 
-def test_a_swipe_to_the_edge_closes_the_open_chat() -> None:
+def test_a_gesture_never_closes_the_open_chat() -> None:
+    """Tirarla per gioco con la chat aperta la perdeva: la chiude solo il tocco."""
     _run("""
         const d = door({ isOpen: true });
         const j = jenny({ chat: d });
         j._onGestureOut(false);
-        assert.deepEqual(d.calls, [['close']]);
+        j._onGestureOut(true);
+        assert.deepEqual(d.calls, []);
+        assert.equal(out(j), true, 'resta fuori, accanto alla chat');
     """)
 
 

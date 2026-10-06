@@ -86,7 +86,8 @@ export function buildFlyLayer(parent) {
  *   el                 lo sprite (prende le classi `dragging` e `flying`)
  *   fly, flyPose       il livello del volo e le sue pose
  *   isOut()            e' fuori adesso?
- *   setOut(v)          applica lo stato voluto dal gesto (a fine volo)
+ *   setOut(v)          applica lo stato voluto dal gesto (a fine volo); un volo
+ *                      la fa solo uscire, quindi `v` e' sempre `true`
  *   onDragCommit()     il trascinamento e' cominciato davvero
  *   onTap()            tocco secco, senza trascinamento
  *   onFlightEnd()      il volo e' finito: rimetti l'arte a posto
@@ -200,23 +201,22 @@ export function bindMascotDrag(host) {
   const settle = () => {
     if (fs.settled) return;
     fs.settled = true;
-    // Lasciata nella metà sinistra, attraversare lo schermo è già il gesto:
-    // la si ritrova a riposo al bordo, non aperta.
-    if (fs.x < vw() / 2) fs.targetOut = false;
+    // Presa dal bordo e lasciata nella metà sinistra, attraversare lo schermo
+    // è già il gesto: la si ritrova a riposo al bordo, non aperta. Se era
+    // fuori resta fuori (v. finish()).
+    if (!isOut() && fs.x < vw() / 2) fs.targetOut = false;
     const r = host.el.getBoundingClientRect();
     fs.bx = r.left + fs.w * PIVOT_X;
     fs.by = r.top + fs.h * PIVOT_Y;
-    const wasOut = isOut();
-    if (fs.targetOut === wasOut) {
+    if (fs.targetOut === isOut()) {
       fs.xT = fs.bx;
       fs.after = null;
     } else {
-      // Il cambio di stato out avviene solo a fine volo (fs.after): la x di
-      // arrivo la anticipa di uno scarto d'ancoraggio, verso l'interno se si
-      // apre e verso il bordo se si chiude.
-      const shift = fs.w * OUT_SHIFT_RATIO;
-      fs.xT = fs.bx + (fs.targetOut ? -shift : shift);
-      fs.after = () => setOut(fs.targetOut);
+      // Esce (l'unico cambio che un volo fa). Il cambio di stato avviene solo
+      // a fine volo (fs.after): la x di arrivo lo anticipa di uno scarto
+      // d'ancoraggio verso l'interno.
+      fs.xT = fs.bx - fs.w * OUT_SHIFT_RATIO;
+      fs.after = () => setOut(true);
     }
     /* La scadenza fissa del rilascio bastava quando il bordo era quello più
        vicino. Adesso la camminata può essere lo schermo intero — ~3,5 s sul
@@ -506,10 +506,12 @@ export function bindMascotDrag(host) {
 
     const dx = clientX - startX;
     const out = isOut();
-    // Verso l'interno (sinistra) apre, verso il bordo chiude.
-    fs.targetOut = out;
-    if (!out && dx < -DRAG_THRESHOLD) fs.targetOut = true;
-    else if (out && dx > DRAG_THRESHOLD) fs.targetOut = false;
+    // Verso l'interno (sinistra) apre. Il contrario non c'e' piu' (06/10/2026):
+    // fuori, tirarla la rimetteva al bordo, e con la chat aperta sopra una
+    // pagina il bordo vuol dire chiuderla — bastava giocarci per perderla.
+    // Adesso un volo che parte fuori torna a piedi dove stava; al bordo la
+    // rimanda solo il tocco.
+    fs.targetOut = out || dx < -DRAG_THRESHOLD;
     fs.xT = fs.bx; // provvisorio: la x di arrivo vera la fissa settle()
     fs.after = null;
     fs.settled = false;

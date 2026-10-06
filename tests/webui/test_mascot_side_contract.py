@@ -203,6 +203,27 @@ assert.deepEqual(r.setOutCalls, [true]);
 
 
 @node
+def test_pulled_toward_the_edge_she_stays_out() -> None:
+    """Fuori, tirarla verso il bordo la rimetteva via — e con la chat aperta
+    sopra una pagina la chiudeva. Adesso torna dove stava."""
+    _run_flight("""
+const r = fly(575, [[575 - 60, 450], [575 - 20, 450], [575 - 5, 450]], { out: true });
+assert.ok(Math.abs(r.tx) < 6, `si è fermata a ${r.tx}px dal suo posto`);
+assert.deepEqual(r.setOutCalls, []);
+""")
+
+
+@node
+def test_flung_across_the_screen_she_walks_back_out() -> None:
+    """Lasciata nella metà sinistra mentre era fuori: torna fuori, non al bordo."""
+    _run_flight("""
+const r = fly(575, [[575 - 60, 450], [300, 400], [40, 380]], { out: true });
+assert.ok(Math.abs(r.tx) < 6, `si è fermata a ${r.tx}px dal suo posto`);
+assert.deepEqual(r.setOutCalls, []);
+""")
+
+
+@node
 def test_squash_and_stretch_leaves_the_flight_where_it_was() -> None:
     """La deformazione si disegna sopra la fisica e non la tocca: stesso arrivo,
     stessa durata, stessa decisione. E resta sugli assi del disegno: ogni passo

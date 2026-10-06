@@ -649,20 +649,18 @@ export class JennyMascot {
   }
 
   /* Dove la fisica la vuole mettere a fine gesto: uno swipe verso l'interno
-     (o un volo che finisce fuori) e' «vieni», verso il bordo e' «vai via».
-     «Vieni» dove la chat non c'e' la apre, come il tocco; «vai via» con la
-     chat aperta sopra una pagina la chiude. Il resto e' solo dove sta lei. */
+     (o un volo che finisce fuori) e' «vieni», e dove la chat non c'e' la
+     apre, come il tocco. «Vai via» un gesto non lo dice piu' (06/10/2026,
+     v. `finish` in mascot-drag.js): tirata, torna dove stava, e la chat
+     aperta sopra una pagina la chiude solo il tocco. Il resto e' solo dove
+     sta lei. */
   _onGestureOut(out) {
     const chat = this._chat;
     if (!chat) {
       this._setOut(out);
       return;
     }
-    if (chat.isOpen()) {
-      if (out) this._setOut(true);
-      else chat.close();
-      return;
-    }
+    if (chat.isOpen()) return;
     if (out && !chat.onScreen()) {
       if (chat.canOpen?.() === false) {
         this._setOut(false);
