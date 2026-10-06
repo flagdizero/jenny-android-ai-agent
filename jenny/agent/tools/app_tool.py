@@ -287,7 +287,21 @@ class AppTool(Tool):
                         "returns a dict with exactly the reader's fields (a list of dicts when "
                         "the reader has a `key`); ctx.now, ctx.prev, ctx.http (only the hosts in "
                         "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit.")
-        drafts.promote_draft(workspace, slug)
+        try:
+            drafts.promote_draft(workspace, slug)
+        except OSError as exc:
+            # Prima risaliva grezzo («Error: [(…/app, …/app, Permission denied)]»):
+            # Jenny lo prendeva per i permessi dei file dell'utente e gli
+            # chiedeva di sistemarli o di cancellare l'app.
+            from loguru import logger
+
+            logger.opt(exception=True).warning("apps: promoting the draft of {} failed", slug)
+            return (f"`{slug}`: the new version passed its test run, but copying it into the "
+                    f"{'live app' if existed else 'apps folder'} failed: {exc}. This is a fault "
+                    "in Jenny, not in the user's files: say so, and do not ask them to change "
+                    "permissions or delete the app. Some of the new files may already be in "
+                    "place. The new version stays in the draft, and the next action=edit "
+                    "publishes it again.")
         # Le schede che la mostrano prendono la taglia della striscia nuova.
         from jenny.board.place import refresh_app_cards
 

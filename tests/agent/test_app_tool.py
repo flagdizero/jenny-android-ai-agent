@@ -130,6 +130,51 @@ async def test_a_broken_new_version_leaves_the_live_app_alone(personal: Path) ->
     assert summary_view(ws, find_app(ws, "spesa"), {})["value"] == 1
 
 
+async def test_an_update_never_copies_file_attributes(personal: Path, monkeypatch) -> None:
+    # Sul telefono ``copystat`` copia anche ``security.selinux``, che un'app non
+    # riscrive: EACCES. Il 06/10/2026 ogni edit di Albinella (che ha ``app/``)
+    # tornava «Permission denied» dopo aver gia' copiato tutto. Sul Mac non si
+    # vede: qui lo si fa fallire come sul telefono.
+    import shutil
+
+    def selinux(*_a, **_k):
+        raise PermissionError(13, "Permission denied")
+
+    ws = personal
+    tool = AppTool()
+    await tool.execute(action="draft", slug="spesa", files={
+        "app.json": json.dumps(SPESA), "app/index.html": "<p>spesa</p>",
+        "app/css/s.css": "p{}"})
+    monkeypatch.setattr(shutil, "copystat", selinux)
+    monkeypatch.setattr(shutil, "copy2", selinux)
+    out = await tool.execute(action="edit", slug="spesa", path="app/index.html",
+                             old="<p>spesa</p>", new="<p>la spesa</p>")
+    assert "`spesa` is updated" in out, out
+    live = ws / "apps" / "spesa" / "app"
+    assert (live / "index.html").read_text() == "<p>la spesa</p>"
+    assert (live / "css" / "s.css").read_text() == "p{}"
+    assert not (ws / "apps" / ".drafts" / "spesa").exists()
+
+
+async def test_a_failed_promotion_does_not_blame_the_users_files(personal: Path,
+                                                                 monkeypatch) -> None:
+    # Il 06/10/2026 l'errore grezzo («[Errno 13] Permission denied» su due
+    # cartelle) ha fatto chiedere a Jenny un chmod, e poi di cancellare l'app.
+    ws = personal
+    tool = AppTool()
+    await tool.execute(action="draft", slug="spesa", files={"app.json": json.dumps(SPESA)})
+
+    def denied(*_a, **_k):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr("jenny.apps.drafts.promote_draft", denied)
+    out = await tool.execute(action="draft", slug="spesa",
+                             files={"app/index.html": "<p>la spesa</p>"})
+    assert "fault in Jenny" in out and "do not ask them to change permissions" in out, out
+    assert "next action=edit" in out, out
+    assert (ws / "apps" / ".drafts" / "spesa").is_dir()
+
+
 async def test_a_stateful_app_without_a_summary_is_not_ready(personal: Path) -> None:
     bare = {k: v for k, v in SPESA.items() if k != "summary"}
     out = await AppTool().execute(action="draft", slug="spesa",

@@ -86,7 +86,7 @@ def promote_draft(workspace: Path, slug: str) -> Path:
         if (dst / sub).exists():
             shutil.rmtree(dst / sub)
         if (src / sub).is_dir():
-            shutil.copytree(src / sub, dst / sub, copy_function=_copy_bytes)
+            _copy_dir(src / sub, dst / sub)
     shutil.rmtree(src)
     return dst
 
@@ -111,7 +111,22 @@ def promote_valid_drafts(workspace: Path) -> list[str]:
     return done
 
 
-def _copy_bytes(src: str, dst: str) -> str:
-    # Niente ``copy2``: su Android gli xattr SELinux danno EACCES dopo la copia.
-    Path(dst).write_bytes(Path(src).read_bytes())
-    return dst
+def _copy_dir(src: Path, dst: Path) -> None:
+    """Copia una cartella: solo il contenuto dei file.
+
+    Niente ``copytree``, nemmeno con un ``copy_function`` suo: alla fine chiama
+    comunque ``copystat`` sulla cartella, che copia anche gli xattr, e su
+    Android ``security.selinux`` non si riscrive da un'app (EACCES). Il
+    06/10/2026 sul Titan ogni ``edit`` di un'app con ``app/`` finiva così: i
+    file erano già al loro posto, ma il tool rispondeva «Permission denied» e
+    Jenny diceva che la correzione non era passata. I link non si seguono: una
+    bozza li ha solo se qualcuno ce li ha messi da fuori.
+    """
+    dst.mkdir()
+    for entry in src.iterdir():
+        if entry.is_symlink():
+            continue
+        if entry.is_dir():
+            _copy_dir(entry, dst / entry.name)
+        elif entry.is_file():
+            (dst / entry.name).write_bytes(entry.read_bytes())
