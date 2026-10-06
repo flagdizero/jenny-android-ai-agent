@@ -606,6 +606,7 @@ body.home {
   font-weight: 700;
 }
 .home-work-action[hidden] { display: none; }
+.home-work-action:disabled { opacity: 0.5; }
 
 /* La bolla di Jenny che scrive (`home-activity.js`): la stessa pelle, ma una
    riga sola — il fiore e la parola scelta male apposta, nel colore del fiore.

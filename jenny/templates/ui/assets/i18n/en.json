@@ -954,6 +954,7 @@
       "failed": "I couldn't finish",
       "helperFailed": "The helper stopped: {label}",
       "helperFailedUnnamed": "The helper stopped",
+      "helperRestarted": "Started again: it's back at work.",
       "result": {
         "pagesOne": "1 page updated.",
         "pagesMany": "{count} pages updated.",

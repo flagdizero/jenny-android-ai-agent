@@ -101,6 +101,10 @@ export class WorkBubbles {
     this._helpersNode = null;
     this._helpersAt = 0;
     this._failedShown = new Set();
+    /* lineage -> { node, attempt } delle bolle «si e' fermato» ancora aperte:
+       quando la stessa linea riparte (dal tuo «Riprova», da Jenny, dall'officina)
+       la bolla lo dice e smette di offrire «Riprova». */
+    this._failedCards = new Map();
     /* Ogni frame alza il contatore: una lettura HTTP partita prima di un frame
        porta uno stato piu' vecchio, e non deve sovrascriverlo (la regola del
        chip degli agenti, che questa bolla sostituisce). */
@@ -280,9 +284,10 @@ export class WorkBubbles {
       }
       this._paintHelpers();
     }
-    for (const entry of Array.isArray(snapshot?.recent) ? snapshot.recent : []) {
-      this._maybeFailedHelper(entry);
-    }
+    const recent = Array.isArray(snapshot?.recent) ? snapshot.recent : [];
+    const all = [...running, ...recent];
+    for (const entry of recent) this._maybeFailedHelper(entry, all);
+    this._resolveRestarted(all);
     this._changed();
   }
 
@@ -322,11 +327,24 @@ export class WorkBubbles {
     return i18n.t(`home.work.doing.${family}`);
   }
 
-  _maybeFailedHelper(entry) {
+  /* Un tentativo piu' nuovo della stessa linea, vivo o finito: il lavoro e'
+     gia' ripartito. Senza `lineage_id` (snapshot vecchi) non si sa, e vale no. */
+  static _newerAttempt(entry, all) {
+    const lineage = entry.lineage_id;
+    if (!lineage) return false;
+    const attempt = Number(entry.attempt) || 0;
+    return all.some((e) => e && e.lineage_id === lineage && (Number(e.attempt) || 0) > attempt);
+  }
+
+  _maybeFailedHelper(entry, all = []) {
     if (!entry || entry.state !== 'failed' || !entry.task_id) return;
     if (this._failedShown.has(entry.task_id)) return;
     const ended = Number(entry.ended_at) * 1000;
     if (!ended || this._now() - ended > FAILED_FRESH_MS) return;
+    /* Gia' rilanciato prima che questa home lo vedesse (riapertura, o Jenny
+       piu' svelta): un «Riprova» qui rilancerebbe un lavoro che e' gia' in
+       corso, e cancellerebbe quello. */
+    if (WorkBubbles._newerAttempt(entry, all)) return;
     this._failedShown.add(entry.task_id);
     const node = this._bubble('helpers');
     node.classList.add('is-failed');
@@ -341,11 +359,50 @@ export class WorkBubbles {
     if (entry.can_restart && this.deps.restartSubagent) {
       this._action(node, {
         label: i18n.t('home.work.retryAction'),
-        run: () => this.deps.restartSubagent(entry.task_id, this.deps.currentKey()),
+        run: () => this._restartFailed(node, entry.task_id),
       });
+    }
+    if (entry.lineage_id) {
+      this._failedCards.set(entry.lineage_id, { node, attempt: Number(entry.attempt) || 0 });
     }
     this._mountLive(node);
     this.deps.chat.settle(node);
+  }
+
+  /* Il tap su «Riprova»: il bottone si spegne subito (un secondo tap
+     rilancerebbe ancora, cancellando il primo), e la bolla dice com'e' andata.
+     Prima restava identica, e il rilancio partito sembrava un tap perso. */
+  async _restartFailed(node, taskId) {
+    const button = node.querySelector('.home-work-action');
+    button.disabled = true;
+    this._note(node, '');
+    try {
+      await this.deps.restartSubagent(taskId, this.deps.currentKey());
+    } catch (err) {
+      button.disabled = false;
+      this._note(node, err?.message || i18n.t('subagents.actionFailed'));
+      return;
+    }
+    this._markRestarted(node);
+  }
+
+  _markRestarted(node) {
+    if (node.dataset.restarted) return;
+    node.dataset.restarted = '1';
+    node.classList.remove('is-failed');
+    node.querySelector('.home-work-icon').className = `ti ${ICON.helpers} home-work-icon`;
+    this._line(node, i18n.t('home.work.helperRestarted'), false);
+    this._note(node, '');
+    this._action(node, null);
+  }
+
+  /* Chiunque abbia rilanciato la linea, la bolla del fallimento lo dice. */
+  _resolveRestarted(all) {
+    for (const [lineage, card] of this._failedCards) {
+      if (!WorkBubbles._newerAttempt({ lineage_id: lineage, attempt: card.attempt }, all)) continue;
+      this._markRestarted(card.node);
+      this._failedCards.delete(lineage);
+    }
   }
 
   /* ── La conversazione cambia, la lingua cambia ── */
@@ -359,6 +416,7 @@ export class WorkBubbles {
     this._helpersNode?.remove();
     this._helpersNode = null;
     this.helpers = [];
+    this._failedCards.clear();
     this._changed();
   }
 

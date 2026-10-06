@@ -954,6 +954,7 @@
       "failed": "Non ci sono riuscita",
       "helperFailed": "L'aiutante si è fermato: {label}",
       "helperFailedUnnamed": "L'aiutante si è fermato",
+      "helperRestarted": "Ripartito: è di nuovo al lavoro.",
       "result": {
         "pagesOne": "1 pagina aggiornata.",
         "pagesMany": "{count} pagine aggiornate.",

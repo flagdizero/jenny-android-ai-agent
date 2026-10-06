@@ -236,11 +236,71 @@ assert.match(text(report), new RegExp(W.why.helperBudget.slice(0, 15)));
 report.querySelector('.home-work-action').click();
 await tick(10);
 assert.ok(calls.some((c) => c.startsWith('/api/subagents/t1/restart')), calls.join(' '));
+// Il 06/10/2026 sul Titan la bolla restava identica dopo il tap, «Riprova»
+// compreso, e il rilancio partito sembrava un tap perso.
+assert.equal(report.querySelector('.home-work-action').hidden, true);
+assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
+assert.ok(!report.classList.contains('is-failed'));
 
 // Lo stesso fallimento in uno snapshot successivo non si ripete.
 frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
         recent: [worker({ state: 'failed', stop_reason: 'max_iterations', ended_at: now(), can_restart: true })] });
 assert.equal(settled().length, 1);
+""")
+
+
+def test_a_restart_from_elsewhere_closes_the_try_again() -> None:
+    # Sul Titan Jenny ha rilanciato la stessa linea mentre la bolla offriva
+    # ancora «Riprova»: un tap li' avrebbe cancellato il suo tentativo.
+    run_home(_HEAD + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+const failed = worker({ lineage_id: 'L1', attempt: 1, state: 'failed', stop_reason: 'max_iterations',
+                        ended_at: now(), can_restart: true });
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [failed] });
+const report = settled()[0];
+assert.equal(report.querySelector('.home-work-action').hidden, false);
+
+frame({ event: 'subagent_status', chat_id: 'project:orto',
+        running: [worker({ task_id: 't2', lineage_id: 'L1', attempt: 2 })], recent: [failed] });
+assert.equal(report.querySelector('.home-work-action').hidden, true);
+assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
+""")
+
+
+def test_a_failure_already_restarted_is_not_shown_on_opening() -> None:
+    run_home(_HEAD + """
+agents['project:orto'] = { running: [], recent: [
+  worker({ task_id: 't2', lineage_id: 'L1', attempt: 2, state: 'completed', ended_at: now() }),
+  worker({ lineage_id: 'L1', attempt: 1, state: 'failed', stop_reason: 'max_iterations',
+           ended_at: now() - 60, can_restart: true }),
+] };
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+assert.equal(settled().length, 0);
+""")
+
+
+def test_a_refused_restart_says_why_and_can_be_tried_again() -> None:
+    run_home(_HEAD + """
+const fetchBefore = hooks.fetch;
+hooks.fetch = (u) => /restart$/.test(u.pathname)
+  ? new Response('no free slots', { status: 429 })
+  : fetchBefore(u);
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [worker({ state: 'failed', stop_reason: 'max_iterations', ended_at: now(), can_restart: true })] });
+const report = settled()[0];
+const button = report.querySelector('.home-work-action');
+button.click();
+await tick(10);
+assert.equal(button.hidden, false);
+assert.equal(button.disabled, false);
+assert.match(text(report.querySelector('.home-work-note')), /no free slots/);
 """)
 
 
