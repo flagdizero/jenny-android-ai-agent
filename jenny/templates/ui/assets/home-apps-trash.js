@@ -84,6 +84,9 @@ export class HomeAppsTrash {
   _drawBody() {
     if (!this.body) return;
     if (this.titleEl) this.titleEl.textContent = i18n.t('apps.trashTitle');
+    /* La casa non applica i `data-i18n` dell'HTML: senza, restava «Chiudi». */
+    const close = document.getElementById('apps-trash-sheet-close');
+    if (close) close.textContent = i18n.t('common.close');
     this.body.innerHTML = '';
     if (!this.entries.length) {
       const p = document.createElement('p');

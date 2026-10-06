@@ -110,6 +110,7 @@ def test_the_trash_row_shows_only_when_something_is_there() -> None:
       row.click();
       await tick(30);
       assert.ok($('apps-trash-sheet').open);
+      assert.equal($('apps-trash-sheet-close').textContent, 'Close', 'il bottone resta in italiano');
       const [restore] = $('apps-trash-sheet-body').querySelectorAll('button');
       restore.click();
       await tick(30);

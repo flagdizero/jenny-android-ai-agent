@@ -150,3 +150,25 @@ def test_the_old_section_is_still_a_value_summary(tmp_path: Path) -> None:
 def test_an_app_without_a_summary_has_none(tmp_path: Path) -> None:
     app = load_app(_write(tmp_path, "calc", {"name": "Calc", "description": "x"}))
     assert summary_view(tmp_path, app, {})["state"] == "no_section"
+
+
+def test_an_unchanged_reading_moves_the_last_one_forward(tmp_path: Path) -> None:
+    """Un sensore fermo letto ogni 15 minuti non riempie la collezione di copie."""
+    from datetime import timedelta
+
+    from jenny.apps.reader import append_readings, read_readings
+
+    d = _write(tmp_path, "waterbot", WATERBOT, run="def run(ctx):\n    return []\n")
+    acero = {"sensor": "acerello", "moisture": 55, "battery": 80, "online": False}
+    monstera = {"sensor": "monstera", "moisture": 17, "battery": 60, "online": True}
+    append_readings(d, [acero, monstera], key="sensor", now=NOW)
+    later = NOW + timedelta(minutes=15)
+    append_readings(d, [dict(acero), {**monstera, "moisture": 16}], key="sensor", now=later)
+    rows = read_readings(d)
+    assert [(r["sensor"], r["moisture"]) for r in rows] == [
+        ("acerello", 55), ("monstera", 17), ("monstera", 16)]
+    # La copia non c'e', ma l'ora si': il dato resta fresco.
+    assert rows[0]["ts"] == later.isoformat(timespec="seconds")
+    assert rows[1]["ts"] == NOW.isoformat(timespec="seconds")
+    append_readings(d, [dict(acero)], key="sensor", now=later + timedelta(minutes=15))
+    assert len(read_readings(d)) == 3

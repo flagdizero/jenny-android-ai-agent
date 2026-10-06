@@ -98,6 +98,15 @@ def _series_of(record: Mapping[str, Any], key: str | None) -> str:
     return str(record.get(key, "")) if key else ""
 
 
+# I campi di una lettura che non sono il dato: chi e quando, e da dove.
+_NOT_DATA = ("id", "ts", "_source")
+
+
+def _same_data(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    return ({k: v for k, v in a.items() if k not in _NOT_DATA}
+            == {k: v for k, v in b.items() if k not in _NOT_DATA})
+
+
 def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | None,
                     now: datetime) -> list[dict[str, Any]]:
     """Le letture di un giro: gli scalari nella collezione, le righe a parte.
@@ -105,6 +114,12 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
     Di un campo ``rows`` la collezione tiene **quante** erano (l'andamento, le
     attese e gli eventi vivono di quel numero); le righe intere stanno in
     ``latest.json``, per serie quando il lettore ne ha piu' d'una.
+
+    **Una lettura uguale all'ultima della sua serie non aggiunge una riga**:
+    sposta in avanti l'ora di quella. Il dato resta fresco (non diventa
+    «fermo») e la collezione non si riempie di copie — un sensore offline
+    letto ogni 15 minuti faceva 96 righe identiche al giorno, che il cestino
+    poi contava come dati.
     """
     from jenny.board.micro import _COMPACT_AFTER, _compact
 
@@ -126,10 +141,33 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
     if latest:
         _write_json(d / LATEST_FILE, latest)
     path = d / f"{READINGS}.jsonl"
-    with path.open("a", encoding="utf-8") as fh:
-        for record in records:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     readings = read_readings(app_dir)
+    last: dict[str, dict[str, Any]] = {}
+    for record in readings:
+        last[_series_of(record, key)] = record
+    fresh: list[dict[str, Any]] = []
+    touched = False
+    for i, record in enumerate(records):
+        prev = last.get(_series_of(record, key))
+        if prev is not None and _same_data(prev, record):
+            prev["ts"] = stamp
+            if "_source" in record:
+                prev["_source"] = record["_source"]
+            records[i] = prev
+            touched = True
+        else:
+            fresh.append(record)
+    if touched:
+        readings.extend(fresh)
+        tmp = path.with_name(f".{path.name}.tmp")
+        tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in readings),
+                       encoding="utf-8")
+        os.replace(tmp, path)
+    else:
+        with path.open("a", encoding="utf-8") as fh:
+            for record in fresh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        readings.extend(fresh)
     groups: dict[str, list[dict[str, Any]]] = {}
     for record in readings:
         groups.setdefault(_series_of(record, key), []).append(record)
