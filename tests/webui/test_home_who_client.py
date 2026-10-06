@@ -783,3 +783,134 @@ def test_the_plate_tells_the_whole_name_only_to_the_keyboard() -> None:
       assert.equal(plate.hidden, true);
       focusVisible = false;
     """)
+
+
+# ── Il bento (06/10/2026) ───────────────────────────────────────────────────
+#
+# Scelto dall'utente fra dieci varianti: il quaderno piu' recente e' la
+# tessera grande, i due con piu' pagine sono alti e il terzo e' largo. Solo
+# nell'ordine per data.
+
+_SHELF = """
+const many = { dir: 'wikis', unopenable: [], projects: [
+  { name: 'etf', modified: NOW - 60, pages: 30 },
+  { name: 'umore', modified: NOW - 2 * 3600, pages: 6 },
+  { name: 'orto', modified: NOW - 3 * 3600, pages: 41 },
+  { name: 'viaggi', modified: NOW - 4 * 3600, pages: 26 },
+  { name: 'salute', modified: NOW - 5 * 3600, pages: 39 },
+  { name: 'nuovo', modified: NOW - 6 * 3600, pages: 0 },
+  { name: 'muto', modified: NOW - 7 * 3600 },
+]};
+const sizeOf = (cover) => ['hero', 'tall', 'wide'].find((s) => hasClass(cover, 'is-' + s)) || '';
+const sizes = (panel) => Object.fromEntries(covers(panel).map((c) => [nameOf(c), sizeOf(c)]));
+const part = (cover, cls) => cover.children.find((c) => hasClass(c, cls));
+"""
+
+
+def test_the_most_recent_notebook_is_the_big_tile() -> None:
+    """La tessera grande e' il primo per data, non il piu' lungo: e' quello da
+    riprendere. Dice cos'e', le pagine per intero e quando, e «Riprendi» e'
+    una parola sulla tessera, non un secondo bottone."""
+    _run(_SHELF + """
+      const panel = await open(many);
+      const etf = coverOf(panel, 'etf');
+      assert.equal(covers(panel)[0], etf, 'la tessera grande non apre la mensola');
+      assert.equal(sizeOf(etf), 'hero');
+      assert.equal(part(etf, 'home-who-cover-kicker').textContent, 'Il più recente');
+      assert.match(part(etf, 'home-who-cover-meta').textContent, /^30 pagine · /);
+      const resume = part(etf, 'home-who-cover-resume');
+      assert.equal(resume.textContent, 'Riprendi');
+      assert.equal(resume.attrs['aria-hidden'], 'true');
+      assert.equal(resume.tag, 'span', 'un bottone dentro un bottone');
+      assert.match(etf.attrs['aria-label'], /^etf, 30 pagine, /);
+    """)
+
+
+def test_the_thickest_notebooks_get_the_bigger_tiles() -> None:
+    """Dopo la grande: i due con piu' pagine alti, il terzo largo, gli altri
+    semplici. Un quaderno vuoto o di cui non si sanno le pagine resta
+    semplice, anche quando mancano candidati."""
+    _run(_SHELF + """
+      const panel = await open(many);
+      assert.deepEqual(sizes(panel), {
+        etf: 'hero', umore: '', orto: 'tall', viaggi: 'wide', salute: 'tall', nuovo: '', muto: '',
+      });
+      // L'ordine nel DOM resta quello per data: la griglia compatta, non riordina.
+      assert.deepEqual(onShelf(shelves(panel)[0]),
+                       ['etf', 'umore', 'orto', 'viaggi', 'salute', 'nuovo', 'muto']);
+    """)
+
+
+def test_a_small_tile_says_one_thing_and_a_big_one_says_both() -> None:
+    """Sulla tessera semplice la riga si ferma prima dell'iniziale: c'e' posto
+    per le pagine, o per la data quando le pagine non si sanno. Le grandi
+    dicono tutte e due."""
+    _run(_SHELF + """
+      const panel = await open(many);
+      const meta = (name) => part(coverOf(panel, name), 'home-who-cover-meta').textContent;
+      assert.equal(meta('umore'), '6 p');
+      assert.equal(meta('nuovo'), '0 p', 'zero pagine e\\' un numero, non un «non so»');
+      assert.ok(!meta('muto').includes(' p'), 'pagine scritte senza saperle');
+      assert.ok(meta('muto').length > 0, 'senza pagine la tessera non dice nemmeno quando');
+      assert.match(meta('orto'), /^41 p · /);
+    """)
+
+
+def test_a_to_z_results_and_archive_are_plain_tiles() -> None:
+    """In A–Z, nei risultati e in archivio conta la fila: tessere tutte uguali,
+    nessuna «piu' recente» che non lo e'."""
+    _run(_SHELF + """
+      const old = { name: 'ortaggi', modified: NOW - 90 * DAY, pages: 50 };
+      const panel = await open({ ...many, projects: [...many.projects, old] });
+      assert.equal(sizeOf(coverOf(panel, 'ortaggi')), '', 'in archivio una tessera grande');
+      assert.ok(hasClass(shelves(panel)[1], 'is-archive'));
+      tap(panel._body.querySelector('.home-who-sort'));
+      assert.ok(Object.values(sizes(panel)).every((s) => s === ''), 'A–Z con le tessere grandi');
+      tap(panel._body.querySelector('.home-who-sort'));
+      search.value = 'ort';
+      fire(search, 'input', {});
+      assert.ok(Object.values(sizes(panel)).every((s) => s === ''), 'risultati con le tessere grandi');
+      assert.ok(hasClass(coverOf(panel, 'ortaggi'), 'is-archived'), 'un risultato d\\'archivio non si smorza');
+      tap(searchClear);
+    """)
+
+
+def test_arrows_follow_the_tiles_on_screen() -> None:
+    """Col bento l'ordine del DOM non e' quello che si vede: ↓ dalla tessera
+    grande va a quella che le sta sotto, non alla seconda per data. Le misure
+    sono quelle di una griglia a quattro colonne da 131 × 104, con gap 10."""
+    _run(_SHELF + """
+      const panel = await open(many);
+      const at = (name, col, row, w = 1, h = 1) => {
+        const left = col * 141, top = row * 114;
+        coverOf(panel, name).getBoundingClientRect = () => ({
+          left, top, right: left + w * 131 + (w - 1) * 10, bottom: top + h * 104 + (h - 1) * 10,
+          width: w * 131 + (w - 1) * 10, height: h * 104 + (h - 1) * 10,
+        });
+      };
+      // etf 2x2 | orto alta | salute alta ; viaggi larga | umore | nuovo ; muto
+      at('etf', 0, 0, 2, 2); at('orto', 2, 0, 1, 2); at('salute', 3, 0, 1, 2);
+      at('viaggi', 0, 2, 2, 1); at('umore', 2, 2); at('nuovo', 3, 2); at('muto', 0, 3);
+      const etf = coverOf(panel, 'etf');
+      etf.focus();
+      key(panel, etf, 'ArrowDown');
+      assert.equal(nameOf(document.activeElement), 'viaggi');
+      key(panel, document.activeElement, 'ArrowRight');
+      assert.equal(nameOf(document.activeElement), 'umore');
+      key(panel, document.activeElement, 'ArrowUp');
+      assert.equal(nameOf(document.activeElement), 'orto');
+      key(panel, document.activeElement, 'ArrowUp');
+      assert.equal(document.activeElement, search, '↑ dalla prima fila non torna al campo');
+    """)
+
+
+def test_one_page_is_said_in_the_singular() -> None:
+    """Le traduzioni non conoscono il plurale: «1 pagine» si e' visto
+    sull'emulatore, sulla tessera grande, il 06/10/2026."""
+    _run(_SHELF + """
+      const one = { name: 'appena', modified: NOW, pages: 1 };
+      const panel = await open({ ...many, projects: [one, ...many.projects] });
+      const cover = coverOf(panel, 'appena');
+      assert.match(part(cover, 'home-who-cover-meta').textContent, /^1 pagina · /);
+      assert.match(cover.attrs['aria-label'], /^appena, 1 pagina, /);
+    """)

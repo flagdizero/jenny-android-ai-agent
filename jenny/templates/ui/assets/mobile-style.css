@@ -504,7 +504,13 @@
    tutti sopra 4,5:1 sul nome a 14 px (il conto sta in
    `test_home_who_contract.py`).
    La finitura e' del tema: il filo intorno, l'ombra, gli angoli, il bagliore
-   di Synthwave, il lucido di Y2K, la storta degli adesivi. */
+   di Synthwave, il lucido di Y2K, la storta degli adesivi.
+   Le tessere del bento (06/10/2026) hanno due finiture loro: gli angoli
+   (`--tile-radius`, piu' morbidi di quelli di un dorso) e il modo in cui la
+   tessera grande del quaderno piu' recente si stacca dalle altre
+   (`--hero-lift`): l'anello d'oro di Chanel e di Kyoto, l'ombra piena degli
+   adesivi e del fumetto. Il bagliore di Synthwave non sta qui perche' e' del
+   colore della tela, che qui non si conosce: lo raddoppia la tessera. */
 :root {
   --spine-1: #f4f1ea; --spine-1-ink: #17141c;
   --spine-2: #c8a96a; --spine-2-ink: #17141c;
@@ -518,7 +524,8 @@
   --spine-radius: 2px;
   --spine-gloss:  none;
   --spine-jitter: 0deg;
-  --shelf:        var(--border-strong);
+  --tile-radius:  2px;
+  --hero-lift:    0 0 0 1px var(--bg), 0 0 0 2px #c8a96a;
 }
 [data-theme="synthwave"] {
   --spine-1: #f92aad; --spine-1-ink: #17141c;
@@ -530,7 +537,8 @@
   --spine-edge:   1px solid rgba(255, 255, 255, 0.16);
   --spine-glow:   14px;
   --spine-radius: 3px;
-  --shelf:        var(--accent);
+  --tile-radius:  16px;
+  --hero-lift:    0 0 0 transparent;
 }
 [data-theme="kyoto"] {
   --spine-1: #a94f3b; --spine-1-ink: #fbf8f2;
@@ -542,6 +550,8 @@
   --spine-edge:   0 solid transparent;
   --spine-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
   --spine-radius: 2px 9px 2px 9px;
+  --tile-radius:  4px 18px 4px 18px;
+  --hero-lift:    0 2px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px #c99b4a;
 }
 [data-theme="sticker"] {
   --spine-1: #a78bfa; --spine-1-ink: #17141c;
@@ -554,6 +564,8 @@
   --spine-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
   --spine-radius: 8px;
   --spine-jitter: 1deg;
+  --tile-radius:  16px;
+  --hero-lift:    5px 5px 0 rgba(0, 0, 0, 0.6);
 }
 [data-theme="comic"] {
   --spine-1: #ffd23f; --spine-1-ink: #17141c;
@@ -566,6 +578,8 @@
   --spine-shadow: 3px 3px 0 #1b1820;
   --spine-radius: 3px;
   --spine-jitter: 0.5deg;
+  --tile-radius:  4px;
+  --hero-lift:    5px 5px 0 #1b1820;
 }
 [data-theme="y2k"] {
   --spine-1: #f56ab5; --spine-1-ink: #17141c;
@@ -579,6 +593,8 @@
   --spine-radius: 10px;
   --spine-gloss:  linear-gradient(90deg, rgba(255, 255, 255, 0) 8%,
                     rgba(255, 255, 255, 0.55) 24%, rgba(255, 255, 255, 0) 46%);
+  --tile-radius:  20px;
+  --hero-lift:    0 6px 18px rgba(245, 106, 181, 0.55);
 }
 [data-theme="stone"] {
   --spine-1: #7f6446; --spine-1-ink: #fbf8f2;
@@ -590,6 +606,8 @@
   --spine-edge:   1px solid #c2bbac;
   --spine-shadow: 0 2px 4px rgba(55, 51, 44, 0.15);
   --spine-radius: 2px;
+  --tile-radius:  4px;
+  --hero-lift:    0 8px 16px rgba(55, 51, 44, 0.28);
 }
 
 /* ── Reset ── */

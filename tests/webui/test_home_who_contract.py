@@ -155,7 +155,7 @@ def test_the_panel_speaks_both_languages() -> None:
         for key in ("none", "loadFailed", "search",
                     "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
                     "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
-                    "pages", "pagesShort", "plateKeys", "newNotebook"):
+                    "pages", "pagesShort", "plateKeys", "newNotebook", "latest", "resume", "page"):
             assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"
@@ -240,13 +240,36 @@ def test_a_notebooks_name_reads_on_its_cloth_in_every_theme() -> None:
 
 
 def test_the_cover_wears_the_theme_finish_not_its_own() -> None:
-    """La copertina non decide filo, ombra, angoli, bagliore, lucido e storta:
+    """La tessera non decide filo, ombra, angoli, bagliore, lucido e storta:
     li legge dal tema. Un valore scritto qui varrebbe per sette temi che non
-    si somigliano."""
+    si somigliano. Dal 06/10/2026 gli angoli sono quelli delle tessere
+    (`--tile-radius`), e la tessera grande si stacca come dice il tema."""
     css = CSS.read_text(encoding="utf-8")
     cover = css.split("\n.home-who-cover {", 1)[1].split("}", 1)[0]
-    for token in ("--spine-edge", "--spine-radius", "--spine-shadow", "--spine-glow",
+    for token in ("--spine-edge", "--tile-radius", "--spine-shadow", "--spine-glow",
                   "--spine-gloss", "--spine-jitter", "--cover", "--cover-ink"):
-        assert f"var({token}" in cover, f"la copertina non legge {token}"
+        assert f"var({token}" in cover, f"la tessera non legge {token}"
+    hero = css.split("\n.home-who-cover.is-hero {", 1)[1].split("}", 1)[0]
+    assert "var(--hero-lift)" in hero, "la tessera grande non si stacca piu' come dice il tema"
+
+
+def test_every_theme_finishes_the_tiles() -> None:
+    """Gli angoli e lo stacco della tessera grande stanno accanto alle tele, e
+    un tema che non li dice eredita quelli di Chanel: un anello d'oro su un
+    fumetto. Ogni tema li scrive."""
+    css = THEMES_CSS.read_text(encoding="utf-8")
+    section = css.split("/* ── Le tele dei quaderni ──", 1)[1].split("/* ── Reset ── */", 1)[0]
+    blocks = dict(re.findall(r'(:root|\[data-theme="(?:\w+)"\])\s*\{([^}]*)\}', section))
+    for theme in THEMES:
+        own = blocks[":root" if theme == "chanel" else f'[data-theme="{theme}"]']
+        for token in ("--tile-radius", "--hero-lift"):
+            assert f"{token}:" in own, f"{theme}: manca {token}"
+
+
+def test_the_bento_keeps_every_tile_easy_to_touch() -> None:
+    """La tessera piu' piccola e' una colonna per una fila: mai sotto i 112 px
+    di larghezza e i 104 di altezza, ben sopra i 44 di un tocco comodo."""
+    css = CSS.read_text(encoding="utf-8")
     shelf = css.split("\n.home-who-shelf {", 1)[1].split("}", 1)[0]
-    assert "var(--shelf)" in shelf, "il ripiano non e' piu' del tema"
+    assert "minmax(112px, 1fr)" in shelf and "grid-auto-rows: 104px" in shelf
+    assert "grid-auto-flow: dense" in shelf, "le tessere grandi lasciano buchi"

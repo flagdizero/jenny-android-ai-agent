@@ -1102,7 +1102,10 @@
       "create": "Create “{name}”",
       "emptyHint": "A notebook keeps its pages, its drawers and a chat of its own together: create one here, or ask Jenny.",
       "pages": "{count} pages",
+      "page": "{count} page",
       "pagesShort": "{count} p",
+      "latest": "Most recent",
+      "resume": "Resume",
       "plateKeys": "⏎ open · ⇧⏎ sheet · ←→ choose"
     },
     "reader": {

@@ -1102,7 +1102,10 @@
       "create": "Crea «{name}»",
       "emptyHint": "Un quaderno tiene insieme le pagine, i cassetti e una chat sua: crealo qui, o chiedilo a Jenny.",
       "pages": "{count} pagine",
+      "page": "{count} pagina",
       "pagesShort": "{count} p",
+      "latest": "Il più recente",
+      "resume": "Riprendi",
       "plateKeys": "⏎ apri · ⇧⏎ scheda · ←→ scegli"
     },
     "reader": {

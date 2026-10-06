@@ -13,6 +13,13 @@
  *  fra cinque varianti di scaffale, tutte costruite sui token del tema: questa
  *  perche' i nomi si leggono senza toccare niente.
  *
+ *  **Dal 06/10/2026 la mensola «In uso» e' un bento**, scelto dall'utente fra
+ *  dieci varianti: il quaderno piu' recente e' una tessera grande, due per due,
+ *  con «Riprendi»; i due con piu' pagine sono alti e il terzo e' largo; gli
+ *  altri sono tessere semplici, mai sotto i 104 px. Solo nell'ordine per data:
+ *  in A–Z, nei risultati e in archivio le tessere sono tutte uguali, perche'
+ *  li' conta la fila e una tessera grande la romperebbe.
+ *
  *  **La conversazione personale non c'e'.** Fino al 05/10/2026 era la prima
  *  riga, poi la prima copertina; ma e' gia' la voce «Jenny» della fila in
  *  alto, a un tocco da qualunque pagina, e qui era un doppione (deciso
@@ -224,7 +231,8 @@ export class WhoPanel {
     body.appendChild(this._head(i18n.t('home.who.inUse'), inUse.length,
                                 { sortable: projects.length > 1 }));
     const shelf = this._shelf(stale);
-    for (const project of inUse) shelf.appendChild(this._cover(project));
+    const sizes = this._sort === 'az' ? new Map() : bentoSizes(inUse);
+    for (const project of inUse) shelf.appendChild(this._cover(project, { size: sizes.get(project.name) }));
     if (!projects.length) shelf.appendChild(this._slot());
     body.appendChild(shelf);
     if (!projects.length && !stale) {
@@ -346,10 +354,14 @@ export class WhoPanel {
     return el;
   }
 
-  _cover(item, { query = '', archived = false } = {}) {
+  /** Una tessera. *size* e' la sua misura nel bento (`hero`, `tall`, `wide`),
+   *  assente per quella semplice; v. `bentoSizes`. */
+  _cover(item, { query = '', archived = false, size = '' } = {}) {
     const cover = this._command(item.name === this._currentProject(), () => this._pick(item.name));
     cover.dataset.name = item.name;
     paintSpine(cover, item.name);
+    if (size) cover.classList.add(`is-${size}`);
+    if (archived) cover.classList.add('is-archived');
     if (this._onHold) setupLongPress(cover, () => this._onHold(item.name));
 
     const age = ago(item.modified, (key, vars) => i18n.t(key, vars));
@@ -358,31 +370,46 @@ export class WhoPanel {
        essere tagliato a due righe, e l'iniziale e il numero corto sono segni. */
     cover.setAttribute('aria-label', [
       item.name,
-      pages === null ? '' : i18n.t('home.who.pages', { count: pages }),
+      pages === null ? '' : pagesWord(pages),
       age,
       archived ? i18n.t('home.who.inArchive') : '',
     ].filter(Boolean).join(', '));
 
-    if (pages !== null) {
-      const count = document.createElement('span');
-      count.className = 'home-who-cover-pages';
-      count.setAttribute('aria-hidden', 'true');
-      count.textContent = i18n.t('home.who.pagesShort', { count: pages });
-      cover.appendChild(count);
-    }
-
+    /* L'iniziale grande, che esce dal bordo in basso a destra: e' un segno,
+       e sta sotto le parole perche' viene prima di loro (la casa non usa
+       `z-index`, v. `.home-who-cover-glyph`). */
     const glyph = document.createElement('span');
     glyph.className = 'home-who-cover-glyph';
     glyph.setAttribute('aria-hidden', 'true');
     glyph.textContent = initialOf(item.name);
     cover.appendChild(glyph);
 
+    if (size === 'hero') {
+      const kicker = document.createElement('span');
+      kicker.className = 'home-who-cover-kicker';
+      kicker.textContent = i18n.t('home.who.latest');
+      cover.appendChild(kicker);
+    }
+
     cover.appendChild(this._name(item.name, query));
 
+    /* Sulla tessera semplice c'e' posto per una cosa sola prima che la riga
+       arrivi sotto l'iniziale: le pagine, o la data se le pagine non si
+       sanno. Le tessere grandi dicono tutte e due. */
     const when = document.createElement('span');
     when.className = 'home-who-cover-meta';
-    when.textContent = archived ? `${age} · ${i18n.t('home.who.inArchive')}` : age;
+    const count = pages === null ? ''
+      : (size === 'hero' ? pagesWord(pages) : i18n.t('home.who.pagesShort', { count: pages }));
+    when.textContent = size ? [count, age].filter(Boolean).join(' · ') : (count || age);
     cover.appendChild(when);
+
+    if (size === 'hero') {
+      const resume = document.createElement('span');
+      resume.className = 'home-who-cover-resume';
+      resume.setAttribute('aria-hidden', 'true');
+      resume.textContent = i18n.t('home.who.resume');
+      cover.appendChild(resume);
+    }
 
     this._maybeCheck(cover);
     return cover;
@@ -526,9 +553,13 @@ export class WhoPanel {
     return [...(this._body?.querySelectorAll?.('.home-who-cover') || [])];
   }
 
-  /* Le frecce fra le copertine, in fila come si leggono: ←→ di una, ↑↓ di una
-     fila (le colonne le conta il foglio di stile, qui si leggono). ⇧⏎ apre la
-     scheda, come nel cassetto; ⏎ da solo e' il clic del bottone. */
+  /* Le frecce fra le tessere, verso quella che sta **a schermo** in quella
+     direzione: nel bento le misure sono diverse e la griglia si compatta,
+     quindi l'ordine del DOM non e' piu' quello che si vede. ←→ in fondo a una
+     fila passano alla precedente o alla seguente nell'ordine; ↑ dalla prima
+     fila torna al campo. Senza misure (un DOM senza layout) decide l'ordine,
+     con le colonne lette dal foglio di stile. ⇧⏎ apre la scheda, come nel
+     cassetto; ⏎ da solo e' il clic del bottone. */
   _onCoverKey(e) {
     const cover = e.target?.closest?.('.home-who-cover');
     if (!cover) return;
@@ -537,13 +568,23 @@ export class WhoPanel {
       this._onHold?.(cover.dataset.name);
       return;
     }
-    const row = () => columnsOf(cover.parentElement);
-    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -row(), ArrowDown: row() }[e.key];
-    if (!delta) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
     e.preventDefault();
     const all = this._covers();
+    const seen = nearestOnScreen(cover, all, e.key);
+    if (seen) {
+      seen.focus();
+      return;
+    }
+    const sideways = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    if (seen === null && !sideways) {
+      /* Sopra la prima fila c'e' il campo: ↑ ci torna, come ↓ ne scende. */
+      if (e.key === 'ArrowUp') this._search?.focus();
+      return;
+    }
+    const row = () => columnsOf(cover.parentElement);
+    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -row(), ArrowDown: row() }[e.key];
     const at = all.indexOf(cover) + delta;
-    /* Sopra la prima fila c'e' il campo: ↑ ci torna, come ↓ ne scende. */
     if (at < 0 && e.key === 'ArrowUp') this._search?.focus();
     else all[Math.max(0, Math.min(all.length - 1, at))]?.focus();
   }
@@ -579,9 +620,65 @@ export class WhoPanel {
   }
 }
 
+/* «1 pagina» e non «1 pagine»: le traduzioni non conoscono il plurale, quindi
+   il singolare ha la sua chiave. */
+function pagesWord(count) {
+  return i18n.t(count === 1 ? 'home.who.page' : 'home.who.pages', { count });
+}
+
+/** Le misure del bento per i quaderni «In uso», gia' in ordine di data: nome →
+ *  `hero` | `tall` | `wide`. Il primo e' la tessera grande; fra gli altri, i
+ *  due con piu' pagine sono alti e il terzo e' largo (a pari pagine vince il
+ *  piu' recente). Un quaderno senza pagine, o di cui non si sanno, resta
+ *  semplice: una tessera alta che dice «0 p» non ha niente da mostrare. */
+export function bentoSizes(inUse) {
+  const sizes = new Map();
+  if (!inUse.length) return sizes;
+  sizes.set(inUse[0].name, 'hero');
+  const thick = inUse.slice(1)
+    .filter((it) => typeof it.pages === 'number' && it.pages > 0)
+    .sort((a, b) => b.pages - a.pages);
+  for (const it of thick.slice(0, 2)) sizes.set(it.name, 'tall');
+  if (thick[2]) sizes.set(thick[2].name, 'wide');
+  return sizes;
+}
+
 /* Quante colonne ha la mensola adesso: le decide il foglio di stile
    (`auto-fill`), quindi si leggono invece di supporle. */
 function columnsOf(shelf) {
   const cols = globalThis.getComputedStyle?.(shelf)?.gridTemplateColumns || '';
   return Math.max(1, cols.split(' ').filter(Boolean).length);
+}
+
+/* La tessera piu' vicina a *cover* nella direzione di *key*, guardando i
+   rettangoli a schermo: prima chi sta nella stessa fila (o colonna), poi il
+   piu' vicino lungo la freccia. `null` se da quella parte non c'e' niente,
+   `undefined` se le misure non ci sono e deve decidere l'ordine. */
+function nearestOnScreen(cover, all, key) {
+  const from = cover.getBoundingClientRect?.();
+  if (!from || !(from.width || from.height)) return undefined;
+  const across = key === 'ArrowLeft' || key === 'ArrowRight';
+  const sign = key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 1;
+  const gap = (a0, a1, b0, b1) => Math.max(0, a0 - b1, b0 - a1);
+  let best = null;
+  let bestScore = Infinity;
+  for (const other of all) {
+    if (other === cover) continue;
+    const r = other.getBoundingClientRect();
+    const ahead = across
+      ? (sign > 0 ? r.left >= from.right - 1 : r.right <= from.left + 1)
+      : (sign > 0 ? r.top >= from.bottom - 1 : r.bottom <= from.top + 1);
+    if (!ahead) continue;
+    const off = across ? gap(r.top, r.bottom, from.top, from.bottom)
+      : gap(r.left, r.right, from.left, from.right);
+    /* ←→ restano nella fila: in fondo decide l'ordine, che va a capo. */
+    if (across && off > 0) continue;
+    const along = across ? Math.abs(r.left - from.left) : Math.abs(r.top - from.top);
+    const score = off * 10000 + along;
+    if (score < bestScore) {
+      best = other;
+      bestScore = score;
+    }
+  }
+  return best;
 }

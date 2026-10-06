@@ -1205,9 +1205,10 @@ body.home {
 }
 
 /* ── «Con chi parli»: la vetrina dei quaderni ──
-   Dal 05/10/2026 i quaderni sono copertine su mensole, non righe. Tutto qui
-   legge i token del tema: le tele (`--spine-N`) e la loro finitura stanno in
-   mobile-style.css, accanto agli altri colori, e qui c'e' solo la forma. */
+   Dal 05/10/2026 i quaderni sono copertine, non righe; dal 06/10/2026 sono le
+   tessere di un bento. Tutto qui legge i token del tema: le tele (`--spine-N`)
+   e la loro finitura stanno in mobile-style.css, accanto agli altri colori, e
+   qui c'e' solo la forma. */
 
 .home-who-label {
   padding: 0;
@@ -1223,9 +1224,6 @@ body.home {
   padding: 10px 4px 4px;
   border-top: 1px solid var(--border);
 }
-/* Dopo una mensola il ripiano separa gia': un secondo filo venti pixel
-   sotto sembrava un difetto (visto su jenny_square il 05/10/2026). */
-.home-who-shelf + .home-who-label.is-divided { border-top: 0; }
 
 /* La ricerca: fuori dall'elenco, ferma in cima. */
 .home-who-search {
@@ -1327,37 +1325,38 @@ body.home {
   transform: translateY(-2px) rotate(45deg);
 }
 
-/* La mensola. Le colonne le decide la larghezza (`auto-fill`), e il ripiano
-   sotto ogni fila e' lo sfondo della griglia: un filo ogni `150 + 22` px, due
-   pixel sotto le copertine. Cosi' non serve contare le colonne in JS, e su
-   uno schermo piu' largo le file si allungano da sole. Il `padding-bottom`
-   e' il posto per l'ultimo ripiano, che cade fuori dall'ultima fila. */
+/* Il bento. Le colonne le decide la larghezza (`auto-fill`, mai sotto i 112
+   px: quattro sul Titan, tre su uno schermo da 480), le file sono alte 104, e
+   le tessere grandi ne prendono due (`is-hero`, `is-tall`, `is-wide`, decise
+   da `bentoSizes` in home-who.js). `dense` riempie i buchi che una tessera
+   grande lascia, quindi a schermo l'ordine e' quasi quello per data: le frecce
+   della tastiera guardano dove stanno le tessere, non l'ordine del DOM. Non
+   c'e' piu' un ripiano: le tessere stanno da sole. */
 .home-who-shelf {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  grid-auto-rows: 150px;
-  column-gap: 14px;
-  row-gap: 22px;
-  padding: 0 6px 8px;
+  grid-auto-rows: 104px;
+  grid-auto-flow: dense;
+  gap: 10px;
+  padding: 2px 0 8px;
   margin-bottom: 8px;
-  background: repeating-linear-gradient(to bottom,
-    transparent 0 152px, var(--shelf) 152px 155px, transparent 155px 172px);
 }
 .home-who-shelf.is-stale { opacity: 0.6; }
-.home-who-shelf.is-archive .home-who-cover { opacity: 0.75; }
+.home-who-shelf.is-archive .home-who-cover,
+.home-who-cover.is-archived { opacity: 0.75; }
 
-/* La copertina. Tela e inchiostro arrivano dal nome (`paintSpine`), la
-   finitura dal tema: il filo, l'ombra, gli angoli, il bagliore, il lucido, la
-   storta. Una copertina e' un comando, e si spoglia del vestito da bottone. */
+/* La tessera. Tela e inchiostro arrivano dal nome (`paintSpine`), la finitura
+   dal tema: il filo, l'ombra, gli angoli, il bagliore, il lucido, la storta.
+   Il nome in alto, la riga in basso, e dietro l'iniziale grande che esce dal
+   bordo. Una tessera e' un comando, e si spoglia del vestito da bottone. */
 .home-who-cover {
   position: relative;
   min-width: 0;
-  height: 150px;
   display: flex;
   flex-direction: column;
-  padding: 0;
+  padding: 12px 13px;
   border: var(--spine-edge);
-  border-radius: var(--spine-radius);
+  border-radius: var(--tile-radius);
   background-color: var(--cover, var(--surface));
   background-image: var(--spine-gloss);
   color: var(--cover-ink, var(--text));
@@ -1379,75 +1378,138 @@ body.home {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-/* Il dorso: una banda dell'inchiostro sulla tela, col filo della cerniera.
-   E' cio' che fa di un rettangolo colorato un libro. */
-.home-who-cover::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 14px;
-  background: rgba(0, 0, 0, 0.16);
-  background: color-mix(in srgb, var(--cover-ink, var(--text)) 18%, transparent);
-  box-shadow: 1px 0 0 color-mix(in srgb, var(--cover-ink, var(--text)) 25%, transparent);
-  pointer-events: none;
+.home-who-cover.is-tall { grid-row: span 2; }
+.home-who-cover.is-wide { grid-column: span 2; }
+/* La tessera grande: il quaderno piu' recente, due per due, con «Riprendi».
+   Si stacca dalle altre come dice il tema (`--hero-lift`), e in Synthwave col
+   doppio del bagliore. In griglia e non in colonna: in basso la riga e il
+   bottone stanno sulla stessa linea. */
+.home-who-cover.is-hero {
+  grid-column: span 2;
+  grid-row: span 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr auto;
+  column-gap: 10px;
+  padding: 18px;
+  box-shadow: var(--hero-lift),
+    0 0 calc(var(--spine-glow) * 2) color-mix(in srgb, var(--cover, transparent) 45%, transparent);
 }
 /* Il solo segnale di pressione: senza, su un telefono un tocco sembra non
    registrato finche' la chat non si e' gia' ricaricata. */
 .home-who-cover:active { filter: brightness(0.92); }
-/* Il fuoco da tastiera: la copertina si alza e prende l'anello. */
+/* Il fuoco da tastiera: la tessera si alza e prende l'anello. */
 .home-who-cover:focus-visible {
   outline: none;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
   box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-ring, var(--text-accent));
 }
-.home-who-cover-pages {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  font-size: 10.5px;
-  font-weight: 600;
-  opacity: 0.85;
+/* Le parole si leggono sempre, anche sopra l'iniziale: un nome lungo o una
+   riga di ricerca possono arrivarle addosso, ed e' inchiostro su inchiostro.
+   L'alone del colore della tela le stacca (visto sull'emulatore il
+   06/10/2026: «13 p · 2 days ago» sparito dentro la P). */
+.home-who-cover-kicker,
+.home-who-cover-name,
+.home-who-cover-meta {
+  text-shadow: 0 0 2px var(--cover, var(--surface)), 0 0 4px var(--cover, var(--surface)),
+    0 0 8px var(--cover, var(--surface));
 }
+.home-who-cover-kicker {
+  position: relative;
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+/* L'iniziale: un segno, sotto le parole, che esce in basso a destra. Sta
+   sotto senza `z-index`: e' il primo figlio, e le parole, posizionate anche
+   loro, vengono dopo. */
 .home-who-cover-glyph {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  padding-left: 14px;
+  position: absolute;
+  right: -8px;
+  bottom: -26px;
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 96px;
+  font-weight: 700;
   line-height: 1;
+  opacity: 0.92;
+  pointer-events: none;
+}
+.home-who-cover.is-tall .home-who-cover-glyph { font-size: 150px; bottom: -40px; }
+.home-who-cover.is-hero .home-who-cover-glyph {
+  right: -18px;
+  bottom: -64px;
+  font-size: 230px;
+  opacity: 0.3;
 }
 /* Il nome, su due righe al massimo: un nome di quaderno arriva a 64
-   caratteri, e intero lo dicono l'etichetta, la targhetta e la scheda. */
+   caratteri, e intero lo dicono l'etichetta, la targhetta e la scheda. Sulla
+   tessera grande e' il titolo. */
 .home-who-cover-name {
+  position: relative;
+  grid-column: 1 / -1;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  padding: 0 10px 0 22px;
+  padding-right: 18px;
   font-family: var(--font-display);
   font-size: 14px;
   line-height: 1.2;
   overflow-wrap: anywhere;
+  hyphens: auto;
 }
+.home-who-cover.is-hero .home-who-cover-name { font-size: 24px; line-height: 1.1; }
 .home-who-cover-name mark {
   border-radius: 2px;
   background: color-mix(in srgb, currentColor 24%, transparent);
   color: inherit;
 }
+/* La riga in basso. Sulla tessera semplice si ferma prima dell'iniziale. */
 .home-who-cover-meta {
-  padding: 2px 10px 10px 22px;
-  font-size: 11px;
+  position: relative;
+  max-width: 62%;
+  margin-top: auto;
+  font-size: 11.5px;
+  font-weight: 600;
   opacity: 0.8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Sulla tessera alta l'iniziale occupa tutta la meta' di sotto: la riga
+   sale sotto il nome. Su quella larga resta in basso, fino all'iniziale. */
+.home-who-cover.is-tall .home-who-cover-meta { max-width: 100%; margin-top: 6px; }
+.home-who-cover.is-wide .home-who-cover-meta { max-width: calc(100% - 84px); }
+.home-who-cover.is-hero .home-who-cover-meta {
+  grid-row: 4;
+  align-self: center;
+  max-width: none;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+/* «Riprendi»: si legge, ma non e' un secondo bottone — la tessera intera lo
+   e', e un tocco ovunque fa la stessa cosa. Inchiostro e tela scambiati. */
+.home-who-cover-resume {
+  position: relative;
+  grid-row: 4;
+  grid-column: 2;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--cover-ink, var(--text));
+  color: var(--cover, var(--surface));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 34px;
+}
 
-/* Dove sei: la spunta, in alto a destra, al posto del numero di pagine. */
+/* Dove sei: la spunta, in alto a destra. */
 .home-who-check {
   position: absolute;
   top: 7px;
@@ -1461,12 +1523,11 @@ body.home {
   color: var(--on-accent);
   font-size: 14px;
 }
-.home-who-cover.is-current .home-who-cover-pages { display: none; }
 
 /* Le forme degli stati: il posto vuoto quando non c'e' nessun quaderno, le
-   copertine fantasma mentre si legge, il «crea» di una ricerca a vuoto. */
+   tessere fantasma mentre si legge, il «crea» di una ricerca a vuoto. L'altezza
+   la da' la fila del bento. */
 .home-who-slot {
-  height: 150px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1475,7 +1536,7 @@ body.home {
   gap: 8px;
   padding: 0 10px;
   border: 1.5px dashed var(--border-strong);
-  border-radius: var(--spine-radius);
+  border-radius: var(--tile-radius);
   background: transparent;
   color: var(--text-accent);
   font: inherit;
@@ -1487,10 +1548,10 @@ body.home {
 }
 .home-who-slot .ti { font-size: 22px; }
 .home-who-ghost {
-  height: 150px;
-  border-radius: var(--spine-radius);
+  border-radius: var(--tile-radius);
   background: var(--surface);
 }
+.home-who-ghost:first-child { grid-column: span 2; grid-row: span 2; }
 .home-who-create {
   align-self: flex-start;
   min-height: 44px;
