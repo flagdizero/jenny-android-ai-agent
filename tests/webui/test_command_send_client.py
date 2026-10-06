@@ -68,6 +68,7 @@ function makeChat({ draft = '', images = [] } = {}) {
     // azioni: entrambi fuori misura qui.
     _setMessageSource() {},
     _appendMsgActions() {},
+    _appendTime() {},
     _resetStreamState() {},
     _updateSendState() {},
     _updateActions() {},

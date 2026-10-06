@@ -74,6 +74,10 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const i18n = { t: (key) => 'i18n:' + key };
+/* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
+   suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 function makeChat() {
   const chat = {
@@ -99,6 +103,7 @@ function makeChat() {
     __PREPEND__,
     __IN_BATCH__,
     __APPEND_USER__,
+    __TIME_EL__,
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
     __APPEND__,
@@ -130,6 +135,7 @@ def _harness() -> str:
         .replace("__PREPEND__", member(src, "prependTurns"))
         .replace("__IN_BATCH__", member(src, "_inBatch"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
         .replace("__APPEND__", member(src, "_append"))
@@ -227,6 +233,22 @@ def test_an_older_page_does_not_wake_the_empty_state() -> None:
 
 
 # ── Il filo con cui la casa è legata al modulo condiviso ─────────────────────
+
+
+def test_a_turn_takes_the_time_of_its_last_part() -> None:
+    """L'ora che la cronologia porta (``sentAt``) arriva alla bolla: quella di
+    chi scrive la sua, quella di una risposta in piu' pezzi l'ultima — quando
+    il turno si e' chiuso, come dal vivo."""
+    _run_js("""
+      const chat = makeChat();
+      const turns = chat._buildTurns([
+        { role: 'user', content: 'ciao', sentAt: 100 },
+        { role: 'assistant', content: 'primo', turnId: 't1', sentAt: 200 },
+        { role: 'assistant', content: 'secondo', turnId: 't1', sentAt: 300 },
+        { role: 'user', content: 'di prima', },
+      ]);
+      assert.deepEqual(turns.map((t) => t.at), [100, 300, null]);
+    """)
 
 
 def test_the_house_measures_and_listens_on_the_same_element() -> None:

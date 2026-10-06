@@ -90,6 +90,7 @@ function makeChat({ text = '', media = [] } = {}) {
     _renderMediaAttachments() {},
     _setMessageSource() {},
     _appendMsgActions() {},
+    _appendTime() {},
     _updateSendState() {},
     _updateActions() {},
     scrollToBottom() {},

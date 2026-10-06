@@ -42,6 +42,10 @@ const i18n = {
 };
 const { describeWireError } = await import('__WIRE_ERROR_URL__');
 const sessionManager = { currentChatId: 'default' };
+/* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
+   suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 let allNodes = [];
 function makeNode() {
@@ -83,6 +87,7 @@ function makeChat() {
     __TAKE_BACK__,
     __NOTE__,
     __APPEND_USER__,
+    __TIME_EL__,
     __APPEND__,
     __BELONGS__,
     __CROSSES__,
@@ -112,6 +117,7 @@ def _harness_src() -> str:
         .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
         .replace("__NOTE__", member(src, "_appendNote"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND__", member(src, "_append"))
         .replace("__BELONGS__", member(src, "_belongsHere"))
         .replace("__CROSSES__", member(src, "_crossesTurn"))

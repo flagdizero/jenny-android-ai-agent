@@ -45,6 +45,7 @@ class Chat {
   _resetStreamState() {}
   _setMessageSource() {}
   _appendMsgActions() {}
+  _appendTime() {}
   _renderMediaAttachments() {}
   scrollToBottom() {}
   startNewChat() {}

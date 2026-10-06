@@ -325,6 +325,7 @@ _UI_MANIFEST = [
     "assets/shared/theme.js",
     "assets/shared/update-flow.js",
     "assets/shared/when.js",
+    "assets/shared/chat-time.js",
     "assets/shared/type-ahead.js",
     "assets/shared/ui-query.js",
     "assets/shared/utils.js",

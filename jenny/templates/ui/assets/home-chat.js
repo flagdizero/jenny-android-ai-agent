@@ -50,6 +50,7 @@ import { renderRich } from './shared/rich-content.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
+import { chatTime, chatTimeIso } from './shared/chat-time.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -339,8 +340,8 @@ export class HomeChat {
       this._inBatch(() => {
         for (const turn of this._buildTurns(messages)) {
           if (turn.boundary) this._appendBoundary();
-          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
-          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs);
+          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at);
+          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at);
         }
       });
     } finally {
@@ -368,8 +369,8 @@ export class HomeChat {
     this._inBatch(() => {
       for (const turn of this._buildTurns(messages).reverse()) {
         if (turn.boundary) this._appendBoundary(true);
-        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
-        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs);
+        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at);
+        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at);
       }
     });
   }
@@ -423,6 +424,7 @@ export class HomeChat {
           text: msg.text || msg.content || '',
           origin: msg.origin,
           media: Array.isArray(msg.media) ? msg.media : [],
+          at: msg.sentAt ?? null,
         });
         continue;
       }
@@ -430,8 +432,11 @@ export class HomeChat {
       // Regola 4: senza id non si accorpa. Mai.
       if (!current || !turnId || current.turnId !== turnId) {
         flush();
-        current = { turnId, content: '', media: [], latencyMs: null };
+        current = { turnId, content: '', media: [], latencyMs: null, at: null };
       }
+      /* L'ora di una risposta e' quella del suo ultimo pezzo: quando il turno
+         si e' chiuso, come dal vivo (v. `_resetTurn`). */
+      if (msg.sentAt != null) current.at = msg.sentAt;
       if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
       /* I secondi sono l'unica cosa che l'officina teneva e la casa buttava e
          che adesso serve anche qui: sono meta' della riga che separa una
@@ -593,7 +598,7 @@ export class HomeChat {
    */
   appendOwn(text, media = []) {
     this._resetTurn();
-    const node = this._appendUser(text, null, media);
+    const node = this._appendUser(text, null, media, false, Date.now());
     this.scrollToBottom();
     /* Partito non vuol dire entrato: il gateway può ancora rifiutarlo (un
        allegato che non riesce ad aprire). Finché non arriva niente che dimostri
@@ -667,7 +672,7 @@ export class HomeChat {
     const media = msg.media_urls || msg.media || [];
     if (!text && !media.length) return;
     this._resetTurn();
-    this._appendUser(text, msg.origin_channel || msg.origin, media);
+    this._appendUser(text, msg.origin_channel || msg.origin, media, false, Date.now());
     this._follow();
   }
 
@@ -695,7 +700,10 @@ export class HomeChat {
     }
     if (this.turnNode) {
       const closed = this.turnNode;
-      this._tailOf(closed, this._seconds);
+      /* Dal vivo l'ora e' quella dell'orologio di qui: il frame non ne porta
+         una, e per una risposta appena chiusa dice la stessa cosa del
+         transcript (che la rilettura usera'). */
+      this._tailOf(closed, this._seconds, Date.now());
       /* La bolla e' cresciuta di una riga **dopo** essere stata misurata: il
          margine per scansare la mascotte va rifatto, e chi era in fondo deve
          restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
@@ -730,7 +738,7 @@ export class HomeChat {
 
   /* ── Disegno ── */
 
-  _appendUser(text, origin, media, toTop = false) {
+  _appendUser(text, origin, media, toTop = false, at = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-user';
     const badge = this._originBadge(origin);
@@ -743,10 +751,14 @@ export class HomeChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
+    /* L'ora, sotto la bolla e fuori dalla sua pelle (che e' di `.home-block`):
+       quel che hai scritto ha la sua, come le risposte. */
+    const time = this._timeEl(at);
+    if (time) node.appendChild(time);
     return this._append(node, toTop);
   }
 
-  _appendAssistant(content, media, toTop = false, latencyMs = null) {
+  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
     if (content) {
@@ -760,11 +772,25 @@ export class HomeChat {
     if (media?.length) this._appendMedia(node, media);
     /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
        misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
-    this._tailOf(node, latencyMs);
+    this._tailOf(node, latencyMs, at);
     this._append(node, toTop);
   }
 
-  /** La riga in coda a una risposta: il Copia e i secondi che ci ha messo.
+  /** L'ora di un messaggio (v. `shared/chat-time.js`), o `null` se non ce
+   *  n'e' una: una cronologia scritta prima del 06/10/2026 che la sessione non
+   *  sa datare resta senza, invece di prendere un'ora inventata. */
+  _timeEl(at) {
+    const text = chatTime(at);
+    if (!text) return null;
+    const el = document.createElement('time');
+    el.className = 'home-time';
+    el.dateTime = chatTimeIso(at);
+    el.textContent = text;
+    return el;
+  }
+
+  /** La riga in coda a una risposta: il Copia, l'ora e i secondi che ci ha
+   *  messo.
    *
    *  **E' anche il confine fra una risposta e la successiva.** In casa non c'e'
    *  ne' bolla ne' avatar: due risposte di fila sono due gruppi di paragrafi,
@@ -772,29 +798,42 @@ export class HomeChat {
    *  una finisce — e invece di una linea che non fa niente, ci sono le due
    *  cose che uno vorrebbe li'.
    *
-   *  Una riga sola, icona e poi tempo, come in officina. I secondi possono
-   *  mancare del tutto: una consegna proattiva non ha un turno dietro, quindi
-   *  nessuno ha misurato niente, e in quel caso resta il solo Copia.
+   *  Una riga sola, icona e poi tempo, come in officina: «⧉ 11:26 · 4.2s». I
+   *  secondi possono mancare del tutto: una consegna proattiva non ha un
+   *  turno dietro, quindi nessuno ha misurato niente, e resta «⧉ 11:40».
    */
-  _tailOf(node, latencyMs) {
+  _tailOf(node, latencyMs, at = null) {
     if (!node || node.querySelector('.home-tail')) return;
     /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col
        suo bordo: e' separato da se', e un Copia sotto le proprie parole non
        serve a nessuno. Oggi nessun chiamante ci passa una bolla utente — la
        guardia e' perche' la prossima non debba ricordarselo. */
     if (!String(node.className).includes('home-msg-jenny')) return;
-    // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
-    if (!this._textOf(node)) return;
+    /* Un turno in cui Jenny ha solo lavorato non ha testo da copiare; una
+       risposta di sole immagini non ha Copia, ma la sua ora si'. */
+    const hasText = Boolean(this._textOf(node));
+    const time = this._timeEl(at);
+    if (!hasText && !time) return;
     const row = document.createElement('div');
     row.className = 'home-tail';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'home-copy';
-    btn.title = i18n.t('chat.copy');
-    btn.setAttribute('aria-label', i18n.t('chat.copy'));
-    btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
-    row.appendChild(btn);
+    if (hasText) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-copy';
+      btn.title = i18n.t('chat.copy');
+      btn.setAttribute('aria-label', i18n.t('chat.copy'));
+      btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
+      row.appendChild(btn);
+    }
+    if (time) row.appendChild(time);
     if (latencyMs != null) {
+      if (time) {
+        const sep = document.createElement('span');
+        sep.className = 'home-tail-sep';
+        sep.setAttribute('aria-hidden', 'true');
+        sep.textContent = '·';
+        row.appendChild(sep);
+      }
       const s = document.createElement('span');
       s.className = 'home-seconds';
       s.textContent = (latencyMs / 1000).toFixed(1) + 's';

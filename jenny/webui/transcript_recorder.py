@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from typing import Any
 
@@ -119,6 +120,12 @@ class WebUITranscriptRecorder:
     def append(self, chat_id: str, event: dict[str, Any]) -> None:
         try:
             dup = json.loads(json.dumps(event, ensure_ascii=False))
+            # L'ora della riga, in ms epoch: la WebUI la mostra sotto ogni
+            # messaggio. Solo su disco, non sul filo — dal vivo il client usa
+            # il proprio orologio, che per un messaggio appena arrivato dice la
+            # stessa cosa. Qui e non in `prepare_and_append` perche' e' l'unico
+            # punto da cui passano tutte le righe.
+            dup.setdefault("at", int(time.time() * 1000))
             append_transcript_object(f"websocket:{chat_id}", dup)
         except (OSError, ValueError, TypeError) as e:
             self._log.warning("webui transcript append failed: {}", e)

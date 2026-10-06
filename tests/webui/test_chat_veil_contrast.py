@@ -131,15 +131,21 @@ def test_the_glass_never_blurs_what_is_behind_it() -> None:
 
 
 def test_the_line_under_a_reply_reads_on_the_veil() -> None:
-    """Copia e i secondi stanno fuori dalla scheda, sul velo: li' i grigi
-    discreti della pagina chat non si leggono (sul caso peggiore stanno sotto
-    3,5 nei temi chiari), quindi sopra il velo prendono il colore del testo, che
-    il primo banco misura."""
+    """Copia, l'ora e i secondi stanno fuori dalla scheda, sul velo — l'ora
+    anche sotto la bolla di chi scrive: li' i grigi discreti della pagina chat
+    non si leggono (sul caso peggiore stanno sotto 3,5 nei temi chiari), quindi
+    sopra il velo prendono il colore del testo, che il primo banco misura."""
     home = HOME_CSS.read_text(encoding="utf-8")
     mobile = MOBILE_CSS.read_text(encoding="utf-8")
-    assert re.search(r"\.home-over \.home-copy,\s*\.home-over \.home-seconds \{ color: var\(--text\); \}", home)
     assert re.search(
-        r":root\.chat-over \.chat-msg-action,\s*:root\.chat-over \.chat-meta \{ color: var\(--text\); \}", mobile
+        r"\.home-over \.home-copy,\s*\.home-over \.home-seconds,\s*\.home-over \.home-time,"
+        r"\s*\.home-over \.home-tail-sep \{ color: var\(--text\); \}",
+        home,
+    )
+    assert re.search(
+        r":root\.chat-over \.chat-msg-action,\s*:root\.chat-over \.chat-meta,"
+        r"\s*:root\.chat-over \.chat-time \{ color: var\(--text\); \}",
+        mobile,
     )
 
 

@@ -1841,7 +1841,8 @@ body {
    velo: nei suoi grigi discreti li' non si legge, quindi prende il colore del
    testo (come `.home-over .home-copy` in casa). */
 :root.chat-over .chat-msg-action,
-:root.chat-over .chat-meta { color: var(--text); }
+:root.chat-over .chat-meta,
+:root.chat-over .chat-time { color: var(--text); }
 :root.chat-over .dock { z-index: 31; }
 :root.chat-over .drawer-backdrop { z-index: 32; }
 :root.chat-over .drawer { z-index: 33; }
@@ -2026,6 +2027,21 @@ body {
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--meta);
+}
+
+/* L'ora del messaggio (06/10/2026): della famiglia dei secondi, nella stessa
+   riga. Il punto fra l'ora e i secondi sta qui e non nel DOM, perche' i due
+   arrivano in ordine diverso dal vivo e dalla cronologia. */
+.chat-time {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chat-time + .chat-meta::before {
+  content: '\00B7';
+  margin-right: 6px;
 }
 
 /* La riga in coda alla bolla: Copia e i secondi. Discreta come `.chat-meta`

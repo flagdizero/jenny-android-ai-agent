@@ -3,6 +3,7 @@
 import asyncio
 import functools
 import json
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -235,6 +236,10 @@ async def test_webui_message_envelope_marks_inbound_metadata(bus: MagicMock) -> 
     assert msg.metadata["webui_turn_id"] == "turn-1"
     assert msg.metadata["_wants_stream"] is True
     lines = read_transcript_lines("websocket:default")
+    # La riga porta l'ora in cui e' stata scritta: la WebUI la mostra sotto il
+    # messaggio.
+    at = lines[0].pop("at")
+    assert isinstance(at, int) and abs(at - time.time() * 1000) < 60_000
     assert lines == [{
         "event": "user",
         "chat_id": "default",

@@ -38,6 +38,7 @@ import { renderRich } from './shared/rich-content.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
+import { chatTime, chatTimeIso } from './shared/chat-time.js';
 import { brandLabel, getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { commandsChip } from './shared/commands-chip.js';
@@ -967,6 +968,7 @@ export class ChatController {
           text: msg.text || msg.content || '',
           origin: msg.origin,
           media: Array.isArray(msg.media) ? msg.media : [],
+          at: msg.sentAt ?? null,
         });
         continue;
       }
@@ -985,8 +987,10 @@ export class ChatController {
       // quindi qui non si spezza niente che fosse legittimamente unito.
       if (!currentTurn || !turnId || currentTurn.turnId !== turnId) {
         if (currentTurn) turns.push(currentTurn);
-        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [] };
+        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [], at: null };
       }
+      // L'ora del turno e' quella del suo ultimo pezzo: quando si e' chiuso.
+      if (msg.sentAt != null) currentTurn.at = msg.sentAt;
       if (msg.toolEvents || msg.tool_events) {
         currentTurn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
       }
@@ -1022,7 +1026,7 @@ export class ChatController {
       if (turn.boundary) {
         this._appendSessionBoundary(turn.text);
       } else if (turn.user) {
-        this.addCompletedMessage(turn.text, 'user', turn.origin, turn.media);
+        this.addCompletedMessage(turn.text, 'user', turn.origin, turn.media, turn.at);
       } else {
         this._flushPersistedTurn(turn);
       }
@@ -1034,7 +1038,7 @@ export class ChatController {
       if (turn.boundary) {
         this._appendSessionBoundary(turn.text, true);
       } else if (turn.user) {
-        this.addCompletedMessageToTop(turn.text, 'user', turn.origin, turn.media);
+        this.addCompletedMessageToTop(turn.text, 'user', turn.origin, turn.media, turn.at);
       } else {
         this._flushPersistedTurn(turn, true);
       }
@@ -1098,6 +1102,7 @@ export class ChatController {
 
     this._appendLatency(node, turn.latencyMs);
     this._appendMsgActions(node);
+    this._appendTime(node, turn.at);
 
     if (toTop) {
       this._insertAtTop(node);
@@ -1146,6 +1151,24 @@ export class ChatController {
     }
     msg.appendChild(row);
     return row;
+  }
+
+  /** L'ora del messaggio nella riga in coda (06/10/2026): «⧉ 11:26 · 4.2s»
+   *  sotto una risposta, «11:26» sotto quel che hai scritto. Fra il Copia e
+   *  i secondi, che possono arrivare prima o dopo di lei: si mette davanti ai
+   *  secondi se ci sono gia', e il punto fra le due lo disegna il CSS
+   *  (`.chat-time + .chat-meta`). Senza un'ora — una cronologia di prima che
+   *  la sessione non sa datare — non si inventa niente. */
+  _appendTime(msg, at) {
+    const text = chatTime(at);
+    if (!msg || !text) return;
+    const row = this._ensureMsgActions(msg);
+    if (row.querySelector(':scope > .chat-time')) return;
+    const el = document.createElement('time');
+    el.className = 'chat-time';
+    el.dateTime = chatTimeIso(at);
+    el.textContent = text;
+    row.insertBefore(el, row.querySelector(':scope > .chat-meta'));
   }
 
   _appendLatency(msg, latencyMs) {
@@ -1275,7 +1298,7 @@ export class ChatController {
     msg.insertBefore(badge, msg.firstChild);
   }
 
-  _buildCompletedMessage(text, role, origin, media) {
+  _buildCompletedMessage(text, role, origin, media, at = null) {
     const msg = document.createElement('div');
     msg.className = `chat-msg chat-msg-${role === 'user' ? 'user' : 'ai'}`;
 
@@ -1295,15 +1318,16 @@ export class ChatController {
     if (role === 'user') this._appendOriginBadge(msg, origin);
     this._setMessageSource(msg, text);
     this._appendMsgActions(msg);
+    this._appendTime(msg, at);
     return msg;
   }
 
-  addCompletedMessage(text, role, origin, media) {
-    this.chatArea.appendChild(this._buildCompletedMessage(text, role, origin, media));
+  addCompletedMessage(text, role, origin, media, at = null) {
+    this.chatArea.appendChild(this._buildCompletedMessage(text, role, origin, media, at));
   }
 
-  addCompletedMessageToTop(text, role, origin, media) {
-    this._insertAtTop(this._buildCompletedMessage(text, role, origin, media));
+  addCompletedMessageToTop(text, role, origin, media, at = null) {
+    this._insertAtTop(this._buildCompletedMessage(text, role, origin, media, at));
   }
 
   activate() {
@@ -1899,6 +1923,9 @@ export class ChatController {
   _handleTurnEnd(latencyMs) {
     this._appendLatency(this._currentMsg, latencyMs);
     this._appendMsgActions(this._currentMsg);
+    // Dal vivo l'ora e' quella di qui, alla chiusura del turno: il frame non
+    // ne porta una, e la rilettura userà quella del transcript.
+    this._appendTime(this._currentMsg, Date.now());
     this._dropTerminatedSubagents();
 
     this._resetStreamState();
@@ -1923,7 +1950,7 @@ export class ChatController {
     const media = msg.media_urls || [];
     if (!text.trim() && !media.length) return;
     this._resetStreamState();
-    this.addCompletedMessage(text, 'user', msg.origin, media);
+    this.addCompletedMessage(text, 'user', msg.origin, media, Date.now());
     this._bumpUnread();
     this.scrollToBottom();
   }
@@ -3621,6 +3648,7 @@ export class ChatController {
     if (entries.length) this._renderMediaAttachments(msg, entries);
     this._setMessageSource(msg, text);
     this._appendMsgActions(msg);
+    this._appendTime(msg, Date.now());
     this.chatArea.appendChild(msg);
     this._autoScroll = true;
     this.scrollToBottom(true);

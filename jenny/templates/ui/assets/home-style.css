@@ -929,6 +929,23 @@ body.home {
   color: var(--text-muted);
 }
 
+/* L'ora di un messaggio (06/10/2026): nella coda di una risposta, fra il
+   Copia e i secondi, e sotto la bolla di chi scrive. Della famiglia dei
+   secondi — stesso carattere, stessa misura, stesso grigio — perche' e' la
+   stessa riga di servizio: si legge se la cerchi, non si fa guardare. */
+.home-time,
+.home-tail-sep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.home-tail-sep { color: var(--text-faint); }
+/* Sotto la bolla, allineata al suo bordo destro (`align-items: flex-end` del
+   messaggio), e piu' vicina a lei che al messaggio dopo. */
+.home-msg-user > .home-time { margin-top: -2px; padding-right: 4px; }
+
 .home-msg-user .home-block {
   padding: 9px 13px;
   border-radius: var(--radius-bubble);
@@ -1782,7 +1799,9 @@ body.home {
    non si legge (il conto e' in `test_chat_veil_contrast.py`), quindi prende il
    colore del testo. Sulla pagina chat resta discreta. */
 .home-over .home-copy,
-.home-over .home-seconds { color: var(--text); }
+.home-over .home-seconds,
+.home-over .home-time,
+.home-over .home-tail-sep { color: var(--text); }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
 /* Il titolo del velo: dove scrivi (v. `HomeApp._applyOverTitle`). Ha la forma
    della voce accesa della fila (`.home-strip-entry.is-on`) e la sua altezza,

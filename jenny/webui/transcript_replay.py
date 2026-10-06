@@ -81,6 +81,15 @@ def replay_transcript_to_ui_messages(
         seq = rec.get("turn_seq")
         if isinstance(seq, (int, float)):
             fields["turnSeq"] = int(seq)
+        # L'ora in cui la riga e' stata scritta (``at``, ms epoch), se c'e': i
+        # transcript scritti prima del 06/10/2026 non ce l'hanno, e allora il
+        # messaggio non ne ha una. Sta qui per la stessa ragione del confine qui
+        # sotto: e' il punto attraversato da tutte le costruzioni di messaggio.
+        # Per una risposta conta poi la chiusura del turno (``stamp_sent_at``);
+        # senza, resta l'ora della riga che ne ha portato il testo.
+        at = rec.get("at")
+        if isinstance(at, (int, float)) and not isinstance(at, bool) and at > 0:
+            fields["sentAt"] = int(at)
         if rec.get("session_boundary"):
             # Marcatore di `/new`. Il replay ricostruisce i messaggi campo per campo
             # invece di rigirare il record salvato, quindi un flag non elencato qui
@@ -267,6 +276,16 @@ def replay_transcript_to_ui_messages(
                     "latencyMs": latency_ms,
                     "isStreaming": False,
                 }
+                return
+
+    def stamp_sent_at(sent_at: int) -> None:
+        """L'ora di una risposta e' quella in cui il turno si chiude: e' quando
+        la coda compare sotto la bolla, anche dal vivo."""
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                return
+            if messages[i].get("role") == "assistant" and messages[i].get("kind") != "trace":
+                messages[i] = {**messages[i], "sentAt": sent_at}
                 return
 
     def absorb_complete(extra: dict[str, Any], idx: int) -> None:
@@ -645,6 +664,9 @@ def replay_transcript_to_ui_messages(
         lat = rec.get("latency_ms")
         if isinstance(lat, (int, float)) and lat >= 0:
             stamp_latency(int(lat))
+        at = rec.get("at")
+        if isinstance(at, (int, float)) and not isinstance(at, bool) and at > 0:
+            stamp_sent_at(int(at))
         buffer_message_id = None
         buffer_parts = []
         return
