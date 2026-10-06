@@ -312,8 +312,12 @@ class AppTool(Tool):
                       if name in last}
             reading = self._reading(summary_view(workspace, live, params))
         what = "updated" if existed else "live"
-        return (f"`{slug}` is {what}{' — ' + reading if reading else ''}. It is in the user's "
-                "App page now, with its tools. Tell them in one or two lines what it does"
+        section = m.section
+        strip = (f" On a board it is a strip {section.size} ("
+                 + ", ".join(b["kind"] for b in section.blocks) + ").") \
+            if section is not None and section.blocks else ""
+        return (f"`{slug}` is {what}{' — ' + reading if reading else ''}.{strip} It is in the "
+                "user's App page now, with its tools. Tell them in one or two lines what it does"
                 + ("" if existed else " — and, if it is about a notebook's subject, offer to put "
                    "it on that board with action=place") + ".")
 

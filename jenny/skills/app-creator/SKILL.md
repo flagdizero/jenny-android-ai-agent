@@ -15,8 +15,8 @@ locked: true
 A Jenny App is a folder in `apps/<slug>/` (workspace-relative). It is always **general** — it
 lives in the App page, not inside a notebook — and every part is optional: a screen for the
 user, typed actions for the agent, a **reader** that reads something by itself on a clock, and
-a **summary**, the way it shows on its own card on a notebook board (the value in place of the
-photo; a tap opens the screen).
+a **summary**, the way it shows on a notebook board: a **strip** of a few blocks (a value, a
+list, a week…) that the house draws; a tap opens the screen.
 If it needs a screen, a live value or a place on a board, it's an app; if it only lives in
 chat, it's a skill.
 
@@ -40,10 +40,12 @@ approve; an app they do not like, they delete.
 </rule>
 
 <rule>
-**Every app that keeps state declares a `summary`** (see the reference): a reader, or any
-storage action that writes, means there is something to show at a glance — "38 %", "7 to
-buy", "€ 12,430". Do not ask the user whether they want it: decide the summary yourself
-from what the app is for. An app with no state (a calculator) has none.
+**Every app that keeps state declares a `summary` with `blocks`** (see the reference): a
+reader, or any storage action that writes, means there is something to show at a glance —
+"38 %", "4 to buy", "€ 12,430". Do not ask the user whether they want it, nor which blocks:
+choose them yourself from what the app is for — the one thing that matters first, then at most
+one or two blocks of context. The strip's size (S/M/L/XL) follows from the blocks. An app with
+no state (a calculator) has none.
 </rule>
 
 For the full manifest schema, action kinds, and UI conventions, read
@@ -156,7 +158,7 @@ tools named `<slug>_<action>`.
 Only after confirmation, call `app action=draft slug=<slug>` with `files`:
 
 1. `app.json` — follow [references/manifest.md](references/manifest.md) exactly, including the
-   `summary` (and the `reader`, if the app reads something by itself).
+   `summary` with its `blocks` (and the `reader`, if the app reads something by itself).
 2. `AGENT.md` — 5–15 lines: what the app is for, user preferences and thresholds learned in the
    conversation (e.g. "water the basil when humidity drops below 20%"), anything the agent
    needs to act well. NOT a copy of the manifest.

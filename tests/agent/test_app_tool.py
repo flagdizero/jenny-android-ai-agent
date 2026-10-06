@@ -95,6 +95,8 @@ async def test_a_new_app_is_live_at_once_with_its_tools(personal: Path) -> None:
     out = await AppTool().execute(action="draft", slug="spesa", files={
         "app.json": json.dumps(SPESA), "app/index.html": "<p>spesa</p>"})
     assert "`spesa` is live" in out and "action=place" in out, out
+    # La lista di prima e' una striscia: tabella e conteggio.
+    assert "On a board it is a strip L (table)." in out, out
     assert find_app(ws, "spesa") is not None
     assert not (ws / "apps" / ".drafts" / "spesa").exists()
     registry = ToolRegistry()
@@ -183,3 +185,14 @@ async def test_only_user_conversations_write_apps(ws: Path) -> None:
     finally:
         reset_request_context(req)
     assert out.startswith("Not from here")
+
+
+async def test_a_strip_bigger_than_xl_is_refused_with_what_to_do(personal: Path) -> None:
+    ws = personal
+    tall = dict(SPESA, summary={"collection": "items", "blocks": [
+        {"kind": "table", "columns": {"what": {}}, "max": 5},
+        {"kind": "table", "columns": {"what": {}}, "max": 5}]})
+    out = await AppTool().execute(action="draft", slug="spesa",
+                                  files={"app.json": json.dumps(tall)})
+    assert "a strip holds at most 9 (XL)" in out and "nothing changed" in out, out
+    assert find_app(ws, "spesa") is None

@@ -152,44 +152,69 @@ Constraints:
 
 ## Summary (`summary`) — required for any app that keeps state
 
-The summary is how the app shows **outside its screen**: on its own card on a notebook board
-(the value in place of the photo; a tap opens the screen, or — for an app with no screen — the
-card's drawer with the whole summary). It is computed by code from the app's data, never by the
-model, and the drawer draws it in one of five shapes. An app that
-keeps state — a reader, or any storage action that writes — **must** declare one; an app with
-no state (a calculator, a converter) declares none.
-
-Two kinds of summary:
-
-**Over a collection** (an app without a reader):
+The summary is how the app shows **outside its screen**: on a notebook board it is a **strip** —
+a paper card two polaroids wide with a header (icon, name, one datum on the right) and a few
+**blocks** below. A tap opens the app's screen (an app with no screen opens the card's drawer,
+which shows the same strip). The house draws it from your description; you never write HTML
+for it. An app that keeps state — a reader, or any storage action that writes — **must**
+declare one; an app with no state (a calculator, a converter) declares none and shows on a
+board as a polaroid with its icon.
 
 ```json
 "summary": {
-  "collection": "items", "view": "list", "where": { "done": false },
-  "label": "to buy", "columns": { "what": { "label": "What" } },
-  "verbs": ["add_item"]
+  "collection": "items",
+  "meta": { "count": true, "where": { "done": false }, "label": "to buy" },
+  "blocks": [
+    { "kind": "checklist", "text": "what", "done": "done", "toggle": "set_done", "max": 4 },
+    { "kind": "buttons", "actions": [{ "action": "clear_done", "label": "Clear" }] }
+  ]
 }
 ```
 
-- `view` — `value` (one big value, the default), `chips` (several values side by side),
-  `progress` (a number towards `max`), `list` / `table` (the records that match, newest
-  first, at most 20, with up to 4 `columns`).
-- `aggregate` — `last` (the latest record's `field`, the default for value/chips/progress) or
-  `count` (how many records match `where`: "7 to buy"; always the case for list and table).
-- `field` — the value shown (required with `aggregate: last`), with optional `label`, `unit`.
-- `where` + `params` — the filter; `params` are asked when the app is placed on a board
-  (which sensor, which plant), and used in `where` as `$name`. The same app can be two cards
-  with two different params.
-- `staleAfterMinutes`, `alarm` (`{field, op, value}`), `trendDays` (0–31), `verbs` (at most two
-  of this app's actions, shown as buttons in the drawer).
+- `collection` — the collection blocks read unless they name their own (`"readings"` with a
+  reader, implicitly). `where` + `params` filter it; `params` are asked when the app is placed on
+  a board (which sensor) and used as `$name`; a block may add its own `where`.
+- `meta` — the datum on the right of the header: `{field, unit, label}` (the latest record's
+  field) or `{count: true, where, label}` ("4 to buy"). Leave it out and the house shows the
+  state ("at 14:02", "stopped · 2 d ago", "in alarm").
+- `alarm` (`{field, op, value}`), `staleAfterMinutes` — the strip's state: an alarm turns it red,
+  stale data greys it out.
+- `blocks` — **1 to 4**, from this closed list. Each takes whole **rows**; the strip's size is the
+  smallest that holds them: **S 2 · M 4 · L 6 · XL 9 rows**. More than 9 rows is an error: show
+  less on the board, the rest stays in the app. Lists count at their `max` (≤ 5), so the size
+  never depends on the data.
 
-**Over the reader** (an app with a `reader`, below): `view`, `primary` (the reader field shown
-big), `alarm`, `staleAfterMinutes`, `params`/`where`, `chips` (which other reader fields to show)
-and `verbs`; labels, units and types come from the reader's fields. The readings live in the
-app's `readings` collection, so the screen and `query` actions see them too.
+| `kind` | Rows | Fields |
+|---|---|---|
+| `value` | 2 | `field`, `unit`, `label`, `delta` (a field, e.g. the % change), `deltaUnit`, `trend` (true: a week's line) |
+| `numbers` | 2 | `items`: 1–3 of `{field, label, unit}` or `{count: true, where, label}` |
+| `chart` | 2 | `field` (a number), `days` (1–31); the `alarm` threshold is drawn as a band |
+| `status` | 1 | `online` (a bool field), `text` (a field); shows fresh / stopped / in alarm |
+| `progress` | 1 | `field`, `max` (a number or the field holding the target), `unit`, `label` |
+| `bars` | `max` | `collection`, `label`, `value`, `weight` (0–100), `target` (0–100), `unit`, `max` |
+| `table` | `max` | `collection`, `columns` (1–3 `{label, type, unit}`), `max` — newest first |
+| `events` | `max` | `collection`, `date`, `text`, `max` — from today on, soonest first |
+| `checklist` | `max` | `collection`, `text`, `done` (a bool field), `toggle` (an `update` action declaring `done`), `hideDone` |
+| `buttons` | 1 per 3 | `actions`: 1–6 of `"name"` or `{action, label}` |
+| `switches` | 1 each | `collection`, `items`: 1–4 of `{field, label, action}` (the action declares `field`) |
+| `counter` | 2 | `items`: 1–2 of `{field, label, dec, inc}` (actions with no required params) |
+| `week` | 2 | `collection`, `date` — this week, days with a record marked |
+| `month` | 6 | `collection`, `date`, `alarmWhere` — this month; always an XL strip |
+| `note` | `lines` | `field` (text), `lines` (1–3) |
 
-The older `section` block (`value`/`status`/`trend`/`verbs`) is still read, as a `value`
-summary; write `summary` in new apps.
+Controls (`checklist`, `buttons`, `switches`, `counter`) call **only actions this app declares**,
+and only with what a tap can supply: the record's `id`, the toggled field, the placement's
+params. An action with other `required` params cannot be a button — the tool says so.
+
+How to choose: one thing that matters at a glance first (`value` for a number, `checklist` for
+a list), then at most one or two blocks of context. Examples — a sensor: `value` + `chart` +
+`status` (L); a portfolio: `value` (with `delta`) + `bars` of the positions (M or L); a shopping
+list: `checklist` + `buttons` (M or L); tax deadlines: `month` + `events` (XL); a savings goal:
+`progress` (S).
+
+Without `blocks`, the older forms still work and become one block each: `view` `value` /
+`chips` / `progress` / `list` / `table` with `field`, `columns`, `verbs`. The older `section`
+block is still read as a `value`. Write `blocks` in new apps.
 
 ## Reader (`reader` + `run.py`)
 
