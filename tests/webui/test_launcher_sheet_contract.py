@@ -109,6 +109,15 @@ def test_the_icon_src_accepts_only_data_images() -> None:
     )
 
 
+def test_the_icon_image_does_not_steal_the_long_press() -> None:
+    """Sul telefono il dito fermo su un'`<img>` trascinabile avvia il drag
+    nativo: `dragstart`, poi `pointercancel`, e `setupLongPress` spegne il
+    timer. Misurato su jenny_square: la scheda di un'app Android (quella con
+    Disinstalla) non si apriva, quella di una Jenny App, col glifo, si'."""
+    body = _method(_src("mobile-launcher.js"), "_buildIcon")
+    assert "img.draggable = false" in body
+
+
 # ── difetto 07 — digitare non ricostruisce l'elenco ─────────────────────────
 
 def test_typing_reorders_and_never_rebuilds() -> None:

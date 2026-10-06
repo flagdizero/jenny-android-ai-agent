@@ -1167,6 +1167,13 @@ export class LauncherController {
       const img = document.createElement('img');
       img.src = entry.icon;
       img.alt = '';
+      /* Senza, il dito fermo su un'immagine avvia il trascinamento nativo di
+         Chromium: `dragstart` e poi `pointercancel`, che spegne il timer della
+         pressione lunga. La scheda (e Disinstalla) non si apriva sulle app
+         Android, si' sulle Jenny App, che hanno un glifo. Misurato su
+         jenny_square il 06/10/2026, quando l'icona e' diventata quasi tutta
+         la cella. */
+      img.draggable = false;
       iconWrap.appendChild(img);
     } else {
       const glyph = document.createElement('i');
