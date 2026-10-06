@@ -355,7 +355,13 @@ async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
         if not force and not is_due(app.manifest.reader, state, current):
             return None
     result = await execute_reader(workspace, app, now=current)
-    return record_reader_run(app, result, now=current)
+    state = record_reader_run(app, result, now=current)
+    if app_dir is None:
+        # Il valore della polaroid puo' essere cambiato: la WebUI si rilegge.
+        from jenny.apps.notify import data_changed
+
+        await data_changed(slug)
+    return state
 
 
 async def run_due_readers(workspace: Path, *, now: datetime | None = None) -> int:

@@ -969,6 +969,32 @@ def test_a_tap_on_an_app_card_opens_the_app() -> None:
 
 
 @requires_jsdom
+def test_an_app_card_follows_its_data_without_reopening_jenny() -> None:
+    """Sul telefono la polaroid restava al valore di prima finche' non si
+    riapriva Jenny: la bacheca non ascoltava, e chiudere l'app non la rileggeva."""
+    _run_covers("""
+      const { calls, frame } = await import('./boot.mjs');
+      const reads = () => calls.filter((c) => c.startsWith('/api/board?')).length;
+      const before = reads();
+      // Un avviso per un'app che non e' sulla bacheca: niente.
+      frame({ event: 'app_data_changed', slug: 'altra' });
+      await wait(400);
+      assert.equal(reads(), before);
+      // Per la sua: una rilettura sola, anche per una raffica.
+      frame({ event: 'app_data_changed', slug: 'waterbot' });
+      frame({ event: 'app_data_changed', slug: 'waterbot' });
+      await wait(400);
+      assert.equal(reads(), before + 1);
+      // Chiudere l'app aperta rilegge la bacheca.
+      const actions = app.appsActions();
+      actions._openApp = { slug: 'etf', overlay: document.createElement('div'), iframe: null };
+      actions.closeApp();
+      await wait(400);
+      assert.equal(reads(), before + 2);
+    """)
+
+
+@requires_jsdom
 def test_the_card_bar_has_no_cover_choice() -> None:
     _run_covers("""
       const rect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 });

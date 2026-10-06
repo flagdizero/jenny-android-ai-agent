@@ -306,6 +306,9 @@ export class AppsActions {
     const open = this._openApp;
     if (!open) return;
     this._openApp = null;
+    /* Chi sta sotto (la bacheca, con la polaroid dell'app) si rilegge: quel
+       che hai scritto nell'app deve vedersi appena la chiudi. */
+    this.shell?.onAppClosed?.(open.slug);
     open.overlay.classList.remove('visible');
     setTimeout(() => open.overlay.remove(), 200);
     /* Il listener del proxy vive quanto la vista: chiuderlo qui è la via

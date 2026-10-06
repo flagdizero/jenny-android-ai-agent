@@ -69,8 +69,12 @@ async def execute_action(
     *,
     http_timeout_s: float = DEFAULT_TIMEOUT_S,
     max_collection_bytes: int = DEFAULT_MAX_COLLECTION_BYTES,
+    announce: bool = True,
 ) -> dict:
     """Execute one action of one app; returns a JSON-safe result dict.
+
+    With *announce* a storage write tells the WebUI (``jenny/apps/notify.py``);
+    the app's own tool passes ``False`` because it announces by itself.
 
     Raises AppActionError with a readable message and an HTTP-ish status on
     any failure. Never half-executes: validation happens before any write.
@@ -89,10 +93,17 @@ async def execute_action(
             )
             if action.op != "query" and app.manifest.reader is not None:
                 # Un lettore che aggrega (il totale dalle operazioni) ricalcola
-                # dopo la scrittura: il riassunto e' sempre quello dei dati.
+                # dopo la scrittura: il riassunto e' sempre quello dei dati, e
+                # l'avviso alla WebUI parte dopo il ricalcolo (``run_reader``).
                 from jenny.apps.reader import schedule_reader
 
                 schedule_reader(workspace, slug)
+            elif action.op != "query" and announce:
+                # Senza lettore il riassunto si legge dai dati: la polaroid e lo
+                # schermo aperto possono rileggersi subito.
+                from jenny.apps.notify import data_changed
+
+                await data_changed(slug)
             return result
         if (action.method or "GET").upper() != "GET":
             # Un'azione http che cambia qualcosa (annaffia, registra) segue la

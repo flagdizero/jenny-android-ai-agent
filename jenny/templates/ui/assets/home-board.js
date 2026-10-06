@@ -927,6 +927,19 @@ export class HomeBoard {
     this.onOpenCard?.(card.id, card.title || '');
   }
 
+  /** I dati di un'app sono cambiati (una scrittura dallo schermo o in chat, un
+   *  lettore che ricalcola), o la sua finestra si e' chiusa: se l'app e' una
+   *  polaroid di questa bacheca, la bacheca si rilegge e il valore si
+   *  aggiorna. Un colpo solo per una raffica; mai sotto il dito. */
+  refreshApp(slug) {
+    if (!this.notebook || !this.data?.cards.some((c) => c.app?.slug === slug)) return;
+    clearTimeout(this._refreshTimer);
+    this._refreshTimer = setTimeout(() => {
+      if (this._itemDrag) return;
+      this.load(this.notebook);
+    }, 250);
+  }
+
   /** Indietro: chiude la barra (e spegne i fili). Vero se c'era da chiudere. */
   closeCardBar() {
     if (!this.focus) return false;

@@ -79,6 +79,7 @@ class AppActionTool(Tool):
                 kwargs,
                 http_timeout_s=http_timeout_s,
                 max_collection_bytes=max_collection_bytes,
+                announce=False,
             )
         except AppActionError as exc:
             return ToolResult.failure(str(exc), code="app_action")

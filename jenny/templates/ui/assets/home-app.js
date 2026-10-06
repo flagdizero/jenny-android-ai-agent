@@ -286,6 +286,9 @@ class HomeApp {
       onOpenPage: (path, label, card) => this.openPage(path, label, card),
       onAskJenny: (text) => this._askInNotebook(text),
     });
+    /* I dati di un'app cambiano — scritti dal suo schermo o in chat, o
+       ricalcolati dal suo lettore: la sua polaroid si aggiorna da sola. */
+    this.appsSource().onAppDataChanged((slug) => this.board.refreshApp(slug));
     this.drawer = new BoardDrawer({
       sheet: this.boardSheet,
       onOpenCard: (card, title) => this.openCard(card, title),
@@ -1721,6 +1724,7 @@ class HomeApp {
     return (this._appActions ||= new AppsActions(this.appsSource(), {
       sendChatPrompt: (text) => this._sendInChat(text),
       homePages: () => this.pagesPort(),
+      onAppClosed: (slug) => this.board?.refreshApp(slug),
     }));
   }
 

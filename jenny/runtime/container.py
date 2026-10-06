@@ -333,6 +333,23 @@ class GatewayContainer:
                 "parte comunque e il prossimo avvio riprova"
             )
 
+    def _wire_app_notifier(self) -> None:
+        """«I dati di un'app sono cambiati» va sulla WebUI (``jenny/apps/notify.py``):
+        una scrittura dallo schermo o un lettore che ricalcola aggiornano la
+        polaroid sulla bacheca e lo schermo aperto."""
+        from jenny.apps.notify import set_notifier
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+
+        async def announce(slug: str) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_app_data_changed": True, "app_slug": slug},
+            ))
+
+        set_notifier(announce)
+
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
 
@@ -397,6 +414,7 @@ class GatewayContainer:
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
         self._prepare_apps()
+        self._wire_app_notifier()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)
