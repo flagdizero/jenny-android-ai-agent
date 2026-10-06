@@ -150,35 +150,87 @@ Constraints:
 - the server must be reachable from the phone when the app is opened (LAN, or Tailscale — the
   SSRF policy allows both). If it is not, say so rather than adding a "ping" action to check.
 
-## Drawer section (`section`, optional)
+## Summary (`summary`) — required for any app that keeps state
 
-A notebook's board has cards, and each card opens a **drawer** about one subject. An app whose
-data is about a subject can show a compact view inside that drawer — a value with its time and
-source, a status, a small trend — and stay in the Apps page as well. Declare it with `section`:
+The summary is how the app shows **outside its screen**: in a card's drawer on a notebook
+board, and on the card's cover (the value in place of the photo). It is computed by code from
+the app's data, never by the model, and the drawer draws it in one of five shapes. An app that
+keeps state — a reader, or any storage action that writes — **must** declare one; an app with
+no state (a calculator, a converter) declares none.
+
+Two kinds of summary:
+
+**Over a collection** (an app without a reader):
 
 ```json
-"section": {
-  "params": { "sensor": { "type": "string" } },
-  "value": { "collection": "readings", "where": { "sensor": "$sensor" },
-             "latest": "ts", "field": "moisture", "unit": "%", "label": "Soil moisture" },
-  "status": { "stale_after_minutes": 120, "alarm": { "field": "moisture", "op": "<", "value": 20 } },
-  "trend": { "days": 7 },
-  "verbs": ["refresh"]
+"summary": {
+  "collection": "items", "view": "list", "where": { "done": false },
+  "label": "to buy", "columns": { "what": { "label": "What" } },
+  "verbs": ["add_item"]
 }
 ```
 
-- `params` — what the user is asked when attaching the section to a drawer; the same app can sit in
-  two drawers with two different sensors. Use them in `where` as `$name`.
-- `value` — the record shown is the latest one of `collection` (by `latest`, default `ts`) that
-  matches `where`; `field` is the number or word displayed.
-- `status` — the data counts as **stale** past `stale_after_minutes`, and in **alarm** when the
-  condition holds. Either lights the card's red corner on the board.
-- `trend` — up to 31 days of `field`, one point per day.
-- `verbs` — at most two of this app's actions, shown as buttons in the drawer.
+- `view` — `value` (one big value, the default), `chips` (several values side by side),
+  `progress` (a number towards `max`), `list` / `table` (the records that match, newest
+  first, at most 20, with up to 4 `columns`).
+- `aggregate` — `last` (the latest record's `field`, the default for value/chips/progress) or
+  `count` (how many records match `where`: "7 to buy"; always the case for list and table).
+- `field` — the value shown (required with `aggregate: last`), with optional `label`, `unit`.
+- `where` + `params` — the filter; `params` are asked when the app is placed in a drawer
+  (which sensor, which plant), and used in `where` as `$name`. The same app can sit in two
+  drawers with two different params.
+- `staleAfterMinutes`, `alarm` (`{field, op, value}`), `trendDays` (0–31), `verbs` (at most two
+  of this app's actions, shown as buttons in the drawer).
 
-The section only **reads** the app's data: keep it fresh with the app's own cron job. When the
-status changes, Jenny writes one journal line in the notebook — the readings themselves never go
-into the wiki.
+**Over the reader** (an app with a `reader`, below): `view`, `primary` (the reader field shown
+big), `alarm`, `staleAfterMinutes`, `params`/`where`, `chips` (which other reader fields to show)
+and `verbs`; labels, units and types come from the reader's fields. The readings live in the
+app's `readings` collection, so the screen and `query` actions see them too.
+
+The older `section` block (`value`/`status`/`trend`/`verbs`) is still read, as a `value`
+summary; write `summary` in new apps.
+
+## Reader (`reader` + `run.py`)
+
+A reader is a small Python program next to the manifest that reads something **by itself**,
+every N minutes, with **no model turn** — a sensor, a price, a count — or recomputes a total
+from the app's own data. It replaces the old notebook "micro apps".
+
+```json
+"reader": {
+  "every": 30, "net": ["192.168.1.40"], "uses": "waterbot-imh", "key": "sensor",
+  "fields": {
+    "sensor":   { "label": "Sensor", "type": "text" },
+    "moisture": { "label": "Moisture", "type": "number", "unit": "%", "min": 0, "max": 100 },
+    "online":   { "label": "Online", "type": "bool" }
+  }
+}
+```
+
+```python
+def run(ctx):
+    hub = ctx.http.get_json("http://192.168.1.40/sensors")
+    return [{"sensor": s["name"], "moisture": s["moisture"], "online": s["online"],
+             "_source": f"hub, seen {s['seen']}"} for s in hub if s["name"] in
+            {w["sensor"] for w in ctx.wanted}]
+```
+
+- `every` — minutes between readings, at least 15 (default 60).
+- `fields` — exactly what `run(ctx)` returns, at most 8: `number` (with optional `min`/`max`),
+  `bool`, `text`, or one `rows` field (a list of dicts with declared `columns`, up to 4 columns
+  and 20 rows) for a list or table. A missing, wrong-typed or out-of-range value is an **error**,
+  never a value; the optional `_source` text says where the value came from.
+- `key` — a text field naming the series when one reader reads several things (three sensors):
+  then `run` returns a **list** of dicts, one per series, and `ctx.wanted` lists the params the
+  placements on the boards need (`[{"sensor": "acerello"}, …]`).
+- `net` — the only hosts `ctx.http.get_json / get_text / post_json` may reach (at most 4).
+- `uses` — at most one installed skill whose scripts `run` imports: reuse it instead of
+  re-implementing an API, and its credentials stay where they are. **Never put a credential in
+  `run.py` or `app.json`** — the `app` tool refuses it.
+- `ctx.now` (ISO), `ctx.prev` (the last reading), `ctx.data("collection")` (the app's own
+  records, read-only: a reader that **aggregates** — a portfolio's value from its operations and
+  current prices — also runs right after every write, so the summary always matches the data).
+- The code reads, never writes; at most 6 KB; 20 s per run, three errors in a row mark it broken.
 
 ## Complete example
 

@@ -333,6 +333,33 @@ class GatewayContainer:
                 "parte comunque e il prossimo avvio riprova"
             )
 
+    def _prepare_apps(self) -> None:
+        """Le app prima dell'agente: la prova per tutte, e le micro app traslocate.
+
+        La prima volta che una versione con la prova parte, le app che ci sono
+        gia' risultano approvate (:func:`jenny.apps.trust.grandfather`): un
+        aggiornamento non ferma niente di quel che usavi. Poi le micro app dei
+        cassetti diventano app generali (``jenny/apps/migrate_micro.py``).
+        Entrambe idempotenti, ed entrambe prima che i tool delle app si
+        registrino. Lo stesso ``except`` largo di ``_repair_pending_renames``:
+        un'app da sistemare non deve valere un gateway che non parte.
+        """
+        try:
+            from jenny.apps.trust import grandfather
+
+            n = grandfather(self.config.workspace_path)
+            if n:
+                logger.info("Apps: {} installed apps approved as they are (first start "
+                            "with trials)", n)
+            from jenny.apps.migrate_micro import migrate_micro_apps
+
+            moved = migrate_micro_apps(self.config.workspace_path)
+            if moved:
+                logger.info("Apps: {} notebook micro apps are now general apps", moved)
+        except Exception:
+            logger.opt(exception=True).error(
+                "Preparazione delle app fallita; il gateway parte comunque")
+
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
         from jenny.bus.queue import MessageBus
@@ -371,6 +398,7 @@ class GatewayContainer:
             self.provider = None
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
+        self._prepare_apps()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)

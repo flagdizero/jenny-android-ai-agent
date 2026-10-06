@@ -67,6 +67,7 @@ import { botName } from './shared/bot-name.js';
 import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
+import { HomeAppsTrash } from './home-apps-trash.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
 import './shared/theme.js';
@@ -120,7 +121,7 @@ const BACK_TO = {
    quello di «Segnala». Scritti una volta: li leggono sia chi chiede se c'e'
    qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
    due elenchi separati divergevano al primo foglio nuovo. */
-const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet'];
+const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet', 'apps-trash-sheet'];
 /* Il foglio della bacheca: «dall'ultima volta», la busta, la ricerca,
    l'anteprima di una pagina, «aggiungi sezione». */
 const BOARD_SHEET = 'home-board-sheet';
@@ -279,7 +280,19 @@ class HomeApp {
       onOpenCard: (card, title) => this.openCard(card, title),
       onOpenPage: (path, label, card) => this.openPage(path, label, card),
       onAskJenny: (text) => this._askInNotebook(text),
-      onOpenApp: (slug) => this.appsActions().openApp(slug),
+      /* L'elenco delle app arriva la prima volta che si apre la pagina App:
+         senza aspettarlo, «Apri» da un cassetto non faceva niente. */
+      onOpenApp: async (slug) => {
+        await this.appsSource().awaitJennyApps();
+        this.appsActions().openApp(slug);
+      },
+      onRenameCard: (card, title) => this.board.openRename(card, title, () => this.drawer.reload()),
+      /* «Togli dalla bacheca» dal fondo del cassetto: si torna alla bacheca, e
+         la scheda se ne va sotto gli occhi, con l'Annulla. */
+      onRemoveCard: async (card, title) => {
+        await this.openBoard();
+        await this.board.removeCard(card, title);
+      },
     });
     /* Da quale cassetto e' stata aperta la pagina nel lettore, o `null` se
        dalla ricerca: «indietro» torna li'. */
@@ -403,7 +416,10 @@ class HomeApp {
     });
     /* Le tre pagine fisse che non sono la chat: cosa fanno quando le guardi. */
     this.homePages.register('app', {
-      activate: () => this.launcher.open(),
+      activate: () => {
+        this.launcher.open();
+        this.appsTrash().refresh();
+      },
       deactivate: () => this.launcher.close(),
     });
     this.homePages.register('notebooks', { activate: () => this.who.show() });
@@ -505,6 +521,12 @@ class HomeApp {
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');
     this.boardListBtn = document.getElementById('home-board-list-toggle');
+    this.boardAddBtn = document.getElementById('home-board-add');
+    this.boardAddBtn?.addEventListener('click', () => this.board.openNewCard());
+    /* I nomi subito, non solo al cambio di lingua: questo cablaggio arriva dopo
+       il primo `_applyTranslations`, e fino al 06/10/2026 la lente e l'elenco
+       restavano senza nome finche' non si cambiava lingua. */
+    this._labelBoardTools();
     this.boardSearchBtn?.addEventListener('click', () => this.board.openSearch());
     this.boardListBtn?.addEventListener('click', () => {
       const on = this.board.toggleList();
@@ -1559,6 +1581,7 @@ class HomeApp {
     /* La lente e l'elenco, solo sulla bacheca. L'interruttore Chat | Bacheca
        che stava accanto non c'e' piu' dal 05/10/2026: la chat del quaderno la
        porta su Jenny, sopra la bacheca. */
+    if (this.boardAddBtn) this.boardAddBtn.hidden = this.view !== 'board';
     if (this.boardSearchBtn) this.boardSearchBtn.hidden = this.view !== 'board';
     if (this.boardListBtn) this.boardListBtn.hidden = this.view !== 'board';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
@@ -1673,6 +1696,11 @@ class HomeApp {
    */
   appsSource() {
     return (this._apps ||= new AppsSource());
+  }
+
+  /** Il cestino delle app, in fondo alla pagina App. */
+  appsTrash() {
+    return (this._appsTrash ||= new HomeAppsTrash(this.appsSource()));
   }
 
   /** Le azioni sulle voci. Il guscio le da' l'unica cosa che sa fare lui:
@@ -1834,6 +1862,9 @@ class HomeApp {
        aprirle, e' il livello che si incontra piu' spesso. `handleBack` e' dell'
        app: una sua schermata interna torna indietro dentro di lei, prima. */
     if (this._appActions?.handleBack()) return true;
+    /* La barra di una scheda tenuta premuta: Indietro la chiude (e spegne i
+       fili) prima di lasciare la bacheca. */
+    if (this.view === 'board' && this.board?.closeCardBar?.()) return true;
     /* La modalita' ordina: Indietro esce **senza salvare**. Salvare e' «Fatto». */
     if (this.strip?.sorting) {
       this.strip.closeSort();
@@ -2307,6 +2338,13 @@ class HomeApp {
     }
   }
 
+  /** I nomi dei tre comandi della bacheca in testa, che sono solo icone. */
+  _labelBoardTools() {
+    this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.card.add'));
+    this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
+    this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
+  }
+
   _applyTranslations() {
     this._applyConversationTexts();
     if (this.send) {
@@ -2314,8 +2352,7 @@ class HomeApp {
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
     this._applyBackLabel();
-    this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
-    this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
+    this._labelBoardTools();
     this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
@@ -2325,6 +2362,7 @@ class HomeApp {
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
+    this._appsTrash?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.you?.sayJenny(this.jennyRoom?.value());
     this.newNotebook?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));

@@ -10,11 +10,11 @@ The jenny-sdk.js hides the transport from app HTML.
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 from jenny.apps.executor import AppActionError, execute_action
-from jenny.apps.manifest import SLUG_RE, scan_apps
+from jenny.apps.manifest import scan_apps
+from jenny.apps.trust import app_trust_state, list_drafts, load_draft
 
 
 def list_apps_payload(workspace: Path) -> dict:
@@ -58,28 +58,41 @@ def list_apps_payload(workspace: Path) -> dict:
             )
         if app.broken:
             entry["error"] = app.error
+        entry.update(app_trust_state(workspace, app.slug))
         apps.append(entry)
+    # Le app nuove ancora in prova: nella griglia col cartellino «in prova», e
+    # dal loro foglio si tengono o si scartano. Niente tool, niente schermo.
+    live = {a["slug"] for a in apps}
+    for slug in list_drafts(workspace):
+        if slug in live:
+            continue
+        draft = load_draft(workspace, slug)
+        if draft is None:
+            continue
+        m = draft.app.manifest
+        apps.append({
+            "slug": slug, "broken": draft.app.broken,
+            "name": m.name if m else slug, "description": m.description if m else "",
+            "icon": m.icon if m else "ti-apps", "has_server": bool(m and m.server_base_url),
+            "view_kind": m.view_kind if m else None, "section": None,
+            **({"error": draft.app.error} if draft.app.broken else {}),
+            **app_trust_state(workspace, slug),
+        })
     return {"apps": apps}
 
 
 def delete_app(workspace: Path, slug: str) -> dict:
-    """Delete a Jenny app by removing its ``<workspace>/apps/<slug>/`` folder.
+    """«Elimina» un'app: la sposta nel cestino (``apps/.trash/``), dati compresi.
 
-    Uninstalling a Jenny app permanently deletes it (unlike Android apps, which
-    only open the system uninstaller). Raises ``ValueError`` on an invalid slug
-    and ``FileNotFoundError`` when the app folder does not exist.
+    Fino al 06/10/2026 era ``rmtree``, senza ritorno. Adesso si rimette con
+    ``apps.restore`` e si butta davvero solo con ``apps.purge`` (v.
+    :mod:`jenny.apps.trash`). ``ValueError`` per uno slug non valido,
+    ``FileNotFoundError`` se l'app non c'e'.
     """
-    if not slug or SLUG_RE.match(slug) is None:
-        raise ValueError("invalid app slug")
-    apps_root = (Path(workspace) / "apps").resolve()
-    app_dir = (apps_root / slug).resolve()
-    # Defence-in-depth: the validated slug cannot escape, but confirm anyway.
-    if app_dir.parent != apps_root:
-        raise ValueError("invalid app slug")
-    if not app_dir.is_dir():
-        raise FileNotFoundError(f"app '{slug}' not found")
-    shutil.rmtree(app_dir)
-    return {"deleted": True}
+    from jenny.apps.trash import trash_app
+
+    trashed = trash_app(workspace, slug)
+    return {"deleted": True, "trashed": trashed}
 
 
 async def execute_app_action_payload(

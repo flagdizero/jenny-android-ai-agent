@@ -88,6 +88,12 @@
       <!-- La lente e' l'unica porta verso tutta la wiki, comprese le pagine che
            non stanno in nessun cassetto; l'elenco mostra le stesse schede in
            fila, per chi non ama le bacheche e per lo screen reader. -->
+      <!-- Il + della bacheca: una scheda nuova al centro di quel che guardi.
+           Tenere premuto il muro vuoto fa lo stesso, nel punto del dito; ma un
+           gesto sul vuoto non lo scopre nessuno, e questo si vede. -->
+      <button class="home-board-tool" id="home-board-add" type="button" hidden>
+        <i class="ti ti-plus" aria-hidden="true"></i>
+      </button>
       <button class="home-board-tool" id="home-board-search-open" type="button" hidden>
         <i class="ti ti-search" aria-hidden="true"></i>
       </button>
@@ -156,6 +162,9 @@
              aria-label="Suggerite" data-i18n-aria="launcher.suggested" hidden></div>
         <div class="launcher-list" id="launcher-list" role="listbox"
              aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
+        <!-- Il cestino delle app: c'e' solo quando non e' vuoto. «Elimina» non
+             cancella piu' niente, sposta qui (v. home-apps-trash.js). -->
+        <button class="launcher-trash" id="launcher-trash" type="button" hidden></button>
       </div>
     </div>
     <div class="home-page" data-page="chat">
@@ -614,6 +623,16 @@
     <div class="oc-sheet-title" id="android-app-title"></div>
     <div class="oc-sheet-actions" id="android-app-actions"></div>
     <button class="oc-sheet-cancel" id="android-app-cancel" data-i18n="common.cancel">Annulla</button>
+  </div>
+</dialog>
+
+<!-- Il cestino delle app: Rimetti, o Elimina per sempre (l'unico punto da cui
+     un'app non torna). -->
+<dialog class="oc-sheet apps-trash-sheet" id="apps-trash-sheet">
+  <div class="oc-sheet-inner">
+    <div class="oc-sheet-title" id="apps-trash-sheet-title"></div>
+    <div class="apps-trash-body" id="apps-trash-sheet-body"></div>
+    <button class="oc-sheet-cancel" id="apps-trash-sheet-close" data-i18n="common.close">Chiudi</button>
   </div>
 </dialog>
 

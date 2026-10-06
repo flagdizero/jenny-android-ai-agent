@@ -165,9 +165,9 @@ _ASKS_FOR_ITSELF = {
     "agent/tools/journal.py": (
         "appende al diario del progetto: non passa dai tool file, ha il suo gate"
     ),
-    "agent/tools/micro_app.py": (
-        "scrive il codice di una micro app in board/micro/, che i tool file non "
-        "possono scrivere: ha il suo gate"
+    "agent/tools/app_tool.py": (
+        "scrive il codice delle app in apps/.drafts, che i tool file non possono "
+        "scrivere, e le pose sulla bacheca: ha il suo gate"
     ),
     # T4.6/T4.7: nessuna primitiva di scrittura, e per questo è stato invisibile
     # a questo file. Scrive ``metadata[goal_state]`` e chiama ``sessions.save``:
@@ -491,32 +491,25 @@ async def _probe_journal(root: Path, readonly: bool) -> str:
     return out
 
 
-async def _probe_micro_app(root: Path, readonly: bool) -> str:
+async def _probe_app_tool(root: Path, readonly: bool) -> str:
+    import json
     from unittest.mock import patch
 
+    from jenny.agent.tools.app_tool import AppTool
     from jenny.agent.tools.context import bind_request_context, reset_request_context
-    from jenny.agent.tools.micro_app import MicroAppTool
-    from jenny.board.store import mutate_board
 
-    project = root / "wikis" / "orto"
-    (project / "wiki").mkdir(parents=True)
-    mutate_board(project, lambda b: b["cards"].append(
-        {"id": "pomodori", "title": "Pomodori", "pages": [], "pos": {"x": 1, "y": 1}}))
     token = bind_request_context(RequestContext(
-        channel="websocket", chat_id="project:orto", session_key="project:orto"))
+        channel="websocket", chat_id="unified:default", session_key="unified:default"))
     try:
-        with _turn(project, readonly), patch("jenny.config.paths.get_workspace_path",
-                                            lambda: root):
-            out = await MicroAppTool().execute(
-                action="draft", card="pomodori", title="Conta",
-                fields={"n": {"label": "Quanti", "type": "number"}},
-                code="def run(ctx):\n    return {'n': 3}\n")
+        with _turn(root, readonly), patch("jenny.config.paths.get_workspace_path",
+                                          lambda: root):
+            out = await AppTool().execute(action="draft", slug="conta", files={
+                "app.json": json.dumps({"name": "Conta", "description": "x"})})
     finally:
         reset_request_context(token)
     if readonly:
-        assert not (project / "board" / "micro").exists(), "in sola lettura niente codice"
+        assert not (root / "apps").exists(), "in sola lettura niente codice di app"
     return out
-
 
 async def _probe_long_task(root: Path, readonly: bool) -> str:
     from jenny.session.goal_state import GOAL_STATE_KEY
@@ -568,7 +561,7 @@ _PROBES: dict[str, Probe] = {
     "agent/tools/cron.py": _probe_cron,
     "agent/tools/app_update.py": _probe_app_update,
     "agent/tools/journal.py": _probe_journal,
-    "agent/tools/micro_app.py": _probe_micro_app,
+    "agent/tools/app_tool.py": _probe_app_tool,
     "agent/tools/long_task.py": _probe_long_task,
     "agent/tools/ssh.py": _probe_ssh,
 }

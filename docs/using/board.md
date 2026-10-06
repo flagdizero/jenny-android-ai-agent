@@ -16,7 +16,7 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 
 | Thing | What it is |
 |---|---|
-| **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. |
+| **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*), and any card can show an app's live value as its **cover**, in place of the photo: see [Covers](#covers). |
 | **Sticky notes** | Yellow notes for the open reminders of a card, with what and when. They sit next to their card; tapping one opens that card's drawer. |
 | **Threads** | Thin red lines between two cards that a page ties together. See [Threads](#threads). |
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
@@ -24,7 +24,7 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 
 The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at, and a sticky note next to its card wherever that card is. It holds at most **40 items**, cards and sticky notes together, and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
 
-Two buttons in the header work on the board: the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
+Three buttons in the header work on the board: **+** makes a new card (see [Your cards](#your-cards)), the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
 
 ### One signal per card
 
@@ -32,7 +32,7 @@ A card shows at most one signal, so that when something lights up it means somet
 
 | Signal | Meaning |
 |---|---|
-| Red corner — *problem* | A [mini-app section](#mini-app) in this card's drawer is in alarm, or its data has stopped arriving. |
+| Red corner — *problem* | An app on this card (in its drawer, or the card itself) is in alarm, its data has stopped arriving, or it stopped and needs approving again. |
 | Yellow corner — *coming up* | The card's nearest dated reminder is due within **14 days**, or is overdue and still open. |
 | Blue dot — *new* | The drawer was rewritten since you last opened it. |
 
@@ -41,12 +41,25 @@ No signal means nothing needs you.
 ### Gestures
 
 - **Tap** a card or a sticky note to open the drawer.
-- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note — not the ones you placed, not the ones she placed. A card's position is chosen once, when it is created, in the free spot farthest from everything else.
-- **Press and hold** a card (about half a second) to light its threads: they turn bold and show their labels, the cards at the other end lift, and the rest of the board dims. Hold it again to put them back. A card with no threads says so.
+- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note — not the ones you placed, not the ones she placed. A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
+- **Press and hold** a card (about half a second) to lift it: its threads turn bold and show their labels, the cards at the other end lift, the rest of the board dims, and a bar rises at the bottom with **Rename** and **Remove from the board**. Tap the background, the **×** on the bar or Back to put everything back.
+- **Press and hold** the empty wall to make a new card right there, under your finger.
+
+### Your cards
+
+The board's shape is yours, and you can change it directly, not only by answering the envelope:
+
+- **New card**: the **+** in the header, or a press and hold on the empty wall. You give it a name; it is born empty, in the free spot nearest to where you asked, and fills as the gardener attaches pages to it or as you add sections.
+- **Rename**: from the bar of a held card, or at the bottom of its drawer. The name becomes yours, and Jenny no longer rewrites it.
+- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and micro apps pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and micro apps. The wiki is never touched: its pages stay, and search finds them.
+
+### Covers
+
+A card's photo can be replaced by a **live value** from an app placed on it: the number big (*38 %*, *12,4k €*), the card's icon small in the corner, a thin trend line and the time of the reading. A card that *is* an app shows its value from the start; on any other card, hold it and choose **Cover** in the bar (it is there only when an app is placed in its drawer), then the app — or **The photo** to go back. When the data stops arriving the cover turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always.
 
 ### Threads
 
-A thread is always visible as a thin line with no words on it; its label — the reason two cards are tied, in a few words, such as *seeds taken from it* — appears when you press and hold either card. A drawer also lists its card's threads, and tapping one opens the card at the other end; the **×** beside it removes the thread, and Jenny will not propose that thread again. A board has at most **8** threads: twenty threads would be the graph the board replaced. Jenny adds threads only by proposing them.
+A thread is always visible as a thin line with no words on it; its label — the reason two cards are tied, in a few words, such as *seeds taken from it* — appears when you press and hold either card. A drawer also lists its card's threads, and tapping one opens the card at the other end; the **×** beside it removes the thread, and Jenny will not propose that thread again. A board has at most **16** threads: more than that would be the graph the board replaced. Jenny adds threads only by proposing them.
 
 ## The drawer
 
@@ -90,58 +103,43 @@ Something to remember, in your words — *it stays on the south windowsill only 
 
 Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder becomes a sticky note on the board and the card's **Next up** when it is the nearest. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. Removing the section drops the reminder. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
 
-#### Micro app
+#### App
 
-A small Python program attached to the drawer that reads **one thing** — a sensor, a price, a count — and keeps it fresh. It is not a [mini-app](./mini-apps.md): no screen, no grid, no manifest. It lives in the notebook, and you look at it rather than use it.
+An app that shows **live data** in this drawer — a sensor, a price, a count, a portfolio's value — and keeps it fresh. Since October 2026 there are no separate "micro apps": it is an ordinary [app](./mini-apps.md), placed here, and it can also have a screen you open.
 
-**Micro app** asks *What do you want to see?*; your sentence goes to the notebook's chat, and Jenny writes the program there. She **runs it once before saving it**: the micro app appears in the drawer **on trial**, showing the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02* — together with what it will reach (the skill it uses, the hosts it connects to). **Keep it** makes it live; **Discard** throws it away. Nothing runs on its own until you tap Keep.
+**App** asks *What do you want to see, or do?*; your sentence goes to the notebook's chat, and Jenny writes the app there and places it in this drawer. She **runs its reader once before saving it**: the section appears **on trial**, showing the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02* — together with what it reaches and writes. **Keep it** makes it live; **Discard** throws it away. Nothing runs on its own until you tap Keep. **Or link one of your apps…**, at the bottom of the sheet, places an app you already have (asking for its parameters — which sensor, which plant — so the same app can sit in two drawers showing two different things).
 
-A micro app has no HTML of its own: it says which **shape** it wants, and the drawer draws it, always the same way.
+The drawer draws the app's **summary** in one of five shapes, always the same way:
 
 | Shape | For | Example |
 |---|---|---|
 | value (the default) | one number, big, with its trend and alarm | *Acerello 38 %* |
 | chips | several values side by side | *Temperature 18° · Rain 70 % · Wind 12 km/h* |
-| progress | a value towards a target (the field's `max`) | *41,200 / 80,000 words* and a bar |
-| list | rows: the first column is the title, the others the line below | new listings, *Two-room flat, via Roma · €180,000* |
-| table | a few columns (up to 4), a few rows (up to 20) | three funds: name, price, change |
+| progress | a value towards a target | *41,200 / 80,000 words* and a bar |
+| list | rows: the first column is the title, the others the line below | *7 to buy*: milk, eggs… |
+| table | a few columns (up to 4), a few rows (up to 20) | three funds: name, value, weight |
 
-For a list or a table the drawer also counts the rows: that count is what the trend, **Remind me when…** (*when there is more than 0 new listings*) and the journal events work on; the rows themselves are kept only for the latest reading.
+For a list or a table the drawer also counts the rows: that count is what the trend, **Remind me when…** and the journal events work on.
 
-Once kept, the notebook clock reads it every *N* minutes (at least 15, an hour by default) with **no model turn**, so a reading costs nothing. The section shows the value big, up to two more values as chips, a seven-day trend, and the signature *every 30 min · from waterbot-imh*; **⟳** reads it now, **Remind me when…** sets a reminder on its value, **Change** asks Jenny for a change in the chat, **Pause** stops it, **Remove** takes it away (its files go to `board/micro/.trash/`).
+An app with a reader is read every *N* minutes (at least 15) with **no model turn**, so a reading costs nothing, and right after every change you make (a purchase recorded on its screen, or said to Jenny), so its value always matches its data. The section shows the value big, up to two more values as chips, a trend, the signature *every 30 min · from waterbot-imh*, up to two of the app's actions as buttons (*Water now*), **Open the app** when it has a screen, and **Remind me when…**, **Change** (asks Jenny in the chat) and **Remove** (the placement only: the app stays in the App page).
 
 When something goes wrong the last good value stays, greyed, with its age, and the section says who fixes it:
 
 | What happened | What you see |
 |---|---|
 | the device or the network did not answer | a note under the value; it tries again by itself, and this never counts as broken |
-| the program failed three times in a row | **It broke**, the card's red corner, and **Ask Jenny to fix it**, which opens the chat with the error already in the sentence |
+| the reader failed three times in a row | **It broke**, the card's red corner, and **Ask Jenny to fix it** |
 | a reading never stopped | it is put on hold until it is fixed |
-| the program was changed outside Jenny | it does not run until you **Approve again** |
+| the app's code was changed outside Jenny | it does not run until you **Approve again** |
+| the app is in the trash | **Put the app back** |
 
-A fix by Jenny that shows the same things (same values, same units, same skill and hosts) runs at once, and a *since you last looked* row says so; a change to what you see goes back on trial.
+A fix by Jenny that reaches and writes nothing new runs at once; a wider change goes back on trial, and the previous version keeps running until you keep it. Alarm and stale data light the card's red corner, and a change of state (into alarm, stalled, back to normal) writes **one** journal line marked `[inferred]` and one *since you last looked* row; the readings themselves never go into the wiki. Placing an app here also lets this notebook's chat use it (see [Apps on a notebook's board](./mini-apps.md#apps-on-a-notebooks-board)).
 
 #### Cron
 
 A job Jenny does by herself on a schedule, attached to this card — *every morning look at the weather and tell me whether to water*, *every Monday look for new listings*. **Cron** opens the chat with *In the … drawer, every …* for you to finish; you can also just ask in the notebook's chat, and Jenny asks which card when it is not clear.
 
 The section shows what the job does, how often, its next run, its last result — *Last result (Monday 09:02): 3 new listings* — and **uses the model**, because every run is a real turn. A run that has something to say also delivers it in the notebook's chat, with the usual notification; a run with nothing to say only updates the section. **Pause**, **Change** and **Remove** are here; removing the section removes the job. Notebook crons are also listed in the workshop with their place, *piante › acero*. See [Notebook crons](./scheduling.md#notebook-crons).
-
-#### Mini app
-
-**Or link one of your apps…**, at the bottom of the micro app sheet, attaches live data from one of your [mini-apps](./mini-apps.md), for an app that declares a drawer view (a `section` block in its `app.json`). The list offers only those apps; when the app asks for parameters — which sensor, which plant — you are asked for them, so the same app can sit in two drawers showing two different things. **Make a new one…** takes you to the chat with a sentence ready to ask Jenny for one.
-
-The section shows the app's latest value with its label and unit, its state, a signature — when the value was recorded and which app it comes from — a small trend line when the app declares one (one point per day, up to 31 days), up to two of the app's actions as buttons, and **Open the app**. States:
-
-| State | What the section says |
-|---|---|
-| ok | updated *when* |
-| alarm | in alarm · *when* — the value crossed the threshold the app declares |
-| stale | stalled since *when* — no new data for longer than the app allows |
-| no data | no data yet |
-| gone, broken, no view | the app was deleted, its manifest is broken, or it no longer declares a drawer view |
-
-Alarm and stale light the card's red corner. The section only **reads** what the app left in its data — it never calls the app; keeping the data fresh is the app's own job. When a section changes state (goes into alarm, stalls, comes back to normal), Jenny writes **one** journal line marked `[inferred]` and one *since you last looked* row; the readings themselves never go into the wiki.
 
 #### Photo
 
@@ -171,7 +169,7 @@ The lens is the one way to everything in the notebook, including pages that are 
 
 ## The envelope: Jenny's proposals
 
-The board's shape — which cards, where, which threads — is yours. Jenny does not change it; she proposes, and the proposal waits in the envelope until you answer. Tap the envelope to read them:
+The board's shape — which cards, where, which threads — is yours: you change it directly (see [Your cards](#your-cards)), and Jenny does not change it at all. She proposes, and the proposal waits in the envelope until you answer. Tap the envelope to read them:
 
 | Proposal | When the gardener may make it |
 |---|---|
@@ -179,9 +177,10 @@ The board's shape — which cards, where, which threads — is yours. Jenny does
 | **Put a card away** | A card whose drawer and pages have not changed for **90 days**, with no open reminders. Its pages stay, and search finds them. |
 | **Add a thread** | A page clearly ties two cards that are not tied yet. |
 | **Attach a page** | A page off the board belongs in a drawer — typically one you asked for. |
-| **Add a mini-app section** | An installed app with a drawer view could show live data in a drawer. |
+| **Add an app to a drawer** | An app you kept, with a summary, could show live data in a drawer. |
+| **Add an app as a card** | An app you kept could be a card of its own, its value on the cover. |
 
-Each proposal is a sentence or two in your language, with **Later**, **No** and **Yes** (for putting a card away: **Leave it** and **Put it away**). **Yes** applies it; a new card goes into the free spot farthest from everything else. **No** is remembered: the same proposal is not made again — except a new card, which can come back only once the subject has at least twice the pages it had when you said no. **Later** keeps it out of the envelope for the next **3** board passes.
+Each proposal is a sentence or two in your language, with **Later**, **No** and **Yes** (for putting a card away: **Leave it** and **Put it away**). **Yes** applies it; a new card goes into the free spot nearest to the middle of what you are looking at. **No** is remembered: the same proposal is not made again — except a new card, which can come back only once the subject has at least twice the pages it had when you said no. **Later** keeps it out of the envelope for the next **3** board passes.
 
 The gardener adds at most **2** new proposals per pass, and the envelope holds at most **4** waiting. Proposing nothing is a normal outcome.
 
@@ -238,13 +237,15 @@ Everything lives inside the notebook's folder, so it is part of your [backups an
 workspace/wikis/<notebook>/
   board/
     board.json         the board: skeleton, cards and their positions, your sections,
-                       threads, the envelope, the "no" and "later" answers, since rows
+                       the apps placed on them and the covers, threads, the envelope,
+                       the "no" and "later" answers, since rows, the cards removed
+                       in the last week (for Undo)
     reminders.json     the reminders, open and closed
     cards/<id>.json    each drawer's written summary — derived from the wiki, regenerable
   raw/photos/          photos added to drawers
 ```
 
-The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` and `reminders.json` are yours: losing them loses your layout, sections and reminders.
+The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` and `reminders.json` are yours: losing them loses your layout, sections and reminders. The apps placed on a board are not in the notebook: they live in `workspace/apps/`, with their data, and a notebook only points at them.
 
 ## See also
 

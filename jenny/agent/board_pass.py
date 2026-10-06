@@ -168,11 +168,14 @@ class BoardPass:
     def apps_with_section(self) -> dict[str, dict[str, Any]]:
         try:
             from jenny.apps.manifest import scan_apps
+            from jenny.apps.trust import is_live
         except Exception:  # noqa: BLE001 — senza app si propone senza sezioni
             return {}
         out = {}
         for app in scan_apps(self.workspace):
-            if app.manifest is not None and app.manifest.section is not None:
+            # Solo app tenute dall'utente: una prova non si propone.
+            if app.manifest is not None and app.manifest.section is not None and is_live(
+                    self.workspace, app.slug):
                 out[app.slug] = {"name": app.manifest.name, "params": app.manifest.section.params}
         return out
 
@@ -345,7 +348,9 @@ class BoardPass:
         if state.apps_with_section:
             rows = [f"- `{slug}` — {info['name']}; asks for: {', '.join(info['params']) or 'nothing'}"
                     for slug, info in state.apps_with_section.items()]
-            parts.append(self._section("Apps that can show live data in a drawer", "\n".join(rows)))
+            parts.append(self._section(
+                "Apps that can show live data in a drawer (add_section) or as a card of their own "
+                "(add_app_card)", "\n".join(rows)))
         return "\n\n---\n\n".join(parts)
 
     def _stale_section(self, board: dict[str, Any], state: BoardPassState) -> str:

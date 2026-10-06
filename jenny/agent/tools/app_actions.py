@@ -118,12 +118,20 @@ class AppToolsSyncer:
     def __init__(self, workspace: Path, *, bus: Any = None) -> None:
         self._workspace = Path(workspace)
         self._bus = bus
-        # slug -> (app.json mtime_ns, [registered tool names])
-        self._state: dict[str, tuple[int, list[str]]] = {}
+        # slug -> ((app.json mtime_ns, approvata), [registered tool names])
+        self._state: dict[str, tuple[object, list[str]]] = {}
 
-    def _manifest_mtimes(self) -> dict[str, int]:
+    def _manifest_mtimes(self) -> dict[str, object]:
+        """Una firma per app: il manifest, e (dalla prova in poi) se è approvata.
+
+        Un'app che passa da «in prova» a «tenuta» non cambia ``app.json``: la
+        firma porta anche l'esito di :func:`jenny.apps.trust.is_live`, che è
+        in cache sulle date dei file, cosi' il giro resta di poche ``stat``.
+        """
+        from jenny.apps.trust import is_live
+
         apps_root = self._workspace / "apps"
-        mtimes: dict[str, int] = {}
+        mtimes: dict[str, object] = {}
         if not apps_root.is_dir():
             return mtimes
         for entry in apps_root.iterdir():
@@ -131,9 +139,10 @@ class AppToolsSyncer:
                 continue
             manifest = entry / "app.json"
             try:
-                mtimes[entry.name] = manifest.stat().st_mtime_ns
+                mtime = manifest.stat().st_mtime_ns
             except OSError:
-                mtimes[entry.name] = -1  # folder without readable manifest
+                mtime = -1  # folder without readable manifest
+            mtimes[entry.name] = (mtime, is_live(self._workspace, entry.name))
         return mtimes
 
     def sync(self, registry: Any) -> tuple[list[str], bool]:
@@ -161,7 +170,10 @@ class AppToolsSyncer:
             for slug in stale:
                 app = by_slug.get(slug)
                 registered: list[str] = []
-                if app is not None and not app.broken and app.manifest is not None:
+                live = bool(current[slug][1]) if isinstance(current[slug], tuple) else True
+                if app is not None and not live:
+                    logger.info("App '{}' is on trial or changed outside Jenny: no tools", slug)
+                elif app is not None and not app.broken and app.manifest is not None:
                     for action in app.manifest.actions:
                         tool = AppActionTool(
                             self._workspace, slug, app.manifest.name, action,

@@ -52,6 +52,7 @@ _STUBS = {
     "i18n.js": "export const i18n = { locale: 'it', t: (k) => k };\n",
     "utils.js": (
         "export const escapeHtml = (s) => s; export const showToast = () => {};\n"
+        "export const showUndo = () => () => {};\n"
         "export const ensureVendor = async () => {};\n"
     ),
 }

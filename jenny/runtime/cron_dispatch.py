@@ -785,6 +785,7 @@ class CronDispatcher:
             self._config.workspace_path,
             wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
             timezone_name=config.agents.defaults.timezone or None,
+            cron=self._cron,
         )
 
     async def _run_update_check(self, agent: "CronCapableAgent") -> str | None:

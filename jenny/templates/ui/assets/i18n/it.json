@@ -600,7 +600,6 @@
     "brokenPrompt": "L'app \"{slug}\" risulta rotta con questo errore: {error}. Puoi sistemarla?",
     "uninstalled": "{name} disinstallata",
     "uninstalledMany": "Disinstallate: {names}",
-    "deleteAppConfirm": "Eliminare l'app \"{name}\"? Verrà rimossa definitivamente.",
     "launchFailed": "Impossibile avviare {name}: forse è stata disinstallata o disattivata.",
     "deleteFailed": "Eliminazione non riuscita",
     "appDeleted": "App eliminata",
@@ -614,7 +613,59 @@
     "unpinned": "Tolta dalle pagine",
     "pageExternal": "Si apre fuori da Jenny: non può stare in una pagina",
     "pageBroken": "È rotta: va riparata prima",
-    "pageFull": "Le pagine sono piene"
+    "pageFull": "Le pagine sono piene",
+    "trashed": "«{name}» nel cestino",
+    "undo": "Annulla",
+    "restoreFailed": "Non sono riuscita a rimetterla",
+    "restoreTaken": "C'è già un'app con quel nome: rinomina o elimina quella, poi riprova",
+    "restored": "«{name}» è tornata",
+    "trashRow": "Cestino · {count}",
+    "trashTitle": "Cestino delle app",
+    "trashEmpty": "Il cestino è vuoto.",
+    "trashRecords": "{count} dati · eliminata il {when}",
+    "trashNoData": "eliminata il {when}",
+    "restore": "Rimetti",
+    "purge": "Elimina per sempre",
+    "purgeConfirm": "Eliminare per sempre «{name}»? Non si potrà più rimettere.",
+    "purgeConfirmData": "Eliminare per sempre «{name}» e i suoi {count} dati? Non si potrà più rimettere.",
+    "purgeFailed": "Non sono riuscita a eliminarla",
+    "trialBadge": {
+      "trial": "in prova",
+      "changed": "modifica in prova",
+      "unapproved": "da riapprovare"
+    },
+    "trialSee": "Guarda la modifica",
+    "trialUnapproved": "Il suo codice è cambiato fuori da Jenny: finché non lo riapprovi non gira.",
+    "trialBroken": "Questa prova non è valida: {error}",
+    "trialReading": "La prima lettura vera · {label}",
+    "trialReadingBare": "La prima lettura vera",
+    "trialReaches": "Va su internet: {what}.",
+    "trialReachesNone": "Non va su internet.",
+    "trialWrites": "Tocca: {what}.",
+    "trialWritesNone": "Non scrive niente: guarda soltanto.",
+    "trialSkills": "Usa la skill {what}.",
+    "trialNew": "Novità di questa versione: {what}.",
+    "trialWhy": "Non gira finché non la tieni.",
+    "trialWhyChanged": "Una modifica aspetta: finché non la tieni resta la versione di prima.",
+    "keep": "Tienila",
+    "reapprove": "Riapprova",
+    "discard": "Scarta",
+    "trialChange": "Cambia",
+    "trialChangePrompt": "Vorrei cambiare l'app «{name}» ({slug}) prima di tenerla: ",
+    "trialFailed": "Non è andata, riprova",
+    "kept": "«{name}» è tua",
+    "discarded": "«{name}» scartata",
+    "place": "Metti in un quaderno…",
+    "placeWhere": "Dove metto «{name}»?",
+    "placeHow": "In «{notebook}»",
+    "placeAsCard": "Come scheda nuova",
+    "placeInCard": "Dentro «{card}»",
+    "placeParams": "Ancora una cosa",
+    "placeParam": "{name}",
+    "placeGo": "Mettila",
+    "placed": "«{name}» è in {notebook}",
+    "placeFailed": "Non sono riuscita a metterla",
+    "placeNoNotebooks": "Non hai ancora quaderni: creane uno dalla pagina Quaderni."
   },
   "graph": {
     "concepts": "Concetti",
@@ -1287,7 +1338,8 @@
         "remove_card": "Metto via {subject}? Le sue pagine restano.",
         "add_connection": "Lego {subject} con un filo?",
         "attach_page": "Metto questa pagina nel cassetto di {subject}?",
-        "add_section": "Aggiungo una mini app al cassetto di {subject}?"
+        "add_section": "Metto un'app nel cassetto di {subject}?",
+        "add_app_card": "Faccio di {subject} una scheda, col suo valore in copertina?"
       }
     },
     "search": {
@@ -1342,7 +1394,8 @@
         "empty": "ancora nessun dato",
         "missing": "Questa app non c'è più.",
         "broken": "Questa app è rotta: aprila dalla sezione App per vedere perché.",
-        "no_section": "Questa app non ha una vista per i cassetti."
+        "no_section": "Questa app non ha una vista per i cassetti.",
+        "trashed": "nel cestino"
       },
       "event": {
         "ok": "tornato a posto",
@@ -1357,7 +1410,8 @@
       "remindDefault": "Controlla {app}",
       "below": "{label} scende sotto",
       "above": "{label} sale sopra",
-      "threshold": "Soglia"
+      "threshold": "Soglia",
+      "restore": "Rimetti l'app"
     },
     "section": {
       "add": "+ Aggiungi sezione",
@@ -1378,16 +1432,16 @@
       "reminderMonth": "Solo il mese",
       "noApps": "Nessuna app installata ha una vista per i cassetti.",
       "newApp": "Creane una nuova…",
-      "newAppPrompt": "Nel cassetto {card} vorrei una mini app che ",
+      "newAppPrompt": "Nel cassetto {card} vorrei un'app che ",
       "appParam": "{app}: {name}?",
       "otherPrompt": "Nel cassetto {card} vorrei una sezione che ",
       "kind": {
         "note": "Nota",
         "reminder": "Promemoria",
-        "app": "Mini app",
+        "app": "App",
         "photo": "Foto",
         "other": "Altro",
-        "micro": "Micro app",
+        "micro": "App",
         "cron": "Cron"
       },
       "hint": {
@@ -1396,7 +1450,7 @@
         "app": "Dati che si aggiornano da soli",
         "photo": "Un'immagine, per esempio com'era",
         "other": "Descrivila e la preparo io",
-        "micro": "Un dato che Jenny legge per te, da solo",
+        "micro": "Un dato vivo, o qualcosa da usare: la prepara Jenny",
         "cron": "Una cosa che Jenny fa da sola, a orario"
       }
     },
@@ -1408,25 +1462,25 @@
       "remindPlaceholder": "Per esempio: i travasi e le concimazioni"
     },
     "micro": {
-      "what": "Cosa vuoi vedere?",
+      "what": "Cosa vuoi vedere, o fare?",
       "whatPlaceholder": "Per esempio: l'umidità della terra e se il sensore è online",
       "explain": "La scrivo io e la provo subito: nel cassetto vedi il primo valore vero, e la tieni se va bene.",
       "prepare": "Preparala",
       "linkApp": "Oppure collega una tua app…",
-      "prompt": "Nel cassetto {card} vorrei una micro app che mi mostri {what}",
+      "prompt": "Nel cassetto {card} vorrei un'app che {what}",
       "trial": "In prova: è il primo valore letto davvero. Se va bene, tienila e da qui in poi si aggiorna da sola.",
       "reachSkill": "Usa la tua skill {skill}, che va in rete da sola.",
       "reachNet": "Si collega a {hosts}.",
       "keep": "Tienila",
       "discard": "Scarta",
       "fix": "Falla sistemare a Jenny",
-      "fixPrompt": "Nel cassetto {card}, la micro app {app} si è rotta ({error}): sistemala.",
+      "fixPrompt": "Nel cassetto {card}, l'app {app} si è rotta ({error}): sistemala.",
       "reapprove": "Riapprova",
       "resume": "Riprendi",
       "pause": "Pausa",
       "runNow": "Rileggi adesso",
       "change": "Cambia",
-      "changePrompt": "Nel cassetto {card}, nella micro app {app} vorrei ",
+      "changePrompt": "Nel cassetto {card}, nell'app {app} vorrei ",
       "every": "ogni {minutes} min",
       "via": "da {what}",
       "yes": "sì",
@@ -1452,6 +1506,35 @@
       "quiet": "Ultimo giro {when}: niente da dirti.",
       "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
       "prompt": "Nel cassetto {card}, ogni "
+    },
+    "card": {
+      "add": "Nuova scheda",
+      "newTitle": "Nuova scheda",
+      "name": "Come si chiama?",
+      "namePlaceholder": "Acerello, Monstera, Viaggio a Lisbona…",
+      "create": "Crea",
+      "rename": "Rinomina",
+      "renameTitle": "Rinomina la scheda",
+      "save": "Salva",
+      "remove": "Togli dalla bacheca",
+      "removed": "«{title}» tolta dalla bacheca",
+      "undo": "Annulla",
+      "restoreFailed": "Non sono riuscita a rimetterla",
+      "full": "La bacheca è piena: togli prima qualcosa",
+      "failed": "Non è andata, riprova",
+      "actions": "Azioni sulla scheda {title}",
+      "close": "Chiudi",
+      "cover": "Copertina",
+      "coverTitle": "Cosa mostra la copertina",
+      "coverNone": "La foto",
+      "what": "Cosa ci metti?",
+      "whatNothing": "Niente per ora"
+    },
+    "cover": {
+      "stale": "fermo",
+      "minutes": "{count} min fa",
+      "hours": "{count} h fa",
+      "days": "{count} g fa"
     }
   }
 }

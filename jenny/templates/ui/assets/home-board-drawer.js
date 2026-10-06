@@ -93,14 +93,19 @@ export class BoardDrawer {
    * @param onOpenCard   `(cardId, title)` — l'altro capo di un filo.
    * @param onAskJenny   `(text)` — «Altro…»: una frase gia' scritta in chat.
    * @param onOpenApp    `(slug)` — «Apri l'app».
+   * @param onRenameCard `(cardId, title)` — «Rinomina», in fondo al cassetto.
+   * @param onRemoveCard `(cardId, title)` — «Togli dalla bacheca», in fondo.
    * @param sheet        il foglio della bacheca, per «Aggiungi sezione».
    */
-  constructor({ onOpenPage, onOpenCard, onAskJenny, onOpenApp, sheet } = {}) {
+  constructor({ onOpenPage, onOpenCard, onAskJenny, onOpenApp, onRenameCard, onRemoveCard,
+    sheet } = {}) {
     this.el = document.getElementById('home-board-drawer');
     this.onOpenPage = onOpenPage;
     this.onOpenCard = onOpenCard;
     this.onAskJenny = onAskJenny;
     this.onOpenApp = onOpenApp;
+    this.onRenameCard = onRenameCard;
+    this.onRemoveCard = onRemoveCard;
     this.sheet = sheet;
     this.notebook = null;
     this.card = null;
@@ -218,6 +223,14 @@ export class BoardDrawer {
       }
       root.appendChild(pages);
     }
+    /* Le stesse azioni della barra che sale tenendo premuta la scheda: chi non
+       conosce il gesto le trova qui, in fondo, dove si arriva comunque. */
+    const own = el('div', 'home-drawer-own');
+    own.append(
+      button('home-drawer-link', i18n.t('board.card.rename'), () => this.onRenameCard?.(d.id, d.title)),
+      button('home-drawer-link', i18n.t('board.card.remove'), () => this.onRemoveCard?.(d.id, d.title)),
+    );
+    root.appendChild(own);
     root.appendChild(el('p', 'home-drawer-foot', i18n.t('board.drawer.foot')));
     this.el.innerHTML = '';
     this.el.appendChild(root);
@@ -335,15 +348,42 @@ export class BoardDrawer {
     } else if (section.kind === 'app') {
       const v = section.view || {};
       h3.append(v.name || section.app, el('span', 'home-drawer-owner', i18n.t('board.section.kind.app')));
-      body.appendChild(this._appView(v));
+      /* Un'app col riassunto in una forma (chip, avanzamento, lista, tabella) o
+         con un lettore si disegna come una micro app: e' la stessa cosa. */
+      body.appendChild(v.view && (v.view !== 'value' || v.extras?.length || v.every)
+        ? this._microView(section, v, { app: true }) : this._appView(v));
       if (v.field && (v.state === 'ok' || v.state === 'alarm' || v.state === 'stale')) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
           () => this._addCondition(section, v)));
       }
-      for (const verb of v.verbs || []) {
+      for (const verb of (v.verbs || []).slice(0, 2)) {
         tools.appendChild(button('home-drawer-link', verb, () => this._verb(section, verb)));
       }
-      if (v.state !== 'missing') {
+      if (v.state === 'trial' || v.state === 'unapproved' || v.trial) {
+        /* In prova (nuova, o una modifica che aspetta), o cambiata fuori da
+           Jenny: la si tiene da qui, come dal foglio della griglia. */
+        const reach = [];
+        if (v.trial?.reaches?.length) reach.push(i18n.t('apps.trialReaches', { what: v.trial.reaches.join(', ') }));
+        if (v.trial?.writes?.length) reach.push(i18n.t('apps.trialWrites', { what: v.trial.writes.join(', ') }));
+        body.appendChild(el('p', 'home-drawer-proof', [
+          i18n.t(v.state === 'unapproved' ? 'apps.trialUnapproved'
+            : v.state === 'trial' ? 'apps.trialWhy' : 'apps.trialWhyChanged'), ...reach].join(' ')));
+        tools.append(
+          button('home-board-btn is-primary', i18n.t(v.state === 'unapproved' ? 'apps.reapprove' : 'apps.keep'),
+            () => this._appTrial('keep', section, v)),
+        );
+        if (v.state !== 'unapproved') {
+          tools.appendChild(button('home-board-btn', i18n.t('apps.discard'),
+            () => this._appTrial('discard', section, v)));
+        }
+      }
+      if (v.state === 'trashed') {
+        /* L'app e' nel cestino, non sparita: si rimette da qui, e la sezione
+           torna viva con i suoi dati. */
+        tools.appendChild(button('home-drawer-link', i18n.t('board.app.restore'),
+          () => this._restoreApp(v)));
+      } else if (v.state !== 'missing' && v.state !== 'trial' && v.state !== 'unapproved'
+          && v.hasScreen !== false) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app)));
       }
       tools.appendChild(remove);
@@ -448,10 +488,39 @@ export class BoardDrawer {
     return row;
   }
 
+  async _appTrial(answer, section, v) {
+    try {
+      await rpc.apps(answer, { slug: section.app });
+    } catch (err) {
+      console.warn('home.drawer: app trial failed', err);
+      showToast(i18n.t('apps.trialFailed'), 'error');
+      return;
+    }
+    if (answer === 'discard' && v.state === 'trial') {
+      /* Una prova scartata non lascia niente da mostrare: la sezione se ne va
+         con lei, come per le micro app. */
+      await this._write('section.remove', { card: this.card, id: section.id });
+      return;
+    }
+    await this.reload();
+  }
+
+  async _restoreApp(v) {
+    try {
+      await rpc.apps('restore', { id: v.trashId });
+    } catch (err) {
+      console.warn('home.drawer: restore app failed', err);
+      showToast(i18n.t(err?.code === 'conflict' ? 'apps.restoreTaken' : 'apps.restoreFailed'), 'error');
+      return;
+    }
+    showToast(i18n.t('apps.restored', { name: v.name || v.slug }), 'success');
+    await this.reload();
+  }
+
   /** Valore, stato e firma: un dato vivo dice sempre quando e da dove viene. */
   _appView(v) {
     const box = el('div', 'home-drawer-app');
-    if (v.state === 'missing' || v.state === 'broken' || v.state === 'no_section') {
+    if (['missing', 'broken', 'no_section', 'trashed'].includes(v.state)) {
       box.appendChild(el('p', 'home-drawer-hint', i18n.t(`board.app.state.${v.state}`)));
       return box;
     }
@@ -472,14 +541,17 @@ export class BoardDrawer {
 
   /** Una micro app: il valore come una mini app, piu' la firma di chi lo
    *  legge — quando, ogni quanto, da dove — e, in prova, cosa toccherà. */
-  _microView(section, v) {
+  _microView(section, v, { app = false } = {}) {
     const shown = { ...v };
     const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
-    if (v.state === 'pending' || codeDown) shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
+    if (v.state === 'pending' || v.state === 'trial' || codeDown) {
+      shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
+    }
     /* La fonte la dice il codice (`_source`); senza, la firma «ogni N min · da …»
-       qui sotto basta, e «fonte: Acerello» ripeterebbe il titolo. */
-    shown.name = v.source;
-    shown.hideSource = !v.source;
+       qui sotto basta, e «fonte: Acerello» ripeterebbe il titolo. Un'app senza
+       lettore firma col suo nome, come prima. */
+    shown.name = v.source || (app && !v.every ? v.name : '');
+    shown.hideSource = !shown.name;
     const shape = v.view || 'value';
     /* Cinque forme, tutte disegnate qui: la micro app dice quale, mai come. */
     const box = shape === 'value' ? this._appView(shown) : el('div', 'home-drawer-app');
@@ -505,10 +577,12 @@ export class BoardDrawer {
       else box.appendChild(chips);
     }
     if (shape !== 'value') box.appendChild(this._microSign(shown));
-    const sign = [i18n.t('board.micro.every', { minutes: v.every })];
-    if (v.uses?.length) sign.push(i18n.t('board.micro.via', { what: v.uses[0] }));
-    else if (v.net?.length) sign.push(i18n.t('board.micro.via', { what: v.net[0] }));
-    box.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
+    if (v.every) {
+      const sign = [i18n.t('board.micro.every', { minutes: v.every })];
+      if (v.uses?.length) sign.push(i18n.t('board.micro.via', { what: v.uses[0] }));
+      else if (v.net?.length) sign.push(i18n.t('board.micro.via', { what: v.net[0] }));
+      box.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
+    }
     if (v.state === 'pending') {
       const reach = [];
       if (v.uses?.length) reach.push(i18n.t('board.micro.reachSkill', { skill: v.uses[0] }));

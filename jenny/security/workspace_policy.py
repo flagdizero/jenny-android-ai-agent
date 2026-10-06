@@ -119,9 +119,76 @@ def is_board_path(path: str | Path) -> bool:
 
 
 def refuse_board_write(path: str | Path) -> None:
-    """Rifiuta una scrittura generica dentro la bacheca di un quaderno."""
+    """Rifiuta una scrittura generica dentro la bacheca di un quaderno, o nel
+    codice di un'app (v. :func:`is_app_code_path`).
+
+    Il nome e' rimasto quello di prima perche' i punti che lo chiamano — gli
+    strumenti file e ogni via di scrittura di ``python_exec`` — sono gli stessi:
+    un recinto in piu' non deve voler dire un punto di chiamata in piu' da
+    dimenticare.
+    """
     if is_board_path(path):
         raise BoardWriteError(f"refused write to {path}")
+    if is_app_code_path(path):
+        raise AppCodeWriteError(f"refused write to {path}")
+
+
+class AppCodeWriteError(PermissionError):
+    """Sollevata quando uno strumento generico prova a scrivere il codice di un'app.
+
+    Il codice di un'app (``app.json``, ``run.py``, ``app/``) cambia solo dal
+    tool ``app``: una modifica va in prova, e gira solo quando l'utente la
+    tiene (``jenny/apps/trust.py``). Scritto a mano, salterebbe la prova. I dati
+    (``data/``) e le note (``AGENT.md``) restano scrivibili.
+    """
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            "An app's code (app.json, run.py, app/) is written only through the `app` tool: "
+            "the change goes on trial and the user keeps it. Do not write it with file tools "
+            "or python_exec, and do not look for another path. Its data/ and AGENT.md stay "
+            "writable."
+            + (f" ({detail})" if detail else "")
+        )
+
+
+APPS_DIRNAME = "apps"
+
+
+def _is_installation_root(parent: Path) -> bool:
+    try:
+        from jenny.config.paths import get_workspace_path
+
+        if get_workspace_path().resolve() == parent.resolve():
+            return True
+    except Exception:  # noqa: BLE001 — senza workspace impostato, i segni della radice
+        pass
+    return (parent / "skills").is_dir() or (parent / "memory").is_dir()
+
+
+def is_app_code_path(path: str | Path) -> bool:
+    """True se *path* e' codice di un'app dell'installazione (non dati, non note).
+
+    ``<installazione>/apps/<slug>/data/**`` e ``AGENT.md`` sono fuori: li
+    scrivono le azioni dell'app e Jenny. Tutto il resto — il manifest,
+    ``run.py``, lo schermo, la cartella dell'app stessa, le bozze e il cestino
+    (``.drafts``, ``.trash``) — passa dal tool ``app``.
+    """
+    parts = Path(path).parts
+    for i, part in enumerate(parts):
+        if part != APPS_DIRNAME or i == 0:
+            continue
+        if not _is_installation_root(Path(*parts[:i])):
+            continue
+        rest = parts[i + 1:]
+        if not rest or rest[0].startswith("."):
+            return True
+        if len(rest) >= 2 and rest[1] == "data":
+            return False
+        if len(rest) == 2 and rest[1] == "AGENT.md":
+            return False
+        return True
+    return False
 
 
 def _resolve_path(path: str | Path, workspace: str | Path | None = None, *, strict: bool = False) -> Path:

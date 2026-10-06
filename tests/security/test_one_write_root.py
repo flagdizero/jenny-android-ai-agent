@@ -286,27 +286,29 @@ def _seed_board(env: Env) -> None:
             {"id": "schede", "title": "Schede", "pages": [], "pos": {"x": 1, "y": 1}}))
 
 
-async def _root_micro_app(env: Env) -> Path:
-    """Destinazione fissa: la radice è quella sotto cui compare ``board/micro/``."""
+async def _root_app_tool(env: Env) -> Path:
+    """Il codice va nell'installazione (``apps/.drafts``) apposta; la **posa** va
+    sulla bacheca del quaderno legato, ed e' quella la radice che il tool chiede."""
+    import json
     from unittest.mock import patch
 
+    from jenny.agent.tools.app_tool import AppTool
     from jenny.agent.tools.context import reset_request_context
-    from jenny.agent.tools.micro_app import MicroAppTool
+    from jenny.board.placements import placements
 
     _seed_board(env)
     token = _bind_project_chat(env)
     try:
         with patch("jenny.config.paths.get_workspace_path", lambda: env.ws):
-            out = await MicroAppTool().execute(
-                action="draft", card="schede", title="Conta",
-                fields={"n": {"label": "Quante", "type": "number"}},
-                code="def run(ctx):\n    return {'n': 3}\n")
+            await AppTool().execute(action="draft", slug="conta", files={
+                "app.json": json.dumps({"name": "Conta", "description": "x"})})
+            out = await AppTool().execute(action="place", slug="conta", card="schede")
     finally:
         reset_request_context(token)
-    assert "Trial run OK" in out, out
-    created = [p.parents[1] for p in env.tmp.rglob("board/micro/.drafts")]
-    assert len(created) == 1, f"un solo `board/micro/` atteso, trovati {created}"
-    return created[0].parent
+    assert "Placed" in out, out
+    hits = [d for d in (env.project, env.other) if placements(d)]
+    assert len(hits) == 1, f"una sola bacheca attesa, trovate {hits}"
+    return hits[0]
 
 
 async def _root_cron(env: Env) -> Path:
@@ -353,7 +355,7 @@ _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
     "download_file": ("download.py", _root_download),
     "journal_append": ("journal.py", _root_journal),
     "ssh_transfer (down)": ("ssh.py", _root_ssh_transfer),
-    "micro_app (draft)": ("micro_app.py", _root_micro_app),
+    "app (place)": ("app_tool.py", _root_app_tool),
     "cron del quaderno (add)": ("cron.py", _root_cron),
 }
 

@@ -24,6 +24,7 @@ def _codes_raised() -> set[str]:
         ROOT / "jenny" / "webui" / "commands.py",
         ROOT / "jenny" / "webui" / "project_rename.py",
         ROOT / "jenny" / "webui" / "board_commands.py",
+        ROOT / "jenny" / "webui" / "apps_commands.py",
     ]
     found: set[str] = set()
     for path in sources:
@@ -54,9 +55,10 @@ def test_every_documented_code_is_in_the_closed_set_of_the_docstring() -> None:
 
 
 def test_every_command_has_a_row() -> None:
+    from jenny.webui.apps_commands import APPS_COMMANDS
     from jenny.webui.board_commands import BOARD_COMMANDS
 
-    for method in [*commands.COMMANDS, *BOARD_COMMANDS]:
+    for method in [*commands.COMMANDS, *BOARD_COMMANDS, *APPS_COMMANDS]:
         assert _row(method)
 
 

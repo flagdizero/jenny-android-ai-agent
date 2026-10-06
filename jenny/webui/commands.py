@@ -1380,6 +1380,11 @@ async def dispatch_command(
         from jenny.webui.board_commands import BOARD_COMMANDS
 
         handler = BOARD_COMMANDS.get(method)
+    if handler is None and method.startswith("apps."):
+        # Il cestino delle app e le risposte alla prova: stesso motivo.
+        from jenny.webui.apps_commands import APPS_COMMANDS
+
+        handler = APPS_COMMANDS.get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
     try:

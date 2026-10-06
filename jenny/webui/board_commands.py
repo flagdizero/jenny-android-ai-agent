@@ -22,7 +22,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.board import model
+from jenny.board import model, removed
 from jenny.board.store import (
     delete_card_summary,
     mutate_board,
@@ -145,6 +145,230 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     return {"ok": True}
 
 
+# ── Le schede dell'utente: crea, rinomina, togli, rimetti ────────────────────
+#
+# Fino al 06/10/2026 la bacheca cambiava forma solo dalla busta. Adesso è anche
+# dell'utente nel senso pieno: una scheda si crea dal «+» o tenendo premuto il
+# muro vuoto, si rinomina, si toglie con un Annulla. Jenny continua a non poter
+# fare niente di tutto questo da sola (``ownership_violations``): queste
+# scritture sono ``user``.
+
+
+def _title(params: Mapping[str, Any]) -> str:
+    title = model.clean_text(params.get("title"), model.MAX_TITLE)
+    if not title:
+        raise CommandError("bad_request", "title required")
+    return title
+
+
+async def board_card_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Una scheda nuova, dove l'utente l'ha chiesta (``near``) o al centro della vista.
+
+    Nasce vuota: niente pagine (le attacca la passata del giardiniere, o una
+    proposta della busta), il titolo e il posto sono dell'utente.
+    """
+    from jenny.board.store import read_reminders
+
+    root = _project(ctx, params)
+    app = params.get("app")
+    if isinstance(app, Mapping):
+        # Una scheda che **e'** un'app: la polaroid porta il suo valore.
+        return await _card_from_app(ctx, root, app, params)
+    title = _title(params)
+    glyph = params.get("glyph") if isinstance(params.get("glyph"), str) else ""
+    near = _near(params)
+    reminders = await _run(read_reminders, root)
+    made: dict[str, Any] = {}
+
+    def apply(board: dict[str, Any]) -> None:
+        if model.is_full(board, reminders):
+            raise CommandError("conflict", "the board is full")
+        taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
+        card_id = model.unique_id(model.slugify(title), taken)
+        target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2) \
+            if near is not None else None
+        x, y = model.free_slot(board, reminders, near=target)
+        card = model.normalize_board({"cards": [{
+            "id": card_id, "title": title, "titleBy": model.USER, "pages": [],
+            "pos": {"x": x, "y": y, "by": model.USER}, "glyph": glyph,
+            "userSections": [], "created": model.now_iso(),
+        }]})["cards"][0]
+        board["cards"].append(card)
+        made.update(card)
+
+    await _run(mutate_board, root, apply)
+    return {"ok": True, "card": {"id": made["id"], "title": made["title"], "pos": made["pos"]}}
+
+
+def _app_params(workspace: Path, slug: Any, raw: Any) -> tuple[str, dict[str, Any]]:
+    """Lo slug di un'app che esiste (o e' in prova) e i parametri che il suo
+    riassunto dichiara: nient'altro passa."""
+    from jenny.apps import trust
+    from jenny.apps.manifest import SLUG_RE, find_app
+
+    if not isinstance(slug, str) or not SLUG_RE.match(slug):
+        raise CommandError("bad_request", "invalid app")
+    app = find_app(workspace, slug)
+    if app is None:
+        draft = trust.load_draft(workspace, slug)
+        app = draft.app if draft is not None else None
+    if app is None or app.manifest is None:
+        raise CommandError("not_found", "app not found")
+    declared = app.manifest.section.params if app.manifest.section is not None else {}
+    given = raw if isinstance(raw, Mapping) else {}
+    unknown = sorted(set(given) - set(declared))
+    if unknown:
+        raise CommandError("bad_request", f"unknown params: {', '.join(unknown)}")
+    return slug, {k: v for k, v in given.items() if isinstance(v, (str, int, float, bool))}
+
+
+async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any],
+                         params: Mapping[str, Any]) -> dict[str, Any]:
+    from jenny.board.place import place_app
+
+    workspace = ctx.get_workspace_root()
+    slug, app_params = _app_params(workspace, app.get("slug"), app.get("params"))
+    title = model.clean_text(params.get("title"), model.MAX_TITLE) or None
+    try:
+        where = await _run(place_app, root, slug, params=app_params, near=_near(params),
+                           title=title, workspace=workspace)
+    except ValueError as exc:
+        raise CommandError("conflict", str(exc)) from exc
+    board = await _run(read_board, root)
+    card = next((c for c in reversed((board or {}).get("cards") or [])
+                 if (c.get("app") or {}).get("slug") == slug), None)
+    return {"ok": True, "where": where,
+            "card": {"id": card["id"], "title": card["title"], "pos": card["pos"]} if card
+            else None}
+
+
+async def board_card_cover(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Quale app fa da copertina: ``@card`` (l'app della scheda), l'id di una
+    sezione ``app`` del cassetto, o ``""`` per tornare alla foto."""
+    root = _project(ctx, params)
+    card_id = _card_id(params, "id")
+    cover = params.get("cover")
+    if not isinstance(cover, str):
+        raise CommandError("bad_request", "cover must be a string")
+
+    def apply(board: dict[str, Any]) -> None:
+        card = _need_card(board, card_id)
+        if cover == "":
+            card.pop("cover", None)
+            return
+        ok = (cover == model.COVER_CARD and isinstance(card.get("app"), dict)) or any(
+            s["id"] == cover and s.get("kind") == "app" for s in card["userSections"])
+        if not ok:
+            raise CommandError("bad_request", "not an app of this card")
+        card["cover"] = cover
+
+    await _run(mutate_board, root, apply)
+    return {"ok": True}
+
+
+async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Il nome di una scheda diventa dell'utente: Jenny non lo riscrive più."""
+    root = _project(ctx, params)
+    card_id = _card_id(params, "id")
+    title = _title(params)
+
+    def apply(board: dict[str, Any]) -> None:
+        card = _need_card(board, card_id)
+        card["title"] = title
+        card["titleBy"] = model.USER
+
+    await _run(mutate_board, root, apply)
+    return {"ok": True}
+
+
+async def board_card_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Togli una scheda dalla bacheca, con un Annulla che rimette tutto.
+
+    La scheda, i suoi fili e il suo posto vanno in ``removedCards`` per
+    :data:`model.REMOVED_KEEP_DAYS` giorni. Quel che faceva da sé si ferma — i
+    cron del suo cassetto in pausa, le micro app in pausa, le attese non si
+    annunciano — e riparte con :func:`board_card_restore`. La wiki non cambia:
+    le pagine restano, e la ricerca le trova.
+    """
+    root = _project(ctx, params)
+    card_id = _card_id(params, "id")
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    taken: dict[str, Any] = {}
+
+    def apply(board: dict[str, Any]) -> None:
+        card = _need_card(board, card_id)
+        board["cards"].remove(card)
+        conns = [c for c in board["connections"] if card_id in (c["a"], c["b"])]
+        board["connections"] = [c for c in board["connections"] if c not in conns]
+        entry = {"card": card, "connections": conns, "at": model.now_iso(),
+                 "paused": {"jobs": [], "micros": []}}
+        board["removedCards"] = [*board["removedCards"], entry][-model.MAX_REMOVED_CARDS:]
+        taken.update(entry)
+
+    await _run(mutate_board, root, apply)
+    card = taken["card"]
+    jobs = []
+    if cron is not None:
+        for job_id in removed.card_crons(card):
+            # Solo quelli che questa «Togli» ha fermato: l'Annulla non deve
+            # riprendere un cron che l'utente aveva già messo in pausa lui.
+            if cron.set_paused(job_id, True) == "paused":
+                jobs.append(job_id)
+    micros = [m for m in removed.card_micros(card) if await _run(removed.set_micro_paused, root, m, True)]
+    if jobs or micros:
+        def note(board: dict[str, Any]) -> None:
+            for entry in board["removedCards"]:
+                if entry["card"]["id"] == card_id:
+                    entry["paused"] = {"jobs": jobs, "micros": micros}
+
+        await _run(mutate_board, root, note)
+    return {"ok": True, "title": card["title"]}
+
+
+async def board_card_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """L'Annulla di «Togli»: la scheda torna dov'era, con i suoi fili.
+
+    Le pagine che nel frattempo un'altra scheda ha preso restano a quella; i
+    fili verso una scheda che non c'è più non tornano.
+    """
+    from jenny.board.store import read_reminders
+
+    root = _project(ctx, params)
+    card_id = _card_id(params, "id")
+    reminders = await _run(read_reminders, root)
+    back: dict[str, Any] = {}
+
+    def apply(board: dict[str, Any]) -> None:
+        entry = next((r for r in board["removedCards"] if r["card"]["id"] == card_id), None)
+        if entry is None:
+            raise CommandError("not_found", "nothing to restore")
+        if model.card_by_id(board, card_id) is not None:
+            raise CommandError("conflict", "a card with that id is on the board")
+        if model.is_full(board, reminders):
+            raise CommandError("conflict", "the board is full")
+        owners = model.page_owners(board)
+        card = entry["card"]
+        card["pages"] = [p for p in card["pages"] if p not in owners]
+        board["cards"].append(card)
+        on_board = {c["id"] for c in board["cards"]}
+        for conn in entry["connections"]:
+            if conn["a"] in on_board and conn["b"] in on_board \
+                    and len(board["connections"]) < model.MAX_CONNECTIONS:
+                board["connections"].append(conn)
+        board["removedCards"] = [r for r in board["removedCards"] if r is not entry]
+        back.update(entry["paused"])
+
+    await _run(mutate_board, root, apply)
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    if cron is not None:
+        for job_id in back.get("jobs") or []:
+            if cron.get_job(job_id) is not None:
+                cron.set_paused(job_id, False)
+    for micro_id in back.get("micros") or []:
+        await _run(removed.set_micro_paused, root, micro_id, False)
+    return {"ok": True}
+
+
 # ── La busta ─────────────────────────────────────────────────────────────────
 
 
@@ -170,7 +394,8 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
     """
     kind = suggestion["kind"]
     owners = model.page_owners(board)
-    taken = {c["id"] for c in board["cards"]}
+    # Anche gli id delle schede tolte: un Annulla non deve trovare il posto preso.
+    taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
     stamp = model.now_iso()
 
     def new_card(title: str, glyph: str, pages: list[str], wanted: str = "") -> dict[str, Any]:
@@ -238,6 +463,17 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
             card["pages"].append(page)
             model.add_since(board, "page_attached", card=card["id"], page=page)
         board["offboardWants"] = [w for w in board["offboardWants"] if w.get("page") != page]
+    elif kind == "add_app_card":
+        if model.is_full(board, reminders):
+            raise CommandError("conflict", "the board is full")
+        app = str(suggestion.get("app") or "")
+        if model.is_valid_id(app):
+            title = model.clean_text(suggestion.get("subject"), model.MAX_TITLE) or app
+            card = new_card(title, "", [])
+            card["titleBy"] = model.USER
+            card["app"] = {"slug": app, "params": dict(suggestion.get("params") or {})}
+            card["cover"] = model.COVER_CARD
+            model.add_since(board, "card_added", card=card["id"], title=card["title"])
     elif kind == "add_section":
         card = model.card_by_id(board, str(suggestion.get("card") or ""))
         app = suggestion.get("app")
@@ -474,15 +710,15 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         await _run(mutate_reminders, root, add_rem)
         section["reminder"] = rid_holder[0]
     elif kind == "app":
-        app = params.get("app")
-        if not model.is_valid_id(app):
-            raise CommandError("bad_request", "invalid app")
-        section["app"] = app
+        # L'app deve esistere (o essere in prova), e i parametri devono essere
+        # quelli che il suo riassunto chiede: un nome sbagliato non deve
+        # diventare una sezione che non sa disegnarsi.
         raw_params = params.get("params") or {}
         if not isinstance(raw_params, Mapping):
             raise CommandError("bad_request", "params must be an object")
-        section["params"] = {str(k): v for k, v in raw_params.items()
-                             if isinstance(v, (str, int, float, bool))}
+        slug, app_params = _app_params(ctx.get_workspace_root(), params.get("app"), raw_params)
+        section["app"] = slug
+        section["params"] = app_params
     elif kind == "photo":
         mime = params.get("mime")
         data = params.get("data")
@@ -776,6 +1012,11 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
 
 
 BOARD_COMMANDS = {
+    "board.card.add": board_card_add,
+    "board.card.rename": board_card_rename,
+    "board.card.remove": board_card_remove,
+    "board.card.restore": board_card_restore,
+    "board.card.cover": board_card_cover,
     "board.cron.pause": board_cron_pause,
     "board.micro.keep": board_micro_keep,
     "board.micro.discard": board_micro_discard,

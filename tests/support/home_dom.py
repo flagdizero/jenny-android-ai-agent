@@ -161,7 +161,12 @@ globalThis.fetch = async (url, init) => {
    `rpcFailed(...)` fa rispondere un rifiuto (`ok: false`), come un comando
    che il gateway non ha potuto eseguire. */
 export const sent = [];
-export const rpcAnswers = {};
+export const rpcAnswers = {
+  /* La pagina App chiede il cestino ogni volta che si accende: un gateway vero
+     risponde sempre, e senza risposta la richiesta aspetterebbe il suo
+     timeout tenendo vivo node per venti secondi a test. */
+  'apps.trash': () => ({ ok: true, trash: [] }),
+};
 const RPC_FAILED = Symbol('rpcFailed');
 export const rpcFailed = (code = 'unavailable', message = 'failed') => ({ [RPC_FAILED]: { code, message } });
 export class FakeWS {

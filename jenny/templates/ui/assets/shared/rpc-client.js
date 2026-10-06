@@ -68,6 +68,13 @@ export const rpc = {
     return send(`board.${method}`, { wiki, ...params });
   },
 
+  /** Le risposte dell'utente sulle app: il cestino (`apps.trash`,
+   *  `apps.restore`, `apps.purge`) e la prova (`apps.keep`, `apps.discard`).
+   *  `jenny/webui/apps_commands.py`. */
+  apps(method, params = {}) {
+    return send(`apps.${method}`, params);
+  },
+
   /** Salva un file di testo del workspace (tetto 1 MB, lato server).
    *
    *  `base`, facoltativo, e' il testo da cui l'editor e' partito: se il file su

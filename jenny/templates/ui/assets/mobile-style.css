@@ -3200,6 +3200,41 @@ body {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ── La prova di un'app: in parole, in cinque secondi ── */
+.app-trial-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px;
+  border-radius: var(--radius-pill); border: 0.5px solid var(--warning);
+  color: var(--warning); font-size: 11px; font-weight: 500; vertical-align: middle;
+}
+.app-trial { display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 2px; }
+.app-trial-value {
+  font-family: var(--font-display); font-size: 34px; line-height: 1.1; color: var(--text);
+  text-align: center;
+}
+.app-trial-note { margin: 0; color: var(--text-muted); font-size: 13px; text-align: center; }
+.app-trial-note.is-error { color: var(--error); }
+.app-trial-row { margin: 0; color: var(--text); font-size: 14px; }
+.app-trial-row.is-none { color: var(--text-muted); }
+.app-trial-row.is-new { color: var(--warning); }
+.app-trial-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding-top: 6px; }
+.app-trial-btn {
+  min-height: 44px; padding: 0 18px; border-radius: var(--radius-pill);
+  border: 0.5px solid var(--border-strong); background: transparent; color: var(--text);
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.app-trial-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.app-trial-btn:disabled { opacity: 0.5; }
+.app-trial-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Il cartellino sull'icona di un'app in prova, nella griglia (e in riga,
+   nell'elenco dell'officina, dove sta in fila invece che sull'angolo). */
+.launcher-row .launcher-trial { position: static; flex-shrink: 0; }
+.launcher-trial {
+  position: absolute; top: 0; right: 2px; padding: 0 5px;
+  border-radius: var(--radius-pill); background: var(--warning); color: var(--bg);
+  font-size: 9px; line-height: 15px; font-weight: 600; white-space: nowrap;
+  max-width: calc(100% - 4px); overflow: hidden; text-overflow: ellipsis;
+}
+
 /* ── Jenny App frame overlay ── */
 .app-frame-overlay {
   position: fixed; inset: 0; z-index: 110;
@@ -3684,6 +3719,29 @@ body {
   color: var(--ok);
   border-color: var(--ok);
 }
+
+/* Il toast con «Annulla» (`showUndo`): il testo e un bottone vero, in riga.
+   Il toast di solito non si tocca; questo si', quindi il bottone ha l'altezza
+   di un bersaglio. */
+.mobile-toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px 4px 16px;
+}
+.mobile-toast-text { flex: 1; min-width: 0; }
+.mobile-toast-action {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-toast-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Il toast entra nel top layer come popover per finire SOPRA le modali aperte
    con showModal() (vedi shared/utils.js: nessun z-index puo superarle). Il

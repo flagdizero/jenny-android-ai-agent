@@ -600,7 +600,6 @@
     "brokenPrompt": "The app \"{slug}\" is broken with this error: {error}. Can you fix it?",
     "uninstalled": "{name} uninstalled",
     "uninstalledMany": "Uninstalled: {names}",
-    "deleteAppConfirm": "Delete app \"{name}\"? It will be removed permanently.",
     "launchFailed": "Could not start {name} — it may have been uninstalled or disabled.",
     "deleteFailed": "Delete failed",
     "appDeleted": "App deleted",
@@ -614,7 +613,59 @@
     "unpinned": "Removed from pages",
     "pageExternal": "It opens outside Jenny, so it can't be a page",
     "pageBroken": "It's broken: fix it first",
-    "pageFull": "The pages are full"
+    "pageFull": "The pages are full",
+    "trashed": "“{name}” moved to the trash",
+    "undo": "Undo",
+    "restoreFailed": "I couldn't put it back",
+    "restoreTaken": "There is already an app with that name: rename or delete it, then try again",
+    "restored": "“{name}” is back",
+    "trashRow": "Trash · {count}",
+    "trashTitle": "App trash",
+    "trashEmpty": "The trash is empty.",
+    "trashRecords": "{count} records · deleted on {when}",
+    "trashNoData": "deleted on {when}",
+    "restore": "Put back",
+    "purge": "Delete for good",
+    "purgeConfirm": "Delete “{name}” for good? It can't be put back.",
+    "purgeConfirmData": "Delete “{name}” and its {count} records for good? It can't be put back.",
+    "purgeFailed": "I couldn't delete it",
+    "trialBadge": {
+      "trial": "on trial",
+      "changed": "change on trial",
+      "unapproved": "approve again"
+    },
+    "trialSee": "See the change",
+    "trialUnapproved": "Its code changed outside Jenny: it does not run until you approve it again.",
+    "trialBroken": "This trial is not valid: {error}",
+    "trialReading": "The first real reading · {label}",
+    "trialReadingBare": "The first real reading",
+    "trialReaches": "Goes on the internet: {what}.",
+    "trialReachesNone": "Does not go on the internet.",
+    "trialWrites": "Touches: {what}.",
+    "trialWritesNone": "Writes nothing: it only looks.",
+    "trialSkills": "Uses the skill {what}.",
+    "trialNew": "New in this version: {what}.",
+    "trialWhy": "It does not run until you keep it.",
+    "trialWhyChanged": "A change is waiting: until you keep it, the previous version stays.",
+    "keep": "Keep it",
+    "reapprove": "Approve again",
+    "discard": "Discard",
+    "trialChange": "Change",
+    "trialChangePrompt": "I'd like to change the app “{name}” ({slug}) before keeping it: ",
+    "trialFailed": "That didn't work, try again",
+    "kept": "“{name}” is yours",
+    "discarded": "“{name}” discarded",
+    "place": "Put in a notebook…",
+    "placeWhere": "Where do I put “{name}”?",
+    "placeHow": "In “{notebook}”",
+    "placeAsCard": "As a new card",
+    "placeInCard": "Inside “{card}”",
+    "placeParams": "One more thing",
+    "placeParam": "{name}",
+    "placeGo": "Put it there",
+    "placed": "“{name}” is in {notebook}",
+    "placeFailed": "I couldn't put it there",
+    "placeNoNotebooks": "You have no notebooks yet: make one from the Notebooks page."
   },
   "graph": {
     "concepts": "Concepts",
@@ -1287,7 +1338,8 @@
         "remove_card": "Shall I put {subject} away? Its pages stay.",
         "add_connection": "Shall I tie {subject} with a thread?",
         "attach_page": "Shall I put this page in the {subject} drawer?",
-        "add_section": "Shall I add a mini app to the {subject} drawer?"
+        "add_section": "Shall I put an app in the drawer of {subject}?",
+        "add_app_card": "Shall I make {subject} a card, with its value on the cover?"
       }
     },
     "search": {
@@ -1342,7 +1394,8 @@
         "empty": "no data yet",
         "missing": "This app is gone.",
         "broken": "This app is broken: open it from the Apps page to see why.",
-        "no_section": "This app has no view for drawers."
+        "no_section": "This app has no view for drawers.",
+        "trashed": "in the trash"
       },
       "event": {
         "ok": "back to normal",
@@ -1357,7 +1410,8 @@
       "remindDefault": "Check {app}",
       "below": "{label} drops below",
       "above": "{label} rises above",
-      "threshold": "Threshold"
+      "threshold": "Threshold",
+      "restore": "Put the app back"
     },
     "section": {
       "add": "+ Add a section",
@@ -1378,16 +1432,16 @@
       "reminderMonth": "Month only",
       "noApps": "No installed app has a view for drawers.",
       "newApp": "Make a new one…",
-      "newAppPrompt": "In the {card} drawer I'd like a mini app that ",
+      "newAppPrompt": "In the {card} drawer I'd like an app that ",
       "appParam": "{app}: {name}?",
       "otherPrompt": "In the {card} drawer I'd like a section that ",
       "kind": {
         "note": "Note",
         "reminder": "Reminder",
-        "app": "Mini app",
+        "app": "App",
         "photo": "Photo",
         "other": "Other",
-        "micro": "Micro app",
+        "micro": "App",
         "cron": "Cron"
       },
       "hint": {
@@ -1396,7 +1450,7 @@
         "app": "Data that updates by itself",
         "photo": "A picture, for example how it was",
         "other": "Describe it and I'll build it",
-        "micro": "A value Jenny reads for you, on its own",
+        "micro": "A live value, or something to use: Jenny builds it",
         "cron": "Something Jenny does on her own, on a schedule"
       }
     },
@@ -1408,25 +1462,25 @@
       "remindPlaceholder": "For example: repotting and feeding"
     },
     "micro": {
-      "what": "What do you want to see?",
+      "what": "What do you want to see, or do?",
       "whatPlaceholder": "For example: the soil moisture and whether the sensor is online",
       "explain": "I write it and try it right away: the drawer shows the first real value, and you keep it if it is right.",
       "prepare": "Make it",
       "linkApp": "Or link one of your apps…",
-      "prompt": "In the {card} drawer I'd like a micro app that shows me {what}",
+      "prompt": "In the {card} drawer I'd like an app that {what}",
       "trial": "On trial: this is the first value actually read. If it is right, keep it and from now on it updates itself.",
       "reachSkill": "It uses your skill {skill}, which goes on the network by itself.",
       "reachNet": "It connects to {hosts}.",
       "keep": "Keep it",
       "discard": "Discard",
       "fix": "Ask Jenny to fix it",
-      "fixPrompt": "In the {card} drawer, the micro app {app} broke ({error}): fix it.",
+      "fixPrompt": "In the {card} drawer, the app {app} broke ({error}): fix it.",
       "reapprove": "Approve again",
       "resume": "Resume",
       "pause": "Pause",
       "runNow": "Read it now",
       "change": "Change",
-      "changePrompt": "In the {card} drawer, in the micro app {app} I'd like ",
+      "changePrompt": "In the {card} drawer, in the app {app} I'd like ",
       "every": "every {minutes} min",
       "via": "from {what}",
       "yes": "yes",
@@ -1452,6 +1506,35 @@
       "quiet": "Last run {when}: nothing to tell you.",
       "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
       "prompt": "In the {card} drawer, every "
+    },
+    "card": {
+      "add": "New card",
+      "newTitle": "New card",
+      "name": "What is it called?",
+      "namePlaceholder": "Maple, Monstera, Trip to Lisbon…",
+      "create": "Create",
+      "rename": "Rename",
+      "renameTitle": "Rename the card",
+      "save": "Save",
+      "remove": "Remove from the board",
+      "removed": "“{title}” removed from the board",
+      "undo": "Undo",
+      "restoreFailed": "I couldn't put it back",
+      "full": "The board is full: remove something first",
+      "failed": "That didn't work, try again",
+      "actions": "Actions on the card {title}",
+      "close": "Close",
+      "cover": "Cover",
+      "coverTitle": "What the cover shows",
+      "coverNone": "The photo",
+      "what": "What goes in it?",
+      "whatNothing": "Nothing for now"
+    },
+    "cover": {
+      "stale": "stopped",
+      "minutes": "{count} min ago",
+      "hours": "{count} h ago",
+      "days": "{count} d ago"
     }
   }
 }

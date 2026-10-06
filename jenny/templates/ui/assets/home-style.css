@@ -2154,6 +2154,49 @@ body.home {
   font-size: 9cqw;
 }
 .home-board-initial { font-family: var(--font-display); font-size: 8cqw; }
+/* La copertina: il valore di un'app al posto della foto. Tutto in cqw come la
+   polaroid, cosi' resta in proporzione sul quadrato e su un telefono alto. */
+.home-board-photo.has-cover { color: #fff; }
+.home-board-cover-value {
+  font-family: var(--font-display);
+  font-size: 6.4cqw;
+  line-height: 1;
+  white-space: nowrap;
+}
+.home-board-cover-value small { font-size: 0.5em; margin-left: 0.3cqw; }
+.home-board-cover-glyph {
+  position: absolute;
+  top: 1.2cqw;
+  left: 1.2cqw;
+  font-size: 2.8cqw;
+  opacity: 0.85;
+}
+.home-board-cover-spark {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 4.2cqw;
+  width: 76%;
+  height: 3cqw;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.home-board-cover-at {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1cqw;
+  text-align: center;
+  font-size: 1.9cqw;
+  opacity: 0.85;
+}
+/* Fermo: grigio, e l'eta' al posto dell'ora. Un dato vecchio non sembra mai fresco. */
+.home-board-photo.has-cover.is-stale { filter: grayscale(1) brightness(0.8); }
+.home-board-photo.has-cover.is-stale .home-board-cover-value { opacity: 0.7; }
+.home-board-photo.has-cover.is-trial .home-board-cover-value,
+.home-board-photo.has-cover.is-unapproved .home-board-cover-value { opacity: 0.6; }
 
 .home-board-label {
   padding: 0.9cqw 0.2cqw 1.3cqw;
@@ -2438,6 +2481,49 @@ body.home {
 .home-board-menu-name { font-weight: 500; }
 .home-board-menu-hint { color: var(--text-muted); font-size: 13px; }
 .home-board-form { display: flex; flex-direction: column; gap: 10px; }
+.home-board-form-label { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); font-size: 13px; }
+
+/* La barra della scheda tenuta premuta: sulla tela (non sul muro), in basso al
+   centro, fra la busta a sinistra e Jenny a destra. Niente z-index: sta sopra
+   le schede perche' viene dopo nel DOM, come la busta. */
+.home-board-cardbar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 32px);
+  padding: 4px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: home-board-bar-in 0.18s ease-out;
+}
+.home-board-cardbar[hidden] { display: none; }
+.home-board-cardbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.home-board-cardbar-btn:hover { background: var(--hover); }
+.home-board-cardbar-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-board-cardbar-btn.is-close { padding: 0 10px; color: var(--text-muted); }
+@keyframes home-board-bar-in {
+  from { transform: translate(-50%, 8px); opacity: 0; }
+}
 .home-board-check { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
 
 /* ── Il cassetto ── */
@@ -2456,6 +2542,7 @@ body.home {
   padding: 14px 20px var(--jenny-away-floor);
 }
 .home-drawer-note { margin: 0; padding: 24px 20px; color: var(--text-muted); }
+.home-drawer-own { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 4px; border-top: 0.5px solid var(--border); }
 .home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
 .home-drawer-meta { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
 .home-drawer-brief { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
@@ -2694,7 +2781,8 @@ body.home {
 
 @media (prefers-reduced-motion: reduce) {
   .home-board-item,
-  .home-board-item.is-appearing { transition: none; animation: none; }
+  .home-board-item.is-appearing,
+  .home-board-cardbar { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */
@@ -2963,6 +3051,54 @@ body.home {
    lato, 16 fra i pezzi): qui si sommava a quella del campo e della griglia, e
    su 432 px di altezza costava quasi una fila di icone. */
 #launcher-sheet { padding: 4px 0 0; gap: 0; }
+/* Il cestino delle app, in fondo alla griglia: una riga sobria, che c'e' solo
+   quando qualcosa e' stato eliminato. */
+.launcher-trash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  min-height: 40px;
+  margin: 10px auto 16px;
+  padding: 0 16px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.launcher-trash[hidden] { display: none; }
+.launcher-trash:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.apps-trash-body { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.apps-trash-empty { margin: 8px 4px; color: var(--text-muted); }
+.apps-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 0.5px solid var(--border);
+}
+.apps-trash-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.apps-trash-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-trash-meta { color: var(--text-muted); font-size: 12px; }
+.apps-trash-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.apps-trash-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.apps-trash-btn.is-danger { color: var(--error); border-color: var(--error); }
+.apps-trash-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
 #launcher-sheet .launcher-head { display: none; }
 
 #launcher-sheet .launcher-search-row { padding: 6px 18px 10px; }

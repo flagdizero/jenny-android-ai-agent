@@ -124,7 +124,8 @@ def board_block(
         summary = read_card_summary(root, card["id"]) or {}
         tags: list[str] = []
         problem = alert is not None and any(
-            alert(s) for s in card.get("userSections") or [] if s.get("kind") in ("app", "micro")
+            alert(s) for s in [*(card.get("userSections") or []), *_app_sections(card)[:1]]
+            if s.get("kind") in ("app", "micro")
         )
         if problem:
             tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
@@ -194,7 +195,48 @@ def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> 
                         else micro.spec["title"])
         elif section.get("kind") == "cron":
             bits.append(f"cron {section.get('name') or section.get('job')}")
+    for view in _app_views(root, card):
+        value = view.get("value")
+        bits.append(f"{view.get('name')} {value}{view.get('unit') or ''}"
+                    if value is not None else str(view.get("name")))
     return f"[auto: {' · '.join(bits)}]" if bits else ""
+
+
+def _app_sections(card: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Le app posate su una scheda: la scheda-app stessa, e le sezioni ``app``."""
+    out = []
+    if isinstance(card.get("app"), dict):
+        out.append({"id": model.COVER_CARD, "kind": "app", "app": card["app"]["slug"],
+                    "params": card["app"].get("params") or {}})
+    out.extend(s for s in card.get("userSections") or [] if s.get("kind") == "app")
+    return out
+
+
+def _app_views(root: Path, card: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Il riassunto delle app posate su *card*, per il blocco e per il cassetto."""
+    from jenny.board.sections import app_section_view
+
+    workspace = _workspace_of(root)
+    if workspace is None:
+        return []
+    views = []
+    for section in _app_sections(card):
+        try:
+            view = app_section_view(workspace, str(section["app"]), section.get("params") or {})
+        except Exception:  # noqa: BLE001 — un'app rotta non toglie il blocco
+            continue
+        if view.get("state") not in ("missing", "no_section"):
+            views.append({**view, "slug": section["app"]})
+    return views
+
+
+def _workspace_of(root: Path) -> Path | None:
+    try:
+        from jenny.config.paths import get_workspace_path
+
+        return get_workspace_path()
+    except Exception:  # noqa: BLE001 — senza workspace impostato, il quaderno sta in <ws>/wikis/
+        return root.parent.parent if root.parent.name else None
 
 
 def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
@@ -233,6 +275,8 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
                 if last.get("text") else ""
             parts.append(f"- Notebook cron «{section.get('name') or ''}» (`{section.get('job')}`, "
                          f"cron action=list shows it){said}")
+    for view in _app_views(root, card):
+        parts.append(_app_line(view))
     for rem in model.open_reminders(reminders):
         if rem.get("card") == card["id"]:
             parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
@@ -240,6 +284,27 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     if pages:
         parts.append(f"Its pages: {pages}")
     return "\n".join(parts)[:DRAWER_MAX_CHARS]
+
+
+def _app_line(view: Mapping[str, Any]) -> str:
+    """Un'app posata nel cassetto: il valore, lo stato, e come cambiarla."""
+    state = str(view.get("state") or "")
+    status = {
+        "trial": "on trial (the user keeps it from the drawer or the App page)",
+        "unapproved": "stopped: its code changed outside Jenny, the user approves it again",
+        "trashed": "in the trash",
+        "broken": f"broken: {view.get('error') or view.get('lastError') or ''}",
+    }.get(state, state)
+    value = view.get("value")
+    shown = f"{view.get('label') or view.get('field') or 'value'} {value}{view.get('unit') or ''}" \
+        if value is not None else "no value yet"
+    extras = ", ".join(f"{x['label']} {x['value']}{x.get('unit') or ''}"
+                       for x in view.get("extras") or [] if x.get("value") is not None)
+    rows = f", {len(view['rows'])} rows" if view.get("rows") else ""
+    params = ", ".join(f"{k}={v}" for k, v in (view.get("params") or {}).items())
+    return (f"- App «{view.get('name')}» (`{view.get('slug')}`{', ' + params if params else ''}; "
+            f"app tool to change it): {shown}{', ' + extras if extras else ''}{rows} at "
+            f"{view.get('at') or '—'}; {status}")
 
 
 def _micro_line(root: Path, section: Mapping[str, Any]) -> str:

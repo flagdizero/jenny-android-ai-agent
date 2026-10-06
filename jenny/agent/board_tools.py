@@ -330,7 +330,8 @@ class BoardAddReminderTool(_BoardTool):
 @tool_parameters(tool_parameters_schema(
     kind=StringSchema(
         "What to propose.",
-        enum=["add_card", "remove_card", "add_connection", "attach_page", "add_section"],
+        enum=["add_card", "remove_card", "add_connection", "attach_page", "add_section",
+              "add_app_card"],
     ),
     text=StringSchema("The proposal as you would say it to the user, in their language: one or two sentences."),
     subject=StringSchema("add_card: the title of the new card."),
@@ -341,7 +342,8 @@ class BoardAddReminderTool(_BoardTool):
     b=StringSchema("add_connection: the other card id."),
     label=StringSchema("add_connection: why they are tied, in a few words."),
     page=StringSchema("attach_page: the page relative to wiki/."),
-    app=StringSchema("add_section: the app slug."),
+    app=StringSchema("add_section / add_app_card: the app slug (add_app_card: a card that IS "
+                     "the app, its value on the cover)."),
     params=ObjectSchema(description="add_section: the parameters the app's section asks for.",
                         additional_properties=True),
     required=["kind", "text"],
@@ -413,6 +415,17 @@ class BoardSuggestTool(_BoardTool):
             if card is None or page not in st.orphans:
                 return st.refuse("attach a page off the board to an existing card")
             spec.update(subject=card["title"], card=card["id"], page=page, pages=[page])
+        elif kind == "add_app_card":
+            app = str(kw.get("app") or "")
+            if app not in st.apps_with_section:
+                return st.refuse("an app card needs an approved app with a summary")
+            if model.is_full(board, reminders):
+                return st.refuse("the board is full")
+            if any((c.get("app") or {}).get("slug") == app for c in board["cards"]):
+                return st.refuse("that app is already a card on this board")
+            params = {k: v for k, v in _as_dict(kw.get("params")).items()
+                      if isinstance(v, (str, int, float, bool))}
+            spec.update(subject=str(kw.get("subject") or app), app=app, params=params)
         elif kind == "add_section":
             card = model.card_by_id(board, str(kw.get("card") or ""))
             app = str(kw.get("app") or "")

@@ -68,3 +68,26 @@ class TestBuildAppsSummary:
         summary = build_apps_summary(tmp_path)
         assert "**rotta** — BROKEN" in summary
         assert "apps/rotta/app.json" in summary
+
+
+def test_in_a_notebook_the_placed_apps_come_first_and_the_others_are_read_only(tmp_path):
+    """In un quaderno si usano le app posate sulla sua bacheca; le altre si nominano."""
+    import json
+
+    from jenny.board.store import mutate_board
+
+    for slug, name in (("etf", "ETF"), ("spesa", "Spesa")):
+        d = tmp_path / "apps" / slug
+        d.mkdir(parents=True)
+        (d / "app.json").write_text(json.dumps({
+            "name": name, "description": "x",
+            "actions": [{"name": "add", "description": "x", "kind": "storage",
+                         "op": "append", "collection": "items"}]}))
+    root = tmp_path / "wikis" / "soldi"
+    (root / "wiki").mkdir(parents=True)
+    mutate_board(root, lambda b: b["cards"].append({
+        "id": "etf", "title": "ETF", "pos": {"x": 1, "y": 1}, "app": {"slug": "etf"}}))
+    summary = build_apps_summary(tmp_path, notebook_root=root)
+    placed, others = summary.split("Other apps")
+    assert "`etf_add`" in placed and "spesa" not in placed
+    assert "Spesa (`spesa`)" in others and "read-only" in others

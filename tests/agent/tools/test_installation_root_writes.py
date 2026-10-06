@@ -113,7 +113,33 @@ async def test_a_project_cannot_change_the_personal_app_data(install: Path, op: 
             )
     text = str(err.value)
     assert "personal" in text.lower()
-    assert "chip" in text.lower(), "il rifiuto deve dire dove si fa, come quello del passo 3"
+    # Dal 06/10/2026 dice anche l'altra strada: posarla sulla bacheca.
+    assert "board" in text.lower() and "place" in text.lower(), text
+
+
+async def test_an_app_placed_on_the_board_is_writable_from_that_notebook(install: Path) -> None:
+    """La regola della posa: posare un'app in un quaderno e' darle il permesso.
+
+    «Comprato 4 VWCE» detto in Soldi deve finire nell'app ETF posata in Soldi; da
+    un altro quaderno, dove non e' posata, resta il rifiuto di prima.
+    """
+    from jenny.board.store import mutate_board
+
+    mutate_board(_project(install), lambda b: b["cards"].append({
+        "id": "lista", "title": "Lista", "pos": {"x": 1, "y": 1},
+        "app": {"slug": "todo", "params": {}}}))
+    with enter_workspace_scope(build_workspace_scope(_project(install), "restricted")):
+        result = await execute_storage_action(
+            install / "apps" / "todo", _action("append"), {"text": "x"}
+        )
+    assert result["ok"] is True
+    other = install / "wikis" / "soldi"
+    (other / "wiki").mkdir(parents=True)
+    with enter_workspace_scope(build_workspace_scope(other, "restricted")):
+        with pytest.raises(StorageError):
+            await execute_storage_action(
+                install / "apps" / "todo", _action("append"), {"text": "y"}
+            )
 
 
 async def test_a_project_can_still_read_them(install: Path) -> None:

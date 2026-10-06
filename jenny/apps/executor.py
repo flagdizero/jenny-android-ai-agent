@@ -78,15 +78,38 @@ async def execute_action(
     app = find_app(workspace, slug)
     if app is None:
         raise AppActionError(f"app '{slug}' not found", status=404)
+    from jenny.apps.trust import is_live
+
+    if not is_live(workspace, slug):
+        # In prova, o cambiata fuori da Jenny: non gira finché l'utente non
+        # tocca «Tienila» (v. ``jenny/apps/trust.py``).
+        raise AppActionError(
+            f"app '{slug}' is waiting for the user's approval: they keep it from its "
+            "trial card (Keep), Jenny cannot", status=423)
     action = resolve_action(app, action_name)
     validate_action_params(action, params)
 
     assert app.manifest is not None
     try:
         if action.kind == "storage":
-            return await execute_storage_action(
+            result = await execute_storage_action(
                 app.dir, action, params, max_bytes=max_collection_bytes
             )
+            if action.op != "query" and app.manifest.reader is not None:
+                # Un lettore che aggrega (il totale dalle operazioni) ricalcola
+                # dopo la scrittura: il riassunto e' sempre quello dei dati.
+                from jenny.apps.reader import schedule_reader
+
+                schedule_reader(workspace, slug)
+            return result
+        if (action.method or "GET").upper() != "GET":
+            # Un'azione http che cambia qualcosa (annaffia, registra) segue la
+            # stessa regola della posa delle azioni storage.
+            from jenny.apps.permissions import write_refusal
+
+            refusal = write_refusal(app.dir)
+            if refusal is not None:
+                raise AppActionError(refusal, status=403)
         return await execute_http_action(
             slug, app.manifest, action, params, timeout_s=http_timeout_s
         )

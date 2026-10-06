@@ -26,7 +26,13 @@ suo hash e' quello approvato, e le approvazioni stanno **fuori dal workspace**
 (accanto alla chiave SSH), dove gli strumenti di Jenny non arrivano. La
 cartella ``board/`` non la scrive nessuno strumento generico (v.
 ``jenny.security.workspace_policy.BoardWriteError``): il codice di una micro app
-lo cambia solo il tool ``micro_app``.
+lo cambiava solo il tool ``micro_app``.
+
+**Dal 06/10/2026 una micro app e' un'app generale col suo lettore** (``reader``
+in ``app.json``, v. ``jenny/apps/reader.py``): all'avvio
+``jenny/apps/migrate_micro.py`` sposta queste cartelle in ``workspace/apps``.
+Di questo modulo restano vive la spec (``normalize_spec``, che valida anche il
+lettore), la validazione delle letture e l'esecuzione, che il lettore riusa.
 """
 
 from __future__ import annotations

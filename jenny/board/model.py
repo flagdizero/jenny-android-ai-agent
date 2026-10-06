@@ -102,6 +102,14 @@ MAX_INITIAL_CARDS = 9
 # così.
 SOON_DAYS = 14
 
+# Le schede che l'utente ha tolto dalla bacheca restano qui, ripristinabili, per
+# questo numero di giorni e al più queste: «Togli» ha un Annulla, e un Annulla
+# vale solo se rimette **tutto** (posto, fili, quel che la scheda faceva da sé).
+# Poi si buttano davvero. Sono un cestino corto, non un archivio: la wiki resta
+# comunque, e la ricerca trova le pagine.
+MAX_REMOVED_CARDS = 5
+REMOVED_KEEP_DAYS = 7
+
 SUGGESTION_KINDS = (
     "initial_board",
     "add_card",
@@ -109,6 +117,7 @@ SUGGESTION_KINDS = (
     "add_connection",
     "attach_page",
     "add_section",
+    "add_app_card",
 )
 # ``micro`` e ``cron`` sono le cose che il quaderno fa da solo: una micro app
 # (un piccolo programma che legge un dato, girato dall'orologio) e un cron del
@@ -136,6 +145,10 @@ GLYPHS = (
 )
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
+# Lo slug di un'app (``jenny/apps/manifest.py::SLUG_RE``).
+_APP_SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
+# La copertina di una scheda-app: la sua app.
+COVER_CARD = "@card"
 # Il glifo di una scheda è il nome di un'icona del set della casa (Tabler):
 # validato come forma, non contro l'elenco — un nome che non esiste non disegna
 # niente, e la scheda mostra l'iniziale.
@@ -324,6 +337,20 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
     for stamp in ("lastOpened", "created"):
         if isinstance(raw.get(stamp), str):
             known[stamp] = raw[stamp]
+    # La scheda-app: la polaroid *e'* un'app generale, con i parametri della posa.
+    app = raw.get("app")
+    if isinstance(app, Mapping) and isinstance(app.get("slug"), str) and _APP_SLUG_RE.match(
+            app["slug"]):
+        params = app.get("params") if isinstance(app.get("params"), Mapping) else {}
+        known["app"] = {"slug": app["slug"], "params": {
+            k: v for k, v in params.items()
+            if isinstance(k, str) and isinstance(v, (str, int, float, bool))}}
+    # La copertina: quale app mostra il suo valore al posto della foto.
+    # ``@card`` e' l'app della scheda, un id e' una sezione del cassetto.
+    cover = raw.get("cover")
+    if cover == COVER_CARD or (is_valid_id(cover) and any(
+            s["id"] == cover for s in sections)):
+        known["cover"] = cover
     return _keep_unknown(raw, known)
 
 
@@ -356,6 +383,28 @@ def _normalize_suggestion(raw: Any) -> dict[str, Any] | None:
     }
     if "pages" in raw:
         known["pages"] = _str_list(raw.get("pages"))
+    return _keep_unknown(raw, known)
+
+
+def _normalize_removed(raw: Any) -> dict[str, Any] | None:
+    """Una scheda tolta dall'utente: la scheda com'era, i suoi fili, quando, e
+    quel che il codice ha messo in pausa togliendola (per riprenderlo)."""
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("at"), str):
+        return None
+    card = _normalize_card(raw.get("card"))
+    if card is None:
+        return None
+    connections = [
+        c for c in (_normalize_connection(x) for x in raw.get("connections") or [])
+        if c is not None
+    ]
+    paused = raw.get("paused") if isinstance(raw.get("paused"), Mapping) else {}
+    known = {
+        "card": card,
+        "connections": connections,
+        "at": raw["at"],
+        "paused": {"jobs": _str_list(paused.get("jobs")), "micros": _str_list(paused.get("micros"))},
+    }
     return _keep_unknown(raw, known)
 
 
@@ -417,6 +466,10 @@ def normalize_board(raw: Any) -> dict[str, Any]:
         "passes": int(data.get("passes") or 0)
         if isinstance(data.get("passes"), int) and not isinstance(data.get("passes"), bool)
         else 0,
+        "removedCards": [
+            r for r in (_normalize_removed(x) for x in data.get("removedCards") or [])
+            if r is not None and r["card"]["id"] not in seen_ids
+        ][-MAX_REMOVED_CARDS:],
     }
     if isinstance(data.get("lastSeen"), str):
         known["lastSeen"] = data["lastSeen"]
@@ -428,6 +481,23 @@ def card_by_id(board: Mapping[str, Any], card_id: str) -> dict[str, Any] | None:
         if card.get("id") == card_id:
             return card
     return None
+
+
+def removed_card_ids(board: Mapping[str, Any]) -> set[str]:
+    """Gli id delle schede tolte dall'utente e ancora ripristinabili."""
+    return {r["card"]["id"] for r in board.get("removedCards") or []
+            if isinstance(r.get("card"), Mapping)}
+
+
+def expired_removed(board: Mapping[str, Any], now: datetime | None = None) -> list[dict[str, Any]]:
+    """Le schede tolte da più di :data:`REMOVED_KEEP_DAYS` giorni: da buttare."""
+    current = now or datetime.now().astimezone()
+    out = []
+    for entry in board.get("removedCards") or []:
+        at = parse_iso(entry.get("at"))
+        if at is None or current - at > timedelta(days=REMOVED_KEEP_DAYS):
+            out.append(entry)
+    return out
 
 
 def page_owners(board: Mapping[str, Any]) -> dict[str, str]:
@@ -597,6 +667,8 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "lastOpened": card.get("lastOpened"),
             "titleBy": card.get("titleBy"),
             "title": card.get("title") if card.get("titleBy") == USER else None,
+            "app": card.get("app"),
+            "cover": card.get("cover"),
         }
     return {
         "cards": cards,
@@ -605,6 +677,7 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
         "skeleton": board.get("skeleton"),
         "lastSeen": board.get("lastSeen"),
         "declined": board.get("declined"),
+        "removedCards": board.get("removedCards"),
     }
 
 
@@ -627,7 +700,8 @@ def ownership_violations(
         other = new["cards"].get(card_id)
         if other is None:
             continue
-        for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title"):
+        for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
+                           "app", "cover"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}
@@ -635,7 +709,7 @@ def ownership_violations(
         missing = [p for p in old_pages.get(card["id"], []) if p not in (card.get("pages") or [])]
         if missing:
             problems.append(f"card {card['id']}: pages removed ({', '.join(missing)})")
-    for key in ("connections", "skeleton", "lastSeen", "declined"):
+    for key in ("connections", "skeleton", "lastSeen", "declined", "removedCards"):
         if old[key] != new[key]:
             problems.append(f"{key} changed")
     return problems

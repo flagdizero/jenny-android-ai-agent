@@ -1,23 +1,48 @@
 # Mini-apps (Jenny Apps)
 
-A Jenny App is a small app with its own screen that Jenny builds for you on request — a shopping list, a counter, a custom dashboard for a device on your network.
+A Jenny App is a small app that Jenny builds for you on request — a shopping list, a portfolio you update, a reading from a device on your network. An app is always **general**: it lives in the **App** page, and you can also put it on a notebook's board, as a card of its own or inside a card's drawer, where it shows a live value at a glance.
+
+Every part of an app is optional:
+
+- a **screen** you open and use — a list you check off, a form you fill in;
+- **actions**, which Jenny can call as tools;
+- a **reader**, a small program that reads something by itself every few minutes (a sensor, a price) or recomputes a total from the app's own data, with no model involved;
+- a **summary**: how the app shows outside its screen — in a drawer, and on a card's cover — as one value, a few values side by side, a progress bar, a list or a small table.
 
 ## Apps vs. skills
 
 Jenny has two ways of gaining a new capability, and they answer different questions:
 
-- **If it needs a screen, it's an app.** A Jenny App has its own UI you open from the app drawer (see [Phone app launcher](app-launcher.md)): a list you check off, a form you fill in, a chart you look at.
+- **If it needs a screen, a live value or a place on a board, it's an app.** A Jenny App has its own UI you open from the App page (see [Phone app launcher](app-launcher.md)) — a list you check off, a form you fill in — or a value that keeps itself fresh, or both.
 - **If it only lives in chat, it's a skill.** A skill just teaches Jenny a procedure — there's nothing to open. See [Skills](skills.md).
 
 An app can still talk to Jenny (see [Directionality](#jenny-and-the-app-talk-in-one-direction) below), and it can integrate with an external server, but the defining trait is: does the user need to look at a screen for this, or does it just happen in conversation?
 
 ## Creating an app
 
-Apps are created only through chat — there is no dedicated app editor or "new app" button in the WebUI. Just ask, in your own words: "make me an app for tracking my plants."
+Apps are created only through chat — there is no app editor or "new app" button. Just ask, in your own words, in the personal chat or in a notebook's chat: "make me an app for tracking my plants", "I want to note my ETF purchases and see what the portfolio is worth".
 
 <p align="center"><img src="../img/apps.png" alt="A mini-app Jenny wrote on request: a meal log for a cat, with today's total and the meals" width="300"></p>
 
-Jenny then walks you through the design conversation (what the app tracks, what actions it needs) using the built-in `app-creator` skill, confirms with you, and writes the files. Editing an existing app works the same way: long-press the app's row in the app drawer and choose **Edit** — this takes you to the chat and writes `I want to edit the Jenny App "{name}" (slug: {slug}). Can you help me?` into the message box, ready for you to add what you want changed and send, rather than opening any in-app editor.
+Jenny walks you through the design conversation (what the app tracks, what actions it needs) using the built-in `app-creator` skill, confirms with you, and writes it with her `app` tool. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?".
+
+### Every app starts on trial
+
+A new app does not run until you say so. Jenny writes it as a **trial**, runs its reader once, and tells you the first real value. In the App page the app carries an **on trial** tag, and tapping it opens its trial card instead of the app:
+
+- the first real reading, big;
+- **Goes on the internet:** the hosts it reaches — or that it does not;
+- **Touches:** the data it writes — or that it only looks;
+- the skill it uses, if any;
+- **Keep it**, **Discard** and **Change** (which takes you back to the chat).
+
+Until you tap **Keep it**, the app has no tools, its screen does not open and its reader does not run. Only you can keep it: Jenny has no way to press that button. Your approval is stored outside the workspace, next to the SSH key, where Jenny's tools cannot reach.
+
+When Jenny fixes an app later, a fix that adds nothing — no new host, no new data written, no new action, no change to the summary — goes live at once. A change that adds something goes back on trial, and the previous version keeps running until you keep the new one; the App page shows **change on trial**, and the app's long-press card has **See the change**. If an app's code is changed by hand, outside Jenny, it stops and asks to be **approved again**.
+
+Apps that were already installed when this arrived were approved as they were: the update stopped nothing you used.
+
+Editing an existing app works the same way: long-press its icon in the App page and choose **Edit** — this takes you to the chat with `I want to edit the Jenny App "{name}" (slug: {slug}). Can you help me?` ready to finish.
 
 In the home, the same card also has **Add as a page**, which puts the app in the row of pages along the top, next to the chat: see [Tour of the WebUI](webui-tour.md#the-pages).
 
@@ -27,12 +52,13 @@ Every app is a folder under `workspace/apps/<slug>/`:
 
 | Path | Contents |
 |---|---|
-| `app.json` | The manifest: name, icon, an optional external server, the (optional) list of typed actions, and an optional drawer view (`section`, see below). |
+| `app.json` | The manifest: name, icon, an optional external server, the (optional) list of typed actions, the reader and the summary. |
 | `AGENT.md` | Context for Jenny about the app — what it's for, preferences, thresholds. Not part of the technical contract, just briefing notes. |
-| `app/index.html` | The UI. HTML and JavaScript only — there is no per-app Python. Only this `app/` folder is served over the web; the manifest, `AGENT.md`, and `data/` are never reachable by URL. |
+| `run.py` | The reader, if the app has one: `def run(ctx)`, run by the clock every few minutes with no model turn. It reads, never writes; its readings go into the app's `readings` collection. |
+| `app/index.html` | The screen, if the app has one. HTML and JavaScript. Only this `app/` folder is served over the web; the manifest, `AGENT.md`, `run.py` and `data/` are never reachable by URL. |
 | `data/` | JSONL collections that hold the app's data, shared between the app and Jenny. |
 
-Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)) if you want — Jenny doesn't have to be the one writing them.
+Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Editing the code by hand (`app.json`, `run.py`, `app/`) stops the app until you approve it again; `data/` and `AGENT.md` you can change freely. Jenny's own file tools cannot write an app's code at all: only her `app` tool can, and what it writes goes on trial.
 
 ## Every action is also a tool
 
@@ -45,11 +71,18 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 - **Jenny → app**: always possible, whether or not the app is open on screen.
 - **App → Jenny**: never on its own. The app can only hand off to chat through an explicit user action, `jenny.discuss()`, which switches you to the chat view with the app's context pre-filled. Jenny's replies always land in chat — they are never rendered inside the app itself. The app stays a deterministic screen; the thinking happens in one place only.
 
-## Apps in a notebook's drawers
+## Apps on a notebook's board
 
-An app whose data is about a subject — a soil-moisture sensor for the monstera, say — can also show that data inside a card's drawer on a notebook's [board](board.md), and stay in the app drawer as well. It does so by declaring an optional `section` block in `app.json`: which collection and field to show, the parameters to ask for when attaching it (which sensor), when the data counts as stale, an alarm threshold, a trend of up to 31 days, and up to two of its actions as buttons. Ask Jenny for it when you create or edit the app; the `app-creator` skill knows the format.
+An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it, in one of two ways:
 
-In the drawer, **+ Add a section → Micro app → Or link one of your apps…** lists only the apps that declare one. The section shows the latest value with its time and source, and lights the card's red corner when the value is in alarm or the data has stalled. It only reads what the app stored — the app's own cron job keeps it fresh — and the readings never go into the wiki: only a change of state is written to the notebook's journal, as one line. See [Notebook board → Mini app](board.md#mini-app).
+- **as a card**: the polaroid *is* the app — its value takes the place of the photo, and tapping the card opens its drawer with the app on top;
+- **inside a card's drawer**, as a section: the WaterBot reading in the drawer of *Acerello*.
+
+The same app can be placed in many drawers, each with its own parameters (which sensor), and every placement is a view of the same app: removing a placement never touches the app or its data. To place one, ask Jenny ("put it on the Acerello card"), use **+ Add a section → Micro app → Or link one of your apps…** in a drawer, or **New card** on the board.
+
+**A placement is also a permission.** A notebook's chat can change only the apps placed on its board: "I bought 4 VWCE" said in *Money* lands in the ETF app placed there, while from another notebook, where the app is not placed, it can be read but not changed (Jenny says so, and offers to place it). The personal chat can use every app.
+
+When a section changes state (goes into alarm, stalls, comes back), Jenny writes **one** journal line in the notebook; the readings themselves never go into the wiki.
 
 ## What an app can and cannot do
 
@@ -98,7 +131,9 @@ If a manifest fails to load — malformed JSON, an invalid action definition —
 
 ## Deleting an app
 
-Long-press an app's row in the app drawer and choose **Delete**. If you had pinned the app as a page of the home, the page goes with it. The confirmation reads `Delete app "{name}"? It will be removed permanently.` — and it means it: this deletes the whole `workspace/apps/<slug>/` folder, including its `data/`. There is no trash or undo from the UI. Your only safety net is the automatic workspace [snapshot](backup.md) history, which is not something you can browse per-app — restoring one means restoring the entire workspace to an earlier point in time.
+Long-press an app's icon on the **App** page and choose **Delete**. There is no question first: the app goes to the **trash** — its whole `workspace/apps/<slug>/` folder, `data/` included, moves to `workspace/apps/.trash/<slug>-<time>/` — and **Undo** appears for a few seconds. In the trash the app has no tools, does not open and is not on the grid; if you had pinned it as a page of the home, the page goes.
+
+Once something is in the trash, a **Trash · N** row appears at the bottom of the App page. It lists what you deleted, with how many records each app holds, and offers **Put back** — the app returns with all its data, unless an app with the same name exists again — and **Delete for good**. That last one is the only way an app's files are erased, and the only place that asks first, saying how many records go with it. A drawer section showing an app that is in the trash says so, with **Put the app back**.
 
 ## See also
 

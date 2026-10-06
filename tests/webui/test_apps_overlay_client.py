@@ -38,7 +38,9 @@ export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 export function showToast(text, type) { globalThis.toasts.push([text, type]); }
+export function showUndo() { return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
     "theme.js": """

@@ -52,6 +52,40 @@ export function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+/* Un toast con «Annulla»: al posto di una domanda di conferma prima di togliere
+   qualcosa. Si fa, e per qualche secondo si puo' disfare — un tocco solo nel
+   caso comune, uno in piu' nel caso raro. `onUndo` si chiama al massimo una
+   volta; il toast se ne va da solo dopo `duration` ms, o subito dopo il tocco.
+   Torna una funzione che lo chiude prima (per chi cambia stanza). */
+export function showUndo(message, onUndo, { duration = 5000, label } = {}) {
+  const toast = document.createElement('div');
+  toast.className = 'mobile-toast info has-action';
+  toast.setAttribute('role', 'status');
+  const text = document.createElement('span');
+  text.className = 'mobile-toast-text';
+  text.textContent = message;
+  const undo = document.createElement('button');
+  undo.type = 'button';
+  undo.className = 'mobile-toast-action';
+  undo.textContent = label || 'Undo';
+  let done = false;
+  const close = () => {
+    if (!toast.isConnected) return;
+    toast.style.animation = 'toastOut 0.3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
+  };
+  undo.addEventListener('click', () => {
+    if (done) return;
+    done = true;
+    close();
+    onUndo?.();
+  });
+  toast.append(text, undo);
+  _mountToast(toast);
+  setTimeout(close, duration);
+  return () => { done = true; close(); };
+}
+
 /* Carica su richiesta un vendor pesante che serve a una sola vista.
    Mermaid da solo pesa 3,2 MB e index.html lo caricava a ogni avvio anche a
    chi apriva solo la chat. La Promise è memoizzata (non il risultato), così

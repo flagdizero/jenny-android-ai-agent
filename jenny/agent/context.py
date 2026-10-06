@@ -873,7 +873,11 @@ class ContextBuilder:
 
         from jenny.apps.summary import build_apps_summary
 
-        apps_summary = build_apps_summary(root)
+        # Le app stanno nell'installazione, non nella cartella del turno: in un
+        # quaderno si elencano quelle posate sulla sua bacheca (che la chat puo'
+        # usare) e, per nome, le altre.
+        notebook = root if root != self.workspace and is_wiki_root(root) else None
+        apps_summary = build_apps_summary(self.workspace, notebook_root=notebook)
         if apps_summary:
             parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary))
 

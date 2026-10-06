@@ -153,6 +153,9 @@ def test_the_board_search_has_a_name() -> None:
     assert lens.tag == "button"
     app = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     assert "this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'))" in app
+    # Anche il + della bacheca, e i nomi si danno appena i bottoni ci sono.
+    assert _by_id(root, "home-board-add").tag == "button"
+    assert "this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.card.add'))" in app
     board = (ASSETS / "home-board.js").read_text(encoding="utf-8")
     assert "input.setAttribute('aria-label', i18n.t('board.search.placeholder'))" in board
 

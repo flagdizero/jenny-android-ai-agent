@@ -40,7 +40,9 @@ export const api = {
     "utils.js": """
 export function escapeHtml(s) { return String(s); }
 export function showToast() {}
+export function showUndo() { return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
     "ws-manager.js": "export const wsManager = new EventTarget();\n",

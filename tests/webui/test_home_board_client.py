@@ -371,8 +371,9 @@ def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
       document.querySelector('.home-drawer-add').click();
       await tick(10);
       const rows = [...document.querySelectorAll('.home-board-menu-row')];
-      const micro = rows.find((r) => /Micro app/.test(r.textContent));
-      assert.ok(micro, 'niente voce Micro app');
+      // Dal 06/10/2026 la voce si chiama «App»: una micro app e' un'app.
+      const micro = rows.find((r) => r.querySelector('.home-board-menu-name')?.textContent === 'App');
+      assert.ok(micro, 'niente voce App');
       assert.ok(!rows.some((r) => /^Mini app/.test(r.querySelector('.home-board-menu-name')?.textContent || '')));
       micro.click();
       await tick(10);
@@ -381,7 +382,7 @@ def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
       input.closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
       await tick(30);
       assert.equal(app.chatOver, true);
-      assert.match(document.getElementById('home-input').value, /micro app .*umidità di Acerello/);
+      assert.match(document.getElementById('home-input').value, /an app that .*umidità di Acerello/);
     """)
 
 
@@ -707,4 +708,243 @@ def test_another_notebook_does_not_show_the_old_wall_while_it_loads() -> None:
       await tick(5);
       assert.equal(document.querySelectorAll('.home-board-polaroid').length, 2);
       await again;
+    """)
+
+
+# ── Le schede dell'utente: +, pressione lunga, barra, Togli con Annulla ──────
+
+_CARDS = """
+rpcAnswers['board.card.add'] = (p) => ({ ok: true, card: { id: 'fico', title: p.title } });
+for (const m of ['board.card.rename', 'board.card.remove', 'board.card.restore']) {
+  rpcAnswers[m] = () => ({ ok: true });
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const press = (el, x, y, type = 'pointerdown') => {
+  const e = new window.Event(type, { bubbles: true });
+  Object.assign(e, { clientX: x, clientY: y, button: 0, pointerId: 1, isPrimary: true });
+  el.dispatchEvent(e);
+};
+const sheetButton = (text) => [...$('home-board-sheet-body').querySelectorAll('button')]
+  .find((b) => b.textContent === text);
+"""
+
+
+@requires_jsdom
+def test_the_plus_makes_a_card_in_the_middle_of_the_view() -> None:
+    _run(_CARDS + """
+      const plus = $('home-board-add');
+      assert.equal(plus.hidden, false);
+      assert.equal(plus.getAttribute('aria-label'), 'New card');
+      plus.click();
+      await tick(10);
+      assert.ok($('home-board-sheet').open);
+      const input = $('home-board-sheet-body').querySelector('input');
+      const create = sheetButton('Create');
+      // Senza nome non si crea niente.
+      assert.equal(create.disabled, true);
+      input.value = 'Fico';
+      input.dispatchEvent(new window.Event('input'));
+      create.click();
+      await tick(40);
+      const call = rpcs('board.card.add').at(-1);
+      assert.equal(call.params.title, 'Fico');
+      assert.deepEqual(call.params.near, app.board.viewCenter());
+      assert.equal($('home-board-sheet').open, false);
+      // Fuori dalla bacheca il + non c'e'.
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      assert.equal($('home-board-add').hidden, true);
+    """)
+
+
+@requires_jsdom
+def test_holding_the_empty_wall_makes_a_card_under_the_finger() -> None:
+    _run(_CARDS + """
+      const canvas = $('home-board-canvas');
+      canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400,
+        right: 400, bottom: 400 });
+      // Un dito che si muove e' il muro che scorre, non una scheda nuova.
+      press(canvas, 200, 100);
+      press(canvas, 240, 100, 'pointermove');
+      await wait(520);
+      assert.equal($('home-board-sheet').open, false);
+      press(canvas, 200, 100, 'pointerup');
+      // Fermo per mezzo secondo: il foglio, e la scheda nasce li'.
+      press(canvas, 200, 100);
+      await wait(520);
+      assert.ok($('home-board-sheet').open, 'la pressione lunga sul muro non apre niente');
+      const input = $('home-board-sheet-body').querySelector('input');
+      input.value = 'Fico';
+      input.dispatchEvent(new window.Event('input'));
+      sheetButton('Create').click();
+      await tick(40);
+      assert.deepEqual(rpcs('board.card.add').at(-1).params.near, { x: 50, y: 25 });
+    """)
+
+
+@requires_jsdom
+def test_holding_a_card_raises_its_bar_and_back_closes_it() -> None:
+    _run(_CARDS + """
+      // Una tela con le misure, o i fili non si disegnano e niente si solleva.
+      const rect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 });
+      $('home-board-canvas').getBoundingClientRect = rect;
+      $('home-board-wall').getBoundingClientRect = rect;
+      const el = document.querySelector('.home-board-polaroid[data-id="acero"]');
+      press(el, 10, 10);
+      await wait(500);
+      press(el, 10, 10, 'pointerup');
+      const bar = document.querySelector('.home-board-cardbar');
+      assert.ok(bar && !bar.hidden, 'la barra della scheda non sale');
+      assert.equal(bar.parentElement.id, 'home-board-canvas');
+      assert.ok(el.classList.contains('is-lifted'));
+      assert.deepEqual([...bar.querySelectorAll('button')].map((b) => b.textContent),
+        ['Rename', 'Remove from the board', '']);
+      // Rinomina: il foglio col nome di adesso.
+      bar.querySelector('button').click();
+      await tick(10);
+      const input = $('home-board-sheet-body').querySelector('input');
+      assert.equal(input.value, 'Acero');
+      input.value = 'Acerello';
+      input.dispatchEvent(new window.Event('input'));
+      sheetButton('Save').click();
+      await tick(40);
+      assert.deepEqual(rpcs('board.card.rename').at(-1).params, { wiki: 'orto', id: 'acero',
+        title: 'Acerello' });
+      // Indietro chiude la barra prima di lasciare la bacheca.
+      assert.equal(app.board.focus, 'acero');
+      app.handleHardwareBack();
+      assert.equal(app.board.focus, null);
+      assert.equal(bar.hidden, true);
+      assert.equal(app.view, 'board');
+    """)
+
+
+@requires_jsdom
+def test_remove_from_the_board_has_an_undo_instead_of_a_question() -> None:
+    _run(_CARDS + """
+      await app.board.removeCard('acero', 'Acero');
+      await tick(20);
+      assert.equal(rpcs('board.card.remove').at(-1).params.id, 'acero');
+      assert.equal(document.querySelector('dialog[open]'), null, 'nessuna domanda prima');
+      const toast = document.querySelector('.mobile-toast.has-action');
+      assert.ok(toast, 'manca il toast con Annulla');
+      assert.match(toast.textContent, /Acero/);
+      toast.querySelector('.mobile-toast-action').click();
+      await tick(40);
+      assert.equal(rpcs('board.card.restore').at(-1).params.id, 'acero');
+      // Un secondo tocco non ripristina due volte.
+      toast.querySelector('.mobile-toast-action').click();
+      await tick(10);
+      assert.equal(rpcs('board.card.restore').length, 1);
+    """)
+
+
+@requires_jsdom
+def test_the_drawer_offers_rename_and_remove_at_the_bottom() -> None:
+    _run(_CARDS + """
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const own = document.querySelector('.home-drawer-own');
+      assert.ok(own);
+      const [rename, remove] = own.querySelectorAll('button');
+      assert.equal(rename.textContent, 'Rename');
+      remove.click();
+      await tick(60);
+      assert.equal(app.view, 'board');
+      assert.equal(rpcs('board.card.remove').at(-1).params.id, 'acero');
+    """)
+
+
+# ── Le app sulla bacheca: copertina, scelta della copertina, scheda da un'app ─
+
+_COVER_BOARD = {
+    **BOARD,
+    "cards": [
+        {**BOARD["cards"][0], "cover": {"short": "38", "unit": "%", "state": "ok",
+                                        "at": "2026-10-06T12:00:00+00:00", "trend": [41, 40, 38],
+                                        "icon": "ti-droplet"},
+         "coverId": "s-app", "coverOptions": [{"id": "s-app", "name": "WaterBot"}]},
+        {**BOARD["cards"][1], "cover": {"short": "12,4k", "unit": "€", "state": "stale",
+                                        "at": "2026-10-01T12:00:00+00:00", "trend": []},
+         "coverOptions": [{"id": "@card", "name": "ETF"}]},
+    ],
+}
+
+
+def _run_covers(script: str) -> None:
+    head = (
+        _SETUP.replace("__BOARD__", json.dumps(_COVER_BOARD))
+        .replace("__CARD__", json.dumps(CARD))
+    )
+    run_home(head + _CARDS + script)
+
+
+@requires_jsdom
+def test_a_cover_puts_the_value_in_place_of_the_photo() -> None:
+    _run_covers("""
+      const [acero, etf] = document.querySelectorAll('.home-board-polaroid');
+      const photo = acero.querySelector('.home-board-photo');
+      assert.ok(photo.classList.contains('has-cover'));
+      assert.equal(photo.querySelector('.home-board-cover-value').textContent, '38%');
+      assert.ok(photo.querySelector('.home-board-cover-spark'), 'manca l\\'andamento');
+      assert.equal(photo.querySelector('i.ti-leaf:not(.home-board-cover-glyph)'), null, 'il glifo grande non c\\'e\\' piu\\'');
+      assert.ok(photo.querySelector('.home-board-cover-glyph.ti-leaf'));
+      assert.match(acero.getAttribute('aria-label'), /38%/);
+      // Fermo: grigio, e l'eta' al posto dell'ora.
+      const stale = etf.querySelector('.home-board-photo');
+      assert.ok(stale.classList.contains('is-stale'));
+      assert.match(stale.querySelector('.home-board-cover-at').textContent, /ago|fa/);
+    """)
+
+
+@requires_jsdom
+def test_the_bar_chooses_the_cover_or_the_photo() -> None:
+    _run_covers("""
+      rpcAnswers['board.card.cover'] = () => ({ ok: true });
+      const rect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 });
+      $('home-board-canvas').getBoundingClientRect = rect;
+      $('home-board-wall').getBoundingClientRect = rect;
+      const el = document.querySelector('.home-board-polaroid[data-id="acero"]');
+      press(el, 10, 10);
+      await wait(500);
+      press(el, 10, 10, 'pointerup');
+      const bar = document.querySelector('.home-board-cardbar');
+      const cover = [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Cover');
+      assert.ok(cover, 'manca Copertina nella barra');
+      cover.click();
+      await tick(10);
+      const rows = [...$('home-board-sheet-body').querySelectorAll('.home-board-menu-row')];
+      assert.deepEqual(rows.map((r) => r.textContent), ['WaterBot', 'The photo']);
+      assert.equal(rows[0].getAttribute('aria-current'), 'true');
+      rows[1].click();
+      await tick(30);
+      assert.deepEqual(rpcs('board.card.cover').at(-1).params, { wiki: 'orto', id: 'acero', cover: '' });
+    """)
+
+
+@requires_jsdom
+def test_a_new_card_can_be_an_app() -> None:
+    _run_covers("""
+      routes['/api/webui/apps'] = { apps: [
+        { slug: 'etf', name: 'ETF', broken: false, state: 'live', section: { params: {} } },
+        { slug: 'waterbot', name: 'WaterBot', broken: false, state: 'live',
+          section: { params: { sensor: { type: 'string' } } } },
+        { slug: 'calc', name: 'Calc', broken: false, state: 'live', section: null },
+      ] };
+      $('home-board-add').click();
+      await tick(40);
+      const select = $('home-board-sheet-body').querySelector('select');
+      assert.ok(select, 'manca «Cosa ci metti?»');
+      assert.deepEqual([...select.options].map((o) => o.value), ['', 'etf', 'waterbot']);
+      select.value = 'waterbot';
+      select.dispatchEvent(new window.Event('change'));
+      const inputs = $('home-board-sheet-body').querySelectorAll('input');
+      assert.equal(inputs.length, 2, 'il nome e il parametro');
+      inputs[1].value = 'acerello';
+      // Il nome si puo' lasciare vuoto: prende quello dell'app.
+      sheetButton('Create').click();
+      await tick(40);
+      const call = rpcs('board.card.add').at(-1);
+      assert.deepEqual(call.params.app, { slug: 'waterbot', params: { sensor: 'acerello' } });
+      assert.equal(call.params.title, 'WaterBot');
     """)

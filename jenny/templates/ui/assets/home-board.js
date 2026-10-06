@@ -8,7 +8,10 @@
  *  La grammatica, e ogni oggetto ne dice una sola cosa:
  *  - **polaroid** = un soggetto. Tocca: apre il cassetto. Trascina: la sposti, e
  *    la puntina diventa rossa — da li' Jenny non la tocca piu'. Tieni premuto:
- *    si accendono i suoi fili, con l'etichetta, e il resto si attenua.
+ *    si accendono i suoi fili, con l'etichetta, il resto si attenua, e in basso
+ *    sale la barra della scheda (Rinomina · Togli dalla bacheca).
+ *  - **il muro vuoto**: tienilo premuto e nasce una scheda li', sotto il dito
+ *    (lo stesso del + in alto, che la mette al centro di quel che guardi).
  *  - **post-it** = un'attesa. Tocca: il cassetto del suo soggetto.
  *  - **busta** = le proposte di Jenny. E' l'unico modo in cui la bacheca cambia
  *    forma senza che sia tu a farlo.
@@ -29,7 +32,7 @@
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
-import { ensureVendor, escapeHtml, showToast } from './shared/utils.js';
+import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
@@ -54,6 +57,38 @@ export function tintFor(id) {
 
 /** La data di un'attesa, come la scrive un post-it: «10 ott», «mar 2027».
  *  Una condizione si scrive per quello che misura: «umidita' < 30». */
+/** L'ora di una lettura sulla copertina: «14:02» oggi, «3 ott» prima. */
+export function coverTime(at, now = new Date()) {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString(i18n.locale, { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
+}
+
+/** Da quanto un dato e' fermo, corto: «3 h», «2 g». */
+export function coverAge(at, now = new Date()) {
+  const ms = now - new Date(at);
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const h = Math.floor(ms / 3600000);
+  if (h < 1) return i18n.t('board.cover.minutes', { count: Math.max(1, Math.floor(ms / 60000)) });
+  if (h < 48) return i18n.t('board.cover.hours', { count: h });
+  return i18n.t('board.cover.days', { count: Math.floor(h / 24) });
+}
+
+/** L'andamento sulla copertina: una linea sottile, nient'altro. */
+export function coverSpark(points) {
+  const pts = (points || []).filter((v) => typeof v === 'number');
+  if (pts.length < 2) return '';
+  const lo = Math.min(...pts);
+  const hi = Math.max(...pts);
+  const span = hi - lo || 1;
+  const step = 100 / (pts.length - 1);
+  const coords = pts.map((v, i) => `${(i * step).toFixed(1)},${(28 - ((v - lo) / span) * 24).toFixed(1)}`);
+  return `<svg class="home-board-cover-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${coords.join(' ')}"/></svg>`;
+}
+
 export function whenLabel(when, locale = i18n.locale) {
   if (!when) return '';
   if (when.kind === 'condition') return `${when.field} ${when.op} ${when.value}`;
@@ -160,6 +195,8 @@ export class HomeBoard {
     this._sel = null;
     /** Il trascinamento di una scheda in corso, con il modo di annullarlo. */
     this._itemDrag = null;
+    /** La barra della scheda tenuta premuta, creata la prima volta che serve. */
+    this._cardBar = null;
 
     this.sinceBtn?.addEventListener('click', () => this.openSince());
     /* Il menu del browser sulla pressione lunga non deve mai comparire sopra
@@ -249,6 +286,7 @@ export class HomeBoard {
        di Jenny): li mette sopra l'ordine nel DOM. */
     this.wall.appendChild(this.threads);
     this.drawThreads();
+    this._drawCardBar();
     requestAnimationFrame(() => this.drawThreads());
   }
 
@@ -301,14 +339,71 @@ export class HomeBoard {
       });
     /* Un tocco sul fondo spegne i fili accesi. */
     this.canvas.addEventListener('click', (e) => {
-      if (!onItem(e) && this.focus) this.setFocus(null);
+      if (this._wallLong) {
+        this._wallLong = false;
+        return;
+      }
+      if (!onItem(e) && !e.target?.closest?.('.home-board-cardbar') && this.focus) {
+        this.setFocus(null);
+      }
     });
+    this._bindWallPress(onItem);
     this.canvas.addEventListener('wheel', (e) => {
       if (e.ctrlKey) return;
       e.preventDefault();
       const k = this.view.k;
       this._zoom.translateBy(this._sel, -e.deltaX / k, -e.deltaY / k);
     }, { passive: false });
+  }
+
+  /** Tenere premuto il muro vuoto fa nascere una scheda li', sotto il dito.
+   *
+   *  Il fondo e' di d3-zoom, che pero' ascolta mouse e tocco, non i pointer
+   *  event: un timer proprio, che qualunque movimento oltre la soglia, un
+   *  secondo dito o il dito alzato annullano. Cosi' il gesto non ruba niente
+   *  allo spostamento del muro, che parte appena il dito si muove. */
+  _bindWallPress(onItem) {
+    let press = null;
+    const cancel = () => {
+      if (press) clearTimeout(press.timer);
+      press = null;
+    };
+    this.canvas.addEventListener('pointerdown', (e) => {
+      this._wallLong = false;
+      if ((e.button !== undefined && e.button !== 0) || onItem(e)
+          || e.target?.closest?.('.home-board-cardbar')) return;
+      if (press || e.isPrimary === false) {
+        cancel();
+        return;
+      }
+      const box = this.canvas.getBoundingClientRect();
+      press = {
+        x: e.clientX, y: e.clientY,
+        timer: setTimeout(() => {
+          const at = this.wallPoint(press.x, press.y, box);
+          press = null;
+          this._wallLong = true;
+          this.openNewCard(at);
+        }, LONG_PRESS_MS),
+      };
+    });
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_THRESHOLD_PX) cancel();
+    });
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+      this.canvas.addEventListener(type, cancel);
+    }
+  }
+
+  /** Il punto del muro sotto (*clientX*, *clientY*), in percento dello schermo:
+   *  la stessa misura delle posizioni delle schede. */
+  wallPoint(clientX, clientY, box = this.canvas?.getBoundingClientRect()) {
+    if (!box?.width) return this.viewCenter();
+    const v = this.view;
+    return {
+      x: Math.round((((clientX - box.left - v.x) / v.k) / box.width) * 1000) / 10,
+      y: Math.round((((clientY - box.top - v.y) / v.k) / box.height) * 1000) / 10,
+    };
   }
 
   /** Il muro non si perde: si puo' andare fin dove c'e' qualcosa, piu' uno
@@ -365,6 +460,7 @@ export class HomeBoard {
       if (el !== this.threads) el.remove();
     }
     this.canvas.querySelector('.home-board-envelope')?.remove();
+    if (this._cardBar) this._cardBar.hidden = true;
     if (this.threads) this.threads.innerHTML = '';
     if (this.listEl) {
       this.listEl.innerHTML = '';
@@ -467,7 +563,37 @@ export class HomeBoard {
     const photo = document.createElement('div');
     photo.className = 'home-board-photo';
     photo.style.background = `linear-gradient(160deg, ${a}, ${b})`;
-    if (card.glyph) {
+    const cover = card.cover && card.cover.short ? card.cover : null;
+    if (cover) {
+      /* La copertina: il valore di un'app posata al posto della foto. Un
+         numero grande, il glifo piccolo in alto, l'andamento e l'ora in basso;
+         grigia e con l'eta' quando il dato e' fermo, e l'angolo rosso di
+         sempre quando e' in allarme (quello lo porta il segnale). */
+      photo.classList.add('has-cover', `is-${cover.state || 'ok'}`);
+      if (card.glyph || cover.icon) {
+        const mark = document.createElement('i');
+        mark.className = `ti ${card.glyph ? `ti-${card.glyph}` : cover.icon} home-board-cover-glyph`;
+        mark.setAttribute('aria-hidden', 'true');
+        photo.appendChild(mark);
+      }
+      const value = document.createElement('span');
+      value.className = 'home-board-cover-value';
+      value.textContent = cover.short;
+      if (cover.unit) {
+        const unit = document.createElement('small');
+        unit.textContent = cover.unit;
+        value.appendChild(unit);
+      }
+      photo.appendChild(value);
+      const spark = coverSpark(cover.trend);
+      if (spark) photo.insertAdjacentHTML('beforeend', spark);
+      if (cover.at) {
+        const when = document.createElement('span');
+        when.className = 'home-board-cover-at';
+        when.textContent = cover.state === 'stale' ? coverAge(cover.at) : coverTime(cover.at);
+        photo.appendChild(when);
+      }
+    } else if (card.glyph) {
       const icon = document.createElement('i');
       icon.className = `ti ti-${card.glyph}`;
       icon.setAttribute('aria-hidden', 'true');
@@ -497,7 +623,9 @@ export class HomeBoard {
     el.append(photo, label);
     const sigWord = card.signal ? `, ${i18n.t(`board.signal.${card.signal}`)}` : '';
     const autoWord = card.auto ? `, ${i18n.t('board.signal.auto')}` : '';
-    el.setAttribute('aria-label', `${card.title}${sigWord}${autoWord}`);
+    const coverWord = cover ? `, ${cover.short}${cover.unit || ''}${cover.state === 'stale'
+      ? ` (${i18n.t('board.cover.stale')})` : ''}` : '';
+    el.setAttribute('aria-label', `${card.title}${coverWord}${sigWord}${autoWord}`);
     this._place(el, card);
     this._bind(el, card, 'card');
     return el;
@@ -623,7 +751,7 @@ export class HomeBoard {
       if (kind === 'card') {
         timer = setTimeout(() => {
           longFired = true;
-          this.setFocus(this.focus === item.id ? null : item.id);
+          this.setFocus(this.focus === item.id ? null : item.id, { quiet: true });
         }, LONG_PRESS_MS);
       }
     });
@@ -705,11 +833,291 @@ export class HomeBoard {
     });
   }
 
-  /** Accende i fili di una scheda (o li spegne tutti, con `null`). */
-  setFocus(id) {
+  /** Accende i fili di una scheda (o li spegne tutti, con `null`).
+   *
+   *  Con la barra della scheda (`quiet`, dalla pressione lunga) l'avviso «non
+   *  ha fili» non serve: la barra che sale e' gia' la risposta al gesto. */
+  setFocus(id, { quiet = false } = {}) {
     this.focus = id;
     const lit = this.drawThreads();
-    if (id && !lit) showToast(i18n.t('board.noThreads'), 'info');
+    if (id && !lit && !quiet) showToast(i18n.t('board.noThreads'), 'info');
+    this._drawCardBar();
+  }
+
+  /* ── La barra della scheda: quel che si fa a una scheda intera ── */
+
+  /** La barra in basso sulla tela, per la scheda coi fili accesi. Sta sulla
+   *  tela e non sul muro, come la busta: non si sposta col muro e non si
+   *  ingrandisce, e non copre i fili, che stanno sopra. */
+  _drawCardBar() {
+    const card = this.focus && this.data?.cards.find((c) => c.id === this.focus);
+    if (!card) {
+      if (this._cardBar) this._cardBar.hidden = true;
+      return;
+    }
+    if (!this._cardBar) {
+      this._cardBar = document.createElement('div');
+      this._cardBar.className = 'home-board-cardbar';
+      this._cardBar.setAttribute('role', 'toolbar');
+    }
+    const bar = this._cardBar;
+    bar.innerHTML = '';
+    bar.setAttribute('aria-label', i18n.t('board.card.actions', { title: card.title }));
+    const act = (icon, key, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'home-board-cardbar-btn';
+      const i = document.createElement('i');
+      i.className = `ti ti-${icon}`;
+      i.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.textContent = i18n.t(key);
+      b.append(i, label);
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fn();
+      });
+      return b;
+    };
+    bar.append(act('pencil', 'board.card.rename', () => this.openRename(card.id, card.title)));
+    /* La copertina c'e' solo se nel cassetto c'e' un'app che puo' esserla. */
+    if (card.coverOptions?.length) {
+      bar.append(act('photo', 'board.card.cover', () => this.openCover(card)));
+    }
+    bar.append(act('square-x', 'board.card.remove', () => this.removeCard(card.id, card.title)));
+    const close = act('x', 'board.card.close', () => this.setFocus(null));
+    close.classList.add('is-close');
+    close.setAttribute('aria-label', i18n.t('board.card.close'));
+    close.querySelector('span').remove();
+    bar.appendChild(close);
+    if (bar.parentNode !== this.canvas) this.canvas.appendChild(bar);
+    bar.hidden = false;
+  }
+
+  /** Indietro: chiude la barra (e spegne i fili). Vero se c'era da chiudere. */
+  closeCardBar() {
+    if (!this.focus) return false;
+    this.setFocus(null);
+    return true;
+  }
+
+  /** Il foglio «Nuova scheda»: un nome, e la scheda nasce in *at* (un punto del
+   *  muro) o al centro di quel che guardi. */
+  openNewCard(at = null) {
+    if (!this.notebook || !this.data) return;
+    const near = at || this.viewCenter();
+    this._nameSheet({
+      title: i18n.t('board.card.newTitle'),
+      value: '',
+      submit: i18n.t('board.card.create'),
+      withApp: true,
+      send: async (title, app) => {
+        const out = await rpc.board('card.add', this.notebook,
+          app ? { title, near, app } : { title, near });
+        await this.load(this.notebook);
+        const id = out?.card?.id;
+        if (id) {
+          this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`)
+            ?.classList.add('is-appearing');
+        }
+      },
+    });
+  }
+
+  /** Quale app fa da copertina: una riga per app posata sulla scheda, e la foto. */
+  openCover(card) {
+    const body = document.createElement('div');
+    body.className = 'home-board-menu';
+    const choose = async (cover) => {
+      try {
+        await rpc.board('card.cover', this.notebook, { id: card.id, cover });
+      } catch (err) {
+        console.warn('home.board: cover failed', err);
+        showToast(i18n.t('board.card.failed'), 'error');
+        return;
+      }
+      this.sheet.close();
+      await this.load(this.notebook);
+      if (this.focus === card.id) this.setFocus(card.id, { quiet: true });
+    };
+    const row = (icon, name, cover, current) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `home-board-menu-row${current ? ' is-current' : ''}`;
+      const i = document.createElement('i');
+      i.className = `ti ti-${icon}`;
+      i.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.className = 'home-board-menu-name';
+      label.textContent = name;
+      b.append(i, label);
+      if (current) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', () => choose(cover));
+      body.appendChild(b);
+    };
+    const now = card.cover ? card.coverId || null : null;
+    for (const opt of card.coverOptions || []) row('chart-line', opt.name, opt.id, opt.id === now);
+    row('photo', i18n.t('board.card.coverNone'), '', !card.cover);
+    this.sheet.open(i18n.t('board.card.coverTitle'), body);
+  }
+
+  /** Il foglio «Rinomina». *after* si chiama a nome cambiato (il cassetto si
+   *  ricarica). */
+  openRename(cardId, current, after = null) {
+    if (!this.notebook) return;
+    this._nameSheet({
+      title: i18n.t('board.card.renameTitle'),
+      value: current || '',
+      submit: i18n.t('board.card.save'),
+      send: async (title) => {
+        await rpc.board('card.rename', this.notebook, { id: cardId, title });
+        await this.load(this.notebook);
+        if (this.focus === cardId) this.setFocus(cardId, { quiet: true });
+        await after?.();
+      },
+    });
+  }
+
+  _nameSheet({ title, value, submit, send, withApp = false }) {
+    const body = document.createElement('div');
+    body.className = 'home-board-form';
+    /* «Cosa ci metti?»: niente per ora, o un'app che hai gia' — allora la
+       scheda *e'* l'app, e il suo valore va al posto della foto. Le app si
+       leggono quando il foglio si apre; senza, la domanda non c'e'. */
+    let picked = null;
+    let paramInputs = {};
+    const appBox = document.createElement('div');
+    appBox.className = 'home-board-form';
+    if (withApp) {
+      api.getJennyApps().then((out) => {
+        const apps = (out?.apps || []).filter((a) => !a.broken && a.section
+          && (a.state || 'live') !== 'trial');
+        if (!apps.length) return;
+        const label = document.createElement('label');
+        label.className = 'home-board-form-label';
+        label.textContent = i18n.t('board.card.what');
+        const select = document.createElement('select');
+        select.className = 'home-board-input';
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = i18n.t('board.card.whatNothing');
+        select.appendChild(none);
+        for (const a of apps) {
+          const o = document.createElement('option');
+          o.value = a.slug;
+          o.textContent = a.name || a.slug;
+          select.appendChild(o);
+        }
+        label.appendChild(select);
+        const params = document.createElement('div');
+        params.className = 'home-board-form';
+        select.addEventListener('change', () => {
+          picked = apps.find((a) => a.slug === select.value) || null;
+          params.innerHTML = '';
+          paramInputs = {};
+          for (const name of Object.keys(picked?.section?.params || {})) {
+            const pl = document.createElement('label');
+            pl.className = 'home-board-form-label';
+            pl.textContent = i18n.t('apps.placeParam', { name });
+            const pi = document.createElement('input');
+            pi.type = 'text';
+            pi.className = 'home-board-input';
+            pl.appendChild(pi);
+            params.appendChild(pl);
+            paramInputs[name] = pi;
+          }
+          input.placeholder = picked ? (picked.name || picked.slug)
+            : i18n.t('board.card.namePlaceholder');
+          sync();
+        });
+        appBox.append(label, params);
+      }).catch((err) => console.warn('home.board: apps for a card failed', err));
+    }
+    const label = document.createElement('label');
+    label.className = 'home-board-form-label';
+    label.textContent = i18n.t('board.card.name');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'home-board-input';
+    input.maxLength = 60;
+    input.value = value;
+    input.placeholder = i18n.t('board.card.namePlaceholder');
+    input.autocapitalize = 'sentences';
+    label.appendChild(input);
+    const actions = document.createElement('div');
+    actions.className = 'home-board-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'home-board-btn';
+    cancel.textContent = i18n.t('common.cancel');
+    cancel.addEventListener('click', () => this.sheet.close());
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'home-board-btn is-primary';
+    ok.textContent = submit;
+    const sync = () => { ok.disabled = !input.value.trim() && !picked; };
+    const go = async () => {
+      const name = input.value.trim() || (picked ? picked.name || picked.slug : '');
+      if (!name || ok.disabled) return;
+      ok.disabled = true;
+      const app = picked ? {
+        slug: picked.slug,
+        params: Object.fromEntries(Object.entries(paramInputs)
+          .map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
+      } : null;
+      try {
+        await send(name, app);
+        this.sheet.close();
+      } catch (err) {
+        console.warn('home.board: card failed', err);
+        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed'), 'error');
+        ok.disabled = false;
+      }
+    };
+    ok.addEventListener('click', go);
+    input.addEventListener('input', sync);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        go();
+      }
+    });
+    sync();
+    actions.append(cancel, ok);
+    body.append(label, appBox, actions);
+    this.sheet.open(title, body);
+    input.focus();
+  }
+
+  /** «Togli dalla bacheca»: subito, con un Annulla di qualche secondo al posto
+   *  di una domanda. L'Annulla rimette la scheda dov'era, coi suoi fili. */
+  async removeCard(cardId, title) {
+    const notebook = this.notebook;
+    if (!notebook) return;
+    try {
+      await rpc.board('card.remove', notebook, { id: cardId });
+    } catch (err) {
+      console.warn('home.board: remove failed', err);
+      showToast(i18n.t('board.card.failed'), 'error');
+      return;
+    }
+    if (this.focus === cardId) this.focus = null;
+    await this.load(notebook);
+    showUndo(i18n.t('board.card.removed', { title }), async () => {
+      try {
+        await rpc.board('card.restore', notebook, { id: cardId });
+      } catch (err) {
+        console.warn('home.board: restore failed', err);
+        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.restoreFailed'),
+          'error');
+        return;
+      }
+      if (this.notebook === notebook) {
+        await this.load(notebook);
+        this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(cardId)}"]`)
+          ?.classList.add('is-appearing');
+      }
+    }, { label: i18n.t('board.card.undo') });
   }
 
   /** I fili: sempre visibili, sottili e senza scritte; quelli della scheda

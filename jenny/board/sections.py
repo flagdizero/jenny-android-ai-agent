@@ -21,8 +21,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
-
 from jenny.board import model
 
 PHOTOS_DIR = "raw/photos"
@@ -72,47 +70,38 @@ def app_section_view(
     ``state`` dice come sta: ``ok``, ``alarm`` (il valore ha passato la soglia
     del manifest), ``stale`` (l'ultimo dato è più vecchio di quanto il manifest
     ammette), ``empty`` (nessun dato), ``missing`` (l'app non c'è più),
-    ``broken`` (il manifest è rotto) o ``no_section`` (l'app non dichiara una
-    vista compatta). ``alarm`` e ``stale`` accendono l'angolo rosso della scheda.
+    ``trashed`` (è nel cestino, si può rimettere), ``broken`` (il manifest è
+    rotto) o ``no_section`` (l'app non dichiara una vista compatta). ``alarm``
+    e ``stale`` accendono l'angolo rosso della scheda.
     """
+    from jenny.apps import trust
     from jenny.apps.manifest import find_app
-    from jenny.apps.storage import StorageError, read_collection
+    from jenny.apps.summary_view import summary_view
 
     app = find_app(workspace, slug)
+    draft = trust.load_draft(workspace, slug)
+    if app is None and draft is not None and not draft.app.broken:
+        # Posata mentre e' ancora in prova: il cassetto mostra la prima lettura
+        # e i bottoni per tenerla o scartarla.
+        view = summary_view(workspace, draft.app, params, now=now, code_state="trial")
+        return {**view, "trial": trust.app_trust_state(workspace, slug).get("trial")}
     if app is None:
+        # Nel cestino non e' sparita: il cassetto offre di rimetterla.
+        from jenny.apps.trash import trashed_entry
+
+        entry = trashed_entry(workspace, slug)
+        if entry is not None:
+            return {"state": "trashed", "slug": slug, "name": entry["name"],
+                    "trashId": entry["id"]}
         return {"state": "missing", "slug": slug}
     if app.broken or app.manifest is None:
         return {"state": "broken", "slug": slug, "error": app.error}
-    manifest = app.manifest
-    base: dict[str, Any] = {"slug": slug, "name": manifest.name, "icon": manifest.icon}
-    section = manifest.section
-    if section is None:
-        return {**base, "state": "no_section"}
-    filters = {
-        key: params.get(val[1:]) if isinstance(val, str) and val.startswith("$") else val
-        for key, val in section.where.items()
-    }
-    try:
-        records = [
-            r for r in read_collection(app.dir, section.collection)
-            if all(r.get(k) == v for k, v in filters.items())
-        ]
-    except (StorageError, OSError) as exc:
-        logger.warning("board: app section {} unreadable: {}", slug, exc)
-        records = []
-    base.update({
-        "unit": section.unit,
-        "label": section.label or section.field,
-        "field": section.field,
-        "verbs": section.verbs,
-        "params": dict(params),
-    })
-    view = records_view(
-        records, field_name=section.field, latest=section.latest, alarm=section.alarm,
-        stale_after_minutes=section.stale_after_minutes, trend_days=section.trend_days, now=now,
-    )
-    view.pop("record", None)
-    return {**base, **view}
+    view = summary_view(workspace, app, params, now=now,
+                        code_state=None if trust.is_live(workspace, slug) else "unapproved")
+    if draft is not None:
+        # Una modifica in prova: la versione viva resta, e il cassetto lo dice.
+        view["trial"] = trust.app_trust_state(workspace, slug).get("trial")
+    return view
 
 
 def records_view(
@@ -185,33 +174,12 @@ def app_field_value(
     ``(None, False)``: una condizione che non si può valutare non scatta.
     """
     from jenny.apps.manifest import find_app
-    from jenny.apps.storage import StorageError, read_collection
+    from jenny.apps.summary_view import field_value
 
     app = find_app(workspace, slug)
     if app is None or app.manifest is None or app.manifest.section is None:
         return None, False
-    section = app.manifest.section
-    filters = {
-        key: params.get(val[1:]) if isinstance(val, str) and val.startswith("$") else val
-        for key, val in section.where.items()
-    }
-    try:
-        records = [
-            r for r in read_collection(app.dir, section.collection)
-            if all(r.get(k) == v for k, v in filters.items())
-        ]
-    except (StorageError, OSError):
-        return None, False
-    if not records:
-        return None, False
-    latest = max(records, key=lambda r: str(r.get(section.latest, "")))
-    at = _record_time(latest)
-    current = now or datetime.now(timezone.utc)
-    fresh = at is not None and (
-        not section.stale_after_minutes
-        or current - at <= timedelta(minutes=section.stale_after_minutes)
-    )
-    return latest.get(field_name), fresh
+    return field_value(app, params, field_name, now=now)
 
 
 def journal_event(
@@ -334,3 +302,48 @@ def journal_note(project_root: Path, text: str, *, timezone_name: str | None = N
     line = " ".join(text.split())[:500]
     number = append_journal_entry(page, day, f"- {stamp:%H:%M} — {SAID_MARKER} {line}\n")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
+
+
+def short_value(value: Any, *, limit: int = 7) -> str:
+    """Un valore in pochi caratteri, per la copertina: «12,4k», «✓», «38».
+
+    I numeri grandi si abbreviano (k, M), i decimali si tagliano a uno, il
+    separatore e' la virgola (la copertina non sa la lingua, e la casa e'
+    nata italiana: le cifre sono le stesse). Il testo si tronca con «…».
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "✓" if value else "–"
+    if isinstance(value, (int, float)):
+        n = float(value)
+        for div, suffix in ((1_000_000_000, "G"), (1_000_000, "M"), (10_000, "k")):
+            if abs(n) >= div:
+                scaled = n / (div if suffix != "k" else 1000)
+                text = f"{scaled:.1f}".rstrip("0").rstrip(".") + suffix
+                return text.replace(".", ",")
+        if n == int(n):
+            return str(int(n))
+        return f"{n:.1f}".replace(".", ",")
+    text = str(value)
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def cover_of(view: Mapping[str, Any]) -> dict[str, Any] | None:
+    """La copertina di una scheda dal riassunto della sua app.
+
+    ``state`` dice come sta (``ok``, ``alarm``, ``stale``, ``empty``,
+    ``trial``…); senza valore la copertina non c'e' e resta la foto.
+    """
+    value = view.get("value")
+    if value is None or view.get("state") in ("missing", "broken", "no_section", "trashed"):
+        return None
+    unit = str(view.get("unit") or "")
+    return {
+        "short": short_value(value),
+        "unit": unit if len(unit) <= 3 else "",
+        "state": view.get("state") or "ok",
+        "at": view.get("at") or "",
+        "trend": [v for v in view.get("trend") or [] if isinstance(v, (int, float))][-14:],
+        "icon": view.get("icon") or "",
+    }

@@ -244,7 +244,11 @@ def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None
     seen: dict[str, str] = {}
     events: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
     for card in board["cards"]:
-        for section in card.get("userSections") or []:
+        sections = list(card.get("userSections") or [])
+        if isinstance(card.get("app"), dict):
+            sections.append({"id": model.COVER_CARD, "kind": "app", "app": card["app"]["slug"],
+                             "params": card["app"].get("params") or {}})
+        for section in sections:
             view = section_view(workspace, root, section)
             if view is None:
                 continue
@@ -278,18 +282,40 @@ async def run_reminders(
     wikis_dir_name: str = "wikis",
     timezone_name: str | None = None,
     now: datetime | None = None,
+    cron: Any = None,
 ) -> str | None:
-    """Un giro dell'orologio su tutti i quaderni. Torna una riga per il log del cron."""
+    """Un giro dell'orologio su tutti i quaderni. Torna una riga per il log del cron.
+
+    *cron* e' il servizio dei job: serve a buttare i cron delle schede tolte da
+    piu' di una settimana (:func:`jenny.board.removed.purge_removed_cards`).
+    """
     from jenny.board.micro import run_due_micros
+    from jenny.board.removed import purge_removed_cards
     from jenny.utils.wiki_paths import discover_wiki_roots
 
     current = _local_now(timezone_name, now)
     announced = 0
     events = 0
     produced = 0
+    # **Prima chi produce, poi chi giudica**, anche per le app: i lettori delle
+    # app generali girano una volta per giro, per tutti i quaderni insieme.
+    try:
+        from jenny.apps.reader import run_due_readers
+
+        produced += await run_due_readers(workspace, now=current)
+    except Exception:  # noqa: BLE001 — un lettore rotto non ferma l'orologio
+        logger.exception("reminders: app readers not run")
     for name, root in sorted(discover_wiki_roots(workspace / wikis_dir_name).items()):
-        if read_board(root) is None:
+        board = read_board(root)
+        if board is None:
             continue
+        try:
+            purge_removed_cards(workspace, root, cron, now=current)
+        except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
+            logger.exception("reminders: removed cards of {} not purged", name)
+        # Le attese di una scheda tolta tacciono finche' la scheda non torna: «Togli»
+        # ferma quel che la scheda fa da se', e un Annulla lo fa ripartire.
+        gone = model.removed_card_ids(board)
         # **Prima chi produce, poi chi giudica**: le micro app scadute girano
         # adesso, cosi' gli eventi e le attese a condizione leggono il dato fresco.
         try:
@@ -301,6 +327,10 @@ async def run_reminders(
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: app sections of {} not checked", name)
         reminders = read_reminders(root)
+        if gone:
+            reminders = {**reminders, "reminders": [
+                r for r in reminders["reminders"] if r.get("card") not in gone
+            ]}
         due = due_by_date(reminders, current)
         conditions = check_conditions(workspace, reminders, root=root, now=current)
         fire = conditions.fire

@@ -70,7 +70,7 @@ _HARDCODED_TOOL_MODULES = [
     "subagent_control",
     "cron",
     "journal",
-    "micro_app",
+    "app_tool",
     "self",
     "memory_recall",
     "search",

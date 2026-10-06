@@ -67,9 +67,18 @@ class AppManifest:
     # "external" quando lo schermo dell'app *e'* il suo server, non
     # ``app/index.html``. None per un'app normale. V. VIEW_KINDS.
     view_kind: str | None = None
-    # La vista compatta con cui l'app sta in un cassetto della bacheca. None per
-    # un'app che non ne dichiara una: si apre solo dalla sezione App.
+    # Il riassunto: la vista compatta con cui l'app sta in un cassetto o sulla
+    # copertina di una scheda. Nel manifest si chiama ``summary``; ``section`` e'
+    # il suo nome di prima, e si legge ancora. None per un'app senza stato da
+    # riassumere (una calcolatrice): si apre e basta.
     section: "AppSection | None" = None
+    # Il lettore: ``run.py`` accanto al manifest, che l'orologio gira ogni
+    # ``every`` minuti senza modello. La spec normalizzata come quella di una
+    # micro app (``jenny/board/micro.py::normalize_spec``), o None.
+    reader: dict | None = None
+    # Il campo testo che distingue le serie di un lettore che ne legge piu' d'una
+    # (un hub con tre sensori: ``sensor``). None per un lettore a serie unica.
+    reader_key: str | None = None
 
 
 @dataclass
@@ -97,6 +106,22 @@ class AppSection:
     alarm: dict | None = None
     trend_days: int = 0
     verbs: list[str] = field(default_factory=list)
+    # ── dal 06/10/2026: il riassunto ha una forma, come le micro app ──
+    # value | chips | progress | list | table (``jenny/board/micro.py::VIEWS``).
+    view: str = "value"
+    # last: il campo dell'ultimo record. count: quanti record passano il filtro
+    # («7 da comprare»); le righe di una lista sono quei record.
+    aggregate: str = "last"
+    # I campi da mostrare accanto al principale (chip), in ordine.
+    chips: list[str] = field(default_factory=list)
+    # Le colonne di una lista o tabella: ``{col: {label, type, unit}}``.
+    columns: dict = field(default_factory=dict)
+    # La meta di ``progress``.
+    max: float | None = None
+    # Il tipo del campo principale, quando il lettore lo dichiara.
+    type: str = ""
+    # Le etichette e le unita' dei campi del lettore, per i chip.
+    fields: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -263,7 +288,11 @@ def _parse_manifest(data: object) -> AppManifest:
         if view_kind == "external" and base_url is None:
             raise ValueError("app.json: view.kind 'external' requires a 'server.baseUrl'")
 
-    section = _parse_section(data.get("section"), [a.name for a in actions])
+    reader, reader_key = _parse_reader(data.get("reader"), data.get("summary"), data["name"])
+    if data.get("summary") is not None:
+        section = _parse_summary(data.get("summary"), [a.name for a in actions], reader)
+    else:
+        section = _parse_section(data.get("section"), [a.name for a in actions])
 
     icon = data.get("icon")
     return AppManifest(
@@ -275,6 +304,8 @@ def _parse_manifest(data: object) -> AppManifest:
         actions=actions,
         view_kind=view_kind,
         section=section,
+        reader=reader,
+        reader_key=reader_key,
     )
 
 
@@ -359,6 +390,166 @@ def _parse_section(raw: object, action_names: list[str]) -> AppSection | None:
     )
 
 
+def _int(raw: dict, *names: str) -> object:
+    for name in names:
+        if name in raw:
+            return raw[name]
+    return None
+
+
+def _parse_reader(raw: object, summary: object, name: str) -> tuple[dict | None, str | None]:
+    """Il blocco ``reader``: ``run.py`` che l'orologio gira, senza modello.
+
+    Si valida con le stesse regole di una micro app (campi, forma, principale,
+    host, skill): sono la stessa cosa, e una sola regola non diverge. Forma e
+    principale stanno nel ``summary``, perche' sono di cio' che si mostra.
+    """
+    if raw is None:
+        return None, None
+    from jenny.board.micro import MicroError, normalize_spec
+
+    where_ = "app.json: reader"
+    if not isinstance(raw, dict):
+        raise ValueError(f"{where_} must be an object")
+    summ = summary if isinstance(summary, dict) else {}
+    uses = raw.get("uses")
+    spec_raw = {
+        "title": name,
+        "fields": raw.get("fields"),
+        "every": raw.get("every"),
+        "net": raw.get("net"),
+        "uses": [uses] if isinstance(uses, str) else uses,
+        "view": summ.get("view"),
+        "primary": summ.get("primary") or summ.get("field"),
+        "alarm": summ.get("alarm"),
+        "staleAfter": _int(summ, "staleAfterMinutes", "stale_after_minutes"),
+    }
+    try:
+        spec = normalize_spec(spec_raw, micro_id="reader")
+    except MicroError as exc:
+        raise ValueError(f"{where_}: {exc}") from exc
+    key = raw.get("key")
+    if key is not None:
+        if not isinstance(key, str) or spec["fields"].get(key, {}).get("type") != "text":
+            raise ValueError(f"{where_}.key must name a text field: the series it reads")
+    return spec, key
+
+
+def _clean_columns(raw: object, where_: str) -> dict:
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"{where_}.columns must map column names to {{label, type, unit}}")
+    if len(raw) > 4:
+        raise ValueError(f"{where_}.columns: at most 4 columns")
+    out = {}
+    for col, spec in raw.items():
+        spec = spec if isinstance(spec, dict) else {}
+        out[str(col)] = {
+            "label": str(spec.get("label") or col),
+            "type": spec.get("type") if spec.get("type") in ("number", "bool", "text") else "text",
+            "unit": str(spec.get("unit") or ""),
+        }
+    return out
+
+
+SUMMARY_VIEWS = ("value", "chips", "progress", "list", "table")
+
+
+def _parse_summary(raw: object, action_names: list[str], reader: dict | None) -> AppSection:
+    """Il blocco ``summary``: come l'app si riassume in un cassetto o in copertina.
+
+    Con un lettore, il riassunto e' quello che il lettore legge: la forma, il
+    principale, l'allarme e i campi vengono dalla sua spec. Senza, il riassunto
+    legge una collezione: l'ultimo record (``aggregate: last``) o quanti record
+    passano il filtro (``count``), e una lista o una tabella ne mostra le righe.
+    """
+    where_ = "app.json: summary"
+    if not isinstance(raw, dict):
+        raise ValueError(f"{where_} must be an object")
+    params = raw.get("params") or {}
+    if not isinstance(params, dict) or not all(
+        isinstance(k, str) and SECTION_PARAM_RE.match(k) and isinstance(v, dict)
+        for k, v in params.items()
+    ):
+        raise ValueError(f"{where_}.params must map parameter names to objects")
+    filters = raw.get("where") or {}
+    if not isinstance(filters, dict):
+        raise ValueError(f"{where_}.where must be an object")
+    for key, val in filters.items():
+        if isinstance(val, str) and val.startswith("$") and val[1:] not in params:
+            raise ValueError(f"{where_}.where.{key}: {val} is not a declared param")
+    verbs = raw.get("verbs") or []
+    if not isinstance(verbs, list) or len(verbs) > 2:
+        raise ValueError(f"{where_}.verbs must be a list of at most two action names")
+    for verb in verbs:
+        if verb not in action_names:
+            raise ValueError(f"{where_}.verbs: {verb!r} is not an action of this app")
+    trend = _int(raw, "trendDays", "trend_days")
+    trend = 7 if trend is None and reader is not None else (trend or 0)
+    if isinstance(trend, bool) or not isinstance(trend, int) or not 0 <= trend <= MAX_SECTION_TREND_DAYS:
+        raise ValueError(f"{where_}.trendDays must be between 0 and {MAX_SECTION_TREND_DAYS}")
+    chips = raw.get("chips") or []
+    if not isinstance(chips, list) or not all(isinstance(c, str) for c in chips):
+        raise ValueError(f"{where_}.chips must be a list of field names")
+
+    if reader is not None:
+        fields = reader["fields"]
+        primary = reader["primary"]
+        fspec = fields[primary]
+        columns = dict(fspec.get("columns") or {})
+        return AppSection(
+            collection="readings", field=primary, params=params, where=filters,
+            latest="ts",
+            unit=str(raw.get("unit") or fspec.get("unit", "")),
+            label=str(raw.get("label") or fspec.get("label") or primary),
+            stale_after_minutes=reader["staleAfter"], alarm=reader["alarm"],
+            trend_days=trend, verbs=list(verbs), view=reader["view"], aggregate="last",
+            chips=[c for c in chips if c in fields and fields[c]["type"] != "rows"],
+            columns=columns, max=fspec.get("max"), type=fspec["type"],
+            fields={k: {"label": v["label"], "unit": v.get("unit", ""), "type": v["type"]}
+                    for k, v in fields.items()},
+        )
+
+    collection = raw.get("collection")
+    if not isinstance(collection, str) or not COLLECTION_RE.match(collection):
+        raise ValueError(f"{where_}.collection must be a collection name (or declare a reader)")
+    view = raw.get("view", "value")
+    if view not in SUMMARY_VIEWS:
+        raise ValueError(f"{where_}.view must be one of {list(SUMMARY_VIEWS)}")
+    aggregate = raw.get("aggregate") or ("count" if view in ("list", "table") else "last")
+    if aggregate not in ("last", "count"):
+        raise ValueError(f"{where_}.aggregate must be 'last' or 'count'")
+    if view in ("list", "table") and aggregate != "count":
+        raise ValueError(f"{where_}: a {view} shows the records that match, so aggregate is 'count'")
+    fld = raw.get("field") or raw.get("primary") or ""
+    if not isinstance(fld, str) or (aggregate == "last" and not fld):
+        raise ValueError(f"{where_}.field is required (the value to show)")
+    columns = _clean_columns(raw.get("columns"), where_) if view in ("list", "table") else {}
+    maximum = raw.get("max")
+    if view == "progress" and (isinstance(maximum, bool) or not isinstance(maximum, (int, float))):
+        raise ValueError(f"{where_}: view 'progress' needs a numeric 'max' (the target)")
+    stale = _int(raw, "staleAfterMinutes", "stale_after_minutes")
+    if stale is not None and (isinstance(stale, bool) or not isinstance(stale, int) or stale < 1):
+        raise ValueError(f"{where_}.staleAfterMinutes must be a positive integer")
+    alarm = raw.get("alarm")
+    if alarm is not None and (
+        not isinstance(alarm, dict) or not isinstance(alarm.get("field"), str)
+        or alarm.get("op") not in SECTION_OPS or isinstance(alarm.get("value"), bool)
+        or not isinstance(alarm.get("value"), (int, float, str))
+    ):
+        raise ValueError(f"{where_}.alarm must be {{field, op, value}} with op in {sorted(SECTION_OPS)}")
+    latest = raw.get("latest", "ts")
+    if not isinstance(latest, str) or not latest:
+        raise ValueError(f"{where_}.latest must be a field name")
+    return AppSection(
+        collection=collection, field=fld, params=params, where=filters, latest=latest,
+        unit=str(raw.get("unit") or ""), label=str(raw.get("label") or ""),
+        stale_after_minutes=stale, alarm=alarm, trend_days=trend, verbs=list(verbs),
+        view=view, aggregate=aggregate, chips=list(chips), columns=columns,
+        max=float(maximum) if isinstance(maximum, (int, float)) and not isinstance(maximum, bool)
+        else None,
+    )
+
+
 def load_app(app_dir: Path) -> LoadedApp:
     """Load one app folder. Never raises: problems come back as broken=True."""
     slug = app_dir.name
@@ -384,6 +575,9 @@ def load_app(app_dir: Path) -> LoadedApp:
 
     try:
         app.manifest = _parse_manifest(data)
+        if app.manifest.reader is not None and not (app_dir / "run.py").is_file():
+            app.manifest = None
+            raise ValueError("app.json: reader is declared but run.py is missing")
     except ValueError as exc:
         app.broken = True
         app.error = str(exc)

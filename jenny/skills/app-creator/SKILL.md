@@ -12,18 +12,40 @@ locked: true
 
 # App Creator
 
-A Jenny App is a folder in `apps/<slug>/` (workspace-relative) that packages a UI for the
-user and typed actions for the agent. If it needs a screen, it's an app; if it only lives in
+A Jenny App is a folder in `apps/<slug>/` (workspace-relative). It is always **general** — it
+lives in the App page, not inside a notebook — and every part is optional: a screen for the
+user, typed actions for the agent, a **reader** that reads something by itself on a clock, and
+a **summary**, the way it shows in a card's drawer or on a card's cover on a notebook board.
+If it needs a screen, a live value or a place on a board, it's an app; if it only lives in
 chat, it's a skill.
 
 ```
 apps/<slug>/
-├── app.json        # manifest: name, icon, external server, typed actions (the contract)
+├── app.json        # manifest: name, icon, server, actions, reader, summary (the contract)
 ├── AGENT.md        # context for the agent: what the app is, preferences, thresholds
+├── run.py          # optional reader: `def run(ctx)`, run every N minutes with no model
 ├── app/
-│   └── index.html  # the UI (HTML/JS only — no per-app Python); only app/ is web-served
+│   └── index.html  # optional screen (HTML/JS); only app/ is web-served
 └── data/           # app state (collections), shared between UI and agent — never web-served
 ```
+
+<rule>
+**Write apps only with the `app` tool — never with write_file, edit_file or python_exec**
+(they refuse app code). `app action=draft` writes the files as a **trial**: it validates them,
+runs the reader once, and tells you the real first value. A new app — or a change that
+reaches a new host, writes a new collection, adds an action or changes the summary — **waits
+on trial**: no tools, no screen, no reader, until the user taps **Keep** on its trial card (in
+the App page, or in the drawer where it is placed). You cannot keep it for them. A fix that
+adds nothing goes live at once. Tell the user what the app reaches and writes, and that they
+keep it from the trial card.
+</rule>
+
+<rule>
+**Every app that keeps state declares a `summary`** (see the reference): a reader, or any
+storage action that writes, means there is something to show at a glance — "38 %", "7 to
+buy", "€ 12,430". Do not ask the user whether they want it: decide the summary yourself
+from what the app is for. An app with no state (a calculator) has none.
+</rule>
 
 For the full manifest schema, action kinds, and UI conventions, read
 [references/manifest.md](references/manifest.md) before writing any file.
@@ -130,34 +152,31 @@ Slug rules: lowercase alphanumeric with single hyphens, max 32 chars, folder nam
 after the slug. Action names: snake_case, unique within the app — the agent will see them as
 tools named `<slug>_<action>`.
 
-### Phase 4: Write the Files
+### Phase 4: Draft the App
 
-Only after confirmation, create the folder and write, in this order:
+Only after confirmation, call `app action=draft slug=<slug>` with `files`:
 
-1. `apps/<slug>/app.json` — follow [references/manifest.md](references/manifest.md) exactly.
-2. `apps/<slug>/AGENT.md` — 5–15 lines: what the app is for, user preferences and thresholds
-   learned in the conversation (e.g. "water the basil when humidity drops below 20%"),
-   anything the agent needs to act well. NOT a copy of the manifest.
-3. `apps/<slug>/app/index.html` — UI built on the Jenny Kit (theme tokens, classless base,
-   component vocabulary, chart helpers) following the conventions in the reference. Never
-   invent a custom design or load anything from an external host.
-4. `apps/<slug>/data/` — create the directory; leave collections to be created on first write.
+1. `app.json` — follow [references/manifest.md](references/manifest.md) exactly, including the
+   `summary` (and the `reader`, if the app reads something by itself).
+2. `AGENT.md` — 5–15 lines: what the app is for, user preferences and thresholds learned in the
+   conversation (e.g. "water the basil when humidity drops below 20%"), anything the agent
+   needs to act well. NOT a copy of the manifest.
+3. `run.py` — the reader, if any: `def run(ctx):` returning exactly the reader's fields.
+4. `app/index.html` — the screen, if any: built on the Jenny Kit (theme tokens, classless base,
+   component vocabulary, chart helpers) following the conventions in the reference. Never invent
+   a custom design or load anything from an external host.
 
-### Phase 5: Validate
+Collections in `data/` are created on first write. If the tool reports a problem, fix it with
+`app action=edit` (one exact replacement in one file) and it tries again.
 
-Run the validator and fix anything it reports:
+### Phase 5: Trial and Place
 
-```
-python_exec(
-    working_dir="<workspace>/skills/app-creator/scripts",
-    code="import validate_app; validate_app.main(['validate_app.py', '<workspace>/apps/<slug>'])",
-)
-```
-
-`working_dir` is what makes the bare `import` resolve; the app path must be absolute, because
-the script walks it with `pathlib`.
-
-Then tell the user the app is ready and will appear in the Jenny Apps grid.
+The tool's answer says whether the app is live or on trial, and the first real value. Tell the
+user, in one or two lines, what it does, what it reaches and writes, and that they keep it with
+**Keep** on its trial card. If the app is about a subject of a notebook (a plant, a portfolio),
+offer to put it on that notebook's board — `app action=place`, as a section in a card's drawer
+(`card`) or as a card of its own — and do it when the user agrees. Placing it in a notebook also
+lets that notebook's chat use it.
 
 ## Secrets
 
@@ -178,9 +197,9 @@ token in chat, do not echo it and do not write it to any file in the workspace.
 
 - Apps live in `apps/`, never in `ui/` — `ui/` is re-extracted from the package on every
   startup and would overwrite them.
-- No per-app Python and no code execution in actions: actions are declarative
-  (`storage`/`http` only). If an app needs real server-side logic, it belongs in the app's
-  external server behind an `http` action.
+- Actions are declarative (`storage`/`http` only). The only Python an app has is its reader
+  (`run.py`), which reads and never writes; real server-side logic belongs in the app's external
+  server behind an `http` action.
 - The app never contacts the agent on its own. The only app→agent path is the user's explicit
   hand-off to chat. Proactivity ("let me know if...") is scheduled work on the agent side, offered
   as a follow-up after the app works — where it goes is decided by the recurring-work rule, not
