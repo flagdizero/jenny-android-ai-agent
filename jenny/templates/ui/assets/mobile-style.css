@@ -382,12 +382,13 @@
    porta della chat, e la chat sale sopra quel che stai guardando — v.
    `.home-over` in home-style.css e `:root.chat-over` qui sotto). Deve lasciar
    leggere la pagina sotto **e** la chat sopra: nei temi scuri e' un nero
-   all'80%, nei tre chiari lo sfondo del tema all'80% — un nero sotto testo
+   al 60%, nei tre chiari lo sfondo del tema al 60% — un nero sotto testo
    nero non si leggerebbe. La pagina sotto e' anche sfocata appena
    (`--chat-veil-blur`): resta riconoscibile, ma il suo testo non si confonde
    con quello della chat. Con la sfocatura il velo e' stato provato al 62/72%,
    e sul telefono si e' preferito tornare all'80%: la pagina sotto e' un
-   riferimento, la chat e' quel che si legge.
+   riferimento, la chat e' quel che si legge. Con la sfocatura forte (sotto)
+   l'80% la spegneva quasi del tutto, e dal 06/10/2026 e' al 60%.
    Il contrasto lo conta un banco (`test_chat_veil_contrast.py`), tema per
    tema, come se sotto non ci fosse sfocatura: la sfocatura e' margine.
 
@@ -398,7 +399,7 @@
    e il filtro non si anima (v. `.home-beneath`, `.view-beneath`). Se sul
    telefono scatta, si scende 12 → 8 qui e basta. */
 :root {
-  --chat-veil: rgba(8, 7, 10, 0.8);
+  --chat-veil: rgba(8, 7, 10, 0.6);
   --chat-veil-blur: 18px;
   /* Le barre ferme dell'officina sopra il velo (v. `:root.chat-over
      #title-chat`): la tinta del velo, quasi opaca. */
@@ -407,7 +408,7 @@
 [data-theme="comic"],
 [data-theme="y2k"],
 [data-theme="stone"] {
-  --chat-veil: color-mix(in srgb, var(--bg) 80%, transparent);
+  --chat-veil: color-mix(in srgb, var(--bg) 60%, transparent);
   --chat-band: color-mix(in srgb, var(--bg) 97%, transparent);
 }
 
@@ -430,34 +431,39 @@
    `.launcher-row.selected`). Il riflesso e' interno e di 1 px; le ombre nette
    di Sticker e Fumetto non sfumano, e costano come un bordo.
 
-   Ogni tema lo veste a modo suo: chiaro e sottile nei temi scuri, ciano in
+   Nei temi scuri il vetro e' fume': una tinta nera al 30% col bordo chiaro.
+   Chiaro come la tela (6-9% di bianco) andava bene col velo all'80%; al 60%
+   il testo nel campo, sopra un glifo della pagina, scendeva sotto 4,5
+   (06/10/2026, v. `test_chat_veil_contrast.py`).
+
+   Ogni tema lo veste a modo suo: sottile nei temi scuri, ciano in
    Synthwave, adesivo in Sticker, inchiostro in Fumetto, lucido in Y2K, brina
    in Stone. */
 :root {
-  --glass-bg: rgba(244, 241, 234, 0.07);
+  --glass-bg: rgba(0, 0, 0, 0.3);
   --glass-border: 1px solid rgba(244, 241, 234, 0.14);
   --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --glass-field-bg: rgba(244, 241, 234, 0.09);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
   --glass-field-border: 1px solid rgba(244, 241, 234, 0.2);
 }
 [data-theme="synthwave"] {
-  --glass-bg: rgba(242, 236, 255, 0.07);
+  --glass-bg: rgba(0, 0, 0, 0.3);
   --glass-border: 1px solid rgba(3, 237, 249, 0.3);
-  --glass-field-bg: rgba(242, 236, 255, 0.08);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
   --glass-field-border: 1px solid rgba(3, 237, 249, 0.35);
 }
 [data-theme="kyoto"] {
-  --glass-bg: rgba(229, 221, 208, 0.06);
+  --glass-bg: rgba(0, 0, 0, 0.3);
   --glass-border: 1px solid rgba(229, 221, 208, 0.16);
   --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --glass-field-bg: rgba(229, 221, 208, 0.07);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
   --glass-field-border: 1px solid rgba(229, 221, 208, 0.22);
 }
 [data-theme="sticker"] {
-  --glass-bg: rgba(244, 239, 250, 0.08);
+  --glass-bg: rgba(0, 0, 0, 0.3);
   --glass-border: 2px solid rgba(255, 255, 255, 0.55);
   --glass-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
-  --glass-field-bg: rgba(244, 239, 250, 0.09);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
   --glass-field-border: 2px solid rgba(255, 255, 255, 0.55);
 }
 [data-theme="comic"] {
