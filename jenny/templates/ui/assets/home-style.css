@@ -394,10 +394,20 @@ body.home {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 4px 18px 8px;
+  /* In fondo niente padding: l'ultimo figlio e' la fascia (v. `.home-band`). */
+  padding: 4px 18px 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--home-thread-gap);
+  --home-thread-gap: 10px;
+  /* La fascia e' alta meta' di lei: la sua altezza e' il 73% del quadrato
+     (`--jenny-art-h`, misurato sull'arte). */
+  --home-band-h: calc(var(--jenny-size) * var(--jenny-art-h) / 2);
+  /* Quanto lei entra nella colonna del testo quando e' fuori, piu' 6 px
+     d'aria: la figura comincia a `1 - --jenny-out - 0,275` lati dal bordo
+     (0,275 e' il margine trasparente del quadrato per lato), e i primi 18 sono
+     gia' il padding del filo. Lo stesso conto di `shapeOf` in `home-band.js`. */
+  --jenny-dodge: calc(var(--jenny-size) * (1 - var(--jenny-out) - 0.275) - 18px + 6px);
 }
 
 /* Una conversazione corta si appoggia al fondo, vicino al composer, invece di
@@ -436,7 +446,7 @@ body.home {
 
 /* ── Chi lavora: le bolle in fondo al filo ── */
 
-/* Il posto vivo (`HomeChat.live`): sempre l'ultimo figlio del filo, e dentro le
+/* Il posto vivo (`HomeChat.live`): sotto i messaggi e sopra la fascia, e dentro le
    bolle di chi sta lavorando adesso — il giardiniere, Dream, gli aiutanti — e,
    per ultima, quella di Jenny che scrive. Vuoto non c'e': un figlio vuoto del
    filo prenderebbe comunque il suo `gap`. */
@@ -446,6 +456,60 @@ body.home {
   gap: 10px;
 }
 .home-live[hidden] { display: none; }
+
+/* ── La fascia: lo spazio per Jenny in fondo al filo ──
+   Dal 06/10/2026 (`home-band.js`). Prima i messaggi che le finivano dietro si
+   prendevano un margine a scorrimento fermo, e il testo tornava a capo sotto
+   il dito. Adesso lo spazio sta tutto in fondo e dipende solo da cosa c'e':
+   scorrendo, quel che le passa dietro le passa dietro, e lei sta sopra.
+
+   La fascia e' l'ultimo figlio del filo, alta meta' di lei, e non e' vuota: ci
+   scende la coda dell'ultima risposta (qui sotto), che una riga la occupava
+   comunque. E' anche il posto per una striscia di chi lavora. */
+.home-band {
+  flex: none;
+  height: var(--home-band-h);
+}
+
+/* L'ultima risposta, quando subito sotto c'e' la fascia (il posto vivo spento
+   in mezzo non conta): la sua coda esce dal flusso e si mette nella fascia, a
+   sinistra di lei. Tutto CSS: quando arriva un messaggio dopo, la regola smette
+   di valere e la coda torna sotto il suo testo. */
+.home-msg-jenny:has(+ .home-live[hidden] + .home-band) { position: relative; }
+.home-msg-jenny:has(+ .home-live[hidden] + .home-band) > .home-tail {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--home-thread-gap));
+  height: var(--home-band-h);
+  margin: 0;
+}
+
+/* Sopra la fascia c'e' la sua testa. Il testo dell'ultima risposta le gira
+   attorno (la sagoma, qui sotto); le scatole no — una bolla tua, una bolla di
+   lavoro, un'immagine — e allora si scansano di lato. Solo l'ultima cosa del
+   filo, e solo finche' lo e': cambia quando arriva qualcosa, mai scorrendo. */
+.home-msg-user:has(+ .home-live[hidden] + .home-band),
+.home-msg-work:has(+ .home-live[hidden] + .home-band),
+.home-msg-jenny:has(+ .home-live[hidden] + .home-band) > .home-media,
+.home-live:not([hidden]) {
+  margin-right: var(--jenny-dodge);
+}
+
+/* La sagoma: due float in testa all'ultimo blocco (`HomeBand.refresh`). Il
+   primo, largo zero, spinge il secondo in fondo; il secondo ha la spalla
+   tonda, cosi' le righe accanto alla sua testa si accorciano a poco a poco
+   invece che di colpo. */
+.home-block.has-jenny-shape { display: flow-root; }
+.home-block.has-jenny-shape > .home-shape + * { margin-top: 0; }
+.home-shape-push {
+  float: right;
+  width: 0;
+}
+.home-shape {
+  float: right;
+  clear: right;
+  shape-outside: inset(0 round calc(var(--jenny-size) * 0.28) 0 0 0);
+}
 
 /* La bolla di lavoro (`home-work.js`). E' l'unica cosa del filo dalla parte di
    Jenny che ha una scatola: un messaggio in arrivo, non ancora un messaggio. Si
@@ -473,10 +537,6 @@ body.home {
 .home-work[hidden] { display: none; }
 .home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
 .home-work.is-failed { border-color: color-mix(in oklab, var(--error) 55%, var(--border-strong)); }
-
-/* Nell'angolo di Jenny la bolla si sposta, come quella dell'utente: e' una
-   scatola, e allungarla fin sotto di lei lascerebbe dentro solo il vuoto. */
-.home-work.is-under-jenny { margin-right: var(--jenny-gap, 39px); }
 
 .home-work-head {
   display: flex;
@@ -851,8 +911,7 @@ body.home {
    fondo a destra, misurati — e il tetto lo pagavano *tutti* i messaggi, anche
    quelli in cima dove non c'e' nessuno: 82,6 px CSS su ogni riga, il 14% dello
    schermo (Titan 2, 20/09/2026).
-   Adesso il margine ce l'ha solo chi le finisce davvero addosso, e a dirlo e'
-   `shared/jenny-gap.js`, che misura i due rettangoli invece di indovinare. */
+   Lo spazio per lei adesso sta tutto in fondo al filo (v. `.home-band`). */
 /* `max-width` non e' il tetto di prima: e' la colonna, e serve lo stesso.
    Con `flex-start` il messaggio si fa largo quanto il suo contenuto, e un
    `<pre>` non va a capo — la sua riga piu' lunga allargava tutta la risposta
@@ -862,24 +921,6 @@ body.home {
 .home-msg-jenny {
   align-self: flex-start;
   max-width: 100%;
-}
-
-/* Il messaggio e' nell'angolo di Jenny. Il valore non e' scritto qui: lo
-   calcola il modulo dalla taglia vera della mascotte e dal suo ancoraggio, e lo
-   mette sul filo come `--jenny-gap`. Il ripiego serve al primo disegno e a chi
-   apre la pagina fuori dall'APK. */
-.home-msg-jenny.is-under-jenny {
-  padding-right: var(--jenny-gap, 39px);
-}
-
-/* La stessa distanza, ma la bolla si **sposta** invece di stringersi.
-   Padding qui vorrebbe dire allungare la bolla fin sotto di lei e lasciarci
-   dentro solo il vuoto: il testo si scanserebbe, la pelle della bolla no. E
-   siccome la bolla e' ancorata a destra (`flex-end`), toglierle margine da
-   quel lato la porta via tutta intera. Il numero e' lo stesso e viene dallo
-   stesso conto: chi scrive sta nella colonna di destra, che e' la sua. */
-.home-msg-user.is-under-jenny {
-  margin-right: var(--jenny-gap, 39px);
 }
 
 .home-block {

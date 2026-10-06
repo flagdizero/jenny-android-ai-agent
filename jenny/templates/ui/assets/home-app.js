@@ -42,7 +42,7 @@ import { dotColor } from './shared/spines.js';
    modulo per i due gusci. I dati e le azioni stanno in `shared/`, fuori da
    qualunque schermata — ci sono usciti il 21/09/2026, quando la scheda «App»
    che li ospitava e' stata cancellata. */
-import { JennyGap } from './shared/jenny-gap.js';
+import { HomeBand } from './home-band.js';
 import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { HomePages, SLIDE_MS } from './home-pages.js';
@@ -176,12 +176,10 @@ class HomeApp {
       wanted: () => chatIdOf(this._summonKey()),
       paint: (on) => this.jenny.setBadge(on, i18n.t('jenny.replyWaiting')),
     });
-    /* Il margine che i messaggi lasciano a Jenny, **solo dove lei c'e'**. Si
+    /* La sagoma di Jenny sopra la fascia in fondo al filo (`home-band.js`). Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
-       la banda da scansare si misura su di lei, non su dei numeri copiati —
-       cosi' vale anche quando cambia taglia, quando la metti via sul bordo e
-       quando la trascini dall'altra parte. */
-    this.chat.gap = new JennyGap(this.thread, this.jenny.el);
+       la sua taglia si legge da lei, non da un numero copiato. */
+    this.chat.band = new HomeBand(this.chat.bandEl, this.jenny.el);
     /* **Chi lavora, in fondo al filo** (05/10/2026, `home-work.js`). La bolla
        di Jenny che scrive e' l'ultima del posto vivo; sopra di lei quelle del
        lavoro lungo (giardiniere, Dream) e degli aiutanti, che durano oltre la
@@ -1025,7 +1023,6 @@ class HomeApp {
     this.jenny?.setChatOnScreen?.(true);
     this.jenny?.setOut?.(true);
     this._measureFloor?.();
-    this.chat?.gap?.settleAfter?.(340);
     if (prefill !== null && this.input) {
       this.input.value = prefill;
       this.input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1359,10 +1356,6 @@ class HomeApp {
     if (this._hasComposer(entry)) this._retryThread();
     this._placeJenny();
     this._syncJennyPlace();
-    /* Il margine attorno a Jenny si misura a pista ferma: durante lo
-       scorrimento il filo e' spostato di lato e `refresh()` non tocca niente,
-       quindi il conto giusto va chiesto a scorrimento finito. */
-    if (this._hasComposer(entry)) this.chat?.gap?.settleAfter(SLIDE_MS + 40);
     this.strip?.draw();
     this._applyHead();
     this._reportChatOnScreen();

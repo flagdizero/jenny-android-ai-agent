@@ -360,7 +360,8 @@ def test_the_source_is_recorded_wherever_the_text_is_complete() -> None:
 def test_the_tail_is_one_row() -> None:
     """Una riga sola, chiesta esplicitamente: `display: flex` sulla coda, non
     due nodi impilati."""
-    m = re.search(r"\.home-tail\s*\{([^}]*)\}", HOME_CSS.read_text(encoding="utf-8"))
+    # La regola della coda, non quella che la porta nella fascia (`> .home-tail`).
+    m = re.search(r"(?m)^\.home-tail\s*\{([^}]*)\}", HOME_CSS.read_text(encoding="utf-8"))
     assert m, ".home-tail non ha stile: sarebbe due righe una sotto l'altra"
     assert "display: flex" in m.group(1)
     assert "align-items: center" in m.group(1)

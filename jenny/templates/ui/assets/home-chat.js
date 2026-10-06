@@ -114,9 +114,9 @@ export class HomeChat {
        Un delta non rende da se': mette in coda un disegno, e i delta dello
        stesso fotogramma ne pagano uno solo (v. `_delta`). */
     this._frame = null;
-    /* Vero mentre la storia entra a blocchi (`load`, `prependTurns`): il
-       margine attorno a Jenny si ricalcola una volta alla fine invece che a
-       ogni messaggio (v. `_append`). */
+    /* Vero mentre la storia entra a blocchi (`load`, `prependTurns`): la
+       sagoma di Jenny si ricalcola una volta alla fine invece che a ogni
+       messaggio (v. `_append`). */
     this._batching = false;
     /* **La storia arriva mentre il filo e' vivo.** Una lettura e' una fetch
        che dura, e intanto il socket porta frame: la risposta che Jenny sta
@@ -162,7 +162,7 @@ export class HomeChat {
        bolla (`WorkBubbles.claims`): quel testo non si disegna due volte. */
     this.claimsWork = null;
 
-    /* **Il posto vivo**, sempre l'ultimo figlio del filo: le bolle di chi sta
+    /* **Il posto vivo**, sempre sotto i messaggi e sopra la fascia: le bolle di chi sta
        lavorando adesso (`home-work.js`) e, per ultima, quella di Jenny che
        scrive (`home-activity.js`). I messaggi entrano sopra di lui, quindi chi
        lavora resta sotto l'ultima cosa detta, come un messaggio in arrivo. */
@@ -170,6 +170,15 @@ export class HomeChat {
     this.live.className = 'home-live';
     this.live.hidden = true;
     this.el.appendChild(this.live);
+
+    /* **La fascia** (06/10/2026, `home-band.js`), dopo il posto vivo: l'ultimo
+       figlio del filo in assoluto. Alta meta' di Jenny, ci scende la coda
+       dell'ultima risposta (una regola `:has()` in home-style.css, niente JS),
+       ed e' il posto per far vedere chi lavora. La sagoma sopra la fascia la
+       rifa `this.band`, che le consegna il guscio. */
+    this.bandEl = document.createElement('div');
+    this.bandEl.className = 'home-band';
+    this.el.appendChild(this.bandEl);
 
     /* **Uno `scroll` non e' sempre un gesto.** Quando una riga compare sotto il
        filo — gli allegati in attesa, la riga di lavoro — il contenitore si
@@ -375,14 +384,13 @@ export class HomeChat {
     });
   }
 
-  /** Molti messaggi in fila, e il margine attorno a Jenny ricalcolato **una
-   *  volta**, alla fine.
+  /** Molti messaggi in fila, e la sagoma di Jenny ricalcolata **una volta**,
+   *  alla fine.
    *
-   *  `gap.refresh()` legge il rettangolo di ogni messaggio del filo: chiamato
-   *  a ogni `_append`, una pagina di N turni costava N letture di N
-   *  rettangoli — quadratico, e ogni lettura dopo una scrittura forza il
-   *  layout. Il risultato di una sola misura in fondo e' lo stesso, perche'
-   *  quel che conta e' dove stanno i messaggi quando la pagina e' finita. */
+   *  `band.refresh()` misura l'ultimo blocco, e ogni misura dopo una
+   *  scrittura forza il layout: a ogni `_append` una pagina di N turni ne
+   *  costava N. Il risultato di una misura sola in fondo e' lo stesso, perche'
+   *  conta solo com'e' il fondo quando la pagina e' finita. */
   _inBatch(fill) {
     const outer = !this._batching;
     this._batching = true;
@@ -391,7 +399,7 @@ export class HomeChat {
     } finally {
       if (outer) {
         this._batching = false;
-        this.gap?.refresh();
+        this.band?.refresh();
       }
     }
   }
@@ -529,6 +537,7 @@ export class HomeChat {
     this._frame = null;
     if (!this.blockNode || !this.buffer) return;
     this.blockNode.innerHTML = renderMarkdown(this.buffer);
+    this.band?.refresh();
     this._follow();
   }
 
@@ -552,6 +561,7 @@ export class HomeChat {
       this.blockNode.innerHTML = renderMarkdown(finalText);
       renderRich(this.blockNode);
       this._register(this.turnNode, finalText);
+      this.band?.refresh();
     }
     this.blockNode = null;
     this.buffer = '';
@@ -586,6 +596,7 @@ export class HomeChat {
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
+    if (msg.text || msg.media_urls?.length) this.band?.refresh();
     this._follow();
   }
 
@@ -704,14 +715,11 @@ export class HomeChat {
          una, e per una risposta appena chiusa dice la stessa cosa del
          transcript (che la rilettura usera'). */
       this._tailOf(closed, this._seconds, Date.now());
-      /* La bolla e' cresciuta di una riga **dopo** essere stata misurata: il
-         margine per scansare la mascotte va rifatto, e chi era in fondo deve
+      /* La coda dell'ultima risposta scende nella fascia e non allunga niente;
+         quella di una risposta con qualcosa sotto si', e chi era in fondo deve
          restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
          qui con un nodo che sta per essere buttato. */
-      if (closed.isConnected) {
-        this.gap?.refresh();
-        this._follow();
-      }
+      if (closed.isConnected) this._follow();
     }
     this._seconds = null;
     this.turnNode = null;
@@ -770,8 +778,7 @@ export class HomeChat {
       this._register(node, content);
     }
     if (media?.length) this._appendMedia(node, media);
-    /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
-       misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
+    /* Prima di `_append`, che rifa la sagoma: il nodo va misurato intero. */
     this._tailOf(node, latencyMs, at);
     this._append(node, toTop);
   }
@@ -987,11 +994,10 @@ export class HomeChat {
       this._empty = false;
       this.syncEmpty();
     }
-    /* Chi le finisce nell'angolo si scansa. Qui e non nel `_follow()`: quello
-       scorre, e il margine va deciso **dopo** che il nodo e' nel filo e prima
-       che l'occhio ci arrivi. Dentro un blocco di storia lo fa `_inBatch`,
-       una volta sola alla fine. */
-    if (!this._batching) this.gap?.refresh();
+    /* Il fondo del filo e' cambiato: la sagoma va rifatta **dopo** che il nodo
+       e' nel filo e prima che l'occhio ci arrivi. Dentro un blocco di storia
+       lo fa `_inBatch`, una volta sola alla fine. */
+    if (!this._batching) this.band?.refresh();
     return node;
   }
 
@@ -1005,11 +1011,12 @@ export class HomeChat {
 
   /** Il posto vivo e' cambiato: una bolla e' comparsa, cresciuta, sparita.
    *  Si nasconde da vuoto (un figlio vuoto del filo prenderebbe comunque il
-   *  suo `gap`), e il fondo si riaggancia solo se ci si era. */
+   *  suo `gap`), e il fondo si riaggancia solo se ci si era. Acceso, separa
+   *  l'ultima risposta dalla fascia: la sagoma va via o torna. */
   liveChanged() {
     this.live.hidden = ![...this.live.children].some((child) => !child.hidden);
     this.syncEmpty();
-    this.gap?.refresh();
+    this.band?.refresh();
     this._follow();
   }
 
@@ -1033,11 +1040,10 @@ export class HomeChat {
     if (this._atBottom()) this._stick = true;
     else if (top < this._lastTop) this._stick = false;
     this._lastTop = top;
-    /* Il filo scorre e lei no, quindi quale messaggio le stia dietro cambia.
-       Si ricalcola a scorrimento **fermo** e non qui dentro: il margine manda
-       il testo a capo, e rifarlo a ogni fotogramma sposterebbe sotto le dita
-       quel che si sta leggendo. */
-    this.gap?.scrolling();
+    /* Niente altro, ed e' voluto: lo spazio per Jenny (la fascia e la sagoma,
+       `home-band.js`) dipende da cosa c'e' nel filo, non da dove sta. Fino al
+       06/10/2026 qui si ricalcolava chi le stava dietro, e il testo tornava a
+       capo sotto il dito ogni volta che ti fermavi. */
   }
 
   _atBottom() {

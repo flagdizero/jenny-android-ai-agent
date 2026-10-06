@@ -40,7 +40,7 @@ import { dotColor } from './shared/spines.js';
 const PULL_PAST_END = 0.06;
 
 /** Quanto dura lo scorrimento della pista da una pagina all'altra. Esportato
- *  per chi deve misurare a pista ferma (v. `JennyGap.settleAfter`). */
+ *  per chi deve aspettare la pista ferma (v. `home-app.js`). */
 export const SLIDE_MS = 220;
 
 /** Le pagine che ci sono sempre, nell'ordine di chi non ha mai spostato

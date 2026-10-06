@@ -80,7 +80,9 @@ frame(job());
 frame({ event: 'stream_end', chat_id: 'project:orto', turn_id: 'x', text: 'nel frattempo' });
 await tick(10);
 const kids = [...$('home-thread').children];
-assert.equal(kids[kids.length - 1], live(), 'il posto vivo non e\\u2019 piu\\u2019 l\\u2019ultimo');
+// Sotto il posto vivo c'e' solo la fascia di Jenny (`home-band.js`).
+assert.ok(kids[kids.length - 1].classList.contains('home-band'), 'la fascia non e\\u2019 in fondo');
+assert.equal(kids[kids.length - 2], live(), 'il posto vivo non e\\u2019 subito sopra la fascia');
 assert.deepEqual(thread(), ['jenny: nel frattempo']);
 """)
 

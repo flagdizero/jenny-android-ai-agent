@@ -30,7 +30,7 @@ def test_nothing_can_hide_her_any_more() -> None:
     """Nessuna regola la nasconde per preferenza. Resta solo la regola del
     paesaggio basso dell'officina, che e' geometria, non una scelta."""
     for name in ("mobile-style.css", "home-style.css", "bootstrap.js", "mobile-jenny.js",
-                 "shared/jenny-mascot.js", "shared/jenny-gap.js", "home-jenny.js"):
+                 "shared/jenny-mascot.js", "home-band.js", "home-jenny.js"):
         text = (ASSETS / name).read_text(encoding="utf-8")
         for word in ("hidden-mode", "data-mascot-hidden", "mascotVisible"):
             assert word not in text, f"{name} parla ancora di {word}"
