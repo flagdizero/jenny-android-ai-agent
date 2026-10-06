@@ -186,11 +186,20 @@ app is rejected at load as broken. This section previously said to write `secret
 "so manifests keep working when the store lands"; that advice shipped a real app whose only
 action was dead on arrival, and it is withdrawn.
 
-So: an app can only talk to an endpoint that needs no credentials (a LAN or Tailscale server
-without auth is the normal case). If the user's endpoint *does* need a token, say plainly
-that Jenny Apps cannot authenticate to an app server yet, and do not write a manifest that
-pretends otherwise. Never put a raw token in `app.json` or `index.html`. If the user pastes a
-token in chat, do not echo it and do not write it to any file in the workspace.
+So the **screen's `http` actions** can only talk to an endpoint that needs no credentials (a
+LAN or Tailscale server without auth is the normal case).
+
+**A reader can authenticate, through an installed skill.** When an installed skill already
+holds the credential and a script that calls the service (e.g. `waterbot-imh`, whose script
+carries the hub's access headers), declare it in the reader (`"uses": "<skill>"`) and import
+its script from `run.py`: the reader fetches the data, the app stores it, and the screen and
+the summary read the app's own collections. That is the way to build an app on a protected
+service — see `uses` in [references/manifest.md](references/manifest.md). Only when no
+installed skill holds the credential, say plainly that the app cannot reach that service yet.
+
+Never put a raw token in `app.json`, `run.py` or `index.html` (the `app` tool refuses it). If
+the user pastes a token in chat, do not echo it and do not write it to any file in the
+workspace.
 
 ## Boundaries
 

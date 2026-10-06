@@ -100,6 +100,15 @@ _RETIRED_ABSOLUTE = "Answer from them"
 # template cambia la terza colonna; chi toglie una riga sta togliendo una regola.
 _PROJECT_MD_RULES: tuple[tuple[str, str, str], ...] = (
     (
+        "le app si creano anche da un quaderno",
+        "il 06/10/2026 sul telefono, in «piante»: l'utente chiede un'app per il WaterBot e "
+        "Jenny risponde che da quella chat fa solo «micro app», e che un'app con schermo «va "
+        "chiesta dalla chat personale». Il tool ``app`` funziona da qui; a fermarla era la "
+        "riga «write only inside this folder… do not plan one», perché le app stanno in "
+        "``workspace/apps``",
+        "One exception: the user's apps",
+    ),
+    (
         "ristrutturare la wiki è un'operazione con un manuale, non un'improvvisazione",
         "il caso del 26/08 su ``wikis/sartoria``: l'utente ha detto «sistema un po' la wiki, "
         "se necessario spezza i concetti» e il risultato è stato buono — ma la passata si è "

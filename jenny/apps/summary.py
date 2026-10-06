@@ -62,6 +62,8 @@ def build_apps_summary(workspace: Path, notebook_root: Path | None = None) -> st
                               for a in others)
             lines.append(f"Other apps of the user, read-only from here (place one on this board "
                          f"with `app action=place` if the user wants it here): {names}")
+        lines.append("A new app the user asks for here: write it from this chat with the `app` "
+                     "tool, then place it on this board.")
     else:
         lines.extend(_line(a, here=True) for a in apps)
     return "\n".join(lines)
