@@ -101,10 +101,13 @@ export class WorkBubbles {
     this._helpersNode = null;
     this._helpersAt = 0;
     this._failedShown = new Set();
-    /* lineage -> { node, attempt } delle bolle «si e' fermato» ancora aperte:
-       quando la stessa linea riparte (dal tuo «Riprova», da Jenny, dall'officina)
-       la bolla lo dice e smette di offrire «Riprova». */
-    this._failedCards = new Map();
+    /* lineage -> { node, attempt, open, stops } delle bolle «si e' fermato».
+       Una linea ha una bolla sola: quando riparte (dal tuo «Riprova», da Jenny,
+       dall'officina) la bolla lo dice e smette di offrire «Riprova» (`open`
+       falso); quando il tentativo nuovo si ferma di nuovo, torna la stessa
+       bolla in fondo al filo. Fino al 06/10/2026 ogni tentativo ne apriva una
+       sua, e due rilanci di un lavoro destinato a fallire lasciavano tre bolle. */
+    this._lineageCards = new Map();
     /* Ogni frame alza il contatore: una lettura HTTP partita prima di un frame
        porta uno stato piu' vecchio, e non deve sovrascriverlo (la regola del
        chip degli agenti, che questa bolla sostituisce). */
@@ -346,7 +349,29 @@ export class WorkBubbles {
        corso, e cancellerebbe quello. */
     if (WorkBubbles._newerAttempt(entry, all)) return;
     this._failedShown.add(entry.task_id);
+    const attempt = Number(entry.attempt) || 0;
+    const card = entry.lineage_id ? this._lineageCards.get(entry.lineage_id) : null;
+    if (card && card.attempt < attempt) {
+      card.attempt = attempt;
+      card.open = true;
+      card.stops += 1;
+      this._paintFailedHelper(card.node, entry);
+      this._note(card.node, i18n.t('home.work.helperStoppedAgain', { count: card.stops }));
+      /* La notizia e' nuova: la bolla scende in fondo, dove guardi. */
+      this.deps.chat.settle(card.node);
+      return;
+    }
     const node = this._bubble('helpers');
+    this._paintFailedHelper(node, entry);
+    if (entry.lineage_id) {
+      this._lineageCards.set(entry.lineage_id, { node, attempt, open: true, stops: 1 });
+    }
+    this._mountLive(node);
+    this.deps.chat.settle(node);
+  }
+
+  _paintFailedHelper(node, entry) {
+    delete node.dataset.restarted;
     node.classList.add('is-failed');
     const label = String(entry.label || '').trim();
     this._head(node, ICON.failed, label
@@ -356,17 +381,12 @@ export class WorkBubbles {
     const why = entry.stop_reason === 'max_iterations' || entry.stop_reason === 'budget'
       ? 'home.work.why.helperBudget' : 'home.work.why.helperError';
     this._line(node, i18n.t(why), false);
-    if (entry.can_restart && this.deps.restartSubagent) {
-      this._action(node, {
-        label: i18n.t('home.work.retryAction'),
-        run: () => this._restartFailed(node, entry.task_id),
-      });
-    }
-    if (entry.lineage_id) {
-      this._failedCards.set(entry.lineage_id, { node, attempt: Number(entry.attempt) || 0 });
-    }
-    this._mountLive(node);
-    this.deps.chat.settle(node);
+    this._note(node, '');
+    const button = node.querySelector('.home-work-action');
+    button.disabled = false;
+    this._action(node, entry.can_restart && this.deps.restartSubagent
+      ? { label: i18n.t('home.work.retryAction'), run: () => this._restartFailed(node, entry.task_id) }
+      : null);
   }
 
   /* Il tap su «Riprova»: il bottone si spegne subito (un secondo tap
@@ -398,10 +418,11 @@ export class WorkBubbles {
 
   /* Chiunque abbia rilanciato la linea, la bolla del fallimento lo dice. */
   _resolveRestarted(all) {
-    for (const [lineage, card] of this._failedCards) {
+    for (const [lineage, card] of this._lineageCards) {
+      if (!card.open) continue;
       if (!WorkBubbles._newerAttempt({ lineage_id: lineage, attempt: card.attempt }, all)) continue;
       this._markRestarted(card.node);
-      this._failedCards.delete(lineage);
+      card.open = false;
     }
   }
 
@@ -416,7 +437,7 @@ export class WorkBubbles {
     this._helpersNode?.remove();
     this._helpersNode = null;
     this.helpers = [];
-    this._failedCards.clear();
+    this._lineageCards.clear();
     this._changed();
   }
 

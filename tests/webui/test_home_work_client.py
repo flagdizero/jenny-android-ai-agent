@@ -271,6 +271,45 @@ assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
 """)
 
 
+def test_a_retry_that_stops_again_is_the_same_bubble() -> None:
+    # Il 06/10/2026 sul Titan una diagnosi destinata a fallire e' stata
+    # rilanciata due volte: tre bolle, due «Ripartito» e un «si e' fermato»,
+    # e sembrava che l'aiutante uscisse due volte.
+    run_home(_HEAD + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+const attempt = (n, over = {}) => worker({ task_id: `t${n}`, lineage_id: 'L1', attempt: n, ...over });
+const failed = (n) => attempt(n, { state: 'failed', stop_reason: 'error', ended_at: now(), can_restart: true });
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [failed(1)] });
+const report = settled()[0];
+report.querySelector('.home-work-action').click();
+await tick(10);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [attempt(2)], recent: [failed(1)] });
+assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
+
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [failed(2), failed(1)] });
+assert.equal(settled().length, 1, 'il secondo fallimento della stessa linea ha aperto una bolla nuova');
+assert.ok(report.classList.contains('is-failed'));
+assert.match(text(report), new RegExp(W.helperStoppedAgain.replace('{count}', '2').slice(0, 20)));
+const button = report.querySelector('.home-work-action');
+assert.equal(button.hidden, false);
+assert.equal(button.disabled, false);
+frame({ event: 'stream_end', chat_id: 'project:orto', turn_id: 'x', text: 'nel frattempo' });
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [attempt(3)],
+        recent: [failed(2), failed(1)] });
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [failed(3), failed(2), failed(1)] });
+assert.equal(settled().length, 1);
+const said = document.querySelector('#home-thread > .home-msg-jenny');
+assert.ok(said.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING,
+          'la notizia nuova sta in fondo al filo, dove guardi');
+button.click();
+await tick(10);
+assert.ok(calls.some((c) => c.startsWith('/api/subagents/t3/restart')), calls.join(' '));
+""")
+
+
 def test_a_failure_already_restarted_is_not_shown_on_opening() -> None:
     run_home(_HEAD + """
 agents['project:orto'] = { running: [], recent: [

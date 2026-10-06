@@ -955,6 +955,7 @@
       "helperFailed": "L'aiutante si è fermato: {label}",
       "helperFailedUnnamed": "L'aiutante si è fermato",
       "helperRestarted": "Ripartito: è di nuovo al lavoro.",
+      "helperStoppedAgain": "Si è fermato di nuovo: è la {count}ª volta.",
       "result": {
         "pagesOne": "1 pagina aggiornata.",
         "pagesMany": "{count} pagine aggiornate.",
