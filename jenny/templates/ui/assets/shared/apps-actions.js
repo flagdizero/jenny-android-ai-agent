@@ -650,6 +650,7 @@ export class AppsActions {
     box.appendChild(buttons);
     body.appendChild(box);
     document.getElementById('jenny-app-sheet-cancel').onclick = () => sheet.close();
+    this._translateSheet(sheet);
     if (!sheet.open) sheet.showModal();
   }
 
@@ -753,7 +754,7 @@ export class AppsActions {
       rows(notebooks.map((nb) => ({ icon: 'ti-notebook', label: nb.name, go: () => chooseCard(nb.name) })));
     }
     document.getElementById('jenny-app-sheet-cancel').onclick = () => sheet.close();
-    this._translateSheet?.(sheet);
+    this._translateSheet(sheet);
     if (!sheet.open) sheet.showModal();
   }
 

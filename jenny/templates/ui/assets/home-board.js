@@ -448,6 +448,24 @@ export class HomeBoard {
     };
   }
 
+  /** Porta in vista la scheda *id*, se e' fuori (anche solo in parte): una
+   *  scheda appena nata o rimessa deve farsi vedere intera, non mezza sotto
+   *  l'intestazione. Si sposta il muro quanto basta, con un margine. */
+  reveal(id) {
+    const el = this.wall?.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`);
+    const box = this.canvas?.getBoundingClientRect();
+    if (!el || !box?.width || !this._zoom) return;
+    const r = el.getBoundingClientRect();
+    const pad = 12;
+    let dx = 0;
+    let dy = 0;
+    if (r.top < box.top + pad) dy = box.top + pad - r.top;
+    else if (r.bottom > box.bottom - pad) dy = box.bottom - pad - r.bottom;
+    if (r.left < box.left + pad) dx = box.left + pad - r.left;
+    else if (r.right > box.right - pad) dx = box.right - pad - r.right;
+    if (dx || dy) this._zoom.translateBy(this._sel, dx / this.view.k, dy / this.view.k);
+  }
+
   /** Torna all'origine, a grandezza naturale. */
   resetView() {
     this._lookAt(window.d3.zoomIdentity);
@@ -919,6 +937,7 @@ export class HomeBoard {
         if (id) {
           this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(id)}"]`)
             ?.classList.add('is-appearing');
+          this.reveal(id);
         }
       },
     });
@@ -1116,6 +1135,7 @@ export class HomeBoard {
         await this.load(notebook);
         this.wall.querySelector(`.home-board-polaroid[data-id="${CSS.escape(cardId)}"]`)
           ?.classList.add('is-appearing');
+        this.reveal(cardId);
       }
     }, { label: i18n.t('board.card.undo') });
   }
