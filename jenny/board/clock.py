@@ -246,7 +246,7 @@ def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None
     for card in board["cards"]:
         sections = list(card.get("userSections") or [])
         if isinstance(card.get("app"), dict):
-            sections.append({"id": model.COVER_CARD, "kind": "app", "app": card["app"]["slug"],
+            sections.append({"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
                              "params": card["app"].get("params") or {}})
         for section in sections:
             view = section_view(workspace, root, section)

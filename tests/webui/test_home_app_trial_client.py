@@ -68,19 +68,31 @@ def test_an_app_on_trial_opens_its_trial_card_in_plain_words() -> None:
 
 
 @requires_jsdom
-def test_a_kept_app_goes_into_a_notebook_as_a_card_or_inside_one() -> None:
+def test_a_kept_app_goes_into_a_notebook_as_its_own_card() -> None:
     _run("""
       await actions.showPlaceSheet('etf');
       await tick(20);
       assert.deepEqual(buttons().map((b) => b.textContent.trim()), ['soldi']);
       buttons()[0].click();
       await tick(30);
-      assert.deepEqual(buttons().map((b) => b.textContent.trim()), ['As a new card', 'Inside “Conto”']);
+      // Mai dentro un'altra scheda: da sola, o accanto con un filo.
+      assert.deepEqual(buttons().map((b) => b.textContent.trim()),
+        ['On its own', 'Next to “Conto”, tied by a thread']);
       buttons()[0].click();
       await tick(30);
-      const call = rpcs('board.card.add').at(-1);
+      let call = rpcs('board.card.add').at(-1);
       assert.equal(call.params.wiki, 'soldi');
       assert.deepEqual(call.params.app, { slug: 'etf', params: {} });
+      assert.equal(call.params.link, undefined);
+      await actions.showPlaceSheet('etf');
+      await tick(20);
+      buttons()[0].click();
+      await tick(30);
+      buttons()[1].click();
+      await tick(30);
+      call = rpcs('board.card.add').at(-1);
+      assert.equal(call.params.link, 'conto');
+      assert.equal(rpcs('board.section.add').length, 0);
     """)
 
 

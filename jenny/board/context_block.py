@@ -206,7 +206,7 @@ def _app_sections(card: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Le app posate su una scheda: la scheda-app stessa, e le sezioni ``app``."""
     out = []
     if isinstance(card.get("app"), dict):
-        out.append({"id": model.COVER_CARD, "kind": "app", "app": card["app"]["slug"],
+        out.append({"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
                     "params": card["app"].get("params") or {}})
     out.extend(s for s in card.get("userSections") or [] if s.get("kind") == "app")
     return out

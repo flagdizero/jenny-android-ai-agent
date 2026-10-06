@@ -349,8 +349,7 @@ class BoardPass:
             rows = [f"- `{slug}` — {info['name']}; asks for: {', '.join(info['params']) or 'nothing'}"
                     for slug, info in state.apps_with_section.items()]
             parts.append(self._section(
-                "Apps that can show live data in a drawer (add_section) or as a card of their own "
-                "(add_app_card)", "\n".join(rows)))
+                "Apps that can become a card of their own (add_app_card)", "\n".join(rows)))
         return "\n\n---\n\n".join(parts)
 
     def _stale_section(self, board: dict[str, Any], state: BoardPassState) -> str:

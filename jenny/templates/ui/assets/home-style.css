@@ -2159,7 +2159,9 @@ body.home {
 .home-board-photo.has-cover { color: #fff; }
 .home-board-cover-value {
   font-family: var(--font-display);
-  font-size: 6.4cqw;
+  /* Grande quanto ci sta nella foto: «38 %» a tutta altezza, «12,4k €» piu'
+     piccolo ma intero (--len lo mette il JS: i caratteri, l'unita' a meta'). */
+  font-size: min(6.4cqw, calc(22cqw / var(--len, 1)));
   line-height: 1;
   white-space: nowrap;
 }

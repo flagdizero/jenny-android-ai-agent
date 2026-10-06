@@ -330,21 +330,21 @@ class BoardAddReminderTool(_BoardTool):
 @tool_parameters(tool_parameters_schema(
     kind=StringSchema(
         "What to propose.",
-        enum=["add_card", "remove_card", "add_connection", "attach_page", "add_section",
-              "add_app_card"],
+        enum=["add_card", "remove_card", "add_connection", "attach_page", "add_app_card"],
     ),
     text=StringSchema("The proposal as you would say it to the user, in their language: one or two sentences."),
     subject=StringSchema("add_card: the title of the new card."),
     glyph=StringSchema("add_card: an icon name from the list in the instructions."),
     pages=ArraySchema(StringSchema(""), description="add_card: the pages off the board it would hold."),
-    card=StringSchema("remove_card / attach_page / add_section: the card id."),
+    card=StringSchema("remove_card / attach_page: the card id. add_app_card (optional): the "
+                      "card the app belongs with — the two get tied by a thread."),
     a=StringSchema("add_connection: one card id."),
     b=StringSchema("add_connection: the other card id."),
     label=StringSchema("add_connection: why they are tied, in a few words."),
     page=StringSchema("attach_page: the page relative to wiki/."),
-    app=StringSchema("add_section / add_app_card: the app slug (add_app_card: a card that IS "
-                     "the app, its value on the cover)."),
-    params=ObjectSchema(description="add_section: the parameters the app's section asks for.",
+    app=StringSchema("add_app_card: the app slug — a card that IS the app, its value on the "
+                     "polaroid, a tap opens it."),
+    params=ObjectSchema(description="add_app_card: the parameters the app's summary asks for.",
                         additional_properties=True),
     required=["kind", "text"],
 ))
@@ -425,15 +425,14 @@ class BoardSuggestTool(_BoardTool):
                 return st.refuse("that app is already a card on this board")
             params = {k: v for k, v in _as_dict(kw.get("params")).items()
                       if isinstance(v, (str, int, float, bool))}
-            spec.update(subject=str(kw.get("subject") or app), app=app, params=params)
-        elif kind == "add_section":
-            card = model.card_by_id(board, str(kw.get("card") or ""))
-            app = str(kw.get("app") or "")
-            if card is None or app not in st.apps_with_section:
-                return st.refuse("a section proposal needs a card and an app that has a drawer view")
-            params = {k: v for k, v in _as_dict(kw.get("params")).items()
-                      if isinstance(v, (str, int, float, bool))}
-            spec.update(subject=card["title"], card=card["id"], app=app, params=params)
+            spec.update(subject=str(kw.get("subject") or (st.apps_with_section[app] or {}).get("name")
+                                    or app),
+                        app=app, params=params)
+            if kw.get("card"):
+                card = model.card_by_id(board, str(kw["card"]))
+                if card is None:
+                    return st.refuse("the card to tie the app to is not on the board")
+                spec.update(card=card["id"])
         else:
             return st.refuse(f"unknown kind `{kind}`")
         subject_key = (kind, spec.get("subject", "").lower())

@@ -16,7 +16,7 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 
 | Thing | What it is |
 |---|---|
-| **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*), and any card can show an app's live value as its **cover**, in place of the photo: see [Covers](#covers). |
+| **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*): its live value takes the place of the photo, and tapping it opens the app — see [App cards](#app-cards). |
 | **Sticky notes** | Yellow notes for the open reminders of a card, with what and when. They sit next to their card; tapping one opens that card's drawer. |
 | **Threads** | Thin red lines between two cards that a page ties together. See [Threads](#threads). |
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
@@ -53,9 +53,13 @@ The board's shape is yours, and you can change it directly, not only by answerin
 - **Rename**: from the bar of a held card, or at the bottom of its drawer. The name becomes yours, and Jenny no longer rewrites it.
 - **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and micro apps pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and micro apps. The wiki is never touched: its pages stay, and search finds them.
 
-### Covers
+### App cards
 
-A card's photo can be replaced by a **live value** from an app placed on it: the number big (*38 %*, *12,4k €*), the card's icon small in the corner, a thin trend line and the time of the reading. A card that *is* an app shows its value from the start; on any other card, hold it and choose **Cover** in the bar (it is there only when an app is placed in its drawer), then the app — or **The photo** to go back. When the data stops arriving the cover turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always.
+A [Jenny App](mini-apps.md) goes on the board as a **card of its own**: the polaroid *is* the app. In place of the photo it shows the app's **live value** — the number big (*38 %*, *12,4k €*), the app's icon small in the corner, a thin trend line and the time of the reading. When the data stops arriving it turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always. An app still on trial, or with no value yet, shows its icon.
+
+**Tapping an app card opens the app**: its screen, or its trial card (with **Keep**) while it is on trial. An app with no screen opens the card's drawer, with its whole summary.
+
+An app never goes inside another card's drawer, and a subject card always keeps its own photo. When an app belongs with a subject — *Portfolio* with *ETF* — the two cards are tied by a **thread**. That is what **Next to «ETF»** does when you put an app in a notebook from the App page, and **App → Or put one of your apps next to it…** from a drawer.
 
 ### Threads
 
@@ -177,8 +181,7 @@ The board's shape — which cards, where, which threads — is yours: you change
 | **Put a card away** | A card whose drawer and pages have not changed for **90 days**, with no open reminders. Its pages stay, and search finds them. |
 | **Add a thread** | A page clearly ties two cards that are not tied yet. |
 | **Attach a page** | A page off the board belongs in a drawer — typically one you asked for. |
-| **Add an app to a drawer** | An app you kept, with a summary, could show live data in a drawer. |
-| **Add an app as a card** | An app you kept could be a card of its own, its value on the cover. |
+| **Add an app as a card** | An app you kept could be a card of its own, its value in place of the photo — tied by a thread to the card it belongs with. |
 
 Each proposal is a sentence or two in your language, with **Later**, **No** and **Yes** (for putting a card away: **Leave it** and **Put it away**). **Yes** applies it; a new card goes into the free spot nearest to the middle of what you are looking at. **No** is remembered: the same proposal is not made again — except a new card, which can come back only once the subject has at least twice the pages it had when you said no. **Later** keeps it out of the envelope for the next **3** board passes.
 
@@ -237,7 +240,7 @@ Everything lives inside the notebook's folder, so it is part of your [backups an
 workspace/wikis/<notebook>/
   board/
     board.json         the board: skeleton, cards and their positions, your sections,
-                       the apps placed on them and the covers, threads, the envelope,
+                       the cards that are apps, threads, the envelope,
                        the "no" and "later" answers, since rows, the cards removed
                        in the last week (for Undo)
     reminders.json     the reminders, open and closed

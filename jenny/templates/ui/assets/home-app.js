@@ -269,9 +269,20 @@ class HomeApp {
     /* Le stanze di un quaderno: la bacheca, il cassetto di una scheda, e una
        pagina. Un solo foglio dal basso, che le prime due si dividono. */
     this.boardSheet = new HomeBoardSheet();
+    /* L'elenco delle app arriva la prima volta che si apre la pagina App:
+       senza aspettarlo, «Apri» da una polaroid o da un cassetto non faceva
+       niente. */
+    const openApp = async (slug) => {
+      const source = this.appsSource();
+      const apps = await source.awaitJennyApps();
+      /* Un'app appena scritta in chat puo' non esserci ancora: si rilegge. */
+      if (!apps.some((a) => a.slug === slug)) await source.loadJennyApps();
+      this.appsActions().openApp(slug);
+    };
     this.board = new HomeBoard({
       sheet: this.boardSheet,
       onOpenCard: (card, title) => this.openCard(card, title),
+      onOpenApp: openApp,
       onOpenPage: (path, label, card) => this.openPage(path, label, card),
       onAskJenny: (text) => this._askInNotebook(text),
     });
@@ -280,18 +291,19 @@ class HomeApp {
       onOpenCard: (card, title) => this.openCard(card, title),
       onOpenPage: (path, label, card) => this.openPage(path, label, card),
       onAskJenny: (text) => this._askInNotebook(text),
-      /* L'elenco delle app arriva la prima volta che si apre la pagina App:
-         senza aspettarlo, «Apri» da un cassetto non faceva niente. */
-      onOpenApp: async (slug) => {
-        await this.appsSource().awaitJennyApps();
-        this.appsActions().openApp(slug);
-      },
+      onOpenApp: openApp,
       onRenameCard: (card, title) => this.board.openRename(card, title, () => this.drawer.reload()),
       /* «Togli dalla bacheca» dal fondo del cassetto: si torna alla bacheca, e
          la scheda se ne va sotto gli occhi, con l'Annulla. */
       onRemoveCard: async (card, title) => {
         await this.openBoard();
         await this.board.removeCard(card, title);
+      },
+      /* «Mettici accanto una tua app» dal cassetto: la polaroid nuova nasce
+         sulla bacheca, legata a questa scheda; si torna a vederla. */
+      onAppCard: async (card) => {
+        await this.openBoard();
+        if (card) this.board.reveal(card);
       },
     });
     /* Da quale cassetto e' stata aperta la pagina nel lettore, o `null` se

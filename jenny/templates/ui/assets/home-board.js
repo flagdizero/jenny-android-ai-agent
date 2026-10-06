@@ -159,11 +159,12 @@ function pinCenter(el, box, zoom = 1) {
 export class HomeBoard {
   /**
    * @param onOpenCard  `(cardId, title)` — apre il cassetto.
+   * @param onOpenApp   `(slug)` — apre lo schermo di un'app (o la sua prova).
    * @param onOpenPage  `(path, label, cardId)` — apre una pagina nel lettore.
    * @param onAskJenny  `(text)` — porta una frase gia' scritta nella chat.
    * @param sheet       il foglio condiviso della bacheca (`HomeBoardSheet`).
    */
-  constructor({ onOpenCard, onOpenPage, onAskJenny, sheet } = {}) {
+  constructor({ onOpenCard, onOpenApp, onOpenPage, onAskJenny, sheet } = {}) {
     this.el = document.getElementById('home-board');
     this.canvas = document.getElementById('home-board-canvas');
     this.wall = document.getElementById('home-board-wall');
@@ -172,6 +173,7 @@ export class HomeBoard {
     this.listEl = document.getElementById('home-board-list');
     this.emptyEl = document.getElementById('home-board-empty');
     this.onOpenCard = onOpenCard;
+    this.onOpenApp = onOpenApp;
     this.onOpenPage = onOpenPage;
     this.onAskJenny = onAskJenny;
     this.sheet = sheet;
@@ -573,7 +575,7 @@ export class HomeBoard {
 
   _polaroid(card) {
     const el = document.createElement('div');
-    el.className = 'home-board-item home-board-polaroid';
+    el.className = `home-board-item home-board-polaroid${card.app ? ' is-app' : ''}`;
     el.setAttribute('role', 'button');
     el.tabIndex = 0;
     el.style.setProperty('--tilt', `${this._tilt(card.id)}deg`);
@@ -597,6 +599,7 @@ export class HomeBoard {
       const value = document.createElement('span');
       value.className = 'home-board-cover-value';
       value.textContent = cover.short;
+      value.style.setProperty('--len', String(cover.short.length + (cover.unit || '').length / 2));
       if (cover.unit) {
         const unit = document.createElement('small');
         unit.textContent = cover.unit;
@@ -611,9 +614,10 @@ export class HomeBoard {
         when.textContent = cover.state === 'stale' ? coverAge(cover.at) : coverTime(cover.at);
         photo.appendChild(when);
       }
-    } else if (card.glyph) {
+    } else if (card.glyph || card.app?.icon) {
+      /* Un'app ancora senza valore (in prova, o senza dati) mostra la sua icona. */
       const icon = document.createElement('i');
-      icon.className = `ti ti-${card.glyph}`;
+      icon.className = `ti ${card.glyph ? `ti-${card.glyph}` : card.app.icon}`;
       icon.setAttribute('aria-hidden', 'true');
       photo.appendChild(icon);
     } else {
@@ -715,7 +719,7 @@ export class HomeBoard {
         sig.textContent = i18n.t(`board.signal.${card.signal}`);
         row.appendChild(sig);
       }
-      row.addEventListener('click', () => this.onOpenCard?.(card.id, card.title));
+      row.addEventListener('click', () => this.openCard(card));
       this.listEl.appendChild(row);
     }
     const envelope = document.createElement('button');
@@ -736,7 +740,10 @@ export class HomeBoard {
     const open = () => {
       const cardId = kind === 'card' ? item.id : item.card;
       const card = this.data?.cards.find((c) => c.id === cardId);
-      this.onOpenCard?.(cardId, card?.title || '');
+      /* La polaroid di un'app apre l'app; il post-it apre sempre il cassetto
+         della sua scheda. */
+      if (kind === 'card' && card) this.openCard(card);
+      else this.onOpenCard?.(cardId, card?.title || '');
     };
     /* La scheda torna dov'era e smette di seguire il dito: arriva una pinza,
        il gesto si interrompe, o la bacheca si ridisegna sotto il dito. */
@@ -898,10 +905,6 @@ export class HomeBoard {
       return b;
     };
     bar.append(act('pencil', 'board.card.rename', () => this.openRename(card.id, card.title)));
-    /* La copertina c'e' solo se nel cassetto c'e' un'app che puo' esserla. */
-    if (card.coverOptions?.length) {
-      bar.append(act('photo', 'board.card.cover', () => this.openCover(card)));
-    }
     bar.append(act('square-x', 'board.card.remove', () => this.removeCard(card.id, card.title)));
     const close = act('x', 'board.card.close', () => this.setFocus(null));
     close.classList.add('is-close');
@@ -910,6 +913,18 @@ export class HomeBoard {
     bar.appendChild(close);
     if (bar.parentNode !== this.canvas) this.canvas.appendChild(bar);
     bar.hidden = false;
+  }
+
+  /** Il tocco su una polaroid. Una scheda che **e'** un'app apre l'app: il suo
+   *  schermo, o la prova se e' ancora da tenere. Un'app senza schermo, o che
+   *  non c'e' piu' (nel cestino, rotta), apre il cassetto, che dice il resto. */
+  openCard(card) {
+    const app = card.app;
+    if (app && this.onOpenApp && (app.state === 'trial' || (app.state === 'live' && app.hasScreen))) {
+      this.onOpenApp(app.slug);
+      return;
+    }
+    this.onOpenCard?.(card.id, card.title || '');
   }
 
   /** Indietro: chiude la barra (e spegne i fili). Vero se c'era da chiudere. */
@@ -941,43 +956,6 @@ export class HomeBoard {
         }
       },
     });
-  }
-
-  /** Quale app fa da copertina: una riga per app posata sulla scheda, e la foto. */
-  openCover(card) {
-    const body = document.createElement('div');
-    body.className = 'home-board-menu';
-    const choose = async (cover) => {
-      try {
-        await rpc.board('card.cover', this.notebook, { id: card.id, cover });
-      } catch (err) {
-        console.warn('home.board: cover failed', err);
-        showToast(i18n.t('board.card.failed'), 'error');
-        return;
-      }
-      this.sheet.close();
-      await this.load(this.notebook);
-      if (this.focus === card.id) this.setFocus(card.id, { quiet: true });
-    };
-    const row = (icon, name, cover, current) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = `home-board-menu-row${current ? ' is-current' : ''}`;
-      const i = document.createElement('i');
-      i.className = `ti ti-${icon}`;
-      i.setAttribute('aria-hidden', 'true');
-      const label = document.createElement('span');
-      label.className = 'home-board-menu-name';
-      label.textContent = name;
-      b.append(i, label);
-      if (current) b.setAttribute('aria-current', 'true');
-      b.addEventListener('click', () => choose(cover));
-      body.appendChild(b);
-    };
-    const now = card.cover ? card.coverId || null : null;
-    for (const opt of card.coverOptions || []) row('chart-line', opt.name, opt.id, opt.id === now);
-    row('photo', i18n.t('board.card.coverNone'), '', !card.cover);
-    this.sheet.open(i18n.t('board.card.coverTitle'), body);
   }
 
   /** Il foglio «Rinomina». *after* si chiama a nome cambiato (il cassetto si
@@ -1338,7 +1316,11 @@ export class HomeBoard {
       row.append(name, badge);
       row.addEventListener('click', () => {
         this.sheet.close();
-        if (r.kind === 'card') this.onOpenCard?.(r.card, r.title);
+        if (r.kind === 'card') {
+          const card = this.data?.cards.find((c) => c.id === r.card);
+          if (card) this.openCard(card);
+          else this.onOpenCard?.(r.card, r.title);
+        }
         else if (r.kind === 'page') this.onOpenPage?.(r.path, r.title, r.card);
         else this.preview(r.path, null);
       });

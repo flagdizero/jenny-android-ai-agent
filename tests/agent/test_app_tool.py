@@ -184,14 +184,17 @@ async def test_from_a_notebook_jenny_places_but_does_not_delete(notebook_chat) -
         "app.json": json.dumps(WATERBOT), "run.py": READER})
     out = await tool.execute(action="place", slug="waterbot", card="acerello",
                              params={"sensor": "acerello"})
-    assert "Placed in the drawer of «Acerello»" in out, out
-    out = await tool.execute(action="place", slug="waterbot")
-    assert "as the card «WaterBot»" in out, out
+    assert "as the card «WaterBot», tied to «Acerello»" in out, out
+    out = await tool.execute(action="place", slug="waterbot", card="acerello",
+                             params={"sensor": "acerello"})
+    assert "already on this board" in out, out
     places = placements(root)
-    assert {(p["app"], p["section"] is None) for p in places} == {("waterbot", False),
-                                                                  ("waterbot", True)}
-    card = next(c for c in read_board(root)["cards"] if c.get("app"))
-    assert card["cover"] == "@card" and card["pos"]["by"] == "user"
+    assert [(p["app"], p["section"]) for p in places] == [("waterbot", None)]
+    board = read_board(root)
+    card = next(c for c in board["cards"] if c.get("app"))
+    assert card["pos"]["by"] == "user" and card["appBy"] == "jenny-on-request"
+    acerello = next(c for c in board["cards"] if c["title"] == "Acerello")
+    assert [{c["a"], c["b"]} for c in board["connections"]] == [{card["id"], acerello["id"]}]
     out = await tool.execute(action="trash", slug="waterbot")
     assert "Not from a notebook" in out
 

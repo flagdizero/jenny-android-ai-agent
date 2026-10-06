@@ -23,6 +23,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.board import model, removed
+from jenny.board.place import app_title, tie
 from jenny.board.store import (
     delete_card_summary,
     mutate_board,
@@ -231,7 +232,7 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
     title = model.clean_text(params.get("title"), model.MAX_TITLE) or None
     try:
         where = await _run(place_app, root, slug, params=app_params, near=_near(params),
-                           title=title, workspace=workspace)
+                           title=title, workspace=workspace, link=params.get("link") or None)
     except ValueError as exc:
         raise CommandError("conflict", str(exc)) from exc
     board = await _run(read_board, root)
@@ -240,30 +241,6 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
     return {"ok": True, "where": where,
             "card": {"id": card["id"], "title": card["title"], "pos": card["pos"]} if card
             else None}
-
-
-async def board_card_cover(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Quale app fa da copertina: ``@card`` (l'app della scheda), l'id di una
-    sezione ``app`` del cassetto, o ``""`` per tornare alla foto."""
-    root = _project(ctx, params)
-    card_id = _card_id(params, "id")
-    cover = params.get("cover")
-    if not isinstance(cover, str):
-        raise CommandError("bad_request", "cover must be a string")
-
-    def apply(board: dict[str, Any]) -> None:
-        card = _need_card(board, card_id)
-        if cover == "":
-            card.pop("cover", None)
-            return
-        ok = (cover == model.COVER_CARD and isinstance(card.get("app"), dict)) or any(
-            s["id"] == cover and s.get("kind") == "app" for s in card["userSections"])
-        if not ok:
-            raise CommandError("bad_request", "not an app of this card")
-        card["cover"] = cover
-
-    await _run(mutate_board, root, apply)
-    return {"ok": True}
 
 
 async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -386,7 +363,7 @@ def _near(params: Mapping[str, Any]) -> tuple[float, float] | None:
 
 
 def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[str, Any],
-            near: tuple[float, float] | None = None) -> None:
+            near: tuple[float, float] | None = None, workspace: Path | None = None) -> None:
     """Applica una proposta accettata. Il posto lo sceglie il codice, non il modello.
 
     Con *near* — il centro di dove l'utente sta guardando il muro — le schede
@@ -472,18 +449,25 @@ def _accept(board: dict[str, Any], suggestion: dict[str, Any], reminders: dict[s
             card = new_card(title, "", [])
             card["titleBy"] = model.USER
             card["app"] = {"slug": app, "params": dict(suggestion.get("params") or {})}
-            card["cover"] = model.COVER_CARD
             model.add_since(board, "card_added", card=card["id"], title=card["title"])
+            # L'app c'entra con una scheda: un filo, non un posto nel suo cassetto.
+            other = model.card_by_id(board, str(suggestion.get("card") or ""))
+            if other is not None and tie(board, card["id"], other["id"]):
+                model.add_since(board, "connection_added", a=card["id"], b=other["id"])
     elif kind == "add_section":
-        card = model.card_by_id(board, str(suggestion.get("card") or ""))
+        # Una proposta di prima (un'app nel cassetto di una scheda): diventa
+        # la polaroid dell'app, legata a quella scheda.
+        if model.is_full(board, reminders):
+            raise CommandError("conflict", "the board is full")
+        other = model.card_by_id(board, str(suggestion.get("card") or ""))
         app = suggestion.get("app")
-        if card is not None and model.is_valid_id(app):
-            sid = model.unique_id("s-app", [s["id"] for s in card["userSections"]])
-            card["userSections"].append({
-                "id": sid, "kind": "app", "app": app,
-                "params": dict(suggestion.get("params") or {}), "created": stamp,
-            })
-            model.add_since(board, "section_added", card=card["id"], app=app)
+        if other is not None and model.is_valid_id(app):
+            card = new_card(app_title(workspace, app), "", [])
+            card["titleBy"] = model.USER
+            card["app"] = {"slug": app, "params": dict(suggestion.get("params") or {})}
+            model.add_since(board, "card_added", card=card["id"], title=card["title"])
+            if tie(board, card["id"], other["id"]):
+                model.add_since(board, "connection_added", a=card["id"], b=other["id"])
 
 
 async def board_suggestion_respond(
@@ -502,6 +486,7 @@ async def board_suggestion_respond(
     if answer not in ("yes", "no", "later"):
         raise CommandError("bad_request", "answer must be yes, no or later")
     reminders = await _run(read_reminders, root)
+    workspace = ctx.get_workspace_root()
     removed: list[str] = []
 
     def apply(board: dict[str, Any]) -> None:
@@ -510,7 +495,7 @@ async def board_suggestion_respond(
             raise CommandError("not_found", "suggestion not found")
         if answer == "yes":
             before = {c["id"] for c in board["cards"]}
-            _accept(board, suggestion, reminders, _near(params))
+            _accept(board, suggestion, reminders, _near(params), workspace)
             removed.extend(before - {c["id"] for c in board["cards"]})
         elif answer == "no":
             board["declined"].append({
@@ -661,7 +646,7 @@ def _parse_when(raw: Any) -> dict[str, Any]:
 
 
 async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Aggiungi una sezione a un cassetto: nota, promemoria, mini app o foto."""
+    """Aggiungi una sezione a un cassetto: nota, promemoria o foto."""
     from jenny.board.sections import PHOTOS_DIR, journal_note
 
     root = _project(ctx, params)
@@ -673,6 +658,12 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         # Una micro app e un cron nascono da Jenny, su richiesta, con la loro
         # prova o il loro job: dal cassetto si chiedono a parole.
         raise CommandError("bad_request", f"a {kind} section is made by Jenny, not added")
+    if kind == "app":
+        # Un'app non entra nel cassetto di un'altra scheda: e' una polaroid
+        # sua, legata a questa da un filo. Le sezioni ``app`` che ci sono gia'
+        # (le micro app migrate) restano e si disegnano.
+        raise CommandError("bad_request",
+                           "an app is a card of its own: use board.card.add with app and link")
     board = await _run(read_board, root)
     if board is None or model.card_by_id(board, card_id) is None:
         raise CommandError("not_found", "card not found")
@@ -709,16 +700,6 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
 
         await _run(mutate_reminders, root, add_rem)
         section["reminder"] = rid_holder[0]
-    elif kind == "app":
-        # L'app deve esistere (o essere in prova), e i parametri devono essere
-        # quelli che il suo riassunto chiede: un nome sbagliato non deve
-        # diventare una sezione che non sa disegnarsi.
-        raw_params = params.get("params") or {}
-        if not isinstance(raw_params, Mapping):
-            raise CommandError("bad_request", "params must be an object")
-        slug, app_params = _app_params(ctx.get_workspace_root(), params.get("app"), raw_params)
-        section["app"] = slug
-        section["params"] = app_params
     elif kind == "photo":
         mime = params.get("mime")
         data = params.get("data")
@@ -1016,7 +997,6 @@ BOARD_COMMANDS = {
     "board.card.rename": board_card_rename,
     "board.card.remove": board_card_remove,
     "board.card.restore": board_card_restore,
-    "board.card.cover": board_card_cover,
     "board.cron.pause": board_cron_pause,
     "board.micro.keep": board_micro_keep,
     "board.micro.discard": board_micro_discard,

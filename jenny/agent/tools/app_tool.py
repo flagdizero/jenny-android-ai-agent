@@ -46,8 +46,8 @@ _PARAMETERS = tool_parameters_schema(
         "draft: write a new app (or a new version) as a trial, and run its reader once; "
         "edit: replace one exact string in one file of the trial (copies the app first if it "
         "has no trial); show: manifest, state and code; run: read the live reader now; "
-        "place: put the app on a notebook board — as a card or as a section in a card's "
-        "drawer; trash: move an app to the trash (personal chat only).",
+        "place: put the app on a notebook board as a card of its own (its value on the "
+        "polaroid, a tap opens it), optionally tied to an existing card; trash: move an app to the trash (personal chat only).",
         enum=["draft", "edit", "show", "run", "place", "trash"],
     ),
     slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
@@ -61,8 +61,9 @@ _PARAMETERS = tool_parameters_schema(
     old=StringSchema("For edit: the exact text to replace (must occur once)."),
     new=StringSchema("For edit: the replacement text."),
     notebook=StringSchema("For place from the personal chat: the notebook name."),
-    card=StringSchema("For place: the card (title or id) whose drawer gets the app as a "
-                      "section. Omit to make a new card that IS the app."),
+    card=StringSchema("For place (optional): an existing card (title or id) the app belongs "
+                      "with — the app's card is tied to it by a thread. The app never goes "
+                      "inside another card's drawer."),
     params=ObjectSchema(
         description="For place: the summary's params for this placement (e.g. which "
         "sensor), {name: value}.",
@@ -99,14 +100,15 @@ class AppTool(Tool):
             "Write, try, fix and place the user's apps. An app lives in workspace/apps/<slug>/ "
             "and may have: a screen (app/index.html + declared actions in app.json), a reader "
             "(run.py, run every N minutes by the clock with no model turn) and a summary (how "
-            "it shows in a card's drawer or cover). Every app is born ON TRIAL: `draft` writes "
+            "it shows on its own card: the value in place of the photo). Every app is born ON TRIAL: `draft` writes "
             "it and runs its reader once — tell the user the real value — and the user keeps "
-            "it with the Keep button on its trial card (App page, or the drawer where it is "
-            "placed). You cannot keep it yourself. A fix that adds no new host, collection, "
+            "it with the Keep button on its trial card (App page, or a tap on its card on a "
+            "board). You cannot keep it yourself. A fix that adds no new host, collection, "
             "action or summary change goes live at once. Any app that keeps state MUST "
             "declare a `summary`. Use the app-creator skill for the manifest format. `place` "
-            "puts it on a notebook board: placing it in a notebook also lets that notebook's "
-            "chat use it."
+            "puts it on a notebook board as a card of its own (a tap opens its screen), tied by "
+            "a thread to the card it belongs with: placing it in a notebook also lets that "
+            "notebook's chat use it."
         )
 
     # -- dove ---------------------------------------------------------------
@@ -269,7 +271,7 @@ class AppTool(Tool):
             for a in m.actions)
         if stateful and m.section is None:
             return ("Not ready: this app keeps state, so it must declare a `summary` — how it "
-                    "shows in a drawer or on a card (see the app-creator skill). Add it with "
+                    "shows on its card (see the app-creator skill). Add it with "
                     "action=edit.")
         reading = ""
         if m.reader is not None:
@@ -311,7 +313,7 @@ class AppTool(Tool):
         return (
             f"`{slug}` is ready ON TRIAL{' — first reading: ' + reading if reading else ''}."
             f"{changed} It does not run, has no tools and its screen does not open until the "
-            "user taps Keep on its trial card (the App page, or the drawer where it is placed). "
+            "user taps Keep on its trial card (the App page, or a tap on its card on a board). "
             f"Tell them what it does{(' — ' + '; '.join(bits)) if bits else ''} — and that "
             "they keep it there. To put it on a notebook board use action=place."
         )
@@ -401,18 +403,17 @@ class AppTool(Tool):
             root = roots[name]
         params = kw.get("params") if isinstance(kw.get("params"), dict) else {}
         params = {k: v for k, v in params.items() if isinstance(v, (str, int, float, bool))}
-        if any(p["app"] == slug and p["params"] == params and (
-                not kw.get("card") or p["section"]) for p in placements(root)):
+        if any(p["app"] == slug and p["params"] == params for p in placements(root)):
             return f"`{slug}` is already on this board with these params."
         from jenny.board.place import place_app
 
         try:
-            where = place_app(root, slug, params=params, card_ref=kw.get("card"),
+            where = place_app(root, slug, params=params, link=kw.get("card"),
                               by="jenny-on-request")
         except ValueError as exc:
             return str(exc)
         return (f"Placed {where}. The notebook's chat can now use `{slug}`. If it is still on "
-                "trial, the drawer shows its trial card with Keep.")
+                "trial, a tap on its card shows the trial card with Keep.")
 
     def _trash(self, workspace: Path, slug: str, session: str) -> str:
         from jenny.apps.trash import trash_app

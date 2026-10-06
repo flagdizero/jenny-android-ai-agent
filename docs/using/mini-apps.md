@@ -1,13 +1,13 @@
 # Mini-apps (Jenny Apps)
 
-A Jenny App is a small app that Jenny builds for you on request — a shopping list, a portfolio you update, a reading from a device on your network. An app is always **general**: it lives in the **App** page, and you can also put it on a notebook's board, as a card of its own or inside a card's drawer, where it shows a live value at a glance.
+A Jenny App is a small app that Jenny builds for you on request — a shopping list, a portfolio you update, a reading from a device on your network. An app is always **general**: it lives in the **App** page, and you can also put it on a notebook's board as a card of its own, where its live value takes the place of the photo and a tap opens it.
 
 Every part of an app is optional:
 
 - a **screen** you open and use — a list you check off, a form you fill in;
 - **actions**, which Jenny can call as tools;
 - a **reader**, a small program that reads something by itself every few minutes (a sensor, a price) or recomputes a total from the app's own data, with no model involved;
-- a **summary**: how the app shows outside its screen — in a drawer, and on a card's cover — as one value, a few values side by side, a progress bar, a list or a small table.
+- a **summary**: how the app shows outside its screen — on its card on a board, in place of the photo — as one value, a few values side by side, a progress bar, a list or a small table.
 
 ## Apps vs. skills
 
@@ -73,16 +73,15 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 
 ## Apps on a notebook's board
 
-An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it, in one of two ways:
+An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it as a **card of its own**: the polaroid *is* the app. Its summary is the polaroid's picture — the value big, in place of the photo — and tapping the card opens the app's screen (an app on trial opens its trial card; an app with no screen opens the card's drawer, with the whole summary).
 
-- **as a card**: the polaroid *is* the app — its value takes the place of the photo, and tapping the card opens its drawer with the app on top;
-- **inside a card's drawer**, as a section: the WaterBot reading in the drawer of *Acerello*.
+An app never goes inside another card's drawer. When it belongs with a subject that is already on the board — the *Portfolio* app and the *ETF* card, the *WaterBot* and *Acerello* — the two cards are tied by a **thread**, and the subject card keeps its own photo.
 
-The same app can be placed in many drawers, each with its own parameters (which sensor), and every placement is a view of the same app: removing a placement never touches the app or its data. To place one, ask Jenny ("put it on the Acerello card"), use **+ Add a section → Micro app → Or link one of your apps…** in a drawer, or **New card** on the board.
+The same app can be placed as many cards, each with its own parameters (which sensor), and every placement is a view of the same app: removing a placement never touches the app or its data. To place one, ask Jenny ("put the portfolio next to ETF"), use **Put in a notebook…** on the app in the App page, **+ Add a section → App → Or put one of your apps next to it…** in a card's drawer, or **New card** on the board. Apps placed inside a drawer by an older version stay there and keep working.
 
 **A placement is also a permission.** A notebook's chat can change only the apps placed on its board: "I bought 4 VWCE" said in *Money* lands in the ETF app placed there, while from another notebook, where the app is not placed, it can be read but not changed (Jenny says so, and offers to place it). The personal chat can use every app.
 
-When a section changes state (goes into alarm, stalls, comes back), Jenny writes **one** journal line in the notebook; the readings themselves never go into the wiki.
+When an app's card changes state (goes into alarm, stalls, comes back), Jenny writes **one** journal line in the notebook; the readings themselves never go into the wiki.
 
 ## What an app can and cannot do
 

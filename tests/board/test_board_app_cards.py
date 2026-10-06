@@ -1,4 +1,8 @@
-"""Le app sulla bacheca: la scheda che è un'app, la copertina, le sezioni con i loro parametri."""
+"""Le app sulla bacheca: la polaroid che è un'app, col suo valore al posto della foto.
+
+Un'app non entra nel cassetto di un'altra scheda: è una scheda sua, legata con
+un filo alla scheda con cui c'entra. La scheda-soggetto tiene la sua foto.
+"""
 
 from __future__ import annotations
 
@@ -53,13 +57,17 @@ async def test_a_card_that_is_an_app_has_its_value_on_the_cover(ctx, notebook, w
     card_id = out["card"]["id"]
     card = model.card_by_id(read_board(notebook), card_id)
     assert card["app"] == {"slug": "waterbot", "params": {"sensor": "acerello"}}
-    assert card["cover"] == "@card" and card["title"] == "WaterBot"
+    assert card["title"] == "WaterBot"
     view = build_board_view(notebook, workspace=waterbot,
                             alert_probe=alert_probe(waterbot, notebook))
     shown = next(c for c in view["cards"] if c["id"] == card_id)
     assert shown["cover"]["short"] == "38" and shown["cover"]["unit"] == "%"
     assert shown["cover"]["state"] == "ok"
-    assert shown["coverOptions"] == [{"id": "@card", "name": "WaterBot"}]
+    # Il tocco: senza schermo apre il cassetto, viva.
+    assert shown["app"] == {"slug": "waterbot", "params": {"sensor": "acerello"},
+                            "hasScreen": False, "state": "live", "icon": shown["app"]["icon"]}
+    # La scheda-soggetto tiene la sua foto.
+    assert "cover" not in next(c for c in view["cards"] if c["id"] == "acero")
     # Una seconda scheda, sul sensore in allarme: l'angolo rosso.
     out = await dispatch_command(ctx, "board.card.add", {
         "wiki": "piante", "app": {"slug": "waterbot", "params": {"sensor": "monstera"}}})
@@ -69,45 +77,52 @@ async def test_a_card_that_is_an_app_has_its_value_on_the_cover(ctx, notebook, w
     assert red["signal"] == "alert" and red["cover"]["state"] == "alarm"
 
 
-async def test_a_section_can_be_the_cover_and_the_photo_comes_back(ctx, notebook, waterbot) -> None:
+async def test_an_app_next_to_a_card_is_its_own_card_tied_by_a_thread(
+        ctx, notebook, waterbot) -> None:
     _seed(notebook)
-    out = await dispatch_command(ctx, "board.section.add", {
-        "wiki": "piante", "card": "acero", "kind": "app", "app": "waterbot",
-        "params": {"sensor": "acerello"}})
+    out = await dispatch_command(ctx, "board.card.add", {
+        "wiki": "piante", "app": {"slug": "waterbot", "params": {"sensor": "acerello"}},
+        "link": "acero"})
+    board = read_board(notebook)
+    new = out["card"]["id"]
+    assert new != "acero" and model.card_by_id(board, new)["app"]["slug"] == "waterbot"
+    assert {frozenset((c["a"], c["b"])) for c in board["connections"]} == {
+        frozenset(("acero", new))}
+    assert model.card_by_id(board, "acero")["userSections"] == []
+    assert "tied to «Acero»" in out["where"]
     view = build_board_view(notebook, workspace=waterbot)
-    assert "cover" not in view["cards"][0]
-    await dispatch_command(ctx, "board.card.cover", {"wiki": "piante", "id": "acero",
-                                                     "cover": out["id"]})
-    view = build_board_view(notebook, workspace=waterbot)
-    assert view["cards"][0]["cover"]["short"] == "38"
-    await dispatch_command(ctx, "board.card.cover", {"wiki": "piante", "id": "acero", "cover": ""})
-    assert "cover" not in build_board_view(notebook, workspace=waterbot)["cards"][0]
-    with pytest.raises(CommandError):
-        await dispatch_command(ctx, "board.card.cover", {"wiki": "piante", "id": "acero",
-                                                         "cover": "@card"})
+    acero = next(c for c in view["cards"] if c["id"] == "acero")
+    assert "cover" not in acero and "app" not in acero
+    with pytest.raises(CommandError) as err:
+        await dispatch_command(ctx, "board.card.add", {
+            "wiki": "piante", "app": {"slug": "waterbot"}, "link": "mai-vista"})
+    assert err.value.code == "conflict"
 
 
-async def test_a_section_must_name_a_real_app_and_its_params(ctx, notebook, waterbot) -> None:
+async def test_an_app_never_goes_inside_another_cards_drawer(ctx, notebook, waterbot) -> None:
     _seed(notebook)
     with pytest.raises(CommandError) as err:
         await dispatch_command(ctx, "board.section.add", {
-            "wiki": "piante", "card": "acero", "kind": "app", "app": "mai-vista"})
+            "wiki": "piante", "card": "acero", "kind": "app", "app": "waterbot"})
+    assert "card of its own" in str(err.value)
+    with pytest.raises(CommandError) as err:
+        await dispatch_command(ctx, "board.card.add", {
+            "wiki": "piante", "app": {"slug": "mai-vista"}})
     assert err.value.code == "not_found"
     with pytest.raises(CommandError) as err:
-        await dispatch_command(ctx, "board.section.add", {
-            "wiki": "piante", "card": "acero", "kind": "app", "app": "waterbot",
-            "params": {"pianta": "acero"}})
+        await dispatch_command(ctx, "board.card.add", {
+            "wiki": "piante", "app": {"slug": "waterbot", "params": {"pianta": "acero"}}})
     assert "unknown params" in str(err.value)
 
 
-def test_jenny_cannot_change_a_cover_or_a_card_app(notebook) -> None:
+def test_jenny_cannot_change_a_card_app(notebook) -> None:
     from jenny.board.store import BoardOwnershipError
 
     mutate_board(notebook, lambda b: b["cards"].append({
         "id": "wb", "title": "WaterBot", "pos": {"x": 1, "y": 1},
-        "app": {"slug": "waterbot", "params": {}}, "cover": "@card"}))
+        "app": {"slug": "waterbot", "params": {}}}))
     with pytest.raises(BoardOwnershipError):
-        mutate_board(notebook, lambda b: b["cards"][0].pop("cover"), actor=model.JENNY)
+        mutate_board(notebook, lambda b: b["cards"][0].pop("app"), actor=model.JENNY)
 
 
 def test_the_cover_is_short() -> None:
@@ -123,12 +138,28 @@ async def test_jenny_proposes_an_app_card_and_yes_places_it(ctx, notebook, water
     _seed(notebook)
     mutate_board(notebook, lambda b: b["suggestions"].append({
         "id": "sg-wb", "kind": "add_app_card", "subject": "WaterBot", "app": "waterbot",
-        "params": {"sensor": "monstera"}, "text": "Ne faccio una scheda?"}))
+        "params": {"sensor": "monstera"}, "card": "acero", "text": "Ne faccio una scheda?"}))
     await dispatch_command(ctx, "board.suggestion.respond", {
         "wiki": "piante", "id": "sg-wb", "answer": "yes", "near": {"x": 60, "y": 60}})
-    card = next(c for c in read_board(notebook)["cards"] if c.get("app"))
+    board = read_board(notebook)
+    card = next(c for c in board["cards"] if c.get("app"))
     assert card["app"] == {"slug": "waterbot", "params": {"sensor": "monstera"}}
-    assert card["cover"] == "@card" and card["title"] == "WaterBot"
+    assert card["title"] == "WaterBot"
+    assert [{c["a"], c["b"]} for c in board["connections"]] == [{card["id"], "acero"}]
+
+
+async def test_an_old_section_proposal_becomes_an_app_card(ctx, notebook, waterbot) -> None:
+    _seed(notebook)
+    mutate_board(notebook, lambda b: b["suggestions"].append({
+        "id": "sg-old", "kind": "add_section", "subject": "Acero", "card": "acero",
+        "app": "waterbot", "params": {"sensor": "acerello"}, "text": "Metto il sensore?"}))
+    await dispatch_command(ctx, "board.suggestion.respond", {
+        "wiki": "piante", "id": "sg-old", "answer": "yes"})
+    board = read_board(notebook)
+    assert model.card_by_id(board, "acero")["userSections"] == []
+    card = next(c for c in board["cards"] if c.get("app"))
+    assert card["title"] == "WaterBot"
+    assert [{c["a"], c["b"]} for c in board["connections"]] == [{card["id"], "acero"}]
 
 
 def test_a_card_app_changing_state_is_journaled_once(notebook, waterbot) -> None:
@@ -136,7 +167,7 @@ def test_a_card_app_changing_state_is_journaled_once(notebook, waterbot) -> None
 
     mutate_board(notebook, lambda b: b["cards"].append({
         "id": "wb", "title": "WaterBot", "pos": {"x": 1, "y": 1},
-        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}, "cover": "@card"}))
+        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}}))
     assert watch_app_sections(waterbot, notebook) == 0
     rec = waterbot / "apps" / "waterbot" / "data" / "readings.jsonl"
     from datetime import datetime, timedelta, timezone
@@ -155,7 +186,7 @@ def test_the_board_block_names_the_app_of_a_card(notebook, waterbot, monkeypatch
     monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: waterbot)
     mutate_board(notebook, lambda b: b["cards"].append({
         "id": "wb", "title": "WaterBot", "pos": {"x": 1, "y": 1},
-        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}, "cover": "@card"}))
+        "app": {"slug": "waterbot", "params": {"sensor": "acerello"}}}))
     card = read_board(notebook)["cards"][0]
     assert "WaterBot 38%" in drawer_text(notebook, card) or "moisture 38%" in drawer_text(
         notebook, card)

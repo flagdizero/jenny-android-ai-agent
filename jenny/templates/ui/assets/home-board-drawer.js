@@ -98,7 +98,7 @@ export class BoardDrawer {
    * @param sheet        il foglio della bacheca, per «Aggiungi sezione».
    */
   constructor({ onOpenPage, onOpenCard, onAskJenny, onOpenApp, onRenameCard, onRemoveCard,
-    sheet } = {}) {
+    onAppCard, sheet } = {}) {
     this.el = document.getElementById('home-board-drawer');
     this.onOpenPage = onOpenPage;
     this.onOpenCard = onOpenCard;
@@ -106,6 +106,8 @@ export class BoardDrawer {
     this.onOpenApp = onOpenApp;
     this.onRenameCard = onRenameCard;
     this.onRemoveCard = onRemoveCard;
+    /** `(cardId)` — un'app e' nata accanto a questa scheda: si torna a vederla. */
+    this.onAppCard = onAppCard;
     this.sheet = sheet;
     this.notebook = null;
     this.card = null;
@@ -843,9 +845,10 @@ export class BoardDrawer {
     what.focus();
   }
 
-  /** «Cosa vuoi vedere?»: una frase, e la micro app la scrive Jenny nella chat
-   *  del quaderno — la prova torna nel cassetto, e la tieni da qui. Collegare
-   *  una Jenny App che c'è già resta una riga sotto. */
+  /** «Cosa vuoi vedere?»: una frase, e l'app la scrive Jenny nella chat del
+   *  quaderno — e la mette sulla bacheca come polaroid sua, legata a questa
+   *  scheda con un filo. Mettere accanto un'app che c'è già resta una riga
+   *  sotto. */
   _addMicro() {
     const form = el('form', 'home-board-form');
     const what = el('input', 'home-board-input');
@@ -890,6 +893,8 @@ export class BoardDrawer {
     this.sheet.open(i18n.t('board.section.kind.app'), menu);
   }
 
+  /** Un'app accanto a questa scheda: una polaroid sua, legata da un filo —
+   *  non una sezione del cassetto. Si torna alla bacheca a vederla nascere. */
   async _attachApp(app) {
     const params = {};
     for (const name of Object.keys(app.section?.params || {})) {
@@ -898,7 +903,18 @@ export class BoardDrawer {
       params[name] = value.trim();
     }
     this.sheet.close();
-    await this._write('section.add', { card: this.card, kind: 'app', app: app.slug, params });
+    let out;
+    try {
+      out = await rpc.board('card.add', this.notebook, {
+        app: { slug: app.slug, params }, link: this.card,
+      });
+    } catch (err) {
+      console.warn('home.drawer: app card failed', err);
+      showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.section.failed'), 'error');
+      return;
+    }
+    showToast(i18n.t('board.card.appPlaced', { name: app.name, card: this.data.title }), 'success');
+    await this.onAppCard?.(out?.card?.id || null);
   }
 
   _addPhoto() {

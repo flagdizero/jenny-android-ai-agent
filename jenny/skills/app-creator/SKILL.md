@@ -15,7 +15,8 @@ locked: true
 A Jenny App is a folder in `apps/<slug>/` (workspace-relative). It is always **general** — it
 lives in the App page, not inside a notebook — and every part is optional: a screen for the
 user, typed actions for the agent, a **reader** that reads something by itself on a clock, and
-a **summary**, the way it shows in a card's drawer or on a card's cover on a notebook board.
+a **summary**, the way it shows on its own card on a notebook board (the value in place of the
+photo; a tap opens the screen).
 If it needs a screen, a live value or a place on a board, it's an app; if it only lives in
 chat, it's a skill.
 
@@ -35,7 +36,7 @@ apps/<slug>/
 runs the reader once, and tells you the real first value. A new app — or a change that
 reaches a new host, writes a new collection, adds an action or changes the summary — **waits
 on trial**: no tools, no screen, no reader, until the user taps **Keep** on its trial card (in
-the App page, or in the drawer where it is placed). You cannot keep it for them. A fix that
+the App page, or with a tap on its card on a board). You cannot keep it for them. A fix that
 adds nothing goes live at once. Tell the user what the app reaches and writes, and that they
 keep it from the trial card.
 </rule>
@@ -174,8 +175,9 @@ Collections in `data/` are created on first write. If the tool reports a problem
 The tool's answer says whether the app is live or on trial, and the first real value. Tell the
 user, in one or two lines, what it does, what it reaches and writes, and that they keep it with
 **Keep** on its trial card. If the app is about a subject of a notebook (a plant, a portfolio),
-offer to put it on that notebook's board — `app action=place`, as a section in a card's drawer
-(`card`) or as a card of its own — and do it when the user agrees. Placing it in a notebook also
+offer to put it on that notebook's board — `app action=place` makes a card that **is** the app,
+tied by a thread to the card it belongs with (`card`, e.g. the "Portfolio" app next to "ETF") —
+and do it when the user agrees. An app never goes inside another card's drawer. Placing it in a notebook also
 lets that notebook's chat use it.
 
 ## Secrets

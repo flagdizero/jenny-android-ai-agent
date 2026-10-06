@@ -668,10 +668,12 @@ export class AppsActions {
     await this.source.loadJennyApps();
   }
 
-  /** «Metti in un quaderno…»: quale quaderno, poi come scheda nuova o dentro
-   *  una scheda che c'e', poi (se l'app li chiede) i parametri. Tre domande al
-   *  piu', una alla volta, nello stesso foglio. Posarla e' anche darle il
-   *  permesso: la chat di quel quaderno potra' usarla. */
+  /** «Metti in un quaderno…»: quale quaderno, poi da sola o accanto a una
+   *  scheda che c'e' (legata da un filo), poi (se l'app li chiede) i
+   *  parametri. Tre domande al piu', una alla volta, nello stesso foglio.
+   *  L'app diventa sempre una polaroid sua: non entra nel cassetto di
+   *  un'altra scheda. Posarla e' anche darle il permesso: la chat di quel
+   *  quaderno potra' usarla. */
   async showPlaceSheet(slug) {
     const app = this.source.jennyApps.find(a => a.slug === slug);
     const sheet = document.getElementById('jenny-app-sheet');
@@ -696,11 +698,9 @@ export class AppsActions {
     const finish = async (notebook, card) => {
       const ask = async (values) => {
         try {
-          if (card) {
-            await rpc.board('section.add', notebook, { card: card.id, kind: 'app', app: slug, params: values });
-          } else {
-            await rpc.board('card.add', notebook, { app: { slug, params: values } });
-          }
+          await rpc.board('card.add', notebook, {
+            app: { slug, params: values }, ...(card ? { link: card.id } : {}),
+          });
         } catch (err) {
           showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'apps.placeFailed'), 'error');
           return;
@@ -736,8 +736,8 @@ export class AppsActions {
       head(i18n.t('apps.placeHow', { notebook }));
       rows([
         { icon: 'ti-square-plus', label: i18n.t('apps.placeAsCard'), go: () => finish(notebook, null) },
-        ...cards.filter((c) => !c.app).map((c) => ({
-          icon: 'ti-layout-sidebar-right', label: i18n.t('apps.placeInCard', { card: c.title }),
+        ...cards.map((c) => ({
+          icon: 'ti-link', label: i18n.t('apps.placeNextTo', { card: c.title }),
           go: () => finish(notebook, c),
         })),
       ]);

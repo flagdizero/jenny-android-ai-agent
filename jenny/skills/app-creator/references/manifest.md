@@ -152,9 +152,10 @@ Constraints:
 
 ## Summary (`summary`) — required for any app that keeps state
 
-The summary is how the app shows **outside its screen**: in a card's drawer on a notebook
-board, and on the card's cover (the value in place of the photo). It is computed by code from
-the app's data, never by the model, and the drawer draws it in one of five shapes. An app that
+The summary is how the app shows **outside its screen**: on its own card on a notebook board
+(the value in place of the photo; a tap opens the screen, or — for an app with no screen — the
+card's drawer with the whole summary). It is computed by code from the app's data, never by the
+model, and the drawer draws it in one of five shapes. An app that
 keeps state — a reader, or any storage action that writes — **must** declare one; an app with
 no state (a calculator, a converter) declares none.
 
@@ -176,9 +177,9 @@ Two kinds of summary:
 - `aggregate` — `last` (the latest record's `field`, the default for value/chips/progress) or
   `count` (how many records match `where`: "7 to buy"; always the case for list and table).
 - `field` — the value shown (required with `aggregate: last`), with optional `label`, `unit`.
-- `where` + `params` — the filter; `params` are asked when the app is placed in a drawer
-  (which sensor, which plant), and used in `where` as `$name`. The same app can sit in two
-  drawers with two different params.
+- `where` + `params` — the filter; `params` are asked when the app is placed on a board
+  (which sensor, which plant), and used in `where` as `$name`. The same app can be two cards
+  with two different params.
 - `staleAfterMinutes`, `alarm` (`{field, op, value}`), `trendDays` (0–31), `verbs` (at most two
   of this app's actions, shown as buttons in the drawer).
 

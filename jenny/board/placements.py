@@ -1,10 +1,11 @@
 """Dove sono posate le app: le schede-app e le sezioni ``app`` dei cassetti.
 
 Un'app è sempre generale (vive in ``workspace/apps``); sulla bacheca di un
-quaderno si **posa**, in due modi:
-
-- come **scheda**: la polaroid è l'app (``card["app"] = {slug, params}``);
-- come **sezione** nel cassetto di una scheda (``{kind: "app", app, params}``).
+quaderno si **posa** come **scheda**: la polaroid è l'app (``card["app"] =
+{slug, params}``), legata con un filo alla scheda con cui c'entra. Le sezioni
+``{kind: "app", app, params}`` nel cassetto di un'altra scheda non si creano
+più, ma quelle che ci sono (le micro app migrate, le pose di prima) contano
+ancora come pose.
 
 Le pose sono viste della stessa app: toglierne una non tocca l'app. E una posa
 è anche un **permesso**: la chat di un quaderno può usare (scrivere) le app che

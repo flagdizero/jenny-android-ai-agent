@@ -96,24 +96,37 @@ def _note_pos(
     return {"x": x, "y": y, "by": model.JENNY}
 
 
-def _cover(workspace: Path, card: Mapping[str, Any],
-           sections: list[dict[str, Any]]) -> dict[str, Any]:
-    """La copertina di una scheda e le app che potrebbero esserla."""
+def _cover(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
+    """L'app di una scheda-app e la sua copertina: il valore al posto della foto.
+
+    Solo la scheda che **e'** un'app ha una copertina: una scheda-soggetto
+    («Acerello») tiene la sua foto, e un'app che c'entra con lei sta sulla sua
+    polaroid, legata da un filo. ``hasScreen`` dice al tocco se aprire lo
+    schermo dell'app o il cassetto.
+    """
     from jenny.board.sections import cover_of, section_view
 
-    apps = [s for s in sections if s.get("kind") == "app"]
-    out: dict[str, Any] = {}
-    if isinstance(card.get("app"), dict):
-        out["app"] = {"slug": card["app"]["slug"], "params": card["app"].get("params") or {}}
-    names: dict[str, str] = {}
-    chosen = card.get("cover") or ""
-    for section in apps:
-        view = section_view(workspace, None, section) or {}
-        names[section["id"]] = view.get("name") or section.get("app") or ""
-        if section["id"] == chosen:
-            out["cover"] = cover_of(view)
-            out["coverId"] = chosen
-    out["coverOptions"] = [{"id": sid, "name": name} for sid, name in names.items()]
+    if not isinstance(card.get("app"), dict):
+        return {}
+    section = {"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
+               "params": card["app"].get("params") or {}}
+    view = section_view(workspace, None, section) or {}
+    # ``live`` si apre; ``trial`` apre la prova (Tienila); ``missing``,
+    # ``trashed`` e ``broken`` aprono il cassetto, che dice cosa e' successo.
+    if view.get("state") in ("missing", "trashed", "broken"):
+        state = view["state"]
+    elif view.get("codeStatus") in ("trial", "unapproved"):
+        state = "trial"
+    else:
+        state = "live"
+    out: dict[str, Any] = {"app": {
+        "slug": card["app"]["slug"], "params": section["params"],
+        "hasScreen": bool(view.get("hasScreen")), "state": state,
+        "icon": view.get("icon") or "",
+    }}
+    cover = cover_of(view)
+    if cover is not None:
+        out["cover"] = cover
     return out
 
 
@@ -126,8 +139,8 @@ def build_board_view(
 ) -> dict[str, Any]:
     """La risposta di ``GET /api/board``.
 
-    Con *workspace*, ogni scheda porta anche la sua **copertina** (il valore
-    dell'app scelta, al posto della foto) e le app che potrebbero esserlo.
+    Con *workspace*, una scheda che e' un'app porta anche la sua **copertina**
+    (il valore dell'app, al posto della foto).
     """
     board = read_board(project_root)
     reminders = read_reminders(project_root)
@@ -151,7 +164,7 @@ def build_board_view(
         # rosso e il ⟳ come le altre.
         live_sections = list(card.get("userSections") or [])
         if isinstance(card.get("app"), dict):
-            live_sections.append({"id": model.COVER_CARD, "kind": "app",
+            live_sections.append({"id": model.APP_CARD, "kind": "app",
                                   "app": card["app"]["slug"],
                                   "params": card["app"].get("params") or {}})
         alert = bool(alert_probe and any(
@@ -176,7 +189,7 @@ def build_board_view(
             "pages": len(card.get("pages") or []),
             "signal": card_signal(card, summary, reminders, today=today, alert=alert),
             "auto": auto,
-            **(_cover(workspace, card, live_sections) if workspace is not None else {}),
+            **(_cover(workspace, card) if workspace is not None else {}),
         })
     notes: list[dict[str, Any]] = []
     placed: list[tuple[float, float, float, float]] = []

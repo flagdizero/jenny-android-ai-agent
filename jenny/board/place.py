@@ -1,11 +1,15 @@
-"""Posare un'app su una bacheca: come scheda, o come sezione di un cassetto.
+"""Posare un'app su una bacheca: una polaroid che **e'** l'app.
 
-Un solo posto per le due strade che lo fanno — l'RPC ``board.card.add`` /
-``board.section.add`` dell'interfaccia e il tool ``app`` di Jenny quando
-l'utente glielo chiede — cosi' la scheda nasce uguale chiunque la chieda.
-Scrive come ``user``: una posa la decide l'utente (anche quando la chiede a
-Jenny, e allora la sezione porta ``by: "jenny-on-request"``). Di sua
-iniziativa Jenny non posa niente: propone dalla busta (``add_app_card``).
+L'app non entra nel cassetto di un'altra scheda: ha la sua polaroid, col suo
+valore al posto della foto, e il tocco apre il suo schermo. Se c'entra con una
+scheda che c'e' gia' (il portafoglio con «ETF»), le due si legano con un filo.
+
+Un solo posto per le strade che lo fanno — l'RPC ``board.card.add``
+dell'interfaccia e il tool ``app`` di Jenny quando l'utente glielo chiede —
+cosi' la scheda nasce uguale chiunque la chieda. Scrive come ``user``: una
+posa la decide l'utente (anche quando la chiede a Jenny, e allora la scheda
+porta ``appBy: "jenny-on-request"``). Di sua iniziativa Jenny non posa niente:
+propone dalla busta (``add_app_card``).
 """
 
 from __future__ import annotations
@@ -26,6 +30,16 @@ def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
     return next((c for c in board["cards"] if model.slugify(c["title"]) == want), None)
 
 
+def tie(board: dict[str, Any], a: str, b: str, by: str = model.USER) -> bool:
+    """Un filo fra *a* e *b*, se non c'e' gia' e la bacheca ne ha posto."""
+    if a == b or any({c["a"], c["b"]} == {a, b} for c in board["connections"]):
+        return False
+    if len(board["connections"]) >= model.MAX_CONNECTIONS:
+        return False
+    board["connections"].append({"a": a, "b": b, "label": "", "by": by})
+    return True
+
+
 def app_title(workspace: Path | None, slug: str) -> str:
     from jenny.apps import trust
     from jenny.apps.manifest import find_app
@@ -41,14 +55,15 @@ def app_title(workspace: Path | None, slug: str) -> str:
 
 
 def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
-              card_ref: Any = None, near: tuple[float, float] | None = None,
+              link: Any = None, near: tuple[float, float] | None = None,
               title: str | None = None, by: str | None = None,
               workspace: Path | None = None) -> str:
     """Posa *slug* sul quaderno *root*. Torna dove, in parole.
 
-    Con *card_ref* diventa una sezione del cassetto di quella scheda; senza,
-    nasce una scheda che **e'** l'app, con la sua copertina. ``ValueError``
-    con un messaggio che si legge se non si puo'.
+    Nasce una scheda che **e'** l'app, col suo valore sulla polaroid. Con
+    *link* (id o titolo di una scheda) la nuova scheda si lega a quella con un
+    filo, e nasce accanto. ``ValueError`` con un messaggio che si legge se non
+    si puo'.
     """
     from jenny.config.paths import get_workspace_path
 
@@ -62,24 +77,20 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
     done: dict[str, Any] = {}
 
     def apply(board: dict[str, Any]) -> None:
-        if card_ref:
-            card = find_card(board, str(card_ref))
-            if card is None:
+        nonlocal near
+        other = None
+        if link:
+            other = find_card(board, str(link))
+            if other is None:
                 titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
-                raise ValueError(f"No card {card_ref!r} on this board (cards: {titles}).")
-            sid = model.unique_id("s-app", [s["id"] for s in card["userSections"]])
-            section: dict[str, Any] = {"id": sid, "kind": "app", "app": slug, "params": params,
-                                       "created": model.now_iso()}
-            if by:
-                section["by"] = by
-            card["userSections"].append(section)
-            done.update(where=f"in the drawer of «{card['title']}»", card=card["id"],
-                        section=sid)
-            return
+                raise ValueError(f"No card {link!r} on this board (cards: {titles}).")
         if model.is_full(board, reminders):
             raise ValueError("The board is full: the user has to remove a card first.")
         taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
         card_id = model.unique_id(model.slugify(name), taken)
+        if near is None and other is not None:
+            near = (other["pos"]["x"] + model.CARD_BOX[0] * 1.5,
+                    other["pos"]["y"] + model.CARD_BOX[1] / 2)
         target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2) \
             if near is not None else None
         x, y = model.free_slot(board, reminders, near=target)
@@ -87,12 +98,16 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
             "id": card_id, "title": name, "titleBy": model.USER, "pages": [],
             "pos": {"x": x, "y": y, "by": model.USER}, "glyph": "",
             "userSections": [], "created": model.now_iso(),
-            "app": {"slug": slug, "params": params}, "cover": model.COVER_CARD,
+            "app": {"slug": slug, "params": params},
         }]})["cards"][0]
         if by:
             card["appBy"] = by
         board["cards"].append(card)
-        done.update(where=f"as the card «{name}»", card=card_id, section=None)
+        where = f"as the card «{name}»"
+        if other is not None:
+            where += (f", tied to «{other['title']}»" if tie(board, card_id, other["id"])
+                      else f" (no thread to «{other['title']}»: the board has no room for one)")
+        done.update(where=where, card=card_id)
 
     mutate_board(root, apply)
     return str(done["where"])

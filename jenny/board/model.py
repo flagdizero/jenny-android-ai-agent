@@ -147,8 +147,9 @@ GLYPHS = (
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 # Lo slug di un'app (``jenny/apps/manifest.py::SLUG_RE``).
 _APP_SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
-# La copertina di una scheda-app: la sua app.
-COVER_CARD = "@card"
+# L'id con cui l'app di una scheda-app conta come una sua sezione (allarme,
+# eventi, contesto): la polaroid *e'* l'app, il suo valore al posto della foto.
+APP_CARD = "@card"
 # Il glifo di una scheda è il nome di un'icona del set della casa (Tabler):
 # validato come forma, non contro l'elenco — un nome che non esiste non disegna
 # niente, e la scheda mostra l'iniziale.
@@ -345,12 +346,6 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
         known["app"] = {"slug": app["slug"], "params": {
             k: v for k, v in params.items()
             if isinstance(k, str) and isinstance(v, (str, int, float, bool))}}
-    # La copertina: quale app mostra il suo valore al posto della foto.
-    # ``@card`` e' l'app della scheda, un id e' una sezione del cassetto.
-    cover = raw.get("cover")
-    if cover == COVER_CARD or (is_valid_id(cover) and any(
-            s["id"] == cover for s in sections)):
-        known["cover"] = cover
     return _keep_unknown(raw, known)
 
 
@@ -668,7 +663,6 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "titleBy": card.get("titleBy"),
             "title": card.get("title") if card.get("titleBy") == USER else None,
             "app": card.get("app"),
-            "cover": card.get("cover"),
         }
     return {
         "cards": cards,
@@ -701,7 +695,7 @@ def ownership_violations(
         if other is None:
             continue
         for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
-                           "app", "cover"):
+                           "app"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}

@@ -382,7 +382,36 @@ def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
       input.closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
       await tick(30);
       assert.equal(app.chatOver, true);
-      assert.match(document.getElementById('home-input').value, /an app that .*umidità di Acerello/);
+      assert.match(document.getElementById('home-input').value,
+        /an app that .*umidità di Acerello, to put on the board next to Acero/);
+    """)
+
+
+@requires_jsdom
+def test_an_app_from_a_drawer_becomes_a_card_next_to_it() -> None:
+    _run(_CARDS + """
+      routes['/api/webui/apps'] = { apps: [
+        { slug: 'etf', name: 'Portafoglio', broken: false, state: 'live', section: { params: {} } },
+      ] };
+      rpcAnswers['board.card.add'] = () => ({ ok: true, card: { id: 'portafoglio' } });
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      document.querySelector('.home-drawer-add').click();
+      await tick(10);
+      [...document.querySelectorAll('.home-board-menu-row')]
+        .find((r) => r.querySelector('.home-board-menu-name')?.textContent === 'App').click();
+      await tick(10);
+      [...document.querySelectorAll('.home-board-menu-row')]
+        .find((r) => /next to it/.test(r.textContent)).click();
+      await tick(40);
+      [...document.querySelectorAll('.home-board-menu-row')]
+        .find((r) => /Portafoglio/.test(r.textContent)).click();
+      await tick(60);
+      const call = rpcs('board.card.add').at(-1);
+      assert.deepEqual(call.params.app, { slug: 'etf', params: {} });
+      assert.equal(call.params.link, 'acero');
+      assert.equal(rpcs('board.section.add').length, 0, 'mai una sezione nel cassetto');
+      assert.equal(app.view, 'board', 'si torna alla bacheca a vederla');
     """)
 
 
@@ -855,18 +884,29 @@ def test_the_drawer_offers_rename_and_remove_at_the_bottom() -> None:
     """)
 
 
-# ── Le app sulla bacheca: copertina, scelta della copertina, scheda da un'app ─
+# ── Le app sulla bacheca: la polaroid che e' un'app, il suo valore, il tocco ─
 
 _COVER_BOARD = {
     **BOARD,
     "cards": [
-        {**BOARD["cards"][0], "cover": {"short": "38", "unit": "%", "state": "ok",
-                                        "at": "2026-10-06T12:00:00+00:00", "trend": [41, 40, 38],
-                                        "icon": "ti-droplet"},
-         "coverId": "s-app", "coverOptions": [{"id": "s-app", "name": "WaterBot"}]},
-        {**BOARD["cards"][1], "cover": {"short": "12,4k", "unit": "€", "state": "stale",
-                                        "at": "2026-10-01T12:00:00+00:00", "trend": []},
-         "coverOptions": [{"id": "@card", "name": "ETF"}]},
+        BOARD["cards"][0],
+        {"id": "portafoglio", "title": "Portafoglio", "glyph": "", "pages": 0, "signal": None,
+         "pos": {"x": 30, "y": 40, "by": "user"}, "pinned": False,
+         "app": {"slug": "etf", "params": {}, "hasScreen": True, "state": "live",
+                 "icon": "ti-chart-line"},
+         "cover": {"short": "12,4k", "unit": "€", "state": "stale",
+                   "at": "2026-10-01T12:00:00+00:00", "trend": [], "icon": "ti-chart-line"}},
+        {"id": "waterbot", "title": "WaterBot", "glyph": "", "pages": 0, "signal": None,
+         "pos": {"x": 60, "y": 40, "by": "user"}, "pinned": False,
+         "app": {"slug": "waterbot", "params": {"sensor": "acerello"}, "hasScreen": False,
+                 "state": "live", "icon": "ti-droplet"},
+         "cover": {"short": "38", "unit": "%", "state": "ok",
+                   "at": "2026-10-06T12:00:00+00:00", "trend": [41, 40, 38],
+                   "icon": "ti-droplet"}},
+        {"id": "orto-app", "title": "Orto", "glyph": "", "pages": 0, "signal": None,
+         "pos": {"x": 60, "y": 70, "by": "user"}, "pinned": False,
+         "app": {"slug": "orto", "params": {}, "hasScreen": True, "state": "trial",
+                 "icon": "ti-plant"}},
     ],
 }
 
@@ -880,27 +920,57 @@ def _run_covers(script: str) -> None:
 
 
 @requires_jsdom
-def test_a_cover_puts_the_value_in_place_of_the_photo() -> None:
+def test_an_app_card_has_its_value_in_place_of_the_photo() -> None:
     _run_covers("""
-      const [acero, etf] = document.querySelectorAll('.home-board-polaroid');
-      const photo = acero.querySelector('.home-board-photo');
-      assert.ok(photo.classList.contains('has-cover'));
-      assert.equal(photo.querySelector('.home-board-cover-value').textContent, '38%');
-      assert.ok(photo.querySelector('.home-board-cover-spark'), 'manca l\\'andamento');
-      assert.equal(photo.querySelector('i.ti-leaf:not(.home-board-cover-glyph)'), null, 'il glifo grande non c\\'e\\' piu\\'');
-      assert.ok(photo.querySelector('.home-board-cover-glyph.ti-leaf'));
-      assert.match(acero.getAttribute('aria-label'), /38%/);
+      const card = (id) => document.querySelector(`.home-board-polaroid[data-id="${id}"]`);
+      // La scheda-soggetto tiene la sua foto: la foglia, nessun valore.
+      const acero = card('acero').querySelector('.home-board-photo');
+      assert.ok(!acero.classList.contains('has-cover'));
+      assert.ok(acero.querySelector('i.ti-leaf'));
+      assert.ok(!card('acero').classList.contains('is-app'));
+      // L'app: il suo valore e' l'icona della polaroid.
+      const water = card('waterbot').querySelector('.home-board-photo');
+      assert.ok(card('waterbot').classList.contains('is-app'));
+      assert.equal(water.querySelector('.home-board-cover-value').textContent, '38%');
+      assert.ok(water.querySelector('.home-board-cover-spark'), 'manca l\\'andamento');
+      assert.ok(water.querySelector('.home-board-cover-glyph.ti-droplet'));
+      assert.match(card('waterbot').getAttribute('aria-label'), /38%/);
       // Fermo: grigio, e l'eta' al posto dell'ora.
-      const stale = etf.querySelector('.home-board-photo');
+      const stale = card('portafoglio').querySelector('.home-board-photo');
       assert.ok(stale.classList.contains('is-stale'));
       assert.match(stale.querySelector('.home-board-cover-at').textContent, /ago|fa/);
+      // In prova, ancora senza valore: l'icona dell'app.
+      assert.ok(card('orto-app').querySelector('.home-board-photo i.ti-plant'));
     """)
 
 
 @requires_jsdom
-def test_the_bar_chooses_the_cover_or_the_photo() -> None:
+def test_a_tap_on_an_app_card_opens_the_app() -> None:
     _run_covers("""
-      rpcAnswers['board.card.cover'] = () => ({ ok: true });
+      const opened = [];
+      app.appsSource().awaitJennyApps = async () => [{ slug: 'etf' }, { slug: 'orto' }];
+      app.appsActions().openApp = (slug) => opened.push(slug);
+      const card = (id) => document.querySelector(`.home-board-polaroid[data-id="${id}"]`);
+      // Con lo schermo: si apre l'app, non il cassetto.
+      card('portafoglio').click();
+      await tick(20);
+      assert.deepEqual(opened, ['etf']);
+      assert.equal(app.view, 'board');
+      // In prova: si apre la sua prova (openApp la mostra), non il cassetto.
+      card('orto-app').click();
+      await tick(20);
+      assert.deepEqual(opened, ['etf', 'orto']);
+      // Senza schermo: il cassetto, col riassunto intero.
+      card('waterbot').click();
+      await tick(40);
+      assert.deepEqual(opened, ['etf', 'orto']);
+      assert.equal(app.view, 'drawer');
+    """)
+
+
+@requires_jsdom
+def test_the_card_bar_has_no_cover_choice() -> None:
+    _run_covers("""
       const rect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 });
       $('home-board-canvas').getBoundingClientRect = rect;
       $('home-board-wall').getBoundingClientRect = rect;
@@ -909,16 +979,8 @@ def test_the_bar_chooses_the_cover_or_the_photo() -> None:
       await wait(500);
       press(el, 10, 10, 'pointerup');
       const bar = document.querySelector('.home-board-cardbar');
-      const cover = [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Cover');
-      assert.ok(cover, 'manca Copertina nella barra');
-      cover.click();
-      await tick(10);
-      const rows = [...$('home-board-sheet-body').querySelectorAll('.home-board-menu-row')];
-      assert.deepEqual(rows.map((r) => r.textContent), ['WaterBot', 'The photo']);
-      assert.equal(rows[0].getAttribute('aria-current'), 'true');
-      rows[1].click();
-      await tick(30);
-      assert.deepEqual(rpcs('board.card.cover').at(-1).params, { wiki: 'orto', id: 'acero', cover: '' });
+      assert.deepEqual([...bar.querySelectorAll('button span')].map((b) => b.textContent),
+        ['Rename', 'Remove from the board']);
     """)
 
 

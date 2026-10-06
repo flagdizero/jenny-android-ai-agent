@@ -94,7 +94,9 @@ envelope with `board_suggest` — only when one is genuinely worth the user's at
 - a card listed as still for a long time → `remove_card` ("its pages stay, and search finds them");
 - two cards that a page clearly ties together, and are not tied yet → `add_connection`, with the
   reason in a few words ("seeds taken from it");
-- an installed app that could show live data in a drawer → `add_section`.
+- an installed app whose live data belongs on this board → `add_app_card`: a card that **is**
+  the app (its value on the polaroid, a tap opens it), with `card` set when it belongs with an
+  existing card — they get tied by a thread. An app never goes inside another card's drawer.
 
 Write each proposal as you would say it to the user, in their language, in one or two sentences.
 Proposing nothing is a perfectly good outcome.
