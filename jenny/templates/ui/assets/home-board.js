@@ -128,6 +128,11 @@ const WALL_MAX = 1000;
 const AIR = 100;
 const ZOOM_EXTENT = [0.3, 2.2];
 const ITEM_BOX = { card: [20, 40], note: [15, 23] };
+/* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
+   schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
+   grandezza naturale, non oltre: due schede sole non diventano due manifesti. */
+const FIT_PAD = 16;
+const FIT_MAX_K = 1;
 /* d3, che sposta e ingrandisce il muro: gia' spedito per le Jenny App, e
    caricato alla prima bacheca aperta, non all'avvio della casa. */
 const D3_JS = '/html-mobile/assets/vendor/d3@7/d3.min.js';
@@ -186,12 +191,15 @@ export class HomeBoard {
     this._graph = null;
 
     /** Dove si guarda il muro: lo spostamento in pixel e l'ingrandimento, una
-     *  `ZoomTransform` di d3 (`{x, y, k}`) che solo d3-zoom cambia. Una per
-     *  quaderno, finche' la casa e' aperta: riaprire la bacheca torna li'. */
+     *  `ZoomTransform` di d3 (`{x, y, k}`) che solo d3-zoom cambia. Non si
+     *  ricorda: dal 06/10/2026 ogni ingresso nella bacheca la inquadra tutta
+     *  (`zoomToFit`). */
     this.view = { x: 0, y: 0, k: 1 };
-    this._views = new Map();
-    /** Il quaderno di cui `view` e' la vista. */
-    this._viewOf = null;
+    /** Il muro e' stato mosso da un dito dopo l'ingresso: la risposta del
+     *  server, se arriva dopo, non gli rifa' l'inquadratura sotto il dito. */
+    this._touched = false;
+    /** L'inquadratura e' in attesa che la tela abbia una misura (v. `_fit`). */
+    this._fitOnSize = false;
     /** d3-zoom e la tela a cui e' legato, dalla prima bacheca aperta. */
     this._zoom = null;
     this._sel = null;
@@ -210,6 +218,7 @@ export class HomeBoard {
     if (this.canvas && typeof ResizeObserver !== 'undefined') {
       this._resize = new ResizeObserver(() => {
         this._fitExtent();
+        if (this._fitOnSize && this.zoomToFit()) this._showWall();
         this.drawThreads();
       });
       this._resize.observe(this.canvas);
@@ -231,7 +240,13 @@ export class HomeBoard {
       this._clear();
       if (this.emptyEl) this.emptyEl.hidden = true;
     }
+    /* Lo stesso quaderno ha gia' il suo muro a schermo: si inquadra subito,
+       prima che la bacheca si veda, invece di mostrarlo dove lo si era lasciato
+       e farlo saltare all'arrivo della risposta. */
+    const same = notebook === this.notebook && Boolean(this.data);
     this.notebook = notebook;
+    this._touched = false;
+    if (same) this._fit();
     let data;
     try {
       if (!this._zoom) {
@@ -250,13 +265,9 @@ export class HomeBoard {
     if (token !== this._token) return;
     this.data = data;
     this.render();
-    /* Il muro di un altro quaderno: si mette via la vista di quello, e si torna
-       dove si guardava questo (o all'origine). */
-    if (this._viewOf !== notebook) {
-      if (this._viewOf) this._views.set(this._viewOf, this.view);
-      this._viewOf = notebook;
-      this._lookAt(this._views.get(notebook) || window.d3.zoomIdentity);
-    }
+    /* Nello stesso giro del disegno, quindi prima del primo fotogramma: la
+       bacheca compare gia' inquadrata, mai all'origine e poi zoomata. */
+    if (!this._touched) this._fit();
     /* «L'ultima volta» e' adesso: la riga di novita' che hai appena visto non
        deve riaccendersi alla prossima apertura. */
     if (data.exists) {
@@ -331,13 +342,15 @@ export class HomeBoard {
         if (e.sourceEvent) this._itemDrag?.cancel();
       })
       .on('zoom', (e) => {
+        if (e.sourceEvent) this._touched = true;
         this.view = e.transform;
         this._applyView();
       });
     this._sel.call(this._zoom)
-      /* Il doppio tocco (e il doppio clic) sul fondo torna all'origine. */
+      /* Il doppio tocco (e il doppio clic) sul fondo inquadra tutto, come
+         l'ingresso. */
       .on('dblclick.zoom', (e) => {
-        if (!onItem(e)) this.resetView();
+        if (!onItem(e)) this.zoomToFit();
       });
     /* Un tocco sul fondo spegne i fili accesi. */
     this.canvas.addEventListener('click', (e) => {
@@ -468,9 +481,58 @@ export class HomeBoard {
     if (dx || dy) this._zoom.translateBy(this._sel, dx / this.view.k, dy / this.view.k);
   }
 
-  /** Torna all'origine, a grandezza naturale. */
-  resetView() {
-    this._lookAt(window.d3.zoomIdentity);
+  /** Inquadra tutto quel che sta sul muro: le schede e i post-it, misurati
+   *  dove sono davvero (inclinati, con la didascalia), centrati nella finestra
+   *  con `FIT_PAD` d'aria e sopra la busta, che sta ferma in basso. Fra 0,3 e
+   *  grandezza naturale; un muro vuoto torna all'origine. Falso se la tela non
+   *  ha ancora una misura, e allora non si e' mosso niente. */
+  zoomToFit() {
+    if (!this._zoom || !this.canvas || this.listView) return false;
+    const box = this.canvas.getBoundingClientRect();
+    if (!box?.width || !box?.height) return false;
+    const items = this.wall.querySelectorAll('.home-board-polaroid, .home-board-postit');
+    if (!items.length) {
+      this._lookAt(window.d3.zoomIdentity);
+      return true;
+    }
+    const v = this.view;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const el of items) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return false;  // ancora senza layout
+      x0 = Math.min(x0, (r.left - box.left - v.x) / v.k);
+      y0 = Math.min(y0, (r.top - box.top - v.y) / v.k);
+      x1 = Math.max(x1, (r.right - box.left - v.x) / v.k);
+      y1 = Math.max(y1, (r.bottom - box.top - v.y) / v.k);
+    }
+    const env = this.canvas.querySelector('.home-board-envelope')?.getBoundingClientRect();
+    const bottom = env?.height ? Math.max(FIT_PAD, box.bottom - env.top + FIT_PAD / 2) : FIT_PAD;
+    const w = box.width - 2 * FIT_PAD;
+    const h = Math.max(1, box.height - FIT_PAD - bottom);
+    const k = Math.max(ZOOM_EXTENT[0], Math.min(FIT_MAX_K, w / (x1 - x0), h / (y1 - y0)));
+    const t = window.d3.zoomIdentity
+      .translate(FIT_PAD + w / 2 - ((x0 + x1) / 2) * k, FIT_PAD + h / 2 - ((y0 + y1) / 2) * k)
+      .scale(k);
+    this._lookAt(t);
+    return true;
+  }
+
+  /* L'inquadratura dell'ingresso. Se la tela non ha ancora una misura, il muro
+     resta nascosto finche' non ce l'ha (`ResizeObserver`): meglio un istante
+     vuoto che le schede all'origine e poi un salto. */
+  _fit() {
+    if (this.zoomToFit()) {
+      this._showWall();
+      return;
+    }
+    if (!this._zoom || !this.data || this.listView || typeof ResizeObserver === 'undefined') return;
+    this._fitOnSize = true;
+    if (this.wall) this.wall.style.visibility = 'hidden';
+  }
+
+  _showWall() {
+    this._fitOnSize = false;
+    if (this.wall) this.wall.style.visibility = '';
   }
 
   _clear() {

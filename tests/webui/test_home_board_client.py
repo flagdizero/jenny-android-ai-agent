@@ -123,16 +123,14 @@ def test_a_notebook_opens_on_its_board() -> None:
       const wall = $('home-board-wall');
       assert.ok([...wall.children].indexOf($('home-board-threads'))
         > [...wall.children].indexOf(polaroids[1]));
-      // Il muro: le posizioni in percento dello schermo, e lo schermo dell'origine
-      // a grandezza naturale finche' non lo sposti o lo ingrandisci.
+      // Il muro: le posizioni in percento dello schermo. Qui jsdom non ha
+      // misure, quindi niente inquadratura: l'origine a grandezza naturale.
       assert.equal(polaroids[0].style.left, '5cqw');
       assert.equal(polaroids[0].style.top, '6cqh');
-      assert.equal(wall.style.transform, 'translate(0px, 0px) scale(1)');
       const B = app.board;
+      assert.deepEqual({ ...B.view }, { x: 0, y: 0, k: 1 });
       B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-120, 40).scale(1.5));
       assert.equal(wall.style.transform, 'translate(-120px, 40px) scale(1.5)');
-      app.board.resetView();
-      assert.equal(wall.style.transform, 'translate(0px, 0px) scale(1)');
       // La busta resta nella finestra, ferma, mentre il muro scorre.
       assert.equal(document.querySelector('.home-board-envelope').parentElement.id, 'home-board-canvas');
     """)
@@ -568,13 +566,13 @@ def test_the_background_moves_the_wall_up_to_its_edge() -> None:
 
 
 @requires_jsdom
-def test_a_double_tap_on_the_background_goes_back_to_the_origin() -> None:
-    _run_wall("""
+def test_a_double_tap_on_the_background_frames_everything() -> None:
+    _run_wall(_SIZED + """
       B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-200, 100).scale(1.5));
       mouse(card('acero'), 'dblclick', 30, 40);
       assert.deepEqual(at(), { x: -200, y: 100, k: 1.5 });
       mouse(C, 'dblclick', 200, 200);
-      assert.deepEqual(at(), { x: 0, y: 0, k: 1 });
+      assert.deepEqual(at(), FITTED);
     """)
 
 
@@ -699,14 +697,86 @@ def test_a_card_carried_to_the_edge_scrolls_the_wall_and_stays_in_hand() -> None
     """)
 
 
+# Le schede con una misura, che jsdom non da': quella che avrebbero nel
+# quadrato da 400 (polaroid 76 x 100, post-it 56 x 60), alla vista del momento.
+# Con ``BOARD`` l'ingombro va da (20, 16) a (304, 200): sta nella finestra a
+# grandezza naturale, quindi l'inquadratura lo centra senza ingrandirlo.
+_SIZED = """
+const realRect = window.HTMLElement.prototype.getBoundingClientRect;
+window.HTMLElement.prototype.getBoundingClientRect = function () {
+  if (!this.matches('.home-board-polaroid, .home-board-postit')) return realRect.call(this);
+  const v = B.view;
+  const note = this.classList.contains('home-board-postit');
+  const x = parseFloat(this.style.left) * 4, y = parseFloat(this.style.top) * 4;
+  const w = note ? 56 : 76, h = note ? 60 : 100;
+  return { left: v.x + x * v.k, top: v.y + y * v.k, right: v.x + (x + w) * v.k,
+    bottom: v.y + (y + h) * v.k, width: w * v.k, height: h * v.k };
+};
+const FITTED = { x: 38, y: 92, k: 1 };
+"""
+
+
 @requires_jsdom
-def test_each_notebook_keeps_where_you_were_looking() -> None:
-    _run_wall("""
+def test_entering_a_board_frames_everything() -> None:
+    _run_wall(_SIZED + """
       B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
       await B.load('altro');
-      assert.deepEqual(at(), { x: 0, y: 0, k: 1 });
-      await B.load('orto');
-      assert.deepEqual(at(), { x: -150, y: 60, k: 1.2 });
+      assert.deepEqual(at(), FITTED, 'un altro quaderno non si apre inquadrato');
+      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
+      await B.load('altro');
+      assert.deepEqual(at(), FITTED, 'rientrare nello stesso quaderno torna dove lo si era lasciato');
+      assert.equal($('home-board-wall').style.visibility, '');
+    """)
+
+
+@requires_jsdom
+def test_a_big_board_is_framed_smaller_and_centred() -> None:
+    board = json.loads(json.dumps(BOARD))
+    board["cards"][1]["pos"]["x"] = 150  # la monstera da 600 a 676 px
+    _run_wall(_SIZED + """
+      routes['/api/board'] = __BIG__;
+      await B.load('altro');
+      // 656 px di muro in 368 di finestra: 0,56, e il centro dell'ingombro
+      // (348, 108) al centro della finestra.
+      const k = 368 / 656;
+      assert.ok(Math.abs(at().k - k) < 1e-9, `ingrandimento ${at().k}`);
+      assert.ok(Math.abs(at().x + 348 * k - 200) < 1e-9);
+      assert.ok(Math.abs(at().y + 108 * k - 200) < 1e-9);
+    """.replace("__BIG__", json.dumps(board)))
+
+
+@requires_jsdom
+def test_the_same_board_is_framed_before_the_server_answers() -> None:
+    """Rientrando nello stesso quaderno il muro e' gia' a schermo: si inquadra
+    subito, non quando arriva la risposta, che lo farebbe saltare."""
+    _run_wall(_SIZED + """
+      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
+      let release;
+      const held = new Promise((r) => { release = r; });
+      hooks.fetch = async (u) => { if (u.pathname === '/api/board') await held; };
+      const loading = B.load(B.notebook);
+      assert.deepEqual(at(), FITTED, 'il muro si vede dove lo si era lasciato');
+      release();
+      await loading;
+      assert.deepEqual(at(), FITTED);
+    """)
+
+
+@requires_jsdom
+def test_a_finger_on_the_wall_while_it_loads_is_not_overruled() -> None:
+    _run_wall(_SIZED + """
+      let release;
+      const held = new Promise((r) => { release = r; });
+      hooks.fetch = async (u) => { if (u.pathname === '/api/board') await held; };
+      const loading = B.load(B.notebook);
+      mouse(C, 'mousedown', 100, 100);
+      mouse(window, 'mousemove', 150, 80);
+      mouse(window, 'mouseup', 150, 80);
+      const moved = at();
+      assert.notDeepEqual(moved, FITTED);
+      release();
+      await loading;
+      assert.deepEqual(at(), moved, 'la risposta ha rifatto l\u2019inquadratura sotto il dito');
     """)
 
 
