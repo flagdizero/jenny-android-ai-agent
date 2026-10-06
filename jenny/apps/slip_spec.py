@@ -378,7 +378,7 @@ def parse_slip(raw: dict, *, actions: list[Any], reader: dict | None, collection
     return SlipSpec(blocks=blocks, meta=meta, size=size, rows=rows)
 
 
-def legacy_blocks(section: Any) -> SlipSpec:
+def legacy_blocks(section: Any, actions: list[Any] | None = None) -> SlipSpec:
     """Le forme di prima (``view``) come blocchi, senza riscrivere il manifest.
 
     value → valore (+ i chip come numeri); chips → numeri; progress → valore e
@@ -421,9 +421,15 @@ def legacy_blocks(section: Any) -> SlipSpec:
                 {"field": n, "label": (section.fields.get(n) or {}).get("label", n),
                  "unit": (section.fields.get(n) or {}).get("unit", "")}
                 for n in extras[:MAX_NUMBERS]]})
-    if section.verbs:
+    # Un verbo di prima diventa un tasto solo se un tocco basta: un'azione che
+    # vuole altro (il testo di una cosa da comprare) resta nell'app.
+    acts = {a.name: a for a in actions or []}
+    verbs = [v for v in section.verbs if v in acts and all(
+        p in section.params or (p == "id" and acts[v].op in ("set", "update", "delete"))
+        for p in acts[v].required)]
+    if verbs:
         blocks.append({"kind": "buttons", "rows": 1,
-                       "actions": [{"action": v, "label": ""} for v in section.verbs]})
+                       "actions": [{"action": v, "label": ""} for v in verbs]})
     rows = sum(b["rows"] for b in blocks)
     size = size_for(rows) or "XL"
     return SlipSpec(blocks=blocks, meta=meta, size=size, rows=rows)

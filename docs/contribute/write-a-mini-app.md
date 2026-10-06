@@ -115,28 +115,27 @@ Full example (a folder named `piante`):
 }
 ```
 
-### Summary (`summary`)
+### Summary (`summary`) — the strip
 
-How the app shows outside its screen: on its card on a notebook's [board](../using/board.md), in place of the photo (and in the card's drawer, for an app with no screen). Parsed by `_parse_summary` in `jenny/apps/manifest.py` into the same `AppSection` the older `section` block produces, and computed by `jenny/apps/summary_view.py::summary_view` into the payload the drawer draws — the same shape a micro app had (`value`, `state`, `trend`, `extras`, `rows`, `columns`, `view`…). It is **required** for an app that keeps state (a reader, or a mutating storage action): the `app` tool refuses such an app without one.
-
-Over a collection:
+How the app shows outside its screen: on a notebook's [board](../using/board.md) it is a **strip** — a header and a few blocks that the house draws (`assets/home-board-blocks.js`), the same on the board and in a drawer. It is **required** for an app that keeps state (a reader, or a mutating storage action): the `app` tool refuses such an app without one.
 
 ```json
 "summary": {
-  "collection": "items", "view": "list", "where": { "done": false },
-  "label": "to buy", "columns": { "what": { "label": "What" } }, "verbs": ["add"]
+  "collection": "items",
+  "meta": { "count": true, "where": { "done": false }, "label": "to buy" },
+  "blocks": [
+    { "kind": "checklist", "text": "what", "done": "done", "toggle": "set_done", "max": 4 },
+    { "kind": "buttons", "actions": ["clear_done"] }
+  ]
 }
 ```
 
-| Field | Notes |
-|---|---|
-| `view` | `value` (default), `chips`, `progress` (needs `max`), `list`, `table` (need `columns`, at most 4). |
-| `aggregate` | `last` (the latest record's `field`) or `count` (records matching `where`; forced for list and table, whose rows are those records, newest first, at most 20). |
-| `field`, `label`, `unit` | The value shown; `field` is required with `aggregate: last`. |
-| `params`, `where` | What a placement is asked (which sensor) and the filter, with `$name`. |
-| `staleAfterMinutes`, `alarm`, `trendDays`, `verbs` | As before: stale and alarm light the card's red corner; at most two verbs. |
+- `jenny/apps/slip_spec.py::parse_slip` validates the blocks — a closed vocabulary of 15 (`value`, `numbers`, `chart`, `status`, `progress`, `bars`, `table`, `events`, `checklist`, `buttons`, `switches`, `counter`, `week`, `month`, `note`), 1 to 4 per strip — and picks the **size** from whole rows: S 2 · M 4 · L 6 · XL 9 (`jenny/board/model.py::SLIP_ROWS`). Lists count at their `max` (≤ 5), so the size comes from the manifest, never from the data; over XL the app is broken with a readable error. The full catalog with fields is in the skill's `references/manifest.md`.
+- Controls (`checklist` toggle, `buttons`, `switches`, `counter`) may name only actions the app declares, and only ones a tap can fill: an action with other `required` params is refused at load.
+- `jenny/apps/slip_view.py::slip_view` computes what each block draws, from the readings or the named collections filtered by the placement's `params`/`where`. The strip's state (ok, stale, alarm, empty, broken) is `summary_view`'s, the same one the chat and the clock read.
+- Without `blocks` the older forms still work, translated into blocks by `slip_spec.legacy_blocks` without rewriting the manifest: `view` `value` / `chips` / `progress` / `list` / `table` with `field`, `aggregate`, `columns`, `verbs`, and the older `section` block as a `value`.
 
-Over a reader: `view`, `primary`, `alarm`, `staleAfterMinutes`, `params`/`where`, `chips` and `verbs`; field labels, units and types come from the reader. The older `section` block (`value`/`status`/`trend`/`verbs`) is still parsed, as a `value` summary.
+Shared keys: `params`, `where`, `alarm` (`{field, op, value}`), `staleAfterMinutes`, `trendDays`, and `meta` — the datum on the right of the header, `{field, unit, label}` or `{count, where, label}`; without it the house shows the state.
 
 ### Reader (`reader` + `run.py`)
 
@@ -157,7 +156,7 @@ There is no approval step: an app is live as soon as it exists (the trial with *
 
 ## Placement and permission
 
-`jenny/board/placements.py` finds where an app is placed: a card whose `app` is `{slug, params}` (the card *is* the app; `jenny/board/view.py` adds its `cover` and `app.hasScreen`, and a tap opens the screen), or — only from older versions and migrated micro apps — a drawer section `{kind: "app", app, params}`. `jenny/board/place.py::place_app` is the one writer, shared by the UI and the `app` tool; with `link` it ties the new card to an existing one by a thread. `board.section.add` refuses `kind: "app"`: an app never goes inside another card's drawer. A storage write, or an `http` action that is not `GET`, from a notebook's turn is allowed only for an app placed on that notebook's board (`jenny/apps/permissions.py::write_refusal`); from the personal chat, and from the screen's own routes, there is no such check.
+`jenny/board/placements.py` finds where an app is placed: a card whose `app` is `{slug, params}` (the card *is* the app; `jenny/board/view.py` adds its `slip`, its real `box` and `app.hasScreen`, and a tap opens the screen; the strip's size is stored on the card as `size` and kept in step by `place.refresh_app_cards`), or — only from older versions and migrated micro apps — a drawer section `{kind: "app", app, params}`. `jenny/board/place.py::place_app` is the one writer, shared by the UI and the `app` tool; with `link` it ties the new card to an existing one by a thread. `board.section.add` refuses `kind: "app"`: an app never goes inside another card's drawer. A storage write, or an `http` action that is not `GET`, from a notebook's turn is allowed only for an app placed on that notebook's board (`jenny/apps/permissions.py::write_refusal`); from the personal chat, and from the screen's own routes, there is no such check.
 
 ## Storage: JSONL collections
 

@@ -303,7 +303,7 @@ def _parse_manifest(data: object) -> AppManifest:
     if section is not None and not section.blocks:
         from jenny.apps.slip_spec import legacy_blocks
 
-        slip = legacy_blocks(section)
+        slip = legacy_blocks(section, actions)
         section.blocks, section.meta, section.size = slip.blocks, slip.meta, slip.size
 
     icon = data.get("icon")

@@ -724,7 +724,8 @@ export class HomeBoard {
       el.appendChild(sig);
     }
     const sigWord = card.signal ? `, ${i18n.t(`board.signal.${card.signal}`)}` : '';
-    el.setAttribute('aria-label', `${card.title}, ${meta.textContent}${sigWord}`);
+    const metaWord = meta.textContent ? `, ${meta.textContent}` : '';
+    el.setAttribute('aria-label', `${card.title}${metaWord}${sigWord}`);
     this._place(el, card);
     this._bind(el, card, 'card');
     return el;

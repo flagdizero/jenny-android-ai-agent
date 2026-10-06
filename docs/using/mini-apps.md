@@ -7,7 +7,7 @@ Every part of an app is optional:
 - a **screen** you open and use — a list you check off, a form you fill in;
 - **actions**, which Jenny can call as tools;
 - a **reader**, a small program that reads something by itself every few minutes (a sensor, a price) or recomputes a total from the app's own data, with no model involved;
-- a **summary**: how the app shows outside its screen — on its card on a board, in place of the photo — as one value, a few values side by side, a progress bar, a list or a small table.
+- a **summary**: how the app shows outside its screen — a **strip** on a notebook's board, with a few blocks Jenny picks for it (a value and its trend, a list to tick, a week, buttons…).
 
 ## Apps vs. skills
 
@@ -63,7 +63,7 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 
 ## Apps on a notebook's board
 
-An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it as a **card of its own**: the polaroid *is* the app. Its summary is the polaroid's picture — the value big, in place of the photo — and tapping the card opens the app's screen (an app with no screen opens the card's drawer, with the whole summary).
+An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it as a **card of its own**: a strip, in one of four sizes, showing the blocks Jenny chose for it — see [App cards](board.md#app-cards). Tapping it opens the app's screen (an app with no screen opens the card's drawer, which starts from the same strip); up close, its ticks and buttons work right on the board.
 
 An app never goes inside another card's drawer. When it belongs with a subject that is already on the board — the *Portfolio* app and the *ETF* card, the *WaterBot* and *Acerello* — the two cards are tied by a **thread**, and the subject card keeps its own photo.
 

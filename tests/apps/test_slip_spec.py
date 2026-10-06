@@ -116,3 +116,9 @@ def test_the_old_shapes_become_blocks(tmp_path: Path) -> None:
     old = _app(tmp_path / "o", {"actions": SPESA_ACTIONS, "section": {
         "value": {"collection": "items", "field": "what"}}})
     assert [b["kind"] for b in old.manifest.section.blocks] == ["value"]
+    # Un verbo che vuole un testo (cosa comprare) non diventa un tasto.
+    verb = _app(tmp_path / "w", {"actions": SPESA_ACTIONS, "summary": {
+        "collection": "items", "view": "list", "columns": {"what": {}},
+        "verbs": ["add_item", "clear"]}})
+    buttons = [b for b in verb.manifest.section.blocks if b["kind"] == "buttons"]
+    assert [a["action"] for a in buttons[0]["actions"]] == ["clear"]

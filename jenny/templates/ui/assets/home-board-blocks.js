@@ -156,7 +156,8 @@ function numbers(b) {
 function chart(b) {
   const node = block('chart', b.rows);
   const spark = sparkSvg(b.points, { width: 300, height: 60, band: b.band, cls: 'home-board-block-chart' });
-  node.appendChild(spark || el('span', 'home-board-block-label', i18n.t('board.slip.empty')));
+  /* Meno di due punti: una linea tratteggiata, senza parole (lo stato le dice gia'). */
+  node.appendChild(spark || el('div', 'home-board-block-flat'));
   return node;
 }
 
@@ -402,5 +403,7 @@ export function metaText(slip, now = new Date()) {
     return m.unit ? `${formatValue(m.value)} ${m.unit}${m.label ? ` ${m.label}` : ''}`
       : `${formatValue(m.value)}${m.label ? ` ${m.label}` : ''}`;
   }
+  /* Una striscia vuota lo dice una volta, nel suo stato: in alto niente. */
+  if (slip?.state === 'empty') return '';
   return statusText(slip?.state, slip?.at, now);
 }

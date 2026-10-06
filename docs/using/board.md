@@ -55,9 +55,11 @@ The board's shape is yours, and you can change it directly, not only by answerin
 
 ### App cards
 
-A [Jenny App](mini-apps.md) goes on the board as a **card of its own**: the polaroid *is* the app. In place of the photo it shows the app's **live value** — the number big (*38 %*, *12,4k €*), the app's icon small in the corner, a thin trend line and the time of the reading. When the data stops arriving it turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always. An app with no value yet shows its icon.
+A [Jenny App](mini-apps.md) goes on the board as a **card of its own**. Polaroids are the things; apps are **strips**: paper two polaroids wide, with the app's icon, its name and one datum on the right (*4 to buy*, *today +0.8 %* — or, when the app names none, its state: *at 14:02*, *stopped · 2 d ago*, *in alarm*), and below a few **blocks** the app chose: a big value with its trend, a week's chart, a list you can tick, a row of buttons, this week, this month, a progress bar…
 
-**Tapping an app card opens the app**: its screen. An app with no screen opens the card's drawer, with its whole summary.
+Strips come in four sizes — **S, M, L, XL**: an M is as tall as a polaroid, an XL as two. The size comes from the app, not from its data, so the board never jumps when the numbers change; a list that does not fit ends with *and N more*. When the data stops arriving the strip greys out and the datum on the right says how old it is — an old value never looks fresh — and an alarm turns the value and the corner red. An app with no data at all stays a polaroid with its icon.
+
+**Tapping a strip opens the app**: its screen; an app with no screen opens the card's drawer, which starts from the same strip. **Up close** — once the board is zoomed in enough for a finger — the controls inside a strip work right there: tick the shopping list, press *Water now*, flip a switch. Farther away they sleep, and any tap opens the app, so a tap meant for the strip never fires a button by mistake.
 
 An app never goes inside another card's drawer, and a subject card always keeps its own photo. When an app belongs with a subject — *Portfolio* with *ETF* — the two cards are tied by a **thread**. That is what **Next to «ETF»** does when you put an app in a notebook from the App page, and **App → Or put one of your apps next to it…** from a drawer.
 
@@ -180,7 +182,7 @@ The board's shape — which cards, where, which threads — is yours: you change
 | **Put a card away** | A card whose drawer and pages have not changed for **90 days**, with no open reminders. Its pages stay, and search finds them. |
 | **Add a thread** | A page clearly ties two cards that are not tied yet. |
 | **Attach a page** | A page off the board belongs in a drawer — typically one you asked for. |
-| **Add an app as a card** | An app you kept could be a card of its own, its value in place of the photo — tied by a thread to the card it belongs with. |
+| **Add an app as a card** | An app you kept could be a strip of its own — tied by a thread to the card it belongs with. |
 
 Each proposal is a sentence or two in your language, with **Later**, **No** and **Yes** (for putting a card away: **Leave it** and **Put it away**). **Yes** applies it; a new card goes into the free spot nearest to the middle of what you are looking at. **No** is remembered: the same proposal is not made again — except a new card, which can come back only once the subject has at least twice the pages it had when you said no. **Later** keeps it out of the envelope for the next **3** board passes.
 
