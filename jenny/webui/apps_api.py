@@ -14,7 +14,6 @@ from pathlib import Path
 
 from jenny.apps.executor import AppActionError, execute_action
 from jenny.apps.manifest import scan_apps
-from jenny.apps.trust import app_trust_state, list_drafts, load_draft
 
 
 def list_apps_payload(workspace: Path) -> dict:
@@ -36,6 +35,10 @@ def list_apps_payload(workspace: Path) -> dict:
                     # non incornicia app/index.html, chiede l'URL del proxy e
                     # usa un sandbox diverso (v. openApp in mobile-apps.js).
                     "view_kind": app.manifest.view_kind,
+                    # Un'app senza schermo (solo un lettore) non si apre: il
+                    # tocco mostra il suo foglio, col valore.
+                    "has_screen": app.manifest.view_kind == "external"
+                    or (app.dir / "app" / "index.html").is_file(),
                     # La vista compatta per un cassetto della bacheca, se l'app
                     # ne dichiara una: il menu «Aggiungi sezione» propone solo
                     # queste, e chiede i parametri che la sezione vuole.
@@ -58,26 +61,7 @@ def list_apps_payload(workspace: Path) -> dict:
             )
         if app.broken:
             entry["error"] = app.error
-        entry.update(app_trust_state(workspace, app.slug))
         apps.append(entry)
-    # Le app nuove ancora in prova: nella griglia col cartellino «in prova», e
-    # dal loro foglio si tengono o si scartano. Niente tool, niente schermo.
-    live = {a["slug"] for a in apps}
-    for slug in list_drafts(workspace):
-        if slug in live:
-            continue
-        draft = load_draft(workspace, slug)
-        if draft is None:
-            continue
-        m = draft.app.manifest
-        apps.append({
-            "slug": slug, "broken": draft.app.broken,
-            "name": m.name if m else slug, "description": m.description if m else "",
-            "icon": m.icon if m else "ti-apps", "has_server": bool(m and m.server_base_url),
-            "view_kind": m.view_kind if m else None, "section": None,
-            **({"error": draft.app.error} if draft.app.broken else {}),
-            **app_trust_state(workspace, slug),
-        })
     return {"apps": apps}
 
 

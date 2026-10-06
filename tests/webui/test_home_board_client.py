@@ -905,7 +905,7 @@ _COVER_BOARD = {
                    "icon": "ti-droplet"}},
         {"id": "orto-app", "title": "Orto", "glyph": "", "pages": 0, "signal": None,
          "pos": {"x": 60, "y": 70, "by": "user"}, "pinned": False,
-         "app": {"slug": "orto", "params": {}, "hasScreen": True, "state": "trial",
+         "app": {"slug": "orto", "params": {}, "hasScreen": True, "state": "live",
                  "icon": "ti-plant"}},
     ],
 }
@@ -939,7 +939,7 @@ def test_an_app_card_has_its_value_in_place_of_the_photo() -> None:
       const stale = card('portafoglio').querySelector('.home-board-photo');
       assert.ok(stale.classList.contains('is-stale'));
       assert.match(stale.querySelector('.home-board-cover-at').textContent, /ago|fa/);
-      // In prova, ancora senza valore: l'icona dell'app.
+      // Ancora senza valore: l'icona dell'app.
       assert.ok(card('orto-app').querySelector('.home-board-photo i.ti-plant'));
     """)
 
@@ -956,7 +956,7 @@ def test_a_tap_on_an_app_card_opens_the_app() -> None:
       await tick(20);
       assert.deepEqual(opened, ['etf']);
       assert.equal(app.view, 'board');
-      // In prova: si apre la sua prova (openApp la mostra), non il cassetto.
+      // Ancora senza valore, ma con lo schermo: si apre l'app.
       card('orto-app').click();
       await tick(20);
       assert.deepEqual(opened, ['etf', 'orto']);

@@ -290,8 +290,6 @@ def _app_line(view: Mapping[str, Any]) -> str:
     """Un'app posata nel cassetto: il valore, lo stato, e come cambiarla."""
     state = str(view.get("state") or "")
     status = {
-        "trial": "on trial (the user keeps it from the drawer or the App page)",
-        "unapproved": "stopped: its code changed outside Jenny, the user approves it again",
         "trashed": "in the trash",
         "broken": f"broken: {view.get('error') or view.get('lastError') or ''}",
     }.get(state, state)

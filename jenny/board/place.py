@@ -41,14 +41,10 @@ def tie(board: dict[str, Any], a: str, b: str, by: str = model.USER) -> bool:
 
 
 def app_title(workspace: Path | None, slug: str) -> str:
-    from jenny.apps import trust
     from jenny.apps.manifest import find_app
 
     if workspace is not None:
         app = find_app(workspace, slug)
-        if app is None:
-            draft = trust.load_draft(workspace, slug)
-            app = draft.app if draft is not None else None
         if app is not None and app.manifest is not None:
             return app.manifest.name
     return slug

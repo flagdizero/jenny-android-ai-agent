@@ -1,10 +1,9 @@
-"""I comandi ``apps.*`` dell'interfaccia: il cestino, e (dalla prova in poi) le
-risposte dell'utente alle app nuove.
+"""I comandi ``apps.*`` dell'interfaccia: il cestino delle app.
 
 Sono RPC sul WebSocket della WebUI, come i ``board.*``: le chiama solo
 l'interfaccia, con il segreto della WebUI. Jenny non ha un tool che le
-raggiunga, ed e' questo che le rende **dell'utente**: «Tienila» e «Svuota il
-cestino» li preme una persona.
+raggiunga, ed e' questo che le rende **dell'utente**: «Elimina per sempre» lo
+preme una persona.
 """
 
 from __future__ import annotations
@@ -62,66 +61,7 @@ async def apps_purge(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     return {"ok": True, "slug": slug}
 
 
-def _slug(params: Mapping[str, Any]) -> str:
-    from jenny.apps.manifest import SLUG_RE
-
-    value = params.get("slug")
-    if not isinstance(value, str) or not SLUG_RE.match(value):
-        raise CommandError("bad_request", "slug required")
-    return value
-
-
-async def apps_keep(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """«Tienila»: la bozza in prova diventa l'app, e il suo codice è approvato.
-
-    Senza bozza, riapprova il codice che l'app ha adesso: e' il caso di un'app
-    cambiata fuori da Jenny («Riapprova»). Dopo, il lettore (se c'e') legge
-    subito, cosi' il riassunto ha un valore vero.
-    """
-    from jenny.apps import trust
-
-    workspace = ctx.get_workspace_root()
-    slug = _slug(params)
-    draft = await _run(trust.load_draft, workspace, slug)
-    if draft is not None:
-        if draft.app.broken:
-            raise CommandError("conflict", f"the draft is broken: {draft.app.error}")
-        await _run(trust.promote_draft, workspace, slug)
-    elif not (workspace / "apps" / slug / "app.json").is_file():
-        raise CommandError("not_found", "nothing to keep")
-    await _run(trust.approve, workspace, slug)
-    await _after_keep(workspace, slug)
-    return {"ok": True, **(await _run(trust.app_trust_state, workspace, slug))}
-
-
-async def _after_keep(workspace: Any, slug: str) -> None:
-    """Il primo giro del lettore, se l'app ne ha uno (v. ``jenny/apps/reader.py``)."""
-    try:
-        from jenny.apps.reader import run_reader
-    except ImportError:  # pragma: no cover - il lettore arriva con la fase 5
-        return
-    try:
-        await run_reader(workspace, slug, force=True)
-    except Exception:  # noqa: BLE001 — tenere l'app non deve fallire per una lettura
-        from loguru import logger
-
-        logger.exception("apps: first read of {} after keep failed", slug)
-
-
-async def apps_discard(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """«Scarta»: la bozza se ne va. Un'app che c'era resta com'era."""
-    from jenny.apps import trust
-
-    workspace = ctx.get_workspace_root()
-    slug = _slug(params)
-    if not await _run(trust.discard_draft, workspace, slug):
-        raise CommandError("not_found", "no draft to discard")
-    return {"ok": True, **(await _run(trust.app_trust_state, workspace, slug))}
-
-
 APPS_COMMANDS = {
-    "apps.keep": apps_keep,
-    "apps.discard": apps_discard,
     "apps.trash": apps_trash_list,
     "apps.restore": apps_restore,
     "apps.purge": apps_purge,

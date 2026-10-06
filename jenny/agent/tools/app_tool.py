@@ -6,12 +6,12 @@ tutti facoltativi. Questo tool è **l'unica strada** per scriverne il codice:
 gli strumenti generici non toccano ``app.json``, ``run.py`` né ``app/``
 (``jenny/security/workspace_policy.py::is_app_code_path``).
 
-**Prova prima di salvare.** ``draft`` scrive una bozza in ``apps/.drafts/``,
-la valida e, se ha un lettore, lo gira una volta: torna il valore vero o
-l'errore. L'app compare **in prova** — nella griglia App, e nel cassetto se è
-posata — e la tiene l'utente con «Tienila»: è quel tocco ad approvarne il
-codice (``jenny/apps/trust.py``). Una correzione che non allarga ciò che l'app
-tocca o raggiunge gira subito; una che lo allarga torna in prova.
+**Prova prima di salvare.** ``draft`` scrive in ``apps/.drafts/``, valida e,
+se c'è un lettore, lo gira una volta: se va, l'app (o la sua versione nuova)
+**esiste subito** — nella pagina App, con i suoi tool — e torna il valore vero;
+se no torna l'errore, e l'app di prima resta com'era
+(``jenny/apps/drafts.py``). Nessuna approvazione: un'app che non piace si
+butta, nel cestino.
 
 Funziona dalla chat personale e da quella di un quaderno, solo nei turni
 dell'utente: mai dal giardiniere, da un cron o da un subagent. Da un quaderno
@@ -43,9 +43,10 @@ _ALLOWED_TOP = {"app.json", "run.py", "AGENT.md"}
 
 _PARAMETERS = tool_parameters_schema(
     action=StringSchema(
-        "draft: write a new app (or a new version) as a trial, and run its reader once; "
-        "edit: replace one exact string in one file of the trial (copies the app first if it "
-        "has no trial); show: manifest, state and code; run: read the live reader now; "
+        "draft: write a new app (or a new version): it is validated, its reader runs once, "
+        "and when it works it is live at once; edit: replace one exact string in one file "
+        "of the app (same checks, then live); show: manifest, state and code; run: read the "
+        "reader now; "
         "place: put the app on a notebook board as a card of its own (its value on the "
         "polaroid, a tap opens it), optionally tied to an existing card; trash: move an app to the trash (personal chat only).",
         enum=["draft", "edit", "show", "run", "place", "trash"],
@@ -100,11 +101,10 @@ class AppTool(Tool):
             "Write, try, fix and place the user's apps. An app lives in workspace/apps/<slug>/ "
             "and may have: a screen (app/index.html + declared actions in app.json), a reader "
             "(run.py, run every N minutes by the clock with no model turn) and a summary (how "
-            "it shows on its own card: the value in place of the photo). Every app is born ON TRIAL: `draft` writes "
-            "it and runs its reader once — tell the user the real value — and the user keeps "
-            "it with the Keep button on its trial card (App page, or a tap on its card on a "
-            "board). You cannot keep it yourself. A fix that adds no new host, collection, "
-            "action or summary change goes live at once. Any app that keeps state MUST "
+            "it shows on its own card: the value in place of the photo). `draft` validates the "
+            "files and runs the reader once: when they work the app is live at once (in the "
+            "App page, with its tools) — tell the user the real value; when they do not, "
+            "nothing changes and you get the error. Any app that keeps state MUST "
             "declare a `summary`. Use the app-creator skill for the manifest format. `place` "
             "puts it on a notebook board as a card of its own (a tap opens its screen), tied by "
             "a thread to the card it belongs with: placing it in a notebook also lets that "
@@ -189,15 +189,15 @@ class AppTool(Tool):
     @staticmethod
     def _seed_draft(workspace: Path, slug: str) -> Path:
         """La cartella della bozza: vuota per un'app nuova, il codice di adesso per una vecchia."""
-        from jenny.apps import trust
+        from jenny.apps import drafts
 
-        d = trust.draft_dir(workspace, slug)
+        d = drafts.draft_dir(workspace, slug)
         if d.exists():
             return d
-        live = trust.app_dir(workspace, slug)
+        live = drafts.app_dir(workspace, slug)
         d.mkdir(parents=True)
         if live.is_dir():
-            for name in (*trust.CODE_FILES, "AGENT.md"):
+            for name in (*drafts.CODE_FILES, "AGENT.md"):
                 if (live / name).is_file():
                     (d / name).write_bytes((live / name).read_bytes())
             if (live / "app").is_dir():
@@ -233,9 +233,9 @@ class AppTool(Tool):
         problem = self._check_files({path: new})
         if problem:
             return f"Not written: {problem}"
-        from jenny.apps import trust
+        from jenny.apps import drafts
 
-        if not trust.draft_dir(workspace, slug).exists() and not trust.app_dir(
+        if not drafts.draft_dir(workspace, slug).exists() and not drafts.app_dir(
                 workspace, slug).is_dir():
             return f"No app `{slug}`: create it with action=draft."
         d = self._seed_draft(workspace, slug)
@@ -254,17 +254,18 @@ class AppTool(Tool):
         return await self._try(workspace, slug)
 
     async def _try(self, workspace: Path, slug: str) -> str:
-        """Valida la bozza, gira il lettore una volta, e decide: subito o in prova."""
-        from jenny.apps import trust
+        """Valida la bozza, gira il lettore una volta e, se va, la fa diventare l'app."""
+        from jenny.apps import drafts
+        from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
         from jenny.apps.summary_view import summary_view
 
-        draft = trust.load_draft(workspace, slug)
+        draft = drafts.load_draft(workspace, slug)
         assert draft is not None
         app = draft.app
         if app.broken or app.manifest is None:
-            return (f"The draft of `{slug}` is not valid: {app.error}\nFix it with action=edit "
-                    "(or draft again); nothing runs until it is valid.")
+            return (f"`{slug}` is not valid: {app.error}\nFix it with action=edit (or draft "
+                    "again); nothing changed until it is valid.")
         m = app.manifest
         stateful = m.reader is not None or any(
             a.kind == "storage" and a.op in ("append", "set", "update", "delete")
@@ -273,50 +274,39 @@ class AppTool(Tool):
             return ("Not ready: this app keeps state, so it must declare a `summary` — how it "
                     "shows on its card (see the app-creator skill). Add it with "
                     "action=edit.")
-        reading = ""
+        existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
         if m.reader is not None:
             state = await run_reader(workspace, slug, force=True, app_dir=draft.dir)
             if not state or state.get("status") != "ok":
                 error = (state or {}).get("lastError", "the reader did not run")
                 head = ("The network or the host did not answer (not a code bug)"
                         if (state or {}).get("status") == "unreachable" else
-                        "The trial run of the reader failed")
-                return (f"{head}. `{slug}` stays a draft.\n\n{error}\n\nContract: `def run(ctx):` "
+                        "The test run of the reader failed")
+                return (f"{head}. Nothing changed{' in the live app' if existed else ''}.\n\n"
+                        f"{error}\n\nContract: `def run(ctx):` "
                         "returns a dict with exactly the reader's fields (a list of dicts when "
                         "the reader has a `key`); ctx.now, ctx.prev, ctx.http (only the hosts in "
                         "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit.")
-            reading = self._reading(summary_view(workspace, app, {}))
-        live_ok = (trust.app_dir(workspace, slug) / "app.json").is_file() and trust.is_live(
-            workspace, slug)
-        approved = trust.approved_atoms(workspace, slug)
-        atoms = trust.contract_atoms(m)
-        if live_ok and approved is not None and atoms <= approved:
-            trust.promote_draft(workspace, slug)
-            trust.approve(workspace, slug)
-            return (f"Fixed and live already{': ' + reading if reading else ''}. It touches and "
-                    "reaches nothing new, so no trial was needed — tell the user in one line "
-                    "what you changed.")
-        if not trust.trust_on(workspace):
-            # Il mondo di prima (nessun file di approvazioni): niente prova.
-            trust.promote_draft(workspace, slug)
-            return f"`{slug}` is live{': ' + reading if reading else ''}."
-        new = sorted(atoms - (approved or set())) if live_ok else []
-        reach = trust.describe_atoms(atoms)
-        bits = []
-        if reach["reaches"]:
-            bits.append("it reaches " + ", ".join(reach["reaches"]))
-        if reach["writes"]:
-            bits.append("it writes " + ", ".join(reach["writes"]))
-        if reach["skills"]:
-            bits.append("it uses the skill " + ", ".join(reach["skills"]))
-        changed = (" This version adds: " + ", ".join(new) + ".") if new else ""
-        return (
-            f"`{slug}` is ready ON TRIAL{' — first reading: ' + reading if reading else ''}."
-            f"{changed} It does not run, has no tools and its screen does not open until the "
-            "user taps Keep on its trial card (the App page, or a tap on its card on a board). "
-            f"Tell them what it does{(' — ' + '; '.join(bits)) if bits else ''} — and that "
-            "they keep it there. To put it on a notebook board use action=place."
-        )
+        drafts.promote_draft(workspace, slug)
+        reading = ""
+        live = find_app(workspace, slug)
+        if m.reader is not None and live is not None:
+            if existed:
+                # La versione nuova legge sui dati veri, non su quelli della bozza.
+                await run_reader(workspace, slug, force=True)
+            # Un lettore a serie (un sensore per posa): la prima lettura e' quella
+            # dell'ultima serie letta, coi parametri che il riassunto vuole.
+            from jenny.apps.reader import read_readings
+
+            last = (read_readings(live.dir) or [{}])[-1]
+            params = {name: last[name] for name in (m.section.params if m.section else {})
+                      if name in last}
+            reading = self._reading(summary_view(workspace, live, params))
+        what = "updated" if existed else "live"
+        return (f"`{slug}` is {what}{' — ' + reading if reading else ''}. It is in the user's "
+                "App page now, with its tools. Tell them in one or two lines what it does"
+                + ("" if existed else " — and, if it is about a notebook's subject, offer to put "
+                   "it on that board with action=place") + ".")
 
     @staticmethod
     def _reading(view: dict[str, Any]) -> str:
@@ -332,17 +322,23 @@ class AppTool(Tool):
     # -- leggere ------------------------------------------------------------
 
     def _show(self, workspace: Path, slug: str) -> str:
-        from jenny.apps import trust
+        from jenny.apps import drafts
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import read_state
         from jenny.board.micro import redact
 
-        draft = trust.load_draft(workspace, slug)
-        app = draft.app if draft is not None else find_app(workspace, slug)
+        app = find_app(workspace, slug)
+        draft = drafts.load_draft(workspace, slug)
+        if app is None and draft is not None:
+            app = draft.app
+            state = "an unfinished draft (not an app yet: fix it with action=edit)"
+        elif draft is not None:
+            state = "live, with an unfinished new version (fix it with action=edit)"
+        else:
+            state = "live"
         if app is None:
             return f"No app `{slug}`."
-        state = trust.app_trust_state(workspace, slug)
-        out = [f"`{slug}` — {state['state']}" + (f" (broken: {app.error})" if app.broken else "")]
+        out = [f"`{slug}` — {state}" + (f" (broken: {app.error})" if app.broken else "")]
         for name in ("app.json", "run.py"):
             path = app.dir / name
             if path.is_file():
@@ -358,16 +354,13 @@ class AppTool(Tool):
         return "\n\n".join(out)
 
     async def _run(self, workspace: Path, slug: str) -> str:
-        from jenny.apps import trust
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
         from jenny.apps.summary_view import summary_view
 
         app = find_app(workspace, slug)
         if app is None or app.manifest is None or app.manifest.reader is None:
-            return f"`{slug}` has no live reader (a trial is read with action=draft)."
-        if not trust.is_live(workspace, slug):
-            return "Its code is not approved: the user has to Keep it first."
+            return f"`{slug}` has no reader."
         state = await run_reader(workspace, slug, force=True)
         if state and state.get("status") == "ok":
             return "Read now — " + self._reading(summary_view(workspace, app, {}))
@@ -376,13 +369,11 @@ class AppTool(Tool):
     # -- posare -------------------------------------------------------------
 
     def _place(self, workspace: Path, slug: str, session: str, kw: dict[str, Any]) -> str:
-        from jenny.apps import trust
+        from jenny.apps.drafts import app_dir
         from jenny.board.placements import placements
         from jenny.utils.wiki_paths import discover_wiki_roots, is_wiki_root
 
-        exists = (trust.app_dir(workspace, slug) / "app.json").is_file() or trust.load_draft(
-            workspace, slug) is not None
-        if not exists:
+        if not (app_dir(workspace, slug) / "app.json").is_file():
             return f"No app `{slug}`: write it with action=draft first."
         root = None
         if session.startswith("project:"):
@@ -412,8 +403,8 @@ class AppTool(Tool):
                               by="jenny-on-request")
         except ValueError as exc:
             return str(exc)
-        return (f"Placed {where}. The notebook's chat can now use `{slug}`. If it is still on "
-                "trial, a tap on its card shows the trial card with Keep.")
+        return (f"Placed {where}. The notebook's chat can now use `{slug}`; a tap on the card "
+                "opens the app.")
 
     def _trash(self, workspace: Path, slug: str, session: str) -> str:
         from jenny.apps.trash import trash_app

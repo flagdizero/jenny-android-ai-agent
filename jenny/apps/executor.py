@@ -78,14 +78,6 @@ async def execute_action(
     app = find_app(workspace, slug)
     if app is None:
         raise AppActionError(f"app '{slug}' not found", status=404)
-    from jenny.apps.trust import is_live
-
-    if not is_live(workspace, slug):
-        # In prova, o cambiata fuori da Jenny: non gira finché l'utente non
-        # tocca «Tienila» (v. ``jenny/apps/trust.py``).
-        raise AppActionError(
-            f"app '{slug}' is waiting for the user's approval: they keep it from its "
-            "trial card (Keep), Jenny cannot", status=423)
     action = resolve_action(app, action_name)
     validate_action_params(action, params)
 

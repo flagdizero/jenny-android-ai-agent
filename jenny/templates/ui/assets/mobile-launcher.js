@@ -904,16 +904,7 @@ export class LauncherController {
     tile.appendChild(name);
     // Il guasto per intero a chi resta sopra: a schermo e' solo un puntino.
     if (entry.problem) tile.title = entry.problem;
-    if (entry.trial) tile.appendChild(this._trialBadge(entry.trial));
     return tile;
-  }
-
-  /** Il cartellino di un'app in prova: si legge, non e' un colore da indovinare. */
-  _trialBadge(state) {
-    const badge = document.createElement('span');
-    badge.className = `launcher-trial is-${state}`;
-    badge.textContent = i18n.t(`apps.trialBadge.${state}`);
-    return badge;
   }
 
   /** Un `listbox` promette che i suoi figli siano `option`, e nei tre stati
@@ -1265,7 +1256,6 @@ export class LauncherController {
       text.appendChild(desc);
     }
     row.appendChild(text);
-    if (entry.trial) row.appendChild(this._trialBadge(entry.trial));
 
     /* `has_server`: una Jenny App con un backend proprio non è la stessa cosa
        di una che vive nel workspace, e il gateway lo dice già. Un glifo, non

@@ -168,14 +168,11 @@ class BoardPass:
     def apps_with_section(self) -> dict[str, dict[str, Any]]:
         try:
             from jenny.apps.manifest import scan_apps
-            from jenny.apps.trust import is_live
         except Exception:  # noqa: BLE001 — senza app si propone senza sezioni
             return {}
         out = {}
         for app in scan_apps(self.workspace):
-            # Solo app tenute dall'utente: una prova non si propone.
-            if app.manifest is not None and app.manifest.section is not None and is_live(
-                    self.workspace, app.slug):
+            if app.manifest is not None and app.manifest.section is not None:
                 out[app.slug] = {"name": app.manifest.name, "params": app.manifest.section.params}
         return out
 

@@ -111,14 +111,9 @@ def _cover(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
     section = {"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
                "params": card["app"].get("params") or {}}
     view = section_view(workspace, None, section) or {}
-    # ``live`` si apre; ``trial`` apre la prova (Tienila); ``missing``,
-    # ``trashed`` e ``broken`` aprono il cassetto, che dice cosa e' successo.
-    if view.get("state") in ("missing", "trashed", "broken"):
-        state = view["state"]
-    elif view.get("codeStatus") in ("trial", "unapproved"):
-        state = "trial"
-    else:
-        state = "live"
+    # ``live`` si apre; ``missing``, ``trashed`` e ``broken`` aprono il
+    # cassetto, che dice cosa e' successo.
+    state = view["state"] if view.get("state") in ("missing", "trashed", "broken") else "live"
     out: dict[str, Any] = {"app": {
         "slug": card["app"]["slug"], "params": section["params"],
         "hasScreen": bool(view.get("hasScreen")), "state": state,

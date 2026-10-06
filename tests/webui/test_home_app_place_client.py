@@ -1,9 +1,8 @@
-"""La prova di un'app, il cestino e «Metti in un quaderno…», nella casa vera (jsdom).
+"""«Metti in un quaderno…», le app senza schermo e il cestino, nella casa vera (jsdom).
 
-Un'app in prova non si apre: il tocco apre la sua prova, in parole, con
-Tienila / Scarta / Cambia. Un'app tenuta si mette in un quaderno con tre
-domande al piu'. Il cestino c'e' in fondo alla pagina App solo quando non e'
-vuoto.
+Un'app si mette in un quaderno con tre domande al piu', sempre come polaroid
+sua. Un'app senza schermo non apre una pagina vuota: il tocco mostra il suo
+foglio. Il cestino c'e' in fondo alla pagina App solo quando non e' vuoto.
 """
 
 from __future__ import annotations
@@ -17,11 +16,8 @@ pytestmark = requires_node
 
 APPS = {"apps": [
     {"slug": "waterbot", "name": "WaterBot", "broken": False, "icon": "ti-droplet",
-     "state": "trial", "section": None,
-     "trial": {"reaches": ["192.168.1.40"], "writes": [], "skills": [], "actions": [], "new": [],
-               "broken": False, "error": "",
-               "reading": {"value": 38, "unit": "%", "label": "Moisture", "source": "", "at": ""}}},
-    {"slug": "etf", "name": "ETF", "broken": False, "icon": "ti-chart-line", "state": "live",
+     "has_screen": False, "section": {"params": {}}},
+    {"slug": "etf", "name": "ETF", "broken": False, "icon": "ti-chart-line", "has_screen": True,
      "section": {"params": {}}},
 ]}
 
@@ -32,7 +28,7 @@ routes['/api/webui/apps'] = __APPS__;
 routes['/api/projects'] = { dir: 'wikis', projects: [{ name: 'soldi', modified: '2026-10-06' }] };
 routes['/api/board'] = { exists: true, cards: [{ id: 'conto', title: 'Conto', pos: { x: 1, y: 1 } }],
   notes: [], connections: [], suggestions: [], since: [], offboard: 0, pages: 0 };
-for (const m of ['apps.keep', 'apps.discard', 'board.card.add', 'board.section.add']) {
+for (const m of ['board.card.add', 'board.section.add']) {
   rpcAnswers[m] = () => ({ ok: true });
 }
 const app = await boot();
@@ -49,26 +45,20 @@ def _run(script: str, apps: dict = APPS) -> None:
 
 
 @requires_jsdom
-def test_an_app_on_trial_opens_its_trial_card_in_plain_words() -> None:
+def test_an_app_without_a_screen_opens_its_sheet_not_an_empty_page() -> None:
     _run("""
       await actions.openApp('waterbot');
       await tick(10);
-      assert.ok($('jenny-app-sheet').open, 'la prova non si apre');
-      assert.equal(document.querySelector('.app-frame-overlay'), null, 'lo schermo non si apre');
-      const text = $('jenny-app-sheet-actions').textContent;
-      assert.match(text, /38 %/);
-      assert.match(text, /192\\.168\\.1\\.40/);
-      assert.match(text, /Writes nothing/);
-      assert.deepEqual(buttons().map((b) => b.textContent), ['Keep it', 'Discard', 'Change']);
-      buttons()[0].click();
-      await tick(40);
-      assert.deepEqual(rpcs('apps.keep').at(-1).params, { slug: 'waterbot' });
-      assert.equal($('jenny-app-sheet').open, false);
+      assert.equal(document.querySelector('.app-frame-overlay'), null, 'una pagina che non esiste');
+      assert.ok($('jenny-app-sheet').open, 'il suo foglio');
+      const rows = buttons().map((b) => b.textContent.trim());
+      assert.ok(!rows.includes('Open'), rows.join(' | '));
+      assert.ok(rows.includes('Put in a notebook…'), rows.join(' | '));
     """)
 
 
 @requires_jsdom
-def test_a_kept_app_goes_into_a_notebook_as_its_own_card() -> None:
+def test_an_app_goes_into_a_notebook_as_its_own_card() -> None:
     _run("""
       await actions.showPlaceSheet('etf');
       await tick(20);

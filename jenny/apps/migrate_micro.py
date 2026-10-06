@@ -9,14 +9,15 @@ cui veniva. Per l'utente non cambia niente di quel che vede: stessa sezione
 letture, stesso stato, stesse attese a condizione.
 
 L'ordine dei passi è quello che rende sicuro ripartire a metà: prima l'app
-(cartella e dati), poi la sua approvazione, poi la bacheca e le attese, e solo
-alla fine la cartella vecchia va in ``board/micro/.migrated/`` — da lì in poi
+(cartella e dati), poi la bacheca e le attese, e solo alla fine la cartella
+vecchia va in ``board/micro/.migrated/`` — da lì in poi
 :func:`jenny.board.micro.list_micros` non la vede più, e una seconda passata
 non trova niente da fare.
 
-L'approvazione passa: l'utente aveva approvato **quel** ``run.py``, e il
-manifest intorno lo genera questo codice, non Jenny. Una micro app non
-approvata (o ancora in prova) diventa un'app in prova.
+Le app non hanno una prova (tolta il 06/10/2026): una micro app ancora in
+prova diventa un'app come le altre. Una versione nuova in prova di una micro
+app che c'era va nelle bozze, e all'avvio diventa l'app
+(:func:`jenny.apps.drafts.promote_valid_drafts`, che gira dopo).
 """
 
 from __future__ import annotations
@@ -106,7 +107,7 @@ def _write_app(target: Path, spec: dict[str, Any], code: str, notebook: str,
 
 def migrate_notebook(workspace: Path, root: Path) -> int:
     """Migra le micro app di un quaderno. Torna quante."""
-    from jenny.apps import trust
+    from jenny.apps import drafts
     from jenny.board import micro as mc
     from jenny.board import model
     from jenny.board.store import mutate_board, mutate_reminders
@@ -128,12 +129,11 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
             continue
         slug = _slug_for(base.spec["title"], taken)
         if live is not None:
-            target = trust.app_dir(workspace, slug)
-            _write_app(target, live.spec, live.code, root.name, live.dir)
-            if mc.is_approved(workspace, root, live):
-                trust.approve(workspace, slug)
+            _write_app(drafts.app_dir(workspace, slug), live.spec, live.code, root.name,
+                       live.dir)
         if draft is not None:
-            target = trust.draft_dir(workspace, slug)
+            target = (drafts.draft_dir(workspace, slug) if live is not None
+                      else drafts.app_dir(workspace, slug))
             _write_app(target, draft.spec, draft.code, root.name, draft.dir)
         renamed[micro_id] = slug
 
@@ -175,13 +175,9 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
 
 def migrate_micro_apps(workspace: Path) -> int:
     """Tutti i quaderni. Idempotente; un quaderno rotto non ferma gli altri."""
-    from jenny.apps.trust import grandfather
     from jenny.board.placements import _wikis_dirs
     from jenny.utils.wiki_paths import discover_wiki_roots
 
-    # La prova deve essere gia' accesa: un'approvazione scritta qui creerebbe
-    # il file delle approvazioni senza le app che c'erano gia'.
-    grandfather(workspace)
     total = 0
     for wikis in _wikis_dirs(workspace):
         for name, root in sorted(discover_wiki_roots(wikis).items()):

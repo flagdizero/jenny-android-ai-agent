@@ -68,8 +68,7 @@ export const rpc = {
     return send(`board.${method}`, { wiki, ...params });
   },
 
-  /** Le risposte dell'utente sulle app: il cestino (`apps.trash`,
-   *  `apps.restore`, `apps.purge`) e la prova (`apps.keep`, `apps.discard`).
+  /** Il cestino delle app (`apps.trash`, `apps.restore`, `apps.purge`):
    *  `jenny/webui/apps_commands.py`. */
   apps(method, params = {}) {
     return send(`apps.${method}`, params);

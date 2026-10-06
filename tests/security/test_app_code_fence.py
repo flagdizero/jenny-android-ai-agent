@@ -1,10 +1,10 @@
-"""Il codice di un'app si scrive solo dal tool ``app``: va in prova.
+"""Il codice di un'app si scrive solo dal tool ``app``, che lo controlla.
 
-Con la prova per tutte le app (``jenny/apps/trust.py``) un ``app.json`` o un
-``run.py`` riscritti con gli strumenti generici girerebbero lo stesso... non
-girano (l'impronta non torna), ma l'app si fermerebbe sotto gli occhi
-dell'utente senza che nessuno l'abbia chiesto. Quindi il recinto: ogni
-superficie di scrittura rifiuta il codice, e lascia aperti dati e note.
+Il tool valida l'app e gira il lettore prima di salvarla
+(``jenny/apps/drafts.py``): un ``app.json`` o un ``run.py`` riscritti con gli
+strumenti generici salterebbero quei controlli, e un'app rotta o senza
+riassunto finirebbe in produzione. Quindi il recinto: ogni superficie di
+scrittura rifiuta il codice, e lascia aperti dati e note.
 """
 
 from __future__ import annotations

@@ -615,7 +615,7 @@ export class HomeBoard {
         photo.appendChild(when);
       }
     } else if (card.glyph || card.app?.icon) {
-      /* Un'app ancora senza valore (in prova, o senza dati) mostra la sua icona. */
+      /* Un'app ancora senza valore (senza dati, o senza riassunto) mostra la sua icona. */
       const icon = document.createElement('i');
       icon.className = `ti ${card.glyph ? `ti-${card.glyph}` : card.app.icon}`;
       icon.setAttribute('aria-hidden', 'true');
@@ -915,12 +915,12 @@ export class HomeBoard {
     bar.hidden = false;
   }
 
-  /** Il tocco su una polaroid. Una scheda che **e'** un'app apre l'app: il suo
-   *  schermo, o la prova se e' ancora da tenere. Un'app senza schermo, o che
-   *  non c'e' piu' (nel cestino, rotta), apre il cassetto, che dice il resto. */
+  /** Il tocco su una polaroid. Una scheda che **e'** un'app apre il suo
+   *  schermo. Un'app senza schermo, o che non c'e' piu' (nel cestino, rotta),
+   *  apre il cassetto, che dice il resto. */
   openCard(card) {
     const app = card.app;
-    if (app && this.onOpenApp && (app.state === 'trial' || (app.state === 'live' && app.hasScreen))) {
+    if (app && this.onOpenApp && app.state === 'live' && app.hasScreen) {
       this.onOpenApp(app.slug);
       return;
     }
@@ -987,8 +987,7 @@ export class HomeBoard {
     appBox.className = 'home-board-form';
     if (withApp) {
       api.getJennyApps().then((out) => {
-        const apps = (out?.apps || []).filter((a) => !a.broken && a.section
-          && (a.state || 'live') !== 'trial');
+        const apps = (out?.apps || []).filter((a) => !a.broken && a.section);
         if (!apps.length) return;
         const label = document.createElement('label');
         label.className = 'home-board-form-label';

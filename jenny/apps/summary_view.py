@@ -122,13 +122,8 @@ def summary_view(
     params: Mapping[str, Any],
     *,
     now: datetime | None = None,
-    code_state: str | None = None,
 ) -> dict[str, Any]:
-    """Il riassunto di *app* per una posa con *params*. Mai un'eccezione.
-
-    *code_state*, se c'e', vince sullo stato dei dati: un'app in prova o non
-    approvata lo dice anche se ha un valore (che resta, l'ultimo buono).
-    """
+    """Il riassunto di *app* per una posa con *params*. Mai un'eccezione."""
     from jenny.board.sections import records_view
 
     manifest = app.manifest
@@ -182,9 +177,7 @@ def summary_view(
     reader_status = str(state.get("status") or "")
     data_state = view["state"]
     shown = data_state
-    if code_state:
-        shown = code_state
-    elif reader_status in ("broken", "quarantined", "paused"):
+    if reader_status in ("broken", "quarantined", "paused"):
         shown = reader_status
     out = {
         **base,
@@ -205,7 +198,7 @@ def summary_view(
         "dataState": data_state,
         "extras": extras,
         "source": record.get("_source", "") if isinstance(record.get("_source"), str) else "",
-        "codeStatus": code_state or reader_status or "ok",
+        "codeStatus": reader_status or "ok",
         "lastError": state.get("lastError", "") if reader_status not in ("", "ok") else "",
         "failures": int(state.get("failures") or 0),
     }

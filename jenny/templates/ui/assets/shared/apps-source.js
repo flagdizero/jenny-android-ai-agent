@@ -343,10 +343,6 @@ export class AppsSource {
         icon: null,
         description: app.description || '',
         problem,
-        /* La prova: `trial` (nuova, aspetta «Tienila»), `changed` (una modifica
-           aspetta), `unapproved` (cambiata fuori da Jenny). Il cartellino
-           sull'icona lo dice; toccandola si apre la prova, non l'app. */
-        trial: ['trial', 'changed', 'unapproved'].includes(app.state) ? app.state : null,
         hasServer: !!app.has_server,
         // Anche l'errore si cerca: «manifest» deve far emergere le app rotte
         // tutte insieme, che e' il modo in cui uno le ripara.

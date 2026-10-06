@@ -137,15 +137,16 @@ class AppCodeWriteError(PermissionError):
     """Sollevata quando uno strumento generico prova a scrivere il codice di un'app.
 
     Il codice di un'app (``app.json``, ``run.py``, ``app/``) cambia solo dal
-    tool ``app``: una modifica va in prova, e gira solo quando l'utente la
-    tiene (``jenny/apps/trust.py``). Scritto a mano, salterebbe la prova. I dati
-    (``data/``) e le note (``AGENT.md``) restano scrivibili.
+    tool ``app``, che lo valida e prova il lettore prima di salvarlo
+    (``jenny/apps/drafts.py``): scritto a mano, un'app rotta o senza riassunto
+    andrebbe in produzione. I dati (``data/``) e le note (``AGENT.md``) restano
+    scrivibili.
     """
 
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             "An app's code (app.json, run.py, app/) is written only through the `app` tool: "
-            "the change goes on trial and the user keeps it. Do not write it with file tools "
+            "it validates the change and runs the reader before saving. Do not write it with file tools "
             "or python_exec, and do not look for another path. Its data/ and AGENT.md stay "
             "writable."
             + (f" ({detail})" if detail else "")

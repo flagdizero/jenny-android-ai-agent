@@ -334,28 +334,26 @@ class GatewayContainer:
             )
 
     def _prepare_apps(self) -> None:
-        """Le app prima dell'agente: la prova per tutte, e le micro app traslocate.
+        """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
 
-        La prima volta che una versione con la prova parte, le app che ci sono
-        gia' risultano approvate (:func:`jenny.apps.trust.grandfather`): un
-        aggiornamento non ferma niente di quel che usavi. Poi le micro app dei
-        cassetti diventano app generali (``jenny/apps/migrate_micro.py``).
-        Entrambe idempotenti, ed entrambe prima che i tool delle app si
-        registrino. Lo stesso ``except`` largo di ``_repair_pending_renames``:
+        Le micro app dei cassetti diventano app generali
+        (``jenny/apps/migrate_micro.py``); poi un'app lasciata «in prova» da
+        una versione di prima (06/10/2026) diventa vera
+        (:func:`jenny.apps.drafts.promote_valid_drafts`). Entrambe idempotenti, ed entrambe
+        prima che i tool delle app si registrino. Lo stesso ``except`` largo di ``_repair_pending_renames``:
         un'app da sistemare non deve valere un gateway che non parte.
         """
         try:
-            from jenny.apps.trust import grandfather
-
-            n = grandfather(self.config.workspace_path)
-            if n:
-                logger.info("Apps: {} installed apps approved as they are (first start "
-                            "with trials)", n)
             from jenny.apps.migrate_micro import migrate_micro_apps
 
             moved = migrate_micro_apps(self.config.workspace_path)
             if moved:
                 logger.info("Apps: {} notebook micro apps are now general apps", moved)
+            from jenny.apps.drafts import promote_valid_drafts
+
+            kept = promote_valid_drafts(self.config.workspace_path)
+            if kept:
+                logger.info("Apps: {} left on trial are now apps: {}", len(kept), kept)
         except Exception:
             logger.opt(exception=True).error(
                 "Preparazione delle app fallita; il gateway parte comunque")

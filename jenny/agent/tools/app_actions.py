@@ -118,21 +118,11 @@ class AppToolsSyncer:
     def __init__(self, workspace: Path, *, bus: Any = None) -> None:
         self._workspace = Path(workspace)
         self._bus = bus
-        # slug -> ((app.json mtime_ns, approvata), [registered tool names])
+        # slug -> (app.json mtime_ns, [registered tool names])
         self._state: dict[str, tuple[object, list[str]]] = {}
-        # Le prove (``apps/.drafts``): non danno tool, ma la pagina App le
-        # mostra, quindi una prova nuova o scartata e' un cambio dell'elenco.
-        self._drafts: dict[str, int] | None = None
 
     def _manifest_mtimes(self) -> dict[str, object]:
-        """Una firma per app: il manifest, e (dalla prova in poi) se è approvata.
-
-        Un'app che passa da «in prova» a «tenuta» non cambia ``app.json``: la
-        firma porta anche l'esito di :func:`jenny.apps.trust.is_live`, che è
-        in cache sulle date dei file, cosi' il giro resta di poche ``stat``.
-        """
-        from jenny.apps.trust import is_live
-
+        """Una firma per app: la data del suo manifest."""
         apps_root = self._workspace / "apps"
         mtimes: dict[str, object] = {}
         if not apps_root.is_dir():
@@ -145,33 +135,14 @@ class AppToolsSyncer:
                 mtime = manifest.stat().st_mtime_ns
             except OSError:
                 mtime = -1  # folder without readable manifest
-            mtimes[entry.name] = (mtime, is_live(self._workspace, entry.name))
+            mtimes[entry.name] = mtime
         return mtimes
 
-    def _draft_mtimes(self) -> dict[str, int]:
-        """Una firma per prova: la data del suo ``app.json``."""
-        drafts = self._workspace / "apps" / ".drafts"
-        out: dict[str, int] = {}
-        if not drafts.is_dir():
-            return out
-        for entry in drafts.iterdir():
-            try:
-                out[entry.name] = (entry / "app.json").stat().st_mtime_ns
-            except OSError:
-                continue
-        return out
-
     def sync(self, registry: Any) -> tuple[list[str], bool]:
-        """Diff apps against the registry; returns (tool names, changed).
-
-        *changed* is also true when a trial appeared, changed or went away:
-        it has no tools, but the App page lists it (and waits to be told).
-        """
+        """Diff apps against the registry; returns (tool names, changed)."""
         enabled, _, _ = _apps_runtime_config()
         current = self._manifest_mtimes() if enabled else {}
-        drafts = self._draft_mtimes() if enabled else {}
-        changed = self._drafts is not None and drafts != self._drafts
-        self._drafts = drafts
+        changed = False
 
         # Removed or changed apps: drop their tools first.
         for slug in list(self._state):
@@ -192,10 +163,7 @@ class AppToolsSyncer:
             for slug in stale:
                 app = by_slug.get(slug)
                 registered: list[str] = []
-                live = bool(current[slug][1]) if isinstance(current[slug], tuple) else True
-                if app is not None and not live:
-                    logger.info("App '{}' is on trial or changed outside Jenny: no tools", slug)
-                elif app is not None and not app.broken and app.manifest is not None:
+                if app is not None and not app.broken and app.manifest is not None:
                     for action in app.manifest.actions:
                         tool = AppActionTool(
                             self._workspace, slug, app.manifest.name, action,

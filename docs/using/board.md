@@ -32,7 +32,7 @@ A card shows at most one signal, so that when something lights up it means somet
 
 | Signal | Meaning |
 |---|---|
-| Red corner — *problem* | An app on this card (in its drawer, or the card itself) is in alarm, its data has stopped arriving, or it stopped and needs approving again. |
+| Red corner — *problem* | An app on this card (in its drawer, or the card itself) is in alarm, or its data has stopped arriving. |
 | Yellow corner — *coming up* | The card's nearest dated reminder is due within **14 days**, or is overdue and still open. |
 | Blue dot — *new* | The drawer was rewritten since you last opened it. |
 
@@ -55,9 +55,9 @@ The board's shape is yours, and you can change it directly, not only by answerin
 
 ### App cards
 
-A [Jenny App](mini-apps.md) goes on the board as a **card of its own**: the polaroid *is* the app. In place of the photo it shows the app's **live value** — the number big (*38 %*, *12,4k €*), the app's icon small in the corner, a thin trend line and the time of the reading. When the data stops arriving it turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always. An app still on trial, or with no value yet, shows its icon.
+A [Jenny App](mini-apps.md) goes on the board as a **card of its own**: the polaroid *is* the app. In place of the photo it shows the app's **live value** — the number big (*38 %*, *12,4k €*), the app's icon small in the corner, a thin trend line and the time of the reading. When the data stops arriving it turns grey and shows how old it is instead of the time — an old value never looks fresh — and an alarm lights the red corner as always. An app with no value yet shows its icon.
 
-**Tapping an app card opens the app**: its screen, or its trial card (with **Keep**) while it is on trial. An app with no screen opens the card's drawer, with its whole summary.
+**Tapping an app card opens the app**: its screen. An app with no screen opens the card's drawer, with its whole summary.
 
 An app never goes inside another card's drawer, and a subject card always keeps its own photo. When an app belongs with a subject — *Portfolio* with *ETF* — the two cards are tied by a **thread**. That is what **Next to «ETF»** does when you put an app in a notebook from the App page, and **App → Or put one of your apps next to it…** from a drawer.
 
@@ -109,9 +109,9 @@ Something to do, with a date: **What?** and **When?**, and a **Month only** box 
 
 #### App
 
-An app that shows **live data** in this drawer — a sensor, a price, a count, a portfolio's value — and keeps it fresh. Since October 2026 there are no separate "micro apps": it is an ordinary [app](./mini-apps.md), placed here, and it can also have a screen you open.
+An app that shows **live data** — a sensor, a price, a count, a portfolio's value — and keeps it fresh. Since October 2026 there are no separate "micro apps": it is an ordinary [app](./mini-apps.md), and it lives on its own card next to this one ([App cards](#app-cards)). An app placed inside a drawer by an older version (a micro app, after the update) stays there and is drawn as below; the drawer of an app card with no screen shows its summary the same way.
 
-**App** asks *What do you want to see, or do?*; your sentence goes to the notebook's chat, and Jenny writes the app there and places it in this drawer. She **runs its reader once before saving it**: the section appears **on trial**, showing the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02* — together with what it reaches and writes. **Keep it** makes it live; **Discard** throws it away. Nothing runs on its own until you tap Keep. **Or link one of your apps…**, at the bottom of the sheet, places an app you already have (asking for its parameters — which sensor, which plant — so the same app can sit in two drawers showing two different things).
+**App** asks *What do you want to see, or do?*; your sentence goes to the notebook's chat, and Jenny writes the app there and puts it on the board as a card of its own, tied to this one by a thread. She **runs its reader once before saving it**, and tells you the first value actually read and where it came from — *Acerello: 38 % · online, read from the WaterBot hub at 14:02*. **Or put one of your apps next to it…**, at the bottom of the sheet, does the same with an app you already have (asking for its parameters — which sensor, which plant — so the same app can be two cards showing two different things).
 
 The drawer draws the app's **summary** in one of five shapes, always the same way:
 
@@ -134,10 +134,9 @@ When something goes wrong the last good value stays, greyed, with its age, and t
 | the device or the network did not answer | a note under the value; it tries again by itself, and this never counts as broken |
 | the reader failed three times in a row | **It broke**, the card's red corner, and **Ask Jenny to fix it** |
 | a reading never stopped | it is put on hold until it is fixed |
-| the app's code was changed outside Jenny | it does not run until you **Approve again** |
 | the app is in the trash | **Put the app back** |
 
-A fix by Jenny that reaches and writes nothing new runs at once; a wider change goes back on trial, and the previous version keeps running until you keep it. Alarm and stale data light the card's red corner, and a change of state (into alarm, stalled, back to normal) writes **one** journal line marked `[inferred]` and one *since you last looked* row; the readings themselves never go into the wiki. Placing an app here also lets this notebook's chat use it (see [Apps on a notebook's board](./mini-apps.md#apps-on-a-notebooks-board)).
+Alarm and stale data light the card's red corner, and a change of state (into alarm, stalled, back to normal) writes **one** journal line marked `[inferred]` and one *since you last looked* row; the readings themselves never go into the wiki. Placing an app here also lets this notebook's chat use it (see [Apps on a notebook's board](./mini-apps.md#apps-on-a-notebooks-board)).
 
 #### Cron
 

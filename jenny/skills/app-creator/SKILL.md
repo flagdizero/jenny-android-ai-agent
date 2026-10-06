@@ -32,13 +32,11 @@ apps/<slug>/
 
 <rule>
 **Write apps only with the `app` tool — never with write_file, edit_file or python_exec**
-(they refuse app code). `app action=draft` writes the files as a **trial**: it validates them,
-runs the reader once, and tells you the real first value. A new app — or a change that
-reaches a new host, writes a new collection, adds an action or changes the summary — **waits
-on trial**: no tools, no screen, no reader, until the user taps **Keep** on its trial card (in
-the App page, or with a tap on its card on a board). You cannot keep it for them. A fix that
-adds nothing goes live at once. Tell the user what the app reaches and writes, and that they
-keep it from the trial card.
+(they refuse app code). `app action=draft` validates the files, runs the reader once and, when
+everything works, the app is **live at once** — in the user's App page, with its tools — and
+the tool tells you the real first value. When something fails nothing changes (an existing app
+keeps running as it was): fix it with `app action=edit`. There is nothing for the user to
+approve; an app they do not like, they delete.
 </rule>
 
 <rule>
@@ -170,11 +168,10 @@ Only after confirmation, call `app action=draft slug=<slug>` with `files`:
 Collections in `data/` are created on first write. If the tool reports a problem, fix it with
 `app action=edit` (one exact replacement in one file) and it tries again.
 
-### Phase 5: Trial and Place
+### Phase 5: Tell and Place
 
-The tool's answer says whether the app is live or on trial, and the first real value. Tell the
-user, in one or two lines, what it does, what it reaches and writes, and that they keep it with
-**Keep** on its trial card. If the app is about a subject of a notebook (a plant, a portfolio),
+The tool's answer says the app is live, with the first real value. Tell the user, in one or two
+lines, what it does and that it is in the App page. If the app is about a subject of a notebook (a plant, a portfolio),
 offer to put it on that notebook's board — `app action=place` makes a card that **is** the app,
 tied by a thread to the card it belongs with (`card`, e.g. the "Portfolio" app next to "ETF") —
 and do it when the user agrees. An app never goes inside another card's drawer. Placing it in a notebook also

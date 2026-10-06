@@ -26,21 +26,11 @@ Apps are created only through chat — there is no app editor or "new app" butto
 
 Jenny walks you through the design conversation (what the app tracks, what actions it needs) using the built-in `app-creator` skill, confirms with you, and writes it with her `app` tool. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?".
 
-### Every app starts on trial
+### An app exists only once it works
 
-A new app does not run until you say so. Jenny writes it as a **trial**, runs its reader once, and tells you the first real value. In the App page the app carries an **on trial** tag, and tapping it opens its trial card instead of the app:
+Jenny checks an app before saving it: the files must be valid, an app that keeps something must have its summary, and its reader runs once. If anything fails, nothing changes — a new app does not appear, and an app you already had keeps running as it was — and Jenny fixes it in the same conversation. When it works, the app is in the App page at once, with its tools, and Jenny tells you the first real value.
 
-- the first real reading, big;
-- **Goes on the internet:** the hosts it reaches — or that it does not;
-- **Touches:** the data it writes — or that it only looks;
-- the skill it uses, if any;
-- **Keep it**, **Discard** and **Change** (which takes you back to the chat).
-
-Until you tap **Keep it**, the app has no tools, its screen does not open and its reader does not run. Only you can keep it: Jenny has no way to press that button. Your approval is stored outside the workspace, next to the SSH key, where Jenny's tools cannot reach.
-
-When Jenny fixes an app later, a fix that adds nothing — no new host, no new data written, no new action, no change to the summary — goes live at once. A change that adds something goes back on trial, and the previous version keeps running until you keep the new one; the App page shows **change on trial**, and the app's long-press card has **See the change**. If an app's code is changed by hand, outside Jenny, it stops and asks to be **approved again**.
-
-Apps that were already installed when this arrived were approved as they were: the update stopped nothing you used.
+There is nothing to approve. If you do not like an app, delete it: it goes to the trash, and you can put it back (see [Deleting an app](#deleting-an-app)).
 
 Editing an existing app works the same way: long-press its icon in the App page and choose **Edit** — this takes you to the chat with `I want to edit the Jenny App "{name}" (slug: {slug}). Can you help me?` ready to finish.
 
@@ -58,7 +48,7 @@ Every app is a folder under `workspace/apps/<slug>/`:
 | `app/index.html` | The screen, if the app has one. HTML and JavaScript. Only this `app/` folder is served over the web; the manifest, `AGENT.md`, `run.py` and `data/` are never reachable by URL. |
 | `data/` | JSONL collections that hold the app's data, shared between the app and Jenny. |
 
-Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Editing the code by hand (`app.json`, `run.py`, `app/`) stops the app until you approve it again; `data/` and `AGENT.md` you can change freely. Jenny's own file tools cannot write an app's code at all: only her `app` tool can, and what it writes goes on trial.
+Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Jenny's own file tools cannot write an app's code (`app.json`, `run.py`, `app/`): only her `app` tool can, so every change she makes is checked before it is saved. `data/` and `AGENT.md` she can change freely.
 
 ## Every action is also a tool
 
@@ -73,7 +63,7 @@ This has a consequence worth calling out explicitly: **Jenny can read and modify
 
 ## Apps on a notebook's board
 
-An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it as a **card of its own**: the polaroid *is* the app. Its summary is the polaroid's picture — the value big, in place of the photo — and tapping the card opens the app's screen (an app on trial opens its trial card; an app with no screen opens the card's drawer, with the whole summary).
+An app about a subject — the moisture of a bonsai, a portfolio — can also sit on a notebook's [board](board.md), and stay in the App page as well. You **place** it as a **card of its own**: the polaroid *is* the app. Its summary is the polaroid's picture — the value big, in place of the photo — and tapping the card opens the app's screen (an app with no screen opens the card's drawer, with the whole summary).
 
 An app never goes inside another card's drawer. When it belongs with a subject that is already on the board — the *Portfolio* app and the *ETF* card, the *WaterBot* and *Acerello* — the two cards are tied by a **thread**, and the subject card keeps its own photo.
 

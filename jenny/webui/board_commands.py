@@ -202,17 +202,13 @@ async def board_card_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 
 
 def _app_params(workspace: Path, slug: Any, raw: Any) -> tuple[str, dict[str, Any]]:
-    """Lo slug di un'app che esiste (o e' in prova) e i parametri che il suo
-    riassunto dichiara: nient'altro passa."""
-    from jenny.apps import trust
+    """Lo slug di un'app che esiste e i parametri che il suo riassunto
+    dichiara: nient'altro passa."""
     from jenny.apps.manifest import SLUG_RE, find_app
 
     if not isinstance(slug, str) or not SLUG_RE.match(slug):
         raise CommandError("bad_request", "invalid app")
     app = find_app(workspace, slug)
-    if app is None:
-        draft = trust.load_draft(workspace, slug)
-        app = draft.app if draft is not None else None
     if app is None or app.manifest is None:
         raise CommandError("not_found", "app not found")
     declared = app.manifest.section.params if app.manifest.section is not None else {}

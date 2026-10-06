@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from jenny.apps import trust
 from jenny.apps.manifest import find_app
 from jenny.apps.migrate_micro import migrate_micro_apps
 from jenny.board import micro as mc
@@ -58,7 +57,6 @@ def test_an_approved_micro_app_becomes_a_live_placed_app(notebook) -> None:
     app = find_app(ws, "acerello")
     assert app is not None and not app.broken, app and app.error
     assert app.manifest.reader["every"] == 30
-    assert trust.is_live(ws, "acerello")
     section = read_board(root)["cards"][0]["userSections"][0]
     assert section == {"id": "s-m-acerello", "kind": "app", "app": "acerello", "params": {},
                        "created": section["created"], "migratedFrom": "m-acerello",
@@ -74,16 +72,16 @@ def test_an_approved_micro_app_becomes_a_live_placed_app(notebook) -> None:
     assert migrate_micro_apps(ws) == 0
 
 
-def test_an_unapproved_or_pending_micro_app_becomes_a_trial(notebook) -> None:
+def test_an_unapproved_or_pending_micro_app_becomes_an_app_too(notebook) -> None:
+    """Le app non hanno una prova: anche una micro app in prova diventa un'app."""
     ws, root = notebook
     _micro(ws, root, "m-acerello", approved=False)
     _micro(ws, root, "m-nuovo", approved=False, pending=True)
     assert migrate_micro_apps(ws) == 2
-    assert not trust.is_live(ws, "acerello")
-    assert trust.load_draft(ws, "acerello-2") is not None
+    assert find_app(ws, "acerello") is not None and find_app(ws, "acerello-2") is not None
     kinds = [(s["kind"], s["app"]) for s in read_board(root)["cards"][0]["userSections"]]
     assert kinds == [("app", "acerello"), ("app", "acerello-2")]
-    assert app_section_view(ws, "acerello-2", {})["state"] == "trial"
+    assert app_section_view(ws, "acerello-2", {})["state"] == "empty"
 
 
 def test_the_generated_manifest_reads_back(notebook) -> None:

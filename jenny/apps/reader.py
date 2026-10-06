@@ -16,8 +16,7 @@ Quel che cambia:
 - ``ctx.data(collection)`` legge una collezione dell'app: un lettore che
   **aggrega** (il valore del portafoglio dalle operazioni e dai prezzi) gira
   anche dopo ogni scrittura (:func:`schedule_reader`), cosi' il riassunto è
-  sempre quello dei dati;
-- gira solo il codice **approvato** (``jenny/apps/trust.py``).
+  sempre quello dei dati.
 """
 
 from __future__ import annotations
@@ -338,13 +337,11 @@ def record_reader_run(app: LoadedApp, result: Any, *, now: datetime) -> dict[str
 
 async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
                      force: bool = False, app_dir: Path | None = None) -> dict[str, Any] | None:
-    """Un giro del lettore di *slug*, se approvato e (salvo *force*) se tocca.
+    """Un giro del lettore di *slug*, se (salvo *force*) tocca.
 
-    Con *app_dir* gira una **bozza** (la prova del tool ``app``): niente
-    approvazione richiesta, perche' e' Jenny che la prova davanti all'utente.
-    Torna il nuovo stato, o ``None`` se non e' girato.
+    Con *app_dir* gira una **bozza** (la prova del tool ``app``, prima che
+    l'app diventi vera). Torna il nuovo stato, o ``None`` se non e' girato.
     """
-    from jenny.apps.trust import is_live
     from jenny.board.micro import is_due
 
     current = now or datetime.now(timezone.utc)
@@ -356,8 +353,6 @@ async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
         if state.get("status") == "paused" and not force:
             return None
         if not force and not is_due(app.manifest.reader, state, current):
-            return None
-        if not is_live(workspace, slug):
             return None
     result = await execute_reader(workspace, app, now=current)
     return record_reader_run(app, result, now=current)

@@ -199,12 +199,6 @@ export class AppsActions {
   async openApp(slug) {
     const app = this.source.jennyApps.find(a => a.slug === slug);
     if (!app) return;
-    /* In prova, o cambiata fuori da Jenny: lo schermo non si apre (il gateway
-       risponde 423). Si apre la prova, che dice cosa fa e chiede se tenerla. */
-    if (app.state === 'trial' || app.state === 'unapproved') {
-      this.showTrialSheet(slug);
-      return;
-    }
     if (app.broken) {
       const ok = await confirmDialog(
         i18n.t('apps.brokenConfirm', { name: app.name || slug, error: app.error || i18n.t('apps.invalidManifest') })
@@ -212,6 +206,13 @@ export class AppsActions {
       if (ok) {
         this.shell.sendChatPrompt(i18n.t('apps.brokenPrompt', { slug, error: app.error || i18n.t('apps.invalidManifest') }));
       }
+      return;
+    }
+
+    /* Senza schermo non c'e' niente da aprire (una pagina che non esiste):
+       il tocco mostra il suo foglio, da cui si mette su una bacheca. */
+    if (app.has_screen === false) {
+      this.showJennyAppSheet(slug);
       return;
     }
 
@@ -491,13 +492,13 @@ export class AppsActions {
        solo se il guscio ha le pagine — l'officina no, e la scheda non deve
        sapere in che guscio vive: lo dice la porta che le passano. */
     const homePages = this.shell?.homePages?.() || null;
-    const trialRow = app.state === 'changed'
-      ? [{ icon: 'ti-flask', label: i18n.t('apps.trialSee'), action: 'trial' }] : [];
+    /* Un'app senza schermo (solo un lettore) non ha niente da aprire ne' da
+       mettere come pagina: vive sulla sua polaroid. */
+    const screen = app.has_screen !== false;
     const actions = [
-      ...trialRow,
-      { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
-      ...(homePages ? [pageRow(homePages.state('app', slug), app)] : []),
-      ...(app.section && app.state !== 'trial'
+      ...(screen ? [{ icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' }] : []),
+      ...(homePages && screen ? [pageRow(homePages.state('app', slug), app)] : []),
+      ...(app.section
         ? [{ icon: 'ti-layout-board', label: i18n.t('apps.place'), action: 'place' }] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
       { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
@@ -529,8 +530,6 @@ export class AppsActions {
     const slug = app.slug;
     if (action === 'place') {
       this.showPlaceSheet(slug);
-    } else if (action === 'trial') {
-      this.showTrialSheet(slug);
     } else if (action === 'open') {
       this.openApp(slug);
     } else if (action === 'pin') {
@@ -571,101 +570,6 @@ export class AppsActions {
         }
       }, { label: i18n.t('apps.undo') });
     }
-  }
-  /** La prova, in parole: la prima lettura vera, cosa guarda, cosa tocca, dove
-   *  va su internet — e Tienila / Scarta / Cambia. Si legge in cinque secondi:
-   *  i dettagli (le azioni) stanno sotto, e solo se ci sono. Riusa il foglio
-   *  della pressione lunga, che e' gia' nel giro di Indietro. */
-  showTrialSheet(slug) {
-    const app = this.source.jennyApps.find(a => a.slug === slug);
-    const sheet = document.getElementById('jenny-app-sheet');
-    if (!app || !sheet) return;
-    const t = app.trial || {};
-    const unapproved = app.state === 'unapproved';
-    document.getElementById('jenny-app-sheet-title').innerHTML =
-      `<div class="app-sheet-head">
-        <div class="app-sheet-icon"><i class="ti ${escapeHtml(app.icon || 'ti-apps')}"></i></div>
-        <div class="app-sheet-name">${escapeHtml(app.name || slug)}
-          <span class="app-trial-tag">${escapeHtml(i18n.t(`apps.trialBadge.${app.state}`))}</span></div>
-      </div>`;
-    const body = document.getElementById('jenny-app-sheet-actions');
-    body.innerHTML = '';
-    const box = document.createElement('div');
-    box.className = 'app-trial';
-    const line = (cls, text) => {
-      const el = document.createElement('p');
-      el.className = cls;
-      el.textContent = text;
-      box.appendChild(el);
-      return el;
-    };
-    if (unapproved) {
-      line('app-trial-note', i18n.t('apps.trialUnapproved'));
-    } else if (t.broken) {
-      line('app-trial-note is-error', i18n.t('apps.trialBroken', { error: t.error || '' }));
-    } else {
-      if (t.reading) {
-        const value = document.createElement('div');
-        value.className = 'app-trial-value';
-        value.textContent = `${t.reading.value}${t.reading.unit ? ` ${t.reading.unit}` : ''}`;
-        box.appendChild(value);
-        line('app-trial-note', t.reading.label
-          ? i18n.t('apps.trialReading', { label: t.reading.label }) : i18n.t('apps.trialReadingBare'));
-      }
-      const rows = [
-        ['apps.trialReaches', t.reaches, 'apps.trialReachesNone'],
-        ['apps.trialWrites', t.writes, 'apps.trialWritesNone'],
-        ['apps.trialSkills', t.skills, null],
-      ];
-      for (const [key, list, none] of rows) {
-        if (list?.length) line('app-trial-row', i18n.t(key, { what: list.join(', ') }));
-        else if (none) line('app-trial-row is-none', i18n.t(none));
-      }
-      if (app.state === 'changed' && t.new?.length) {
-        line('app-trial-row is-new', i18n.t('apps.trialNew', { what: t.new.join(', ') }));
-      }
-      line('app-trial-note', i18n.t(app.state === 'changed' ? 'apps.trialWhyChanged' : 'apps.trialWhy'));
-    }
-    const buttons = document.createElement('div');
-    buttons.className = 'app-trial-actions';
-    const act = (label, cls, fn) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = `app-trial-btn ${cls}`;
-      b.textContent = label;
-      b.addEventListener('click', async () => {
-        buttons.querySelectorAll('button').forEach((x) => { x.disabled = true; });
-        await fn();
-      });
-      buttons.appendChild(b);
-    };
-    if (!t.broken) {
-      act(i18n.t(unapproved ? 'apps.reapprove' : 'apps.keep'), 'is-primary', () => this._trialAnswer(sheet, app, 'keep'));
-    }
-    if (!unapproved) act(i18n.t('apps.discard'), '', () => this._trialAnswer(sheet, app, 'discard'));
-    act(i18n.t('apps.trialChange'), '', async () => {
-      sheet.close();
-      this.shell.sendChatPrompt(i18n.t('apps.trialChangePrompt', { name: app.name || slug, slug }));
-    });
-    box.appendChild(buttons);
-    body.appendChild(box);
-    document.getElementById('jenny-app-sheet-cancel').onclick = () => sheet.close();
-    this._translateSheet(sheet);
-    if (!sheet.open) sheet.showModal();
-  }
-
-  async _trialAnswer(sheet, app, answer) {
-    try {
-      await rpc.apps(answer, { slug: app.slug });
-    } catch (err) {
-      showToast(i18n.t('apps.trialFailed'), 'error');
-      sheet.close();
-      return;
-    }
-    sheet.close();
-    showToast(i18n.t(answer === 'keep' ? 'apps.kept' : 'apps.discarded', { name: app.name || app.slug }),
-      'success');
-    await this.source.loadJennyApps();
   }
 
   /** «Metti in un quaderno…»: quale quaderno, poi da sola o accanto a una
@@ -724,7 +628,7 @@ export class AppsActions {
       }
       const go = document.createElement('button');
       go.type = 'button';
-      go.className = 'app-trial-btn is-primary';
+      go.className = 'app-place-btn';
       go.textContent = i18n.t('apps.placeGo');
       go.addEventListener('click', () => ask(Object.fromEntries(Object.entries(inputs)
         .map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v))));
@@ -749,7 +653,7 @@ export class AppsActions {
     } catch { notebooks = []; }
     head(i18n.t('apps.placeWhere', { name: app.name || slug }));
     if (!notebooks.length) {
-      body.innerHTML = `<p class="app-trial-note">${escapeHtml(i18n.t('apps.placeNoNotebooks'))}</p>`;
+      body.innerHTML = `<p class="app-place-note">${escapeHtml(i18n.t('apps.placeNoNotebooks'))}</p>`;
     } else {
       rows(notebooks.map((nb) => ({ icon: 'ti-notebook', label: nb.name, go: () => chooseCard(nb.name) })));
     }

@@ -170,15 +170,6 @@ class AppsRoutes:
         await detach_pages_quietly("app", slug, log=self._log)
         return http_json_response(outcome)
 
-    def _refuse_unapproved(self, slug: str) -> Response | None:
-        """423 per un'app in prova o cambiata fuori da Jenny: lo schermo non si
-        apre finché l'utente non la tiene (v. ``jenny/apps/trust.py``)."""
-        from jenny.apps.trust import is_live
-
-        if is_live(self._get_workspace_root(), slug):
-            return None
-        return http_error(423, "app is waiting for your approval")
-
     def _resolve_view_app(self, raw_slug: str) -> tuple[str, str] | Response:
         """``(slug, base_url)`` per una vista esterna, o il ``Response`` d'errore."""
         slug = unquote(raw_slug)
@@ -193,9 +184,6 @@ class AppsRoutes:
             return http_error(409, f"app is broken: {app.error}")
         if app.manifest.view_kind != "external":
             return http_error(400, "app has no external view")
-        refused = self._refuse_unapproved(slug)
-        if refused is not None:
-            return refused
         if not app.manifest.server_base_url:
             # _parse_manifest lo garantisce per view.kind 'external'; qui e' per
             # il type checker e per il caso in cui quella regola cambi.
@@ -266,9 +254,6 @@ class AppsRoutes:
         slug = unquote(raw_slug)
         if not slug or APP_SLUG_RE.match(slug) is None:
             return http_error(400, "invalid app slug")
-        refused = self._refuse_unapproved(slug)
-        if refused is not None:
-            return refused
         secret = self._app_token_secret()
         if not secret:
             return http_error(503, "no gateway secret configured")
@@ -330,9 +315,6 @@ class AppsRoutes:
         rel = unquote(parts[1]) if len(parts) > 1 and parts[1] else "index.html"
         if not slug or APP_SLUG_RE.match(slug) is None:
             return http_error(400, "invalid app slug")
-        refused = self._refuse_unapproved(slug)
-        if refused is not None:
-            return refused
         if ".." in rel.split("/") or rel.startswith("/"):
             return http_error(403, "Forbidden")
 

@@ -361,31 +361,12 @@ export class BoardDrawer {
       for (const verb of (v.verbs || []).slice(0, 2)) {
         tools.appendChild(button('home-drawer-link', verb, () => this._verb(section, verb)));
       }
-      if (v.state === 'trial' || v.state === 'unapproved' || v.trial) {
-        /* In prova (nuova, o una modifica che aspetta), o cambiata fuori da
-           Jenny: la si tiene da qui, come dal foglio della griglia. */
-        const reach = [];
-        if (v.trial?.reaches?.length) reach.push(i18n.t('apps.trialReaches', { what: v.trial.reaches.join(', ') }));
-        if (v.trial?.writes?.length) reach.push(i18n.t('apps.trialWrites', { what: v.trial.writes.join(', ') }));
-        body.appendChild(el('p', 'home-drawer-proof', [
-          i18n.t(v.state === 'unapproved' ? 'apps.trialUnapproved'
-            : v.state === 'trial' ? 'apps.trialWhy' : 'apps.trialWhyChanged'), ...reach].join(' ')));
-        tools.append(
-          button('home-board-btn is-primary', i18n.t(v.state === 'unapproved' ? 'apps.reapprove' : 'apps.keep'),
-            () => this._appTrial('keep', section, v)),
-        );
-        if (v.state !== 'unapproved') {
-          tools.appendChild(button('home-board-btn', i18n.t('apps.discard'),
-            () => this._appTrial('discard', section, v)));
-        }
-      }
       if (v.state === 'trashed') {
         /* L'app e' nel cestino, non sparita: si rimette da qui, e la sezione
            torna viva con i suoi dati. */
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.restore'),
           () => this._restoreApp(v)));
-      } else if (v.state !== 'missing' && v.state !== 'trial' && v.state !== 'unapproved'
-          && v.hasScreen !== false) {
+      } else if (v.state !== 'missing' && v.hasScreen !== false) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app)));
       }
       tools.appendChild(remove);
@@ -490,23 +471,6 @@ export class BoardDrawer {
     return row;
   }
 
-  async _appTrial(answer, section, v) {
-    try {
-      await rpc.apps(answer, { slug: section.app });
-    } catch (err) {
-      console.warn('home.drawer: app trial failed', err);
-      showToast(i18n.t('apps.trialFailed'), 'error');
-      return;
-    }
-    if (answer === 'discard' && v.state === 'trial') {
-      /* Una prova scartata non lascia niente da mostrare: la sezione se ne va
-         con lei, come per le micro app. */
-      await this._write('section.remove', { card: this.card, id: section.id });
-      return;
-    }
-    await this.reload();
-  }
-
   async _restoreApp(v) {
     try {
       await rpc.apps('restore', { id: v.trashId });
@@ -546,7 +510,7 @@ export class BoardDrawer {
   _microView(section, v, { app = false } = {}) {
     const shown = { ...v };
     const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
-    if (v.state === 'pending' || v.state === 'trial' || codeDown) {
+    if (v.state === 'pending' || codeDown) {
       shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
     }
     /* La fonte la dice il codice (`_source`); senza, la firma «ogni N min · da …»

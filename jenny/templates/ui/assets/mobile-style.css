@@ -3200,40 +3200,14 @@ body {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* ── La prova di un'app: in parole, in cinque secondi ── */
-.app-trial-tag {
-  display: inline-block; margin-left: 6px; padding: 1px 7px;
-  border-radius: var(--radius-pill); border: 0.5px solid var(--warning);
-  color: var(--warning); font-size: 11px; font-weight: 500; vertical-align: middle;
-}
-.app-trial { display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 2px; }
-.app-trial-value {
-  font-family: var(--font-display); font-size: 34px; line-height: 1.1; color: var(--text);
-  text-align: center;
-}
-.app-trial-note { margin: 0; color: var(--text-muted); font-size: 13px; text-align: center; }
-.app-trial-note.is-error { color: var(--error); }
-.app-trial-row { margin: 0; color: var(--text); font-size: 14px; }
-.app-trial-row.is-none { color: var(--text-muted); }
-.app-trial-row.is-new { color: var(--warning); }
-.app-trial-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding-top: 6px; }
-.app-trial-btn {
+/* ── «Metti in un quaderno…»: i parametri e il bottone ── */
+.app-place-note { margin: 0; color: var(--text-muted); font-size: 13px; text-align: center; }
+.app-place-btn {
   min-height: 44px; padding: 0 18px; border-radius: var(--radius-pill);
-  border: 0.5px solid var(--border-strong); background: transparent; color: var(--text);
+  border: 0.5px solid var(--accent); background: var(--accent); color: var(--on-accent);
   font: inherit; font-size: 14px; cursor: pointer;
 }
-.app-trial-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.app-trial-btn:disabled { opacity: 0.5; }
-.app-trial-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-/* Il cartellino sull'icona di un'app in prova, nella griglia (e in riga,
-   nell'elenco dell'officina, dove sta in fila invece che sull'angolo). */
-.launcher-row .launcher-trial { position: static; flex-shrink: 0; }
-.launcher-trial {
-  position: absolute; top: 0; right: 2px; padding: 0 5px;
-  border-radius: var(--radius-pill); background: var(--warning); color: var(--bg);
-  font-size: 9px; line-height: 15px; font-weight: 600; white-space: nowrap;
-  max-width: calc(100% - 4px); overflow: hidden; text-overflow: ellipsis;
-}
+.app-place-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* ── Jenny App frame overlay ── */
 .app-frame-overlay {
