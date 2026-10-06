@@ -456,7 +456,8 @@ def append_reading(d: Path, values: dict[str, Any], *, now: datetime) -> dict[st
     Di un campo ``rows`` lo storico tiene **quante** erano: e' il numero su cui
     vivono l'andamento, gli eventi e «avvisami quando…» («piu' di 0 annunci»).
     """
-    stamp = now.isoformat(timespec="seconds")
+    # In UTC, chiunque chiami: l'orologio passa l'ora locale, un giro a mano UTC.
+    stamp = now.astimezone(timezone.utc).isoformat(timespec="seconds")
     rows = {k: v for k, v in values.items() if isinstance(v, list)}
     scalars = {k: (len(v) if isinstance(v, list) else v) for k, v in values.items()}
     record = {"id": uuid.uuid4().hex[:12], "ts": stamp, **scalars}
@@ -1021,7 +1022,7 @@ def micro_field_value(root: Path, micro_id: str, field_name: str, *,
     readings = read_readings(micro.dir)
     if not readings:
         return None, False
-    last = max(readings, key=lambda r: str(r.get("ts", "")))
+    last = max(readings, key=lambda r: model.instant_order(r.get("ts")))
     at = model.parse_iso(last.get("ts"))
     current = now or datetime.now(timezone.utc)
     fresh = at is not None and current - at <= timedelta(minutes=micro.spec["staleAfter"])

@@ -113,8 +113,8 @@ def records_view(
     if not records:
         return {"state": "empty", "value": None, "at": "", "trend": [], "record": None}
 
-    def order(record: Mapping[str, Any]) -> str:
-        return str(record.get(latest, ""))
+    def order(record: Mapping[str, Any]) -> tuple[int, float, str]:
+        return model.instant_order(record.get(latest))
 
     last = max(records, key=order)
     value = last.get(field_name)

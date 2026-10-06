@@ -251,6 +251,21 @@ def parse_iso(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.astimezone()
 
 
+def instant_order(value: Any) -> tuple[int, float, str]:
+    """La chiave per ordinare dei ``ts`` nel tempo, non come testo.
+
+    Lo stesso istante scritto con fusi diversi (``14:07+02:00`` dall'orologio,
+    ``13:18+00:00`` da un giro a mano) come stringa si ordina al contrario: la
+    lettura piu' vecchia sembrava l'ultima e il cassetto mostrava un numero
+    superato. Un valore che non e' un istante va prima di tutti, e fra loro si
+    ordina come testo — com'era.
+    """
+    stamp = parse_iso(value)
+    if stamp is None:
+        return (0, 0.0, "" if value is None else str(value))
+    return (1, stamp.timestamp(), "")
+
+
 # ── board.json ───────────────────────────────────────────────────────────────
 
 

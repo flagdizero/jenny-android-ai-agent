@@ -120,9 +120,13 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
     letto ogni 15 minuti faceva 96 righe identiche al giorno, che il cestino
     poi contava come dati.
     """
+    from jenny.board import model
     from jenny.board.micro import _COMPACT_AFTER, _compact
 
-    stamp = now.isoformat(timespec="seconds")
+    # In UTC, chiunque chiami: l'orologio passa l'ora locale, `app run` e il
+    # ricalcolo dopo una scrittura UTC — e due fusi nello stesso file si
+    # ordinano male per chi li legge come testo (lo schermo dell'app, `query`).
+    stamp = now.astimezone(timezone.utc).isoformat(timespec="seconds")
     d = reader_dir(app_dir)
     d.mkdir(parents=True, exist_ok=True)
     records = []
@@ -174,7 +178,7 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
         kept: list[dict[str, Any]] = []
         for group in groups.values():
             kept.extend(_compact(group, now))
-        kept.sort(key=lambda r: str(r.get("ts", "")))
+        kept.sort(key=lambda r: model.instant_order(r.get("ts")))
         tmp = path.with_name(f".{path.name}.tmp")
         tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept),
                        encoding="utf-8")

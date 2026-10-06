@@ -247,3 +247,18 @@ def test_ordinary_code_is_not_a_credential() -> None:
     code = ("HUB = 'https://imh.example.com/v1/streams/waterbot/devices'\n"
             "DEVICE = 'wb-70123c'\n" + GOOD)
     assert mc.find_secrets(code) == []
+
+
+def test_the_newest_reading_wins_across_time_zones(tmp_path) -> None:
+    """L'orologio scrive con l'ora locale: come testo ``13:30+02:00`` batte ``12:00+00:00``."""
+    ws, root = _notebook(tmp_path)
+    m = _live(ws, root, GOOD)
+    rome = timezone(timedelta(hours=2))
+    first = mc.append_reading(m.dir, {"moisture": 40, "online": True},
+                              now=datetime(2026, 10, 5, 13, 7, tzinfo=rome))
+    assert first["ts"] == "2026-10-05T11:07:00+00:00"
+    # Una riga scritta prima della correzione, ancora col fuso locale.
+    with (m.dir / mc.READINGS_FILE).open("a", encoding="utf-8") as fh:
+        fh.write('{"id": "x", "ts": "2026-10-05T13:30:00+02:00", "moisture": 35}\n')
+    mc.append_reading(m.dir, {"moisture": 31, "online": True}, now=NOW)
+    assert mc.micro_field_value(root, "m-acerello", "moisture", now=NOW) == (31, True)

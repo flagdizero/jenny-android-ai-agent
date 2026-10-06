@@ -97,7 +97,8 @@ def _count_view(section: AppSection, records: list[dict[str, Any]],
     """``aggregate: count``: quanti record passano il filtro, e i piu' recenti come righe."""
     from jenny.board import model
 
-    ordered = sorted(records, key=lambda r: str(r.get(section.latest, "")), reverse=True)
+    ordered = sorted(records, key=lambda r: model.instant_order(r.get(section.latest)),
+                     reverse=True)
     value = len(records)
     newest = _record_time(ordered[0]) if ordered else None
     state = "ok"
@@ -220,6 +221,8 @@ def field_value(app: LoadedApp, params: Mapping[str, Any], field_name: str, *,
 
     Per un riassunto a conteggio, il suo campo (o ``count``) è il conteggio.
     """
+    from jenny.board import model
+
     manifest = app.manifest
     if manifest is None or manifest.section is None:
         return None, False
@@ -231,7 +234,7 @@ def field_value(app: LoadedApp, params: Mapping[str, Any], field_name: str, *,
         return view["value"], view["state"] != "stale"
     if not records:
         return None, False
-    latest = max(records, key=lambda r: str(r.get(section.latest, "")))
+    latest = max(records, key=lambda r: model.instant_order(r.get(section.latest)))
     at = _record_time(latest)
     fresh = at is not None and (
         not section.stale_after_minutes
