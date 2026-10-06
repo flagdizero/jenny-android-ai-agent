@@ -23,6 +23,23 @@ from jenny.apps.summary_view import READINGS, summary_view
 
 # Quanti punti al massimo in un grafico: abbastanza per la forma, pochi per il filo.
 MAX_CHART_POINTS = 48
+# Le immagini di un'app: in ``data/media/``, solo questi tipi, non oltre questa
+# misura. La rotta che le serve alla casa (``apps_routes._media``) usa le stesse.
+MEDIA_DIR = "media"
+MEDIA_MIMES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+               ".webp": "image/webp", ".gif": "image/gif"}
+MAX_MEDIA_BYTES = 8 * 1024 * 1024
+
+
+def media_files(app_dir) -> list:
+    """Le immagini dell'app, la piu' recente per prima."""
+    root = app_dir / "data" / MEDIA_DIR
+    try:
+        files = [p for p in root.iterdir()
+                 if p.is_file() and p.suffix.lower() in MEDIA_MIMES and not p.name.startswith(".")]
+    except OSError:
+        return []
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 class _Data:
@@ -245,6 +262,11 @@ def _b_month(b, data, today):
             "days": sorted(marked), "alarm": sorted(alarm), "today": today.day}
 
 
+def _b_photos(b, app):
+    files = media_files(app.dir)
+    return {"names": [p.name for p in files[:b["max"]]], "more": max(0, len(files) - b["max"])}
+
+
 def _b_note(b, latest):
     text = latest.get(b["field"]) if latest else None
     return {"text": str(text)[:400] if text is not None else "", "lines": b["rows"]}
@@ -311,6 +333,8 @@ def slip_view(workspace, app: LoadedApp, params: Mapping[str, Any], *,
                 payload = _b_month(b, data, today)
             elif kind == "note":
                 payload = _b_note(b, latest)
+            elif kind == "photos":
+                payload = _b_photos(b, app)
             else:
                 payload = {}
         except Exception as exc:  # noqa: BLE001 — un blocco che non legge resta vuoto

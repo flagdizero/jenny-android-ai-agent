@@ -33,7 +33,8 @@ MAX_NUMBERS = 3
 MAX_NOTE_LINES = 3
 MAX_CHART_DAYS = 31
 KINDS = ("value", "numbers", "chart", "status", "progress", "bars", "table", "events",
-         "checklist", "buttons", "switches", "counter", "week", "month", "note")
+         "checklist", "buttons", "switches", "counter", "week", "month", "note", "photos")
+MAX_PHOTOS = 3
 # I blocchi che leggono un campo dell'ultimo record (e che quindi possono dare
 # alla striscia il suo «valore» per la chat e l'orologio).
 VALUE_KINDS = ("value", "chart", "progress")
@@ -324,11 +325,20 @@ def _note(c: _Ctx, raw: dict) -> dict:
     return {"field": fld, "rows": lines}
 
 
+def _photos(c: _Ctx, raw: dict) -> dict:
+    """Le ultime immagini che l'app tiene in ``data/media/`` (le servono alla casa
+    ``apps_routes._media``, solo immagini, solo da li')."""
+    n = raw.get("max", MAX_PHOTOS)
+    if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_PHOTOS:
+        c.fail(f".max must be between 1 and {MAX_PHOTOS}")
+    return {"max": n, "rows": 3}
+
+
 _PARSERS = {
     "value": _value, "numbers": _numbers, "chart": _chart, "status": _status,
     "progress": _progress, "bars": _bars, "table": _table, "events": _events,
     "checklist": _checklist, "buttons": _buttons, "switches": _switches, "counter": _counter,
-    "week": _week, "month": _month, "note": _note,
+    "week": _week, "month": _month, "note": _note, "photos": _photos,
 }
 
 

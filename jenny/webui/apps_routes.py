@@ -7,6 +7,7 @@ Stesso pattern router di ``SkillsRoutes``/``WikiRoutes``/``WorkspaceRoutes``.
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import re
 from collections.abc import Callable
@@ -27,6 +28,8 @@ from jenny.channels.http_utils import (
     query_first,
 )
 
+# Il nome di un'immagine di un'app: niente cartelle, niente punti in testa.
+_MEDIA_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 # Request-line budget is 8192 bytes (websockets); leave headroom for path+token.
 APP_PARAMS_MAX_CHARS = 6000
 # App iframes run with an opaque origin (sandbox without allow-same-origin):
@@ -130,10 +133,47 @@ class AppsRoutes:
         m = re.match(r"^/api/webui/apps/([^/]+)/token$", path)
         if m:
             return self._token(request, m.group(1))
+        m = re.match(r"^/api/webui/apps/([^/]+)/media/([^/]+)$", path)
+        if m:
+            return await self._media(request, m.group(1), m.group(2))
         m = re.match(r"^/api/apps/([^/]+)/actions/([^/]+)$", path)
         if m:
             return await self._action(request, m.group(1), m.group(2))
         return None
+
+    async def _media(self, request: WsRequest, raw_slug: str, raw_name: str) -> Response:
+        """Un'immagine di un'app, per il blocco Foto della sua striscia.
+
+        Solo col segreto della WebUI (la casa ne fa un ``blob:``), solo file
+        diretti di ``data/media/`` con un'estensione d'immagine, non oltre
+        ``MAX_MEDIA_BYTES``. Il resto di ``data/`` resta chiuso come prima.
+        """
+        if not self._check_api_token(request):
+            return http_error(401, "Unauthorized")
+        disabled = self._check_apps_enabled()
+        if disabled is not None:
+            return disabled
+        from jenny.apps.slip_view import MAX_MEDIA_BYTES, MEDIA_DIR, MEDIA_MIMES
+        from jenny.security.workspace_policy import is_path_within
+
+        slug, name = unquote(raw_slug), unquote(raw_name)
+        if not slug or APP_SLUG_RE.match(slug) is None:
+            return http_error(400, "invalid app slug")
+        mime = MEDIA_MIMES.get(Path(name).suffix.lower())
+        if mime is None or _MEDIA_NAME_RE.match(name) is None:
+            return http_error(400, "invalid media name")
+        media = self._get_workspace_root() / "apps" / slug / "data" / MEDIA_DIR
+        candidate = media / name
+        if not is_path_within(candidate, media) or not candidate.is_file():
+            return http_error(404, "not found")
+        if candidate.stat().st_size > MAX_MEDIA_BYTES:
+            return http_error(413, "image too large")
+        body = await asyncio.to_thread(candidate.read_bytes)
+        return http_response(
+            body, content_type=mime,
+            extra_headers=[("Cache-Control", "private, max-age=3600"),
+                           ("X-Content-Type-Options", "nosniff")],
+        )
 
     def _list(self, request: WsRequest) -> Response:
         if not self._check_api_token(request):

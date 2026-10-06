@@ -55,7 +55,7 @@ The board's shape is yours, and you can change it directly, not only by answerin
 
 ### App cards
 
-A [Jenny App](mini-apps.md) goes on the board as a **card of its own**. Polaroids are the things; apps are **strips**: paper two polaroids wide, with the app's icon, its name and one datum on the right (*4 to buy*, *today +0.8 %* — or, when the app names none, its state: *at 14:02*, *stopped · 2 d ago*, *in alarm*), and below a few **blocks** the app chose: a big value with its trend, a week's chart, a list you can tick, a row of buttons, this week, this month, a progress bar…
+A [Jenny App](mini-apps.md) goes on the board as a **card of its own**. Polaroids are the things; apps are **strips**: paper two polaroids wide, with the app's icon, its name and one datum on the right (*4 to buy*, *today +0.8 %* — or, when the app names none, its state: *at 14:02*, *stopped · 2 d ago*, *in alarm*), and below a few **blocks** the app chose: a big value with its trend, a week's chart, a list you can tick, a row of buttons, this week, this month, a progress bar, the latest photos…
 
 Strips come in four sizes — **S, M, L, XL**: an M is as tall as a polaroid, an XL as two. The size comes from the app, not from its data, so the board never jumps when the numbers change; a list that does not fit ends with *and N more*. When the data stops arriving the strip greys out and the datum on the right says how old it is — an old value never looks fresh — and an alarm turns the value and the corner red. An app with no data at all stays a polaroid with its icon.
 

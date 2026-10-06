@@ -2354,6 +2354,10 @@ body.home {
 .home-board-slip.is-alarm .home-board-slip-meta,
 .home-board-slip.is-alarm .is-value .home-board-block-big { color: var(--board-alert); }
 .home-board-slip.is-broken .home-board-slip-body { opacity: 0.6; }
+.home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
+.home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
+.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
 
 /* I blocchi: righe intere. */
 .home-board-block {

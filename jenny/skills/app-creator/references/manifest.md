@@ -179,7 +179,7 @@ board as a polaroid with its icon.
   state ("at 14:02", "stopped · 2 d ago", "in alarm").
 - `alarm` (`{field, op, value}`), `staleAfterMinutes` — the strip's state: an alarm turns it red,
   stale data greys it out.
-- `blocks` — **1 to 4**, from this closed list. Each takes whole **rows**; the strip's size is the
+- `blocks` — **1 to 4**, from this closed list (16 kinds). Each takes whole **rows**; the strip's size is the
   smallest that holds them: **S 2 · M 4 · L 6 · XL 9 rows**. More than 9 rows is an error: show
   less on the board, the rest stays in the app. Lists count at their `max` (≤ 5), so the size
   never depends on the data.
@@ -201,6 +201,7 @@ board as a polaroid with its icon.
 | `week` | 2 | `collection`, `date` — this week, days with a record marked |
 | `month` | 6 | `collection`, `date`, `alarmWhere` — this month; always an XL strip |
 | `note` | `lines` | `field` (text), `lines` (1–3) |
+| `photos` | 3 | `max` (1–3) — the newest images in the app's `data/media/` (jpg, png, webp, gif, ≤ 8 MB) |
 
 Controls (`checklist`, `buttons`, `switches`, `counter`) call **only actions this app declares**,
 and only with what a tap can supply: the record's `id`, the toggled field, the placement's

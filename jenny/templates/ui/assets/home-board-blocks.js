@@ -384,9 +384,27 @@ function note(b) {
   return node;
 }
 
+/* Le foto arrivano dopo: `ctx.media(name)` le chiede al gateway (un `blob:`),
+   e chi disegna le rilascia al giro dopo. Finche' non c'e', un riquadro vuoto. */
+function photos(b, ctx) {
+  const node = block('photos', b.rows);
+  for (const name of b.names || []) {
+    const frame = el('div', 'home-board-block-photo');
+    const img = el('img');
+    img.alt = '';
+    img.decoding = 'async';
+    frame.appendChild(img);
+    ctx.media?.(name).then((url) => { if (url) img.src = url; }).catch(() => {});
+    node.appendChild(frame);
+  }
+  if (!(b.names || []).length) node.appendChild(el('div', 'home-board-block-flat'));
+  if (b.more) node.appendChild(el('span', 'home-board-block-label is-more-photos', i18n.t('board.slip.more', { count: b.more })));
+  return node;
+}
+
 const RENDERERS = {
   value, numbers, chart, status, progress, bars: barsBlock, table, events, checklist, buttons,
-  switches, counter, week, month, note,
+  switches, counter, week, month, note, photos,
 };
 
 /** Un blocco della striscia. Uno sconosciuto (un gateway piu' nuovo) resta vuoto. */

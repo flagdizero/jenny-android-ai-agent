@@ -328,6 +328,14 @@ class ApiClient {
     return URL.createObjectURL(await res.blob());
   }
 
+  /** Un'immagine di una Jenny App (il blocco Foto della sua striscia), come
+   *  `blob:`: la rotta vuole il segreto, che un `<img src>` non porterebbe. */
+  async getAppMediaUrl(slug, name) {
+    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/media/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error(`App media failed: ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  }
+
   /** Esegue un'azione di una Jenny App da fuori della sua cornice: i verbi di
    *  una sezione mini app nel cassetto. Il segreto della SPA vale anche sulle
    *  rotte delle app (`check_app_secret`). */

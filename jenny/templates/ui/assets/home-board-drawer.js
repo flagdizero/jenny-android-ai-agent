@@ -355,7 +355,13 @@ export class BoardDrawer {
         /* La striscia intera, coi blocchi della bacheca: stessi dati, stessi
            controlli (qui sempre attivi), un solo modo di disegnarli. */
         const slip = el('div', 'home-drawer-slip');
-        const ctx = { act: (req) => this._act(section, req) };
+        const ctx = {
+          act: (req) => this._act(section, req),
+          media: (name) => api.getAppMediaUrl(section.app, name).then((url) => {
+            this._photoUrls.push(url);
+            return url;
+          }),
+        };
         for (const b of section.slip.blocks) slip.appendChild(renderBlock(b, ctx));
         body.appendChild(slip);
       } else {

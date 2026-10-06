@@ -262,6 +262,8 @@ export class HomeBoard {
   render() {
     const data = this.data;
     this._clear();
+    for (const url of this._mediaUrls || []) URL.revokeObjectURL(url);
+    this._mediaUrls = [];
     if (!data) return;
     this._fitExtent();
     this._drawSince();
@@ -711,7 +713,7 @@ export class HomeBoard {
     head.append(badge, name, meta);
     const body = document.createElement('div');
     body.className = 'home-board-slip-body';
-    const ctx = { act: (req) => this._act(card, req) };
+    const ctx = { act: (req) => this._act(card, req), media: (name) => this._media(card, name) };
     for (const b of slip.blocks || []) body.appendChild(renderBlock(b, ctx));
     el.append(head, body);
     if (card.signal && card.signal !== 'new') {
@@ -729,6 +731,13 @@ export class HomeBoard {
     this._place(el, card);
     this._bind(el, card, 'card');
     return el;
+  }
+
+  /** Un'immagine del blocco Foto: un `blob:` che si rilascia al prossimo disegno. */
+  async _media(card, name) {
+    const url = await api.getAppMediaUrl(card.app?.slug, name);
+    (this._mediaUrls ||= []).push(url);
+    return url;
   }
 
   /** Un controllo di una striscia: l'azione dell'app, poi la bacheca si rilegge.
