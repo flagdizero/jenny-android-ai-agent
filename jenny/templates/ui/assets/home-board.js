@@ -226,8 +226,16 @@ export class HomeBoard {
     document.fonts?.ready?.then(() => this.drawThreads());
   }
 
-  /** Carica e disegna la bacheca di *notebook*. */
-  async load(notebook) {
+  /** Carica e disegna la bacheca di *notebook*.
+   *
+   *  *fit* e' chi entra nel quaderno da fuori — i Quaderni, la sua scheda, la
+   *  porta appesa, un quaderno appena nato (v. `HomeApp.openNotebook`): la
+   *  bacheca si inquadra tutta. Chi ci torna da dentro — Indietro da un
+   *  cassetto o da una pagina, il percorso in alto — la ritrova dove l'aveva
+   *  lasciata. Si inquadra comunque quando una vista a cui tornare non c'e':
+   *  questo muro non e' ancora stato disegnato, o l'ultimo era di un altro
+   *  quaderno. */
+  async load(notebook, { fit = false } = {}) {
     const token = ++this._token;
     /* Un altro quaderno: il muro di quello di prima si toglie **subito**. Restava
        a schermo finche' la bacheca nuova non arrivava, e per quel momento
@@ -240,13 +248,14 @@ export class HomeBoard {
       this._clear();
       if (this.emptyEl) this.emptyEl.hidden = true;
     }
-    /* Lo stesso quaderno ha gia' il suo muro a schermo: si inquadra subito,
-       prima che la bacheca si veda, invece di mostrarlo dove lo si era lasciato
-       e farlo saltare all'arrivo della risposta. */
     const same = notebook === this.notebook && Boolean(this.data);
+    const frame = fit || !same;
     this.notebook = notebook;
     this._touched = false;
-    if (same) this._fit();
+    /* Lo stesso quaderno ha gia' il suo muro a schermo: se va inquadrato, lo si
+       fa subito, prima che la bacheca si veda, invece di mostrarlo dove lo si
+       era lasciato e farlo saltare all'arrivo della risposta. */
+    if (frame && same) this._fit();
     let data;
     try {
       if (!this._zoom) {
@@ -267,7 +276,7 @@ export class HomeBoard {
     this.render();
     /* Nello stesso giro del disegno, quindi prima del primo fotogramma: la
        bacheca compare gia' inquadrata, mai all'origine e poi zoomata. */
-    if (!this._touched) this._fit();
+    if (frame && !this._touched) this._fit();
     /* «L'ultima volta» e' adesso: la riga di novita' che hai appena visto non
        deve riaccendersi alla prossima apertura. */
     if (data.exists) {

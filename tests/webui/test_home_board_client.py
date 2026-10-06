@@ -716,16 +716,76 @@ const FITTED = { x: 38, y: 92, k: 1 };
 """
 
 
+# Una vista qualunque, diversa dall'inquadratura, dentro i bordi del muro.
+_MOVED = """
+const look = () => B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
+const LOOKED = { x: -150, y: 60, k: 1.2 };
+"""
+
+
 @requires_jsdom
 def test_entering_a_board_frames_everything() -> None:
-    _run_wall(_SIZED + """
-      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
+    _run_wall(_SIZED + _MOVED + """
+      look();
       await B.load('altro');
       assert.deepEqual(at(), FITTED, 'un altro quaderno non si apre inquadrato');
-      B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
-      await B.load('altro');
-      assert.deepEqual(at(), FITTED, 'rientrare nello stesso quaderno torna dove lo si era lasciato');
+      look();
+      await B.load('altro', { fit: true });
+      assert.deepEqual(at(), FITTED, 'rientrare da fuori torna dove lo si era lasciato');
       assert.equal($('home-board-wall').style.visibility, '');
+    """)
+
+
+@requires_jsdom
+def test_opening_from_the_notebooks_frames_everything() -> None:
+    _run_wall(_SIZED + _MOVED + """
+      look();
+      await app.openNotebook('orto');
+      assert.equal(app.view, 'board');
+      assert.deepEqual(at(), FITTED);
+    """)
+
+
+@requires_jsdom
+def test_back_from_a_drawer_finds_the_board_where_it_was() -> None:
+    _run_wall(_SIZED + _MOVED + """
+      look();
+      card('acero').click();
+      await tick(40);
+      assert.equal(app.view, 'drawer');
+      app.handleHardwareBack();
+      await tick(40);
+      assert.equal(app.view, 'board');
+      // La bacheca si e' ricaricata dal server, e non ha rifatto l'inquadratura.
+      assert.equal(document.querySelectorAll('.home-board-polaroid').length, 2);
+      assert.deepEqual(at(), LOOKED);
+    """)
+
+
+@requires_jsdom
+def test_back_from_a_page_of_the_search_finds_the_board_where_it_was() -> None:
+    _run_wall(_SIZED + _MOVED + """
+      look();
+      await app.openPage('travaso-acero.md', 'travaso acero');
+      await tick(20);
+      assert.equal(app.view, 'reader');
+      app.handleHardwareBack();
+      await tick(40);
+      assert.equal(app.view, 'board');
+      assert.deepEqual(at(), LOOKED);
+    """)
+
+
+@requires_jsdom
+def test_the_path_root_from_a_drawer_finds_the_board_where_it_was() -> None:
+    _run_wall(_SIZED + _MOVED + """
+      look();
+      card('acero').click();
+      await tick(40);
+      app.goToPathRoot();
+      await tick(40);
+      assert.equal(app.view, 'board');
+      assert.deepEqual(at(), LOOKED);
     """)
 
 
@@ -747,14 +807,14 @@ def test_a_big_board_is_framed_smaller_and_centred() -> None:
 
 @requires_jsdom
 def test_the_same_board_is_framed_before_the_server_answers() -> None:
-    """Rientrando nello stesso quaderno il muro e' gia' a schermo: si inquadra
-    subito, non quando arriva la risposta, che lo farebbe saltare."""
+    """Rientrando da fuori nello stesso quaderno il muro e' gia' a schermo: si
+    inquadra subito, non quando arriva la risposta, che lo farebbe saltare."""
     _run_wall(_SIZED + """
       B._zoom.transform(B._sel, window.d3.zoomIdentity.translate(-150, 60).scale(1.2));
       let release;
       const held = new Promise((r) => { release = r; });
       hooks.fetch = async (u) => { if (u.pathname === '/api/board') await held; };
-      const loading = B.load(B.notebook);
+      const loading = B.load(B.notebook, { fit: true });
       assert.deepEqual(at(), FITTED, 'il muro si vede dove lo si era lasciato');
       release();
       await loading;
@@ -768,7 +828,7 @@ def test_a_finger_on_the_wall_while_it_loads_is_not_overruled() -> None:
       let release;
       const held = new Promise((r) => { release = r; });
       hooks.fetch = async (u) => { if (u.pathname === '/api/board') await held; };
-      const loading = B.load(B.notebook);
+      const loading = B.load(B.notebook, { fit: true });
       mouse(C, 'mousedown', 100, 100);
       mouse(window, 'mousemove', 150, 80);
       mouse(window, 'mouseup', 150, 80);

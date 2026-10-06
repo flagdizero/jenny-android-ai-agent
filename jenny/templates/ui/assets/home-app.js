@@ -742,7 +742,10 @@ class HomeApp {
     this._closeAllOverlays();
     if (!this._setView('chat', () => this.openNotebook(name))) return;
     const read = this.chatMove.retune(this.homePages?._panelFor?.('chat'), projectKey(name));
-    await this.openBoard();
+    /* Si entra nel quaderno da fuori: la bacheca si apre inquadrata tutta.
+       Le altre strade per la bacheca ci tornano da dentro, e la ritrovano dove
+       l'avevano lasciata (v. `HomeBoard.load`). */
+    await this.openBoard({ fit: true });
     await read;
   }
 
@@ -927,11 +930,11 @@ class HomeApp {
    *  **Un quaderno si apre sulla bacheca, non sulle pagine**: l'elenco delle
    *  pagine e la mappa a grafo sono usciti dalla casa, e la wiki si raggiunge
    *  da un cassetto o dalla ricerca. */
-  async openBoard() {
+  async openBoard({ fit = false } = {}) {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook) return;
     if (!this._setView('board')) return;
-    await this.board.load(notebook);
+    await this.board.load(notebook, { fit });
   }
 
   /** Il cassetto di una scheda. */
