@@ -579,7 +579,17 @@ class AppTool(Tool):
         last = (read_readings(app.dir) or [{}])[-1]
         params = {name: last[name] for name in (section.params if section else {})
                   if name in last}
-        return self._reading(summary_view(workspace, app, params))
+        shown = self._reading(summary_view(workspace, app, params))
+        # Anche i campi che la scheda non mette in primo piano: il 07/10/2026
+        # Jenny ha aggiunto il prezzo medio al litro, la risposta mostrava solo
+        # la spesa del mese, e per controllarlo ha girato il lettore a vuoto e
+        # cercato i file dell'app.
+        reader = app.manifest.reader if app.manifest is not None else None
+        fields = [f"{name}={last[name]}" for name in ((reader or {}).get("fields") or {})
+                  if name in last]
+        if fields and shown != "no value yet":
+            shown += " [last reading: " + ", ".join(fields) + "]"
+        return shown
 
     @staticmethod
     def _reading(view: dict[str, Any]) -> str:
@@ -666,7 +676,12 @@ class AppTool(Tool):
 
         app = find_app(workspace, slug)
         if app is None or app.manifest is None or app.manifest.reader is None:
-            return f"`{slug}` has no reader."
+            # Il 07/10/2026 un costruttore a cui era stato chiesto di «segnare il
+            # pieno di oggi» ha provato venticinque modi di passare un record a
+            # ``run``, finche' non e' caduto.
+            return (f"`{slug}` has no reader, so there is nothing to run. Its actions (adding "
+                    "or changing records) are not called from here: once the app is published, "
+                    "the main agent and the user use them.")
         state = await run_reader(workspace, slug, force=True)
         if state and state.get("status") == "ok":
             return "Read now — " + self._latest_reading(workspace, app)

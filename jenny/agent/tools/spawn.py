@@ -47,7 +47,9 @@ if TYPE_CHECKING:
             "remote machine, and the only way to do so. "
             "'app-builder': writes and tests a new version of one of the user's apps (the "
             "app tool, read/list/grep), NO network — use it to create or change an app, then "
-            "publish its work with `app action=publish`. "
+            "publish its work with `app action=publish`. It writes code only: it cannot use "
+            "the app's actions (add a record, mark an item), so do that yourself after "
+            "publishing. "
             "'operator': the whole subagent toolset except SSH (fallback for tasks that fit "
             "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,

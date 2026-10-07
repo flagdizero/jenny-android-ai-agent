@@ -370,6 +370,8 @@ async def test_the_main_agent_publishes_what_the_builder_tested(personal: Path) 
         files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
     out = await publisher.execute(action="publish", slug="portafoglio")
     assert "`portafoglio` is live" in out, out
+    # Ogni campo dell'ultima lettura, non solo quello della scheda.
+    assert "[last reading: totale=0]" in out, out
     assert find_app(ws, "portafoglio") is not None
     assert not (ws / "apps" / ".drafts" / "portafoglio").exists()
 
