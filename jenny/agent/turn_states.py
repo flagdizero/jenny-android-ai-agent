@@ -96,6 +96,9 @@ class StateHandlersMixin:
             self, msg: InboundMessage, session: Session, **kwargs: Any
         ) -> bool: ...
         def _replay_token_budget(self) -> int: ...
+        def _turn_tool_view(
+            self, msg: InboundMessage, session: Session, session_key: str, *, silent: bool
+        ) -> ToolRegistry | None: ...
         async def _run_agent_loop(
             self,
             initial_messages: list[dict],
@@ -311,6 +314,15 @@ class StateHandlersMixin:
             ctx.msg.metadata,
             ctx.session_key,
         )
+
+        # Gli strumenti di questo turno: quelli del loop meno cio' che qui non
+        # serve. Solo sul registro del loop: un registro sostituito (Dream, il
+        # giardiniere) e' gia' quello giusto.
+        if ctx.tools is self.tools:
+            view = self._turn_tool_view(
+                ctx.msg, ctx.session, ctx.session_key, silent=ctx.silent)
+            if view is not None:
+                ctx.tools = view
 
         _hist_kwargs: dict[str, Any] = {
             "max_messages": self._max_messages,

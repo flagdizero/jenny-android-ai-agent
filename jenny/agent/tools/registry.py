@@ -1,7 +1,7 @@
 """Tool registry for dynamic tool management."""
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.base import Tool
@@ -221,3 +221,68 @@ class ToolRegistry:
 
     def __contains__(self, name: str) -> bool:
         return name in self._tools
+
+
+class ToolRegistryView(ToolRegistry):
+    """Il registro di un turno: quello del loop, meno cio' che qui non serve.
+
+    **Vivo, non una copia.** Un'app creata a meta' turno registra le sue azioni
+    sul registro del loop, e devono comparire subito anche qui; il registro del
+    loop e' condiviso fra sessioni concorrenti, quindi questa vista non lo
+    modifica mai (niente ``unregister``): filtra quel che c'e', a ogni lettura.
+
+    Nato il 07/10/2026: in un quaderno 23 strumenti su 42 erano azioni di app
+    posate altrove, che scrivevano e a runtime rispondevano «Not from here»;
+    ``recall_history``, che nei quaderni rifiuta; ``nothing_to_report``, che
+    serve solo ai giri pianificati. Un modello piccolo li vedeva tutti.
+
+    ``exec_seq`` avanza anche sul registro del loop: la guardia anti-polling di
+    ``subagent_status`` legge quello.
+    """
+
+    def __init__(self, base: ToolRegistry, hidden: "Callable[[str, Tool], bool]") -> None:
+        super().__init__()
+        self.view_of = base
+        self._hidden = hidden
+        self.file_states = base.file_states
+        self.memory_entries = base.memory_entries
+
+    @property  # type: ignore[override]
+    def _tools(self) -> dict[str, Tool]:
+        base = self.__dict__.get("view_of")
+        if base is None:
+            return {}
+        return {n: t for n, t in base._tools.items() if not self._hidden(n, t)}
+
+    @_tools.setter
+    def _tools(self, _value: dict[str, Tool]) -> None:
+        # ``ToolRegistry.__init__`` assegna un dict vuoto: qui non serve.
+        pass
+
+    def register(self, tool: Tool) -> None:
+        self.view_of.register(tool)
+
+    def unregister(self, name: str) -> None:
+        self.view_of.unregister(name)
+
+    def get_definitions(self) -> list[dict[str, Any]]:
+        visible = set(self._tools)
+        return [d for d in self.view_of.get_definitions() if self._schema_name(d) in visible]
+
+    def prepare_call(self, name: str, params: Any) -> tuple[Tool | None, Any, str | None]:
+        # Uno strumento visibile si risolve sul registro del loop, come sempre:
+        # stessi controlli, e ``exec_seq`` avanza li'. Uno nascosto qui non
+        # esiste, con i suggerimenti presi fra i visibili.
+        if not self._is_hidden(name):
+            return self.view_of.prepare_call(name, params)
+        self.view_of.exec_seq += 1
+        return super().prepare_call(name, params)
+
+    async def execute(self, name: str, params: dict[str, Any]) -> Any:
+        if not self._is_hidden(name):
+            return await self.view_of.execute(name, params)
+        return await super().execute(name, params)
+
+    def _is_hidden(self, name: str) -> bool:
+        tool = self.view_of.get(name)
+        return tool is not None and self._hidden(name, tool)

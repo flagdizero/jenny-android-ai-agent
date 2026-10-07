@@ -675,6 +675,45 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         line = location_runtime_line(channel, chat_id, self.tools_config.location)
         return [line] if line else []
 
+    def _turn_tool_view(
+        self, msg: InboundMessage, session: Session, session_key: str, *, silent: bool
+    ) -> ToolRegistry | None:
+        """Il registro di questo turno, o ``None`` se e' quello del loop intero.
+
+        Fuori restano, solo quando il turno non li puo' usare: le azioni che
+        **scrivono** delle app non posate sulla bacheca di questo quaderno (le
+        letture restano: da qui un'app non posata si legge,
+        ``apps/permissions.py``); ``recall_history``, che nei quaderni rifiuta;
+        ``nothing_to_report``, che serve solo a un giro silenzioso. Il resto
+        e' il registro del loop, vivo (``ToolRegistryView``).
+        """
+        from jenny.agent.tools.app_actions import AppActionTool
+        from jenny.agent.tools.registry import ToolRegistryView
+
+        in_project = is_project_session_key(session_key)
+        placed: set[str] = set()
+        if in_project:
+            from jenny.board.placements import placed_slugs
+            from jenny.utils.wiki_paths import is_wiki_root
+
+            root = self.workspace_scopes.for_message(msg, session.metadata).project_path
+            if root is not None and is_wiki_root(root):
+                placed = set(placed_slugs(root))
+
+        def hidden(name: str, tool: Any) -> bool:
+            if name == "nothing_to_report":
+                return not silent
+            if not in_project:
+                return False
+            if name == "recall_history":
+                return True
+            return (isinstance(tool, AppActionTool) and not tool.read_only
+                    and tool._slug not in placed)
+
+        if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
+            return None
+        return ToolRegistryView(self.tools, hidden)
+
     def _build_initial_messages(
         self,
         msg: InboundMessage,
@@ -700,7 +739,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # che passa da qui. Dire a Dream o al giardiniere "non puoi scrivere file,
             # delega con `spawn`" e falso due volte — scrivere e il loro unico
             # mestiere, e `spawn` non ce l'hanno.
-            orchestrator=self.orchestrator_mode and turn_tools is self.tools,
+            orchestrator=self.orchestrator_mode and (
+                turn_tools is self.tools or getattr(turn_tools, "view_of", None) is self.tools),
             history=history,
             current_message=msg.content,
             media=msg.media if msg.media else None,
