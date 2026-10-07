@@ -498,7 +498,7 @@ class TestProjectCompactionWorks:
         )
         consolidator._persist_last_summary(session, summary)
 
-        assert session.metadata["_last_summary"]["text"] == "riassunto della conversazione"
+        assert session.metadata["_last_summary"]["text"].endswith("\nriassunto della conversazione")
 
     async def test_for_the_personal_conversation_the_tail_receives_it(
         self, consolidator, store

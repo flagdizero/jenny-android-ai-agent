@@ -76,11 +76,6 @@ class TestInit:
         ac = _make_autocompact()
         assert ac._archiving == set()
 
-    def test_summaries_dict_is_empty(self):
-        """_summaries should start as an empty dict."""
-        ac = _make_autocompact()
-        assert ac._summaries == {}
-
     def test_stores_sessions_reference(self):
         """sessions attribute should reference the passed SessionManager."""
         mock_sm = MagicMock(spec=SessionManager)
@@ -318,45 +313,6 @@ class TestArchiveDelegates:
         assert "dream:20260602-155256" not in ac._archiving
 
     @pytest.mark.asyncio
-    async def test_populates_summaries_from_metadata(self):
-        ac = _make_autocompact()
-        mock_sm = MagicMock(spec=SessionManager)
-        session = _make_session(
-            metadata={"_last_summary": {"text": "Hello.", "last_active": "2026-05-13T10:00:00"}}
-        )
-        mock_sm.get_or_create.return_value = session
-        ac.sessions = mock_sm
-        ac.consolidator.compact_idle_session = AsyncMock(return_value="Hello.")
-
-        await ac._archive("internal:test")
-
-        entry = ac._summaries.get("internal:test")
-        assert entry is not None
-        assert entry[0] == "Hello."
-
-    @pytest.mark.asyncio
-    async def test_no_summary_when_compact_returns_empty(self):
-        ac = _make_autocompact()
-        mock_sm = MagicMock(spec=SessionManager)
-        ac.sessions = mock_sm
-        ac.consolidator.compact_idle_session = AsyncMock(return_value="")
-
-        await ac._archive("internal:test")
-
-        assert "internal:test" not in ac._summaries
-
-    @pytest.mark.asyncio
-    async def test_no_summary_when_compact_returns_nothing(self):
-        ac = _make_autocompact()
-        mock_sm = MagicMock(spec=SessionManager)
-        ac.sessions = mock_sm
-        ac.consolidator.compact_idle_session = AsyncMock(return_value="(nothing)")
-
-        await ac._archive("internal:test")
-
-        assert "internal:test" not in ac._summaries
-
-    @pytest.mark.asyncio
     async def test_exception_still_removes_from_archiving(self):
         ac = _make_autocompact()
         mock_sm = MagicMock(spec=SessionManager)
@@ -406,32 +362,16 @@ class TestPrepareSession:
         mock_sm.get_or_create.assert_called_once_with("internal:test")
         assert result_session is reloaded
 
-    def test_hot_path_summary_from_summaries(self):
-        """Summary from _summaries dict should be returned (hot path)."""
+    def test_the_summary_comes_from_the_metadata_every_time(self):
+        """Una fonte sola: i metadati della sessione. Il percorso «caldo» in
+        memoria mostrava l'ultimo pezzo mentre un quaderno ne tiene diversi."""
         ac = _make_autocompact()
-        session = _make_session()
-        last_active = datetime(2026, 5, 13, 14, 0, 0)
-        ac._summaries["internal:test"] = ("Hot summary.", last_active)
-
-        result_session, summary = ac.prepare_session(session, "internal:test")
-
-        assert result_session is session
-        assert summary is not None
-        assert "Hot summary." in summary
-        assert "Previous conversation summary" in summary
-
-    def test_hot_path_pops_summary_one_shot(self):
-        """Hot path should pop the summary (one-shot; second call returns None)."""
-        ac = _make_autocompact()
-        session = _make_session()
-        last_active = datetime(2026, 1, 1)
-        ac._summaries["internal:test"] = ("One-shot.", last_active)
-
-        _, summary1 = ac.prepare_session(session, "internal:test")
-        assert summary1 is not None
-        # Second call: hot path entry was popped
-        _, summary2 = ac.prepare_session(session, "internal:test")
-        assert summary2 is None
+        session = _make_session(metadata={
+            "_last_summary": {"text": "Fatti archiviati.", "last_active": "2026-05-13T14:00:00"}})
+        for _ in range(2):
+            _, summary = ac.prepare_session(session, "internal:test")
+            assert summary is not None and "Fatti archiviati." in summary
+        assert ac.summary_for(_make_session(), "internal:test") is None
 
     def test_cold_path_summary_from_metadata(self):
         """When _summaries is empty, summary should come from metadata (cold path)."""
@@ -467,7 +407,6 @@ class TestPrepareSession:
         ac.sessions = mock_sm
         key = "dream:20260602-155256"
         ac._archiving.add(key)
-        ac._summaries[key] = ("Hot summary.", datetime(2026, 6, 2, 15, 52, 56))
         session = _make_session(
             key=key,
             updated_at=datetime.now() - timedelta(minutes=20),
@@ -485,7 +424,6 @@ class TestPrepareSession:
         assert result_session is session
         assert summary is None
         assert key not in ac._archiving
-        assert key not in ac._summaries
 
     def test_cold_path_metadata_not_dict_returns_none(self):
         """If metadata _last_summary is not a dict, should return None summary."""
@@ -496,19 +434,3 @@ class TestPrepareSession:
 
         assert result_session is session
         assert summary is None
-
-    def test_hot_path_takes_priority_over_metadata(self):
-        """Hot path (_summaries) should take priority over metadata."""
-        ac = _make_autocompact()
-        session = _make_session(metadata={
-            "_last_summary": {
-                "text": "Cold summary.",
-                "last_active": datetime(2026, 1, 1).isoformat(),
-            },
-        })
-        last_active = datetime(2026, 5, 13, 14, 0, 0)
-        ac._summaries["internal:test"] = ("Hot summary.", last_active)
-
-        _, summary = ac.prepare_session(session, "internal:test")
-        assert "Hot summary." in summary
-        # After hot path pops, cold path would kick in on next call

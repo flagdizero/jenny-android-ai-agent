@@ -299,6 +299,9 @@ class StateHandlersMixin:
                 replay_max_messages=self._max_messages,
                 max_rounds=self.consolidator.INLINE_ROUNDS,
             )
+            # Il riassunto appena scritto vale gia' per questo turno: quel che ha
+            # tolto dalla cronologia non deve sparire per un turno intero.
+            ctx.pending_summary = self.auto_compact.summary_for(ctx.session, ctx.session_key)
         # Pick up app manifest changes before the runner reads tool definitions
         # (mirror of the per-turn skills rescan; cheap stat-only when unchanged).
         await self._begin_turn_tooling(

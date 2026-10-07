@@ -96,6 +96,36 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // CHARS_PER_TOKEN
 
 
+# Quanto riassunto archiviato torna nel prompt di un quaderno, al massimo.
+SUMMARY_MAX_CHARS = 6_000
+
+
+def accumulate_summary(previous: Any, texts: list[str], when: datetime) -> dict[str, Any]:
+    """Il riassunto di un quaderno con i pezzi nuovi in coda, datati.
+
+    I pezzi stanno in ``pieces`` (``[{"at", "text"}]``) e ``text`` e' la loro
+    resa, cosi' chi legge solo ``text`` (la stima, il prompt) non cambia. Un
+    riassunto nel formato di prima diventa il primo pezzo. Oltre
+    :data:`SUMMARY_MAX_CHARS` cadono i pezzi piu' vecchi, e la resa lo dice.
+    """
+    pieces: list[dict[str, str]] = []
+    if isinstance(previous, dict):
+        old = previous.get("pieces")
+        if isinstance(old, list):
+            pieces = [p for p in old if isinstance(p, dict) and p.get("text")]
+        elif previous.get("text"):
+            pieces = [{"at": str(previous.get("last_active") or ""), "text": str(previous["text"])}]
+    stamp = when.isoformat(timespec="minutes")
+    pieces += [{"at": stamp, "text": t.strip()} for t in texts if t and t.strip()]
+    dropped = 0
+    while len(pieces) > 1 and sum(len(p["text"]) + 40 for p in pieces) > SUMMARY_MAX_CHARS:
+        pieces.pop(0)
+        dropped += 1
+    lines = ["(older summaries left out)"] if dropped else []
+    lines += [f"[{p['at'][:16]}]\n{p['text']}" for p in pieces]
+    return {"text": "\n\n".join(lines), "last_active": when.isoformat(), "pieces": pieces}
+
+
 class Consolidator:
     """Lightweight consolidation: summarizes evicted messages into history.jsonl."""
 
@@ -277,12 +307,30 @@ class Consolidator:
         return summary
 
     def _persist_last_summary(self, session: Session, summary: str | None) -> None:
-        if summary and summary != "(nothing)":
+        self._persist_summaries(session, [summary] if summary else [])
+
+    def _persist_summaries(self, session: Session, summaries: list[str]) -> None:
+        """I riassunti di questa compattazione, nel riassunto che torna nel prompt.
+
+        In un quaderno **si accumulano**: e' l'unico posto da cui la parte
+        archiviata della conversazione torna al modello (``memory.py`` non da'
+        la cronologia archiviata a un progetto). Fino al 07/10/2026 ogni
+        compattazione sovrascriveva la precedente, e in una sessione lunga il
+        modello vedeva solo l'ultimo pezzo. Nella chat personale resta l'ultimo,
+        come prima: la' l'archivio torna gia' come ``# Recent History``.
+        """
+        texts = [t for t in summaries if t and t != "(nothing)"]
+        if not texts:
+            return
+        if is_project_session_key(session.key):
+            session.metadata["_last_summary"] = accumulate_summary(
+                session.metadata.get("_last_summary"), texts, session.updated_at)
+        else:
             session.metadata["_last_summary"] = {
-                "text": summary,
+                "text": texts[-1],
                 "last_active": session.updated_at.isoformat(),
             }
-            self.sessions.save(session)
+        self.sessions.save(session)
 
     def estimate_session_prompt_tokens(
         self,
@@ -617,10 +665,11 @@ class Consolidator:
 
             budget = self._input_token_budget
             target = int(budget * self.consolidation_ratio)
-            last_summary = await self._consolidate_replay_overflow(
+            overflow_summary = await self._consolidate_replay_overflow(
                 session,
                 replay_max_messages,
             )
+            summaries = [overflow_summary] if overflow_summary else []
             try:
                 estimated, source = self.estimate_session_prompt_tokens(
                     session,
@@ -629,7 +678,7 @@ class Consolidator:
                 logger.exception("Token estimation failed for {}", session.key)
                 estimated, source = 0, "error"
             if estimated <= 0:
-                self._persist_last_summary(session, last_summary)
+                self._persist_summaries(session, summaries)
                 return
             if estimated < budget:
                 unconsolidated_count = len(session.messages) - session.last_consolidated
@@ -641,7 +690,7 @@ class Consolidator:
                     source,
                     unconsolidated_count,
                 )
-                self._persist_last_summary(session, last_summary)
+                self._persist_summaries(session, summaries)
                 return
 
             rounds = self._MAX_CONSOLIDATION_ROUNDS if max_rounds is None else max(
@@ -711,7 +760,7 @@ class Consolidator:
                 self._token_failures.pop(session.key, None)
                 self._token_failure_turns.pop(session.key, None)
                 if summary:
-                    last_summary = summary
+                    summaries.append(summary)
                 session.last_consolidated = end_idx
                 self.sessions.save(session)
                 if not summary:
@@ -732,7 +781,7 @@ class Consolidator:
             # Persist the last summary to session metadata so it can be injected
             # into the runtime context on the next prepare_session() call, aligning
             # the summary injection strategy with AutoCompact._archive().
-            self._persist_last_summary(session, last_summary)
+            self._persist_summaries(session, summaries)
 
     async def compact_idle_session(
         self,
@@ -846,10 +895,14 @@ class Consolidator:
                 )
 
             if summary and summary != "(nothing)":
-                session.metadata["_last_summary"] = {
-                    "text": summary,
-                    "last_active": last_active.isoformat(),
-                }
+                if is_project_session_key(session_key):
+                    session.metadata["_last_summary"] = accumulate_summary(
+                        session.metadata.get("_last_summary"), [summary], last_active)
+                else:
+                    session.metadata["_last_summary"] = {
+                        "text": summary,
+                        "last_active": last_active.isoformat(),
+                    }
 
             # L'indice della raccolta del diario di un progetto conta i messaggi
             # della sessione: dopo la troncatura va riportato sui messaggi

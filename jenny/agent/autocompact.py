@@ -103,7 +103,6 @@ class AutoCompact:
         # sessione — uno la accorcia, l'altro la legge e basta — e un insieme
         # solo farebbe rinviare l'uno per colpa dell'altro.
         self._harvesting: set[str] = set()
-        self._summaries: dict[str, tuple[str, datetime]] = {}
         # Il motivo dell'ultimo rinvio, per progetto: serve solo a non ripetere
         # la stessa riga di log ogni minuto (il giro TTL gira a 60s). La
         # decisione non e' memorizzata — si rifa ogni volta.
@@ -508,14 +507,6 @@ class AutoCompact:
                 self._retry_not_before[key] = time.monotonic() + self._RETRY_AFTER_FAILURE_S
             else:
                 self._retry_not_before.pop(key, None)
-            if summary and summary != "(nothing)":
-                session = self.sessions.get_or_create(key)
-                meta = session.metadata.get("_last_summary")
-                if isinstance(meta, dict):
-                    self._summaries[key] = (
-                        meta["text"],
-                        datetime.fromisoformat(meta["last_active"]),
-                    )
         except Exception:
             logger.exception("Auto-compact: failed for {}", key)
             self._retry_not_before[key] = time.monotonic() + self._RETRY_AFTER_FAILURE_S
@@ -525,7 +516,6 @@ class AutoCompact:
     def prepare_session(self, session: Session, key: str) -> tuple[Session, str | None]:
         if self._is_internal_session(key):
             self._archiving.discard(key)
-            self._summaries.pop(key, None)
             return session, None
         if key in self._archiving or self._is_expired(session.updated_at):
             # Il log sta *dentro* il confronto e non prima della chiamata: se la
@@ -540,12 +530,24 @@ class AutoCompact:
                     key, key in self._archiving,
                 )
             session = reloaded
-        # Hot path: summary from in-memory dict (process hasn't restarted).
-        entry = self._summaries.pop(key, None)
-        if entry:
-            return session, self._format_summary(entry[0], entry[1])
-        # Cold path: summary persisted in session metadata (process restarted).
+        return session, self.summary_for(session, key)
+
+    def summary_for(self, session: Session, key: str) -> str | None:
+        """Il riassunto archiviato da mettere nel prompt, letto dai metadati.
+
+        Una sola fonte. C'era anche un percorso «caldo» in memoria, pieno dopo
+        una compattazione per inattivita', che mostrava l'ultimo pezzo mentre i
+        metadati di un quaderno ne tengono diversi (``accumulate_summary``):
+        due risposte alla stessa domanda. La sessione e' gia' in memoria, quindi
+        leggere i metadati non costa niente.
+        """
+        if self._is_internal_session(key):
+            return None
         meta = session.metadata.get("_last_summary")
-        if isinstance(meta, dict):
-            return session, self._format_summary(meta["text"], datetime.fromisoformat(meta["last_active"]))
-        return session, None
+        if not isinstance(meta, dict) or not meta.get("text"):
+            return None
+        try:
+            last_active = datetime.fromisoformat(meta["last_active"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return self._format_summary(meta["text"], last_active)

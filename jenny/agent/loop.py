@@ -2002,6 +2002,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             replay_max_messages=self._max_messages,
             max_rounds=self.consolidator.INLINE_ROUNDS,
         )
+        pending = self.auto_compact.summary_for(session, key)
         is_subagent = msg.sender_id == "subagent"
         followup_state = self._subagent_followup_state(session, msg) if is_subagent else None
         if followup_state in (FollowupState.DELIVERED, FollowupState.EMPTY):

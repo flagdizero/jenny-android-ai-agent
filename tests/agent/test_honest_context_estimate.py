@@ -116,3 +116,36 @@ async def test_before_a_turn_only_one_summary_runs_inline(tmp_path) -> None:
     consolidator, provider = _consolidator(tmp_path, session)
     await consolidator.maybe_consolidate_by_tokens(session, max_rounds=consolidator.INLINE_ROUNDS)
     assert provider.chat_with_retry.await_count == 1
+
+
+def test_notebook_summaries_add_up_and_the_oldest_drop() -> None:
+    """In un quaderno ogni compattazione aggiunge un pezzo datato: prima
+    sovrascriveva, e il modello vedeva solo l'ultimo."""
+    from datetime import datetime
+
+    from jenny.agent.consolidator import SUMMARY_MAX_CHARS, accumulate_summary
+
+    old = {"text": "- [durable] vecchio formato", "last_active": "2026-10-06T10:00:00"}
+    one = accumulate_summary(old, ["- [durable] primo"], datetime(2026, 10, 7, 9, 0))
+    two = accumulate_summary(one, ["- [durable] secondo"], datetime(2026, 10, 7, 12, 0))
+    assert [p["text"] for p in two["pieces"]] == [
+        "- [durable] vecchio formato", "- [durable] primo", "- [durable] secondo"]
+    assert two["text"].index("primo") < two["text"].index("secondo")
+    big = two
+    for i in range(40):
+        big = accumulate_summary(big, ["x" * 400], datetime(2026, 10, 8, 0, i))
+    assert len(big["text"]) <= SUMMARY_MAX_CHARS + 200
+    assert big["text"].startswith("(older summaries left out)")
+    assert "vecchio formato" not in big["text"]
+
+
+async def test_a_notebook_turn_sees_the_summary_written_before_it(tmp_path) -> None:
+    from jenny.agent.autocompact import AutoCompact
+
+    session = _reasoning_session(8)
+    consolidator, _provider = _consolidator(tmp_path, session)
+    await consolidator.maybe_consolidate_by_tokens(session, max_rounds=1)
+    ac = AutoCompact(sessions=consolidator.sessions, consolidator=consolidator,
+                     session_ttl_minutes=0)
+    summary = ac.summary_for(session, session.key)
+    assert summary is not None and "un fatto" in summary

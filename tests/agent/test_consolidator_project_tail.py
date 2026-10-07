@@ -183,7 +183,10 @@ class TestProjectHealthyCompaction:
         reloaded = consolidator.sessions.get_or_create(PROJECT_KEY)
         assert len(reloaded.messages) <= 4
         assert reloaded.last_consolidated == 0
-        assert reloaded.metadata["_last_summary"]["text"] == "Summary of old conversation."
+        # In un quaderno il riassunto e' un pezzo datato in una lista che cresce.
+        summary = reloaded.metadata["_last_summary"]
+        assert summary["text"].endswith("\nSummary of old conversation.")
+        assert [p["text"] for p in summary["pieces"]] == ["Summary of old conversation."]
         assert _copies(project_root) == []
         # Ramo felice: nella coda ci va il **riassunto**, non il dump, ed e' la
         # forma buona — Dream estrae meglio da un riassunto che da una
