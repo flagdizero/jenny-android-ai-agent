@@ -297,6 +297,7 @@ class StateHandlersMixin:
             await self.consolidator.maybe_consolidate_by_tokens(
                 ctx.session,
                 replay_max_messages=self._max_messages,
+                max_rounds=self.consolidator.INLINE_ROUNDS,
             )
         # Pick up app manifest changes before the runner reads tool definitions
         # (mirror of the per-turn skills rescan; cheap stat-only when unchanged).

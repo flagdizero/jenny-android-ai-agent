@@ -414,6 +414,15 @@ class AgentDefaults(Base):
     )
     max_messages: int = Field(default=120, ge=0)
     consolidation_ratio: float = Field(default=0.5, ge=0.1, le=0.95)
+    # La stima dei token che conta ogni campo dei messaggi (ragionamenti,
+    # chiamate ai tool), non solo il testo: v. ``utils/helpers.py``. Spenta,
+    # torna la stima di prima del 07/10/2026, che non faceva mai scattare la
+    # compattazione. Esiste per tornare indietro sul telefono senza una release.
+    honest_context_estimate: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("honestContextEstimate", "honest_context_estimate"),
+        serialization_alias="honestContextEstimate",
+    )
     dream: DreamConfig = Field(default_factory=DreamConfig)
     gardener: GardenerConfig = Field(default_factory=GardenerConfig)
     model_preset: str | None = Field(

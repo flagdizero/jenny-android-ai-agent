@@ -99,6 +99,8 @@ class Consolidator:
     """Lightweight consolidation: summarizes evicted messages into history.jsonl."""
 
     _MAX_CONSOLIDATION_ROUNDS = 5
+    # Riassunti consentiti in linea, prima di un turno (v. maybe_consolidate_by_tokens).
+    INLINE_ROUNDS = 1
 
     # Turni di fila con la consolidazione per lunghezza fallita, sulla stessa
     # sessione, prima di ripiegare sul dump grezzo e avanzare.
@@ -576,11 +578,18 @@ class Consolidator:
         session: Session,
         *,
         replay_max_messages: int | None = None,
+        max_rounds: int | None = None,
     ) -> None:
         """Loop: archive old messages until prompt fits within safe budget.
 
         The budget reserves space for completion tokens and a safety buffer
         so the LLM request never exceeds the context window.
+
+        *max_rounds* limita i riassunti di questa chiamata. Prima di un turno si
+        passa ``INLINE_ROUNDS``: con la stima onesta una sessione lunga ne
+        chiederebbe fino a cinque, ognuno una chiamata al modello, e l'utente
+        aspetterebbe minuti prima della risposta. Il resto lo fa il giro in
+        background dopo il turno, e intanto il governatore del runner taglia.
         """
         if self._window <= 0:
             return
@@ -613,17 +622,19 @@ class Consolidator:
             if estimated < budget:
                 unconsolidated_count = len(session.messages) - session.last_consolidated
                 logger.debug(
-                    "Token consolidation idle {}: {}/{} via {}, msgs={}",
+                    "Token consolidation idle {}: {}/{} budget via {}, msgs={}",
                     session.key,
                     estimated,
-                    self._window,
+                    budget,
                     source,
                     unconsolidated_count,
                 )
                 self._persist_last_summary(session, last_summary)
                 return
 
-            for round_num in range(self._MAX_CONSOLIDATION_ROUNDS):
+            rounds = self._MAX_CONSOLIDATION_ROUNDS if max_rounds is None else max(
+                0, min(max_rounds, self._MAX_CONSOLIDATION_ROUNDS))
+            for round_num in range(rounds):
                 if estimated <= target:
                     break
 

@@ -66,11 +66,15 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
     """Build an outbound status message for a session."""
     loop = ctx.loop
     session = ctx.session or loop.sessions.get_or_create(ctx.key)
-    ctx_est = 0
-    with suppress(Exception):
-        ctx_est, _ = loop.consolidator.estimate_session_prompt_tokens(session)
+    # Il numero vero dell'ultima chiamata, quando c'e': la stima e' un ripiego.
+    # ``_last_usage`` invece somma tutte le chiamate di un turno, e non e' la
+    # grandezza della conversazione.
+    from jenny.utils.token_calibration import last_real
+
+    ctx_est = last_real(ctx.key) or 0
     if ctx_est <= 0:
-        ctx_est = loop._last_usage.get("prompt_tokens", 0)
+        with suppress(Exception):
+            ctx_est, _ = loop.consolidator.estimate_session_prompt_tokens(session)
 
     active_tasks = loop._active_tasks.get(ctx.key, [])
     task_count = sum(1 for t in active_tasks if not t.done())

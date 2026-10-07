@@ -35,6 +35,11 @@ _MODULE_REGISTRIES: tuple[tuple[str, str], ...] = (
     # Un turno websocket segnato «in corso» e mai chiuso: il canale lo legge
     # all'attach e manda un `goal_status` che le prove dopo non si aspettano.
     ("jenny.session.webui_turns", "_WEBSOCKET_TURN_WALL_STARTED_AT"),
+    # Il rapporto vero/stima dei token e l'ultimo numero vero per sessione:
+    # una prova con un provider finto che riporta l'usage cambierebbe la stima
+    # di tutte quelle dopo.
+    ("jenny.utils.token_calibration", "_factors"),
+    ("jenny.utils.token_calibration", "_last_real"),
 )
 
 

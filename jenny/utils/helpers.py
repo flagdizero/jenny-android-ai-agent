@@ -610,21 +610,49 @@ def build_assistant_message(
     return msg
 
 
+# Quanto costa un'immagine nel prompt, in token. Il suo base64 non e' testo:
+# contato a caratteri, una foto da 400 KB valeva 100 mila token e faceva
+# tagliare tutta la cronologia. Un costo fisso e' piu' vicino al vero.
+IMAGE_PROMPT_TOKENS = 1_500
+_IMAGE_PART_TYPES = frozenset({"image_url", "input_image", "image"})
+
+# La stima onesta del prompt conta tutto quel che parte: testo, ragionamenti,
+# argomenti dei tool. Fino al 07/10/2026 contava solo ``content`` e sul Titan
+# diceva 50 mila token dove il provider ne contava 165 mila: la compattazione
+# non scattava mai. L'interruttore (``agents.defaults.honestContextEstimate``)
+# esiste per tornare indietro sul telefono senza una release.
+_COUNT_EVERY_FIELD = True
+
+
+def set_honest_prompt_estimate(enabled: bool) -> None:
+    """Accende o spegne la stima che conta ogni campo dei messaggi."""
+    global _COUNT_EVERY_FIELD
+    _COUNT_EVERY_FIELD = bool(enabled)
+
+
 def estimate_prompt_tokens(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> int:
-    """Estimate prompt tokens with a character heuristic."""
+    """Estimate prompt tokens with a character heuristic.
+
+    Conta ogni messaggio come :func:`estimate_message_tokens` (testo,
+    ragionamento, chiamate ai tool, immagini a costo fisso) piu' le definizioni
+    dei tool: la stessa unita' che usano i tagli, cosi' il cancello e il taglio
+    parlano dello stesso prompt.
+    """
+    tool_tokens = len(json.dumps(tools, ensure_ascii=False)) // CHARS_PER_TOKEN if tools else 0
+    if _COUNT_EVERY_FIELD:
+        return sum(estimate_message_tokens(m) for m in messages) + tool_tokens
     total_chars = sum(len(str(m.get("content", ""))) for m in messages)
-    if tools:
-        total_chars += len(json.dumps(tools, ensure_ascii=False))
-    return total_chars // CHARS_PER_TOKEN + len(messages) * 4
+    return total_chars // CHARS_PER_TOKEN + len(messages) * 4 + tool_tokens
 
 
 def estimate_message_tokens(message: dict[str, Any]) -> int:
     """Estimate prompt tokens contributed by one persisted message."""
     content = message.get("content")
     parts: list[str] = []
+    images = 0
     if isinstance(content, str):
         parts.append(content)
     elif isinstance(content, list):
@@ -633,6 +661,8 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
                 text = part.get("text", "")
                 if text:
                     parts.append(text)
+            elif isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES:
+                images += 1
             else:
                 parts.append(json.dumps(part, ensure_ascii=False))
     elif content is not None:
@@ -648,11 +678,14 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
     rc = message.get("reasoning_content")
     if isinstance(rc, str) and rc:
         parts.append(rc)
+    if message.get("thinking_blocks"):
+        parts.append(json.dumps(message["thinking_blocks"], ensure_ascii=False, default=str))
 
     payload = "\n".join(parts)
+    image_tokens = images * IMAGE_PROMPT_TOKENS
     if not payload:
-        return 4
-    return max(4, len(payload) // CHARS_PER_TOKEN + 4)
+        return 4 + image_tokens
+    return max(4, len(payload) // CHARS_PER_TOKEN + 4) + image_tokens
 
 
 # Token di output riservati di default quando il provider non specifica altro.
@@ -690,7 +723,11 @@ def estimate_prompt_tokens_chain(
                 return int(tokens), str(source or "provider_counter")
     estimated = estimate_prompt_tokens(messages, tools)
     if estimated > 0:
-        return int(estimated), "heuristic"
+        # Corretta col rapporto misurato sui numeri veri del provider per questo
+        # modello (1.0 finche' non c'e' una chiamata): v. ``token_calibration``.
+        from jenny.utils.token_calibration import factor
+
+        return int(estimated * factor(model)), "heuristic"
     return 0, "none"
 
 

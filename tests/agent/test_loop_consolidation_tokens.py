@@ -205,9 +205,11 @@ async def test_preflight_consolidation_receives_pending_summary(tmp_path) -> Non
 
     await loop.process_direct("hello", session_key="internal:test")
 
+    # Prima del turno, un solo riassunto in linea: il resto in background.
     loop.consolidator.maybe_consolidate_by_tokens.assert_any_await(
         session,
         replay_max_messages=loop._max_messages,
+        max_rounds=loop.consolidator.INLINE_ROUNDS,
     )
 
 

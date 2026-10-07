@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from jenny.utils.helpers import (
     CONTEXT_BUDGET_SAFETY_BUFFER,
     estimate_message_tokens,
@@ -105,7 +107,12 @@ def snip_history(
     if not non_system:
         return messages
 
-    system_tokens = sum(estimate_message_tokens(msg) for msg in system_messages)
+    # Le stime per messaggio nella stessa unita' del cancello, che e' corretto
+    # col rapporto misurato sul provider (``token_calibration``).
+    from jenny.utils.token_calibration import factor
+
+    scale = factor(spec.model)
+    system_tokens = int(sum(estimate_message_tokens(msg) for msg in system_messages) * scale)
     fixed_tokens, _ = estimate_prompt_tokens_chain(
         provider,
         spec.model,
@@ -116,7 +123,7 @@ def snip_history(
     kept: list[dict[str, Any]] = []
     kept_tokens = 0
     for message in reversed(non_system):
-        msg_tokens = estimate_message_tokens(message)
+        msg_tokens = int(estimate_message_tokens(message) * scale)
         if kept and kept_tokens + msg_tokens > remaining_budget:
             break
         kept.append(message)
@@ -146,4 +153,12 @@ def snip_history(
         start = find_legal_message_start(kept)
         if start:
             kept = kept[start:]
+    # Il taglio e' la rete di sicurezza: se scatta, la compattazione e' rimasta
+    # indietro e il modello perde messaggi che nessun riassunto racconta.
+    if len(kept) < len(non_system):
+        logger.warning(
+            "Context snip for {}: {} of {} history messages dropped (estimate {} > budget {})",
+            spec.session_key or "?", len(non_system) - len(kept), len(non_system), estimate,
+            budget,
+        )
     return system_messages + kept

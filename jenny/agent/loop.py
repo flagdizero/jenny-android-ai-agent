@@ -471,6 +471,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         if bus is None:
             bus = MessageBus()
         defaults = config.agents.defaults
+        from jenny.utils.helpers import set_honest_prompt_estimate
+
+        set_honest_prompt_estimate(defaults.honest_context_estimate)
         provider = extra.pop("provider", None) or make_provider(config)
         model = extra.pop("model", None) or defaults.model
         context_window_tokens = extra.pop("context_window_tokens", None) or defaults.context_window_tokens
@@ -1989,11 +1992,15 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
 
         session, pending = self.auto_compact.prepare_session(session, key)
         if pending:
-            logger.info("Memory compact triggered for session {}", key)
+            # Non e' una compattazione: e' il riassunto archiviato che torna nel
+            # prompt, cioe' quasi ogni turno. Il vecchio «Memory compact
+            # triggered» a INFO faceva credere a una compattazione continua.
+            logger.debug("Archived summary attached to the prompt for {}", key)
 
         await self.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._max_messages,
+            max_rounds=self.consolidator.INLINE_ROUNDS,
         )
         is_subagent = msg.sender_id == "subagent"
         followup_state = self._subagent_followup_state(session, msg) if is_subagent else None

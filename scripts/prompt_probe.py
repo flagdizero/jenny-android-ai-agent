@@ -119,12 +119,16 @@ async def probe(workspace: Path, chat: str, message: str) -> dict[str, Any]:
     await loop._process_message(InboundMessage(
         channel="websocket", sender_id="probe", chat_id=chat, content=message,
         metadata={"webui": True}))
-    if not provider.requests:
+    # Prima del turno puo' girare un riassunto (la compattazione): e' una
+    # richiesta senza tool. Quella del turno e' la prima con i tool.
+    turn_requests = [r for r in provider.requests if r.get("tools")]
+    if not turn_requests:
         raise SystemExit("the turn did not reach the provider")
-    first = provider.requests[0]
+    first = turn_requests[0]
     report = measure(first)
     report["jenny_estimate"] = estimate_prompt_tokens_chain(
         provider, provider.model, first.get("messages") or [], first.get("tools"))[0]
+    report["summaries"] = len(provider.requests) - len(turn_requests)
     report["request"] = first
     return report
 
@@ -144,7 +148,8 @@ def main() -> None:
         args.save.write_text(json.dumps(request, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"messages {report['messages']} · tools {report['tool_count']} · "
           f"{report['total_chars']:,} chars ≈ {report['real_tokens_estimate']:,} real tokens · "
-          f"Jenny's estimate {report['jenny_estimate']:,}")
+          f"Jenny's estimate {report['jenny_estimate']:,} · "
+          f"summaries before the turn {report['summaries']}")
     for name, size in report["parts"].items():
         share = 100 * size / max(1, report["total_chars"])
         print(f"  {name:13s} {size:9,d}  {share:5.1f}%")
