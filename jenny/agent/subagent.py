@@ -964,6 +964,7 @@ class SubagentManager:
         workspace: Path | None = None,
         tools_config: ToolsConfig | None = None,
         agent_type: AgentType | None = None,
+        origin_session_key: str | None = None,
     ) -> ToolRegistry:
         """Build an isolated subagent tool registry via ToolLoader.
 
@@ -981,7 +982,7 @@ class SubagentManager:
         root = self.workspace if workspace is None else workspace
         registry = ToolRegistry()
         cfg = tools_config if tools_config is not None else self._subagent_tools_config()
-        ctx = self._tool_context(root, cfg)
+        ctx = self._tool_context(root, cfg, origin_session_key)
         loader = ToolLoader()
         if agent_type is None:
             loader.load(ctx, registry, scope="subagent", allow=None)
@@ -991,13 +992,15 @@ class SubagentManager:
         self._log_unavailable(loader, agent_type, ctx)
         return registry
 
-    def _tool_context(self, root: Path, cfg: ToolsConfig) -> ToolContext:
+    def _tool_context(self, root: Path, cfg: ToolsConfig,
+                      origin_session_key: str | None = None) -> ToolContext:
         """Il ctx che i tool ricevono. Estratto perche lo usa anche il pre-volo."""
         return ToolContext(
             config=cfg,
             workspace=str(root.resolve()),
             file_states=FileStates(),
             android_context=get_android_context(),
+            origin_session_key=origin_session_key,
         )
 
     @staticmethod
@@ -1270,7 +1273,8 @@ class SubagentManager:
                 cfg = self._subagent_tools_config()
                 cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
             atype = get_agent_type(spec.agent_type)
-            tools = self._build_tools(workspace=root, tools_config=cfg, agent_type=atype)
+            tools = self._build_tools(workspace=root, tools_config=cfg, agent_type=atype,
+                                      origin_session_key=spec.session_key)
             system_prompt = self._build_subagent_prompt(
                 workspace=root,
                 agent_type=atype,
@@ -1749,11 +1753,12 @@ class SubagentManager:
             # l'ambiente — e allora e' l'ambiente a dover parlare.
             readonly=not (bound_scope is None or bound_scope.writable),
             skills_summary=skills_summary or "",
-            role_section=self._render_role_section(agent_type),
+            role_section=self._render_role_section(agent_type, install_path=self.workspace),
         )
 
     @staticmethod
-    def _render_role_section(agent_type: AgentType | None) -> str:
+    def _render_role_section(agent_type: AgentType | None, *,
+                             install_path: Path | None = None) -> str:
         """Rende il prompt di ruolo del tipo, o stringa vuota se non c'e.
 
         Un template mancante non deve uccidere il subagent: un workspace
@@ -1763,7 +1768,11 @@ class SubagentManager:
         if agent_type is None:
             return ""
         try:
-            return render_template(agent_type.prompt_template, strip=True)
+            # ``install_path``: la radice dell'installazione, perche' un subagent
+            # in un quaderno lavora nella cartella del progetto e un percorso
+            # relativo (``skills/…``) non ci arriva.
+            return render_template(agent_type.prompt_template, strip=True,
+                                   install_path=str(install_path or ""))
         except Exception as e:  # noqa: BLE001 — vedi docstring
             logger.warning(
                 "Agent type prompt {} unavailable ({}); running without role section",

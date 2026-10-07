@@ -172,6 +172,24 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
         scopes=("subagent", "remote"),
         requires=frozenset(("ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer")),
     ),
+    # Scrive e prova le app dell'utente: il tool ``app`` nella sua faccia di
+    # costruttore (scope ``apps``), che scrive solo bozze e le prova sui dati veri;
+    # a pubblicarle e' l'agente principale. Nato il 07/10/2026, per decisione
+    # dell'utente: l'orchestratore scriveva file interi dentro argomenti JSON, e
+    # restavano nella conversazione del quaderno.
+    #
+    # Niente web e niente ``python_exec``: il lettore si prova con ``app run``,
+    # nel suo ambiente vero (``ctx.http``), e chi ha letto pagine non fidate non
+    # e' chi scrive codice che gira da solo ogni mezz'ora. Lo scope a parte e'
+    # cio' che tiene ``app`` fuori da ``operator``, come gli ``ssh_*``.
+    AgentType(
+        name="app-builder",
+        tools=frozenset(("app", *_FS_READ, "grep")),
+        temperature=0.1,
+        max_iterations=40,
+        scopes=("subagent", "apps"),
+        requires=frozenset(("app",)),
+    ),
     # Fallback per cio che non rientra negli altri: l'intero scope ``subagent``,
     # cioe esattamente il subagent generico che esisteva prima dei tipi. Resta
     # ``tools=None`` di proposito, ed e il motivo per cui i tool SSH stanno in

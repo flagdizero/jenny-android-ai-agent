@@ -135,6 +135,9 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
             target = (drafts.draft_dir(workspace, slug) if live is not None
                       else drafts.app_dir(workspace, slug))
             _write_app(target, draft.spec, draft.code, root.name, draft.dir)
+            if live is not None:
+                # Solo una bozza della migrazione si pubblica da sola all'avvio.
+                (target / drafts.MIGRATED_MARKER).write_text("", encoding="utf-8")
         renamed[micro_id] = slug
 
     def apply(board: dict[str, Any]) -> None:

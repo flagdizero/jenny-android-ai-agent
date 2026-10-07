@@ -48,6 +48,7 @@ _SYSTEM_PROMPT_TEMPLATES = [
     "agent/_snippets/untrusted_content.md",
     "agent/types/researcher.md", "agent/types/writer.md", "agent/types/coder.md",
     "agent/types/analyst.md", "agent/types/sysadmin.md", "agent/types/operator.md",
+    "agent/types/app-builder.md",
 ]
 
 _TEMPLATES_MANIFEST = [*_USER_OWNED_TEMPLATES, *_SYSTEM_PROMPT_TEMPLATES]

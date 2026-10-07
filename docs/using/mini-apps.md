@@ -24,7 +24,7 @@ Apps are created only through chat — there is no app editor or "new app" butto
 
 <p align="center"><img src="../img/apps.png" alt="A mini-app Jenny wrote on request: a meal log for a cat, with today's total and the meals" width="300"></p>
 
-Jenny walks you through the design conversation (what the app tracks, what actions it needs) using the built-in `app-creator` skill, confirms with you, and writes it with her `app` tool. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?".
+Jenny walks you through the design conversation (what the app tracks, what actions it needs), then hands the work to an `app-builder` helper: it writes the app with the built-in `app-creator` skill and tests it on the app's real data, and Jenny looks at the values it read before publishing it. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?".
 
 ### An app exists only once it works
 
@@ -48,7 +48,7 @@ Every app is a folder under `workspace/apps/<slug>/`:
 | `app/index.html` | The screen, if the app has one. HTML and JavaScript. Only this `app/` folder is served over the web; the manifest, `AGENT.md`, `run.py` and `data/` are never reachable by URL. |
 | `data/` | JSONL collections that hold the app's data, shared between the app and Jenny. |
 
-Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Jenny's own file tools cannot write an app's code (`app.json`, `run.py`, `app/`): only her `app` tool can, so every change she makes is checked before it is saved. `data/` and `AGENT.md` she can change freely.
+Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Jenny's own file tools cannot write an app's code (`app.json`, `run.py`, `app/`): only the `app` tool can, so every change is checked — and its reader tested — before it goes live. `data/` and `AGENT.md` she can change freely.
 
 ## Every action is also a tool
 

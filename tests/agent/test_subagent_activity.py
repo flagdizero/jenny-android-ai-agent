@@ -500,7 +500,7 @@ class TestFormatterPerTool:
         from jenny.agent.agent_types import AGENT_TYPES
 
         scopes = {scope for t in AGENT_TYPES.values() for scope in t.scopes}
-        assert scopes == {"subagent", "remote"}
+        assert scopes == {"subagent", "remote", "apps"}
 
     def test_all_agent_type_allowlists_are_covered(self):
         from jenny.agent.agent_types import AGENT_TYPES

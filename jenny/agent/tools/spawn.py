@@ -45,6 +45,9 @@ if TYPE_CHECKING:
             "start and follow long jobs, transfer files) plus read/list/write, NO "
             "network and NO local code execution — the only type that reaches a "
             "remote machine, and the only way to do so. "
+            "'app-builder': writes and tests a new version of one of the user's apps (the "
+            "app tool, read/list/grep), NO network — use it to create or change an app, then "
+            "publish its work with `app action=publish`. "
             "'operator': the whole subagent toolset except SSH (fallback for tasks that fit "
             "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,
@@ -130,6 +133,17 @@ class SpawnTool(Tool, ContextAware):
             SubagentConcurrencyLimitError,
         )
 
+        # Le app si scrivono solo per una conversazione con l'utente: un
+        # costruttore lanciato da un cron, dal giardiniere o da Dream non potrebbe
+        # comunque scrivere (il tool ``app`` lo rifiuta), quindi lo si dice qui,
+        # prima di spendere un giro intero.
+        if (agent_type or "") == "app-builder":
+            from jenny.session.keys import is_personal_session_key, is_project_session_key
+
+            key = self._session_key.get() or ""
+            if not (is_personal_session_key(key) or is_project_session_key(key)):
+                return ("Cannot spawn an app-builder here: apps are written only for a "
+                        "conversation with the user (the personal chat or a notebook's chat).")
         # L'invariante di concorrenza vive nel manager (dove sta lo stato); qui
         # si formatta soltanto il messaggio per il modello.
         try:

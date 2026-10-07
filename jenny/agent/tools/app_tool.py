@@ -35,8 +35,12 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 
-_MAX_DRAFTS = 4
+_MAX_DRAFTS = 6
 _DRAFT_WINDOW_S = 600
+# I tentativi recenti per app, condivisi fra istanze del tool: un costruttore
+# nasce con un registro nuovo, e un contatore per istanza si azzerava a ogni
+# spawn.
+_RECENT_DRAFTS: dict[str, list[float]] = {}
 MAX_CODE_BYTES = 6 * 1024
 MAX_SCREEN_BYTES = 512 * 1024
 _ALLOWED_TOP = {"app.json", "run.py", "AGENT.md"}
@@ -48,8 +52,9 @@ _PARAMETERS = tool_parameters_schema(
         "of the app (same checks, then live); show: manifest, state and code; run: read the "
         "reader now; "
         "place: put the app on a notebook board as a card of its own (its value on the "
-        "polaroid, a tap opens it), optionally tied to an existing card; trash: move an app to the trash (personal chat only).",
-        enum=["draft", "edit", "show", "run", "place", "trash"],
+        "polaroid, a tap opens it), optionally tied to an existing card; trash: move an app to the trash (personal chat only); "
+        "set: change one value of app.json by its path; publish: make a tested new version live.",
+        enum=["draft", "edit", "set", "show", "run", "place", "trash", "publish"],
     ),
     slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
     files=ObjectSchema(
@@ -59,6 +64,9 @@ _PARAMETERS = tool_parameters_schema(
         additional_properties=True,
     ),
     path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…)."),
+    key=StringSchema("For set: a dotted path in app.json, e.g. reader.net or reader.every."),
+    value=StringSchema("For set: the new value as JSON (a list, a number, a string in quotes); "
+                       "null removes the key."),
     old=StringSchema("For edit: the exact text to replace (must occur once)."),
     new=StringSchema("For edit: the replacement text."),
     notebook=StringSchema("For place from the personal chat: the notebook name."),
@@ -92,14 +100,35 @@ def _silent_screen_failure(text: str) -> str | None:
     return None
 
 
+def _readable(path: str, content: str) -> str:
+    """``app.json`` si salva indentato: ``edit`` lavora per righe, e un JSON su
+    una riga sola chiedeva al modello di ricopiarne un pezzo esatto."""
+    if path != "app.json":
+        return content
+    try:
+        return json.dumps(json.loads(content), ensure_ascii=False, indent=2) + "\n"
+    except ValueError:
+        return content
+
+
 @tool_parameters(_PARAMETERS)
 class AppTool(Tool):
     """Scrive, prova, ripara e posa le app."""
 
-    _scopes = {"core", "orchestrator"}
+    _scopes = {"core"}
 
-    def __init__(self) -> None:
-        self._drafts: dict[str, list[float]] = {}
+    # Le azioni di questa faccia del tool, e se una bozza provata diventa subito
+    # l'app (la faccia ``core``, un agente solo) o aspetta ``publish``.
+    _ACTIONS = frozenset({"draft", "edit", "set", "show", "run", "place", "trash", "publish"})
+    _publishes = True
+    _starts_fresh = False
+
+    def __init__(self, origin_session_key: str | None = None) -> None:
+        # La conversazione per cui si lavora quando chi chiama e' un subagent
+        # (``ToolContext.origin_session_key``): dentro il suo giro la sessione di
+        # richiesta e' la sua, non quella dell'utente.
+        self._origin = origin_session_key
+        self._touched: set[str] = set()
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
@@ -107,7 +136,7 @@ class AppTool(Tool):
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:
-        return cls()
+        return cls(origin_session_key=getattr(ctx, "origin_session_key", None))
 
     @property
     def name(self) -> str:
@@ -131,23 +160,22 @@ class AppTool(Tool):
 
     # -- dove ---------------------------------------------------------------
 
-    @staticmethod
-    def _session() -> str | None:
+    def _session(self) -> str | None:
         """La sessione, se e' un turno dell'utente (personale o di un quaderno)."""
         from jenny.session.keys import is_personal_session_key, is_project_session_key
 
-        key = current_request_session_key() or ""
+        key = self._origin or current_request_session_key() or ""
         if is_project_session_key(key) or is_personal_session_key(key):
             return key
         return None
 
     def _throttled(self, slug: str) -> bool:
         now = time.monotonic()
-        recent = [t for t in self._drafts.get(slug, []) if now - t < _DRAFT_WINDOW_S]
+        recent = [t for t in _RECENT_DRAFTS.get(slug, []) if now - t < _DRAFT_WINDOW_S]
         if len(recent) >= _MAX_DRAFTS:
-            self._drafts[slug] = recent
+            _RECENT_DRAFTS[slug] = recent
             return True
-        self._drafts[slug] = [*recent, now]
+        _RECENT_DRAFTS[slug] = [*recent, now]
         return False
 
     async def execute(self, action: str = "", slug: str = "", **kw: Any) -> str:
@@ -160,9 +188,25 @@ class AppTool(Tool):
                     "(the personal chat or a notebook's chat). Nothing was written.")
         if not isinstance(slug, str) or not SLUG_RE.match(slug) or len(slug) > 32:
             return "`slug` must be lowercase letters, digits and hyphens, at most 32."
+        if action not in self._ACTIONS:
+            return f"Unknown action here: use {', '.join(sorted(self._ACTIONS))}."
         workspace = get_workspace_path()
-        if action in ("draft", "edit", "place", "trash") and current_turn_is_readonly():
+        if action in ("draft", "edit", "set", "place", "trash", "publish") and \
+                current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
+        if action in ("draft", "edit", "set") and self._starts_fresh and slug not in self._touched:
+            # Il primo tocco di un costruttore su un'app riparte dal codice vivo:
+            # una bozza lasciata a meta' da un altro non e' il suo punto di partenza.
+            self._touched.add(slug)
+            from jenny.apps import drafts
+
+            stale = drafts.draft_dir(workspace, slug)
+            if stale.exists():
+                shutil.rmtree(stale)
+        if action == "set":
+            return await self._set(workspace, slug, kw)
+        if action == "publish":
+            return await self._publish(workspace, slug)
         if action == "draft":
             return await self._draft(workspace, slug, kw.get("files") or {})
         if action == "edit":
@@ -236,13 +280,13 @@ class AppTool(Tool):
         if problem:
             return f"Not written: {problem}"
         if self._throttled(slug):
-            return (f"Four tries on `{slug}` in a few minutes: stop here, tell the user what is "
-                    "failing and ask how to go on.")
+            return (f"Six tries on `{slug}` in ten minutes: stop here and report what keeps "
+                    "failing, with the last error, instead of trying again.")
         d = self._seed_draft(workspace, slug)
         for path, content in files.items():
             target = d / path
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_text(_readable(path, content), encoding="utf-8")
         return await self._try(workspace, slug)
 
     async def _edit(self, workspace: Path, slug: str, kw: dict[str, Any]) -> str:
@@ -276,7 +320,6 @@ class AppTool(Tool):
     async def _try(self, workspace: Path, slug: str) -> str:
         """Valida la bozza, gira il lettore una volta e, se va, la fa diventare l'app."""
         from jenny.apps import drafts
-        from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
 
         draft = drafts.load_draft(workspace, slug)
@@ -314,6 +357,26 @@ class AppTool(Tool):
                         "returns a dict with exactly the reader's fields (a list of dicts when "
                         "the reader has a `key`); ctx.now, ctx.prev, ctx.http (only the hosts in "
                         "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit.")
+        if not self._publishes:
+            return self._tested_reply(workspace, slug, draft.app)
+        return await self._promote(workspace, slug, m, existed)
+
+    def _tested_reply(self, workspace: Path, slug: str, app: Any) -> str:
+        """Cosa dice al costruttore una bozza che ha passato la prova: i valori letti."""
+        m = app.manifest
+        reading = self._latest_reading(workspace, app) if m.reader is not None else ""
+        return (f"`{slug}`: the new version passed its checks"
+                + (f" and its test run on the app's real data read — {reading}" if reading else "")
+                + ". It is **not live yet**: the main agent publishes it. Check the values against "
+                "what the app should show; when they are right, stop and report what you built "
+                "and what it read.")
+
+    async def _promote(self, workspace: Path, slug: str, m: Any, existed: bool) -> str:
+        """La bozza provata diventa l'app, e il primo giro sui dati veri conta."""
+        from jenny.apps import drafts
+        from jenny.apps.manifest import find_app
+        from jenny.apps.reader import run_reader
+
         try:
             drafts.promote_draft(workspace, slug)
         except OSError as exc:
@@ -327,8 +390,7 @@ class AppTool(Tool):
                     f"{'live app' if existed else 'apps folder'} failed: {exc}. This is a fault "
                     "in Jenny, not in the user's files: say so, and do not ask them to change "
                     "permissions or delete the app. Some of the new files may already be in "
-                    "place. The new version stays in the draft, and the next action=edit "
-                    "publishes it again.")
+                    "place. The new version stays in the draft, and publishing it again retries.")
         # Le schede che la mostrano prendono la taglia della striscia nuova.
         from jenny.board.place import refresh_app_cards
 
@@ -365,6 +427,79 @@ class AppTool(Tool):
                 + ("" if existed else " If it is about a notebook's subject, it can go on that "
                    "board with action=place.")
                 + (" Check the values above before saying it works." if reading else ""))
+
+    async def _publish(self, workspace: Path, slug: str) -> str:
+        """Pubblica la bozza che un ``app-builder`` ha scritto e provato."""
+        from jenny.apps import drafts
+        from jenny.apps.reader import read_state
+
+        draft = drafts.load_draft(workspace, slug)
+        if draft is None:
+            return (f"No new version of `{slug}` to publish: an app-builder writes and tests it "
+                    "first (spawn agent_type=app-builder).")
+        if draft.app.broken or draft.app.manifest is None:
+            return (f"The new version of `{slug}` is not valid ({draft.app.error}): send it back "
+                    "to its app-builder with subagent_send.")
+        m = draft.app.manifest
+        if m.reader is not None:
+            state = read_state(draft.dir)
+            if state.get("status") != "ok":
+                why = state.get("lastError") or "it never ran"
+                return (f"The new version of `{slug}` has not passed its test run ({why}): send "
+                        "it back to its app-builder with subagent_send.")
+        existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
+        return await self._promote(workspace, slug, m, existed)
+
+    async def _set(self, workspace: Path, slug: str, kw: dict[str, Any]) -> str:
+        """Un valore di ``app.json`` per percorso, senza riscrivere il file a memoria.
+
+        Il 07/10/2026, per cambiare due host di ``net``, un modello piccolo
+        riscriveva tutto ``app.json`` con le sue undici azioni dentro una stringa
+        JSON; ``edit`` invece voleva il testo esatto di un JSON su una riga sola.
+        """
+        path, value = kw.get("key"), kw.get("value")
+        if not isinstance(path, str) or not path.strip():
+            return "set needs `key`, a dotted path in app.json (e.g. reader.net), and `value`."
+        from jenny.apps import drafts
+
+        if not drafts.draft_dir(workspace, slug).exists() and not drafts.app_dir(
+                workspace, slug).is_dir():
+            return f"No app `{slug}`: create it with action=draft."
+        d = self._seed_draft(workspace, slug)
+        try:
+            data = json.loads((d / "app.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return f"app.json cannot be read ({exc}): rewrite it with action=draft."
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                pass
+        node: Any = data
+        keys = path.strip().split(".")
+        for key in keys[:-1]:
+            if isinstance(node, list) and key.isdigit() and int(key) < len(node):
+                node = node[int(key)]
+            elif isinstance(node, dict):
+                node = node.setdefault(key, {})
+            else:
+                return f"`{path}`: `{key}` is not an object in app.json."
+        last = keys[-1]
+        if isinstance(node, list) and last.isdigit() and int(last) < len(node):
+            node[int(last)] = value
+        elif isinstance(node, dict):
+            if value is None:
+                node.pop(last, None)
+            else:
+                node[last] = value
+        else:
+            return f"`{path}`: cannot set `{last}` there."
+        text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        problem = self._check_files({"app.json": text})
+        if problem:
+            return f"Not written: {problem}"
+        (d / "app.json").write_text(text, encoding="utf-8")
+        return await self._try(workspace, slug)
 
     def _latest_reading(self, workspace: Path, app: Any) -> str:
         """L'ultima lettura come la mostra la scheda.
@@ -496,4 +631,93 @@ class AppTool(Tool):
                 "from the Trash row at the bottom of the App page.")
 
 
-TOOLS = [AppTool]
+_BUILD_PARAMETERS = tool_parameters_schema(
+    action=StringSchema(
+        "draft: write files of the app's new version (app.json, run.py, AGENT.md, app/<file>); "
+        "send one or two files per call — a big call gets cut. edit: replace one exact string "
+        "in one file. set: change one value of app.json by its dotted path. Each of these "
+        "validates the version and runs its reader once on the app's real data. show: the "
+        "app's code and state. run: read the live app's reader now.",
+        enum=["draft", "edit", "set", "show", "run"],
+    ),
+    slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
+    files=ObjectSchema(
+        description="For draft: {path: content}. app.json is required for a new app; after "
+        "that send only the files that change.",
+        additional_properties=True,
+    ),
+    path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…)."),
+    old=StringSchema("For edit: the exact text to replace (must occur once)."),
+    new=StringSchema("For edit: the replacement text."),
+    key=StringSchema("For set: a dotted path in app.json, e.g. reader.net or reader.every."),
+    value=StringSchema("For set: the new value as JSON (a list, a number, a string in quotes); "
+                       "null removes the key."),
+    required=["action", "slug"],
+)
+
+
+@tool_parameters(_BUILD_PARAMETERS)
+class AppBuildTool(AppTool):
+    """La faccia del costruttore: scrive e prova una versione nuova, non la pubblica."""
+
+    _scopes = {"apps"}
+    _ACTIONS = frozenset({"draft", "edit", "set", "show", "run"})
+    _publishes = False
+    _starts_fresh = True
+
+    @property
+    def description(self) -> str:
+        return (
+            "Write and test a new version of one of the user's apps (workspace/apps/<slug>/: "
+            "app.json, run.py for the reader, app/index.html for the screen). Every write is "
+            "validated and the reader runs once on the app's real data; the reply shows the "
+            "values it read. Your version is not live until the main agent publishes it: "
+            "check the values, then report."
+        )
+
+
+_PUBLISH_PARAMETERS = tool_parameters_schema(
+    action=StringSchema(
+        "publish: make live the new version an app-builder wrote and tested. show: the app's "
+        "code and state. run: read the app's reader now. place: put the app on a notebook "
+        "board as a card of its own, optionally tied to an existing card. trash: move an app "
+        "to the trash (personal chat only).",
+        enum=["publish", "show", "run", "place", "trash"],
+    ),
+    slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
+    notebook=StringSchema("For place from the personal chat: the notebook name."),
+    card=StringSchema("For place (optional): an existing card (title or id) the app belongs "
+                      "with — the app's card is tied to it by a thread."),
+    params=ObjectSchema(
+        description="For place: the summary's params for this placement (e.g. which "
+        "sensor), {name: value}.",
+        additional_properties=True,
+    ),
+    required=["action", "slug"],
+)
+
+
+@tool_parameters(_PUBLISH_PARAMETERS)
+class AppPublishTool(AppTool):
+    """La faccia dell'orchestratore: pubblica, legge, posa. Le app le scrive l'``app-builder``.
+
+    Fino al 07/10/2026 l'orchestratore le scriveva da se': un modello piccolo
+    ricostruiva a memoria file interi dentro argomenti JSON, e ognuno restava
+    nella conversazione del quaderno per sempre (64 k caratteri nella chat ETF).
+    """
+
+    _scopes = {"orchestrator"}
+    _ACTIONS = frozenset({"publish", "show", "run", "place", "trash"})
+
+    @property
+    def description(self) -> str:
+        return (
+            "Publish, read and place the user's apps. To create or change an app, spawn an "
+            "app-builder subagent (agent_type=app-builder) with what the user wants; it "
+            "writes and tests a new version and reports the values it read. Then `publish` "
+            "makes it live (the reply shows its first real reading: check it before saying it "
+            "works), and `place` puts it on a notebook board as a card of its own."
+        )
+
+
+TOOLS = [AppTool, AppBuildTool, AppPublishTool]

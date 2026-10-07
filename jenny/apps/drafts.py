@@ -93,15 +93,27 @@ def promote_draft(workspace: Path, slug: str) -> Path:
     return dst
 
 
+# Il segno di una bozza nata dalla migrazione delle micro app (``migrate_micro``):
+# solo quelle si pubblicano da sole all'avvio.
+MIGRATED_MARKER = ".from-migration"
+
+
 def promote_valid_drafts(workspace: Path) -> list[str]:
-    """All'avvio: le bozze valide diventano app. Torna quali.
+    """All'avvio: le bozze valide **nate dalla migrazione** diventano app. Torna quali.
 
     Fino al 06/10/2026 un'app nuova restava **in prova** finché l'utente non
     toccava «Tienila»: chi aggiorna con una prova in sospeso la ritrova app
     vera. Una bozza rotta resta dov'è (è un lavoro a metà di Jenny).
+
+    Dal 07/10/2026 le bozze le scrive anche un ``app-builder`` e le pubblica
+    l'agente principale dopo averne guardato i valori: pubblicarle tutte a ogni
+    riavvio metterebbe in linea lavoro che nessuno ha rivisto. Si pubblicano
+    solo quelle col segno :data:`MIGRATED_MARKER`.
     """
     done = []
     for slug in list_drafts(workspace):
+        if not (draft_dir(workspace, slug) / MIGRATED_MARKER).exists():
+            continue
         draft = load_draft(workspace, slug)
         if draft is None or draft.app.broken or draft.app.manifest is None:
             continue

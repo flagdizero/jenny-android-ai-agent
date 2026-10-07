@@ -638,6 +638,23 @@ def _end_write_file(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return f"{_fmt_bytes(size)} written, {_plural(lines, 'line')}"
 
 
+# -- app (la faccia del costruttore) -----------------------------------------
+
+
+def _start_app(args: Mapping[str, Any]) -> str:
+    action = _arg_text(args, "action", limit=12) or "app"
+    slug = _arg_text(args, "slug", limit=32)
+    target = _arg_text(args, "key", limit=40) if action == "set" else _basename(args.get("path"))
+    where = f"{slug} {target}".strip() if target and target != "?" else slug
+    return f"app {action} {where}".strip()
+
+
+def _end_app(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Solo una misura: il testo della risposta porta i valori letti, che sono
+    # contenuto dell'utente.
+    return _generic_end(outcome)
+
+
 # -- edit_file ---------------------------------------------------------------
 
 
@@ -1104,8 +1121,8 @@ def _end_ssh_transfer(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return f"{verb} {_fmt_bytes(size)}" if size is not None else verb
 
 
-# Registro: un tool coperto ha una riga qui. Copre tutto lo scope ``subagent``
-# e tutto lo scope ``remote`` di ``agent/tools/loader.py`` (e quindi ogni
+# Registro: un tool coperto ha una riga qui. Copre tutto lo scope ``subagent``,
+# tutto lo scope ``remote`` e lo scope ``apps`` di ``agent/tools/loader.py`` (e quindi ogni
 # allowlist di ``agent/agent_types.py``, che ne e un sottoinsieme).
 _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "read_file": (_start_read_file, _end_read_file),
@@ -1114,6 +1131,7 @@ _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "list_dir": (_start_list_dir, _end_list_dir),
     "apply_patch": (_start_apply_patch, _end_apply_patch),
     "journal_append": (_start_journal_append, _end_journal_append),
+    "app": (_start_app, _end_app),
     "web_search": (_start_web_search, _end_web_search),
     "web_fetch": (_start_web_fetch, _end_web_fetch),
     "browser_open": (_start_browser_open, _end_browser),

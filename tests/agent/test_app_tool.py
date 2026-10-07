@@ -171,7 +171,7 @@ async def test_a_failed_promotion_does_not_blame_the_users_files(personal: Path,
     out = await tool.execute(action="draft", slug="spesa",
                              files={"app/index.html": "<p>la spesa</p>"})
     assert "fault in Jenny" in out and "do not ask them to change permissions" in out, out
-    assert "next action=edit" in out, out
+    assert "publishing it again" in out, out
     assert (ws / "apps" / ".drafts" / "spesa").is_dir()
 
 
@@ -337,3 +337,111 @@ async def test_editing_a_stuck_reader_lets_it_run_again(personal: Path) -> None:
     finally:
         mc._stuck.discard("apps/apps/portafoglio")
         mc._stuck.discard("apps/.drafts/portafoglio")
+
+
+# ── le app le scrive l'app-builder, le pubblica l'agente principale ──────────
+
+
+def _builder(origin: str | None = "project:piante"):
+    from jenny.agent.tools.app_tool import AppBuildTool
+
+    return AppBuildTool(origin_session_key=origin)
+
+
+async def test_a_builder_tests_a_version_but_does_not_publish_it(ws: Path) -> None:
+    """Il costruttore lavora per la chat da cui e' partito (l'origine), non per la
+    sua sessione di subagent; la sua versione resta in bozza."""
+    out = await _builder().execute(action="draft", slug="portafoglio",
+                                   files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    assert "passed its checks" in out and "not live yet" in out and "Totale: 0€" in out, out
+    assert find_app(ws, "portafoglio") is None
+    assert (ws / "apps" / ".drafts" / "portafoglio" / "app.json").is_file()
+
+
+async def test_the_main_agent_publishes_what_the_builder_tested(personal: Path) -> None:
+    from jenny.agent.tools.app_tool import AppPublishTool
+
+    ws = personal
+    publisher = AppPublishTool()
+    assert "app-builder writes and tests it first" in await publisher.execute(
+        action="publish", slug="portafoglio")
+    await _builder("unified:default").execute(
+        action="draft", slug="portafoglio",
+        files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    out = await publisher.execute(action="publish", slug="portafoglio")
+    assert "`portafoglio` is live" in out, out
+    assert find_app(ws, "portafoglio") is not None
+    assert not (ws / "apps" / ".drafts" / "portafoglio").exists()
+
+
+async def test_a_version_that_failed_its_test_is_not_published(personal: Path) -> None:
+    from jenny.agent.tools.app_tool import AppPublishTool
+
+    broken = "def run(ctx):\n    raise RuntimeError('HTTP 429')\n"
+    out = await _builder("unified:default").execute(
+        action="draft", slug="portafoglio",
+        files={"app.json": json.dumps(PORTAFOGLIO), "run.py": broken})
+    assert "HTTP 429" in out and "not live" not in out, out
+    out = await AppPublishTool().execute(action="publish", slug="portafoglio")
+    assert "has not passed its test run" in out and "HTTP 429" in out, out
+
+
+async def test_a_builder_from_a_scheduled_job_cannot_write(ws: Path) -> None:
+    for origin in ("cron:job", None):
+        out = await _builder(origin).execute(
+            action="draft", slug="portafoglio", files={"app.json": json.dumps(PORTAFOGLIO)})
+        assert out.startswith("Not from here"), out
+
+
+async def test_set_changes_one_value_and_keeps_app_json_readable(ws: Path) -> None:
+    b = _builder()
+    await b.execute(action="draft", slug="portafoglio",
+                    files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    out = await b.execute(action="set", slug="portafoglio", key="reader.every", value="1440")
+    assert "passed its checks" in out, out
+    text = (ws / "apps" / ".drafts" / "portafoglio" / "app.json").read_text()
+    assert json.loads(text)["reader"]["every"] == 1440 and "\n  " in text
+    out = await b.execute(action="set", slug="portafoglio", key="reader.net",
+                          value='["https://api.example.com/"]')
+    assert "net takes host names only" in out, out
+
+
+async def test_a_new_builder_starts_from_the_live_code(ws: Path) -> None:
+    """Una bozza lasciata a meta' da un costruttore non e' il punto di partenza
+    del prossimo."""
+    stale = ws / "apps" / ".drafts" / "portafoglio"
+    stale.mkdir(parents=True)
+    (stale / "app.json").write_text("{not json")
+    out = await _builder().execute(action="draft", slug="portafoglio",
+                                   files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    assert "passed its checks" in out, out
+
+
+def test_startup_publishes_only_migrated_drafts(ws: Path) -> None:
+    from jenny.apps import drafts
+
+    for slug in ("costruttore", "migrata"):
+        d = drafts.draft_dir(ws, slug)
+        d.mkdir(parents=True)
+        (d / "app.json").write_text(json.dumps(SPESA))
+    (drafts.draft_dir(ws, "migrata") / drafts.MIGRATED_MARKER).write_text("")
+    assert drafts.promote_valid_drafts(ws) == ["migrata"]
+    assert drafts.draft_dir(ws, "costruttore").exists()
+
+
+def test_each_registry_gets_its_face_of_the_tool(ws: Path) -> None:
+    from types import SimpleNamespace
+
+    from jenny.agent.tools.app_tool import AppBuildTool, AppPublishTool
+    from jenny.agent.tools.loader import ToolLoader
+
+    loader = ToolLoader()
+    faces = {}
+    for scope in ("core", "orchestrator", "apps"):
+        registry = ToolRegistry()
+        ctx = SimpleNamespace(workspace=str(ws), config=None, registry=registry)
+        loader.load(ctx, registry, scope=scope, allow={"app"} if scope != "core" else None)
+        faces[scope] = type(registry.get("app"))
+    assert faces["core"] is AppTool
+    assert faces["orchestrator"] is AppPublishTool
+    assert faces["apps"] is AppBuildTool

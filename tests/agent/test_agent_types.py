@@ -41,6 +41,9 @@ EXPECTED_TOOLS = {
         "ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer",
         "read_file", "list_dir", "write_file",
     },
+    # Scrive e prova le app: il tool ``app`` (faccia del costruttore, scope
+    # ``apps``) e la sola lettura. Niente web, niente esecuzione.
+    "app-builder": {"app", "read_file", "list_dir", "grep"},
     "operator": None,  # tutto lo scope subagent
 }
 
@@ -100,15 +103,15 @@ def _load_type(name: str, tmp_path: Path) -> set[str]:
     return loaded
 
 
-def test_six_types_exist() -> None:
+def test_seven_types_exist() -> None:
     assert AGENT_TYPE_NAMES == (
-        "researcher", "writer", "coder", "analyst", "sysadmin", "operator",
+        "researcher", "writer", "coder", "analyst", "sysadmin", "app-builder", "operator",
     )
     assert DEFAULT_AGENT_TYPE == "operator"
 
 
 @pytest.mark.parametrize(
-    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "operator"]
+    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "app-builder", "operator"]
 )
 def test_declared_allowlist_matches_contract(name: str) -> None:
     expected = EXPECTED_TOOLS[name]
@@ -186,9 +189,9 @@ def test_ssh_tools_are_in_no_pre_existing_scope(scope: str, tmp_path: Path) -> N
 
 
 def test_only_sysadmin_reaches_the_remote_scope() -> None:
+    extra = {"sysadmin": ("subagent", "remote"), "app-builder": ("subagent", "apps")}
     for name, agent_type in AGENT_TYPES.items():
-        expected = ("subagent", "remote") if name == "sysadmin" else ("subagent",)
-        assert agent_type.scopes == expected, name
+        assert agent_type.scopes == extra.get(name, ("subagent",)), name
 
 
 def test_multi_scope_allowlist_is_split_per_scope() -> None:

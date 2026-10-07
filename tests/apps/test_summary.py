@@ -92,4 +92,4 @@ def test_in_a_notebook_the_placed_apps_come_first_and_the_others_are_read_only(t
     assert "`etf_add`" in placed and "spesa" not in placed
     assert "Spesa (`spesa`)" in others and "read-only" in others
     # E le app nuove si fanno da qui: Jenny mandava l'utente nella chat personale.
-    assert "write it from this chat with the `app` tool" in others
+    assert "is made from this chat too" in others

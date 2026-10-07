@@ -665,6 +665,7 @@ class ContextBuilder:
             with suppress(Exception):  # workspace sincronizzato da una versione precedente
                 parts.append(render_template(
                     "agent/project.md",
+                    has=has,
                     project_path=str(_absolute_workspace(root)),
                     # La politica di cattura vale per **questo** turno, quello in
                     # cui c'e' un utente che dice qualcosa. Un subagent riceve lo
@@ -884,7 +885,8 @@ class ContextBuilder:
         notebook = root if root != self.workspace and is_wiki_root(root) else None
         apps_summary = build_apps_summary(self.workspace, notebook_root=notebook)
         if apps_summary:
-            parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary))
+            parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary,
+                                         has=has))
 
         if include_memory_recent_history:
             # Due pavimenti, e vince il più alto. Quello di Dream dice «queste

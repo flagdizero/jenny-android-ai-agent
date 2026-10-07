@@ -411,3 +411,20 @@ async def test_drain_pending_no_block_when_no_subagents(tmp_path):
     # With no sub-agents and empty queue, should return immediately
     results = await asyncio.wait_for(injection_callback(), timeout=1.0)
     assert results == []
+
+
+async def test_an_app_builder_is_spawned_only_for_a_user_conversation() -> None:
+    """Un costruttore lanciato da un cron non potrebbe scrivere: lo si dice
+    subito, invece di spendere un giro intero."""
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.spawn import SpawnTool
+
+    mgr = MagicMock()
+    mgr.spawn = AsyncMock(return_value="started")
+    tool = SpawnTool(mgr)
+    tool.set_context(RequestContext(channel="internal", chat_id="j", session_key="cron:job"))
+    out = await tool.execute(task="fai un'app", agent_type="app-builder")
+    assert out.startswith("Cannot spawn an app-builder here") and not mgr.spawn.await_count
+    tool.set_context(RequestContext(channel="websocket", chat_id="project:soldi",
+                                    session_key="project:soldi"))
+    assert await tool.execute(task="fai un'app", agent_type="app-builder") == "started"

@@ -12,7 +12,7 @@ There is no fixed tool count. What Jenny actually has available in a given conve
 
 - **The agent's scope** — the main agent loads either the `orchestrator` scope (default, see `agents.defaults.orchestratorMode`) or the historical `core` scope; a subagent loads the `subagent` scope, narrowed further by its agent type. The four SSH tools sit in a scope of their own, `remote`, which **no** agent loads by default — only the `sysadmin` subagent type asks for it. The same install therefore exposes different tools to the orchestrator, to a `sysadmin` subagent, and to every other subagent.
 
-A conversation agent can draw on **42** named built-in tools: 41 registered through the standard loader (`jenny/agent/tools/loader.py`, which imports 23 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 42 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
+A conversation agent can draw on **42** named built-in tools: 41 registered through the standard loader (44 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps)) (`jenny/agent/tools/loader.py`, which imports 23 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 42 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
 
 Below, tools are grouped into ten categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
 
@@ -376,13 +376,14 @@ Starts a subagent to work a task in the background and reports the result back i
 | `coder` | filesystem, `find_files`, `grep`, `apply_patch`, `python_exec`, `write_stdin`, `list_exec_sessions`, `get_recent_logs` | 0.1 | 120 | Writes and changes code. No network. The longest leash, because a build/test loop legitimately takes many steps. |
 | `analyst` | `python_exec`, `read_file`, `list_dir`, `write_file` | 0.1 | 60 | Computation, data, charts. No network. |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer`, `read_file`, `list_dir`, `write_file` | 0.0 | 60 | The only type that can touch a remote machine — and in exchange the only one with **neither web access nor `python_exec`**. |
+| `app-builder` | `app` (its builder face: `draft`, `edit`, `set`, `show`, `run`), `read_file`, `list_dir`, `grep` | 0.1 | 40 | Writes and tests a new version of one of your apps; the main agent publishes it. No web, no `python_exec`: its code runs only as the app's reader, tested on the app's real data. Spawned only from a conversation with you. |
 | `operator` | the whole `subagent` scope | manager default | manager default | Default, and the fallback for what fits none of the above. It declares no sampling defaults of its own. |
 
 Both columns are *defaults*, not ceilings you can't move: a `temperature` passed to `spawn` overrides the type's. The iteration count is different — the effective cap is `min(type cap, agents.defaults.maxToolIterations)`, where that setting defaults to **200**. So the type's number is what you normally get, and lowering `maxToolIterations` lowers every type at once (setting it to 30 caps even `coder` at 30); raising it above 200 never lifts a type past its own number.
 
-`sysadmin` is also the only type that loads a second scope (`subagent` + `remote`). The SSH tools are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell by accident; granting them takes naming their scope explicitly.
+`sysadmin` and `app-builder` load a second scope (`subagent` + `remote`, `subagent` + `apps`). The SSH tools and the app builder's `app` are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell or a way to write apps by accident; granting them takes naming their scope explicitly.
 
-**A type can also declare tools it cannot work without.** Five of the six do:
+**A type can also declare tools it cannot work without.** Six of the seven do:
 
 | Type | Requires | What has to be off for the spawn to be refused |
 |---|---|---|
@@ -391,6 +392,7 @@ Both columns are *defaults*, not ceilings you can't move: a `temperature` passed
 | `coder` | `read_file`, `write_file` | `tools.file.enable` |
 | `analyst` | `python_exec`, `read_file` | `tools.pythonExec.enable` **and** `tools.file.enable` — either one alone is partial loss, not a refusal |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer` | `tools.ssh.enable`, or an empty host list |
+| `app-builder` | `app` | never (the tool is always there) |
 
 The practical consequence: turn `tools.file.enable` off and asking for a `writer` or a `coder` is refused outright, with a message naming that setting, rather than starting an agent that would try to write a document with no write tool. `operator` requires nothing and always spawns.
 
@@ -520,6 +522,19 @@ Every action declared in an installed Jenny App's `<workspace>/apps/<slug>/app.j
 - A broken app (invalid manifest) contributes zero tools — it doesn't crash tool loading, it's just silently absent (with a warning in the logs).
 - If an app declares an action name that collides with a built-in tool name, that action is skipped with a warning rather than overriding the built-in.
 - Jenny can act on an app's data through these tools even while the app's own screen is closed — the app UI and the tool layer are independent.
+- In a notebook's chat, the actions that **write** to an app not placed on that notebook's board are not offered at all (reads are): they would be refused anyway (`jenny/apps/permissions.py`).
+
+### The `app` tool and who writes apps
+
+An app's code (`app.json`, `run.py`, `app/`) changes only through the `app` tool, which comes in three faces of the same tool:
+
+| Who | Actions | What happens |
+|---|---|---|
+| The main agent, orchestrator mode (default) | `publish`, `show`, `run`, `place`, `trash` | It never writes code: it spawns an `app-builder`, checks the values the builder reports, and `publish` makes the tested version live. |
+| An `app-builder` subagent | `draft`, `edit`, `set`, `show`, `run` | Writes a new version as a draft; every write is validated and the reader runs once on the app's **real data** (read-only); the reply shows the values it read. It never publishes. |
+| The main agent with `orchestratorMode` off | all of the above | Writes, tests and publishes in one step, as before. |
+
+`set` changes one value of `app.json` by its dotted path (`reader.net`, `reader.every`), and drafts store `app.json` indented, so a fix never means rewriting the whole manifest. A draft's manifest is checked strictly: what an installed app gets silently corrected (a `net` host written as a URL, an unknown field type, `every` outside 15–1440) is an error that says how to write it.
 
 See the Mini-apps page for how apps and actions are authored. Config: `apps.enabled` (default `true`, turning it off removes all app tools at once), `apps.httpTimeoutS` (default 20.0, range 1–120 — timeout for an app action's outbound proxy calls), `apps.maxCollectionBytes` (default 5,000,000 — per-collection storage cap).
 

@@ -53,9 +53,10 @@ def test_the_contract_asks_to_say_checked_or_guessed() -> None:
     assert "**values** are the ones expected" in text
 
 
-def test_the_orchestrator_knows_its_two_writes() -> None:
+def test_the_orchestrator_hands_apps_to_a_builder() -> None:
     text = render_template("agent/orchestrator.md")
-    assert "Two writes are yours" in text and "`app` tool" in text and "still a spawn" in text
+    assert "One write is yours: `journal_append`" in text and "still a spawn" in text
+    assert "`app-builder`" in text and "app action=publish" in text
     assert len(text) < 3_200
 
 

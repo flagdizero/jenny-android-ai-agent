@@ -100,7 +100,7 @@ Dream is a periodic consolidation job (`jenny/agent/memory.py`): every 2 hours b
 
 ## Tools and safety
 
-Tools are **not** discovered by scanning the filesystem — they are registered explicitly. A fixed list of 23 modules under `jenny/agent/tools/` each declare a `TOOLS = [...]` list of tool classes (41 in all), collected once at startup by `jenny/agent/tools/loader.py` — plus `my`, `memory` and the per-app action tools, which are built outside the loader because each needs a live reference it cannot provide; a module missing that declaration, or a name collision between two tools, is a startup error rather than a silent gap. Common tool groups include:
+Tools are **not** discovered by scanning the filesystem — they are registered explicitly. A fixed list of 23 modules under `jenny/agent/tools/` each declare a `TOOLS = [...]` list of tool classes (44 in all: a few names have one class per scope — `app` has three), collected once at startup by `jenny/agent/tools/loader.py` — plus `my`, `memory` and the per-app action tools, which are built outside the loader because each needs a live reference it cannot provide; a module missing that declaration, or a name collision between two tools, is a startup error rather than a silent gap. Common tool groups include:
 
 - file read/write/edit, search, and multi-file patching, scoped to the workspace;
 - Python code execution (`python_exec`), in-process, with a module allowlist that is explicitly not a security sandbox;
