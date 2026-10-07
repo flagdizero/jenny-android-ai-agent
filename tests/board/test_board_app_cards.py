@@ -215,7 +215,9 @@ def test_the_board_block_names_the_app_of_a_card(notebook, waterbot, monkeypatch
     card = read_board(notebook)["cards"][0]
     assert "WaterBot 38%" in drawer_text(notebook, card) or "moisture 38%" in drawer_text(
         notebook, card)
-    assert "WaterBot 38%" in board_block(notebook)
+    # Nel prompt di sistema il nome, non il valore (che cambia a ogni lettura).
+    assert "[auto: WaterBot]" in board_block(notebook)
+    assert "38%" not in board_block(notebook)
 
 
 def test_the_drawer_of_an_app_card_starts_from_the_app(notebook, waterbot) -> None:

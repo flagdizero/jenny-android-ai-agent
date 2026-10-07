@@ -613,12 +613,17 @@ class ContextBuilder:
         """
         orchestrating = self.orchestrator if orchestrator is None else orchestrator
         root = workspace or self.workspace
+        # Lo stesso predicato del contratto dei tool, anche per l'identita' e la
+        # policy di piattaforma: «usa `web_search`», «tutto il codice passa da
+        # `python_exec`» arrivavano a un orchestratore che non li ha.
+        has = self._tool_predicate(self._resolve_tool_names(available_tools))
         parts = [
             self._get_identity(
                 channel=channel,
                 workspace=root,
                 orchestrating=orchestrating,
                 session_key=session_key,
+                has=has,
             )
         ]
 
@@ -1044,6 +1049,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         orchestrating: bool | None = None,
         session_key: str | None = None,
+        has: Callable[[str], bool] | None = None,
     ) -> str:
         """Get the core identity section.
 
@@ -1088,12 +1094,14 @@ class ContextBuilder:
         workspace_path = str(_absolute_workspace(root))
         runtime = f"Android, Python {platform.python_version()}"
 
+        has = has or (lambda _name: True)
         return render_template(
             "agent/identity.md",
             workspace_path=workspace_path,
             install_path=str(_absolute_workspace(self.workspace)),
             runtime=runtime,
-            platform_policy=render_template("agent/platform_policy.md"),
+            platform_policy=render_template("agent/platform_policy.md", has=has),
+            has=has,
             channel=channel or "",
             orchestrator=self.orchestrator if orchestrating is None else orchestrating,
             installation_files=not is_gardener_session_key(session_key),

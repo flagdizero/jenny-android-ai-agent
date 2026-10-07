@@ -123,7 +123,9 @@ def test_a_micro_app_and_a_cron_reach_the_block_and_the_drawer(tmp_path) -> None
                                                    "status": "ok", "text": "Oggi piove."}}
 
     mutate_board(root, apply)
-    assert "[auto: Acerello 38% · cron Meteo]" in board_block(root)
+    # Solo i nomi nel prompt di sistema: il valore arriva col cassetto.
+    assert "[auto: Acerello · cron Meteo]" in board_block(root)
+    assert "38%" not in board_block(root)
     drawer = turn_lines(root, "come sta pianta 0?")[0]
     assert "Micro app «Acerello» (`m-acerello`, micro_app tool): Umidità 38%" in drawer
     assert "board/micro/m-acerello/run.py" in drawer

@@ -109,7 +109,8 @@ def measure(request: dict[str, Any]) -> dict[str, Any]:
             "system_blocks": _system_blocks(system)}
 
 
-async def probe(workspace: Path, chat: str, message: str) -> dict[str, Any]:
+async def probe(workspace: Path, chat: str, message: str, *,
+                sync: bool = True) -> dict[str, Any]:
     from jenny.agent.loop import AgentLoop
     from jenny.bus.events import InboundMessage
     from jenny.bus.queue import MessageBus
@@ -119,6 +120,13 @@ async def probe(workspace: Path, chat: str, message: str) -> dict[str, Any]:
     ctx = get_runtime_context()
     ctx.workspace_dir = workspace
     ctx.config_path = workspace / "config.json"
+    if sync:
+        # Come al primo avvio dopo un aggiornamento: i prompt di sistema e le
+        # skill del pacchetto sovrascrivono quelli della copia, altrimenti si
+        # misurerebbero i template della versione installata sul telefono.
+        from jenny.utils.helpers import sync_workspace_templates
+
+        sync_workspace_templates(workspace, silent=True)
     config = load_config(workspace / "config.json")
     provider = _RecordingProvider(config.agents.defaults.model)
     loop = AgentLoop.from_config(config, MessageBus(), provider=provider)
@@ -148,9 +156,12 @@ def main() -> None:
                         help="chat id of the websocket channel, e.g. project:etf-finance")
     parser.add_argument("--message", default="ciao")
     parser.add_argument("--save", type=Path, help="write the recorded request here")
+    parser.add_argument("--no-sync", action="store_true",
+                        help="measure the copy's own templates and skills (the installed version)")
     args = parser.parse_args()
 
-    report = asyncio.run(probe(args.workspace.resolve(), args.chat, args.message))
+    report = asyncio.run(probe(args.workspace.resolve(), args.chat, args.message,
+                               sync=not args.no_sync))
     request = report.pop("request")
     if args.save:
         args.save.write_text(json.dumps(request, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -174,31 +174,27 @@ def board_block(
 
 
 def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> str:
-    """``[auto: Acerello 38% · cron Meteo]``: cio' che nel cassetto gira da solo.
+    """``[auto: Acerello · cron Meteo]``: cio' che nel cassetto gira da solo.
 
-    Solo i nomi e l'ultimo valore, dentro il tetto del blocco: il resto entra
-    col cassetto, quando la scheda viene nominata.
+    **Solo i nomi.** Fino al 07/10/2026 c'era anche l'ultimo valore
+    («Portafoglio 34390.17€»), cioe' un dato che cambia a ogni giro di un
+    lettore in mezzo al prompt di sistema: rompeva la cache del provider da li'
+    in giu', e nello stesso prompt il modello trovava quattro totali diversi del
+    portafoglio. Il valore vero arriva col cassetto, nel contesto del turno,
+    quando la scheda viene nominata.
     """
-    from jenny.board.micro import load_micro, read_readings
+    from jenny.board.micro import load_micro
 
     bits: list[str] = []
     for section in card.get("userSections") or []:
         if section.get("kind") == "micro" and section.get("pending") is not True:
             micro = load_micro(root, str(section.get("micro")))
-            if micro is None:
-                continue
-            readings = read_readings(micro.dir)
-            primary = micro.spec["primary"]
-            value = readings[-1].get(primary) if readings else None
-            unit = micro.spec["fields"][primary].get("unit", "")
-            bits.append(f"{micro.spec['title']} {value}{unit}" if value is not None
-                        else micro.spec["title"])
+            if micro is not None:
+                bits.append(micro.spec["title"])
         elif section.get("kind") == "cron":
             bits.append(f"cron {section.get('name') or section.get('job')}")
     for view in _app_views(root, card):
-        value = view.get("value")
-        bits.append(f"{view.get('name')} {value}{view.get('unit') or ''}"
-                    if value is not None else str(view.get("name")))
+        bits.append(str(view.get("name")))
     return f"[auto: {' · '.join(bits)}]" if bits else ""
 
 

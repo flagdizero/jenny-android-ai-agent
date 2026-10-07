@@ -1274,6 +1274,7 @@ class SubagentManager:
             system_prompt = self._build_subagent_prompt(
                 workspace=root,
                 agent_type=atype,
+                tool_names=tools.tool_names,
                 # Lo scope della spec, non l'ambiente: il prompt si costruisce
                 # qui fuori, il ``with`` che lega e' piu' sotto.
                 workspace_scope=workspace_scope,
@@ -1652,8 +1653,12 @@ class SubagentManager:
         agent_type: AgentType | None = None,
         *,
         workspace_scope: WorkspaceScope | None = None,
+        tool_names: list[str] | None = None,
     ) -> str:
         """Build a focused system prompt for the subagent.
+
+        *tool_names* sono gli strumenti del subagent: i template dicono solo
+        cio' che vale per chi li ha (``has``), come nel prompt principale.
 
         Il prompt di ruolo del tipo viene *composto* dentro il template base, non
         duplicato: la parte condivisa (contenuto non fidato, workspace, skills)
@@ -1685,6 +1690,7 @@ class SubagentManager:
         ).build_skills_summary()
         return render_template(
             "agent/subagent_system.md",
+            has=ContextBuilder._tool_predicate(tool_names),
             time_ctx=time_ctx,
             workspace=str(root),
             # Assoluto come ``workspace`` qui accanto: il subagent scrive con

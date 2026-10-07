@@ -7,10 +7,14 @@ from pathlib import Path
 
 from jenny.utils.path import atomic_write
 
+# Neutra sugli strumenti: le skill sempre attive arrivano anche
+# all'orchestratore, che ``python_exec`` non l'ha. «use python_exec as the only
+# execution tool» era un'istruzione su uno strumento che non aveva.
 _ANDROID_SKILL_NOTE = (
     "\n\n[Platform compatibility note: Android is the only supported runtime. "
-    "There is no shell, no pip, and no CLI tools; use python_exec as the only "
-    "execution tool. Skill requirements may only reference python/python3 binaries.]\n"
+    "There is no shell, no pip, and no CLI tools: code runs only through python_exec, "
+    "yours if you have it, a subagent's if you do not. Skill requirements may only "
+    "reference python/python3 binaries.]\n"
 )
 
 try:

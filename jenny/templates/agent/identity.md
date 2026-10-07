@@ -5,7 +5,7 @@
 Your workspace is at: {{ workspace_path }}
 {% if installation_files -%}
 - Long-term memory: {{ install_path }}/memory/MEMORY.md (automatically managed by Dream — do not edit directly)
-- History log: {{ install_path }}/memory/history.jsonl (append-only JSONL; search it with `grep`, do not read it whole).
+- History log: {{ install_path }}/memory/history.jsonl (append-only JSONL; search it with `recall`, do not read it whole).
 - Custom skills: {{ install_path }}/skills/{% raw %}{skill-name}{% endraw %}/SKILL.md
 {% endif -%}
 
