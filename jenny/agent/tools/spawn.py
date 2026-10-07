@@ -45,7 +45,8 @@ if TYPE_CHECKING:
             "start and follow long jobs, transfer files) plus read/list/write, NO "
             "network and NO local code execution — the only type that reaches a "
             "remote machine, and the only way to do so. "
-            "'operator': everything (fallback for tasks that fit none of the above).",
+            "'operator': the whole subagent toolset except SSH (fallback for tasks that fit "
+            "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,
         ),
         quick=BooleanSchema(

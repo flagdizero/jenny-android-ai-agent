@@ -237,6 +237,11 @@ def test_the_block_stays_small() -> None:
     sta descrivendo *come si fa* qualcosa che capita di rado, quel paragrafo va
     nella skill e questo tetto ha fatto il suo lavoro.
 
+    **Tetto a 4.400 dal 07/10/2026, su un pavimento misurato di 3.942.** La regola
+    di cattura e' passata da cinque paragrafi argomentati a sei punti: le stesse
+    regole, dette una volta, per un modello piccolo che si perdeva nelle eccezioni
+    alle eccezioni. Senza ``capture`` il render resta sotto i 3.000.
+
     **Tetto a 6.300 dall'08/09/2026, su un pavimento misurato di 5.739.** Il tetto
     ha fatto il suo lavoro e la deliberazione è andata dall'altra parte: il
     paragrafo aggiunto è politica di cattura — la classe che questa regola dice
@@ -277,12 +282,12 @@ def test_the_block_stays_small() -> None:
     # e nessuno saprebbe che il tetto ha smesso di sorvegliare qualcosa. È il
     # solo modo di far fallire un test che sbaglia per difetto invece che per
     # eccesso, ed è la lezione del 25/08 scritta come asserzione.
-    assert len(rendered) > 4000, (
+    assert len(rendered) > 3000, (
         f"agent/project.md è {len(rendered)} caratteri: il blocco di cattura non è nel "
         "render, quindi questo tetto non sta sorvegliando quel che dice di sorvegliare. "
         "Manca `capture=True`?"
     )
-    assert len(rendered) <= 6300, (
+    assert len(rendered) <= 4400, (
         f"agent/project.md è {len(rendered)} caratteri: sta diventando il manuale della "
         "skill. Qui ci sta quel che si applica a ogni turno; il come si esegue "
         "un'operazione sta in `skills/llm-wiki/SKILL.md`."

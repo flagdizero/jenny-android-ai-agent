@@ -16,6 +16,7 @@ from jenny.agent.context_governor import (
     closed_reasoning_can_be_blank,
     extract_context_limit,
     is_context_length_error,
+    label_mid_turn_messages,
     snip_history,
 )
 from jenny.agent.history_repair import (
@@ -732,6 +733,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             messages_for_model = self._backfill_missing_tool_results(messages_for_model)
             if closed_reasoning_can_be_blank(self.provider, spec.model):
                 messages_for_model = blank_closed_reasoning(messages_for_model)
+            messages_for_model = label_mid_turn_messages(messages_for_model)
             messages_for_model = self._microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)
             messages_for_model = self._snip_history(spec, messages_for_model)

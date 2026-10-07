@@ -44,6 +44,12 @@ GOAL_CONTINUE_EVENT = "goal_continue"
 #: Ripresa dopo un output troncato dal tetto di token.
 LENGTH_RECOVERY_EVENT = "length_recovery"
 
+#: Un messaggio che l'utente ha scritto mentre il turno lavorava, iniettato a
+#: meta' giro. **Non** e' una riga sintetica (l'ha scritta l'utente): il segno
+#: serve solo al governatore del runner, che nella richiesta lo presenta come
+#: tale (``context_governor.label_mid_turn_messages``).
+MID_TURN_META = "mid_turn"
+
 _INJECTED_EVENTS = frozenset({
     SUBAGENT_RESULT_EVENT,
     GOAL_CONTINUE_EVENT,

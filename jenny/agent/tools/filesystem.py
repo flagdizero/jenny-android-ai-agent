@@ -629,6 +629,12 @@ class ReadFileTool(_FsTool):
     _scopes = {"core", "orchestrator", "subagent"}
 
     _MAX_CHARS = 128_000
+    # Per l'orchestratore: cio' che legge resta nella conversazione per sempre,
+    # e il 07/10/2026 sul Titan tre letture (uno script da 16 k, uno schermo da
+    # 12 k, una skill da 6 k) erano un decimo di ogni richiesta del quaderno. Oltre
+    # questo tetto la lettura va delegata.
+    _ORCHESTRATOR_MAX_CHARS = 12_000
+    _orchestrator = False
     # Oltre questo il file non si carica in memoria: sul telefono un log
     # da centinaia di MB, decodificato e spezzato in righe, vale il gateway.
     _MAX_FILE_BYTES = 16 * 1024 * 1024
@@ -639,8 +645,36 @@ class ReadFileTool(_FsTool):
     def name(self) -> str:
         return "read_file"
 
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        tool = super().create(ctx)
+        tool._orchestrator = bool(getattr(ctx, "orchestrator", False))  # type: ignore[attr-defined]
+        return tool
+
+    @property
+    def _max_chars(self) -> int:
+        return self._ORCHESTRATOR_MAX_CHARS if self._orchestrator else self._MAX_CHARS
+
+    def _slice_hint(self) -> str:
+        """Dove mandare chi deve leggere un pezzo che ``read_file`` non da'.
+
+        All'orchestratore niente ``python_exec``: non ce l'ha, e il consiglio lo
+        mandava a cercarlo.
+        """
+        if self._orchestrator:
+            return "ask a subagent to read it and report what matters"
+        return "slice it with python_exec, or ask a subagent that has it"
+
     @property
     def description(self) -> str:
+        if self._orchestrator:
+            return (
+                "Read a file (text, image, or PDF document). Text output format: "
+                "LINE_NUM|CONTENT. What you read stays in this conversation for good: read the "
+                "part you need with offset and limit, and delegate long reads to a subagent. "
+                f"Reads over ~{self._ORCHESTRATOR_MAX_CHARS // 1000}K chars are cut. "
+                "Use force=true to re-read content even if unchanged."
+            )
         return (
             "Read a file (text, image, or PDF document). "
             "Text output format: LINE_NUM|CONTENT. "
@@ -695,9 +729,8 @@ class ReadFileTool(_FsTool):
             if st.st_size > self._MAX_FILE_BYTES:
                 return (
                     f"Error: {path} is too large for read_file ({st.st_size:,} bytes; the "
-                    f"limit is {self._MAX_FILE_BYTES:,}). grep skips it too. Read the part "
-                    "you need with python_exec (seek and read a slice), or ask a subagent "
-                    "that has it."
+                    f"limit is {self._MAX_FILE_BYTES:,}). grep skips it too: "
+                    f"{self._slice_hint()}."
                 )
             raw = await asyncio.to_thread(fp.read_bytes)
             if not raw:
@@ -770,11 +803,11 @@ class ReadFileTool(_FsTool):
             result = "\n".join(numbered)
 
             long_line_note = ""
-            if len(result) > self._MAX_CHARS:
+            if len(result) > self._max_chars:
                 trimmed, chars = [], 0
                 for line in numbered:
                     chars += len(line) + 1
-                    if chars > self._MAX_CHARS:
+                    if chars > self._max_chars:
                         break
                     trimmed.append(line)
                 end = start + len(trimmed)
@@ -785,12 +818,11 @@ class ReadFileTool(_FsTool):
                     # l'invito era «Use offset=<la stessa>», all'infinito.
                     # Se ne mostra la testa e l'offset successivo la scavalca.
                     end = start + 1
-                    result = numbered[0][: self._MAX_CHARS]
+                    result = numbered[0][: self._max_chars]
                     long_line_note = (
                         f"(Line {end} is {len(all_lines[start]):,} characters long; only "
-                        f"its first ~{self._MAX_CHARS:,} are shown. read_file cannot page "
-                        "inside a line: slice it with python_exec, or ask a subagent that "
-                        "has it.)"
+                        f"its first ~{self._max_chars:,} are shown. read_file cannot page "
+                        f"inside a line: {self._slice_hint()}.)"
                     )
 
             if long_line_note:
@@ -843,8 +875,9 @@ class ReadFileTool(_FsTool):
                 f"Use pages='{end + 2}-{min(end + 1 + self._MAX_PDF_PAGES, total_pages)}' "
                 "to continue.)"
             )
-        if len(result) > self._MAX_CHARS:
-            result = result[:self._MAX_CHARS] + "\n\n(PDF text truncated at ~128K chars)"
+        if len(result) > self._max_chars:
+            result = (result[:self._max_chars]
+                      + f"\n\n(PDF text truncated at ~{self._max_chars // 1000}K chars)")
         return result
 
 # ---------------------------------------------------------------------------

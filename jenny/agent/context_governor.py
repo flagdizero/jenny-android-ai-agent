@@ -204,3 +204,35 @@ def blank_closed_reasoning(messages: list[dict[str, Any]]) -> list[dict[str, Any
         if m.get("role") == "assistant" and m.get("reasoning_content"):
             out[i] = {**m, "reasoning_content": ""}
     return out
+
+
+MID_TURN_LABEL = ("[New message from the user while you were working. Answer it before going "
+                  "on with what you were doing.]")
+
+
+def label_mid_turn_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Presenta come tale un messaggio scritto mentre il turno lavorava.
+
+    Iniettato a meta' giro, arrivava al modello come un ``user`` qualunque in
+    mezzo a una catena di tool, e il modello lo mescolava al compito in corso:
+    sul Titan, il 07/10/2026, «puoi lanciare l'aggiornamento a mano?» chiesto tre
+    volte e risposto alla fine di un altro lavoro. L'etichetta sta solo nella
+    richiesta: il transcript resta come l'utente l'ha scritto.
+    """
+    from jenny.session.history_meta import MID_TURN_META
+
+    out = messages
+    for i, m in enumerate(messages):
+        if m.get("role") != "user" or not m.get(MID_TURN_META):
+            continue
+        if out is messages:
+            out = list(messages)
+        content = m.get("content")
+        if isinstance(content, str):
+            labelled: Any = f"{MID_TURN_LABEL}\n{content}"
+        elif isinstance(content, list):
+            labelled = [{"type": "text", "text": MID_TURN_LABEL}, *content]
+        else:
+            continue
+        out[i] = {**m, "content": labelled}
+    return out
