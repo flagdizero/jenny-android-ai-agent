@@ -50,7 +50,9 @@ def load_draft(workspace: Path, slug: str) -> Draft | None:
     d = draft_dir(workspace, slug)
     if not (d / "app.json").is_file():
         return None
-    return Draft(slug=slug, dir=d, app=load_app(d))
+    # Severa: la bozza e' cio' che Jenny sta scrivendo, e una correzione
+    # silenziosa qui diventa un errore misterioso quando il lettore gira.
+    return Draft(slug=slug, dir=d, app=load_app(d, strict=True))
 
 
 def list_drafts(workspace: Path) -> list[str]:

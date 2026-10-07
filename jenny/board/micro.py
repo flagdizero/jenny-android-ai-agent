@@ -128,8 +128,19 @@ def _clean_number(value: Any) -> float | int | None:
     return value
 
 
-def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
-    """La spec di una micro app, ripulita; :class:`MicroError` se non regge."""
+def normalize_spec(raw: Any, *, micro_id: str, strict: bool = False) -> dict[str, Any]:
+    """La spec di una micro app, ripulita; :class:`MicroError` se non regge.
+
+    Ripulita vuol dire che alcune cose sbagliate si **correggono in silenzio**:
+    un ``type`` sconosciuto diventa ``number``, ``every`` si porta dentro
+    15–1440, un host di ``net`` con lo schema o la porta, un ``uses`` o un
+    ``alarm`` storti si buttano. Va bene per un'app gia' installata, che deve
+    continuare a caricarsi; non va bene mentre la si scrive, perche' l'errore
+    salta fuori solo quando il lettore gira («host 'x' is not in this micro
+    app's net list») e il modello non sa perche'. Con *strict* (la bozza del
+    tool ``app``) le stesse cose diventano errori che dicono come scriverle.
+    """
+    problems: list[str] = []
     if not isinstance(raw, dict):
         raise MicroError("the spec must be an object")
     title = model.clean_text(raw.get("title"), model.MAX_TITLE)
@@ -145,6 +156,9 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
         if not isinstance(name, str) or not _FIELD_RE.match(name):
             raise MicroError(f"field name {name!r}: lowercase letters, digits and _")
         spec = spec if isinstance(spec, dict) else {}
+        if spec.get("type") is not None and spec.get("type") not in FIELD_TYPES:
+            problems.append(f"field {name!r}: type {spec.get('type')!r} is not one of "
+                            f"{', '.join(FIELD_TYPES)}")
         ftype = spec.get("type") if spec.get("type") in FIELD_TYPES else "number"
         entry: dict[str, Any] = {
             "label": model.clean_text(spec.get("label"), model.MAX_TITLE) or name,
@@ -179,15 +193,23 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
     try:
         every = int(raw.get("every") or DEFAULT_EVERY_MINUTES)
     except (TypeError, ValueError):
+        problems.append(f"every must be a whole number of minutes, not {raw.get('every')!r}")
         every = DEFAULT_EVERY_MINUTES
+    if not MIN_EVERY_MINUTES <= every <= MAX_EVERY_MINUTES:
+        problems.append(f"every is in minutes, from {MIN_EVERY_MINUTES} to "
+                        f"{MAX_EVERY_MINUTES} (once a day): {every} is out of range")
     every = max(MIN_EVERY_MINUTES, min(MAX_EVERY_MINUTES, every))
     alarm = None
-    if isinstance(raw.get("alarm"), dict):
-        a = raw["alarm"]
+    if raw.get("alarm") is not None:
+        a = raw["alarm"] if isinstance(raw.get("alarm"), dict) else {}
         if a.get("field") in fields and a.get("op") in model.CONDITION_OPS and isinstance(
             a.get("value"), (int, float, str, bool)
         ):
             alarm = {"field": a["field"], "op": a["op"], "value": a["value"]}
+        else:
+            problems.append(f"alarm must be {{field, op, value}} with field one of "
+                            f"{', '.join(fields)} and op one of "
+                            f"{', '.join(sorted(model.CONDITION_OPS))}")
     try:
         stale = int(raw.get("staleAfter") or every * 3)
     except (TypeError, ValueError):
@@ -196,11 +218,18 @@ def normalize_spec(raw: Any, *, micro_id: str) -> dict[str, Any]:
     for host in raw.get("net") or []:
         if isinstance(host, str) and _HOST_RE.match(host.strip().lower()):
             net.append(host.strip().lower())
+        else:
+            problems.append(f"net takes host names only: {host!r} is not one "
+                            "(write api.example.com, not https://api.example.com:443/path)")
     if len(net) > MAX_NET_HOSTS:
         raise MicroError(f"at most {MAX_NET_HOSTS} hosts in net")
     uses = [u for u in (raw.get("uses") or []) if isinstance(u, str) and _SKILL_RE.match(u)]
+    if len(uses) != len(raw.get("uses") or []):
+        problems.append("uses names one installed skill, by its folder name")
     if len(uses) > 1:
         raise MicroError("a micro app can use one skill")
+    if strict and problems:
+        raise MicroError("; ".join(problems))
     card = raw.get("card")
     out = {
         "id": micro_id,
@@ -760,8 +789,11 @@ def _format_error(exc: BaseException) -> str:
 
     from jenny.agent.tools.python_exec import _path_guard_bypass
 
+    # I frame **interni**, dove l'errore nasce (il codice dell'app, la skill,
+    # httpx): un ``limit`` positivo teneva i quattro piu' esterni, cioe' la
+    # cornice del sandbox, e tagliava proprio la riga che spiega cosa e' successo.
     with _path_guard_bypass():
-        text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=4))
+        text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=-4))
     return text[-_MAX_ERROR:]
 
 

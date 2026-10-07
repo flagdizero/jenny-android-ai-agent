@@ -271,8 +271,11 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
             parts.append(_micro_line(root, section))
         elif section.get("kind") == "cron":
             last = results.get(f"{card['id']}/{section.get('id')}") or {}
-            said = f", last result {last.get('textAt') or last.get('at')}: {last['text']}" \
-                if last.get("text") else ""
+            # Una citazione datata, non una frase di Jenny al presente: il testo
+            # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
+            # come un'istruzione da eseguire adesso.
+            said = (f", its last result ({last.get('textAt') or last.get('at')}, its own words, "
+                    f"may be out of date): «{last['text']}»") if last.get("text") else ""
             parts.append(f"- Notebook cron «{section.get('name') or ''}» (`{section.get('job')}`, "
                          f"cron action=list shows it){said}")
     for view in _app_views(root, card):

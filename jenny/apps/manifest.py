@@ -20,7 +20,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Kept character-identical to skills/app-creator/scripts/validate_app.py
+# I nomi validi di app, azioni e collezioni: una sola copia, qui (il validatore
+# della skill che li duplicava e' uno stub dal 07/10/2026).
 SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
 ACTION_NAME_RE = re.compile(r"\A[a-z][a-z0-9_]*\Z")
 COLLECTION_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
@@ -237,7 +238,7 @@ def _parse_action(raw: object, index: int, has_server: bool) -> AppAction:
     return action
 
 
-def _parse_manifest(data: object) -> AppManifest:
+def _parse_manifest(data: object, *, strict: bool = False) -> AppManifest:
     """Parse a decoded app.json; raises ValueError with a readable message."""
     if not isinstance(data, dict):
         raise ValueError("app.json: top level must be an object")
@@ -295,7 +296,7 @@ def _parse_manifest(data: object) -> AppManifest:
             raise ValueError("app.json: view.kind 'external' requires a 'server.baseUrl'")
 
     summary = _summary_with_blocks(data.get("summary"))
-    reader, reader_key = _parse_reader(data.get("reader"), summary, data["name"])
+    reader, reader_key = _parse_reader(data.get("reader"), summary, data["name"], strict=strict)
     if summary is not None:
         section = _parse_summary(summary, actions, reader)
     else:
@@ -409,7 +410,8 @@ def _int(raw: dict, *names: str) -> object:
     return None
 
 
-def _parse_reader(raw: object, summary: object, name: str) -> tuple[dict | None, str | None]:
+def _parse_reader(raw: object, summary: object, name: str, *,
+                  strict: bool = False) -> tuple[dict | None, str | None]:
     """Il blocco ``reader``: ``run.py`` che l'orologio gira, senza modello.
 
     Si valida con le stesse regole di una micro app (campi, forma, principale,
@@ -437,7 +439,7 @@ def _parse_reader(raw: object, summary: object, name: str) -> tuple[dict | None,
         "staleAfter": _int(summ, "staleAfterMinutes", "stale_after_minutes"),
     }
     try:
-        spec = normalize_spec(spec_raw, micro_id="reader")
+        spec = normalize_spec(spec_raw, micro_id="reader", strict=strict)
     except MicroError as exc:
         raise ValueError(f"{where_}: {exc}") from exc
     key = raw.get("key")
@@ -592,8 +594,13 @@ def _parse_summary_shape(raw: object, action_names: list[str], reader: dict | No
     )
 
 
-def load_app(app_dir: Path) -> LoadedApp:
-    """Load one app folder. Never raises: problems come back as broken=True."""
+def load_app(app_dir: Path, *, strict: bool = False) -> LoadedApp:
+    """Load one app folder. Never raises: problems come back as broken=True.
+
+    *strict* e' per la bozza che si sta scrivendo: cio' che per un'app gia'
+    installata si corregge in silenzio diventa un errore (v.
+    ``board.micro.normalize_spec``).
+    """
     slug = app_dir.name
     app = LoadedApp(slug=slug, dir=app_dir)
 
@@ -616,7 +623,7 @@ def load_app(app_dir: Path) -> LoadedApp:
         return app
 
     try:
-        app.manifest = _parse_manifest(data)
+        app.manifest = _parse_manifest(data, strict=strict)
         if app.manifest.reader is not None and not (app_dir / "run.py").is_file():
             app.manifest = None
             raise ValueError("app.json: reader is declared but run.py is missing")

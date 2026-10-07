@@ -241,3 +241,99 @@ async def test_a_strip_bigger_than_xl_is_refused_with_what_to_do(personal: Path)
                                   files={"app.json": json.dumps(tall)})
     assert "a strip holds at most 9 (XL)" in out and "nothing changed" in out, out
     assert find_app(ws, "spesa") is None
+
+
+# ── la prova dice la verita' (07/10/2026, il Portafoglio sul Titan) ──────────
+
+PORTAFOGLIO = {
+    "name": "Portafoglio", "description": "Value of the shares",
+    "actions": [{"name": "set_quote", "description": "How many shares", "kind": "storage",
+                 "op": "append", "collection": "quote",
+                 "params": {"ticker": {"type": "string"}, "quote": {"type": "number"}}}],
+    "reader": {"every": 720, "fields": {"totale": {"label": "Totale", "type": "number",
+                                                   "unit": "€"}}},
+    "summary": {"primary": "totale"},
+}
+SUM = ("def run(ctx):\n"
+       "    return {'totale': sum(q['quote'] * 10 for q in ctx.data('quote'))}\n")
+
+
+async def test_a_new_version_is_tried_on_the_real_data(personal: Path) -> None:
+    """La prova di una versione nuova legge le quote vere: prima girava su una
+    cartella vuota e rispondeva «0 €» o un valore preso da un campo vecchio."""
+    ws = personal
+    tool = AppTool()
+    await tool.execute(action="draft", slug="portafoglio",
+                       files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    await execute_action(ws, "portafoglio", "set_quote", {"ticker": "CSSPX", "quote": 28})
+    live_quote = (ws / "apps" / "portafoglio" / "data" / "quote.jsonl").read_text()
+    out = await tool.execute(action="edit", slug="portafoglio", path="run.py",
+                             old="* 10", new="* 11")
+    assert "Totale: 308€" in out, out
+    assert "Check the values" in out and "Tell them" not in out
+    assert (ws / "apps" / "portafoglio" / "data" / "quote.jsonl").read_text() == live_quote
+
+
+async def test_a_first_real_reading_that_fails_is_said(personal: Path, monkeypatch) -> None:
+    tool = AppTool()
+    await tool.execute(action="draft", slug="portafoglio",
+                       files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    import jenny.apps.reader as reader
+
+    real = reader.run_reader
+
+    async def live_fails(workspace, slug, **kw):
+        state = await real(workspace, slug, **kw)
+        if kw.get("app_dir") is None and state is not None:
+            return {**state, "status": "error", "lastError": "RuntimeError: HTTP 429"}
+        return state
+
+    monkeypatch.setattr(reader, "run_reader", live_fails)
+    out = await tool.execute(action="edit", slug="portafoglio", path="run.py",
+                             old="* 10", new="* 12")
+    assert "is published, but its first reading on the real data failed" in out, out
+    assert "HTTP 429" in out and "is updated" not in out
+
+
+async def test_run_shows_the_last_series(personal: Path) -> None:
+    """`app run` di un lettore a serie: prima filtrava su parametri vuoti e
+    rispondeva «no value yet» dopo un giro riuscito."""
+    tool = AppTool()
+    await tool.execute(action="draft", slug="waterbot",
+                       files={"app.json": json.dumps(WATERBOT), "run.py": READER})
+    out = await tool.execute(action="run", slug="waterbot")
+    assert out.startswith("Read now — Moisture: 17%"), out
+
+
+async def test_a_draft_says_what_is_wrong_instead_of_dropping_it(personal: Path) -> None:
+    """Un host con lo schema veniva buttato in silenzio, e il lettore falliva
+    solo girando («host 'x' is not in this micro app's net list»)."""
+    ws = personal
+    manifest = {**PORTAFOGLIO, "reader": {**PORTAFOGLIO["reader"],
+                                          "net": ["https://api.boerse-frankfurt.de/"]}}
+    out = await AppTool().execute(action="draft", slug="portafoglio",
+                                  files={"app.json": json.dumps(manifest), "run.py": SUM})
+    assert "net takes host names only" in out and "is live" not in out, out
+    # Un'app gia' installata con lo stesso manifest continua a caricarsi.
+    live = ws / "apps" / "vecchia"
+    live.mkdir(parents=True)
+    (live / "app.json").write_text(json.dumps(manifest))
+    (live / "run.py").write_text(SUM)
+    assert not find_app(ws, "vecchia").broken
+
+
+async def test_editing_a_stuck_reader_lets_it_run_again(personal: Path) -> None:
+    from jenny.board import micro as mc
+
+    tool = AppTool()
+    await tool.execute(action="draft", slug="portafoglio",
+                       files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    mc._stuck.update({"apps/apps/portafoglio", "apps/.drafts/portafoglio"})
+    try:
+        out = await tool.execute(action="edit", slug="portafoglio", path="run.py",
+                                 old="* 10", new="* 13")
+        assert "is updated" in out, out
+        assert not ({"apps/apps/portafoglio", "apps/.drafts/portafoglio"} & mc._stuck)
+    finally:
+        mc._stuck.discard("apps/apps/portafoglio")
+        mc._stuck.discard("apps/.drafts/portafoglio")

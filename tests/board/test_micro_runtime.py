@@ -89,6 +89,19 @@ async def test_three_code_errors_in_a_row_break_it_and_back_off(tmp_path) -> Non
     assert due - mc.model.parse_iso(state["lastRunAt"]) == timedelta(minutes=30 * 8)
 
 
+async def test_a_reader_error_shows_where_it_happened(tmp_path) -> None:
+    """L'errore che arriva a Jenny e' quello vero, con la riga dell'app: non un
+    finto SyntaxError del sandbox, non la sola cornice esterna."""
+    ws, root = _notebook(tmp_path)
+    _live(ws, root, "def fetch():\n    raise RuntimeError('HTTP 429 from hub')\n"
+                    "def run(ctx):\n    return fetch()\n")
+    state = await mc.run_micro(ws, root, "m-acerello", now=NOW, force=True)
+    assert "RuntimeError: HTTP 429 from hub" in state["lastError"]
+    assert "in fetch" in state["lastError"]
+    assert "SyntaxError" not in state["lastError"]
+    assert "During handling" not in state["lastError"]
+
+
 async def test_the_network_down_is_not_a_broken_micro_app(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     code = "def run(ctx):\n    raise ConnectionError('hub down')\n"

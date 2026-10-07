@@ -243,7 +243,7 @@ def run(ctx):
             {w["sensor"] for w in ctx.wanted}]
 ```
 
-- `every` — minutes between readings, at least 15 (default 60).
+- `every` — minutes between readings, from 15 to 1440 (once a day); default 60.
 - `fields` — exactly what `run(ctx)` returns, at most 8: `number` (with optional `min`/`max`),
   `bool`, `text`, or one `rows` field (a list of dicts with declared `columns`, up to 4 columns
   and 20 rows) for a list or table. A missing, wrong-typed or out-of-range value is an **error**,
@@ -251,11 +251,16 @@ def run(ctx):
 - `key` — a text field naming the series when one reader reads several things (three sensors):
   then `run` returns a **list** of dicts, one per series, and `ctx.wanted` lists the params the
   placements on the boards need (`[{"sensor": "acerello"}, …]`).
-- `net` — the only hosts `ctx.http.get_json / get_text / post_json` may reach (at most 4).
+- `net` — the only hosts `ctx.http.get_json / get_text / post_json` may reach (at most 4),
+  as bare host names: `api.example.com`, never `https://…` or a port. `ctx.http` is a plain
+  HTTP client — no cookies, no JavaScript, not a browser: a source that answered `web_fetch`
+  (which goes through the phone's browser) may refuse it. Try a source with `app run`, which
+  is the reader's real environment.
 - `uses` — at most one installed skill whose scripts `run` imports: reuse it instead of
   re-implementing an API, and its credentials stay where they are. **Never put a credential in
   `run.py` or `app.json`** — the `app` tool refuses it.
-- `ctx.now` (ISO), `ctx.prev` (the last reading), `ctx.data("collection")` (the app's own
+- `ctx.now` (ISO), `ctx.prev` (the last reading **as it was written**: after you rename a
+  field it still carries the old name, so read it defensively), `ctx.data("collection")` (the app's own
   records, read-only: a reader that **aggregates** — a portfolio's value from its operations and
   current prices — also runs right after every write, so the summary always matches the data).
 - The code reads, never writes; at most 6 KB; 20 s per run and **at most 8 HTTP requests per run**
@@ -263,7 +268,15 @@ def run(ctx):
   real error when you retry: one that ends on the cap hides why the earlier calls failed.
 - Readings are kept as the last 48 plus one per day for about 13 months: a long trend (a
   portfolio's year) is drawn from the reader's own readings and grows from the first one — it is
-  not rebuilt from the past.
+  not rebuilt from the past. A reading equal to the previous one adds no row: it moves the
+  previous one's time forward, so few rows mean "nothing changed", not "the reader did not run".
+- **A value you could not read is an error, not the old value.** Let the exception rise
+  (a network failure becomes "unreachable", anything else an error the tool shows you), and do
+  not wrap the fetch in `except Exception: continue`: that hides the reason — a 429, the
+  request cap — and leaves a reading that looks fresh and is wrong.
+- The draft's test run reads the live app's data (`ctx.prev`, `ctx.data`) without changing it,
+  and the tool's reply shows the values it read: check them against what you expect before
+  saying the app works.
 
 ## Complete example
 
@@ -283,9 +296,18 @@ def run(ctx):
       "kind": "storage", "op": "append", "collection": "care",
       "params": { "plant": {"type": "string"}, "note": {"type": "string"} },
       "required": ["plant"] }
-  ]
+  ],
+  "summary": {
+    "collection": "care",
+    "meta": { "count": true, "label": "care notes" },
+    "blocks": [ { "kind": "table", "collection": "care", "max": 3,
+                  "columns": { "plant": { "label": "Plant" }, "note": { "label": "Note" } } } ]
+  }
 }
 ```
+
+An app with a storage action that writes keeps state, so it declares a `summary`: without it
+the draft is refused.
 
 ## AGENT.md
 
@@ -445,8 +467,8 @@ window.addEventListener('popstate', (e) => {
 - **No `<form>` at all** — there is no `allow-forms`, and the submission is blocked *before*
   the `submit` event is fired, so `event.preventDefault()` never runs and cannot rescue it.
   Use a plain `<button type="button">` with a click handler, add a `keydown` listener for
-  Enter on the input, and call `jenny.action(...)` from the handler. `validate_app.py`
-  rejects any `<form>` in `index.html`.
+  Enter on the input, and call `jenny.action(...)` from the handler. The draft refuses a
+  screen with a `<form>`, a modal call or a direct `/api/apps/` fetch.
 - **Never call the actions API with `fetch` directly, and never with POST or custom
   headers** — the gateway is GET-only and cannot answer CORS preflights. Always go through
   `jenny.action()`, which issues the correct simple GET.

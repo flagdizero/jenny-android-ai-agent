@@ -6,9 +6,6 @@ import json
 from pathlib import Path
 
 from jenny.apps.manifest import (
-    ACTION_NAME_RE,
-    COLLECTION_RE,
-    SLUG_RE,
     action_param_schema,
     find_app,
     load_app,
@@ -237,12 +234,3 @@ class TestSchemaAndRegexParity:
             "additionalProperties": False,
         }
 
-    def test_regexes_match_skill_validator(self):
-        """The runtime and the app-creator validator must agree on names."""
-        validator = (
-            Path(__file__).resolve().parents[2]
-            / "jenny" / "skills" / "app-creator" / "scripts" / "validate_app.py"
-        ).read_text(encoding="utf-8")
-        assert SLUG_RE.pattern in validator
-        assert ACTION_NAME_RE.pattern in validator
-        assert COLLECTION_RE.pattern in validator

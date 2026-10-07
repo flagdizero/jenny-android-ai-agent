@@ -741,6 +741,23 @@ class _Lineage:
     task_id: str
 
 
+# Quanto del compito torna nell'annuncio. Il testo intero e' gia' nella
+# cronologia, negli argomenti della ``spawn``: ripeterlo raddoppiava ogni
+# delega nel contesto (un compito da 10 k caratteri tornava tale e quale).
+_ANNOUNCE_TASK_CHARS = 240
+
+
+def _task_head(task: str) -> str:
+    """La prima riga del compito, quanto basta a riconoscerlo."""
+    text = (task or "").strip()
+    head = text.splitlines()[0] if text else ""
+    if len(head) > _ANNOUNCE_TASK_CHARS:
+        head = head[:_ANNOUNCE_TASK_CHARS].rstrip() + "…"
+    if head != text:
+        head += " (the full brief is in your spawn call)"
+    return head
+
+
 class SubagentManager:
     """Manages background subagent execution."""
 
@@ -1564,7 +1581,7 @@ class SubagentManager:
             "agent/subagent_announce.md",
             label=label,
             status_text=status_text,
-            task=task,
+            task=_task_head(task),
             result=result,
             silent=silent,
         )

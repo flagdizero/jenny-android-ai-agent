@@ -65,7 +65,7 @@ nothing when tapped:
 - **Never call `/api/apps/` with `fetch`.** Always go through `jenny.action()` — the
   gateway is GET-only and answers no CORS preflight.
 
-`scripts/validate_app.py` rejects the first as an error and warns on the others.
+`app action=draft` refuses a screen that does any of the three.
 </rule>
 
 <rule>

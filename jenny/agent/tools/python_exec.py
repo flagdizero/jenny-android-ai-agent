@@ -2884,11 +2884,20 @@ class PythonNamespace:
         try:
             self._enter_guard(working_dir)
             with _capture_streams(stdout_buf, stderr_buf):
-                # Try eval first (for expressions)
+                # Un'espressione si valuta (il suo valore torna), il resto si
+                # esegue. La scelta si fa compilando, e l'esecuzione sta FUORI
+                # dall'``except``: dentro, ogni errore del codice arrivava al
+                # modello dopo un «SyntaxError: invalid syntax» sulla prima
+                # riga e un «During handling of the above exception», e un
+                # modello piccolo correggeva la sintassi invece dell'errore
+                # vero (sul Titan, il 07/10/2026, un HTTP 429 sepolto così).
                 try:
-                    result = eval(self._compile(code, "eval"), ns)
+                    compiled, mode = self._compile(code, "eval"), "eval"
                 except SyntaxError:
-                    # Fall back to exec (for statements)
+                    compiled, mode = None, "exec"
+                if mode == "eval":
+                    result = eval(compiled, ns)
+                else:
                     exec(self._compile(code, "exec"), ns)
         except (PythonExecInterrupted, _SessionStopped, asyncio.CancelledError):
             # Interrupt del sandbox (timeout / stop): non è un errore del

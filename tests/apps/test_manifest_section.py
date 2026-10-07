@@ -7,7 +7,6 @@ dice la stessa cosa mentre il manifest si scrive.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -41,14 +40,6 @@ def _app(tmp_path: Path, section) -> Path:
     return app
 
 
-def _validator():
-    spec = importlib.util.spec_from_file_location(
-        "validate_app", ROOT / "jenny" / "skills" / "app-creator" / "scripts" / "validate_app.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_a_good_section_loads(tmp_path) -> None:
     app = load_app(_app(tmp_path, SECTION))
     assert not app.broken, app.error
@@ -56,8 +47,6 @@ def test_a_good_section_loads(tmp_path) -> None:
     assert (section.collection, section.field, section.unit) == ("readings", "moisture", "%")
     assert section.stale_after_minutes == 120 and section.trend_days == 7
     assert section.verbs == ["refresh"]
-    errors, _ = _validator().validate_app(_app(tmp_path / "v", SECTION))
-    assert errors == []
 
 
 @pytest.mark.parametrize(("change", "message"), [
@@ -77,8 +66,6 @@ def test_a_bad_section_breaks_the_app_with_a_readable_error(tmp_path, change, me
     app = load_app(_app(tmp_path, section))
     assert app.broken
     assert message in app.error
-    errors, _ = _validator().validate_app(_app(tmp_path / "v", section))
-    assert any(message in e for e in errors), errors
 
 
 def test_an_app_without_a_section_is_unchanged(tmp_path) -> None:

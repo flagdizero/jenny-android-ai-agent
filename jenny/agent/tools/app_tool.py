@@ -74,6 +74,24 @@ _PARAMETERS = tool_parameters_schema(
 )
 
 
+def _silent_screen_failure(text: str) -> str | None:
+    """Cio' che nell'iframe dell'app fallisce **senza un errore**, e quindi va
+    fermato qui. Erano i controlli di ``skills/app-creator/scripts/validate_app.py``,
+    uno script che nessuno eseguiva: stanno dove la bozza si valida davvero."""
+    import re
+
+    if re.search(r"<form\b", text, re.IGNORECASE):
+        return ("a <form> never submits in the app iframe (no allow-forms): use "
+                "<button type=\"button\"> with a click handler, plus Enter on the input.")
+    for fn in ("alert", "confirm", "prompt"):
+        if re.search(rf"(?<![\w.$])(?:window\.)?{fn}\s*\(", text):
+            return (f"{fn}() does nothing in the app iframe (no allow-modals): use a "
+                    "<dialog> or kit markup.")
+    if re.search(r"fetch\s*\(\s*[`'\"][^)]*?/api/apps/", text):
+        return "call the app's actions with jenny.action(...), not fetch('/api/apps/…')."
+    return None
+
+
 @tool_parameters(_PARAMETERS)
 class AppTool(Tool):
     """Scrive, prova, ripara e posa le app."""
@@ -102,9 +120,9 @@ class AppTool(Tool):
             "and may have: a screen (app/index.html + declared actions in app.json), a reader "
             "(run.py, run every N minutes by the clock with no model turn) and a summary (how "
             "it shows on its own card: the value in place of the photo). `draft` validates the "
-            "files and runs the reader once: when they work the app is live at once (in the "
-            "App page, with its tools) — tell the user the real value; when they do not, "
-            "nothing changes and you get the error. Any app that keeps state MUST "
+            "files and runs the reader once on the app's real data: when they work the app is "
+            "live at once (in the App page, with its tools) and the reply carries the values it "
+            "read — check them; when they do not, nothing changes and you get the error. Any app that keeps state MUST "
             "declare a `summary`. Use the app-creator skill for the manifest format. `place` "
             "puts it on a notebook board as a card of its own (a tap opens its screen), tied by "
             "a thread to the card it belongs with: placing it in a notebook also lets that "
@@ -179,6 +197,8 @@ class AppTool(Tool):
                 return f"run.py is over {MAX_CODE_BYTES // 1024} KB: keep the reader small."
             if parts[0] == "app":
                 screen += len(content.encode())
+                if path.endswith((".html", ".js")) and (problem := _silent_screen_failure(content)):
+                    return f"{path}: {problem}"
             if path in ("run.py", "app.json") and find_secrets(content):
                 return (f"{path} contains what looks like a credential: never put one in an "
                         "app. Import the installed skill that holds it (reader `uses`).")
@@ -258,10 +278,17 @@ class AppTool(Tool):
         from jenny.apps import drafts
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
-        from jenny.apps.summary_view import summary_view
 
         draft = drafts.load_draft(workspace, slug)
         assert draft is not None
+        # Un lettore che non si era fermato resta in quarantena finche' qualcuno
+        # non lo modifica, come promette il suo messaggio («edit it to retry»):
+        # questo e' quel qualcuno. Due chiavi, perche' bozza e app vera girano
+        # sotto nomi diversi (``reader.execute_reader``).
+        from jenny.board import micro as mc
+
+        mc._stuck.discard(f"apps/{drafts.DRAFTS_DIRNAME}/{slug}")
+        mc._stuck.discard(f"apps/apps/{slug}")
         app = draft.app
         if app.broken or app.manifest is None:
             return (f"`{slug}` is not valid: {app.error}\nFix it with action=edit (or draft "
@@ -315,25 +342,45 @@ class AppTool(Tool):
         live = find_app(workspace, slug)
         if m.reader is not None and live is not None:
             if existed:
-                # La versione nuova legge sui dati veri, non su quelli della bozza.
-                await run_reader(workspace, slug, force=True)
-            # Un lettore a serie (un sensore per posa): la prima lettura e' quella
-            # dell'ultima serie letta, coi parametri che il riassunto vuole.
-            from jenny.apps.reader import read_readings
-
-            last = (read_readings(live.dir) or [{}])[-1]
-            params = {name: last[name] for name in (m.section.params if m.section else {})
-                      if name in last}
-            reading = self._reading(summary_view(workspace, live, params))
+                # La versione nuova legge sui dati veri. L'esito conta: fino al
+                # 07/10/2026 si ignorava, e un primo giro fallito sull'app vera
+                # tornava come «updated» con l'ultima lettura della versione vecchia.
+                state = await run_reader(workspace, slug, force=True)
+                if not state or state.get("status") != "ok":
+                    error = (state or {}).get("lastError", "the reader did not run")
+                    return (f"`{slug}` is published, but its first reading on the real data "
+                            f"failed:\n\n{error}\n\nThe card still shows the previous value. "
+                            "Fix the reader before telling the user it works.")
+            reading = self._latest_reading(workspace, live)
         what = "updated" if existed else "live"
         section = m.section
         strip = (f" On a board it is a strip {section.size} ("
                  + ", ".join(b["kind"] for b in section.blocks) + ").") \
             if section is not None and section.blocks else ""
+        # I fatti, non un copione: il «Tell them in one or two lines what it
+        # does» spingeva a dire «funziona» anche quando la stessa riga diceva
+        # «prezzi non letti».
         return (f"`{slug}` is {what}{' — ' + reading if reading else ''}.{strip} It is in the "
-                "user's App page now, with its tools. Tell them in one or two lines what it does"
-                + ("" if existed else " — and, if it is about a notebook's subject, offer to put "
-                   "it on that board with action=place") + ".")
+                "user's App page, with its tools."
+                + ("" if existed else " If it is about a notebook's subject, it can go on that "
+                   "board with action=place.")
+                + (" Check the values above before saying it works." if reading else ""))
+
+    def _latest_reading(self, workspace: Path, app: Any) -> str:
+        """L'ultima lettura come la mostra la scheda.
+
+        Un lettore a serie (un sensore per posa) mostra l'ultima serie letta,
+        coi parametri che il riassunto vuole: senza, ``summary_view`` filtra su
+        valori vuoti e risponde «no value yet» anche dopo un giro riuscito.
+        """
+        from jenny.apps.reader import read_readings
+        from jenny.apps.summary_view import summary_view
+
+        section = app.manifest.section if app.manifest is not None else None
+        last = (read_readings(app.dir) or [{}])[-1]
+        params = {name: last[name] for name in (section.params if section else {})
+                  if name in last}
+        return self._reading(summary_view(workspace, app, params))
 
     @staticmethod
     def _reading(view: dict[str, Any]) -> str:
@@ -383,14 +430,13 @@ class AppTool(Tool):
     async def _run(self, workspace: Path, slug: str) -> str:
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
-        from jenny.apps.summary_view import summary_view
 
         app = find_app(workspace, slug)
         if app is None or app.manifest is None or app.manifest.reader is None:
             return f"`{slug}` has no reader."
         state = await run_reader(workspace, slug, force=True)
         if state and state.get("status") == "ok":
-            return "Read now — " + self._reading(summary_view(workspace, app, {}))
+            return "Read now — " + self._latest_reading(workspace, app)
         return f"The reader failed: {(state or {}).get('lastError', 'did not run')}"
 
     # -- posare -------------------------------------------------------------

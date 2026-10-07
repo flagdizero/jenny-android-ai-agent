@@ -128,6 +128,9 @@ def test_a_micro_app_and_a_cron_reach_the_block_and_the_drawer(tmp_path) -> None
     assert "Micro app «Acerello» (`m-acerello`, micro_app tool): Umidità 38%" in drawer
     assert "board/micro/m-acerello/run.py" in drawer
     assert "Notebook cron «Meteo»" in drawer and "Oggi piove." in drawer
+    # Una citazione datata, non una frase al presente da eseguire.
+    assert ("its last result (2026-10-05T09:00:00+02:00, its own words, may be out of date): "
+            "«Oggi piove.»") in drawer
 
 
 # ── Senza bacheca: il perche' arriva nel prompt ─────────────────────────────

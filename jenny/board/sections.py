@@ -116,7 +116,10 @@ def records_view(
     def order(record: Mapping[str, Any]) -> tuple[int, float, str]:
         return model.instant_order(record.get(latest))
 
-    last = max(records, key=order)
+    # A parita' d'ora vince l'ultima scritta: ``max`` tiene la prima, e due
+    # letture nello stesso secondo (una prova e la versione nuova) mostravano
+    # quella vecchia.
+    last = max(reversed(records), key=order)
     value = last.get(field_name)
     at = _record_time(last)
     current = now or datetime.now(timezone.utc)

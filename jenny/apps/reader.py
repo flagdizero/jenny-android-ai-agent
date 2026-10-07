@@ -223,11 +223,16 @@ def wanted_params(workspace: Path, slug: str) -> list[dict[str, Any]]:
 
 
 async def execute_reader(workspace: Path, app: LoadedApp, *,
-                         now: datetime | None = None) -> Any:
+                         now: datetime | None = None,
+                         data_dir: Path | None = None) -> Any:
     """Gira ``run.py`` una volta e valida l'uscita. Non scrive niente.
 
     Torna un ``RunResult`` di ``jenny/board/micro.py``, con ``values`` che e'
     la **lista** delle letture validate.
+
+    *data_dir* e' la cartella dell'app da cui ``ctx.prev`` e ``ctx.data``
+    leggono, se non e' quella del codice: la prova di una bozza legge i dati
+    dell'app vera (v. :func:`run_reader`).
     """
     from jenny.agent.tools.python_exec import (
         PythonExecInterrupted,
@@ -251,11 +256,12 @@ async def execute_reader(workspace: Path, app: LoadedApp, *,
         code = (app.dir / "run.py").read_text(encoding="utf-8")
     except OSError as exc:
         return mc.RunResult("error", error=f"run.py unreadable: {exc}", at=stamp)
-    readings = read_readings(app.dir)
+    source = data_dir or app.dir
+    readings = read_readings(source)
 
     def data(collection: str) -> list[dict[str, Any]]:
         try:
-            return read_collection(app.dir, collection)
+            return read_collection(source, collection)
         except Exception:  # noqa: BLE001 — una collezione che non c'e' e' vuota
             return []
 
@@ -345,6 +351,12 @@ async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
 
     Con *app_dir* gira una **bozza** (la prova del tool ``app``, prima che
     l'app diventi vera). Torna il nuovo stato, o ``None`` se non e' girato.
+
+    La bozza di un'app che esiste gia' **legge i dati di quella** (``ctx.prev``,
+    ``ctx.data``) e scrive la lettura di prova solo nella bozza. Fino al
+    07/10/2026 leggeva la propria cartella, vuota: la prova del Portafoglio
+    girava senza quote e senza lettura precedente, rispondeva «0 €» o «12,4 €»
+    da un campo rinominato, e diceva comunque che l'app andava.
     """
     from jenny.board.micro import is_due
 
@@ -358,7 +370,11 @@ async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
             return None
         if not force and not is_due(app.manifest.reader, state, current):
             return None
-    result = await execute_reader(workspace, app, now=current)
+    live_dir = None
+    if app_dir is not None:
+        live = find_app(workspace, slug)
+        live_dir = live.dir if live is not None else None
+    result = await execute_reader(workspace, app, now=current, data_dir=live_dir)
     state = record_reader_run(app, result, now=current)
     if app_dir is None:
         # Il valore della polaroid puo' essere cambiato: la WebUI si rilegge.

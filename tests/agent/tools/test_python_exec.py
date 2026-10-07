@@ -676,3 +676,26 @@ class TestGuardedCodeDoesNotInheritHostFutureFlags:
     async def test_syntax_error_still_reported(self, tmp_path):
         result = await self._run(tmp_path, "def (:")
         assert "SyntaxError" in result
+
+    async def test_a_runtime_error_is_not_dressed_as_a_syntax_error(self, tmp_path):
+        """Sul Titan, 07/10/2026: un HTTP 429 arrivava al modello dopo un
+        «SyntaxError: invalid syntax» e un «During handling…», perche' l'exec
+        delle istruzioni girava dentro l'``except`` del tentativo con eval."""
+        code = "def fetch():\n    raise RuntimeError('HTTP 429')\nfetch()"
+        result = await self._run(tmp_path, code)
+        assert "RuntimeError: HTTP 429" in result
+        assert "SyntaxError" not in result
+        assert "During handling" not in result
+
+    async def test_a_syntax_error_points_at_its_own_line(self, tmp_path):
+        result = await self._run(tmp_path, "x = 1\ny = (\n")
+        assert "SyntaxError" in result and "During handling" not in result
+
+    async def test_an_expression_runs_once(self, tmp_path):
+        code = "calls = []\ncalls.append(1)\nprint(len(calls))"
+        assert "1" in await self._run(tmp_path, code)
+        ns = _restricted_namespace(str(tmp_path))
+        out = await run_python_async(code="print('side') or 7", function=None, args=None,
+                                     kwargs=None, namespace=ns, timeout=15,
+                                     max_output_chars=8000)
+        assert out.count("side") == 1 and "7" in out
