@@ -386,3 +386,75 @@ async def test_a_silent_turn_is_silent_on_every_user_channel(
 
     assert outcome.message is None
     assert await asyncio.wait_for(_drain(loop), timeout=1.0) == []
+
+
+class TestAVisibleAnnounceShowsItIsWorking:
+    """Sul Titan, 07/10/2026: l'annuncio di un aiutante apriva un turno che non
+    accendeva la bolla di lavoro; l'utente ci scriveva dentro, il suo messaggio
+    veniva iniettato, e per 453 s la chat non mostrava niente."""
+
+    def _spy(self, loop: AgentLoop) -> tuple[list, dict]:
+        statuses: list[tuple[str, str, str]] = []
+        seen: dict = {}
+
+        async def run_status_changed(msg, session_key, status, **_kw):
+            statuses.append((msg.channel, msg.chat_id, status))
+
+        loop.runtime_event_publisher.run_status_changed = run_status_changed  # type: ignore[method-assign]
+        stub = loop._run_agent_loop
+
+        async def run(initial_messages, **kwargs):
+            seen["on_progress"] = kwargs.get("on_progress")
+            seen["status_before_run"] = list(statuses)
+            return await stub(initial_messages, **kwargs)
+
+        loop._run_agent_loop = run  # type: ignore[method-assign]
+        return statuses, seen
+
+    async def test_it_runs_on_the_origin_chat_with_its_steps(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop, final_content="ecco")
+        statuses, seen = self._spy(loop)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.disposition is TurnDisposition.DELIVERED
+        assert seen["status_before_run"] == [("websocket", "default", "running")]
+        assert statuses == [("websocket", "default", "running"),
+                            ("websocket", "default", "idle")]
+        assert seen["on_progress"] is not None
+
+    async def test_its_steps_reach_the_origin_chat(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        _statuses, seen = self._spy(loop)
+
+        await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+        await seen["on_progress"]("", tool_events=[{"name": "app", "phase": "start"}])
+
+        sent = await _drain(loop)
+        assert [(m.channel, m.chat_id) for m in sent] == [("websocket", "default")]
+        assert sent[0].metadata["_tool_events"] == [{"name": "app", "phase": "start"}]
+
+    async def test_it_goes_idle_even_when_the_run_fails(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        statuses, _seen = self._spy(loop)
+
+        async def boom(initial_messages, **_kwargs):
+            raise RuntimeError("provider down")
+
+        loop._run_agent_loop = boom  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError):
+            await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert statuses[-1] == ("websocket", "default", "idle")
+
+    async def test_a_silent_announce_still_shows_nothing(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        statuses, seen = self._spy(loop)
+
+        await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
+
+        assert statuses == [] and seen["on_progress"] is None

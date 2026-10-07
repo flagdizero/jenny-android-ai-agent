@@ -258,7 +258,12 @@ def run(ctx):
 - `ctx.now` (ISO), `ctx.prev` (the last reading), `ctx.data("collection")` (the app's own
   records, read-only: a reader that **aggregates** — a portfolio's value from its operations and
   current prices — also runs right after every write, so the summary always matches the data).
-- The code reads, never writes; at most 6 KB; 20 s per run, three errors in a row mark it broken.
+- The code reads, never writes; at most 6 KB; 20 s per run and **at most 8 HTTP requests per run**
+  (the ninth raises `at most 8 requests per run`); three errors in a row mark it broken. Keep the
+  real error when you retry: one that ends on the cap hides why the earlier calls failed.
+- Readings are kept as the last 48 plus one per day for about 13 months: a long trend (a
+  portfolio's year) is drawn from the reader's own readings and grows from the first one — it is
+  not rebuilt from the past.
 
 ## Complete example
 

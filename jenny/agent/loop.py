@@ -2078,18 +2078,36 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # sistema invece va salvato, e salta solo cio' che lo precede.
         save_skip = len(messages) if is_subagent else 1 + len(history)
         t_wall = time.time()
-        # Differenza deliberata dallo stato RUN della FSM: il path di sistema NON
-        # emette run_status_changed("running"). Un turno subagent/announce è di
-        # background e non deve accendere il banner "in esecuzione" nella WebUI; la
-        # transizione a "idle" a fine turno resta gestita a livello di dispatch.
-        final_content, _, all_msgs, stop_reason, _ = await self._run_agent_loop(
-            messages, session=session, channel=channel, chat_id=chat_id,
-            message_id=msg.metadata.get("message_id"),
-            metadata=msg.metadata,
-            session_key=key,
-            pending_queue=pending_queue,
-            turn_token=turn_token,
+        # Un turno d'annuncio che parlera' nella chat si fa vedere come un turno
+        # dell'utente: ``running`` e i passi dei tool sulla chat d'origine, poi
+        # ``idle``. Fino al 07/10/2026 non emetteva niente, per non accendere la
+        # bolla per un lavoro di sottofondo; ma un annuncio visibile finisce
+        # comunque in chat, e l'utente che ci scrive dentro viene iniettato qui.
+        # Sul Titan: 453 s di lavoro su un «metti il tasto», e a schermo niente.
+        # Il turno silenzioso (heartbeat, lavori interni) resta invisibile.
+        origin = None if silent else InboundMessage(
+            channel=channel, sender_id=msg.sender_id, chat_id=chat_id, content="",
+            metadata=dict(msg.metadata or {}),
         )
+        on_progress = None
+        if origin is not None:
+            on_progress = await self._build_bus_progress_callback(origin)
+            await self._runtime_events().run_status_changed(
+                origin, key, "running", started_at=t_wall,
+            )
+        try:
+            final_content, _, all_msgs, stop_reason, _ = await self._run_agent_loop(
+                messages, on_progress=on_progress,
+                session=session, channel=channel, chat_id=chat_id,
+                message_id=msg.metadata.get("message_id"),
+                metadata=msg.metadata,
+                session_key=key,
+                pending_queue=pending_queue,
+                turn_token=turn_token,
+            )
+        finally:
+            if origin is not None:
+                await self._runtime_events().run_status_changed(origin, key, "idle")
         # Re-sync dei tool delle app dopo l'esecuzione (mirror dello stato RUN):
         # il turno può aver creato/eliminato app durante il run.
         await self._sync_apps_and_notify()

@@ -167,15 +167,28 @@ def test_spec_rules() -> None:
 
 def test_readings_are_compacted(tmp_path) -> None:
     d = tmp_path / "m"
-    for i in range(400):
-        mc.append_reading(d, {"moisture": i}, now=NOW - timedelta(hours=400 - i))
+    n = mc._COMPACT_AFTER + 200
+    for i in range(n):
+        mc.append_reading(d, {"moisture": i}, now=NOW - timedelta(hours=n - i))
     kept = mc.read_readings(d)
     assert len(kept) <= mc._COMPACT_AFTER
-    assert kept[-1]["moisture"] == 399
+    assert kept[-1]["moisture"] == n - 1
     # Prima delle ultime letture ne resta al piu' una al giorno.
-    compacted = kept[:-(len(kept) - mc.KEEP_DAYS - mc.KEEP_RECENT)] if len(kept) > 79 else kept
-    days = [r["ts"][:10] for r in compacted[:10]]
+    days = [r["ts"][:10] for r in kept[:10]]
     assert len(days) == len(set(days))
+
+
+def test_a_year_of_daily_readings_survives_compaction(tmp_path) -> None:
+    """Un andamento a 12 mesi nasce dalle letture del lettore stesso: fino al
+    07/10/2026 se ne teneva una al giorno solo per 31 giorni."""
+    d = tmp_path / "m"
+    n = 4 * 200  # ogni 6 ore per 200 giorni
+    for i in range(n):
+        mc.append_reading(d, {"moisture": i % 100}, now=NOW - timedelta(hours=6 * (n - i)))
+    kept = mc.read_readings(d)
+    oldest = datetime.fromisoformat(kept[0]["ts"])
+    assert (NOW - oldest).days >= 195
+    assert mc._COMPACT_AFTER > mc.KEEP_DAYS + mc.KEEP_RECENT
 
 
 ROWS_SPEC = {
@@ -262,3 +275,16 @@ def test_the_newest_reading_wins_across_time_zones(tmp_path) -> None:
         fh.write('{"id": "x", "ts": "2026-10-05T13:30:00+02:00", "moisture": 35}\n')
     mc.append_reading(m.dir, {"moisture": 31, "online": True}, now=NOW)
     assert mc.micro_field_value(root, "m-acerello", "moisture", now=NOW) == (31, True)
+
+
+def test_a_run_may_make_eight_requests(monkeypatch) -> None:
+    """Quattro ETF, un prezzo ciascuno, con un ritentativo: con 3 non ci stavano."""
+    import jenny.security.network as net
+
+    monkeypatch.setattr(net, "validate_app_server_target", lambda url: (True, ""))
+    http = mc.MicroHttp(["api.example.com"])
+    for _ in range(mc.MAX_HTTP_REQUESTS):
+        http._check("https://api.example.com/q")
+    assert mc.MAX_HTTP_REQUESTS == 8
+    with pytest.raises(PermissionError, match="at most 8 requests per run"):
+        http._check("https://api.example.com/q")

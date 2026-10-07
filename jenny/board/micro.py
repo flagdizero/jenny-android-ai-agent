@@ -72,15 +72,21 @@ MAX_FIELDS = 8
 MAX_TEXT_VALUE = 80
 MAX_SOURCE = 160
 MAX_NET_HOSTS = 4
-# Quanto puo' durare un giro, e quante richieste puo' fare.
+# Quanto puo' durare un giro, e quante richieste puo' fare. Il limite vero e'
+# il tempo; il numero ferma un lettore che gira in tondo su un server. Era 3
+# fino al 07/10/2026: un portafoglio di quattro ETF chiede un prezzo per ETF, e
+# Jenny ripiegava su una fonte che rifiuta chi non e' un browser.
 RUN_TIMEOUT_S = 20.0
 HTTP_TIMEOUT_S = 15.0
-MAX_HTTP_REQUESTS = 3
+MAX_HTTP_REQUESTS = 8
 MAX_HTTP_BYTES = 256 * 1024
-# Le letture: le ultime 48, piu' l'ultima di ogni giorno per un mese.
+# Le letture: le ultime 48, piu' l'ultima di ogni giorno per poco piu' di un
+# anno (era un mese fino al 07/10/2026: un andamento a 12 mesi non aveva da
+# dove nascere). Si compatta oltre ``_COMPACT_AFTER``, che sta sopra a quel che
+# la compattazione tiene, o ogni lettura riscriverebbe il file intero.
 KEEP_RECENT = 48
-KEEP_DAYS = 31
-_COMPACT_AFTER = 200
+KEEP_DAYS = 400
+_COMPACT_AFTER = 600
 # Tre errori di codice di fila: rotta.
 BROKEN_AFTER = 3
 _MAX_ERROR = 2000
