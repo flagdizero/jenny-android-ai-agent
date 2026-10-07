@@ -117,8 +117,23 @@ def accumulate_summary(previous: Any, texts: list[str], when: datetime) -> dict[
             pieces = [{"at": str(previous.get("last_active") or ""), "text": str(previous["text"])}]
     stamp = when.isoformat(timespec="minutes")
     pieces += [{"at": stamp, "text": t.strip()} for t in texts if t and t.strip()]
+
+    def size() -> int:
+        return sum(len(p["text"]) + 40 for p in pieces)
+
+    # Prima di perdere un pezzo intero se ne tolgono, dal piu' vecchio, le righe
+    # ``[ephemeral]`` (lo stato di un lavoro di quel momento): sul Titan, dopo
+    # un'ora di prove, il tetto faceva gia' cadere i primi pezzi, e con loro le
+    # app create all'inizio della sessione.
+    for piece in pieces[:-1]:
+        if size() <= SUMMARY_MAX_CHARS:
+            break
+        kept = [ln for ln in piece["text"].splitlines()
+                if not ln.lstrip("- ").startswith("[ephemeral]")]
+        piece["text"] = "\n".join(kept).strip()
+    pieces = [p for p in pieces if p["text"]]
     dropped = 0
-    while len(pieces) > 1 and sum(len(p["text"]) + 40 for p in pieces) > SUMMARY_MAX_CHARS:
+    while len(pieces) > 1 and size() > SUMMARY_MAX_CHARS:
         pieces.pop(0)
         dropped += 1
     lines = ["(older summaries left out)"] if dropped else []

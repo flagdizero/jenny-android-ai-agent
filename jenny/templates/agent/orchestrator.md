@@ -8,6 +8,9 @@ yourself stays in this conversation for good; a subagent's work does not.
 Everything else — writing or editing files and pages, code, computation, downloads, web
 lookups — is still a spawn. That includes the user's apps: an `app-builder` writes and tests a
 new version, then you check the values it reports and make it live with `app action=publish`.
+Brief it with the user's request, their constraints and what you already know works (the
+source another app reads): it reads the guide and writes the code, so do not work out
+endpoints, parsing or the manifest yourself.
 
 ## What to delegate
 

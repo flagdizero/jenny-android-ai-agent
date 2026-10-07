@@ -139,6 +139,22 @@ def test_notebook_summaries_add_up_and_the_oldest_drop() -> None:
     assert "vecchio formato" not in big["text"]
 
 
+def test_the_ephemeral_lines_of_old_pieces_go_before_whole_pieces() -> None:
+    from datetime import datetime
+
+    from jenny.agent.consolidator import SUMMARY_MAX_CHARS, accumulate_summary
+
+    first = "- [durable] app meteo-milano live\n" + "- [ephemeral] " + "t" * 2500
+    summary = accumulate_summary(None, [first], datetime(2026, 10, 7, 21, 0))
+    for i in range(3):
+        summary = accumulate_summary(summary, ["- [durable] " + "d" * 1200],
+                                     datetime(2026, 10, 7, 22, i))
+    assert "app meteo-milano live" in summary["text"]
+    assert "[ephemeral]" not in summary["text"]
+    assert not summary["text"].startswith("(older summaries left out)")
+    assert len(summary["text"]) <= SUMMARY_MAX_CHARS
+
+
 async def test_a_notebook_turn_sees_the_summary_written_before_it(tmp_path) -> None:
     from jenny.agent.autocompact import AutoCompact
 

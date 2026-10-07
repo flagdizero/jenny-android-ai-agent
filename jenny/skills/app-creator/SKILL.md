@@ -32,11 +32,19 @@ apps/<slug>/
 
 <rule>
 **Write apps only with the `app` tool — never with write_file, edit_file or python_exec**
-(they refuse app code). `app action=draft` validates the files, runs the reader once and, when
-everything works, the app is **live at once** — in the user's App page, with its tools — and
-the tool tells you the real first value. When something fails nothing changes (an existing app
-keeps running as it was): fix it with `app action=edit`. There is nothing for the user to
-approve; an app they do not like, they delete.
+(they refuse app code). `app action=draft` validates the files and runs the reader once on the
+app's real data; when something fails nothing changes (an existing app keeps running as it
+was): fix it with `app action=edit`. What happens when it works depends on your `app` tool:
+
+- it has `draft` and `publish`: the app is **live at once**, and the reply carries its first
+  real value;
+- it has `publish` but no `draft` (a notebook chat): you do not write the files — spawn an
+  `app-builder` with what the user wants, check the values it reports, then
+  `app action=publish`;
+- it has `draft` but no `publish` (you are the app-builder): the new version waits for the
+  main agent to publish it — report what you built and what it read.
+
+There is nothing for the user to approve; an app they do not like, they delete.
 </rule>
 
 <rule>
@@ -108,7 +116,9 @@ unclear (e.g. the user tapped "+" and has written nothing yet), use English.
 
 <rule>
 **Follow the Guided Conversation Flow below.** Ask ONE question at a time. Only write files
-AFTER the user has confirmed name and actions in Phase 3.
+AFTER the user has confirmed name and actions in Phase 3 — unless the request already answers
+the flow: what the app shows, where the data comes from (or that it is kept locally) and how
+often it reads. Then say the plan in one line and build it, without asking for confirmation.
 Never write real secrets into app.json or index.html, and never declare `server.auth` at all (see Secrets below).
 
 **This conversation is not a sustained goal: do not call `long_task` for it.** Each phase
@@ -155,7 +165,8 @@ tools named `<slug>_<action>`.
 
 ### Phase 4: Draft the App
 
-Only after confirmation, call `app action=draft slug=<slug>` with `files`:
+Only after confirmation, call `app action=draft slug=<slug>` with `files` (in a notebook chat,
+the `app-builder` does this step). The first call of a new app carries `app.json`:
 
 1. `app.json` — follow [references/manifest.md](references/manifest.md) exactly, including the
    `summary` with its `blocks` (and the `reader`, if the app reads something by itself).
@@ -172,8 +183,9 @@ Collections in `data/` are created on first write. If the tool reports a problem
 
 ### Phase 5: Tell and Place
 
-The tool's answer says the app is live, with the first real value. Tell the user, in one or two
-lines, what it does and that it is in the App page. If the app is about a subject of a notebook (a plant, a portfolio),
+Once it is live (after `draft`, or after `publish`), the tool's answer carries the first real
+value: check it, then tell the user, in one or two lines, what it does and that it is in the App
+page. If the app is about a subject of a notebook (a plant, a portfolio),
 offer to put it on that notebook's board — `app action=place` makes a card that **is** the app,
 tied by a thread to the card it belongs with (`card`, e.g. the "Portfolio" app next to "ETF") —
 and do it when the user agrees. An app never goes inside another card's drawer. Placing it in a notebook also
