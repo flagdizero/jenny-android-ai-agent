@@ -190,7 +190,9 @@ export function ageText(at, now = new Date()) {
 
 function status(b, ctx) {
   const node = block('status', b.rows);
-  const kind = b.state === 'alarm' || b.state === 'broken' ? 'is-alarm'
+  /* Un sensore muto e' rosso anche se l'ultima lettura e' fresca: prima
+     l'offline cambiava la parola e lasciava la pillola verde. */
+  const kind = b.state === 'alarm' || b.state === 'broken' || b.online === false ? 'is-alarm'
     : b.state === 'stale' || b.state === 'empty' ? 'is-warn' : 'is-ok';
   let text = statusText(b.state, b.at, ctx.now);
   if (b.online !== undefined) text = `${i18n.t(b.online ? 'board.slip.online' : 'board.slip.offline')}${text ? ` · ${text}` : ''}`;

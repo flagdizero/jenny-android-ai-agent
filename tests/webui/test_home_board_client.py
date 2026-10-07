@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from support.home_dom import requires_jsdom, run_home
+from support.home_dom import UI, requires_jsdom, run_home
 from support.js_harness import ASSETS, function, requires_node, run_js
 
 pytestmark = requires_node
@@ -1106,6 +1106,27 @@ def test_an_app_with_data_is_a_strip_and_a_thing_keeps_its_photo() -> None:
       // Il dato in alto dichiarato dall'app.
       assert.equal(card('spesa').querySelector('.home-board-slip-meta').textContent, '3 da comprare');
     """)
+
+
+@requires_jsdom
+def test_an_offline_sensor_has_a_red_pill_even_with_fresh_data() -> None:
+    """Sul Titan (07/10/2026): «offline · at 01:58 PM» con la pillola verde,
+    perche' il colore seguiva solo lo stato dei dati e l'offline cambiava la parola."""
+    run_home("""
+      import assert from 'node:assert/strict';
+      import { boot } from './boot.mjs';
+      await boot();
+      const { renderBlock } = await import(__UI__ + '/assets/home-board-blocks.js');
+      const pill = (b) => renderBlock({ kind: 'status', rows: 1, at: '', ...b })
+        .querySelector('.home-board-block-pill');
+      const off = pill({ state: 'ok', online: false });
+      assert.ok(off.classList.contains('is-alarm'), off.className);
+      assert.match(off.textContent, /^offline/);
+      assert.ok(pill({ state: 'ok', online: true }).classList.contains('is-ok'));
+      // Senza un campo online la pillola resta quella dei dati.
+      assert.ok(pill({ state: 'ok' }).classList.contains('is-ok'));
+      assert.ok(pill({ state: 'stale', online: true }).classList.contains('is-warn'));
+    """.replace("__UI__", json.dumps(str(UI))))
 
 
 @requires_jsdom

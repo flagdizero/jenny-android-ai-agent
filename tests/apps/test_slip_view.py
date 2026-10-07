@@ -88,6 +88,29 @@ def test_a_reader_strip_follows_its_series(tmp_path: Path) -> None:
     assert other["blocks"][0]["value"] == 17 and other["state"] == "alarm"
 
 
+def test_an_alarm_tests_its_own_field_not_the_one_shown(tmp_path: Path) -> None:
+    """Il caso del Titan (07/10/2026): la striscia mostra l'umidità e l'allarme
+    guarda ``online``. Prima si confrontava l'umidità con ``false``, mai vero:
+    il sensore muto restava verde."""
+    manifest = {
+        "reader": {"every": 30, "fields": {
+            "umidita": {"label": "Umidità", "type": "number", "unit": "%"},
+            "online": {"label": "Online", "type": "bool"}}},
+        "summary": {"alarm": {"field": "online", "op": "==", "value": False},
+                    "staleAfterMinutes": 120,
+                    "blocks": [{"kind": "value", "field": "umidita", "unit": "%"},
+                               {"kind": "status", "online": "online"}]},
+    }
+    run = "def run(ctx):\n    return []\n"
+    muto = [{"id": "r0", "ts": _ts(), "umidita": 33, "online": False}]
+    view = slip_view(tmp_path, _app(tmp_path, manifest, {"readings": muto}, run=run), {}, now=NOW)
+    assert view["state"] == "alarm" and view["blocks"][1]["online"] is False
+    vivo = [{"id": "r0", "ts": _ts(), "umidita": 33, "online": True}]
+    view = slip_view(tmp_path / "b", _app(tmp_path / "b", manifest, {"readings": vivo}, run=run),
+                     {}, now=NOW)
+    assert view["state"] == "ok"
+
+
 def test_portfolio_bars_and_numbers(tmp_path: Path) -> None:
     manifest = {"summary": {"collection": "totali", "blocks": [
         {"kind": "value", "field": "totale", "unit": "€", "delta": "rendimento", "deltaUnit": "%"},

@@ -121,7 +121,12 @@ def records_view(
     at = _record_time(last)
     current = now or datetime.now(timezone.utc)
     state = "ok"
-    if alarm and model.compare(value, alarm["op"], alarm["value"]):
+    # L'allarme guarda il *suo* campo dell'ultima lettura, non quello mostrato:
+    # ``{"field": "online", "op": "==", "value": false}`` su una striscia
+    # dell'umidità confrontava l'umidità con ``false``, e non scattava mai.
+    if alarm and model.compare(
+        last.get(alarm.get("field") or field_name), alarm["op"], alarm["value"]
+    ):
         state = "alarm"
     if stale_after_minutes and (
         at is None or current - at > timedelta(minutes=stale_after_minutes)

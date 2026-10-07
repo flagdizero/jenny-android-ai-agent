@@ -178,7 +178,8 @@ board as a polaroid with its icon.
   field) or `{count: true, where, label}` ("4 to buy"). Leave it out and the house shows the
   state ("at 14:02", "stopped · 2 d ago", "in alarm").
 - `alarm` (`{field, op, value}`), `staleAfterMinutes` — the strip's state: an alarm turns it red,
-  stale data greys it out.
+  stale data greys it out. The alarm tests its own `field` on the latest record, which need not
+  be the one the strip shows.
 - `blocks` — **1 to 4**, from this closed list (16 kinds). Each takes whole **rows**; the strip's size is the
   smallest that holds them: **S 2 · M 4 · L 6 · XL 9 rows**. More than 9 rows is an error: show
   less on the board, the rest stays in the app. Lists count at their `max` (≤ 5), so the size
@@ -189,7 +190,7 @@ board as a polaroid with its icon.
 | `value` | 2 | `field`, `unit`, `label`, `delta` (a field, e.g. the % change), `deltaUnit`, `trend` (true: a week's line) |
 | `numbers` | 2 | `items`: 1–3 of `{field, label, unit}` or `{count: true, where, label}` |
 | `chart` | 2 | `field` (a number), `days` (1–31); the `alarm` threshold is drawn as a band |
-| `status` | 1 | `online` (a bool field), `text` (a field); shows fresh / stopped / in alarm |
+| `status` | 1 | `online` (a bool field: `false` turns the pill red), `text` (a field); shows fresh / stopped / in alarm |
 | `progress` | 1 | `field`, `max` (a number or the field holding the target), `unit`, `label` |
 | `bars` | `max` | `collection`, `label`, `value`, `weight` (0–100), `target` (0–100), `unit`, `max` |
 | `table` | `max` | `collection`, `columns` (1–3 `{label, type, unit}`), `max` — newest first |
