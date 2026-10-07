@@ -66,3 +66,32 @@ def test_the_message_rule_has_no_wrong_example() -> None:
                            installation_files=True, has=lambda _n: True)
     assert 'chat_id="default"' not in text
     assert "Do not use the 'message' tool for normal replies in the current chat" in text
+
+
+async def test_a_notebook_system_prompt_stays_small(tmp_path) -> None:
+    """Il costo fisso del prompt di sistema di un quaderno, senza i contenuti
+    dell'utente (pagine, bacheca, il suo AGENTS.md). Il 07/10/2026 la chat ETF
+    del Titan mandava 53,8 k caratteri di sistema a ogni chiamata; dopo il
+    lavoro sul prompt il codice ne mette 20,4 k. Il tetto e' quello piu' circa il
+    15%: tre paragrafi nuovi lo sfondano, ed e' quel che deve succedere — una
+    regola nuova si scrive corta, o va in una skill."""
+    from jenny.bus.events import InboundMessage
+    from jenny.config import paths as paths_mod
+    from jenny.runtime.context import get_runtime_context
+    from jenny.utils.helpers import sync_workspace_templates
+    from tests.agent.test_prompt_matches_offered_tools import _loop_with_capture, _system_prompt
+
+    previous = get_runtime_context().workspace_dir
+    root = tmp_path / "workspace"
+    root.mkdir()
+    paths_mod.set_workspace_dir(str(root))
+    try:
+        sync_workspace_templates(root, silent=True)
+        (root / "wikis" / "soldi" / "wiki").mkdir(parents=True)
+        loop, captured = _loop_with_capture(root)
+        loop.orchestrator_mode = True
+        await loop._process_message(InboundMessage(
+            channel="websocket", sender_id="u", chat_id="project:soldi", content="ciao"))
+        assert len(_system_prompt(captured)) <= 24_000
+    finally:
+        paths_mod.set_workspace_dir(str(previous) if previous else "")
