@@ -402,6 +402,17 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
     def _request_model_name(self, model_name: str) -> str:
         return model_name
 
+    def closed_reasoning_can_be_blank(self, model: str | None) -> bool:
+        """``reasoning_content: ""`` sui turni chiusi e' accettato da questo modello?
+
+        Solo DeepSeek, l'unico misurato (07/10/2026, ``opencode-go``): con i tool
+        vuole indietro il ragionamento, ma un ``""`` sui turni gia' chiusi passa
+        e non si paga. Per gli altri si manda tutto, come prima: Kimi e MiMo
+        potrebbero volerlo intero, e nessuno l'ha provato.
+        """
+        name = (model or self.default_model or "").lower()
+        return "deepseek" in name.rsplit("/", 1)[-1]
+
     @staticmethod
     def _supports_temperature(
         model_name: str,

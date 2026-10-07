@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
+from jenny.agent.context_governor import blank_closed_reasoning, closed_reasoning_can_be_blank
 from jenny.agent.hook import AgentHook, AgentHookContext
 from jenny.agent.memory import (
     _ARCHIVE_SUMMARY_MAX_CHARS,
@@ -191,12 +192,17 @@ class Consolidator:
 
         removed_tokens = 0
         last_boundary: tuple[int, int] | None = None
+        # Stessa unita' della stima: se i ragionamenti dei turni chiusi non
+        # partono, non contano nemmeno in cio' che si toglie.
+        blank = self._blanks_closed_reasoning()
         for idx in range(start, len(session.messages)):
             message = session.messages[idx]
             if idx > start and message.get("role") == "user":
                 last_boundary = (idx, removed_tokens)
                 if removed_tokens >= tokens_to_remove:
                     return last_boundary
+            if blank and message.get("role") == "assistant" and message.get("reasoning_content"):
+                message = {**message, "reasoning_content": ""}
             removed_tokens += estimate_message_tokens(message)
 
         return last_boundary
@@ -299,12 +305,18 @@ class Consolidator:
             session_key=session.key,
             workspace=self._probe_workspace(session.key),
         )
+        if self._blanks_closed_reasoning():
+            # La stima misura la richiesta che partira': v. ``blank_closed_reasoning``.
+            probe_messages = blank_closed_reasoning(probe_messages)
         return estimate_prompt_tokens_chain(
             self.provider,
             self.model,
             probe_messages,
             self._get_tool_definitions(),
         )
+
+    def _blanks_closed_reasoning(self) -> bool:
+        return closed_reasoning_can_be_blank(self.provider, self.model)
 
     @property
     def _workspace_scopes(self) -> WorkspaceScopeResolver:

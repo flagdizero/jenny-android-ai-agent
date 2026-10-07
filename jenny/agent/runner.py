@@ -12,6 +12,8 @@ from typing import Any, Callable, Literal
 from loguru import logger
 
 from jenny.agent.context_governor import (
+    blank_closed_reasoning,
+    closed_reasoning_can_be_blank,
     extract_context_limit,
     is_context_length_error,
     snip_history,
@@ -728,6 +730,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             # later when the caller saves only the new turn.
             messages_for_model = self._drop_orphan_tool_results(messages)
             messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+            if closed_reasoning_can_be_blank(self.provider, spec.model):
+                messages_for_model = blank_closed_reasoning(messages_for_model)
             messages_for_model = self._microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)
             messages_for_model = self._snip_history(spec, messages_for_model)

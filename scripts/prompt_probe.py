@@ -52,9 +52,17 @@ class _RecordingProvider:
         self.model = model
         self.generation = SimpleNamespace(max_tokens=8192, temperature=0.1, reasoning_effort=None)
         self.requests: list[dict[str, Any]] = []
+        self.default_model = model
 
     def get_default_model(self) -> str:
         return self.model
+
+    def closed_reasoning_can_be_blank(self, model: str | None) -> bool:
+        # La stessa risposta del provider vero (``OpenAICompatProvider``), cosi'
+        # la richiesta registrata e' quella che partirebbe.
+        from jenny.providers.openai_compat_provider import OpenAICompatProvider
+
+        return OpenAICompatProvider.closed_reasoning_can_be_blank(self, model)  # type: ignore[arg-type]
 
     async def chat_with_retry(self, *_args: Any, **kwargs: Any) -> Any:
         from jenny.providers.base import LLMResponse

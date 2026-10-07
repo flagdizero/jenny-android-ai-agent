@@ -162,3 +162,45 @@ def snip_history(
             budget,
         )
     return system_messages + kept
+
+
+def closed_reasoning_can_be_blank(provider: Any, model: str | None) -> bool:
+    """Il provider accetta ``reasoning_content: ""`` sui turni chiusi?"""
+    check = getattr(provider, "closed_reasoning_can_be_blank", None)
+    if not callable(check):
+        return False
+    try:
+        return bool(check(model))
+    except Exception:  # noqa: BLE001 — nel dubbio si manda tutto, come prima
+        return False
+
+
+def blank_closed_reasoning(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Svuota il ragionamento dei turni gia' chiusi, solo nella richiesta.
+
+    Un turno e' chiuso quando l'assistente ha risposto senza chiamare tool: da
+    li' indietro, il ragionamento non serve piu' al modello. Il confine e'
+    l'**ultimo assistente senza** ``tool_calls``, non l'ultimo ``user``: un
+    messaggio iniettato a meta' giro e l'annuncio di un aiutante sono ``user``
+    anche loro, e tagliare li' toglierebbe il ragionamento della catena di tool
+    in corso, che DeepSeek vuole indietro (400 senza).
+
+    Misurato il 07/10/2026 su ``opencode-go``/``deepseek-v4.1-flash``: un
+    ``""`` sui turni chiusi e' accettato, e quei token non si pagano piu'. Nella
+    sessione ETF del Titan i ragionamenti erano il 56% del prompt. I messaggi
+    toccati sono copie: la sessione salvata resta intera.
+    """
+    last_final = None
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if m.get("role") == "assistant" and not m.get("tool_calls"):
+            last_final = i
+            break
+    if last_final is None:
+        return messages
+    out = list(messages)
+    for i in range(last_final + 1):
+        m = out[i]
+        if m.get("role") == "assistant" and m.get("reasoning_content"):
+            out[i] = {**m, "reasoning_content": ""}
+    return out
