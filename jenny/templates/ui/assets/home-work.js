@@ -103,10 +103,11 @@ export class WorkBubbles {
     this._failedShown = new Set();
     /* lineage -> { node, attempt, open, stops } delle bolle «si e' fermato».
        Una linea ha una bolla sola: quando riparte (dal tuo «Riprova», da Jenny,
-       dall'officina) la bolla lo dice e smette di offrire «Riprova» (`open`
-       falso); quando il tentativo nuovo si ferma di nuovo, torna la stessa
-       bolla in fondo al filo. Fino al 06/10/2026 ogni tentativo ne apriva una
-       sua, e due rilanci di un lavoro destinato a fallire lasciavano tre bolle. */
+       dall'officina) la bolla esce dal filo, perche' il tentativo nuovo ha gia'
+       la sua bolla «in corso» (`open` falso); quando si ferma di nuovo, torna la
+       stessa bolla in fondo al filo. Fino al 06/10/2026 ogni tentativo ne apriva
+       una sua; fino al 07/10 quella fermata restava come «Ripartito», e dopo un
+       «Riprova» le bolle erano due, una vecchia e una che girava. */
     this._lineageCards = new Map();
     /* Ogni frame alza il contatore: una lettura HTTP partita prima di un frame
        porta uno stato piu' vecchio, e non deve sovrascriverlo (la regola del
@@ -390,8 +391,9 @@ export class WorkBubbles {
   }
 
   /* Il tap su «Riprova»: il bottone si spegne subito (un secondo tap
-     rilancerebbe ancora, cancellando il primo), e la bolla dice com'e' andata.
-     Prima restava identica, e il rilancio partito sembrava un tap perso. */
+     rilancerebbe ancora, cancellando il primo); se il rilancio parte la bolla
+     esce, se no dice perche'. Prima restava identica, e il rilancio partito
+     sembrava un tap perso. */
   async _restartFailed(node, taskId) {
     const button = node.querySelector('.home-work-action');
     button.disabled = true;
@@ -406,17 +408,18 @@ export class WorkBubbles {
     this._markRestarted(node);
   }
 
+  /* Il lavoro e' ripartito: la bolla del fallimento esce dal filo, e resta
+     quella del tentativo in corso. */
   _markRestarted(node) {
     if (node.dataset.restarted) return;
     node.dataset.restarted = '1';
-    node.classList.remove('is-failed');
-    node.querySelector('.home-work-icon').className = `ti ${ICON.helpers} home-work-icon`;
-    this._line(node, i18n.t('home.work.helperRestarted'), false);
-    this._note(node, '');
-    this._action(node, null);
+    const card = [...this._lineageCards.values()].find((c) => c.node === node);
+    if (card) card.open = false;
+    node.remove();
+    this._changed();
   }
 
-  /* Chiunque abbia rilanciato la linea, la bolla del fallimento lo dice. */
+  /* Chiunque abbia rilanciato la linea, la bolla del fallimento esce. */
   _resolveRestarted(all) {
     for (const [lineage, card] of this._lineageCards) {
       if (!card.open) continue;

@@ -239,15 +239,15 @@ report.querySelector('.home-work-action').click();
 await tick(10);
 assert.ok(calls.some((c) => c.startsWith('/api/subagents/t1/restart')), calls.join(' '));
 // Il 06/10/2026 sul Titan la bolla restava identica dopo il tap, «Riprova»
-// compreso, e il rilancio partito sembrava un tap perso.
-assert.equal(report.querySelector('.home-work-action').hidden, true);
-assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
-assert.ok(!report.classList.contains('is-failed'));
+// compreso, e il rilancio partito sembrava un tap perso; fino al 07/10 restava
+// come «Ripartito», accanto alla bolla del tentativo nuovo. Ora esce.
+assert.equal(settled().length, 0);
+assert.ok(!report.isConnected);
 
 // Lo stesso fallimento in uno snapshot successivo non si ripete.
 frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
         recent: [worker({ state: 'failed', stop_reason: 'max_iterations', ended_at: now(), can_restart: true })] });
-assert.equal(settled().length, 1);
+assert.equal(settled().length, 0);
 """)
 
 
@@ -266,8 +266,8 @@ assert.equal(report.querySelector('.home-work-action').hidden, false);
 
 frame({ event: 'subagent_status', chat_id: 'project:orto',
         running: [worker({ task_id: 't2', lineage_id: 'L1', attempt: 2 })], recent: [failed] });
-assert.equal(report.querySelector('.home-work-action').hidden, true);
-assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
+assert.ok(!report.isConnected, 'la bolla del fallimento resta accanto al tentativo nuovo');
+assert.equal(bubbles().length, 1, 'il tentativo in corso ha la sua bolla');
 """)
 
 
@@ -286,7 +286,8 @@ const report = settled()[0];
 report.querySelector('.home-work-action').click();
 await tick(10);
 frame({ event: 'subagent_status', chat_id: 'project:orto', running: [attempt(2)], recent: [failed(1)] });
-assert.match(text(report), new RegExp(W.helperRestarted.slice(0, 12)));
+assert.equal(settled().length, 0, 'dopo «Riprova» resta solo la bolla del tentativo in corso');
+assert.equal(bubbles().length, 1);
 
 frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [failed(2), failed(1)] });
 assert.equal(settled().length, 1, 'il secondo fallimento della stessa linea ha aperto una bolla nuova');
