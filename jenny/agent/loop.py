@@ -550,6 +550,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         app_tools, _changed = self._app_tools_syncer.sync(self.tools)
         if app_tools:
             registered.append(f"apps:{len(app_tools)}")
+        # Un'app pubblicata a meta' turno porta le sue azioni subito: senza, il
+        # 07/10/2026 Jenny ha lanciato un subagent per provare la lista della
+        # spesa appena nata (che i subagent non hanno) e l'ha provata da se' solo
+        # al turno dopo.
+        from jenny.agent.tools.app_tool import AppTool
+
+        if isinstance(app_tool := self.tools.get("app"), AppTool):
+            app_tool.on_apps_changed = self._sync_apps_and_notify
 
         logger.info("Registered {} tools: {}", len(registered), registered)
 
@@ -691,14 +699,30 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         from jenny.agent.tools.registry import ToolRegistryView
 
         in_project = is_project_session_key(session_key)
-        placed: set[str] = set()
+        root: Path | None = None
         if in_project:
-            from jenny.board.placements import placed_slugs
             from jenny.utils.wiki_paths import is_wiki_root
 
             root = self.workspace_scopes.for_message(msg, session.metadata).project_path
-            if root is not None and is_wiki_root(root):
-                placed = set(placed_slugs(root))
+            if root is not None and not is_wiki_root(root):
+                root = None
+        # La bacheca si rilegge quando cambia: un'app posata a meta' turno
+        # (``app action=place``) si usa subito.
+        board: dict[str, Any] = {"sig": object(), "placed": set()}
+
+        def placed() -> set[str]:
+            if root is None:
+                return set()
+            from jenny.board.placements import placed_slugs
+            from jenny.board.store import board_path
+
+            try:
+                sig: Any = board_path(root).stat().st_mtime_ns
+            except OSError:
+                sig = None
+            if sig != board["sig"]:
+                board.update(sig=sig, placed=set(placed_slugs(root)))
+            return board["placed"]
 
         def hidden(name: str, tool: Any) -> bool:
             if name == "nothing_to_report":
@@ -708,7 +732,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             if name == "recall_history":
                 return True
             return (isinstance(tool, AppActionTool) and not tool.read_only
-                    and tool._slug not in placed)
+                    and tool._slug not in placed())
 
         if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
             return None
@@ -2147,7 +2171,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 origin, key, "running", started_at=t_wall,
             )
         try:
-            final_content, _, all_msgs, stop_reason, _ = await self._run_agent_loop(
+            final_content, tools_used, all_msgs, stop_reason, _ = await self._run_agent_loop(
                 messages, on_progress=on_progress,
                 session=session, channel=channel, chat_id=chat_id,
                 message_id=msg.metadata.get("message_id"),
@@ -2211,6 +2235,15 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 if spoke_via_tool
                 else TurnOutcome.silent(final_text=text)
             )
+        if (is_subagent and msg.metadata.get("subagent_status") not in (None, "ok")
+                and "subagent_restart" in tools_used):
+            # Un subagent caduto e rilanciato: in chat parla solo l'esito del
+            # rilancio. Il 07/10/2026 l'utente si e' visto arrivare «piccolo
+            # intoppo, l'ho rilanciato» e poi il risultato vero, e ha chiesto che
+            # resti solo il secondo. La risposta resta nella storia, cosi' Jenny
+            # sa di averlo rilanciato.
+            logger.info("Subagent relaunched after a failure; no message to {}", key)
+            return TurnOutcome.silent(final_text=final_content or "")
         # Differenza deliberata dal path utente: nessuna soppressione MessageTool
         # (_assemble_outbound). Un turno di sistema VISIBILE ha un contratto di
         # outbound proprio e restituisce sempre una risposta (contenuto o fallback).

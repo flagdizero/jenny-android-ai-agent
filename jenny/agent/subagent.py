@@ -1593,6 +1593,7 @@ class SubagentManager:
         live = self._task_statuses.get(task_id)
         metadata: dict[str, Any] = {
             "injected_event": "subagent_result",
+            "subagent_status": status,
             "subagent_task_id": task_id,
             "subagent_lineage_id": (
                 lineage_id

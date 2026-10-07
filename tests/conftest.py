@@ -42,7 +42,7 @@ _MODULE_REGISTRIES: tuple[tuple[str, str], ...] = (
     ("jenny.utils.token_calibration", "_last_real"),
     # I tentativi recenti del tool ``app``, condivisi fra istanze: senza, il
     # tetto scatta in un file di prove che ne ha fatti pochi.
-    ("jenny.agent.tools.app_tool", "_RECENT_DRAFTS"),
+    ("jenny.agent.tools.app_tool", "_RECENT_FAILURES"),
 )
 
 

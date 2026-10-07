@@ -406,15 +406,100 @@ async def test_set_changes_one_value_and_keeps_app_json_readable(ws: Path) -> No
     assert "net takes host names only" in out, out
 
 
-async def test_a_new_builder_starts_from_the_live_code(ws: Path) -> None:
-    """Una bozza lasciata a meta' da un costruttore non e' il punto di partenza
-    del prossimo."""
+async def test_an_abandoned_draft_is_not_the_next_builders_start(ws: Path) -> None:
+    """Una bozza ferma da ore e' abbandonata: il costruttore dopo riparte pulito."""
+    import os
+    import time as _time
+
     stale = ws / "apps" / ".drafts" / "portafoglio"
     stale.mkdir(parents=True)
-    (stale / "app.json").write_text("{not json")
+    (stale / "AGENT.md").write_text("old notes")
+    old = _time.time() - 7 * 3600
+    for p in (stale / "AGENT.md", stale):
+        os.utime(p, (old, old))
     out = await _builder().execute(action="draft", slug="portafoglio",
                                    files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
     assert "passed its checks" in out, out
+    assert not (stale / "AGENT.md").exists()
+
+
+async def test_a_second_builder_continues_the_draft_in_progress(ws: Path) -> None:
+    """Il 07/10/2026 sul Titan: il secondo costruttore (la schermata da rifare)
+    mandava solo ``app/index.html`` e cancellava ``app.json`` e ``run.py`` del
+    primo; poi un ``assert`` arrivava al modello come «AssertionError:»."""
+    await _builder().execute(action="draft", slug="portafoglio",
+                             files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    out = await _builder().execute(action="draft", slug="portafoglio",
+                                   files={"app/index.html": "<p>totale</p>"})
+    assert "passed its checks" in out, out
+    d = ws / "apps" / ".drafts" / "portafoglio"
+    assert (d / "app.json").is_file() and (d / "run.py").is_file()
+
+
+async def test_a_new_app_starts_with_its_manifest(ws: Path) -> None:
+    out = await _builder().execute(action="draft", slug="volo",
+                                   files={"app/index.html": "<p>volo</p>"})
+    assert "send app.json in this call" in out, out
+    assert not (ws / "apps" / ".drafts" / "volo").exists()
+    # Una bozza rimasta senza manifest lo dice, invece di un ``assert``.
+    d = ws / "apps" / ".drafts" / "volo"
+    (d / "app").mkdir(parents=True)
+    (d / "app" / "index.html").write_text("<p>volo</p>")
+    assert "has no app.json" in await _builder().execute(
+        action="edit", slug="volo", path="app/index.html", old="volo", new="Volo")
+    assert "not an app yet" in await _builder().execute(action="show", slug="volo")
+
+
+async def test_show_shows_the_version_being_built(personal: Path) -> None:
+    """Chi ha appena cambiato una bozza la rivede con ``show``, con l'esito della prova."""
+    from jenny.agent.tools.app_tool import AppPublishTool
+
+    await AppTool().execute(action="draft", slug="portafoglio",
+                            files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    b = _builder("unified:default")
+    await b.execute(action="set", slug="portafoglio", key="reader.every", value="1440")
+    out = await b.execute(action="show", slug="portafoglio")
+    assert out.startswith("`portafoglio` — a new version of a live app, tested"), out
+    assert '"every": 1440' in out and "; the main agent publishes it" in out, out
+    assert "The live version still shows: Totale: 0€" in out, out
+    out = await AppPublishTool().execute(action="show", slug="portafoglio")
+    assert "; action=publish makes it live" in out, out
+
+
+async def test_only_failed_tries_count_and_the_refusal_says_when(ws: Path) -> None:
+    b = _builder()
+    await b.execute(action="draft", slug="portafoglio",
+                    files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    for every in range(60, 60 + 8):
+        out = await b.execute(action="set", slug="portafoglio", key="reader.every",
+                              value=str(every))
+        assert "passed its checks" in out, out
+    broken = "def run(ctx):\n    raise RuntimeError('HTTP 429')\n"
+    for _ in range(6):
+        assert "HTTP 429" in await b.execute(action="draft", slug="portafoglio",
+                                              files={"run.py": broken})
+    out = await _builder().execute(action="draft", slug="portafoglio", files={"run.py": SUM})
+    assert out.startswith("Six failed tries") and "accepted after" in out, out
+
+
+async def test_a_published_app_brings_its_tools_into_the_same_turn(personal: Path) -> None:
+    from jenny.agent.tools.app_tool import AppPublishTool
+
+    ws = personal
+    registry = ToolRegistry()
+    syncer = AppToolsSyncer(ws)
+
+    async def sync() -> None:
+        syncer.sync(registry)
+
+    publisher = AppPublishTool()
+    publisher.on_apps_changed = sync
+    await _builder("unified:default").execute(
+        action="draft", slug="portafoglio",
+        files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    assert registry.get("portafoglio_set_quote") is None
+    await publisher.execute(action="publish", slug="portafoglio")
+    assert registry.get("portafoglio_set_quote") is not None
 
 
 def test_startup_publishes_only_migrated_drafts(ws: Path) -> None:

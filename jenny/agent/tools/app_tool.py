@@ -7,15 +7,15 @@ gli strumenti generici non toccano ``app.json``, ``run.py`` né ``app/``
 (``jenny/security/workspace_policy.py::is_app_code_path``).
 
 **Prova prima di salvare.** ``draft`` scrive in ``apps/.drafts/``, valida e,
-se c'è un lettore, lo gira una volta: se va, l'app (o la sua versione nuova)
-**esiste subito** — nella pagina App, con i suoi tool — e torna il valore vero;
-se no torna l'errore, e l'app di prima resta com'era
-(``jenny/apps/drafts.py``). Nessuna approvazione: un'app che non piace si
-butta, nel cestino.
+se c'è un lettore, lo gira una volta sui dati veri dell'app. Poi dipende dalla
+faccia del tool: quella ``core`` (un agente solo) rende subito viva la versione
+che funziona; quella dell'``app-builder`` la lascia in bozza, e la pubblica
+l'agente principale con ``publish`` (``AppBuildTool``, ``AppPublishTool``). Una
+versione che non funziona non tocca l'app di prima (``jenny/apps/drafts.py``).
 
-Funziona dalla chat personale e da quella di un quaderno, solo nei turni
-dell'utente: mai dal giardiniere, da un cron o da un subagent. Da un quaderno
-non si cancellano app.
+Lavora per una conversazione con l'utente, personale o di un quaderno: anche
+dall'``app-builder``, che e' un subagent ma porta la sessione da cui e' partito.
+Mai per il giardiniere o un cron. Da un quaderno non si cancellano app.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import json
 import shutil
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_session_key
@@ -35,12 +35,22 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 
-_MAX_DRAFTS = 6
-_DRAFT_WINDOW_S = 600
-# I tentativi recenti per app, condivisi fra istanze del tool: un costruttore
-# nasce con un registro nuovo, e un contatore per istanza si azzerava a ogni
-# spawn.
-_RECENT_DRAFTS: dict[str, list[float]] = {}
+_MAX_FAILURES = 6
+_FAILURE_WINDOW_S = 600
+# I tentativi **falliti** recenti per app, condivisi fra istanze del tool: un
+# costruttore nasce con un registro nuovo, e un contatore per istanza si
+# azzerava a ogni spawn. Solo i falliti: il 07/10/2026 sul Titan contava ogni
+# draft, e tre prove riuscite di un costruttore bastavano a bloccare il
+# successivo per dieci minuti; Jenny ha passato quei minuti a leggere il proprio
+# codice sorgente per capire quando si sbloccava. Una prova che passa, o una
+# pubblicazione, azzera il conto.
+_RECENT_FAILURES: dict[str, list[float]] = {}
+# Una bozza ferma da tanto e' abbandonata: il costruttore che arriva riparte dal
+# codice vivo. Una recente invece e' il lavoro in corso, e il costruttore dopo
+# (un ritocco alla schermata) ci parte sopra: fino al 07/10/2026 la si
+# cancellava sempre, e un draft col solo ``app/index.html`` buttava via
+# ``app.json`` e ``run.py`` dell'app nuova che il primo aveva scritto.
+_ABANDONED_DRAFT_S = 6 * 3600
 MAX_CODE_BYTES = 6 * 1024
 MAX_SCREEN_BYTES = 512 * 1024
 _ALLOWED_TOP = {"app.json", "run.py", "AGENT.md"}
@@ -121,7 +131,7 @@ class AppTool(Tool):
     # l'app (la faccia ``core``, un agente solo) o aspetta ``publish``.
     _ACTIONS = frozenset({"draft", "edit", "set", "show", "run", "place", "trash", "publish"})
     _publishes = True
-    _starts_fresh = False
+    _reseeds_abandoned = False
 
     def __init__(self, origin_session_key: str | None = None) -> None:
         # La conversazione per cui si lavora quando chi chiama e' un subagent
@@ -129,6 +139,10 @@ class AppTool(Tool):
         # richiesta e' la sua, non quella dell'utente.
         self._origin = origin_session_key
         self._touched: set[str] = set()
+        # Chi tiene il registro degli strumenti lo aggiorna qui quando un'app
+        # cambia (``AgentLoop``): le azioni di un'app appena pubblicata servono
+        # nello stesso turno, non dal messaggio dopo.
+        self.on_apps_changed: Callable[[], Awaitable[None]] | None = None
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
@@ -169,14 +183,34 @@ class AppTool(Tool):
             return key
         return None
 
-    def _throttled(self, slug: str) -> bool:
-        now = time.monotonic()
-        recent = [t for t in _RECENT_DRAFTS.get(slug, []) if now - t < _DRAFT_WINDOW_S]
-        if len(recent) >= _MAX_DRAFTS:
-            _RECENT_DRAFTS[slug] = recent
+    @staticmethod
+    def _throttled(slug: str) -> str | None:
+        """Il rifiuto, con l'ora in cui si potra' riprovare, o ``None``."""
+        now = time.time()
+        recent = [t for t in _RECENT_FAILURES.get(slug, []) if now - t < _FAILURE_WINDOW_S]
+        _RECENT_FAILURES[slug] = recent
+        if len(recent) < _MAX_FAILURES:
+            return None
+        free_at = time.strftime("%H:%M", time.localtime(recent[0] + _FAILURE_WINDOW_S))
+        return (f"Six failed tries on `{slug}` in ten minutes: stop here and report what keeps "
+                f"failing, with the last error, instead of trying again (the next try is "
+                f"accepted after {free_at}).")
+
+    @staticmethod
+    def _note_try(slug: str, ok: bool) -> None:
+        if ok:
+            _RECENT_FAILURES.pop(slug, None)
+        else:
+            _RECENT_FAILURES.setdefault(slug, []).append(time.time())
+
+    @staticmethod
+    def _abandoned(d: Path) -> bool:
+        """Una bozza in cui niente e' cambiato da :data:`_ABANDONED_DRAFT_S`."""
+        try:
+            newest = max(p.stat().st_mtime for p in [d, *d.rglob("*")])
+        except (OSError, ValueError):
             return True
-        _RECENT_DRAFTS[slug] = [*recent, now]
-        return False
+        return time.time() - newest > _ABANDONED_DRAFT_S
 
     async def execute(self, action: str = "", slug: str = "", **kw: Any) -> str:
         from jenny.apps.manifest import SLUG_RE
@@ -194,15 +228,18 @@ class AppTool(Tool):
         if action in ("draft", "edit", "set", "place", "trash", "publish") and \
                 current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
-        if action in ("draft", "edit", "set") and self._starts_fresh and slug not in self._touched:
-            # Il primo tocco di un costruttore su un'app riparte dal codice vivo:
-            # una bozza lasciata a meta' da un altro non e' il suo punto di partenza.
-            self._touched.add(slug)
-            from jenny.apps import drafts
+        if action in ("draft", "edit", "set"):
+            if refusal := self._throttled(slug):
+                return refusal
+            if self._reseeds_abandoned and slug not in self._touched:
+                # Il primo tocco di un costruttore riparte dal codice vivo solo se
+                # la bozza e' abbandonata: una recente e' il lavoro che continua.
+                self._touched.add(slug)
+                from jenny.apps import drafts
 
-            stale = drafts.draft_dir(workspace, slug)
-            if stale.exists():
-                shutil.rmtree(stale)
+                stale = drafts.draft_dir(workspace, slug)
+                if stale.exists() and self._abandoned(stale):
+                    shutil.rmtree(stale)
         if action == "set":
             return await self._set(workspace, slug, kw)
         if action == "publish":
@@ -279,9 +316,13 @@ class AppTool(Tool):
         problem = self._check_files(files)
         if problem:
             return f"Not written: {problem}"
-        if self._throttled(slug):
-            return (f"Six tries on `{slug}` in ten minutes: stop here and report what keeps "
-                    "failing, with the last error, instead of trying again.")
+        from jenny.apps import drafts
+
+        has_manifest = (drafts.draft_dir(workspace, slug) / "app.json").is_file() or (
+            drafts.app_dir(workspace, slug) / "app.json").is_file()
+        if "app.json" not in files and not has_manifest:
+            return (f"`{slug}` is a new app: send app.json in this call too (with run.py and "
+                    "the screen when it has them). Nothing was written.")
         d = self._seed_draft(workspace, slug)
         for path, content in files.items():
             target = d / path
@@ -319,11 +360,28 @@ class AppTool(Tool):
 
     async def _try(self, workspace: Path, slug: str) -> str:
         """Valida la bozza, gira il lettore una volta e, se va, la fa diventare l'app."""
+        reply, ok = await self._try_draft(workspace, slug)
+        self._note_try(slug, ok)
+        if ok and self._publishes:
+            from jenny.apps import drafts
+
+            draft = drafts.load_draft(workspace, slug)
+            if draft is not None and draft.app.manifest is not None:
+                existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
+                return await self._promote(workspace, slug, draft.app.manifest, existed)
+        return reply
+
+    async def _try_draft(self, workspace: Path, slug: str) -> tuple[str, bool]:
+        """La prova della bozza: la risposta per il costruttore, e se e' passata."""
         from jenny.apps import drafts
         from jenny.apps.reader import run_reader
 
         draft = drafts.load_draft(workspace, slug)
-        assert draft is not None
+        if draft is None:
+            # Una bozza senza ``app.json`` (prima un ``assert``, che arrivava al
+            # modello come «AssertionError:» e basta).
+            return (f"`{slug}` has no app.json in its new version: write it with action=draft "
+                    "(app.json, plus run.py and the screen when it has them)."), False
         # Un lettore che non si era fermato resta in quarantena finche' qualcuno
         # non lo modifica, come promette il suo messaggio («edit it to retry»):
         # questo e' quel qualcuno. Due chiavi, perche' bozza e app vera girano
@@ -335,7 +393,7 @@ class AppTool(Tool):
         app = draft.app
         if app.broken or app.manifest is None:
             return (f"`{slug}` is not valid: {app.error}\nFix it with action=edit (or draft "
-                    "again); nothing changed until it is valid.")
+                    "again); nothing changed until it is valid."), False
         m = app.manifest
         stateful = m.reader is not None or any(
             a.kind == "storage" and a.op in ("append", "set", "update", "delete")
@@ -343,7 +401,7 @@ class AppTool(Tool):
         if stateful and m.section is None:
             return ("Not ready: this app keeps state, so it must declare a `summary` — how it "
                     "shows on its card (see the app-creator skill). Add it with "
-                    "action=edit.")
+                    "action=edit."), False
         existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
         if m.reader is not None:
             state = await run_reader(workspace, slug, force=True, app_dir=draft.dir)
@@ -356,10 +414,8 @@ class AppTool(Tool):
                         f"{error}\n\nContract: `def run(ctx):` "
                         "returns a dict with exactly the reader's fields (a list of dicts when "
                         "the reader has a `key`); ctx.now, ctx.prev, ctx.http (only the hosts in "
-                        "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit.")
-        if not self._publishes:
-            return self._tested_reply(workspace, slug, draft.app)
-        return await self._promote(workspace, slug, m, existed)
+                        "`net`), ctx.data(collection), ctx.wanted. Fix it with action=edit."), False
+        return self._tested_reply(workspace, slug, draft.app), True
 
     def _tested_reply(self, workspace: Path, slug: str, app: Any) -> str:
         """Cosa dice al costruttore una bozza che ha passato la prova: i valori letti."""
@@ -391,6 +447,14 @@ class AppTool(Tool):
                     "in Jenny, not in the user's files: say so, and do not ask them to change "
                     "permissions or delete the app. Some of the new files may already be in "
                     "place. The new version stays in the draft, and publishing it again retries.")
+        self._note_try(slug, True)
+        if self.on_apps_changed is not None:
+            try:
+                await self.on_apps_changed()
+            except Exception:  # noqa: BLE001 — gli strumenti arrivano al turno dopo
+                from loguru import logger
+
+                logger.opt(exception=True).warning("apps: tools of {} not synced", slug)
         # Le schede che la mostrano prendono la taglia della striscia nuova.
         from jenny.board.place import refresh_app_cards
 
@@ -531,36 +595,70 @@ class AppTool(Tool):
     # -- leggere ------------------------------------------------------------
 
     def _show(self, workspace: Path, slug: str) -> str:
+        """Il codice e lo stato dell'app: della **bozza**, quando ce n'e' una.
+
+        Fino al 07/10/2026 mostrava sempre l'app viva, e chiamava «unfinished» anche
+        una bozza gia' provata: sul Titan un costruttore ha fatto `set` dell'allarme
+        a 175, ha guardato con `show`, ha visto 130 e ha rifatto il lavoro finche'
+        il limite dei tentativi l'ha fermato.
+        """
         from jenny.apps import drafts
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import read_state
+
+        live = find_app(workspace, slug)
+        draft = drafts.load_draft(workspace, slug)
+        if draft is None and drafts.draft_dir(workspace, slug).is_dir() and live is None:
+            return (f"`{slug}` is not an app yet: its new version has no app.json. Write it "
+                    "with action=draft (app.json, plus run.py and the screen).")
+        if live is None and draft is None:
+            return f"No app `{slug}`."
+        out: list[str] = []
+        if draft is not None:
+            out.append(f"`{slug}` — {self._draft_state(workspace, slug, draft)}")
+            if live is not None and live.manifest is not None and live.manifest.reader:
+                out.append(f"The live version still shows: "
+                           f"{self._latest_reading(workspace, live)}.")
+            app = draft.app
+        else:
+            assert live is not None
+            app = live
+            out.append(f"`{slug}` — live" + (f" (broken: {app.error})" if app.broken else ""))
         from jenny.board.micro import redact
 
-        app = find_app(workspace, slug)
-        draft = drafts.load_draft(workspace, slug)
-        if app is None and draft is not None:
-            app = draft.app
-            state = "an unfinished draft (not an app yet: fix it with action=edit)"
-        elif draft is not None:
-            state = "live, with an unfinished new version (fix it with action=edit)"
-        else:
-            state = "live"
-        if app is None:
-            return f"No app `{slug}`."
-        out = [f"`{slug}` — {state}" + (f" (broken: {app.error})" if app.broken else "")]
         for name in ("app.json", "run.py"):
             path = app.dir / name
             if path.is_file():
                 text = path.read_text(encoding="utf-8")
                 out.append(f"--- {name}\n{redact(text) if name == 'run.py' else text}")
-        if app.manifest is not None and app.manifest.reader is not None:
-            reader_state = read_state(app.dir)
-            out.append("--- reader state\n" + json.dumps(reader_state, ensure_ascii=False))
+        if draft is None and app.manifest is not None and app.manifest.reader is not None:
+            out.append("--- reader state\n" + json.dumps(read_state(app.dir), ensure_ascii=False))
         screen = sorted(p.relative_to(app.dir).as_posix() for p in (app.dir / "app").rglob("*")
                         if p.is_file()) if (app.dir / "app").is_dir() else []
         if screen:
             out.append("--- screen files: " + ", ".join(screen))
         return "\n\n".join(out)
+
+    def _draft_state(self, workspace: Path, slug: str, draft: Any) -> str:
+        """A che punto e' una versione nuova, detto per chi deve decidere cosa fare."""
+        from jenny.apps import drafts
+        from jenny.apps.reader import read_state
+
+        app = draft.app
+        exists = (drafts.app_dir(workspace, slug) / "app.json").is_file()
+        what = "a new version of a live app" if exists else "a new app"
+        if app.broken or app.manifest is None:
+            return f"{what}, not valid: {app.error}. Fix it with action=edit or draft."
+        publish = ("action=publish makes it live" if "publish" in self._ACTIONS
+                   else "the main agent publishes it")
+        if app.manifest.reader is None:
+            return f"{what}, valid and not live yet: {publish}."
+        state = read_state(draft.dir)
+        if state.get("status") == "ok":
+            return (f"{what}, tested and not live yet: its test run read "
+                    f"{self._latest_reading(workspace, app)}; {publish}.")
+        why = state.get("lastError") or "it has not run yet"
+        return f"{what}, not live: its test run failed ({why}). Fix it with action=edit."
 
     async def _run(self, workspace: Path, slug: str) -> str:
         from jenny.apps.manifest import find_app
@@ -663,7 +761,7 @@ class AppBuildTool(AppTool):
     _scopes = {"apps"}
     _ACTIONS = frozenset({"draft", "edit", "set", "show", "run"})
     _publishes = False
-    _starts_fresh = True
+    _reseeds_abandoned = True
 
     @property
     def description(self) -> str:

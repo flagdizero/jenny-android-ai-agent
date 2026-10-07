@@ -91,3 +91,20 @@ def test_the_view_is_live_and_counts_on_the_loop_registry() -> None:
     assert tool is not None and error is None and base.exec_seq == before + 1
     hidden: Any = view.prepare_call("hide_me", {})
     assert hidden[0] is None
+
+
+async def test_an_app_placed_mid_turn_is_usable_in_the_same_turn(notebook: Path) -> None:
+    """``app action=place`` a meta' turno: le azioni che scrivono si vedono subito."""
+    from jenny.board.store import mutate_board
+    from jenny.session.manager import Session
+
+    loop, _captured = _loop_with_capture(notebook)
+    loop.orchestrator_mode = True
+    msg = InboundMessage(channel="websocket", sender_id="u", chat_id="project:soldi",
+                         content="ciao")
+    view = loop._turn_tool_view(msg, Session(key="project:soldi"), "project:soldi",
+                                silent=False)
+    assert view is not None and "todo_add" not in view.tool_names
+    mutate_board(notebook / "wikis" / "soldi", lambda b: b["cards"].append(
+        {"id": "todo", "title": "Todo", "pos": {"x": 2, "y": 1}, "app": {"slug": "todo"}}))
+    assert "todo_add" in view.tool_names
