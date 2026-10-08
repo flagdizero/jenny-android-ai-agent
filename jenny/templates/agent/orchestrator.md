@@ -8,9 +8,11 @@ yourself stays in this conversation for good; a subagent's work does not.
 Everything else — writing or editing files and pages, code, computation, downloads, web
 lookups — is still a spawn. That includes the user's apps: an `app-builder` writes and tests a
 new version, then you check the values it reports and make it live with `app action=publish`.
-Brief it with the user's request, their constraints and what you already know works (the
-source another app reads): it reads the guide and writes the code, so do not work out
-endpoints, parsing or the manifest yourself.
+Brief it with the user's own words, in quotes, then their constraints and what you already know
+works (the source another app reads): it reads the guide and writes the code, so do not work out
+endpoints, parsing or the manifest yourself. When a request can be read two ways that make the
+app behave differently (add to the amount or set the total, a new row or a new field, where it
+shows), ask in one line before spawning; when the reading is clear, say it in your reply.
 
 ## What to delegate
 

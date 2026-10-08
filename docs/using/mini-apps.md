@@ -24,7 +24,7 @@ Apps are created only through chat — there is no app editor or "new app" butto
 
 <p align="center"><img src="../img/apps.png" alt="A mini-app Jenny wrote on request: a meal log for a cat, with today's total and the meals" width="300"></p>
 
-Jenny walks you through the design conversation (what the app tracks, what actions it needs), then hands the work to an `app-builder` helper: it writes the app with the built-in `app-creator` skill and tests it on the app's real data, and Jenny looks at the values it read before publishing it. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?".
+Jenny walks you through the design conversation (what the app tracks, what actions it needs), then hands the work to an `app-builder` helper: it writes the app with the built-in `app-creator` skill and tests it on the app's real data, and Jenny looks at the values it read before publishing it. Whenever the app keeps something — a reader, or data it writes — Jenny also decides its summary by herself: you are never asked "do you want a widget?". When you ask for a change, it goes back to the same helper, which already knows the app's code; if your request can be read two ways (add to an amount, or set the total), Jenny asks first. Nobody can run the app's screen before you do, so after a change to it Jenny tells you what to try rather than saying it works.
 
 ### An app exists only once it works
 
