@@ -104,11 +104,11 @@ The UI refuses to delete the last remaining provider ("Cannot delete the last pr
 | Field | Range | Default |
 |---|---|---|
 | Context window | 65,536 or 262,144 tokens (the list comes from the server) | 65,536 |
-| Max Tokens | integer ≥ 1 | 16384 |
+| Max Tokens | integer ≥ 1 | 32000 |
 | Temperature | 0.0 – 2.0 | 0.1 |
 | Reasoning Effort | empty / low / medium / high | medium |
 
-Max Tokens is the ceiling for a single reply. On a reasoning model the thinking counts against that same budget, which is why the default is 16384 rather than the 8192 of earlier versions: a turn that planned at length could spend the whole allowance before saying anything. Reasoning Effort defaults to `medium` instead of leaving the provider to decide, for the same reason: an unbridled reasoning model will happily spend the entire output budget thinking about an open-ended task.
+Max Tokens is the ceiling for a single reply. On a reasoning model the thinking counts against that same budget, which is why the default is 32000 (as in OpenCode) rather than the 8192 and then 16384 of earlier versions: a turn that planned at length could spend the whole allowance before saying anything. What is sent is never more than a quarter of the context window, so a model with a small window keeps room for the prompt. Reasoning Effort defaults to `medium` instead of leaving the provider to decide, for the same reason: an unbridled reasoning model will happily spend the entire output budget thinking about an open-ended task.
 
 A rejected value comes back as an error rather than being silently clamped: Max Tokens must parse as an integer of at least 1, and Temperature must land inside 0.0–2.0. Temperature accepts a comma as the decimal separator, since that is what an Italian-locale number input produces.
 

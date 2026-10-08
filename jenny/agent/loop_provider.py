@@ -107,9 +107,15 @@ class ProviderPresetMixin:
         )
         generation = getattr(self.provider, "generation", None)
         if generation is not None:
+            from jenny.utils.helpers import output_tokens_for_window
+
             max_tokens = self._preset_field(preset, "max_tokens")
             if max_tokens:
                 generation.max_tokens = int(max_tokens)
+            # Un preset con una finestra piccola e il tetto di output del default
+            # lascerebbero il prompt senza spazio.
+            generation.max_tokens = output_tokens_for_window(
+                int(generation.max_tokens), int(context_window or 0))
             temperature = self._preset_field(preset, "temperature")
             if temperature is not None:
                 generation.temperature = float(temperature)

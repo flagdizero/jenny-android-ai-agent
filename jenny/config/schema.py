@@ -315,10 +315,15 @@ class AgentDefaults(Base):
 
     model: str = ""
     # Tetto per singola risposta. Sui reasoning model il thinking pesa su questo
-    # stesso budget: con 8192 un turno che pianifica a lungo lo consumava tutto
-    # prima di dire qualcosa. 16384 lascia margine restando dentro la finestra
-    # anche coi prompt più grossi osservati (~38k su 65536).
-    max_tokens: int = 16384
+    # stesso budget (DeepSeek via OpenAI-compatibile non ne ha uno separato):
+    # con 8192 un turno che pianificava a lungo lo consumava tutto prima di dire
+    # qualcosa, e l'08/10/2026 sul s22 un app-builder ha bruciato tutti i 16384 in
+    # ragionamento, perdendo un giro. 32000 come ``OUTPUT_TOKEN_MAX`` di OpenCode.
+    # Non prende mai piu' di un quarto della finestra
+    # (``helpers.output_tokens_for_window``), cosi' un modello locale con una
+    # finestra piccola non resta senza spazio per il prompt. Chi aggiorna lo
+    # sposta la migrazione v5 di ``Config._migrate_by_version``.
+    max_tokens: int = 32000
     # 128K dal 05/10/2026, prima 65536. Tolti i 16384 riservati alla risposta,
     # 64K lasciavano ~48k di prompt, e un lavoro che legge molte pagine — la
     # passata della bacheca su un quaderno di 33 — perdeva le prime mentre
@@ -1072,7 +1077,7 @@ class ModelPresetConfig(Base):
 
 # Versione corrente dello schema del config. Alzala di uno ogni volta che
 # aggiungi un ramo a ``Config._migrate_by_version``, mai altrimenti.
-CURRENT_CONFIG_VERSION = 4
+CURRENT_CONFIG_VERSION = 5
 
 # Migrazioni gia annunciate in questo processo. Solo per il log: la migrazione
 # resta idempotente e rigira a ogni parse finche il file non viene riscritto (lo
@@ -1272,6 +1277,29 @@ class Config(BaseSettings):
                                     "Config migration v4: contextWindowTokens 65536 -> {} "
                                     "(the old default made long reading jobs drop the "
                                     "pages they had read; set it back explicitly to keep 64K)",
+                                    new_value,
+                                )
+                            defaults = {**defaults, key: new_value}
+                            agents = {**agents, "defaults": defaults}
+                            data = {**data, "agents": agents}
+                            break
+
+        # v5: ``maxTokens`` passa da 16384 a 32000 (v. il commento sul campo). Come
+        # la v4, solo il default di ``agents.defaults``, non i preset.
+        if version < 5:
+            agents = data.get("agents")
+            if isinstance(agents, dict):
+                defaults = agents.get("defaults")
+                if isinstance(defaults, dict):
+                    for key in ("maxTokens", "max_tokens"):
+                        if defaults.get(key) == 16384:
+                            new_value = AgentDefaults.model_fields["max_tokens"].default
+                            if 5 not in _ANNOUNCED_MIGRATIONS:
+                                _ANNOUNCED_MIGRATIONS.add(5)
+                                logger.warning(
+                                    "Config migration v5: maxTokens 16384 -> {} (a reasoning "
+                                    "model could spend the whole reply thinking; set it back "
+                                    "explicitly to keep 16384)",
                                     new_value,
                                 )
                             defaults = {**defaults, key: new_value}

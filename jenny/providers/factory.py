@@ -83,9 +83,12 @@ def _make_provider_core(config: Config) -> LLMProvider:
             ssl_context=ssl_context,
         )
 
+    from jenny.utils.helpers import output_tokens_for_window
+
     provider.generation = GenerationSettings(
         temperature=defaults.temperature,
-        max_tokens=defaults.max_tokens,
+        max_tokens=output_tokens_for_window(defaults.max_tokens,
+                                            defaults.context_window_tokens),
         reasoning_effort=defaults.reasoning_effort,
     )
     # Nome config del provider attivo: la WebUI lo usa per il branding

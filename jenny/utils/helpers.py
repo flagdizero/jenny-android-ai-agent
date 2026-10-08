@@ -694,6 +694,19 @@ DEFAULT_RESERVED_OUTPUT_TOKENS = 4096
 CONTEXT_BUDGET_SAFETY_BUFFER = 1024
 
 
+def output_tokens_for_window(max_tokens: int, context_window_tokens: int | None) -> int:
+    """Il tetto di output davvero usato: mai piu' di un quarto della finestra.
+
+    Con il default a 32000 un modello locale da 32768 di finestra resterebbe
+    senza spazio per il prompt. OpenCode prende il limite dal catalogo dei
+    modelli; noi non lo conosciamo, e un quarto della finestra (minimo 4096) e'
+    la regola che non lo fa mai finire. Una finestra ignota non limita niente.
+    """
+    if not context_window_tokens or context_window_tokens <= 0:
+        return max_tokens
+    return min(max_tokens, max(4096, context_window_tokens // 4))
+
+
 def reserved_output_tokens(provider: Any, spec_max_tokens: Any = None) -> int:
     """Token di output da riservare nel budget di contesto.
 
