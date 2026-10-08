@@ -965,6 +965,7 @@ class SubagentManager:
         tools_config: ToolsConfig | None = None,
         agent_type: AgentType | None = None,
         origin_session_key: str | None = None,
+        lineage_id: str | None = None,
     ) -> ToolRegistry:
         """Build an isolated subagent tool registry via ToolLoader.
 
@@ -982,7 +983,7 @@ class SubagentManager:
         root = self.workspace if workspace is None else workspace
         registry = ToolRegistry()
         cfg = tools_config if tools_config is not None else self._subagent_tools_config()
-        ctx = self._tool_context(root, cfg, origin_session_key)
+        ctx = self._tool_context(root, cfg, origin_session_key, lineage_id)
         loader = ToolLoader()
         if agent_type is None:
             loader.load(ctx, registry, scope="subagent", allow=None)
@@ -993,7 +994,8 @@ class SubagentManager:
         return registry
 
     def _tool_context(self, root: Path, cfg: ToolsConfig,
-                      origin_session_key: str | None = None) -> ToolContext:
+                      origin_session_key: str | None = None,
+                      lineage_id: str | None = None) -> ToolContext:
         """Il ctx che i tool ricevono. Estratto perche lo usa anche il pre-volo."""
         return ToolContext(
             config=cfg,
@@ -1001,6 +1003,7 @@ class SubagentManager:
             file_states=FileStates(),
             android_context=get_android_context(),
             origin_session_key=origin_session_key,
+            subagent_lineage_id=lineage_id,
         )
 
     @staticmethod
@@ -1274,7 +1277,8 @@ class SubagentManager:
                 cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
             atype = get_agent_type(spec.agent_type)
             tools = self._build_tools(workspace=root, tools_config=cfg, agent_type=atype,
-                                      origin_session_key=spec.session_key)
+                                      origin_session_key=spec.session_key,
+                                      lineage_id=status.lineage_id or None)
             system_prompt = self._build_subagent_prompt(
                 workspace=root,
                 agent_type=atype,
@@ -2191,6 +2195,37 @@ class SubagentManager:
             "context): it already knows what it did, you only sent the change. "
             "Its result will be announced to you as usual.",
         )
+
+    # Oltre questa conversazione un ritocco riparte da un costruttore nuovo:
+    # riprendere rimanda al provider tutta la storia del subagent, e a ogni
+    # ritocco cresce.
+    CONTINUE_MAX_HISTORY_CHARS = 160_000
+
+    def continuable(self, target_id: str) -> bool:
+        """Vero se ``send`` a *target_id* continuerebbe il suo lavoro.
+
+        Cioe' se c'e' un tentativo vivo che accetta un messaggio, o una storia
+        da riprendere non troppo lunga. Il terzo ramo di ``send`` — il rilancio
+        dalla spec, col messaggio come nota — qui non conta: rifarebbe il lavoro
+        vecchio, non quello nuovo.
+        """
+        live_id = self._live_task_for(target_id)
+        if live_id is not None:
+            live = self._task_statuses.get(live_id)
+            return (live is not None and live.state == "running"
+                    and live_id in self._pending_injections)
+        resolved = self._resolve_target(target_id)
+        if resolved is None:
+            return False
+        history = self._history.load(resolved[0])
+        if not history:
+            return False
+        size = sum(
+            len(json.dumps({k: v for k, v in m.items() if k != "reasoning_content"},
+                           ensure_ascii=False, default=str))
+            for m in history
+        )
+        return size <= self.CONTINUE_MAX_HISTORY_CHARS
 
     def _live_task_for(self, target_id: str) -> str | None:
         """Task id del tentativo VIVO che corrisponde a un task id o lineage id."""

@@ -54,6 +54,10 @@ if TYPE_CHECKING:
             "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,
         ),
+        app=StringSchema(
+            "For agent_type=app-builder: the slug of the app it works on. A follow-up on "
+            "an app goes back to the builder that already worked on it, which knows the code."
+        ),
         quick=BooleanSchema(
             description=(
                 "Mark this as a short job (a single lookup, a quick check). One "
@@ -101,6 +105,38 @@ class SpawnTool(Tool, ContextAware):
         self._session_key.set(ctx.session_key or f"{ctx.channel}:{ctx.chat_id}")
         self._origin_message_id.set(ctx.message_id)
 
+    async def _to_known_builder(self, session_key: str, task: str,
+                                app: str | None) -> str | None:
+        """Un ritocco a un'app va al costruttore che ci ha gia' lavorato.
+
+        Il 08/10/2026 sul Titan sei ritocchi al Portafoglio sono stati sei
+        costruttori nuovi: ognuno rileggeva la guida (20-60 s), vedeva solo il
+        brief e aggiungeva il suo pezzo, finche' l'utente ha chiamato il codice
+        «un casino». La regola «follow-up: subagent_send» Jenny non l'ha mai
+        applicata; qui la applica lo strumento. L'app si prende da ``app`` o, se
+        manca, dal brief, quando nomina una sola delle app che un costruttore ha
+        toccato in questa conversazione.
+        """
+        import re
+
+        from jenny.agent.subagent import SubagentSendError
+        from jenny.agent.tools.app_tool import apps_with_builders, builder_for
+
+        slug = (app or "").strip()
+        if not slug:
+            named = [s for s in apps_with_builders(session_key)
+                     if re.search(rf"(?<![\w-]){re.escape(s)}(?![\w-])", task)]
+            slug = named[0] if len(named) == 1 else ""
+        lineage = builder_for(session_key, slug) if slug else None
+        if lineage is None or not self._manager.continuable(lineage):
+            return None
+        try:
+            result = await self._manager.send(lineage, task)
+        except SubagentSendError:
+            return None
+        return (f"Sent to the app-builder that already worked on `{slug}` [{lineage}]: it "
+                f"knows the code and continues from it. {result.text}")
+
     @property
     def name(self) -> str:
         return "spawn"
@@ -125,6 +161,7 @@ class SpawnTool(Tool, ContextAware):
         temperature: float | None = None,
         agent_type: str | None = None,
         quick: bool = False,
+        app: str | None = None,
         **kwargs: Any,
     ) -> str:
         """Spawn a subagent to execute the given task."""
@@ -146,6 +183,9 @@ class SpawnTool(Tool, ContextAware):
             if not (is_personal_session_key(key) or is_project_session_key(key)):
                 return ("Cannot spawn an app-builder here: apps are written only for a "
                         "conversation with the user (the personal chat or a notebook's chat).")
+            routed = await self._to_known_builder(key, task, app)
+            if routed is not None:
+                return routed
         # L'invariante di concorrenza vive nel manager (dove sta lo stato); qui
         # si formatta soltanto il messaggio per il modello.
         try:

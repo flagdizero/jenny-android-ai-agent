@@ -118,6 +118,9 @@ class ToolContext:
     # la sessione di richiesta e' la sua, e il tool ``app`` deve sapere che il
     # lavoro viene da una chat dell'utente (non da un cron o dal giardiniere).
     origin_session_key: str | None = None
+    # Il lineage del subagent che usa questi tool: l'``app-builder`` lo lascia
+    # sull'app che sta cambiando, cosi' un ritocco torna da lui (``spawn``).
+    subagent_lineage_id: str | None = None
     # Registry in costruzione, valorizzato da ``ToolLoader.load``. Lo legge solo
     # chi deve osservare l'attivita degli *altri* tool dello stesso agente (la
     # guardia anti-polling di ``subagent_status``), non per chiamarli.

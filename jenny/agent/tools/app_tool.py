@@ -51,6 +51,24 @@ _RECENT_FAILURES: dict[str, list[float]] = {}
 # cancellava sempre, e un draft col solo ``app/index.html`` buttava via
 # ``app.json`` e ``run.py`` dell'app nuova che il primo aveva scritto.
 _ABANDONED_DRAFT_S = 6 * 3600
+# Chi sta lavorando a quale app, per conversazione: ``(sessione, slug) ->
+# lineage`` dell'``app-builder`` che l'ha toccata per ultimo. Lo legge ``spawn``
+# per mandare un ritocco al costruttore che conosce gia' il codice: il 08/10/2026
+# sul Titan sei ritocchi al Portafoglio sono stati sei costruttori nuovi, ognuno a
+# rileggere la guida da capo e ad aggiungere pezzi su un codice che non
+# conosceva. Stato di processo: dopo un riavvio la storia dei subagent e' fredda
+# comunque, e si riparte da un costruttore nuovo.
+_BUILDERS: dict[tuple[str, str], str] = {}
+
+
+def builder_for(session_key: str, slug: str) -> str | None:
+    """Il lineage dell'ultimo ``app-builder`` che ha lavorato a *slug* per *session_key*."""
+    return _BUILDERS.get((session_key, slug))
+
+
+def apps_with_builders(session_key: str) -> list[str]:
+    """Le app che un ``app-builder`` ha toccato per *session_key*."""
+    return sorted(slug for key, slug in _BUILDERS if key == session_key)
 MAX_CODE_BYTES = 6 * 1024
 MAX_SCREEN_BYTES = 512 * 1024
 _ALLOWED_TOP = {"app.json", "run.py", "AGENT.md"}
@@ -135,11 +153,13 @@ class AppTool(Tool):
     _publishes = True
     _reseeds_abandoned = False
 
-    def __init__(self, origin_session_key: str | None = None) -> None:
+    def __init__(self, origin_session_key: str | None = None,
+                 lineage_id: str | None = None) -> None:
         # La conversazione per cui si lavora quando chi chiama e' un subagent
         # (``ToolContext.origin_session_key``): dentro il suo giro la sessione di
         # richiesta e' la sua, non quella dell'utente.
         self._origin = origin_session_key
+        self._lineage = lineage_id
         self._touched: set[str] = set()
         # Chi tiene il registro degli strumenti lo aggiorna qui quando un'app
         # cambia (``AgentLoop``): le azioni di un'app appena pubblicata servono
@@ -152,7 +172,8 @@ class AppTool(Tool):
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:
-        return cls(origin_session_key=getattr(ctx, "origin_session_key", None))
+        return cls(origin_session_key=getattr(ctx, "origin_session_key", None),
+                   lineage_id=getattr(ctx, "subagent_lineage_id", None))
 
     @property
     def name(self) -> str:
@@ -233,6 +254,8 @@ class AppTool(Tool):
         if action in ("draft", "edit", "set"):
             if refusal := self._throttled(slug):
                 return refusal
+            if self._lineage:
+                _BUILDERS[(session, slug)] = self._lineage
             if self._reseeds_abandoned and slug not in self._touched:
                 # Il primo tocco di un costruttore riparte dal codice vivo solo se
                 # la bozza e' abbandonata: una recente e' il lavoro che continua.

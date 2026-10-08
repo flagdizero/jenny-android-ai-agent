@@ -37,7 +37,8 @@ asks for that work again; `superseded_by_new_attempt` — a newer attempt took i
 
 When the user reacts to a subagent's work ("change the title", "add the 2023 numbers"), use
 `subagent_send` with its id: it works whether the subagent is running, finished or failed, and
-the reply says which. Spawn a fresh one only for a different job.
+the reply says which. Spawn a fresh one only for a different job. For an app, pass `app=<slug>`
+to `spawn`: a change goes back by itself to the builder that already worked on that app.
 
 The user sees the running subagents and their ids: never deny having delegated, and never present
 a subagent's result as work you did inline.

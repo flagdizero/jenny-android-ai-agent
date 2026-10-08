@@ -43,6 +43,7 @@ _MODULE_REGISTRIES: tuple[tuple[str, str], ...] = (
     # I tentativi recenti del tool ``app``, condivisi fra istanze: senza, il
     # tetto scatta in un file di prove che ne ha fatti pochi.
     ("jenny.agent.tools.app_tool", "_RECENT_FAILURES"),
+    ("jenny.agent.tools.app_tool", "_BUILDERS"),
 )
 
 
