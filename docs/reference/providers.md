@@ -114,7 +114,7 @@ When both hold, Jenny tries the Responses API — and if it starts failing, a sm
 
 For every other endpoint — Groq, DeepSeek, Ollama, OpenRouter, a self-hosted server, anything that isn't `api.openai.com` directly — `auto` always means Chat Completions; the Responses API is never attempted.
 
-That last sentence is about `auto` only. Setting `apiType: "responses"` **explicitly** forces the Responses API on any `openai_compat` base URL, auto-detection included — which is what makes gateways that serve a Responses-shaped endpoint of their own reachable (see [OpenCode Go](#opencode-go) below).
+That last sentence is about `auto` only. Setting `apiType: "responses"` **explicitly** forces the Responses API on any `openai_compat` base URL, auto-detection included — which is what makes gateways that serve a Responses-shaped endpoint of their own reachable. OpenCode Go is the exception that needs none of this: Jenny picks its endpoint per model by itself (see [OpenCode Go](#opencode-go) below).
 
 ## Session affinity header
 
@@ -139,19 +139,29 @@ When the configured base URL contains `openrouter` (case-insensitive), Jenny aut
 
 The conversation ID is a SHA-256 hash of Jenny's internal session key, truncated to 32 characters: opaque, stable for the life of a conversation, and distinct across conversations. The raw session key names a channel and a chat (`telegram:123456789`), so it is never sent as-is. Internal sessions — cron, Dream, heartbeat — each get their own ID, as does the unified user conversation. The model-catalog probe sends the user agent but no session header: a catalog listing is not a conversation.
 
-### One base URL, three provider entries
+### One base URL, three endpoints, picked per model
 
-Go serves the same base URL in three different wire formats, and a provider entry in Jenny picks exactly one. So reaching every model means up to three entries, all sharing `apiBase` and `apiKey`:
+Go serves the same base URL in three different wire formats, and each model accepts exactly one of them:
 
-| `format` | `apiType` | Endpoint | Models |
-|---|---|---|---|
-| `openai_compat` | `chat_completions` | `/chat/completions` | GLM-5.x, Kimi, LongCat, DeepSeek, MiMo, Hy3/Hy4 |
-| `openai_compat` | `responses` | `/responses` | Grok 4.6, GPT 5.6 Luna, Muse Spark |
-| `anthropic` | — | `/messages` | MiniMax, Qwen3.x, Union Alpha |
+| Endpoint | Format | Models |
+|---|---|---|
+| `/chat/completions` | OpenAI Chat Completions | GLM-5.x, Kimi, LongCat, DeepSeek, MiMo, Hy |
+| `/responses` | OpenAI Responses | GPT Luna, Grok, Muse Spark |
+| `/messages` | Anthropic Messages | Claude Haiku, MiniMax, Qwen3.x |
 
-Set `apiBase` to `https://opencode.ai/zen/go/v1` in all three: the `anthropic` format strips a trailing `/v1` before appending its own path, so one string works everywhere. Switching between model families means switching the active provider, not just the model field — a Go model ID sent to the wrong entry fails the way described under "Model IDs must match the endpoint exactly" below.
+One provider entry reaches all of them. Set `apiBase` to `https://opencode.ai/zen/go/v1` and pick any `format`: when the base URL is OpenCode, the format only decides which endpoint Jenny tries **first** (`/messages` for `anthropic`, `/responses` for `openai_compat` with `apiType: "responses"`, `/chat/completions` otherwise).
 
-The provider dialog only exposes name, format, API key, base URL and CA certificate, so `apiType: "responses"` has to be written into `workspace/config.json` by hand. Editing that provider from the workshop afterwards preserves it.
+Jenny does not need to be told which endpoint a model wants, and could not ask: Go's `/models` listing carries no protocol information. Instead it learns from Go's own refusal. A model sent to the wrong endpoint is rejected with `HTTP 400 {"error":{"type":"ModelProtocolUnsupported"}}` before it generates anything, so nothing ran and nothing was billed. On that error, and only on that error, Jenny repeats the request on the next endpoint. The one that answers is remembered for that model in `workspace/.jenny/opencode_endpoints.json`, so the next turn goes straight there; in practice the first message to a new model is about a second slower, and that's all.
+
+The rules that keep this from hiding real problems:
+
+- **Any other error goes straight to you.** A 400 about account privacy, a bad key or a bad parameter is not retried on another endpoint, because switching wouldn't fix it and would bury the real cause.
+- **If no endpoint accepts the model, you see the first error**, the one from the endpoint your format chose, not the last one tried.
+- **Only a successful reply teaches.** An error never records an endpoint for a model.
+- **A streamed reply that has already shown text is never repeated.** The refusal arrives before any output, so this only matters for some other, unexpected failure.
+- **A remembered endpoint that starts refusing is forgotten**, and the search starts over.
+
+The provider dialog only exposes name, format, API key, base URL and CA certificate. You never need `apiType` for Go; delete `opencode_endpoints.json` to make Jenny relearn every model.
 
 ### `name` is stripped from messages
 
@@ -172,6 +182,8 @@ Jenny sends whatever string you put in the model field straight to the provider.
 |---|---|
 | `Provider '<name>': api_key is required.` | The active provider entry has no `apiKey`. Local/self-hosted servers that ignore auth still need a placeholder value. |
 | `messages[N]: "name" is not supported by this endpoint` (HTTP 400, after the first tool call) | An OpenCode base URL reached by a code path that skips the provider's message sanitiser. See [OpenCode Go](#name-is-stripped-from-messages). |
+| `ModelProtocolUnsupported` (HTTP 400) on an OpenCode base URL | Should not reach you: Jenny retries on Go's other endpoints. If it does, no endpoint accepted that model ID. See [OpenCode Go](#one-base-url-three-endpoints-picked-per-model). |
+| `This Go model trains on request data. Allow paid endpoints that train on request data…` (HTTP 400) | Muse Spark on an OpenCode workspace whose Privacy settings do not allow models that train on your data. It's an account setting on opencode.ai, not a Jenny one; see the privacy note under [OpenCode Go](#two-things-to-know-before-subscribing). |
 | `No provider configured. Add a provider in Settings or edit workspace/config.json...` | `providers.providers` is empty. Add one from the workshop's **Brain → Who thinks → Add provider**, or by hand-editing `config.json`. |
 | 401 / unauthorized | The key is missing, expired, has stray whitespace, or belongs to a different service than the configured base URL. |
 | Model not found | The model ID doesn't exist on the endpoint you configured — check it's the exact ID that endpoint serves, not a name copied from a different provider's docs. |
