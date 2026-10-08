@@ -532,3 +532,42 @@ def test_each_registry_gets_its_face_of_the_tool(ws: Path) -> None:
     assert faces["core"] is AppTool
     assert faces["orchestrator"] is AppPublishTool
     assert faces["apps"] is AppBuildTool
+
+
+# ── la schermata: chi la cambia la legge dalla bozza, e nessuno dice che va ──
+
+
+async def test_show_reads_one_file_of_the_version_in_progress(personal: Path) -> None:
+    """Il 08/10/2026 un costruttore leggeva ``app/index.html`` dall'app viva, gia'
+    vecchia rispetto alla sua bozza, e i suoi ``edit`` non trovavano il testo."""
+    await AppTool().execute(action="draft", slug="portafoglio", files={
+        "app.json": json.dumps(PORTAFOGLIO), "run.py": SUM, "app/index.html": "<p>vecchia</p>"})
+    b = _builder("unified:default")
+    await b.execute(action="edit", slug="portafoglio", path="app/index.html",
+                    old="vecchia", new="nuova")
+    out = await b.execute(action="show", slug="portafoglio", path="app/index.html")
+    assert "(the version in progress)" in out and "1| <p>nuova</p>" in out, out
+    assert "of the version in progress; read one with action=show path=" in await b.execute(
+        action="show", slug="portafoglio")
+    for bad in ("../config.json", "/etc/passwd", "data/quote.jsonl"):
+        assert "an app's files are" in await b.execute(action="show", slug="portafoglio",
+                                                          path=bad)
+    out = await b.execute(action="edit", slug="portafoglio", path="app/index.html",
+                          old="vecchia", new="x")
+    assert "occurs 0 times" in out and "action=show path=app/index.html" in out, out
+
+
+async def test_publish_says_when_the_screen_changed(personal: Path) -> None:
+    from jenny.agent.tools.app_tool import AppPublishTool
+
+    await AppTool().execute(action="draft", slug="portafoglio", files={
+        "app.json": json.dumps(PORTAFOGLIO), "run.py": SUM, "app/index.html": "<p>uno</p>"})
+    b = _builder("unified:default")
+    publisher = AppPublishTool()
+    await b.execute(action="set", slug="portafoglio", key="reader.every", value="1440")
+    out = await publisher.execute(action="publish", slug="portafoglio")
+    assert "is updated" in out and "screen changed" not in out, out
+    await b.execute(action="edit", slug="portafoglio", path="app/index.html",
+                    old="uno", new="due")
+    out = await publisher.execute(action="publish", slug="portafoglio")
+    assert "Its screen changed, and nobody has run it" in out, out

@@ -73,7 +73,9 @@ _PARAMETERS = tool_parameters_schema(
         "On a new version you may send only the files that change.",
         additional_properties=True,
     ),
-    path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…)."),
+    path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…). "
+                      "For show: one file to read, numbered (of the version in progress "
+                      "when there is one)."),
     key=StringSchema("For set: a dotted path in app.json, e.g. reader.net or reader.every."),
     value=StringSchema("For set: the new value as JSON (a list, a number, a string in quotes); "
                        "null removes the key."),
@@ -249,6 +251,9 @@ class AppTool(Tool):
         if action == "edit":
             return await self._edit(workspace, slug, kw)
         if action == "show":
+            path = kw.get("path")
+            if isinstance(path, str) and path.strip():
+                return self._show_file(workspace, slug, path.strip())
             return self._show(workspace, slug)
         if action == "run":
             return await self._run(workspace, slug)
@@ -350,7 +355,11 @@ class AppTool(Tool):
         except OSError:
             return f"{path} does not exist in `{slug}`."
         if text.count(old) != 1:
-            return f"`old` occurs {text.count(old)} times in {path}: it must occur exactly once."
+            hint = (f" Read the current text with action=show path={path}: the version in "
+                    "progress may differ from the live app's files."
+                    if not text.count(old) else "")
+            return (f"`old` occurs {text.count(old)} times in {path}: it must occur exactly "
+                    f"once.{hint}")
         updated = text.replace(old, new)
         problem = self._check_files({path: updated})
         if problem:
@@ -433,6 +442,7 @@ class AppTool(Tool):
         from jenny.apps.manifest import find_app
         from jenny.apps.reader import run_reader
 
+        screen_changed = self._screen_changed(workspace, slug)
         try:
             drafts.promote_draft(workspace, slug)
         except OSError as exc:
@@ -490,7 +500,33 @@ class AppTool(Tool):
                 "user's App page, with its tools."
                 + ("" if existed else " If it is about a notebook's subject, it can go on that "
                    "board with action=place.")
-                + (" Check the values above before saying it works." if reading else ""))
+                + (" Check the values above before saying it works." if reading else "")
+                + (" Its screen changed, and nobody has run it — neither you nor the builder "
+                   "can: tell the user in one line what to try on it, and do not say the "
+                   "screen works until they have." if screen_changed else ""))
+
+    @staticmethod
+    def _screen_changed(workspace: Path, slug: str) -> bool:
+        """La schermata della bozza e' diversa da quella viva (o e' nuova).
+
+        Il 08/10/2026 sul Titan tasti mancanti, righe doppie e un numero che
+        tornava indietro li ha trovati l'utente: la prova di una bozza fa girare
+        il lettore, mai la schermata, e Jenny diceva «fatto».
+        """
+        from jenny.apps import drafts
+
+        def files(root: Path) -> dict[str, bytes]:
+            screen = root / "app"
+            if not screen.is_dir():
+                return {}
+            return {p.relative_to(root).as_posix(): p.read_bytes()
+                    for p in screen.rglob("*") if p.is_file()}
+
+        try:
+            new = files(drafts.draft_dir(workspace, slug))
+            return bool(new) and new != files(drafts.app_dir(workspace, slug))
+        except OSError:
+            return False
 
     async def _publish(self, workspace: Path, slug: str) -> str:
         """Pubblica la bozza che un ``app-builder`` ha scritto e provato."""
@@ -646,8 +682,42 @@ class AppTool(Tool):
         screen = sorted(p.relative_to(app.dir).as_posix() for p in (app.dir / "app").rglob("*")
                         if p.is_file()) if (app.dir / "app").is_dir() else []
         if screen:
-            out.append("--- screen files: " + ", ".join(screen))
+            whose = "of the version in progress" if draft is not None else "of the live app"
+            out.append(f"--- screen files ({whose}; read one with action=show path=…): "
+                       + ", ".join(screen))
         return "\n\n".join(out)
+
+    # Un file di un'app, da chi la sta cambiando. Il 08/10/2026 sul Titan un
+    # costruttore leggeva ``app/index.html`` con ``read_file`` dalla cartella
+    # dell'app viva, gia' vecchia rispetto alla sua bozza, e tre ``edit`` di fila
+    # non trovavano il testo da sostituire.
+    _SHOW_FILE_MAX_CHARS = 60_000
+
+    def _show_file(self, workspace: Path, slug: str, path: str) -> str:
+        from jenny.apps import drafts
+
+        parts = Path(path).parts
+        if ".." in parts or path.startswith("/") or not parts or (
+                path not in _ALLOWED_TOP and parts[0] != "app"):
+            return f"{path}: an app's files are app.json, run.py, AGENT.md and app/…"
+        draft_file = drafts.draft_dir(workspace, slug) / path
+        live_file = drafts.app_dir(workspace, slug) / path
+        target, whose = ((draft_file, "the version in progress") if draft_file.is_file()
+                         else (live_file, "the live app"))
+        if not target.is_file():
+            return f"{path} does not exist in `{slug}`."
+        try:
+            text = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            return f"{path} cannot be read: {exc}"
+        if path == "run.py":
+            from jenny.board.micro import redact
+
+            text = redact(text)
+        numbered = "\n".join(f"{i}| {line}" for i, line in enumerate(text.splitlines(), 1))
+        cut = len(numbered) > self._SHOW_FILE_MAX_CHARS
+        return (f"`{slug}` {path} ({whose}):\n{numbered[:self._SHOW_FILE_MAX_CHARS]}"
+                + ("\n… (cut: the file is longer)" if cut else ""))
 
     def _draft_state(self, workspace: Path, slug: str, draft: Any) -> str:
         """A che punto e' una versione nuova, detto per chi deve decidere cosa fare."""
@@ -750,7 +820,8 @@ _BUILD_PARAMETERS = tool_parameters_schema(
         "send one or two files per call — a big call gets cut. edit: replace one exact string "
         "in one file. set: change one value of app.json by its dotted path. Each of these "
         "validates the version and runs its reader once on the app's real data. show: the "
-        "app's code and state. run: read the live app's reader now.",
+        "app's code and state (with path: one file, e.g. app/index.html). run: read the live "
+        "app's reader now.",
         enum=["draft", "edit", "set", "show", "run"],
     ),
     slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
@@ -759,7 +830,9 @@ _BUILD_PARAMETERS = tool_parameters_schema(
         "that send only the files that change.",
         additional_properties=True,
     ),
-    path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…)."),
+    path=StringSchema("For edit: the file to change (app.json, run.py, AGENT.md, app/…). "
+                      "For show: one file to read, numbered (of the version in progress "
+                      "when there is one)."),
     old=StringSchema("For edit: the exact text to replace (must occur once)."),
     new=StringSchema("For edit: the replacement text."),
     key=StringSchema("For set: a dotted path in app.json, e.g. reader.net or reader.every."),
@@ -798,6 +871,8 @@ _PUBLISH_PARAMETERS = tool_parameters_schema(
         enum=["publish", "show", "run", "place", "trash"],
     ),
     slug=StringSchema("The app's folder name: lowercase, digits and hyphens, at most 32."),
+    path=StringSchema("For show: one file to read, numbered (app.json, run.py, AGENT.md, "
+                      "app/…), of the new version when there is one."),
     notebook=StringSchema("For place from the personal chat: the notebook name."),
     card=StringSchema("For place (optional): an existing card (title or id) the app belongs "
                       "with — the app's card is tied to it by a thread."),
