@@ -315,10 +315,10 @@ async def test_the_first_board_is_proposed_with_its_drawers_written(tmp_path, mo
     assert not BoardPass(root, ws).is_migrating()
 
     # Accettata, la bacheca nasce coi cassetti gia' scritti.
-    from jenny.webui.board_commands import _accept
+    from jenny.board.edit import accept_suggestion
 
     def accept(b):
-        _accept(b, b["suggestions"][0], read_reminders(root))
+        accept_suggestion(b, b["suggestions"][0], read_reminders(root))
         b["suggestions"] = []
 
     mutate_board(root, accept)

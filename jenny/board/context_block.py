@@ -145,6 +145,9 @@ def board_block(
     pending = open_questions(root)
     if pending:
         footer = (footer + "\n" if footer else "") + f"Open in the map: {pending}"
+    waiting = _envelope(board)
+    if waiting:
+        footer = (footer + "\n" if footer else "") + waiting
     # Il muro tiene fino a 40 schede, il blocco resta di 2.000 caratteri: prima si
     # accorciano i riassunti, poi le schede che non ci stanno diventano «e altre N»
     # (il cassetto di una scheda entra comunque quando la si nomina). Il piede —
@@ -171,6 +174,20 @@ def board_block(
     if footer:
         out += "\n" + footer
     return out[:BOARD_BLOCK_MAX_CHARS]
+
+
+def _envelope(board: Mapping[str, Any]) -> str:
+    """Le proposte in busta, una riga: la chat le deve conoscere per rispondere.
+
+    Il 09/10/2026 sull'emulatore, a «accetta la proposta nella busta», Jenny ha
+    speso sette chiamate a cercarla — un ``grep`` su «envelope», il template del
+    giardiniere, ``board.json`` letto a mano — perché il blocco non la diceva.
+    Sono al più :data:`model.MAX_PENDING_SUGGESTIONS`, e cambiano solo a una
+    passata del giardiniere: il prefisso in cache non ne soffre.
+    """
+    items = [f"«{s.get('subject') or s['kind']}» ({s['kind']})"
+             for s in board.get("suggestions") or []]
+    return f"In the envelope, waiting for the user: {'; '.join(items)}." if items else ""
 
 
 def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> str:
@@ -324,7 +341,7 @@ def _micro_line(root: Path, section: Mapping[str, Any]) -> str:
         state.get("status") or "new")
     error = state.get("lastError") or ""
     tail = f"; last error: {error.strip().splitlines()[-1][:200]}" if error.strip() else ""
-    return (f"- Micro app «{micro.spec['title']}» (`{mid}`, micro_app tool): {values}"
+    return (f"- Micro app «{micro.spec['title']}» (`{mid}`): {values}"
             f" at {last.get('ts', '—')}; {status}{tail}; code in "
             f"board/micro/{mid}/run.py")
 

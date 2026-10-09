@@ -655,6 +655,20 @@ def _end_app(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return _generic_end(outcome)
 
 
+# -- board (l'editore dei quaderni) ------------------------------------------
+
+
+def _start_board(args: Mapping[str, Any]) -> str:
+    action = _arg_text(args, "action", limit=16) or "show"
+    card = _arg_text(args, "card", limit=32)
+    return f"board {action} {card}".strip()
+
+
+def _end_board(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Solo una misura: la risposta porta titoli e pagine del quaderno.
+    return _generic_end(outcome)
+
+
 # -- edit_file ---------------------------------------------------------------
 
 
@@ -1122,7 +1136,7 @@ def _end_ssh_transfer(args: Mapping[str, Any], outcome: _Outcome) -> str:
 
 
 # Registro: un tool coperto ha una riga qui. Copre tutto lo scope ``subagent``,
-# tutto lo scope ``remote`` e lo scope ``apps`` di ``agent/tools/loader.py`` (e quindi ogni
+# tutto lo scope ``remote`` e gli scope ``apps`` e ``notebook`` di ``agent/tools/loader.py`` (e quindi ogni
 # allowlist di ``agent/agent_types.py``, che ne e un sottoinsieme).
 _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "read_file": (_start_read_file, _end_read_file),
@@ -1132,6 +1146,7 @@ _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "apply_patch": (_start_apply_patch, _end_apply_patch),
     "journal_append": (_start_journal_append, _end_journal_append),
     "app": (_start_app, _end_app),
+    "board": (_start_board, _end_board),
     "web_search": (_start_web_search, _end_web_search),
     "web_fetch": (_start_web_fetch, _end_web_fetch),
     "browser_open": (_start_browser_open, _end_browser),

@@ -782,9 +782,20 @@ class SubagentManager:
         session_manager: "SessionManager | None" = None,
         history_store: SubagentHistoryStore | None = None,
         usage_hooks: Iterable[AgentHook] = (),
+        cron_service: Any | None = None,
+        timezone: str = "UTC",
     ):
         defaults = AgentDefaults()
         self.provider = provider
+        # Il servizio cron e il fuso dell'utente, per i tool che li chiedono al
+        # ctx. Li vuole il tool ``board`` dell'editore dei quaderni: togliere una
+        # scheda mette in pausa i cron del suo cassetto, e una nota diventa una
+        # riga di diario con l'ora locale. Fino al 09/10/2026 il ctx dei subagent
+        # non li aveva: sull'emulatore l'editore toglieva Prunus e il suo
+        # promemoria restava armato. Il tool ``cron`` resta fuori lo stesso: il
+        # suo scope non e' ``subagent``.
+        self.cron_service = cron_service
+        self.timezone = timezone
         # Gli hook di **misura** del loop (oggi ``TokenUsageHook``), montati su
         # ogni run accanto a ``_SubagentHook``. Senza, un subagent girava nel suo
         # ``AgentRunner`` e i suoi token non arrivavano mai in
@@ -1002,6 +1013,8 @@ class SubagentManager:
             workspace=str(root.resolve()),
             file_states=FileStates(),
             android_context=get_android_context(),
+            cron_service=self.cron_service,
+            timezone=self.timezone,
             origin_session_key=origin_session_key,
             subagent_lineage_id=lineage_id,
         )

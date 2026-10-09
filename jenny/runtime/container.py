@@ -350,6 +350,23 @@ class GatewayContainer:
 
         set_notifier(announce)
 
+    def _wire_board_notifier(self) -> None:
+        """«La bacheca è cambiata» va sulla WebUI (``jenny/board/notify.py``): una
+        scrittura che non viene dalla bacheca stessa — l'editore, un'app posata,
+        la passata del giardiniere — ridisegna la bacheca aperta."""
+        from jenny.board.notify import set_notifier
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+
+        async def announce(notebook: str) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_board_changed": True, "notebook": notebook},
+            ))
+
+        set_notifier(announce)
+
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
 
@@ -422,6 +439,7 @@ class GatewayContainer:
         self._repair_pending_renames()
         self._prepare_apps()
         self._wire_app_notifier()
+        self._wire_board_notifier()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)

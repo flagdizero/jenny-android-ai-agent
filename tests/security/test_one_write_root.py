@@ -342,6 +342,25 @@ async def _root_cron(env: Env) -> Path:
     return hits[0]
 
 
+async def _root_board_tool(env: Env) -> Path:
+    """L'editore dei quaderni: la radice è quella la cui bacheca riceve la scheda."""
+    from jenny.agent.tools.board import BoardTool
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.board.store import read_board
+
+    _seed_board(env)
+    token = _bind_project_chat(env)
+    try:
+        out = await BoardTool().execute(action="add_card", title="Sonda")
+    finally:
+        reset_request_context(token)
+    assert "added" in out, out
+    hits = [d for d in (env.project, env.other)
+            if any(c["id"] == "sonda" for c in read_board(d)["cards"])]
+    assert len(hits) == 1, f"una sola bacheca deve ricevere la scheda, trovate {hits}"
+    return hits[0]
+
+
 # Nome della superficie → sonda. Il MODULO è la chiave del controllo
 # strutturale qui sotto: una superficie nuova senza sonda fa fallire quello.
 _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
@@ -357,6 +376,7 @@ _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
     "ssh_transfer (down)": ("ssh.py", _root_ssh_transfer),
     "app (place)": ("app_tool.py", _root_app_tool),
     "cron del quaderno (add)": ("cron.py", _root_cron),
+    "board (l'editore dei quaderni)": ("board.py", _root_board_tool),
 }
 
 

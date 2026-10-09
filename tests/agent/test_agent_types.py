@@ -44,6 +44,11 @@ EXPECTED_TOOLS = {
     # Scrive e prova le app: il tool ``app`` (faccia del costruttore, scope
     # ``apps``) e la sola lettura. Niente web, niente esecuzione.
     "app-builder": {"app", "read_file", "list_dir", "grep"},
+    # Cambia un quaderno su richiesta: il tool ``board`` (scope ``notebook``) e i
+    # file. Niente web, niente esecuzione, come ``writer``.
+    "notebook-editor": {
+        "board", "read_file", "write_file", "edit_file", "list_dir", "apply_patch", "grep",
+    },
     "operator": None,  # tutto lo scope subagent
 }
 
@@ -103,15 +108,17 @@ def _load_type(name: str, tmp_path: Path) -> set[str]:
     return loaded
 
 
-def test_seven_types_exist() -> None:
+def test_eight_types_exist() -> None:
     assert AGENT_TYPE_NAMES == (
-        "researcher", "writer", "coder", "analyst", "sysadmin", "app-builder", "operator",
+        "researcher", "writer", "coder", "analyst", "sysadmin", "app-builder",
+        "notebook-editor", "operator",
     )
     assert DEFAULT_AGENT_TYPE == "operator"
 
 
 @pytest.mark.parametrize(
-    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "app-builder", "operator"]
+    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "app-builder",
+             "notebook-editor", "operator"]
 )
 def test_declared_allowlist_matches_contract(name: str) -> None:
     expected = EXPECTED_TOOLS[name]
@@ -122,7 +129,9 @@ def test_declared_allowlist_matches_contract(name: str) -> None:
         assert declared == frozenset(expected)
 
 
-@pytest.mark.parametrize("name", ["researcher", "writer", "coder", "analyst", "sysadmin"])
+@pytest.mark.parametrize(
+    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "notebook-editor"]
+)
 def test_type_registry_contains_exactly_its_tools(name: str, tmp_path: Path) -> None:
     assert _load_type(name, tmp_path) == EXPECTED_TOOLS[name]
 
@@ -151,7 +160,7 @@ def test_researcher_cannot_execute_code(tmp_path: Path) -> None:
     assert "edit_file" not in loaded
 
 
-@pytest.mark.parametrize("name", ["writer", "analyst", "coder", "sysadmin"])
+@pytest.mark.parametrize("name", ["writer", "analyst", "coder", "sysadmin", "notebook-editor"])
 def test_non_researcher_types_have_no_network(name: str, tmp_path: Path) -> None:
     """Confine simmetrico: chi esegue/scrive non va a prendersi la fonte."""
     assert not (_load_type(name, tmp_path) & _NETWORK)
@@ -189,7 +198,8 @@ def test_ssh_tools_are_in_no_pre_existing_scope(scope: str, tmp_path: Path) -> N
 
 
 def test_only_sysadmin_reaches_the_remote_scope() -> None:
-    extra = {"sysadmin": ("subagent", "remote"), "app-builder": ("subagent", "apps")}
+    extra = {"sysadmin": ("subagent", "remote"), "app-builder": ("subagent", "apps"),
+             "notebook-editor": ("subagent", "notebook")}
     for name, agent_type in AGENT_TYPES.items():
         assert agent_type.scopes == extra.get(name, ("subagent",)), name
 

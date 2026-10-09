@@ -113,7 +113,7 @@ The journal is append-only by construction — the tool that writes it can only 
 Two things follow from this design that surprise people:
 
 - **Jenny does not ask permission to write.** The switch already answered that question; asking again in words would reopen what you closed. If you do not want a turn to capture, flip the workshop's switch to Read-only — in read-only the capture instructions are not even part of the prompt, so Jenny does not attempt it and does not offer.
-- **Capture is not authorship.** A journal line is not a page. Turning lines into pages, and keeping the map current, happens when you ask for it — or on its own, later, in a [gardener](./gardener.md) pass.
+- **Capture is not authorship.** A journal line is not a page. Turning lines into pages, and keeping the map current, happens when you ask for it — Jenny hands that to the [notebook editor](./board.md#asking-jenny) — or on its own, later, in a [gardener](./gardener.md) pass.
 
 What arrives from outside — an article, a document, a page you pasted — goes verbatim into `raw/research/` first, and into a page second, with the page's `source:` pointing back at the raw copy.
 

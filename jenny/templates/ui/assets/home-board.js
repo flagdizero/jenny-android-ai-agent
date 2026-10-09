@@ -1041,11 +1041,34 @@ export class HomeBoard {
    *  aggiorna. Un colpo solo per una raffica; mai sotto il dito. */
   refreshApp(slug) {
     if (!this.notebook || !this.data?.cards.some((c) => c.app?.slug === slug)) return;
+    this._reloadSoon();
+  }
+
+  /** La bacheca di *notebook* e' cambiata fuori da qui (l'editore lanciato
+   *  dalla chat, un'app posata, la passata del giardiniere): se e' quella
+   *  aperta, si rilegge. */
+  refreshNotebook(notebook) {
+    if (!this.notebook || notebook !== this.notebook || !this.data) return;
+    this._reloadSoon({ frameShape: true });
+  }
+
+  /** Un colpo solo per una raffica; mai sotto il dito. Con *frameShape*, se la
+   *  forma e' cambiata fuori da qui — schede nate o spostate dall'editore — la
+   *  bacheca si inquadra: sul telefono il 09/10/2026 due schede su tre erano
+   *  fuori dallo schermo. Un cassetto riscritto non sposta la vista. */
+  _reloadSoon({ frameShape = false } = {}) {
     clearTimeout(this._refreshTimer);
-    this._refreshTimer = setTimeout(() => {
+    this._refreshTimer = setTimeout(async () => {
       if (this._itemDrag) return;
-      this.load(this.notebook);
+      const before = this._shape();
+      await this.load(this.notebook);
+      if (frameShape && this._shape() !== before) this.zoomToFit();
     }, 250);
+  }
+
+  /** Quali schede ci sono e dove: la firma di cio' che si vede del muro. */
+  _shape() {
+    return JSON.stringify((this.data?.cards || []).map((c) => [c.id, c.pos?.x, c.pos?.y]));
   }
 
   /** Indietro: chiude la barra (e spegne i fili). Vero se c'era da chiudere. */

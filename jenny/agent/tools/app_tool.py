@@ -281,7 +281,7 @@ class AppTool(Tool):
         if action == "run":
             return await self._run(workspace, slug)
         if action == "place":
-            return self._place(workspace, slug, session, kw)
+            return await self._place(workspace, slug, session, kw)
         if action == "trash":
             return self._trash(workspace, slug, session)
         return "Unknown action: use draft, edit, show, run, place or trash."
@@ -782,7 +782,7 @@ class AppTool(Tool):
 
     # -- posare -------------------------------------------------------------
 
-    def _place(self, workspace: Path, slug: str, session: str, kw: dict[str, Any]) -> str:
+    async def _place(self, workspace: Path, slug: str, session: str, kw: dict[str, Any]) -> str:
         from jenny.apps.drafts import app_dir
         from jenny.board.placements import placements
         from jenny.utils.wiki_paths import discover_wiki_roots, is_wiki_root
@@ -817,6 +817,9 @@ class AppTool(Tool):
                               by="jenny-on-request")
         except ValueError as exc:
             return str(exc)
+        from jenny.board.notify import board_changed
+
+        await board_changed(root.name)
         return (f"Placed {where}. The notebook's chat can now use `{slug}`; a tap on the card "
                 "opens the app.")
 

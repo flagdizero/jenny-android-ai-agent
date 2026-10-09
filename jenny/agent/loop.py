@@ -385,6 +385,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # divergenti sugli stessi file.
             session_manager=self.sessions,
             usage_hooks=self._measuring_hooks(),
+            cron_service=self.cron_service,
+            timezone=self.context.timezone or "UTC",
         )
         self._max_messages = max_messages if max_messages > 0 else 120
         self._running = False

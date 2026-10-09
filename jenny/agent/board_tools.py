@@ -17,7 +17,6 @@ uno stato (:class:`BoardPassState`) condiviso, per un quaderno solo.
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +30,7 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.board import model
+from jenny.board.drawers import DrawerError, as_dict, as_list, page_text, write_drawer
 from jenny.board.store import (
     BoardOwnershipError,
     mutate_board,
@@ -38,12 +38,7 @@ from jenny.board.store import (
     read_board,
     read_card_summary,
     read_reminders,
-    write_card_summary,
 )
-
-# Due righe per sezione: la sezione e' un indice, non la pagina.
-MAX_SECTION_CHARS = 320
-MAX_BRIEF_CHARS = 240
 
 
 @dataclass
@@ -79,38 +74,6 @@ class BoardPassState:
     def refuse(self, text: str) -> str:
         self.refused.append(text)
         return f"Refused: {text}"
-
-
-def _page_text(root: Path, page: str) -> str:
-    try:
-        return (root / "wiki" / page).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return ""
-
-
-def _as_list(value: Any) -> list[Any]:
-    """Una lista, anche se il modello l'ha mandata come stringa JSON."""
-    if isinstance(value, list):
-        return value
-    if isinstance(value, str) and value.strip().startswith("["):
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            return []
-        return parsed if isinstance(parsed, list) else []
-    return []
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str) and value.strip().startswith("{"):
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
-    return {}
 
 
 class _BoardTool(Tool):
@@ -217,43 +180,14 @@ class BoardWriteSummaryTool(_BoardTool):
         board = read_board(st.root) or model.empty_board()
         existing = model.card_by_id(board, card)
         pages = existing["pages"] if existing else st.proposed_cards.get(card, [])
-        skeleton = board["skeleton"] or st.proposed_skeleton
-        old = read_card_summary(st.root, card) or {}
-        old_by_title = {s["title"]: s for s in old.get("sections") or []}
-        stamp = model.now_iso()
-        out: list[dict[str, Any]] = []
-        problems: list[str] = []
-        for raw in _as_list(sections):
-            item = _as_dict(raw)
-            title = model.clean_text(item.get("title"), model.MAX_TITLE)
-            text = model.clean_block(item.get("text"), MAX_SECTION_CHARS)
-            sources = [p for p in _as_list(item.get("sources")) if isinstance(p, str)]
-            if skeleton and title not in skeleton:
-                problems.append(f"`{title}` is not a skeleton section")
-                continue
-            bad = [p for p in sources if p not in pages]
-            if bad or not sources:
-                problems.append(f"`{title}` cites pages that are not in this drawer: {bad or '(none)'}")
-                continue
-            if not text:
-                continue
-            before = old_by_title.get(title)
-            changed = before["changed"] if before and before.get("text") == text and \
-                before.get("changed") else stamp
-            out.append({"title": title, "text": text, "sources": sources[:8], "changed": changed})
-        if problems and not out:
-            return st.refuse("; ".join(problems))
-        fingerprint = st.fingerprints.get(card) or model.fingerprint(
-            (p, _page_text(st.root, p)) for p in pages
-        )
-        write_card_summary(st.root, card, {
-            "generated": stamp,
-            "fingerprint": fingerprint,
-            "brief": model.clean_block(brief, MAX_BRIEF_CHARS),
-            "sections": out,
-        })
+        try:
+            out, rewritten, problems = write_drawer(
+                st.root, card, pages=pages, skeleton=board["skeleton"] or st.proposed_skeleton,
+                brief=brief, sections=sections, fingerprint=st.fingerprints.get(card),
+            )
+        except DrawerError as exc:
+            return st.refuse(str(exc))
         st.stale.discard(card)
-        rewritten = sum(1 for s in out if s["changed"] == stamp)
         st.summaries[card] = rewritten
         note = f" Skipped: {'; '.join(problems)}." if problems else ""
         done = f"Drawer of `{card}` written: {len(out)} sections, {rewritten} changed.{note}"
@@ -381,7 +315,7 @@ class BoardSuggestTool(_BoardTool):
         spec: dict[str, Any] = {"kind": kind, "text": clean_text, "created": model.now_iso()}
         if kind == "add_card":
             subject = model.clean_text(kw.get("subject"), model.MAX_TITLE)
-            pages = [p for p in _as_list(kw.get("pages")) if isinstance(p, str)]
+            pages = [p for p in as_list(kw.get("pages")) if isinstance(p, str)]
             if model.is_full(board, reminders):
                 return st.refuse("the board is full: propose putting a card away first")
             if not subject or len(pages) < model.NEW_CARD_MIN_PAGES:
@@ -423,7 +357,7 @@ class BoardSuggestTool(_BoardTool):
                 return st.refuse("the board is full")
             if any((c.get("app") or {}).get("slug") == app for c in board["cards"]):
                 return st.refuse("that app is already a card on this board")
-            params = {k: v for k, v in _as_dict(kw.get("params")).items()
+            params = {k: v for k, v in as_dict(kw.get("params")).items()
                       if isinstance(v, (str, int, float, bool))}
             spec.update(subject=str(kw.get("subject") or (st.apps_with_section[app] or {}).get("name")
                                     or app),
@@ -531,7 +465,7 @@ class BoardProposeBoardTool(_BoardTool):
         st = self.state
         if not st.migration or st.proposed_cards:
             return st.refuse("this notebook already has a board or a proposal for one")
-        sk = [s for s in (model.clean_text(x, model.MAX_TITLE) for x in _as_list(skeleton)) if s]
+        sk = [s for s in (model.clean_text(x, model.MAX_TITLE) for x in as_list(skeleton)) if s]
         sk = list(dict.fromkeys(sk))[:model.MAX_SKELETON]
         # Lo scheletro che l'utente ha scelto creando il quaderno vince: e' suo.
         current = read_board(st.root)
@@ -540,10 +474,10 @@ class BoardProposeBoardTool(_BoardTool):
         specs: list[dict[str, Any]] = []
         used: set[str] = set()
         taken_ids: set[str] = set()
-        for raw in _as_list(cards)[:model.MAX_INITIAL_CARDS]:
-            item = _as_dict(raw)
+        for raw in as_list(cards)[:model.MAX_INITIAL_CARDS]:
+            item = as_dict(raw)
             title = model.clean_text(item.get("title"), model.MAX_TITLE)
-            pages = [p for p in _as_list(item.get("pages"))
+            pages = [p for p in as_list(item.get("pages"))
                      if isinstance(p, str) and p in st.orphans and p not in used]
             if not title or not pages:
                 continue
@@ -601,7 +535,7 @@ def drawer_pages(root: Path, pages: list[str]) -> str:
             parts.append(f"`{page}` — _(not shown: over the budget of this drawer; read it with "
                          "read_file if you need it)_")
             continue
-        body = _page_text(root, page)
+        body = page_text(root, page)
         cut = body[:room]
         note = "\n_(cut here)_" if len(body) > room else ""
         fence = "`" * max(4, max((len(m) for m in re.findall(r"`+", cut)), default=0) + 1)

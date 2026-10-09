@@ -268,6 +268,7 @@ class CronTool(Tool, ContextAware):
         """
         from jenny.board import model
         from jenny.board.micro import find_card
+        from jenny.board.notify import board_changed
         from jenny.board.store import mutate_board
 
         found = self._notebook_root()
@@ -304,6 +305,7 @@ class CronTool(Tool, ContextAware):
                 return None
 
             mutate_board(root, drop)
+            await board_changed(notebook)
             return out
         if action != "add":
             return f"Unknown action: {action}"
@@ -337,6 +339,7 @@ class CronTool(Tool, ContextAware):
         except Exception:  # noqa: BLE001 — senza la sezione il job non avrebbe casa
             self._cron.remove_job(new_id)
             return "Error: the job could not be put in the drawer, so it was not created."
+        await board_changed(notebook)
         return f"{out} — it is in the drawer of «{card['title']}», and delivers in this notebook."
 
     def _add_job(

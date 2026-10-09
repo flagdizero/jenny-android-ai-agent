@@ -41,7 +41,9 @@ Work only from those.
    when the project does". Folded into the project's page it disappears with the project, and it is
    usually the thing the rest depends on: name it, and let the pages that rely on it link to it.
 2. **Leave the rest.** Chatter, one-off logistics, a detail that only made sense that day: these
-   pass through. A pass that promotes nothing has done its job correctly.
+   pass through. So does a line about the notebook itself — a card added or removed, a thread
+   tied: the board already shows it, and it is not a fact about the subject. A pass that promotes
+   nothing has done its job correctly.
 3. **Link.** A page that names something with a page of its own links to it: `[[page-name]]`.
    The links are what make this a wiki instead of a folder.
 4. **Then fix the map**, and last: it describes what now exists.

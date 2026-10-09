@@ -127,7 +127,7 @@ def test_a_micro_app_and_a_cron_reach_the_block_and_the_drawer(tmp_path) -> None
     assert "[auto: Acerello · cron Meteo]" in board_block(root)
     assert "38%" not in board_block(root)
     drawer = turn_lines(root, "come sta pianta 0?")[0]
-    assert "Micro app «Acerello» (`m-acerello`, micro_app tool): Umidità 38%" in drawer
+    assert "Micro app «Acerello» (`m-acerello`): Umidità 38%" in drawer
     assert "board/micro/m-acerello/run.py" in drawer
     assert "Notebook cron «Meteo»" in drawer and "Oggi piove." in drawer
     # Una citazione datata, non una frase al presente da eseguire.
@@ -231,3 +231,35 @@ def test_a_board_with_cards_keeps_the_absence_out_of_the_prompt(tmp_path) -> Non
     text = render_template("agent/project.md", project_path="wikis/piante", **fed)
     assert "This notebook opens on its **board**" in text
     assert "has no board yet" not in text
+
+
+def test_who_changes_the_board_is_said_to_each_reader(tmp_path) -> None:
+    """La chat lancia l'editore, l'editore usa il tool, gli altri subagent non la
+    toccano. Fino al 09/10/2026 la chat leggeva «you do not change it: the
+    gardener proposes», e mandava al giardiniere richieste che non poteva fare."""
+    from jenny.utils.prompt_templates import render_template
+
+    root = _notebook(tmp_path)
+    _cards(root, 1, brief="In vaso 14.")
+    fed = ContextBuilder(tmp_path)._project_block_vars(root)
+
+    def render(*tools: str) -> str:
+        return render_template("agent/project.md", project_path="wikis/piante",
+                               has=lambda name: name in tools, **fed)
+
+    chat = render("spawn", "journal_append")
+    assert "is the job of a `notebook-editor`" in chat and "ask once first" in chat
+    assert "you do not change it" not in chat
+    assert "the `board` tool, exactly as asked" in render("board", "write_file")
+    assert "you do not change it — the main agent does" in render("write_file")
+
+
+def test_the_chat_knows_what_waits_in_the_envelope(tmp_path) -> None:
+    """Senza, a «accetta la proposta» Jenny la cercava con grep (09/10/2026)."""
+    root = _notebook(tmp_path)
+    _cards(root, 1, brief="In vaso 14.")
+    mutate_board(root, lambda b: b["suggestions"].append({
+        "id": "sg-x", "kind": "add_connection", "subject": "Ginkgo — Fico", "text": "Un filo?"}),
+        actor="jenny")
+    assert "In the envelope, waiting for the user: «Ginkgo — Fico» (add_connection)." in \
+        board_block(root)

@@ -174,17 +174,19 @@ What changes once a goal is active:
 
 The reason is context. Everything the main agent does stays in your conversation permanently, and a page fetch or a test run is exactly the kind of large, low-value output that would sit there forever. A subagent's tool output lives and dies with the subagent; only its conclusion comes back.
 
-### The six kinds of subagent
+### The eight kinds of subagent
 
 `spawn` picks a **type**, and the type decides which tools that agent gets. The split is a safety boundary, not a convenience: whoever reads untrusted web pages is never also the one who runs code.
 
 | Type | For | Notably cannot |
 |---|---|---|
 | `researcher` | Gathering material online | Run code |
-| `writer` | Docs, wiki pages, synthesis from material already gathered | Reach the network at all |
+| `writer` | Docs and synthesis from material already gathered, outside a notebook | Reach the network at all |
 | `coder` | Writing and changing code, running tests | Reach the network |
 | `analyst` | Computation, data, charts | Reach the network |
 | `sysadmin` | Remote machines over SSH | Use the web, or run code locally |
+| `app-builder` | Writing and testing a new version of one of your apps | Use the web, or publish what it wrote |
+| `notebook-editor` | Changing a notebook as you asked: pages, map, board | Reach the network, or run code |
 | `operator` | Everything else — the default | (holds the general subagent toolset) |
 
 Full tool lists and sampling defaults are in the [Tool reference](../reference/tools.md).

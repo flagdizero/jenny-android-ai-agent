@@ -78,6 +78,9 @@ SHELL_WITHOUT_LISTENER = {
         # stesso lavoro dal resoconto di testo che il comando continua a
         # mandare, come prima.
         "work_status": "la bolla di lavoro e' solo della casa",
+        # La bacheca dei quaderni e' solo della casa: l'officina non ne ha una
+        # da ridisegnare.
+        "board_changed": "la bacheca e' solo della casa",
     },
 }
 

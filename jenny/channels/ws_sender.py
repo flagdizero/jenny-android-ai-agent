@@ -224,6 +224,11 @@ class OutboundSenderMixin:
             if isinstance(slug, str) and slug:
                 await self.send_app_data_changed(slug)
             return []
+        if msg.metadata.get("_board_changed"):
+            notebook = msg.metadata.get("notebook")
+            if isinstance(notebook, str) and notebook:
+                await self.send_board_changed(notebook)
+            return []
         if msg.metadata.get("_apps_list_changed"):
             await self.send_apps_list_changed()
             return []
@@ -1005,6 +1010,15 @@ class OutboundSenderMixin:
         raw = json.dumps({"event": "app_data_changed", "slug": slug}, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
         await self._fanout(conns, raw, label=" app_data_changed ")
+
+    async def send_board_changed(self, notebook: str) -> None:
+        """Broadcast that a notebook's board changed (an open board redraws)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps({"event": "board_changed", "notebook": notebook}, ensure_ascii=False)
+        # Idempotent refresh-hint, like app_data_changed: the next change replaces it.
+        await self._fanout(conns, raw, label=" board_changed ")
 
     async def send_apps_list_changed(self) -> None:
         """Broadcast that the Jenny Apps list changed (WebUI grid refreshes)."""

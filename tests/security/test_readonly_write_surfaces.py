@@ -174,6 +174,10 @@ _ASKS_FOR_ITSELF = {
     # stato che sopravvive al turno, alla conversazione e al riavvio, e che cambia
     # il comportamento futuro (wall timeout, chip del goal, iniezione «keep
     # working»). Stessa famiglia di un job cron, stesso rifiuto.
+    "agent/tools/board.py": (
+        "la bacheca di un quaderno passa dal suo imbuto (board/store.py), che i tool file "
+        "non possono scrivere: ha il suo gate"
+    ),
     "agent/tools/long_task.py": "registra un goal sostenuto via sessions.save, non un path",
     # Stava in ``_OUT_OF_SCOPE`` con «scrive su una
     # macchina remota», ma ``ssh_transfer direction=down`` scrive **sul
@@ -511,6 +515,27 @@ async def _probe_app_tool(root: Path, readonly: bool) -> str:
         assert not (root / "apps").exists(), "in sola lettura niente codice di app"
     return out
 
+async def _probe_board(root: Path, readonly: bool) -> str:
+    from jenny.agent.tools.board import BoardTool
+    from jenny.agent.tools.context import bind_request_context, reset_request_context
+    from jenny.board.store import mutate_board, read_board
+
+    project = root / "wikis" / "orto"
+    (project / "wiki").mkdir(parents=True)
+    mutate_board(project, lambda b: b["cards"].append(
+        {"id": "acero", "title": "Acero", "pages": [], "pos": {"x": 1, "y": 1}}))
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:orto", session_key="project:orto"))
+    try:
+        with _turn(project, readonly):
+            out = await BoardTool().execute(action="remove_card", card="acero")
+    finally:
+        reset_request_context(token)
+    if readonly:
+        assert read_board(project)["cards"], "in sola lettura la scheda resta dov'era"
+    return out
+
+
 async def _probe_long_task(root: Path, readonly: bool) -> str:
     from jenny.session.goal_state import GOAL_STATE_KEY
 
@@ -562,6 +587,7 @@ _PROBES: dict[str, Probe] = {
     "agent/tools/app_update.py": _probe_app_update,
     "agent/tools/journal.py": _probe_journal,
     "agent/tools/app_tool.py": _probe_app_tool,
+    "agent/tools/board.py": _probe_board,
     "agent/tools/long_task.py": _probe_long_task,
     "agent/tools/ssh.py": _probe_ssh,
 }

@@ -428,3 +428,25 @@ async def test_an_app_builder_is_spawned_only_for_a_user_conversation() -> None:
     tool.set_context(RequestContext(channel="websocket", chat_id="project:soldi",
                                     session_key="project:soldi"))
     assert await tool.execute(task="fai un'app", agent_type="app-builder") == "started"
+
+
+async def test_a_notebook_is_changed_by_its_editor_and_only_by_it() -> None:
+    """L'editore lavora solo dalla chat di un quaderno, e li' il ``writer`` non
+    entra: due tipi che si sovrapponevano li separa il codice, non il prompt."""
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.spawn import SpawnTool
+
+    mgr = MagicMock()
+    mgr.spawn = AsyncMock(return_value="started")
+    tool = SpawnTool(mgr)
+    tool.set_context(RequestContext(channel="internal", chat_id="j", session_key="cron:job"))
+    out = await tool.execute(task="dividi la scheda", agent_type="notebook-editor")
+    assert out.startswith("Cannot spawn a notebook-editor here")
+    tool.set_context(RequestContext(channel="websocket", chat_id="project:piante",
+                                    session_key="project:piante"))
+    out = await tool.execute(task="scrivi la pagina", agent_type="writer")
+    assert out.startswith("Cannot spawn a writer in a notebook") and not mgr.spawn.await_count
+    assert await tool.execute(task="dividi la scheda", agent_type="notebook-editor") == "started"
+    tool.set_context(RequestContext(channel="websocket", chat_id="unified:default",
+                                    session_key="unified:default"))
+    assert await tool.execute(task="scrivi un documento", agent_type="writer") == "started"

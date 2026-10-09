@@ -83,6 +83,7 @@ _HARDCODED_TOOL_MODULES = [
     "ui_view",
     "ssh",
     "app_update",
+    "board",
 ]
 
 

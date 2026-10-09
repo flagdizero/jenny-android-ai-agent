@@ -190,6 +190,24 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
         scopes=("subagent", "apps"),
         requires=frozenset(("app",)),
     ),
+    # Cambia un quaderno come l'ha chiesto l'utente: pagine, mappa e bacheca (il
+    # tool ``board``, scope ``notebook``), cassetti compresi. Nato il 09/10/2026,
+    # per decisione dell'utente: un quaderno si modifica tutto su richiesta, da
+    # un editore solo, e il giardiniere resta a fare manutenzione e proposte. Le
+    # sue scritture sulla bacheca valgono come dell'utente, quindi il
+    # giardiniere non le disfa.
+    #
+    # Niente rete e niente ``python_exec``, come ``writer``: chi scrive il
+    # quaderno non va a prendersi contenuto non fidato. Lo scope a parte tiene
+    # ``board`` fuori da ``operator``, come ``app`` e gli ``ssh_*``.
+    AgentType(
+        name="notebook-editor",
+        tools=frozenset(("board", *_FS_ALL, "apply_patch", "grep")),
+        temperature=0.2,
+        max_iterations=60,
+        scopes=("subagent", "notebook"),
+        requires=frozenset(("board",)),
+    ),
     # Fallback per cio che non rientra negli altri: l'intero scope ``subagent``,
     # cioe esattamente il subagent generico che esisteva prima dei tipi. Resta
     # ``tools=None`` di proposito, ed e il motivo per cui i tool SSH stanno in

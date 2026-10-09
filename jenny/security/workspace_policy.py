@@ -83,8 +83,8 @@ UNRESTRICTED = _Unrestricted()
 class BoardWriteError(PermissionError):
     """Sollevata quando uno strumento generico prova a scrivere nella bacheca.
 
-    ``<quaderno>/board/`` ha i suoi imbuti (``jenny.board.store``, gli
-    strumenti della bacheca, il tool delle micro app): sono loro a tenere il
+    ``<quaderno>/board/`` ha i suoi imbuti (``jenny.board.store``, il tool
+    ``board`` dell'editore dei quaderni, gli strumenti del giardiniere): sono loro a tenere il
     lucchetto, il ``.bak``, la normalizzazione e il controllo di proprieta'
     delle cose dell'utente. Una scrittura diretta li salterebbe tutti, e il
     codice di una micro app riscritto a mano girerebbe senza approvazione.
@@ -94,8 +94,8 @@ class BoardWriteError(PermissionError):
         super().__init__(
             "A notebook's board/ folder is written only through the board's own tools "
             "(they keep what is the user's untouched). Do not write it with file tools "
-            "or python_exec, and do not look for another path: use the board or micro "
-            "app tools, or describe the change to the user."
+            "or python_exec, and do not look for another path: the board changes through "
+            "the `board` tool of a notebook-editor, or describe the change to the user."
             + (f" ({detail})" if detail else "")
         )
 

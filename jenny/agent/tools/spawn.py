@@ -36,7 +36,8 @@ if TYPE_CHECKING:
             "a login or a site's own search box), read/list/write files, NO code "
             "execution — use it for gathering material online. "
             "'writer': read/list/write files and apply_patch, NO network — use it "
-            "for docs, wiki pages and synthesis of material already gathered. "
+            "for docs and synthesis of material already gathered, outside a notebook "
+            "(in a notebook, the notebook-editor writes). "
             "'coder': filesystem, search, apply_patch, python_exec, exec sessions "
             "and logs, NO network — use it to write or change code. "
             "'analyst': python_exec plus read/list/write, NO network — use it for "
@@ -50,6 +51,9 @@ if TYPE_CHECKING:
             "publish its work with `app action=publish`. It writes code only: it cannot use "
             "the app's actions (add a record, mark an item), so do that yourself after "
             "publishing. "
+            "'notebook-editor': only in a notebook's chat — changes this notebook as the "
+            "user asks: its pages, the map and the board (cards, which pages each holds, "
+            "drawers, reminders, threads), NO network. Every change to a notebook goes to it. "
             "'operator': the whole subagent toolset except SSH (fallback for tasks that fit "
             "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,
@@ -186,6 +190,19 @@ class SpawnTool(Tool, ContextAware):
             routed = await self._to_known_builder(key, task, app)
             if routed is not None:
                 return routed
+        # Un quaderno lo cambia l'editore, e solo l'editore: il ``writer`` scriveva
+        # le pagine senza poter toccare la bacheca, e Jenny doveva scegliere fra due
+        # tipi che si sovrapponevano. Lo separa il codice, non il prompt.
+        if (agent_type or "") in ("notebook-editor", "writer"):
+            from jenny.session.keys import is_project_session_key
+
+            in_notebook = is_project_session_key(self._session_key.get() or "")
+            if agent_type == "notebook-editor" and not in_notebook:
+                return ("Cannot spawn a notebook-editor here: it changes a notebook only from "
+                        "that notebook's chat.")
+            if agent_type == "writer" and in_notebook:
+                return ("Cannot spawn a writer in a notebook: spawn a notebook-editor, which "
+                        "writes the pages and the board.")
         # L'invariante di concorrenza vive nel manager (dove sta lo stato); qui
         # si formatta soltanto il messaggio per il modello.
         try:

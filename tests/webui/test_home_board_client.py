@@ -1244,6 +1244,46 @@ def test_an_app_card_follows_its_data_without_reopening_jenny() -> None:
 
 
 @requires_jsdom
+def test_a_board_changed_from_the_chat_redraws_itself() -> None:
+    """L'editore lanciato dalla chat del quaderno cambia la bacheca che sta sotto:
+    fino al 09/10/2026 restava quella di prima finche' non la si riapriva."""
+    _run_covers("""
+      const { calls, frame } = await import('./boot.mjs');
+      const reads = () => calls.filter((c) => c.startsWith('/api/board?')).length;
+      const before = reads();
+      // Un altro quaderno: niente.
+      frame({ event: 'board_changed', notebook: 'altro' });
+      await wait(400);
+      assert.equal(reads(), before);
+      // Questo: una rilettura sola, anche per una raffica; le stesse schede non
+      // spostano la vista.
+      let fits = 0;
+      const fit = app.board.zoomToFit.bind(app.board);
+      app.board.zoomToFit = () => { fits += 1; return fit(); };
+      frame({ event: 'board_changed', notebook: 'orto' });
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(reads(), before + 1);
+      assert.equal(fits, 0);
+      // Una scheda nata fuori da qui si inquadra: puo' stare fuori dalla vista.
+      const board = structuredClone(routes['/api/board']);
+      board.cards.push({ ...board.cards[0], id: 'nuova', title: 'Nuova',
+                         pos: { x: -60, y: 3, by: 'user' } });
+      routes['/api/board'] = board;
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(fits, 1);
+      // Anche una scheda spostata: l'editore la mette in fila, magari fuori vista.
+      const moved = structuredClone(board);
+      moved.cards.at(-1).pos = { x: 80, y: 3, by: 'user' };
+      routes['/api/board'] = moved;
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(fits, 2);
+    """)
+
+
+@requires_jsdom
 def test_the_card_bar_has_no_cover_choice() -> None:
     _run_covers("""
       const rect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 });

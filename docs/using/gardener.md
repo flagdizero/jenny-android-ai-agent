@@ -87,6 +87,8 @@ A notebook with pages and no board gets, instead, its **first board** as one pro
 
 What the board pass cannot do is decided by its tools and by the board's write funnel, not by its prompt: there is no tool to move, add or remove a card, to change your sections, threads or skeleton, or to take a page out of a drawer, and a proposal you already declined is refused. Its file tools write only inside `wiki/`, and it is told to use them only to apply a correction. The *since you last looked* rows on the board are written by the code from what the tools actually did.
 
+The gardener does maintenance and proposals, and nothing you ask for: a change you want — split a card, move pages, put a card away — you ask for in the notebook's chat, where Jenny hands it to the [notebook editor](./board.md#asking-jenny). What the editor does counts as yours, so this pass cannot undo it; a journal line that records such a request is history to the pass, not a task.
+
 Some things are left out on purpose:
 
 - **Research wikis** — those with `concepts/` or `entities/` folders — get no board, and no board pass.

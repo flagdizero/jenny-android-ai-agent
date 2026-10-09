@@ -511,6 +511,7 @@ class HomeApp {
       this._readActivity(e.detail);
       this._readSubagents(e.detail);
       this._readWork(e.detail);
+      this._readBoardChanged(e.detail);
       this.chat.handleFrame(e.detail);
     });
 
@@ -2237,6 +2238,14 @@ class HomeApp {
   _readWork(msg) {
     if (msg?.event !== 'work_status' || !this._frameIsHere(msg)) return;
     this.work.ingestWork(msg);
+  }
+
+  /* `board_changed`: una bacheca e' cambiata fuori dalla bacheca (l'editore
+     lanciato dalla chat, la passata del giardiniere). Non e' di una
+     conversazione: vale per chiunque abbia aperta quella bacheca. */
+  _readBoardChanged(msg) {
+    if (msg?.event !== 'board_changed' || !msg.notebook) return;
+    this.board?.refreshNotebook(msg.notebook);
   }
 
   /* `goal_status` dice se un turno sta girando: e' quel che trasforma il

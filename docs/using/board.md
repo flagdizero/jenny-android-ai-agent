@@ -41,17 +41,23 @@ No signal means nothing needs you.
 ### Gestures
 
 - **Tap** a card or a sticky note to open the drawer.
-- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note — not the ones you placed, not the ones she placed. A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
+- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
 - **Press and hold** a card (about half a second) to lift it: its threads turn bold and show their labels, the cards at the other end lift, the rest of the board dims, and a bar rises at the bottom with **Rename** and **Remove from the board**. Tap the background, the **×** on the bar or Back to put everything back.
 - **Press and hold** the empty wall to make a new card right there, under your finger.
 
 ### Your cards
 
-The board's shape is yours, and you can change it directly, not only by answering the envelope:
+The board's shape is yours, and you can change it directly — or [ask Jenny](#asking-jenny) — not only by answering the envelope:
 
-- **New card**: the **+** in the header, or a press and hold on the empty wall. You give it a name; it is born empty, in the free spot nearest to where you asked, and fills as the gardener attaches pages to it or as you add sections.
+- **New card**: the **+** in the header, or a press and hold on the empty wall. You give it a name; it is born empty, in the free spot nearest to where you asked, and fills as the gardener attaches pages to it, as Jenny puts pages in it when you ask, or as you add sections.
 - **Rename**: from the bar of a held card, or at the bottom of its drawer. The name becomes yours, and Jenny no longer rewrites it.
-- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and micro apps pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and micro apps. The wiki is never touched: its pages stay, and search finds them.
+- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and micro apps pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and micro apps. The wiki is never touched: its pages stay, and search finds them. Accepting **Put it away** from the envelope removes a card the same way, with the same undo.
+
+### Asking Jenny
+
+In the notebook's chat you can ask for any change to the notebook, in your own words: *split this card into one per plant*, *move the vase pages to the Ginkgo card*, *tie the fig to the terrace project*, *remind me to divide the cherry in November*, *put the old card away*, *yes to the proposal in the envelope*. Jenny hands the job to a helper of hers, the **notebook editor**, which changes pages, the map and the board, and rewrites the drawer of every card whose pages it moved. The board under the chat redraws itself when it is done.
+
+What the editor changes counts as yours, exactly as if you had done it by hand: the gardener cannot undo it. When a request could mean two things — or is only a question, *could this card be split?* — Jenny asks once before doing anything.
 
 ### App cards
 
@@ -65,7 +71,7 @@ An app never goes inside another card's drawer, and a subject card always keeps 
 
 ### Threads
 
-A thread is always visible as a thin line with no words on it; its label — the reason two cards are tied, in a few words, such as *seeds taken from it* — appears when you press and hold either card. A drawer also lists its card's threads, and tapping one opens the card at the other end; the **×** beside it removes the thread, and Jenny will not propose that thread again. A board has at most **16** threads: more than that would be the graph the board replaced. Jenny adds threads only by proposing them.
+A thread is always visible as a thin line with no words on it; its label — the reason two cards are tied, in a few words, such as *seeds taken from it* — appears when you press and hold either card. A drawer also lists its card's threads, and tapping one opens the card at the other end; the **×** beside it removes the thread, and Jenny will not propose that thread again. A board has at most **16** threads: more than that would be the graph the board replaced. On her own, Jenny adds threads only by proposing them; ask her in the chat and she ties two cards for you.
 
 ## The drawer
 
@@ -97,7 +103,7 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-**+ Add a section** offers six kinds: note, reminder, micro app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own, and each one can be moved up or removed (removing a section never changes the wiki). A micro app or a cron is the one exception to "on her own": Jenny puts it in the drawer **because you asked for it**, and it is marked as made on request.
+**+ Add a section** offers six kinds: note, reminder, micro app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). A micro app or a cron always comes that way: Jenny puts it in the drawer **because you asked for it**, and it is marked as made on request.
 
 The rule behind micro apps and crons: **everything a notebook does by itself lives in the drawer of its card, where you can see it.** A micro app reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
@@ -174,7 +180,7 @@ The lens is the one way to everything in the notebook, including pages that are 
 
 ## The envelope: Jenny's proposals
 
-The board's shape — which cards, where, which threads — is yours: you change it directly (see [Your cards](#your-cards)), and Jenny does not change it at all. She proposes, and the proposal waits in the envelope until you answer. Tap the envelope to read them:
+The board's shape — which cards, where, which threads — is yours: you change it directly (see [Your cards](#your-cards)) or ask Jenny to (see [Asking Jenny](#asking-jenny)), and Jenny never changes it on her own initiative. On her own she proposes, and the proposal waits in the envelope until you answer — or until you tell her in the chat to accept it. Tap the envelope to read them:
 
 | Proposal | When the gardener may make it |
 |---|---|
@@ -231,7 +237,7 @@ In the notebook's conversation, the board takes the place of the map (`wiki/inde
 
 After its pass over the wiki, the [gardener](./gardener.md) makes a second pass over the board, in the same run: it applies your corrections to the wiki, puts new pages into drawers, rewrites only the drawers whose pages changed, takes dated reminders from new journal lines, and makes proposals. See [The board pass](./gardener.md#the-board-pass).
 
-What it cannot do is enforced by the code, not left to the prompt: it has no tool to move, add or remove a card, to touch your sections, threads or skeleton, or to take a page out of a drawer, and any write of Jenny's that would change something of yours is refused. Research wikis — the ones with `concepts/` or `entities/` folders and no journal — get no board; a notebook you keep a journal in gets one whatever its folders look like.
+What it cannot do is enforced by the code, not left to the prompt: it has no tool to move, add or remove a card, to touch your sections, threads or skeleton, or to take a page out of a drawer, and any write of its own that would change something of yours — including what the notebook editor did at your request — is refused. Research wikis — the ones with `concepts/` or `entities/` folders and no journal — get no board; a notebook you keep a journal in gets one whatever its folders look like.
 
 ## Where it is stored
 

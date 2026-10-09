@@ -372,18 +372,19 @@ Starts a subagent to work a task in the background and reports the result back i
 | `agent_type` | Tools | Temp. | Max iterations | Notes |
 |---|---|---|---|---|
 | `researcher` | `web_search`, `web_fetch`, `browser_open`, `browser_snapshot`, `browser_do`, `browser_read`, `browser_close`, `read_file`, `list_dir`, `write_file` | 0.2 | 60 | Gathers material online, including pages that need clicks or a cookie banner dismissed (the browser tools exist only on Android). **No code execution** — it is the type most exposed to untrusted pages. |
-| `writer` | `read_file`, `list_dir`, `write_file`, `apply_patch` | 0.5 | 40 | Docs, wiki pages, synthesis. **No network at all.** The highest temperature of the six, because prose is the one output where variety helps. |
+| `writer` | `read_file`, `list_dir`, `write_file`, `apply_patch` | 0.5 | 40 | Docs and synthesis outside a notebook. **No network at all.** The highest temperature of all, because prose is the one output where variety helps. Refused in a notebook's chat, where the `notebook-editor` writes. |
 | `coder` | filesystem, `find_files`, `grep`, `apply_patch`, `python_exec`, `write_stdin`, `list_exec_sessions`, `get_recent_logs` | 0.1 | 120 | Writes and changes code. No network. The longest leash, because a build/test loop legitimately takes many steps. |
 | `analyst` | `python_exec`, `read_file`, `list_dir`, `write_file` | 0.1 | 60 | Computation, data, charts. No network. |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer`, `read_file`, `list_dir`, `write_file` | 0.0 | 60 | The only type that can touch a remote machine — and in exchange the only one with **neither web access nor `python_exec`**. |
 | `app-builder` | `app` (its builder face: `draft`, `edit`, `set`, `show`, `run`), `read_file`, `list_dir`, `grep` | 0.1 | 40 | Writes and tests a new version of one of your apps; the main agent publishes it. No web, no `python_exec`: its code runs only as the app's reader, tested on the app's real data. Spawned only from a conversation with you. |
+| `notebook-editor` | `board`, `read_file`, `write_file`, `edit_file`, `list_dir`, `apply_patch`, `grep` | 0.2 | 60 | Changes a notebook as you asked — its pages, the map and the board, drawers included. Its board writes count as yours, so the gardener cannot undo them. No web, no `python_exec`. Spawned only from a notebook's chat. |
 | `operator` | the whole `subagent` scope | manager default | manager default | Default, and the fallback for what fits none of the above. It declares no sampling defaults of its own. |
 
 Both columns are *defaults*, not ceilings you can't move: a `temperature` passed to `spawn` overrides the type's. The iteration count is different — the effective cap is `min(type cap, agents.defaults.maxToolIterations)`, where that setting defaults to **200**. So the type's number is what you normally get, and lowering `maxToolIterations` lowers every type at once (setting it to 30 caps even `coder` at 30); raising it above 200 never lifts a type past its own number.
 
-`sysadmin` and `app-builder` load a second scope (`subagent` + `remote`, `subagent` + `apps`). The SSH tools and the app builder's `app` are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell or a way to write apps by accident; granting them takes naming their scope explicitly.
+`sysadmin`, `app-builder` and `notebook-editor` load a second scope (`subagent` + `remote`, `subagent` + `apps`, `subagent` + `notebook`). The SSH tools, the app builder's `app` and the editor's `board` are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell, a way to write apps or a way to reshape a board by accident; granting them takes naming their scope explicitly.
 
-**A type can also declare tools it cannot work without.** Six of the seven do:
+**A type can also declare tools it cannot work without.** Seven of the eight do:
 
 | Type | Requires | What has to be off for the spawn to be refused |
 |---|---|---|
@@ -393,6 +394,7 @@ Both columns are *defaults*, not ceilings you can't move: a `temperature` passed
 | `analyst` | `python_exec`, `read_file` | `tools.pythonExec.enable` **and** `tools.file.enable` — either one alone is partial loss, not a refusal |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer` | `tools.ssh.enable`, or an empty host list |
 | `app-builder` | `app` | never (the tool is always there) |
+| `notebook-editor` | `board` | never (the tool is always there) |
 
 The practical consequence: turn `tools.file.enable` off and asking for a `writer` or a `coder` is refused outright, with a message naming that setting, rather than starting an agent that would try to write a document with no write tool. `operator` requires nothing and always spawns.
 
@@ -546,7 +548,7 @@ Gotcha: because the tool count depends on what's installed, don't expect a stabl
 
 ---
 
-## 9. Memory recall and journal
+## 9. Memory recall, journal and board
 
 ### recall
 
@@ -569,6 +571,14 @@ Appends one line to the current project's working journal (`raw/journal/<today>.
 - Meant for the moment something is said that will still be true next week — a constraint, a decision, a preference, a name, a date.
 - Parameters: `text` (required, one short line, at most 500 characters — a longer one is refused as page material; the timestamp and the leading dash are added for you) and `attribution`, `said` when you stated the fact yourself or `inferred` when Jenny concluded it (default `inferred`). Only a `said` line can later become a decided page.
 - The only tool in this group a subagent also gets (`core`, `orchestrator`, `subagent`), and it has no config toggle: it is always registered.
+
+### board
+
+Changes a notebook's board as you asked: cards (add, rename, move next to another, put away, restore), which pages each card holds, threads, notes, reminders, the skeleton of a board that has no cards yet, answers to the envelope's proposals, and the drawers. `show` gives the board as you see it, with the ids to act on.
+
+- Scope `notebook` only: the [`notebook-editor`](#spawn) has it, and nobody else — not the agent you talk to, not `operator`.
+- Every write goes through the same code as the board's own buttons and counts as yours, so the gardener cannot undo it. Giving a card a page that another card holds moves the page; the reply then lists the drawers to rewrite, and `write_drawer` rewrites one with the gardener's rules (skeleton sections only, citing the card's own pages).
+- Works only for the notebook's chat it was spawned from, and never in a read-only turn. Each write redraws the board if it is open.
 
 ---
 

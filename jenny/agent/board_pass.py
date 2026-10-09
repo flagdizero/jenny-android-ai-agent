@@ -39,6 +39,7 @@ from loguru import logger
 from jenny.agent.board_tools import BoardPassState, build_board_tools, next_drawer
 from jenny.board import model
 from jenny.board.corrections import open_corrections
+from jenny.board.drawers import pages_fingerprint
 from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
@@ -124,9 +125,8 @@ class BoardPass:
         return [p for p in self.orphans() if p not in seen]
 
     def card_fingerprint(self, card: dict[str, Any]) -> str:
-        return model.fingerprint(
-            (p, self.text(p)) for p in card.get("pages") or [] if p in self.titles
-        )
+        """L'impronta del cassetto, coi testi letti una volta per passata."""
+        return pages_fingerprint(card.get("pages") or [], self.titles, self.text)
 
     def stale_cards(self) -> list[dict[str, Any]]:
         """I cassetti da riscrivere: mai scritti, o con le pagine cambiate dall'ultima volta."""
@@ -474,6 +474,10 @@ async def run_board_pass(
         BoardPass(store.root, store.workspace).finish(state)
     except Exception as exc:  # noqa: BLE001 — il racconto non deve far cadere la passata
         logger.warning("board pass over {}: could not record the pass: {}", store.name, exc)
+    from jenny.board.notify import board_changed
+
+    # La bacheca aperta mostra i cassetti appena riscritti senza doverla riaprire.
+    await board_changed(store.root.name)
     outcome = BoardOutcome(
         status=status,
         assigned=len(state.assigned),
