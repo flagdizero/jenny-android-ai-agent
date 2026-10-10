@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from jenny.board import model
-from jenny.board.sections import alert_probe, cover_of, short_value
+from jenny.board.sections import alert_probe, short_value
 from jenny.board.store import mutate_board, read_board
 from jenny.board.view import build_board_view
 from jenny.webui.commands import CommandError, dispatch_command
@@ -155,8 +155,6 @@ def test_the_cover_is_short() -> None:
     assert short_value(38) == "38"
     assert short_value(True) == "✓"
     assert short_value("latte e uova") == "latte…"
-    assert cover_of({"state": "empty", "value": None}) is None
-    assert cover_of({"state": "stale", "value": 3, "unit": "items"})["unit"] == ""
 
 
 async def test_jenny_proposes_an_app_card_and_yes_places_it(ctx, notebook, waterbot) -> None:

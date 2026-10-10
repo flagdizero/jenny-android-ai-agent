@@ -24,10 +24,10 @@ from jenny.agent.dream_cycle import (
     batch_was_not_consolidated,
     consolidation_landed,
     finish_dream_cycle,
-    format_stuck_alarm,
 )
 from jenny.agent.memory import MemoryStore
 from jenny.agent.memory_budget import budget_report
+from jenny.runtime.user_text import say
 
 
 @pytest.fixture
@@ -213,30 +213,6 @@ class TestBatchWasNotConsolidated:
         # Non un numero nuovo: il freno riusa la soglia dell'allarme, così la
         # finestra di replay finisce esattamente quando l'utente viene avvisato.
         assert STUCK_IS_ALARMING == 4
-
-
-class TestTheAlarmNamesOneCauseAgain:
-    """Questo test difendeva la vaghezza, ed era giusto finché le cause erano tre.
-
-    Sostituisce ``TestTheAlarmNoLongerNamesOneCause``, che chiedeva l'opposto:
-    con il caso di 12:01 — scrittura riuscita che non porta niente — una frase
-    sui rifiuti mandava chi la legge a controllare la cosa sbagliata, quindi la
-    frase era stata sfumata fino a coprire tutti e tre i casi. Vera e inutile.
-
-    La fase 5 ha tolto il motivo: gli altri due casi salgono ora su
-    ``nothing_new_runs``, che logga e non allarma, quindi qui arriva una causa
-    sola. Una diagnosi che può essere precisa deve esserlo — indica un rimedio
-    che esiste, alzare un tetto.
-    """
-
-    def test_it_blames_the_cap_because_now_only_the_cap_gets_here(self):
-        alarm = format_stuck_alarm(4)
-
-        assert "size cap" in alarm
-        assert "4 runs" in alarm
-
-    def test_the_hedge_is_gone(self):
-        assert "are not landing" not in format_stuck_alarm(4)
 
 
 class TestTheEvidenceIsNowCounted:
@@ -492,14 +468,13 @@ class TestTheAlarmCanNameItsCauseAgain:
     """
 
     def test_it_names_the_cap(self):
-        text = format_stuck_alarm(STUCK_IS_ALARMING)
+        text = say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 
-        assert "size cap" in text
-        assert "refusing its writes" in text
+        assert "memory files are full" in text
 
     def test_it_still_says_how_long(self):
-        assert str(STUCK_IS_ALARMING) in format_stuck_alarm(STUCK_IS_ALARMING)
+        assert str(STUCK_IS_ALARMING) in say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 
     def test_it_no_longer_hedges(self):
-        assert "are not landing" not in format_stuck_alarm(STUCK_IS_ALARMING)
+        assert "are not landing" not in say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 

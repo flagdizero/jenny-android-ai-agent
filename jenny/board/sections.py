@@ -333,22 +333,3 @@ def short_value(value: Any, *, limit: int = 7) -> str:
     text = str(value)
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
-
-def cover_of(view: Mapping[str, Any]) -> dict[str, Any] | None:
-    """La copertina di una scheda dal riassunto della sua app.
-
-    ``state`` dice come sta (``ok``, ``alarm``, ``stale``, ``empty``…);
-    senza valore la copertina non c'e' e resta la foto.
-    """
-    value = view.get("value")
-    if value is None or view.get("state") in ("missing", "broken", "no_section", "trashed"):
-        return None
-    unit = str(view.get("unit") or "")
-    return {
-        "short": short_value(value),
-        "unit": unit if len(unit) <= 3 else "",
-        "state": view.get("state") or "ok",
-        "at": view.get("at") or "",
-        "trend": [v for v in view.get("trend") or [] if isinstance(v, (int, float))][-14:],
-        "icon": view.get("icon") or "",
-    }

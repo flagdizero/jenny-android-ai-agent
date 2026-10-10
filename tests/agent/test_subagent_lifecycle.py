@@ -328,7 +328,7 @@ class TestTerminalRetention:
         await _drain_subagent_tasks(sm)
 
         # Lo status vivo è sparito, ma il lavoro non è svanito con lui.
-        assert sm.list_statuses() == {}
+        assert sm._task_statuses == {}
         records = sm.list_records("s1")
         assert len(records) == 1
         record = records[0]

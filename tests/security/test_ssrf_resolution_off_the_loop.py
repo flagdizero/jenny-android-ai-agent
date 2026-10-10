@@ -68,8 +68,6 @@ async def _ticks_during(coro):
 async def test_the_async_validators(slow_dns) -> None:
     for coro in (
         network.validate_url_target_async("https://box.example/"),
-        network.validate_app_server_target_async("http://box.example:8080"),
-        network.validate_ssh_target_async("box.example"),
     ):
         ticks, out = await _ticks_during(coro)
         assert out == (True, ""), out

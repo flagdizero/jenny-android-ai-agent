@@ -5007,12 +5007,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.brand-key {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
 .brand-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── Il pannello di una marca ─────────────────────────────────────────────
@@ -6802,7 +6796,6 @@ body {
   50% { transform: translate(0px, 0px) rotate(2deg) scale(1.012, 0.988); }
   75% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.016); }
 }
-@keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
 /* In landscape basso il dock dell'officina sparisce (v. il `@media
    (max-height: 380px)` dopo `.dock`): niente spazio nemmeno per lei. Stessa

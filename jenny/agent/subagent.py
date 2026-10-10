@@ -2038,10 +2038,6 @@ class SubagentManager:
                 logger.exception("Failed to publish subagent transition hint")
         self._publish_status_snapshot(spec)
 
-    def list_statuses(self) -> dict[str, SubagentStatus]:
-        """Status dei subagent attualmente vivi (copia difensiva)."""
-        return dict(self._task_statuses)
-
     def list_records(self, session_key: str | None = None) -> list[SubagentRecord]:
         """Record Tier-1 dei subagent terminati, dal piu vecchio al piu nuovo."""
         if session_key is None:

@@ -44,7 +44,6 @@
      leggevano il valore di ritorno). */
   const COMMANDS = [
     'setGestureExclusion',
-    'clearGestureExclusion',
     'setLauncherUsage',
     'setMascotSize',
     'setFloatingPalette',

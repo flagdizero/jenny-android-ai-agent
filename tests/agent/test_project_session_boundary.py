@@ -496,7 +496,7 @@ class TestProjectCompactionWorks:
         summary = await consolidator.archive(
             [{"role": "user", "content": "conversazione"}], session_key=session.key
         )
-        consolidator._persist_last_summary(session, summary)
+        consolidator._persist_summaries(session, [summary])
 
         assert session.metadata["_last_summary"]["text"].endswith("\nriassunto della conversazione")
 

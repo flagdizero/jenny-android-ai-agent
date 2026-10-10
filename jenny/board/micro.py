@@ -106,7 +106,6 @@ MAX_COLUMNS = 4
 # Le righe dell'ultima lettura: nello storico resta solo quante erano (per
 # l'andamento, gli eventi e le attese), le righe intere stanno qui.
 LATEST_FILE = "latest.json"
-STATUSES = ("ok", "unreachable", "error", "broken", "quarantined", "unapproved", "paused")
 
 _FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _HOST_RE = re.compile(r"^[a-z0-9.-]{1,253}$")

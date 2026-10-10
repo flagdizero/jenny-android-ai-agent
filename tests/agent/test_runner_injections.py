@@ -694,13 +694,13 @@ async def test_cron_turn_deferred_while_session_active(tmp_path):
     assert pending.empty()
     assert loop._dispatch.await_count == 0
     assert loop._cron_turns.deferred_queues[session_key] == [msg]
-    assert loop.pending_cron_job_ids_for_session(session_key) == {"job-1"}
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == {"job-1"}
 
     await loop._cron_turns.publish_next_deferred(session_key)
     queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
     assert queued is msg
     assert session_key not in loop._cron_turns.deferred_queues
-    assert loop.pending_cron_job_ids_for_session(session_key) == set()
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == set()
 
 
 @pytest.mark.asyncio
@@ -726,7 +726,7 @@ async def test_submitted_cron_turn_reports_pending_until_completed(tmp_path):
     queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
 
     assert queued is msg
-    assert loop.pending_cron_job_ids_for_session(session_key) == {"job-1"}
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == {"job-1"}
 
     response = OutboundMessage(
         channel="websocket",
@@ -736,7 +736,7 @@ async def test_submitted_cron_turn_reports_pending_until_completed(tmp_path):
     loop._cron_turns.complete(msg, outcome=TurnOutcome.delivered(response))
 
     assert (await asyncio.wait_for(submit_task, timeout=0.5)).message is response
-    assert loop.pending_cron_job_ids_for_session(session_key) == set()
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == set()
 
 
 @pytest.mark.asyncio

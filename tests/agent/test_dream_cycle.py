@@ -1151,8 +1151,7 @@ class TestTheAlarmLeavesTheLog:
 
         assert len(sent) == 1
         content, metadata = sent[0]
-        # La frase per l'utente, nella sua lingua (qui l'inglese della suite):
-        # la diagnosi di ``format_stuck_alarm`` resta a ``/dream budget``.
+        # La frase per l'utente, nella sua lingua (qui l'inglese della suite).
         assert content == say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
         assert str(STUCK_IS_ALARMING) in content
         # L'alert dice dove andare a vedere i numeri, che qui non ci sono.

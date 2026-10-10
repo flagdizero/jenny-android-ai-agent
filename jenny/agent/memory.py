@@ -1516,9 +1516,8 @@ class MemoryStore:
         # aveva altro modo naturale che ``write_file``. La risposta era un
         # ``WorkspaceBoundaryError`` con in coda "do not retry with alternative
         # tools": un vicolo chiuso, con il tentativo già contato, quindi cursore
-        # fermo e ``stuck`` in salita — il "rifiuto di *path*" che il commento di
-        # ``format_stuck_alarm`` dice di aver visto sul Titan 2 con tutti i file
-        # all'81% o meno.
+        # fermo e ``stuck`` in salita — il "rifiuto di *path*" visto sul Titan 2
+        # con tutti i file all'81% o meno.
         #
         # Non allarga il perimetro: sono gli stessi tre file che ``edit_file`` e
         # ``apply_patch`` qui sopra riscrivono già interi. Cambia due cose, entrambe

@@ -728,10 +728,10 @@ class TestRefIndex:
         browser._render_snapshot({"url": "https://x.test/", "text": "..."})
         assert browser._LAST_INDEX == {"1:e0": ("button", "Paga")}
 
-    def test_closing_empties_it(self, monkeypatch):
+    async def test_closing_empties_it(self, monkeypatch):
         _install(monkeypatch)
         browser._LAST_INDEX["1:e0"] = ("button", "Paga")
-        browser.destroy_browser()
+        await browser._destroy_browser_async()
         assert browser._LAST_INDEX == {}
 
 

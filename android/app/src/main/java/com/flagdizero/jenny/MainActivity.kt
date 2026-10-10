@@ -1817,7 +1817,6 @@ class MainActivity : AppCompatActivity() {
         fun dispatch(method: String, a: JSONArray): Any? = when (method) {
             "setGestureExclusion" ->
                 setGestureExclusion(a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3)).let { null }
-            "clearGestureExclusion" -> clearGestureExclusion().let { null }
             "getLauncherUsage" -> getLauncherUsage()
             "setLauncherUsage" -> setLauncherUsage(a.getString(0)).let { null }
             "setMascotSize" -> setMascotSize(a.getInt(0), a.getDouble(1)).let { null }
@@ -1871,11 +1870,6 @@ class MainActivity : AppCompatActivity() {
                 wv.systemGestureExclusionRects =
                     if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
             }
-        }
-
-        fun clearGestureExclusion() {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-            runOnUiThread { webView?.systemGestureExclusionRects = emptyList() }
         }
 
         /**

@@ -43,7 +43,6 @@ PUBLISH_EVERY_S = 2.0
 LINGER_S = 60.0
 
 KINDS = ("gardener", "dream")
-STATES = ("running", "done", "failed")
 
 _REGISTRY: dict[str, WorkReporter] = {}
 

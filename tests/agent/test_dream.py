@@ -736,8 +736,7 @@ class TestWriteFileSaysWhatThePromptSays:
     ``SOUL.md``, che non ha un tool per voci e che il review pass deve accorciare
     come prosa. Il tentativo rifiutato resta contato (``record_write_attempt``
     sta prima della risoluzione), quindi il cursore non avanza e ``stuck``
-    sale — il "rifiuto di *path*" che il commento di ``format_stuck_alarm``
-    dice di aver visto sul Titan 2.
+    sale — il "rifiuto di *path*" visto sul Titan 2.
     """
 
     @pytest.mark.asyncio

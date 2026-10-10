@@ -345,42 +345,6 @@ def batch_was_not_consolidated(
     return not consolidation_landed(before)
 
 
-def format_stuck_alarm(stuck: int) -> str:
-    """La frase che descrive il livelock, condivisa dalle superfici che lo dicono.
-
-    Una stesura sola perché sono due: l'alert di sistema che parte da
-    :func:`finish_dream_cycle` e la vista di ``/dream budget``, che è dove si va
-    a guardare dopo averlo letto. Se divergessero, la seconda smentirebbe la
-    prima nel momento peggiore.
-
-    Nessuna cifra dei file qui dentro: da ``finish_dream_cycle`` le misure non
-    sono a portata — il report è del prologo, un turno LLM fa — e rifarle
-    vorrebbe dire rileggere tre file per comporre una frase. Chi ha bisogno dei
-    numeri li trova nella vista che questa frase gli dice di aprire.
-    """
-    # Nessuna causa nominata, e non è vaghezza. ``stuck`` conta i run in cui il
-    # consolidamento non è arrivato su disco, e i modi sono **tre**: il tetto in
-    # caratteri; il rifiuto di *path* — un file fuori dalla allowlist del registry
-    # di Dream, visto sul Titan 2 con tutti i file all'81% o meno; e un run che
-    # scrive soltanto potature senza aggiungere il fatto nuovo
-    # (``batch_was_not_consolidated``, misurato il 2026-08-18 alle 12:01).
-    #
-    # La stesura precedente diceva "keep being refused"; poi, con il terzo caso,
-    # è diventata il "non stanno atterrando" che copriva tutti e tre senza dirne
-    # nessuno — una frase vera e inutile, che è il modo in cui una diagnosi muore.
-    #
-    # Con la fase 5 la copertura non serve più: questo allarme parte **solo** dal
-    # contatore dei rifiuti di budget (``finish_dream_cycle`` manda le altre
-    # cause su ``nothing_new_runs``, che logga e non allarma). Quindi la frase
-    # può tornare a nominare la causa, e indicare il rimedio che esiste davvero:
-    # c'è spazio da liberare, e chi legge può alzare un tetto.
-    return (
-        f"Dream has not consolidated anything for {stuck} runs in a row: the size cap "
-        "is refusing its writes to long-term memory and the review pass is not "
-        "freeing enough room."
-    )
-
-
 def _alert_stuck(stuck: int) -> None:
     """Porta l'allarme fuori dal log, su una superficie che qualcuno vede.
 
@@ -416,8 +380,7 @@ def _alert_stuck(stuck: int) -> None:
     # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
     # stanno nel cassetto Memoria dell'officina, e il notifier tronca a 200
     # caratteri — il percorso intero farebbe cadere proprio la coda azionabile.
-    # La frase è quella per l'utente, nella sua lingua; ``format_stuck_alarm``
-    # resta la diagnosi inglese che ``/dream budget`` mostra. Il tag deriva
+    # La frase è quella per l'utente, nella sua lingua. Il tag deriva
     # dall'etichetta (``cron:Memoria``/``cron:Memory``): basta che sia sempre lo
     # stesso per questo allarme, e a lingua fissata lo è.
     notify_delivery(

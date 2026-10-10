@@ -321,9 +321,6 @@ class Consolidator:
         self.sessions.save(session)
         return summary
 
-    def _persist_last_summary(self, session: Session, summary: str | None) -> None:
-        self._persist_summaries(session, [summary] if summary else [])
-
     def _persist_summaries(self, session: Session, summaries: list[str]) -> None:
         """I riassunti di questa compattazione, nel riassunto che torna nel prompt.
 

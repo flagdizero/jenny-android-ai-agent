@@ -570,7 +570,6 @@
     "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora."
   },
   "launcher": {
-    "open": "Apri app",
     "kindSkill": "Skill",
     "kindJennyApp": "Jenny App",
     "kindAndroidApp": "App Android",
@@ -595,7 +594,6 @@
     "delete": "Elimina",
     "uninstall": "Disinstalla",
     "appInfo": "Info app",
-    "enable": "Abilita",
     "close": "Chiudi",
     "brokenConfirm": "L'app \"{name}\" è rotta: {error}. Chiedo a Jenny di sistemarla?",
     "brokenPrompt": "L'app \"{slug}\" risulta rotta con questo errore: {error}. Puoi sistemarla?",
@@ -641,12 +639,6 @@
     "placed": "«{name}» è in {notebook}",
     "placeFailed": "Non sono riuscita a metterla",
     "placeNoNotebooks": "Non hai ancora quaderni: creane uno dalla pagina Quaderni."
-  },
-  "graph": {
-    "concepts": "Concetti",
-    "entities": "Entità",
-    "other": "Altro",
-    "searchPlaceholder": "Cerca nelle pagine…"
   },
   "header": {
     "back": "Indietro",

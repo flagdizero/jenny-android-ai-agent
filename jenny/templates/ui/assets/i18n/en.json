@@ -570,7 +570,6 @@
     "changedOnDisk": "The file changed since you opened it: nothing was saved. Close the editor and reopen it to see how it is now."
   },
   "launcher": {
-    "open": "Open apps",
     "kindSkill": "Skill",
     "kindJennyApp": "Jenny App",
     "kindAndroidApp": "Android App",
@@ -595,7 +594,6 @@
     "delete": "Delete",
     "uninstall": "Uninstall",
     "appInfo": "App info",
-    "enable": "Enable",
     "close": "Close",
     "brokenConfirm": "The app \"{name}\" is broken: {error}. Ask Jenny to fix it?",
     "brokenPrompt": "The app \"{slug}\" is broken with this error: {error}. Can you fix it?",
@@ -641,12 +639,6 @@
     "placed": "“{name}” is in {notebook}",
     "placeFailed": "I couldn't put it there",
     "placeNoNotebooks": "You have no notebooks yet: make one from the Notebooks page."
-  },
-  "graph": {
-    "concepts": "Concepts",
-    "entities": "Entities",
-    "other": "Other",
-    "searchPlaceholder": "Search page contents…"
   },
   "header": {
     "back": "Back",

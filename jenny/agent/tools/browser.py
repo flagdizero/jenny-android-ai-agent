@@ -219,18 +219,10 @@ def _close_bridge(bridge: Any) -> None:
         logger.opt(exception=True).warning("Browser session close failed")
 
 
-def destroy_browser() -> None:
+async def _destroy_browser_async() -> None:
     """Chiude la sessione e ne svuota il profilo (cookie inclusi), se c'e'.
 
-    **Bloccante** (``close`` in Kotlin aspetta il main thread fino a 10 s): dal
-    loop si usa ``_destroy_browser_async``. Resta sincrona per chi non ha un
-    loop sotto.
-    """
-    _close_bridge(_detach_browser())
-
-
-async def _destroy_browser_async() -> None:
-    """``destroy_browser`` senza fermare il loop del gateway. Col lucchetto preso.
+    Senza fermare il loop del gateway, col lucchetto preso.
 
     La sessione si stacca subito, sul loop; la chiusura bloccante gira in un
     thread. Chiamata sul thread del loop, ``close`` teneva fermo il gateway —
