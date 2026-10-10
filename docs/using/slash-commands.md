@@ -31,7 +31,7 @@ All server-side command responses below are **hardcoded in English**, regardless
 | Command | Arguments | What it does |
 |---|---|---|
 | `/new` | none | Stops the active task (if any) and clears the model's context for a fresh conversation |
-| `/stop` | none | Cancels the active agent turn for this chat |
+| `/stop` | `[all]` | Cancels the active agent turn for this chat; background helpers keep going unless you send `/stop all` |
 | `/status` | none | Shows a runtime snapshot: version, model, token usage, context budget, session size, uptime, active tasks |
 | `/model` | `[preset]` | Shows the current model/preset, or switches the active preset |
 | `/history` | `[n]` | Prints the last `n` persisted user/assistant messages (default 10, max 50) |
@@ -65,19 +65,11 @@ If a conversation seems to keep dragging in an old topic — or to ignore a rule
 
 ### `/stop` — cancel the active turn
 
-While a turn runs, the home's send button turns into **Stop** and sends this command for you. The workshop Console has no stop button, so there typing `/stop` (or picking it from the Commands chip) is the way to interrupt a turn that's in progress. It works specifically because it's on the priority fast path (it's processed even mid-turn, before the normal dispatch lock). Response:
+While a turn runs, the home's send button turns into **Stop** and sends this command for you. The workshop Console has no stop button, so there typing `/stop` (or picking it from the Commands chip) is the way to interrupt a turn that's in progress. It works specifically because it's on the priority fast path (it's processed even mid-turn, before the normal dispatch lock). The reply is a short sentence in the agent's language (`agents.defaults.language`): that it stopped, or that there was nothing to stop.
 
-```text
-Stopped N task(s).
-```
+`/stop` also cancels an active `/goal`. It does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
 
-or, if nothing was running:
-
-```text
-No active task to stop.
-```
-
-`/stop` also cancels an active `/goal` and discards any subagent working in the background for this chat — a subagent that finishes after being stopped has its result silently thrown away.
+`/stop all` stops everything: the turn, the goal, and every helper of this chat — a helper that finishes after being stopped has its result silently thrown away.
 
 ### `/status` — runtime snapshot
 
@@ -262,7 +254,7 @@ In the personal chat:
 ```text
 ✿ jenny commands:
 /new — Stop the current task and start a fresh conversation.
-/stop — Cancel the active agent turn for this chat.
+/stop — Cancel the active agent turn for this chat. Helpers working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
 /status — Display runtime, provider, and channel status.
 /model [preset] — Show or switch the active model preset.
 /history [n] — Print the last N persisted conversation messages.

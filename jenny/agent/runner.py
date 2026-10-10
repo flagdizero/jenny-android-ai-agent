@@ -45,6 +45,8 @@ from jenny.agent.usage_accounting import (
 )
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from jenny.providers.opencode import conversation_scope
+from jenny.providers.retry_policy import classify_user_error
+from jenny.runtime.user_text import say
 from jenny.utils.helpers import (
     build_assistant_message,
     extract_reasoning,
@@ -64,11 +66,6 @@ from jenny.utils.runtime import (
 
 GoalContinueMessage = str | Callable[[], str | None]
 
-_DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
-_ARREARAGE_ERROR_MESSAGE = (
-    "The AI provider rejected the request because the API key is out of quota or the "
-    "account is in arrears. Please top up / check the billing status of your API key and try again."
-)
 _MAX_CONTEXT_LENGTH_RETRIES = 2  # Max attempts to recover from context_length errors per turn
 _PERSISTED_MODEL_ERROR_PLACEHOLDER = "[Assistant reply unavailable due to model error.]"
 _PARTIAL_CONTENT_INTERRUPTED_MARKER = "[response was interrupted by an error]"
@@ -118,7 +115,6 @@ class AgentRunSpec:
     max_tokens: int | None = None
     reasoning_effort: str | None = None
     hook: AgentHook | None = None
-    error_message: str | None = _DEFAULT_ERROR_MESSAGE
     max_iterations_message: str | None = None
     concurrent_tools: bool = False
     fail_on_tool_error: bool = False
@@ -166,6 +162,10 @@ class AgentRunResult:
     # spronarlo: sta aspettando l'utente. Il product layer lo usa per
     # parcheggiare il goal invece di lasciare che il modello lo chiuda.
     goal_stalled: bool = False
+    # Con ``stop_reason == "error"``: il tipo d'errore del provider per chi legge
+    # (``retry_policy.classify_user_error``), che il loop mette nei metadata
+    # dell'outbound come ``error: {kind}``. ``None`` per ogni altro esito.
+    error_kind: str | None = None
 
 
 @dataclass
@@ -211,6 +211,7 @@ class _RunCounters:
     goal_continue_cycles: int = 0
     tools_at_last_goal_continue: int = 0
     goal_stalled: bool = False
+    error_kind: str | None = None
 
 
 class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
@@ -708,6 +709,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             # esaurito, la continuazione interna (``session.turn_continuation``) ha
             # ancora la parola e il goal non sta aspettando nessuno.
             goal_stalled=state.goal_stalled and state.stop_reason != "max_iterations",
+            error_kind=state.error_kind if state.stop_reason == "error" else None,
         )
 
     # --- Branch handlers estratti da ``_run_core`` (behavior-identical) ---
@@ -1159,12 +1161,22 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         messages: list[dict[str, Any]],
         state: _RunCounters,
     ) -> Literal["continue", "break"]:
-        if LLMProvider.is_arrearage_response(response):
-            state.final_content = _ARREARAGE_ERROR_MESSAGE
-        else:
-            state.final_content = clean or spec.error_message or _DEFAULT_ERROR_MESSAGE
+        # All'utente la frase del suo tipo d'errore, nella sua lingua, che dice
+        # cosa fare; il testo grezzo del provider («Error calling LLM: All
+        # connection attempts failed», il corpo HTTP) resta nel log e in
+        # ``state.error``, che è quel che legge chi delega (il subagent lo passa
+        # al modello che l'ha lanciato). La cronologia del modello non cambia:
+        # lì va il segnaposto (o il testo parziale), sotto.
+        kind = classify_user_error(response)
+        logger.warning(
+            "LLM error ({}, status={}, kind={}): {}",
+            kind, response.error_status_code, response.error_kind,
+            (clean or response.content or "")[:500],
+        )
+        state.error_kind = kind
+        state.final_content = say(f"error.{kind}")
         state.stop_reason = "error"
-        state.error = state.final_content
+        state.error = clean or state.final_content
         if response.partial_content:
             self._append_interrupted_partial_content(messages, response.partial_content)
         else:
@@ -1195,12 +1207,15 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         # Due esiti distinti sotto lo stesso sintomo (contenuto vuoto): dirlo
         # all'utente, invece di collassarli sul messaggio generico, è ciò che
         # rende il limite di token diagnosticabile senza leggere i log.
-        state.final_content = (
-            OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
-        )
+        #
+        # Due testi: la cronologia del modello tiene la frase inglese di sempre
+        # (``utils/runtime.py``), l'utente legge la sua nella sua lingua — senza
+        # «alza i max output tokens», che a chi tiene un telefono non dice niente.
+        persisted = OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
+        state.final_content = say("turn.truncated" if truncated else "turn.empty")
         state.stop_reason = "output_truncated" if truncated else "empty_final_response"
-        state.error = state.final_content
-        self._append_final_message(messages, state.final_content)
+        state.error = persisted
+        self._append_final_message(messages, persisted)
         context.final_content = state.final_content
         context.error = state.error
         context.stop_reason = state.stop_reason
@@ -1242,7 +1257,17 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 state.usage,
             )
         if state.final_content is None:
-            state.final_content = self._max_iterations_fallback(spec)
+            fallback = self._max_iterations_fallback(spec)
+            self._append_final_message(messages, fallback)
+            # Il testo del template (inglese) resta nella cronologia; all'utente
+            # la stessa cosa nella sua lingua. Chi passa un proprio
+            # ``max_iterations_message`` (il subagent) parla a un modello, non a
+            # una persona, e riceve il suo testo così com'è.
+            state.final_content = (
+                fallback if spec.max_iterations_message
+                else say("turn.max_iterations", max_iterations=spec.max_iterations)
+            )
+            return
         self._append_final_message(messages, state.final_content)
 
     # Contabilità usage estratta in ``agent/usage_accounting.py``. Delegatori

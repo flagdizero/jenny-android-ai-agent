@@ -45,7 +45,6 @@ from jenny.agent.dream_cycle import (
     begin_dream_cycle,
     finish_dream_cycle,
     format_budget,
-    format_stuck_alarm,
     take_dream_snapshot,
 )
 from jenny.agent.dream_review import STATUS_COMPLETED, STATUS_FAILED
@@ -56,6 +55,7 @@ from jenny.command.router import CommandContext, CommandRouter
 from jenny.config.schema import Config
 from jenny.runtime.cron_dispatch import CronDispatcher
 from jenny.runtime.notifier import alert_fields
+from jenny.runtime.user_text import say
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _REVIEW_TARGET = "jenny.agent.dream_review.run_dream_review"
@@ -1151,14 +1151,20 @@ class TestTheAlarmLeavesTheLog:
 
         assert len(sent) == 1
         content, metadata = sent[0]
-        assert format_stuck_alarm(STUCK_IS_ALARMING) in content
+        # La frase per l'utente, nella sua lingua (qui l'inglese della suite):
+        # la diagnosi di ``format_stuck_alarm`` resta a ``/dream budget``.
+        assert content == say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
+        assert str(STUCK_IS_ALARMING) in content
         # L'alert dice dove andare a vedere i numeri, che qui non ci sono.
         # Era ``/dream budget``, rimosso il 31/08/2026: la superficie ora è il
         # cassetto Memoria dell'officina, e l'alert deve nominare *quello*
         # — mandare a un comando che non esiste è peggio che non dire niente.
         assert "Workshop \u2192 Memory" in content
+        assert say("alarm.dream_stuck", "it", stuck=3).endswith(
+            "Officina \u2192 Memoria mostra le dimensioni."
+        )
         assert metadata == {
-            WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": "Dream"}
+            WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": "Memory"}
         }
 
     async def test_below_the_threshold_posts_nothing(
@@ -1196,12 +1202,12 @@ class TestTheAlarmLeavesTheLog:
 
         tags = {alert_fields(content, metadata)[2] for content, metadata in sent}
         assert len(sent) == 3
-        assert tags == {"cron:Dream"}
+        assert tags == {"cron:Memory"}
         assert tags != {alert_fields("qualsiasi", None)[2]}
         # Il conteggio nel corpo cresce: l'alert che sostituisce il precedente
         # non è una copia, è la misura aggiornata.
         assert [alert_fields(c, m)[1] for c, m in sent] == [
-            f"{format_stuck_alarm(n)} Workshop \u2192 Memory shows the sizes."
+            say("alarm.dream_stuck", stuck=n)
             for n in (STUCK_IS_ALARMING + 1, STUCK_IS_ALARMING + 2, STUCK_IS_ALARMING + 3)
         ]
 

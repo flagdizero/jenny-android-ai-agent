@@ -410,14 +410,19 @@ def _alert_stuck(stuck: int) -> None:
     è una buona ragione per cominciare.
     """
     from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.user_text import say
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
-    # «Workshop → Memory» e non «Settings → Workshop → Memory»: i numeri stanno
-    # nel cassetto Memoria dell'officina, e il notifier tronca a 200 caratteri —
-    # il percorso intero farebbe cadere proprio la coda azionabile.
+    # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
+    # stanno nel cassetto Memoria dell'officina, e il notifier tronca a 200
+    # caratteri — il percorso intero farebbe cadere proprio la coda azionabile.
+    # La frase è quella per l'utente, nella sua lingua; ``format_stuck_alarm``
+    # resta la diagnosi inglese che ``/dream budget`` mostra. Il tag deriva
+    # dall'etichetta (``cron:Memoria``/``cron:Memory``): basta che sia sempre lo
+    # stesso per questo allarme, e a lingua fissata lo è.
     notify_delivery(
-        f"{format_stuck_alarm(stuck)} Workshop \u2192 Memory shows the sizes.",
-        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": "Dream"}},
+        say("alarm.dream_stuck", stuck=stuck),
+        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": say("alarm.dream_label")}},
     )
 
 

@@ -15,7 +15,7 @@ from jenny.agent.tools.schema import (
 )
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import CronService
-from jenny.cron.types import CronJob, CronJobState, CronSchedule
+from jenny.cron.types import CronJob, CronJobState, CronSchedule, job_display_name
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -61,8 +61,10 @@ _CRON_PARAMETERS = tool_parameters_schema(
     ),
     action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
     name=StringSchema(
-        "Optional short human-readable label for the job "
-        "(e.g., 'weather-monitor', 'daily-standup'). Defaults to first 30 chars of message."
+        "Short human label for the job, in the user's language, as the user would name it "
+        "(e.g. 'Annaffiare le piante', 'Weekly report'). It is the title of the phone "
+        "notification, so never put the instruction from `message` here. Omit it and the job "
+        "has no name."
     ),
     message=StringSchema(
         "REQUIRED when action='add'. Instruction for the agent to execute when the job triggers "
@@ -283,7 +285,8 @@ class CronTool(Tool, ContextAware):
             if not mine:
                 return "No scheduled jobs in this notebook."
             return "Scheduled jobs in this notebook:\n" + "\n".join(
-                f"- {j.name} (id: {j.id}, {self._format_timing(j.schedule)}, in the drawer "
+                f"- {job_display_name(j)} (id: {j.id}, {self._format_timing(j.schedule)}, "
+                "in the drawer "
                 f"of `{(j.payload.board or {}).get('card')}`)" for j in mine)
         if current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
@@ -330,6 +333,9 @@ class CronTool(Tool, ContextAware):
             if target is None:
                 raise ValueError("card gone")
             target["userSections"].append({
+                # Il cassetto vuole un nome da scrivere: senza, l'inizio del
+                # messaggio, come prima. Il titolo della notifica non lo vede
+                # (``job_user_label``).
                 "id": section_id, "kind": "cron", "job": new_id, "name": name or message[:30],
                 "by": "jenny-on-request", "created": model.now_iso(),
             })
@@ -414,7 +420,7 @@ class CronTool(Tool, ContextAware):
 
         try:
             job = self._cron.add_job(
-                name=name or message[:30],
+                name=(name or "").strip(),
                 schedule=schedule,
                 message=message,
                 mode=job_mode,
@@ -430,7 +436,9 @@ class CronTool(Tool, ContextAware):
             # scatta mai) torna al modello come le altre risposte d'errore di
             # questo tool, da correggere e riprovare.
             return f"Error: {exc}"
-        return f"Created job '{job.name}' (id: {job.id})"
+        if job.name:
+            return f"Created job '{job.name}' (id: {job.id})"
+        return f"Created job (id: {job.id})"
 
     def _format_timing(self, schedule: CronSchedule) -> str:
         """Format schedule as a human-readable timing string."""
@@ -557,7 +565,7 @@ class CronTool(Tool, ContextAware):
                 if mode == "monitor"
                 else ""
             )
-            parts = [f"- {j.name} (id: {j.id}, {timing}{mode_note})"]
+            parts = [f"- {job_display_name(j)} (id: {j.id}, {timing}{mode_note})"]
             if j.payload.board:
                 parts.append(
                     f"  In the notebook {j.payload.board.get('notebook')}, in the drawer of "

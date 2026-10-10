@@ -283,3 +283,22 @@ def test_the_text_of_a_long_work_keeps_its_id_and_its_role() -> None:
     assert (start["workId"], start.get("workStart")) == ("gardener-1", True)
     assert (report["workId"], report.get("workStart")) == ("gardener-1", None)
     assert "workId" not in other
+
+
+def test_a_turn_that_ended_in_an_error_stays_an_error_bubble() -> None:
+    """Il turno finito in errore del provider: il payload dal vivo porta
+    ``error: {kind}`` (``ws_sender``), e riaprendo la chat la stessa chiave, con
+    la stessa forma, arriva nel messaggio rigiocato. Un ``error`` storto non passa."""
+    lines = [
+        {"event": "message", "chat_id": "default", "text": "Non riesco a raggiungere il modello.",
+         "error": {"kind": "connection"}},
+        {"event": "message", "chat_id": "default", "text": "ciao"},
+        {"event": "message", "chat_id": "default", "text": "x", "error": "connection"},
+        {"event": "message", "chat_id": "default", "text": "y", "error": {"kind": ""}},
+    ]
+    failed, ok, bad_shape, empty_kind = replay_transcript_to_ui_messages(lines)
+    assert failed["error"] == {"kind": "connection"}
+    assert failed["content"] == "Non riesco a raggiungere il modello."
+    assert "error" not in ok
+    assert "error" not in bad_shape
+    assert "error" not in empty_kind

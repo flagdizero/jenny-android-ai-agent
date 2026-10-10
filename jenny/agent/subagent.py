@@ -1338,7 +1338,6 @@ class SubagentManager:
                     ),
                     max_iterations_message="Task completed but no final response was generated.",
                     finalize_on_max_iterations=False,
-                    error_message=None,
                     # Un errore tool resta fatale, ma non il primo: il budget
                     # lascia sbagliare qualche colpo (col retry hint, come
                     # l'agente principale) e chiude solo quando l'agente non sta

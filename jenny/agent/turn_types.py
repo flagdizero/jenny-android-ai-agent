@@ -20,6 +20,26 @@ if TYPE_CHECKING:
     from jenny.session.manager import Session
 
 
+class AgentLoopRun(tuple):
+    """Il ritorno di ``AgentLoop._run_agent_loop``: la quintupla di sempre, più ``error_kind``.
+
+    ``(final_content, tools_used, messages, stop_reason, had_injections)`` si
+    spacchetta come prima — i chiamanti e i test che lo fanno non cambiano — e
+    in più porta il tipo d'errore del provider quando il turno è finito in
+    errore (``AgentRunResult.error_kind``), che RESPOND mette nei metadata
+    dell'outbound. Un attributo e non un sesto elemento proprio per non rompere
+    quelle spacchettature; chi lo legge usa ``getattr(..., "error_kind", None)``,
+    perché un ``_run_agent_loop`` finto nei test torna una tupla nuda.
+    """
+
+    error_kind: str | None
+
+    def __new__(cls, items: tuple[Any, ...], *, error_kind: str | None = None) -> AgentLoopRun:
+        run = super().__new__(cls, items)
+        run.error_kind = error_kind
+        return run
+
+
 class TurnDisposition(Enum):
     """Come si e' concluso un turno, dal punto di vista di chi lo ha chiesto.
 
@@ -140,6 +160,9 @@ class TurnContext:
     all_messages: list[dict[str, Any]] = field(default_factory=list)
     stop_reason: str = ""
     had_injections: bool = False
+    # Il tipo d'errore del provider, se il turno è finito in errore
+    # (``AgentLoopRun.error_kind``): diventa ``error: {kind}`` nell'outbound.
+    error_kind: str | None = None
 
     user_persisted_early: bool = False
     save_skip: int = 0

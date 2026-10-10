@@ -98,7 +98,7 @@ class WebUITranscriptRecorder:
         media_paths: list[str] | None = None,
     ) -> None:
         # I due comandi che nel registro sono solo rumore: quel che hanno fatto
-        # lo dice gia' la riga che segue — «Stopped N task(s).» per il primo, il
+        # lo dice gia' la riga che segue — la risposta di `/stop` (anche `/stop all`), il
         # separatore di sessione per il secondo. `/new` ci e' entrato quando il
         # confine e' diventato il pavimento della cronologia visibile: la sua
         # riga utente sta nello **stesso** turno del confine (i turni si spezzano
@@ -106,7 +106,7 @@ class WebUITranscriptRecorder:
         # il pavimento — e la chat appena azzerata si riapriva con un `/new`
         # appeso in cima. Gli altri comandi restano: `/model fast` o
         # `/goal <cosa>` sono decisioni, e rileggerle serve.
-        if text.strip() in ("/stop", "/new") and not media_paths:
+        if text.strip() in ("/stop", "/stop all", "/new") and not media_paths:
             return
         payload = _build_user_transcript_event(
             chat_id,

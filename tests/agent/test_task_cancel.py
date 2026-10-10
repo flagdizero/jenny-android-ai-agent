@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from jenny.config.schema import AgentDefaults
+from jenny.runtime.user_text import say
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
@@ -54,7 +55,7 @@ class TestHandleStop:
         msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="/stop")
         ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/stop", loop=loop)
         out = await cmd_stop(ctx)
-        assert "No active task" in out.content
+        assert out.content == say("stop.none")
 
     @pytest.mark.asyncio
     async def test_stop_cancels_active_task(self):
@@ -81,7 +82,7 @@ class TestHandleStop:
         out = await cmd_stop(ctx)
 
         assert cancelled.is_set()
-        assert "stopped" in out.content.lower()
+        assert out.content == say("stop.done")
 
     @pytest.mark.asyncio
     async def test_stop_cancels_multiple_tasks(self):
@@ -108,7 +109,53 @@ class TestHandleStop:
         out = await cmd_stop(ctx)
 
         assert all(e.is_set() for e in events)
-        assert "2 task" in out.content
+        assert out.content == say("stop.done")
+
+    @pytest.mark.asyncio
+    async def test_plain_stop_spares_the_helpers_and_says_how_many_keep_going(self):
+        """``/stop`` ferma il turno ma non i subagent: ognuno ha la sua bolla."""
+        from jenny.bus.events import InboundMessage
+        from jenny.command.builtin import cmd_stop
+        from jenny.command.router import CommandContext
+
+        loop, bus = _make_loop()
+        loop.subagents.cancel_by_session = AsyncMock(return_value=2)
+        loop.subagents.get_running_count_by_session = MagicMock(return_value=2)
+
+        msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="/stop")
+        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/stop", loop=loop)
+        out = await cmd_stop(ctx)
+
+        loop.subagents.cancel_by_session.assert_not_awaited()
+        assert out.content == f"{say('stop.none')} {say('stop.helpers_running', count=2)}"
+        assert "/stop all" in out.content
+
+        loop.subagents.get_running_count_by_session = MagicMock(return_value=1)
+        out = await cmd_stop(ctx)
+        assert out.content.endswith(say("stop.helper_running"))
+
+    @pytest.mark.asyncio
+    async def test_stop_all_stops_the_helpers_too(self):
+        from jenny.bus.events import InboundMessage
+        from jenny.command.builtin import register_builtin_commands
+        from jenny.command.router import CommandContext, CommandRouter
+
+        loop, bus = _make_loop()
+        loop.subagents.cancel_by_session = AsyncMock(return_value=2)
+        loop.subagents.get_running_count_by_session = MagicMock(return_value=0)
+        router = CommandRouter()
+        register_builtin_commands(router)
+        assert router.is_priority("/stop all")
+
+        msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="/stop all")
+        ctx = CommandContext(
+            msg=msg, session=None, key=msg.session_key, raw="/stop all", loop=loop,
+        )
+        out = await router.dispatch_priority(ctx)
+
+        loop.subagents.cancel_by_session.assert_awaited_once()
+        assert out is not None
+        assert out.content == say("stop.done")
 
 
 class TestStopClearsStuckGoalState:
@@ -243,7 +290,7 @@ class TestStopClearsStuckGoalState:
         ctx = CommandContext(msg=msg, session=None, key=key, raw="/stop", loop=loop)
         out = await cmd_stop(ctx)
 
-        assert "No active task" in out.content
+        assert out.content == say("stop.none")
         assert GOAL_STATE_KEY not in loop.sessions.get_or_create(key).metadata
 
 
@@ -859,7 +906,7 @@ class TestStopAbandonsStuckTasks:
         out = await cmd_stop(ctx)
 
         try:
-            assert "1 task" in out.content
+            assert out.content == say("stop.done")
             roles = [m.get("role") for m in session.messages]
             assert roles == ["user", "assistant", "tool"]
             assert "runtime_checkpoint" not in session.metadata

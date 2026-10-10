@@ -60,15 +60,27 @@ class LoopTasksMixin:
         def _restore_runtime_checkpoint(self, session: Session) -> bool: ...
         def _runtime_events(self) -> RuntimeEventPublisher: ...
 
-    async def _cancel_active_tasks(self, key: str, *, grace_s: float = _CANCEL_GRACE_S) -> int:
+    async def _cancel_active_tasks(
+        self,
+        key: str,
+        *,
+        grace_s: float = _CANCEL_GRACE_S,
+        spare_subagents: bool = False,
+    ) -> int:
         """Cancella i task e i subagent attivi per *key*, senza mai bloccarsi.
+
+        ``spare_subagents=True`` (il ``/stop`` semplice) lascia lavorare i
+        subagent della sessione: si fermano dalla loro bolla o con ``/stop all``.
+        Il goal sostenuto si cancella comunque, perche' e' il turno stesso che
+        continua, non un aiutante.
 
         Bumpa l'epoch della sessione (ripudiando i turni in volo), cancella,
         attende al massimo ``grace_s`` e ABBANDONA i sopravvissuti: grazie al
         ripudio i loro effetti futuri vengono scartati, e la session lock viene
         ruotata così i turni successivi non si serializzano dietro lo zombie.
 
-        Ritorna il totale di task cancellati/abbandonati + subagent.
+        Ritorna il totale di task cancellati/abbandonati + subagent (zero
+        subagent quando li risparmia).
         """
         current = asyncio.current_task()
         tasks = [t for t in self._active_tasks.pop(key, []) if not t.done()]
@@ -118,7 +130,9 @@ class LoopTasksMixin:
                     abandoned, key, grace_s,
                 )
                 self._session_locks.rotate(key)
-        sub_cancelled = await self.subagents.cancel_by_session(key, grace_s=grace_s)
+        sub_cancelled = 0
+        if not spare_subagents:
+            sub_cancelled = await self.subagents.cancel_by_session(key, grace_s=grace_s)
         await self._cancel_active_goal_if_any(key)
         return cancelled + sub_cancelled
 

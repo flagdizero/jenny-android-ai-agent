@@ -1045,6 +1045,14 @@ async def update_agent_settings(query: QueryParams) -> dict[str, Any]:
     return settings_payload(requires_restart=restart.get("required", False))
 
 
+# Gli alias di ``_apply_agent_settings`` che non chiedono il riavvio e non
+# toccano il provider, perche' il loro valore non vive in memoria: chi lo usa lo
+# rilegge da ``config.json`` ogni volta. E' la terza via dell'invariante in
+# ``tests/webui/test_settings_alias_invariant.py``, che per ognuno di questi
+# prova anche la rilettura vera.
+LIVE_FROM_DISK_ALIASES: frozenset[str] = frozenset({"bot_name", "botName"})
+
+
 def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, bool]:
     """Applica le impostazioni agente a *config*; ritorna (modificato, richiede-riavvio).
 
@@ -1108,9 +1116,11 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         changed = True
         restart_required = True
 
+    # Niente riavvio: il nome lo rilegge da ``config.json`` chi lo usa, a ogni
+    # uso — il prompt d'identità a ogni turno, il titolo di ogni notifica
+    # (``runtime/user_text.current_bot_name``). V. ``LIVE_FROM_DISK_ALIASES``.
     if _apply_str(query, defaults, "bot_name", "bot_name", "botName"):
         changed = True
-        restart_required = True
 
     # ``required=False``: l'icona vuota è "nessuna icona", che è una scelta
     # legittima — a differenza del nome vuoto, che è un errore di battitura.

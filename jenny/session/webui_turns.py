@@ -185,7 +185,7 @@ class WebuiTurnCoordinator:
         text = (event.content or "").strip()
         # Un allegato senza didascalia e' un messaggio: la bolla e' l'immagine.
         # Col solo controllo sul testo, una foto muta non arrivava in chat.
-        if (not text and not event.media) or text == "/stop":
+        if (not text and not event.media) or text in ("/stop", "/stop all"):
             return
         channel, chat_id = target
         await self.bus.publish_outbound(

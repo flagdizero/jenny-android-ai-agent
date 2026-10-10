@@ -21,6 +21,8 @@ from loguru import logger
 
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
+from jenny.runtime.user_text import current_bot_name, say
+from jenny.utils.plain_text import plain_text
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _BRIDGE = BridgeCache("com.flagdizero.jenny.NotifierBridge")
@@ -61,36 +63,47 @@ async def _get_bridge(context: Any) -> Any:
 def alert_fields(content: str, metadata: dict[str, Any] | None) -> tuple[str, str, str]:
     """Deriva ``(title, body, tag)`` dell'alert dal messaggio outbound.
 
-    Il titolo viene dal metadata di sorgente proattiva già esistente
-    (``_webui_message_source``: cron/heartbeat); il tag coalizza gli alert
-    della stessa sorgente (stesso tag → il nuovo sostituisce il vecchio).
-    Funzione pura, testabile senza runtime Android.
+    Il titolo è il nome che l'utente ha dato all'agente (``bot_name``, di
+    default «Jenny») seguito dal tipo dell'avviso nella sua lingua
+    (``user_text``: «⏰ Promemoria», «Monitoraggio», «Aggiornamento»), e per un
+    cron dall'etichetta del job quando ne ha una — un nome per l'utente, mai
+    l'istruzione inglese che il job esegue (v. ``jenny/agent/tools/cron.py``).
+    Il tipo viene dal metadata di sorgente proattiva (``_webui_message_source``:
+    cron/heartbeat/update); il tag coalizza gli alert della stessa sorgente
+    (stesso tag → il nuovo sostituisce il vecchio).
+
+    Il corpo è testo semplice: il markdown della risposta (asterischi, URL dei
+    link, titoli) si toglie **prima** di troncare, così i 200 caratteri vanno a
+    quel che si legge.
     """
     source = (metadata or {}).get(WEBUI_MESSAGE_SOURCE_METADATA_KEY)
     kind = source.get("kind") if isinstance(source, dict) else None
     raw_label = source.get("label") if isinstance(source, dict) else None
     label = raw_label.strip() if isinstance(raw_label, str) and raw_label.strip() else None
 
+    bot = current_bot_name()
     if kind == "cron":
-        title = f"Jenny ⏰ {label}" if label else "Jenny ⏰ promemoria"
+        title = f"{bot} · {say('notify.reminder')}"
+        if label:
+            title = f"{title} · {label}"
         tag = f"cron:{label}" if label else "cron"
     elif kind == "heartbeat":
-        title = "Jenny · monitoraggio"
+        title = f"{bot} · {say('notify.monitor')}"
         tag = "heartbeat"
     elif kind == "update":
         # Tag dedicato: l'annuncio in chat e l'alert esplicito di un update
         # critico partono entrambi da qui e devono coalizzare, non sommarsi.
-        title = "Jenny · aggiornamento"
+        title = f"{bot} · {say('notify.update')}"
         tag = "update"
     else:
-        title = "Jenny"
+        title = bot
         tag = "message"
 
-    body = " ".join(content.split())
+    body = " ".join(plain_text(content).split())
     if len(body) > _BODY_MAX_CHARS:
         body = body[: _BODY_MAX_CHARS - 1] + "…"
     if not body:
-        body = "Nuovo messaggio"
+        body = say("notify.new_message")
     return title, body, tag
 
 

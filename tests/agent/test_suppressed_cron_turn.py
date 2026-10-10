@@ -32,9 +32,12 @@ from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_MONITOR_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import TURN_VISIBILITY_META, mark_silent_turn
-from jenny.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
+
+# In inglese esplicito: a livello di modulo la fixture della lingua non c'e' ancora.
+EMPTY_FINAL_RESPONSE_MESSAGE = say("turn.empty", "en")
 
 MONITOR_SESSION_KEY = "cron:job-m"
 

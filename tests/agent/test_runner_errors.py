@@ -78,7 +78,10 @@ async def test_llm_error_not_appended_to_session_messages():
     ))
 
     assert result.stop_reason == "error"
-    assert result.final_content == "429 rate limit exceeded"
+    # Senza status né ``error_kind`` il tipo è ``generic``: il testo grezzo resta
+    # in ``result.error`` (e nel log), all'utente va la frase.
+    assert result.error == "429 rate limit exceeded"
+    assert "429" not in (result.final_content or "")
     assistant_msgs = [m for m in result.messages if m.get("role") == "assistant"]
     assert all("429" not in (m.get("content") or "") for m in assistant_msgs), \
         "Error content should not appear in session messages"
@@ -122,27 +125,95 @@ async def test_llm_error_with_partial_content_persists_partial_and_marker():
     assert assistant_msgs[-1]["content"] != _PERSISTED_MODEL_ERROR_PLACEHOLDER
 
 
-@pytest.mark.asyncio
-async def test_llm_arrearage_error_surfaces_clear_message():
-    """Arrearage errors yield a clear user-facing message, not a raw dump (#3006)."""
-    from jenny.agent.runner import _ARREARAGE_ERROR_MESSAGE, AgentRunner
+async def _run_with_error(response: LLMResponse):
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
-    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
-        content="HTTP 402 insufficient_quota", finish_reason="error", error_status_code=402,
-    ))
+    provider.chat_with_retry = AsyncMock(return_value=response)
     tools = MagicMock()
     tools.get_definitions.return_value = []
-
-    runner = AgentRunner(provider)
-    result = await runner.run(make_spec(
+    return await AgentRunner(provider).run(make_spec(
         initial_messages=[{"role": "user", "content": "hello"}],
         tools=tools,
         max_iterations=5,
     ))
 
+
+@pytest.mark.asyncio
+async def test_llm_arrearage_error_surfaces_clear_message():
+    """Arrearage errors yield a clear user-facing message, not a raw dump (#3006)."""
+    from jenny.runtime.user_text import say
+
+    result = await _run_with_error(LLMResponse(
+        content="HTTP 402 insufficient_quota", finish_reason="error", error_status_code=402,
+    ))
+
     assert result.stop_reason == "error"
-    assert result.final_content == _ARREARAGE_ERROR_MESSAGE
+    assert result.error_kind == "credit"
+    assert result.final_content == say("error.credit")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response", "kind"),
+    [
+        (LLMResponse(
+            content="Error calling LLM: All connection attempts failed",
+            finish_reason="error", error_kind="connection",
+        ), "connection"),
+        (LLMResponse(
+            content="Error calling LLM: no output from the model within 90 seconds",
+            finish_reason="error", error_kind="timeout",
+        ), "timeout"),
+        (LLMResponse(
+            content='Error: {"error": "invalid api key"}', finish_reason="error",
+            error_status_code=401,
+        ), "auth"),
+        (LLMResponse(
+            content="Error: rate limited", finish_reason="error", error_status_code=429,
+        ), "rate_limit"),
+        (LLMResponse(
+            content="Error: upstream 503", finish_reason="error", error_status_code=503,
+        ), "server"),
+        (LLMResponse(content="Error: something odd", finish_reason="error"), "generic"),
+    ],
+)
+async def test_llm_error_shows_the_localized_message_and_logs_the_raw_one(response, kind):
+    """L'utente legge la frase del suo tipo d'errore; il testo grezzo del
+    provider resta in ``result.error`` (e nel log), e la cronologia del modello
+    tiene il segnaposto di sempre."""
+    from jenny.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+    from jenny.runtime.user_text import say
+
+    result = await _run_with_error(response)
+
+    assert result.stop_reason == "error"
+    assert result.error_kind == kind
+    assert result.final_content == say(f"error.{kind}")
+    assert result.error == response.content
+    assert "Error" not in result.final_content
+    assistant = [m for m in result.messages if m.get("role") == "assistant"]
+    assert assistant[-1]["content"] == _PERSISTED_MODEL_ERROR_PLACEHOLDER
+
+
+@pytest.mark.asyncio
+async def test_llm_error_message_follows_the_language(monkeypatch):
+    from jenny.runtime import user_text
+
+    monkeypatch.setattr(user_text, "current_language", lambda: "it")
+    result = await _run_with_error(LLMResponse(
+        content="Error calling LLM: All connection attempts failed",
+        finish_reason="error", error_kind="connection",
+    ))
+    assert result.final_content.startswith("Non riesco a raggiungere il modello.")
+    assert "Impostazioni → Chi risponde" in result.final_content
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_does_not_fail_has_no_error_kind():
+    result = await _run_with_error(LLMResponse(content="ciao", finish_reason="stop"))
+    assert result.stop_reason == "completed"
+    assert result.error_kind is None
 
 
 @pytest.mark.asyncio

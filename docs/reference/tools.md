@@ -342,7 +342,7 @@ Schedules reminders and recurring work. Actions: `add`, `list`, `remove`.
   - `every_seconds` — recurring interval.
   - `cron_expr` — a cron expression (`"0 9 * * *"`), optionally with an explicit `tz` (IANA name). `tz` is **only** accepted alongside `cron_expr` — passing it with `every_seconds` or `at` is an error.
   - `at` — a one-shot ISO datetime; the job auto-deletes itself after it fires.
-- `add` also takes an optional `name`, a short label for the job (it defaults to the first 30 characters of the `message`).
+- `add` also takes an optional `name`, a short human label for the job in the user's language: it is what the notification title shows. Without one the job has no name (lists fall back to the start of the `message`, the notification title never does).
 - Naive (timezone-less) `cron_expr`/`at` values fall back to the device's configured timezone.
 - `add` also takes an optional `mode`, which decides whether the job is allowed to stay quiet:
   - `reminder` (default) — the job **always** messages you when it fires. This is every job created before this option existed, and every job that omits `mode`.

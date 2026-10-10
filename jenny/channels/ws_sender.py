@@ -412,6 +412,13 @@ class OutboundSenderMixin:
             payload["work_id"] = work_id
             if msg.metadata.get(OUTBOUND_META_WORK_START):
                 payload["work_start"] = True
+        error = msg.metadata.get("error")
+        if isinstance(error, dict) and isinstance(error.get("kind"), str) and error["kind"]:
+            # Il turno è finito in un errore del provider (o in un'eccezione):
+            # il testo è già la frase per l'utente, ``kind`` dice alla WebUI di
+            # disegnarlo come errore. Solo ``kind``, nella forma esatta che il
+            # client legge, e persiste nel transcript come il resto del payload.
+            payload["error"] = {"kind": error["kind"]}
         if msg.metadata.get("_session_boundary"):
             # /new: il client rende un separatore al posto della bolla. Finisce
             # anche nel transcript persistito (payload è ciò che viene salvato),

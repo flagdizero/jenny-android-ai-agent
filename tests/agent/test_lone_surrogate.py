@@ -14,11 +14,12 @@ import json
 
 from jenny.bus.events import InboundMessage
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.manager import SessionManager, scrub_lone_surrogates
 from tests.support.agent import make_loop, make_provider
 
 KEY = "unified:default"
-GENERIC_ERROR = "Sorry, I encountered an error."
+GENERIC_ERROR = say("error.internal", "en")
 
 
 async def test_the_turns_after_a_lone_surrogate_still_work(tmp_path):

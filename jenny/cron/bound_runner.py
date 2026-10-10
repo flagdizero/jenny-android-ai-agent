@@ -30,6 +30,8 @@ from jenny.cron.types import (
     CronJobSilencedError,
     CronJobState,
     CronMonitorCouldNotCheckError,
+    job_display_name,
+    job_user_label,
 )
 from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
 from jenny.runtime.power import keep_awake
@@ -231,24 +233,25 @@ async def _run_bound_cron_job(
     channel, chat_id, metadata = _bound_session_delivery_context(
         job,
         turn_seed=f"cron:{job.id}",
-        source_label=job.name,
+        # Il titolo della notifica: solo un nome vero, mai l'istruzione del job.
+        source_label=job_user_label(job),
         monitor=monitor,
     )
     if monitor:
         metadata[CRON_MONITOR_META] = True
     metadata[CRON_TRIGGER_META] = {
         "job_id": job.id,
-        "job_name": job.name,
+        "job_name": job_display_name(job),
         "run_id": run_id,
         "prompt_ref": prompt_ref,
         "persist_content": (
-            f"Scheduled cron job triggered: {job.name}\n\n{job.payload.message}"
+            f"Scheduled cron job triggered: {job_display_name(job)}\n\n{job.payload.message}"
         ),
     }
     metadata[CRON_DEFER_UNTIL_IDLE_META] = True
     run_record_base: dict[str, Any] = {
         "job_id": job.id,
-        "job_name": job.name,
+        "job_name": job_display_name(job),
         "session_key": session_key,
         "prompt_ref": prompt_ref,
         "prompt_vars": {"message": job.payload.message},
@@ -304,7 +307,8 @@ async def _run_bound_cron_job(
                 said = ""
             said = said or outcome.final_text
         record_result(board_link, status="ok" if (outcome.spoke or not monitor) else "silent",
-                      text=said if (outcome.spoke or not monitor) else "", job_name=job.name)
+                      text=said if (outcome.spoke or not monitor) else "",
+                      job_name=job_display_name(job))
 
     if monitor:
         _prune_monitor_session(agent, turn_session_key)

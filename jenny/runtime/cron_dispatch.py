@@ -223,16 +223,18 @@ def _alert_gardener_stuck(name: str, failures: int, status: str) -> None:
     allarme che significa «questo progetto è fermo» è il comportamento voluto.
     """
     from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.user_text import say
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
+    # Nella lingua dell'utente, e con un posto dove guardare che sta
+    # nell'interfaccia: un comando da digitare non è una cosa che si fa dalla
+    # tendina delle notifiche.
     notify_delivery(
-        f"The gardener has failed {failures} passes in a row on '{name}' ({status}): "
-        f"its journal is not becoming pages. Open that project and send /gardener to see "
-        f"the error.",
+        say("alarm.gardener_stuck", failures=failures, name=name, status=status),
         {
             WEBUI_MESSAGE_SOURCE_METADATA_KEY: {
                 "kind": "cron",
-                "label": f"Gardener · {name}",
+                "label": say("alarm.gardener_label", name=name),
             }
         },
     )
@@ -907,9 +909,10 @@ class CronDispatcher:
             # turno ha davvero prodotto un messaggio. Stesso tag, quindi le due
             # notifiche si sostituiscono invece di sommarsi.
             from jenny.runtime.notifier import post_alert
+            from jenny.runtime.user_text import say
 
             await post_alert(
-                f"Aggiornamento critico {info.version_name} disponibile",
+                say("alarm.update_critical", version=info.version_name),
                 source_metadata,
             )
 

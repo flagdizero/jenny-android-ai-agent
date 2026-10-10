@@ -40,12 +40,13 @@ from jenny.agent.turn_epochs import TurnEpochs, TurnToken
 from jenny.agent.turn_persistence import FollowupState, TurnPersistenceMixin
 from jenny.agent.turn_states import StateHandlersMixin
 from jenny.agent.turn_types import (
-    StateTraceEntry as StateTraceEntry,
-)
-from jenny.agent.turn_types import (
+    AgentLoopRun,
     TurnContext,
     TurnOutcome,
     TurnState,
+)
+from jenny.agent.turn_types import (
+    StateTraceEntry as StateTraceEntry,
 )
 from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
@@ -63,6 +64,7 @@ from jenny.providers.base import LLMProvider
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
+from jenny.runtime.user_text import say
 from jenny.security.workspace_access import (
     WorkspaceScopeResolver,
     bind_workspace_scope,
@@ -1568,7 +1570,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 max_iterations=self.max_iterations,
                 max_tool_result_chars=self.max_tool_result_chars,
                 hook=hook,
-                error_message="Sorry, I encountered an error calling the AI model.",
                 concurrent_tools=True,
                 workspace=effective_scope.project_path,
                 session_key=session.key if session else None,
@@ -1630,10 +1631,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # dopo un rifiuto non transitorio del provider (modello senza
             # supporto vision) e ha ritentato solo testo: avvisa in chat invece
             # di lasciare che sembri che l'allegato sia stato ignorato.
-            notice = (
-                "\n\n⚠️ The attached images were not processed: "
-                "the active model does not support image input."
-            )
+            notice = "\n\n" + say("turn.images_dropped")
             result.final_content += notice
             if result.messages and result.messages[-1].get("role") == "assistant":
                 last = result.messages[-1]
@@ -1654,9 +1652,20 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             if on_stream and on_stream_end and should_stream:
                 await on_stream(result.final_content or "")
                 await on_stream_end(resuming=False)
-        elif result.stop_reason == "error":
-            logger.error("LLM returned error: {}", (result.final_content or "")[:200])
-        return result.final_content, result.tools_used, result.messages, result.stop_reason, result.had_injections
+        # ``getattr``: i runner finti dei test tornano oggetti senza questi campi.
+        error_kind = getattr(result, "error_kind", None)
+        if result.stop_reason == "error":
+            logger.error(
+                "LLM returned error ({}): {}",
+                error_kind, (getattr(result, "error", None) or "")[:200],
+            )
+        return AgentLoopRun(
+            (
+                result.final_content, result.tools_used, result.messages,
+                result.stop_reason, result.had_injections,
+            ),
+            error_kind=error_kind,
+        )
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -1969,13 +1978,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     if self._turn_epochs.is_current(turn_token):
                         # Un turno silenzioso non consegna nemmeno i propri
                         # errori: l'utente non ha chiesto questo lavoro e una
-                        # bolla "Sorry, I encountered an error." in chat sarebbe
+                        # bolla d'errore (``error.internal``) in chat sarebbe
                         # rumore per un fallimento che appartiene alla run record
                         # del job. L'eccezione risale comunque al chiamante.
                         if not self._is_silent_turn(msg, session_key):
                             await self.bus.publish_outbound(OutboundMessage(
                                 channel=msg.channel, chat_id=msg.chat_id,
-                                content="Sorry, I encountered an error.",
+                                content=say("error.internal"),
+                                metadata={"error": {"kind": "generic"}},
                             ))
                         if not turn_continuation.internal_continuation_pending(msg.metadata):
                             await self._runtime_events().turn_completed(
@@ -2449,8 +2459,15 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         on_stream: Callable[[str], Awaitable[None]] | None,
         *,
         turn_latency_ms: int | None = None,
+        error_kind: str | None = None,
     ) -> OutboundMessage | None:
-        """Assemble the final outbound message from turn results."""
+        """Assemble the final outbound message from turn results.
+
+        *error_kind* (un turno finito in errore del provider) diventa
+        ``metadata["error"] = {"kind": ...}``: il canale WebSocket lo porta nel
+        payload e nel transcript, e la WebUI ne fa una bolla d'errore invece di
+        una risposta qualunque.
+        """
         # MessageTool suppression
         tool_spoke = self._message_tool_spoke()
         if tool_spoke:
@@ -2471,6 +2488,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             meta["_streamed"] = True
         if turn_latency_ms is not None:
             meta["latency_ms"] = int(turn_latency_ms)
+        if stop_reason == "error" and error_kind:
+            meta["error"] = {"kind": error_kind}
 
         return OutboundMessage(
             channel=msg.channel,

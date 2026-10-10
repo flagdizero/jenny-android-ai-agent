@@ -101,3 +101,27 @@ async def test_the_announcement_says_it_is_one() -> None:
     assert frame["work_start"] is True
     persisted = channel._transcripts.prepare_and_append.call_args.args[1]
     assert persisted["work_start"] is True
+
+
+async def test_a_turn_that_ended_in_an_error_says_so_on_the_wire_and_on_disk() -> None:
+    """Il contratto con la WebUI: ``"error": {"kind": "<tipo>"}`` nel frame e nel
+    transcript, solo ``kind``, e niente chiave se i metadata non la portano."""
+    channel = _channel()
+    conn = _subscribed_conn(channel, "default")
+    text = "I can't reach the model."
+    channel._media.localize_remote_media = AsyncMock(return_value=(text, []))
+    channel._media.rewrite_local_markdown_images = MagicMock(return_value=text)
+
+    await channel.send(OutboundMessage(
+        channel="websocket", chat_id="default", content=text,
+        metadata={"error": {"kind": "connection", "raw": "Error calling LLM: boom"}},
+    ))
+
+    frame = json.loads(conn.send.await_args.args[0])
+    assert frame["event"] == "message"
+    assert frame["error"] == {"kind": "connection"}
+    persisted = channel._transcripts.prepare_and_append.call_args.args[1]
+    assert persisted["error"] == {"kind": "connection"}
+
+    await channel.send(OutboundMessage(channel="websocket", chat_id="default", content=text))
+    assert "error" not in json.loads(conn.send.await_args.args[0])

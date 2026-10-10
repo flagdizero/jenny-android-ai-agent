@@ -21,10 +21,10 @@ from jenny.agent.tools.nothing_to_report import NothingToReportTool
 from jenny.agent.turn_types import TurnState
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
+from jenny.runtime.user_text import say
 from jenny.session import turn_continuation
 from jenny.session.goal_state import note_goal_turn
 from jenny.utils.document import extract_documents, prepare_attachments
-from jenny.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     import asyncio
@@ -75,6 +75,7 @@ class StateHandlersMixin:
             on_stream: Callable[[str], Awaitable[None]] | None,
             *,
             turn_latency_ms: int | None = None,
+            error_kind: str | None = None,
         ) -> OutboundMessage | None: ...
         def _message_tool_spoke(self, tools: ToolRegistry | None = None) -> bool: ...
         async def _build_bus_progress_callback(
@@ -400,6 +401,7 @@ class StateHandlersMixin:
         ctx.all_messages = all_msgs
         ctx.stop_reason = stop_reason
         ctx.had_injections = had_injections
+        ctx.error_kind = getattr(result, "error_kind", None)
         # Re-sync app tools after execution: tools may have created/deleted
         # apps (e.g. python_exec + shutil.rmtree) during this turn.
         await self._sync_apps_and_notify()
@@ -413,7 +415,7 @@ class StateHandlersMixin:
             (ctx.final_content is None or not ctx.final_content.strip())
             and not ctx.suppress_response
         ):
-            ctx.final_content = EMPTY_FINAL_RESPONSE_MESSAGE
+            ctx.final_content = say("turn.empty")
 
         latency_started_at = (
             ctx.visible_run_started_at
@@ -453,6 +455,7 @@ class StateHandlersMixin:
             ctx.had_injections,
             ctx.on_stream,
             turn_latency_ms=ctx.turn_latency_ms,
+            error_kind=ctx.error_kind if ctx.stop_reason == "error" else None,
         )
         if ctx.ephemeral and ctx.outbound is not None:
             ctx.outbound.metadata["_stop_reason"] = ctx.stop_reason

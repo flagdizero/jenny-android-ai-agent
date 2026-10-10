@@ -38,7 +38,7 @@ from loguru import logger
 from jenny.cron.heartbeat_tasks import parse_heartbeat_tasks
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import next_run_on_resume
-from jenny.cron.types import CronJob
+from jenny.cron.types import CronJob, job_display_name
 from jenny.utils.clock import now_ms as _now_ms
 
 # Quanto testo di un promemoria entra nell'elenco. Il resto arriva col dettaglio:
@@ -239,7 +239,9 @@ def _job_payload(
     message = job.payload.message or ""
     return {
         "id": job.id,
-        "name": job.name,
+        # Mai vuoto per il pannello: un job senza nome mostra l'inizio del
+        # messaggio, come quando quel ripiego stava nel nome stesso.
+        "name": job_display_name(job),
         "kind": kind,
         "purpose": system_job_purpose(job.id) if kind == "system" else None,
         "protected": kind == "system",

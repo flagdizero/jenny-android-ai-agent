@@ -34,7 +34,7 @@ Tapping the identity row opens a "Session Info" popover with details such as the
 
 ### There is no stop button in the Console
 
-The Console has no dedicated stop/cancel button (in the home, the send button turns into **Stop** while a turn runs and sends `/stop` for you). To interrupt a turn that is in progress here, pick **`/stop`** from the Commands chip, or send it as a chat message. `/stop` is processed with priority even while the agent is mid-turn — it doesn't wait in line behind whatever the model is doing — and it always ends the turn cleanly (you'll see something like "Stopped 1 task(s)." or "No active task to stop."). See [Slash commands](slash-commands.md) for the rest of the command list.
+The Console has no dedicated stop/cancel button (in the home, the send button turns into **Stop** while a turn runs and sends `/stop` for you). To interrupt a turn that is in progress here, pick **`/stop`** from the Commands chip, or send it as a chat message. `/stop` is processed with priority even while the agent is mid-turn — it doesn't wait in line behind whatever the model is doing — and it always ends the turn cleanly (you'll see a short reply saying it stopped, or that there was nothing to stop). Helpers already working in the background keep going — stop them from their own bubbles, or with `/stop all`. See [Slash commands](slash-commands.md) for the rest of the command list.
 
 ## Anatomy of a response
 

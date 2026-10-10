@@ -120,7 +120,11 @@ connection that sent a turn rather than every client of the chat.
 with `kind` `image`/`video`/`file`) are present only when the reply has attachments;
 `media_urls` leaves out a path the gateway could not sign. Other optional fields: `origin` (the
 channel the turn came from, e.g. `"telegram"`), `latency_ms`, `tool_events`, `agent_ui`,
-`session_boundary: true` (after `/new`: the client draws a separator instead of a bubble) and
+`session_boundary: true` (after `/new`: the client draws a separator instead of a bubble),
+`error: {"kind": "<kind>"}` (the turn ended in a model error; `text` is already the message for
+the user, in the agent's language, saying what to do — `kind` is one of `connection`, `timeout`,
+`auth`, `rate_limit`, `server`, `credit`, `generic`; it is persisted in the transcript and comes
+back as `error` on the replayed message) and
 `kind` — `"tool_hint"` or `"progress"` for an interim activity line rather than an answer.
 
 **`user`** — a user message that entered from another channel (e.g. Telegram), echoed to the

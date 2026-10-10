@@ -85,6 +85,46 @@ def describe_project(*, wikis_dir: Path, workspace: Path, name: str) -> dict[str
     }
 
 
+def remove_notebook_crons(cron: Any, name: str) -> list[str]:
+    """Toglie i cron legati alle schede del quaderno *name*; ritorna gli id tolti.
+
+    Un cron chiesto nella chat di un quaderno porta ``payload.board =
+    {notebook, card, section}`` (``jenny/board/cron_link.py``). Cancellato il
+    quaderno restava nello store, e a ogni giro falliva con «notebook gone»
+    (``cron/bound_runner.py``) — per sempre, perche' nessuno poteva piu' aprire il
+    cassetto da cui si toglieva. Anche quelli in pausa (le schede nel cestino):
+    il cestino se ne va col quaderno.
+
+    **Sul loop, non nel thread della cancellazione**: il servizio cron riarma il
+    suo timer con l'event loop corrente, e da un thread di lavoro solleva «no
+    running event loop» (lo stesso motivo per cui ``board/edit.py`` mette in
+    pausa i cron delle schede sul loop). Un job che non si toglie non fa
+    fallire niente: il quaderno e' gia' cancellato, e il job si toglie a mano.
+    """
+    if cron is None:
+        return []
+    removed: list[str] = []
+    try:
+        jobs = cron.list_jobs(include_disabled=True)
+    except Exception:  # noqa: BLE001 — uno store illeggibile non ferma la cancellazione
+        logger.opt(exception=True).warning("Cron jobs of notebook {} not listed", name)
+        return []
+    for job in jobs:
+        link = getattr(job.payload, "board", None) or {}
+        if link.get("notebook") != name:
+            continue
+        try:
+            if cron.remove_job(job.id) == "removed":
+                removed.append(job.id)
+        except Exception:  # noqa: BLE001 — si prova il prossimo
+            logger.opt(exception=True).warning(
+                "Cron job {} of notebook {} not removed", job.id, name,
+            )
+    if removed:
+        logger.info("Removed {} cron job(s) of deleted notebook {}", len(removed), name)
+    return removed
+
+
 def delete_project(
     *,
     wikis_dir: Path,

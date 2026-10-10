@@ -45,19 +45,47 @@ def _moved_to_settings(command: str, section: str, still: str) -> str:
 
 
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
-    """Cancel all active tasks and subagents for the session."""
+    """Ferma il turno in corso; gli aiutanti in background continuano.
+
+    ``/stop`` ferma quel che Jenny sta facendo adesso nella chat (e il goal
+    sostenuto, se c'e'), ma **non** i subagent lanciati prima: sono lavori che
+    l'utente vede ciascuno nella propria bolla, e da li' li ferma uno per uno.
+    Fino al 10/10/2026 li cancellava tutti, e un «basta» detto alla risposta
+    corrente buttava via anche un lavoro lungo che non c'entrava. ``/stop all``
+    (:func:`cmd_stop_all`) e' la forma di prima: ferma tutto.
+    """
+    return await _stop(ctx, spare_subagents=True)
+
+
+async def cmd_stop_all(ctx: CommandContext) -> OutboundMessage:
+    """Ferma tutto: il turno, il goal e ogni aiutante della sessione."""
+    return await _stop(ctx, spare_subagents=False)
+
+
+async def _stop(ctx: CommandContext, *, spare_subagents: bool) -> OutboundMessage:
+    from jenny.runtime.user_text import say
+
     loop = ctx.loop
     msg = ctx.msg
-    total = await loop._cancel_active_tasks(ctx.key)
+    total = await loop._cancel_active_tasks(ctx.key, spare_subagents=spare_subagents)
     if total:
         # Il turno ripudiato salta il proprio restore/turn_end: li emette /stop,
         # in modo deterministico (la UI riceve sempre turn_end) — ma **dopo** la
         # propria risposta (v. `CommandContext.after_reply`).
         loop._restore_cancelled_turn(ctx.key)
         ctx.after_reply.append(lambda: loop._emit_stop_turn_end(msg, ctx.key))
-    content = f"Stopped {total} task(s)." if total else "No active task to stop."
+    parts = [say("stop.done" if total else "stop.none")]
+    if spare_subagents:
+        helpers = 0
+        with suppress(Exception):
+            counted = loop.subagents.get_running_count_by_session(ctx.key)
+            helpers = counted if isinstance(counted, int) else 0
+        if helpers == 1:
+            parts.append(say("stop.helper_running"))
+        elif helpers > 1:
+            parts.append(say("stop.helpers_running", count=helpers))
     return OutboundMessage(
-        channel=msg.channel, chat_id=msg.chat_id, content=content,
+        channel=msg.channel, chat_id=msg.chat_id, content=" ".join(parts),
         metadata=dict(msg.metadata or {})
     )
 
@@ -1069,6 +1097,7 @@ def register_builtin_commands(router: CommandRouter) -> None:
     # comandi, quindi non c'e' finestra in cui accetti senza controllare.
     router.availability = _scope_refusal
     router.priority("/stop", cmd_stop)
+    router.priority("/stop all", cmd_stop_all)
     router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)
     router.exact("/model", cmd_model)

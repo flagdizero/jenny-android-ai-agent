@@ -106,6 +106,8 @@ def last_message_text(session: Any) -> str:
 
 def job_snapshot(job: Any) -> dict[str, Any]:
     """Quel che il cassetto mostra di un job: nome, quando, prossimo giro, stato."""
+    from jenny.cron.types import job_display_name
+
     sched = job.schedule
     # La forma dello ``schedule`` dell'officina (``webui/cron_api._schedule_payload``):
     # il cassetto lo racconta con lo stesso ``describeSchedule``.
@@ -118,7 +120,8 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         when["at_ms"] = sched.at_ms
     return {
         "id": job.id,
-        "name": job.name,
+        # Mai vuoto per il cassetto (v. ``cron.types.job_display_name``).
+        "name": job_display_name(job),
         "message": (job.payload.message or "")[:300],
         "mode": job.payload.mode,
         "schedule": when,

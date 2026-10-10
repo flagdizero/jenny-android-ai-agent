@@ -28,6 +28,7 @@ from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import silent_turn_metadata
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
@@ -161,7 +162,7 @@ class TestTheErrorBranchRespectsTheContract:
         await self._dispatch_failing(loop, msg)
 
         contents = [m.content for m in await _drain(loop)]
-        assert "Sorry, I encountered an error." not in contents
+        assert say("error.internal") not in contents
 
     async def test_a_user_turn_still_gets_told_something_broke(
         self, tmp_path: Path
@@ -178,7 +179,7 @@ class TestTheErrorBranchRespectsTheContract:
         await self._dispatch_failing(loop, msg)
 
         contents = [m.content for m in await _drain(loop)]
-        assert "Sorry, I encountered an error." in contents
+        assert say("error.internal") in contents
 
 
 class TestSilentTurnsDoNotStream:

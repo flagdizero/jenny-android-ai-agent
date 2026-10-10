@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from jenny.runtime import notifier
+import pytest
+
+from jenny.runtime import notifier, user_text
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 
@@ -31,33 +33,40 @@ def _meta(kind: str, label: str | None = None) -> dict[str, Any]:
     return {WEBUI_MESSAGE_SOURCE_METADATA_KEY: source}
 
 
+@pytest.fixture(autouse=True)
+def _italian_jenny(monkeypatch):
+    """Lingua e nome fissati: i titoli dipendono da ``config.json``, e qui no."""
+    monkeypatch.setattr(user_text, "current_language", lambda: "it")
+    monkeypatch.setattr(notifier, "current_bot_name", lambda: "Jenny")
+
+
 class TestAlertFields:
     def test_cron_with_label(self):
         title, body, tag = notifier.alert_fields("ricordati il pane", _meta("cron", "spesa"))
-        assert title == "Jenny ⏰ spesa"
+        assert title == "Jenny · ⏰ Promemoria · spesa"
         assert tag == "cron:spesa"
         assert body == "ricordati il pane"
 
     def test_cron_without_label(self):
         title, _, tag = notifier.alert_fields("ping", _meta("cron"))
-        assert title == "Jenny ⏰ promemoria"
+        assert title == "Jenny · ⏰ Promemoria"
         assert tag == "cron"
 
     def test_cron_blank_label_falls_back(self):
         title, _, tag = notifier.alert_fields("ping", _meta("cron", "   "))
-        assert title == "Jenny ⏰ promemoria"
+        assert title == "Jenny · ⏰ Promemoria"
         assert tag == "cron"
 
     def test_heartbeat(self):
         title, _, tag = notifier.alert_fields("evento X accaduto", _meta("heartbeat"))
-        assert title == "Jenny · monitoraggio"
+        assert title == "Jenny · Monitoraggio"
         assert tag == "heartbeat"
 
     def test_update(self):
         # Tag dedicato: l'annuncio in chat e l'alert esplicito di un update
         # critico coalizzano invece di suonare due volte.
         title, _, tag = notifier.alert_fields("nuova versione 0.7.0", _meta("update"))
-        assert title == "Jenny · aggiornamento"
+        assert title == "Jenny · Aggiornamento"
         assert tag == "update"
 
     def test_plain_message_defaults(self):
@@ -84,6 +93,24 @@ class TestAlertFields:
         _, body, _ = notifier.alert_fields("   \n  ", None)
         assert body == "Nuovo messaggio"
 
+    def test_english_titles_follow_the_language(self, monkeypatch):
+        monkeypatch.setattr(user_text, "current_language", lambda: "en")
+        assert notifier.alert_fields("x", _meta("cron"))[0] == "Jenny · ⏰ Reminder"
+        assert notifier.alert_fields("x", _meta("heartbeat"))[0] == "Jenny · Monitoring"
+        assert notifier.alert_fields("x", _meta("update"))[0] == "Jenny · Update"
+        assert notifier.alert_fields("   ", None)[1] == "New message"
+
+    def test_title_uses_the_configured_bot_name(self, monkeypatch):
+        monkeypatch.setattr(notifier, "current_bot_name", lambda: "Ada")
+        assert notifier.alert_fields("x", _meta("cron", "pane"))[0] == "Ada · ⏰ Promemoria · pane"
+        assert notifier.alert_fields("x", None)[0] == "Ada"
+
+    def test_body_is_plain_text_before_truncation(self):
+        """Il markdown si toglie prima di tagliare: i 200 caratteri vanno al testo."""
+        md = "## Fatto\n\n**Pronto!** Vedi [il file](https://example.com/" + "a" * 300 + ")"
+        _, body, _ = notifier.alert_fields(md, None)
+        assert body == "Fatto Pronto! Vedi il file"
+
 
 class TestPostAlert:
     async def test_noop_without_android_context(self, monkeypatch):
@@ -100,7 +127,7 @@ class TestPostAlert:
         monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
         ok = await notifier.post_alert("ricordati il pane", _meta("cron", "spesa"))
         assert ok is True
-        assert bridge.calls == [("Jenny ⏰ spesa", "ricordati il pane", "cron:spesa")]
+        assert bridge.calls == [("Jenny · ⏰ Promemoria · spesa", "ricordati il pane", "cron:spesa")]
 
     async def test_thread_overrides_the_tag_and_leaves_the_title(self, monkeypatch):
         """Il canale della tendina passa un thread unico.
@@ -118,7 +145,7 @@ class TestPostAlert:
 
         monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
         await notifier.post_alert("ecco", _meta("cron", "spesa"), thread="chat")
-        assert bridge.calls == [("Jenny ⏰ spesa", "ecco", "chat")]
+        assert bridge.calls == [("Jenny · ⏰ Promemoria · spesa", "ecco", "chat")]
 
     async def test_without_thread_nothing_changes(self, monkeypatch):
         """Gli avvisi proattivi tengono i loro tag distinti."""
@@ -159,5 +186,5 @@ class TestNotifyDelivery:
         notifier.notify_delivery("evento X", _meta("heartbeat"))
         assert notifier._TASKS
         await asyncio.gather(*notifier._TASKS)
-        assert bridge.calls == [("Jenny · monitoraggio", "evento X", "heartbeat")]
+        assert bridge.calls == [("Jenny · Monitoraggio", "evento X", "heartbeat")]
         assert not notifier._TASKS

@@ -217,3 +217,53 @@ def test_both_modes_pass_schema_validation(mode: str) -> None:
     )
 
     assert err is None
+
+
+class TestTheJobName:
+    """Il nome del job e' il titolo della notifica: un'etichetta umana o niente."""
+
+    async def test_a_nameless_job_stays_nameless(self) -> None:
+        """Fino al 10/10/2026 il ripiego era ``message[:30]`` — l'istruzione
+        inglese per l'agente, finita nel titolo («Remind the user to water the p»)."""
+        service = _RecordingCronService()
+        out = await _tool(service).execute(
+            action="add", message="Remind the user to water the plants", every_seconds=3600,
+        )
+        assert service.added[0]["name"] == ""
+        assert out == "Created job (id: job-1)"
+
+    async def test_a_given_name_is_kept(self) -> None:
+        service = _RecordingCronService()
+        out = await _tool(service).execute(
+            action="add", name=" Annaffiare ", message="Remind the user", every_seconds=3600,
+        )
+        assert service.added[0]["name"] == "Annaffiare"
+        assert out == "Created job 'Annaffiare' (id: job-1)"
+
+    def test_the_schema_asks_for_a_human_label_in_the_user_language(self) -> None:
+        description = _tool(_RecordingCronService()).parameters["properties"]["name"]["description"]
+        assert "user's language" in description
+        assert "first 30" not in description
+
+    async def test_the_list_still_shows_something_for_a_nameless_job(self) -> None:
+        job = CronJob(
+            id="j1", name="",
+            schedule=CronSchedule(kind="every", every_ms=3_600_000),
+            payload=CronPayload(kind="agent_turn", message="check the weather"),
+        )
+        out = await _tool(_RecordingCronService([job])).execute(action="list")
+        assert "- check the weather (id: j1" in out
+
+
+def test_job_user_label_and_display_name() -> None:
+    from jenny.cron.types import job_display_name, job_user_label
+
+    def job(name: str, message: str = "Remind the user to water the plants") -> CronJob:
+        return CronJob(id="j", name=name, payload=CronPayload(message=message))
+
+    assert job_user_label(job("Annaffiare")) == "Annaffiare"
+    assert job_user_label(job("")) is None
+    assert job_user_label(job("Remind the user to water the p")) is None
+    assert job_display_name(job("")) == "Remind the user to water the p"
+    assert job_display_name(job("Annaffiare")) == "Annaffiare"
+    assert job_display_name(job("", message="")) == "j"

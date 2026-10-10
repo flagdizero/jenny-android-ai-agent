@@ -12,6 +12,7 @@ from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_HISTORY_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.goal_state import GOAL_STATE_KEY
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
@@ -969,12 +970,12 @@ async def test_process_direct_appends_notice_when_images_stripped(tmp_path: Path
     assert result is not None
     assert result.content is not None
     assert result.content.startswith("Ecco la risposta")
-    assert "does not support image input" in result.content
+    assert say("turn.images_dropped") in result.content
 
     session = loop.sessions.get_or_create("websocket:vision-test")
     assistant_messages = [m["content"] for m in session.messages if m["role"] == "assistant"]
     assert assistant_messages
-    assert "does not support image input" in assistant_messages[-1]
+    assert say("turn.images_dropped") in assistant_messages[-1]
 
 
 @pytest.mark.asyncio
@@ -1121,7 +1122,7 @@ async def test_stop_preserves_runtime_checkpoint_for_next_turn(tmp_path: Path) -
     stop_ctx = CommandContext(msg=stop_msg, session=None, key=stop_msg.session_key, raw="/stop", loop=loop)
     stop_result = await cmd_stop(stop_ctx)
 
-    assert "Stopped 1 task" in stop_result.content
+    assert stop_result.content == say("stop.done")
     assert task.done()
 
     loop.sessions.invalidate(UNIFIED_SESSION_KEY)

@@ -640,6 +640,11 @@ def replay_transcript_to_ui_messages(
             extra["workId"] = work_id
             if rec.get("work_start"):
                 extra["workStart"] = True
+        error = rec.get("error")
+        if isinstance(error, dict) and isinstance(error.get("kind"), str) and error["kind"]:
+            # La bolla d'errore resta tale anche riaprendo la chat: stessa
+            # chiave e stessa forma del payload dal vivo (``ws_sender``).
+            extra["error"] = {"kind": error["kind"]}
         extra.update(_turn_fields(rec, "answer"))
         absorb_complete(extra, idx)
         if media:

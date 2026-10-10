@@ -11,6 +11,7 @@ import pytest
 from support.runner import empty_tools, make_spec
 
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from jenny.runtime.user_text import say
 
 
 @pytest.mark.asyncio
@@ -85,12 +86,14 @@ async def test_runner_returns_max_iterations_fallback():
     ))
 
     assert result.stop_reason == "max_iterations"
-    assert result.final_content == (
+    # L'utente legge la frase nella sua lingua; la cronologia del modello tiene
+    # il testo inglese del template.
+    assert result.final_content == say("turn.max_iterations", max_iterations=2)
+    assert result.messages[-1]["role"] == "assistant"
+    assert result.messages[-1]["content"] == (
         "I reached the maximum number of tool call iterations (2) "
         "without completing the task. You can try breaking the task into smaller steps."
     )
-    assert result.messages[-1]["role"] == "assistant"
-    assert result.messages[-1]["content"] == result.final_content
     assert provider.chat_with_retry.await_count == 3
     assert provider.chat_with_retry.await_args_list[-1].kwargs["tools"] is None
     assert tools.execute.await_count == 2
@@ -168,7 +171,9 @@ async def test_runner_times_out_hung_llm_request():
 
     assert (time.monotonic() - started) < 1.0
     assert result.stop_reason == "error"
-    assert "timed out" in (result.final_content or "").lower()
+    assert result.error_kind == "timeout"
+    assert result.final_content == say("error.timeout")
+    assert "timed out" in (result.error or "").lower()
 
 
 @pytest.mark.asyncio
@@ -317,7 +322,9 @@ async def test_runner_uses_specific_message_after_empty_finalization_retry():
         max_iterations=3,
     ))
 
-    assert result.final_content == EMPTY_FINAL_RESPONSE_MESSAGE
+    # All'utente la frase nella sua lingua; la cronologia tiene l'inglese di sempre.
+    assert result.final_content == say("turn.empty")
+    assert result.messages[-1]["content"] == EMPTY_FINAL_RESPONSE_MESSAGE
     assert result.stop_reason == "empty_final_response"
 
 

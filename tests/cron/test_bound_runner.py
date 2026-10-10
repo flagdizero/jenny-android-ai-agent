@@ -295,6 +295,33 @@ class TestRunBoundCronJobSuccess:
             "label": job.name,
         }
 
+    @pytest.mark.parametrize(
+        "name",
+        ["", "controlla la pioggia", "Remind the user to water the p"],
+    )
+    async def test_a_job_without_a_real_name_gives_the_notification_no_label(
+        self, name: str
+    ) -> None:
+        """Il titolo della notifica non riceve mai l'istruzione del job.
+
+        Un job senza nome, o col ripiego di una volta (``message[:30]``, che sui
+        job gia' nello store e' ancora li'), non ha etichetta: il titolo resta
+        «⏰ Promemoria». Il resto — il nome nel prompt e nel cassetto — continua
+        a mostrare l'inizio del messaggio, com'era.
+        """
+        message = (
+            "Remind the user to water the plants on the balcony"
+            if name.startswith("Remind") else "controlla la pioggia"
+        )
+        job = _bound_job(origin_channel="websocket", name=name, message=message)
+        agent = _FakeAgent()
+
+        await run_bound_cron_job(job, agent=agent, cron=_FakeCronRecorder())
+
+        metadata = agent.received[0].metadata
+        assert metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {"kind": "cron"}
+        assert metadata[CRON_TRIGGER_META]["job_name"] == message[:30].strip()
+
     async def test_non_websocket_channel_has_no_webui_metadata(self) -> None:
         job = _bound_job(origin_channel="other-channel")
         agent = _FakeAgent()

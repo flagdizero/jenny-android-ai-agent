@@ -969,7 +969,11 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     la WebView usa per le operazioni che cambiano il disco.
     """
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_delete import ProjectDeleteError, delete_project
+    from jenny.webui.project_delete import (
+        ProjectDeleteError,
+        delete_project,
+        remove_notebook_crons,
+    )
 
     name = _require_str(params, "name").strip()
     if not is_valid_project_name(name):
@@ -999,6 +1003,11 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", str(exc)) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
+    # I cron delle sue schede se ne vanno con lui: restando, fallirebbero a ogni
+    # giro con «notebook gone». Sul loop e dopo la cancellazione riuscita, come
+    # la pagina qui sotto (il perche' del loop sta in ``remove_notebook_crons``).
+    get_cron = getattr(ctx, "get_cron_service", None)
+    outcome["removed_crons"] = remove_notebook_crons(get_cron() if get_cron else None, name)
     # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
     # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
     # cancellato: la pagina verso il nulla la toglie l'utente.

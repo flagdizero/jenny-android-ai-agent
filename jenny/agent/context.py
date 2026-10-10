@@ -17,6 +17,7 @@ from jenny.agent.memory import (
 )
 from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
+from jenny.runtime.user_text import current_bot_name
 from jenny.session.goal_state import goal_state_runtime_lines
 from jenny.session.keys import is_project_session_key
 from jenny.utils.android_assets import (
@@ -1095,6 +1096,10 @@ class ContextBuilder:
         root = workspace or self.workspace
         workspace_path = str(_absolute_workspace(root))
         runtime = f"Android, Python {platform.python_version()}"
+        # Il nome che l'utente le ha dato (``agents.defaults.bot_name``), riletto
+        # a ogni prompt: lo si cambia da Impostazioni e vale dal turno dopo, senza
+        # riavvio. Col nome di default il template non aggiunge niente, e il
+        # prompt resta byte-identico a prima.
 
         has = has or (lambda _name: True)
         return render_template(
@@ -1107,6 +1112,7 @@ class ContextBuilder:
             channel=channel or "",
             orchestrator=self.orchestrator if orchestrating is None else orchestrating,
             installation_files=not is_gardener_session_key(session_key),
+            bot_name=current_bot_name(),
         )
 
     @staticmethod

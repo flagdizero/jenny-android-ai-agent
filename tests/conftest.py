@@ -48,6 +48,20 @@ _MODULE_REGISTRIES: tuple[tuple[str, str], ...] = (
 
 
 @pytest.fixture(autouse=True)
+def _user_text_in_english(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le frasi per l'utente (``jenny.runtime.user_text``) in inglese, sempre.
+
+    La lingua si legge da ``config.json`` a ogni frase, e il workspace della
+    suite è condiviso: senza questo un test che scrive la config cambierebbe la
+    lingua di quelli dopo. Chi prova un'altra lingua la passa a ``say`` o
+    rifà questo patch; la lettura vera la prova ``tests/runtime/test_user_text.py``.
+    """
+    from jenny.runtime import user_text
+
+    monkeypatch.setattr(user_text, "current_language", lambda: "en")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_process_state() -> Generator[None, None, None]:
     """Ogni prova ritrova lo stato di processo come l'ha trovato la precedente.
 
