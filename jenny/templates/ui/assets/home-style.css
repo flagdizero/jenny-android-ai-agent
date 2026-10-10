@@ -1075,6 +1075,9 @@ body.home {
    quanto un dito. */
 .home-retry {
   display: inline-flex;
+  /* La bolla e' una colonna flex: senza, il bottone si allargava a tutta
+     la riga (visto sull'emulatore). */
+  align-self: flex-start;
   align-items: center;
   gap: 6px;
   min-height: 40px;
@@ -3655,6 +3658,19 @@ body.home {
 }
 #launcher-sheet .launcher-row:active,
 #launcher-sheet .launcher-tile:active { background: var(--overlay-strong); }
+/* Il ⋯ della riga (`mobile-style.css`), nella griglia della casa: nell'angolo
+   in alto a destra della cella, discreto, non sotto di lei — in colonna finiva
+   sopra l'icona della cella successiva (visto sull'emulatore, 10/10/2026). */
+#launcher-sheet .launcher-row-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  opacity: .7;
+}
 
 /* La selezione di ⏎. Nella griglia si vede solo quando serve: dopo una
    freccia o la rotella (`kbd-nav`, v. `_moveSelection`) o mentre si cerca —
