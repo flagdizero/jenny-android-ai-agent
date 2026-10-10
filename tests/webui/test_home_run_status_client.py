@@ -49,6 +49,8 @@ class App {
   __READ_ACTIVITY__
   __FRAME_IS_HERE__
   __SET_RUNNING__
+  __PAINT_SEND__
+  __HAS_DRAFT__
 }
 """
 
@@ -60,6 +62,8 @@ def _run(script: str) -> None:
         .replace("__READ_ACTIVITY__", member(src, "_readActivity"))
         .replace("__FRAME_IS_HERE__", member(src, "_frameIsHere"))
         .replace("__SET_RUNNING__", member(src, "_setRunning"))
+        .replace("__PAINT_SEND__", member(src, "_paintSend"))
+        .replace("__HAS_DRAFT__", member(src, "_hasDraft"))
     )
     run_js(harness + "\n" + script)
 
@@ -98,4 +102,31 @@ def test_frames_of_this_conversation_and_frames_without_a_chat_still_count() -> 
       assert.equal(app._running, false);
       app._readActivity({ event: 'goal_status', status: 'running', chat_id: 'default', turn_id: 't1' });
       assert.deepEqual(app.rows, ['start:t1']);
+    """)
+
+
+def test_the_round_button_sends_what_is_written_even_while_jenny_works() -> None:
+    """Con un turno in corso il tasto tondo e' Ferma solo a campo vuoto. Con
+    una precisazione scritta manda, come l'Invio: il gateway la inietta nel
+    turno. Prima la fermava e lasciava il testo nel campo (10/10/2026)."""
+    _run("""
+      const app = new App();
+      let icon = '';
+      app.send.classList.toggle = (cls, on) => { if (cls === 'is-stop') icon = on ? 'stop' : 'send'; };
+      app.input = { value: '' };
+      app.files = { count: 0 };
+      app._setRunning(true);
+      assert.equal(icon, 'stop', 'a campo vuoto e\\u2019 Ferma');
+      app.input.value = 'anzi, in rosso';
+      app._paintSend();
+      assert.equal(icon, 'send', 'con un testo scritto il tasto deve mandare');
+      app.input.value = '';
+      app.files.count = 1;
+      app._paintSend();
+      assert.equal(icon, 'send', 'un allegato e\\u2019 qualcosa da mandare');
+      app.files.count = 0;
+      app._paintSend();
+      assert.equal(icon, 'stop');
+      app._setRunning(false);
+      assert.equal(icon, 'send');
     """)

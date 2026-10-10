@@ -54,6 +54,8 @@ function makeNode() {
     appendChild(child) { child.isConnected = true; node.children.push(child); return child; },
     insertBefore(child) { child.isConnected = true; node.children.unshift(child); return child; },
     get firstChild() { return node.children[0] || null; },
+    /* Il «Riprova» si cerca nel filo (`_append` toglie quello di prima). */
+    querySelectorAll() { return []; },
     remove() {
       node.isConnected = false;
       for (const parent of allNodes) {
@@ -71,6 +73,7 @@ function makeChat() {
   allNodes = [];
   const chat = {
     el: makeNode(),
+    _userSent: new WeakMap(),
     turnId: null,
     _empty: true,
     _pendingSend: null,

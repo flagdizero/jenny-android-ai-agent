@@ -85,6 +85,7 @@ function makeChat() {
     _empty: true,
     _stick: true,
     _source: new WeakMap(),
+    _userSent: new WeakMap(),
     _seconds: null,
     _batching: false,
     _follow() {},

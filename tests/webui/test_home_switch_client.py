@@ -102,7 +102,11 @@ const document = {
 
 /* Il guscio nativo, finto: conta le volte che la casa gli dice «la chat e' a
    schermo» — e' quel che cancella gli avvisi letti. */
-globalThis.window = { JennyNative: { opened: 0, chatOpened() { this.opened += 1; } } };
+globalThis.window = { JennyNative: {
+  opened: 0, closed: 0,
+  chatOpened() { this.opened += 1; },
+  chatClosed() { this.closed += 1; },
+} };
 
 /* `/api/settings`: un payload solo, che il guscio chiede una volta e divide
    fra le due stanze. Qui interessa **quante volte** viene chiesto, e cosa
@@ -439,6 +443,7 @@ function home() {
   app._applyConversation();
   app.actions.length = 0;
   window.JennyNative.opened = 0;
+  window.JennyNative.closed = 0;
   return app;
 }
 """
@@ -949,6 +954,27 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
 
 
 
+
+
+def test_the_shell_hears_when_the_chat_leaves_the_screen() -> None:
+    """Un avviso con Jenny davanti si sopprime solo se la chat e' a schermo:
+    il guscio nativo deve sentirsi dire anche quando la chat se ne va, una
+    volta per uscita e non a ogni ricalcolo."""
+    _run_js("""
+      const app = home();
+      app.onPageChanged(1, { id: 'chat', kind: 'chat', fixed: true });
+      assert.equal(window.JennyNative.opened, 1);
+      app._setView('board');
+      assert.equal(window.JennyNative.closed, 1, 'la bacheca non ha detto che la chat se n\u2019e\u2019 andata');
+      app.openChat();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.ok(window.JennyNative.opened >= 1, 'il velo su non l\u2019ha detto');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(window.JennyNative.closed, 2, 'il velo giu\u2019 non l\u2019ha detto');
+      app._reportChatOnScreen();
+      assert.equal(window.JennyNative.closed, 2, 'ripetuto a vuoto');
+    """)
 
 
 def test_a_tapped_alert_raises_the_personal_chat_over_the_board() -> None:

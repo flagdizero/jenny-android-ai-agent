@@ -95,6 +95,7 @@ function makeChat() {
     el: makeNode(),
     _empty: false,
     _source: new WeakMap(),
+    _userSent: new WeakMap(),
     _seconds: null,
     turnNode: null,
     blockNode: null,

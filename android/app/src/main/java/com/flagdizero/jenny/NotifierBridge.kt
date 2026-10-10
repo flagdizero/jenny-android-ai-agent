@@ -499,13 +499,17 @@ class NotifierBridge(context: Context) {
     private fun ensureChannel() = ensureAlertChannel(appContext)
 
     /**
-     * Posta un alert che squilla. Ritorna false quando soppresso (app in
-     * foreground), permesso mancante o errore — il chiamante Python logga e
-     * basta, il messaggio resta comunque in chat.
+     * Posta un alert che squilla. Ritorna false quando soppresso (la chat
+     * personale è a schermo), permesso mancante o errore — il chiamante
+     * Python logga e basta, il messaggio resta comunque in chat.
+     *
+     * Soppresso solo se la chat è davvero davanti, non se l'app lo è: Jenny è
+     * il launcher, e «in primo piano» voleva dire anche la pagina App o una
+     * bacheca, dove il promemoria arrivava muto (v. MainActivity.isChatOnScreen).
      */
     fun postAlert(title: String, body: String, tag: String): Boolean {
-        if (MainActivity.isInForeground) {
-            Log.d(TAG, "Alert suppressed: app in foreground")
+        if (MainActivity.isInForeground && MainActivity.isChatOnScreen) {
+            Log.d(TAG, "Alert suppressed: the chat is on screen")
             return false
         }
         // Se su questo tag è già aperto un filo, questa è la sua continuazione e

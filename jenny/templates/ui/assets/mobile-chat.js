@@ -1418,6 +1418,9 @@ export class ChatController {
   }
 
   deactivate() {
+    // La chat esce di scena: gli avvisi proattivi tornano a squillare anche
+    // con l'app davanti (v. `MainActivity.isChatOnScreen`).
+    try { window.JennyNative?.chatClosed?.(); } catch (e) { /* nessun guscio nativo */ }
     // Il popover Info sessione è appeso a document.body, non alla view: il
     // display:none del cambio sezione non lo tocca, quindi restava a schermo
     // sopra la sezione nuova, col suo setInterval da 1s ancora vivo.

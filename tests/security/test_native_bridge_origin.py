@@ -52,6 +52,7 @@ MUST_BE_ORIGIN_BOUND = {
     "getLauncherUsage",
     "setLauncherUsage",
     "chatOpened",
+    "chatClosed",
 }
 
 

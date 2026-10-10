@@ -964,6 +964,28 @@ body.home {
 }
 .home-copy:active { opacity: .7; }
 
+/* «Riprova» sotto una risposta finita in un errore del modello (10/10/2026):
+   un'azione vera, quindi un bottone col suo nome e non un'icona muta, alto
+   quanto un dito. */
+.home-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-retry i { font-size: 16px; }
+.home-retry:active { opacity: .7; }
+
 .home-seconds {
   font-family: var(--font-mono);
   font-size: 10px;

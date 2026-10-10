@@ -988,6 +988,7 @@
       "notification": "from the shade",
       "floating": "from the bubble"
     },
+    "retry": "Try again",
     "stop": "Stop",
     "verbs": {
       "think": [

@@ -161,6 +161,12 @@ export class HomeChat {
     /* Chi sa dire se un testo con `work_id` racconta un lavoro che e' gia' una
        bolla (`WorkBubbles.claims`): quel testo non si disegna due volte. */
     this.claimsWork = null;
+    /* Chi rimanda un messaggio dopo un errore del modello (il «Riprova» sotto
+       la risposta che non e' arrivata): riceve il testo da rimandare. */
+    this.onRetry = null;
+    /* Il testo di ogni bolla dell'utente, e se aveva allegati: e' quel che
+       «Riprova» rimanda. */
+    this._userSent = new WeakMap();
 
     /* **Il posto vivo**, sempre sotto i messaggi e sopra la fascia: le bolle di chi sta
        lavorando adesso (`home-work.js`) e, per ultima, quella di Jenny che
@@ -350,7 +356,7 @@ export class HomeChat {
         for (const turn of this._buildTurns(messages)) {
           if (turn.boundary) this._appendBoundary();
           else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at);
-          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at);
+          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error);
         }
       });
     } finally {
@@ -450,6 +456,9 @@ export class HomeChat {
          che adesso serve anche qui: sono meta' della riga che separa una
          risposta dalla successiva. */
       if (msg.latencyMs != null) current.latencyMs = msg.latencyMs;
+      /* Il turno e' finito in un errore del modello (`error: {kind}`, dal
+         gateway): la bolla avra' il suo «Riprova» anche dopo una ricarica. */
+      if (msg.error) current.error = msg.error;
       /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
          uno strumento, e in casa non e' niente: si butta, punto. L'officina la
          tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
@@ -596,6 +605,7 @@ export class HomeChat {
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
+    if (msg.error && this.turnNode) this._offerRetry(this.turnNode);
     if (msg.text || msg.media_urls?.length) this.band?.refresh();
     this._follow();
   }
@@ -759,6 +769,7 @@ export class HomeChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
+    if (text) this._userSent.set(node, { text, media: Boolean(media?.length) });
     /* L'ora, sotto la bolla e fuori dalla sua pelle (che e' di `.home-block`):
        quel che hai scritto ha la sua, come le risposte. */
     const time = this._timeEl(at);
@@ -766,7 +777,7 @@ export class HomeChat {
     return this._append(node, toTop);
   }
 
-  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null) {
+  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
     if (content) {
@@ -781,6 +792,39 @@ export class HomeChat {
     /* Prima di `_append`, che rifa la sagoma: il nodo va misurato intero. */
     this._tailOf(node, latencyMs, at);
     this._append(node, toTop);
+    /* Dopo: `_append` toglie i «Riprova» di prima, e la storia piu' vecchia
+       (`toTop`) non ne ha — il presente e' in fondo. */
+    if (error && !toTop) this._offerRetry(node);
+  }
+
+  /** «Riprova» sotto una risposta finita in un errore del modello.
+   *
+   *  Rimanda il messaggio dell'utente a cui rispondeva — prima andava
+   *  riscritto a mano. Solo per l'ultima cosa detta: qualunque bolla nuova lo
+   *  toglie (`_append`), perche' riprovare una domanda di tre messaggi fa
+   *  vorrebbe dire rispondere fuori posto. Niente «Riprova» se quel messaggio
+   *  aveva allegati: il testo da solo non sarebbe la stessa domanda. */
+  _offerRetry(node) {
+    if (!node || node.querySelector('.home-retry')) return;
+    let prev = node.previousElementSibling;
+    while (prev && !String(prev.className).includes('home-msg-user')) {
+      if (String(prev.className).includes('home-msg-jenny')) return;
+      prev = prev.previousElementSibling;
+    }
+    const sent = prev && this._userSent.get(prev);
+    if (!sent || sent.media) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-retry';
+    btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i>';
+    const label = document.createElement('span');
+    label.textContent = i18n.t('home.retry');
+    btn.appendChild(label);
+    btn.addEventListener('click', () => {
+      btn.remove();
+      this.onRetry?.(sent.text);
+    });
+    node.appendChild(btn);
   }
 
   /** L'ora di un messaggio (v. `shared/chat-time.js`), o `null` se non ce
@@ -982,6 +1026,9 @@ export class HomeChat {
   }
 
   _append(node, toTop = false) {
+    /* Una cosa nuova in fondo: il «Riprova» di prima non e' piu' dell'ultima
+       risposta (v. `_offerRetry`). */
+    if (!toTop) for (const old of this.el.querySelectorAll('.home-retry')) old.remove();
     if (toTop) this.el.insertBefore(node, this.el.firstChild);
     else if (this._anchor?.parentNode === this.el) this.el.insertBefore(node, this._anchor);
     else if (this.live?.parentNode === this.el) this.el.insertBefore(node, this.live);

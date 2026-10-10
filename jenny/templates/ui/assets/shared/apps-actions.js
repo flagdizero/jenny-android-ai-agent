@@ -256,6 +256,9 @@ export class AppsActions {
     requestAnimationFrame(() => overlay.classList.add('visible'));
     this._openApp = { slug, overlay, iframe, depth: 1 };
     if (external) this._openApp.external = true;
+    /* Chi sta sotto sa che adesso c'e' un'app sopra (la casa: la chat non e'
+       piu' a schermo, gli avvisi tornano a squillare). */
+    this.shell?.onAppOpened?.(slug);
   }
   async _openExternalView(slug, app) {
     let url;

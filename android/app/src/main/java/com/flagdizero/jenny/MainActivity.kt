@@ -258,11 +258,23 @@ class MainActivity : AppCompatActivity() {
         // arrivata senza che Android mostrasse un dialog (negata per sempre).
         private const val LOCATION_NO_DIALOG_MS = 400L
 
-        // Letto da NotifierBridge (thread Python via Chaquopy) per sopprimere
-        // gli alert quando l'utente sta già guardando la chat. @Volatile:
-        // scritto dal main thread (onResume/onPause), letto da altri thread.
+        // L'activity è davanti (onResume/onPause). Letto dalla mascotte
+        // flottante e da UpdateBridge; NotifierBridge lo legge insieme a
+        // [isChatOnScreen]. @Volatile: scritto dal main thread, letto da altri.
         @Volatile
         var isInForeground = false
+            private set
+
+        // La chat personale è la cosa che l'utente ha davanti. Da solo
+        // isInForeground non lo dice: Jenny è il launcher, e sta davanti anche
+        // sulla pagina App, nelle Impostazioni, sopra una bacheca — e lì un
+        // promemoria soppresso era un promemoria perso (giro UX del
+        // 10/10/2026). Lo dice la SPA a ogni cambio (chatOpened/chatClosed);
+        // si spegne quando l'activity va dietro o la pagina riparte, e al
+        // rientro lo richiede onResume. Letto da NotifierBridge (thread
+        // Python via Chaquopy).
+        @Volatile
+        var isChatOnScreen = false
             private set
     }
 
@@ -940,6 +952,7 @@ class MainActivity : AppCompatActivity() {
         // Copre anche lo schermo spento: da qui in poi i messaggi proattivi
         // possono squillare come notifica di sistema.
         isInForeground = false
+        isChatOnScreen = false
         // ...e la mascotte flottante può tornare a schermo: l'app non è più
         // davanti, quindi non c'è più il rischio di vederne due.
         FloatingOverlayController.onAppForegroundChanged()
@@ -967,8 +980,12 @@ class MainActivity : AppCompatActivity() {
         // la chat è quello che l'utente ha davanti. Asincrono per forza — la
         // risposta arriva dal thread JS — e va bene: un alert cancellato una
         // frazione di secondo dopo il resume è indistinguibile.
+        // La stessa risposta riaccende isChatOnScreen, che onPause ha spento:
+        // la SPA lo dice solo ai cambi, e rientrando non cambia niente.
         webView?.evaluateJavascript(CHAT_ON_SCREEN_JS) { result ->
-            if (result?.trim() == "true") NotifierBridge.clearAlerts(this, "resume-on-chat")
+            val onChat = result?.trim() == "true"
+            isChatOnScreen = onChat
+            if (onChat) NotifierBridge.clearAlerts(this, "resume-on-chat")
         }
         // Pacchetti installati/disinstallati mentre eravamo dietro (tipicamente
         // l'uninstaller di sistema): ora la SPA può aggiornare la griglia.
@@ -1169,6 +1186,8 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 mainFrameError = false
+                // Un documento nuovo non ha ancora detto cosa mostra.
+                isChatOnScreen = false
                 if (!loaded) showLoading()
             }
 
@@ -1585,6 +1604,7 @@ class MainActivity : AppCompatActivity() {
                 a.getString(3), a.getString(4), a.getString(5)
             ).let { null }
             "chatOpened" -> chatOpened().let { null }
+            "chatClosed" -> chatClosed().let { null }
             "setThemeBars" -> setThemeBars(a.getString(0), a.getString(1)).let { null }
             "exportBackup" -> exportBackup(a.getString(0), a.getString(1)).let { null }
             "importBackup" -> importBackup().let { null }
@@ -1757,9 +1777,22 @@ class MainActivity : AppCompatActivity() {
          * ``NotificationManager`` è thread-safe, quindi non serve saltare sul
          * thread UI come fanno i metodi qui sopra — quelli toccano la WebView e
          * la finestra, questo no.
+         *
+         * Accende anche [isChatOnScreen]: da qui un avviso proattivo non
+         * squilla più, il messaggio lo stai già vedendo.
          */
         fun chatOpened() {
+            isChatOnScreen = true
             NotifierBridge.clearAlerts(this@MainActivity, "chat-view-opened")
+        }
+
+        /**
+         * La chat personale è uscita di scena dentro la SPA: un'altra pagina,
+         * una bacheca, il velo richiuso, un'app aperta sopra. Da qui gli avvisi
+         * tornano a squillare anche con Jenny davanti (v. [isChatOnScreen]).
+         */
+        fun chatClosed() {
+            isChatOnScreen = false
         }
 
         /**

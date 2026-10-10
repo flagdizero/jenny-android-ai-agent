@@ -18,7 +18,8 @@
  *  avvisi in coda non si cancellavano mai (trovato il 24/09/2026).
  *
  *  Nell'altro verso la casa chiama `JennyNative.chatOpened()` quando la chat
- *  personale arriva a schermo (v. `_reportChatOnScreen`).
+ *  personale arriva a schermo e `JennyNative.chatClosed()` quando ne esce
+ *  (v. `_reportChatOnScreen`): e' quel che decide se un avviso squilla.
  *
  *  Il nome globale resta `mobileApp` apposta: cosi' il guscio nativo non sa, e
  *  non deve sapere, quale delle due interfacce ha caricato.
@@ -534,6 +535,9 @@ class HomeApp {
       this.input.value = text;
       this._autosize();
     };
+    /* «Riprova» sotto una risposta finita in errore: rimanda lo stesso testo,
+       e quel che hai nel campo resta li'. */
+    this.chat.onRetry = (text) => { if (text) this._sendText(text); };
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');
@@ -577,8 +581,13 @@ class HomeApp {
     /* Un filo che non e' arrivato si riprova quando torni a guardare: la casa
        e' il launcher, e fra un'occhiata e l'altra il gateway e' tornato. */
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'hidden') this._retryThread();
+      if (document.visibilityState === 'hidden') return;
+      this._retryThread();
+      this._reportChatOnScreen();
     });
+    /* Un foglio o una domanda che si chiude sopra la chat la rimette a
+       schermo: `close` non risale, ma passa dalla cattura del documento. */
+    document.addEventListener('close', () => this._reportChatOnScreen(), true);
     await this._readThread({ fresh: false });
   }
 
@@ -1068,6 +1077,7 @@ class HomeApp {
     /* Il pavimento torna quello della pagina sotto: il composer la' non c'e'. */
     if (this.view === 'chat' && this._hasComposer(this._entry)) this._measureFloor?.();
     else document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
+    this._reportChatOnScreen();
     this.unseen?.refresh();
     return true;
   }
@@ -1591,7 +1601,7 @@ class HomeApp {
     }
     this._syncJennyPlace();
     this._applyHead();
-    if (view === 'chat') this._reportChatOnScreen();
+    this._reportChatOnScreen();
     this.unseen?.refresh();
     return true;
   }
@@ -1740,7 +1750,12 @@ class HomeApp {
     return (this._appActions ||= new AppsActions(this.appsSource(), {
       sendChatPrompt: (text) => this._sendInChat(text),
       homePages: () => this.pagesPort(),
-      onAppClosed: (slug) => this.board?.refreshApp(slug),
+      onAppClosed: (slug) => {
+        this.board?.refreshApp(slug);
+        this._reportChatOnScreen();
+      },
+      /* Un'app aperta copre la chat: gli avvisi tornano a squillare. */
+      onAppOpened: () => this._reportChatOnScreen(),
     }));
   }
 
@@ -2030,10 +2045,23 @@ class HomeApp {
   /* Il secondo dei tre modi in cui la chat arriva a schermo (v.
      `NotifierBridge.clearAlerts`): un cambio di pagina o di conversazione dentro
      la WebView, che il guscio nativo non puo' vedere da se'. Si chiama su ogni
-     occasione e decide qui; l'officina lo fa da `ChatController.activate`. */
+     occasione e decide qui; l'officina lo fa da `ChatController.activate`.
+
+     E anche il contrario, dal 10/10/2026: quando la chat esce di scena il
+     guscio lo deve sapere, perche' un avviso con Jenny davanti si sopprime
+     solo se la chat e' davvero a schermo (`MainActivity.isChatOnScreen`).
+     Prima si sopprimeva su «app in primo piano», e Jenny — il launcher — lo e'
+     quasi sempre: i promemoria arrivavano muti sulla pagina App o su una
+     bacheca. `chatOpened` va a ogni occasione (cancella gli avvisi letti);
+     `chatClosed` solo quando cambia, o al primo giro della pagina. */
   _reportChatOnScreen() {
-    if (!this.isChatOnScreen()) return;
-    try { window.JennyNative?.chatOpened?.(); } catch { /* nessun guscio nativo */ }
+    const on = this.isChatOnScreen();
+    if (!on && this._chatReported === false) return;
+    this._chatReported = on;
+    try {
+      if (on) window.JennyNative?.chatOpened?.();
+      else window.JennyNative?.chatClosed?.();
+    } catch { /* nessun guscio nativo */ }
   }
 
   /** Una app Android e' stata installata o rimossa.
@@ -2064,8 +2092,12 @@ class HomeApp {
       if (btn) this.files.remove(Number(btn.dataset.remove));
     });
 
+    /* Ferma solo a campo vuoto. Con qualcosa da mandare il tasto manda, come
+       l'Invio della tastiera: il gateway lo inietta nel turno in corso. Prima
+       il tocco fermava Jenny e lasciava la precisazione nel campo — lo stesso
+       testo faceva due cose diverse secondo il gesto (giro UX del 10/10/2026). */
     this.send.addEventListener('click', () => {
-      if (this._running) this._stop();
+      if (this._running && !this._hasDraft()) this._stop();
       else this._send();
     });
 
@@ -2137,12 +2169,20 @@ class HomeApp {
   _autosize() {
     this.input.style.height = 'auto';
     this.input.style.height = `${this.input.scrollHeight}px`;
+    /* Ogni cambio del campo passa di qui: il tasto dice se manda o ferma. */
+    this._paintSend();
+  }
+
+  /* C'e' qualcosa da mandare: testo o un allegato. */
+  _hasDraft() {
+    return Boolean(this.input?.value.trim()) || Boolean(this.files?.count);
   }
 
   /* Gli allegati in attesa: miniature per le immagini, una pastiglia col nome
      per tutto il resto. Ognuno si toglie da solo con la sua X — senza, l'unico
      modo di disfare uno sbaglio sarebbe mandare il messaggio. */
   _renderPending() {
+    this._paintSend();
     const entries = this.files.getAttachmentEntries();
     this.pending.innerHTML = '';
     this.pending.hidden = !entries.length;
@@ -2327,11 +2367,21 @@ class HomeApp {
   _setRunning(running) {
     if (this._running === running) return;
     this._running = running;
-    this.send.classList.toggle('is-stop', running);
-    this.send.innerHTML = running
+    this._paintSend();
+  }
+
+  /* Il tasto tondo: Ferma mentre Jenny lavora **e** il campo e' vuoto, manda
+     in ogni altro caso (v. il suo click). */
+  _paintSend() {
+    if (!this.send) return;
+    const stop = Boolean(this._running) && !this._hasDraft();
+    if (this._sendShowsStop === stop) return;
+    this._sendShowsStop = stop;
+    this.send.classList.toggle('is-stop', stop);
+    this.send.innerHTML = stop
       ? '<i class="ti ti-player-stop-filled" aria-hidden="true"></i>'
       : '<i class="ti ti-arrow-up" aria-hidden="true"></i>';
-    this.send.setAttribute('aria-label', i18n.t(running ? 'home.stop' : 'home.send'));
+    this.send.setAttribute('aria-label', i18n.t(stop ? 'home.stop' : 'home.send'));
   }
 
   /* ── Lo stato del filo ── */

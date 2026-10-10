@@ -432,8 +432,34 @@ def test_the_resume_branch_asks_what_is_on_screen_before_clearing() -> None:
     """
     body = _code_only(_fun_body(_main_activity(), "onResume"))
     assert "CHAT_ON_SCREEN_JS" in body
+    assert 'val onChat = result?.trim() == "true"' in body
     clear_line = next(line for line in body.splitlines() if "clearAlerts" in line)
-    assert '== "true"' in clear_line, clear_line
+    assert "if (onChat)" in clear_line, clear_line
+    # La stessa risposta riaccende lo stato che onPause ha spento.
+    assert "isChatOnScreen = onChat" in body
+
+
+def test_an_alert_is_silenced_only_while_the_chat_is_on_screen() -> None:
+    """Jenny è il launcher: «in primo piano» vuol dire anche la pagina App o
+    una bacheca, e lì il promemoria arrivava muto (giro UX del 10/10/2026).
+    Si sopprime solo se la chat personale è a schermo, che la SPA dice a ogni
+    cambio (``chatOpened``/``chatClosed``) e che si spegne quando l'activity va
+    dietro o la pagina riparte."""
+    notifier = _code_only(_fun_body(read_source(JAVA / "NotifierBridge.kt"), "postAlert"))
+    gate = notifier[: notifier.index("return false")]
+    assert "MainActivity.isInForeground && MainActivity.isChatOnScreen" in gate
+    kotlin = _main_activity()
+    assert "isChatOnScreen = true" in _code_only(_fun_body(kotlin, "chatOpened"))
+    assert "isChatOnScreen = false" in _code_only(_fun_body(kotlin, "chatClosed"))
+    assert '"chatClosed" -> chatClosed()' in kotlin
+    assert "isChatOnScreen = false" in _code_only(_fun_body(kotlin, "onPause"))
+    assert "isChatOnScreen = false" in _code_only(_fun_body(kotlin, "onPageStarted"))
+    # La casa lo dice anche quando la chat esce, non solo quando arriva.
+    home = (UI_ASSETS / "home-app.js").read_text(encoding="utf-8")
+    report = _method(home, "_reportChatOnScreen")
+    assert "chatClosed" in report and "chatOpened" in report
+    close = _method(home, "closeChatOver")
+    assert "this._reportChatOnScreen()" in close, "il velo che scende non lo dice"
 
 
 def test_the_chat_visible_question_asks_a_method_every_shell_has() -> None:

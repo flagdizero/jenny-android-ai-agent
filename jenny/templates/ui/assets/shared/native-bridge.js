@@ -49,6 +49,7 @@
     'setMascotSize',
     'setFloatingPalette',
     'chatOpened',
+    'chatClosed',
     'setThemeBars',
     'exportBackup',
     'importBackup',
