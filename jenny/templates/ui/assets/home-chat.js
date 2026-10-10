@@ -199,6 +199,20 @@ export class HomeChat {
     this._lastTop = 0;
     this._stick = true;
     this.el.addEventListener('scroll', () => this._onScroll());
+    /* Dove eri rimasto a leggere, per conversazione: la distanza dal fondo
+       (v. `restorePlace`). Niente se eri in fondo, che e' dove si torna. */
+    this._marks = new Map();
+    /* «↓» sopra il composer: compare quando sei risalito, col pallino se
+       intanto sotto e' arrivato qualcosa. Sta dentro `#home-chat`, quindi
+       sale nel velo con lei. E' il FAB dell'officina (`#chat-scroll-fab`). */
+    this._newBelow = false;
+    this.fab = document.createElement('button');
+    this.fab.type = 'button';
+    this.fab.className = 'home-scroll-fab';
+    this.fab.innerHTML = '<i class="ti ti-chevron-down" aria-hidden="true"></i>'
+      + '<span class="home-scroll-fab-dot" aria-hidden="true"></span>';
+    this.fab.addEventListener('click', () => this.scrollToBottom());
+    this.el.parentElement?.appendChild(this.fab);
 
     /* Delegato, e non un ascoltatore per bolla: le bolle sono centinaia dopo
        tre pagine di storia. Come in officina, e per la stessa ragione — la CSP
@@ -366,7 +380,9 @@ export class HomeChat {
     this._empty = !this.el.querySelector(THREAD_NODES);
     this.syncEmpty();
     this.pager.adopt(thread?.page);
-    this.scrollToBottom();
+    /* Dove eri rimasto, o in fondo (v. `restorePlace`): la prima parte e'
+       sincrona, e `ensureReach` qui sotto misura gia' il filo al suo posto. */
+    this.restorePlace();
     /* Dopo il disegno e dopo l'aggancio al fondo: `ensureReach` misura se il
        filo trabocca, e prima del disegno la risposta sarebbe sempre "no". */
     this.pager.ensureReach();
@@ -580,6 +596,8 @@ export class HomeChat {
   /* Regola 2: testo gia' completo, blocco proprio, chiuso subito. */
   _message(msg) {
     if (msg.session_boundary) {
+      // Il punto di lettura era in una storia che non c'e' piu'.
+      this._marks?.delete(sessionManager.currentKey);
       /* Il contesto e' stato azzerato. La storia sul server e' cambiata sotto i
          piedi: si ricarica invece di indovinare. La rilettura la fa chi sa
          dire che non e' arrivata (il guscio, `onSessionBoundary`); senza di
@@ -672,7 +690,9 @@ export class HomeChat {
     node.className = 'home-note';
     node.textContent = text;
     this._append(node);
-    this.scrollToBottom();
+    /* Segue il fondo se ci si era; se stai rileggendo piu' su, il «↓» si
+       accende invece di strapparti via (giro UX del 10/10/2026). */
+    this._follow();
     return node;
   }
 
@@ -1087,6 +1107,8 @@ export class HomeChat {
     if (this._atBottom()) this._stick = true;
     else if (top < this._lastTop) this._stick = false;
     this._lastTop = top;
+    this._mark();
+    this._paintFab();
     /* Niente altro, ed e' voluto: lo spazio per Jenny (la fascia e la sagoma,
        `home-band.js`) dipende da cosa c'e' nel filo, non da dove sta. Fino al
        06/10/2026 qui si ricalcolava chi le stava dietro, e il testo tornava a
@@ -1103,9 +1125,60 @@ export class HomeChat {
     return this._stick;
   }
 
-  /** Segue il fondo, ma solo se ci si era. */
+  /** Segue il fondo, ma solo se ci si era. Se no, il «↓» si accende: sotto
+   *  e' arrivato qualcosa che non stai guardando. */
   _follow() {
-    if (this._stick) this.scrollToBottom();
+    if (this._stick) {
+      this.scrollToBottom();
+      return;
+    }
+    this._newBelow = true;
+    this._paintFab();
+  }
+
+  /* Ricorda dove sei, per la conversazione a schermo. Non con il filo nascosto
+     o staccato (alto zero): azzererebbe un ricordo buono, come avverte
+     `_rememberScrollAnchor` dell'officina. */
+  _mark() {
+    const key = this._shownKey;
+    if (!key || !this.el.clientHeight) return;
+    if (this._atBottom()) this._marks.delete(key);
+    else this._marks.set(key, this.el.scrollHeight - this.el.scrollTop);
+  }
+
+  /** Torna dove eri rimasto in questa conversazione — o in fondo, se eri li'
+   *  o se non c'e' un ricordo.
+   *
+   *  Lo chiamano il trasloco (la chat che sale nel velo o ridiscende) e la
+   *  lettura del filo. Fino al 10/10/2026 entrambi portavano sempre in fondo:
+   *  chi stava rileggendo la storia, aperta e chiusa Jenny, ricominciava da
+   *  capo. Se il punto sta oltre la storia ricaricata si chiedono fino a tre
+   *  pagine in piu'; oltre, si resta in cima a quel che c'e'. */
+  async restorePlace() {
+    const key = sessionManager.currentKey;
+    const fromBottom = this._marks.get(key);
+    if (fromBottom == null || !this.el.clientHeight) {
+      this.scrollToBottom();
+      return;
+    }
+    for (let i = 0; i < 3 && this.el.scrollHeight < fromBottom && this.pager.hasMore; i += 1) {
+      await this.pager.loadMore();
+      if (sessionManager.currentKey !== key) return;
+    }
+    this.el.scrollTop = Math.max(0, this.el.scrollHeight - fromBottom);
+    this._lastTop = this.el.scrollTop;
+    this._stick = this._atBottom();
+    this._paintFab();
+  }
+
+  _paintFab() {
+    if (!this.fab) return;
+    const away = Boolean(this.el.clientHeight) && !this._atBottom();
+    if (!away) this._newBelow = false;
+    this.fab.classList.toggle('visible', away);
+    this.fab.classList.toggle('has-new', away && this._newBelow);
+    this.fab.setAttribute('aria-label', i18n.t('chat.scrollToBottom'));
+    this.fab.tabIndex = away ? 0 : -1;
   }
 
   /** Riaggancia il fondo **se ci si era**: chi sta rileggendo più su non si
@@ -1119,5 +1192,8 @@ export class HomeChat {
     // Anche il ricordo, o il primo gesto dopo sembrerebbe un ritorno indietro.
     this._lastTop = this.el.scrollTop;
     this._stick = true;
+    if (this._shownKey) this._marks?.delete(this._shownKey);
+    this._newBelow = false;
+    this._paintFab();
   }
 }

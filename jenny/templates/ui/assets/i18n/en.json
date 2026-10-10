@@ -1057,7 +1057,11 @@
       "chat": "back to the chat",
       "settings": "back to Settings",
       "board": "back to the board",
-      "drawer": "back to the drawer"
+      "drawer": "back to the drawer",
+      "page": "back to the previous page",
+      "notebooks": "back to Notebooks",
+      "apps": "back to Apps",
+      "pinned": "back to the pinned page"
     },
     "path": {
       "label": "Where you are"

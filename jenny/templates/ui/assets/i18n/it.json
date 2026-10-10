@@ -1057,7 +1057,11 @@
       "chat": "torna alla chat",
       "settings": "torna alle Impostazioni",
       "board": "torna alla bacheca",
-      "drawer": "torna al cassetto"
+      "drawer": "torna al cassetto",
+      "page": "torna alla pagina di prima",
+      "notebooks": "torna ai Quaderni",
+      "apps": "torna alle App",
+      "pinned": "torna alla pagina in alto"
     },
     "path": {
       "label": "Dove sei"

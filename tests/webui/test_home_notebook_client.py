@@ -285,7 +285,7 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     apre: Indietro chiude prima lei, e solo alla pressione dopo lascia la
     pagina."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    chain = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
+    chain = app_js.split("_closeOverlays({ editor = true } = {}) {", 1)[1].split("\n  }\n", 1)[0]
     sheets = re.search(r"(?m)^const LONG_PRESS_SHEETS = \[(.*)\];$", app_js)
     assert sheets and "'home-notebook-sheet'" in sheets.group(1)
     assert chain.index("LONG_PRESS_SHEETS") < chain.index("handleBack()")

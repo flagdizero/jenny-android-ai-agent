@@ -85,6 +85,8 @@ function makeChat() {
     _originBadge() { return null; },
     _appendMedia() {},
     _delta() {}, _streamEnd() {}, _message() {}, _externalUser() {}, _turnEnd() {},
+    // Una riga segue il fondo come il resto del filo (v. `_follow`, banco suo).
+    _follow() { this.scrollToBottom(); },
     __APPEND_OWN__,
     __ERROR__,
     __TAKE_BACK__,

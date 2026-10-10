@@ -273,6 +273,7 @@ class App {
     this._personalName = 'Jenny';
     this._settingsGen = 0;
     this._drafts = new Map();
+    this._draftsAside = new Map();
     this._threadFailed = false;
     this._threadReads = 0;
     this._running = false;
@@ -429,7 +430,9 @@ class App {
   __OPEN_CHAT_OVER__
   __CLOSE_CHAT_OVER__
   __SHEET_OPEN__
-  __OPEN_DOOR__
+  __BACK_LABEL_KEY__
+  __FOLLOW_PAGE__
+  __BACK_ONE_PAGE__
 }
 
 function home() {
@@ -532,7 +535,9 @@ def _harness() -> str:
         .replace("__OPEN_CHAT_OVER__", member(src, "openChatOver"))
         .replace("__CLOSE_CHAT_OVER__", member(src, "closeChatOver"))
         .replace("__SHEET_OPEN__", member(src, "_sheetOpen"))
-        .replace("__OPEN_DOOR__", member(src, "_openDoor"))
+        .replace("__BACK_LABEL_KEY__", member(src, "_backLabelKey"))
+        .replace("__FOLLOW_PAGE__", member(src, "_followPage", prefixes=("async ",)))
+        .replace("__BACK_ONE_PAGE__", member(src, "_backOnePage", prefixes=("async ",)))
         .replace("__NOTEBOOK_ROOMS__", _const_block_scalar(src, "NOTEBOOK_ROOMS"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__SHEETS__", _const_block_scalar(src, "LONG_PRESS_SHEETS") + "\n"
@@ -1441,13 +1446,19 @@ def test_back_peels_the_layers_of_the_app_page_one_at_a_time() -> None:
     """)
 
 
-def test_back_leaves_the_moving_mode_without_saving() -> None:
-    """Salvare e' «Fatto». Indietro e' «lascia com'era»."""
+def test_back_and_home_leave_the_moving_mode_saving() -> None:
+    """Ogni uscita dalla modalita' ordina salva, come nei launcher (scelta
+    dell'utente, 10/10/2026): prima Indietro e Home buttavano il nuovo ordine
+    senza dirlo."""
     _run_js("""
       const app = home();
+      const saves = [];
+      app.strip.closeSort = (opts) => { saves.push(opts); app.strip.sorting = false; };
       app.strip.sorting = true;
       assert.equal(app._closeOverlays(), true);
-      assert.deepEqual(app.actions, ['ordina chiusa']);
+      app.strip.sorting = true;
+      app.goHome();
+      assert.deepEqual(saves, [{ save: true }, { save: true }], 'un\u2019uscita non ha salvato');
     """)
 
 
@@ -1560,33 +1571,74 @@ _GONE = """
 """
 
 
-def test_a_gone_notebook_door_does_not_open_its_board() -> None:
-    """La porta di un quaderno appeso apre la sua bacheca a scorrimento finito
-    (dal 05/10/2026) — ma non se intanto si e' scoperto che il quaderno non
-    c'e' piu': li' resta la pagina che lo dice."""
-    _run_js(_GONE + """
-      app.homePages.index = 1;
-      gone = true;
-      app.onPageChanged(1, NOTEBOOK);
-      await new Promise((r) => setTimeout(r, 5));
-      assert.ok(!app.actions.includes('bacheca:piante'), 'la porta di un quaderno sparito si e\u2019 aperta');
-      gone = false;
-      app.onPageChanged(1, NOTEBOOK);
-      await new Promise((r) => setTimeout(r, 5));
-      assert.ok(app.actions.includes('bacheca:piante'), 'la porta non ha aperto la bacheca');
+def test_a_link_between_pages_leaves_a_trail_for_back() -> None:
+    """Un link dal lettore a un'altra pagina dello stesso cassetto: Indietro
+    torna alla pagina di prima, dov'eri, e solo dopo al cassetto. Prima il
+    link non lasciava traccia e Indietro saltava la pagina A."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('piante'));
+      app.reader = {
+        path: null, editing: false, bodyEl: { scrollTop: 0 },
+        isDirty: () => false, cancelEdit() {}, applyTranslations() {},
+        load: async (nb, path) => { app.reader.path = path; return path.toUpperCase(); },
+      };
+      await app.openPage('a.md', 'A', 'c1');
+      app.reader.bodyEl.scrollTop = 120;
+      await app._followPage('b.md');
+      assert.equal(app.reader.path, 'b.md');
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna alla pagina di prima');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader', 'Indietro e\u2019 uscito dal lettore');
+      assert.equal(app.reader.path, 'a.md', 'Indietro ha saltato la pagina A');
+      assert.equal(app.reader.bodyEl.scrollTop, 120, 'la pagina A e\u2019 ripartita dall\u2019alto');
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna al cassetto');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'drawer');
     """)
 
 
-def test_a_door_does_not_open_once_you_have_moved_on() -> None:
+def test_the_back_arrow_says_the_page_it_returns_to() -> None:
+    """Dalla bacheca aperta dai Quaderni la freccia porta ai Quaderni, e ora
+    lo dice: prima si annunciava «torna alla chat»."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('piante'));
+      app.onPageChanged(2, { id: 'notebooks', kind: 'notebooks', fixed: true });
+      await app.openBoard();
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna ai Quaderni');
+    """)
+
+
+def test_scrolling_onto_a_notebook_door_opens_nothing() -> None:
+    """La porta di un quaderno appeso si apre **al tocco** (dal 10/10/2026).
+    Prima si apriva a scorrimento finito, e chi scorreva verso le pagine dopo
+    restava chiuso nella sua bacheca, dove la pista non scorre."""
     _run_js(_GONE + """
       app.homePages.index = 1;
       app.onPageChanged(1, NOTEBOOK, { animated: true });
-      app.homePages.index = 2;  // un dito veloce: si e' gia' altrove
       await new Promise((r) => setTimeout(r, 400));
-      assert.ok(!app.actions.includes('bacheca:piante'));
+      assert.ok(!app.actions.includes('bacheca:piante'), 'la porta si e\u2019 aperta da sola');
+      assert.equal(app.view, 'chat');
     """)
 
 
+def test_back_from_a_board_opened_at_its_door_returns_to_the_door() -> None:
+    """Aperta dalla porta, la bacheca torna alla porta — la pagina in alto da
+    cui sei entrato — e non salta alla chat."""
+    _run_js(_GONE + """
+      app.homePages.index = 1;
+      app.onPageChanged(1, NOTEBOOK);
+      await app.openNotebook('piante');
+      assert.equal(app.view, 'board');
+      app.actions.length = 0;
+      app.handleHardwareBack();
+      assert.equal(app.view, 'chat');
+      assert.ok(!app.actions.some((a) => a.startsWith('pagina:')), 'la pista e\u2019 saltata altrove');
+      assert.equal(app.homePages.index, 1);
+    """)
 
 
 def test_enter_on_a_gone_notebook_sends_nothing() -> None:
@@ -1787,6 +1839,7 @@ _DIRTY_READER = """
         isDirty: () => dirty,
         blurEditor() {},
         cancelEdit() { dirty = false; app.actions.push('modifiche buttate'); },
+        askCancel() { app.actions.push('annulla chiesto'); },
         applyTranslations() {},
         editing: true,
       };
@@ -1810,6 +1863,29 @@ def test_home_waits_for_the_reader_confirm_before_switching() -> None:
       assert.ok(app.actions.includes('modifiche buttate'));
       assert.equal(app.view, 'chat');
       assert.equal(sessionManager.currentKey, 'websocket:default');
+    """)
+
+
+def test_back_in_the_editor_closes_only_the_editor() -> None:
+    """Indietro con l'editor aperto chiude l'editor (chiedendo, se c'e' del
+    lavoro) e resta sulla pagina. Prima usciva dal lettore: con un si' alla
+    conferma buttava le modifiche *e* usciva, due cose per una pressione."""
+    _run_js(_DIRTY_READER + """
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader', 'Indietro e\u2019 uscito dalla pagina');
+      assert.ok(app.actions.includes('annulla chiesto'), 'non ha chiesto all\u2019editor');
+      assert.equal(reply, null, 'ha chiesto di uscire dal lettore');
+    """)
+
+
+def test_home_asks_about_the_edit_once() -> None:
+    """Home chiude tutto in un giro: la domanda sul lavoro non salvato la fa
+    il cambio di stanza, una volta sola, non l'editor a ogni giro."""
+    _run_js(_DIRTY_READER + """
+      app.goHome();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.ok(!app.actions.includes('annulla chiesto'), 'Home ha chiesto all\u2019editor');
     """)
 
 

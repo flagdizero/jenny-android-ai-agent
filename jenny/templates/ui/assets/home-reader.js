@@ -416,6 +416,9 @@ export class HomeReader {
       this.onPreview?.(target.path, this.board?.card || null);
       return;
     }
-    this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));
+    /* Una pagina dello stesso cassetto: la apre il guscio, che se ne ricorda
+       per Indietro (v. `HomeApp._followPage`). Senza guscio, qui sul posto. */
+    if (this.onFollow) this.onFollow(target.path);
+    else this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));
   }
 }

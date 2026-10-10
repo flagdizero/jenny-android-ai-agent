@@ -1380,7 +1380,9 @@ export class HomeBoard {
 
   /* ── La ricerca: l'unica porta verso tutto ── */
 
-  async openSearch() {
+  /** *query*: si torna a una ricerca gia' fatta (da una pagina aperta fra i
+   *  suoi risultati), con la frase ancora scritta. */
+  async openSearch(query = '') {
     const body = document.createElement('div');
     body.className = 'home-board-search';
     const input = document.createElement('input');
@@ -1393,6 +1395,8 @@ export class HomeBoard {
     const results = document.createElement('div');
     results.className = 'home-board-results';
     body.append(input, results);
+    input.value = query;
+    this.searchQuery = query;
     this.sheet.open(i18n.t('board.search.title'), body);
     input.focus();
     try {
@@ -1402,7 +1406,10 @@ export class HomeBoard {
     }
     const index = this._graph ? WikiSearchIndex.from(this._graph.search) : null;
     const draw = () => this._drawResults(results, input.value, index);
-    input.addEventListener('input', draw);
+    input.addEventListener('input', () => {
+      this.searchQuery = input.value;
+      draw();
+    });
     draw();
   }
 
@@ -1464,7 +1471,9 @@ export class HomeBoard {
           if (card) this.openCard(card);
           else this.onOpenCard?.(r.card, r.title);
         }
-        else if (r.kind === 'page') this.onOpenPage?.(r.path, r.title, r.card);
+        /* Aperta da qui, Indietro torna alla ricerca con la frase scritta, per
+           provare il risultato dopo (v. `HomeApp._searchReturn`). */
+        else if (r.kind === 'page') this.onOpenPage?.(r.path, r.title, r.card, { fromSearch: query });
         else this.preview(r.path, null);
       });
       el.appendChild(row);

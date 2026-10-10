@@ -46,7 +46,7 @@ import { dotColor } from './shared/spines.js';
 import { HomeBand } from './home-band.js';
 import { JennyMascot } from './shared/jenny-mascot.js';
 import { LauncherController } from './mobile-launcher.js';
-import { HomePages, SLIDE_MS } from './home-pages.js';
+import { HomePages } from './home-pages.js';
 import { HomeStrip } from './home-strip.js';
 import { HomeUiQuery } from './home-ui-query.js';
 import { ComposerFocus } from './home-focus.js';
@@ -285,7 +285,7 @@ class HomeApp {
       sheet: this.boardSheet,
       onOpenCard: (card, title) => this.openCard(card, title),
       onOpenApp: openApp,
-      onOpenPage: (path, label, card) => this.openPage(path, label, card),
+      onOpenPage: (path, label, card, opts) => this.openPage(path, label, card, opts),
       onAskJenny: (text) => this._askInNotebook(text),
     });
     /* I dati di un'app cambiano — scritti dal suo schermo o in chat, o
@@ -318,6 +318,10 @@ class HomeApp {
     this.reader.onTitle = (title) => this._readerTitle(title);
     this.reader.onOpenDrawer = (card, title) => this.openCard(card, title);
     this.reader.onPreview = (path, from) => this.board.preview(path, from);
+    this.reader.onFollow = (path) => this._followPage(path);
+    /* Le pagine lette passando da un link, per Indietro: la piu' recente in
+       fondo. Si azzera a ogni pagina aperta da fuori (`openPage`). */
+    this._pageTrail = [];
     this.audit = new HomeAudit(this.reader);
     this.audit.onFiled = (report) => this._bringToChat(report);
     /* Aperto o chiuso l'editor, cambiano i comandi dell'intestazione — e la
@@ -349,6 +353,9 @@ class HomeApp {
        diario di un altro progetto — solo un attimo prima. In memoria e basta:
        una bozza non e' una cosa da conservare fra due avvii. */
     this._drafts = new Map();
+    /* Le bozze messe da parte da una frase pronta, per conversazione (v.
+       `_prefill`): tornano nel campo quando la frase parte. */
+    this._draftsAside = new Map();
 
     /* «Con chi parli», cioe' la pagina Quaderni. Il pannello non sa cosa sia
        una chiave di sessione — dice quale nome hai toccato, e la conversazione
@@ -414,12 +421,13 @@ class HomeApp {
       chat: document.getElementById('home-chat'),
       change: (key) => this.showConversation(key),
       currentKey: () => sessionManager.currentKey,
-      /* In fondo **senza condizioni**, non `keepBottom`: spostata nel
-         documento la chat riparte da scroll 0, e `keepBottom` segue il fondo
-         solo «se ci si era» — lo scroll azzerato puo' fargli credere che
-         l'utente sia risalito. E la foto che e' appena entrata mostrava il
-         fondo: arrivare altrove sarebbe il trucco che si vede. */
-      atBottom: () => this.chat?.scrollToBottom(),
+      /* Non `keepBottom`: spostata nel documento la chat riparte da scroll 0,
+         e `keepBottom` segue il fondo solo «se ci si era» — lo scroll azzerato
+         puo' fargli credere che l'utente sia risalito. `restorePlace` non
+         guarda lo scroll ma il ricordo della conversazione: in fondo se eri
+         in fondo, se no dove eri rimasto (dal 10/10/2026; prima sempre in
+         fondo, e chi rileggeva la storia la perdeva aprendo Jenny). */
+      atBottom: () => this.chat?.restorePlace(),
       homeKey: () => sessionManager.personalKey,
     });
     this.homePages = new HomePages(this);
@@ -531,7 +539,17 @@ class HomeApp {
        scrivere: quello vince sempre, non si sovrascrive del testo vivo con del
        testo vecchio. */
     this.chat.onSendRejected = (text) => {
-      if (!text || this.input.value.trim()) return;
+      if (!text) return;
+      /* Nel campo c'e' solo la bozza rimessa dopo una frase pronta: la frase
+         rifiutata torna, e la bozza si rimette da parte. */
+      const restored = this._restoredDraft;
+      this._restoredDraft = null;
+      if (restored && restored.key === sessionManager.currentKey
+          && this.input.value === restored.text) {
+        this._draftsAside.set(restored.key, restored.text);
+        this.input.value = '';
+      }
+      if (this.input.value.trim()) return;
       this.input.value = text;
       this._autosize();
     };
@@ -941,19 +959,19 @@ class HomeApp {
   async openBoard({ fit = false } = {}) {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook) return;
-    if (!this._setView('board')) return;
+    if (!this._setView('board', () => this.openBoard({ fit }))) return;
     await this.board.load(notebook, { fit });
   }
 
   /** Il cassetto di una scheda. */
-  async openCard(card, title) {
+  async openCard(card, title, { keepPlace = false } = {}) {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook || !card) return;
     this.boardSheet.close();
-    if (!this._setView('drawer')) return;
+    if (!this._setView('drawer', () => this.openCard(card, title, { keepPlace }))) return;
     this._cardTitle = title || '';
     this._setHeadTitle(title || '');
-    const loaded = await this.drawer.load(notebook, card);
+    const loaded = await this.drawer.load(notebook, card, { keepPlace });
     if (loaded && this.view === 'drawer') {
       this._cardTitle = loaded;
       this._setHeadTitle(loaded);
@@ -963,10 +981,16 @@ class HomeApp {
 
   /** Una pagina del quaderno, letta. *card* e' il cassetto da cui la si apre:
    *  «indietro» torna li'. */
-  async openPage(path, label, card = null) {
+  async openPage(path, label, card = null, { fromSearch = null } = {}) {
     const notebook = projectNameOf(sessionManager.currentKey);
     if (!notebook || !path) return;
     this._readerCard = card || null;
+    this._pageTrail = [];
+    /* Aperta fra i risultati della ricerca della bacheca: Indietro torna li',
+       con la frase scritta, non nel cassetto della pagina — che non avevi
+       aperto (giro UX del 10/10/2026; il commento di `BACK_TO` lo prometteva
+       gia'). */
+    this._searchReturn = fromSearch;
     /* Il nome del cassetto da cui viene la pagina, per il percorso: quello del
        cassetto aperto se e' lui, se no quello che la bacheca conosce (una
        pagina aperta dalla ricerca puo' stare in un cassetto mai aperto). */
@@ -984,8 +1008,44 @@ class HomeApp {
   /* Dove torna la freccia da questa stanza. Il lettore torna al cassetto da cui
      l'hai aperto; senza un cassetto (dalla ricerca), alla bacheca. */
   _backTarget(view = this.view) {
-    if (view === 'reader' && !this._readerCard) return 'board';
+    if (view === 'reader' && this._pageTrail?.length) return 'page';
+    if (view === 'reader' && (this._searchReturn != null || !this._readerCard)) return 'board';
     return BACK_TO[view];
+  }
+
+  /** Un link a un'altra pagina dello stesso cassetto, dal lettore.
+   *
+   *  La pagina che lasci entra nella pila (dov'eri compreso), e Indietro ci
+   *  torna prima di tornare al cassetto. Fino al 10/10/2026 il link caricava
+   *  la pagina nuova al posto della vecchia senza traccia: Indietro saltava A
+   *  e portava al cassetto. Dieci pagine bastano: e' un sentiero, non una
+   *  cronologia. */
+  async _followPage(path) {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (!notebook || !path || this.view !== 'reader') return;
+    if (this.reader.path) {
+      this._pageTrail.push({
+        path: this.reader.path,
+        label: this.nameEl?.textContent || '',
+        top: this.reader.bodyEl?.scrollTop || 0,
+      });
+      if (this._pageTrail.length > 10) this._pageTrail.shift();
+    }
+    this._applyHead();
+    this._readerTitle(await this.reader.load(notebook, path));
+  }
+
+  /* Indietro di una pagina lungo la pila dei link, dov'eri. */
+  async _backOnePage() {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    const step = this._pageTrail.pop();
+    if (!notebook || !step) return;
+    this._applyHead();
+    this._setHeadTitle(step.label);
+    this._readerTitle(await this.reader.load(notebook, step.path, step.label));
+    if (this.view === 'reader' && this.reader.path === step.path && this.reader.bodyEl) {
+      this.reader.bodyEl.scrollTop = step.top;
+    }
   }
 
   /* «Altro…» e l'esempio della bacheca vuota: una frase gia' scritta, nella
@@ -993,7 +1053,8 @@ class HomeApp {
      quando tocchi Jenny. */
   _askInNotebook(text) {
     this.boardSheet.close();
-    this.openChatOver({ prefill: text });
+    if (this.chatOver) this._prefill(text);
+    else this.openChatOver({ prefill: text });
   }
 
   /* ── Il velo: la chat sopra la pagina ──
@@ -1041,11 +1102,7 @@ class HomeApp {
     this.jenny?.setOut?.(true);
     this._measureFloor?.();
     if (prefill !== null && this.input) {
-      this.input.value = prefill;
-      this.input.dispatchEvent(new Event('input', { bubbles: true }));
-      /* Sincrono, dentro il tocco: e' l'unico modo perche' Android alzi la
-         tastiera. */
-      this.input.focus();
+      this._prefill(prefill);
     } else {
       this.focus?.restore();
     }
@@ -1338,20 +1395,29 @@ class HomeApp {
     }
     const target = this._backTarget();
     if (!target) return false;
-    /* La bacheca aperta dalla porta di un quaderno appeso: tornando alla pista
-       ci si ritroverebbe sulla porta, che la riaprirebbe. Si torna alla chat,
-       come da qualunque pagina. */
+    if (target === 'page') {
+      this._backOnePage();
+      return true;
+    }
+    /* La bacheca aperta dalla porta di un quaderno appeso torna **alla
+       porta**, cioe' alla pagina in alto da cui l'hai aperta: dal 10/10/2026
+       la porta non si riapre da sola (v. `onPageChanged`), e prima di allora qui
+       si saltava alla chat per non ritrovarsela riaperta. La pista e' gia'
+       li': basta cambiare stanza. */
     if (target === 'chat' && this._entry?.kind === 'conversation') {
-      if (!this._setView('chat', () => this.goBackOneRoom())) return true;
-      this.homePages?.goTo(this.homePages.chatIndex, { animated: false });
+      this._setView('chat', () => this.goBackOneRoom());
       return true;
     }
     if (target === 'drawer' && this._readerCard) {
-      this.openCard(this._readerCard, this._cardTitle);
+      /* Il cassetto da cui eri entrato, ritrovato dove l'avevi lasciato. */
+      this.openCard(this._readerCard, this._cardTitle, { keepPlace: true });
       return true;
     }
     if (target === 'board') {
-      this.openBoard();
+      const query = this.view === 'reader' ? this._searchReturn : null;
+      this.openBoard().then(() => {
+        if (query != null && this.view === 'board') this.board.openSearch(query);
+      });
       return true;
     }
     if (target === 'settings') {
@@ -1370,7 +1436,11 @@ class HomeApp {
   /** La pista ha cambiato casella: la fila dice dove sei. */
   onPageChanged(index, entry, { animated = false } = {}) {
     this._entry = entry;
-    this._openDoor?.(index, entry, animated);
+    /* La pagina di un quaderno appeso e' una porta che si apre **al tocco**
+       («Apri la bacheca», `HomePages._fillDoor`), non al passaggio: fino al
+       10/10/2026 si apriva da sola appena la pista ci si fermava, e
+       scorrendo verso le pagine dopo restavi chiuso nella sua bacheca (li' la
+       pista non scorre). */
     /* Su quale pagina si e' lo dice un attributo, come per le stanze: cosi' la
        geometria resta nel CSS e qui c'e' solo il nome. */
     this.shell?.setAttribute('data-page', entry?.id || '');
@@ -1387,22 +1457,6 @@ class HomeApp {
     this._applyHead();
     this._reportChatOnScreen();
     this.unseen?.refresh();
-  }
-
-  /* La pagina di un quaderno appeso e' una porta: arrivandoci si apre la sua
-     bacheca (dal 05/10/2026 un quaderno si apre sempre li'). A scorrimento
-     finito, non sopra la pista che scorre; e non se intanto sei andato
-     altrove, se e' salita la chat, o se il quaderno non c'e' piu'. */
-  _openDoor(index, entry, animated) {
-    clearTimeout(this._doorTimer);
-    if (entry?.kind !== 'conversation') return;
-    const name = projectNameOf(entry.ref);
-    if (!name) return;
-    this._doorTimer = setTimeout(() => {
-      if (this.homePages?.index !== index || this.view !== 'chat' || this.chatOver) return;
-      if (this.homePages?.goneHere?.()) return;
-      this.openNotebook(name);
-    }, animated ? SLIDE_MS : 0);
   }
 
   /** Una pagina ha scoperto che la sua cosa non c'e' piu', o che c'e' di
@@ -1574,6 +1628,10 @@ class HomeApp {
        vorrebbe dire ritrovarlo all'ingresso successivo, sopra una pagina che
        nel frattempo puo' essere un'altra. */
     if (this.view === 'reader') this.reader?.cancelEdit();
+    if (view !== 'reader') {
+      this._pageTrail = [];
+      this._searchReturn = null;
+    }
     this.view = view;
     this.shell?.setAttribute('data-view', view);
     /* Il polling dell'installazione non tiene sveglia una stanza che non c'e'
@@ -1588,8 +1646,10 @@ class HomeApp {
          quello rifaceva le traduzioni di tutta la casa e ridisegnava fila e
          Quaderni due volte a ogni ritorno. Chi cambia
          conversazione lo chiama da se' (`showConversation`); qui basta
-         l'intestazione, in fondo. */
-      this.chat.keepBottom();
+         l'intestazione, in fondo. Il filo torna dove l'avevi lasciato, o
+         in fondo (`restorePlace`): nascosto dietro una stanza puo' aver perso
+         lo scroll. */
+      this.chat.restorePlace?.();
       this.focus?.restore();
     } else {
       /* Niente composer, quindi il pavimento va dichiarato: senza, l'osservatore
@@ -1693,7 +1753,22 @@ class HomeApp {
      sceglie la stessa tabella che decide il salto, quindi le due non possono
      divergere. Fino al 26/09/2026 era scritta a schermo, come occhiello. */
   _applyBackLabel() {
-    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backTarget() || 'chat'}`));
+    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backLabelKey()}`));
+  }
+
+  /* Dove porta davvero la freccia. «Torna alla chat» da una stanza voleva
+     dire «torna alla pista», che sta sulla pagina da cui sei entrato — i
+     Quaderni, le App, una pagina in alto — e la frase mentiva a chi la
+     sente col lettore di schermo (giro UX del 10/10/2026). */
+  _backLabelKey() {
+    const target = this._backTarget() || 'chat';
+    if (target !== 'chat') return target;
+    const entry = this._entry;
+    if (!entry || entry.kind === 'chat') return 'chat';
+    if (entry.id === 'notebooks') return 'notebooks';
+    if (entry.id === 'app') return 'apps';
+    if (entry.id === 'settings') return 'settings';
+    return 'pinned';
   }
 
   /* La conversazione e' cambiata: le frasi del campo e del vuoto, la testa, e
@@ -1749,6 +1824,7 @@ class HomeApp {
   appsActions() {
     return (this._appActions ||= new AppsActions(this.appsSource(), {
       sendChatPrompt: (text) => this._sendInChat(text),
+      keepsAppUnderChat: true,
       homePages: () => this.pagesPort(),
       onAppClosed: (slug) => {
         this.board?.refreshApp(slug);
@@ -1787,15 +1863,48 @@ class HomeApp {
     });
   }
 
-  /** Porta una richiesta gia' scritta dentro la conversazione, nel campo e
-   *  **senza mandarla**: chi la legge ci aggiunge cosa vuole, poi la manda lui.
-   *  Serve a «modifica questa app», che non apre un editor: chiede a Jenny. */
+  /** Porta una richiesta gia' scritta dentro la conversazione personale, nel
+   *  campo e **senza mandarla**: chi la legge ci aggiunge cosa vuole, poi la
+   *  manda lui. Serve a «modifica questa app», a «parlane in chat» di un'app
+   *  e all'app rotta.
+   *
+   *  **Sopra dove sei, nel velo** (dal 10/10/2026), come un avviso toccato:
+   *  prima passava da Home, che chiudeva l'app, usciva dal quaderno e
+   *  scriveva sopra la mezza frase che avevi nel campo. Ora il foglio da cui
+   *  arriva si chiude, la chat sale con la personale e la bozza si mette da
+   *  parte finche' non mandi (v. `_prefill`). */
   _sendInChat(text) {
-    this.goHome();
+    this._closeSheets();
+    if (this.chatOver && sessionManager.currentKey !== sessionManager.personalKey) this.closeChatOver();
+    if (this.chatOver) {
+      this._prefill(text);
+      return;
+    }
+    this.openChatOver({ key: sessionManager.personalKey, prefill: text });
+  }
+
+  /** Mette *text* nel campo **senza buttare la bozza**.
+   *
+   *  La bozza che c'era — se diversa — si mette da parte per la conversazione
+   *  in cui e' scritta, e torna nel campo quando il messaggio pronto parte
+   *  (`_send`), o resta nel campo se il gateway lo rifiuta. E' la regola di
+   *  `prefillComposer` nell'officina (`test_prefill_keeps_the_draft_client`):
+   *  una frase pronta non vale piu' di quel che stavi scrivendo. */
+  _prefill(text) {
     if (!this.input) return;
+    const draft = this.input.value;
+    const key = sessionManager.currentKey;
+    if (draft.trim() && draft.trim() !== String(text).trim() && !this._draftsAside.has(key)) {
+      this._draftsAside.set(key, draft);
+    }
     this.input.value = text;
     this.input.dispatchEvent(new Event('input', { bubbles: true }));
+    /* Sincrono, dentro il tocco: e' l'unico modo perche' Android alzi la
+       tastiera. Il cursore in fondo, dove si aggiunge. */
     this.input.focus();
+    const end = this.input.value.length;
+    try { this.input.setSelectionRange(end, end); } catch { /* campo senza selezione */ }
+    this._autosize();
   }
 
   /** Il nome che l'elenco delle app da' a uno slug, se l'elenco e' gia' stato
@@ -1866,7 +1975,7 @@ class HomeApp {
    *  per pressione, dall'alto: l'ordine qui sotto e' quello in cui stanno a
    *  schermo, non una scelta fra candidati.
    */
-  _closeOverlays() {
+  _closeOverlays({ editor = true } = {}) {
     /* Prima di tutto i dialoghi condivisi, che si aprono sopra le schede e
        sopra le pagine. Si congedano con la semantica di Esc, come fa
        l'officina (`_dismissTopDialog`): l'evento `cancel`, annullabile, e
@@ -1907,6 +2016,15 @@ class HomeApp {
        sopra le mini-app, perche' Jenny si apre anche li', quindi si chiude
        prima dell'app che le sta sotto. */
     if (this.chatOver) return this.closeChatOver();
+    /* L'editor di una pagina: Indietro chiude **lui**, e resta sulla pagina
+       (dal 10/10/2026). Prima Indietro usciva dal lettore — in silenzio con
+       l'editor intonso, e con la conferma che, detto si', buttava le
+       modifiche *e* usciva: due cose per una pressione. Se dentro c'e' del
+       lavoro chiede, come il suo Annulla. */
+    if (editor && this.view === 'reader' && this.reader?.editing) {
+      this.reader.askCancel();
+      return true;
+    }
     /* Poi un'app aperta a tutto schermo dal cassetto. Fino al 23/09/2026 la
        casa non la chiudeva mai: Indietro agiva su quel che c'era **sotto**, e
        l'app restava li'. Con la pagina App diventata la strada principale per
@@ -1916,9 +2034,13 @@ class HomeApp {
     /* La barra di una scheda tenuta premuta: Indietro la chiude (e spegne i
        fili) prima di lasciare la bacheca. */
     if (this.view === 'board' && this.board?.closeCardBar?.()) return true;
-    /* La modalita' ordina: Indietro esce **senza salvare**. Salvare e' «Fatto». */
+    /* La modalita' ordina: ogni uscita **salva**, come nei launcher (scelta
+       dell'utente, 10/10/2026). Fino ad allora Indietro e Home uscivano
+       senza salvare, e il nuovo ordine spariva senza dirlo. Se la scrittura
+       non riesce si resta dentro con la bozza intatta (`closeSort`), e la
+       pista lo dice. */
     if (this.strip?.sorting) {
-      this.strip.closeSort();
+      this.strip.closeSort({ save: true });
       return true;
     }
     /* Il cassetto non e' piu' uno strato, e' una pagina. Ma la ricerca scritta
@@ -1956,7 +2078,9 @@ class HomeApp {
    *  casa bloccata su un tocco. */
   _closeAllOverlays() {
     this._appActions?.closeApp();
-    for (let i = 0; i < 8 && this._closeOverlays(); i += 1) { /* avanti */ }
+    /* Senza l'editor: chi chiude tutto cambia anche stanza, e la domanda sul
+       lavoro non salvato la fa `_setView` — una volta, non otto. */
+    for (let i = 0; i < 8 && this._closeOverlays({ editor: false }); i += 1) { /* avanti */ }
   }
 
   /** Il tocco su un avviso proattivo, o sulla mascotte flottante: porta il
@@ -2236,7 +2360,14 @@ class HomeApp {
       return false;
     }
     this.files.clear();
-    this.input.value = '';
+    /* Era una frase pronta: la bozza messa da parte torna nel campo. */
+    const key = sessionManager.currentKey;
+    const aside = this._draftsAside.get(key);
+    this._draftsAside.delete(key);
+    this.input.value = aside || '';
+    /* Se il gateway la rifiuta, la frase deve poter tornare al posto della
+       bozza (v. `onSendRejected`). */
+    this._restoredDraft = aside ? { key, text: aside } : null;
     this._autosize();
     return true;
   }

@@ -99,6 +99,8 @@ function makeChat() {
       const n = makeNode(); n.className = 'home-msg home-msg-jenny'; n.innerHTML = content;
       return this._append(n, toTop);
     },
+    // Il punto di lettura ha il suo banco (`test_home_place_client.py`).
+    restorePlace() { this.scrollToBottom(); },
     __METHODS__,
   };
 }

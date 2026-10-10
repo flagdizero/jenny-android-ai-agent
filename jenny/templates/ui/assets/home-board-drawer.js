@@ -113,6 +113,12 @@ export class BoardDrawer {
     this.notebook = null;
     this.card = null;
     this.data = null;
+    /* Dove eri nel cassetto: si legge dallo scroll mentre si vede (nascosto
+       dietro una pagina lo scroll si azzera, e quel valore non vale). */
+    this._top = 0;
+    this.el?.addEventListener('scroll', () => {
+      if (this.el.clientHeight) this._top = this.el.scrollTop;
+    });
     /** La sezione che si sta correggendo, per titolo. */
     this.editing = null;
     this._token = 0;
@@ -123,14 +129,26 @@ export class BoardDrawer {
     return this.data?.title || '';
   }
 
-  /** Apre il cassetto *card* del quaderno *notebook*. */
-  async load(notebook, card) {
+  /** Apre il cassetto *card* del quaderno *notebook*.
+   *
+   *  *keepPlace*: si torna a un cassetto gia' aperto — da una sua pagina —
+   *  e lo si ritrova com'era, dove eri, senza il lampo di «caricamento»: si
+   *  rilegge sotto, e si ridisegna al suo posto. Fino al 10/10/2026 ogni
+   *  ritorno svuotava il cassetto e lo riportava in cima. */
+  async load(notebook, card, { keepPlace = false } = {}) {
     const token = ++this._token;
+    const same = keepPlace && this.data && this.notebook === notebook && this.card === card;
+    const top = same ? this._top : 0;
     this.notebook = notebook;
     this.card = card;
     this.editing = null;
-    this.el.innerHTML = '';
-    this.el.appendChild(el('p', 'home-drawer-note', i18n.t('board.drawer.loading')));
+    if (same) {
+      this.render();
+      this.el.scrollTop = top;
+    } else {
+      this.el.innerHTML = '';
+      this.el.appendChild(el('p', 'home-drawer-note', i18n.t('board.drawer.loading')));
+    }
     let data;
     try {
       data = await api.getBoardCard(notebook, card);
@@ -144,7 +162,7 @@ export class BoardDrawer {
     if (token !== this._token) return null;
     this.data = data;
     this.render();
-    this.el.scrollTop = 0;
+    this.el.scrollTop = top;
     /* Aperto adesso: il puntino blu della scheda e quelli delle sezioni si
        spengono alla prossima apertura della bacheca. */
     rpc.board('seen', notebook, { card }).catch((err) => console.warn('home.drawer: seen failed', err));

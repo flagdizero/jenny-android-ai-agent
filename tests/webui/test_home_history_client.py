@@ -308,7 +308,10 @@ const STICK_PX = __STICK_PX__;  // il numero vero, letto dal sorgente
 
 function makeChat(el) {
   const chat = { el, _stick: true, _lastTop: el.scrollTop, __ON_SCROLL__, __AT_BOTTOM__,
-                 __FOLLOW__, __KEEP__, __SCROLL__ };
+                 __FOLLOW__, __KEEP__, __SCROLL__,
+                 // Il punto di lettura e il «↓» hanno il loro banco
+                 // (`test_home_place_client.py`): qui conta l'aggancio.
+                 _mark() {}, _paintFab() {} };
   // L'aggancio vero: senza, `fire()` non chiama niente e il banco passa a vuoto.
   el.addEventListener('scroll', () => chat._onScroll());
   return chat;

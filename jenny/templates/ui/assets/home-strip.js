@@ -153,7 +153,8 @@ export class HomeStrip {
   }
 
   /** Esce. Con `save` scrive l'ordine della bozza, e toglie le pagine che non
-   *  ci sono piu'; senza, lascia tutto com'era — e' Indietro.
+   *  ci sono piu'; senza, lascia tutto com'era. Dal 10/10/2026 la casa esce
+   *  sempre salvando — «Fatto», Indietro e Home — come i launcher.
    *
    *  **Si esce solo a salvataggio riuscito.** La bozza si azzerava prima di
    *  scrivere, e una scrittura rifiutata perdeva l'ordine in silenzio: ora si

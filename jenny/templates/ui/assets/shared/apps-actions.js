@@ -386,7 +386,10 @@ export class AppsActions {
       const app = this.source.jennyApps.find(a => a.slug === open.slug);
       const name = app?.name || open.slug;
       const text = String(msg.text || '').slice(0, 4000);
-      this.closeApp();
+      /* La casa apre la chat **sopra** l'app (il velo): si parla di quel che si
+         sta guardando, e richiusa la chat l'app e' ancora li'. L'officina la
+         chat la mostra al posto dell'app, e l'app va chiusa. */
+      if (!this.shell.keepsAppUnderChat) this.closeApp();
       this.shell.sendChatPrompt(i18n.t('apps.chatAboutApp', { name, text }));
       return;
     }
