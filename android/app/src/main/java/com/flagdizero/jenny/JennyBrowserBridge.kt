@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.ServiceWorkerClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -507,6 +508,16 @@ class JennyBrowserBridge(context: Context) {
     }
 
     private fun sessionClient(): WebViewClient = object : WebViewClient() {
+        // Il renderer è condiviso da tutte le WebView dell'app: se muore e una
+        // sola risponde false, cade il processo intero, gateway compreso. La
+        // sessione del browser finisce qui; la prossima apertura ne fa una nuova.
+        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+            Log.w(TAG, "WebView renderer gone: the browser session ends")
+            if (webView === view) webView = null
+            view?.destroy()
+            return true
+        }
+
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
             val uri = request?.url ?: return false
             if (isBlockedLiteral(uri)) {

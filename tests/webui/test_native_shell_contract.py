@@ -566,3 +566,12 @@ def test_every_event_the_shell_dispatches_has_a_listener() -> None:
         f"Cadono nel vuoto in silenzio — nessun errore, e la cosa che dovevano "
         f"far succedere semplicemente non succede."
     )
+
+
+def test_a_dead_renderer_rebuilds_the_activity_instead_of_killing_the_app() -> None:
+    """Senza ``onRenderProcessGone`` la morte del renderer fa cadere il
+    processo intero, e la casa ripartiva dalla chat. Si ricostruisce
+    l'activity, e la casa riprende il posto salvato (10/10/2026)."""
+    body = _code_only(_fun_body(_main_activity(), "onRenderProcessGone"))
+    assert "recreate()" in body
+    assert "return true" in body, "false lascia cadere il processo"

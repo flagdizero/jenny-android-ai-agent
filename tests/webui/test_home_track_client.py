@@ -849,7 +849,8 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
         "  _placeJenny() {}\n"
         "  _syncJennyPlace() {}\n"
         "  _applyHead() {}\n"
-        "  _reportChatOnScreen() {}\n  "
+        "  _reportChatOnScreen() {}\n"
+        "  _savePlace() {}\n  "
         + member(app_js, "onPageChanged")
         + "\n}\n"
         "const g = new FakeShell();\n"

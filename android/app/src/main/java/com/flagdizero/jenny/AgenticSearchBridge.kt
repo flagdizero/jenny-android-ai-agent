@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -183,6 +184,22 @@ class AgenticSearchBridge(context: Context) {
                 ensureWebView()
                 val wv = webView!!
                 wv.webViewClient = object : WebViewClient() {
+                    // Il renderer è condiviso da tutte le WebView dell'app: se
+                    // muore e una sola risponde false, cade il processo intero
+                    // (gateway compreso). Questa, nascosta, se ne va e la
+                    // ricerca finisce in errore.
+                    override fun onRenderProcessGone(
+                        view: WebView?,
+                        detail: RenderProcessGoneDetail?
+                    ): Boolean {
+                        Log.w(TAG, "WebView renderer gone during a search")
+                        errorRef.set("WebView renderer gone")
+                        latch.countDown()
+                        if (webView === view) webView = null
+                        view?.destroy()
+                        return true
+                    }
+
                     override fun onReceivedError(
                         view: WebView?,
                         request: WebResourceRequest?,

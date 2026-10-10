@@ -29,6 +29,7 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebChromeClient.FileChooserParams
@@ -1180,6 +1181,23 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
                 openExternalUrl(uri)
+                return true
+            }
+
+            /**
+             * Il renderer della WebView è morto (Android l'ha ucciso per
+             * memoria mentre l'utente stava in un'altra app pesante, o è
+             * caduto). Senza questo override la WebView fa cadere l'intero
+             * processo — gateway compreso — e si ripartiva da zero, in chat.
+             * Qui si ricostruisce solo l'activity: la WebView morta se ne va
+             * con onDestroy (che la toglie e la distrugge, come vuole la
+             * documentazione), quella nuova ricarica la casa, e la casa
+             * riprende il posto che aveva salvato (`home-app.js`
+             * `_restorePlace`; giro UX del 10/10/2026).
+             */
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                Log.w(TAG, "WebView renderer gone (crashed=${detail?.didCrash()}): rebuilding the activity")
+                if (!isFinishing && !isDestroyed) recreate()
                 return true
             }
 

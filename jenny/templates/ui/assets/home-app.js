@@ -59,7 +59,7 @@ import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
 import { createProjectFlow } from './shared/project-create.js';
 import { deleteProjectFlow } from './shared/project-delete.js';
-import { showToast } from './shared/utils.js';
+import { readStorage, showToast, writeStorage } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { isFirstRun } from './shared/first-run.js';
 import { ImageHandler } from './shared/image-handler.js';
@@ -89,6 +89,13 @@ const WIRE_GRACE_MS = 2_500;
    `--jenny-away-floor` in mobile-style.css, che i fondi delle stanze leggono
    per lasciarle posto. */
 const FLOOR_NO_COMPOSER = 66;
+
+/* Dove eri nella casa, per ritrovarlo dopo un riavvio della WebView (v.
+   `_savePlace`). Per-telefono e di comodo: `localStorage` basta, e se manca
+   si riparte dalla chat come sempre. */
+const PLACE_KEY = 'home-place';
+/* Oltre, il posto e' di un altro momento: si riparte dalla chat. */
+const PLACE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 /* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
    ripiego del server (`settings_api`, `bot_name or "Jenny"`). E' un nome
@@ -588,7 +595,13 @@ class HomeApp {
     /* Non `await`: le pagine aggiunte e l'ordine arrivano quando arrivano, e
        finche' non ci sono la casa e' quella di chi non ha spostato niente, su
        Jenny — che e' esattamente quel che deve essere. */
-    this.homePages.load();
+    /* Finche' il posto di prima non e' stato ripreso (o lasciato), non se ne
+       scrive uno nuovo: il primo arrivo sulla chat lo cancellerebbe. */
+    this._placeHeld = true;
+    this.homePages.load().then(() => this._restorePlace()).finally(() => {
+      this._placeHeld = false;
+      this._savePlace();
+    });
     /* Neanche il nome si aspetta: fino ad allora la fila dice quello di
        sempre. */
     this._readName();
@@ -979,6 +992,7 @@ class HomeApp {
       this._setHeadTitle(loaded);
       this._applyPath(notebook);
     }
+    this._savePlace();
   }
 
   /** Una pagina del quaderno, letta. *card* e' il cassetto da cui la si apre:
@@ -1005,6 +1019,7 @@ class HomeApp {
     this._setHeadTitle(label || '');
     this._applyHead();
     this._readerTitle(await this.reader.load(notebook, path, label));
+    this._savePlace();
   }
 
   /* Dove torna la freccia da questa stanza. Il lettore torna al cassetto da cui
@@ -1035,6 +1050,7 @@ class HomeApp {
     }
     this._applyHead();
     this._readerTitle(await this.reader.load(notebook, path));
+    this._savePlace();
   }
 
   /* Indietro di una pagina lungo la pila dei link, dov'eri. */
@@ -1048,6 +1064,7 @@ class HomeApp {
     if (this.view === 'reader' && this.reader.path === step.path && this.reader.bodyEl) {
       this.reader.bodyEl.scrollTop = step.top;
     }
+    this._savePlace();
   }
 
   /* «Altro…» e l'esempio della bacheca vuota: una frase gia' scritta, nella
@@ -1382,6 +1399,53 @@ class HomeApp {
   }
 
 
+  /** Ricorda dove sei: la pagina in alto, e dentro un quaderno la stanza —
+   *  bacheca, cassetto, pagina letta.
+   *
+   *  Serve quando la WebView riparte da capo (Android chiude il processo o il
+   *  renderer mentre usi un'altra app pesante): prima la casa ripartiva
+   *  sempre dalla chat (giro UX del 10/10/2026). Si scrive a ogni cambio di
+   *  pagina o di stanza; si rilegge una volta, all'avvio (`_restorePlace`). */
+  _savePlace() {
+    if (this._placeHeld) return;
+    const reading = this.view === 'reader';
+    writeStorage(PLACE_KEY, JSON.stringify({
+      at: Date.now(),
+      page: this._entry?.id || null,
+      view: this.view,
+      notebook: NOTEBOOK_ROOMS.includes(this.view) ? projectNameOf(sessionManager.currentKey) : null,
+      card: this.view === 'drawer' ? this.drawer?.card || null : reading ? this._readerCard : null,
+      cardTitle: this._cardTitle || '',
+      path: reading ? this.reader?.path || null : null,
+      label: reading ? this.nameEl?.textContent || '' : '',
+    }));
+  }
+
+  /** All'avvio, il posto di prima — se e' recente, e se l'avvio non chiede
+   *  la chat (`?mode=chat`: un avviso toccato a app chiusa, il riavvio dopo
+   *  un ripristino). Una cosa che nel frattempo non c'e' piu' (un quaderno
+   *  cancellato) lascia dove si e' arrivati. */
+  async _restorePlace() {
+    if (new URLSearchParams(globalThis.location?.search || '').get('mode') === 'chat') return;
+    let place = null;
+    try { place = JSON.parse(readStorage(PLACE_KEY) || 'null'); } catch { place = null; }
+    if (!place || !(Date.now() - place.at < PLACE_MAX_AGE_MS)) return;
+    // Nel frattempo ti sei gia' mosso: vince quel che hai fatto tu.
+    if (this.view !== 'chat' || this.chatOver) return;
+    if (place.page && place.page !== 'chat' && this.homePages.indexOf(place.page) >= 0) {
+      this.homePages.goToId(place.page, { animated: false });
+    }
+    if (!place.notebook) return;
+    await this.openNotebook(place.notebook);
+    if (this.view !== 'board') return;
+    if (place.card && (place.view === 'drawer' || place.view === 'reader')) {
+      await this.openCard(place.card, place.cardTitle);
+    }
+    if (place.view === 'reader' && place.path) {
+      await this.openPage(place.path, place.label, place.card);
+    }
+  }
+
   /** Indietro di **una** stanza. Vero se c'era dove tornare.
    *
    *  Fra le pagine c'e' un gradino in piu' che le stanze non hanno: da
@@ -1459,6 +1523,7 @@ class HomeApp {
     this._applyHead();
     this._reportChatOnScreen();
     this.unseen?.refresh();
+    this._savePlace();
   }
 
   /** Una pagina ha scoperto che la sua cosa non c'e' piu', o che c'e' di
@@ -1665,6 +1730,7 @@ class HomeApp {
     this._applyHead();
     this._reportChatOnScreen();
     this.unseen?.refresh();
+    this._savePlace();
     return true;
   }
 

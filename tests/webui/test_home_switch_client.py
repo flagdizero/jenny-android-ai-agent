@@ -362,6 +362,9 @@ class App {
   }
   _autosize() {}
   _renderPending() {}
+  /* Il posto per un riavvio (`localStorage`) ha il suo banco
+     (`test_home_place_restore_client.py`). */
+  _savePlace() {}
   /* Gli allegati per conversazione hanno il loro banco
      (`test_home_attachments_per_conversation_client.py`). */
   _filesFor() { return this.files; }
