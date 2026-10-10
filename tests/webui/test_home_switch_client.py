@@ -374,6 +374,7 @@ class App {
   __BACK__
   __GO_HOME__
   __OPEN_CHAT__
+  __CLOSE_SHEETS__
   __APPLY_TRANSLATIONS__
   __APPLY_CONVERSATION_TEXTS__
   __APPLY_OVER_TITLE__
@@ -475,6 +476,7 @@ def _harness() -> str:
         .replace("__BACK__", member(src, "handleHardwareBack"))
         .replace("__GO_HOME__", member(src, "goHome"))
         .replace("__OPEN_CHAT__", member(src, "openChat"))
+        .replace("__CLOSE_SHEETS__", member(src, "_closeSheets"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
         .replace("__APPLY_CONVERSATION_TEXTS__", member(src, "_applyConversationTexts"))
         .replace("__APPLY_OVER_TITLE__", member(src, "_applyOverTitle"))
@@ -949,17 +951,92 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
 
 
 
-def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
-    """Le pagine parlano di *un* quaderno. Un avviso toccato porta nella
-    conversazione personale: restare sull'elenco vorrebbe dire leggere le
-    pagine di una stanza in cui non sei piu'."""
+def test_a_tapped_alert_raises_the_personal_chat_over_the_board() -> None:
+    """Un avviso toccato dentro un quaderno porta la conversazione personale —
+    e' li' che l'avviso sta — **sopra** la bacheca, non al suo posto (dal
+    10/10/2026): chiusa la chat, sei di nuovo dov'eri, e la chat dietro la
+    bacheca e' tornata quella del quaderno. Prima l'avviso ti portava fuori dal
+    quaderno, e il posto era perso."""
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
       app._setView('board');
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'board', 'l\u2019avviso ha portato via la bacheca');
+      assert.equal(app.chatOver, true, 'la chat non e\u2019 salita');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.ok(app.actions.includes('sale:websocket:default'));
+      assert.equal(app.isChatOnScreen(), true, 'gli avvisi non si cancellerebbero');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, false);
+      assert.equal(app.view, 'board');
+      assert.equal(sessionManager.currentKey, 'project:orto', 'la bacheca e\u2019 rimasta senza la sua chat');
+      assert.ok(app.actions.includes('risintonizza:project:orto'));
+    """)
+
+
+def test_a_tapped_alert_swaps_a_notebook_chat_already_open_over_the_board() -> None:
+    """Con la chat del quaderno gia' aperta sopra la bacheca, l'avviso la
+    sostituisce con la personale; richiusa, il quaderno ritrova la sua."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('board');
+      app.openChatOver();
+      assert.equal(sessionManager.currentKey, 'project:orto');
       app.openChat();
-      assert.equal(app.view, 'chat');
-      assert.equal(app.shell.attrs['data-view'], 'chat');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, true);
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:orto');
+    """)
+
+
+def test_a_tapped_alert_on_the_chat_page_just_shows_the_bottom() -> None:
+    """Sulla pagina chat, con la personale a schermo, il velo non serve:
+    l'avviso porta in fondo al filo e basta."""
+    _run_js("""
+      const app = home();
+      app.onPageChanged(1, { id: 'chat', kind: 'chat', fixed: true });
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      assert.equal(app.chatOver, false, 'un velo sopra la chat stessa');
+      assert.ok(app.actions.includes('in fondo'));
+    """)
+
+
+def test_a_tapped_alert_leaves_the_pages_where_they_were() -> None:
+    """Dai Quaderni, dalle App, dalle Impostazioni: la chat sale sopra la
+    pagina e la pista non si muove."""
+    _run_js("""
+      const app = home();
+      app.homePages.goToId('notebooks');
+      app.onPageChanged(2, { id: 'notebooks', kind: 'notebooks', fixed: true });
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      assert.equal(app.homePages.current, 'notebooks');
+      assert.equal(app.chatOver, true);
+      assert.ok(!app.actions.some((a) => a.startsWith('pagina:')), 'la pista si e\u2019 mossa');
+    """)
+
+
+def test_a_tapped_alert_does_not_climb_over_an_open_question() -> None:
+    """Una domanda aperta aspetta una risposta: il velo non sale, e il guscio
+    nativo, sentendosi dire di no, lascia l'avviso in tendina."""
+    _run_js("""
+      const app = home();
+      app._setView('board');
+      document.getElementById('oc-confirm-dialog').open = true;
+      const realQuery = document.querySelector;
+      document.querySelector = (sel) => (sel === 'dialog[open]' ? {} : realQuery(sel));
+      assert.equal(app.openChat(), false);
+      assert.equal(app.chatOver, false);
+      assert.equal(document.getElementById('oc-confirm-dialog').open, true, 'la domanda e\u2019 stata chiusa');
     """)
 
 
@@ -1212,6 +1289,9 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
       /* Le pagine finte non cambiano conversazione: si resta in «piante», e
          ognuna delle due strade deve chiedere la personale alle pagine. */
       sessionManager.currentKey = projectKey('piante');
+      /* Sulla pagina chat: e' li' che l'avviso cambia conversazione invece di
+         salire nel velo (v. `openChat`). */
+      app._entry = { id: 'chat', kind: 'chat' };
       for (const [route, perform] of [
         ['Home', () => app.goHome()],
         ['un avviso', () => app.openChat()],
@@ -1259,12 +1339,21 @@ def test_home_closes_an_app_with_inner_screens_for_good() -> None:
     """)
 
 
-def test_a_tapped_alert_closes_an_app_with_inner_screens_for_good() -> None:
+def test_a_tapped_alert_keeps_an_open_app_under_the_chat() -> None:
+    """L'app aperta resta li', sotto il velo, alla sua schermata interna:
+    chiusa la chat la si ritrova com'era. Fino al 10/10/2026 l'avviso la
+    chiudeva, e con lei quel che ci stavi facendo."""
     _run_js(_DEEP_APP + """
-      app.openChat();
+      assert.equal(app.openChat(), true);
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(mini.open, false, 'l\\u2019avviso ha lasciato l\\u2019app aperta sopra la chat');
-      assert.equal(mini.back, 0);
+      assert.equal(app.chatOver, true);
+      assert.equal(mini.open, true, 'l\\u2019avviso ha chiuso l\\u2019app');
+      assert.equal(mini.depth, 2);
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.handleHardwareBack();
+      assert.equal(app.chatOver, false, 'Indietro chiude prima la chat');
+      assert.equal(mini.open, true);
+      assert.equal(mini.back, 0, 'Indietro ha toccato anche l\\u2019app');
     """)
 
 
@@ -1700,7 +1789,7 @@ def test_home_waits_for_the_reader_confirm_before_switching() -> None:
 
 def test_saying_no_to_the_reader_confirm_keeps_everything() -> None:
     _run_js(_DIRTY_READER + """
-      app.openChat();
+      app.goHome();
       reply(false);
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(app.view, 'reader');
@@ -1709,15 +1798,21 @@ def test_saying_no_to_the_reader_confirm_keeps_everything() -> None:
     """)
 
 
-def test_a_tapped_alert_waits_for_the_reader_confirm_too() -> None:
+def test_a_tapped_alert_keeps_the_reader_edit_under_the_chat() -> None:
+    """L'avviso non esce dal lettore, quindi non chiede di buttare le
+    modifiche: la chat sale sopra l'editor, e richiusa lo ritrovi a meta'."""
     _run_js(_DIRTY_READER + """
+      reply = null;
       assert.equal(app.openChat(), true);
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(sessionManager.currentKey, 'project:piante');
-      reply(true);
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.view, 'chat');
+      assert.equal(reply, null, 'ha chiesto di buttare le modifiche');
+      assert.equal(app.view, 'reader');
       assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader');
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      assert.ok(!app.actions.includes('modifiche buttate'));
     """)
 
 

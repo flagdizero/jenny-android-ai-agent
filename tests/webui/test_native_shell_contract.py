@@ -339,10 +339,11 @@ def test_alerts_left_from_before_an_update_get_the_token_too() -> None:
     assert boot.index("refreshAlertTapIntents(") < boot.index("GatewayStarter.ensureUp(")
 
 
-def test_tapping_the_alert_closes_what_is_above_and_lands_in_chat() -> None:
-    """Il ramo deve smontare i livelli sopra la vista e *forzare* la chat — la
-    vista "home" è una preferenza e può non esserlo, mentre il messaggio che
-    l'utente ha toccato sta in chat.
+def test_tapping_the_alert_brings_the_chat_without_taking_the_place() -> None:
+    """Il ramo deve portare a schermo la chat — il messaggio che l'utente ha
+    toccato sta lì — e nella casa **senza togliere il posto**: la chat sale
+    sopra la pagina in cui eri, mini-app o quaderno che sia (dal 10/10/2026;
+    prima smontava i livelli e tornava alla pagina chat).
 
     Il guscio non compone più il comportamento da sé. ``goHome()`` seguito da
     ``switchMode('chat', false)`` lasciava la entry di radice a descrivere la
@@ -369,8 +370,36 @@ def test_tapping_the_alert_closes_what_is_above_and_lands_in_chat() -> None:
     assert "api.navigate('/html-mobile/', { replace: true })" in open_chat
     assert "return false;" in open_chat
     home = _method((UI_ASSETS / "home-app.js").read_text(encoding="utf-8"), "openChat")
-    assert "this._closeAllOverlays()" in home
-    assert "this.switchConversation(null)" in home, "la casa deve aprire la conversazione personale"
+    assert "this.openChatOver({ key: sessionManager.personalKey })" in home, (
+        "la casa deve aprire la conversazione personale sopra la pagina"
+    )
+    assert "_closeAllOverlays" not in home, "l'avviso chiude di nuovo l'app aperta"
+    assert "_setView(" not in home, "l'avviso cambia di nuovo stanza"
+
+
+def test_home_from_another_app_brings_the_house_back_where_it_was() -> None:
+    """Jenny è il launcher: ogni Home, anche quello che ti riporta qui da
+    un'altra app, arriva come intent ``CATEGORY_HOME`` a ``onNewIntent``.
+    Solo quello premuto con la casa già davanti la riporta alla chat
+    (``goHome``); quello del rientro no — altrimenti ogni giro in un'altra app
+    finiva in chat, fuori dal quaderno e dalla mini-app (10/10/2026).
+
+    «Eri via» lo dice ``onStop``, e il segno si spegne a fine ``onResume``,
+    che per un'activity riportata davanti arriva **dopo** ``onNewIntent``.
+    """
+    kotlin = _main_activity()
+    on_new_intent = _code_only(_fun_body(kotlin, "onNewIntent"))
+    home_branch = re.search(r"if \(intent\?\.hasCategory\(Intent\.CATEGORY_HOME\) == true(.*?)\)\s*\{(.*?)\}",
+                            on_new_intent, re.S)
+    assert home_branch, "il ramo Home non c'è più"
+    assert "!cameBackFromBackground" in home_branch.group(1), "Home dal rientro riporta di nuovo alla chat"
+    assert "goHome()" in home_branch.group(2)
+    assert "cameBackFromBackground = true" in _code_only(_fun_body(kotlin, "onStop"))
+    on_resume = _code_only(_fun_body(kotlin, "onResume")).strip()
+    assert on_resume.rstrip().endswith("cameBackFromBackground = false"), (
+        "il segno va spento in fondo a onResume, dopo che onNewIntent l'ha letto"
+    )
+    assert "cameBackFromBackground = false" not in _code_only(_fun_body(kotlin, "onPause"))
 
 
 def test_pending_alerts_are_cleared_where_the_chat_reaches_the_screen() -> None:

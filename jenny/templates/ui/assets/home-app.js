@@ -1007,8 +1007,9 @@ class HomeApp {
   }
 
   /** Apre la chat sopra la pagina. *prefill* e' una frase gia' scritta nel
-   *  campo, da mandare tu. Vero se si e' aperta. */
-  openChatOver({ prefill = null } = {}) {
+   *  campo, da mandare tu. *key* impone la conversazione al posto di quella
+   *  che Jenny porterebbe da qui (v. `openChat`). Vero se si e' aperta. */
+  openChatOver({ prefill = null, key: wanted = null } = {}) {
     if (this.chatOver) return true;
     /* Mentre si ordinano le pagine, o con una domanda aperta, il velo non
        sale: lei sobbalza, e la cosa aperta resta quella. */
@@ -1017,7 +1018,13 @@ class HomeApp {
       return false;
     }
     if (!this.over?.host) return false;
-    const key = this._summonKey();
+    const key = wanted || this._summonKey();
+    /* Una conversazione imposta sopra una stanza di quaderno — l'avviso porta
+       la personale sopra la bacheca — si ricorda quella che c'era: la bacheca
+       sotto e' del quaderno, e la chat dietro di lei torna sua quando il velo
+       scende (v. `closeChatOver`). */
+    this._overReturn = key !== sessionManager.currentKey && NOTEBOOK_ROOMS.includes(this.view)
+      ? sessionManager.currentKey : null;
     this.over.show();
     this.jenny?.setExpanded?.(true);
     this.chatMove.lift(this.over.host, key);
@@ -1043,8 +1050,17 @@ class HomeApp {
    *  conversazione che aveva. Vero se era aperta. */
   closeChatOver() {
     if (!this.chatOver) return false;
+    const back = this._overReturn;
+    this._overReturn = null;
     this.input?.blur();
-    this.chatMove.lower(this.homePages?._panelFor?.('chat'));
+    const home = this.homePages?._panelFor?.('chat');
+    this.chatMove.lower(home);
+    /* Il velo era salito con un'altra conversazione sopra il quaderno (v.
+       `openChatOver`): la chat, a casa dietro la bacheca, torna sua senza
+       farsi vedere — come quando il quaderno si apre. */
+    if (back && back !== sessionManager.currentKey && NOTEBOOK_ROOMS.includes(this.view)) {
+      this.chatMove.retune(home, back);
+    }
     this.over.hide();
     this.jenny?.setExpanded?.(false);
     this.jenny?.setChatOnScreen?.(false);
@@ -1773,7 +1789,11 @@ class HomeApp {
     return this._apps?.jennyApps?.find?.((a) => a.slug === slug)?.name || null;
   }
 
-  /** Il tasto Home di Android, quando Jenny e' il launcher.
+  /** Il tasto Home di Android, quando Jenny e' il launcher — premuto **mentre
+   *  la casa e' gia' davanti**. Quello che ti riporta qui da un'altra app non
+   *  arriva: il guscio nativo lo filtra, e la casa ricompare dove l'avevi
+   *  lasciata (v. `MainActivity.onNewIntent`). E' la regola dei launcher:
+   *  il primo Home riporta a casa, il secondo alla pagina di partenza.
    *
    *  In officina Home smonta cinque livelli di overlay e collassa il
    *  sotto-stato di ogni sezione. Qui Home vuol dire una cosa sola: **sei a
@@ -1924,25 +1944,63 @@ class HomeApp {
     for (let i = 0; i < 8 && this._closeOverlays(); i += 1) { /* avanti */ }
   }
 
-  /** Il tocco su un avviso proattivo: porta *in chat*.
+  /** Il tocco su un avviso proattivo, o sulla mascotte flottante: porta il
+   *  messaggio davanti **senza toglierti il posto**.
    *
-   *  **Nella conversazione personale**, e non in quella che stavi guardando:
-   *  la copia websocket di un avviso proattivo va sempre li' (il fan-out di
+   *  **La conversazione personale**, e non quella che stavi guardando: la
+   *  copia websocket di un avviso proattivo va sempre li' (il fan-out di
    *  `runtime/delivery.py` ce la mette d'ufficio), quindi dentro un quaderno
-   *  quell'avviso non c'e' — e portarti "in chat" lasciandoti dove sei
-   *  vorrebbe dire aprire la stanza sbagliata per una notifica che hai appena
-   *  toccato.
+   *  quell'avviso non c'e'.
    *
-   *  Qui gli strati si chiudono **e** si torna a casa: non e' un tasto
-   *  Indietro, e' un indirizzo.
+   *  **Sopra la pagina, nel velo**, e non al suo posto (dal 10/10/2026). Fino
+   *  ad allora l'avviso era un indirizzo come Home: chiudeva l'app aperta,
+   *  usciva dal quaderno e tornava alla pagina chat — e chi leggeva una
+   *  pagina della wiki, toccata la notifica, perdeva la pagina. L'avviso
+   *  dice «Jenny ti ha scritto», non «smetti quel che fai»: si legge, si
+   *  risponde, e Indietro (o Jenny) riporta esattamente dov'eri — la stessa
+   *  porta che apre Jenny toccata, con la chat di sempre al posto di quella
+   *  del quaderno. Sulla pagina chat, dove il velo non serve, si cambia
+   *  conversazione li'.
+   *
+   *  I fogli di un momento (una pressione lunga, la bacheca, «Segnala»,
+   *  l'immagine ingrandita) si chiudono: starebbero sopra il velo. Una domanda
+   *  aperta no — e' una risposta che qualcuno aspetta — e allora il velo non
+   *  sale, il risultato e' falso e l'avviso resta in tendina.
    */
   openChat() {
-    this._closeAllOverlays();
-    if (!this._setView('chat', () => this.openChat())) return true;
-    this.switchConversation(null);
-    this._retryThread();
+    this._closeSheets();
+    if (this.isChatOnScreen()) {
+      this._retryThread();
+      this.chat.scrollToBottom();
+      return true;
+    }
+    if (this.view === 'chat' && this._entry?.kind === 'chat' && !this.hasOverlayAbove()) {
+      this.switchConversation(null);
+      this._retryThread();
+      this.chat.scrollToBottom();
+      return true;
+    }
+    /* Il velo e' gia' su con la chat di un quaderno: scende e risale con la
+       personale, che e' dove sta l'avviso. */
+    if (this.chatOver) this.closeChatOver();
+    if (!this.openChatOver({ key: sessionManager.personalKey })) return false;
     this.chat.scrollToBottom();
     return true;
+  }
+
+  /* Chiude i fogli di un momento, tutti: quelli di una pressione lunga, il
+     foglio della bacheca, «Segnala» e l'immagine ingrandita. Non i dialoghi
+     condivisi, che sono domande; non l'app aperta, che il velo copre e
+     ritrova. */
+  _closeSheets() {
+    for (const id of [...LONG_PRESS_SHEETS, BOARD_SHEET, REPORT_SHEET]) {
+      const sheet = document.getElementById(id);
+      if (sheet?.open) sheet.close();
+    }
+    const lightbox = document.querySelector('.image-lightbox');
+    if (!lightbox) return;
+    if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
+    else lightbox.remove();
   }
 
   /** La chat dove arrivano gli avvisi e' a schermo? Lo chiede il guscio nativo

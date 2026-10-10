@@ -157,7 +157,8 @@ class MainActivity : AppCompatActivity() {
          * proattivo. Senza, l'intent era indistinguibile da un rilancio
          * qualunque dell'activity: `onNewIntent` instrada solo CATEGORY_HOME,
          * quindi il tap portava l'app in primo piano esattamente dov'era —
-         * dentro una mini-app, in Wiki, ovunque — e non in chat.
+         * dentro una mini-app, in Wiki, ovunque — senza mostrare il messaggio.
+         * Il posto si tiene ancora (dal 10/10/2026): la chat sale sopra.
          */
         const val ACTION_OPEN_CHAT = "com.flagdizero.jenny.action.OPEN_CHAT"
 
@@ -206,20 +207,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         /**
-         * Porta la WebUI in chat da un tap sull'alert. `goHome()` è l'unico
-         * punto che smonta *tutti* i livelli sopra la vista (mini-app compresa,
-         * col suo cleanup); lo `switchMode` dopo serve perché la vista "home"
-         * è una preferenza e può non essere la chat — qui la chat non è una
-         * preferenza, è dove sta il messaggio che l'utente ha appena toccato.
-         * È no-op se la chat è già davanti.
+         * Porta la chat davanti da un tap sull'alert. Come lo fa lo decide la
+         * SPA: la casa la apre sopra la pagina in cui eri, senza togliertela;
+         * l'officina torna alla casa e risponde `false` (gli alert restano
+         * finché la chat non è davvero a schermo).
          *
-         * Ritorna un booleano vero: `false` se la SPA non c'è, e in quel caso
-         * gli alert NON vengono cancellati — la chat non si è aperta.
+         * Ritorna un booleano vero: `false` se la SPA non c'è, o se non ha
+         * potuto aprirla (una domanda aperta), e in quel caso gli alert NON
+         * vengono cancellati — la chat non si è aperta.
          */
-        // La SPA sa da sé cosa comporta "apri la chat" (smontare gli overlay,
-        // collassare il sotto-stato delle sezioni, ripartire dalla radice):
-        // comporlo qui da goHome + switchMode lasciava la entry di radice a
-        // descrivere la vista home mentre a schermo c'era la chat.
+        // La SPA sa da sé cosa comporta "apri la chat": comporlo qui da goHome
+        // + switchMode lasciava la entry di radice a descrivere la vista home
+        // mentre a schermo c'era la chat.
         private const val OPEN_CHAT_JS = """
             (function () {
               var app = window.mobileApp;
@@ -286,6 +285,11 @@ class MainActivity : AppCompatActivity() {
     // thread di polling — scritta in onCreate prima che quel thread parta.
     @Volatile
     private var openChatOnLoad = false
+    // L'activity è passata da onStop dall'ultimo onResume: è stata dietro
+    // un'altra app (o a schermo spento). Un Home che arriva così riporta la
+    // casa davanti, e non deve anche riportarla alla chat (v. onNewIntent).
+    // Main thread soltanto: onStop, onNewIntent e onResume.
+    private var cameBackFromBackground = false
     // Resolved once the gateway socket is confirmed listening (config.json,
     // and therefore the bootstrap secret, is guaranteed to already exist by
     // then — ensure_minimal_config() runs before the port is opened). Falls
@@ -883,10 +887,10 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Tap su una notifica proattiva: si va in chat, chiudendo prima
-        // qualunque livello sopra (la mini-app aperta per prima). Gli alert
-        // pendenti si cancellano SOLO qui — cioè solo quando la chat viene
-        // davvero aperta. Stavano in onResume, che in un launcher scatta a
+        // Tap su una notifica proattiva: la chat personale sale sopra la
+        // pagina in cui eri, che resta sotto (v. openChat nella casa). Gli
+        // alert pendenti si cancellano SOLO qui — cioè solo quando la chat
+        // viene davvero aperta. Stavano in onResume, che in un launcher scatta a
         // ogni ritorno alla home: l'alert veniva cancellato comunque, fosse
         // stato letto o no, e il messaggio proattivo restava senza alcun
         // segnale. Solo per un intent nostro: l'action la può scrivere
@@ -897,24 +901,38 @@ class MainActivity : AppCompatActivity() {
                 if (result?.trim() == "true") {
                     NotifierBridge.clearAlerts(this@MainActivity, "alert-tap")
                 } else {
-                    Log.w(TAG, "Alert tap could not reach the SPA; chat not opened")
+                    Log.w(TAG, "Alert tap did not bring the chat on screen; alerts kept")
                 }
             }
             return
         }
         // This app is the device HOME launcher (see AndroidManifest: category
-        // HOME + DEFAULT). Pressing the system Home button / doing the home
-        // swipe gesture while we are already the foreground task re-delivers the
-        // HOME intent here instead of a fresh onCreate (launchMode=singleTask).
-        // A launcher's Home means "collapse back to the home screen": close any
-        // open Jenny mini-app overlay and return the WebUI to chat (✿). It is a
-        // no-op when already home. The gateway service is untouched.
+        // HOME + DEFAULT), so every Home press re-delivers the HOME intent here
+        // instead of a fresh onCreate (launchMode=singleTask) — the one that
+        // brings us back from another app too.
+        //
+        // Solo un Home premuto con la casa GIÀ davanti la riporta alla chat
+        // (goHome: chiude la mini-app, esce dal quaderno, torna alla pagina
+        // chat). Quello che arriva da un'altra app riporta la casa davanti e
+        // basta, dov'era: un quaderno, una pagina della wiki, una mini-app.
+        // Fino al 10/10/2026 li trattava uguali, e ogni giro in un'altra app
+        // finiva in chat. È la regola dei launcher (Launcher3 guarda
+        // FLAG_ACTIVITY_BROUGHT_TO_FRONT per la stessa domanda): il primo Home
+        // riporta a casa, il secondo alla pagina di partenza. La domanda qui è
+        // posta a onStop e non al flag: è la nostra definizione di «eri via»,
+        // schermo spento compreso.
+        //
         // Solo per il VERO intent Home (ACTION_MAIN + CATEGORY_HOME): anche
         // l'alarm di restartApp arriva qui via onNewIntent (intent esplicito,
         // senza categoria) e non deve simulare una pressione di Home.
-        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
+        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true && !cameBackFromBackground) {
             webView?.evaluateJavascript("if (window.mobileApp) window.mobileApp.goHome()") {}
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        cameBackFromBackground = true
     }
 
     override fun onPause() {
@@ -955,6 +973,9 @@ class MainActivity : AppCompatActivity() {
         // Pacchetti installati/disinstallati mentre eravamo dietro (tipicamente
         // l'uninstaller di sistema): ora la SPA può aggiornare la griglia.
         flushPackageNotices()
+        // Dopo onNewIntent, che arriva prima di onResume: il Home del rientro
+        // ha già visto il flag acceso (v. onNewIntent).
+        cameBackFromBackground = false
     }
 
     private fun startGatewayAndLoad() {
