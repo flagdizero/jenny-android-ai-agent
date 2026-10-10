@@ -77,6 +77,34 @@ body.home {
 .home-shell:not([data-view='chat']) .home-strip,
 .home-shell[data-view='chat'] .home-head { display: none; }
 
+.home-strip:not(.is-sort) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.home-strip:not(.is-sort) .home-strip-names { flex: 1; min-width: 0; }
+
+/* Il ⋯ in fondo alla fila: la modalita' ordina, che prima si apriva solo
+   tenendo premuto un nome (10/10/2026). Alto quanto un dito. */
+.home-strip-more {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-right: -10px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-strip-more:active { background: var(--overlay); }
+
 .home-strip-names {
   display: flex;
   align-items: baseline;
@@ -262,6 +290,15 @@ body.home {
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+  position: relative;
+}
+/* Il bersaglio del dito, piu' grande del segno: 24 px dentro una pastiglia
+   che si trascina, e mancarla di poco faceva partire un trascinamento (giro
+   UX del 10/10/2026). Lo stesso anello di `.home-pending-x`. */
+.home-sort-remove::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .home-shell[data-sort] .home-showcase {
@@ -964,6 +1001,25 @@ body.home {
 }
 .home-copy:active { opacity: .7; }
 
+/* Il ⋯ di una tessera (10/10/2026): la stessa scheda della pressione lunga,
+   per chi non sa che si puo' tenere premuto. In alto a destra, alto quanto un
+   dito; e' un segno dentro la tessera, non un bottone a parte. */
+.home-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: .7;
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-more:active { opacity: 1; }
+
 /* «↓» sopra il composer (10/10/2026): compare quando sei risalito a
    rileggere, col pallino se intanto sotto e' arrivato qualcosa. Al centro, non
    all'angolo: a destra c'e' Jenny, che si prenderebbe il tocco (lo stesso
@@ -1417,7 +1473,7 @@ body.home {
 }
 .home-who-sort {
   margin-left: auto;
-  min-height: 32px;
+  min-height: 40px;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -1551,7 +1607,8 @@ body.home {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  padding-right: 18px;
+  /* Il posto del ⋯ in alto a destra (`.home-more`). */
+  padding-right: 26px;
   font-family: var(--font-display);
   font-size: 14px;
   line-height: 1.2;
@@ -2198,8 +2255,9 @@ body.home {
 .home-shell[data-view='drawer'] .home-board-drawer { display: flex; }
 
 .home-board-tool {
-  width: 34px;
-  height: 34px;
+  /* 40 px: il bersaglio del dito della casa (erano 34). */
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: none;
@@ -2641,6 +2699,16 @@ body.home {
   border-radius: 50%;
   background: var(--board-new);
   box-shadow: 0 0 0 0.5cqw rgba(255, 255, 255, 0.85);
+}
+/* Il ⋯ di una scheda (10/10/2026): in basso a destra, perche' in alto c'e' il
+   segnale (il puntino, l'angolo). Misurato in `cqw` come tutto quel che sta
+   sulla tela, cosi' cresce e cala con lo zoom. */
+.home-more.home-board-more {
+  top: auto;
+  bottom: 0;
+  width: 5.4cqw;
+  height: 5.4cqw;
+  font-size: 2.8cqw;
 }
 .home-board-sig-corner {
   position: absolute;
@@ -4022,7 +4090,7 @@ body.home {
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: 40px;
   padding: 0 12px 0 10px;
   border: 1px solid var(--border);
   border-radius: 999px;

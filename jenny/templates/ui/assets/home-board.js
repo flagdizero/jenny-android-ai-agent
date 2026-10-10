@@ -834,6 +834,23 @@ export class HomeBoard {
   /* ── Il gesto: tocca, trascina, tieni premuto ── */
 
   _bind(el, item, kind) {
+    /* Il ⋯ della scheda: la sua barra (Rinomina, Togli), come la pressione
+       lunga, per chi non sa che si puo' tenere premuto (10/10/2026). Il suo
+       tocco non e' un tocco della scheda: niente trascinamento, niente
+       cassetto. */
+    if (kind === 'card') {
+      const more = document.createElement('span');
+      more.className = 'home-more home-board-more';
+      more.setAttribute('aria-hidden', 'true');
+      more.innerHTML = '<i class="ti ti-dots" aria-hidden="true"></i>';
+      more.addEventListener('pointerdown', (e) => e.stopPropagation());
+      more.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.setFocus(this.focus === item.id ? null : item.id, { quiet: true });
+      });
+      el.appendChild(more);
+    }
     let start = null;
     let moved = false;
     let longFired = false;
@@ -959,6 +976,13 @@ export class HomeBoard {
     });
     el.addEventListener('keydown', (e) => {
       if (e.target !== el) return;
+      /* ⇧⏎: la barra della scheda, come ⇧⏎ su un quaderno o su un'app.
+         Prima a tastiera Rinomina e Togli non si raggiungevano. */
+      if (kind === 'card' && e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        this.setFocus(this.focus === item.id ? null : item.id, { quiet: true });
+        return;
+      }
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         open();

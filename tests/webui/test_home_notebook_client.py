@@ -438,7 +438,8 @@ def test_a_refused_rename_changes_nothing_at_home() -> None:
 def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_language() -> None:
     """Il rifiuto ``conflict`` (un turno, un subagent, una passata del giardiniere
     in corso) e' una condizione attesa: la sua frase sta nell'i18n, non nel testo
-    inglese del server. Un altro errore resta quello di sempre, col motivo."""
+    inglese del server. Neanche un errore imprevisto lo mostra (10/10/2026): il
+    motivo inglese finiva nel toast italiano, e resta nel log."""
     _run_rename(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
         "assert.deepEqual(history.at(-1), ['avviso', 'home.notebook.renameBusy|viaggio', 'error']);\n",
@@ -448,8 +449,7 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     )
     _run_rename(
         "await g.renameNotebook('viaggio');\n"
-        "assert.deepEqual(history.at(-1), ['avviso',\n"
-        "  'home.notebook.renameFailed:a folder named viaggi already exists', 'error']);\n",
+        "assert.deepEqual(history.at(-1), ['avviso', 'home.notebook.renameFailed|viaggio', 'error']);\n",
         written="viaggi",
         current_key="project:viaggio",
         refuses=True,

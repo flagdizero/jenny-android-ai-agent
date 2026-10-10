@@ -223,6 +223,12 @@ export class LauncherController {
          riga aprirebbe la scheda **e** lancerebbe l'app. Stessa guardia di
          ogni altro chiamante di `setupLongPress` in questo codice. */
       if (row.dataset.longpress) { delete row.dataset.longpress; return; }
+      /* Il ⋯ della riga apre la sua scheda, non l'app (v. `_buildRow`). */
+      if (e.target.closest?.('.launcher-row-more')) {
+        const entry = this._entries.find((x) => x.key === row.dataset.key);
+        if (entry) this._actions?.detailEntry(entry);
+        return;
+      }
       this._activate(row.dataset.key);
     });
     /* Le suggerite: stessa delega e stessa guardia della pressione lunga. Un
@@ -1288,6 +1294,19 @@ export class LauncherController {
       kind.textContent = i18n.t(kindKey);
     }
     row.appendChild(kind);
+    /* Il ⋯ della riga: la sua scheda (apri, info, disinstalla, metti come
+       pagina), come la pressione lunga — che col dito non si indovina
+       (10/10/2026). Un segno e non un bottone: la riga e' gia' un'opzione, e
+       a tastiera la scheda e' ⇧⏎. Il suo tocco lo prende la delega della
+       lista, come ogni altro tocco di una riga. */
+    const more = document.createElement('span');
+    more.className = 'launcher-row-more';
+    more.setAttribute('aria-hidden', 'true');
+    const dots = document.createElement('i');
+    dots.className = 'ti ti-dots';
+    dots.setAttribute('aria-hidden', 'true');
+    more.appendChild(dots);
+    row.appendChild(more);
     return row;
   }
 }

@@ -52,7 +52,7 @@
       "title": "Chat nuova"
     },
     "stop": {
-      "title": "Ferma quel che sta girando"
+      "title": "Ferma la risposta (gli aiutanti continuano)"
     },
     "status": {
       "title": "Stato di runtime e provider"
@@ -560,8 +560,9 @@
       "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill).",
       "heartbeat": "I controlli ricorrenti che Jenny ripassa a ogni battito.\n\nVanno scritti sotto «## Active Tasks»: è l'unica sezione che viene letta. Quando un'attività è finita, cancellala invece di lasciarla lì — un elenco di cose già fatte viene riletto a ogni battito.\n\nNon qui: le richieste una tantum (basta chiederle in chat) e le procedure ripetibili (le Skill)."
     },
-    "deleteProjectConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
-    "deleteProjectConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
+    "deleteProjectConfirm": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione, e non si potrà annullare.",
+    "deleteProjectConfirmWithChat": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione ({count} messaggi), e non si potrà annullare.",
+    "deleteProjectForever": "Elimina per sempre",
     "deleteProjectFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente.",
     "deleteProjectBusy": "Sto ancora lavorando in «{name}»: eliminalo quando ho finito.",
     "deletedProject": "Quaderno “{name}” eliminato, conversazione compresa",
@@ -613,7 +614,7 @@
     "unpinned": "Tolta dalle pagine",
     "pageExternal": "Si apre fuori da Jenny: non può stare in una pagina",
     "pageBroken": "È rotta: va riparata prima",
-    "pageFull": "Le pagine sono piene",
+    "pageFull": "Le pagine in alto sono al completo: per farne posto, togline una da ⋯ in fondo alla fila",
     "trashed": "«{name}» nel cestino",
     "undo": "Annulla",
     "restoreFailed": "Non sono riuscita a rimetterla",
@@ -1180,6 +1181,7 @@
     "pages": {
       "appGone": "L'app «{name}» non c'è più.",
       "notebookGone": "Il quaderno «{name}» non c'è più.",
+      "appUnreachable": "Non riesco ad aprire questa app adesso.",
       "removePage": "Togli la pagina",
       "saveFailed": "Non ho potuto salvare le pagine. Non ho cambiato niente.",
       "unknown": "Non riesco a leggere le pagine della casa: non ho cambiato niente. Riprova fra poco."
@@ -1189,7 +1191,8 @@
       "deleted": "Quaderno «{name}» eliminato",
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
-      "renameFailed": "Non ho potuto rinominare «{name}». {error}",
+      "renameFailed": "Non ho potuto rinominare «{name}». Riprova fra poco.",
+      "unpinned": "Tolto dalle pagine",
       "renameBusy": "Sto ancora lavorando in «{name}»: rinominalo quando ho finito.",
       "renameTaken": "C'è già un quaderno o una conversazione che si chiama «{name}».",
       "renameMissing": "«{name}» non c'è più: forse è stato cancellato o rinominato."
@@ -1199,6 +1202,7 @@
       "app": "App",
       "notebooks": "Quaderni",
       "settings": "Impostazioni",
+      "sortOpen": "Riordina le pagine",
       "sortHelp": "Trascina per spostare · × per togliere",
       "done": "Fatto",
       "move": "Sposta {name}: frecce sinistra e destra",

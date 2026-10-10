@@ -3617,6 +3617,19 @@ body {
   letter-spacing: .04em; text-transform: uppercase;
   flex-shrink: 0;
 }
+/* Il ⋯ della riga (10/10/2026): la sua scheda, come la pressione lunga. In
+   fondo alla riga, alto quanto un dito. */
+.launcher-row-more {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  margin: -8px -8px -8px 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  font-size: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.launcher-row-more:active { background: var(--overlay); }
 .launcher-note {
   margin: 6px 2px 0;
   font-size: 11px; font-style: italic;
@@ -3935,6 +3948,13 @@ body {
 .oc-btn-confirm:active {
   filter: brightness(1.15);
   transform: scale(0.97);
+}
+/* Un si' che non si annulla: rosso, e senza il bagliore dell'accento. */
+.oc-btn-confirm.oc-btn-danger {
+  background: var(--error);
+  color: var(--on-error);
+  border-color: var(--error);
+  box-shadow: none;
 }
 
 /* ── Detail Dialog (dialog.js::detailDialog) ──
@@ -4618,6 +4638,21 @@ body {
   flex-direction: column;
   padding: 20px 16px 24px;
   gap: 4px;
+  /* Un elenco lungo (dieci quaderni in «Metti in un quaderno…», le schede
+     di una bacheca piena, il cestino) non esce piu' dallo schermo: il foglio
+     ha un tetto, la lista scorre dentro, e titolo e «Annulla» restano a
+     schermo. Sul Titan (566 px di altezza) le ultime righe e «Annulla» erano
+     irraggiungibili (giro UX del 10/10/2026). Stesso modello di `.oc-detail`. */
+  box-sizing: border-box;
+  max-height: 92dvh;
+}
+.oc-sheet-inner > * { flex: none; }
+.oc-sheet-inner > .oc-sheet-actions,
+.oc-sheet-inner > .apps-trash-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .oc-sheet-title {
   font-size: 14px;

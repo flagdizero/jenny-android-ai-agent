@@ -834,15 +834,17 @@ class HomeApp {
          legge: `conflict` (qualcuno ci sta scrivendo: un turno, un subagent,
          una passata del giardiniere, l'autocompact), `name_taken` (il nome
          nuovo e' gia' di una cartella o di una conversazione), `not_found` (il
-         quaderno non c'e' piu'). Il testo inglese del server resta per i log;
-         il motivo lo porta solo l'errore imprevisto. */
+         quaderno non c'e' piu'). Il testo inglese del server resta per i log,
+         anche per l'errore imprevisto: nel toast italiano era un corpo
+         estraneo (10/10/2026). */
+      console.warn('home.notebook: rename failed', err?.code || '(no code)', err?.message);
       const expected = {
         conflict: ['home.notebook.renameBusy', { name: name }],
         name_taken: ['home.notebook.renameTaken', { name: newName }],
         not_found: ['home.notebook.renameMissing', { name: name }],
       };
       const [key, parameters] = expected[err?.code]
-        || ['home.notebook.renameFailed', { name: name, error: err?.message || '' }];
+        || ['home.notebook.renameFailed', { name: name }];
       showToast(i18n.t(key, parameters), 'error');
       return false;
     }

@@ -52,7 +52,7 @@
       "title": "New chat"
     },
     "stop": {
-      "title": "Stop the current task"
+      "title": "Stop the reply (helpers keep going)"
     },
     "status": {
       "title": "Runtime and provider status"
@@ -560,8 +560,9 @@
       "memory": "Long-term memory: what has to survive from one session to the next — project context, useful facts, notes worth keeping.\n\nDream, the consolidation pass that runs after conversations, is what maintains it. You can read it and correct it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills).",
       "heartbeat": "The recurring checks Jenny goes through on every heartbeat.\n\nWrite them under \"## Active Tasks\": that is the only section that gets read. When a task is done, delete it instead of leaving it there — a list of finished work is re-read on every beat.\n\nNot here: one-off requests (just ask in chat) and repeatable procedures (Skills)."
     },
-    "deleteProjectConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
-    "deleteProjectConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
+    "deleteProjectConfirm": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation go with it, and it can't be undone.",
+    "deleteProjectConfirmWithChat": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation ({count} messages) go with it, and it can't be undone.",
+    "deleteProjectForever": "Delete for good",
     "deleteProjectFailed": "I could not delete the notebook “{name}”. Nothing was changed.",
     "deleteProjectBusy": "I'm still working in “{name}”: delete it once I've finished.",
     "deletedProject": "Notebook “{name}” deleted, conversation included",
@@ -613,7 +614,7 @@
     "unpinned": "Removed from pages",
     "pageExternal": "It opens outside Jenny, so it can't be a page",
     "pageBroken": "It's broken: fix it first",
-    "pageFull": "The pages are full",
+    "pageFull": "The pages up top are full: to make room, remove one from ⋯ at the end of the row",
     "trashed": "“{name}” moved to the trash",
     "undo": "Undo",
     "restoreFailed": "I couldn't put it back",
@@ -1180,6 +1181,7 @@
     "pages": {
       "appGone": "The app “{name}” is gone.",
       "notebookGone": "The notebook “{name}” is gone.",
+      "appUnreachable": "I can't open this app right now.",
       "removePage": "Remove the page",
       "saveFailed": "Couldn't save the pages. Nothing was changed.",
       "unknown": "I can't read the home's pages, so I changed nothing. Try again shortly."
@@ -1189,7 +1191,8 @@
       "deleted": "Notebook “{name}” deleted",
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
-      "renameFailed": "I could not rename “{name}”. {error}",
+      "renameFailed": "I could not rename “{name}”. Try again shortly.",
+      "unpinned": "Removed from the pages",
       "renameBusy": "I'm still working in “{name}”: rename it once I've finished.",
       "renameTaken": "There is already a notebook or a conversation called “{name}”.",
       "renameMissing": "“{name}” is no longer there: it may have been deleted or renamed."
@@ -1199,6 +1202,7 @@
       "app": "Apps",
       "notebooks": "Notebooks",
       "settings": "Settings",
+      "sortOpen": "Arrange the pages",
       "sortHelp": "Drag to move · × to remove",
       "done": "Done",
       "move": "Move {name}: left and right arrows",

@@ -150,7 +150,8 @@ export class HomeAppsTrash {
 
   async _purge(entry, row) {
     const ok = await confirmDialog(i18n.t(entry.records ? 'apps.purgeConfirmData'
-      : 'apps.purgeConfirm', { name: entry.name || entry.slug, count: entry.records || 0 }));
+      : 'apps.purgeConfirm', { name: entry.name || entry.slug, count: entry.records || 0 }),
+    i18n.t('apps.purge'), null, { danger: true });
     if (!ok) return;
     row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
     try {

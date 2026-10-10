@@ -462,9 +462,9 @@ export class HomePages {
     /* `full` porta il **numero del tentativo**, non un `1`: qui basta che sia
        valorizzato. Confrontarlo con `'1'` — com'era finche' il numero non
        c'era — avrebbe lasciato passare ogni rientro dal secondo in poi. */
-    /* Una pagina quaderno e' una porta: arrivandoci si apre la bacheca (v.
-       `HomeApp.onPageChanged`). Il pannello ha solo una copertina, quella che
-       si vede scorrendo, e un bottone per chi la bacheca l'ha chiusa. */
+    /* Una pagina quaderno e' una porta: la copertina che si vede scorrendo,
+       e «Apri la bacheca», che la apre — dal 10/10/2026 solo al tocco (v.
+       `HomeApp.onPageChanged`). */
     if (panel.dataset.kind === 'conversation') {
       this._fillDoor(panel);
       return;
@@ -482,13 +482,18 @@ export class HomePages {
     const mine = String((this._attempt = (this._attempt || 0) + 1));
     panel.dataset.full = mine;
     if (page.kind === 'app') {
+      // Un «non riesco ad aprirla» di un giro prima se ne va: si riprova.
+      this._removeGone(panel);
       /* Il segreto **prima** della cornice: l'indirizzo se lo porta dentro, e
          costruirla senza vorrebbe dire un `token=undefined`, cioe' un 401 e
          una pagina bianca. `openApp` questa guardia ce l'ha da sempre; qui si
          era persa estraendo la cornice. */
       if (!api.getSecret()) {
         try { await api.bootstrap(); } catch {
-          if (panel.dataset.full === mine) panel.dataset.full = '';
+          if (panel.dataset.full === mine) {
+            panel.dataset.full = '';
+            this._unreachable(panel);
+          }
           return;
         }
       }
@@ -497,7 +502,10 @@ export class HomePages {
          gateway (v. `frameForApp`). */
       let token;
       try { token = await api.appToken(page.ref); } catch {
-        if (panel.dataset.full === mine) panel.dataset.full = '';
+        if (panel.dataset.full === mine) {
+          panel.dataset.full = '';
+          this._unreachable(panel);
+        }
         return;
       }
       /* Nel frattempo si puo' essere usciti dalla pagina, o rientrati: in tutti
@@ -641,6 +649,29 @@ export class HomePages {
     panel.appendChild(card);
     panel.dataset.gone = '1';
     this.app?.onGoneChanged?.(panel);
+  }
+
+  /** L'app non si e' potuta aprire (il gateway non risponde, il token non
+   *  arriva): lo si dice nella pagina, con «Riprova». Prima la pagina restava
+   *  bianca e muta, indistinguibile da un'app vuota (giro UX del 10/10/2026).
+   *  Stessa scheda dell'avviso di una cosa sparita, senza il suo segno: il
+   *  campo e i tasti qui non c'entrano. */
+  _unreachable(panel) {
+    this._removeGone(panel);
+    const card = document.createElement('div');
+    card.className = 'home-page-gone';
+    const text = document.createElement('p');
+    text.textContent = i18n.t('home.pages.appUnreachable');
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'home-page-gone-remove';
+    retry.textContent = i18n.t('home.retry');
+    retry.addEventListener('click', () => {
+      card.remove();
+      this._fill(panel);
+    });
+    card.append(text, retry);
+    panel.appendChild(card);
   }
 
   _removeGone(panel) {

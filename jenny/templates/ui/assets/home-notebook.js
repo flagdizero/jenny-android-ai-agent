@@ -20,7 +20,7 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { escapeHtml } from './shared/utils.js';
+import { escapeHtml, showToast } from './shared/utils.js';
 import { drawRow } from './shared/apps-actions.js';
 import { projectKey } from './shared/conversation-list.js';
 import { initialOf, paintSpine } from './shared/spines.js';
@@ -107,7 +107,13 @@ export class NotebookCard {
     const homePages = this.shell.homePages?.();
     if (action === 'open') return this.shell.open(name);
     if (action === 'pin') return homePages?.append('conversation', key);
-    if (action === 'unpin') return homePages?.detach('conversation', key);
+    if (action === 'unpin') {
+      /* Detto, come per un'app (`apps.unpinned`): la pagina sparisce dalla
+         fila in alto, che dalla scheda spesso non si vede. */
+      const done = await homePages?.detach('conversation', key);
+      if (done) showToast(i18n.t('home.notebook.unpinned'), 'success');
+      return done;
+    }
     if (action === 'rename') return this.shell.rename?.(name);
     if (action === 'delete') return this.shell.delete(name);
     return undefined;

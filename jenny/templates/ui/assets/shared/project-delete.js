@@ -30,6 +30,7 @@ export const NOTEBOOK_DELETE_WORDS = {
   confirmWithChat: 'workspace.deleteProjectConfirmWithChat',
   failed: 'workspace.deleteProjectFailed',
   busy: 'workspace.deleteProjectBusy',
+  ok: 'workspace.deleteProjectForever',
 };
 
 /** Chiede conferma e cancella *name*. Ritorna `true` solo se è sparito davvero.
@@ -56,7 +57,10 @@ export async function deleteProjectFlow(name, words = NOTEBOOK_DELETE_WORDS) {
   const question = messages
     ? i18n.t(words.confirmWithChat, { name, count: messages })
     : i18n.t(words.confirm, { name });
-  if (!(await confirmDialog(question))) return false;
+  /* Definitivo, e lo dice: bottone rosso «Elimina per sempre», non il
+     «Conferma» di ogni domanda (scelta dell'utente, 10/10/2026). */
+  const ok = words.ok ? i18n.t(words.ok) : null;
+  if (!(await confirmDialog(question, ok, null, { danger: true }))) return false;
 
   try {
     await rpc.deleteProject(name);

@@ -112,7 +112,16 @@ export class HomeStrip {
       setupLongPress(b, () => this.openSort());
       nav.appendChild(b);
     });
-    this.el.replaceChildren(nav);
+    /* Il ⋯ in fondo alla fila: la modalita' ordina (sposta, togli una
+       pagina), che prima si apriva solo tenendo premuto un nome. Fuori dalla
+       fila che scorre, cosi' resta sempre a portata. */
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'home-strip-more';
+    more.setAttribute('aria-label', i18n.t('home.strip.sortOpen'));
+    more.innerHTML = '<i class="ti ti-dots" aria-hidden="true"></i>';
+    more.addEventListener('click', () => this.openSort());
+    this.el.replaceChildren(nav, more);
     this._inView(nav, active);
   }
 

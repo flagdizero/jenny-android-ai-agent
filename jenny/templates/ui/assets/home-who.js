@@ -409,7 +409,10 @@ export class WhoPanel {
     paintSpine(cover, item.name);
     if (size) cover.classList.add(`is-${size}`);
     if (archived) cover.classList.add('is-archived');
-    if (this._onHold) setupLongPress(cover, () => this._onHold(item.name));
+    if (this._onHold) {
+      setupLongPress(cover, () => this._onHold(item.name));
+      cover.appendChild(this._more(() => this._onHold(item.name)));
+    }
 
     const age = ago(item.modified, (key, vars) => i18n.t(key, vars));
     const pages = typeof item.pages === 'number' ? item.pages : null;
@@ -508,6 +511,24 @@ export class WhoPanel {
      cui sei lo dice solo a chi legge con TalkBack (`aria-current`): a schermo
      c'era una spunta, tolta il 06/10/2026 — sulla pagina dei quaderni non
      diceva niente che servisse. */
+  /* Il ⋯ di una tessera: la stessa scheda della pressione lunga, per chi non
+     sa che si puo' tenere premuto (scelta dell'utente, 10/10/2026). Un segno
+     dentro la tessera e non un bottone annidato, che l'HTML non vuole: a
+     tastiera e con TalkBack la scheda c'e' gia' (⇧⏎, la pressione lunga). */
+  _more(open) {
+    const more = document.createElement('span');
+    more.className = 'home-more';
+    more.setAttribute('aria-hidden', 'true');
+    more.innerHTML = '<i class="ti ti-dots" aria-hidden="true"></i>';
+    more.addEventListener('pointerdown', (e) => e.stopPropagation());
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      open();
+    });
+    return more;
+  }
+
   _command(current, onPick) {
     const cover = document.createElement('button');
     cover.type = 'button';
