@@ -22,6 +22,12 @@ Releases before 1.0 are described only on their
   corners like the other themes.
 - **A notebook always opens on its board**, from the Notebooks page and from a notebook
   pinned as a page. Its chat is behind Jenny; the Chat | Board switch is gone.
+- **A new notebook opens on its chat, and Jenny speaks first**: a short greeting about what
+  the notebook is for, ending with a question to get you started. Creating one asks only
+  its name and what it is about.
+- **A notebook's notification opens that notebook**, on its board with its chat on top,
+  instead of the personal chat. Each notebook has its own notification, titled with its
+  name, and opening one no longer clears the personal chat's alerts you have not read.
 - A **pink dot** on Jenny says a reply arrived while her chat was closed.
 - The mascot can no longer be switched off: she is the way into the chat. Her size stays.
 - ui_view describes the board and the card drawer, which it used to send empty.

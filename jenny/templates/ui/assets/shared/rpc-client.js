@@ -118,6 +118,12 @@ export const rpc = {
     return send('project.create', { name, seed, conversation });
   },
 
+  /** Il primo messaggio di Jenny in un quaderno appena creato. Il testo arriva
+   *  alla chat dal filo; la risposta dice solo se c'e' stato (`greeted`). */
+  greetProject(name, lang) {
+    return send('project.greet', { name, lang });
+  },
+
   /** Salva una pagina di quaderno modificata a mano dal lettore.
    *
    *  Non e' `writeWorkspaceFile` su `wikis/<q>/wiki/<page>`: la cartella dei

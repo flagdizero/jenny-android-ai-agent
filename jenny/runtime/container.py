@@ -501,6 +501,12 @@ class GatewayContainer:
             # Chi scrive adesso sotto quale sessione, per i comandi della WebUI che
             # non devono spostarla sotto le sue mani (``project.rename``).
             get_busy_session_keys=self._busy_session_keys,
+            # Il modello che saluta in un quaderno appena creato
+            # (``project.greet``): quello dell'agente, letto a ogni chiamata
+            # perche' l'agente puo' nascere dopo e cambiare provider a caldo.
+            get_llm=lambda: (
+                (self._agent.provider, self._agent.model) if self._agent is not None else None
+            ),
             # Telegram ci legge lo stato del turno: e' l'unico segnale di
             # inizio/fine che arriva a un canale che non riceve ne' progress
             # ne' turn_end.

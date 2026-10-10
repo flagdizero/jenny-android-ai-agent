@@ -1610,8 +1610,6 @@ body.home {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  /* Il posto del ⋯ in alto a destra (`.home-more`). */
-  padding-right: 26px;
   font-family: var(--font-display);
   font-size: 14px;
   line-height: 1.2;
@@ -3658,20 +3656,6 @@ body.home {
 }
 #launcher-sheet .launcher-row:active,
 #launcher-sheet .launcher-tile:active { background: var(--overlay-strong); }
-/* Il ⋯ della riga (`mobile-style.css`), nella griglia della casa: nell'angolo
-   in alto a destra della cella, discreto, non sotto di lei — in colonna finiva
-   sopra l'icona della cella successiva (visto sull'emulatore, 10/10/2026). */
-#launcher-sheet .launcher-row-more {
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin: 0;
-  width: 36px;
-  height: 36px;
-  font-size: 16px;
-  opacity: .7;
-}
-
 /* La selezione di ⏎. Nella griglia si vede solo quando serve: dopo una
    freccia o la rotella (`kbd-nav`, v. `_moveSelection`) o mentre si cerca —
    a riposo la prima app dell'alfabeto non resta cerchiata. */

@@ -114,6 +114,12 @@ class CommandContext:
     # cassetto toglie il job, e la pausa passa da li'. Facoltativo come i ganci
     # qui sopra; senza, quei comandi rispondono ``unavailable``.
     get_cron_service: Callable[[], Any | None] | None = None
+    # Per ``project.greet``: il bus su cui il saluto va alla chat, e la coppia
+    # ``(provider, modello)`` dell'agente, risolta a call-time perche' l'agente
+    # nasce dopo il gateway (onboarding) e cambia provider a caldo. Facoltativi:
+    # senza bus il saluto non si scrive, senza modello si scrive la frase fissa.
+    bus: Any | None = None
+    get_llm: Callable[[], tuple[Any, str] | None] | None = None
 
 
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -954,6 +960,57 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
 
+async def project_greet(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Il primo messaggio di Jenny in un quaderno appena creato.
+
+    Separato da :func:`project_create` di proposito: la creazione scrive su
+    disco ed e' istantanea, il saluto aspetta un modello. Lo chiede il client
+    quando la chat del quaderno e' gia' aperta, cosi' lo vede arrivare. Le
+    regole (solo su una chat vuota, la frase fissa se il modello manca) stanno
+    in ``jenny/webui/project_greet.py``.
+    """
+    from jenny.config.loader import load_config
+    from jenny.session.keys import is_valid_project_name
+    from jenny.utils.wiki_paths import discover_wiki_roots, read_wiki_scope
+    from jenny.webui.project_greet import greet_project
+
+    name = _require_str(params, "name").strip()
+    if not is_valid_project_name(name):
+        raise CommandError("bad_request", "invalid project name")
+    _require_wiki_enabled()
+    if ctx.session_manager is None or ctx.bus is None:
+        raise CommandError("unavailable", "greeting is unavailable")
+    # La radice, non la pages-dir di ``discover_wikis``: lo scope sta
+    # nell'``AGENTS.md`` accanto a ``wiki/``, non dentro.
+    wiki_root = (await asyncio.to_thread(discover_wiki_roots, _wikis_dir(ctx))).get(name)
+    if wiki_root is None:
+        raise CommandError("not_found", "no such notebook")
+
+    try:
+        defaults = load_config().agents.defaults
+        language, bot_name = defaults.language, defaults.bot_name
+    except Exception:
+        language, bot_name = "en", "Jenny"
+    # La lingua dell'interfaccia, se il client la dice: e' quella in cui
+    # l'utente sta leggendo adesso.
+    lang = params.get("lang")
+    if isinstance(lang, str) and lang in ("it", "en"):
+        language = lang
+
+    return await greet_project(
+        name=name,
+        wiki_root=wiki_root,
+        workspace=ctx.get_workspace_root(),
+        language=language,
+        bot_name=bot_name,
+        session_manager=ctx.session_manager,
+        bus=ctx.bus,
+        llm=ctx.get_llm() if ctx.get_llm is not None else None,
+        busy_session_keys=ctx.busy_session_keys,
+        read_scope=read_wiki_scope,
+    )
+
+
 async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Cancella un progetto: l'albero della wiki **e** la sua conversazione.
 
@@ -1360,6 +1417,7 @@ COMMANDS: dict[str, Command] = {
     "page.write": page_write,
     "audit.create": audit_create,
     "project.create": project_create,
+    "project.greet": project_greet,
     "project.delete": project_delete,
     "project.rename": project_rename,
     "home.pages.set": home_pages_set,

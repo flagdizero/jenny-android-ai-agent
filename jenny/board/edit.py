@@ -567,8 +567,8 @@ def close_reminder(root: Path, rid: str, *, timezone_name: str | None = None) ->
 # ── Lo scheletro ─────────────────────────────────────────────────────────────
 
 
-def set_skeleton(root: Path, raw: Any, remind: Any = "") -> tuple[list[str], str]:
-    """Lo scheletro dei cassetti, e cosa ricordare: solo finché la bacheca non ha schede.
+def set_skeleton(root: Path, raw: Any) -> list[str]:
+    """Lo scheletro dei cassetti: solo finché la bacheca non ha schede.
 
     Con le schede già scritte su uno scheletro, cambiarlo lascerebbe ogni cassetto
     con sezioni che lo scheletro non ha più.
@@ -579,19 +579,15 @@ def set_skeleton(root: Path, raw: Any, remind: Any = "") -> tuple[list[str], str
         raise BoardEditError("bad_request", "skeleton must be a list")
     skeleton = [s for s in (model.clean_text(x, model.MAX_TITLE) for x in raw) if s]
     skeleton = list(dict.fromkeys(skeleton))[:model.MAX_SKELETON]
-    hint = model.clean_text(remind, model.MAX_TEXT)
 
     def apply(board: dict[str, Any]) -> bool | None:
-        if not skeleton and not hint:
+        if not skeleton or board["cards"]:
             return False
-        if skeleton and not board["cards"]:
-            board["skeleton"] = skeleton
-        if hint:
-            board["remindHint"] = hint
+        board["skeleton"] = skeleton
         return None
 
     mutate_board(root, apply)
-    return skeleton, hint
+    return skeleton
 
 
 # ── La busta ─────────────────────────────────────────────────────────────────

@@ -323,6 +323,27 @@ def test_a_failure_is_never_told_as_an_empty_list() -> None:
     """)
 
 
+def test_a_redraw_after_invalidate_reads_the_list_again() -> None:
+    """Creato un quaderno (`invalidate`), il ridisegno che arriva senza `show()`
+    — il cambio di conversazione, il ResizeObserver al ritorno sui Quaderni —
+    non resta su «Caricamento…»: va a rileggere l'elenco, una volta sola.
+    Visto su jenny_square il 10/10/2026, pagina ferma sugli scheletri."""
+    _run("""
+      const panel = await open(LIST);
+      let reads = 0;
+      const fetch = panel._list._fetch;
+      panel._list._fetch = () => { reads += 1; return fetch(); };
+      net.next = { ...LIST, projects: [...LIST.projects, { name: 'nuovo', modified: NOW }] };
+      panel.invalidate();
+      panel.render();
+      panel.render();
+      assert.ok(readout(panel).join(' | ').includes('Caricamento'));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(reads, 1, 'due ridisegni, ' + reads + ' letture');
+      assert.ok(coverOf(panel, 'nuovo'), 'il quaderno nuovo non compare: ' + readout(panel).join(' | '));
+    """)
+
+
 # ── L'archivio ──────────────────────────────────────────────────────────────
 
 

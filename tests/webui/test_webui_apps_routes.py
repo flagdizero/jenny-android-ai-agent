@@ -315,6 +315,28 @@ class TestExternalView:
                 await handler.apps_routes._view_close(
                     _make_request("/api/webui/apps/telecomando/view/close"), "telecomando")
 
+    async def test_a_proxy_closed_by_the_idle_timeout_is_not_reused(self, tmp_path):
+        """Il reaper chiude il listener senza toglierlo dal registro: riaprire la
+        vista dopo deve dare una porta nuova, non quella su cui non ascolta piu'
+        nessuno (l'iframe restava vuoto)."""
+        handler = _make_handler(tmp_path)
+        workspace = _make_workspace(tmp_path)
+        _add_view_app(workspace)
+        with patch.object(handler, "_get_workspace_root", return_value=workspace), \
+             patch("jenny.apps.proxy.validate_app_server_target", return_value=(True, "")):
+            try:
+                first = _body(await handler.apps_routes._view(
+                    _make_request("/api/webui/apps/telecomando/view"), "telecomando"))["url"]
+                # Come fa `_reap_when_idle`: close() diretto, registro intatto.
+                await handler.apps_routes._view_proxies["telecomando"].close()
+                second = _body(await handler.apps_routes._view(
+                    _make_request("/api/webui/apps/telecomando/view"), "telecomando"))["url"]
+                assert second != first
+                assert not handler.apps_routes._view_proxies["telecomando"].closed
+            finally:
+                await handler.apps_routes._view_close(
+                    _make_request("/api/webui/apps/telecomando/view/close"), "telecomando")
+
     async def test_close_drops_the_proxy(self, tmp_path):
         handler = _make_handler(tmp_path)
         workspace = _make_workspace(tmp_path)

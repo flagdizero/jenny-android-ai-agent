@@ -196,18 +196,15 @@ The gardener adds at most **2** new proposals per pass, and the envelope holds a
 
 ### A notebook's first board
 
-A notebook that has pages but no board gets its first board as a single proposal: the skeleton of the drawers (unless you already chose one when you created the notebook) and up to **9** cards, each with its pages — with every drawer already written, so the board is complete the moment you accept. Dated plans it finds in the pages (an unchecked `[ ]` with a date) become reminders on the right card. While the proposal waits, the empty board says *I've prepared a board for you: it's in the envelope.* If you decline it, it is not proposed again on its own.
+A notebook that has pages but no board gets its first board as a single proposal: the skeleton of the drawers (unless you already asked Jenny for one) and up to **9** cards, each with its pages — with every drawer already written, so the board is complete the moment you accept. Dated plans it finds in the pages (an unchecked `[ ]` with a date) become reminders on the right card. While the proposal waits, the empty board says *I've prepared a board for you: it's in the envelope.* If you decline it, it is not proposed again on its own.
 
 A page that fits no card stays off the board, which is fine: it remains searchable.
 
 ### A new notebook
 
-When you create a notebook in the home, two questions follow the name and *what is it about*, and both can be skipped:
+When you create a notebook in the home, its chat opens over the board and Jenny greets you (see [Creating a notebook](./projects.md#creating-a-notebook)). The skeleton is not asked: Jenny proposes one once the notebook has a few pages, and while the board is still empty you can ask her in the chat for the sections you want — *Pot and repotting, Water, Feeding, Light, History*.
 
-1. **What do you want to keep track of, for each thing?** The skeleton, separated by commas — *Pot and repotting, Water, Feeding, Light, History*. Left empty, Jenny proposes one once the notebook has a few pages.
-2. **What do you want me to remind you of?** — *repotting and feeding*. The gardener looks for those first when it takes reminders from the journal.
-
-The notebook then opens on its empty board. *The board is empty* comes with an example sentence; tapping it opens the chat with the sentence ready to finish. The board fills as you talk and as the gardener works.
+Close the chat and you find the empty board. *The board is empty* comes with an example sentence; tapping it opens the chat with the sentence ready to finish. The board fills as you talk and as the gardener works.
 
 ## Since you last looked
 

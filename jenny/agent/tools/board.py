@@ -202,7 +202,7 @@ class BoardTool(Tool):
             if board is not None and board["cards"]:
                 raise edit.BoardEditError(
                     "conflict", "the skeleton is set while the board has no cards")
-            skeleton, _hint = edit.set_skeleton(root, as_list(kw.get("skeleton")))
+            skeleton = edit.set_skeleton(root, as_list(kw.get("skeleton")))
             return f"Skeleton: {' · '.join(skeleton) or '(empty)'}."
         return self._write_drawer(root, card, kw)
 

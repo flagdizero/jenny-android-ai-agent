@@ -1439,13 +1439,6 @@
         "cron": "Una cosa che Jenny fa da sola, a orario"
       }
     },
-    "birth": {
-      "skeleton": "Di cosa vuoi tenere traccia, per ogni cosa di «{name}»?",
-      "skeletonPlaceholder": "Per esempio: Vaso e travaso, Acqua, Nutrimento, Esposizione, Storia",
-      "skeletonHint": "Sono le sezioni di ogni cassetto, separate da virgole. Lascia vuoto e le propongo io quando il quaderno avrà qualche pagina.",
-      "remind": "Cosa vuoi che ti ricordi?",
-      "remindPlaceholder": "Per esempio: i travasi e le concimazioni"
-    },
     "micro": {
       "what": "Cosa vuoi vedere, o fare?",
       "whatPlaceholder": "Per esempio: l'umidità della terra e se il sensore è online",

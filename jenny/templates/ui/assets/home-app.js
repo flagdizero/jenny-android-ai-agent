@@ -601,6 +601,8 @@ class HomeApp {
     this.homePages.load().then(() => this._restorePlace()).finally(() => {
       this._placeHeld = false;
       this._savePlace();
+      /* Ripreso il posto, il guscio sente dov'e' la casa (v. `_reportChatOnScreen`). */
+      this._reportChatOnScreen();
     });
     /* Neanche il nome si aspetta: fino ad allora la fila dice quello di
        sempre. */
@@ -740,16 +742,20 @@ class HomeApp {
     await this._readThread();
   }
 
-  /** Un quaderno nuovo, e ci si entra.
+  /** Un quaderno nuovo, e ci si entra: **nella sua chat**, dove Jenny saluta.
    *
    *  Le due domande — come si chiama, di cosa si occupa — e tutto quel che puo'
    *  andare storto stanno in `shared/project-create.js`, che e' lo stesso giro
    *  che fa l'officina, con le stesse parole. Qui c'e' quel che e' di casa: i nomi
    *  gia' noti per l'avviso, e dove si va dopo.
    *
-   *  Ci si entra, e non e' un di piu': aver dato un nome e scritto la riga di
-   *  scope senza finire nella conversazione vorrebbe dire lasciare a meta' il
-   *  gesto che l'utente ha cominciato.
+   *  Dove si va: il quaderno si apre come sempre, e sopra la sua bacheca sale
+   *  subito la chat. La bacheca di un quaderno appena nato e' vuota per forza, e
+   *  fermarsi li' lasciava l'utente davanti a un posto che non dice niente; la
+   *  chat invece si apre con Jenny che parla per prima (`project.greet`, v.
+   *  `jenny/webui/project_greet.py`). Fino al 10/10/2026 qui c'erano altre due
+   *  domande — le sezioni dei cassetti e cosa ricordare — tolte perche' a
+   *  quaderno vuoto non si sa ancora rispondere: le sezioni le propone Jenny.
    */
   async createNotebook(initial = '') {
     const name = await createProjectFlow({
@@ -759,12 +765,26 @@ class HomeApp {
     });
     if (!name) return;
     this.who.invalidate();              // l'elenco su disco e' cambiato
-    /* La nascita guidata: dopo «di cosa parla», due domande che si possono
-       saltare — cosa tenere d'occhio per ogni cosa (lo scheletro dei
-       cassetti) e cosa ricordare. Poi il quaderno si apre sulla sua bacheca,
-       vuota: il vuoto e' il tutorial. */
-    await this._guideNewBoard(name);
     await this.openNotebook(name);
+    if (!this.openChatOver({ key: projectKey(name) })) return;
+    await this._greetNotebook(name);
+  }
+
+  /** Chiede il saluto di Jenny nella chat appena aperta. Il messaggio arriva
+   *  dal filo come ogni messaggio suo; qui c'e' solo la bolla «sta scrivendo»
+   *  per l'attesa. Si spegne a risposta arrivata, comunque sia andata: il
+   *  `turn_end` del saluto la spegnerebbe da se', ma un frame perso la
+   *  lascerebbe accesa per sempre. Un saluto che non arriva non e' un errore da
+   *  mostrare: la chat resta quella di sempre. */
+  async _greetNotebook(name) {
+    this.activity.start();
+    try {
+      await rpc.greetProject(name, i18n.locale);
+    } catch (err) {
+      console.warn('home: notebook greeting failed', err);
+    } finally {
+      this.activity.stop();
+    }
   }
 
   /** Apre un quaderno: **sempre sulla sua bacheca** (dal 05/10/2026).
@@ -778,32 +798,23 @@ class HomeApp {
    */
   async openNotebook(name) {
     if (!name) return;
-    this._closeAllOverlays();
-    if (!this._setView('chat', () => this.openNotebook(name))) return;
-    const read = this.chatMove.retune(this.homePages?._panelFor?.('chat'), projectKey(name));
-    /* Si entra nel quaderno da fuori: la bacheca si apre inquadrata tutta.
-       Le altre strade per la bacheca ci tornano da dentro, e la ritrovano dove
-       l'avevano lasciata (v. `HomeBoard.load`). */
-    await this.openBoard({ fit: true });
-    await read;
-  }
-
-  /** Le due domande della nascita di un quaderno. Una risposta vuota lascia
-   *  decidere a Jenny, quando il quaderno avra' qualche pagina. */
-  async _guideNewBoard(name) {
-    const skeleton = await promptDialog(i18n.t('board.birth.skeleton', { name }), {
-      placeholder: i18n.t('board.birth.skeletonPlaceholder'),
-      hint: i18n.t('board.birth.skeletonHint'),
-    });
-    if (skeleton === null) return;
-    const remind = await promptDialog(i18n.t('board.birth.remind'), {
-      placeholder: i18n.t('board.birth.remindPlaceholder'),
-    });
-    if (!skeleton.trim() && !(remind || '').trim()) return;
+    /* Si passa dalla pagina chat, ancora sulla personale, per arrivare alla
+       bacheca: detto al guscio, quel passaggio cancellava gli avvisi personali
+       non letti (misurato sull'emulatore il 10/10/2026, toccando l'avviso di un
+       quaderno). Al guscio si dice solo dove si arriva. */
+    this._holdChatReport = true;
     try {
-      await rpc.board('setup', name, { skeleton: skeleton.trim(), remind: (remind || '').trim() });
-    } catch (err) {
-      console.warn('home.board: setup failed', err);
+      this._closeAllOverlays();
+      if (!this._setView('chat', () => this.openNotebook(name))) return;
+      const read = this.chatMove.retune(this.homePages?._panelFor?.('chat'), projectKey(name));
+      /* Si entra nel quaderno da fuori: la bacheca si apre inquadrata tutta.
+         Le altre strade per la bacheca ci tornano da dentro, e la ritrovano dove
+         l'avevano lasciata (v. `HomeBoard.load`). */
+      await this.openBoard({ fit: true });
+      await read;
+    } finally {
+      this._holdChatReport = false;
+      this._reportChatOnScreen();
     }
   }
 
@@ -1426,7 +1437,15 @@ class HomeApp {
    *  un ripristino). Una cosa che nel frattempo non c'e' piu' (un quaderno
    *  cancellato) lascia dove si e' arrivati. */
   async _restorePlace() {
-    if (new URLSearchParams(globalThis.location?.search || '').get('mode') === 'chat') return;
+    const params = new URLSearchParams(globalThis.location?.search || '');
+    if (params.get('mode') === 'chat') {
+      /* L'avviso toccato a app chiusa era di un quaderno: si va li' (v.
+         `openChat`), e si aspetta di esserci — il posto resta tenuto, e il
+         guscio non sente la pagina chat da cui si passa. */
+      const notebook = projectNameOf(params.get('chat'));
+      if (notebook && isOpenableProjectName(notebook)) await this._enterNotebookChat(notebook);
+      return;
+    }
     let place = null;
     try { place = JSON.parse(readStorage(PLACE_KEY) || 'null'); } catch { place = null; }
     if (!place || !(Date.now() - place.at < PLACE_MAX_AGE_MS)) return;
@@ -2173,8 +2192,15 @@ class HomeApp {
    *  l'immagine ingrandita) si chiudono: starebbero sopra il velo. Una domanda
    *  aperta no — e' una risposta che qualcuno aspetta — e allora il velo non
    *  sale, il risultato e' falso e l'avviso resta in tendina.
+   *
+   *  **L'avviso di un quaderno porta nel quaderno** (*key* =
+   *  `project:<nome>`, dal tag della notifica: v. `AlertConversation.kt`).
+   *  Fino al 10/10/2026 anche quello apriva la personale, dove la risposta
+   *  del quaderno non c'e'. V. `_openNotebookChat`.
    */
-  openChat() {
+  openChat(key = null) {
+    const notebook = projectNameOf(key);
+    if (notebook && isOpenableProjectName(notebook)) return this._openNotebookChat(notebook);
     this._closeSheets();
     if (this.isChatOnScreen()) {
       this._retryThread();
@@ -2193,6 +2219,66 @@ class HomeApp {
     if (!this.openChatOver({ key: sessionManager.personalKey })) return false;
     this.chat.scrollToBottom();
     return true;
+  }
+
+  /** Il tocco sull'avviso di un quaderno: la sua bacheca sotto e la sua chat
+   *  sopra, come quando il quaderno nasce (`createNotebook`). Indietro
+   *  riporta alla bacheca.
+   *
+   *  **Si entra nel quaderno**, e non si apre la sua chat sopra la pagina in
+   *  cui eri: il velo, richiudendosi, riporterebbe la chat a casa con la
+   *  chiave del quaderno, e la pagina chat finirebbe a mostrarlo. Se sei
+   *  gia' in una stanza di quel quaderno, sale solo il velo.
+   *
+   *  Torna vero **subito**, prima di aver finito: il guscio nativo chiede da
+   *  `evaluateJavascript`, che non aspetta una Promise, e senza un vero
+   *  sincrono gli avvisi non si cancellerebbero mai. Una domanda aperta, come
+   *  per la personale, ferma tutto e lascia l'avviso. Un quaderno che non
+   *  c'e' piu' (cancellato con la notifica in tendina) ripiega sulla
+   *  personale. */
+  _openNotebookChat(name) {
+    const key = projectKey(name);
+    this._closeSheets();
+    if (document.querySelector('dialog[open]')) {
+      this.jenny?.nudge?.();
+      return false;
+    }
+    if (this.chatOver && sessionManager.currentKey === key) {
+      this._retryThread();
+      this.chat.scrollToBottom();
+      return true;
+    }
+    if (this.chatOver) this.closeChatOver();
+    this._enterNotebookChat(name).catch((err) => {
+      console.warn('home: notebook alert not opened', err);
+    });
+    return true;
+  }
+
+  async _enterNotebookChat(name) {
+    const key = projectKey(name);
+    if (!(await this._notebookExists(name))) {
+      this.openChat(null);
+      return;
+    }
+    if (NOTEBOOK_ROOMS.includes(this.view) && sessionManager.currentKey === key) {
+      this._closeAllOverlays();
+    } else {
+      await this.openNotebook(name);
+    }
+    if (sessionManager.currentKey !== key) return;   // nel frattempo ti sei mosso
+    if (this.openChatOver({ key })) this.chat.scrollToBottom();
+  }
+
+  /* C'e' ancora? Nel dubbio — la lettura non e' riuscita — si', e si prova:
+     l'errore da evitare e' mandare nella personale chi ha un quaderno vero. */
+  async _notebookExists(name) {
+    try {
+      const projects = (await api.listProjects())?.projects;
+      return !Array.isArray(projects) || projects.some((p) => p?.name === name);
+    } catch {
+      return true;
+    }
   }
 
   /* Chiude i fogli di un momento, tutti: quelli di una pressione lunga, il
@@ -2222,16 +2308,30 @@ class HomeApp {
    *  dubbio un avviso resta, che e' la direzione d'errore giusta.
    */
   isChatOnScreen() {
-    if (sessionManager.currentKey !== sessionManager.personalKey) return false;
+    return this.chatOnScreenKey() === 'personal';
+  }
+
+  /** **Quale** chat e' a schermo: `'personal'`, `'project:<nome>'`, o `''`.
+   *
+   *  La domanda di `isChatOnScreen` estesa ai quaderni: gli avvisi di un
+   *  quaderno (le sue risposte, i suoi cron) si cancellano quando e' la sua
+   *  chat ad arrivare a schermo, e un suo cron tace con quella davanti. Lo
+   *  chiede `CHAT_ON_SCREEN_JS` al rientro, e lo riporta
+   *  `_reportChatOnScreen` a ogni cambio. */
+  chatOnScreenKey() {
+    const key = sessionManager.currentKey;
     /* La chat sopra la pagina e' a schermo davanti a tutto, a parte un foglio
        che le si apre sopra. */
-    if (this.chatOver) return !this._sheetOpen();
-    return this.view === 'chat'
-      && this._entry?.kind === 'chat'
-      && sessionManager.currentKey === sessionManager.personalKey
-      /* Un'app aperta, una scheda, una domanda condivisa o la modalita'
-         ordina la coprono: sotto c'e', ma non la stai guardando. */
-      && !this.hasOverlayAbove();
+    const visible = this.chatOver
+      ? !this._sheetOpen()
+      : this.view === 'chat'
+        && this._entry?.kind === 'chat'
+        /* Un'app aperta, una scheda, una domanda condivisa o la modalita'
+           ordina la coprono: sotto c'e', ma non la stai guardando. */
+        && !this.hasOverlayAbove();
+    if (!visible) return '';
+    if (key === sessionManager.personalKey) return 'personal';
+    return projectNameOf(key) ? key : '';
   }
 
   /* Il secondo dei tre modi in cui la chat arriva a schermo (v.
@@ -2247,11 +2347,19 @@ class HomeApp {
      bacheca. `chatOpened` va a ogni occasione (cancella gli avvisi letti);
      `chatClosed` solo quando cambia, o al primo giro della pagina. */
   _reportChatOnScreen() {
-    const on = this.isChatOnScreen();
-    if (!on && this._chatReported === false) return;
+    /* A meta' di `openNotebook`, o mentre la casa riprende il posto di prima
+       all'avvio: in entrambi i casi si passa dalla pagina chat personale senza
+       restarci, e detto al guscio quel passaggio cancellava gli avvisi
+       personali non letti (misurato sull'emulatore il 10/10/2026). */
+    if (this._holdChatReport || this._placeHeld) return;
+    const on = this.chatOnScreenKey();
+    if (!on && this._chatReported === '') return;
     this._chatReported = on;
     try {
-      if (on) window.JennyNative?.chatOpened?.();
+      /* La personale senza argomento, come l'officina; un quaderno col suo
+         nome, perche' il guscio cancelli gli avvisi di quello. */
+      if (on === 'personal') window.JennyNative?.chatOpened?.();
+      else if (on) window.JennyNative?.chatOpened?.(on);
       else window.JennyNative?.chatClosed?.();
     } catch { /* nessun guscio nativo */ }
   }

@@ -1439,13 +1439,6 @@
         "cron": "Something Jenny does on her own, on a schedule"
       }
     },
-    "birth": {
-      "skeleton": "What do you want to keep track of, for each thing in “{name}”?",
-      "skeletonPlaceholder": "For example: Pot and repotting, Water, Feeding, Light, History",
-      "skeletonHint": "These are the sections of every drawer, separated by commas. Leave it empty and I'll propose them once the notebook has a few pages.",
-      "remind": "What do you want me to remind you of?",
-      "remindPlaceholder": "For example: repotting and feeding"
-    },
     "micro": {
       "what": "What do you want to see, or do?",
       "whatPlaceholder": "For example: the soil moisture and whether the sensor is online",

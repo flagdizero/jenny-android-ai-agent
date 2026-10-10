@@ -247,6 +247,11 @@ class AppsRoutes:
         slug, base_url = resolved
 
         existing = self._view_proxies.get(slug)
+        if existing is not None and existing.closed:
+            # Chiuso dall'idle timeout: il reaper non passa da qui, e riusarne
+            # l'URL darebbe alla vista una porta su cui non ascolta nessuno.
+            self._view_proxies.pop(slug, None)
+            existing = None
         if existing is not None and existing.base_url == base_url:
             return http_json_response({"url": existing.entry_url}, extra_headers=APP_CORS_HEADERS)
         if existing is not None:

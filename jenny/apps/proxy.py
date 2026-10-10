@@ -133,6 +133,16 @@ class AppViewProxy:
     def port(self) -> int | None:
         return self._bound_port
 
+    @property
+    def closed(self) -> bool:
+        """Il listener non accetta piu': chiuso dalla UI o dall'idle timeout.
+
+        Chi tiene un registro dei proxy lo deve chiedere prima di riusarne uno:
+        il reaper chiude da se', senza avvisare nessuno, e un ``entry_url``
+        riusato dopo punta a una porta morta (un iframe vuoto).
+        """
+        return self._server is None
+
     async def close(self) -> None:
         """Chiude il listener. L'ORDINE dei quattro passi non e' arbitrario.
 

@@ -378,14 +378,13 @@ async def test_the_first_board_keeps_the_skeleton_the_user_chose(tmp_path) -> No
 
     def setup(board):
         board["skeleton"] = ["Semina", "Raccolto"]
-        board["remindHint"] = "le semine"
 
     mutate_board(root, setup)
     bp = BoardPass(root, ws)
     assert bp.is_migrating()
     state = bp.build_state()
     prompt = bp.build_prompt(state)
-    assert "The skeleton the user chose" in prompt and "«le semine»" in prompt
+    assert "The skeleton the user chose" in prompt
     out = await _tools(state)["board_propose_board"].execute(
         skeleton=["Altro", "Ancora"],
         cards=[{"title": "Acero", "pages": ["travaso-acero.md"]}],

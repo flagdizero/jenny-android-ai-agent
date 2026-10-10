@@ -46,16 +46,31 @@ function banco({ keyboard = true, active = true } = {}) {
   const doc = target();
   doc.activeElement = null;
   doc.visibilityState = 'visible';
-  const input = { tagName: 'TEXTAREA', focusCalls: [] };
-  input.focus = (opts) => { input.focusCalls.push(opts); doc.activeElement = input; };
+  // Un campo con testo e cursore: `setSelectionRange` fa partire il
+  // `selectionchange` come il browser.
+  const input = Object.assign(target(), {
+    tagName: 'TEXTAREA', focusCalls: [], value: '', selectionStart: 0, selectionEnd: 0,
+  });
+  input.setSelectionRange = (start, end) => {
+    input.selectionStart = start;
+    input.selectionEnd = end;
+    input.fire('selectionchange', {});
+  };
+  input.focus = (opts) => {
+    input.focusCalls.push(opts);
+    doc.activeElement = input;
+    input.fire('focus', {});
+  };
   const chat = target();
   const state = { keyboard, active };
+  const clock = { t: 1000 };
   const focus = new ComposerFocus({
     input, surfaces: [chat], doc,
     active: () => state.active,
     keyboard: () => state.keyboard,
+    now: () => clock.t,
   });
-  return { doc, input, chat, state, focus };
+  return { doc, input, chat, state, focus, clock };
 }
 
 function tap(el) {
@@ -233,3 +248,94 @@ console.log(JSON.stringify({ ok: true }));
 """
     )
     assert out["ok"] is True
+
+
+_CARET = """
+const b = banco();
+b.input.value = 'una bozza';
+b.input.setSelectionRange(9, 9);
+// La pagina cambia: il campo perde il fuoco.
+b.doc.activeElement = null;
+b.input.fire('focusout', {});
+"""
+
+
+def test_the_caret_comes_back_where_it_was() -> None:
+    """Il difetto del 10/10/2026: tornando dalla pagina dei Quaderni il cursore
+    era all'inizio, e il tasto dopo scriveva in testa alla bozza. Chromium lo
+    sposta pochi ms dopo il fuoco: la guardia lo rimette."""
+    out = _run_js(
+        _CARET
+        + """
+b.focus.restore();
+assert.equal(b.input.selectionStart, 9);
+b.clock.t += 5;
+b.input.selectionStart = b.input.selectionEnd = 0;
+b.input.fire('selectionchange', {});
+console.log(JSON.stringify({ start: b.input.selectionStart, end: b.input.selectionEnd }));
+"""
+    )
+    assert out == {"start": 9, "end": 9}
+
+
+def test_a_tap_on_the_field_places_the_caret_where_you_tap() -> None:
+    """Un dito sul campo decide lui: niente cursore ricordato."""
+    out = _run_js(
+        _CARET
+        + """
+b.input.fire('pointerdown', {});
+b.clock.t += 200;  // il fuoco del tocco arriva al mousedown, dopo il rilascio
+b.input.selectionStart = b.input.selectionEnd = 2;
+b.input.focus();
+b.clock.t += 5;
+b.input.fire('selectionchange', {});
+console.log(JSON.stringify({ start: b.input.selectionStart }));
+"""
+    )
+    assert out == {"start": 2}
+
+
+def test_a_changed_draft_keeps_its_own_caret() -> None:
+    """Una bozza cambiata mentre eri via (un invio, una frase pronta) non
+    riceve il cursore di un altro testo."""
+    out = _run_js(
+        _CARET
+        + """
+b.input.value = '';
+b.input.selectionStart = b.input.selectionEnd = 0;
+b.focus.restore();
+b.clock.t += 5;
+b.input.fire('selectionchange', {});
+console.log(JSON.stringify({ start: b.input.selectionStart }));
+"""
+    )
+    assert out == {"start": 0}
+
+
+def test_the_guard_ends_and_arrow_keys_move_the_caret_again() -> None:
+    """Passata la guardia il cursore è tuo: le frecce lo spostano."""
+    out = _run_js(
+        _CARET
+        + """
+b.focus.restore();
+b.clock.t += 500;
+b.input.selectionStart = b.input.selectionEnd = 3;
+b.input.fire('selectionchange', {});
+console.log(JSON.stringify({ start: b.input.selectionStart }));
+"""
+    )
+    assert out == {"start": 3}
+
+
+def test_type_ahead_puts_the_character_where_you_were() -> None:
+    """Col type-ahead il fuoco arriva dentro il keydown e il carattere entra
+    subito dopo: il cursore dev'essere già al suo posto, sincrono."""
+    out = _run_js(
+        _CARET
+        + """
+b.input.selectionStart = b.input.selectionEnd = 0;  // com'era dopo il ritorno
+b.doc.fire('keydown', { key: 'x' });
+console.log(JSON.stringify({ start: b.input.selectionStart, focused: b.doc.activeElement === b.input }));
+"""
+    )
+    assert out == {"start": 9, "focused": True}

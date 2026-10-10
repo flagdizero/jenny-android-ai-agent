@@ -83,7 +83,7 @@ A notebook with a [board](./board.md) is curated in a second turn, after the wik
 4. **Reminders from the journal.** A new journal line that decides or plans something with a date becomes a dated reminder on the card it is about, pointing at the page that explains why. Not a fact, not a wish without a date, not something already done, and never the same reminder twice.
 5. **Proposals**, at most **2** per pass, into the [envelope](./board.md#the-envelope-jennys-proposals): a new card, putting a card away, a thread, a page into a drawer, a mini-app section. Proposing nothing is a normal outcome.
 
-A notebook with pages and no board gets, instead, its **first board** as one proposal: the skeleton (yours, if you gave one when you created the notebook) and up to 9 cards, with every drawer already written.
+A notebook with pages and no board gets, instead, its **first board** as one proposal: the skeleton (yours, if you asked Jenny for one) and up to 9 cards, with every drawer already written.
 
 What the board pass cannot do is decided by its tools and by the board's write funnel, not by its prompt: there is no tool to move, add or remove a card, to change your sections, threads or skeleton, or to take a page out of a drawer, and a proposal you already declined is refused. Its file tools write only inside `wiki/`, and it is told to use them only to apply a correction. The *since you last looked* rows on the board are written by the code from what the tools actually did.
 

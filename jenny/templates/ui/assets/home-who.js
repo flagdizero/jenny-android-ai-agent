@@ -213,7 +213,10 @@ export class WhoPanel {
     if (failed) body.appendChild(this._note(i18n.t('home.who.loadFailed'), true));
     const projects = this._list.projects;
     if (projects === null) {
-      if (!failed) this._drawLoading(body);
+      if (!failed) {
+        this._drawLoading(body);
+        this._loadThenRender();
+      }
     } else if (this._query.trim()) {
       this._drawResults(body, projects, failed);
     } else {
@@ -226,6 +229,22 @@ export class WhoPanel {
        eccezione e' il posto vuoto sulla mensola quando non ce n'e' nessuno. */
     if (last) body.scrollTop = last;
     if (sortHadFocus) body.querySelector?.('.home-who-sort')?.focus();
+  }
+
+  /** Chi disegna «non lo so ancora» deve anche andarlo a leggere.
+   *
+   *  `invalidate()` svuota la cache senza rileggere, e un ridisegno arriva
+   *  anche senza `show()`: il cambio di conversazione, il ResizeObserver
+   *  quando la pagina torna visibile. Visto su jenny_square il 10/10/2026:
+   *  creato un quaderno e tornati ai Quaderni, la pagina restava su
+   *  «Caricamento…» per sempre. Una lettura sola alla volta; a lettura finita
+   *  si ridisegna, e non si ricomincia — la cache e' piena, o `loadFailed`. */
+  _loadThenRender() {
+    if (this._loading) return;
+    this._loading = this._list.load().finally(() => {
+      this._loading = null;
+      this.render();
+    });
   }
 
   /* ── Le tre forme della pagina ─────────────────────────────────────────── */
@@ -411,7 +430,6 @@ export class WhoPanel {
     if (archived) cover.classList.add('is-archived');
     if (this._onHold) {
       setupLongPress(cover, () => this._onHold(item.name));
-      cover.appendChild(this._more(() => this._onHold(item.name)));
     }
 
     const age = ago(item.modified, (key, vars) => i18n.t(key, vars));
@@ -511,24 +529,6 @@ export class WhoPanel {
      cui sei lo dice solo a chi legge con TalkBack (`aria-current`): a schermo
      c'era una spunta, tolta il 06/10/2026 — sulla pagina dei quaderni non
      diceva niente che servisse. */
-  /* Il ⋯ di una tessera: la stessa scheda della pressione lunga, per chi non
-     sa che si puo' tenere premuto (scelta dell'utente, 10/10/2026). Un segno
-     dentro la tessera e non un bottone annidato, che l'HTML non vuole: a
-     tastiera e con TalkBack la scheda c'e' gia' (⇧⏎, la pressione lunga). */
-  _more(open) {
-    const more = document.createElement('span');
-    more.className = 'home-more';
-    more.setAttribute('aria-hidden', 'true');
-    more.innerHTML = '<i class="ti ti-dots" aria-hidden="true"></i>';
-    more.addEventListener('pointerdown', (e) => e.stopPropagation());
-    more.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      open();
-    });
-    return more;
-  }
-
   _command(current, onPick) {
     const cover = document.createElement('button');
     cover.type = 'button';

@@ -3617,19 +3617,6 @@ body {
   letter-spacing: .04em; text-transform: uppercase;
   flex-shrink: 0;
 }
-/* Il ⋯ della riga (10/10/2026): la sua scheda, come la pressione lunga. In
-   fondo alla riga, alto quanto un dito. */
-.launcher-row-more {
-  flex-shrink: 0;
-  width: 40px; height: 40px;
-  margin: -8px -8px -8px 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--text-muted);
-  font-size: 18px;
-  border-radius: 50%;
-  cursor: pointer;
-}
-.launcher-row-more:active { background: var(--overlay); }
 .launcher-note {
   margin: 6px 2px 0;
   font-size: 11px; font-style: italic;

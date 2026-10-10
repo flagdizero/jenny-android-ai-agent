@@ -3,10 +3,10 @@
 - **Eliminare per sempre** ha un bottone rosso che lo dice («Elimina per
   sempre»), non il «Conferma» color accento di ogni domanda: un quaderno se ne
   va con pagine, bacheca e conversazione, e non torna.
-- **Le azioni della pressione lunga** hanno un ⋯ visibile: sulle copertine dei
-  quaderni, sulle righe delle app, sulle schede della bacheca, e in fondo alla
+- **Le azioni della pressione lunga** hanno un ⋯ visibile: sulle schede della bacheca, e in fondo alla
   fila delle pagine (la modalita' ordina). Prima, chi non sapeva di poter
-  tenere premuto non le trovava.
+  tenere premuto non le trovava. Le righe delle app e le copertine dei
+  quaderni no: lì basta la pressione lunga.
 """
 
 from __future__ import annotations
@@ -46,14 +46,13 @@ def test_deleting_for_good_asks_with_a_red_button_that_says_so() -> None:
 
 def test_every_long_press_has_a_visible_dots_button() -> None:
     who = _src("home-who.js")
-    assert "cover.appendChild(this._more(() => this._onHold(item.name)))" in who
+    assert "_more(" not in who, "le copertine dei quaderni non hanno il ⋯: basta la pressione lunga"
     board = _src("home-board.js")
     assert "home-more home-board-more" in board
     assert "e.key === 'Enter' && e.shiftKey" in board, "a tastiera la barra della scheda e' ⇧⏎"
     launcher = _src("mobile-launcher.js")
-    assert "more.className = 'launcher-row-more'" in launcher
-    assert "e.target.closest?.('.launcher-row-more')" in launcher, (
-        "il tocco del ⋯ passa dalla delega della lista, come ogni tocco di riga"
+    assert "launcher-row-more" not in launcher, (
+        "le righe delle app non hanno il ⋯: basta la pressione lunga, il gesto standard"
     )
     strip = _src("home-strip.js")
     assert "more.addEventListener('click', () => this.openSort())" in strip

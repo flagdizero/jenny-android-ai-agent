@@ -467,7 +467,8 @@ class BoardProposeBoardTool(_BoardTool):
             return st.refuse("this notebook already has a board or a proposal for one")
         sk = [s for s in (model.clean_text(x, model.MAX_TITLE) for x in as_list(skeleton)) if s]
         sk = list(dict.fromkeys(sk))[:model.MAX_SKELETON]
-        # Lo scheletro che l'utente ha scelto creando il quaderno vince: e' suo.
+        # Lo scheletro che l'utente ha chiesto a Jenny (``set_skeleton``, a
+        # bacheca ancora vuota) vince: e' suo.
         current = read_board(st.root)
         if current and current["skeleton"]:
             sk = list(current["skeleton"])

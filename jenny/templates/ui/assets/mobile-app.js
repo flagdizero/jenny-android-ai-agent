@@ -747,9 +747,14 @@ class MobileApp {
      — e non la chat personale, dove l'avviso sta davvero (v. `openChat` della
      casa). Adesso si va a casa, come la pillola «⌂ Jenny», e la casa nasce
      sulla sua chat. Torna false: la chat qui non si e' aperta, e gli avvisi li
-     cancella la casa quando la mostra (`chatOpened`). */
-  openChat() {
-    api.navigate('/html-mobile/', { replace: true });
+     cancella la casa quando la mostra (`chatOpened`). L'avviso di un quaderno
+     (*key* = `project:<nome>`) ci arriva con `?mode=chat&chat=`, e la casa
+     entra in quel quaderno (v. `_restorePlace` della casa). */
+  openChat(key = null) {
+    const chat = typeof key === 'string' && key.startsWith('project:')
+      ? `?mode=chat&chat=${encodeURIComponent(key)}`
+      : '';
+    api.navigate(`/html-mobile/${chat}`, { replace: true });
     return false;
   }
 

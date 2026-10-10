@@ -293,4 +293,9 @@ dependencies {
     implementation("io.noties.markwon:ext-tasklist:4.6.2")
     implementation("io.noties.markwon:linkify:4.6.2")
     implementation("io.noties.markwon:html:4.6.2")
+
+    // Test JVM delle regole native senza Android (`./gradlew testDebugUnitTest`).
+    // La CI non costruisce l'APK, quindi non li gira: si lanciano a mano prima
+    // di un install. Il primo è `ImeBindingPolicyTest`.
+    testImplementation("junit:junit:4.13.2")
 }

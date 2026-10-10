@@ -19,10 +19,15 @@ from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 class _FakeBridge:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, str]] = []
+        self.replies: list[tuple[str, str, str]] = []
         self.result = True
 
     def postAlert(self, title: str, body: str, tag: str) -> bool:  # noqa: N802
         self.calls.append((title, body, tag))
+        return self.result
+
+    def postReply(self, title: str, body: str, tag: str) -> bool:  # noqa: N802
+        self.replies.append((title, body, tag))
         return self.result
 
 
@@ -159,6 +164,29 @@ class TestPostAlert:
         await notifier.post_alert("ecco", _meta("heartbeat"), thread=None)
         assert bridge.calls[0][2] == "heartbeat"
 
+    async def test_a_reply_to_the_webui_goes_through_post_reply(self, monkeypatch):
+        """Una risposta a quel che l'utente ha scritto nell'app tace con l'app
+        davanti (``postReply``); un avviso no (``postAlert``). Dentro un
+        quaderno la chat personale non è mai a schermo, e col solo
+        ``postAlert`` ogni risposta lì squillava (10/10/2026)."""
+        bridge = _FakeBridge()
+        monkeypatch.setattr(notifier, "get_android_context", lambda: object())
+
+        async def fake_get_bridge(context: Any) -> Any:
+            return bridge
+
+        monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
+        await notifier.post_alert("ecco la risposta", {"webui": True, "conn_id": "c1"})
+        await notifier.post_alert("ricordati il pane", _meta("cron", "spesa"))
+        assert bridge.replies == [("Jenny", "ecco la risposta", "message")]
+        assert bridge.calls == [("Jenny · ⏰ Promemoria · spesa", "ricordati il pane", "cron:spesa")]
+
+    def test_only_a_true_webui_flag_is_a_reply(self):
+        assert notifier.is_app_reply({"webui": True}) is True
+        assert notifier.is_app_reply({"webui": "true"}) is False
+        assert notifier.is_app_reply({}) is False
+        assert notifier.is_app_reply(None) is False
+
     async def test_bridge_error_is_swallowed(self, monkeypatch):
         monkeypatch.setattr(notifier, "get_android_context", lambda: object())
 
@@ -188,3 +216,66 @@ class TestNotifyDelivery:
         await asyncio.gather(*notifier._TASKS)
         assert bridge.calls == [("Jenny · Monitoraggio", "evento X", "heartbeat")]
         assert not notifier._TASKS
+
+
+class TestNotebookConversation:
+    """Un messaggio consegnato nella chat di un quaderno porta il quaderno nel
+    tag, da cui Kotlin ricava dove portare il tocco: fino al 10/10/2026 ogni
+    notifica apriva la chat personale, anche la risposta di un quaderno."""
+
+    def test_a_project_chat_id_is_the_conversation(self):
+        assert notifier.alert_conversation("project:Casa") == "project:Casa"
+
+    def test_the_personal_chat_has_no_conversation(self):
+        assert notifier.alert_conversation("default") is None
+        assert notifier.alert_conversation(None) is None
+        assert notifier.alert_conversation("") is None
+
+    def test_an_invalid_project_name_falls_back_to_the_personal_chat(self):
+        """Stessa regola della sessione (``session_key_for_channel``)."""
+        assert notifier.alert_conversation("project:../fuori") is None
+        assert notifier.alert_conversation("project:") is None
+
+    def test_a_reply_in_a_notebook_names_it_in_tag_and_title(self):
+        title, _, tag = notifier.alert_fields("ecco", None, conversation="project:Casa")
+        assert tag == "project:Casa|message"
+        assert title == "Jenny · Casa"
+
+    def test_a_notebook_cron_keeps_its_title_and_gains_the_notebook(self):
+        """Un cron del quaderno consegna nel quaderno: il tocco deve portare lì."""
+        title, _, tag = notifier.alert_fields(
+            "annaffia", _meta("cron", "Piante"), conversation="project:Casa"
+        )
+        assert tag == "project:Casa|cron:Piante"
+        assert title == "Jenny · ⏰ Promemoria · Piante"
+
+    def test_without_a_conversation_the_tags_do_not_change(self):
+        assert notifier.alert_fields("ciao", None)[2] == "message"
+        assert notifier.alert_fields("x", _meta("cron", "spesa"))[2] == "cron:spesa"
+
+    async def test_notify_delivery_carries_the_chat_id_to_the_bridge(self, monkeypatch):
+        bridge = _FakeBridge()
+        monkeypatch.setattr(notifier, "get_android_context", lambda: object())
+
+        async def fake_get_bridge(context: Any) -> Any:
+            return bridge
+
+        monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
+        notifier.notify_delivery("fatto", {"webui": True}, chat_id="project:Casa")
+        notifier.notify_delivery("ciao", {"webui": True}, chat_id="default")
+        await asyncio.gather(*notifier._TASKS)
+        assert bridge.replies == [
+            ("Jenny · Casa", "fatto", "project:Casa|message"),
+            ("Jenny", "ciao", "message"),
+        ]
+
+    async def test_the_shade_thread_still_wins(self, monkeypatch):
+        bridge = _FakeBridge()
+        monkeypatch.setattr(notifier, "get_android_context", lambda: object())
+
+        async def fake_get_bridge(context: Any) -> Any:
+            return bridge
+
+        monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
+        await notifier.post_alert("ecco", None, thread="chat", chat_id="project:Casa")
+        assert bridge.calls[0][2] == "chat"

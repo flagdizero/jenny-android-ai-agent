@@ -273,18 +273,6 @@ async def test_unknown_notebook_is_a_bad_request(ctx, notebook: Path) -> None:
     assert exc.value.code == "bad_request"
 
 
-async def test_setup_records_the_users_skeleton_and_reminder_wish(ctx, notebook: Path) -> None:
-    out = await dispatch_command(ctx, "board.setup", {
-        "wiki": "piante", "skeleton": "Vaso e travaso, Acqua; Acqua, Storia",
-        "remind": "i travasi e le concimazioni",
-    })
-    assert out["skeleton"] == ["Vaso e travaso", "Acqua", "Storia"]
-    board = read_board(notebook)
-    assert board["skeleton"] == ["Vaso e travaso", "Acqua", "Storia"]
-    assert board["remindHint"] == "i travasi e le concimazioni"
-    assert board["cards"] == []
-
-
 async def test_a_removed_thread_is_a_no_to_that_thread(ctx, notebook: Path) -> None:
     _seed(notebook)
     await dispatch_command(ctx, "board.connection.remove", {"wiki": "piante", "a": "monstera", "b": "acero"})

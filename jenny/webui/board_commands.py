@@ -492,19 +492,6 @@ async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
-async def board_setup(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """La nascita guidata: lo scheletro dei cassetti, e cosa ricordare.
-
-    Le due risposte che seguono «di cosa parla questo quaderno» quando lo crei.
-    Lo scheletro scelto dall'utente e' suo: la prima passata della bacheca lo
-    usa invece di proporne uno. Una risposta vuota lascia decidere a Jenny.
-    """
-    root = _project(ctx, params)
-    skeleton, remind = await _run(edit.set_skeleton, root, params.get("skeleton") or [],
-                                  params.get("remind"))
-    return {"ok": True, "skeleton": skeleton, "remind": remind}
-
-
 def _micro_id(params: Mapping[str, Any]) -> str:
     return _card_id(params, "micro")
 
@@ -610,7 +597,6 @@ BOARD_COMMANDS = {
     "board.micro.discard": board_micro_discard,
     "board.micro.run": board_micro_run,
     "board.micro.pause": board_micro_pause,
-    "board.setup": board_setup,
     "board.seen": board_seen,
     "board.move": board_move,
     "board.suggestion.respond": board_suggestion_respond,

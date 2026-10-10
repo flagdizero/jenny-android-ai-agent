@@ -450,8 +450,9 @@ class OutboundSenderMixin:
                 # `not skip_persist` così un retry non ri-squilla; il gate
                 # foreground sta nel bridge Kotlin. I messaggi con origin sono
                 # proiezioni di turni già consegnati sul canale d'origine
-                # (l'utente sta chattando lì): nessuno squillo sul server.
-                notify_delivery(text, msg.metadata)
+                # (l'utente sta chattando lì): nessuno squillo sul server. Il
+                # `chat_id` porta il quaderno nella notifica (v. notifier).
+                notify_delivery(text, msg.metadata, chat_id=msg.chat_id)
         raw = json.dumps(payload, ensure_ascii=False)
         target_conns = only_conns if only_conns is not None else conns
         if not target_conns:

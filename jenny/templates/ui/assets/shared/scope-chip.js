@@ -23,6 +23,7 @@ import { api } from './api-client.js';
 import { showToast } from './utils.js';
 import { deleteProjectFlow } from './project-delete.js';
 import { createProjectFlow } from './project-create.js';
+import { rpc } from './rpc-client.js';
 import {
   ConversationList, UNOPENABLE_HINT_KEYS, ago, projectKey,
 } from './conversation-list.js';
@@ -569,6 +570,14 @@ export class ScopeChip {
        `select` fa il resto — chip, placeholder, aggancio delle viste e cambio
        di conversazione. */
     this.select({ kind: 'project', name: clean });
+    /* E Jenny parla per prima (`project.greet`): il saluto arriva alla chat
+       dal filo, come ogni suo messaggio. Su una conversazione ripresa il
+       server non saluta; un saluto che non arriva non e' un errore. */
+    try {
+      await rpc.greetProject(clean, i18n.locale);
+    } catch (err) {
+      console.warn('scope: project greeting failed', err);
+    }
   }
 
   /** "2 ore fa" da un mtime unix in secondi.

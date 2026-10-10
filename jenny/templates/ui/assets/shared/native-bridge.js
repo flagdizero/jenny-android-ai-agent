@@ -50,6 +50,7 @@
     'setFloatingPalette',
     'chatOpened',
     'chatClosed',
+    'setEditableFocus',
     'setThemeBars',
     'exportBackup',
     'importBackup',

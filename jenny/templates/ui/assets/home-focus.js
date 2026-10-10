@@ -21,6 +21,21 @@
  *    fisica, perche' altrove il fuoco sul campo e' una tastiera a schermo
  *    alzata sopra meta' della conversazione che stai leggendo.
  *
+ *  E una terza, per il cursore:
+ *
+ *  - **Il cursore resta dove l'avevi lasciato.** Il campo perde il fuoco a
+ *    ogni pagina che lasci e lo riprende quando torni; e al ritorno il
+ *    cursore finiva all'inizio della bozza, cosi' il tasto dopo ci scriveva in
+ *    testa. Misurato il 10/10/2026 sull'emulatore: succede quando lo swipe di
+ *    ritorno parte sopra un campo della pagina che lasci (la ricerca dei
+ *    Quaderni), 3 volte su 3, e mai partendo da un'area senza campi. Non e'
+ *    il nostro `focus()`: senza, Chromium da' il fuoco al campo da se', 4 ms
+ *    dopo il rilascio, e il cursore va a 0 pochi ms dopo. Quindi il campo
+ *    ricorda dov'era il cursore quando ha perso il fuoco, e quando lo
+ *    riprende **senza un dito sopra** lo rimette li' — anche contro uno
+ *    spostamento che arriva subito dopo (`CARET_GUARD_MS`). Un tocco sul
+ *    campo, invece, mette il cursore dove tocchi: quello lo decidi tu.
+ *
  *  Il modulo non sa quando la chat e' a schermo: lo chiede a chi lo crea
  *  (`active`), che conosce stanze, pagine e strati.
  */
@@ -51,6 +66,16 @@ export function physicalKeyboard(win = globalThis.window) {
   return Boolean(win?.matchMedia?.('(any-pointer: fine)')?.matches);
 }
 
+/** Per quanto, dopo un fuoco tornato senza un dito sul campo, il cursore si
+ *  rimette dove l'avevi lasciato se qualcosa lo sposta. Lo spostamento
+ *  misurato arriva 3-15 ms dopo il `focus`; un tasto vero cambia il testo, e
+ *  da li' la guardia non vale piu'. */
+export const CARET_GUARD_MS = 150;
+
+/** Quanto dura «c'e' un dito sul campo»: il fuoco di un tocco arriva col
+ *  `mousedown` di compatibilita', dopo il rilascio. */
+const PLACING_MS = 1000;
+
 export class ComposerFocus {
   /**
    * @param {object} opts
@@ -59,12 +84,20 @@ export class ComposerFocus {
    * @param {() => boolean} opts.attivo il campo e' a schermo, e niente gli sta sopra.
    * @param {() => boolean} [opts.tastiera] c'e' una tastiera fisica.
    * @param {Document} [opts.doc]
+   * @param {() => number} [opts.now] l'orologio, in ms.
    */
-  constructor({ input, surfaces, active, keyboard = physicalKeyboard, doc = document }) {
+  constructor({
+    input, surfaces, active, keyboard = physicalKeyboard, doc = document, now = () => Date.now(),
+  }) {
     this.input = input;
     this.active = active;
     this.keyboard = keyboard;
     this.doc = doc;
+    this.now = now;
+    /** Il testo e il cursore all'ultima uscita dal campo. */
+    this._caret = null;
+    this._placingAt = -Infinity;
+    this._guardUntil = 0;
     doc.addEventListener('keydown', (e) => this._onKey(e));
     for (const el of surfaces) el?.addEventListener('mousedown', (e) => this._onTap(e));
     /* Tornando all'app da un'altra, il campo riprende il fuoco: sul Titan si
@@ -72,6 +105,10 @@ export class ComposerFocus {
     doc.addEventListener('visibilitychange', () => {
       if (doc.visibilityState === 'visible') this.restore();
     });
+    input?.addEventListener('focusout', () => this._keepCaret());
+    input?.addEventListener('pointerdown', () => { this._placingAt = this.now(); });
+    input?.addEventListener('focus', () => this._onFocus());
+    input?.addEventListener('selectionchange', () => this._onSelection());
   }
 
   /** Il fuoco sul campo, se c'e' una tastiera fisica e il campo e' a schermo.
@@ -106,5 +143,44 @@ export class ComposerFocus {
     if (!this.keyboard() || !this.active()) return;
     e.preventDefault();
     this._focus();
+  }
+
+  _keepCaret() {
+    const { value, selectionStart: start, selectionEnd: end } = this.input;
+    this._caret = { value, start, end };
+    this._guardUntil = 0;
+  }
+
+  /* Il cursore ricordato vale solo per lo stesso testo: una bozza cambiata
+     mentre eri via (un invio, una frase pronta) ha il suo. */
+  _kept() {
+    const kept = this._caret;
+    return kept && kept.value === this.input.value ? kept : null;
+  }
+
+  _putCaret({ start, end }) {
+    if (this.input.selectionStart === start && this.input.selectionEnd === end) return;
+    try { this.input.setSelectionRange(start, end); } catch { /* campo senza selezione */ }
+  }
+
+  /* Sincrono, dentro il `focus`: col type-ahead il carattere entra subito dopo,
+     e deve entrare dove eri, non all'inizio. */
+  _onFocus() {
+    const placing = this.now() - this._placingAt < PLACING_MS;
+    this._placingAt = -Infinity;
+    const kept = placing ? null : this._kept();
+    if (!kept) return;
+    this._putCaret(kept);
+    this._guardUntil = this.now() + CARET_GUARD_MS;
+  }
+
+  _onSelection() {
+    if (this.now() > this._guardUntil) return;
+    const kept = this._kept();
+    if (!kept) {
+      this._guardUntil = 0;
+      return;
+    }
+    this._putCaret(kept);
   }
 }
