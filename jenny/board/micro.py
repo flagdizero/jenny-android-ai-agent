@@ -1,63 +1,40 @@
-"""Le micro app: un piccolo programma Python attaccato a un cassetto.
+"""Il motore dei lettori delle app, nato con le micro app dei cassetti.
 
-Una micro app non e' una Jenny App: niente manifest, niente HTML, niente
-griglia. E' una sezione del cassetto con un ``run.py`` accanto, che va a
-prendere un dato e lo tiene fresco. Vive nel quaderno::
+Fino al 06/10/2026 una micro app era un ``run.py`` attaccato a un cassetto
+(``<quaderno>/board/micro/<id>/``), che l'orologio del quaderno girava dopo un
+[Tienilo] dell'utente. Adesso e' un'app generale col suo lettore (``reader`` in
+``app.json``, v. ``jenny/apps/reader.py``), e all'avvio
+``jenny/apps/migrate_micro.py`` sposta le cartelle rimaste in ``workspace/apps``.
 
-    <quaderno>/board/micro/<id>/
-        micro.json      la spec: titolo, ogni quanto, i campi e il principale,
-                        la soglia, gli host e la skill che usa
-        run.py          ``def run(ctx) -> dict``
-        readings.jsonl  le letture, ``{id, ts, ...campi}`` — lo stesso formato dei
-                        record di una collezione app, cosi' la vista e' una sola
-        state.json      come sta: ultimo giro, ultimo errore, guasti di fila
-
-Le bozze (scritte da Jenny e provate una volta, in attesa del [Tienilo]) stanno
-in ``board/micro/.drafts/<id>/`` con la stessa forma.
-
-**Chi la esegue e' l'orologio del quaderno**, non un cron e non il modello: una
-lettura costa zero token. Il codice gira nello stesso ``PythonNamespace`` di
-``python_exec``, con lo scope del quaderno **in sola lettura**: legge, non
-scrive niente. Le letture le scrive questo modulo, fuori dal codice guardato.
+Di questo modulo resta quello che il lettore riusa: la spec
+(:func:`normalize_spec`, che valida anche il lettore), la validazione delle
+letture, la compattazione, ``ctx.http``, il pool e il sandbox dell'esecuzione,
+il passo. In coda, quel poco che la migrazione deve ancora saper leggere: dove
+stava una micro app, e la sua approvazione da cancellare.
 
 **La linea di fiducia non e' la sandbox** — ``python_exec`` dice da se' di non
-esserlo. E' chi puo' cambiare il codice: il runner esegue ``run.py`` solo se il
-suo hash e' quello approvato, e le approvazioni stanno **fuori dal workspace**
-(accanto alla chiave SSH), dove gli strumenti di Jenny non arrivano. La
-cartella ``board/`` non la scrive nessuno strumento generico (v.
-``jenny.security.workspace_policy.BoardWriteError``): il codice di una micro app
-lo cambiava solo il tool ``micro_app``.
-
-**Dal 06/10/2026 una micro app e' un'app generale col suo lettore** (``reader``
-in ``app.json``, v. ``jenny/apps/reader.py``): all'avvio
-``jenny/apps/migrate_micro.py`` sposta queste cartelle in ``workspace/apps``.
-Di questo modulo restano vive la spec (``normalize_spec``, che valida anche il
-lettore), la validazione delle letture e l'esecuzione, che il lettore riusa.
+esserlo. Il codice gira nello stesso ``PythonNamespace`` di ``python_exec``, con
+lo scope del workspace **in sola lettura**: legge, non scrive niente. Le letture
+le scrive ``reader.py``, fuori dal codice guardato.
 """
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
 import os
 import re
-import shutil
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-
-from loguru import logger
 
 from jenny.board import model
 
 MICRO_DIRNAME = "micro"
 DRAFTS_DIRNAME = ".drafts"
-TRASH_DIRNAME = ".trash"
 SPEC_FILE = "micro.json"
 CODE_FILE = "run.py"
 READINGS_FILE = "readings.jsonl"
@@ -267,32 +244,7 @@ def _normalize_columns(name: str, raw: Any) -> dict[str, dict[str, Any]]:
     return cols
 
 
-def contract_of(spec: dict[str, Any]) -> str:
-    """L'impronta di cio' che l'utente ha approvato **vedendolo**.
-
-    I campi e le loro unita', il principale, gli host e la skill: se una
-    riparazione li lascia uguali, il codice nuovo gira subito (decisione
-    dell'utente del 05/10); se li cambia, serve un nuovo [Tienilo].
-    """
-    body = {
-        "fields": {k: {"type": v["type"], "unit": v.get("unit", ""),
-                       "columns": {c: {"type": cv["type"], "unit": cv.get("unit", "")}
-                                   for c, cv in sorted((v.get("columns") or {}).items())}}
-                   for k, v in sorted(spec["fields"].items())},
-        "primary": spec["primary"],
-        "view": spec.get("view", "value"),
-        "net": spec["net"],
-        "uses": spec["uses"],
-    }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(body, sort_keys=True).encode("utf-8")).hexdigest()
-
-
-def code_hash(code: str) -> str:
-    return "sha256:" + hashlib.sha256(code.encode("utf-8")).hexdigest()
-
-
-# ── dove sta ────────────────────────────────────────────────────────────────
+# ── le micro app di prima, per la migrazione ────────────────────────────────
 
 
 def micros_dir(root: Path) -> Path:
@@ -377,92 +329,7 @@ def redact(code: str) -> str:
     return code
 
 
-def write_micro(root: Path, micro_id: str, spec: dict[str, Any], code: str, *,
-                draft: bool) -> Micro:
-    """Scrive spec e codice (bozza o viva). Lo chiama solo il tool ``micro_app``."""
-    if find_secrets(code):
-        raise MicroError(
-            "run.py contains what looks like a credential. A micro app never carries "
-            "secrets: import the installed skill that already holds them (`uses`, e.g. "
-            "uses=['waterbot-imh'] and `from imh_probe import ...`), and keep run.py to "
-            "reading and shaping the values.")
-    if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-        raise MicroError(f"run.py is over {MAX_CODE_BYTES // 1024} KB: a micro app does one thing")
-    if not re.search(r"^def run\(", code, re.MULTILINE):
-        raise MicroError("run.py must define `def run(ctx):` returning a dict")
-    clean = normalize_spec(spec, micro_id=micro_id)
-    d = micro_dir(root, micro_id, draft=draft)
-    d.mkdir(parents=True, exist_ok=True)
-    now = model.now_iso()
-    old = _read_json(d / SPEC_FILE) or {}
-    clean["created"] = old.get("created") or now
-    clean["updated"] = now
-    _write_json(d / SPEC_FILE, clean)
-    (d / CODE_FILE).write_text(code, encoding="utf-8")
-    return Micro(id=micro_id, dir=d, spec=clean, code=code, draft=draft)
-
-
-def promote_draft(root: Path, micro_id: str) -> Micro | None:
-    """La bozza diventa la micro app viva (le letture della prova vengono con lei)."""
-    src = micro_dir(root, micro_id, draft=True)
-    if not (src / SPEC_FILE).is_file():
-        return None
-    dst = micro_dir(root, micro_id)
-    dst.mkdir(parents=True, exist_ok=True)
-    for name in (SPEC_FILE, CODE_FILE):
-        os.replace(src / name, dst / name)
-    # Le letture vive restano (la storia non si perde per una modifica); se non
-    # ce ne sono, quelle della prova diventano le prime.
-    if not (dst / READINGS_FILE).exists() and (src / READINGS_FILE).exists():
-        os.replace(src / READINGS_FILE, dst / READINGS_FILE)
-    _write_json(dst / STATE_FILE, {**(read_state(dst) or {}), "status": "ok", "failures": 0})
-    shutil.rmtree(src, ignore_errors=True)
-    return load_micro(root, micro_id)
-
-
-def discard_draft(root: Path, micro_id: str) -> None:
-    shutil.rmtree(micro_dir(root, micro_id, draft=True), ignore_errors=True)
-
-
-def trash_micro(root: Path, micro_id: str) -> None:
-    """Toglie una micro app dal quaderno senza cancellarla: va in ``.trash/``."""
-    src = micro_dir(root, micro_id)
-    discard_draft(root, micro_id)
-    if not src.is_dir():
-        return
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-    dst = micros_dir(root) / TRASH_DIRNAME / f"{micro_id}-{stamp}"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(src, dst)
-
-
-# ── stato e letture ─────────────────────────────────────────────────────────
-
-
-def read_state(d: Path) -> dict[str, Any]:
-    data = _read_json(d / STATE_FILE)
-    return data if isinstance(data, dict) else {}
-
-
-def write_state(d: Path, state: dict[str, Any]) -> None:
-    _write_json(d / STATE_FILE, state)
-
-
-def read_readings(d: Path) -> list[dict[str, Any]]:
-    path = d / READINGS_FILE
-    out: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return out
-    for line in lines:
-        try:
-            item = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(item, dict):
-            out.append(item)
-    return out
+# ── le letture ──────────────────────────────────────────────────────────────
 
 
 def _compact(readings: list[dict[str, Any]], now: datetime) -> list[dict[str, Any]]:
@@ -476,39 +343,6 @@ def _compact(readings: list[dict[str, Any]], now: datetime) -> list[dict[str, An
             continue
         daily[stamp.astimezone(timezone.utc).date().isoformat()] = item
     return [*daily.values(), *recent]
-
-
-def read_latest_rows(d: Path) -> dict[str, list[dict[str, Any]]]:
-    data = _read_json(d / LATEST_FILE)
-    rows = data.get("rows") if isinstance(data, dict) else None
-    return rows if isinstance(rows, dict) else {}
-
-
-def append_reading(d: Path, values: dict[str, Any], *, now: datetime) -> dict[str, Any]:
-    """Una lettura: gli scalari nello storico, le righe (liste e tabelle) a parte.
-
-    Di un campo ``rows`` lo storico tiene **quante** erano: e' il numero su cui
-    vivono l'andamento, gli eventi e «avvisami quando…» («piu' di 0 annunci»).
-    """
-    # In UTC, chiunque chiami: l'orologio passa l'ora locale, un giro a mano UTC.
-    stamp = now.astimezone(timezone.utc).isoformat(timespec="seconds")
-    rows = {k: v for k, v in values.items() if isinstance(v, list)}
-    scalars = {k: (len(v) if isinstance(v, list) else v) for k, v in values.items()}
-    record = {"id": uuid.uuid4().hex[:12], "ts": stamp, **scalars}
-    d.mkdir(parents=True, exist_ok=True)
-    if rows:
-        _write_json(d / LATEST_FILE, {"ts": stamp, "rows": rows})
-    path = d / READINGS_FILE
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    readings = read_readings(d)
-    if len(readings) > _COMPACT_AFTER:
-        kept = _compact(readings, now)
-        tmp = path.with_name(f".{path.name}.tmp")
-        tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept),
-                       encoding="utf-8")
-        os.replace(tmp, path)
-    return record
 
 
 def validate_output(spec: dict[str, Any], out: Any) -> dict[str, Any]:
@@ -581,9 +415,6 @@ def _validate_rows(name: str, columns: dict[str, dict[str, Any]], value: Any) ->
     return out
 
 
-# ── le approvazioni, fuori dal workspace ────────────────────────────────────
-
-
 _approvals_lock = threading.Lock()
 
 
@@ -601,36 +432,12 @@ def _approval_key(root: Path, micro_id: str) -> str:
     return f"{root.name}/{micro_id}"
 
 
-def read_approval(workspace: Path, root: Path, micro_id: str) -> dict[str, Any] | None:
-    data = _read_json(approvals_path(workspace))
-    entry = (data or {}).get(_approval_key(root, micro_id)) if isinstance(data, dict) else None
-    return entry if isinstance(entry, dict) else None
-
-
-def write_approval(workspace: Path, root: Path, micro: Micro) -> None:
-    path = approvals_path(workspace)
-    with _approvals_lock:
-        data = _read_json(path)
-        data = data if isinstance(data, dict) else {}
-        data[_approval_key(root, micro.id)] = {
-            "codeHash": code_hash(micro.code),
-            "contract": contract_of(micro.spec),
-            "approvedAt": model.now_iso(),
-        }
-        _write_json(path, data)
-
-
 def drop_approval(workspace: Path, root: Path, micro_id: str) -> None:
     path = approvals_path(workspace)
     with _approvals_lock:
         data = _read_json(path)
         if isinstance(data, dict) and data.pop(_approval_key(root, micro_id), None) is not None:
             _write_json(path, data)
-
-
-def is_approved(workspace: Path, root: Path, micro: Micro) -> bool:
-    entry = read_approval(workspace, root, micro.id)
-    return bool(entry) and entry.get("codeHash") == code_hash(micro.code)
 
 
 # ── la rete, solo verso gli host dichiarati ─────────────────────────────────
@@ -694,16 +501,6 @@ class MicroHttp:
         return self._send("POST", url, json=data, headers=headers).json()
 
 
-@dataclass
-class MicroContext:
-    """``ctx``: quel che ``run(ctx)`` riceve."""
-
-    now: str
-    prev: dict[str, Any] | None
-    http: MicroHttp
-    params: dict[str, Any] = field(default_factory=dict)
-
-
 # ── un giro ─────────────────────────────────────────────────────────────────
 
 
@@ -717,8 +514,8 @@ class RunResult:
 
 _pool: ThreadPoolExecutor | None = None
 _pool_lock = threading.Lock()
-# Le micro app il cui thread non si e' fermato al timeout: finche' non vengono
-# modificate non ripartono (un thread fermo in C non si uccide).
+# I lettori il cui thread non si e' fermato al timeout: finche' non vengono
+# modificati non ripartono (un thread fermo in C non si uccide).
 _stuck: set[str] = set()
 
 
@@ -796,109 +593,6 @@ def _format_error(exc: BaseException) -> str:
     return text[-_MAX_ERROR:]
 
 
-async def execute_micro(workspace: Path, root: Path, micro: Micro, *,
-                        now: datetime | None = None) -> RunResult:
-    """Esegue ``run.py`` una volta e valida l'uscita. Non scrive niente.
-
-    Il codice gira con lo scope del quaderno **senza permesso di scrittura**:
-    legge (la propria skill, le pagine), non cambia niente. I globali sono
-    nuovi a ogni giro (una sessione per giro, dimenticata alla fine).
-    """
-    from jenny.agent.tools.python_exec import (
-        PythonExecInterrupted,
-        _carry_turn_across_thread,
-        _interrupt_thread,
-    )
-    from jenny.security.workspace_access import build_workspace_scope, enter_workspace_scope
-
-    current = now or datetime.now(timezone.utc)
-    key = f"{root.name}/{micro.id}"
-    if key in _stuck:
-        return RunResult("quarantined", error="the last run never stopped; edit it to retry",
-                         at=current.isoformat(timespec="seconds"))
-    readings = read_readings(micro_dir(root, micro.id))
-    ctx = MicroContext(now=current.isoformat(timespec="seconds"),
-                       prev=readings[-1] if readings else None,
-                       http=MicroHttp(micro.spec["net"]))
-    ns = _namespace(workspace)
-    session = f"micro:{key}:{uuid.uuid4().hex[:6]}"
-    base = _skill_base(workspace, micro.spec["uses"]) or micro.dir
-    ident: list[int | None] = [None]
-    done = [False]
-
-    def _run() -> tuple[str, str, Any, BaseException | None]:
-        ident[0] = threading.get_ident()
-        try:
-            out, err, _ = ns.execute(micro.code, str(base), session)
-            if "Traceback (most recent call last)" in err:
-                return out, err, None, None
-            ns._globals_for(session)["ctx"] = ctx
-            out2, err2, _ = ns.execute(_RUN_SNIPPET, str(base), session)
-            g = ns._globals_for(session)
-            return out + out2, err2, g.get("_micro_out"), g.get("_micro_err")
-        except PythonExecInterrupted:
-            return "", "interrupted", None, None
-        finally:
-            done[0] = True
-            ns.forget_session(session)
-
-    scope = build_workspace_scope(root, "restricted").without_write_access()
-    with enter_workspace_scope(scope):
-        carried = _carry_turn_across_thread(_run)
-    loop = asyncio.get_running_loop()
-    stamp = current.isoformat(timespec="seconds")
-    try:
-        _stdout, stderr, out, exc = await asyncio.wait_for(
-            loop.run_in_executor(_executor(), carried), timeout=RUN_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        if not done[0]:
-            _interrupt_thread(ident[0])
-            await asyncio.sleep(1.0)
-            if not done[0]:
-                _stuck.add(key)
-                return RunResult("quarantined", error="run() did not stop", at=stamp)
-        return RunResult("error", error=f"run() took longer than {RUN_TIMEOUT_S:.0f} s", at=stamp)
-    if exc is not None:
-        status = "unreachable" if _is_unreachable(exc) else "error"
-        return RunResult(status, error=_format_error(exc), at=stamp)
-    if stderr.strip() and out is None:
-        return RunResult("error", error=stderr.strip()[-_MAX_ERROR:], at=stamp)
-    try:
-        values = validate_output(micro.spec, out)
-    except MicroError as err:
-        return RunResult("error", error=str(err), at=stamp)
-    return RunResult("ok", values=values, at=stamp)
-
-
-def unstick(root: Path, micro_id: str) -> None:
-    """Una micro app modificata riparte, anche se l'ultimo giro era rimasto appeso."""
-    _stuck.discard(f"{root.name}/{micro_id}")
-
-
-def record_run(micro: Micro, result: RunResult, *, now: datetime) -> dict[str, Any]:
-    """Scrive l'esito di un giro: la lettura, se c'e', e lo stato. Torna lo stato."""
-    state = read_state(micro.dir)
-    state["lastRunAt"] = result.at or now.isoformat(timespec="seconds")
-    if result.status == "ok" and result.values is not None:
-        append_reading(micro.dir, result.values, now=now)
-        state.update({"status": "ok", "failures": 0, "lastError": "",
-                      "lastOkAt": state["lastRunAt"]})
-    elif result.status == "unreachable":
-        # Il mondo, non il codice: non conta verso «rotta».
-        state.update({"status": "unreachable", "lastError": result.error[:_MAX_ERROR]})
-    elif result.status in ("quarantined", "unapproved"):
-        state.update({"status": result.status, "lastError": result.error[:_MAX_ERROR]})
-    else:
-        failures = int(state.get("failures") or 0) + 1
-        state.update({
-            "status": "broken" if failures >= BROKEN_AFTER else "error",
-            "failures": failures,
-            "lastError": result.error[:_MAX_ERROR],
-        })
-    write_state(micro.dir, state)
-    return state
-
-
 def next_run_at(spec: dict[str, Any], state: dict[str, Any]) -> datetime | None:
     """Quando tocca di nuovo; ``None`` = adesso. Un errore allunga il passo."""
     last = model.parse_iso(state.get("lastRunAt"))
@@ -923,150 +617,7 @@ def is_due(spec: dict[str, Any], state: dict[str, Any], now: datetime) -> bool:
     return due is None or now >= due - _DUE_SLACK
 
 
-async def run_micro(workspace: Path, root: Path, micro_id: str, *,
-                    now: datetime | None = None, force: bool = False) -> dict[str, Any] | None:
-    """Un giro di una micro app viva, se approvata e (salvo *force*) se tocca.
-
-    Torna il nuovo stato, o ``None`` se non e' girata.
-    """
-    current = now or datetime.now(timezone.utc)
-    micro = load_micro(root, micro_id)
-    if micro is None:
-        return None
-    state = read_state(micro.dir)
-    if not force and not is_due(micro.spec, state, current):
-        return None
-    if not is_approved(workspace, root, micro):
-        if state.get("status") != "unapproved":
-            state.update({"status": "unapproved",
-                          "lastError": "run.py changed outside Jenny: approve it again"})
-            write_state(micro.dir, state)
-        return None
-    result = await execute_micro(workspace, root, micro, now=current)
-    return record_run(micro, result, now=current)
-
-
-async def run_due_micros(workspace: Path, root: Path, *,
-                         now: datetime | None = None) -> int:
-    """Le micro app del quaderno che toccano, in parallelo. Torna quante sono girate."""
-    current = now or datetime.now(timezone.utc)
-    ids = list_micros(root)
-    if not ids:
-        return 0
-    results = await asyncio.gather(
-        *(run_micro(workspace, root, mid, now=current) for mid in ids),
-        return_exceptions=True,
-    )
-    ran = 0
-    for mid, res in zip(ids, results):
-        if isinstance(res, BaseException):
-            logger.warning("micro {} in {} failed to run: {}", mid, root.name, res)
-        elif res is not None:
-            ran += 1
-    return ran
-
-
-# ── la vista ────────────────────────────────────────────────────────────────
-
-
-def micro_view(workspace: Path, root: Path, micro_id: str, *, pending: bool = False,
-               now: datetime | None = None) -> dict[str, Any]:
-    """La vista di una micro app nel cassetto, nella stessa forma di una mini app.
-
-    ``state`` e' quello dei dati (``ok``, ``alarm``, ``stale``, ``empty``) finche'
-    il codice va; diventa quello del codice (``broken``, ``unapproved``,
-    ``quarantined``, ``paused``) quando non va: in quel caso il valore resta
-    l'ultimo buono, e il cassetto lo mostra in grigio con la sua eta'.
-    """
-    from jenny.board.sections import records_view
-
-    micro = load_micro(root, micro_id, draft=pending) or (
-        load_micro(root, micro_id) if pending else None)
-    if micro is None:
-        return {"state": "missing", "slug": micro_id, "micro": micro_id}
-    spec = micro.spec
-    primary = spec["primary"]
-    fspec = spec["fields"][primary]
-    state = read_state(micro.dir)
-    alarm = spec["alarm"] if spec["alarm"] and spec["alarm"]["field"] == primary else None
-    view = records_view(
-        read_readings(micro.dir), field_name=primary, alarm=alarm,
-        stale_after_minutes=spec["staleAfter"], trend_days=7, now=now,
-    )
-    record = view.pop("record", None) or {}
-    shape = spec.get("view", "value")
-    # I valori a chip: tutti gli scalari per la forma ``chips``, altrimenti al
-    # piu' due oltre al principale.
-    extras = [
-        {"field": name, "label": f["label"], "unit": f.get("unit", ""), "type": f["type"],
-         "value": record.get(name)}
-        for name, f in spec["fields"].items()
-        if f["type"] != "rows" and (shape == "chips" or name != primary)
-    ][:MAX_FIELDS if shape == "chips" else 2]
-    rows: list[dict[str, Any]] = []
-    columns: list[dict[str, Any]] = []
-    if fspec["type"] == "rows":
-        rows = read_latest_rows(micro.dir).get(primary) or []
-        columns = [{"field": c, **cv} for c, cv in fspec["columns"].items()]
-    code_state = str(state.get("status") or "")
-    data_state = view["state"]
-    if pending:
-        shown = "pending"
-    elif code_state in ("broken", "unapproved", "quarantined", "paused"):
-        shown = code_state
-    elif not is_approved(workspace, root, micro):
-        shown = "unapproved"
-    else:
-        shown = data_state
-    due = next_run_at(spec, state)
-    return {
-        "slug": micro.id,
-        "micro": micro.id,
-        "name": spec["title"],
-        "label": fspec["label"],
-        "unit": fspec.get("unit", ""),
-        "field": primary,
-        "type": fspec["type"],
-        "view": shape,
-        "rows": rows,
-        "columns": columns,
-        "min": fspec.get("min", 0),
-        "max": fspec.get("max"),
-        "verbs": [],
-        "params": {},
-        **view,
-        "state": shown,
-        "dataState": data_state,
-        "extras": extras,
-        "source": record.get(SOURCE_FIELD, ""),
-        "every": spec["every"],
-        "net": spec["net"],
-        "uses": spec["uses"],
-        "codeStatus": code_state or "new",
-        "lastRunAt": state.get("lastRunAt", ""),
-        "nextRunAt": due.isoformat(timespec="seconds") if due else "",
-        "lastError": state.get("lastError", "") if code_state != "ok" else "",
-        "failures": int(state.get("failures") or 0),
-    }
-
-
-def micro_field_value(root: Path, micro_id: str, field_name: str, *,
-                      now: datetime | None = None) -> tuple[Any, bool]:
-    """L'ultimo valore di un campo di una micro app, e se e' fresco (per le attese)."""
-    micro = load_micro(root, micro_id)
-    if micro is None or field_name not in micro.spec["fields"]:
-        return None, False
-    readings = read_readings(micro.dir)
-    if not readings:
-        return None, False
-    last = max(readings, key=lambda r: model.instant_order(r.get("ts")))
-    at = model.parse_iso(last.get("ts"))
-    current = now or datetime.now(timezone.utc)
-    fresh = at is not None and current - at <= timedelta(minutes=micro.spec["staleAfter"])
-    return last.get(field_name), fresh
-
-
-# ── la sezione nel cassetto ─────────────────────────────────────────────────
+# ── una scheda per nome ─────────────────────────────────────────────────────
 
 
 def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
@@ -1080,86 +631,3 @@ def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
     return matches[0] if len(matches) == 1 else None
 
 
-def section_of(board: dict[str, Any], micro_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    for card in board["cards"]:
-        for section in card.get("userSections") or []:
-            if section.get("kind") == "micro" and section.get("micro") == micro_id:
-                return card, section
-    return None
-
-
-def set_section(root: Path, card_id: str, micro_id: str, *, pending: bool) -> str:
-    """Mette (o aggiorna) la sezione della micro app nel cassetto; torna il suo id.
-
-    Scrive **come l'utente**: la chiamano il tool ``micro_app`` (che esiste solo
-    nei turni dell'utente, quindi agisce su sua richiesta, e lo segna con
-    ``by: jenny-on-request``) e i comandi del cassetto.
-    """
-    from jenny.board.store import mutate_board
-
-    out: list[str] = []
-
-    def apply(board: dict[str, Any]) -> None:
-        found = section_of(board, micro_id)
-        if found is not None:
-            found[1]["pending"] = pending
-            out.append(found[1]["id"])
-            return
-        card = model.card_by_id(board, card_id)
-        if card is None:
-            raise MicroError(f"no card `{card_id}` on this board")
-        taken = {s["id"] for c in board["cards"] for s in c.get("userSections") or []}
-        sid = model.unique_id("s-micro", taken)
-        card["userSections"].append({
-            "id": sid, "kind": "micro", "micro": micro_id, "pending": pending,
-            "by": "jenny-on-request", "created": model.now_iso(),
-        })
-        out.append(sid)
-
-    mutate_board(root, apply)
-    return out[0]
-
-
-def drop_section(root: Path, micro_id: str) -> None:
-    from jenny.board.store import mutate_board
-
-    def apply(board: dict[str, Any]) -> bool | None:
-        touched = False
-        for card in board["cards"]:
-            keep = [s for s in card.get("userSections") or []
-                    if not (s.get("kind") == "micro" and s.get("micro") == micro_id)]
-            if len(keep) != len(card.get("userSections") or []):
-                card["userSections"] = keep
-                touched = True
-        return None if touched else False
-
-    mutate_board(root, apply)
-
-
-def keep(workspace: Path, root: Path, micro_id: str) -> Micro | None:
-    """[Tienilo]: la bozza diventa viva e approvata; senza bozza, si riapprova la viva."""
-    micro = promote_draft(root, micro_id) or load_micro(root, micro_id)
-    if micro is None:
-        return None
-    write_approval(workspace, root, micro)
-    unstick(root, micro_id)
-    found = None
-    from jenny.board.store import read_board
-
-    board = read_board(root)
-    if board is not None:
-        found = section_of(board, micro_id)
-    if found is not None:
-        set_section(root, found[0]["id"], micro_id, pending=False)
-    state = read_state(micro.dir)
-    if state.get("status") in ("unapproved", "quarantined", "broken", "error"):
-        state.update({"status": "ok", "failures": 0, "lastError": ""})
-        write_state(micro.dir, state)
-    return micro
-
-
-def remove(workspace: Path, root: Path, micro_id: str) -> None:
-    """Toglie la micro app: i file in ``.trash/``, l'approvazione cancellata."""
-    trash_micro(root, micro_id)
-    drop_approval(workspace, root, micro_id)
-    unstick(root, micro_id)

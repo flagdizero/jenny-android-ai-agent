@@ -75,7 +75,7 @@ the pages of the next. For each, call `board_write_summary` once, as soon as its
   every section whose text changed, and a dot that means nothing teaches them to ignore it.
 
 Write it from the pages, not from memory: every sentence must be backed by a page you cite. Never
-quote a live value (a micro app reading, a cron's last result): the drawer shows those itself, and
+quote a live value (an app reading, a cron's last result): the drawer shows those itself, and
 a summary that carried them would need rewriting at every reading.{% else %}No drawer needs rewriting.{% endif %}
 
 ### 4. Reminders

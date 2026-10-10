@@ -196,12 +196,9 @@ export class BoardDrawer {
     if (d.brief) root.appendChild(el('p', 'home-drawer-brief', d.brief));
     for (const s of d.userSections) {
       const state = s.view?.state;
-      if ((s.kind === 'app' || s.kind === 'micro') && (state === 'alarm' || state === 'stale')) {
+      if (s.kind === 'app' && (state === 'alarm' || state === 'stale')) {
         root.appendChild(el('div', 'home-drawer-alert',
           i18n.t(`board.app.alert.${state}`, { app: s.view.name || s.app })));
-      } else if (s.kind === 'micro' && state === 'broken') {
-        root.appendChild(el('div', 'home-drawer-alert',
-          i18n.t('board.micro.alertBroken', { app: s.view.name })));
       }
     }
     if (d.next) root.appendChild(this._next(d.next));
@@ -384,9 +381,9 @@ export class BoardDrawer {
         body.appendChild(slip);
       } else {
         /* Un'app col riassunto in una forma (chip, avanzamento, lista, tabella) o
-           con un lettore si disegna come una micro app: e' la stessa cosa. */
+           con un lettore ha la sua vista: chip, righe, la firma del lettore. */
         body.appendChild(v.view && (v.view !== 'value' || v.extras?.length || v.every)
-          ? this._microView(section, v, { app: true }) : this._appView(v));
+          ? this._microView(v) : this._appView(v));
       }
       if (v.field && (v.state === 'ok' || v.state === 'alarm' || v.state === 'stale')) {
         tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
@@ -407,48 +404,6 @@ export class BoardDrawer {
       }
       /* L'app della scheda-app non si toglie dal suo cassetto: si toglie la scheda. */
       if (!section.own) tools.appendChild(remove);
-    } else if (section.kind === 'micro') {
-      const v = section.view || {};
-      if (v.state === 'missing') return null;
-      h3.append(v.name || section.micro, el('span', 'home-drawer-owner', i18n.t('board.section.kind.micro')));
-      body.appendChild(this._microView(section, v));
-      if (v.state === 'pending') {
-        tools.append(
-          button('home-board-btn is-primary', i18n.t('board.micro.keep'), () => this._micro('keep', v)),
-          button('home-board-btn', i18n.t('board.micro.discard'), () => this._micro('discard', v)),
-        );
-      } else {
-        if (v.state === 'broken' || v.state === 'quarantined') {
-          tools.appendChild(button('home-board-btn is-primary', i18n.t('board.micro.fix'),
-            () => this.onAskJenny?.(i18n.t('board.micro.fixPrompt', {
-              card: this.data.title, app: v.name, error: (v.lastError || '').split('\n').filter(Boolean).pop() || '',
-            }))));
-        } else if (v.state === 'unapproved') {
-          tools.appendChild(button('home-board-btn is-primary', i18n.t('board.micro.reapprove'),
-            () => this._micro('keep', v)));
-        } else if (v.state === 'paused') {
-          tools.appendChild(button('home-board-btn', i18n.t('board.micro.resume'),
-            () => this._micro('pause', v, { paused: false })));
-        } else {
-          const again = button('home-drawer-link is-icon', '', () => this._micro('run', v));
-          const icon = el('i', 'ti ti-refresh');
-          icon.setAttribute('aria-hidden', 'true');
-          again.appendChild(icon);
-          again.setAttribute('aria-label', i18n.t('board.micro.runNow'));
-          tools.appendChild(again);
-        }
-        if (v.field && (v.type === 'number' || v.type === 'rows') && v.dataState !== 'empty') {
-          tools.appendChild(button('home-drawer-link', i18n.t('board.app.remindWhen'),
-            () => this._addCondition(section, v)));
-        }
-        tools.appendChild(button('home-drawer-link', i18n.t('board.micro.change'),
-          () => this.onAskJenny?.(i18n.t('board.micro.changePrompt', { card: this.data.title, app: v.name }))));
-        if (v.state !== 'paused' && v.state !== 'unapproved') {
-          tools.appendChild(button('home-drawer-link', i18n.t('board.micro.pause'),
-            () => this._micro('pause', v, { paused: true })));
-        }
-        tools.appendChild(remove);
-      }
     } else if (section.kind === 'cron') {
       /* Un cron del quaderno: cosa fa, ogni quanto, l'ultimo esito, il prossimo
          giro. Lavora Jenny, quindi costa: lo dice la firma. */
@@ -544,23 +499,24 @@ export class BoardDrawer {
     return box;
   }
 
-  /** Una micro app: il valore come una mini app, piu' la firma di chi lo
-   *  legge — quando, ogni quanto, da dove — e, in prova, cosa toccherà. */
-  _microView(section, v, { app = false } = {}) {
+  /** Un'app in una forma o col suo lettore: il valore come una mini app, piu'
+   *  la firma di chi lo legge — quando, ogni quanto, da dove. Il nome e' quello
+   *  delle micro app, da cui la forma viene. */
+  _microView(v) {
     const shown = { ...v };
-    const codeDown = ['broken', 'quarantined', 'unapproved', 'paused'].includes(v.state);
-    if (v.state === 'pending' || codeDown) {
+    const codeDown = ['broken', 'quarantined', 'paused'].includes(v.state);
+    if (codeDown) {
       shown.state = v.dataState === 'empty' ? 'empty' : 'ok';
     }
     /* La fonte la dice il codice (`_source`); senza, la firma «ogni N min · da …»
        qui sotto basta, e «fonte: Acerello» ripeterebbe il titolo. Un'app senza
        lettore firma col suo nome, come prima. */
-    shown.name = v.source || (app && !v.every ? v.name : '');
+    shown.name = v.source || (!v.every ? v.name : '');
     shown.hideSource = !shown.name;
     const shape = v.view || 'value';
     /* Cinque forme, tutte disegnate qui: la micro app dice quale, mai come. */
     const box = shape === 'value' ? this._appView(shown) : el('div', 'home-drawer-app');
-    if (codeDown || v.state === 'pending') box.classList.add(`is-${v.state}`);
+    if (codeDown) box.classList.add(`is-${v.state}`);
     if (shape === 'progress') box.appendChild(this._microProgress(v));
     if (shape === 'list') box.appendChild(this._microList(v));
     if (shape === 'table') box.appendChild(this._microTable(v));
@@ -588,12 +544,7 @@ export class BoardDrawer {
       else if (v.net?.length) sign.push(i18n.t('board.micro.via', { what: v.net[0] }));
       box.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
     }
-    if (v.state === 'pending') {
-      const reach = [];
-      if (v.uses?.length) reach.push(i18n.t('board.micro.reachSkill', { skill: v.uses[0] }));
-      if (v.net?.length) reach.push(i18n.t('board.micro.reachNet', { hosts: v.net.join(', ') }));
-      box.appendChild(el('p', 'home-drawer-proof', [i18n.t('board.micro.trial'), ...reach].join(' ')));
-    } else if (codeDown) {
+    if (codeDown) {
       box.appendChild(el('p', 'home-drawer-proof is-down', i18n.t(`board.micro.state.${v.state}`)));
     } else if (v.codeStatus === 'unreachable') {
       box.appendChild(el('p', 'home-drawer-hint', i18n.t('board.micro.unreachable')));
@@ -683,10 +634,6 @@ export class BoardDrawer {
     return table;
   }
 
-  async _micro(action, v, extra = {}) {
-    await this._write(`micro.${action}`, { micro: v.micro, ...extra });
-  }
-
   /** Un controllo della striscia nel cassetto: l'azione dell'app, poi si rilegge. */
   async _act(section, { action, params } = {}) {
     if (!action) return;
@@ -720,7 +667,7 @@ export class BoardDrawer {
   _addCondition(section, view) {
     const form = el('form', 'home-board-form');
     const what = el('input', 'home-board-input');
-    what.value = i18n.t('board.app.remindDefault', { app: view.name || section.app || section.micro });
+    what.value = i18n.t('board.app.remindDefault', { app: view.name || section.app });
     what.setAttribute('aria-label', i18n.t('board.section.reminderWhat'));
     const row = el('div', 'home-board-row');
     const op = el('select', 'home-board-input is-op');
@@ -744,12 +691,10 @@ export class BoardDrawer {
       e.preventDefault();
       if (!what.value.trim() || value.value === '') return;
       this.sheet.close();
-      const source = section.kind === 'micro'
-        ? { micro: section.micro }
-        : { app: section.app, params: section.params || {} };
       await this._write('section.add', {
         card: this.card, kind: 'reminder', text: what.value,
-        when: { kind: 'condition', ...source, field: view.field, op: op.value, value: Number(value.value) },
+        when: { kind: 'condition', app: section.app, params: section.params || {},
+          field: view.field, op: op.value, value: Number(value.value) },
       });
     });
     this.sheet.open(i18n.t('board.app.remindWhen'), form);

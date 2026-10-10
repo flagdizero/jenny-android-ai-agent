@@ -659,8 +659,8 @@ export class HomeBoard {
       sig.className = card.signal === 'new' ? 'home-board-sig-dot' : `home-board-sig-corner is-${card.signal}`;
       photo.appendChild(sig);
     }
-    /* Il segno ⟳: qualcosa in questo cassetto gira da solo (una micro app, un
-       cron). Un segno e non un segnale: in basso, e mai rosso. */
+    /* Il segno ⟳: qualcosa in questo cassetto gira da solo (un cron). Un
+       segno e non un segnale: in basso, e mai rosso. */
     if (card.auto) {
       const auto = document.createElement('i');
       auto.className = 'ti ti-refresh home-board-auto';

@@ -51,7 +51,7 @@ The board's shape is yours, and you can change it directly — or [ask Jenny](#a
 
 - **New card**: the **+** in the header, or a press and hold on the empty wall. You give it a name; it is born empty, in the free spot nearest to where you asked, and fills as the gardener attaches pages to it, as Jenny puts pages in it when you ask, or as you add sections.
 - **Rename**: from the bar of a held card, or at the bottom of its drawer. The name becomes yours, and Jenny no longer rewrites it.
-- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and micro apps pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and micro apps. The wiki is never touched: its pages stay, and search finds them. Accepting **Put it away** from the envelope removes a card the same way, with the same undo.
+- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons. The wiki is never touched: its pages stay, and search finds them. Accepting **Put it away** from the envelope removes a card the same way, with the same undo.
 
 ### Asking Jenny
 
@@ -103,9 +103,9 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-**+ Add a section** offers six kinds: note, reminder, micro app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). A micro app or a cron always comes that way: Jenny puts it in the drawer **because you asked for it**, and it is marked as made on request.
+**+ Add a section** offers six kinds: note, reminder, app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
 
-The rule behind micro apps and crons: **everything a notebook does by itself lives in the drawer of its card, where you can see it.** A micro app reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
+The rule behind apps and crons: **everything a notebook does by itself is on its board, where you can see it.** An app's reader reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
 #### Note
 
@@ -216,19 +216,19 @@ Every line is written by the code, from what was actually done, not by the model
 
 A notebook's reminders live in its own `board/reminders.json`, not in the [reminder list](./scheduling.md) of the personal chat. They come from two places: the ones you add in a drawer, and the ones the gardener takes from new journal lines — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, pointing at the page that explains why.
 
-A system job, **`reminders`** — the notebook clock — runs **every 15 minutes** over every notebook. It first runs the micro apps that are due, then reads every notebook's reminders:
+A system job, **`reminders`** — the notebook clock — runs **every 15 minutes** over every notebook. It first runs the app readers that are due, then reads every notebook's reminders:
 
 - A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next round.
 - The announcement is written by Jenny in a silent turn whose only way to reach you is a message, and it has to say **why**: what is due, the reason taken from the page the reminder points to, and a short question about when you will do it. It arrives in the personal chat like her other proactive messages (see [Android notifications](./scheduling.md#android-notifications)), and a *since you last looked* row is added on the board.
 - Each reminder is announced **once**. It stays on the board until you tap **Done** or remove its section.
 
-The reminder format also allows a trigger on a micro app's or a mini-app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
+The reminder format also allows a trigger on an app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
 
-The same round is the one that notices when a micro app or mini-app section changes state. The job is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing in a round with nothing due: a micro app's reading never involves the model.
+The same round is the one that notices when an app section changes state. The job is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing in a round with nothing due: an app's reading never involves the model.
 
 ## What Jenny sees in a notebook with a board
 
-In the notebook's conversation, the board takes the place of the map (`wiki/index.md`) in the block Jenny gets on every turn: one line per card, with its brief, what runs by itself in its drawer (*auto: Acerello 38 % · cron Weather*), its nearest reminder, and a problem flag when a micro app or mini app in its drawer is in alarm, stalled or broken, within **2,000 characters**, plus how many pages are off the board. When your message names a card, that card's whole drawer is added to that turn — up to two drawers per message. See [What Jenny actually sees](./projects.md#what-jenny-actually-sees-the-board-the-map-and-the-pages).
+In the notebook's conversation, the board takes the place of the map (`wiki/index.md`) in the block Jenny gets on every turn: one line per card, with its brief, what runs by itself in its drawer (*auto: cron Weather*), its nearest reminder, and a problem flag when an app in its drawer is in alarm, stalled or broken, within **2,000 characters**, plus how many pages are off the board. When your message names a card, that card's whole drawer is added to that turn — up to two drawers per message. See [What Jenny actually sees](./projects.md#what-jenny-actually-sees-the-board-the-map-and-the-pages).
 
 ## What the gardener does to the board
 

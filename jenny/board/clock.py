@@ -1,8 +1,8 @@
 """L'orologio dei quaderni: il job di sistema ``reminders``.
 
 Un ``[ ]`` dentro una pagina non esiste finché qualcuno non la apre; un'attesa
-in ``reminders.json`` sì. Questo job gira ogni quarto d'ora: fa girare le micro
-app dei cassetti, legge le attese di tutti i quaderni e avvisa quando una arriva:
+in ``reminders.json`` sì. Questo job gira ogni quarto d'ora: fa girare i lettori
+delle app, legge le attese di tutti i quaderni e avvisa quando una arriva:
 
 - **a data**: dalle nove del mattino del giorno dovuto (con ``precision:
   month`` il primo del mese: «verso marzo» si ricorda all'inizio di marzo, non
@@ -42,7 +42,7 @@ from jenny.board import model
 from jenny.board.store import mutate_board, mutate_reminders, read_board, read_reminders
 
 # Il passo dell'orologio: un quarto d'ora (decisione del 05/10/2026). E' anche
-# l'intervallo minimo di una micro app (``micro.MIN_EVERY_MINUTES``).
+# l'intervallo minimo di un lettore (``micro.MIN_EVERY_MINUTES``).
 CLOCK_EVERY_MS = 15 * 60 * 1000
 
 # L'ora da cui un'attesa a data diventa dovuta, nel fuso dell'utente.
@@ -87,15 +87,8 @@ def due_by_date(reminders: Mapping[str, Any], now: datetime) -> list[dict[str, A
     return out
 
 
-def _condition_value(workspace: Path, when: Mapping[str, Any],
-                     root: Path | None = None) -> tuple[Any, bool]:
-    """L'ultimo valore del campo osservato (micro app o mini app), e se è fresco."""
-    if when.get("micro"):
-        if root is None:
-            return None, False
-        from jenny.board.micro import micro_field_value
-
-        return micro_field_value(root, str(when.get("micro")), str(when.get("field")))
+def _condition_value(workspace: Path, when: Mapping[str, Any]) -> tuple[Any, bool]:
+    """L'ultimo valore del campo osservato (di una mini app), e se è fresco."""
     from jenny.board.sections import app_field_value
 
     return app_field_value(workspace, str(when.get("app")), when.get("params") or {},
@@ -133,7 +126,7 @@ def check_conditions(
         when = rem.get("when") or {}
         if when.get("kind") != "condition":
             continue
-        value, fresh = _condition_value(workspace, when, root)
+        value, fresh = _condition_value(workspace, when)
         if not fresh:
             continue
         holds = model.compare(value, str(when.get("op")), when.get("value"))
@@ -249,7 +242,7 @@ def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None
             sections.append({"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
                              "params": card["app"].get("params") or {}})
         for section in sections:
-            view = section_view(workspace, root, section)
+            view = section_view(workspace, section)
             if view is None:
                 continue
             key = f"{card['id']}/{section['id']}"
@@ -289,7 +282,6 @@ async def run_reminders(
     *cron* e' il servizio dei job: serve a buttare i cron delle schede tolte da
     piu' di una settimana (:func:`jenny.board.removed.purge_removed_cards`).
     """
-    from jenny.board.micro import run_due_micros
     from jenny.board.removed import purge_removed_cards
     from jenny.utils.wiki_paths import discover_wiki_roots
 
@@ -316,12 +308,6 @@ async def run_reminders(
         # Le attese di una scheda tolta tacciono finche' la scheda non torna: «Togli»
         # ferma quel che la scheda fa da se', e un Annulla lo fa ripartire.
         gone = model.removed_card_ids(board)
-        # **Prima chi produce, poi chi giudica**: le micro app scadute girano
-        # adesso, cosi' gli eventi e le attese a condizione leggono il dato fresco.
-        try:
-            produced += await run_due_micros(workspace, root)
-        except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
-            logger.exception("reminders: micro apps of {} not run", name)
         try:
             events += watch_app_sections(workspace, root, timezone_name=timezone_name)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
@@ -350,4 +336,4 @@ async def run_reminders(
             announced += 1
     if not announced and not events and not produced:
         return None
-    return f"reminders: {announced} announced, {events} app events, {produced} micro runs"
+    return f"reminders: {announced} announced, {events} app events, {produced} reader runs"

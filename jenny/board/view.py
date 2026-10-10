@@ -115,7 +115,7 @@ def _app_card(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
     slug = card["app"]["slug"]
     params = card["app"].get("params") or {}
     section = {"id": model.APP_CARD, "kind": "app", "app": slug, "params": params}
-    view = section_view(workspace, None, section) or {}
+    view = section_view(workspace, section) or {}
     # ``live`` si apre; ``missing``, ``trashed`` e ``broken`` aprono il
     # cassetto, che dice cosa e' successo.
     state = view["state"] if view.get("state") in ("missing", "trashed", "broken") else "live"
@@ -172,16 +172,11 @@ def build_board_view(
                                   "params": card["app"].get("params") or {}})
         alert = bool(alert_probe and any(
             alert_probe(section) for section in live_sections
-            if section.get("kind") in ("app", "micro")
+            if section.get("kind") == "app"
         ))
-        # Il segno ⟳: la scheda ha qualcosa che gira da solo (una micro app
-        # tenuta, un cron, un'app col suo lettore). E' un segno, non un
-        # segnale: non e' rosso.
-        auto = any(
-            (sec.get("kind") == "micro" and sec.get("pending") is not True)
-            or sec.get("kind") == "cron"
-            for sec in card.get("userSections") or []
-        )
+        # Il segno ⟳: la scheda ha qualcosa che gira da solo (un cron). E' un
+        # segno, non un segnale: non e' rosso.
+        auto = any(sec.get("kind") == "cron" for sec in card.get("userSections") or [])
         on_board[card["id"]] = card
         cards_out.append({
             "id": card["id"],

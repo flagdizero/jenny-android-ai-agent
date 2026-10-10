@@ -104,8 +104,8 @@ def records_view(
 ) -> dict[str, Any]:
     """Lo stato di una serie di letture: l'ultimo valore, l'allarme, il dato fermo, l'andamento.
 
-    **Un solo motore** per le sezioni mini app (i record di una collezione
-    dell'app) e per le micro app (le letture del loro ``readings.jsonl``): stessi
+    **Un solo motore** per le sezioni mini app, che i record vengano da una
+    collezione dell'app o dalle letture del suo lettore (``readings.jsonl``): stessi
     record ``{id, ts, ...}``, stessi stati, stesso andamento — cosi' la vista, gli
     eventi di diario e le attese a condizione non sanno chi ha prodotto il dato.
     ``record`` e' l'ultima lettura intera, per chi vuole anche gli altri campi.
@@ -244,11 +244,6 @@ def section_resolver(
         if kind == "photo":
             path = project_root / str(section.get("path"))
             return {"exists": path.is_file()}
-        if kind == "micro":
-            from jenny.board.micro import micro_view
-
-            return {"view": micro_view(workspace, project_root, str(section.get("micro")),
-                                       pending=section.get("pending") is True)}
         if kind == "cron":
             jobs = ctx.get("cronJobs") or {}
             results = ctx.get("cronResults") or {}
@@ -260,30 +255,23 @@ def section_resolver(
 
 
 # Gli stati di una sezione che accendono l'angolo rosso della sua scheda: il
-# dato in allarme o fermo, e una micro app che non va piu'.
+# dato in allarme o fermo, e un lettore che non va piu'.
 ALERT_STATES = ("alarm", "stale", "broken", "unapproved", "quarantined")
 
 
-def section_view(workspace: Path, project_root: Path | None,
-                 section: Mapping[str, Any]) -> dict[str, Any] | None:
-    """La vista di una sezione che produce dati (mini app o micro app), o ``None``."""
+def section_view(workspace: Path, section: Mapping[str, Any]) -> dict[str, Any] | None:
+    """La vista di una sezione che produce dati (una mini app), o ``None``."""
     kind = section.get("kind")
     if kind == "app":
         return app_section_view(workspace, str(section.get("app")), section.get("params") or {})
-    if kind == "micro" and project_root is not None and section.get("pending") is not True:
-        from jenny.board.micro import micro_view
-
-        return micro_view(workspace, project_root, str(section.get("micro")))
     return None
 
 
-def alert_probe(
-    workspace: Path, project_root: Path | None = None
-) -> Callable[[Mapping[str, Any]], bool]:
-    """Se una sezione mini app o micro app deve accendere l'angolo rosso della sua scheda."""
+def alert_probe(workspace: Path) -> Callable[[Mapping[str, Any]], bool]:
+    """Se una sezione mini app deve accendere l'angolo rosso della sua scheda."""
 
     def probe(section: Mapping[str, Any]) -> bool:
-        view = section_view(workspace, project_root, section)
+        view = section_view(workspace, section)
         return bool(view) and view.get("state") in ALERT_STATES
 
     return probe
@@ -307,29 +295,4 @@ def journal_note(project_root: Path, text: str, *, timezone_name: str | None = N
     line = " ".join(text.split())[:500]
     number = append_journal_entry(page, day, f"- {stamp:%H:%M} — {SAID_MARKER} {line}\n")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
-
-
-def short_value(value: Any, *, limit: int = 7) -> str:
-    """Un valore in pochi caratteri, per la copertina: «12,4k», «✓», «38».
-
-    I numeri grandi si abbreviano (k, M), i decimali si tagliano a uno, il
-    separatore e' la virgola (la copertina non sa la lingua, e la casa e'
-    nata italiana: le cifre sono le stesse). Il testo si tronca con «…».
-    """
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "✓" if value else "–"
-    if isinstance(value, (int, float)):
-        n = float(value)
-        for div, suffix in ((1_000_000_000, "G"), (1_000_000, "M"), (10_000, "k")):
-            if abs(n) >= div:
-                scaled = n / (div if suffix != "k" else 1000)
-                text = f"{scaled:.1f}".rstrip("0").rstrip(".") + suffix
-                return text.replace(".", ",")
-        if n == int(n):
-            return str(int(n))
-        return f"{n:.1f}".replace(".", ",")
-    text = str(value)
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 

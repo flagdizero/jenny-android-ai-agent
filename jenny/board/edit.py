@@ -230,12 +230,11 @@ def move_pages(root: Path, pages: Iterable[str], to_card: str) -> list[str]:
 
 async def remove_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, Any]:
     """Togli una scheda, con un Annulla che rimette tutto; restituisce la voce del
-    cestino: ``card`` e ``paused`` (i cron e le micro app fermati).
+    cestino: ``card`` e ``paused`` (i cron fermati).
 
     La scheda, i suoi fili e il suo posto vanno in ``removedCards`` per
     :data:`model.REMOVED_KEEP_DAYS` giorni. Quel che faceva da sé si ferma — i
-    cron del suo cassetto in pausa, le micro app in pausa, le attese non si
-    annunciano — e riparte con :func:`restore_card`. La wiki non cambia: le
+    cron del suo cassetto in pausa, le attese non si annunciano — e riparte con :func:`restore_card`. La wiki non cambia: le
     pagine restano, e la ricerca le trova.
     """
     def trash() -> dict[str, Any]:
@@ -255,7 +254,7 @@ def _trash(board: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
     conns = [c for c in board["connections"] if card_id in (c["a"], c["b"])]
     board["connections"] = [c for c in board["connections"] if c not in conns]
     entry = {"card": card, "connections": conns, "at": model.now_iso(),
-             "paused": {"jobs": [], "micros": []}}
+             "paused": {"jobs": []}}
     board["removedCards"] = [*board["removedCards"], entry][-model.MAX_REMOVED_CARDS:]
     return entry
 
@@ -269,13 +268,8 @@ async def _pause_trashed(root: Path, card: Mapping[str, Any], cron: Any) -> dict
             # riprendere un cron che l'utente aveva già messo in pausa lui.
             if cron.set_paused(job_id, True) == "paused":
                 jobs.append(job_id)
-
-    def pause_micros() -> list[str]:
-        return [m for m in removed.card_micros(card) if removed.set_micro_paused(root, m, True)]
-
-    micros = await asyncio.to_thread(pause_micros)
-    paused = {"jobs": jobs, "micros": micros}
-    if not (jobs or micros):
+    paused = {"jobs": jobs}
+    if not jobs:
         return paused
 
     def note(board: dict[str, Any]) -> None:
@@ -292,7 +286,7 @@ async def restore_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, A
 
     Le pagine che nel frattempo un'altra scheda ha preso restano a quella; i
     fili verso una scheda che non c'è più non tornano. Restituisce ``card`` e
-    quel che riparte: ``jobs`` e ``micros``.
+    quel che riparte: ``jobs``.
     """
     def untrash() -> dict[str, Any]:
         reminders = read_reminders(root)
@@ -328,8 +322,6 @@ async def restore_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, A
         for job_id in back.get("jobs") or []:
             if cron.get_job(job_id) is not None:
                 cron.set_paused(job_id, False)
-    for micro_id in back.get("micros") or []:
-        await asyncio.to_thread(removed.set_micro_paused, root, micro_id, False)
     return back
 
 
@@ -502,8 +494,7 @@ def update_reminder(root: Path, ref: str, sid: str, text: Any, when: Any = None)
     mutate_reminders(root, apply_rem)
 
 
-async def remove_section(root: Path, ref: str, sid: str, *, workspace: Path | None = None,
-                         cron: Any = None) -> bool:
+async def remove_section(root: Path, ref: str, sid: str, *, cron: Any = None) -> bool:
     """Togli una sezione. La wiki non cambia: togliere è una scelta di forma."""
     def drop_section() -> list[dict[str, Any]]:
         gone: list[dict[str, Any]] = []
@@ -522,10 +513,6 @@ async def remove_section(root: Path, ref: str, sid: str, *, workspace: Path | No
 
     gone = await asyncio.to_thread(drop_section)
     for section in gone:
-        if section.get("kind") == "micro" and workspace is not None:
-            from jenny.board import micro as mc
-
-            await asyncio.to_thread(mc.remove, workspace, root, str(section.get("micro")))
         if section.get("kind") == "cron" and cron is not None:
             # Togliere il cron dal cassetto toglie il job: nessun cron orfano.
             cron.remove_job(str(section.get("job")))

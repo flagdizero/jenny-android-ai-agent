@@ -189,7 +189,7 @@ async def test_the_editor_is_told_what_a_removal_paused(notebook_chat: Path) -> 
     cron = _Cron()
     tool = BoardTool(cron=cron)
     out = await tool.execute(action="remove_card", card="nuove")
-    assert "1 cron job(s), 0 micro app(s) — is paused until restore_card" in out, out
+    assert "1 cron job(s) — is paused until restore_card" in out, out
     out = await tool.execute(action="restore_card", card="nuove")
     assert "is running again" in out and cron.paused == {"j1": False}
 

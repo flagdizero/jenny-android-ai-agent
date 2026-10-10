@@ -296,69 +296,50 @@ def test_the_pure_helpers_of_the_board() -> None:
     assert run_js(script).strip().endswith("ok")
 
 
-_MICRO = {
-    "slug": "m-acerello", "micro": "m-acerello", "name": "Acerello", "label": "Umidità",
+_READER = {
+    "slug": "acerello", "name": "Acerello", "label": "Umidità",
     "unit": "%", "field": "moisture", "type": "number", "verbs": [], "params": {},
     "value": 38, "at": "2026-10-05T12:00:00+00:00", "trend": [40, 39, 38],
     "dataState": "ok", "extras": [{"field": "online", "label": "Sensore", "unit": "",
                                    "type": "bool", "value": True}],
     "source": "hub WaterBot", "every": 30, "net": [], "uses": ["waterbot-imh"],
     "codeStatus": "ok", "lastRunAt": "", "nextRunAt": "", "lastError": "", "failures": 0,
+    "view": "value", "hasScreen": False,
 }
 
 
-def _run_micro(state: str, script: str, *, error: str = "") -> None:
-    board = json.loads(json.dumps(BOARD))
-    board["cards"][0]["auto"] = True
-    card = json.loads(json.dumps(CARD))
-    view = {**_MICRO, "state": state, "lastError": error}
-    card["userSections"] = [{"id": "s-micro", "kind": "micro", "micro": "m-acerello",
-                             "pending": state == "pending", "view": view}]
-    head = (
-        _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
-        + "for (const m of ['board.micro.keep', 'board.micro.discard', 'board.micro.run',"
-          " 'board.micro.pause']) rpcAnswers[m] = () => ({ ok: true });\n"
-    )
-    run_home(head + script)
+def _reader_section(view: dict) -> dict:
+    return {"id": f"s-{view['slug']}", "kind": "app", "app": view["slug"], "params": {},
+            "view": view}
 
 
 @requires_jsdom
-def test_a_micro_app_on_trial_is_kept_from_the_drawer() -> None:
-    _run_micro("pending", """
+def test_the_auto_sign_is_drawn_and_is_not_a_signal() -> None:
+    board = json.loads(json.dumps(BOARD))
+    board["cards"][0]["auto"] = True
+    head = _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(CARD))
+    run_home(head + """
       // Il segno ⟳ sulla polaroid: qualcosa gira da solo, ma non e' un segnale rosso.
       const polaroid = document.querySelector('.home-board-polaroid[data-id="acero"]');
       assert.ok(polaroid.querySelector('.home-board-auto'));
-      await app.openCard('acero', 'Acero');
-      await tick(40);
-      const drawer = $('home-board-drawer');
-      assert.match(drawer.textContent, /38%/);
-      assert.match(drawer.textContent, /waterbot-imh/);
-      assert.ok(drawer.querySelector('.home-drawer-app.is-pending'));
-      const keep = [...drawer.querySelectorAll('.home-board-btn.is-primary')]
-        .find((b) => /Tienila|Keep/.test(b.textContent));
-      keep.click();
-      await tick(40);
-      assert.equal(rpcs('board.micro.keep').at(-1).params.micro, 'm-acerello');
+      assert.ok(!polaroid.querySelector('.home-board-sig-corner'));
     """)
 
 
 @requires_jsdom
-def test_a_broken_micro_app_asks_jenny_to_fix_it() -> None:
-    _run_micro("broken", """
+def test_a_broken_reader_keeps_its_last_value_in_grey() -> None:
+    card = json.loads(json.dumps(CARD))
+    card["userSections"] = [_reader_section({**_READER, "state": "broken",
+                                             "lastError": "Traceback...\nKeyError: 'soil'"})]
+    head = _SETUP.replace("__BOARD__", json.dumps(BOARD)).replace("__CARD__", json.dumps(card))
+    run_home(head + """
       await app.openCard('acero', 'Acero');
       await tick(40);
       const drawer = $('home-board-drawer');
-      assert.ok(drawer.querySelector('.home-drawer-alert'));
       assert.ok(drawer.querySelector('.home-drawer-app.is-broken'));
-      const fix = [...drawer.querySelectorAll('.home-board-btn.is-primary')]
-        .find((b) => /sistemare|fix/i.test(b.textContent));
-      fix.click();
-      await tick(40);
-      assert.equal(app.chatOver, true, 'la chat non e\u2019 salita sopra il cassetto');
-      assert.equal(app.view, 'drawer', 'il cassetto e\u2019 sparito da sotto la chat');
-      assert.equal($('home-chat').parentElement.id, 'home-over');
-      assert.match(document.getElementById('home-input').value, /KeyError: 'soil'/);
-    """, error="Traceback...\nKeyError: 'soil'")
+      assert.match(drawer.textContent, /38%/);
+      assert.match(drawer.textContent, /waterbot-imh/);
+    """)
 
 
 @requires_jsdom
@@ -449,29 +430,28 @@ def test_a_notebook_cron_shows_in_its_drawer_and_pauses_there() -> None:
 
 @requires_jsdom
 def test_the_drawer_draws_the_four_other_shapes() -> None:
-    base = {**_MICRO, "state": "ok", "extras": [], "uses": [], "net": []}
+    base = {**_READER, "state": "ok", "extras": [], "uses": [], "net": []}
     sections = [
-        {**base, "micro": "m-meteo", "name": "Meteo", "view": "chips", "extras": [
+        {**base, "slug": "meteo", "name": "Meteo", "view": "chips", "extras": [
             {"field": "temp", "label": "Temperatura", "unit": "°", "type": "number", "value": 18},
             {"field": "pioggia", "label": "Pioggia", "unit": "%", "type": "number", "value": 70},
         ]},
-        {**base, "micro": "m-parole", "name": "Romanzo", "view": "progress", "label": "Parole",
+        {**base, "slug": "parole", "name": "Romanzo", "view": "progress", "label": "Parole",
          "unit": "parole", "value": 41200, "min": 0, "max": 80000},
-        {**base, "micro": "m-annunci", "name": "Annunci", "view": "list", "type": "rows",
+        {**base, "slug": "annunci", "name": "Annunci", "view": "list", "type": "rows",
          "value": 2, "columns": [{"field": "titolo", "label": "Titolo", "type": "text", "unit": ""},
                                  {"field": "prezzo", "label": "Prezzo", "type": "number",
                                   "unit": " €"}],
          "rows": [{"titolo": "Bilocale via Roma", "prezzo": 180000},
                   {"titolo": "Trilocale Pigneto", "prezzo": 260000}]},
-        {**base, "micro": "m-etf", "name": "ETF", "view": "table", "type": "rows", "value": 1,
+        {**base, "slug": "etf", "name": "ETF", "view": "table", "type": "rows", "value": 1,
          "columns": [{"field": "nome", "label": "Nome", "type": "text", "unit": ""},
                      {"field": "prezzo", "label": "Prezzo", "type": "number", "unit": ""}],
          "rows": [{"nome": "MSCI World", "prezzo": 104.2}]},
     ]
     board = json.loads(json.dumps(BOARD))
     card = json.loads(json.dumps(CARD))
-    card["userSections"] = [{"id": f"s-{v['micro']}", "kind": "micro", "micro": v["micro"],
-                             "pending": False, "view": v} for v in sections]
+    card["userSections"] = [_reader_section(v) for v in sections]
     head = _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
     run_home(head + """
       await app.openCard('acero', 'Acero');

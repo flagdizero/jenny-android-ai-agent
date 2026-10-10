@@ -119,9 +119,11 @@ SUGGESTION_KINDS = (
     "add_section",
     "add_app_card",
 )
-# ``micro`` e ``cron`` sono le cose che il quaderno fa da solo: una micro app
-# (un piccolo programma che legge un dato, girato dall'orologio) e un cron del
-# quaderno (un lavoro di Jenny a orario). Vivono nel cassetto della loro scheda.
+# ``cron`` e' un lavoro di Jenny a orario, nel cassetto della sua scheda.
+# ``micro`` e' la micro app di prima del 06/10/2026: nessuno la crea, nessuno la
+# disegna, ma ``board.json`` la deve ancora leggere perche' la migrazione
+# all'avvio (``jenny/apps/migrate_micro.py``) la trovi e la faccia diventare
+# una sezione ``app``.
 SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
 REMINDER_STATES = ("open", "done", "dropped")
 WHEN_KINDS = ("date", "condition")
@@ -322,7 +324,6 @@ def _normalize_user_section(raw: Any) -> dict[str, Any] | None:
         if not is_valid_id(raw.get("micro")):
             return None
         known["micro"] = raw["micro"]
-        # In prova: Jenny l'ha scritta e letta una volta, e aspetta il [Tienilo].
         known["pending"] = raw.get("pending") is True
     elif kind == "cron":
         if not is_valid_id(raw.get("job")):
@@ -416,7 +417,7 @@ def _normalize_removed(raw: Any) -> dict[str, Any] | None:
         "card": card,
         "connections": connections,
         "at": raw["at"],
-        "paused": {"jobs": _str_list(paused.get("jobs")), "micros": _str_list(paused.get("micros"))},
+        "paused": {"jobs": _str_list(paused.get("jobs"))},
     }
     return _keep_unknown(raw, known)
 
@@ -766,7 +767,8 @@ def _normalize_when(raw: Any) -> dict[str, Any] | None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
-    # La sorgente del dato: una micro app del quaderno, o una Jenny App.
+    # La sorgente del dato: una Jenny App, o (solo finche' la migrazione non la
+    # converte) una micro app di prima.
     if is_valid_id(raw.get("micro")):
         return _keep_unknown(raw, {
             "kind": "condition", "micro": raw["micro"], "field": fld, "op": op, "value": value,

@@ -98,7 +98,7 @@ class BoardRoutes:
 
         workspace = self._get_workspace_root()
         payload: dict[str, Any] = await asyncio.to_thread(
-            build_board_view, root, alert_probe=alert_probe(workspace, root),
+            build_board_view, root, alert_probe=alert_probe(workspace),
             workspace=workspace
         )
         return http_json_response(payload)

@@ -3,8 +3,7 @@
 «Togli dalla bacheca» ha un Annulla, e un Annulla vale solo se rimette
 **tutto**. Quindi togliere una scheda non butta niente: la scheda, i suoi fili e
 il suo posto vanno in ``removedCards`` (v. :data:`model.REMOVED_KEEP_DAYS`), e
-quel che faceva da sé — i cron del suo cassetto, le micro app — si mette in
-pausa. Le RPC stanno in ``webui/board_commands.py``; la scadenza la fa
+quel che faceva da sé — i cron del suo cassetto — si mette in pausa. Le RPC stanno in ``webui/board_commands.py``; la scadenza la fa
 l'orologio dei quaderni, che non deve dipendere dalla WebUI: per questo i pezzi
 comuni stanno qui.
 """
@@ -23,45 +22,15 @@ def card_crons(card: Mapping[str, Any]) -> list[str]:
     return [str(s["job"]) for s in card.get("userSections") or [] if s.get("kind") == "cron"]
 
 
-def card_micros(card: Mapping[str, Any]) -> list[str]:
-    return [
-        str(s["micro"]) for s in card.get("userSections") or []
-        if s.get("kind") == "micro" and not s.get("pending")
-    ]
-
-
-def set_micro_paused(root: Path, micro_id: str, paused: bool) -> bool:
-    """Mette in pausa (o riprende) una micro app; vero se ha cambiato qualcosa."""
-    from jenny.board import micro as mc
-
-    micro = mc.load_micro(root, micro_id)
-    if micro is None:
-        return False
-    state = mc.read_state(micro.dir)
-    if paused:
-        if state.get("status") == "paused":
-            return False
-        state["status"] = "paused"
-    else:
-        if state.get("status") != "paused":
-            return False
-        state["status"] = "ok"
-        state.pop("lastRunAt", None)
-    mc.write_state(micro.dir, state)
-    return True
-
-
 def purge_removed_cards(workspace: Path, root: Path, cron: Any = None, now: Any = None) -> int:
     """Butta davvero le schede tolte da più di una settimana. Lo chiama l'orologio.
 
     Scrive come ``user``: non è Jenny che decide qualcosa sulla bacheca, è la
     scadenza dell'Annulla che l'utente ha avuto (la regola la dice
     :data:`model.REMOVED_KEEP_DAYS`). Quel che la scheda faceva da sé se ne va
-    con lei: i cron del cassetto, le micro app (nel loro cestino), le attese
-    aperte (lasciate, non cancellate), il riassunto derivato.
+    con lei: i cron del cassetto, le attese aperte (lasciate, non cancellate),
+    il riassunto derivato.
     """
-    from jenny.board import micro as mc
-
     board = read_board(root)
     if board is None:
         return 0
@@ -84,9 +53,6 @@ def purge_removed_cards(workspace: Path, root: Path, cron: Any = None, now: Any 
     mutate_reminders(root, drop)
     for entry in expired:
         card = entry["card"]
-        for section in card.get("userSections") or []:
-            if section.get("kind") == "micro":
-                mc.remove(workspace, root, str(section.get("micro")))
         if cron is not None:
             for job_id in card_crons(card):
                 cron.remove_job(job_id)

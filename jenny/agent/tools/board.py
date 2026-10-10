@@ -223,7 +223,7 @@ class BoardTool(Tool):
             return f"«{title}» is back on the board.{resumed}{redraw}"
         if action == "remove_section":
             if not await edit.remove_section(root, card, str(kw.get("id") or ""),
-                                             workspace=_workspace(), cron=self._cron):
+                                             cron=self._cron):
                 return "No such section on that card: nothing changed."
             return "Section removed."
         done = await edit.respond_suggestion(root, str(kw.get("id") or ""),
@@ -246,11 +246,11 @@ class BoardTool(Tool):
 
 
 def _jobs_note(what: dict[str, Any], state: str) -> str:
-    """«Its 1 cron job and 0 micro apps: paused…» — quel che la scheda fa da sé."""
-    jobs, micros = len(what.get("jobs") or []), len(what.get("micros") or [])
-    if not (jobs or micros):
+    """«Its 1 cron job: paused…» — quel che la scheda fa da sé."""
+    jobs = len(what.get("jobs") or [])
+    if not jobs:
         return ""
-    return f" What it did by itself — {jobs} cron job(s), {micros} micro app(s) — is {state}."
+    return f" What it did by itself — {jobs} cron job(s) — is {state}."
 
 
 def _strings(value: Any) -> list[str]:

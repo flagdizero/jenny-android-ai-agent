@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from jenny.board import model
-from jenny.board.sections import alert_probe, short_value
+from jenny.board.sections import alert_probe
 from jenny.board.store import mutate_board, read_board
 from jenny.board.view import build_board_view
 from jenny.webui.commands import CommandError, dispatch_command
@@ -60,7 +60,7 @@ async def test_a_card_that_is_an_app_is_a_strip_of_its_size(ctx, notebook, water
     # Il riassunto di prima (un valore) e' una striscia S, e la taglia sta sulla scheda.
     assert card["title"] == "WaterBot" and card["size"] == "S"
     view = build_board_view(notebook, workspace=waterbot,
-                            alert_probe=alert_probe(waterbot, notebook))
+                            alert_probe=alert_probe(waterbot))
     shown = next(c for c in view["cards"] if c["id"] == card_id)
     slip = shown["slip"]
     assert slip["size"] == "S" and slip["state"] == "ok" and shown["box"] == list(
@@ -77,7 +77,7 @@ async def test_a_card_that_is_an_app_is_a_strip_of_its_size(ctx, notebook, water
     out = await dispatch_command(ctx, "board.card.add", {
         "wiki": "piante", "app": {"slug": "waterbot", "params": {"sensor": "monstera"}}})
     view = build_board_view(notebook, workspace=waterbot,
-                            alert_probe=alert_probe(waterbot, notebook))
+                            alert_probe=alert_probe(waterbot))
     red = next(c for c in view["cards"] if c["id"] == out["card"]["id"])
     assert red["signal"] == "alert" and red["slip"]["state"] == "alarm"
 
@@ -148,13 +148,6 @@ def test_jenny_cannot_change_a_card_app(notebook) -> None:
         "app": {"slug": "waterbot", "params": {}}}))
     with pytest.raises(BoardOwnershipError):
         mutate_board(notebook, lambda b: b["cards"][0].pop("app"), actor=model.JENNY)
-
-
-def test_the_cover_is_short() -> None:
-    assert short_value(12430.2) == "12,4k"
-    assert short_value(38) == "38"
-    assert short_value(True) == "✓"
-    assert short_value("latte e uova") == "latte…"
 
 
 async def test_jenny_proposes_an_app_card_and_yes_places_it(ctx, notebook, waterbot) -> None:

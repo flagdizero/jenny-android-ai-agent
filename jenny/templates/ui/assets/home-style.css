@@ -3137,7 +3137,7 @@ body.home {
 .home-drawer-app-sign.is-stale .home-drawer-app-dot { background: var(--board-alert); }
 .home-drawer-app-sign.is-empty .home-drawer-app-dot { background: var(--text-faint); }
 .home-drawer-spark polyline { fill: none; stroke: var(--text-muted); stroke-width: 1.4; }
-/* La micro app: i valori secondari a chip, la prova e il guasto. Con il codice
+/* Un'app col lettore: i valori secondari a chip, e il guasto. Con il codice
    fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'. */
 .home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
 .home-drawer-chip {
@@ -3195,9 +3195,7 @@ body.home {
 .home-drawer-proof.is-down { color: var(--board-alert); }
 .home-drawer-app.is-broken .home-drawer-app-number,
 .home-drawer-app.is-quarantined .home-drawer-app-number,
-.home-drawer-app.is-unapproved .home-drawer-app-number,
 .home-drawer-app.is-paused .home-drawer-app-number { color: var(--text-faint); }
-.home-drawer-app.is-pending { padding: 8px; border: 1px dashed var(--border); border-radius: 6px; }
 .home-drawer-photo { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }
 .home-drawer-add {
   align-self: flex-start;

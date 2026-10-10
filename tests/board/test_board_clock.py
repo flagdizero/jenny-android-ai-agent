@@ -67,7 +67,7 @@ async def test_a_due_reminder_is_announced_once_with_its_why(tmp_path) -> None:
     agent = _Agent()
     now = datetime(2027, 3, 2, 10, 0, tzinfo=ROME)
     out = await run_reminders(agent, ws, now=now)
-    assert out == "reminders: 2 announced, 0 app events, 0 micro runs"
+    assert out == "reminders: 2 announced, 0 app events, 0 reader runs"
     assert len(agent.prompts) == 2
     travaso = next(p for p in agent.prompts if "r-travaso" in p)
     assert "Notebook: piante" in travaso

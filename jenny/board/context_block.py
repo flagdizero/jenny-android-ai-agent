@@ -125,7 +125,7 @@ def board_block(
         tags: list[str] = []
         problem = alert is not None and any(
             alert(s) for s in [*(card.get("userSections") or []), *_app_sections(card)[:1]]
-            if s.get("kind") in ("app", "micro")
+            if s.get("kind") == "app"
         )
         if problem:
             tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
@@ -200,15 +200,9 @@ def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> 
     portafoglio. Il valore vero arriva col cassetto, nel contesto del turno,
     quando la scheda viene nominata.
     """
-    from jenny.board.micro import load_micro
-
     bits: list[str] = []
     for section in card.get("userSections") or []:
-        if section.get("kind") == "micro" and section.get("pending") is not True:
-            micro = load_micro(root, str(section.get("micro")))
-            if micro is not None:
-                bits.append(micro.spec["title"])
-        elif section.get("kind") == "cron":
+        if section.get("kind") == "cron":
             bits.append(f"cron {section.get('name') or section.get('job')}")
     for view in _app_views(root, card):
         bits.append(str(view.get("name")))
@@ -280,8 +274,6 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     for section in card.get("userSections") or []:
         if section.get("kind") == "note":
             parts.append(f"- The user's note: {section.get('text')}")
-        elif section.get("kind") == "micro":
-            parts.append(_micro_line(root, section))
         elif section.get("kind") == "cron":
             last = results.get(f"{card['id']}/{section.get('id')}") or {}
             # Una citazione datata, non una frase di Jenny al presente: il testo
@@ -319,31 +311,6 @@ def _app_line(view: Mapping[str, Any]) -> str:
     return (f"- App «{view.get('name')}» (`{view.get('slug')}`{', ' + params if params else ''}; "
             f"app tool to change it): {shown}{', ' + extras if extras else ''}{rows} at "
             f"{view.get('at') or '—'}; {status}")
-
-
-def _micro_line(root: Path, section: Mapping[str, Any]) -> str:
-    """Una micro app nel cassetto: valore, stato, e dove sta il codice (per ripararla)."""
-    from jenny.board.micro import load_micro, micro_dir, read_readings, read_state
-
-    mid = str(section.get("micro"))
-    pending = section.get("pending") is True
-    micro = load_micro(root, mid, draft=pending) or load_micro(root, mid)
-    if micro is None:
-        return f"- Micro app `{mid}`: missing"
-    readings = read_readings(micro_dir(root, mid))
-    last = readings[-1] if readings else {}
-    values = ", ".join(
-        f"{f['label']} {last.get(name)}{f.get('unit', '')}"
-        for name, f in micro.spec["fields"].items() if name in last
-    ) or "no reading yet"
-    state = read_state(micro.dir)
-    status = "on trial (the user keeps it from the drawer)" if pending else (
-        state.get("status") or "new")
-    error = state.get("lastError") or ""
-    tail = f"; last error: {error.strip().splitlines()[-1][:200]}" if error.strip() else ""
-    return (f"- Micro app «{micro.spec['title']}» (`{mid}`): {values}"
-            f" at {last.get('ts', '—')}; {status}{tail}; code in "
-            f"board/micro/{mid}/run.py")
 
 
 def turn_lines(root: Path, message: str) -> list[str]:

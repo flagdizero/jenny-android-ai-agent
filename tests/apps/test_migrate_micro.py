@@ -33,13 +33,24 @@ def notebook(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
 def _micro(ws: Path, root: Path, micro_id: str, *, approved: bool, pending: bool = False) -> None:
     spec = {"title": "Acerello", "fields": FIELDS, "primary": "moisture", "every": 30,
             "card": "acero", "alarm": {"field": "moisture", "op": "<", "value": 20}}
-    micro = mc.write_micro(root, micro_id, spec, CODE, draft=pending)
+    # Scritta a mano, come la lasciava una versione di prima del 06/10/2026:
+    # chi la scriveva non c'e' piu'.
+    d = mc.micro_dir(root, micro_id, draft=pending)
+    d.mkdir(parents=True)
+    (d / mc.SPEC_FILE).write_text(json.dumps(spec), encoding="utf-8")
+    (d / mc.CODE_FILE).write_text(CODE, encoding="utf-8")
     if not pending:
-        mc.append_reading(micro.dir, {"moisture": 41, "online": True},
-                          now=datetime.now(timezone.utc))
-        mc.write_state(micro.dir, {"status": "ok", "lastRunAt": "2026-10-06T08:00:00+00:00"})
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        (d / mc.READINGS_FILE).write_text(json.dumps(
+            {"id": "r1", "ts": stamp, "moisture": 41, "online": True}) + "\n", encoding="utf-8")
+        (d / mc.STATE_FILE).write_text(json.dumps(
+            {"status": "ok", "lastRunAt": "2026-10-06T08:00:00+00:00"}), encoding="utf-8")
         if approved:
-            mc.write_approval(ws, root, micro)
+            path = mc.approvals_path(ws)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = json.loads(path.read_text()) if path.exists() else {}
+            data[f"{root.name}/{micro_id}"] = {"codeHash": "sha256:x"}
+            path.write_text(json.dumps(data), encoding="utf-8")
     mutate_board(root, lambda b: b["cards"][0]["userSections"].append(
         {"id": f"s-{micro_id}", "kind": "micro", "micro": micro_id, "pending": pending,
          "by": "jenny-on-request"}))
@@ -68,6 +79,7 @@ def test_an_approved_micro_app_becomes_a_live_placed_app(notebook) -> None:
     assert app_field_value(ws, "acerello", {}, "moisture")[0] == 41
     # La cartella vecchia e' messa da parte, e una seconda passata non fa niente.
     assert mc.list_micros(root) == []
+    assert json.loads(mc.approvals_path(ws).read_text()) == {}
     assert (root / "board" / "micro" / ".migrated" / "m-acerello" / "run.py").is_file()
     assert migrate_micro_apps(ws) == 0
 

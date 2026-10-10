@@ -387,8 +387,8 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
     if kind not in model.SECTION_KINDS:
         raise CommandError("bad_request", "invalid kind")
     if kind in ("micro", "cron"):
-        # Una micro app e un cron nascono da Jenny, su richiesta, con la loro
-        # prova o il loro job: dal cassetto si chiedono a parole.
+        # Un cron nasce da Jenny, su richiesta, col suo job: dal cassetto si
+        # chiede a parole. Una micro app non nasce piu'.
         raise CommandError("bad_request", f"a {kind} section is made by Jenny, not added")
     if kind == "app":
         # Un'app non entra nel cassetto di un'altra scheda: e' una polaroid
@@ -464,7 +464,7 @@ async def board_section_remove(ctx: CommandContext, params: Mapping[str, Any]) -
     """Togli una sezione. La wiki non cambia: togliere è una scelta di forma."""
     root = _project(ctx, params)
     await _edit(edit.remove_section(root, _card_id(params), _card_id(params, "id"),
-                                    workspace=ctx.get_workspace_root(), cron=_cron(ctx)))
+                                    cron=_cron(ctx)))
     return {"ok": True}
 
 
@@ -492,83 +492,6 @@ async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
-def _micro_id(params: Mapping[str, Any]) -> str:
-    return _card_id(params, "micro")
-
-
-async def board_micro_keep(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """[Tienilo]: la micro app in prova diventa viva, e il suo codice approvato.
-
-    E' **questo tocco** ad approvare il codice: l'impronta finisce fuori dal
-    workspace (``micro.approvals_path``), e da li' in poi l'orologio lo esegue.
-    Vale anche come [Riapprova] per un codice cambiato fuori da Jenny.
-    """
-    from jenny.board import micro as mc
-
-    root = _project(ctx, params)
-    mid = _micro_id(params)
-    kept = await _run(mc.keep, ctx.get_workspace_root(), root, mid)
-    if kept is None:
-        raise CommandError("not_found", "micro app not found")
-
-    def since(board: dict[str, Any]) -> None:
-        found = mc.section_of(board, mid)
-        card = found[0] if found else {"id": "", "title": ""}
-        model.add_since(board, "micro_kept", card=card["id"], title=card["title"],
-                        app=kept.spec["title"])
-
-    await _run(mutate_board, root, since)
-    # La prima lettura vera da viva, subito: il cassetto non resta su quella di prova.
-    await mc.run_micro(ctx.get_workspace_root(), root, mid, force=True)
-    return {"ok": True}
-
-
-async def board_micro_discard(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """[Scarta]: via la bozza; se non c'era una versione viva, via anche la sezione."""
-    from jenny.board import micro as mc
-
-    root = _project(ctx, params)
-    mid = _micro_id(params)
-    await _run(mc.discard_draft, root, mid)
-    if mc.load_micro(root, mid) is None:
-        await _run(mc.drop_section, root, mid)
-    else:
-        board = await _run(read_board, root)
-        found = mc.section_of(board, mid) if board else None
-        if found is not None:
-            await _run(mc.set_section, root, found[0]["id"], mid, pending=False)
-    return {"ok": True}
-
-
-async def board_micro_run(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """⟳: rileggi adesso."""
-    from jenny.board import micro as mc
-
-    root = _project(ctx, params)
-    state = await mc.run_micro(ctx.get_workspace_root(), root, _micro_id(params), force=True)
-    if state is None:
-        raise CommandError("conflict", "micro app not approved or missing")
-    return {"ok": True, "status": state.get("status")}
-
-
-async def board_micro_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Pausa e ripresa: ``paused: true|false``."""
-    from jenny.board import micro as mc
-
-    root = _project(ctx, params)
-    micro = mc.load_micro(root, _micro_id(params))
-    if micro is None:
-        raise CommandError("not_found", "micro app not found")
-    state = mc.read_state(micro.dir)
-    if params.get("paused") is True:
-        state["status"] = "paused"
-    elif state.get("status") == "paused":
-        state["status"] = "ok"
-        state.pop("lastRunAt", None)
-    mc.write_state(micro.dir, state)
-    return {"ok": True}
-
-
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Pausa e ripresa di un cron del quaderno, dal suo cassetto: ``paused: true|false``.
 
@@ -593,10 +516,6 @@ BOARD_COMMANDS = {
     "board.card.remove": board_card_remove,
     "board.card.restore": board_card_restore,
     "board.cron.pause": board_cron_pause,
-    "board.micro.keep": board_micro_keep,
-    "board.micro.discard": board_micro_discard,
-    "board.micro.run": board_micro_run,
-    "board.micro.pause": board_micro_pause,
     "board.seen": board_seen,
     "board.move": board_move,
     "board.suggestion.respond": board_suggestion_respond,

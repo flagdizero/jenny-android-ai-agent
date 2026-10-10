@@ -2,14 +2,13 @@
 
 **Lo calcola il codice, mai il modello.** Legge i dati dell'app — le letture
 del suo lettore, o una sua collezione — filtrati dai parametri della posa
-(quale sensore), e li porta nella **stessa forma** di una micro app
-(``jenny/board/micro.py::micro_view``): valore, stato, andamento, chip, righe.
-Cosi' il cassetto ha un solo modo di disegnare un dato vivo, chiunque l'abbia
-prodotto, e la copertina di una scheda ne prende un pezzo.
+(quale sensore), e li porta in **una forma sola**: valore, stato, andamento,
+chip, righe. Cosi' il cassetto ha un solo modo di disegnare un dato vivo,
+chiunque l'abbia prodotto, e la copertina di una scheda ne prende un pezzo.
 
 Gli stati sono quelli dei dati (``ok``, ``alarm``, ``stale``, ``empty``) finché
-il codice va; diventano quelli del codice (``trial``, ``unapproved``,
-``broken``, ``paused``…) quando non va, e allora il valore resta l'ultimo buono.
+il codice va; diventano quelli del codice (``broken``, ``quarantined``,
+``paused``) quando non va, e allora il valore resta l'ultimo buono.
 """
 
 from __future__ import annotations
