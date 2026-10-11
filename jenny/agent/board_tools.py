@@ -143,7 +143,8 @@ class BoardAssignPageTool(_BoardTool):
 
 _SECTION = ObjectSchema(
     title=StringSchema("One of the notebook's skeleton sections, spelled exactly as given."),
-    text=StringSchema("At most two short sentences: what the pages say about this, now."),
+    text=StringSchema("At most two short sentences: what the pages say about this, now."
+                      " Plain prose, no [[links]]: the drawer lists the pages under it."),
     sources=ArraySchema(StringSchema("A page of this card, relative to wiki/."),
                         description="The pages this section comes from, most relevant first."),
     required=["title", "text", "sources"],
@@ -152,7 +153,8 @@ _SECTION = ObjectSchema(
 
 @tool_parameters(tool_parameters_schema(
     card=StringSchema("The card id."),
-    brief=StringSchema("One or two sentences: the state of this subject right now."),
+    brief=StringSchema("One or two sentences: the state of this subject right now, in plain "
+                       "prose."),
     sections=ArraySchema(_SECTION, description="The skeleton sections that have material."),
     required=["card", "brief", "sections"],
 ))

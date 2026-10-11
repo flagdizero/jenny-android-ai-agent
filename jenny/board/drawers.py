@@ -73,6 +73,33 @@ def as_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _plain_links(root: Path) -> Callable[[Any], Any]:
+    """:func:`model.plain_wikilinks` coi titoli veri delle pagine del quaderno.
+
+    Al posto di ``[[Coltivazione-Prunus]]`` va «Coltivazione del prunus»: in
+    scrittura il quaderno c'e', e il titolo si trova come lo trova il lettore.
+    """
+    from jenny.board.view import wiki_titles
+    from jenny.webui.wiki import resolve_wikilink
+
+    pages_dir = root / "wiki"
+    titles: dict[str, str] | None = None
+
+    def title_of(target: str) -> str | None:
+        nonlocal titles
+        found = resolve_wikilink(root, target.split("#", 1)[0])
+        if found is None:
+            return None
+        if titles is None:
+            titles = wiki_titles(root)
+        try:
+            return titles.get(found.relative_to(pages_dir).as_posix())
+        except ValueError:  # fuori da wiki/ (``audit/``): niente titolo, il nome basta
+            return None
+
+    return lambda value: model.plain_wikilinks(value, title_of)
+
+
 def write_drawer(
     root: Path,
     card_id: str,
@@ -93,13 +120,14 @@ def write_drawer(
     """
     old = read_card_summary(root, card_id) or {}
     old_by_title = {s["title"]: s for s in old.get("sections") or []}
+    plain = _plain_links(root)
     stamp = model.now_iso()
     out: list[dict[str, Any]] = []
     problems: list[str] = []
     for raw in as_list(sections):
         item = as_dict(raw)
         title = model.clean_text(item.get("title"), model.MAX_TITLE)
-        text = model.clean_block(item.get("text"), MAX_SECTION_CHARS)
+        text = model.clean_block(plain(item.get("text")), MAX_SECTION_CHARS)
         sources = [p for p in as_list(item.get("sources")) if isinstance(p, str)]
         if skeleton and title not in skeleton:
             problems.append(f"`{title}` is not a skeleton section")
@@ -123,7 +151,7 @@ def write_drawer(
     write_card_summary(root, card_id, {
         "generated": stamp,
         "fingerprint": fingerprint,
-        "brief": model.clean_block(brief, MAX_BRIEF_CHARS),
+        "brief": model.clean_block(plain(brief), MAX_BRIEF_CHARS),
         "sections": out,
     })
     return out, sum(1 for sec in out if sec["changed"] == stamp), problems

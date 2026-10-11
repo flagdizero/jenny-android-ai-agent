@@ -46,7 +46,8 @@ _ON_THE_LOOP = ("remove_card", "restore_card", "remove_section", "answer_proposa
 
 _SECTION = ObjectSchema(
     title=StringSchema("One of the board's skeleton sections, spelled exactly as `show` lists it."),
-    text=StringSchema("At most two short sentences: what the pages say about this, now."),
+    text=StringSchema("At most two short sentences: what the pages say about this, now."
+                      " Plain prose, no [[links]]: the drawer lists the pages under it."),
     sources=ArraySchema(StringSchema("A page of this card, relative to wiki/."),
                         description="The pages this section comes from, most relevant first."),
     required=["title", "text", "sources"],

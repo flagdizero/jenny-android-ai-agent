@@ -43,7 +43,8 @@ Then write the drawer of **every** card you proposed, with `board_write_summary`
 proposal returned, so that the board is complete the moment the user accepts it. **One drawer at
 a time:** the proposal returns the pages of the first drawer only, and each drawer you write
 returns the pages of the next, until the last. Write each drawer as soon as its pages arrive, from
-those pages — do not read ahead, and do not read a page the tools have already shown you. If you
+those pages and in plain prose (no `[[links]]`) — do not read ahead, and do not read a page the
+tools have already shown you. If you
 find dated plans in the pages (an unchecked `[ ]` with a date, "around March"), add them with
 `board_add_reminder` on the right card.
 {% endif %}
@@ -74,7 +75,8 @@ the pages of the next. For each, call `board_write_summary` once, as soon as its
 - When a section's pages did not change what it says, copy it as it was: the user sees a blue dot on
   every section whose text changed, and a dot that means nothing teaches them to ignore it.
 
-Write it from the pages, not from memory: every sentence must be backed by a page you cite. Never
+Write it from the pages, not from memory: every sentence must be backed by a page you cite, and
+written as plain prose — no `[[links]]`: the drawer already lists each section's pages under it. Never
 quote a live value (an app reading, a cron's last result): the drawer shows those itself, and
 a summary that carried them would need rewriting at every reading.{% else %}No drawer needs rewriting.{% endif %}
 

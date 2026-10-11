@@ -58,3 +58,51 @@ def test_an_unchanged_section_keeps_its_date(notebook: Path) -> None:
     out, changed, _ = _write(notebook, card, [section, {"title": "Acqua", "text": "Poca.",
                                                         "sources": ["ginkgo.md"]}])
     assert out[0]["changed"] == "2026-10-01T09:00:00+02:00" and changed == 1
+
+
+# ── Niente [[link]] nel cassetto (11/10/2026) ───────────────────────────────
+
+
+def test_a_link_in_a_drawer_becomes_the_page_title(notebook: Path) -> None:
+    """Il cassetto si disegna come testo: sull'emulatore mostrava «[[Ginkgo]]» alla
+    lettera. In scrittura il link diventa il titolo della pagina, che si trova."""
+    (notebook / "wiki" / "concepts").mkdir()
+    (notebook / "wiki" / "concepts" / "Coltivazione-Ginkgo.md").write_text(
+        "---\ntitle: Coltivazione del ginkgo\n---\n\n# Coltivazione del ginkgo\n")
+    card = _card(notebook, ["ginkgo.md", "concepts/Coltivazione-Ginkgo.md"])
+    out, _, _ = write_drawer(
+        notebook, "ginkgo", pages=card["pages"], skeleton=["Vaso", "Acqua"],
+        brief="Affidato a [[Coltivazione-Ginkgo]].",
+        sections=[{"title": "Vaso", "text": "Vedi [[concepts/Coltivazione-Ginkgo.md|la scheda]] "
+                   "e [[sparita]].", "sources": ["concepts/Coltivazione-Ginkgo.md"]}])
+    assert out[0]["text"] == "Vedi la scheda e sparita."
+    from jenny.board.store import read_card_summary
+
+    assert read_card_summary(notebook, "ginkgo")["brief"] == "Affidato a Coltivazione del ginkgo."
+
+
+def test_a_drawer_written_before_the_rule_reads_without_links(notebook: Path) -> None:
+    """I cassetti gia' scritti si riscrivono solo quando cambiano le loro pagine:
+    fino ad allora la pulizia la fa la lettura, senza titoli (il nome basta)."""
+    from jenny.board.store import read_card_summary
+
+    write_card_summary(notebook, "ginkgo", {
+        "generated": "2026-10-09T19:32:29+02:00",
+        "brief": "Tre alberi — [[Ginkgo]], [[Fico]] e [[Prunus]] — in vaso.",
+        "sections": [{"title": "Vaso", "text": "Affidato a [[concepts/Coltivazione-Fico.md#Vaso]].",
+                      "sources": ["ginkgo.md"]}]})
+    summary = read_card_summary(notebook, "ginkgo")
+    assert summary["brief"] == "Tre alberi — Ginkgo, Fico e Prunus — in vaso."
+    assert summary["sections"][0]["text"] == "Affidato a Coltivazione-Fico."
+
+
+@pytest.mark.parametrize("raw, plain", [
+    ("nessun link", "nessun link"),
+    ("[[a|Etichetta]]", "Etichetta"),
+    ("[[cartella/pagina.md]]", "pagina"),
+    ("[[pagina#titolo]]", "pagina"),
+    ("[[x]] e [[y]]", "x e y"),
+    (None, None),
+])
+def test_plain_wikilinks(raw, plain) -> None:
+    assert model.plain_wikilinks(raw) == plain

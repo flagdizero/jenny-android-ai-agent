@@ -24,7 +24,7 @@ import copy
 import hashlib
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -918,6 +918,36 @@ def fingerprint(texts: Iterable[tuple[str, str]]) -> str:
     return "sha1:" + h.hexdigest()
 
 
+# Un wikilink: ``[[pagina]]``, ``[[cartella/pagina.md#titolo]]``, ``[[pagina|etichetta]]``.
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|]+)(?:\|([^\[\]]*))?\]\]")
+
+
+def plain_wikilinks(value: Any, title_of: Callable[[str], str | None] | None = None) -> Any:
+    """Il testo di un cassetto senza ``[[link]]``: al loro posto, parole.
+
+    Il cassetto si disegna come testo semplice, e le sue pagine le mostra gia'
+    come fonti sotto ogni sezione: un ``[[Coltivazione-Prunus]]`` li' e' solo
+    rumore (visto sull'emulatore l'11/10/2026, tre cassetti su diciassette).
+    Resta l'etichetta, se c'e'; altrimenti il titolo che *title_of* trova per
+    il bersaglio; altrimenti il nome della pagina, senza cartelle ne' ``.md``.
+    Un valore che non e' testo torna com'e'.
+    """
+    if not isinstance(value, str) or "[[" not in value:
+        return value
+
+    def plain(m: re.Match[str]) -> str:
+        target, label = m.group(1).strip(), (m.group(2) or "").strip()
+        if label:
+            return label
+        title = title_of(target) if title_of is not None else None
+        if title:
+            return title
+        name = target.split("#", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        return name.removesuffix(".md") or target
+
+    return _WIKILINK_RE.sub(plain, value)
+
+
 def normalize_card_summary(raw: Any, card_id: str) -> dict[str, Any] | None:
     if not isinstance(raw, Mapping):
         return None
@@ -926,7 +956,7 @@ def normalize_card_summary(raw: Any, card_id: str) -> dict[str, Any] | None:
         if not isinstance(item, Mapping):
             continue
         title = clean_text(item.get("title"), MAX_TITLE)
-        text = clean_block(item.get("text"), MAX_TEXT)
+        text = clean_block(plain_wikilinks(item.get("text")), MAX_TEXT)
         if not title or not text:
             continue
         known = {
@@ -940,7 +970,7 @@ def normalize_card_summary(raw: Any, card_id: str) -> dict[str, Any] | None:
         "card": card_id,
         "generated": raw.get("generated") if isinstance(raw.get("generated"), str) else "",
         "fingerprint": raw.get("fingerprint") if isinstance(raw.get("fingerprint"), str) else "",
-        "brief": clean_block(raw.get("brief"), MAX_TEXT),
+        "brief": clean_block(plain_wikilinks(raw.get("brief")), MAX_TEXT),
         "sections": sections,
     })
 
