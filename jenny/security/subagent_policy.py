@@ -63,9 +63,27 @@ _SECRET_DIRS = (
     # Il registro di provenienza: un lavoro non fidato non cancella le proprie
     # tracce (``security.taint_ledger``).
     (".jenny", "taint_ledger.json"),
+    # Le bozze in attesa della conferma dell'utente (``agent.staged_writes``):
+    # un lavoro non fidato non riscrive una bozza già mostrata.
+    (".jenny", "staged"),
 )
 
 _SYSTEM_CODE_DIRS = ("agent", "ui")
+
+# CONTROL: file che Jenny carica o esegue da sola, senza nessuno davanti — il
+# battito, i promemoria, le skill, l'identità, la memoria, le conversazioni.
+# Un lavoro non fidato non li scrive direttamente: la scrittura va in bozza e
+# serve un tocco dell'utente (``agent.staged_writes``).
+_CONTROL_FILES = ("HEARTBEAT.md", "AGENTS.md", "SOUL.md", "USER.md")
+_CONTROL_DIRS = (
+    ("cron",),
+    ("skills",),
+    ("memory",),
+    ("sessions",),
+    (".jenny", "soul_rules.md"),
+)
+# Dentro un quaderno: il suo AGENTS.md, la sua memoria, le sue skill.
+_PROJECT_CONTROL = ("AGENTS.md", "memory", "skills")
 
 # Leggerli dice qualcosa della persona: memoria, profilo, conversazioni, i
 # thread della WebUI, i log dei job SSH, le storie e i digest dei subagent.
@@ -160,6 +178,9 @@ class SubagentRunPolicy:
     # destinazioni permesse. Vuoto se il lavoro nasce contaminato, perché quel
     # testo l'ha scritto un modello che aveva letto contenuto non fidato.
     task_hosts: frozenset[str] = frozenset()
+    # Bozze messe in attesa da questo lavoro (``agent.staged_writes``): path
+    # relativo → id. L'annuncio dice a Jenny quante ce ne sono.
+    staged: dict[str, str] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @classmethod
@@ -270,6 +291,13 @@ def _is_private(parts: tuple[str, ...]) -> bool:
         return True
     inner = _project_relative(parts)
     return _under(parts, _PRIVATE_DIRS) or (bool(inner) and inner[0] == "memory")
+
+
+def _is_control(parts: tuple[str, ...]) -> bool:
+    if len(parts) == 1 and parts[0] in _CONTROL_FILES:
+        return True
+    inner = _project_relative(parts)
+    return _under(parts, _CONTROL_DIRS) or (bool(inner) and inner[0] in _PROJECT_CONTROL)
 
 
 def _is_untrusted_src(parts: tuple[str, ...]) -> bool:
@@ -446,6 +474,27 @@ def check_read(path: str | Path) -> None:
         policy.mark_private(f"file:{rel}")
     if _is_untrusted_src(parts) or ledger_for(policy.install_root).source_of(rel):
         policy.mark_untrusted(f"file:{rel}")
+
+
+def must_stage(path: str | Path) -> bool:
+    """True se un subagent non fidato deve mettere in bozza questa scrittura."""
+    policy = current_subagent_policy()
+    if policy is None or not policy.untrusted:
+        return False
+    parts = policy.relative(path)
+    return parts is not None and _is_control(parts)
+
+
+class StagedWriteRequiredError(PermissionError):
+    """Scrittura CONTROL di un lavoro non fidato da una via che non mette in bozza."""
+
+    def __init__(self, rel: str) -> None:
+        super().__init__(
+            f"'{rel}' is loaded or run by Jenny on her own, and this job has read content "
+            "from outside the user, so it cannot change it directly. Use write_file, "
+            "edit_file or apply_patch: they save the change as a draft the user approves "
+            "in the app."
+        )
 
 
 def note_write(path: str | Path, *, full: bool = False) -> None:

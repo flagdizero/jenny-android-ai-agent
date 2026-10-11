@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from jenny.agent import staged_writes
+from jenny.agent.staged_writes import StagedRef
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.file_state import FileStates, current_file_states
 from jenny.agent.tools.filesystem_edit_match import (
@@ -29,6 +31,8 @@ from jenny.config.tool_schemas import (
 )
 from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.subagent_policy import check_write as check_subagent_write
+from jenny.security.subagent_policy import current_subagent_policy
+from jenny.security.subagent_policy import must_stage as must_stage_subagent_write
 from jenny.security.subagent_policy import note_write as note_subagent_write
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
 from jenny.security.workspace_policy import (
@@ -75,6 +79,16 @@ def _page_over_ceiling_note(rel: str, chars: int, ceiling: int) -> str:
         "along the things it talks about — each part becomes a page named after its own thing, "
         "carrying the sentences that were already about it, moved word for word — then add the "
         "new pages to the map."
+    )
+
+
+def staged_reply(ref: StagedRef) -> str:
+    """Risposta al modello per una scrittura messa in bozza (non un errore)."""
+    return (
+        f"Saved as a draft for the user's approval, not written yet: {ref.target_rel}. "
+        "This job read content from outside the user, and this file is one Jenny loads "
+        "on her own, so the user will see the change and where it came from in the app "
+        "and decide. Do not try to write it another way; mention the draft in your report."
     )
 
 
@@ -393,7 +407,8 @@ class _FsTool(Tool):
         prima scrittura, e archiviare lì significherebbe degradare voci di una
         patch poi rifiutata.
         """
-        if self._entry_archiver is None:
+        if self._entry_archiver is None or must_stage_subagent_write(path):
+            # Una scrittura messa in bozza non fa sparire niente (ancora).
             return
         self._entry_archiver(path, text)
 
@@ -532,7 +547,7 @@ class _FsTool(Tool):
                 return True
         return False
 
-    def _commit_write(self, path: Path, text: str, *, full: bool = False) -> None:
+    def _commit_write(self, path: Path, text: str, *, full: bool = False) -> StagedRef | None:
         """Imbuto unico di scrittura dei tool sui file, e sede della scelta atomica.
 
         La regola sulle scritture atomiche vale per verso: i file **dell'utente**
@@ -550,6 +565,12 @@ class _FsTool(Tool):
         testo qui è già esattamente ciò che deve finire su disco.
         """
         data = text.encode("utf-8")
+        if must_stage_subagent_write(path):
+            # Un subagent non fidato su un file che Jenny carica da sola: la
+            # scrittura va in bozza, e la mette al suo posto solo un tocco
+            # dell'utente in app (``agent.staged_writes``). Il chiamante risponde
+            # al modello con :func:`staged_reply` invece di «Successfully».
+            return self._stage(path, data, full=full)
         if self._is_exact_allowed_file(path):
             atomic_write(path, data)
         else:
@@ -559,6 +580,27 @@ class _FsTool(Tool):
         # che lo riscrive per intero (``full``: solo ``write_file``) lo ripulisce.
         # V. ``security.taint_ledger``.
         note_subagent_write(path, full=full)
+        return None
+
+    @staticmethod
+    def _stage(path: Path, data: bytes, *, full: bool) -> StagedRef:
+        policy = current_subagent_policy()
+        assert policy is not None  # ``must_stage`` è vero solo dentro un subagent
+        rel = "/".join(policy.relative(path) or (path.name,))
+        if not full and rel in policy.staged:
+            # Una modifica parziale si calcola dal file su disco, che non ha la
+            # bozza dentro: applicarla la sostituirebbe perdendo la precedente.
+            raise PermissionError(
+                f"'{rel}' already has a draft from this job waiting for the user's "
+                "approval; to change it again, write the whole file with write_file."
+            )
+        ref = staged_writes.stage(
+            policy.install_root, rel, data,
+            sources=policy.taint_sources(), task_id=policy.task_id,
+        )
+        with policy.lock:
+            policy.staged[rel] = ref.id
+        return ref
 
     def _resolve(self, path: str) -> Path:
         return self._resolve_read(path)
@@ -940,7 +982,8 @@ class WriteFileTool(_FsTool):
             # ha scritto, non che quel quanto ha appena spento la pagina.
             note = self._wiki_page_ceiling_note(fp, content)
             self._archive_departing(fp, content)
-            self._commit_write(fp, content, full=True)
+            if (staged := self._commit_write(fp, content, full=True)) is not None:
+                return staged_reply(staged)
             self._file_states.record_write(fp)
             msg = f"Successfully wrote {len(content)} characters to {fp}"
             return msg if note is None else f"{msg}\n{note}"
@@ -1037,7 +1080,8 @@ class EditFileTool(_FsTool):
                         return refusal
                     note = self._wiki_page_ceiling_note(fp, new_text)
                     self._archive_departing(fp, new_text)
-                    self._commit_write(fp, new_text)
+                    if (staged := self._commit_write(fp, new_text, full=True)) is not None:
+                        return staged_reply(staged)
                     self._file_states.record_write(fp)
                     msg = f"Successfully created {fp}"
                     return msg if note is None else f"{msg}\n{note}"
@@ -1062,7 +1106,8 @@ class EditFileTool(_FsTool):
                     return refusal
                 note = self._wiki_page_ceiling_note(fp, new_text)
                 self._archive_departing(fp, new_text)
-                self._commit_write(fp, new_text)
+                if (staged := self._commit_write(fp, new_text)) is not None:
+                    return staged_reply(staged)
                 self._file_states.record_write(fp)
                 msg = f"Successfully edited {fp}"
                 return msg if note is None else f"{msg}\n{note}"
@@ -1156,7 +1201,8 @@ class EditFileTool(_FsTool):
                 return refusal
             note = self._wiki_page_ceiling_note(fp, new_content)
             self._archive_departing(fp, new_content)
-            self._commit_write(fp, new_content)
+            if (staged := self._commit_write(fp, new_content)) is not None:
+                return staged_reply(staged)
             self._file_states.record_write(fp)
             msg = f"Successfully edited {fp}"
             if warning:

@@ -46,8 +46,10 @@ from jenny.agent.tools.schema import (
 )
 from jenny.config.paths import get_workspace_path
 from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in config.tool_schemas)
+from jenny.security.subagent_policy import StagedWriteRequiredError
 from jenny.security.subagent_policy import check_read as _check_subagent_read
 from jenny.security.subagent_policy import check_write as _check_subagent_write
+from jenny.security.subagent_policy import must_stage as _must_stage_subagent_write
 from jenny.security.subagent_policy import note_move as _note_subagent_move
 from jenny.security.subagent_policy import note_write as _note_subagent_write
 from jenny.security.workspace_policy import refuse_board_write
@@ -1179,6 +1181,11 @@ def _refuse_guarded_write(path: Any) -> None:
     """
     refuse_board_write(path)
     _check_subagent_write(path)
+    # Un file che Jenny carica da sola, in un lavoro non fidato: da qui non si
+    # può mettere in bozza (un ``open`` può appendere, rinominare, troncare),
+    # quindi si rimanda ai tool dei file, che la bozza la fanno.
+    if _must_stage_subagent_write(path):
+        raise StagedWriteRequiredError(os.path.basename(str(path)))
     # Un lavoro non fidato contamina ciò che scrive. Qui non si sa se la
     # scrittura è completa (``open(..., 'a')`` passa di qui come ``'w'``), quindi
     # si registra soltanto e non si pulisce mai: pulire è di ``write_file``.

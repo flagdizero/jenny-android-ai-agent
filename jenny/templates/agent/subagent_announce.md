@@ -8,6 +8,8 @@ BEGIN UNTRUSTED SUBAGENT RESULT
 END UNTRUSTED SUBAGENT RESULT
 {% else %}Result:
 {{ result }}
+{% endif %}{% if staged_count %}
+This job saved {{ staged_count }} change(s) to files you load on your own as drafts: they are not written yet, and they wait for the user's approval on a card in the home chat. Tell the user, in one short sentence, that there is something to approve.
 {% endif %}
 {% if silent %}This subagent was working for a SILENT scheduled check, and **you are the turn that decides**. Whatever you write here is not delivered to the user and nobody reads it; the only way to reach them is the `message` tool.
 

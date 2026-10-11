@@ -81,6 +81,9 @@ SHELL_WITHOUT_LISTENER = {
         # La bacheca dei quaderni e' solo della casa: l'officina non ne ha una
         # da ridisegnare.
         "board_changed": "la bacheca e' solo della casa",
+        # Le bozze da approvare hanno la loro scheda nella chat della casa
+        # (``home-staged.js``); l'officina, per ora, non la mostra.
+        "staged_changed": "la scheda delle bozze e' solo della casa",
     },
 }
 

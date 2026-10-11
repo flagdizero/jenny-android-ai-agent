@@ -572,6 +572,48 @@ body.home {
   -webkit-touch-callout: none;
 }
 .home-work[hidden] { display: none; }
+
+/* Le bozze in attesa (v. `home-staged.js`): la stessa bolla di vetro del
+   lavoro, ma si seleziona il testo (si legge una diff) e il bordo e' quello
+   dell'attenzione, non dell'esito. */
+.home-staged {
+  user-select: text;
+  -webkit-user-select: text;
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border-strong));
+}
+.home-staged-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--border);
+}
+.home-staged-file { font-size: 14px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.home-staged-why { font-size: 12.5px; color: var(--text-muted); }
+.home-staged-toggle {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-staged-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-staged-diff {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.06));
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre;
+}
+.home-staged-actions { display: flex; gap: 8px; }
 .home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
 .home-work.is-failed { border-color: color-mix(in oklab, var(--error) 55%, var(--border-strong)); }
 

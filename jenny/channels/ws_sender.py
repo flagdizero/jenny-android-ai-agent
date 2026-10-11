@@ -232,6 +232,10 @@ class OutboundSenderMixin:
         if msg.metadata.get("_apps_list_changed"):
             await self.send_apps_list_changed()
             return []
+        if msg.metadata.get("_staged_changed"):
+            count = msg.metadata.get("count")
+            await self.send_staged_changed(count if isinstance(count, int) else 0)
+            return []
         if msg.metadata.get("_user_echo"):
             return await self._send_user_echo(
                 msg, only_conns=only_conns, skip_persist=skip_persist
@@ -1036,6 +1040,15 @@ class OutboundSenderMixin:
         raw = json.dumps({"event": "apps_list_changed"}, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
         await self._fanout(conns, raw, label=" apps_list_changed ")
+
+    async def send_staged_changed(self, count: int) -> None:
+        """Broadcast that the drafts awaiting approval changed (the home card redraws)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps({"event": "staged_changed", "count": count}, ensure_ascii=False)
+        # Idempotent refresh-hint: the client re-reads ``staged.list``.
+        await self._fanout(conns, raw, label=" staged_changed ")
 
     async def send_runtime_model_updated(
         self,

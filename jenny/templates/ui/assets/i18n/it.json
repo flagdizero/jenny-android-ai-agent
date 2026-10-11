@@ -901,6 +901,22 @@
     "askAboutReadonly": "Chiedi qualcosa su {name} (sola lettura)…"
   },
   "home": {
+    "staged": {
+      "title": "Da approvare · {count}",
+      "file": "Modifica a {path}",
+      "newFile": "Nuovo file: {path}",
+      "why": "Un lavoro di Jenny che ha letto contenuti da fuori ({sources}) vuole cambiare un file che lei usa da sola. Non è ancora scritto.",
+      "unknownSource": "fonte sconosciuta",
+      "showDiff": "Mostra le modifiche",
+      "hideDiff": "Nascondi le modifiche",
+      "truncated": "Le modifiche sono più lunghe: qui c'è solo l'inizio.",
+      "install": "Installa",
+      "discard": "Scarta",
+      "installed": "Fatto: {path} è aggiornato.",
+      "discarded": "Scartata: il file è rimasto com'era.",
+      "conflict": "Il file è cambiato nel frattempo: niente è stato scritto. Riguarda le modifiche.",
+      "failed": "Non ci sono riuscita. Riprova."
+    },
     "empty": "Non c'è ancora niente qui.\nComincia tu.",
     "emptyNotebook": "Questo quaderno c’è, la conversazione no.\nQuello che scrivi qui resta qui.",
     "placeholder": "Scrivi a {name}",

@@ -367,6 +367,38 @@ class GatewayContainer:
 
         set_notifier(announce)
 
+    def _wire_staged_notifier(self) -> None:
+        """«Le bozze in attesa sono cambiate» va sulla WebUI (``agent.staged_writes``).
+
+        L'avviso può arrivare da un thread (le RPC fanno il disco fuori dal
+        loop), quindi si rientra nel loop con ``call_soon_threadsafe``.
+        """
+        import asyncio
+
+        from jenny.agent.staged_writes import set_change_listener
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+        try:
+            gateway_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
+            gateway_loop = None
+
+        def announce(count: int) -> None:
+            message = OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_staged_changed": True, "count": count},
+            )
+            try:
+                asyncio.get_running_loop().create_task(bus.publish_outbound(message))
+            except RuntimeError:
+                if (target := gateway_loop) is not None:
+                    target.call_soon_threadsafe(
+                        lambda: target.create_task(bus.publish_outbound(message))
+                    )
+
+        set_change_listener(announce)
+
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
 
@@ -440,6 +472,7 @@ class GatewayContainer:
         self._prepare_apps()
         self._wire_app_notifier()
         self._wire_board_notifier()
+        self._wire_staged_notifier()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)

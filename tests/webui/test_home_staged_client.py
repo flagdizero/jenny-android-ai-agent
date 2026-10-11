@@ -1,0 +1,87 @@
+"""La scheda delle bozze da approvare, nella casa vera.
+
+Un subagent che ha letto qualcosa da fuori non scrive da solo i file che Jenny
+carica senza nessuno davanti: la modifica resta in bozza e la casa mostra una
+scheda con **Installa** / **Scarta**. Qui si fissa che la scheda compare
+all'apertura e al frame ``staged_changed``, che niente si installa senza un
+tocco, e che un conflitto lo dice invece di scrivere.
+"""
+
+from __future__ import annotations
+
+from support.home_dom import requires_jsdom, run_home
+
+pytestmark = requires_jsdom
+
+_HEAD = """
+import assert from 'node:assert/strict';
+import { boot, tick, frame, sent, rpcAnswers, rpcFailed, toasts, locales } from './boot.mjs';
+const S = locales.en.home.staged;
+const draft = (over = {}) => ({ id: 'd1', target: 'HEARTBEAT.md', sources: ['web_fetch:evil.example'],
+  created_ms: 1, new_file: false, target_sha256: 'abc', diff: '--- a\\n+++ b\\n+- check x\\n',
+  truncated: false, ...over });
+let pending = [draft()];
+rpcAnswers['staged.list'] = () => ({ ok: true, staged: pending });
+const card = () => document.querySelector('#home-thread > .home-live > .home-staged');
+const rpcs = (m) => sent.filter((x) => x.type === 'rpc' && x.method === m);
+const text = (node) => node.textContent.replace(/\\s+/g, ' ').trim();
+"""
+
+
+def test_the_card_appears_and_nothing_installs_without_a_tap() -> None:
+    run_home(_HEAD + """
+await boot();
+await tick(30);
+assert.ok(card(), 'la scheda compare all\\'apertura');
+assert.match(text(card()), /HEARTBEAT\\.md/);
+assert.match(text(card()), /evil\\.example/);
+assert.equal(rpcs('staged.install').length, 0, 'niente si installa da solo');
+assert.equal(card().querySelector('.home-staged-diff'), null, 'la diff parte chiusa');
+card().querySelector('.home-staged-toggle').click();
+assert.match(card().querySelector('.home-staged-diff').textContent, /check x/);
+""")
+
+
+def test_install_sends_the_sha_it_showed_and_the_card_goes() -> None:
+    run_home(_HEAD + """
+await boot();
+await tick(30);
+rpcAnswers['staged.install'] = (p) => { pending = []; return { ok: true }; };
+const install = [...card().querySelectorAll('button')].find((b) => b.textContent === S.install);
+install.click();
+await tick(30);
+const call = rpcs('staged.install')[0];
+assert.deepEqual(call.params, { id: 'd1', target_sha256: 'abc' });
+assert.equal(card(), null, 'senza bozze la scheda sparisce');
+assert.ok(toasts().some((t) => t.includes('HEARTBEAT.md')));
+""")
+
+
+def test_a_conflict_says_so_and_keeps_the_card() -> None:
+    run_home(_HEAD + """
+await boot();
+await tick(30);
+rpcAnswers['staged.install'] = () => rpcFailed('conflict', 'changed');
+[...card().querySelectorAll('button')].find((b) => b.textContent === S.install).click();
+await tick(30);
+assert.ok(toasts().includes(S.conflict), toasts());
+assert.ok(card(), 'la bozza resta da guardare');
+""")
+
+
+def test_discard_and_the_frame_refresh() -> None:
+    run_home(_HEAD + """
+pending = [];
+await boot();
+await tick(30);
+assert.equal(card(), null);
+pending = [draft({ id: 'd2', target: 'skills/x/SKILL.md', new_file: true, target_sha256: null })];
+frame({ event: 'staged_changed', count: 1 });
+await tick(30);
+assert.match(text(card()), /New file: skills\\/x\\/SKILL\\.md/);
+rpcAnswers['staged.discard'] = () => { pending = []; return { ok: true }; };
+[...card().querySelectorAll('button')].find((b) => b.textContent === S.discard).click();
+await tick(30);
+assert.deepEqual(rpcs('staged.discard')[0].params, { id: 'd2' });
+assert.equal(card(), null);
+""")

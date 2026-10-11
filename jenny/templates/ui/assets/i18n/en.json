@@ -901,6 +901,22 @@
     "askAboutReadonly": "Ask about {name} (read-only)…"
   },
   "home": {
+    "staged": {
+      "title": "To approve · {count}",
+      "file": "Change to {path}",
+      "newFile": "New file: {path}",
+      "why": "A Jenny job that read content from outside ({sources}) wants to change a file she uses on her own. It is not written yet.",
+      "unknownSource": "unknown source",
+      "showDiff": "Show the changes",
+      "hideDiff": "Hide the changes",
+      "truncated": "The changes are longer: only the start is shown.",
+      "install": "Install",
+      "discard": "Discard",
+      "installed": "Done: {path} is updated.",
+      "discarded": "Discarded: the file stayed as it was.",
+      "conflict": "The file changed in the meantime: nothing was written. Look at the changes again.",
+      "failed": "That didn't work. Try again."
+    },
     "empty": "Nothing here yet.\nGo ahead.",
     "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to {name}",

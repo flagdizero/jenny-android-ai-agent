@@ -1618,6 +1618,7 @@ class SubagentManager:
         # le fonti, e i metadati lo dicono a chi lo salva nella sessione.
         policy = self._run_policies.get(task_id)
         taint = policy.taint_sources() if policy is not None else ()
+        staged_ids = list(policy.staged.values()) if policy is not None else []
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -1627,6 +1628,7 @@ class SubagentManager:
             silent=silent,
             untrusted=bool(taint),
             sources=", ".join(taint),
+            staged_count=len(staged_ids),
         )
         live = self._task_statuses.get(task_id)
         metadata: dict[str, Any] = {
@@ -1649,6 +1651,8 @@ class SubagentManager:
         if taint:
             metadata["subagent_tainted"] = True
             metadata["subagent_taint_sources"] = list(taint)
+        if staged_ids:
+            metadata["subagent_staged_ids"] = staged_ids
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",

@@ -1468,6 +1468,11 @@ async def dispatch_command(
         from jenny.webui.apps_commands import APPS_COMMANDS
 
         handler = APPS_COMMANDS.get(method)
+    if handler is None and method.startswith("staged."):
+        # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
+        from jenny.webui.staged_commands import STAGED_COMMANDS
+
+        handler = STAGED_COMMANDS.get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
     try:

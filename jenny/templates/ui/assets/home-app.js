@@ -69,6 +69,7 @@ import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
 import { HomeAppsTrash } from './home-apps-trash.js';
+import { HomeStaged } from './home-staged.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
 import './shared/theme.js';
@@ -213,6 +214,9 @@ class HomeApp {
       },
       onOpenInWorkshop: () => this._openInWorkshop(null, sessionManager.currentKey),
     });
+    /* Le bozze di un subagent che ha letto qualcosa da fuori: una scheda nel
+       posto live, con Installa / Scarta (v. `home-staged.js`). */
+    this.staged = new HomeStaged(this.chat.live, { onChange: () => this.chat.liveChanged() });
     this.chat.claimsWork = (workId) => this.work.claims(workId);
     this.empty = document.getElementById('home-empty');
     this.emptyText = document.getElementById('home-empty-text');
@@ -528,6 +532,7 @@ class HomeApp {
       this._readSubagents(e.detail);
       this._readWork(e.detail);
       this._readBoardChanged(e.detail);
+      this.staged.handleFrame(e.detail);
       this.chat.handleFrame(e.detail);
     });
 
@@ -2699,6 +2704,7 @@ class HomeApp {
        transizioni avvenute a socket chiuso non le ridice nessuno. */
     this.work.loadSubagents();
     this.work.loadWork();
+    this.staged?.refresh();
     /* Al boot le impostazioni non si leggevano, quindi non si sa se questo e'
        il primo avvio: il socket aperto dice che il gateway adesso c'e', e si
        richiede. Una volta sola — un secondo «non lo so» resta nella casa. */
@@ -2815,6 +2821,7 @@ class HomeApp {
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
     this._appsTrash?.applyTranslations();
+    this.staged?.applyTranslations();
     this.jennyRoom?.applyTranslations();
     this.you?.sayJenny(this.jennyRoom?.value());
     this.newNotebook?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));

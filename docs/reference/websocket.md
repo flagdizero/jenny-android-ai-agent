@@ -339,6 +339,14 @@ re-read the list. Broadcast, and carries no payload beyond the event name:
 {"event": "apps_list_changed"}
 ```
 
+**`staged_changed`** — the drafts waiting for your approval changed (a subagent saved one, or one
+was installed or discarded); the home reads them again with `staged.list`. Broadcast, with how
+many are pending:
+
+```json
+{"event": "staged_changed", "count": 1}
+```
+
 **`error`** — soft error for malformed inbound envelopes. The connection stays open. `detail`
 is human-readable, `reason` is the stable token for a client to branch on (`missing_content`,
 `unknown_type`, `invalid_task_id`, `invalid_project_name`, or — with `detail: "image_rejected"`
@@ -462,6 +470,9 @@ correlate a reply to.
 | `apps.trash` | — | The app trash, newest first: `{trash: [{id, slug, name, at, records}]}`. Deleting an app moves its folder here, data included. |
 | `apps.restore` | `id` | Put an app back from the trash (`id` is the trash entry). `conflict` when an app with that slug exists again. |
 | `apps.purge` | `id` | Delete a trash entry for good, data included. The only way an app's files are erased. |
+| `staged.list` | — | The drafts waiting for your approval, oldest first: `{staged: [{id, target, sources, created_ms, new_file, target_sha256, diff, truncated}]}`. A draft is a change a subagent wanted to make to a file Jenny loads on her own (a skill, `HEARTBEAT.md`, `cron/`, `USER.md`, memory) after reading content from outside you; see [Security model](../internals/security-model.md). |
+| `staged.install` | `id`, `target_sha256` | Write a draft into place. `target_sha256` is the one `staged.list` returned (`null` for a new file): if the file changed since, the answer is `conflict` and nothing is written. No tool of the model can call this. |
+| `staged.discard` | `id` | Throw a draft away; the file stays as it was. |
 | `board.seen` | `wiki`, `card` | Record that the user looked: the notebook's board (no `card`), or one card's drawer. Drives the "since you last looked" row and the blue dots. A notebook without a board is a no-op. |
 | `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`) or a reminder's sticky note (`kind: note`) to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
 | `board.card.add` | `wiki`, `title`, `near`?, `glyph`?, `app`?, `link`? | Make a card yourself. With `app` (`{slug, params}`) the card **is** that app: its value takes the place of the photo, a tap opens the app, and the title defaults to the app's name; with `link` (a card id) it is tied to that card by a thread and lands next to it. It lands in the free spot nearest `near` (`{x, y}` in board coordinates: the point the user held on the empty wall, or the centre of the view), with no pages yet; its title and place are the user's. A full board refuses with `conflict`. Replies `{card: {id, title, pos}}`. |
@@ -522,7 +533,7 @@ All fields go under the top-level `websocket` object in `config.json`. These are
 | `sendProgress` | bool | `true` | Send interim progress text while a turn runs. With it off the client sees nothing until the turn produces its answer. |
 | `sendToolHints` | bool | `false` | Include one-line tool hints in that progress stream ("reading SOUL.md", "searching…"). Off by default: it is the noisiest of the four. With it off the hint text is dropped but the `tool_events` it carried (the tools that are starting) still arrive, as a `progress` message with no text, wherever `sendProgress` is on. |
 | `showReasoning` | bool | `true` | Forward `reasoning_delta` / `reasoning_end` frames when the provider exposes incremental reasoning. |
-| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `work_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
+| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `work_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`, `staged_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
 
 ### Keep-alive
 
@@ -607,7 +618,7 @@ After a reconnect the connection is back on the personal chat only, so a client 
 ### Rules
 
 - A chat's frames (`message`, `user`, `delta`, `stream_end`, `reasoning_*`, `turn_end`, `goal_status`, `mascot_mood`, `file_edit`, `subagent_status`, `work_status`) carry the `chat_id` they belong to and go only to the connections subscribed to it.
-- Some frames carry no `chat_id`: `runtime_model_updated`, `app_data_changed` and `apps_list_changed` go to every connection; `error`, `rpc_result`, `ui_query` and `subagent_unwatched` go to one.
+- Some frames carry no `chat_id`: `runtime_model_updated`, `app_data_changed`, `apps_list_changed` and `staged_changed` go to every connection; `error`, `rpc_result`, `ui_query` and `subagent_unwatched` go to one.
 - The personal chat cannot be left: proactive messages and the mascot's frames reach a connection there even while it is showing a project.
 - Errors (invalid envelope, unknown `type`, missing `content`, an impossible project name) are soft: the server replies with `{"event":"error","detail":"...","reason":"..."}` and keeps the connection open.
 

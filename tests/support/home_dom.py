@@ -166,6 +166,9 @@ export const rpcAnswers = {
      risponde sempre, e senza risposta la richiesta aspetterebbe il suo
      timeout tenendo vivo node per venti secondi a test. */
   'apps.trash': () => ({ ok: true, trash: [] }),
+  /* Le bozze da approvare si rileggono a ogni apertura del socket: stessa
+     ragione, una casa senza bozze. */
+  'staged.list': () => ({ ok: true, staged: [] }),
 };
 const RPC_FAILED = Symbol('rpcFailed');
 export const rpcFailed = (code = 'unavailable', message = 'failed') => ({ [RPC_FAILED]: { code, message } });
