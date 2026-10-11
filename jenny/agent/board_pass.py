@@ -232,6 +232,42 @@ class BoardPass:
     def _section(self, title: str, body: str) -> str:
         return f"## {title}\n\n{body}"
 
+    def _scheduled_crons(self) -> list[str]:
+        """I cron dei cassetti, una riga ciascuno: anche loro sono «gia' in agenda».
+
+        L'11/10/2026 sull'emulatore la passata ha letto «promemoria per novembre:
+        dividere il prunus» nel diario, non l'ha trovato fra le attese — era un
+        cron nel cassetto di un'altra scheda — e l'ha cercato per sei minuti:
+        ``grep``, la skill del cron, ``board.json`` riletto quattro volte. Il
+        messaggio e la data si leggono da ``cron/jobs.json``, se si legge; se no
+        restano il nome e la scheda, che bastano a non aggiungerlo due volte.
+        """
+        import json
+
+        jobs: dict[str, Any] = {}
+        try:
+            raw = json.loads((self.workspace / "cron" / "jobs.json").read_text(encoding="utf-8"))
+            jobs = {j["id"]: j for j in raw.get("jobs") or [] if isinstance(j, dict) and "id" in j}
+        except (OSError, ValueError, AttributeError, TypeError):
+            pass
+        rows = []
+        for card in (self.board or {}).get("cards") or []:
+            for section in card.get("userSections") or []:
+                if section.get("kind") != "cron":
+                    continue
+                job = jobs.get(str(section.get("job"))) or {}
+                name = section.get("name") or job.get("name") or section.get("job")
+                row = f"- cron «{name}» in the drawer of `{card['id']}`"
+                message = ((job.get("payload") or {}).get("message") or "").strip()
+                if message:
+                    row += f": {' '.join(message.split())[:200]}"
+                next_ms = (job.get("state") or {}).get("nextRunAtMs")
+                if isinstance(next_ms, (int, float)):
+                    when = datetime.fromtimestamp(next_ms / 1000).astimezone()
+                    row += f" (next {when:%Y-%m-%d})"
+                rows.append(row)
+        return rows
+
     def build_state(self) -> BoardPassState:
         stale = self.stale_cards()
         return BoardPassState(
@@ -324,9 +360,10 @@ class BoardPass:
             parts.append(self._section("Pages the user wants on the board", "\n".join(rows)))
         if journal.strip():
             parts.append(self._section("New journal lines", f"````markdown\n{journal}\n````"))
-        rems = [f"- `{r['id']}` on `{r['card']}`: {r['text']} ({r['when'].get('date', '')})"
+        rems = [f"- reminder `{r['id']}` on `{r['card']}`: {r['text']} ({r['when'].get('date', '')})"
                 for r in model.open_reminders(self.reminders)]
-        parts.append(self._section("Reminders already on the list", "\n".join(rems) or "_(none)_"))
+        parts.append(self._section("Already scheduled",
+                                   "\n".join([*rems, *self._scheduled_crons()]) or "_(none)_"))
         if state.remove_candidates:
             parts.append(self._section(
                 "Cards still for a long time",

@@ -85,8 +85,9 @@ a summary that carried them would need rewriting at every reading.{% else %}No d
 {% if journal %}Read the new journal lines below. A line that decides or plans something **with a date** ("repot it
 around March", "next feed on the 10th") becomes a reminder with `board_add_reminder`, on the card
 it is about, with the page that explains why and the journal line as its source. Not a fact, not a
-wish without a date, not something already done. The current reminders are listed; do not add one
-twice.{% else %}No new journal lines: nothing to extract.{% endif %}
+wish without a date, not something already done. Everything already scheduled — the reminders
+**and the crons in the drawers** — is listed under "Already scheduled": a plan that is already
+there, as either, is done; do not add it again, and do not go looking for it elsewhere.{% else %}No new journal lines: nothing to extract.{% endif %}
 
 ### 5. Propose, do not impose
 

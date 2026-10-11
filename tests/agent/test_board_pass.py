@@ -188,6 +188,38 @@ async def test_reminders_are_not_added_twice(tmp_path) -> None:
     assert bad.startswith("Refused")
 
 
+def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
+    """Un piano gia' in agenda come cron non si cerca: si legge nel prompt.
+
+    L'11/10/2026 sull'emulatore la passata trovo' «promemoria per novembre» nel
+    diario, le attese dicevano «nessuna» — era un cron nel cassetto — e lo cerco'
+    per sei minuti. Il messaggio e la data vengono da ``cron/jobs.json``; un job
+    illeggibile lascia nome e scheda."""
+    import json
+
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    mutate_board(root, lambda b: b["cards"][0]["userSections"].extend([
+        {"id": "s-cron-1", "kind": "cron", "job": "ab12cd34", "name": "Travaso"},
+        {"id": "s-cron-2", "kind": "cron", "job": "sparito1", "name": "Concime"},
+    ]))
+    (ws / "cron").mkdir()
+    (ws / "cron" / "jobs.json").write_text(json.dumps({"jobs": [{
+        "id": "ab12cd34", "name": "Travaso",
+        "payload": {"message": "Ricorda il travaso\n dell'acero."},
+        "state": {"nextRunAtMs": 1803974400000},
+    }]}), encoding="utf-8")
+    bp = BoardPass(root, ws)
+    prompt = bp.build_prompt(bp.build_state(), journal="- 18:46 — promemoria per marzo: travaso.")
+    block = prompt.split("## Already scheduled", 1)[1].split("\n## ", 1)[0]
+    assert "- cron «Travaso» in the drawer of `acero`: Ricorda il travaso dell'acero. (next 2027-" in block
+    assert "- cron «Concime» in the drawer of `acero`" in block
+    assert "Reminders already on the list" not in prompt
+    (ws / "cron" / "jobs.json").write_text("{rotto", encoding="utf-8")
+    assert "- cron «Travaso» in the drawer of `acero`" in BoardPass(root, ws).build_prompt(
+        bp.build_state(), journal="x")
+
+
 async def test_at_most_two_proposals_and_a_no_does_not_come_back(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     _seed_board(root)

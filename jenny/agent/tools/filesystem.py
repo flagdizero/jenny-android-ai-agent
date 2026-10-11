@@ -1222,10 +1222,15 @@ class ListDirTool(_FsTool):
     _scopes = {"core", "orchestrator", "subagent"}
 
     _DEFAULT_MAX = 200
+    # ``.jenny`` e' lo stato interno di Jenny (il segnalibro del giardiniere, gli
+    # output dei tool salvati su file): non e' materiale da sfogliare. L'11/10/2026
+    # la passata della bacheca l'ha trovato con ``find_files`` e ha riletto cinque
+    # volte l'output salvato di un tool della chat (500 righe di una skill), per
+    # niente. Un output salvato resta leggibile dal percorso esatto che lo annuncia.
     _IGNORE_DIRS = {
         ".git", "node_modules", "__pycache__", ".venv", "venv",
         "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
-        ".ruff_cache", ".coverage", "htmlcov",
+        ".ruff_cache", ".coverage", "htmlcov", ".jenny",
     }
 
     @property
@@ -1263,7 +1268,9 @@ class ListDirTool(_FsTool):
 
             if recursive:
                 for item in sorted(dp.rglob("*")):
-                    if any(p in self._IGNORE_DIRS for p in item.parts):
+                    # Le parti **sotto** la cartella chiesta: chi elenca apposta
+                    # dentro una cartella ignorata vede il suo contenuto.
+                    if any(p in self._IGNORE_DIRS for p in item.relative_to(dp).parts):
                         continue
                     total += 1
                     if len(items) < cap:
