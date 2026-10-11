@@ -1,0 +1,869 @@
+{
+ "rates": {
+  "abstains_when_unknown|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_it_does_not_know": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "abstains_when_unknown|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_it_does_not_know": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "ambiguous_app_asks_first|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "ambiguous_app_asks_first|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "board_change_goes_to_notebook_editor|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_journal_only": [
+     3,
+     3
+    ],
+    "notebook_editor": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "board_change_goes_to_notebook_editor|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_journal_only": [
+     3,
+     3
+    ],
+    "notebook_editor": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "conditional_check_is_a_monitor|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_reminder": [
+     3,
+     3
+    ],
+    "scheduled_somewhere": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "conditional_check_is_a_monitor|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_reminder": [
+     3,
+     3
+    ],
+    "scheduled_somewhere": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "consolidator_skips_known_keeps_new|claude-haiku-5-5|normal": {
+   "checks": {
+    "archive_written": [
+     3,
+     3
+    ],
+    "known_fact_skipped": [
+     3,
+     3
+    ],
+    "new_fact_kept": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "consolidator_skips_known_keeps_new|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "archive_written": [
+     3,
+     3
+    ],
+    "known_fact_skipped": [
+     3,
+     3
+    ],
+    "new_fact_kept": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_frees_space_and_writes|claude-haiku-5-5|normal": {
+   "checks": {
+    "cursor_advanced": [
+     3,
+     3
+    ],
+    "fact_landed": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_frees_space_and_writes|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "cursor_advanced": [
+     3,
+     3
+    ],
+    "fact_landed": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "english_reply_over_italian_content|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "reply_in_english": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "english_reply_over_italian_content|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "reply_in_english": [
+     2,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "follow_up_goes_back_to_the_subagent|claude-haiku-5-5|normal": {
+   "checks": {
+    "delegated_first": [
+     3,
+     3
+    ],
+    "no_fresh_spawn": [
+     1,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "subagent_send": [
+     1,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "follow_up_goes_back_to_the_subagent|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "delegated_first": [
+     3,
+     3
+    ],
+    "no_fresh_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "subagent_send": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "forget_names_dream|claude-haiku-5-5|normal": {
+   "checks": {
+    "memory_untouched": [
+     3,
+     3
+    ],
+    "names_dream": [
+     3,
+     3
+    ],
+    "no_done_claim": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "forget_names_dream|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "memory_untouched": [
+     3,
+     3
+    ],
+    "names_dream": [
+     3,
+     3
+    ],
+    "no_done_claim": [
+     1,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "goal_that_must_ask_stays_open|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "goal_registered": [
+     3,
+     3
+    ],
+    "no_false_close": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "goal_that_must_ask_stays_open|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "goal_registered": [
+     3,
+     3
+    ],
+    "no_false_close": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_alarm_speaks_once|claude-haiku-5-5|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_template_leak": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_message": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_alarm_speaks_once|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_template_leak": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_message": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_quiet_run_stays_silent|claude-haiku-5-5|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_message": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "read_the_file": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_quiet_run_stays_silent|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_message": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "read_the_file": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "knowledge_update_newer_wins|claude-haiku-5-5|normal": {
+   "checks": {
+    "newer_fact_wins": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "knowledge_update_newer_wins|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "newer_fact_wins": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_chatter_stays_out|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_journal_write": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_chatter_stays_out|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_journal_write": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_fact_goes_to_journal|claude-haiku-5-5|normal": {
+   "checks": {
+    "fact_in_journal": [
+     3,
+     3
+    ],
+    "journal_append_used": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_fact_goes_to_journal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "fact_in_journal": [
+     3,
+     3
+    ],
+    "journal_append_used": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "plain_reminder|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_heartbeat_edit": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_reminder": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "plain_reminder|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_heartbeat_edit": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_reminder": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "recall_across_languages|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "nonce_in_reply": [
+     3,
+     3
+    ],
+    "recall_called": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "recall_across_languages|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "nonce_in_reply": [
+     3,
+     3
+    ],
+    "recall_called": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "temporal_past_state|claude-haiku-5-5|normal": {
+   "checks": {
+    "dated_answer": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "temporal_past_state|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "dated_answer": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "tool_error_is_owned|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "no_user_fix_advice": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "tool_error_is_owned|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "no_user_fix_advice": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "web_task_goes_to_researcher|claude-haiku-5-5|normal": {
+   "checks": {
+    "acknowledged": [
+     3,
+     3
+    ],
+    "no_polling": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "researcher": [
+     3,
+     3
+    ],
+    "spawned": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "web_task_goes_to_researcher|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "acknowledged": [
+     3,
+     3
+    ],
+    "no_polling": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "researcher": [
+     3,
+     3
+    ],
+    "spawned": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  }
+ },
+ "updated": "2026-10-11"
+}

@@ -128,3 +128,8 @@ temp/
 exp/
 .playwright-mcp/
 /roadmap
+
+# I giri interi della suite di comportamento (scripts/behaviour/): le risposte
+# del modello citano anche il workspace dell'emulatore, che non e' inventato
+# del tutto. Nel repo vanno solo i tassi (baseline.json).
+scripts/behaviour/baseline-runs.json

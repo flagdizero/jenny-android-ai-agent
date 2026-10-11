@@ -62,6 +62,11 @@ project name and logo are covered by a separate
   The boundaries, and the limits already accepted, are described in
   [Security model](docs/internals/security-model.md).
 - Test on a real device when possible, and say which one.
+- If you change a prompt under `jenny/templates/agent/`, a skill, or a tool
+  description, run [`scripts/behaviour_check.py`](scripts/behaviour/README.md)
+  against an emulator and paste the rates that moved. Several of Jenny's
+  guarantees are sentences the model honours, not code, and no test goes red
+  when one stops holding.
 
 ## Design rules
 
