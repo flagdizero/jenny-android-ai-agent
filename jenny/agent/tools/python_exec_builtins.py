@@ -179,7 +179,12 @@ def _register_builtin_functions(
                 resolved = resolve_allowed_path(path, workspace=base, allowed_root=allowed_root)
         if not for_write:
             # Dentro un subagent i file segreti non si leggono (``subagent_policy``).
-            check_read(resolved)
+            # Sotto bypass: il controllo legge il registro di provenienza, che per
+            # il codice guardato è un file segreto.
+            from jenny.agent.tools.python_exec import _path_guard_bypass as _bypass
+
+            with _bypass():
+                check_read(resolved)
         return resolved
 
     def _write_path(path: str) -> Path:

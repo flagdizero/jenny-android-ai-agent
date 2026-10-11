@@ -29,6 +29,7 @@ from jenny.config.tool_schemas import (
 )
 from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.subagent_policy import check_write as check_subagent_write
+from jenny.security.subagent_policy import note_write as note_subagent_write
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
 from jenny.security.workspace_policy import (
     ReadOnlyTurnError,
@@ -531,7 +532,7 @@ class _FsTool(Tool):
                 return True
         return False
 
-    def _commit_write(self, path: Path, text: str) -> None:
+    def _commit_write(self, path: Path, text: str, *, full: bool = False) -> None:
         """Imbuto unico di scrittura dei tool sui file, e sede della scelta atomica.
 
         La regola sulle scritture atomiche vale per verso: i file **dell'utente**
@@ -551,9 +552,13 @@ class _FsTool(Tool):
         data = text.encode("utf-8")
         if self._is_exact_allowed_file(path):
             atomic_write(path, data)
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        # Dentro un subagent: un lavoro non fidato contamina il file, uno fidato
+        # che lo riscrive per intero (``full``: solo ``write_file``) lo ripulisce.
+        # V. ``security.taint_ledger``.
+        note_subagent_write(path, full=full)
 
     def _resolve(self, path: str) -> Path:
         return self._resolve_read(path)
@@ -935,7 +940,7 @@ class WriteFileTool(_FsTool):
             # ha scritto, non che quel quanto ha appena spento la pagina.
             note = self._wiki_page_ceiling_note(fp, content)
             self._archive_departing(fp, content)
-            self._commit_write(fp, content)
+            self._commit_write(fp, content, full=True)
             self._file_states.record_write(fp)
             msg = f"Successfully wrote {len(content)} characters to {fp}"
             return msg if note is None else f"{msg}\n{note}"

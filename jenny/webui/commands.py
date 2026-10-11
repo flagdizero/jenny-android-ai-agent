@@ -265,6 +265,18 @@ async def _write_live_config(content: str, base: str) -> str:
     return config_path.read_text(encoding="utf-8")
 
 
+def _clear_taint(root: Any, full_path: Any) -> None:
+    from pathlib import Path
+
+    from jenny.security.taint_ledger import ledger_for
+
+    try:
+        rel = Path(full_path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (OSError, ValueError):
+        return
+    ledger_for(Path(root)).clear(rel)
+
+
 async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Scrive un file di testo del workspace (salvataggio dall'editor WebUI).
 
@@ -312,6 +324,10 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
             await asyncio.to_thread(write_file, full_path, content)
         else:
             await asyncio.to_thread(_write_file_unchanged, full_path, content, base)
+        # Il file ora è tuo per intero: se un lavoro non fidato l'aveva scritto,
+        # chi lo legge da qui in poi non eredita più quel taint
+        # (``security.taint_ledger``).
+        _clear_taint(ctx.get_workspace_root(), full_path)
     except ValueError as exc:
         raise CommandError("bad_request", str(exc)) from exc
     except FileNotFoundError as exc:

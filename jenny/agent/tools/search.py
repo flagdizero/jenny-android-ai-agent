@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, TypeVar
 
 from jenny.agent.tools.filesystem import ListDirTool, _FsTool
+from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.subagent_policy import is_secret_path
 
 _DEFAULT_HEAD_LIMIT = 250
@@ -660,6 +661,11 @@ class GrepTool(_SearchTool):
                         break
                     blocks.append(block)
                     result_chars += extra_sep + len(block)
+                    # Righe di questo file entrano nel contesto: dentro un
+                    # subagent valgono come una lettura (marcano il lavoro). Solo
+                    # qui, non sull'elenco dei nomi: un ``grep`` su tutto il
+                    # workspace non deve contaminare per i file che non mostra.
+                    check_subagent_read(file_path)
                 if output_mode == "count" and file_had_match:
                     if display_path not in matching_files:
                         matching_files.append(display_path)

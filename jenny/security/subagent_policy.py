@@ -46,6 +46,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 from urllib.parse import urlparse
 
+from jenny.security.taint_ledger import ledger_for
+
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
 # ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli stessi
 # nomi che il listing della WebUI nasconde
@@ -57,6 +59,9 @@ CONFIG_FILE_PATTERNS = ("config.json*", "config.corrupt-*.json")
 _SECRET_DIRS = (
     (".jenny", "snapshots"),
     (".jenny", "backup_staging"),
+    # Il registro di provenienza: un lavoro non fidato non cancella le proprie
+    # tracce (``security.taint_ledger``).
+    (".jenny", "taint_ledger.json"),
 )
 
 _SYSTEM_CODE_DIRS = ("agent", "ui")
@@ -313,8 +318,40 @@ def check_read(path: str | Path) -> None:
     rel = "/".join(parts)
     if _is_private(parts):
         policy.mark_private(f"file:{rel}")
-    if _is_untrusted_src(parts):
+    if _is_untrusted_src(parts) or ledger_for(policy.install_root).source_of(rel):
         policy.mark_untrusted(f"file:{rel}")
+
+
+def note_write(path: str | Path, *, full: bool = False) -> None:
+    """Aggiorna il registro di provenienza dopo una scrittura di un subagent.
+
+    Un lavoro non fidato contamina ciò che scrive. Un lavoro fidato che
+    riscrive un file per intero (``full``) lo ripulisce; una modifica parziale
+    no, perché i byte contaminati restano. Fuori da un subagent è una no-op.
+    """
+    policy = current_subagent_policy()
+    if policy is None:
+        return
+    parts = policy.relative(path)
+    if not parts or _is_secret(parts):
+        return
+    rel = "/".join(parts)
+    ledger = ledger_for(policy.install_root)
+    sources = policy.taint_sources()
+    if sources:
+        ledger.record(rel, sources[0])
+    elif full:
+        ledger.clear(rel)
+
+
+def note_move(src: str | Path, dst: str | Path) -> None:
+    """Una rinomina o una copia porta il taint della sorgente sulla destinazione."""
+    policy = current_subagent_policy()
+    if policy is None:
+        return
+    src_parts, dst_parts = policy.relative(src), policy.relative(dst)
+    if src_parts and dst_parts:
+        ledger_for(policy.install_root).move("/".join(src_parts), "/".join(dst_parts))
 
 
 def check_write(path: str | Path) -> None:

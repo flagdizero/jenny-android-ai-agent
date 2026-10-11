@@ -48,6 +48,8 @@ from jenny.config.paths import get_workspace_path
 from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in config.tool_schemas)
 from jenny.security.subagent_policy import check_read as _check_subagent_read
 from jenny.security.subagent_policy import check_write as _check_subagent_write
+from jenny.security.subagent_policy import note_move as _note_subagent_move
+from jenny.security.subagent_policy import note_write as _note_subagent_write
 from jenny.security.workspace_policy import refuse_board_write
 from jenny.utils.helpers import truncate_head_tail
 
@@ -1171,6 +1173,10 @@ def _refuse_guarded_write(path: Any) -> None:
     """
     refuse_board_write(path)
     _check_subagent_write(path)
+    # Un lavoro non fidato contamina ciò che scrive. Qui non si sa se la
+    # scrittura è completa (``open(..., 'a')`` passa di qui come ``'w'``), quindi
+    # si registra soltanto e non si pulisce mai: pulire è di ``write_file``.
+    _note_subagent_write(path)
 
 
 # Flag di ``os.open`` che significano "questa apertura può cambiare il file".
@@ -1812,6 +1818,9 @@ class PythonNamespace:
                 )
             except Exception:
                 return False
+            # Importare un file è leggerlo: se l'ha scritto un lavoro non fidato,
+            # il lavoro che lo importa lo diventa (``taint_ledger``).
+            _check_subagent_read(origin)
         return True
 
     def _guarded_import(self, name: str, *args, **kwargs):
@@ -2396,6 +2405,8 @@ class PythonNamespace:
                     with _path_guard_bypass():
                         _refuse_guarded_write(src)
                         _refuse_guarded_write(dst)
+                        # Il taint della sorgente segue il file (``taint_ledger``).
+                        _note_subagent_move(src, dst)
                 return _real(src, dst, *rest, **kwargs)
 
             self._install_os_wrapper(mod, name, _two, real)
