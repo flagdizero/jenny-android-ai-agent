@@ -1431,7 +1431,7 @@
     "micro": {
       "what": "What do you want to see, or do?",
       "whatPlaceholder": "For example: the soil moisture and whether the sensor is online",
-      "explain": "I write it and try it right away: it becomes a card of its own, tied to this one by a thread, and you keep it if it is right.",
+      "explain": "I write it and try it right away: it becomes a card of its own, tied to this one by a thread.",
       "prepare": "Make it",
       "linkApp": "Or put one of your apps next to it…",
       "prompt": "I'd like an app that {what}, to put on the board next to {card}",

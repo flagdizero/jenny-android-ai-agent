@@ -1431,7 +1431,7 @@
     "micro": {
       "what": "Cosa vuoi vedere, o fare?",
       "whatPlaceholder": "Per esempio: l'umidità della terra e se il sensore è online",
-      "explain": "La scrivo io e la provo subito: diventa una scheda sua, legata a questa con un filo, e la tieni se va bene.",
+      "explain": "La scrivo io e la provo subito: diventa una scheda sua, legata a questa con un filo.",
       "prepare": "Preparala",
       "linkApp": "Oppure mettici accanto una tua app…",
       "prompt": "Vorrei un'app che {what}, da mettere sulla bacheca accanto a {card}",
