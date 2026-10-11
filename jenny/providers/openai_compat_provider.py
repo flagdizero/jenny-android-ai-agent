@@ -317,7 +317,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         def _mark(msg: dict[str, Any]) -> dict[str, Any]:
             content = msg.get("content")
-            if isinstance(content, str):
+            if isinstance(content, str) and content:
                 return {**msg, "content": [
                     {"type": "text", "text": content, "cache_control": cache_marker},
                 ]}
@@ -329,8 +329,9 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         if new_messages and new_messages[0].get("role") == "system":
             new_messages[0] = _mark(new_messages[0])
-        if len(new_messages) >= 3:
-            new_messages[-2] = _mark(new_messages[-2])
+        # Sull'ultimo messaggio, non sul penultimo (v. ``anthropic_conversion``).
+        if len(new_messages) >= 2:
+            new_messages[-1] = _mark(new_messages[-1])
 
         new_tools = tools
         if tools:

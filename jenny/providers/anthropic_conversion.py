@@ -370,16 +370,19 @@ class AnthropicConversionMixin:
             system = list(system)
             system[-1] = {**system[-1], "cache_control": marker}
 
+        # Il marker va sull'ultimo messaggio: in un ciclo di tool ogni
+        # tool_result si scrive in cache una volta e si rilegge al giro dopo. Sul
+        # penultimo (com'era) lo si pagava pieno e poi ancora come scrittura.
         new_msgs = list(messages)
-        if len(new_msgs) >= 3:
-            m = new_msgs[-2]
+        if new_msgs:
+            m = new_msgs[-1]
             c = m.get("content")
-            if isinstance(c, str):
-                new_msgs[-2] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
+            if isinstance(c, str) and c:
+                new_msgs[-1] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
             elif isinstance(c, list) and c:
                 nc = list(c)
                 nc[-1] = {**nc[-1], "cache_control": marker}
-                new_msgs[-2] = {**m, "content": nc}
+                new_msgs[-1] = {**m, "content": nc}
 
         new_tools = tools
         if tools:
