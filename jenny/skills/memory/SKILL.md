@@ -9,6 +9,8 @@ internal: true
 
 - `SOUL.md`, `USER.md`, `memory/MEMORY.md` — personality, the user, long-term facts.
   **Dream manages them: never edit them.** Something outdated is fixed when Dream runs next.
+  So when the user asks you to remember, change or forget something, it is not done yet: say
+  it will be applied at the next Dream pass, which `/dream` starts now.
 - `memory/history.jsonl` — past conversations, one JSON object per line, never loaded into the
   prompt. Do not read it whole.
 - `wikis/<name>/` — the user's notebooks; `wikis/<name>/wiki/index.md` lists their pages. Do not

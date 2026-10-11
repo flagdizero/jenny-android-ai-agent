@@ -101,7 +101,9 @@ These files play different roles:
 - `history.jsonl` remembers what happened on the way there, as compressed, timestamped summaries.
 - Recurring workflows can also be promoted into `workspace/skills/<name>/SKILL.md` by Dream, rather than staying as prose inside `MEMORY.md` or `USER.md`.
 
-All of these are plain text in your workspace. You can read them, edit them by hand, or just ask Jenny to change something in them — nothing about memory is hidden behind a locked format.
+All of these are plain text in your workspace. You can read them and edit them by hand — nothing about memory is hidden behind a locked format.
+
+You can also just ask Jenny to remember, change or forget something, but she does not edit these files while you talk: what you said stays in the conversation, and Dream applies it on its next pass. She tells you so, and `/dream` runs that pass now. A hand edit takes effect on the next message.
 
 ### `history.jsonl` instead of a plain history file
 
@@ -174,9 +176,9 @@ Dream's configuration lives under `agents.defaults.dream` in `config.json`, and 
 
 The budgets are counted in **characters**, not tokens, because that is the only unit the model can count while it is writing.
 
-**These caps bind Dream, not Jenny.** The refusal is mounted only on the tools Dream's own runs get. The tools Jenny uses while you are talking to her carry no size guard at all, so a chat turn can write past a budget and nothing stops it — measured on a real device at 2,399 characters against a cap of 2,400. That is deliberate. A refusal in the middle of a conversation would land on the one writer that has you sitting there, and it would trade a visible failure for an invisible one: the thing you just asked Jenny to remember would quietly not be saved. So for the main agent the numbers are **advisory** — the size the review pass aims for, not a wall. They are enforced where the writer is unattended and has a review pass behind it to make room.
+**These caps bind Dream, not other writers.** The refusal is mounted only on the tools Dream's own runs get. Anything else that writes these files carries no size guard: your own hand edits, and a chat turn that writes them anyway — Jenny is told to leave them to Dream, but with orchestrator mode off she has the file tools to do it, and one such write was measured on a real device at 2,399 characters against a cap of 2,400. That is deliberate. A refusal in the middle of a conversation would land on the one writer that has you sitting there, and it would trade a visible failure for an invisible one. So outside Dream the numbers are **advisory** — the size the review pass aims for, not a wall. They are enforced where the writer is unattended and has a review pass behind it to make room.
 
-The cost of that choice is worth knowing: a chat turn can leave a file saturated, and it is Dream that then finds no room. If you see Dream reporting that it consolidated nothing, a file already at its cap is the first thing to check — the workshop's Memory drawer shows each file's size against its budget.
+The cost of that choice is worth knowing: a hand edit or a chat turn can leave a file saturated, and it is Dream that then finds no room. If you see Dream reporting that it consolidated nothing, a file already at its cap is the first thing to check — the workshop's Memory drawer shows each file's size against its budget.
 
 **Being over budget is not an error.** It means the next thing Dream wants to add has to wait for the review pass to make room — usually by *moving* something to where it belongs (a task specification to a skill file, project context to `MEMORY.md`) rather than by forgetting it.
 
