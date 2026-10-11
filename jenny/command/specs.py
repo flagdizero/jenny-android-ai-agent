@@ -62,6 +62,22 @@ class BuiltinCommandSpec:
     scope: str = "any"
     scope_note: str = ""
 
+    @property
+    def help_key(self) -> str:
+        """La chiave di ``user_text`` della riga di ``/help``.
+
+        L'inglese di quella chiave e' ``description``, parola per parola: lo fissa
+        un test, perche' la tendina mostra questo campo come ripiego e ``/help`` la
+        chiave, e due testi inglesi diversi per lo stesso comando sarebbero un
+        difetto.
+        """
+        return f"cmd.help.{self.command.lstrip('/')}"
+
+    @property
+    def scope_note_key(self) -> str:
+        """La chiave di ``user_text`` di ``scope_note`` (stessa regola di :attr:`help_key`)."""
+        return f"cmd.scope_note.{self.command.lstrip('/')}"
+
     def as_dict(self) -> dict[str, str]:
         return {
             "command": self.command,

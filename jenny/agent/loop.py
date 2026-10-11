@@ -1197,7 +1197,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="`/init` is unavailable: its prompt template could not be loaded.",
+                content=say("cmd.unavailable", command="/init"),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return None
@@ -1290,7 +1290,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="`/tidy` is unavailable: its prompt template could not be loaded.",
+                content=say("cmd.unavailable", command="/tidy"),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return None

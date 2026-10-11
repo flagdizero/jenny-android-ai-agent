@@ -78,7 +78,7 @@ The interface exists in two languages: Italian and English. It follows the phone
 This is worth separating clearly from a similarly named setting:
 
 - **UI language** only controls what the buttons, labels, and toasts in the WebUI say.
-- **`agents.defaults.language`** is a `config.json` field, and the *only* place that writes it is the onboarding wizard. It captures the UI language active when you set the phone up, and uses it for a handful of backend-generated strings (like the initial welcome message).
+- **`agents.defaults.language`** is a `config.json` field, and the *only* place that writes it is the onboarding wizard. It captures the UI language active when you set the phone up, and uses it for the text the backend writes to you: the initial welcome message, provider errors, notification titles and slash-command replies.
 
 Changing the phone's language later does **not** touch `agents.defaults.language`. Any backend-generated text that depends on that field keeps using the language you had during onboarding until you edit `config.json` directly; see [Configuration](../reference/configuration.md). Several backend error messages (settings validation, some model-list failures) are in English regardless of either.
 

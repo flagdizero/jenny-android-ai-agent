@@ -795,19 +795,18 @@ def build_status_content(
         else str(context_tokens_estimate)
     )
     ctx_total_str = f"{ctx_total // 1000}k" if ctx_total > 0 else "n/a"
-    token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
-    if cached and last_in:
-        token_line += f" ({cached * 100 // last_in}% cached)"
-    lines = [
-        f"\U0001f408 jenny v{version}",
-        f"\U0001f9e0 Model: {model}",
-        token_line,
-        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}% of input budget)",
-        f"\U0001f4ac Session: {session_msg_count} messages",
-        f"\u23f1 Uptime: {uptime}",
-        f"\u26a1 Tasks: {active_task_count} active",
-    ]
-    return "\n".join(lines)
+    # Import locale: ``utils`` sta sotto ``runtime`` negli strati.
+    from jenny.runtime.user_text import say
+
+    cached_note = (
+        say("cmd.status.cached", pct=cached * 100 // last_in) if cached and last_in else ""
+    )
+    return say(
+        "cmd.status.body",
+        version=version, model=model, prompt=last_in, completion=last_out, cached=cached_note,
+        used=ctx_used_str, total=ctx_total_str, pct=ctx_pct, messages=session_msg_count,
+        uptime=uptime, tasks=active_task_count,
+    )
 
 
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:

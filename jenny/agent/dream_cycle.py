@@ -171,15 +171,6 @@ def release_dream_cycle() -> None:
     _CYCLE_IN_FLIGHT.clear()
 
 
-# La frase che legge chi ha battuto ``/dream`` mentre un ciclo era già in volo.
-# Dice il costo vero — token spesi due volte — e non quello di prima di T2.4b:
-# l'archivio al confine del file rende la seconda passata di review costosa, non
-# distruttiva, e un rifiuto che spaventa più del dovuto è un rifiuto che mente.
-DREAM_ALREADY_RUNNING = (
-    "A Dream cycle is already running, so this one did not start — Dream runs one cycle "
-    "at a time, or both take the same batch off the same cursor and each pays for its own "
-    "review pass. Nothing would be lost, only spent twice. Try again once it has finished."
-)
 
 
 # I tag con cui il Consolidator marca un fatto destinato a **restare**. Sono la

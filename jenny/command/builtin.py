@@ -12,6 +12,7 @@ from loguru import logger
 from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
+from jenny.runtime.user_text import say
 from jenny.utils.helpers import build_status_content
 
 if TYPE_CHECKING:
@@ -29,19 +30,14 @@ if TYPE_CHECKING:
 # Il prefisso resta registrato nel router *proprio* per arrivare qui: senza,
 # `/dream budget` non sarebbe piu' un comando e finirebbe **al modello** come
 # messaggio — che e' il modo peggiore di dire "non esiste piu'".
-def _moved_to_settings(command: str, section: str, still: str) -> str:
-    """«Quell'argomento non c'e' piu', la manopola e' in Impostazioni → Officina → <cassetto>».
+def _moved_to_settings(command: str, still: str) -> str:
+    """«Quell'argomento non c'e' piu', la manopola e' in Impostazioni → Officina → Memoria».
 
     Le manopole di Dream e del giardiniere stanno nell'officina, nel cassetto
     Memoria (gruppi *Dream* e *Gardener*): la pagina Impostazioni della casa le
     raggiunge solo dalla riga Officina, quindi il percorso la nomina.
     """
-    return (
-        f"`{command}` does not take arguments any more: those settings live in "
-        f"**Settings → Workshop → {section}**, where they sit next to the numbers they "
-        f"act on.\n\n"
-        f"{still}"
-    )
+    return say("cmd.moved_to_settings", command=command, still=still)
 
 
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
@@ -63,8 +59,6 @@ async def cmd_stop_all(ctx: CommandContext) -> OutboundMessage:
 
 
 async def _stop(ctx: CommandContext, *, spare_subagents: bool) -> OutboundMessage:
-    from jenny.runtime.user_text import say
-
     loop = ctx.loop
     msg = ctx.msg
     total = await loop._cancel_active_tasks(ctx.key, spare_subagents=spare_subagents)
@@ -172,7 +166,7 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
         )
     return OutboundMessage(
         channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-        content="New session started.",
+        content=say("cmd.new.done"),
         # `_session_boundary` dice ai client di rendere questa conferma come
         # separatore invece che come bolla. Il transcript NON viene toccato da
         # /new (si azzera il contesto del modello, non il registro visibile):
@@ -183,7 +177,7 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
 
 
 def _format_preset_names(names: list[str]) -> str:
-    return ", ".join(f"`{name}`" for name in names) if names else "(none configured)"
+    return ", ".join(f"`{name}`" for name in names) if names else say("cmd.model.none_configured")
 
 
 def _model_preset_names(loop) -> list[str]:
@@ -191,7 +185,7 @@ def _model_preset_names(loop) -> list[str]:
 
 
 def _active_model_preset_name(loop) -> str:
-    return loop.model_preset or "(none)"
+    return loop.model_preset or say("cmd.model.no_preset")
 
 
 def _command_error_message(exc: Exception) -> str:
@@ -199,14 +193,12 @@ def _command_error_message(exc: Exception) -> str:
 
 
 def _model_command_status(loop) -> str:
-    names = _model_preset_names(loop)
-    active = _active_model_preset_name(loop)
-    return "\n".join([
-        "## Model",
-        f"- Current model: `{loop.model}`",
-        f"- Current preset: `{active}`",
-        f"- Available presets: {_format_preset_names(names)}",
-    ])
+    return say(
+        "cmd.model.status",
+        model=loop.model,
+        preset=_active_model_preset_name(loop),
+        presets=_format_preset_names(_model_preset_names(loop)),
+    )
 
 
 async def cmd_model(ctx: CommandContext) -> OutboundMessage:
@@ -228,7 +220,7 @@ async def cmd_model(ctx: CommandContext) -> OutboundMessage:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content="Usage: `/model [preset]`",
+            content=say("cmd.model.usage"),
             metadata=metadata,
         )
 
@@ -240,21 +232,21 @@ async def cmd_model(ctx: CommandContext) -> OutboundMessage:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content=(
-                f"Could not switch model preset: {_command_error_message(exc)}\n\n"
-                f"Available presets: {_format_preset_names(names)}"
+            content=say(
+                "cmd.model.switch_failed",
+                error=_command_error_message(exc),
+                presets=_format_preset_names(names),
             ),
             metadata=metadata,
         )
 
     max_tokens = getattr(getattr(loop.provider, "generation", None), "max_tokens", None)
-    lines = [
-        f"Switched model preset to `{loop.model_preset}`.",
-        f"- Model: `{loop.model}`",
-        f"- Context window: {loop.context_window_tokens}",
-    ]
+    lines = [say(
+        "cmd.model.switched",
+        preset=loop.model_preset, model=loop.model, window=loop.context_window_tokens,
+    )]
     if max_tokens is not None:
-        lines.append(f"- Max output tokens: {max_tokens}")
+        lines.append(say("cmd.model.max_output", max_tokens=max_tokens))
     return OutboundMessage(
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
@@ -272,17 +264,9 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     if args:
         # `/dream budget` viveva qui. Le manopole della memoria stanno in
         # Impostazioni dal 31/08/2026: v. ``_MOVED_TO_SETTINGS``.
-        return _reply(msg, _moved_to_settings(
-                "/dream",
-                "Memory",
-                "`/dream` on its own still runs a consolidation now.",
-            ))
+        return _reply(msg, _moved_to_settings("/dream", say("cmd.dream.moved")))
 
-    from jenny.agent.dream_cycle import (
-        DREAM_ALREADY_RUNNING,
-        claim_dream_cycle,
-        release_dream_cycle,
-    )
+    from jenny.agent.dream_cycle import claim_dream_cycle, release_dream_cycle
     from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_START
     from jenny.runtime.work_status import WorkReporter
 
@@ -364,7 +348,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     loop, store, prologue, take_snapshot=snapshot_cb, reporter=reporter,
                 )
                 advanced, refused = turn.advanced, turn.refused
-                elapsed = time.monotonic() - t0
+                elapsed = f"{time.monotonic() - t0:.1f}"
                 # Non ha scritto (rifiuti, blocchi) o non si e' chiuso: per la
                 # bolla e' un lavoro non riuscito. Tutto il resto — anche
                 # «niente di nuovo» — e' un lavoro fatto.
@@ -385,23 +369,13 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     ))
                     return
                 if turn.outcome is DreamOutcome.ADVANCED:
-                    content = f"Dream completed in {elapsed:.1f}s."
+                    content = say("cmd.dream.done", elapsed=elapsed)
                 elif turn.outcome is DreamOutcome.HELD_BATCH:
-                    content = (
-                        f"Dream completed in {elapsed:.1f}s but consolidated nothing "
-                        "from its batch (no memory file grew); memory cursor was not "
-                        "advanced, so those entries come back next run."
-                    )
+                    content = say("cmd.dream.held", elapsed=elapsed)
                 elif turn.outcome is DreamOutcome.BLOCKED:
-                    content = (
-                        f"Dream completed in {elapsed:.1f}s but wrote nothing "
-                        "(attempts blocked/refused); memory cursor was not advanced."
-                    )
+                    content = say("cmd.dream.blocked", elapsed=elapsed)
                 else:
-                    content = (
-                        f"Dream did not complete after {elapsed:.1f}s; "
-                        "memory cursor was not advanced."
-                    )
+                    content = say("cmd.dream.incomplete", elapsed=elapsed)
                 content = _prefix_review_note(review_note, content)
             finally:
                 # Anti-livelock, con la stessa regola del percorso cron perché è
@@ -426,9 +400,9 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     refused=refused,
                 )
         except Exception as e:
-            elapsed = time.monotonic() - t0
             content = _prefix_review_note(
-                review_note, f"Dream failed after {elapsed:.1f}s: {e}"
+                review_note,
+                say("cmd.dream.failed", elapsed=f"{time.monotonic() - t0:.1f}", error=e),
             )
             if reporter.state == "running":
                 reporter.finish("failed", reason="error")
@@ -467,7 +441,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     if not claim_dream_cycle():
         reporter.forget()
         return OutboundMessage(
-            channel=msg.channel, chat_id=msg.chat_id, content=DREAM_ALREADY_RUNNING,
+            channel=msg.channel, chat_id=msg.chat_id, content=say("cmd.dream.already_running"),
         )
     try:
         # Tracciato dal loop, non ``create_task`` nudo: cosi' lo shutdown lo
@@ -483,7 +457,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
         raise
     reporter.start()
     return OutboundMessage(
-        channel=msg.channel, chat_id=msg.chat_id, content="Dreaming...",
+        channel=msg.channel, chat_id=msg.chat_id, content=say("cmd.dream.started"),
         metadata={**work_meta, OUTBOUND_META_WORK_START: True},
     )
 
@@ -528,20 +502,14 @@ def _format_dream_review_note(outcome: "ReviewOutcome") -> str:
 
     files = "MEMORY.md, USER.md, SOUL.md"
     if outcome.status == STATUS_FAILED:
-        note = (
-            "A memory review pass ran first but did not complete cleanly; "
-            f"{outcome.freed:,} chars freed across {files}."
-        )
+        note = say("cmd.dream.review_failed", freed=f"{outcome.freed:,}", files=files)
     elif outcome.freed > 0:
-        note = (
-            f"A memory review pass ran first and freed {outcome.freed:,} chars "
-            f"across {files}."
-        )
+        note = say("cmd.dream.review_freed", freed=f"{outcome.freed:,}", files=files)
     else:
         # Zero o negativo. Un review che non trova niente da potare è un esito
         # valido — il suo prompt lo dice al modello — e il negativo è il caso in
         # cui ha ristrutturato spostando testo *fra* i tre file misurati.
-        note = f"A memory review pass ran first; nothing was freed across {files}."
+        note = say("cmd.dream.review_nothing", files=files)
     extra = [_format_dream_refusals(outcome), _format_dream_demotions(outcome)]
     return " ".join([note, *(part for part in extra if part)])
 
@@ -569,12 +537,7 @@ def _format_dream_refusals(outcome: "ReviewOutcome") -> str:
     refused = getattr(outcome, "unresolved_refusals", 0)
     if refused <= 0:
         return ""
-    return (
-        f"{refused} write(s) were refused by their size budget and never landed — "
-        "**Settings → Workshop → Memory** shows which file is full, as a gauge against "
-        "its cap: "
-        "raise it or prune the file, then run `/dream` again."
-    )
+    return say("cmd.dream.refused", count=refused)
 
 
 # Quanti id di voci degradate si nominano nella risposta di `/dream`. Il tetto non
@@ -598,28 +561,12 @@ def _format_dream_demotions(outcome: "ReviewOutcome") -> str:
         return ""
     shown = ids[:_DEMOTIONS_NAMED_IN_NOTE]
     more = len(ids) - len(shown)
-    tail = f", and {more} more" if more else ""
-    return (
-        f"It also moved {len(ids)} fact(s) into `memory/archive/` instead of "
-        f"deleting them — ask me to recall {', '.join(shown)}{tail} to read them back."
-    )
+    tail = say("cmd.dream.demoted_more", more=more) if more else ""
+    return say("cmd.dream.demoted", count=len(ids), ids=", ".join(shown), more=tail)
 
 
 def _format_dream_no_input_message() -> str:
-    return "\n".join([
-        "Dream has no conversation history to process yet.",
-        "",
-        "Dream reads new entries from `memory/history.jsonl` after the current Dream cursor.",
-        (
-            "Short chats only reach that file after token compaction or idle auto-compact, "
-            "so a fresh or short WebUI chat may leave Dream with no input."
-        ),
-        "",
-        "Next steps:",
-        "- Enable `agents.defaults.idleCompactAfterMinutes` so completed chats become Dream input automatically.",
-        "- Compact the current chat into memory once that manual action is available.",
-        "- If you expected history to exist, check whether `memory/history.jsonl` has new entries after the Dream cursor.",
-    ])
+    return say("cmd.dream.no_input")
 
 
 async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
@@ -643,11 +590,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     loop = ctx.loop
     msg = ctx.msg
     if ctx.args.strip():
-        return _reply(msg, _moved_to_settings(
-            "/gardener",
-            "Memory",
-            "A pass runs on the project you are in: open it and send `/gardener` there.",
-        ))
+        return _reply(msg, _moved_to_settings("/gardener", say("cmd.gardener.moved")))
     if not is_project_session_key(ctx.key):
         # Un rifiuto che dice **dove**, non solo che qui non si può: la lezione
         # dei rifiuti del passo 6, e la stessa forma del rifiuto di
@@ -679,9 +622,9 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
                 config.workspace_path, target, wikis_dir_name=wikis_dir
             )
             if store is None:
-                content = (
-                    f"`{target}` is not a project I can garden: I look for "
-                    f"`{wikis_dir}/{target}/wiki/`, and there is nothing there."
+                content = say(
+                    "cmd.gardener.not_a_project",
+                    name=target, path=f"{wikis_dir}/{target}/wiki/",
                 )
                 reporter.finish("failed", reason="not_a_project")
             else:
@@ -694,7 +637,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
                 content = _format_gardener_outcome(target, outcome, absence=absence)
                 report_gardener_outcome(reporter, outcome, store.root, absence=absence)
         except Exception as e:
-            content = f"The gardener failed: {e}"
+            content = say("cmd.gardener.error", error=e)
             reporter.finish("failed", reason="error")
         await loop.bus.publish_outbound(OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=content,
@@ -706,7 +649,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     loop._schedule_background(_run())
     return OutboundMessage(
         channel=msg.channel, chat_id=msg.chat_id,
-        content=f"Gardening {target}...",
+        content=say("cmd.gardener.started", name=target),
         metadata={OUTBOUND_META_WORK_ID: reporter.id, OUTBOUND_META_WORK_START: True},
     )
 
@@ -757,7 +700,7 @@ def _format_gardener_outcome(name: str, outcome: "GardenerOutcome", *, absence: 
     if not board:
         return _format_wiki_outcome(name, outcome)
     if outcome.status == "skipped_no_delta" and outcome.board:
-        return f"Nothing new in {name}'s journal for the pages. {board}"
+        return say("cmd.gardener.no_delta_board", name=name, board=board)
     return f"{_format_wiki_outcome(name, outcome)} {board}"
 
 
@@ -772,39 +715,29 @@ def _gardener_board_absence(root: Path) -> str:
         return ""
 
 
+# Gli esiti che hanno una frase propria in ``user_text`` (``cmd.gardener.*``).
+_NO_BOARD_REASONS = frozenset({"research", "no_pages", "proposed", "declined", "later", "next_pass"})
+_BOARD_PASS_STATUSES = frozenset({"done", "incomplete", "failed"})
+
+
 def _gardener_no_board_line(name: str, absence: str) -> str:
     """Perche' *name* resta senza bacheca, o ``""`` se ce l'ha (o non si sa)."""
-    if absence == "research":
-        return (
-            f"{name} has no board, on purpose: its pages are in concepts/ and entities/ and it "
-            "has no journal, so it counts as a research archive. Once the journal has a line, "
-            "the next pass proposes a first board."
-        )
-    if absence == "no_pages":
-        return f"{name} has no board because it has no pages yet."
-    if absence == "proposed":
-        return f"A first board for {name} is waiting in the envelope for you to accept."
-    if absence == "declined":
-        return f"{name} has no board because you turned down the first one proposed."
-    if absence == "later":
-        return f"{name}'s first board was postponed; a later pass proposes it again."
-    if absence == "next_pass":
-        return f"{name} has no board yet; a later pass proposes the first one."
+    if absence in _NO_BOARD_REASONS:
+        return say(f"cmd.gardener.no_board.{absence}", name=name)
     return ""
 
 
 def _gardener_board_line(name: str, status: str) -> str:
     """La frase della passata della bacheca, o ``""`` se non e' partita."""
-    if status == "done":
-        return (
-            f"Then it went over {name}'s board: anything it proposes, a first board "
-            "included, is waiting in the envelope."
-        )
-    if status == "incomplete":
-        return f"Then it started on {name}'s board but did not finish; the next pass retries."
-    if status == "failed":
-        return f"Then the board pass over {name} failed; the next pass retries."
+    if status in _BOARD_PASS_STATUSES:
+        return say(f"cmd.gardener.board.{status}", name=name)
     return ""
+
+
+_WIKI_OUTCOME_STATUSES = frozenset({
+    "written", "nothing_to_promote", "partial_write", "commit_failed",
+    "aborted_user_active", "already_running", "no_write", "incomplete",
+})
 
 
 def _format_wiki_outcome(name: str, outcome: "GardenerOutcome") -> str:
@@ -837,54 +770,16 @@ def _format_wiki_outcome(name: str, outcome: "GardenerOutcome") -> str:
     """
     elapsed = f"{outcome.elapsed:.1f}s"
     if outcome.status == "skipped_no_delta":
-        return (
-            f"Nothing new in {name}'s journal since the last pass, so there was nothing to "
-            "promote — no tokens spent."
-        )
+        return say("cmd.gardener.skipped_no_delta", name=name)
     if outcome.map_pass and outcome.status not in ("failed", "incomplete"):
         return _gardener_map_pass_line(name, outcome, elapsed)
-    if outcome.status == "written":
-        return (
-            f"The gardener read {outcome.lines} journal lines in {name} and wrote "
-            f"{outcome.writes} times, in {elapsed}. See `wiki/index.md` and today's `log/`."
+    if outcome.status in _WIKI_OUTCOME_STATUSES:
+        return say(
+            f"cmd.gardener.{outcome.status}",
+            name=name, elapsed=elapsed, lines=outcome.lines, writes=outcome.writes,
+            detail=outcome.detail,
         )
-    if outcome.status == "nothing_to_promote":
-        return (
-            f"The gardener read {outcome.lines} journal lines in {name} in {elapsed} and "
-            "judged that none of them earned a page. The journal is marked as read."
-        )
-    if outcome.status == "partial_write":
-        return (
-            f"The gardener wrote {outcome.writes} pages in {name} in {elapsed}, but some writes "
-            "were refused, so the journal was left unread — the next pass will see those lines "
-            "again."
-        )
-    if outcome.status == "commit_failed":
-        return (
-            f"The gardener wrote {outcome.writes} pages in {name} in {elapsed}, but could not "
-            f"record how far it had read: {outcome.detail}. The pages are on disk and the "
-            "journal was left unread, so the next pass will see those lines again."
-        )
-    if outcome.status == "aborted_user_active":
-        return (
-            f"You came back to {name} while the gardener was working there, so it stood down "
-            f"after {elapsed} rather than write over you ({outcome.writes} pages had already "
-            "landed). The journal was left unread, so the next pass will see those lines again."
-        )
-    if outcome.status == "already_running":
-        return (
-            f"A pass on {name} is already running, so this one did not start — the gardener "
-            "works on one project one pass at a time, or two passes overwrite each other's "
-            "pages. Try again once it has finished."
-        )
-    if outcome.status == "no_write":
-        return (
-            f"The gardener finished in {elapsed} without writing (attempts blocked or refused); "
-            "the journal was left unread, so the next pass will try again."
-        )
-    if outcome.status == "incomplete":
-        return f"The gardener did not finish after {elapsed}; nothing was changed."
-    return f"The gardener failed after {elapsed}: {outcome.detail}"
+    return say("cmd.gardener.failed", elapsed=elapsed, detail=outcome.detail)
 
 
 def _gardener_map_pass_line(name: str, outcome: "GardenerOutcome", elapsed: str) -> str:
@@ -902,22 +797,18 @@ def _gardener_map_pass_line(name: str, outcome: "GardenerOutcome", elapsed: str)
     """
     from jenny.agent.gardener import MAP_TARGET_CHARS
 
-    lede = f"Nothing new in {name}'s journal, so the gardener went in for the map alone"
+    lede = say("cmd.gardener.map_lede", name=name)
     if outcome.map_after < outcome.map_before:
-        moved = (
-            f"`wiki/index.md` went from {outcome.map_before} to {outcome.map_after} characters "
-            f"in {elapsed}, against a ceiling of {MAP_TARGET_CHARS}"
+        moved = say(
+            "cmd.gardener.map_moved",
+            before=outcome.map_before, after=outcome.map_after, elapsed=elapsed,
+            ceiling=MAP_TARGET_CHARS,
         )
-        if outcome.map_after <= MAP_TARGET_CHARS:
-            return f"{lede}: {moved} — it fits now, so every turn sees all of it again."
-        return (
-            f"{lede}: {moved} — still over, and it will not be tried again until the map grows "
-            "past that."
-        )
-    return (
-        f"{lede}, and after {elapsed} it is still {outcome.map_after} characters against a "
-        f"ceiling of {MAP_TARGET_CHARS}: nothing was moved out of it. It will not be tried "
-        "again until the map grows past that."
+        key = "map_fits" if outcome.map_after <= MAP_TARGET_CHARS else "map_still_over"
+        return say(f"cmd.gardener.{key}", lede=lede, moved=moved)
+    return say(
+        "cmd.gardener.map_unchanged",
+        lede=lede, elapsed=elapsed, after=outcome.map_after, ceiling=MAP_TARGET_CHARS,
     )
 
 
@@ -940,7 +831,7 @@ def _format_history_message(msg: dict) -> str | None:
         return None
     if len(content) > _HISTORY_MAX_CONTENT_CHARS:
         content = content[:_HISTORY_MAX_CONTENT_CHARS] + "…"
-    label = "👤 You" if role == "user" else "🤖 Bot"
+    label = say("cmd.history.you") if role == "user" else say("cmd.history.bot")
     return f"{label}: {content}"
 
 
@@ -956,7 +847,7 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
         except ValueError:
             return OutboundMessage(
                 channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-                content="Usage: /history [count] — e.g. /history 5 (default: 10, max: 50)",
+                content=say("cmd.history.usage"),
                 metadata=dict(ctx.msg.metadata or {}),
             )
 
@@ -969,11 +860,11 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
     if not recent:
         return OutboundMessage(
             channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-            content="No conversation history yet.",
+            content=say("cmd.history.empty"),
             metadata=dict(ctx.msg.metadata or {}),
         )
 
-    header = f"Last {len(recent)} message(s):\n"
+    header = say("cmd.history.header", count=len(recent)) + "\n"
     return OutboundMessage(
         channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
         content=header + "\n".join(recent),
@@ -997,7 +888,7 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content="Usage: /goal <long-running task description>",
+            content=say("cmd.goal.usage"),
             metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
         )
     current_task = asyncio.current_task()
@@ -1008,10 +899,7 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content=(
-                "A task is already running for this chat. "
-                "Use `/stop` first, then send `/goal <long-running task description>` again."
-            ),
+            content=say("cmd.goal.busy"),
             metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
         )
 
@@ -1029,9 +917,9 @@ async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
     loop = ctx.loop
     skills = loop.context.skills.list_skills(filter_unavailable=False)
     if not skills:
-        content = "No skills available."
+        content = say("cmd.skill.none")
     else:
-        lines = [f"Available skills ({len(skills)}):", ""]
+        lines = [say("cmd.skill.header", count=len(skills)), ""]
         for entry in skills:
             desc = loop.context.skills._get_skill_description(entry["name"])
             lines.append(f"- **{entry['name']}** — {desc}")
@@ -1068,12 +956,12 @@ def build_help_text(session_key: str | None = None) -> str:
     """
     from jenny.command.scope import visible_specs
 
-    lines = ["✿ jenny commands:"]
+    lines = [say("cmd.help.header")]
     for spec in visible_specs(session_key):
         command = spec.command
         if spec.arg_hint:
             command = f"{command} {spec.arg_hint}"
-        lines.append(f"{command} — {spec.description}")
+        lines.append(f"{command} — {say(spec.help_key)}")
     return "\n".join(lines)
 
 

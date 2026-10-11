@@ -24,7 +24,7 @@ Two consequences worth naming. Working on a notebook is always done **from insid
 
 Two commands — `/stop` and `/status` — are handled on a "priority" fast path that runs even while a turn is actively streaming or a tool is executing. The rest wait for the current dispatch to be free, which in practice is rarely noticeable.
 
-All server-side command responses below are **hardcoded in English**, regardless of whether the WebUI is set to Italian or English. This is true for the confirmation text, the usage/error messages, and the `/status`/`/model` output.
+Server-side command responses follow the language set for Jenny (`agents.defaults.language`, Italian or English): the confirmation text, the usage and error messages, `/help`, and the `/status`/`/model` output. The examples below show the English text.
 
 ## The server commands
 

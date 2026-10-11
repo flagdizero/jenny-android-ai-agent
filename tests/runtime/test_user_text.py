@@ -52,12 +52,25 @@ def test_the_error_kinds_are_the_websocket_contract() -> None:
     }
 
 
+# Le letture che un comando slash da' su richiesta: i numeri di ``/status`` e di
+# ``/model``, il «nessun token speso» del giardiniere, la spiegazione di ``/dream``
+# senza materiale. Le chiede chi ha battuto il comando per nome; la regola qui
+# sotto vale per le frasi che dicono a qualcuno cosa fare.
+_COMMAND_READOUTS = frozenset({
+    "cmd.status.body",
+    "cmd.model.max_output",
+    "cmd.gardener.skipped_no_delta",
+    "cmd.dream.no_input",
+})
+
+
 def test_no_user_text_sends_a_phone_user_to_tokens_or_the_terminal() -> None:
     """Chi tiene un telefono non alza «max output tokens» e non legge logcat."""
     for lang in languages():
         for key in keys(lang):
             text = say(key, lang).lower()
-            assert "token" not in text, (lang, key)
+            if key not in _COMMAND_READOUTS:
+                assert "token" not in text, (lang, key)
             assert "logcat" not in text, (lang, key)
 
 
