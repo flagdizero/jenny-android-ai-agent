@@ -29,6 +29,7 @@ from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.result import ToolResult
 from jenny.config.runtime_env import tool_timeout_s
 from jenny.providers.base import ToolCallRequest
+from jenny.security.subagent_policy import policy_after_tool
 from jenny.utils.file_edit_events import (
     build_file_edit_end_event,
     build_file_edit_error_event,
@@ -522,6 +523,10 @@ class ToolExecutionMixin:
             )
 
         budget.credit()
+        # Dentro un subagent, un tool riuscito può marcare il lavoro come non
+        # fidato (web, browser) o privato (posizione, log): v.
+        # ``security.subagent_policy``. Fuori da un subagent è una no-op.
+        policy_after_tool(tool_call.name, params)
         if file_edit_trackers and progress_callback is not None:
             await invoke_file_edit_progress(
                 progress_callback,

@@ -84,6 +84,7 @@ from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     MID_TURN_META,
     SUBAGENT_RESULT_EVENT,
+    SUBAGENT_TAINT_META,
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
@@ -1463,6 +1464,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     task_id = pending_msg.metadata.get("subagent_task_id")
                     if task_id:
                         message["subagent_task_id"] = task_id
+                    if taint := pending_msg.metadata.get(SUBAGENT_TAINT_META):
+                        message[SUBAGENT_TAINT_META] = list(taint)
                 else:
                     message[MID_TURN_META] = True
                 return message

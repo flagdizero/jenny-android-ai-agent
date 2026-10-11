@@ -153,7 +153,8 @@ def _format_results(query: str, items: list[dict[str, Any]], n: int) -> str:
     """Format provider results into shared plaintext output."""
     if not items:
         return f"No results for: {query}"
-    lines = [f"Results for: {query}\n"]
+    # Titoli e snippet li scrivono i siti: stesso banner di ``web_fetch``.
+    lines = [_UNTRUSTED_BANNER, f"Results for: {query}\n"]
     for i, item in enumerate(items[:n], 1):
         title = _normalize(_strip_tags(item.get("title", "")))
         snippet = _normalize(_strip_tags(item.get("snippet", "")))

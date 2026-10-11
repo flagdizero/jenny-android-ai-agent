@@ -259,6 +259,14 @@ def _register_builtin_functions(
         return results
 
     # HTTP
+    def _url_host(url: str) -> str:
+        from urllib.parse import urlparse
+
+        try:
+            return urlparse(url).hostname or ""
+        except ValueError:
+            return ""
+
     def http_get(url: str, headers: dict | None = None, timeout: int = 30) -> str:
         """Make an HTTP GET request and return the response body.
 
@@ -278,6 +286,12 @@ def _register_builtin_functions(
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
+
+        from jenny.security.subagent_policy import mark_untrusted
+
+        # La risposta è testo che non viene dall'utente: il lavoro diventa non
+        # fidato appena la si chiede (v. ``security.subagent_policy``).
+        mark_untrusted(f"http_get:{_url_host(url)}")
         resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
         if resp.has_redirect_location:
             location = resp.headers.get("location", "")
@@ -303,6 +317,10 @@ def _register_builtin_functions(
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
+
+        from jenny.security.subagent_policy import mark_untrusted
+
+        mark_untrusted(f"http_post:{_url_host(url)}")
         resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.text

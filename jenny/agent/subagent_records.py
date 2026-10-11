@@ -194,6 +194,12 @@ class SubagentSpec:
     # Job breve: puo occupare lo slot riservato del pool (vedi
     # ``SubagentManager._check_capacity``).
     quick: bool = False
+    # Fonti non fidate da cui il lavoro nasce gia' contaminato: un compito
+    # scritto da Jenny dopo aver letto un risultato non fidato, o la ripresa di
+    # una conversazione che ne conteneva. Non vuoto ⇒ il lavoro parte
+    # *untrusted* (v. ``security.subagent_policy``). Sta nella spec perche' un
+    # rilancio rigioca lo stesso compito, e quindi lo stesso testo.
+    taint_seed: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -244,6 +250,7 @@ class SubagentSpec:
             "session_key": self.session_key,
             "origin_message_id": self.origin_message_id,
             "quick": self.quick,
+            "taint_seed": list(self.taint_seed),
         }
 
     @classmethod
@@ -274,6 +281,11 @@ class SubagentSpec:
                 else None
             ),
             quick=bool(raw.get("quick", False)),
+            # Un record scritto prima dell'11/10/2026 non ha la chiave: parte pulito.
+            taint_seed=tuple(
+                x for x in (raw.get("taint_seed") if isinstance(raw.get("taint_seed"), list) else [])
+                if isinstance(x, str)
+            )[:8],
         )
 
 

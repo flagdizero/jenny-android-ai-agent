@@ -106,6 +106,7 @@ class SubagentHistoryStore:
         messages: list[dict[str, Any]] | None,
         *,
         now: float | None = None,
+        taint: tuple[str, ...] = (),
     ) -> bool:
         """Salva la conversazione di un lineage. Ritorna ``True`` se persistita.
 
@@ -130,6 +131,9 @@ class SubagentHistoryStore:
                     "subagent_lineage_id": lineage_id,
                     "origin_session_key": origin_key,
                     "saved_at": moment,
+                    # Fonti non fidate lette in questa conversazione: chi la
+                    # riprende nasce contaminato (v. ``taint_of``).
+                    "taint_sources": list(taint),
                 },
             )
             session.enforce_file_cap(limit=_MAX_HISTORY_MESSAGES)
@@ -188,6 +192,24 @@ class SubagentHistoryStore:
             self.drop(lineage_id)
             return None
         return messages
+
+    def taint_of(self, lineage_id: str) -> tuple[str, ...]:
+        """Fonti non fidate della storia salvata, ``()`` se pulita o assente.
+
+        Una ripresa rimette in contesto tutto ciò che quel lavoro aveva letto:
+        se c'erano pagine web, il lavoro ripreso è non fidato quanto il primo.
+        """
+        if self._sessions is None:
+            return ()
+        try:
+            data = self._sessions.read_session_file(subagent_session_key(lineage_id))
+        except Exception:  # noqa: BLE001 — illeggibile: ``load`` la scarta comunque
+            return ()
+        metadata = data.get("metadata") if isinstance(data, dict) else None
+        raw = metadata.get("taint_sources") if isinstance(metadata, dict) else None
+        if not isinstance(raw, list):
+            return ()
+        return tuple(x for x in raw if isinstance(x, str))[:8]
 
     # ------------------------------------------------------------------
     # delete / prune

@@ -38,6 +38,12 @@ INJECTED_EVENT_META = "injected_event"
 #: (``TurnPersistenceMixin._persist_subagent_followup``).
 SUBAGENT_RESULT_EVENT = "subagent_result"
 
+#: Fonti non fidate di un rientro di subagent (``security.subagent_policy``):
+#: presente solo se il lavoro ha letto contenuto che non viene dall'utente.
+#: Finché la riga sta nella parte non consolidata della sessione, i lavori che
+#: Jenny avvia nascono contaminati.
+SUBAGENT_TAINT_META = "subagent_taint_sources"
+
 #: Sprone sintetico a un sustained goal ancora attivo.
 GOAL_CONTINUE_EVENT = "goal_continue"
 

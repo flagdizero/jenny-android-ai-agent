@@ -18,6 +18,7 @@ from jenny.agent.context import ContextBuilder
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     SUBAGENT_RESULT_EVENT,
+    SUBAGENT_TAINT_META,
     is_synthetic_history_row,
 )
 from jenny.utils.helpers import image_placeholder_text
@@ -210,13 +211,17 @@ class TurnPersistenceMixin:
         riconoscere la riga come sintetica (``history_meta``) e che
         ``_subagent_followup_state`` usa per non scriverla due volte.
         """
-        task_id = msg.metadata.get("subagent_task_id") if isinstance(msg.metadata, dict) else None
+        meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+        extra: dict[str, Any] = {}
+        if taint := meta.get(SUBAGENT_TAINT_META):
+            extra[SUBAGENT_TAINT_META] = list(taint)
         session.add_message(
             "user",
             msg.content,
             sender_id=msg.sender_id,
             injected_event=SUBAGENT_RESULT_EVENT,
-            subagent_task_id=task_id,
+            subagent_task_id=meta.get("subagent_task_id"),
+            **extra,
         )
 
     def _set_runtime_checkpoint(self, session: Session, payload: dict[str, Any]) -> None:

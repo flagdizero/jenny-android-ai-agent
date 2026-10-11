@@ -850,6 +850,9 @@ class SubagentManager:
         # il grace) o superati da un rilancio: il loro announce tardivo va
         # soppresso, non deve iniettare un turno stale nella sessione.
         self._repudiated_task_ids: set[str] = set()
+        # Politica di ogni lavoro vivo (``security.subagent_policy``): l'annuncio
+        # la legge per sapere se il risultato va incorniciato come non fidato.
+        self._run_policies: dict[str, SubagentRunPolicy] = {}
         self._lineages: dict[str, _Lineage] = {}
         # Casella di posta per subagent vivo, consumata dal runner via
         # ``injection_callback``. Creata allo spawn, rimossa alla terminazione.
@@ -1324,7 +1327,10 @@ class SubagentManager:
             # La politica del lavoro (``security.subagent_policy``) si misura
             # sempre dalla radice dell'installazione, anche per un subagent di
             # quaderno: è lì che stanno config.json e le sue copie.
-            policy = SubagentRunPolicy(task_id=task_id, install_root=Path(self.workspace))
+            policy = SubagentRunPolicy.for_run(
+                task_id, Path(self.workspace), seed=spec.taint_seed,
+            )
+            self._run_policies[task_id] = policy
             with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
@@ -1412,6 +1418,7 @@ class SubagentManager:
                     status.lineage_id,
                     spec.records_key,
                     getattr(result, "messages", None),
+                    taint=policy.taint_sources(),
                 )
                 await self._announce_result(
                     task_id, label, task, partial, origin, "budget", origin_message_id,
@@ -1430,6 +1437,7 @@ class SubagentManager:
                     status.lineage_id,
                     spec.records_key,
                     getattr(result, "messages", None),
+                    taint=policy.taint_sources(),
                 )
                 await self._announce_result(task_id, label, task, final_result, origin, "ok", origin_message_id)
 
@@ -1443,6 +1451,8 @@ class SubagentManager:
             status.result_summary = truncate_text(f"Error: {e}", MAX_RESULT_SUMMARY_CHARS)
             logger.exception("Subagent [{}] failed", task_id)
             await self._announce_result(task_id, label, task, f"Error: {e}", origin, "error", origin_message_id)
+        finally:
+            self._run_policies.pop(task_id, None)
 
     # ------------------------------------------------------------------
     # iniezione mid-run
@@ -1603,6 +1613,11 @@ class SubagentManager:
         silent = resolve_turn_visibility(
             None, channel=origin.get("channel") or INTERNAL_CHANNEL, session_key=override
         ).silent
+        # Un lavoro che ha letto contenuto non fidato consegna un risultato che
+        # può portarne dentro le istruzioni: arriva incorniciato come dato, con
+        # le fonti, e i metadati lo dicono a chi lo salva nella sessione.
+        policy = self._run_policies.get(task_id)
+        taint = policy.taint_sources() if policy is not None else ()
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -1610,6 +1625,8 @@ class SubagentManager:
             task=_task_head(task),
             result=result,
             silent=silent,
+            untrusted=bool(taint),
+            sources=", ".join(taint),
         )
         live = self._task_statuses.get(task_id)
         metadata: dict[str, Any] = {
@@ -1629,6 +1646,9 @@ class SubagentManager:
         }
         if origin_message_id:
             metadata["origin_message_id"] = origin_message_id
+        if taint:
+            metadata["subagent_tainted"] = True
+            metadata["subagent_taint_sources"] = list(taint)
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
@@ -2187,6 +2207,10 @@ class SubagentManager:
     ) -> SubagentSendResult:
         """Rilancia un lineage terminato seminandolo con la storia salvata."""
         resume_spec = spec if quick is None or quick == spec.quick else replace(spec, quick=quick)
+        # La storia rimette in contesto ciò che il lavoro aveva letto: se era non
+        # fidato, lo è anche la ripresa.
+        if taint := self._history.taint_of(lineage_id):
+            resume_spec = replace(resume_spec, taint_seed=taint)
         messages = list(history) + [{"role": "user", "content": message}]
         # ``attempt`` invariato: vedi il contratto in ``send``. Il record del run
         # ripreso resta sullo stesso attempt, cosi ``can_restart`` nello snapshot
