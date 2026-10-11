@@ -148,23 +148,6 @@ export class WhoPanel {
     return this._list.projects || [];
   }
 
-  /** Quante pagine ha il quaderno *name*, o `null` se non si sa.
-   *
-   *  Legge la stessa cache della pagina, e la riempie se e' vuota: la
-   *  pastiglia delle pagine compare entrando in un quaderno, che puo' essere
-   *  prima che la pagina Quaderni sia stata guardata anche una volta.
-   *
-   *  `null` e **non** zero quando la lettura non e' riuscita o la voce non c'e':
-   *  «non lo so» e «e' vuoto» sono due cose diverse, e la seconda si scrive a
-   *  schermo mentre la prima no.
-   */
-  async pagesOf(name) {
-    if (!name) return null;
-    if (this._list.projects === null) await this._list.load();
-    const found = (this._list.projects || []).find((it) => it.name === name);
-    return found && typeof found.pages === 'number' ? found.pages : null;
-  }
-
   /** L'elenco su disco e' cambiato: si rilegge alla prossima apertura. */
   invalidate() {
     this._list.invalidate();

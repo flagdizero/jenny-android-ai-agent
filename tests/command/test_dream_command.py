@@ -25,7 +25,7 @@ from jenny.agent.memory import MemoryStore
 from jenny.bus.events import InboundMessage
 from jenny.command.builtin import register_builtin_commands
 from jenny.command.router import CommandContext, CommandRouter
-from jenny.config.loader import load_config, save_config
+from jenny.config.loader import save_config
 from jenny.config.schema import Config
 from jenny.utils.helpers import sync_workspace_templates
 
@@ -141,10 +141,6 @@ async def _drain(timeout: float = 30.0) -> None:
 
 def _config_path(workspace: Path) -> Path:
     return workspace / "config.json"
-
-
-def _dream_config(workspace: Path):
-    return load_config(_config_path(workspace)).agents.defaults.dream
 
 
 class TestRegistration:

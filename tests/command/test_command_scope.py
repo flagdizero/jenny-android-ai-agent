@@ -120,7 +120,7 @@ def test_a_line_that_does_not_name_a_command_has_no_spec(line: str) -> None:
 
 
 def test_a_project_command_outside_says_how_to_get_in() -> None:
-    text = refusal(_spec("/tidy"), UNIFIED_SESSION_KEY)
+    text = refusal(_spec("/tidy"))
 
     assert "not a project" in text
     assert "chip above the composer" in text
@@ -128,7 +128,7 @@ def test_a_project_command_outside_says_how_to_get_in() -> None:
 
 
 def test_a_personal_command_inside_a_project_says_where_to_send_it() -> None:
-    text = refusal(_spec("/dream"), _PROJECT)
+    text = refusal(_spec("/dream"))
 
     assert "personal chat" in text
     assert "chip above the composer" in text
@@ -136,8 +136,8 @@ def test_a_personal_command_inside_a_project_says_where_to_send_it() -> None:
 
 def test_the_refusal_carries_the_note_of_that_command() -> None:
     """La riga che dice *cosa* fa il comando: senza, «qui no» resta senza perche'."""
-    assert "personal memory" in refusal(_spec("/dream"), _PROJECT)
-    assert "Settings" in refusal(_spec("/gardener"), UNIFIED_SESSION_KEY)
+    assert "personal memory" in refusal(_spec("/dream"))
+    assert "Settings" in refusal(_spec("/gardener"))
 
 
 # ── Il cancello nel dispatch ────────────────────────────────────────────────

@@ -67,13 +67,6 @@ class _Ancestry(HTMLParser):
             self.stack.pop()
 
 
-def _ancestor_ids(node_id: str) -> list[str]:
-    parser = _Ancestry()
-    parser.feed(WORKSHOP_HTML)
-    assert node_id in parser.ancestors, f"#{node_id} non esiste in officina.html"
-    return parser.ancestors[node_id]
-
-
 # ── Il modulo ────────────────────────────────────────────────────────────────
 
 

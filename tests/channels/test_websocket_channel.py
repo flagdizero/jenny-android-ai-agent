@@ -103,15 +103,6 @@ async def _http_get(url: str, headers: dict[str, str] | None = None) -> httpx.Re
     )
 
 
-async def _recv_ws_event(client: Any, event: str) -> dict[str, Any]:
-    """Receive until a specific websocket event appears."""
-    for _ in range(10):
-        payload = json.loads(await client.recv())
-        if payload.get("event") == event:
-            return payload
-    raise AssertionError(f"websocket event {event!r} was not received")
-
-
 def _sent_ws_payloads(mock_ws: AsyncMock) -> list[dict[str, Any]]:
     return [json.loads(call.args[0]) for call in mock_ws.send.await_args_list]
 

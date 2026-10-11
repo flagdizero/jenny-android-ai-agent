@@ -147,7 +147,7 @@ async def test_a_removed_card_pauses_its_crons_and_undo_resumes_them(
 
 
 async def test_a_week_later_the_removed_card_is_gone_for_good(
-    ctx, notebook: Path, workspace_root: Path, tmp_path: Path,
+    ctx, notebook: Path, tmp_path: Path,
 ) -> None:
     from jenny.cron.service import CronService
     from jenny.cron.types import CronSchedule
@@ -170,9 +170,9 @@ async def test_a_week_later_the_removed_card_is_gone_for_good(
     await dispatch_command(ctx, "board.card.remove", {"wiki": "piante", "id": "acero"})
 
     later = datetime.now().astimezone() + timedelta(days=model.REMOVED_KEEP_DAYS - 1)
-    assert purge_removed_cards(workspace_root, notebook, service, now=later) == 0
+    assert purge_removed_cards(notebook, service, now=later) == 0
     later = datetime.now().astimezone() + timedelta(days=model.REMOVED_KEEP_DAYS + 1)
-    assert purge_removed_cards(workspace_root, notebook, service, now=later) == 1
+    assert purge_removed_cards(notebook, service, now=later) == 1
     assert read_board(notebook)["removedCards"] == []
     assert service.get_job(job.id) is None
     assert read_reminders(notebook)["reminders"][0]["state"] == "dropped"

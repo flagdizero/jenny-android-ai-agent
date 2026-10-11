@@ -22,7 +22,7 @@ def card_crons(card: Mapping[str, Any]) -> list[str]:
     return [str(s["job"]) for s in card.get("userSections") or [] if s.get("kind") == "cron"]
 
 
-def purge_removed_cards(workspace: Path, root: Path, cron: Any = None, now: Any = None) -> int:
+def purge_removed_cards(root: Path, cron: Any = None, now: Any = None) -> int:
     """Butta davvero le schede tolte da più di una settimana. Lo chiama l'orologio.
 
     Scrive come ``user``: non è Jenny che decide qualcosa sulla bacheca, è la

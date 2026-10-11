@@ -129,7 +129,7 @@ def board_block(
         )
         if problem:
             tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
-        auto = _auto_tag(root, board, card)
+        auto = _auto_tag(root, card)
         if auto:
             tags.append(auto)
         nxt = model.next_reminder(reminders, card["id"])
@@ -190,7 +190,7 @@ def _envelope(board: Mapping[str, Any]) -> str:
     return f"In the envelope, waiting for the user: {'; '.join(items)}." if items else ""
 
 
-def _auto_tag(root: Path, board: Mapping[str, Any], card: Mapping[str, Any]) -> str:
+def _auto_tag(root: Path, card: Mapping[str, Any]) -> str:
     """``[auto: Acerello · cron Meteo]``: cio' che nel cassetto gira da solo.
 
     **Solo i nomi.** Fino al 07/10/2026 c'era anche l'ultimo valore

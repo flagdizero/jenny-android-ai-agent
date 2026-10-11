@@ -27,14 +27,6 @@ class _FakeTool(Tool):
         return kwargs
 
 
-def _tool_names(definitions: list[dict[str, Any]]) -> list[str]:
-    names: list[str] = []
-    for definition in definitions:
-        fn = definition.get("function", {})
-        names.append(fn.get("name", ""))
-    return names
-
-
 def _registry_with_names(names: list[str]) -> ToolRegistry:
     registry = ToolRegistry()
     for name in names:

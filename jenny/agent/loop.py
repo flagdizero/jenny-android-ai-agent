@@ -1152,7 +1152,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
-            content=refusal(spec, key),
+            content=refusal(spec),
             metadata={**dict(msg.metadata or {}), "render_as": "text"},
         ))
         return True

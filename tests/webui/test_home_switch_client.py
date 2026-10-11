@@ -340,7 +340,6 @@ class App {
     this._jennyOut = true;
     this.who = {
       known: [{ name: 'piante', modified: 1 }],
-      pagesOf: (name) => Promise.resolve(this.pageCounts?.[name] ?? null),
       invalidate: () => this.actions.push('elenco da rileggere'),
       render: () => {},
     };

@@ -1,10 +1,7 @@
 {
   "nav": {
-    "chat": "Chat",
-    "apps": "Apps",
     "workspace": "Workspace",
     "settings": "Settings",
-    "wiki": "Wiki",
     "ariaLabel": "Navigation",
     "console": "Console",
     "brain": "Brain",
@@ -1487,7 +1484,6 @@
       "appPlaced": "“{name}” is on the board, next to {card}"
     },
     "cover": {
-      "stale": "stopped",
       "minutes": "{count} min ago",
       "hours": "{count} h ago",
       "days": "{count} d ago"

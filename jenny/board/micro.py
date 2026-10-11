@@ -112,8 +112,8 @@ def normalize_spec(raw: Any, *, micro_id: str, strict: bool = False) -> dict[str
     15–1440, un host di ``net`` con lo schema o la porta, un ``uses`` o un
     ``alarm`` storti si buttano. Va bene per un'app gia' installata, che deve
     continuare a caricarsi; non va bene mentre la si scrive, perche' l'errore
-    salta fuori solo quando il lettore gira («host 'x' is not in this micro
-    app's net list») e il modello non sa perche'. Con *strict* (la bozza del
+    salta fuori solo quando il lettore gira («host 'x' is not in this
+    reader's net list») e il modello non sa perche'. Con *strict* (la bozza del
     tool ``app``) le stesse cose diventano errori che dicono come scriverle.
     """
     problems: list[str] = []
@@ -121,7 +121,7 @@ def normalize_spec(raw: Any, *, micro_id: str, strict: bool = False) -> dict[str
         raise MicroError("the spec must be an object")
     title = model.clean_text(raw.get("title"), model.MAX_TITLE)
     if not title:
-        raise MicroError("a micro app needs a title")
+        raise MicroError("a reader needs a title")
     fields_raw = raw.get("fields")
     if not isinstance(fields_raw, dict) or not fields_raw:
         raise MicroError("declare the fields run() returns: {name: {label, type, unit?}}")
@@ -150,7 +150,7 @@ def normalize_spec(raw: Any, *, micro_id: str, strict: bool = False) -> dict[str
         fields[name] = entry
     rows_fields = [n for n, f in fields.items() if f["type"] == "rows"]
     if len(rows_fields) > 1:
-        raise MicroError("at most one rows field (a list or a table) per micro app")
+        raise MicroError("at most one rows field (a list or a table) per reader")
     view = raw.get("view") if raw.get("view") in VIEWS else (
         "list" if rows_fields else "value")
     scalars = [n for n, f in fields.items() if f["type"] != "rows"]
@@ -203,7 +203,7 @@ def normalize_spec(raw: Any, *, micro_id: str, strict: bool = False) -> dict[str
     if len(uses) != len(raw.get("uses") or []):
         problems.append("uses names one installed skill, by its folder name")
     if len(uses) > 1:
-        raise MicroError("a micro app can use one skill")
+        raise MicroError("a reader can use one skill")
     if strict and problems:
         raise MicroError("; ".join(problems))
     card = raw.get("card")
@@ -467,7 +467,7 @@ class MicroHttp:
 
         host = (urlsplit(url).hostname or "").lower()
         if host not in self._hosts:
-            raise PermissionError(f"host {host!r} is not in this micro app's net list")
+            raise PermissionError(f"host {host!r} is not in this reader's net list")
         self._count += 1
         if self._count > MAX_HTTP_REQUESTS:
             raise PermissionError(f"at most {MAX_HTTP_REQUESTS} requests per run")

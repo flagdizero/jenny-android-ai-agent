@@ -233,7 +233,6 @@ def build_card_view(
     project_root: Path,
     card_id: str,
     *,
-    today: date | None = None,
     sections_resolver: Callable[[Mapping[str, Any], Mapping[str, Any]], dict[str, Any]]
     | None = None,
     corrections: list[dict[str, Any]] | None = None,

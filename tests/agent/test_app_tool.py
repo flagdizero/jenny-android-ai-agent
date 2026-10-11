@@ -307,7 +307,7 @@ async def test_run_shows_the_last_series(personal: Path) -> None:
 
 async def test_a_draft_says_what_is_wrong_instead_of_dropping_it(personal: Path) -> None:
     """Un host con lo schema veniva buttato in silenzio, e il lettore falliva
-    solo girando («host 'x' is not in this micro app's net list»)."""
+    solo girando («host 'x' is not in this reader's net list»)."""
     ws = personal
     manifest = {**PORTAFOGLIO, "reader": {**PORTAFOGLIO["reader"],
                                           "net": ["https://api.boerse-frankfurt.de/"]}}

@@ -733,11 +733,10 @@ def _gardener_no_target() -> str:
     cui aggirarsi.
     """
     from jenny.command.scope import refusal, spec_for_line
-    from jenny.session.keys import UNIFIED_SESSION_KEY
 
     spec = spec_for_line("/gardener")
     assert spec is not None  # è nella tabella: se non c'è, è un errore di programmazione
-    return refusal(spec, UNIFIED_SESSION_KEY)
+    return refusal(spec)
 
 
 def _format_gardener_outcome(name: str, outcome: "GardenerOutcome", *, absence: str = "") -> str:

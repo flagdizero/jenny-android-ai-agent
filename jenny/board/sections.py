@@ -29,7 +29,7 @@ PHOTOS_DIR = "raw/photos"
 _TREND_POINTS = 31
 
 
-def _note_integrated(project_root: Path, ref: str, cursor: Mapping[str, int]) -> bool:
+def _note_integrated(ref: str, cursor: Mapping[str, int]) -> bool:
     """Se la riga di diario di una nota è già stata letta dal giardiniere.
 
     *ref* è ``raw/journal/AAAAMMGG.md:<riga>``, la riga fisica come la conta il
@@ -219,7 +219,7 @@ def section_resolver(
                 return {"status": "pending"}
             if cursor is None:
                 cursor = _gardener_cursor(project_root)
-            return {"status": "integrated" if _note_integrated(project_root, ref, cursor)
+            return {"status": "integrated" if _note_integrated(ref, cursor)
                     else "pending"}
         if kind == "reminder":
             reminders = ctx.get("reminders") or {}

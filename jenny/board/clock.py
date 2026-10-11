@@ -116,8 +116,7 @@ class ConditionPass:
 
 
 def check_conditions(
-    workspace: Path, reminders: Mapping[str, Any], *,
-    root: Path | None = None, now: datetime | None = None,
+    workspace: Path, reminders: Mapping[str, Any], *, now: datetime | None = None,
 ) -> ConditionPass:
     """Le attese a condizione diventate vere (da annunciare) e quelle da riarmare."""
     out = ConditionPass()
@@ -302,7 +301,7 @@ async def run_reminders(
         if board is None:
             continue
         try:
-            purge_removed_cards(workspace, root, cron, now=current)
+            purge_removed_cards(root, cron, now=current)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: removed cards of {} not purged", name)
         # Le attese di una scheda tolta tacciono finche' la scheda non torna: «Togli»
@@ -318,7 +317,7 @@ async def run_reminders(
                 r for r in reminders["reminders"] if r.get("card") not in gone
             ]}
         due = due_by_date(reminders, current)
-        conditions = check_conditions(workspace, reminders, root=root, now=current)
+        conditions = check_conditions(workspace, reminders, now=current)
         fire = conditions.fire
         if conditions.rearm or conditions.streaks:
             _stamp(root, conditions.rearm, at=None, streaks=conditions.streaks)

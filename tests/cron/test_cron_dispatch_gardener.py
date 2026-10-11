@@ -334,12 +334,6 @@ def _alarms(monkeypatch) -> list[str]:
     return seen
 
 
-def _with_failures(root: Path, failures: int) -> None:
-    from jenny.agent.gardener_state import GardenerState, write_state
-
-    write_state(root, GardenerState(failures=failures))
-
-
 @pytest.mark.asyncio
 async def test_a_series_of_failures_reaches_a_surface_someone_sees(tmp_path, monkeypatch):
     """L'allarme, perché il log da solo non basta: su Android nessuno legge

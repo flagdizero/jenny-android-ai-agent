@@ -1,10 +1,7 @@
 {
   "nav": {
-    "chat": "Chat",
-    "apps": "Apps",
     "workspace": "Workspace",
     "settings": "Impostazioni",
-    "wiki": "Wiki",
     "ariaLabel": "Navigazione",
     "console": "Console",
     "brain": "Cervello",
@@ -1487,7 +1484,6 @@
       "appPlaced": "«{name}» è sulla bacheca, accanto a {card}"
     },
     "cover": {
-      "stale": "fermo",
       "minutes": "{count} min fa",
       "hours": "{count} h fa",
       "days": "{count} g fa"

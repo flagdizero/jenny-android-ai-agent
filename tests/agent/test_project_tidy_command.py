@@ -132,7 +132,7 @@ async def test_outside_a_project_it_says_where_to_go(tmp_path: Path) -> None:
     assert len(published) == 1
     spec = spec_for_line("/tidy")
     assert spec is not None
-    assert published[0].content == refusal(spec, "websocket:default")
+    assert published[0].content == refusal(spec)
     assert "not a project" in published[0].content
     assert "chip above the composer" in published[0].content
 

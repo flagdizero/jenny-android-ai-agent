@@ -78,7 +78,7 @@ def visible_specs(session_key: str | None) -> tuple[BuiltinCommandSpec, ...]:
     return tuple(spec for spec in BUILTIN_COMMAND_SPECS if available(spec, session_key))
 
 
-def refusal(spec: BuiltinCommandSpec, session_key: str) -> str:
+def refusal(spec: BuiltinCommandSpec) -> str:
     """«Qui non c'e' niente su cui agire», **e dove invece c'e'**.
 
     Un rifiuto che dice solo di no costa un altro turno: e' la lezione dei
@@ -115,4 +115,4 @@ def refusal_for_line(raw: str, session_key: str) -> str | None:
     spec = spec_for_line(raw)
     if spec is None or available(spec, session_key):
         return None
-    return refusal(spec, session_key)
+    return refusal(spec)

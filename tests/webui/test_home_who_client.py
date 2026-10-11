@@ -574,30 +574,6 @@ def test_a_gateway_that_does_not_send_the_count_says_it_does_not_know() -> None:
     """)
 
 
-def test_the_panel_answers_how_many_pages_and_reads_the_list_if_it_has_to() -> None:
-    """La pastiglia compare entrando in un quaderno, che di solito e' prima
-    che la pagina sia stata guardata anche una volta: se la cache e' vuota, la
-    domanda la riempie invece di rispondere «non lo so» per sempre."""
-    _run("""
-      const { ConversationList } = await import('./shared/conversation-list.js');
-      const panel = new WhoPanel(makeEl('div'), {});
-      let reads = 0;
-      panel._list = new ConversationList(async () => {
-        reads += 1;
-        return { dir: 'wikis', projects: [{ name: 'orto', modified: 1, pages: 7 }],
-                 unopenable: [] };
-      });
-      assert.equal(await panel.pagesOf('orto'), 7);
-      assert.equal(reads, 1, 'la cache vuota non e’ stata riempita');
-      // La seconda volta la cache c'e': non si rilegge.
-      assert.equal(await panel.pagesOf('orto'), 7);
-      assert.equal(reads, 1, 'riletto l’elenco per una risposta che sapeva gia’');
-      // Un quaderno che l'elenco non conosce: «non lo so», non zero.
-      assert.equal(await panel.pagesOf('sconosciuto'), null);
-      assert.equal(await panel.pagesOf(''), null);
-    """)
-
-
 # ── La pressione lunga: la scheda del quaderno (23/09/2026) ─────────────────
 #
 # Una cosa si appende dal posto dove vive, e i quaderni vivono qui: tenerne

@@ -878,10 +878,8 @@ class HomeApp {
     const newKey = projectKey(newName);
     this.homePages.renameConversation(oldKey, newKey);
     this._renameDraft(oldKey, newKey);
-    /* I Quaderni rileggono **prima** del cambio: la pastiglia delle pagine,
-       ridisegnandosi, chiede alla loro cache quante pagine ha il quaderno — e
-       con la cache ancora sul nome vecchio perdeva il numero. Visto sul
-       telefono il 23/09/2026 rinominando un quaderno di prova. */
+    /* I Quaderni rileggono l'elenco **prima** del cambio: chi ridisegna dopo
+       trova la loro cache gia' sul nome nuovo. */
     await this.who.refresh();
     /* La chat segue il nome nuovo **dove sta**, senza passare dalla regola
        delle pagine: `switchConversation` da qui — la pagina Quaderni —
@@ -1762,8 +1760,7 @@ class HomeApp {
 
   /* Quali comandi dell'intestazione valgono in questa stanza. Nella
      conversazione l'intestazione non c'e' — c'e' la fila — quindi qui si
-     decide solo per le stanze; la pastiglia delle pagine del quaderno, che sta
-     nella barra dove scrivi, vale invece ovunque la barra si veda. */
+     decide solo per le stanze. */
   _applyHead() {
     const notebook = projectNameOf(sessionManager.currentKey);
     /* La lente e l'elenco, solo sulla bacheca. L'interruttore Chat | Bacheca

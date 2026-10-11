@@ -336,8 +336,9 @@ _UI_MANIFEST = [
     "assets/shared/wiki-search.js",
     "assets/shared/ws-manager.js",
     "assets/vendor/@tabler/icons-webfont@3.19.0/LICENSE",
-    "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.ttf",
-    "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.woff",
+    # Solo woff2: la WebView (minSdk 26) lo legge sempre, e ttf e woff (3,7 MB)
+    # non venivano mai scaricati. Il loro ``url()`` e' stato tolto anche dal CSS
+    # vendor: chi lo riscarica deve rifare le due cose insieme.
     "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.woff2",
     "assets/vendor/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css",
     "assets/vendor/codemirror@5.65.16/LICENSE",
