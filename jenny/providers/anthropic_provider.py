@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import ssl
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -42,6 +43,27 @@ from jenny.providers.endpoint_budget import (
 )
 from jenny.providers.opencode import session_headers
 from jenny.providers.tool_ids import dedupe_tool_ids, unique_tool_ids_in_history
+
+# Come si chiede il thinking, per famiglia di modello. Dal 4.7 in poi (e su tutti
+# i 5) ``budget_tokens`` e' un 400 e anche ``temperature``: si manda
+# ``{"type": "adaptive"}`` e la profondita' va in ``output_config.effort``. Il
+# resto resta sul budget, com'era: i 4.6 (deprecato ma accettato), Haiku 4.5, i
+# modelli piu' vecchi e i non-Claude che un gateway serve sul formato Anthropic
+# (MiniMax, Qwen su OpenCode Go).
+_CLAUDE_VERSION_RE = re.compile(r"claude-(?:opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?!\d)")
+_EFFORT_LEVELS = frozenset({"low", "medium", "high", "xhigh", "max"})
+
+
+def _thinking_style(model_name: str) -> str:
+    """``"adaptive"`` (4.7+ e i 5: niente budget, niente temperatura) o ``"budget"``."""
+    name = model_name.lower()
+    if "claude-fable" in name or "claude-mythos" in name:
+        return "adaptive"
+    match = _CLAUDE_VERSION_RE.search(name)
+    if not match:
+        return "budget"
+    version = (int(match.group(1)), int(match.group(2) or 0))
+    return "adaptive" if version >= (4, 7) else "budget"
 
 
 class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
@@ -218,10 +240,9 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
             "none", "minimal", "minimum",
         )
 
-        # Several Anthropic models (opus-4-7, opus-4-8, fable) deprecated the
-        # `temperature` parameter — the API returns 400 if it is present.
-        _model_lower = model_name.lower()
-        omit_temperature = any(m in _model_lower for m in ("opus-4-7", "opus-4-8", "fable"))
+        # Dal 4.7 la temperatura e' un 400 (Sonnet e Haiku 5.5 accettano solo il
+        # valore di default, cioe' nessun valore).
+        adaptive_only = _thinking_style(model_name) == "adaptive"
 
         kwargs: dict[str, Any] = {
             "model": model_name,
@@ -232,13 +253,19 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
         if system:
             kwargs["system"] = system
 
-        if reasoning_effort == "adaptive":
+        if adaptive_only and thinking_enabled:
+            kwargs["thinking"] = {"type": "adaptive"}
+            # ``adaptive`` come effort vuol dire "decida il modello": nessun
+            # ``output_config``, vale il default del modello.
+            effort = (reasoning_effort or "").lower()
+            if effort in _EFFORT_LEVELS:
+                kwargs["output_config"] = {"effort": effort}
+        elif reasoning_effort == "adaptive":
             # Adaptive thinking: model decides when and how much to think
             # Supported on claude-sonnet-4-6 and claude-opus-4-6.
             # Also auto-enables interleaved thinking between tool calls.
             kwargs["thinking"] = {"type": "adaptive"}
-            if not omit_temperature:
-                kwargs["temperature"] = 1.0
+            kwargs["temperature"] = 1.0
         elif thinking_enabled:
             # ``high`` prende tutto lo spazio che il ``max_tokens`` configurato
             # lascia al testo (4096), non il ``max_tokens`` intero: con quello il
@@ -249,9 +276,8 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
             budget = budget_map.get(reasoning_effort.lower(), 4096)
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
             kwargs["max_tokens"] = max(max_tokens, budget + 4096)
-            if not omit_temperature:
-                kwargs["temperature"] = 1.0
-        elif not omit_temperature:
+            kwargs["temperature"] = 1.0
+        elif not adaptive_only:
             kwargs["temperature"] = temperature
 
         # ``tool_choice: "none"`` si rispetta togliendo i tool dal body: l'unico
