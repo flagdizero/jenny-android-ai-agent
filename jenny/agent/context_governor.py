@@ -175,7 +175,9 @@ def closed_reasoning_can_be_blank(provider: Any, model: str | None) -> bool:
         return False
 
 
-def blank_closed_reasoning(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def blank_closed_reasoning(
+    messages: list[dict[str, Any]], *, flagged_only: bool = False,
+) -> list[dict[str, Any]]:
     """Svuota il ragionamento dei turni gia' chiusi, solo nella richiesta.
 
     Un turno e' chiuso quando l'assistente ha risposto senza chiamare tool: da
@@ -189,7 +191,23 @@ def blank_closed_reasoning(messages: list[dict[str, Any]]) -> list[dict[str, Any
     ``""`` sui turni chiusi e' accettato, e quei token non si pagano piu'. Nella
     sessione ETF del Titan i ragionamenti erano il 56% del prompt. I messaggi
     toccati sono copie: la sessione salvata resta intera.
+
+    Con *flagged_only* si svuotano solo le righe marcate da
+    :func:`settle_closed_reasoning`, cioe' i turni del loop principale: il
+    confine qui sopra si sposta a ogni turno, e il turno dopo rimandava vuoto
+    quel che il turno prima aveva mandato pieno, perdendo la cache da li'.
     """
+    if flagged_only:
+        from jenny.session.history_meta import REASONING_DROPPED_META
+
+        if not any(m.get(REASONING_DROPPED_META) and m.get("reasoning_content")
+                   for m in messages):
+            return messages
+        return [
+            {**m, "reasoning_content": ""}
+            if m.get(REASONING_DROPPED_META) and m.get("reasoning_content") else m
+            for m in messages
+        ]
     last_final = None
     for i in range(len(messages) - 1, -1, -1):
         m = messages[i]
@@ -204,6 +222,66 @@ def blank_closed_reasoning(messages: list[dict[str, Any]]) -> list[dict[str, Any
         if m.get("role") == "assistant" and m.get("reasoning_content"):
             out[i] = {**m, "reasoning_content": ""}
     return out
+
+
+#: Quanto ragionamento dei turni chiusi si lascia andare al provider prima di
+#: azzerarlo comunque, in caratteri (~8k token). Tenerlo costa una lettura in
+#: cache a ogni richiesta, azzerarlo costa una volta la catena dopo il punto
+#: azzerato: oltre questa soglia la lettura costa di piu'. Il 07/10/2026, senza
+#: tetto, i ragionamenti erano il 56% del prompt di una sessione del Titan.
+CLOSED_REASONING_KEEP_CHARS = 32_000
+
+_CACHE_FINGERPRINT_KEY = "_closed_reasoning_fingerprint"
+
+
+def settle_closed_reasoning(
+    rows: list[dict[str, Any]],
+    built: list[dict[str, Any]],
+    metadata: dict[str, Any],
+) -> bool:
+    """Marca il ragionamento dei turni chiusi da non rimandare, ma solo quando costa poco.
+
+    *rows* sono i messaggi della sessione, *built* la richiesta appena costruita
+    (system, storia, messaggio corrente), *metadata* quelli della sessione. Si
+    marca tutto il ragionamento chiuso — su *rows*, per i turni dopo, e sulle
+    righe di storia di *built*, per questo — quando:
+
+    - la cache di questo turno e' gia' persa: il system prompt o la prima riga
+      della finestra sono cambiati dal turno prima (un consolidamento, Dream, la
+      finestra che scorre). L'impronta sta in *metadata*; la prima volta manca,
+      e vale come cambiata;
+    - oppure il ragionamento non ancora marcato supera
+      :data:`CLOSED_REASONING_KEEP_CHARS`.
+
+    Altrimenti non si tocca niente, e il turno dopo rimanda gli stessi byte.
+    Ritorna ``True`` se ha marcato.
+    """
+    import hashlib
+
+    from jenny.session.history_meta import REASONING_DROPPED_META
+
+    head = built[:2]
+    fingerprint = hashlib.sha256(
+        repr([(m.get("role"), m.get("content")) for m in head]).encode("utf-8", "replace"),
+    ).hexdigest()
+    changed = metadata.get(_CACHE_FINGERPRINT_KEY) != fingerprint
+    metadata[_CACHE_FINGERPRINT_KEY] = fingerprint
+    pending = [
+        m for m in rows
+        if m.get("role") == "assistant" and m.get("reasoning_content")
+        and not m.get(REASONING_DROPPED_META)
+    ]
+    if not pending:
+        return False
+    size = sum(len(str(m["reasoning_content"])) for m in pending)
+    if not changed and size <= CLOSED_REASONING_KEEP_CHARS:
+        return False
+    for m in pending:
+        m[REASONING_DROPPED_META] = True
+    for m in built[1:]:
+        if m.get("role") == "assistant" and m.get("reasoning_content"):
+            m[REASONING_DROPPED_META] = True
+    return True
 
 
 MID_TURN_LABEL = ("[New message from the user while you were working. Answer it before going "

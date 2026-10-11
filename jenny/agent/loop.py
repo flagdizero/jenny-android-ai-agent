@@ -37,7 +37,11 @@ from jenny.agent.tools.nothing_to_report import declared_marker_lines
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.tools.self import MyTool
 from jenny.agent.turn_epochs import TurnEpochs, TurnToken
-from jenny.agent.turn_persistence import FollowupState, TurnPersistenceMixin
+from jenny.agent.turn_persistence import (
+    FollowupState,
+    TurnPersistenceMixin,
+    record_sent_content,
+)
 from jenny.agent.turn_states import StateHandlersMixin
 from jenny.agent.turn_types import (
     AgentLoopRun,
@@ -1625,6 +1629,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     message_metadata=metadata,
                 ),
                 on_context_overflow=_on_context_overflow,
+                closed_reasoning_flagged=session is not None,
             ))
         finally:
             reset_turn_taint(turn_taint_token)
@@ -2120,6 +2125,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
             "extend_to_user": is_subagent,
+            "replay_sent": True,
         }
         # La storia si legge PRIMA di scrivere il rientro, come fa la FSM con un
         # messaggio dell'utente (``_state_build``): la finestra resta ancorata
@@ -2158,6 +2164,18 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             session_key=key,
             current_runtime_lines=self._location_runtime_lines(channel, chat_id),
         )
+        # Il rientro si rimandera' com'e' partito (``SENT_CONTENT_META``): scritto
+        # qui sopra, il messaggio costruito e' lui solo se in coda non c'era gia'
+        # una riga ``user``; scritto da un turno interrotto, e' lui la coda su cui
+        # il contesto runtime si e' unito. Prima del blocco dell'heartbeat, che
+        # non si salva.
+        announce_row = self._subagent_followup_row(session, msg) if is_subagent else None
+        if announce_row is not None and (
+            followup_state is FollowupState.PENDING
+            or not (history and history[-1].get("role") == "user")
+        ):
+            record_sent_content(announce_row, messages)
+        self._settle_closed_reasoning(session, messages)
         # Un controllo dell'heartbeat delegato con ``spawn`` non ha un esito nel
         # turno che lo delega: `spawn` ritorna subito. QUESTO turno è l'unico che
         # il risultato ce l'ha, ed è già quello a cui il preambolo dell'heartbeat

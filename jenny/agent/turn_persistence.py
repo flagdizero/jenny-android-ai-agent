@@ -15,8 +15,15 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.agent.context import ContextBuilder
+from jenny.agent.context_governor import (
+    MID_TURN_LABEL,
+    closed_reasoning_can_be_blank,
+    settle_closed_reasoning,
+)
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
+    MID_TURN_META,
+    SENT_CONTENT_META,
     SUBAGENT_RESULT_EVENT,
     SUBAGENT_TAINT_META,
     is_synthetic_history_row,
@@ -27,6 +34,37 @@ from jenny.utils.helpers import truncate_text as truncate_text_fn
 if TYPE_CHECKING:
     from jenny.bus.events import InboundMessage
     from jenny.session.manager import Session, SessionManager
+
+
+def sent_user_content(message: dict[str, Any]) -> str:
+    """Il testo di una riga ``user`` come il runner lo manda al provider.
+
+    Uguale a ``content``, tranne per un messaggio scritto mentre il turno
+    lavorava: l'etichetta la mette il governatore a ogni richiesta
+    (``context_governor.label_mid_turn_messages``), e il turno dopo la deve
+    ritrovare.
+    """
+    content = message.get("content")
+    text = content if isinstance(content, str) else ""
+    if message.get(MID_TURN_META):
+        return f"{MID_TURN_LABEL}\n{text}"
+    return text
+
+
+def record_sent_content(row: dict[str, Any], built: list[dict[str, Any]]) -> None:
+    """Scrive su *row* il messaggio con cui ``build_messages`` chiude *built*.
+
+    *row* e' la riga di storia che quel messaggio rappresenta, salvata prima
+    del turno (la domanda dell'utente, un rientro di subagent): senza, il turno
+    dopo la rimanderebbe senza Runtime Context e col ``[Message Time]`` davanti,
+    e il provider ripartirebbe da li'. Un messaggio con immagini resta com'e'
+    (il base64 non si salva): quel turno rinuncia alla cache, come prima.
+    """
+    if not built or built[-1].get("role") != "user":
+        return
+    content = built[-1].get("content")
+    if isinstance(content, str):
+        row[SENT_CONTENT_META] = content
 
 
 class FollowupState(Enum):
@@ -52,6 +90,8 @@ class TurnPersistenceMixin:
         _RUNTIME_CHECKPOINT_KEY: str
         max_tool_result_chars: int
         sessions: SessionManager
+        provider: Any
+        model: str
 
     def _sanitize_persisted_blocks(
         self,
@@ -138,6 +178,10 @@ class TurnPersistenceMixin:
                         ]
                     entry["content"] = filtered
             elif role == "user":
+                if isinstance(content, str):
+                    # Il testo com'e' partito, per la richiesta del turno dopo
+                    # (``SENT_CONTENT_META``); ``content`` si ripulisce qui sotto.
+                    entry[SENT_CONTENT_META] = sent_user_content(entry)
                 if isinstance(content, str) and ContextBuilder._RUNTIME_CONTEXT_TAG in content:
                     # Strip the runtime-context block appended at the end.
                     tag_pos = content.find(ContextBuilder._RUNTIME_CONTEXT_TAG)
@@ -201,6 +245,29 @@ class TurnPersistenceMixin:
             return FollowupState.DELIVERED
         session.messages[found]["role"] = "user"
         return FollowupState.PENDING
+
+    def _settle_closed_reasoning(self, session: Session, built: list[dict[str, Any]]) -> None:
+        """Marca il ragionamento chiuso da non rimandare, se il provider lo accetta vuoto.
+
+        V. :func:`context_governor.settle_closed_reasoning`: lo si chiama dove
+        il turno si costruisce, perche' e' li' che si sa se la cache e' gia'
+        persa.
+        """
+        if closed_reasoning_can_be_blank(self.provider, self.model):
+            settle_closed_reasoning(session.messages, built, session.metadata)
+
+    def _subagent_followup_row(
+        self, session: Session, msg: InboundMessage,
+    ) -> dict[str, Any] | None:
+        """La riga di storia del rientro che ``msg`` porta, la piu' recente."""
+        meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+        task_id = meta.get("subagent_task_id")
+        for row in reversed(session.messages):
+            if row.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT and (
+                not task_id or row.get("subagent_task_id") == task_id
+            ):
+                return row
+        return None
 
     def _persist_subagent_followup(self, session: Session, msg: InboundMessage) -> None:
         """Scrive in storia il rientro di un subagent arrivato a turno chiuso.

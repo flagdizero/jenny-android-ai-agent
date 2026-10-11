@@ -18,6 +18,7 @@ from loguru import logger
 
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
+from jenny.agent.turn_persistence import record_sent_content
 from jenny.agent.turn_types import TurnState
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
@@ -97,6 +98,9 @@ class StateHandlersMixin:
             self, msg: InboundMessage, session: Session, **kwargs: Any
         ) -> bool: ...
         def _replay_token_budget(self) -> int: ...
+        def _settle_closed_reasoning(
+            self, session: Session, built: list[dict[str, Any]]
+        ) -> None: ...
         def _turn_tool_view(
             self, msg: InboundMessage, session: Session, session_key: str, *, silent: bool
         ) -> ToolRegistry | None: ...
@@ -330,6 +334,7 @@ class StateHandlersMixin:
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
             "extend_to_user": False,
+            "replay_sent": True,
         }
         ctx.history = ctx.session.get_history(**_hist_kwargs)
         self._runtime_events().record_turn_runtime(
@@ -350,6 +355,15 @@ class StateHandlersMixin:
         ctx.user_persisted_early = self._persist_user_message_early(
             ctx.msg, ctx.session
         )
+        # La riga appena salvata si rimandera' com'e' partita. Non se
+        # ``build_messages`` l'ha fusa a una domanda rimasta senza risposta: quel
+        # messaggio rappresenta due righe, e il turno dopo ne rimanda due.
+        if ctx.user_persisted_early and ctx.session is not None and not (
+            ctx.history and ctx.history[-1].get("role") == "user"
+        ):
+            record_sent_content(ctx.session.messages[-1], ctx.initial_messages)
+        if ctx.session is not None:
+            self._settle_closed_reasoning(ctx.session, ctx.initial_messages)
 
         # Un turno silenzioso non installa i callback che pubblicano sul bus:
         # progress e retry-wait sono indirizzati alla chat d'origine e vengono

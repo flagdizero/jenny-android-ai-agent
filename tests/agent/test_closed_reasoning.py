@@ -71,3 +71,16 @@ def test_the_runner_sends_the_blanked_history() -> None:
                            tools=SimpleNamespace(get_definitions=lambda: []))
     sent = runner._govern_context(spec, list(HISTORY), 0)
     assert [m.get("reasoning_content") for m in sent if m["role"] == "assistant"][:2] == ["", ""]
+
+
+def test_flagged_only_blanks_what_the_history_marked() -> None:
+    """Nel loop principale il confine non si sposta da solo: si svuota solo cio'
+    che ``settle_closed_reasoning`` ha marcato, e il turno dopo rimanda uguale."""
+    from jenny.session.history_meta import REASONING_DROPPED_META
+
+    marked = [dict(m) for m in HISTORY]
+    marked[1][REASONING_DROPPED_META] = True
+    out = blank_closed_reasoning(marked, flagged_only=True)
+    reasoning = [m.get("reasoning_content") for m in out if m["role"] == "assistant"]
+    assert reasoning == ["", "vecchio-2", "in-corso-1", "in-corso-2"]
+    assert blank_closed_reasoning(HISTORY, flagged_only=True) is HISTORY

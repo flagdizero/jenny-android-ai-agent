@@ -367,7 +367,7 @@ class Consolidator:
         )
         if self._blanks_closed_reasoning():
             # La stima misura la richiesta che partira': v. ``blank_closed_reasoning``.
-            probe_messages = blank_closed_reasoning(probe_messages)
+            probe_messages = blank_closed_reasoning(probe_messages, flagged_only=True)
         return estimate_prompt_tokens_chain(
             self.provider,
             self.model,

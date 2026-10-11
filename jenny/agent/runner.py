@@ -142,6 +142,11 @@ class AgentRunSpec:
     # non si sprona e non si parcheggia, perche' il rientro riapre il turno.
     delegated_work_pending: Callable[[], bool] | None = None
     finalize_on_max_iterations: bool = True
+    # Il ragionamento dei turni chiusi si svuota solo dove la storia lo ha
+    # marcato (``context_governor.settle_closed_reasoning``), non al confine
+    # dell'ultima risposta: lo chiede il loop, che marca quando costruisce il
+    # turno. I subagent e i chiamanti diretti restano col confine.
+    closed_reasoning_flagged: bool = False
     on_context_overflow: Callable[[int], Any] | None = None  # Called when context_length error; receives current window, returns new window
 
 
@@ -734,7 +739,10 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             messages_for_model = self._drop_orphan_tool_results(messages)
             messages_for_model = self._backfill_missing_tool_results(messages_for_model)
             if closed_reasoning_can_be_blank(self.provider, spec.model):
-                messages_for_model = blank_closed_reasoning(messages_for_model)
+                messages_for_model = blank_closed_reasoning(
+                    messages_for_model,
+                    flagged_only=getattr(spec, "closed_reasoning_flagged", False),
+                )
             messages_for_model = label_mid_turn_messages(messages_for_model)
             messages_for_model = self._microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)

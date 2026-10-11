@@ -133,6 +133,34 @@ def _read_project_board_absence(root: Path) -> str:
         return ""
 
 
+GOAL_UNCHANGED_LINE = "Goal (active): unchanged, as stated earlier in this conversation."
+
+
+def _goal_lines_once(lines: list[str], history: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Il blocco del goal, pieno solo se la storia non lo porta gia' identico.
+
+    Il Runtime Context resta in storia con il messaggio che l'ha portato
+    (``SENT_CONTENT_META``, per la cache del turno dopo), e un obiettivo arriva a
+    4.000 caratteri: ripeterlo a ogni turno di un goal gonfierebbe la cronologia
+    di tanto a turno. *history* e' quella che si sta per mandare, quindi il
+    controllo dice il vero; quando la riga col testo pieno esce dalla finestra,
+    il testo pieno torna da se'. Si confronta solo la parte stabile (obiettivo e
+    riassunto): la riga ``Status:`` porta l'ora dell'attesa e cambia a ogni
+    turno, quindi va sempre, e un riassunto nuovo fa ripetere tutto.
+    """
+    if not lines:
+        return []
+    cut = next((i for i, line in enumerate(lines) if line.startswith("Status:")), len(lines))
+    stable, status = lines[:cut], lines[cut:]
+    # Fra due a-capo: un obiettivo allungato non deve passare per quello vecchio.
+    block = "\n" + "\n".join(stable) + "\n"
+    for message in history:
+        content = message.get("content")
+        if isinstance(content, str) and block in content:
+            return [GOAL_UNCHANGED_LINE, *status]
+    return list(lines)
+
+
 def _board_turn_lines(root: Path, message: Any) -> list[str]:
     """I cassetti delle schede che il messaggio nomina, per il contesto del turno."""
     if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
@@ -1564,9 +1592,7 @@ class ContextBuilder:
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
         root = workspace or self.workspace
-        extra = [
-            *goal_state_runtime_lines(session_metadata),
-        ]
+        extra = _goal_lines_once(goal_state_runtime_lines(session_metadata), history)
         if current_runtime_lines:
             extra.extend(line for line in current_runtime_lines if line)
         # In un quaderno, il cassetto della scheda di cui si parla: qui e non nel
@@ -1587,6 +1613,9 @@ class ContextBuilder:
         # to avoid consecutive same-role messages that some providers reject.
         # Runtime context is appended to keep the user-content prefix stable
         # for prompt-cache hits (the context changes every turn due to time).
+        # Il blocco non si toglie piu' dopo: la riga di storia ricorda il testo
+        # com'e' partito (``SENT_CONTENT_META``) e il turno dopo lo rimanda
+        # uguale, cosi' la cache arriva fino in fondo al turno prima.
         if isinstance(user_content, str):
             merged = f"{user_content}\n\n{runtime_ctx}"
         else:

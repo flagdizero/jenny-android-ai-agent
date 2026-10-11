@@ -56,6 +56,24 @@ LENGTH_RECOVERY_EVENT = "length_recovery"
 #: tale (``context_governor.label_mid_turn_messages``).
 MID_TURN_META = "mid_turn"
 
+#: Il testo di una riga ``user`` com'e' andato al provider: col Runtime Context
+#: in coda, l'etichetta di un messaggio arrivato a meta' turno. ``content`` resta
+#: quello che l'utente ha scritto, per chi legge da umano (WebUI, ``/history``,
+#: consolidatore); questo lo rimanda solo ``Session.get_history(replay_sent=True)``,
+#: cioe' la richiesta del turno dopo. La cache dei provider vale solo su un
+#: prefisso identico: misurato l'11/10/2026, rimandare una riga diversa da come
+#: era partita faceva ripagare per intero la catena di tool del turno prima
+#: (9,8k token su DeepSeek, 14k su Haiku 5.5).
+SENT_CONTENT_META = "sent_content"
+
+#: Su una riga ``assistant``: il suo ragionamento non torna piu' al provider
+#: (``reasoning_content: ""``, solo DeepSeek). Lo mette
+#: ``context_governor.settle_closed_reasoning`` nei soli turni in cui la cache
+#: e' gia' persa, e da li' in poi la riga si rimanda sempre vuota: azzerarlo
+#: al turno dopo, come si faceva, rompeva il prefisso alla prima assistant con
+#: tool del turno prima (9,8k token fuori cache su DeepSeek, 11/10/2026).
+REASONING_DROPPED_META = "reasoning_dropped"
+
 _INJECTED_EVENTS = frozenset({
     SUBAGENT_RESULT_EVENT,
     GOAL_CONTINUE_EVENT,
