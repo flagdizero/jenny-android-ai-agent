@@ -129,6 +129,8 @@ Be precise about this, because it differs a lot by format:
 
 In short: don't expect Jenny-driven prompt caching outside of Anthropic-format requests and the OpenRouter-Claude combination specifically.
 
+What Jenny does do for every provider is keep the conversation append-only: the next turn resends the previous turn's messages byte for byte, runtime block included (see [The agent turn](../internals/agent-turn.md)). That is what lets a server-side prefix cache — DeepSeek's, OpenAI's — reuse the whole previous turn instead of stopping at its first message.
+
 ## OpenRouter attribution headers
 
 When the configured base URL contains `openrouter` (case-insensitive), Jenny automatically attaches attribution headers to every request: an `HTTP-Referer` pointing at the project's GitHub repository and an `X-OpenRouter-Title` of "Jenny" (plus a categories header). This is fixed behavior tied to detecting an OpenRouter base URL — there's no setting to suppress it, and it has no effect on non-OpenRouter endpoints.

@@ -422,7 +422,7 @@ Gotcha: `subagent_status` **refuses a second consecutive call in the same turn**
 A pair of tools for tracking a sustained objective across many turns of the same chat thread, without a separate orchestrator — the work still happens in ordinary turns.
 
 - `long_task(goal, ui_summary?)` registers the objective (`goal` up to 12,000 chars; optional `ui_summary` up to 120 chars for display). Only **one goal can be active at a time** — a second call while one is active is rejected.
-- The active goal is mirrored into the Runtime Context every turn, so context compaction can't make it disappear.
+- The active goal is mirrored into the Runtime Context every turn, so context compaction can't make it disappear. The full objective is written once; while the message that carried it is still in the history being sent, later turns get a one-line `Goal (active): unchanged, as stated earlier in this conversation.` instead, so a long objective does not pile up in the conversation. When that message leaves the window, the full text comes back.
 - `complete_goal(recap?)` closes it out (recap up to 8,000 chars) — call it whether the goal succeeded, was cancelled, or was redirected; the recap should say what actually happened, not just claim success.
 
 Config: none — always registered whenever session management is available (i.e., always in the normal runtime).
