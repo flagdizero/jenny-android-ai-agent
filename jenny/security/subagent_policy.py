@@ -541,3 +541,86 @@ def check_write(path: str | Path) -> None:
         raise SubagentSecretError("/".join(parts))
     if _is_system_code(parts):
         raise SubagentSystemCodeError("/".join(parts))
+
+
+# ---------------------------------------------------------------------------
+# Il taint del turno di Jenny: propagazione, mai blocco
+# ---------------------------------------------------------------------------
+#
+# Il risultato di un lavoro non fidato entra nella conversazione di Jenny, e da
+# lì può guidare ciò che Jenny fa dopo: il compito del prossimo subagent, un
+# messaggio a un lavoro vivo, un promemoria che girerà da solo. Jenny non viene
+# bloccata (ha letto un dato, non eseguito un ordine), ma ciò che avvia mentre
+# quel risultato è in vista nasce contaminato: senza siti del compito
+# all'incrocio, e con le scritture sensibili in bozza.
+#
+# «In vista» = nella parte non consolidata della sessione. Quando la riga viene
+# riassunta e consolidata, il taint del turno scade da solo.
+
+
+@dataclass(slots=True)
+class TurnTaint:
+    """Fonti non fidate in vista durante un turno di Jenny. Mutabile: cresce
+    quando un risultato non fidato arriva a metà turno."""
+
+    sources: list[str] = field(default_factory=list)
+
+    def add(self, sources: object) -> None:
+        if not isinstance(sources, (list, tuple)):
+            return
+        for source in sources:
+            if isinstance(source, str) and source and source not in self.sources:
+                if len(self.sources) < _MAX_SOURCES:
+                    self.sources.append(source)
+
+
+_TURN: ContextVar[TurnTaint | None] = ContextVar("jenny_turn_taint", default=None)
+
+
+def turn_taint_for(messages: object, metadata: object, meta_key: str) -> TurnTaint:
+    """Il taint di un turno: dai metadati del messaggio e dalle righe in vista.
+
+    *messages* è la parte non consolidata della sessione; *meta_key* è la
+    chiave che le righe d'annuncio portano (``history_meta.SUBAGENT_TAINT_META``,
+    passata da fuori per non legare la sicurezza alla sessione).
+    """
+    taint = TurnTaint()
+    if isinstance(metadata, dict):
+        taint.add(metadata.get("_taint"))
+        taint.add(metadata.get(meta_key))
+    if isinstance(messages, list):
+        for row in messages:
+            if isinstance(row, dict):
+                taint.add(row.get(meta_key))
+    return taint
+
+
+@contextmanager
+def enter_turn_taint(taint: TurnTaint) -> Iterator[None]:
+    token = _TURN.set(taint)
+    try:
+        yield
+    finally:
+        _TURN.reset(token)
+
+
+def current_turn_taint() -> tuple[str, ...]:
+    """Le fonti non fidate del turno in corso, ``()`` fuori da un turno o se pulito."""
+    taint = _TURN.get()
+    return tuple(taint.sources) if taint is not None else ()
+
+
+def note_turn_taint(sources: object) -> None:
+    """Un risultato non fidato arrivato a metà turno: il turno lo eredita."""
+    taint = _TURN.get()
+    if taint is not None:
+        taint.add(sources)
+
+
+def bind_turn_taint(taint: TurnTaint) -> object:
+    """Come :func:`enter_turn_taint`, per chi lega e scioglie con un token."""
+    return _TURN.set(taint)
+
+
+def reset_turn_taint(token: object) -> None:
+    _TURN.reset(token)  # type: ignore[arg-type]

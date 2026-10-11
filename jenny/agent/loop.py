@@ -65,6 +65,12 @@ from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
 from jenny.runtime.user_text import say
+from jenny.security.subagent_policy import (
+    bind_turn_taint,
+    note_turn_taint,
+    reset_turn_taint,
+    turn_taint_for,
+)
 from jenny.security.workspace_access import (
     WorkspaceScopeResolver,
     bind_workspace_scope,
@@ -1466,6 +1472,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                         message["subagent_task_id"] = task_id
                     if taint := pending_msg.metadata.get(SUBAGENT_TAINT_META):
                         message[SUBAGENT_TAINT_META] = list(taint)
+                        # Arrivato a metà turno: da qui il turno lo eredita.
+                        note_turn_taint(taint)
                 else:
                     message[MID_TURN_META] = True
                 return message
@@ -1497,6 +1505,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         file_state_token = bind_file_states(self._file_state_store.for_session(active_session_key))
         request_token = bind_request_context(request_ctx)
         workspace_token = bind_workspace_scope(effective_scope)
+        # Il taint del turno (``security.subagent_policy``): un risultato non
+        # fidato ancora in vista fa nascere contaminati i lavori che Jenny avvia.
+        in_view = getattr(session, "messages", None)
+        if isinstance(in_view, list):
+            in_view = in_view[getattr(session, "last_consolidated", 0) or 0:]
+        turn_taint_token = bind_turn_taint(
+            turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META)
+        )
         # Compute lazily because long_task may create goal metadata during this run.
 
         def _goal_continue() -> str | None:
@@ -1611,6 +1627,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 on_context_overflow=_on_context_overflow,
             ))
         finally:
+            reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
             reset_file_states(file_state_token)

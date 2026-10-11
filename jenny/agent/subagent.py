@@ -66,7 +66,11 @@ from jenny.bus.queue import MessageBus
 from jenny.config.schema import AgentDefaults, ToolsConfig
 from jenny.providers.base import LLMProvider
 from jenny.runtime.context import get_android_context
-from jenny.security.subagent_policy import SubagentRunPolicy, enter_subagent_policy
+from jenny.security.subagent_policy import (
+    SubagentRunPolicy,
+    current_turn_taint,
+    enter_subagent_policy,
+)
 from jenny.security.workspace_access import (
     WorkspaceScope,
     current_workspace_scope,
@@ -759,6 +763,16 @@ def _task_head(task: str) -> str:
     return head
 
 
+
+def _merge_taint(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    """Unisce fonti di taint senza doppioni, nel tetto di ``SubagentSpec``."""
+    merged: list[str] = []
+    for group in groups:
+        for source in group:
+            if source not in merged:
+                merged.append(source)
+    return tuple(merged[:8])
+
 class SubagentManager:
     """Manages background subagent execution."""
 
@@ -1080,6 +1094,9 @@ class SubagentManager:
             session_key=session_key,
             origin_message_id=origin_message_id,
             quick=quick,
+            # Un compito scritto mentre un risultato non fidato è in vista nasce
+            # contaminato (``security.subagent_policy``, taint del turno).
+            taint_seed=current_turn_taint(),
         )
         return await self._spawn_spec(spec)
 
@@ -2111,6 +2128,10 @@ class SubagentManager:
         await self._supersede(lineage_id, grace_s=grace_s)
 
         new_spec = spec.with_extra_instructions(extra_instructions)
+        if extra_instructions and (turn := current_turn_taint()):
+            # La nota correttiva l'ha scritta un turno con contenuto non fidato in
+            # vista: il rilancio la porta, e con lei il taint.
+            new_spec = replace(new_spec, taint_seed=_merge_taint(new_spec.taint_seed, turn))
         if quick is not None and quick != new_spec.quick:
             new_spec = replace(new_spec, quick=quick)
         logger.info(
@@ -2163,6 +2184,11 @@ class SubagentManager:
                 and live.state == "running"
                 and live_id in self._pending_injections
             ):
+                # Un messaggio scritto con contenuto non fidato in vista porta il
+                # taint del turno dentro il lavoro vivo.
+                if (turn := current_turn_taint()) and (policy := self._run_policies.get(live_id)):
+                    for source in turn:
+                        policy.mark_untrusted(source)
                 self._enqueue_injection(live_id, text)
                 return SubagentSendResult(
                     "injected",
@@ -2213,7 +2239,8 @@ class SubagentManager:
         resume_spec = spec if quick is None or quick == spec.quick else replace(spec, quick=quick)
         # La storia rimette in contesto ciò che il lavoro aveva letto: se era non
         # fidato, lo è anche la ripresa.
-        if taint := self._history.taint_of(lineage_id):
+        taint = _merge_taint(self._history.taint_of(lineage_id), current_turn_taint())
+        if taint:
             resume_spec = replace(resume_spec, taint_seed=taint)
         messages = list(history) + [{"role": "user", "content": message}]
         # ``attempt`` invariato: vedi il contratto in ``send``. Il record del run

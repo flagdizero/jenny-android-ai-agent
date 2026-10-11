@@ -16,6 +16,7 @@ from jenny.agent.tools.schema import (
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronJobState, CronSchedule, job_display_name
+from jenny.security.subagent_policy import current_turn_taint
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -418,6 +419,12 @@ class CronTool(Tool, ContextAware):
         else:
             return "Error: either every_seconds, cron_expr, or at is required"
 
+        origin_metadata = dict(self._origin_metadata.get() or {})
+        if turn_taint := current_turn_taint():
+            # Un promemoria scritto con contenuto non fidato in vista: il suo testo
+            # può venire da lì, e girerà da solo. I lavori che i suoi turni
+            # avvieranno nascono contaminati (``security.subagent_policy``).
+            origin_metadata["_taint"] = list(turn_taint)
         try:
             job = self._cron.add_job(
                 name=(name or "").strip(),
@@ -428,7 +435,7 @@ class CronTool(Tool, ContextAware):
                 session_key=session_key,
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
-                origin_metadata=dict(self._origin_metadata.get() or {}),
+                origin_metadata=origin_metadata,
                 board=board,
             )
         except ValueError as exc:
