@@ -9,8 +9,13 @@ tool, e il tool ``spawn`` per pubblicarne l'enum al modello.
 
 La separazione fra i tipi non e decorativa: ``researcher`` legge il web e NON
 puo eseguire codice, ``writer`` scrive testo e NON ha rete. Chi ha letto pagine
-non fidate non e lo stesso che poi esegue codice — e un confine di sicurezza, e
-allargare una di queste due allowlist lo cancella.
+non fidate non e lo stesso che poi esegue codice, e allargare una di queste due
+allowlist lo cancella. Ma non e il confine che regge da solo: ``operator`` ha
+tutto lo scope, e ``python_exec`` porta la rete a ``coder`` e ``analyst``. Il
+confine vero e la politica per lavoro di ``security.subagent_policy`` (dall'11/10/2026),
+che non toglie tool a nessun tipo: blocca l'uscita dei dati solo all'incrocio
+fra contenuto non fidato e dati personali, e mette in bozza le scritture ai file
+che Jenny carica da sola.
 """
 
 from __future__ import annotations

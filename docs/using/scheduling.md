@@ -191,6 +191,10 @@ The reason is context. Everything the main agent does stays in your conversation
 
 Full tool lists and sampling defaults are in the [Tool reference](../reference/tools.md).
 
+### Changes waiting for your approval
+
+A helper that has read something from outside — a web page, a search, a download — does not change on its own the files Jenny uses by herself: a skill, `HEARTBEAT.md`, a reminder, `USER.md`, her memory. The change is kept as a draft, Jenny tells you there is something to approve, and a card in the home chat shows which file, where the content came from and what would change, with **Install** and **Discard**. Nothing is written until you tap **Install**. If the same helper has also read your personal files, it can send data only to the sites you named in the request. Why, and what this does not cover: [Security model](../internals/security-model.md#subagents-and-untrusted-content).
+
 ### Watching and steering the work
 
 Because a subagent can run for minutes, the workshop's Console gives you a **Subagents panel** just above the message box: one card per running job with its type, elapsed time, idle time and current step, plus **Stop** and **Relaunch** buttons and a tap-through detail sheet showing what it actually did. It appears when work starts and disappears when the work is done. The home's chat shows the short version, a chip saying how many agents are working for that conversation; pressing and holding it opens the workshop. See [Chat basics](chat.md#the-subagents-panel).
