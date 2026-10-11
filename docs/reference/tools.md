@@ -559,9 +559,9 @@ Searches long-term memory for facts that were **removed from the active files an
 
 ### recall_history
 
-Searches the verbatim turn-by-turn log of the personal conversation — what was actually said, before Dream distilled it.
+Searches the notes taken on the personal conversation: one entry per stretch that was compacted, written before Dream chose what to keep. They are summaries, not the exact words said.
 
-- Same two-step shape: no arguments gives the index, one line per turn; then call it again with the cursors you want expanded.
+- Same two-step shape: no arguments gives the index, one line per entry; then call it again with the cursors you want expanded.
 - Scope `core` + `orchestrator`.
 
 ### journal_append

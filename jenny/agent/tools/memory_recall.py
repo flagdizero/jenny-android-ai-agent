@@ -131,8 +131,8 @@ class MemoryRecallTool(Tool):
             "something used to be, why a thing was set up that way. "
             "The list is not filtered by keyword, so a fact stored in one "
             "language is found by a question asked in another. "
-            "This holds facts that were kept and later demoted; for the verbatim "
-            "wording of a turn, kept or not, use recall_history."
+            "This holds facts that were kept and later demoted; for details of a "
+            "past conversation that Dream did not keep, use recall_history."
         )
 
     @property
@@ -202,15 +202,16 @@ class MemoryRecallTool(Tool):
 
 
 # ---------------------------------------------------------------------------
-# Il verbale grezzo: history.jsonl
+# Gli appunti sulla conversazione: history.jsonl
 # ---------------------------------------------------------------------------
 #
 # Perché serve un secondo tool e non basta ``recall``. Sono due popolazioni
 # diverse, e la differenza si misura sul telefono: l'archivio contiene **fatti
 # retrocessi** dai file di identità (``source: USER.md``, ``demoted:`` nel
 # frontmatter), cioè roba che Dream ha guardato, giudicato degna e poi spostata
-# quando il file cresceva. ``history.jsonl`` è il verbale turno per turno, prima
-# di qualunque giudizio.
+# quando il file cresceva. ``history.jsonl`` sono gli appunti del consolidatore,
+# una voce per ogni tratto di conversazione compattato: riassunti e non le parole
+# dette, ma presi prima del giudizio di Dream.
 #
 # E il pezzo che nessuno legge è il **secondo**, non il primo. Le voci oltre il
 # cursore di Dream finiscono già nel prompt di ogni turno
@@ -289,7 +290,7 @@ def _history_index_line(rec: dict[str, Any]) -> str:
     )
 )
 class HistoryRecallTool(Tool):
-    """Elenca il verbale grezzo, e apre le voci che il modello ha riconosciuto."""
+    """Elenca gli appunti della conversazione, e apre le voci che il modello ha riconosciuto."""
 
     # Gli stessi di ``recall``, e per la stessa ragione: è lì che succede "ti
     # ricordi quando…". A Dream non va — il suo prompt si è già dimostrato
@@ -311,13 +312,14 @@ class HistoryRecallTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Search the verbatim turn-by-turn log of the personal conversation — what was "
-            "actually said, before Dream distilled it. Call it with no arguments to see the "
-            "index, one line per turn, then call it again with the cursors you want in full. "
-            "Use it when recall came back with nothing and the question is about a detail "
-            "rather than a fact: an exact number, the wording of a decision, what was tried "
-            "before. recall holds facts that were kept and later demoted from the identity "
-            "files; this holds everything, kept or not. "
+            "Search the notes taken on the personal conversation: one entry per stretch "
+            "that was compacted, written before Dream chose what to keep. They are "
+            "summaries, not the exact words said. Call it with no arguments to see the "
+            "index, one line per entry, then call it again with the cursors you want in "
+            "full. Use it when recall came back with nothing and the question is about a "
+            "detail rather than a fact: a number, a decision, what was tried before. recall "
+            "holds facts that were kept and later demoted from the identity files; this "
+            "holds the notes on everything, kept or not. "
             "The index is not filtered by keyword, so an entry written in one language is "
             "found by a question asked in another."
         )
@@ -346,7 +348,7 @@ class HistoryRecallTool(Tool):
         sessione di progetto **scrive dentro il progetto**: pagine di wiki,
         diario, file che restano e che a volte stanno in un repository pubblico.
         ``recall`` può viaggiare perché restituisce fatti che Dream ha filtrato e
-        ritenuto durevoli; il verbale non è filtrato da niente, e comprende
+        ritenuto durevoli; gli appunti non passano da quel filtro, e comprendono
         quello che è stato detto di sfuggita.
 
         È anche la direzione in cui il resto del codice si muove già: il ramo

@@ -133,7 +133,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 | 10 | `cron.py` | `CronTool` | Create/list/cancel reminders and scheduled jobs |
 | 11 | `journal.py` | `JournalAppendTool` | Appends one line to the project's working journal (`raw/journal/<today>.md`). No config toggle: always registered |
 | 12 | `self.py` | *(none — see below)* | Declares `MyTool` but registers it manually, not through `TOOLS` |
-| 13 | `memory_recall.py` | `MemoryRecallTool`, `HistoryRecallTool` | Search the memory archive (`recall`) and the verbatim conversation log (`recall_history`). `core` + `orchestrator` only |
+| 13 | `memory_recall.py` | `MemoryRecallTool`, `HistoryRecallTool` | Search the memory archive (`recall`) and the notes taken on past conversation (`recall_history`). `core` + `orchestrator` only |
 | 14 | `search.py` | `FindFilesTool`, `GrepTool` | Filename and content search inside the workspace |
 | 15 | `message.py` | `MessageTool` | Sends a proactive message (with attachments/buttons) outside the current turn |
 | 16 | `nothing_to_report.py` | `NothingToReportTool` | Lets a silent scheduled run declare that there is nothing for the user to see, instead of sending an empty message. `core` + `orchestrator` |

@@ -162,7 +162,7 @@ class TestAlongsideRecall:
     def test_the_two_names_are_not_confused(self, tmp_path):
         assert _tool(tmp_path).name == "recall_history"
 
-    @pytest.mark.parametrize("expected", ["verbatim", "recall holds facts"])
+    @pytest.mark.parametrize("expected", ["not the exact words", "recall holds facts"])
     def test_the_description_says_which_window_it_covers(self, tmp_path, expected):
         """Due popolazioni diverse: se le descrizioni non lo dicono, sceglie a caso."""
         assert expected in _tool(tmp_path).description
