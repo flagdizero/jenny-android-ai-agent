@@ -428,10 +428,11 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
 
 @pytest.mark.asyncio
 async def test_microcompact_replaces_old_tool_results():
-    """Tool results beyond _MICROCOMPACT_KEEP_RECENT should be summarized."""
+    """Once a full batch is past _MICROCOMPACT_KEEP_RECENT, it is summarized at once."""
+    from jenny.agent.history_repair import MICROCOMPACT_BATCH
     from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + 5
+    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH
     long_content = "x" * 600
     messages: list[dict] = [{"role": "system", "content": "sys"}]
     for i in range(total):
@@ -447,7 +448,7 @@ async def test_microcompact_replaces_old_tool_results():
 
     result = AgentRunner._microcompact(messages)
     tool_msgs = [m for m in result if m.get("role") == "tool"]
-    stale_count = total - _MICROCOMPACT_KEEP_RECENT
+    stale_count = MICROCOMPACT_BATCH
     compacted = [m for m in tool_msgs if "omitted from context" in str(m.get("content", ""))]
     preserved = [m for m in tool_msgs if m.get("content") == long_content]
     assert len(compacted) == stale_count
@@ -457,9 +458,10 @@ async def test_microcompact_replaces_old_tool_results():
 @pytest.mark.asyncio
 async def test_microcompact_preserves_short_results():
     """Short tool results (< _MICROCOMPACT_MIN_CHARS) should not be replaced."""
+    from jenny.agent.history_repair import MICROCOMPACT_BATCH
     from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + 5
+    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
     messages: list[dict] = []
     for i in range(total):
         messages.append({
@@ -479,9 +481,10 @@ async def test_microcompact_preserves_short_results():
 @pytest.mark.asyncio
 async def test_microcompact_skips_non_compactable_tools():
     """Non-compactable tools (e.g. 'message') should never be replaced."""
+    from jenny.agent.history_repair import MICROCOMPACT_BATCH
     from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + 5
+    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
     long_content = "y" * 1000
     messages: list[dict] = []
     for i in range(total):

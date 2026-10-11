@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from jenny.utils.helpers import persisted_tool_result_path
+
 # find_legal_message_start vive in utils.helpers; qui serve solo a
 # ``trim_orphan_prefix`` (uso interno), non è parte dell'API pubblica del modulo.
 
@@ -23,11 +25,18 @@ __all__ = [
     "microcompact",
     "BACKFILL_CONTENT",
     "COMPACTABLE_TOOLS",
+    "MICROCOMPACT_BATCH",
     "MICROCOMPACT_KEEP_RECENT",
     "MICROCOMPACT_MIN_CHARS",
 ]
 
-MICROCOMPACT_KEEP_RECENT = 10
+# Si svuota a blocchi di ``MICROCOMPACT_BATCH``, lasciandone intatti almeno
+# ``MICROCOMPACT_KEEP_RECENT``: un risultato svuotato e' un messaggio cambiato a
+# meta' prefisso, e da li' in poi la cache del provider si perde. Uno alla volta
+# succedeva a ogni chiamata; a blocchi, una volta ogni dieci. Restano intatti fra
+# 5 e 14 risultati, in media quanti ne teneva la finestra fissa da 10.
+MICROCOMPACT_KEEP_RECENT = 5
+MICROCOMPACT_BATCH = 10
 MICROCOMPACT_MIN_CHARS = 500
 COMPACTABLE_TOOLS = frozenset(
     {
@@ -111,26 +120,40 @@ def backfill_missing_tool_results(messages: list[dict[str, Any]]) -> list[dict[s
 
 
 def microcompact(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Replace old compactable tool results with one-line summaries."""
+    """Replace old compactable tool results with one-line summaries, a batch at a time."""
     compactable_indices: list[int] = []
     for idx, msg in enumerate(messages):
         if msg.get("role") == "tool" and msg.get("name") in COMPACTABLE_TOOLS:
             compactable_indices.append(idx)
 
-    if len(compactable_indices) <= MICROCOMPACT_KEEP_RECENT:
+    stale_count = (
+        (len(compactable_indices) - MICROCOMPACT_KEEP_RECENT) // MICROCOMPACT_BATCH
+    ) * MICROCOMPACT_BATCH
+    if stale_count <= 0:
         return messages
 
-    stale = compactable_indices[: len(compactable_indices) - MICROCOMPACT_KEEP_RECENT]
+    stale = compactable_indices[:stale_count]
     updated: list[dict[str, Any]] | None = None
     for idx in stale:
         msg = messages[idx]
         content = msg.get("content")
         if not isinstance(content, str) or len(content) < MICROCOMPACT_MIN_CHARS:
             continue
-        name = msg.get("name", "tool")
-        summary = f"[{name} result omitted from context]"
         if updated is None:
             updated = [dict(m) for m in messages]
-        updated[idx]["content"] = summary
+        updated[idx]["content"] = _omitted_placeholder(msg.get("name", "tool"), content)
 
     return updated if updated is not None else messages
+
+
+def _omitted_placeholder(name: str, content: str) -> str:
+    """Il segnaposto di un risultato svuotato.
+
+    Gli argomenti non servono: la ``tool_call`` che lo precede resta intatta. Il
+    path di un output salvato su file si', perche' rileggerlo costa meno che
+    rifare la chiamata (un ``web_fetch``, per dire).
+    """
+    path = persisted_tool_result_path(content)
+    if path:
+        return f"[{name} result omitted from context; full output still at {path}]"
+    return f"[{name} result omitted from context; call the tool again if you need it]"

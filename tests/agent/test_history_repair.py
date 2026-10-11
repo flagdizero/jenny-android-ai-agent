@@ -11,12 +11,14 @@ from __future__ import annotations
 from jenny.agent.history_repair import (
     BACKFILL_CONTENT,
     COMPACTABLE_TOOLS,
+    MICROCOMPACT_BATCH,
     MICROCOMPACT_KEEP_RECENT,
     MICROCOMPACT_MIN_CHARS,
     backfill_missing_tool_results,
     drop_orphan_tool_results,
     microcompact,
 )
+from jenny.utils.helpers import maybe_persist_tool_result
 
 
 def _assistant(call_id: str, name: str = "read_file") -> dict:
@@ -189,7 +191,10 @@ class TestBackfillMissingToolResults:
 
 
 class TestMicrocompact:
-    """Sostituzione dei risultati tool datati con riassunti a una riga."""
+    """Sostituzione dei risultati tool datati con riassunti a una riga, a blocchi."""
+
+    # Il primo conteggio a cui scatta un blocco.
+    FIRST_BATCH = MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH
 
     def _long_content(self) -> str:
         return "x" * MICROCOMPACT_MIN_CHARS
@@ -197,33 +202,73 @@ class TestMicrocompact:
     def _short_content(self) -> str:
         return "y" * (MICROCOMPACT_MIN_CHARS - 1)
 
-    def test_within_keep_recent_budget_is_noop(self):
+    def _placeholder(self, tool_name: str) -> str:
+        return f"[{tool_name} result omitted from context; call the tool again if you need it]"
+
+    def test_below_first_batch_is_noop(self):
         tool_name = next(iter(COMPACTABLE_TOOLS))
         messages = [
             _tool(str(i), content=self._long_content(), name=tool_name)
-            for i in range(MICROCOMPACT_KEEP_RECENT)
+            for i in range(self.FIRST_BATCH - 1)
         ]
         assert microcompact(messages) is messages
 
-    def test_stale_long_compactable_result_is_summarized(self):
+    def test_first_batch_is_summarized_at_once(self):
         tool_name = next(iter(COMPACTABLE_TOOLS))
-        # keep_recent + 1 risultati compattabili: il primo è "stale".
         messages = [
             _tool(str(i), content=self._long_content(), name=tool_name)
-            for i in range(MICROCOMPACT_KEEP_RECENT + 1)
+            for i in range(self.FIRST_BATCH)
         ]
         result = microcompact(messages)
         assert result is not messages
-        assert result[0]["content"] == f"[{tool_name} result omitted from context]"
+        for i in range(MICROCOMPACT_BATCH):
+            assert result[i]["content"] == self._placeholder(tool_name)
         # I "recenti" (ultimi keep_recent) restano intatti.
-        for i in range(1, MICROCOMPACT_KEEP_RECENT + 1):
+        for i in range(MICROCOMPACT_BATCH, self.FIRST_BATCH):
             assert result[i]["content"] == self._long_content()
+
+    def test_compacted_set_changes_only_at_batch_boundaries(self):
+        """La proprieta' che tiene la cache: aggiungere un risultato non cambia i
+        messaggi gia' inviati, se non quando si chiude un blocco."""
+        tool_name = next(iter(COMPACTABLE_TOOLS))
+        messages = [
+            _tool(str(i), content=self._long_content(), name=tool_name)
+            for i in range(4 * MICROCOMPACT_BATCH)
+        ]
+        boundaries = set()
+        for k in range(1, len(messages)):
+            before = microcompact(messages[:k])
+            after = microcompact(messages[: k + 1])
+            if after[:k] != before:
+                boundaries.add(k + 1)
+        assert boundaries == {
+            n for n in range(2, len(messages) + 1)
+            if n >= self.FIRST_BATCH and (n - MICROCOMPACT_KEEP_RECENT) % MICROCOMPACT_BATCH == 0
+        }
+
+    def test_persisted_result_keeps_its_path(self, tmp_path):
+        tool_name = next(iter(COMPACTABLE_TOOLS))
+        # Il riferimento vero, non una sua copia: se il formato cambia, il
+        # segnaposto deve continuare a trovarci il path.
+        reference = maybe_persist_tool_result(
+            tmp_path, "s", "c0", "z" * 5000, max_chars=MICROCOMPACT_MIN_CHARS,
+        )
+        saved = tmp_path / ".jenny" / "tool-results" / "s" / "c0.txt"
+        assert saved.exists()
+        messages = [_tool("0", content=reference, name=tool_name)] + [
+            _tool(str(i), content=self._long_content(), name=tool_name)
+            for i in range(1, self.FIRST_BATCH)
+        ]
+        result = microcompact(messages)
+        assert result[0]["content"] == (
+            f"[{tool_name} result omitted from context; full output still at {saved}]"
+        )
 
     def test_stale_short_content_is_not_compacted(self):
         tool_name = next(iter(COMPACTABLE_TOOLS))
         messages = [
             _tool(str(i), content=self._short_content(), name=tool_name)
-            for i in range(MICROCOMPACT_KEEP_RECENT + 1)
+            for i in range(self.FIRST_BATCH)
         ]
         result = microcompact(messages)
         # Nessuna voce supera la soglia minima: nessuna modifica effettiva.
@@ -235,7 +280,7 @@ class TestMicrocompact:
             {"role": "tool", "tool_call_id": "0", "name": tool_name, "content": ["not", "a", "str"]}
         ] + [
             _tool(str(i), content=self._long_content(), name=tool_name)
-            for i in range(1, MICROCOMPACT_KEEP_RECENT + 1)
+            for i in range(1, self.FIRST_BATCH)
         ]
         result = microcompact(messages)
         assert result[0]["content"] == ["not", "a", "str"]
@@ -243,7 +288,7 @@ class TestMicrocompact:
     def test_non_compactable_tool_name_never_counted_or_touched(self):
         messages = [
             _tool(str(i), content=self._long_content(), name="not_in_allowlist")
-            for i in range(MICROCOMPACT_KEEP_RECENT + 5)
+            for i in range(self.FIRST_BATCH + 5)
         ]
         result = microcompact(messages)
         assert result is messages
@@ -254,15 +299,15 @@ class TestMicrocompact:
             [{"role": "user", "content": "start"}]
             + [
                 _tool(str(i), content=self._long_content(), name=tool_name)
-                for i in range(MICROCOMPACT_KEEP_RECENT + 2)
+                for i in range(self.FIRST_BATCH + 2)
             ]
             + [{"role": "assistant", "content": "end"}]
         )
         result = microcompact(messages)
         assert result[0] == {"role": "user", "content": "start"}
         assert result[-1] == {"role": "assistant", "content": "end"}
-        # Le prime due voci tool (stale) sono compattate.
-        assert result[1]["content"] == f"[{tool_name} result omitted from context]"
-        assert result[2]["content"] == f"[{tool_name} result omitted from context]"
-        # Le successive (keep_recent) restano intatte.
-        assert result[3]["content"] == self._long_content()
+        # Il primo blocco e' compattato; i due in piu' non ne aprono un altro.
+        for i in range(1, MICROCOMPACT_BATCH + 1):
+            assert result[i]["content"] == self._placeholder(tool_name)
+        for i in range(MICROCOMPACT_BATCH + 1, self.FIRST_BATCH + 3):
+            assert result[i]["content"] == self._long_content()

@@ -473,6 +473,25 @@ def stringify_text_blocks(content: list[dict[str, Any]]) -> str | None:
     return "\n".join(parts)
 
 
+_TOOL_RESULT_REFERENCE_HEAD = "[tool output persisted]\n"
+_TOOL_RESULT_PATH_LABEL = "Full output saved to: "
+
+
+def persisted_tool_result_path(content: str) -> str | None:
+    """Il file di un riferimento scritto da :func:`_render_tool_result_reference`.
+
+    ``None`` se *content* non e' un riferimento. Formato e lettura stanno qui
+    insieme: il microcompact svuota i vecchi risultati ma tiene il path, e una
+    copia del formato altrove invecchierebbe in silenzio.
+    """
+    if not content.startswith(_TOOL_RESULT_REFERENCE_HEAD):
+        return None
+    line = content[len(_TOOL_RESULT_REFERENCE_HEAD):].split("\n", 1)[0]
+    if not line.startswith(_TOOL_RESULT_PATH_LABEL):
+        return None
+    return line[len(_TOOL_RESULT_PATH_LABEL):] or None
+
+
 def _render_tool_result_reference(
     filepath: Path,
     *,
@@ -493,8 +512,8 @@ def _render_tool_result_reference(
     riprendere.
     """
     result = (
-        f"[tool output persisted]\n"
-        f"Full output saved to: {filepath}\n"
+        f"{_TOOL_RESULT_REFERENCE_HEAD}"
+        f"{_TOOL_RESULT_PATH_LABEL}{filepath}\n"
         f"Original size: {original_size} chars, {total_lines} lines\n"
         f"Preview:\n{preview}"
     )
