@@ -165,6 +165,22 @@ def _is_blocked(
     return any(form in net for form in _address_forms(addr) for net in blocked_networks)
 
 
+def is_blocked_ip(ip: str) -> bool:
+    """True se un IP letterale cade nei range che ``validate_url_target`` rifiuta.
+
+    Serve a chi controlla una connessione già risolta, senza URL: la guardia
+    sui socket grezzi di ``python_exec`` (``_patch_socket_egress``). Stessa
+    lista e stessa eccezione di ``security.ssrfWhitelist``, così una
+    destinazione permessa a ``http_get`` è permessa anche lì e viceversa. Un
+    valore che non è un IP conta come bloccato.
+    """
+    try:
+        addr = ipaddress.ip_address(ip.split("%", 1)[0])
+    except ValueError:
+        return True
+    return _is_blocked(addr, _BLOCKED_NETWORKS)
+
+
 def _validate_target(
     url: str,
     blocked_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],

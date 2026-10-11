@@ -133,8 +133,10 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
         max_iterations=120,
         requires=frozenset(("read_file", "write_file")),
     ),
-    # Calcolo, dati, grafici. Nessuna rete: gira codice, quindi non deve poter
-    # anche scaricare cio che esegue.
+    # Calcolo, dati, grafici. Nessun tool del web; la rete c'e' comunque, con
+    # ``http_get``/``http_post`` di ``python_exec`` (fino all'11/10/2026 questo
+    # commento diceva «nessuna rete», e non era vero). Il confine che regge e'
+    # la politica per lavoro di ``security.subagent_policy``, non l'allowlist.
     AgentType(
         name="analyst",
         tools=frozenset(("python_exec", *_FS_READ, "write_file")),

@@ -66,6 +66,7 @@ from jenny.bus.queue import MessageBus
 from jenny.config.schema import AgentDefaults, ToolsConfig
 from jenny.providers.base import LLMProvider
 from jenny.runtime.context import get_android_context
+from jenny.security.subagent_policy import SubagentRunPolicy, enter_subagent_policy
 from jenny.security.workspace_access import (
     WorkspaceScope,
     current_workspace_scope,
@@ -1320,7 +1321,11 @@ class SubagentManager:
                 if self._llm_wall_timeout_for_session
                 else None
             )
-            with enter_workspace_scope(workspace_scope):
+            # La politica del lavoro (``security.subagent_policy``) si misura
+            # sempre dalla radice dell'installazione, anche per un subagent di
+            # quaderno: è lì che stanno config.json e le sue copie.
+            policy = SubagentRunPolicy(task_id=task_id, install_root=Path(self.workspace))
+            with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,

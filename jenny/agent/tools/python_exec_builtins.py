@@ -159,21 +159,28 @@ def _register_builtin_functions(
           Questa e' l'isolazione che conta: e' cio' che tiene un progetto lontano
           dai file di un altro, da ``USER.md`` e da ``SOUL.md``.
         """
+        from jenny.security.subagent_policy import check_read
+
         if not restrict_to_workspace:
             from jenny.security.workspace_policy import _safe_expanduser
-            return _safe_expanduser(path).resolve()
-        from jenny.agent.tools.python_exec import _path_guard_bypass
-        from jenny.security.workspace_policy import resolve_allowed_path
+            resolved = _safe_expanduser(path).resolve()
+        else:
+            from jenny.agent.tools.python_exec import _path_guard_bypass
+            from jenny.security.workspace_policy import resolve_allowed_path
 
-        allowed_root = _write_root() if for_write else workspace
-        # La base va letta PRIMA del bypass, che la azzera. Il bypass copre la
-        # sola risoluzione: `Path.resolve()` passa da `os.lstat` su ogni
-        # prefisso del percorso e sotto guard quei prefissi sono fuori dal
-        # workspace, quindi senza bypass ogni chiamata logga una raffica di
-        # rifiuti spuri (stessa ragione di `_guarded_os_path`).
-        base = _resolution_base()
-        with _path_guard_bypass():
-            return resolve_allowed_path(path, workspace=base, allowed_root=allowed_root)
+            allowed_root = _write_root() if for_write else workspace
+            # La base va letta PRIMA del bypass, che la azzera. Il bypass copre
+            # la sola risoluzione: `Path.resolve()` passa da `os.lstat` su ogni
+            # prefisso del percorso e sotto guard quei prefissi sono fuori dal
+            # workspace, quindi senza bypass ogni chiamata logga una raffica di
+            # rifiuti spuri (stessa ragione di `_guarded_os_path`).
+            base = _resolution_base()
+            with _path_guard_bypass():
+                resolved = resolve_allowed_path(path, workspace=base, allowed_root=allowed_root)
+        if not for_write:
+            # Dentro un subagent i file segreti non si leggono (``subagent_policy``).
+            check_read(resolved)
+        return resolved
 
     def _write_path(path: str) -> Path:
         """Percorso di una scrittura: confinato alla cartella del progetto."""
@@ -184,11 +191,10 @@ def _register_builtin_functions(
         _refuse_if_readonly(f"refused write to {path}")
         resolved = _enforce_path(path, for_write=True)
         # La bacheca di un quaderno ha i suoi imbuti (``BoardWriteError``).
-        from jenny.agent.tools.python_exec import _path_guard_bypass
-        from jenny.security.workspace_policy import refuse_board_write
+        from jenny.agent.tools.python_exec import _path_guard_bypass, _refuse_guarded_write
 
         with _path_guard_bypass():
-            refuse_board_write(resolved)
+            _refuse_guarded_write(resolved)
         return resolved
 
     # File I/O

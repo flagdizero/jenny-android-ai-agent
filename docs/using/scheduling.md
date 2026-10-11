@@ -182,8 +182,8 @@ The reason is context. Everything the main agent does stays in your conversation
 |---|---|---|
 | `researcher` | Gathering material online | Run code |
 | `writer` | Docs and synthesis from material already gathered, outside a notebook | Reach the network at all |
-| `coder` | Writing and changing code, running tests | Reach the network |
-| `analyst` | Computation, data, charts | Reach the network |
+| `coder` | Writing and changing code, running tests | Search or read the web (its code can still call a public site through `http_get`/`http_post`) |
+| `analyst` | Computation, data, charts | Search or read the web (same `python_exec` network as `coder`) |
 | `sysadmin` | Remote machines over SSH | Use the web, or run code locally |
 | `app-builder` | Writing and testing a new version of one of your apps | Use the web, or publish what it wrote |
 | `notebook-editor` | Changing a notebook as you asked: pages, map, board | Reach the network, or run code |

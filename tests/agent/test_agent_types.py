@@ -53,7 +53,10 @@ EXPECTED_TOOLS = {
 }
 
 _CODE_EXECUTION = {"python_exec", "write_stdin", "list_exec_sessions"}
-_NETWORK = {"web_search", "web_fetch", "download_file"}
+# I tool del web. ``python_exec`` raggiunge la rete anche lui, con
+# ``http_get``/``http_post``: non sta qui perché non è un tool del web, ed è
+# dichiarato a parte (``test_python_exec_is_network_for_whoever_has_it``).
+_WEB_TOOLS = {"web_search", "web_fetch", "download_file"}
 _SSH = {"ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer"}
 
 
@@ -161,9 +164,31 @@ def test_researcher_cannot_execute_code(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("name", ["writer", "analyst", "coder", "sysadmin", "notebook-editor"])
-def test_non_researcher_types_have_no_network(name: str, tmp_path: Path) -> None:
-    """Confine simmetrico: chi esegue/scrive non va a prendersi la fonte."""
-    assert not (_load_type(name, tmp_path) & _NETWORK)
+def test_non_researcher_types_have_no_web_tools(name: str, tmp_path: Path) -> None:
+    """Chi esegue o scrive non ha i tool del web (python_exec è a parte, sotto)."""
+    assert not (_load_type(name, tmp_path) & _WEB_TOOLS)
+
+
+def test_python_exec_is_network_for_whoever_has_it(tmp_path: Path) -> None:
+    """Fino all'11/10/2026 docs e prompt dicevano «coder/analyst: NO network».
+
+    Non era vero: ``python_exec`` porta ``http_get``/``http_post``. Il confine che
+    regge è un altro (la politica per lavoro di ``security.subagent_policy``);
+    qui si fissa chi ha la rete per questa via, così un tipo nuovo con
+    ``python_exec`` non si descrive di nuovo «senza rete».
+    """
+    with_exec = {
+        name for name in ("researcher", "writer", "coder", "analyst", "sysadmin",
+                          "app-builder", "notebook-editor")
+        if "python_exec" in _load_type(name, tmp_path)
+    }
+    assert with_exec == {"coder", "analyst"}
+    from jenny.agent.tools.python_exec import PythonNamespace
+    from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
+
+    ns = PythonNamespace()
+    _register_builtin_functions(ns, workspace=str(tmp_path), restrict_to_workspace=True)
+    assert {"http_get", "http_post"} <= set(ns._template)
 
 
 # -- SSH: il confine del tipo ``sysadmin`` -------------------------------------
@@ -175,7 +200,7 @@ def test_sysadmin_has_the_four_ssh_tools_and_nothing_that_executes_or_browses(
     """La catena corta: da "pagina ostile" a "shell su un server" non c'e ponte."""
     loaded = _load_type("sysadmin", tmp_path)
     assert _SSH <= loaded
-    assert not (loaded & _NETWORK)
+    assert not (loaded & _WEB_TOOLS)
     assert not (loaded & _CODE_EXECUTION)
     assert "apply_patch" not in loaded
     assert "edit_file" not in loaded

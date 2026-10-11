@@ -1,7 +1,6 @@
 """Message tool for sending messages to users."""
 
 from contextvars import ContextVar
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -14,6 +13,7 @@ from jenny.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_
 from jenny.bus.events import OutboundMessage
 from jenny.config.paths import get_workspace_path
 from jenny.cron.could_not_check import is_only_markers
+from jenny.security.subagent_policy import is_config_file
 from jenny.security.workspace_access import current_tool_workspace
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.turn_visibility import is_silent_turn, mark_silent_turn
@@ -249,30 +249,16 @@ class MessageTool(Tool, ContextAware):
             "Do NOT use read_file to send files — that only reads content for your own analysis."
         )
 
-    # I file di configurazione nella radice del workspace: ``config.json``, il
-    # suo ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli
-    # stessi nomi che il listing della WebUI nasconde
-    # (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``) e che il
-    # ``FileProvider`` Kotlin rifiuta di condividere.
-    _CONFIG_FILE_PATTERNS = ("config.json*", "config.corrupt-*.json")
-
     def _is_config_file(self, path: Path) -> bool:
         """*path* e' uno dei file di configurazione nella radice del workspace?
 
         Il security model promette che le chiavi del provider e i segreti non
         escono dal telefono tramite ``openFile``/``shareFile``: un allegato di
         ``message`` verso Telegram e' la stessa uscita, e va chiusa allo stesso
-        modo. Si guarda il nome **e** la cartella: un ``config.json`` di un
-        progetto dell'utente resta un file come un altro.
+        modo. I nomi stanno in ``security.subagent_policy``, che li nega anche
+        ai subagent.
         """
-        try:
-            resolved = path.resolve()
-            root = Path(self._workspace).resolve()
-        except OSError:
-            return False
-        return resolved.parent == root and any(
-            fnmatch(resolved.name, pattern) for pattern in self._CONFIG_FILE_PATTERNS
-        )
+        return is_config_file(path, self._workspace)
 
     def _resolve_media(self, media: list[str]) -> list[str]:
         """Resolve local media attachments and enforce workspace restriction when enabled.

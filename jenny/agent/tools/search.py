@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, TypeVar
 
 from jenny.agent.tools.filesystem import ListDirTool, _FsTool
+from jenny.security.subagent_policy import is_secret_path
 
 _DEFAULT_HEAD_LIMIT = 250
 _DEFAULT_FILE_HEAD_LIMIT = 200
@@ -148,8 +149,12 @@ class _SearchTool(_FsTool):
         return False
 
     def _iter_files(self, root: Path) -> Iterable[Path]:
+        # Dentro un subagent i file segreti dell'installazione non compaiono
+        # nemmeno: ``grep apiKey .`` dalla radice stampava ``config.json``.
+        # Fuori da un subagent ``is_secret_path`` e' sempre False.
         if root.is_file():
-            yield root
+            if not is_secret_path(root):
+                yield root
             return
 
         for dirpath, dirnames, filenames in os.walk(root):
@@ -157,7 +162,7 @@ class _SearchTool(_FsTool):
             current = Path(dirpath)
             for filename in sorted(filenames):
                 candidate = current / filename
-                if self._link_escapes(candidate):
+                if self._link_escapes(candidate) or is_secret_path(candidate):
                     continue
                 yield candidate
 
@@ -245,7 +250,7 @@ class FindFilesTool(_SearchTool):
                 yield current
             for filename in sorted(filenames):
                 candidate = current / filename
-                if self._link_escapes(candidate):
+                if self._link_escapes(candidate) or is_secret_path(candidate):
                     continue
                 yield candidate
 

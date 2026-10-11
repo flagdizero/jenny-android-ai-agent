@@ -27,6 +27,8 @@ from jenny.agent.wiki_provenance import wiki_page_provenance_guard
 from jenny.config.tool_schemas import (
     FileToolsConfig,  # noqa: F401 — re-export (def in config.tool_schemas)
 )
+from jenny.security.subagent_policy import check_read as check_subagent_read
+from jenny.security.subagent_policy import check_write as check_subagent_write
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
 from jenny.security.workspace_policy import (
     ReadOnlyTurnError,
@@ -322,13 +324,17 @@ class _FsTool(Tool):
         )
 
     def _resolve_read(self, path: str) -> Path:
-        return self._resolve_with_extra(
+        resolved = self._resolve_with_extra(
             path,
             self._extra_read_allowed_dirs,
             None,
             include_media_dir=self._read_media_dir,
             for_write=False,
         )
+        # Dentro un subagent, i file segreti dell'installazione (config.json e
+        # le sue copie) non si leggono; fuori è una no-op. V. ``subagent_policy``.
+        check_subagent_read(resolved)
+        return resolved
 
     def _resolve_write(self, path: str, *, preview: bool = False) -> Path:
         # ``preview``: la risoluzione di un dry-run (``apply_patch``). Stessi
@@ -375,6 +381,7 @@ class _FsTool(Tool):
         # La bacheca di un quaderno si scrive solo dai suoi imbuti (v.
         # ``BoardWriteError``): qui passano write_file, edit_file e apply_patch.
         refuse_board_write(resolved)
+        check_subagent_write(resolved)
         return resolved
 
     def _archive_departing(self, path: Path, text: str) -> None:
