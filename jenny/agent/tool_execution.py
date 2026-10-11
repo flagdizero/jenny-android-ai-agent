@@ -29,7 +29,7 @@ from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.result import ToolResult
 from jenny.config.runtime_env import tool_timeout_s
 from jenny.providers.base import ToolCallRequest
-from jenny.security.subagent_policy import policy_after_tool
+from jenny.security.subagent_policy import policy_after_tool, policy_before_tool
 from jenny.utils.file_edit_events import (
     build_file_edit_end_event,
     build_file_edit_error_event,
@@ -359,6 +359,17 @@ class ToolExecutionMixin:
                 detail=prep_error,
                 legacy_exc=RuntimeError(prep_error),
             )
+        # J1 (``security.subagent_policy``): un subagent che ha letto contenuto
+        # non fidato e dati personali non manda più niente fuori, tranne verso i
+        # siti del compito. Il rifiuto torna come risultato normale e accreditato:
+        # non è un errore del modello, e contarlo chiuderebbe il lavoro.
+        refusal = policy_before_tool(tool_call.name, params)
+        if refusal is not None:
+            budget.credit()
+            await self._emit_tool_result(spec, tool_call, params, started, result=refusal)
+            return refusal, {
+                "name": tool_call.name, "status": "ok", "detail": "refused: junction",
+            }, None
         emit_file_edit_events = (
             spec.progress_callback is not None
             and on_progress_accepts_file_edit_events(spec.progress_callback)

@@ -1068,6 +1068,12 @@ def _checked_socket_address(family: int, address: Any) -> Any:
     import socket as _socket_mod
 
     from jenny.security.network import is_blocked_ip
+    from jenny.security.subagent_policy import socket_egress_refusal
+
+    # J1: all'incrocio un socket aperto a mano non ha un URL da confrontare con
+    # il compito; passa solo ciò che ``http_get``/``http_post`` hanno approvato.
+    if refusal := socket_egress_refusal():
+        raise SocketEgressError(refusal)
 
     if family not in (_socket_mod.AF_INET, _socket_mod.AF_INET6):
         raise SocketEgressError(

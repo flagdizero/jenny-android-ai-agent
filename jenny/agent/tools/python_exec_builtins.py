@@ -286,18 +286,26 @@ def _register_builtin_functions(
         following it.
         """
         from jenny.security.network import validate_url_target
+        from jenny.security.subagent_policy import (
+            approved_egress,
+            egress_refusal,
+            mark_untrusted,
+        )
 
+        # J1 prima della risoluzione: anche chiedere il nome al DNS fa uscire
+        # qualcosa (v. ``security.subagent_policy``).
+        if refusal := egress_refusal(url):
+            return refusal
         ok, error = validate_url_target(url)
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
 
-        from jenny.security.subagent_policy import mark_untrusted
-
         # La risposta è testo che non viene dall'utente: il lavoro diventa non
-        # fidato appena la si chiede (v. ``security.subagent_policy``).
+        # fidato appena la si chiede.
         mark_untrusted(f"http_get:{_url_host(url)}")
-        resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
+        with approved_egress():
+            resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
         if resp.has_redirect_location:
             location = resp.headers.get("location", "")
             return (
@@ -317,16 +325,22 @@ def _register_builtin_functions(
     ) -> str:
         """Make an HTTP POST request and return the response body."""
         from jenny.security.network import validate_url_target
+        from jenny.security.subagent_policy import (
+            approved_egress,
+            egress_refusal,
+            mark_untrusted,
+        )
 
+        if refusal := egress_refusal(url):
+            return refusal
         ok, error = validate_url_target(url)
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
 
-        from jenny.security.subagent_policy import mark_untrusted
-
         mark_untrusted(f"http_post:{_url_host(url)}")
-        resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
+        with approved_egress():
+            resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.text
 

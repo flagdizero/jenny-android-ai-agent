@@ -1328,7 +1328,7 @@ class SubagentManager:
             # sempre dalla radice dell'installazione, anche per un subagent di
             # quaderno: è lì che stanno config.json e le sue copie.
             policy = SubagentRunPolicy.for_run(
-                task_id, Path(self.workspace), seed=spec.taint_seed,
+                task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
             self._run_policies[task_id] = policy
             with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):

@@ -37,6 +37,7 @@ dato e non come istruzione. Un lavoro nato da un compito già contaminato
 
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -155,13 +156,26 @@ class SubagentRunPolicy:
     untrusted: bool = False
     private: bool = False
     sources: list[str] = field(default_factory=list)
+    # Host nominati nel testo del compito: all'incrocio sono le sole
+    # destinazioni permesse. Vuoto se il lavoro nasce contaminato, perché quel
+    # testo l'ha scritto un modello che aveva letto contenuto non fidato.
+    task_hosts: frozenset[str] = frozenset()
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @classmethod
     def for_run(
-        cls, task_id: str, install_root: Path, *, seed: tuple[str, ...] = ()
+        cls,
+        task_id: str,
+        install_root: Path,
+        *,
+        seed: tuple[str, ...] = (),
+        task: str = "",
     ) -> SubagentRunPolicy:
-        policy = cls(task_id=task_id, install_root=install_root)
+        policy = cls(
+            task_id=task_id,
+            install_root=install_root,
+            task_hosts=frozenset() if seed else hosts_named_in(task),
+        )
         for source in seed:
             policy.mark_untrusted(source)
         return policy
@@ -269,6 +283,36 @@ def _is_untrusted_src(parts: tuple[str, ...]) -> bool:
     )
 
 
+# Un URL completo, o un nome di dominio nudo («riassumi example.org»).
+_URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
+_DOMAIN_RE = re.compile(
+    r"(?<![\w@.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})(?![\w-])",
+    re.IGNORECASE,
+)
+# Estensioni che il regex scambierebbe per domini («report.md», «run.py»).
+_FILE_SUFFIXES = frozenset({
+    "md", "py", "txt", "json", "csv", "html", "htm", "js", "css", "pdf", "png",
+    "jpg", "jpeg", "gif", "svg", "yaml", "yml", "toml", "xml", "log", "sh", "zip",
+})
+
+
+def _normalize_host(host: str) -> str:
+    host = host.lower().rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+def hosts_named_in(text: str) -> frozenset[str]:
+    """Gli host che il testo di un compito nomina, normalizzati (senza ``www.``)."""
+    hosts: set[str] = set()
+    for url in _URL_RE.findall(text or ""):
+        if host := _host(url):
+            hosts.add(_normalize_host(host))
+    for match in _DOMAIN_RE.findall(text or ""):
+        if match.rsplit(".", 1)[-1].lower() not in _FILE_SUFFIXES:
+            hosts.add(_normalize_host(match))
+    return frozenset(hosts)
+
+
 def _host(url: object) -> str:
     try:
         return urlparse(str(url)).hostname or ""
@@ -294,6 +338,88 @@ def mark_untrusted(source: str) -> None:
     policy = current_subagent_policy()
     if policy is not None:
         policy.mark_untrusted(source)
+
+
+# ---------------------------------------------------------------------------
+# J1: all'incrocio, i dati escono solo verso i siti del compito
+# ---------------------------------------------------------------------------
+#
+# Un lavoro che ha letto contenuto non fidato *e* dati personali ha le prime due
+# gambe della trifecta nello stesso contesto: una pagina ostile può chiedergli
+# di spedire USER.md da qualche parte. Lì, e solo lì, l'uscita si restringe agli
+# host nominati nel compito (che ha scritto l'utente, o Jenny prima di leggere
+# testo non fidato). Prima dell'incrocio non si blocca niente: il primo contatto
+# con il web non può essere guidato da un'iniezione che non è ancora entrata.
+#
+# ``web_search`` resta libero: va solo al motore di ricerca. ``browser_do`` è
+# rifiutato all'incrocio perché lì navigazione e digitazione succedono dentro la
+# WebView, dove Python non vede la destinazione. La lettura della pagina già
+# aperta (``browser_snapshot``/``browser_read``) non manda niente.
+#
+# Il rifiuto è un risultato normale, non comincia con «Error»: contato come
+# errore di confine, il secondo chiuderebbe il lavoro (``tool_execution``).
+_URL_TOOLS = frozenset({"web_fetch", "browser_open", "download_file"})
+_BLIND_EGRESS_TOOLS = frozenset({"browser_do"})
+
+
+def _refusal(what: str) -> str:
+    return (
+        f"Refused: {what}. This job has read content from outside the user and also "
+        "their private data, so it can no longer send anything out except to the "
+        "sites named in its task. Finish with what you have and report it; the main "
+        "agent can start a fresh job for the rest."
+    )
+
+
+def egress_refusal(url: str) -> str | None:
+    """Il rifiuto per un'uscita verso *url*, o None se è permessa."""
+    policy = current_subagent_policy()
+    if policy is None or not policy.junction:
+        return None
+    host = _normalize_host(_host(url))
+    if host and host in policy.task_hosts:
+        return None
+    return _refusal(f"no request to {host or url!r}")
+
+
+def policy_before_tool(name: str, params: object) -> str | None:
+    """Il rifiuto di J1 per un tool, o None. No-op fuori da un subagent."""
+    policy = current_subagent_policy()
+    if policy is None or not policy.junction:
+        return None
+    args = params if isinstance(params, dict) else {}
+    if name in _BLIND_EGRESS_TOOLS:
+        return _refusal("no browser interaction (typing, clicking, submitting)")
+    if name in _URL_TOOLS:
+        return egress_refusal(str(args.get("url") or ""))
+    return None
+
+
+_EGRESS_STATE = threading.local()
+
+
+@contextmanager
+def approved_egress() -> Iterator[None]:
+    """Una connessione già controllata da :func:`egress_refusal` (``http_get``)."""
+    previous = getattr(_EGRESS_STATE, "approved", False)
+    _EGRESS_STATE.approved = True
+    try:
+        yield
+    finally:
+        _EGRESS_STATE.approved = previous
+
+
+def socket_egress_refusal() -> str | None:
+    """Il rifiuto di J1 per un socket grezzo aperto dal codice di un subagent.
+
+    All'incrocio passa solo ciò che ha già superato :func:`egress_refusal`
+    (le helper ``http_get``/``http_post``); un socket aperto a mano non ha un
+    URL da confrontare con il compito.
+    """
+    policy = current_subagent_policy()
+    if policy is None or not policy.junction or getattr(_EGRESS_STATE, "approved", False):
+        return None
+    return _refusal("no direct network connection")
 
 
 def is_secret_path(path: str | Path) -> bool:
