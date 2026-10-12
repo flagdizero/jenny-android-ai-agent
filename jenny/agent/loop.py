@@ -548,6 +548,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             android_context=get_android_context(),
             ui_query_service=self._ui_query,
             orchestrator=self.orchestrator_mode,
+            memory_store=self.context.memory,
         )
         loader = ToolLoader()
         registered = loader.load(ctx, self.tools, scope=self.tool_scope)

@@ -546,6 +546,10 @@ class MemoryStore:
         max_chars: int | None = None,
         session_key: str | None = None,
         prompt_visible: bool = True,
+        kind: str | None = None,
+        about: str | None = None,
+        ref: str | None = None,
+        untrusted: bool = False,
     ) -> int:
         """Append *entry* to history.jsonl and return its auto-incrementing cursor.
 
@@ -608,6 +612,14 @@ class MemoryStore:
         intanto arrivato. Il flag tocca solo quel blocco: Dream continua a
         vederla, e ``recall_history`` la elenca e la apre dalla chat personale
         come ogni altra voce.
+
+        **Le righe del diario** (dal 12/10/2026): ``kind`` dice che la voce e' una
+        riga breve e chi ne e' l'autore (``said``/``inferred`` come nel journal
+        dei quaderni), ``about`` di quale quaderno parla, ``ref`` dove sta la
+        fonte, ``untrusted`` che e' nata con un risultato non fidato in vista.
+        Senza ``kind`` la voce e' una nota del consolidatore, come tutte quelle
+        gia' su disco. Come ``prompt_visible``, ogni chiave si scrive solo quando
+        dice qualcosa.
         """
         limit = max_chars if max_chars is not None else _HISTORY_ENTRY_HARD_CAP
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -644,6 +656,11 @@ class MemoryStore:
             # sempre comportate le voci gia' su disco.
             if not prompt_visible:
                 record["prompt_visible"] = False
+            for key, value in (("kind", kind), ("about", about), ("ref", ref)):
+                if value:
+                    record[key] = value
+            if untrusted:
+                record["untrusted"] = True
             append_lines_durable(self.history_file, [json.dumps(record, ensure_ascii=False)])
             # Small full-file replacement each append: use the same atomic
             # temp-file+fsync+rename helper as every other on-disk cursor/state
@@ -953,7 +970,20 @@ class MemoryStore:
             return False
         if not cls._valid_history_payload(entry):
             return False
-        return cls._history_entry_scope(entry.get("session_key")) != "internal"
+        return (cls._history_entry_scope(entry.get("session_key")) != "internal"
+                and cls._dream_reads(entry))
+
+    @staticmethod
+    def _dream_reads(entry: dict[str, Any]) -> bool:
+        """Le righe del diario (``kind``) non vanno a Dream, come le voci interne.
+
+        Una riga specchiata dal journal di un quaderno porta a Dream la stessa
+        materia che gli porta gia' la raccolta progetto→diario, che la riassume
+        all'inattivita': leggerle entrambe sarebbe estrarre due volte lo stesso
+        fatto. Finche' la raccolta esiste, la riga e' solo per i prompt e per
+        ``recall_history``. Una riga ``untrusted`` non ci va comunque.
+        """
+        return not entry.get("kind") and not entry.get("untrusted")
 
     # -- JSONL helpers -------------------------------------------------------
 
@@ -1239,6 +1269,7 @@ class MemoryStore:
             (entry, kind)
             for entry in self.read_unprocessed_history(since_cursor=last_cursor)
             if (kind := self._history_entry_scope(entry.get("session_key"))) != "internal"
+            and self._dream_reads(entry)
         ]
         if not pending:
             return None

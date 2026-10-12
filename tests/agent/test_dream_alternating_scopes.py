@@ -222,3 +222,32 @@ class TestCompactHistory:
 
         left = [e["cursor"] for e in store.read_unprocessed_history(0)]
         assert left == [4, 5, 6]
+
+
+class TestDiaryRows:
+    """Le righe del diario (``kind``) stanno in ``history.jsonl`` per i prompt e per
+    ``recall_history``, non per Dream: la stessa materia gliela porta la raccolta
+    progetto→diario, e leggerle entrambe vorrebbe dire estrarre due volte."""
+
+    def test_dream_skips_diary_rows_and_moves_past_them(self, tmp_path: Path):
+        store = MemoryStore(tmp_path)
+        store.append_history("- [durable] personale 00", session_key=PERSONAL)
+        store.append_history("Ha visto il film Zafkril", session_key=PROJECT, kind="said",
+                             about="esempio", ref="wikis/esempio/raw/journal/x.md:3")
+        store.append_history("- [durable] personale 01", session_key=PERSONAL)
+
+        batch = store.build_dream_prompt()
+
+        assert batch is not None
+        history = MemoryStore.dream_prompt_history(batch.prompt)
+        assert "personale 00" in history and "personale 01" in history
+        assert "Zafkril" not in history
+        assert batch.cursor == 3
+
+    def test_a_diary_row_does_not_wait_for_dream(self, tmp_path: Path):
+        row = {"cursor": 5, "timestamp": "2026-10-12 10:00", "content": "x",
+               "session_key": PROJECT, "kind": "said"}
+        assert not MemoryStore._awaits_dream(row, dream_cursor=0)
+        assert MemoryStore._awaits_dream({**row, "kind": None}, dream_cursor=0)
+        assert not MemoryStore._awaits_dream({**row, "kind": None, "untrusted": True},
+                                             dream_cursor=0)

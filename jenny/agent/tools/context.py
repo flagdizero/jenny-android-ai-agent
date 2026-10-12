@@ -125,3 +125,8 @@ class ToolContext:
     # chi deve osservare l'attivita degli *altri* tool dello stesso agente (la
     # guardia anti-polling di ``subagent_status``), non per chiamarli.
     registry: Any | None = None
+    # Il ``MemoryStore`` dell'agente principale, il solo: il lock che da' i
+    # cursori del diario e' per istanza, e una seconda istanza ne darebbe di
+    # doppi. Lo legge ``journal_append`` per specchiare le righe nel diario;
+    # un subagent non ce l'ha.
+    memory_store: Any | None = None

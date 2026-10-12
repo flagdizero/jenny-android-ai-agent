@@ -31,6 +31,7 @@ capita a ogni turno.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -38,12 +39,15 @@ from typing import Any
 from loguru import logger
 
 from jenny.agent.tools.base import Tool, tool_parameters
+from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.security.subagent_policy import current_turn_taint
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
     current_workspace_scope,
 )
+from jenny.session.keys import PROJECT_SESSION_PREFIX
 from jenny.utils.helpers import safe_zoneinfo
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
@@ -61,6 +65,10 @@ _NO_PROJECT_REFUSAL = (
 # che non ci sta e' materiale da pagina, e il posto di una pagina non lo decide
 # la cattura (v. la docstring del modulo).
 _MAX_TEXT_CHARS = 500
+
+# La copia nel diario e' un indice, non la riga: la fonte resta nel journal, e
+# la chat personale deve poterne vedere tante senza pagarle per intero.
+_MIRROR_MAX_CHARS = 300
 
 # ── Attribuzione: di chi e' il fatto che la riga registra ────────────────────
 #
@@ -140,6 +148,7 @@ class JournalAppendTool(Tool):
         origin_marker: str = "",
         timezone: str | None = None,
         now: Any = None,
+        memory_store: Any = None,
     ) -> None:
         # Iniettabile per i test; in produzione nessuno lo passa. Resta la
         # sola **data**: l'istante lo dà ``_stamp`` (v. ``_append``), e chi
@@ -166,6 +175,9 @@ class JournalAppendTool(Tool):
         # e' l'unico modo che ha di non essere dimenticato, e una riga di diario
         # senza origine e' indistinguibile da una detta a voce quel giorno.
         self._origin_marker = origin_marker
+        # Il diario della memoria (``history.jsonl``), dove ogni riga detta qui
+        # lascia la sua copia breve: v. :meth:`_mirror`.
+        self._memory = memory_store
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
@@ -173,7 +185,8 @@ class JournalAppendTool(Tool):
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:
-        return cls(timezone=getattr(ctx, "timezone", None))
+        return cls(timezone=getattr(ctx, "timezone", None),
+                   memory_store=getattr(ctx, "memory_store", None))
 
     @property
     def name(self) -> str:
@@ -239,7 +252,8 @@ class JournalAppendTool(Tool):
         if current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
 
-        written = await self._append(root, line)
+        written = await self._append(root, line, text=" ".join(text.split()),
+                                     attribution="" if self._origin_marker else choice)
         if fallback:
             return (
                 f"{written}\n\nNote: attribution {fallback!r} is not one of 'said' / "
@@ -271,20 +285,61 @@ class JournalAppendTool(Tool):
         tz = safe_zoneinfo(self._timezone) if self._timezone else None
         return datetime.now(tz=tz) if tz else datetime.now().astimezone()
 
-    async def _append(self, root: Path, line: str) -> str:
+    async def _append(self, root: Path, line: str, *, text: str = "",
+                      attribution: str = "") -> str:
         # Un colpo d'orologio, due usi: la pagina e l'ora della riga.
         stamp = self._stamp()
         day = self._today() if self._today is not None else stamp.date()
         page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
         try:
-            append_journal_entry(page, day, entry)
+            lineno = append_journal_entry(page, day, entry)
         except OSError as exc:
             logger.warning("journal_append on {} failed: {}", page, exc)
             return f"Could not append to the journal: {exc}"
 
         logger.info("journal_append: {} <- {}", page.name, line[:60])
+        if attribution:
+            await self._mirror(root, page, lineno, text, attribution)
         return f"Appended to {page.parent.name}/{page.name}: {entry.strip()}"
+
+    async def _mirror(self, root: Path, page: Path, lineno: int, text: str,
+                      attribution: str) -> None:
+        """La copia breve della riga nel diario della memoria (``history.jsonl``).
+
+        Il journal resta la fonte del quaderno; questa e' l'indice che la chat
+        personale vede: il fatto in una riga, chi l'ha detto, di quale quaderno
+        parla, dove sta l'originale. Senza, quel che l'utente diceva in un
+        quaderno arrivava al diario solo con la raccolta all'inattivita' (un
+        riassunto, quindici minuti dopo), e la chat personale non lo vedeva
+        comunque — misurato l'11/10/2026 sul caso del film.
+
+        Le righe ``[recovered]`` del giardiniere non si specchiano: sono fatti
+        gia' detti e persi dalla cattura, recuperati a posteriori, e il diario
+        datato al recupero mentirebbe sul quando. Un fallimento qui non tocca la
+        riga gia' scritta: il journal e' la fonte, il diario un indice.
+        """
+        store = self._memory
+        if store is None:
+            return
+        workspace = Path(getattr(store, "workspace", "") or "")
+        try:
+            where = page.relative_to(workspace)
+        except ValueError:
+            where = page
+        request = current_request_context()
+        session_key = request.session_key if request is not None else None
+        content = text if len(text) <= _MIRROR_MAX_CHARS else (
+            text[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        try:
+            await asyncio.to_thread(
+                store.append_history, content,
+                session_key=session_key or f"{PROJECT_SESSION_PREFIX}{root.name}",
+                kind=attribution, about=root.name, ref=f"{where.as_posix()}:{lineno}",
+                untrusted=bool(current_turn_taint()),
+            )
+        except Exception as exc:  # noqa: BLE001 — v. la docstring
+            logger.warning("journal_append: diary mirror failed: {}", exc)
 
 
 def append_journal_entry(page: Path, day: date, entry: str) -> int:
