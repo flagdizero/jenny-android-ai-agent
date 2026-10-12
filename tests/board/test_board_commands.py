@@ -373,41 +373,47 @@ def _three_reminders(notebook: Path) -> None:
     mutate_reminders(notebook, apply)
 
 
-def test_the_board_view_carries_one_agenda_in_date_order(notebook: Path) -> None:
+def test_each_card_with_reminders_has_its_own_postit(notebook: Path) -> None:
     _seed(notebook)
     _three_reminders(notebook)
     view = build_board_view(notebook, today=date(2026, 10, 4))
     # Dalla più vicina; quelle a condizione, senza giorno, in fondo.
     assert [n["id"] for n in view["notes"]] == ["r-concime", "r-poltiglia", "r-marzo", "r-umido"]
     assert all("pos" not in n for n in view["notes"])
-    agenda = view["agenda"]
-    assert agenda["rows"] == model.AGENDA_ROWS and agenda["pos"]["by"] == "jenny"
-    # Il posto calcolato non copre le schede.
-    rect = (agenda["pos"]["x"], agenda["pos"]["y"],
-            agenda["pos"]["x"] + model.AGENDA_BOX[0], agenda["pos"]["y"] + model.AGENDA_BOX[1])
-    for card in view["cards"]:
-        box = (card["pos"]["x"], card["pos"]["y"],
-               card["pos"]["x"] + card["box"][0], card["pos"]["y"] + card["box"][1])
-        assert model._overlap(rect, box) == 0
+    # Un post-it per scheda, non uno per attesa: due schede, due post-it.
+    assert [p["card"] for p in view["postits"]] == ["acero", "monstera"]
+    assert view["postitRows"] == model.POSTIT_ROWS
+    # Nati accanto alla loro scheda, senza coprire le schede né fra loro.
+    rects = [(p["pos"]["x"], p["pos"]["y"], p["pos"]["x"] + model.POSTIT_BOX[0],
+              p["pos"]["y"] + model.POSTIT_BOX[1]) for p in view["postits"]]
+    assert all(p["pos"]["by"] == "jenny" for p in view["postits"])
+    assert model._overlap(rects[0], rects[1]) == 0
+    for rect in rects:
+        for card in view["cards"]:
+            box = (card["pos"]["x"], card["pos"]["y"],
+                   card["pos"]["x"] + card["box"][0], card["pos"]["y"] + card["box"][1])
+            assert model._overlap(rect, box) == 0
 
 
-def test_no_open_reminders_no_agenda(notebook: Path) -> None:
+def test_no_open_reminders_no_postit(notebook: Path) -> None:
     _seed(notebook)
-    assert build_board_view(notebook)["agenda"] is None
+    assert build_board_view(notebook)["postits"] == []
     assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 2
     _three_reminders(notebook)
-    # Quattro attese, un oggetto solo: l'agenda.
-    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 3
+    # Quattro attese su due schede: due post-it.
+    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 4
 
 
-async def test_moving_the_agenda_makes_its_place_the_users(ctx, notebook: Path) -> None:
+async def test_moving_a_postit_makes_its_place_the_users(ctx, notebook: Path) -> None:
     _seed(notebook)
     _three_reminders(notebook)
     await dispatch_command(ctx, "board.move", {
-        "wiki": "piante", "kind": "agenda", "x": 70, "y": 12.5,
+        "wiki": "piante", "kind": "postit", "id": "acero", "x": 70, "y": 12.5,
     })
-    assert read_board(notebook)["agenda"]["pos"] == {"x": 70.0, "y": 12.5, "by": "user"}
-    assert build_board_view(notebook)["agenda"]["pos"]["by"] == "user"
+    card = model.card_by_id(read_board(notebook), "acero")
+    assert card["postitPos"] == {"x": 70.0, "y": 12.5, "by": "user"}
+    view = build_board_view(notebook)
+    assert next(p for p in view["postits"] if p["card"] == "acero")["pos"]["by"] == "user"
     with pytest.raises(CommandError) as exc:
         await dispatch_command(ctx, "board.move", {
             "wiki": "piante", "kind": "note", "id": "r-concime", "x": 1, "y": 1,
@@ -415,10 +421,11 @@ async def test_moving_the_agenda_makes_its_place_the_users(ctx, notebook: Path) 
     assert exc.value.code == "bad_request"
 
 
-def test_jenny_does_not_move_the_agenda() -> None:
-    before = model.normalize_board({"agenda": {"pos": {"x": 70, "y": 10, "by": "user"}}})
-    after = model.normalize_board({"agenda": {"pos": {"x": 10, "y": 10, "by": "user"}}})
-    assert "agenda changed" in model.ownership_violations(before, after)
+def test_jenny_does_not_move_a_postit() -> None:
+    card = {"id": "acero", "title": "Acero", "pos": {"x": 1, "y": 1}}
+    before = model.normalize_board({"cards": [{**card, "postitPos": {"x": 70, "y": 10}}]})
+    after = model.normalize_board({"cards": [{**card, "postitPos": {"x": 10, "y": 10}}]})
+    assert "card acero: postitPos changed" in model.ownership_violations(before, after)
 
 
 async def test_a_reminder_of_jenny_is_edited_and_dropped_by_id(ctx, notebook: Path) -> None:

@@ -1527,10 +1527,8 @@
       "inc": "più {label}",
       "failed": "Non è andata: riprova dall'app"
     },
-    "agenda": {
-      "title": "In arrivo",
-      "more": "+{count} più avanti",
-      "all": "Tutte le attese"
+    "postit": {
+      "more": "+{count} altre"
     }
   }
 }

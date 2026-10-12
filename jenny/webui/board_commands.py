@@ -145,14 +145,16 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
             _need_card(board, item)["pos"] = pos
 
         await _run(mutate_board, root, apply)
-    elif kind == "agenda":
-        # L'agenda e' una sola per bacheca: niente id.
-        def apply_agenda(board: dict[str, Any]) -> None:
-            board.setdefault("agenda", {})["pos"] = pos
+    elif kind == "postit":
+        # Il post-it delle attese di una scheda: l'id e' quello della scheda.
+        card_id = _card_id(params, "id")
 
-        await _run(mutate_board, root, apply_agenda)
+        def apply_postit(board: dict[str, Any]) -> None:
+            _need_card(board, card_id)["postitPos"] = pos
+
+        await _run(mutate_board, root, apply_postit)
     else:
-        raise CommandError("bad_request", "kind must be card or agenda")
+        raise CommandError("bad_request", "kind must be card or postit")
     return {"ok": True}
 
 

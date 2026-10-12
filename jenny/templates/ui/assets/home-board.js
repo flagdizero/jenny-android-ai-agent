@@ -2,7 +2,7 @@
  *
  *  **Un quaderno si apre sulla bacheca, non sulle pagine.** La wiki resta dov'e'
  *  e resta la fonte di verita', ma diventa l'archivio di Jenny: qui ci sono
- *  poche schede curate (una per soggetto, ognuna col suo cassetto), l'agenda
+ *  poche schede curate (una per soggetto, ognuna col suo cassetto), i post-it
  *  delle attese, i fili fra le schede e la busta con le proposte di Jenny.
  *
  *  La grammatica, e ogni oggetto ne dice una sola cosa:
@@ -12,12 +12,12 @@
  *    sale la barra della scheda (Rinomina · Togli dalla bacheca).
  *  - **il muro vuoto**: tienilo premuto e nasce una scheda li', sotto il dito
  *    (lo stesso del + in alto, che la mette al centro di quel che guardi).
- *  - **agenda** = le attese, un foglio solo per bacheca: le prossime tre, e un
- *    filo dal suo chiodo a ogni scheda che vi compare. Tocca una riga: il
- *    cassetto del suo soggetto; «+N più avanti»: tutte, per mese. Trascina: la
- *    sposti, come una scheda. Fino al 12/10/2026 ogni attesa era un post-it a
- *    sé, senza filo: sette foglietti per tre piante, e di chi fossero lo diceva
- *    solo la vicinanza.
+ *  - **post-it** = le attese di una scheda, uno per scheda: le prossime tre,
+ *    e «+N» per le altre; un filo dal suo chiodo a quello della sua polaroid.
+ *    Tocca: il cassetto della scheda, col calendario intero. Trascina: lo
+ *    sposti, come una scheda. Fino al 12/10/2026 ogni *attesa* era un post-it a
+ *    se', senza filo: sette foglietti per tre piante, e di chi fossero lo
+ *    diceva solo la vicinanza.
  *  - **busta** = le proposte di Jenny. E' l'unico modo in cui la bacheca cambia
  *    forma senza che sia tu a farlo.
  *  - **un segnale per scheda, al massimo**: angolo rosso (un problema), angolo
@@ -61,7 +61,7 @@ export function tintFor(id) {
   return [`hsl(${h} 32% 46%)`, `hsl(${(h + 18) % 360} 38% 28%)`];
 }
 
-/** La data di un'attesa, come la scrive l'agenda: «10 ott», «mar 2027».
+/** La data di un'attesa, come la scrive un post-it: «10 ott», «mar 2027».
  *  Una condizione si scrive per quello che misura: «umidita' < 30». */
 export function whenLabel(when, locale = i18n.locale) {
   if (!when) return '';
@@ -152,7 +152,7 @@ const ZOOM_EXTENT = [0.3, 2.2];
    quando una riga supera NEAR_ROW_PX pixel sullo schermo. */
 const SLIP_ROW = 0.0355;
 const NEAR_ROW_PX = 30;
-const ITEM_BOX = { card: [20, 40], agenda: [30, 48] };
+const ITEM_BOX = { card: [20, 40], postit: [24, 44] };
 /* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
    schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
    grandezza naturale, non oltre: due schede sole non diventano due manifesti. */
@@ -328,8 +328,11 @@ export class HomeBoard {
       this._drawList();
       return;
     }
-    /* L'agenda prima delle schede: se una le sta sopra, si legge la scheda. */
-    if (data.agenda && data.notes?.length) this.wall.appendChild(this._agenda(data));
+    /* I post-it prima delle schede: se una gli sta sopra, si legge la scheda. */
+    for (const postit of data.postits || []) {
+      const el = this._postit(postit, data);
+      if (el) this.wall.appendChild(el);
+    }
     /* Una scheda-app con dati e' una striscia; le altre, polaroid. */
     for (const card of data.cards) {
       this.wall.appendChild(card.slip ? this._slip(card) : this._polaroid(card));
@@ -484,9 +487,7 @@ export class HomeBoard {
       const [w, h] = Array.isArray(c.box) ? c.box : ITEM_BOX.card;
       take(c.pos, w, h);
     }
-    if (this.data.agenda && this.data.notes?.length) {
-      take(this.data.agenda.pos, ITEM_BOX.agenda[0], ITEM_BOX.agenda[1]);
-    }
+    for (const p of this.data.postits || []) take(p.pos, ITEM_BOX.postit[0], ITEM_BOX.postit[1]);
     this._zoom.translateExtent([
       [((x0 - AIR) / 100) * W, ((y0 - AIR) / 100) * H],
       [((x1 + AIR) / 100) * W, ((y1 + AIR) / 100) * H],
@@ -532,7 +533,7 @@ export class HomeBoard {
     if (dx || dy) this._zoom.translateBy(this._sel, dx / this.view.k, dy / this.view.k);
   }
 
-  /** Inquadra tutto quel che sta sul muro: le schede e l'agenda, misurate
+  /** Inquadra tutto quel che sta sul muro: le schede e i post-it, misurati
    *  dove sono davvero (inclinati, con la didascalia), centrati nella finestra
    *  con `FIT_PAD` d'aria e sopra la busta, che sta ferma in basso. Fra 0,3 e
    *  grandezza naturale; un muro vuoto torna all'origine. Falso se la tela non
@@ -541,7 +542,7 @@ export class HomeBoard {
     if (!this._zoom || !this.canvas || this.listView) return false;
     const box = this.canvas.getBoundingClientRect();
     if (!box?.width || !box?.height) return false;
-    const items = this.wall.querySelectorAll('.home-board-card, .home-board-agenda');
+    const items = this.wall.querySelectorAll('.home-board-card, .home-board-postit');
     if (!items.length) {
       this._lookAt(window.d3.zoomIdentity);
       return true;
@@ -808,119 +809,54 @@ export class HomeBoard {
     this.refreshApp(slug);
   }
 
-  /** L'agenda: le prossime attese del quaderno su un foglio solo.
-   *
-   *  Le prime `agenda.rows` (tre), dalla piu' vicina, ognuna col nome della sua
-   *  scheda; le altre dietro «+N più avanti». E' un gruppo, non un bottone: le
-   *  righe sono bottoni veri, e il foglio si porta tenendolo fuori da loro o
-   *  sopra, come una scheda (v. `_bind`). I fili verso le schede li disegna
-   *  `drawThreads`, uno per scheda: tre righe dello stesso soggetto sono un filo. */
-  _agenda(data) {
-    const agenda = data.agenda;
-    const notes = data.notes;
-    const shown = notes.slice(0, agenda.rows || 3);
+  /** Il post-it delle attese di una scheda: le prime `postitRows` (tre),
+   *  dalla piu' vicina, data e testo; le altre come «+N». Il soggetto non si
+   *  scrive: lo dice il filo verso la sua polaroid (`drawThreads`). Si tocca
+   *  tutto intero e apre il cassetto, dove c'e' il calendario completo. */
+  _postit(postit, data) {
+    const card = data.cards.find((c) => c.id === postit.card);
+    const notes = data.notes.filter((n) => n.card === postit.card);
+    if (!card || !notes.length) return null;
+    const shown = notes.slice(0, data.postitRows || 3);
     /* L'oggetto della vista stesso: trascinato, il posto nuovo e' subito quello
-       che `_fitExtent` misura. */
-    const item = agenda;
-    item.id = 'agenda';
+       che `_fitExtent` misura. L'id e' quello della scheda, come vuole `board.move`. */
+    const item = postit;
+    item.id = postit.card;
     const el = document.createElement('div');
-    el.className = 'home-board-item home-board-agenda';
-    el.setAttribute('role', 'group');
-    el.setAttribute('aria-label', i18n.t('board.agenda.title'));
+    el.className = 'home-board-item home-board-postit';
+    el.setAttribute('role', 'button');
     el.tabIndex = 0;
-    el.style.setProperty('--tilt', '1deg');
-    const head = document.createElement('div');
-    head.className = 'home-board-agenda-title';
-    head.textContent = i18n.t('board.agenda.title');
-    el.appendChild(head);
+    el.style.setProperty('--tilt', `${this._tilt(postit.card) + 3}deg`);
     const today = localDay();
+    const words = [];
     for (const note of shown) {
-      const card = data.cards.find((c) => c.id === note.card);
-      const row = document.createElement('button');
-      row.type = 'button';
       const late = note.when?.kind !== 'condition' && note.when?.precision !== 'month'
         && String(note.when?.date || '') < today;
-      row.className = `home-board-agenda-row${late ? ' is-late' : ''}`;
-      row.dataset.card = note.card;
+      const row = document.createElement('span');
+      row.className = `home-board-postit-row${late ? ' is-late' : ''}`;
       const when = document.createElement('span');
-      when.className = 'home-board-agenda-when';
+      when.className = 'home-board-postit-when';
       when.textContent = whenLabel(note.when);
-      const what = document.createElement('span');
-      what.className = 'home-board-agenda-what';
-      const subject = document.createElement('span');
-      subject.className = 'home-board-agenda-card';
-      subject.textContent = card?.title || '';
       const text = document.createElement('span');
-      text.className = 'home-board-agenda-text';
+      text.className = 'home-board-postit-text';
       text.textContent = note.text;
-      what.append(subject, text);
-      row.append(when, what);
-      row.setAttribute('aria-label', `${when.textContent}, ${card?.title || ''}: ${note.text}`);
+      row.append(when, text);
       el.appendChild(row);
+      words.push(`${when.textContent}: ${note.text}`);
     }
     const rest = notes.length - shown.length;
     if (rest > 0) {
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'home-board-agenda-more';
-      more.textContent = i18n.t('board.agenda.more', { count: rest });
+      const more = document.createElement('span');
+      more.className = 'home-board-postit-more';
+      more.textContent = i18n.t('board.postit.more', { count: rest });
       el.appendChild(more);
+      words.push(more.textContent);
     }
+    el.setAttribute('aria-label', `${card.title} — ${words.join('; ')}`);
+    el.dataset.card = postit.card;
     this._place(el, item);
-    this._bind(el, item, 'agenda');
+    this._bind(el, item, 'postit');
     return el;
-  }
-
-  /** Il tocco sull'agenda: una riga apre il cassetto della sua scheda, «+N»
-   *  l'elenco intero; il foglio fuori dalle righe non fa niente. */
-  _agendaTap(target) {
-    const row = target?.closest?.('.home-board-agenda-row');
-    if (row) {
-      const card = this.data?.cards.find((c) => c.id === row.dataset.card);
-      this.onOpenCard?.(row.dataset.card, card?.title || '');
-      return;
-    }
-    if (target?.closest?.('.home-board-agenda-more')) this.openAgenda();
-  }
-
-  /** Tutte le attese del quaderno, per mese, nel foglio: ogni riga porta al
-   *  cassetto della sua scheda. */
-  openAgenda() {
-    const notes = this.data?.notes || [];
-    const body = document.createElement('div');
-    body.className = 'home-board-agenda-all';
-    for (const group of reminderGroups(notes)) {
-      const h = document.createElement('h3');
-      h.className = `home-board-agenda-group is-${group.kind}`;
-      h.textContent = group.kind === 'month' ? group.label
-        : i18n.t(`board.drawer.calendar.${group.kind}`);
-      body.appendChild(h);
-      for (const note of group.items) {
-        const card = this.data.cards.find((c) => c.id === note.card);
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = `home-board-agenda-row${group.kind === 'overdue' ? ' is-late' : ''}`;
-        const when = document.createElement('span');
-        when.className = 'home-board-agenda-when';
-        when.textContent = whenLabel(note.when);
-        const what = document.createElement('span');
-        what.className = 'home-board-agenda-what';
-        const subject = document.createElement('span');
-        subject.className = 'home-board-agenda-card';
-        subject.textContent = card?.title || '';
-        const text = document.createElement('span');
-        text.className = 'home-board-agenda-text';
-        text.textContent = note.text;
-        what.append(subject, text);
-        row.append(when, what);
-        row.addEventListener('click', () => {
-          this.sheet.close();
-          this.onOpenCard?.(note.card, card?.title || '');
-        });
-        body.appendChild(row);
-      }
-    }
-    this.sheet.open(i18n.t('board.agenda.all'), body);
   }
 
   /* Un'inclinazione piccola e stabile per oggetto: la bacheca deve sembrare
@@ -1005,13 +941,13 @@ export class HomeBoard {
     let moved = false;
     let longFired = false;
     let timer = null;
-    const open = (target) => {
-      /* L'agenda non si apre: si apre la riga che hai toccato. */
-      if (kind === 'agenda') {
-        this._agendaTap(target);
+    const open = () => {
+      const card = this.data?.cards.find((c) => c.id === item.id);
+      /* Il post-it apre sempre il cassetto della sua scheda, anche di un'app. */
+      if (kind === 'postit') {
+        this.onOpenCard?.(item.id, card?.title || '');
         return;
       }
-      const card = this.data?.cards.find((c) => c.id === item.id);
       /* La polaroid di un'app apre l'app. */
       if (card) this.openCard(card);
       else this.onOpenCard?.(item.id, '');
@@ -1048,9 +984,7 @@ export class HomeBoard {
       moved = false;
       longFired = false;
       this._itemDrag = { cancel: drop };
-      /* L'agenda cattura il dito solo quando comincia a portarla: catturato
-         subito, il click finirebbe al foglio e non alla riga toccata. */
-      if (kind !== 'agenda') capture(el, e.pointerId);
+      capture(el, e.pointerId);
       if (kind === 'card') {
         timer = setTimeout(() => {
           longFired = true;
@@ -1127,7 +1061,7 @@ export class HomeBoard {
         return;
       }
       if (onControl(e)) return;
-      open(e.target);
+      open();
     });
     el.addEventListener('keydown', (e) => {
       if (e.target !== el) return;
@@ -1489,29 +1423,23 @@ export class HomeBoard {
       label.style.top = `${from.y + (to.y - from.y) * LABEL_AT}px`;
       this.wall.appendChild(label);
     }
-    /* I fili dell'agenda: dal suo chiodo a quello di ogni scheda che compare
-       nelle sue righe, uno per scheda anche se le righe sono tre. */
-    const agenda = this.wall.querySelector('.home-board-agenda');
-    if (agenda) {
-      const from = pinCenter(agenda, box, zoom);
-      const ids = [...new Set([...agenda.querySelectorAll('.home-board-agenda-row')]
-        .map((r) => r.dataset.card))];
-      for (const id of ids) {
-        const card = elOf(id);
-        if (!card) continue;
-        const on = this.focus === id;
-        const to = pinCenter(card, box, zoom);
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', from.x);
-        line.setAttribute('y1', from.y);
-        line.setAttribute('x2', to.x);
-        line.setAttribute('y2', to.y);
-        line.setAttribute('class', `is-agenda ${!this.focus ? 'is-rest' : on ? 'is-on' : 'is-off'}`);
-        svg.appendChild(line);
-        if (!on) continue;
-        lit = true;
-        agenda.classList.add('is-linked');
-      }
+    /* Il filo di ogni post-it, dal suo chiodo a quello della sua scheda. */
+    for (const postit of this.wall.querySelectorAll('.home-board-postit')) {
+      const card = elOf(postit.dataset.card);
+      if (!card) continue;
+      const on = this.focus === postit.dataset.card;
+      const a = pinCenter(postit, box, zoom);
+      const b = pinCenter(card, box, zoom);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', a.x);
+      line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x);
+      line.setAttribute('y2', b.y);
+      line.setAttribute('class', `is-postit ${!this.focus ? 'is-rest' : on ? 'is-on' : 'is-off'}`);
+      svg.appendChild(line);
+      if (!on) continue;
+      lit = true;
+      postit.classList.add('is-linked');
     }
     return lit;
   }

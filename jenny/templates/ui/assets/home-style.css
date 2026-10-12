@@ -2426,9 +2426,9 @@ body.home {
 .home-board-threads line.is-rest { stroke-width: 1.7; opacity: 0.7; }
 .home-board-threads line.is-on { stroke-width: 2.4; opacity: 1; }
 .home-board-threads line.is-off { stroke-width: 1.5; opacity: 0.12; }
-/* Il filo dell'agenda: del colore del suo foglio, per non confondersi coi fili
+/* Il filo di un post-it: del colore del foglietto, per non confondersi coi fili
    fra le schede. */
-.home-board-threads line.is-agenda { stroke: var(--board-agenda-thread, var(--board-postit)); }
+.home-board-threads line.is-postit { stroke: var(--board-postit-thread, var(--board-postit)); }
 
 .home-board-thread-label {
   position: absolute;
@@ -2811,105 +2811,39 @@ body.home {
 .home-board-sig-corner.is-soon { background: var(--board-soon); }
 .home-board-sig-corner.is-alert { background: var(--board-alert); }
 
-/* L'agenda: un foglio giallo, largo 30 (`model.AGENDA_BOX`). Le misure in `cqw`
-   come il resto del muro: si ingrandisce con lui. Una riga e' alta 7cqw, un
-   dito sul quadrato del Titan a ingrandimento pieno. */
-.home-board-agenda {
-  width: 30cqw;
+/* Il post-it delle attese di una scheda: largo 24 (`model.POSTIT_BOX`), in
+   `cqw` come il resto del muro, che si ingrandisce con lui. Tre righe al
+   massimo, ognuna la data e il testo su due righe, poi «+N». */
+.home-board-postit {
+  width: 24cqw;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 2.2cqw 1.6cqw 1cqw;
+  gap: 1cqw;
+  padding: 2.4cqw 1.6cqw 1.4cqw;
   background: var(--board-postit);
   color: var(--board-postit-ink);
   font-family: var(--font-hand);
   box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
 }
-.home-board-agenda-title {
-  padding: 0 1cqw 0.8cqw;
-  font-family: var(--font-sans);
-  font-size: 1.8cqw;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.home-board-agenda-row {
-  display: grid;
-  grid-template-columns: 8.5cqw minmax(0, 1fr);
-  gap: 1cqw;
-  align-items: center;
-  min-height: 7cqw;
-  padding: 0.6cqw 1cqw;
-  border: none;
+.home-board-postit-row { display: flex; flex-direction: column; gap: 0.2cqw; }
+.home-board-postit-row + .home-board-postit-row {
+  padding-top: 1cqw;
   border-top: 1px dashed color-mix(in srgb, var(--board-postit-ink) 30%, transparent);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
 }
-.home-board-agenda-title + .home-board-agenda-row { border-top: none; }
-.home-board-agenda-when { font-size: 2.7cqw; font-weight: 700; line-height: 1.1; }
-.home-board-agenda-row.is-late .home-board-agenda-when { color: var(--board-alert); }
-.home-board-agenda-what { display: flex; flex-direction: column; min-width: 0; }
-.home-board-agenda-card {
-  font-family: var(--font-sans);
-  font-size: 1.6cqw;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Il testo su due righe al massimo: su una sola, a bacheca inquadrata, restava
-   «Rinvaso e inci…». */
-.home-board-agenda-text {
+.home-board-postit-when { font-size: 2.3cqw; font-weight: 700; line-height: 1.1; }
+.home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
+/* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
+.home-board-postit-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  font-size: 2.2cqw;
+  font-size: 2.1cqw;
   font-weight: 700;
   line-height: 1.15;
   overflow: hidden;
 }
-.home-board-agenda-more {
-  min-height: 6cqw;
-  padding: 0 1cqw;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 2.1cqw;
-  font-weight: 700;
-  opacity: 0.8;
-  text-align: left;
-  cursor: pointer;
-}
-/* L'elenco intero, nel foglio: le stesse righe a misura di schermo. */
-.home-board-agenda-all { display: flex; flex-direction: column; }
-.home-board-agenda-group {
-  margin: 14px 0 4px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.home-board-agenda-group:first-child { margin-top: 0; }
-.home-board-agenda-group.is-overdue { color: var(--board-alert); }
-.home-board-agenda-all .home-board-agenda-row {
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 48px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
-  font-family: var(--font-sans);
-}
-.home-board-agenda-all .home-board-agenda-when { font-size: 14px; color: var(--board-soon); }
-.home-board-agenda-all .is-late .home-board-agenda-when { color: var(--board-alert); }
-.home-board-agenda-all .home-board-agenda-card { font-size: 10px; color: var(--text-muted); }
-.home-board-agenda-all .home-board-agenda-text { font-size: 15px; font-weight: 500; -webkit-line-clamp: unset; }
+.home-board-postit-more { font-size: 2cqw; font-weight: 700; opacity: 0.75; }
 
 /* La busta sta in basso a **sinistra**: a destra c'e' Jenny, che sporge dal
    bordo e si prende i tocchi di quell'angolo. Il posto e' suo, e la busta lo

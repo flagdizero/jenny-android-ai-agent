@@ -28,7 +28,8 @@ BOARD = {
         {"id": "r-concime", "card": "monstera", "text": "Concime",
          "when": {"kind": "date", "date": "2026-10-10", "precision": "day"}},
     ],
-    "agenda": {"pos": {"x": 62, "y": 35, "by": "jenny"}, "rows": 3},
+    "postits": [{"card": "monstera", "pos": {"x": 62, "y": 35, "by": "jenny"}}],
+    "postitRows": 3,
     "connections": [{"a": "acero", "b": "monstera", "label": "vasi dello stesso ordine",
                      "by": "jenny"}],
     "suggestions": [{"id": "sg-ginkgo", "kind": "add_card", "subject": "Ginkgo",
@@ -107,9 +108,9 @@ def test_a_notebook_opens_on_its_board() -> None:
       // La puntina dice chi ha scelto il posto.
       assert.ok(polaroids[0].querySelector('.home-board-pin.is-jenny'));
       assert.ok(polaroids[1].querySelector('.home-board-pin.is-user'));
-      // Le attese: un foglio solo, con la sua riga e il filo verso la scheda.
-      assert.equal(document.querySelectorAll('.home-board-agenda').length, 1);
-      assert.equal(document.querySelectorAll('.home-board-agenda-row').length, 1);
+      // Le attese: il post-it della monstera, con la sua riga.
+      assert.equal(document.querySelectorAll('.home-board-postit').length, 1);
+      assert.equal(document.querySelectorAll('.home-board-postit-row').length, 1);
       // La busta col numero, e «dall'ultima volta»: una riga piu' la busta.
       assert.equal(document.querySelector('.home-board-envelope-count').textContent, '1');
       assert.equal($('home-board-since').hidden, false);
@@ -682,16 +683,16 @@ def test_a_card_carried_to_the_edge_scrolls_the_wall_and_stays_in_hand() -> None
 
 
 # Le schede con una misura, che jsdom non da': quella che avrebbero nel
-# quadrato da 400 (polaroid 76 x 100), alla vista del momento. L'agenda qui e'
-# piccola, 56 x 60, quanto il post-it che c'era al suo posto: i conti restano quelli.
+# quadrato da 400 (polaroid 76 x 100), alla vista del momento. Il post-it qui e'
+# piccolo, 56 x 60, quanto quello di prima: i conti restano quelli.
 # Con ``BOARD`` l'ingombro va da (20, 16) a (304, 200): sta nella finestra a
 # grandezza naturale, quindi l'inquadratura lo centra senza ingrandirlo.
 _SIZED = """
 const realRect = window.HTMLElement.prototype.getBoundingClientRect;
 window.HTMLElement.prototype.getBoundingClientRect = function () {
-  if (!this.matches('.home-board-polaroid, .home-board-agenda')) return realRect.call(this);
+  if (!this.matches('.home-board-polaroid, .home-board-postit')) return realRect.call(this);
   const v = B.view;
-  const note = this.classList.contains('home-board-agenda');
+  const note = this.classList.contains('home-board-postit');
   const x = parseFloat(this.style.left) * 4, y = parseFloat(this.style.top) * 4;
   const w = note ? 56 : 76, h = note ? 60 : 100;
   return { left: v.x + x * v.k, top: v.y + y * v.k, right: v.x + (x + w) * v.k,
@@ -839,7 +840,7 @@ def test_another_notebook_does_not_show_the_old_wall_while_it_loads() -> None:
       const loading = app.board.load('altro');
       await tick(5);
       assert.equal(document.querySelectorAll('.home-board-polaroid').length, 0);
-      assert.equal(document.querySelectorAll('.home-board-agenda').length, 0);
+      assert.equal(document.querySelectorAll('.home-board-postit').length, 0);
       assert.equal(document.querySelector('.home-board-envelope'), null);
       assert.equal($('home-board-since').hidden, true);
       assert.equal($('home-board-empty').hidden, true);
@@ -1315,54 +1316,58 @@ def test_a_new_card_can_be_an_app() -> None:
 # ── L'agenda delle attese, il calendario di cura, il «+» flottante ───────────
 
 
-def _agenda_board() -> dict:
+def _postit_board() -> dict:
     board = json.loads(json.dumps(BOARD))
     when = lambda d: {"kind": "date", "date": d, "precision": "day"}  # noqa: E731
     board["notes"] = [
         {"id": "r-1", "card": "monstera", "text": "Concime", "when": when("2099-01-10")},
         {"id": "r-2", "card": "acero", "text": "Poltiglia", "when": when("2099-02-01")},
         {"id": "r-3", "card": "monstera", "text": "Rinvaso", "when": when("2099-03-01")},
-        {"id": "r-4", "card": "acero", "text": "Margotta", "when": when("2099-04-01")},
+        {"id": "r-4", "card": "monstera", "text": "Margotta", "when": when("2099-04-01")},
+        {"id": "r-5", "card": "monstera", "text": "Radici", "when": when("2099-08-20")},
+    ]
+    board["postits"] = [
+        {"card": "acero", "pos": {"x": 20, "y": 50, "by": "jenny"}},
+        {"card": "monstera", "pos": {"x": 62, "y": 35, "by": "jenny"}},
     ]
     return board
 
 
 @requires_jsdom
-def test_the_agenda_shows_three_rows_and_one_thread_per_card() -> None:
+def test_each_card_has_its_postit_with_three_rows_and_a_thread() -> None:
     _run_wall("""
-      routes['/api/board'] = __AGENDA__;
+      routes['/api/board'] = __POSTITS__;
       await B.load('altro');
-      const agenda = document.querySelector('.home-board-agenda');
-      assert.ok(agenda.querySelector('.home-board-pin.is-jenny'), 'il suo chiodo');
-      const rows = [...agenda.querySelectorAll('.home-board-agenda-row')];
-      assert.deepEqual(rows.map((r) => r.dataset.card), ['monstera', 'acero', 'monstera']);
-      assert.match(rows[0].textContent, /Monstera.*Concime/);
-      assert.equal(agenda.querySelector('.home-board-agenda-more').textContent, '+1 later');
-      // Tre righe, due schede: due fili gialli, piu' quello rosso fra le schede.
-      assert.equal(document.querySelectorAll('#home-board-threads line.is-agenda').length, 2);
+      const postits = [...document.querySelectorAll('.home-board-postit')];
+      assert.deepEqual(postits.map((p) => p.dataset.card), ['acero', 'monstera']);
+      // La scheda con una sola attesa ha il suo post-it, non resta dietro alle altre.
+      assert.equal(postits[0].querySelectorAll('.home-board-postit-row').length, 1);
+      assert.match(postits[0].textContent, /Poltiglia/);
+      // Quattro attese: tre righe, e «+1» per l'ultima.
+      const rows = [...postits[1].querySelectorAll('.home-board-postit-text')].map((t) => t.textContent);
+      assert.deepEqual(rows, ['Concime', 'Rinvaso', 'Margotta']);
+      assert.equal(postits[1].querySelector('.home-board-postit-more').textContent, '+1 more');
+      assert.ok(postits[0].querySelector('.home-board-pin.is-jenny'), 'il suo chiodo');
+      // Un filo per post-it, piu' quello rosso fra le schede.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-postit').length, 2);
       assert.equal(document.querySelectorAll('#home-board-threads line').length, 3);
-      // Una scheda tenuta premuta accende anche il filo dell'agenda.
+      // Una scheda tenuta premuta accende anche il filo del suo post-it.
       B.setFocus('acero', { quiet: true });
-      assert.equal(document.querySelectorAll('#home-board-threads line.is-agenda.is-on').length, 1);
-      assert.ok(agenda.classList.contains('is-linked'));
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-postit.is-on').length, 1);
+      assert.ok(postits[0].classList.contains('is-linked'));
       B.setFocus(null);
-      // «+1 più avanti»: tutte, per mese, nel foglio.
-      agenda.querySelector('.home-board-agenda-more').click();
-      const sheet = $('home-board-sheet-body');
-      assert.equal(sheet.querySelectorAll('.home-board-agenda-row').length, 4);
-      assert.equal(sheet.querySelectorAll('.home-board-agenda-group').length, 4);
-      // Una riga porta al cassetto della sua scheda.
-      rows[1].click();
+      // Il tocco apre il cassetto della sua scheda.
+      postits[1].click();
       await tick(40);
       assert.equal(app.view, 'drawer');
-      assert.equal(rpcs('board.seen').at(-1).params.card, 'acero');
-    """.replace("__AGENDA__", json.dumps(_agenda_board())))
+      assert.equal(rpcs('board.seen').at(-1).params.card, 'monstera');
+    """.replace("__POSTITS__", json.dumps(_postit_board())))
 
 
 @requires_jsdom
-def test_dragging_the_agenda_tells_the_server() -> None:
+def test_dragging_a_postit_tells_the_server() -> None:
     _run("""
-      const el = document.querySelector('.home-board-agenda');
+      const el = document.querySelector('.home-board-postit');
       const ev = (type, x, y) => {
         const e = new window.Event(type, { bubbles: true });
         Object.assign(e, { clientX: x, clientY: y, button: 0, pointerId: 1 });
@@ -1373,9 +1378,10 @@ def test_dragging_the_agenda_tells_the_server() -> None:
       ev('pointerup', 60, 50);
       await tick(20);
       const move = rpcs('board.move').at(-1);
-      assert.equal(move.params.kind, 'agenda');
+      assert.equal(move.params.kind, 'postit');
+      assert.equal(move.params.id, 'monstera');
       assert.ok(el.querySelector('.home-board-pin.is-user'));
-      assert.equal(app.view, 'board', 'portarla non apre niente');
+      assert.equal(app.view, 'board', 'portarlo non apre niente');
     """)
 
 

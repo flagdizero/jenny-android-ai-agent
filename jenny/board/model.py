@@ -55,7 +55,7 @@ ACTORS = (USER, JENNY)
 # prima stanno tutte nello schermo dell'origine, dov'erano, senza migrazione.
 WALL_MAX = 1000.0
 
-# Il tetto degli elementi sulla bacheca, schede più l'agenda. Era 12, quando la
+# Il tetto degli elementi sulla bacheca, schede più post-it. Era 12, quando la
 # bacheca stava in una schermata sola; sul muro c'e' posto, e il tetto resta solo
 # perche' il blocco per turno (una riga per scheda) ha un tetto suo. Quando è
 # piena, Jenny propone di togliere prima di proporre di aggiungere.
@@ -354,6 +354,11 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
     for stamp in ("lastOpened", "created"):
         if isinstance(raw.get(stamp), str):
             known[stamp] = raw[stamp]
+    # Il posto del post-it delle sue attese, se l'utente l'ha spostato: senza,
+    # lo calcola la vista accanto alla scheda.
+    postit = _normalize_pos(raw.get("postitPos"), USER)
+    if postit:
+        known["postitPos"] = postit
     # La taglia della striscia, se la scheda e' un'app che ne ha una.
     if raw.get("size") in SLIP_ROWS:
         known["size"] = raw["size"]
@@ -487,12 +492,6 @@ def normalize_board(raw: Any) -> dict[str, Any]:
     }
     if isinstance(data.get("lastSeen"), str):
         known["lastSeen"] = data["lastSeen"]
-    # L'agenda delle attese: un foglio solo per bacheca. Del suo posto si salva
-    # solo quello scelto dall'utente; senza, lo calcola la vista.
-    agenda = data.get("agenda")
-    if isinstance(agenda, Mapping):
-        pos = _normalize_pos(agenda.get("pos"), USER)
-        known["agenda"] = _keep_unknown(agenda, {"pos": pos} if pos else {})
     return _keep_unknown(data, known)
 
 
@@ -562,14 +561,15 @@ def board_reminders(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> l
 
 
 def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> int:
-    """Quanti oggetti sono sulla bacheca: le schede, e l'agenda se ci sono attese.
+    """Quanti oggetti sono sulla bacheca: le schede, e un post-it per scheda con attese.
 
-    Le attese non sono più un post-it ciascuna: stanno tutte nell'agenda, che è
-    un oggetto solo. Così un'attesa nuova non trova mai la bacheca piena.
+    Le attese non sono più un post-it ciascuna: quelle di una scheda stanno
+    tutte sul suo, che è un oggetto solo. Così la seconda attesa di una scheda
+    non trova mai la bacheca piena.
     """
     cards = {c["id"] for c in board.get("cards") or []}
-    agenda = any(r.get("card") in cards for r in open_reminders(reminders))
-    return len(cards) + int(agenda)
+    with_notes = {r.get("card") for r in open_reminders(reminders)} & cards
+    return len(cards) + len(with_notes)
 
 
 def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
@@ -577,16 +577,16 @@ def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
 
 
 # L'ingombro degli oggetti, in percentuale della bacheca. La larghezza viene dal
-# CSS (una polaroid e' il 19% della larghezza, l'agenda il 30%); l'altezza
+# CSS (una polaroid e' il 19% della larghezza, un post-it il 24%); l'altezza
 # dipende dalla forma dello schermo, e qui si prende quella del quadrato basso
 # del Titan 2 (590x~400 px di bacheca), il caso in cui gli oggetti sono piu' alti
 # in proporzione: su uno schermo piu' alto avanza spazio, non ne manca.
 CARD_BOX = (20.0, 40.0)
-# L'agenda: larga 30 (il CSS di ``.home-board-agenda``), alta quanto intestazione,
-# tre righe e «+N più avanti» sul quadrato basso del Titan 2.
-AGENDA_BOX = (30.0, 48.0)
-# Quante attese mostra l'agenda; le altre stanno dietro «+N più avanti».
-AGENDA_ROWS = 3
+# Il post-it delle attese di una scheda: largo 24 (il CSS di ``.home-board-postit``),
+# alto quanto tre righe e «+N» sul quadrato basso del Titan 2.
+POSTIT_BOX = (24.0, 44.0)
+# Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
+POSTIT_ROWS = 3
 # La striscia: la forma compatta di un'app (``jenny/apps/slip_spec.py``). Larga
 # due polaroid, alta una di quattro taglie fisse, contate in righe di contenuto
 # (una riga = 3,55% della larghezza: il 28 px del mockup sulla polaroid da 150).
@@ -619,12 +619,14 @@ def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> lis
         x, y = float(card["pos"]["x"]), float(card["pos"]["y"])
         w, h = card_box(card)
         out.append((x, y, x + w, y + h))
-    # L'agenda c'è solo con delle attese, e occupa il muro solo dove l'ha messa
+    # Un post-it c'è solo con delle attese, e occupa il muro solo dove l'ha messo
     # l'utente: il posto calcolato lo sceglie la vista *dopo* le schede.
-    pos = (board.get("agenda") or {}).get("pos")
-    if isinstance(pos, Mapping) and board_reminders(board, reminders or {}):
-        x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
-        out.append((x, y, x + AGENDA_BOX[0], y + AGENDA_BOX[1]))
+    with_notes = {r.get("card") for r in open_reminders(reminders or {})}
+    for card in board.get("cards") or []:
+        pos = card.get("postitPos")
+        if isinstance(pos, Mapping) and card["id"] in with_notes:
+            x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
+            out.append((x, y, x + POSTIT_BOX[0], y + POSTIT_BOX[1]))
     return out
 
 
@@ -646,14 +648,14 @@ def free_slot(
 
     Si provano le caselle di una griglia fitta, si scartano gli angoli che non
     sono della bacheca, e vince la casella con la sovrapposizione minore; a
-    parita', la piu' vicina a *near* (le schede, per l'agenda) o, senza, la
+    parita', la piu' vicina a *near* (la scheda, per un post-it) o, senza, la
     prima in ordine di lettura. Deterministico: due aperture della stessa
     bacheca danno lo stesso posto.
     """
     taken = _boxes(board, reminders) + list(extra or [])
     best: tuple[float, float, float] | None = None
     if near is not None:
-        # **Vicino a dove si guarda** (o accanto alle schede, per l'agenda): una finestra
+        # **Vicino a dove si guarda** (o alla sua scheda, per un post-it): una finestra
         # attorno a *near*, ovunque sia sul muro. Gli angoli riservati qui non
         # contano: sono angoli della finestra, non di un posto del muro.
         cx, cy = float(near[0]), float(near[1])
@@ -719,6 +721,7 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "title": card.get("title") if card.get("titleBy") == USER else None,
             "app": card.get("app"),
             "size": card.get("size"),
+            "postitPos": card.get("postitPos"),
         }
     return {
         "cards": cards,
@@ -726,7 +729,6 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
         "connections": board.get("connections"),
         "skeleton": board.get("skeleton"),
         "lastSeen": board.get("lastSeen"),
-        "agenda": board.get("agenda"),
         "declined": board.get("declined"),
         "removedCards": board.get("removedCards"),
     }
@@ -752,7 +754,7 @@ def ownership_violations(
         if other is None:
             continue
         for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
-                           "app", "size"):
+                           "app", "size", "postitPos"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}
@@ -760,7 +762,7 @@ def ownership_violations(
         missing = [p for p in old_pages.get(card["id"], []) if p not in (card.get("pages") or [])]
         if missing:
             problems.append(f"card {card['id']}: pages removed ({', '.join(missing)})")
-    for key in ("connections", "skeleton", "lastSeen", "agenda", "declined", "removedCards"):
+    for key in ("connections", "skeleton", "lastSeen", "declined", "removedCards"):
         if old[key] != new[key]:
             problems.append(f"{key} changed")
     return problems
@@ -909,7 +911,7 @@ def _reminder_key(rem: Mapping[str, Any]) -> tuple[date, str]:
 
 
 def sorted_reminders(rems: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Le attese dalla più vicina: l'ordine dell'agenda e del calendario di cura."""
+    """Le attese dalla più vicina: l'ordine dei post-it e del calendario di cura."""
     return [dict(r) for r in sorted(rems, key=_reminder_key)]
 
 

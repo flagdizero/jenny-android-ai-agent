@@ -412,7 +412,7 @@ def parse_when(raw: Any) -> dict[str, Any]:
 
 
 def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
-    """Un'attesa dell'utente nel cassetto: sulla bacheca è una riga dell'agenda."""
+    """Un'attesa dell'utente nel cassetto: sulla bacheca è una riga del post-it della sua scheda."""
     body = model.clean_text(text, model.MAX_TITLE * 2)
     if not body:
         raise BoardEditError("bad_request", "text required")

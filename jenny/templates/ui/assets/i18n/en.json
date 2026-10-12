@@ -1527,10 +1527,8 @@
       "inc": "plus {label}",
       "failed": "That didn't work: try from the app"
     },
-    "agenda": {
-      "title": "Coming up",
-      "more": "+{count} later",
-      "all": "Everything coming up"
+    "postit": {
+      "more": "+{count} more"
     }
   }
 }

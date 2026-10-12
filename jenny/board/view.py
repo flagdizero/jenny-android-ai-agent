@@ -1,7 +1,7 @@
 """Quel che la bacheca e un cassetto mostrano, calcolato dal server.
 
 Il client non legge mai ``board.json``: riceve una vista già risolta — i
-segnali di ogni scheda, l'agenda delle attese aperte, le righe di «dall'ultima
+segnali di ogni scheda, i post-it delle attese aperte, le righe di «dall'ultima
 volta» successive all'ultima apertura, quante pagine stanno fuori bacheca. Così
 le regole (un segnale per scheda, e in quale ordine) stanno in un posto solo, e
 la WebView disegna e basta.
@@ -78,21 +78,23 @@ def card_signal(
     return None
 
 
-def _agenda_pos(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> dict[str, Any]:
-    """Il posto dell'agenda finché l'utente non la sposta: libero, in alto a destra delle schede.
+def _postit_pos(
+    board: Mapping[str, Any],
+    reminders: Mapping[str, Any],
+    card: Mapping[str, Any],
+    placed: list[tuple[float, float, float, float]],
+) -> dict[str, Any]:
+    """Il posto del post-it di una scheda finché l'utente non lo sposta: il
+    posto libero più vicino all'angolo in basso a destra della sua polaroid.
 
-    Calcolato e non salvato, come il posto di una scheda nuova: è un foglio
-    solo, e dei fili partono dal suo chiodo verso le schede, quindi sta di lato
-    al gruppo invece che in mezzo.
+    Calcolato e non salvato: il post-it nasce accanto alla scheda senza coprire
+    niente (né le schede né gli altri post-it già messi in questo giro), e resta
+    lì finché qualcuno non lo porta altrove.
     """
-    cards = board.get("cards") or []
-    if cards:
-        right = max(float(c["pos"]["x"]) + model.card_box(c)[0] for c in cards)
-        top = min(float(c["pos"]["y"]) for c in cards)
-        near = (right + 2.0, top)
-    else:
-        near = (2.0, 3.0)
-    x, y = model.free_slot(board, reminders, box=model.AGENDA_BOX, near=near)
+    w, h = model.card_box(card)
+    near = (float(card["pos"]["x"]) + w * 0.6, float(card["pos"]["y"]) + h * 0.75)
+    x, y = model.free_slot(board, reminders, box=model.POSTIT_BOX, near=near, extra=placed)
+    placed.append((x, y, x + model.POSTIT_BOX[0], y + model.POSTIT_BOX[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
 
@@ -152,7 +154,7 @@ def build_board_view(
             "exists": False,
             "cards": [],
             "notes": [],
-            "agenda": None,
+            "postits": [],
             "connections": [],
             "suggestions": [],
             "since": [],
@@ -190,16 +192,19 @@ def build_board_view(
             "auto": auto,
             **(_app_card(workspace, card) if workspace is not None else {}),
         })
-    # Le attese aperte, dalla più vicina: le prime righe sono l'agenda sul muro,
-    # tutte insieme l'elenco dietro «+N più avanti».
+    # Le attese aperte, dalla più vicina; e un post-it per ogni scheda che ne
+    # ha, con le sue prime righe e un filo verso la scheda.
     notes = [
         {"id": rem["id"], "card": rem["card"], "text": rem["text"], "when": rem["when"]}
         for rem in model.board_reminders(board, reminders)
     ]
-    agenda = None
-    if notes:
-        saved = (board.get("agenda") or {}).get("pos")
-        agenda = {"pos": saved or _agenda_pos(board, reminders), "rows": model.AGENDA_ROWS}
+    with_notes = {n["card"] for n in notes}
+    placed: list[tuple[float, float, float, float]] = []
+    postits = [
+        {"card": card["id"],
+         "pos": card.get("postitPos") or _postit_pos(board, reminders, card, placed)}
+        for card in board["cards"] if card["id"] in with_notes
+    ]
     last_seen = _stamp(board.get("lastSeen"))
     since = [row for row in board.get("since") or [] if _stamp(row.get("at")) > last_seen]
     offboard = offboard_pages(board, titles)
@@ -208,7 +213,8 @@ def build_board_view(
         "skeleton": board["skeleton"],
         "cards": cards_out,
         "notes": notes,
-        "agenda": agenda,
+        "postits": postits,
+        "postitRows": model.POSTIT_ROWS,
         "connections": [
             c for c in board["connections"] if c["a"] in on_board and c["b"] in on_board
         ],

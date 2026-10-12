@@ -374,7 +374,7 @@
   --board-thread:  #a8352b;
   --board-done:    #3f8a3c;
   /* Il giallo del post-it, sulla carta chiara, non si vede: un ocra. */
-  --board-agenda-thread: #a8841c;
+  --board-postit-thread: #a8841c;
 }
 [data-theme="synthwave"] { --board-thread: #f92aad; }
 [data-theme="kyoto"] { --board-bg: #241f1a; --board-thread: #a94f3b; }

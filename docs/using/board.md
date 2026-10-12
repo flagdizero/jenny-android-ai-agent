@@ -17,12 +17,12 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 | Thing | What it is |
 |---|---|
 | **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*): its live value takes the place of the photo, and tapping it opens the app — see [App cards](#app-cards). |
-| **The agenda** | One yellow sheet for the whole notebook, **Coming up**: the next three open reminders, each with its date and its card, and *+N later* for the rest. A thread runs from its pin to every card it lists — one per card, however many of its rows are that card's. Tapping a row opens that card's drawer; *+N later* opens all of them, by month. |
+| **Sticky notes** | One yellow note per card that has open reminders: its next three, each with its date, and *+N more* for the rest. A thread runs from the note's pin to its card's pin. Tapping it opens that card's drawer, where the [care calendar](#the-drawer) lists them all. |
 | **Threads** | Thin red lines between two cards that a page ties together. See [Threads](#threads). |
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
 | **Since you last looked · N new** | A row at the top, shown only when something changed since you last opened the board, or proposals are waiting. See [Since you last looked](#since-you-last-looked). |
 
-The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at; the agenda starts beside the cards, top right, until you move it. It holds at most **40 items** — the cards, plus the agenda when there are reminders — and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
+The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at, and a card's sticky note next to it, wherever that card is. It holds at most **40 items**, cards and sticky notes together — one note per card, however many reminders it holds — and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
 
 Three buttons in the header work on the board: **+** makes a new card (see [Your cards](#your-cards)), the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
 
@@ -40,8 +40,8 @@ No signal means nothing needs you.
 
 ### Gestures
 
-- **Tap** a card to open its drawer, or a row of the agenda to open the drawer of that row's card.
-- **Drag** a card or the agenda to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or the agenda on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
+- **Tap** a card or a sticky note to open the drawer.
+- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
 - **Press and hold** a card (about half a second) to lift it: its threads turn bold and show their labels, the cards at the other end lift, the rest of the board dims, and a bar rises at the bottom with **Rename** and **Remove from the board**. Tap the background, the **×** on the bar or Back to put everything back.
 - **Press and hold** the empty wall to make a new card right there, under your finger.
 
@@ -113,7 +113,7 @@ Something to remember, in your words — *it stays on the south windowsill only 
 
 #### Reminder
 
-Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder goes into the card's care calendar and, when it is among the next three, onto the board's agenda. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. **Remove**, from its **⋯**, drops it; **Edit** changes its text or date, and makes a reminder Jenny wrote yours. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
+Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder goes into the card's care calendar and, when it is among the card's next three, onto its sticky note on the board. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. **Remove**, from its **⋯**, drops it; **Edit** changes its text or date, and makes a reminder Jenny wrote yours. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
 
 #### App
 
@@ -220,7 +220,7 @@ A system job, **`reminders`** — the notebook clock — runs **every 15 minutes
 
 - A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next round.
 - The announcement is written by Jenny in a silent turn whose only way to reach you is a message, and it has to say **why**: what is due, the reason taken from the page the reminder points to, and a short question about when you will do it. It arrives in the personal chat like her other proactive messages (see [Android notifications](./scheduling.md#android-notifications)), and a *since you last looked* row is added on the board.
-- Each reminder is announced **once**. It stays in the agenda and the calendar until you tap **Done** or **Remove** it.
+- Each reminder is announced **once**. It stays on the card's sticky note and in its calendar until you tap **Done** or **Remove** it.
 
 The reminder format also allows a trigger on an app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
 

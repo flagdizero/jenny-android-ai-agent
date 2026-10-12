@@ -2,7 +2,7 @@
 
 Un quaderno si apre sulla bacheca e non sulle pagine. La wiki resta la fonte di
 verità del sapere; la bacheca è un oggetto a sé che punta alla wiki: poche
-schede curate (un soggetto ciascuna, col suo cassetto), l'agenda delle attese,
+schede curate (un soggetto ciascuna, col suo cassetto), i post-it delle attese,
 i fili fra le schede e la busta con le proposte di Jenny.
 
 Tre file, tutti dentro la cartella del quaderno (``<quaderno>/board/``):
