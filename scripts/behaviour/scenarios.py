@@ -908,11 +908,16 @@ def _journaled(obs: Observation, n: Mapping[str, str]) -> Check:
 
 
 def _knows_from_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    dug = [c.name for c in obs.tool_calls if c.name in _DIGGING]
+    dug = [c for c in obs.tool_calls if c.name in _DIGGING]
+    # Cercare il titolo esatto, o aprire subito il quaderno giusto, vuol dire che
+    # lo sapeva e ha controllato; frugare senza nessuno dei due e' non saperlo.
+    aimed = all(n["n"].lower() in c.arg_text().lower() or f"bh-{n['p']}" in c.arg_text()
+                for c in dug)
     return [
         _journaled(obs, n),
         Check("knows_it", n["n"].lower() in obs.reply.lower(), obs.reply[:160]),
-        Check("without_digging", not dug, ",".join(dug)),
+        Check("without_digging", not dug, ",".join(c.name for c in dug)),
+        Check("knew_where", aimed, ",".join(c.arg_text()[:60] for c in dug)),
     ]
 
 

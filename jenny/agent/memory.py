@@ -866,6 +866,9 @@ class MemoryStore:
             # informato a meta' turno, chiunque stia chiedendo. V.
             # :meth:`append_history` (``prompt_visible``).
             if entry.get("prompt_visible") is not False
+            # Le righe del diario hanno il loro blocco (``jenny/agent/diary.py``),
+            # brevi e attribuite: qui sarebbero due volte.
+            and not entry.get("kind")
         ]
         if session_key is None:
             return entries

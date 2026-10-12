@@ -4,12 +4,15 @@ import base64
 import mimetypes
 import platform
 import re
+from collections.abc import MutableMapping
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 from loguru import logger
 
+from jenny.agent.diary import DiaryTurn, diary_turn
 from jenny.agent.memory import (
     HISTORY_FLOOR_METADATA_KEY,
     MemoryStore,
@@ -626,6 +629,7 @@ class ContextBuilder:
         available_tools: list[str] | None = None,
         orchestrator: bool | None = None,
         history_floor: int = 0,
+        diary_section: str = "",
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills.
 
@@ -916,6 +920,11 @@ class ContextBuilder:
         if apps_summary:
             parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary,
                                          has=has))
+
+        if diary_section:
+            # La vista congelata del diario (``jenny/agent/diary.py``): la costruisce
+            # ``build_messages``, che ha la sessione, e qui entra com'e'.
+            parts.append(diary_section)
 
         if include_memory_recent_history:
             # Due pavimenti, e vince il più alto. Quello di Dream dice «queste
@@ -1595,6 +1604,10 @@ class ContextBuilder:
         extra = _goal_lines_once(goal_state_runtime_lines(session_metadata), history)
         if current_runtime_lines:
             extra.extend(line for line in current_runtime_lines if line)
+        diary = self._diary_turn(session_key, session_metadata, history) \
+            if include_memory_recent_history else None
+        if diary is not None:
+            extra.extend(diary.new_lines)
         # In un quaderno, il cassetto della scheda di cui si parla: qui e non nel
         # prompt di sistema, che e' il prefisso in cache e non deve dipendere
         # dal messaggio.
@@ -1632,6 +1645,7 @@ class ContextBuilder:
                     available_tools=available_tools,
                     orchestrator=orchestrator,
                     history_floor=_history_floor(session_metadata),
+                    diary_section=diary.section if diary is not None else "",
                 ),
             },
             *history,
@@ -1643,6 +1657,25 @@ class ContextBuilder:
             return messages
         messages.append({"role": current_role, "content": merged})
         return messages
+
+    def _diary_turn(self, session_key: str | None, session_metadata: Mapping[str, Any] | None,
+                    history: Sequence[Mapping[str, Any]]) -> DiaryTurn | None:
+        """Il diario del turno (``jenny/agent/diary.py``), o ``None``.
+
+        Lo stato della vista congelata si scrive nei metadata della sessione —
+        l'unico effetto di ``build_messages`` fuori dai messaggi che restituisce,
+        e per questo solo quando sono il dizionario vero della sessione. Un
+        diario illeggibile non fa fallire il turno: e' un di piu'.
+        """
+        if not session_key:
+            return None
+        holder = session_metadata if isinstance(session_metadata, MutableMapping) else None
+        try:
+            entries = self.memory.read_unprocessed_history(since_cursor=0)
+            return diary_turn(entries, session_key, holder, history, now=datetime.now())
+        except Exception as exc:  # noqa: BLE001 — v. la docstring
+            logger.warning("diary: cannot build the view for {}: {}", session_key, exc)
+            return None
 
     def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
         """Build user message content with optional base64-encoded images."""

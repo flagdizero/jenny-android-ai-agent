@@ -277,7 +277,12 @@ def test_knowing_a_notebook_event_means_without_searching() -> None:
     known = _obs("Zafkril.", prelude_calls=noted)
     assert all(_ok("notebook_event_reaches_personal", known, nonces).values())
     dug = _obs("Zafkril.", [ToolCall("grep", {"pattern": "film"})], prelude_calls=noted)
-    assert not _ok("notebook_event_reaches_personal", dug, nonces)["without_digging"]
+    blind = _ok("notebook_event_reaches_personal", dug, nonces)
+    assert not blind["without_digging"] and not blind["knew_where"]
+    checked = _obs("Zafkril.", [ToolCall("grep", {"pattern": "zafkril", "path": "wikis/bh-p1"})],
+                   prelude_calls=noted)
+    aimed = _ok("notebook_event_reaches_personal", checked, nonces)
+    assert not aimed["without_digging"] and aimed["knew_where"]
     unknown = _ok("notebook_event_reaches_personal", _obs("Non lo so.", prelude_calls=noted),
                   nonces)
     assert not unknown["knows_it"] and unknown["prelude_journaled"]

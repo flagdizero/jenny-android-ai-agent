@@ -79,6 +79,22 @@ That is deliberately all it carries. The prompt knows your wikis by name and sco
 
 Two things follow. The block is withheld from [notebook](./projects.md) conversations and from [gardener](./gardener.md) passes — inside a notebook, the list of your other subjects is exactly the cross-project inventory the boundary keeps out. And there is no compiled directory of entities any more: versions before 0.10.0 built one from the wikis with a periodic job (Atlas) into `memory/WIKI.md`. That job, its config block and its files are removed at the first start of a version without it; nothing you wrote is touched.
 
+## The diary: what happened in your notebooks
+
+Jenny is one person across the personal chat and your notebooks, so the personal chat carries a `# Diary` block: what was written lately in the notebooks' journals, one line per event — the day and time, the notebook, whether **you said it** or Jenny noted it, and the fact itself. Each line is a short copy of a journal line, kept in `memory/history.jsonl` with a pointer back to the full one; the journal stays the source.
+
+It has two grades, the way memory does:
+
+- **the last three days, line by line**;
+- **the rest of the week as a trace**: one line per day, with the notebooks touched and how many things happened in each, so Jenny knows *that* something happened on Tuesday and opens the source for *what*;
+- nothing older: past a week Jenny searches with `recall_history`.
+
+A line is an index, not the whole story, and the prompt tells Jenny so: she uses a line only when the conversation touches it, never brings up one notebook's matters while you talk about something else, and checks the source before stating a detail the line does not contain.
+
+What it leaves out on purpose. A notebook sees only lines *about itself* written elsewhere, never another notebook's. Dream, the gardener, cron jobs and subagents see none of it. A line written while Jenny had an untrusted result in view — a web page she read — stays in its own conversation instead of reaching another one as a fact (see the [security model](../internals/security-model.md#subagents-and-untrusted-content)). And the lines are not Dream's input: the notebook's conversation already reaches Dream through its own archive entry, so reading both would extract the same fact twice.
+
+The block is part of the cached prompt, so it does not change on every write. It is frozen at a point in time; lines written after that reach Jenny once, with the turn that follows them, and the block is rebuilt only when the provider's cache would be cold anyway — after an hour's pause — or when more than twelve new lines have piled up.
+
 ## The files
 
 ```text
@@ -119,6 +135,7 @@ At the start of every conversation, Jenny's system prompt includes:
 - `MEMORY.md`, if it has real content (an untouched template file isn't injected).
 - The `## Wikis` block: one line per wiki under `workspace/wikis/` — its name and one-line scope — rendered from disk at every build. It sits under the same "Memory" heading as `MEMORY.md` but is injected independently — an untouched `MEMORY.md` doesn't suppress it — and never inside a project conversation.
 - Any history entries from `memory/history.jsonl` that Dream hasn't processed yet (capped to the last 50 entries / roughly 8,000 tokens of text) — this is the bridge between "compacted but not yet dreamed" and the durable files.
+- The [diary](#the-diary-what-happened-in-your-notebooks): the last week of your notebooks' journals, in two grades.
 
 So a brand-new chat isn't a blank slate: it inherits your durable profile and project notes from the last Dream pass, plus whatever's been compacted since then but not yet folded in.
 

@@ -669,7 +669,7 @@
      3
     ],
     "notebook_stays_out": [
-     3,
+     2,
      3
     ],
     "prelude_journaled": [
@@ -874,6 +874,10 @@
   },
   "notebook_event_reaches_personal|claude-haiku-5-5|normal": {
    "checks": {
+    "knew_where": [
+     3,
+     3
+    ],
     "knows_it": [
      3,
      3
@@ -891,7 +895,7 @@
      3
     ],
     "without_digging": [
-     0,
+     2,
      3
     ]
    },
@@ -899,6 +903,10 @@
   },
   "notebook_event_reaches_personal|deepseek-v4.1-flash|normal": {
    "checks": {
+    "knew_where": [
+     3,
+     3
+    ],
     "knows_it": [
      3,
      3
@@ -916,7 +924,7 @@
      3
     ],
     "without_digging": [
-     0,
+     3,
      3
     ]
    },
