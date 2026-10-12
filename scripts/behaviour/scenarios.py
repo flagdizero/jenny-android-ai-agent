@@ -455,7 +455,7 @@ def _past_version(obs: Observation, n: Mapping[str, str]) -> list[Check]:
 
 _RETRACTED_WORDS = re.compile(r"contrabbass|double bass", re.IGNORECASE)
 _RETRACTION_MARK = re.compile(
-    r"non (era|e') vero|non è vero|mai vero|smentit|corrett|sbagliat|ritirat|ritrattat|"
+    r"non (era|e') vero|non è vero|mai vero|smentit|corrett|sbagliat|ritirat|ritratt|retratt|"
     r"non suoni|non lo suoni|"
     r"never true|not true|wrong|retract|corrected|you don't play|you do not play",
     re.IGNORECASE)

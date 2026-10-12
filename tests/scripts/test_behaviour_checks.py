@@ -176,7 +176,8 @@ def test_a_retracted_fact_may_be_named_only_as_wrong() -> None:
     silent = _obs("Non me l'hai mai detto.")
     # Le due forme viste sull'emulatore il 12/10/2026, contate rosse a torto.
     for said in ("C'era il contrabbasso, ma è stato **ritirato**: risulta come mai vero.",
-                 "Diceva contrabbasso, ma è stata ritrattata."):
+                 "Diceva contrabbasso, ma è stata ritrattata.",
+                 "Parlava di contrabbasso, ma è segnato come **RETRATTATO**."):
         assert _ok("recall_retracted", _obs(said), {"n": "x"})["retracted_not_asserted"]
     assert not _ok("recall_retracted", asserted, {"n": "zafkril"})["retracted_not_asserted"]
     assert _ok("recall_retracted", flagged, {"n": "zafkril"})["retracted_not_asserted"]

@@ -1,5 +1,47 @@
 {
  "rates": {
+  "abstains_after_search|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "says_it_does_not_know": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "abstains_after_search|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "says_it_does_not_know": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
   "abstains_when_unknown|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [
@@ -699,44 +741,196 @@
   "recall_across_languages|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "nonce_in_reply": [
-     3,
-     3
+     5,
+     5
     ],
     "recall_called": [
-     3,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "recall_across_languages|deepseek-v4.1-flash|normal": {
    "checks": {
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "nonce_in_reply": [
-     3,
-     3
+     5,
+     5
     ],
     "recall_called": [
-     3,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
+  },
+  "recall_deep_archive|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_deep_archive|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_history_deep|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     1,
+     5
+    ],
+    "searched_history": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_history_deep|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_history": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_retracted|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "retracted_not_asserted": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_retracted|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "retracted_not_asserted": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_superseded|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "older_version_found": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_superseded|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "older_version_found": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
   },
   "temporal_past_state|claude-haiku-5-5|normal": {
    "checks": {
