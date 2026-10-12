@@ -44,6 +44,13 @@ SUBAGENT_RESULT_EVENT = "subagent_result"
 #: Jenny avvia nascono contaminati.
 SUBAGENT_TAINT_META = "subagent_taint_sources"
 
+#: Fonti non fidate che un giro di tool di Jenny stessa ha portato nel turno
+#: (un ``web_fetch``, un ``http_get`` dentro ``python_exec``): sta sui risultati
+#: di quel giro. Come ``SUBAGENT_TAINT_META``, finché la riga resta nella parte
+#: non consolidata, i lavori che Jenny avvia nascono contaminati — anche nei
+#: turni dopo, non solo in quello del tool.
+TOOL_TAINT_META = "tool_taint_sources"
+
 #: Sprone sintetico a un sustained goal ancora attivo.
 GOAL_CONTINUE_EVENT = "goal_continue"
 

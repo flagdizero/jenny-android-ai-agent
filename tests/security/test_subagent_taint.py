@@ -92,7 +92,8 @@ async def test_read_file_marks_the_run_through_the_tool(ws: Path) -> None:
 
 
 async def test_the_main_agent_has_no_policy(ws: Path) -> None:
-    """Fuori da ``_run_subagent`` non c'è stato da marcare: nessun effetto."""
+    """Fuori da ``_run_subagent`` non c'è un lavoro da marcare (il turno di Jenny
+    si marca a parte: ``test_turn_taint.py``)."""
     assert current_subagent_policy() is None
     check_read(ws / "downloads" / "pagina.html")
     policy_after_tool("web_fetch", {"url": "https://example.org"})
@@ -274,3 +275,20 @@ def test_a_late_announce_keeps_its_taint_in_the_history_row() -> None:
                            content="annuncio", metadata={"subagent_task_id": "t2"})
     TurnPersistenceMixin._persist_subagent_followup(MagicMock(), session, clean)
     assert SUBAGENT_TAINT_META not in session.messages[-1]
+
+
+async def test_http_get_from_jennys_own_python_exec_taints_her_turn(
+    ws: Path, page_server: int,
+) -> None:
+    """Fuori da un subagent la marcatura va al turno, e dal worker ci arriva."""
+    from jenny.security.subagent_policy import TurnTaint, current_turn_taint, enter_turn_taint
+
+    cfg = PythonExecConfig()
+    tool = PythonExecTool(
+        working_dir=str(ws), timeout=30, allowed_modules=cfg.allowed_modules,
+        blocked_modules=cfg.blocked_modules, restrict_to_workspace=True, workspace=str(ws),
+    )
+    _register_builtin_functions(tool.namespace, workspace=str(ws), restrict_to_workspace=True)
+    with enter_turn_taint(TurnTaint()):
+        await tool.execute(code=f"print(http_get('http://127.0.0.1:{page_server}/'))")
+        assert current_turn_taint() == ("http_get:127.0.0.1",)

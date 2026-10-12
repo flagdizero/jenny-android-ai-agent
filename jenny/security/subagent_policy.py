@@ -349,23 +349,38 @@ def _host(url: object) -> str:
 
 
 def policy_after_tool(name: str, params: object) -> None:
-    """Marca il lavoro dopo un tool riuscito; no-op fuori da un subagent."""
+    """Marca il lavoro dopo un tool riuscito.
+
+    Dentro un subagent marca il lavoro; fuori, un tool non fidato marca il
+    **turno** di Jenny (:func:`note_turn_taint`). Fino al 12/10/2026 fuori da un
+    subagent era una no-op: un ``web_fetch`` chiamato da Jenny stessa lasciava il
+    turno pulito, e quel che avviava subito dopo nasceva fidato — mentre lo
+    stesso testo, portato da un subagent, lo contaminava.
+    """
+    args = params if isinstance(params, dict) else {}
     policy = current_subagent_policy()
     if policy is None:
+        if name in UNTRUSTED_TOOLS:
+            note_turn_taint([_untrusted_source(name, args)])
         return
-    args = params if isinstance(params, dict) else {}
     if name in UNTRUSTED_TOOLS:
-        host = _host(args.get("url")) if "url" in args else ""
-        policy.mark_untrusted(f"{name}:{host}" if host else name)
+        policy.mark_untrusted(_untrusted_source(name, args))
     elif name in PRIVATE_TOOLS:
         policy.mark_private(name)
 
 
+def _untrusted_source(name: str, args: dict) -> str:
+    host = _host(args.get("url")) if "url" in args else ""
+    return f"{name}:{host}" if host else name
+
+
 def mark_untrusted(source: str) -> None:
-    """Marca il lavoro corrente; no-op fuori da un subagent."""
+    """Marca il lavoro corrente, o fuori da un subagent il turno di Jenny."""
     policy = current_subagent_policy()
     if policy is not None:
         policy.mark_untrusted(source)
+    else:
+        note_turn_taint([source])
 
 
 # ---------------------------------------------------------------------------
@@ -577,21 +592,24 @@ class TurnTaint:
 _TURN: ContextVar[TurnTaint | None] = ContextVar("jenny_turn_taint", default=None)
 
 
-def turn_taint_for(messages: object, metadata: object, meta_key: str) -> TurnTaint:
+def turn_taint_for(messages: object, metadata: object, *meta_keys: str) -> TurnTaint:
     """Il taint di un turno: dai metadati del messaggio e dalle righe in vista.
 
-    *messages* è la parte non consolidata della sessione; *meta_key* è la
-    chiave che le righe d'annuncio portano (``history_meta.SUBAGENT_TAINT_META``,
-    passata da fuori per non legare la sicurezza alla sessione).
+    *messages* è la parte non consolidata della sessione; *meta_keys* sono le
+    chiavi che le righe contaminate portano (``history_meta.SUBAGENT_TAINT_META``
+    sui rientri dei subagent, ``TOOL_TAINT_META`` sui risultati dei tool di
+    Jenny), passate da fuori per non legare la sicurezza alla sessione.
     """
     taint = TurnTaint()
     if isinstance(metadata, dict):
         taint.add(metadata.get("_taint"))
-        taint.add(metadata.get(meta_key))
+        for key in meta_keys:
+            taint.add(metadata.get(key))
     if isinstance(messages, list):
         for row in messages:
             if isinstance(row, dict):
-                taint.add(row.get(meta_key))
+                for key in meta_keys:
+                    taint.add(row.get(key))
     return taint
 
 

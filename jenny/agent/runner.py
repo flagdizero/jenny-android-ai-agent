@@ -47,6 +47,8 @@ from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from jenny.providers.opencode import conversation_scope
 from jenny.providers.retry_policy import classify_user_error
 from jenny.runtime.user_text import say
+from jenny.security.subagent_policy import current_turn_taint
+from jenny.session.history_meta import TOOL_TAINT_META
 from jenny.utils.helpers import (
     build_assistant_message,
     extract_reasoning,
@@ -798,6 +800,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
 
         await hook.before_execute_tools(context)
 
+        taint_before = current_turn_taint()
         results, new_events, fatal_error = await self._execute_tools(
             spec,
             response.tool_calls,
@@ -814,6 +817,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         context.tool_results = list(results)
         context.tool_events = list(new_events)
         completed_tool_results: list[dict[str, Any]] = []
+        # Quel che questo giro di tool ha portato di non fidato nel turno di
+        # Jenny (``subagent_policy.policy_after_tool``) resta scritto sui suoi
+        # risultati: e' cosi' che il turno dopo, finche' le righe sono in vista,
+        # nasce ancora contaminato. Il giro intero e non il singolo tool: le
+        # chiamate concorrenti marcano lo stesso turno, e marcare in piu' non
+        # apre niente.
+        new_taint = [s for s in current_turn_taint() if s not in taint_before]
         for tool_call, result in zip(response.tool_calls, results):
             tool_message = {
                 "role": "tool",
@@ -826,6 +836,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                     result,
                 ),
             }
+            if new_taint:
+                tool_message[TOOL_TAINT_META] = list(new_taint)
             messages.append(tool_message)
             completed_tool_results.append(tool_message)
         if fatal_error is not None:

@@ -17,12 +17,14 @@ from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMProvider
 from jenny.security.subagent_policy import (
     SubagentRunPolicy,
+    TurnTaint,
     current_turn_taint,
     enter_turn_taint,
     note_turn_taint,
+    policy_after_tool,
     turn_taint_for,
 )
-from jenny.session.history_meta import SUBAGENT_TAINT_META
+from jenny.session.history_meta import SUBAGENT_TAINT_META, TOOL_TAINT_META
 from jenny.session.manager import Session
 
 
@@ -133,5 +135,63 @@ def test_the_loop_binds_the_turn_taint() -> None:
     """Il punto di legame esiste ed è sciolto nel ``finally`` (lettura del sorgente:
     il turno vero è coperto dai test sopra, il legame qui)."""
     source = Path("jenny/agent/loop.py").read_text(encoding="utf-8")
-    assert "turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META)" in source
+    assert "turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)" in source
     assert "reset_turn_taint(turn_taint_token)" in source
+
+
+# -- quel che Jenny legge da sola ------------------------------------------------
+
+
+def test_a_web_tool_called_by_jenny_taints_her_turn() -> None:
+    """Fuori da un subagent un tool non fidato marca il turno, uno privato no."""
+    with enter_turn_taint(TurnTaint()):
+        policy_after_tool("get_location", {})
+        assert current_turn_taint() == ()
+        policy_after_tool("web_fetch", {"url": "https://evil.example/pagina"})
+        assert current_turn_taint() == ("web_fetch:evil.example",)
+
+
+def test_a_web_tool_outside_any_turn_marks_nothing() -> None:
+    policy_after_tool("web_search", {"query": "x"})
+    assert current_turn_taint() == ()
+
+
+def test_a_tool_row_carries_the_taint_into_the_next_turn() -> None:
+    rows = [{"role": "tool", "tool_call_id": "c1", "name": "web_fetch", "content": "pagina",
+             TOOL_TAINT_META: ["web_fetch:evil.example"]}]
+    taint = turn_taint_for(rows, {}, SUBAGENT_TAINT_META, TOOL_TAINT_META)
+    assert taint.sources == ["web_fetch:evil.example"]
+    assert turn_taint_for(rows, {}, SUBAGENT_TAINT_META).sources == []
+
+
+async def test_the_runner_writes_the_new_taint_on_the_rounds_results() -> None:
+    """Il giro che ha letto il web porta il taint sui suoi risultati; il giro
+    dopo, che non legge niente di nuovo, no."""
+    from support.runner import empty_tools, make_spec
+
+    from jenny.agent.runner import AgentRunner
+    from jenny.providers.base import LLMResponse, ToolCallRequest
+
+    replies = iter([
+        LLMResponse(content="", tool_calls=[
+            ToolCallRequest(id="c1", name="web_fetch", arguments={"url": "https://evil.example"}),
+        ]),
+        LLMResponse(content="", tool_calls=[
+            ToolCallRequest(id="c2", name="list_dir", arguments={"path": "."}),
+        ]),
+        LLMResponse(content="fatto", tool_calls=[]),
+    ])
+    provider = MagicMock(spec=LLMProvider)
+
+    async def _chat(**_):
+        return next(replies)
+
+    provider.chat_with_retry = _chat
+    with enter_turn_taint(TurnTaint()):
+        result = await AgentRunner(provider).run(make_spec(
+            initial_messages=[{"role": "user", "content": "leggi"}],
+            tools=empty_tools(), max_iterations=5,
+        ))
+    rows = {m["tool_call_id"]: m for m in result.messages if m.get("role") == "tool"}
+    assert rows["c1"][TOOL_TAINT_META] == ["web_fetch:evil.example"]
+    assert TOOL_TAINT_META not in rows["c2"]

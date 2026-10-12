@@ -95,6 +95,7 @@ from jenny.session.history_meta import (
     MID_TURN_META,
     SUBAGENT_RESULT_EVENT,
     SUBAGENT_TAINT_META,
+    TOOL_TAINT_META,
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
@@ -1515,7 +1516,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         if isinstance(in_view, list):
             in_view = in_view[getattr(session, "last_consolidated", 0) or 0:]
         turn_taint_token = bind_turn_taint(
-            turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META)
+            turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)
         )
         # Compute lazily because long_task may create goal metadata during this run.
 
